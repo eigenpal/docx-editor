@@ -385,6 +385,8 @@ export {
   type DocumentSection,
   type DocumentSectionsEnumeration,
   type SectionBreakType,
+  type SectionColumnDefinition,
+  type SectionColumns,
   type SectionMargins,
   type SectionPageNumbering,
   type SectionProperties,

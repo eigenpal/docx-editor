@@ -372,6 +372,21 @@ describe('paint draws every published stroke and invents no geometry', () => {
     }
   });
 
+  test('a sub-pixel paragraph rule paints as a visible hairline', () => {
+    const body = paragraph(
+      'header',
+      '<w:pBdr><w:bottom w:val="single" w:sz="2" w:color="CCCCCC"/></w:pBdr>'
+    );
+    const fragment = paragraphsOf(lay(body))[0]!;
+    const published = stroke(fragment, 'bottom');
+    const container = painted(body);
+    const rule = container.querySelector<HTMLElement>('.docx-paragraph-border-bottom')!;
+    expect(rule.style.height).toBe('1px');
+    expect(Number.parseFloat(rule.style.top) + 1).toBe(
+      published.box.y - fragment.box.y + published.box.height
+    );
+  });
+
   test('a hostile colour on a non-bottom edge is refused at the sink too', () => {
     const container = painted(
       paragraph(

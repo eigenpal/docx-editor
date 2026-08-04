@@ -1113,13 +1113,30 @@ function paintParagraphBorder(
   const rule = positioned(document, 'div', stroke.box, scale);
   rule.className = `docx-paragraph-border docx-paragraph-border-${stroke.side}`;
   rule.setAttribute('aria-hidden', 'true');
-  rule.style.left = `${(stroke.box.x - fragment.box.x) * scale}px`;
-  rule.style.top = `${(stroke.box.y - fragment.box.y) * scale}px`;
-  // Size already set by `positioned` from the published box; colour is the only extra.
+  const publishedLeft = (stroke.box.x - fragment.box.x) * scale;
+  const publishedTop = (stroke.box.y - fragment.box.y) * scale;
+  // Preserve layout geometry, but snap a very thin rule to a visible screen hairline. Word's
+  // 1/4pt header rules otherwise become 0.33 CSS px at 96dpi and effectively disappear. Keep
+  // closing edges inside the published box so a header ending at that edge does not clip them.
+  const vertical = stroke.side === 'left' || stroke.side === 'right' || stroke.side === 'bar';
+  const publishedThickness = (vertical ? stroke.box.width : stroke.box.height) * scale;
+  const paintedThickness = Math.max(1, publishedThickness);
+  rule.style.left = `${
+    stroke.side === 'right'
+      ? publishedLeft - (paintedThickness - publishedThickness)
+      : publishedLeft
+  }px`;
+  rule.style.top = `${
+    stroke.side === 'bottom' ? publishedTop - (paintedThickness - publishedThickness) : publishedTop
+  }px`;
+  if (vertical) {
+    rule.style.width = `${paintedThickness}px`;
+  } else {
+    rule.style.height = `${paintedThickness}px`;
+  }
   const color = stroke.edge.color && HEX.test(stroke.edge.color) ? stroke.edge.color : '000000';
   rule.style.backgroundColor = `#${color}`;
   // A side rule is a tall thin box, so its dash/double pattern runs down it rather than across.
-  const vertical = stroke.side === 'left' || stroke.side === 'right' || stroke.side === 'bar';
   // `val` selects a CSS approximation; unknown styles fall back to a solid rule so a
   // recognised thickness is never silently dropped.
   switch (stroke.edge.val) {
@@ -1286,6 +1303,19 @@ function paintPage(
   content.style.height = `${page.contentBox.height * options.scale}px`;
   if (options.activeHeaderFooterRId) {
     content.setAttribute('contenteditable', 'false');
+  }
+  for (const separator of page.columnSeparators ?? []) {
+    const rule = document.createElement('div');
+    rule.className = 'docx-column-separator';
+    rule.setAttribute('contenteditable', 'false');
+    rule.style.position = 'absolute';
+    rule.style.left = `${separator.x * options.scale}px`;
+    rule.style.top = `${separator.y * options.scale}px`;
+    rule.style.width = `${separator.width * options.scale}px`;
+    rule.style.height = `${separator.height * options.scale}px`;
+    rule.style.backgroundColor = 'currentColor';
+    rule.style.pointerEvents = 'none';
+    content.append(rule);
   }
   for (const fragment of page.fragments) {
     content.append(

@@ -577,6 +577,8 @@ export interface PageRecord {
   /** The area inside the margins that content flows into. */
   readonly contentBox: LayoutBox;
   readonly fragments: readonly BlockFragmentRecord[];
+  /** Layout-owned vertical rules requested by `w:cols/@w:sep`, content-box relative. */
+  readonly columnSeparators?: readonly LayoutBox[];
   /** Page furniture for this page's variant, absent when the document declares none. */
   readonly header?: HeaderFooterStoryRecord;
   readonly footer?: HeaderFooterStoryRecord;
