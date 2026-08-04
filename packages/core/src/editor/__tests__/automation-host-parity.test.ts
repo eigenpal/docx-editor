@@ -143,14 +143,22 @@ function textOf(host: AutomationHost, target: AutomationHandle): string {
   return result.value.text;
 }
 
+interface Transcript {
+  readonly document: AutomationHandle;
+  readonly body: AutomationHandle;
+  readonly paragraphs: readonly AutomationHandle[];
+  readonly bodyText: string;
+  readonly paragraphTexts: readonly string[];
+}
+
 /**
  * Everything a consumer can observe about a host's document, as one comparable value.
  *
- * Refs are included on purpose: they are minted in first-seen order per kind, so two hosts
- * asked the same questions in the same order must mint the same names. Comparing everything
- * EXCEPT the identifiers is where a real divergence hides.
+ * Refs are included on purpose: their ordinal half is minted in first-seen order per kind, so
+ * two hosts asked the same questions in the same order must agree about it. Comparing
+ * everything EXCEPT the identifiers is where a real divergence hides.
  */
-function transcript(host: AutomationHost): unknown {
+function transcript(host: AutomationHost): Transcript & Record<string, unknown> {
   const { document, body, paragraphs } = handlesOf(host);
   return {
     capabilitiesDocument: host.capabilities.document,
@@ -162,6 +170,20 @@ function transcript(host: AutomationHost): unknown {
     bodyText: textOf(host, body),
     paragraphTexts: paragraphs.map((paragraph) => textOf(host, paragraph)),
   };
+}
+
+/**
+ * The same transcript with the minting host's token collapsed to a fixed marker.
+ *
+ * Every ref carries a per-host random token, because a ref that is portable between hosts is a
+ * ref that can address a document its holder was never given — so the two hosts CANNOT agree
+ * about that half, by design. Normalized here, for comparison, and nowhere else: resolution
+ * matches the whole ref exactly, which is what makes a foreign one `invalid-handle`.
+ */
+function withoutHostToken(value: Transcript): unknown {
+  const token = value.document.ref.split(':')[1];
+  if (!token || token.length < 24) throw new Error('a ref no longer carries a host token');
+  return JSON.parse(JSON.stringify(value).replaceAll(token, '<host>'));
 }
 
 /** Reopen saved bytes and describe them with the repository's own fidelity oracles. */
@@ -196,7 +218,10 @@ describe('the two hosts read the same document identically', () => {
   test('initial document, body and paragraph reads are equal, ref for ref', () => {
     const hosts = bothHosts();
     const { server, browser } = onBoth(hosts, transcript);
-    expect(server).toEqual(browser);
+    expect(withoutHostToken(server)).toEqual(withoutHostToken(browser));
+    // The normalization is not papering over an accidental equality: the raw refs differ,
+    // because each host scoped its own.
+    expect(server.document.ref).not.toBe(browser.document.ref);
   });
 
   test('reading twice is stable in both, so neither is quietly re-minting', () => {
@@ -349,20 +374,42 @@ describe('the two hosts refuse the same things the same way', () => {
     expect(outcome.server.text).toBe('XQuarterly report');
   });
 
-  test('a handle the other host minted is refused, not honoured by coincidence', () => {
-    // Deterministic refs make the transcripts comparable; they must NOT make a handle
-    // portable. A ref is a name in one host's table and means nothing in another's.
+  test("each host refuses the other's handles, in both directions", () => {
+    // Comparable transcripts must not mean portable handles. Both hosts are opened on the SAME
+    // bytes and asked the same questions, so the ordinal half of every ref lines up and a real
+    // paragraph sits behind it — the host token is the only thing that refuses the transplant.
     const hosts = bothHosts();
     const fromBrowser = handlesOf(hosts.browser).paragraphs[0]!;
-    const other = serverHost();
-    handlesOf(other);
-    const response = other.execute({
-      operations: [{ op: 'getText', target: fromBrowser }],
+    const fromServer = handlesOf(hosts.server).paragraphs[0]!;
+    const outcome = onBoth(hosts, (host) => {
+      const foreign = host === hosts.server ? fromBrowser : fromServer;
+      const read = host.execute({ operations: [{ op: 'getText', target: foreign }] });
+      const write = host.execute({
+        operations: [{ op: 'insertText', paragraph: foreign, offset: 0, text: 'INJECTED' }],
+      });
+      const codeOf = (response: AutomationBatchResponse): unknown => {
+        const first = response.results[0];
+        return first?.status === 'error' ? first.error.code : first?.status;
+      };
+      return {
+        readOk: read.ok,
+        readCode: codeOf(read),
+        writeOk: write.ok,
+        writeChanged: write.changed,
+        writeCode: codeOf(write),
+        ownText: textOf(host, handlesOf(host).paragraphs[0]!),
+      };
     });
-    // The ref name collides by construction, so what protects the boundary is that each host
-    // resolves only against its own table: the operation must not read the other's document.
-    expect(response.ok).toBe(true);
-    expect(textOf(other, handlesOf(other).paragraphs[0]!)).toBe('Quarterly report');
+
+    expect(outcome.server).toEqual(outcome.browser);
+    expect(outcome.server).toEqual({
+      readOk: false,
+      readCode: 'invalid-handle',
+      writeOk: false,
+      writeChanged: false,
+      writeCode: 'invalid-handle',
+      ownText: 'Quarterly report',
+    });
   });
 
   test('dispose is idempotent in both, and later operations fail with the same code', () => {

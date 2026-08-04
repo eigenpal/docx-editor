@@ -5,8 +5,8 @@
 // paginated-surface.ts implements and re-exports them, so importers keep one entry point.
 
 import type { IndentFormatting } from '../contracts/types.ts';
-import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import type { BookmarkIndex } from '@docx-editor.dev/core-contract/store';
+import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
+import type { BookmarkIndex, TreeDocOp } from '@docx-editor.dev/core-contract/store';
 import type { ViewScope } from '../contracts/editor.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
 import type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
@@ -449,6 +449,19 @@ export interface PaginatedSurface {
    */
   editingMode(): SurfaceEditingMode;
   setEditingMode(mode: SurfaceEditingMode): void;
+  /**
+   * Commit ops that came from automation, through the gate a keystroke goes through.
+   *
+   * The narrow entry an automation host writes with, and the reason it needs one: reaching
+   * `session.applyTreeOps` past this skips the editing-mode gate entirely — a document open for
+   * viewing accepts a scripted edit, and a suggesting document records one as a permanent
+   * change with no proposal and no author. Here, viewing refuses, suggesting attributes, the
+   * refusal reason is reported like any other, and the pages repaint from the commit.
+   *
+   * The ops address the BODY, whatever story the reader is in: the caller identified its target
+   * before calling, so following the caret into a header would write somewhere else entirely.
+   */
+  applyAutomationOps(ops: readonly TreeDocOp[]): TreeApplyResult;
   /**
    * Commit review ops — accept, reject, a new comment — through the SAME path a keystroke
    * takes: layout, paint, and a caret clamped to what the document now holds.

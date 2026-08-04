@@ -4,7 +4,11 @@
 /* eslint-disable max-lines -- composition root; seams live in surface-*.ts */
 
 import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import { hyperlinkTargetOf, type TreeDocOp } from '@docx-editor.dev/core-contract/store';
+import {
+  hyperlinkTargetOf,
+  type StoryScope,
+  type TreeDocOp,
+} from '@docx-editor.dev/core-contract/store';
 import {
   createLayoutScheduler,
   createLayoutSession,
@@ -746,6 +750,9 @@ export function mountPaginatedSurface(
 
   let editingMode: SurfaceEditingMode = options.editingMode ?? 'edit';
 
+  /** The main story. Named once so the automation entry cannot drift from the session default. */
+  const BODY_STORY: StoryScope = Object.freeze({ kind: 'body' as const });
+
   /**
    * Commit ops, attributing them when the surface is suggesting.
    *
@@ -757,7 +764,11 @@ export function mountPaginatedSurface(
   function applyOps(
     ops: readonly TreeDocOp[],
     selectionBefore?: Parameters<TreeDocxSession['applyTreeOps']>[1],
-    selectionAfter?: Parameters<TreeDocxSession['applyTreeOps']>[2]
+    selectionAfter?: Parameters<TreeDocxSession['applyTreeOps']>[2],
+    // Defaulted, and therefore evaluated per call: every input path wants the story the
+    // reader is in. Only a caller that ALREADY knows which story its ops address — an
+    // automation handle names one — passes this, and then the reader's position is irrelevant.
+    scope: StoryScope = storyScope()
   ): ReturnType<TreeDocxSession['applyTreeOps']> {
     // VIEWING refuses every write here rather than only at the facade. The keymap and
     // `beforeinput` are wired to this surface, not to `Editor.exec`, so a facade-only gate
@@ -785,9 +796,9 @@ export function mountPaginatedSurface(
       };
     }
 
-    // `storyScope()` so an edit inside a header, a footer or a note is applied to that story
-    // rather than to the body.
-    return session.applyTreeOps(trackedOps(ops), selectionBefore, selectionAfter, storyScope());
+    // The scope resolves to `storyScope()` unless the caller named one, so an edit inside a
+    // header, a footer or a note is applied to that story rather than to the body.
+    return session.applyTreeOps(trackedOps(ops), selectionBefore, selectionAfter, scope);
   }
 
   /** Ops that change the DOCUMENT, as opposed to reading or resolving it. */
@@ -1660,6 +1671,34 @@ export function mountPaginatedSurface(
           return clampedToDocument(currentLayout, session.paragraphIds(), selection);
         }
       ),
+
+    applyAutomationOps: (ops) => {
+      // THE SAME PATH A KEYSTROKE TAKES, minus the keystroke. `applyOps` is where viewing
+      // refuses and where suggesting turns an edit into a proposal, and `commit` is where the
+      // refusal is recorded, the caret is re-clamped and the pages are repainted. A host that
+      // reached `session.applyTreeOps` instead — as this one did — typed into a document open
+      // for viewing and wrote permanent text while the chrome said Suggesting.
+      //
+      // The scope is the BODY, explicitly, because that is what the handle named. The input
+      // path follows the reader into a header; a scripted edit must not, or an object model
+      // holding a body paragraph would write into whatever furniture happened to be open.
+      let result: ReturnType<TreeDocxSession['applyTreeOps']> = {
+        committed: false,
+        rejected: false,
+        opCount: 0,
+      };
+      commit(
+        () => (result = applyOps(ops, undefined, undefined, BODY_STORY)),
+        () => {
+          // Flushed before the clamp for the same reason `commitReviewOps` does it: the clamp
+          // needs post-edit lengths, and this thunk runs before the repaint.
+          flushLayout();
+          selectionSync.noteModelMoved();
+          return clampedToDocument(currentLayout, session.paragraphIds(), selection);
+        }
+      );
+      return result;
+    },
 
     editingMode: () => editingMode,
     setEditingMode: (mode) => {

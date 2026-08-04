@@ -100,18 +100,17 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
     },
     currentPackage: (): OoxmlPackage | null => sync()?.currentPackage() ?? null,
     apply(ops: readonly TreeDocOp[]): AutomationPortApplyResult {
-      const live = sync();
-      if (!live) return { ok: false, reason: 'no-document' };
-      // One call, every op: `applyTreeOps` stages them in a single transaction, so a
-      // rejection anywhere leaves the session, its history and the painted pages untouched.
-      const result = live.applyTreeOps(ops);
+      sync();
+      const surface = editor.surface;
+      if (!surface) return { ok: false, reason: 'no-document' };
+      // THROUGH THE SURFACE, NOT THE SESSION. `applyAutomationOps` is one gated transaction:
+      // viewing refuses, suggesting proposes and attributes, the body is addressed explicitly,
+      // and the pages repaint from the commit. Reaching `session.applyTreeOps` from here — the
+      // first version of this adapter — wrote into a document open for viewing and turned a
+      // proposal into a permanent edit. A refusal anywhere leaves the session, its history and
+      // the painted pages untouched, which is what makes the batch atomic.
+      const result = surface.applyAutomationOps(ops);
       if (result.rejected) return { ok: false, reason: String(result.reason ?? 'refused') };
-      // A commit that came through the surface repaints as part of that commit; one made
-      // straight on the session only ARMS a layout, and nothing disarms it until the next
-      // keystroke or scroll. Flushing here is what keeps a scripted edit from leaving the
-      // painted pages showing a revision the model has already left — the same reason
-      // `surface.layout()` flushes before it answers.
-      if (result.committed) editor.surface?.layout();
       return { ok: true, changed: result.committed };
     },
     save: () => sync()?.save() ?? null,

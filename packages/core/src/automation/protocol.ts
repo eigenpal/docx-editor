@@ -26,6 +26,10 @@ declare const AUTOMATION_HANDLE_BRAND: unique symbol;
  * id, not a part name, not a path. A host that returned engine identity here would hand
  * every consumer a way to address the canonical tree directly, and the next thing to arrive
  * would be a second write path.
+ *
+ * SCOPED TO ONE HOST. Each host draws a random token when it starts and stamps it into every
+ * ref it mints, so a ref carries no meaning anywhere else: passed to another host — including
+ * one open on the same bytes — it is `invalid-handle`, not a paragraph.
  */
 export type AutomationHandleRef = string & { readonly [AUTOMATION_HANDLE_BRAND]: 'handle' };
 

@@ -164,7 +164,11 @@ describe('the lane touches no DOM and no unsafe sink', () => {
     const globals = [
       /\bdocument\s*\./,
       /\bwindow\s*\./,
-      /\bglobalThis\s*\./,
+      // `globalThis.crypto` is the ONE exception, and the test below pins it to that name:
+      // handle scoping needs the platform CSPRNG, which is reachable in a browser, in Bun and
+      // in Node under exactly this name and no other. Anything else read off `globalThis`
+      // would be the DOM arriving by the back door.
+      /\bglobalThis\s*\.(?!crypto\b)/,
       /\bHTML[A-Z]\w*Element\b/,
       /\bnavigator\b/,
       /\bDocumentFragment\b/,
@@ -177,6 +181,16 @@ describe('the lane touches no DOM and no unsafe sink', () => {
       }
     }
     expect(hits).toEqual([]);
+  });
+
+  test('the one global the lane reads is the CSPRNG, and only for handle scoping', () => {
+    const references = files.flatMap((file) => {
+      const source = withoutComments(readFileSync(file, 'utf8'));
+      return [...source.matchAll(/globalThis\s*\.\s*(\w+)/g)].map(
+        (match) => `${file.split('/').pop()} globalThis.${match[1]}`
+      );
+    });
+    expect(references).toEqual(['handles.ts globalThis.crypto']);
   });
 
   test('no HTML-from-strings sink, no fetch, no dynamic evaluation', () => {
