@@ -135,6 +135,7 @@ import {
 import {
   mountPaginatedSurface,
   type PaginatedSurface,
+  type PaginatedSurfaceOptions,
   type PaginatedSurfaceState,
 } from './paginated-surface.ts';
 import type {
@@ -336,6 +337,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // host's chrome wired to the surface it replaced.
       onHyperlinkPopover: (activation) => liveHyperlinkChrome().onPopover?.(activation),
       onRequestHyperlink: () => liveHyperlinkChrome().onRequest?.(),
+      onTrackedChange: () => {
+        if (reviewPaneOpen) return;
+        reviewPaneOpen = true;
+        bump();
+        emitSelectionChange();
+      },
       onChange: (state) => {
         // The mount-time render reports before `surface` is assigned; nothing observable
         // has changed at that point, so it is not a selection change.
@@ -363,7 +370,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         lastSelection = state.selection;
         emitSelectionChange();
       },
-    });
+    } as PaginatedSurfaceOptions & { readonly onTrackedChange?: () => void });
     if (!result.ok) {
       parseError = result.detail ? `${result.reason}: ${result.detail}` : result.reason;
       // Failure is observable state too: `snapshot().parseError` moved.

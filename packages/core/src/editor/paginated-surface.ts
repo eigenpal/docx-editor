@@ -121,6 +121,9 @@ export function mountPaginatedSurface(
   bytes: Uint8Array,
   options: PaginatedSurfaceOptions = {}
 ): OpenPaginatedResult {
+  const runtimeOptions = options as PaginatedSurfaceOptions & {
+    readonly onTrackedChange?: () => void;
+  };
   const opened = openTreeSession(bytes);
   if (!opened.ok) {
     return {
@@ -787,7 +790,12 @@ export function mountPaginatedSurface(
 
     // `storyScope()` so an edit inside a header, a footer or a note is applied to that story
     // rather than to the body.
-    return session.applyTreeOps(trackedOps(ops), selectionBefore, selectionAfter, storyScope());
+    const attributed = trackedOps(ops);
+    const result = session.applyTreeOps(attributed, selectionBefore, selectionAfter, storyScope());
+    if (result.committed && editingMode === 'suggest' && attributed.some(isTrackedEdit)) {
+      runtimeOptions.onTrackedChange?.();
+    }
+    return result;
   }
 
   /** Ops that change the DOCUMENT, as opposed to reading or resolving it. */
@@ -798,6 +806,20 @@ export function mountPaginatedSurface(
       op.op !== 'acceptAllRevisions' &&
       op.op !== 'rejectAllRevisions'
     );
+  }
+
+  /** Ops that create or extend a reviewable proposal. */
+  function isTrackedEdit(op: TreeDocOp): boolean {
+    switch (op.op) {
+      case 'insertText':
+      case 'deleteText':
+        return op.revision !== undefined;
+      case 'setParagraphMarkRevision':
+      case 'proposeParagraphMerge':
+        return true;
+      default:
+        return false;
+    }
   }
 
   /** Text ops become tracked ones while suggesting; everything else is untouched. */

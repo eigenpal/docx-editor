@@ -203,6 +203,7 @@ function ReviewRoot({
 }: ReviewProps) {
   const editor = useDocxEditor();
   const review = useReview();
+  const setReviewPaneOpen = review.setPaneOpen;
   const { t } = useTranslation();
   const railRef = useRef<HTMLElement | null>(null);
   // Claim the gutter. Without this the viewport reserved it for every consumer, mounted
@@ -376,8 +377,9 @@ function ReviewRoot({
     // Pin the range before the compose box takes focus, or the browser drops the highlight
     // off the very words the comment is about.
     editor.surface?.retainSelection();
+    setReviewPaneOpen(true);
     setDraftAnchorY(editor.getSelectionPlacement()?.anchorY ?? null);
-  }, [editor]);
+  }, [editor, setReviewPaneOpen]);
   const endDraft = useCallback(() => {
     editor?.surface?.releaseSelection();
     setDraftAnchorY(null);
