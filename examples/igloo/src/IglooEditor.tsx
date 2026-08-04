@@ -10,17 +10,17 @@
 // page that looked like ice would be a lie about what the file contains — so the theme lives
 // in the chrome, in the sea behind, and in the berg the page rides on.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DocxEditor } from '@docx-editor.dev/react';
 import type { FontConfiguration } from '@docx-editor.dev/react';
 import { composeFontConfiguration } from '@docx-editor.dev/react';
 import { installDefaultFontFaces, loadDefaultFonts } from '@docx-editor.dev/fonts';
-import { IceSea } from './IceSea';
-import { Iceberg } from './Iceberg';
+import { IceSea } from './art/IceSea';
+import { Iceberg } from './art/Iceberg';
 import { IglooContextMenu } from './IglooContextMenu';
 import { IglooMenu } from './IglooMenu';
 import { IglooToolbar } from './IglooToolbar';
-import { Blizzard } from './Blizzard';
+import { Blizzard } from './art/Blizzard';
 import { iglooT } from './labels';
 
 export interface IglooEditorProps {

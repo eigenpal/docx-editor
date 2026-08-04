@@ -8,7 +8,7 @@
 // strokes on a 24-box, round caps, no fills. A host swapping icons wants its own look, and
 // a demo that swapped them for near-identical glyphs would not show that anything happened.
 
-import { Frost } from './frost-svg';
+import { Frost } from './Frost';
 
 export const IceUndo = (
   <Frost>

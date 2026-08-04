@@ -9,7 +9,7 @@
 //   tracker and a product embedding the editor should point at its own.
 
 import { DocxEditor, useDocxEditor } from '@docx-editor.dev/react';
-import { useFrost } from './frost';
+import { useFrost } from './useFrost';
 import { iglooT } from './labels';
 import {
   IceDeposit,
@@ -17,7 +17,7 @@ import {
   IceGuide,
   IceIgloo,
   IceSculpt,
-} from './menu-icons';
+} from './icons/menu';
 
 export function IglooMenu() {
   const editor = useDocxEditor();

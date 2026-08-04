@@ -17,11 +17,15 @@ enabled state are the library's — and none of them had to be reimplemented to 
 | `IglooEditor.tsx` | The composition root: `Root` / `Viewport` / `Content` / `Loading`, the workspace row a floating navigation pane anchors to, and where host art goes relative to the page |
 | `IglooToolbar.tsx` | `Toolbar preset={false}` — a hand-ordered bar, every packaged part re-iconed, plus two `Toolbar.Action`s of the demo's own |
 | `IglooContextMenu.tsx` | `ContextMenu` — packaged rows re-iconed, one removed, a chrome slot pulled in, three host rows, and a submenu |
-| `IglooMenu.tsx` | `Menu` — a whole menu the library has never heard of, and Help replaced |
-| `frost.ts` | One host action shared by the toolbar and the menu, gated on `Editor.can` |
+| `IglooMenu.tsx` | `Menu` — the registry's menus re-iconed in place, a whole menu the library has never heard of, and Help replaced |
+| `useFrost.ts` | One host action shared by the toolbar, the menu and the context menu, gated on `Editor.can` |
 | `labels.ts` | A `t` catalogue: the same override path a real locale takes |
 | `igloo.css` | The theme. Almost entirely `--doc-*` token overrides |
-| `IceSea.tsx`, `Iceberg.tsx`, `Blizzard.tsx` | The demo's own art, which the library knows nothing about |
+| `icons/` | The demo's own glyphs — `Frost.tsx` is the shared SVG frame, `toolbar.tsx` and `menu.tsx` the two sets |
+| `art/` | `IceSea`, `Iceberg`, `Blizzard` and their shared seeded RNG. The library knows nothing about any of it |
+
+Everything at the top level is the API demonstration; `icons/` and `art/` are the theme's own
+decoration, kept apart so the composition reads without them.
 
 ## Three things worth copying
 

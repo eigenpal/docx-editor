@@ -10,7 +10,7 @@
 // and the command all still come from the engine. Only the glyph is the demo's.
 
 import { DocxEditor } from '@docx-editor.dev/react';
-import { useFrost } from './frost';
+import { useFrost } from './useFrost';
 import { iglooT } from './labels';
 import {
   IceAlignCenter,
@@ -30,7 +30,7 @@ import {
   IceStrike,
   IceUndo,
   IceUnderline,
-} from './icons';
+} from './icons/toolbar';
 
 /** The two demo-owned actions, side by side, are the point of this pair. */
 interface IglooActionsProps {

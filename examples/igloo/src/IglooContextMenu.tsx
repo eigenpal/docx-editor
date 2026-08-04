@@ -15,10 +15,10 @@
 // and the SVG sits behind at `z-index: 0` with no hit test of its own.
 
 import { DocxEditor, useDocxEditor } from '@docx-editor.dev/react';
-import { BergPanel } from './Iceberg';
-import { useFrost } from './frost';
+import { BergPanel } from './art/Iceberg';
+import { useFrost } from './useFrost';
 import { iglooT } from './labels';
-import { IceCarve, IceCopy, IceCore, IceCut, IceFrost, IceThaw } from './menu-icons';
+import { IceCarve, IceCopy, IceCore, IceCut, IceFrost, IceThaw } from './icons/menu';
 
 export function IglooContextMenu() {
   const editor = useDocxEditor();

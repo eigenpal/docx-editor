@@ -5,7 +5,7 @@
 // `Icons.tsx`. Same drawing language: 1.6px strokes on a 24-box, no fills.
 
 import type { ReactNode } from 'react';
-import { Frost } from './frost-svg';
+import { Frost } from './Frost';
 
 /** Cut: an ice saw. */
 export const IceCut = (
