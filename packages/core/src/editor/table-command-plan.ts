@@ -99,6 +99,7 @@ const TABLE_COMMANDS = new Set([
   'deleteColumn',
   'deleteTable',
   'setCellFill',
+  'setTableCellVerticalAlignment',
   'setTableBorders',
   'commitTableColumnDividerResize',
   'commitTableRightEdgeResize',
@@ -313,6 +314,15 @@ function validateTableCommandShape(command: EditorCommand): TableCommandPlan | n
         return refusal('invalidArgs', 'setCellFill color shape is invalid');
       }
       return null;
+    case 'setTableCellVerticalAlignment':
+      if (
+        !isPlainObject(command) ||
+        !ownKeysExactly(command, ['type', 'alignment']) ||
+        !['top', 'center', 'bottom'].includes(command.alignment)
+      ) {
+        return refusal('invalidArgs', 'cell vertical alignment command shape is invalid');
+      }
+      return null;
     case 'setTableBorders':
       if (!isPlainObject(command) || command.type !== 'setTableBorders') {
         return refusal('invalidArgs', 'setTableBorders command shape is invalid');
@@ -498,7 +508,7 @@ function lowerBorderSpec(
 }
 
 function revalidateExplicitStoreTarget(
-  input: TableCommandPlannerInput,
+  input: Pick<TableCommandPlannerInput, 'part' | 'storeRevision'>,
   tableId: string,
   layoutSourceRevision: number
 ): TableCommandPlan | null {
@@ -597,6 +607,32 @@ function planResizeRightEdge(
     gridColumnId: target.gridColumnId,
     columnWidthTwips,
     tableWidthTwips,
+  };
+  return planValidated(input.part, [op], { kind: 'preserveSelection' });
+}
+
+/** Plan a pointer-driven row-height resize without widening the public command surface. */
+export function planTableRowHeightResize(
+  input: Omit<TableCommandPlannerInput, 'command'>,
+  target: TableRowOccurrenceTarget,
+  heightTwips: number
+): TableCommandPlan {
+  if (input.viewing || !input.editable) {
+    return refusal('locked', 'the document is open for viewing');
+  }
+  const stale = revalidateExplicitStoreTarget(input, target.tableId, target.sourceRevision);
+  if (stale) return stale;
+  if (target.isHeaderRepeat) {
+    return refusal('unsupported', 'repeated header rows cannot be edited');
+  }
+  if (!Number.isInteger(heightTwips) || heightTwips < 20 || heightTwips > 31_680) {
+    return refusal('invalidArgs', 'row height is outside the supported range');
+  }
+  const op: TreeDocOp = {
+    op: 'setTableRowHeight',
+    tableId: target.tableId,
+    rowId: target.rowId,
+    heightTwips,
   };
   return planValidated(input.part, [op], { kind: 'preserveSelection' });
 }
@@ -744,6 +780,16 @@ export function planTableCommand(input: TableCommandPlannerInput): TableCommandP
         tableId: anchor.tableId,
         cellIds: anchor.cellIds,
         color: storeColor,
+      };
+      return planValidated(part, [op], { kind: 'preserveSelection' });
+    }
+    case 'setTableCellVerticalAlignment': {
+      if (!anchor) return refusal('unsupported', 'the selection is not inside a table');
+      const op: TreeDocOp = {
+        op: 'setTableCellVerticalAlignment',
+        tableId: anchor.tableId,
+        cellIds: anchor.cellIds,
+        alignment: command.alignment,
       };
       return planValidated(part, [op], { kind: 'preserveSelection' });
     }

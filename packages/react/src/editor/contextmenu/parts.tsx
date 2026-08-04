@@ -288,6 +288,84 @@ export const ContextMenuDeleteTable = defineTableCommandRow(
   }
 );
 
+const CELL_VERTICAL_ALIGNMENT_COMMANDS = [
+  {
+    alignment: 'top',
+    labelKey: 'tableAdvanced.top',
+    icon: 'vertical_align_top',
+  },
+  {
+    alignment: 'center',
+    labelKey: 'tableAdvanced.middle',
+    icon: 'vertical_align_center',
+  },
+  {
+    alignment: 'bottom',
+    labelKey: 'tableAdvanced.bottom',
+    icon: 'vertical_align_bottom',
+  },
+] as const;
+
+/** Compact vertical-alignment picker for selected table cells. @public */
+export function ContextMenuCellVerticalAlignment({ hidden }: ContextMenuCommandProps) {
+  const { close } = useContextMenuContext();
+  const label = useMenuLabel();
+  const tableVisible = useTableContextMenuVisible();
+  const top = useEditorCommand({
+    type: 'setTableCellVerticalAlignment',
+    alignment: 'top',
+  });
+  const center = useEditorCommand({
+    type: 'setTableCellVerticalAlignment',
+    alignment: 'center',
+  });
+  const bottom = useEditorCommand({
+    type: 'setTableCellVerticalAlignment',
+    alignment: 'bottom',
+  });
+  const states = [top, center, bottom] as const;
+  if (hidden || !tableVisible) return null;
+  return (
+    <div className="docx-contextmenu__table-align">
+      <span className="docx-contextmenu__table-align-label">
+        {label('tableAdvanced.verticalAlignment')}
+      </span>
+      <div
+        className="docx-contextmenu__table-align-buttons"
+        role="group"
+        aria-label={label('tableAdvanced.verticalAlignment')}
+      >
+        {CELL_VERTICAL_ALIGNMENT_COMMANDS.map((item, index) => {
+          const state = states[index]!;
+          return (
+            <button
+              key={item.alignment}
+              type="button"
+              role="menuitemradio"
+              aria-checked={false}
+              aria-label={label(item.labelKey)}
+              title={state.disabledReason ?? label(item.labelKey)}
+              aria-disabled={!state.isEnabled}
+              className="docx-contextmenu__table-align-button"
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onClick={() => {
+                if (state.execute()) close(true);
+              }}
+            >
+              {chromeIcon(tableChromeIconPaths(item.icon))}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+ContextMenuCellVerticalAlignment.docxRow = 'table.cellVerticalAlignment' as const;
+
 /** Whether table context rows should render for the current selection. @internal */
 export function useTableContextMenuVisible(): boolean {
   return useEditorState(
@@ -305,6 +383,7 @@ export const TABLE_CONTEXT_ROWS = [
   ContextMenuDeleteTableRow,
   ContextMenuDeleteTableColumn,
   ContextMenuDeleteTable,
+  ContextMenuCellVerticalAlignment,
 ] as const;
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ export {
 } from './DocxEditorContextMenu';
 export {
   ContextMenuCopy,
+  ContextMenuCellVerticalAlignment,
   ContextMenuCut,
   ContextMenuDelete,
   ContextMenuDeleteTable,

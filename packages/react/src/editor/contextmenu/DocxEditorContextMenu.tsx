@@ -34,6 +34,7 @@ import { MenuItem, MenuRow, MenuSeparator, MenuSubmenu } from '../menu/parts';
 import { ContextMenuContext, type ContextMenuAnchor } from './contextmenu-context';
 import {
   ContextMenuCopy,
+  ContextMenuCellVerticalAlignment,
   ContextMenuCut,
   ContextMenuDelete,
   ContextMenuDeleteTable,
@@ -143,6 +144,12 @@ function tableContextEntries(): readonly DefaultEntry[] {
       render: () => <ContextMenuDeleteTableColumn />,
     },
     { kind: 'row', id: ContextMenuDeleteTable.docxRow, render: () => <ContextMenuDeleteTable /> },
+    { kind: 'separator', id: 'sep.table.alignment' },
+    {
+      kind: 'row',
+      id: ContextMenuCellVerticalAlignment.docxRow,
+      render: () => <ContextMenuCellVerticalAlignment />,
+    },
   ];
 }
 
@@ -449,6 +456,7 @@ export interface DocxEditorContextMenuNamespace {
   readonly DeleteTableRow: typeof ContextMenuDeleteTableRow;
   readonly DeleteTableColumn: typeof ContextMenuDeleteTableColumn;
   readonly DeleteTable: typeof ContextMenuDeleteTable;
+  readonly CellVerticalAlignment: typeof ContextMenuCellVerticalAlignment;
   /** A host-owned row: no slot, no command, the host's own label and action. */
   readonly Item: typeof ContextMenuItem;
   /** Any chrome slot as a live row (`<ContextMenu.Slot slot="text.bold" />`). */
@@ -472,6 +480,7 @@ export const ContextMenu: DocxEditorContextMenuNamespace = Object.assign(DocxEdi
   DeleteTableRow: ContextMenuDeleteTableRow,
   DeleteTableColumn: ContextMenuDeleteTableColumn,
   DeleteTable: ContextMenuDeleteTable,
+  CellVerticalAlignment: ContextMenuCellVerticalAlignment,
   Item: ContextMenuItem,
   Slot: MenuItem,
   Row: MenuRow,

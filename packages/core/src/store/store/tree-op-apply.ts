@@ -8,6 +8,7 @@
 
 import { hardBreakAttributes, hardBreakText } from '../package/hard-break.ts';
 import { fieldAtomText } from '../package/field-nodes.ts';
+import { W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlAttribute,
@@ -179,10 +180,18 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     return applyTableRowOp(part, op, options);
   if (op.op === 'insertTableColumn' || op.op === 'deleteTableColumn')
     return applyTableColumnOp(part, op, options);
-  if (op.op === 'setTableColumnWidths' || op.op === 'setTableRightEdgeWidth') {
+  if (
+    op.op === 'setTableColumnWidths' ||
+    op.op === 'setTableRightEdgeWidth' ||
+    op.op === 'setTableRowHeight'
+  ) {
     return applyTableResizeOp(part, op, options);
   }
-  if (op.op === 'setTableCellBorders' || op.op === 'setTableCellFill') {
+  if (
+    op.op === 'setTableCellBorders' ||
+    op.op === 'setTableCellFill' ||
+    op.op === 'setTableCellVerticalAlignment'
+  ) {
     return applyTableCellPropertyOp(part, op, options);
   }
 

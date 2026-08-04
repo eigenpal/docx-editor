@@ -65,6 +65,12 @@ export type TableCellPropertyOp =
       readonly tableId: string;
       readonly cellIds: readonly string[];
       readonly color: TreeDocColorValue | null;
+    }
+  | {
+      readonly op: 'setTableCellVerticalAlignment';
+      readonly tableId: string;
+      readonly cellIds: readonly string[];
+      readonly alignment: 'top' | 'center' | 'bottom';
     };
 
 type BorderSideName = 'top' | 'left' | 'bottom' | 'right';
@@ -1277,6 +1283,37 @@ function patchCellFill(
   return Object.freeze({ ...cell, children }) as OoxmlTableCellNode;
 }
 
+function patchCellVerticalAlignment(
+  cell: OoxmlTableCellNode,
+  alignment: 'top' | 'center' | 'bottom',
+  nextId: () => string,
+  wml: WmlFreshNamespaceContext
+): OoxmlTableCellNode | null {
+  const existingTcPr = wmlChildNamed(cell, 'tcPr');
+  const existing = existingTcPr && wmlChildNamed(existingTcPr, 'vAlign');
+  if (existing && wmlAttributeValue(existing, 'val') === alignment) return null;
+  const property = freshWmlElement('vAlign', nextId, wml, [
+    {
+      kind: 'genericExtension',
+      namespaceUri: WML_NAMESPACE_URI,
+      localName: 'val',
+      prefix: wml.attributePrefix,
+      value: alignment,
+    },
+  ]);
+  const tcPr = existingTcPr ?? freshWmlElement('tcPr', nextId, wml, []);
+  const patched = patchTcPrChild(tcPr, property);
+  if (!patched.ok) return null;
+  if (existingTcPr) {
+    const children = cell.children.map((child) =>
+      child === existingTcPr ? patched.container : child
+    );
+    return Object.freeze({ ...cell, children }) as OoxmlTableCellNode;
+  }
+  const children: OoxmlNode[] = [patched.container, ...cell.children];
+  return Object.freeze({ ...cell, children }) as OoxmlTableCellNode;
+}
+
 function isEdgeTarget(value: unknown): value is TableBorderEdgeTarget {
   return typeof value === 'string' && (EDGE_TARGETS as readonly string[]).includes(value);
 }
@@ -1309,18 +1346,28 @@ function validateSetTableCellFillShape(
   return null;
 }
 
+function validateSetTableCellVerticalAlignmentShape(
+  op: Extract<TableCellPropertyOp, { op: 'setTableCellVerticalAlignment' }>
+): TreeOpRejection | null {
+  if (!ownNonEmptyString(op, 'tableId')) return 'invalidArgs';
+  if (!Array.isArray(op.cellIds)) return 'invalidArgs';
+  if (!ownKeysExactly(op, ['op', 'tableId', 'cellIds', 'alignment'])) return 'invalidArgs';
+  if (!['top', 'center', 'bottom'].includes(op.alignment)) return 'invalid-property-value';
+  return null;
+}
+
 export function validateTableCellPropertyOp(
   part: OoxmlPart,
   op: TableCellPropertyOp,
   limits: TableTopologyLimits = DEFAULT_TABLE_TOPOLOGY_LIMITS
 ): TreeOpRejection | null {
-  if (op.op === 'setTableCellBorders') {
-    const shape = validateSetTableCellBordersShape(op);
-    if (shape) return shape;
-  } else {
-    const shape = validateSetTableCellFillShape(op);
-    if (shape) return shape;
-  }
+  const shape =
+    op.op === 'setTableCellBorders'
+      ? validateSetTableCellBordersShape(op)
+      : op.op === 'setTableCellFill'
+        ? validateSetTableCellFillShape(op)
+        : validateSetTableCellVerticalAlignmentShape(op);
+  if (shape) return shape;
 
   const resolved = resolveTableTopologyLimits(limits);
   const topologyResult = readEditableTableTopology(part.root, op.tableId, resolved);
@@ -1463,11 +1510,56 @@ function applySetTableCellFill(
   return fromEdit(applyEdits(part, edits, options), effect);
 }
 
+function applySetTableCellVerticalAlignment(
+  part: OoxmlPart,
+  op: Extract<TableCellPropertyOp, { op: 'setTableCellVerticalAlignment' }>,
+  options?: EditOptions,
+  limits: TableTopologyLimits = DEFAULT_TABLE_TOPOLOGY_LIMITS
+): TreeOpResult {
+  const rejection = validateTableCellPropertyOp(part, op, limits);
+  if (rejection) return { ok: false, reason: rejection };
+  const resolved = resolveTableTopologyLimits(limits);
+  const topologyResult = readEditableTableTopology(part.root, op.tableId, resolved);
+  if (!topologyResult.ok) return { ok: false, reason: mapTopologyRejection(topologyResult.reason) };
+  const selectionResult = validateCellSelection(topologyResult.topology, op.cellIds, resolved);
+  if (!selectionResult.ok) return { ok: false, reason: selectionResult.reason };
+
+  const wml = wmlFreshNamespaceContextAt(part, topologyResult.topology.table);
+  const nextId = createNodeIdAllocator(part);
+  const edits: ((current: OoxmlPart) => ReturnType<typeof replaceNode>)[] = [];
+  const dirty = new Set<string>();
+  for (const id of selectionResult.selection.selectedIds) {
+    const placed = selectionResult.selection.index.byId.get(id);
+    if (!placed) continue;
+    const patched = patchCellVerticalAlignment(placed.cell, op.alignment, nextId, wml);
+    if (!patched) continue;
+    dirty.add(id);
+    edits.push((current) => replaceNode(current, id, patched, options));
+  }
+  if (edits.length === 0) return ok(part, NO_OP_FILL_EFFECT);
+  const targetTable = tableWithDeclaredWmlBinding(topologyResult.topology.table, part, wml);
+  if (targetTable !== topologyResult.topology.table) {
+    dirty.add(topologyResult.topology.table.id);
+    edits.unshift((current) =>
+      replaceNode(current, topologyResult.topology.table.id, targetTable, options)
+    );
+  }
+  const effect: TreeOpEffect = {
+    dirty: [...dirty],
+    created: [],
+    deleted: [],
+    dependencyKeys: TEXT_DEPS,
+    impact: 'flow-structural',
+  };
+  return fromEdit(applyEdits(part, edits, options), effect);
+}
+
 export function applyTableCellPropertyOp(
   part: OoxmlPart,
   op: TableCellPropertyOp,
   options?: EditOptions
 ): TreeOpResult {
   if (op.op === 'setTableCellBorders') return applySetTableCellBorders(part, op, options);
-  return applySetTableCellFill(part, op, options);
+  if (op.op === 'setTableCellFill') return applySetTableCellFill(part, op, options);
+  return applySetTableCellVerticalAlignment(part, op, options);
 }

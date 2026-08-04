@@ -221,7 +221,12 @@ function buildMenuCompound(slot: TableChromeSlotId, classBase: string, defaultLa
     const shared = {
       className: `${classBase}${className ? ` ${className}` : ''}`,
       'data-slot': slot,
-      style: { position: 'relative' as const, display: 'inline-block' as const },
+      style: {
+        position: 'relative' as const,
+        display: 'inline-flex' as const,
+        alignItems: 'center' as const,
+        verticalAlign: 'middle' as const,
+      },
     };
     const body = children ?? (
       <>
@@ -573,7 +578,12 @@ function buildColorSplitCompound(
     const shared = {
       className: `docx-toolbar__colorsplit docx-table-chrome${className ? ` ${className}` : ''}`,
       'data-slot': slot,
-      style: { position: 'relative' as const, display: 'inline-block' as const },
+      style: {
+        position: 'relative' as const,
+        display: 'inline-flex' as const,
+        alignItems: 'center' as const,
+        verticalAlign: 'middle' as const,
+      },
     };
     const body = children ?? (
       <>

@@ -125,6 +125,7 @@ export {
   DocxEditorContextMenu,
   ContextMenuCopy,
   ContextMenuCut,
+  ContextMenuCellVerticalAlignment,
   ContextMenuDelete,
   ContextMenuItem,
   ContextMenuPaste,

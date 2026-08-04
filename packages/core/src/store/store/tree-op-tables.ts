@@ -130,6 +130,12 @@ export type TableResizeDocOp =
       readonly gridColumnId: string;
       readonly columnWidthTwips: number;
       readonly tableWidthTwips: number;
+    }
+  | {
+      readonly op: 'setTableRowHeight';
+      readonly tableId: string;
+      readonly rowId: string;
+      readonly heightTwips: number;
     };
 
 interface GridCellSlot {
@@ -1526,6 +1532,22 @@ function validateSetTableRightEdgeWidthShape(
   return null;
 }
 
+function validateSetTableRowHeightShape(
+  op: Extract<TableResizeDocOp, { op: 'setTableRowHeight' }>
+): TreeOpRejection | null {
+  if (!ownNonEmptyString(op, 'rowId')) return 'invalidArgs';
+  if (!hasOwnOpKey(op, 'heightTwips')) return 'invalidArgs';
+  if (
+    typeof op.heightTwips !== 'number' ||
+    !Number.isInteger(op.heightTwips) ||
+    op.heightTwips < 20 ||
+    op.heightTwips > 31_680
+  ) {
+    return 'invalidArgs';
+  }
+  return null;
+}
+
 export function validateTableResizeOp(
   part: OoxmlPart,
   op: TableResizeDocOp,
@@ -1533,19 +1555,23 @@ export function validateTableResizeOp(
 ): TreeOpRejection | null {
   if (!ownNonEmptyString(op, 'tableId')) return 'invalidArgs';
 
-  if (op.op === 'setTableColumnWidths') {
-    const shape = validateSetTableColumnWidthsShape(op);
-    if (shape) return shape;
-  } else {
-    const shape = validateSetTableRightEdgeWidthShape(op);
-    if (shape) return shape;
-  }
+  const shape =
+    op.op === 'setTableColumnWidths'
+      ? validateSetTableColumnWidthsShape(op)
+      : op.op === 'setTableRightEdgeWidth'
+        ? validateSetTableRightEdgeWidthShape(op)
+        : validateSetTableRowHeightShape(op);
+  if (shape) return shape;
 
   const resolved = resolveTableTopologyLimits(limits);
   const topologyResult = readEditableTableTopology(part.root, op.tableId, resolved);
   if (!topologyResult.ok) return mapTopologyRejection(topologyResult.reason);
 
   const { topology } = topologyResult;
+  if (op.op === 'setTableRowHeight') {
+    return topology.rows.some((entry) => entry.row.id === op.rowId) ? null : 'unknown-row';
+  }
+
   const regular = validateRegularColumnTable(topology);
   if (regular) return regular;
 
@@ -1753,13 +1779,58 @@ function applySetTableRightEdgeWidth(
   return fromEdit(applyEdits(part, edits, options), effect);
 }
 
+function applySetTableRowHeight(
+  part: OoxmlPart,
+  op: Extract<TableResizeDocOp, { op: 'setTableRowHeight' }>,
+  options?: EditOptions
+): TreeOpResult {
+  const rejection = validateTableResizeOp(part, op);
+  if (rejection) return { ok: false, reason: rejection };
+
+  const topologyResult = readEditableTableTopology(part.root, op.tableId);
+  if (!topologyResult.ok) return { ok: false, reason: mapTopologyRejection(topologyResult.reason) };
+  const row = topologyResult.topology.rows.find((entry) => entry.row.id === op.rowId)?.row;
+  if (!row) return { ok: false, reason: 'unknown-row' };
+
+  const nextId = createNodeIdAllocator(part);
+  const wml = wmlFreshNamespaceContextAt(part, row);
+  const attribute = (localName: string, value: string): OoxmlAttribute => ({
+    kind: 'genericExtension',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName,
+    prefix: wml.attributePrefix,
+    value,
+  });
+  const trHeight = freshWmlElement('trHeight', nextId, wml, [
+    attribute('val', String(op.heightTwips)),
+    attribute('hRule', 'exact'),
+  ]);
+  const existingTrPr = wmlChildNamed(row, 'trPr');
+  const trPr = existingTrPr ?? freshWmlElement('trPr', nextId, wml, []);
+  const patched = patchTrPrChild(trPr, trHeight);
+  if (!patched.ok) return { ok: false, reason: 'tree-invariant' };
+  const children = existingTrPr
+    ? row.children.map((child) => (child === existingTrPr ? patched.container : child))
+    : [patched.container, ...row.children];
+  const resizedRow = Object.freeze({ ...row, children }) as OoxmlTableRowNode;
+  const effect: TreeOpEffect = {
+    dirty: [row.id, ...paragraphIdsWithin(row)],
+    created: [],
+    deleted: [],
+    dependencyKeys: TEXT_DEPS,
+    impact: 'flow-structural',
+  };
+  return fromEdit(replaceNode(part, row.id, resizedRow, options), effect);
+}
+
 export function applyTableResizeOp(
   part: OoxmlPart,
   op: TableResizeDocOp,
   options?: EditOptions
 ): TreeOpResult {
   if (op.op === 'setTableColumnWidths') return applySetTableColumnWidths(part, op, options);
-  return applySetTableRightEdgeWidth(part, op, options);
+  if (op.op === 'setTableRightEdgeWidth') return applySetTableRightEdgeWidth(part, op, options);
+  return applySetTableRowHeight(part, op, options);
 }
 
 export {

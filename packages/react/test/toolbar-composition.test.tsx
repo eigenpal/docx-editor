@@ -533,9 +533,9 @@ describe('the shaped parts', () => {
       trigger.click();
     });
     await act(async () => {
-      (
-        [...root.querySelectorAll('[role="menuitemradio"]')] as HTMLButtonElement[]
-      ).find((row) => row.textContent === '2.0')!.click();
+      ([...root.querySelectorAll('[role="menuitemradio"]')] as HTMLButtonElement[])
+        .find((row) => row.textContent === '2.0')!
+        .click();
     });
     await act(async () => {
       trigger.click();
@@ -674,13 +674,14 @@ describe('the shaped parts', () => {
 
     expect(editor().getEditingMode()).toBe('suggesting');
     expect(
-      view.container.querySelector('[data-testid="editing-mode-trigger"]')!.getAttribute('data-mode')
+      view.container
+        .querySelector('[data-testid="editing-mode-trigger"]')!
+        .getAttribute('data-mode')
     ).toBe('suggesting');
   });
 
   test('the style picker lists the DOCUMENT paragraph styles and a pick applies one', async () => {
-    const STYLE_REL =
-      'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+    const STYLE_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
     const styled = zipSync({
       '[Content_Types].xml': strToU8(
         `<Types xmlns="${CT}">` +
@@ -1008,6 +1009,25 @@ describe('contextual table chrome (Task 10)', () => {
     ]);
   });
 
+  test('table controls share the toolbar horizontal axis', async () => {
+    const { view, editor } = mountToolbar(
+      <DocxEditorToolbar preset={false}>
+        <DocxEditorToolbar.TableBorderTarget />
+        <DocxEditorToolbar.TableBorderColor />
+        <DocxEditorToolbar.TableCellFill />
+      </DocxEditorToolbar>,
+      TABLE_2X2
+    );
+    await act(async () => {
+      caretInCell(editor(), 0);
+    });
+    for (const root of view.container.querySelectorAll<HTMLElement>('[data-slot^="table."]')) {
+      expect(root.style.display).toBe('inline-flex');
+      expect(root.style.alignItems).toBe('center');
+      expect(root.style.verticalAlign).toBe('middle');
+    }
+  });
+
   test('target then color picks dispatch complete border commands through the shared draft', async () => {
     const { view, editor } = mountToolbar(
       <DocxEditorToolbar preset={false}>
@@ -1069,9 +1089,7 @@ describe('contextual table chrome (Task 10)', () => {
     await act(async () => {
       none.click();
     });
-    expect(
-      editor().can({ type: 'setTableBorders', scope: 'none', target: 'all' }).ok
-    ).toBe(true);
+    expect(editor().can({ type: 'setTableBorders', scope: 'none', target: 'all' }).ok).toBe(true);
 
     const fillRoot = view.container.querySelector('[data-slot="table.cellFill"]')!;
     await act(async () => {
@@ -1103,7 +1121,9 @@ describe('contextual table chrome (Task 10)', () => {
     expect(trigger.title).toBe('the document is open for viewing');
     const describedBy = trigger.getAttribute('aria-describedby');
     expect(describedBy).toBeTruthy();
-    expect(document.getElementById(describedBy!)?.textContent).toBe('the document is open for viewing');
+    expect(document.getElementById(describedBy!)?.textContent).toBe(
+      'the document is open for viewing'
+    );
   });
 
   test('table chrome labels resolve through t, not hardcoded English', async () => {
@@ -1123,9 +1143,9 @@ describe('contextual table chrome (Task 10)', () => {
     await act(async () => {
       trigger.click();
     });
-    const labels = [...view.container.querySelectorAll('[data-slot="table.borderStyle"] [role="menuitemradio"]')].map(
-      (row) => row.textContent
-    );
+    const labels = [
+      ...view.container.querySelectorAll('[data-slot="table.borderStyle"] [role="menuitemradio"]'),
+    ].map((row) => row.textContent);
     expect(labels).toEqual([
       'table.borderStyles.single',
       'table.borderStyles.dashed',
@@ -1155,7 +1175,9 @@ describe('contextual table chrome (Task 10)', () => {
       const popup = root.querySelector('[role="dialog"]')!;
       expect(popup.querySelector('.docx-toolbar__swatch-grid--theme')).not.toBeNull();
       expect(
-        popup.querySelectorAll('.docx-toolbar__swatch-grid:not(.docx-toolbar__swatch-grid--theme) button')
+        popup.querySelectorAll(
+          '.docx-toolbar__swatch-grid:not(.docx-toolbar__swatch-grid--theme) button'
+        )
       ).toHaveLength(10);
       expect(popup.querySelector('.docx-toolbar__swatch-hex')).not.toBeNull();
       await act(async () => {
@@ -1296,9 +1318,7 @@ describe('enabled state is the engine answer, not a registry constant', () => {
     expect(undo.title).toContain('nothing to undo');
 
     await act(async () => {
-      (
-        view.container.querySelector('[data-slot="text.underline"]') as HTMLButtonElement
-      ).click();
+      (view.container.querySelector('[data-slot="text.underline"]') as HTMLButtonElement).click();
     });
     expect(undo.disabled).toBe(false);
   });

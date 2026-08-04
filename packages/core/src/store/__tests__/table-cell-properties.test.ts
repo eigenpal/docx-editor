@@ -21,7 +21,7 @@ import {
   testVisualMemberCheckCount,
   testVisualOwnerGroupValidationCount,
 } from '../store/tree-op-table-cell-properties.ts';
-import { wmlChildNamed } from '../store/tree-op-table-shared.ts';
+import { wmlAttributeValue, wmlChildNamed } from '../store/tree-op-table-shared.ts';
 import { diffSemanticDigests, semanticDigest } from '../package/ooxml-digest.ts';
 import { MAX_TABLE_CELL_SELECTION_COUNT, MAX_TABLE_COLUMNS } from '../store/table-constraints.ts';
 import { TABLE_BORDER_STYLES } from '../table-border-style.ts';
@@ -512,6 +512,29 @@ describe('setTableCellFill', () => {
     expect(shd.attributes.find((a) => a.localName === 'themeFill')?.value).toBe('accent1');
     expect(shd.attributes.find((a) => a.localName === 'themeFillTint')?.value).toBe('66');
     expect(shdFill(result.part, id)).toBe('445566');
+  });
+});
+
+describe('setTableCellVerticalAlignment', () => {
+  test('writes direct vAlign to every selected cell', () => {
+    const part = load(TABLE(ROW(CELL('a1'), CELL('a2'))));
+    const table = collectByKind(part.root, 'table')[0]!;
+    const ids = cellIds(part, [
+      [0, 0],
+      [0, 1],
+    ]);
+    const result = applyTreeOp(part, {
+      op: 'setTableCellVerticalAlignment',
+      tableId: table.id,
+      cellIds: ids,
+      alignment: 'center',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    for (let column = 0; column < 2; column += 1) {
+      const tcPr = wmlChildNamed(cellAt(result.part, 0, column), 'tcPr')!;
+      expect(wmlAttributeValue(wmlChildNamed(tcPr, 'vAlign')!, 'val')).toBe('center');
+    }
   });
 });
 

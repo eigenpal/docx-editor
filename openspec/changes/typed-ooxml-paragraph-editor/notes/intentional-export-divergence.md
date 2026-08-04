@@ -340,6 +340,7 @@ Task 10 landed five contextual toolbar parts and seven fixed table context-menu 
 - `ContextMenuDeleteTableRow`
 - `ContextMenuDeleteTableColumn`
 - `ContextMenuDeleteTable`
+- `ContextMenuCellVerticalAlignment`
 
 ### Opening a document
 

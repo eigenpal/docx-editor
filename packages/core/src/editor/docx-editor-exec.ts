@@ -273,6 +273,7 @@ export function execEditorCommand(
     case 'deleteColumn':
     case 'deleteTable':
     case 'setCellFill':
+    case 'setTableCellVerticalAlignment':
     case 'setTableBorders':
     case 'commitTableColumnDividerResize':
     case 'commitTableRightEdgeResize':

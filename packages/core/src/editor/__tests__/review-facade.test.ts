@@ -156,6 +156,34 @@ describe('the review queue the facade publishes', () => {
 });
 
 describe('tracked table rows', () => {
+  test('sequential suggesting keystrokes replace table-cell text beyond one character', () => {
+    const editor = mount({ body: TWO_ROW_TABLE });
+    editor.setEditingMode('suggesting');
+    const firstParagraph = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: firstParagraph, offset: 0 },
+      head: { paragraphId: firstParagraph, offset: 5 },
+    });
+
+    editor.surface!.type('s');
+    expect(editor.surface!.state().selection.head).toEqual({
+      paragraphId: firstParagraph,
+      offset: 6,
+    });
+    editor.surface!.type('e');
+
+    expect(editor.surface!.state().lastRejection).toBeNull();
+    expect(editor.surface!.state().selection.head).toEqual({
+      paragraphId: firstParagraph,
+      offset: 7,
+    });
+    const replacement = editor
+      .getReviewItems()
+      .find((item) => item.kind === 'revision' && item.revisionKind === 'replace');
+    expect(replacement?.replacedText).toBe('first');
+    expect(replacement?.text).toBe('se');
+  });
+
   test('inserting a row paints immediately, opens one review card, and keeps typing', () => {
     const editor = mount({ body: TWO_ROW_TABLE });
     editor.setEditingMode('suggesting');

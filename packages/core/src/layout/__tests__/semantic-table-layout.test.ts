@@ -340,8 +340,8 @@ describe('semantic table layout', () => {
       1,
       5
     );
-    // Pre-fix floor was 20pt; content-sized row is 2+14+1 = 17.
-    expect(tight.box.height).toBeCloseTo(17, 5);
+    // No fixed row floor: the box is exactly top margin + resolved line + bottom margin.
+    expect(tight.box.height).toBeCloseTo(2 + tightLine.box.height + 1, 5);
     expect(tight.box.height).toBeLessThan(19);
   });
 

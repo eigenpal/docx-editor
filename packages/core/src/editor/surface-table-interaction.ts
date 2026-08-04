@@ -13,7 +13,11 @@ import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
 import type { BlockFragmentRecord, TableFragmentRecord } from '../layout/semantic-records.ts';
 import type { CellSelection } from '../layout/semantic-cell-selection.ts';
 import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
-import { planTableCommand, type TableCommandPlan } from './table-command-plan.ts';
+import {
+  planTableCommand,
+  planTableRowHeightResize,
+  type TableCommandPlan,
+} from './table-command-plan.ts';
 import { pageAtY } from '../layout/semantic-hit-test.ts';
 import {
   findTableInteractionAt,
@@ -35,10 +39,10 @@ import {
   tableRightEdgeResizeTargetFrom,
   tableRowOccurrenceTargetFrom,
   type TableOccurrenceRef,
+  type TableRowOccurrenceTarget,
 } from '../layout/table-interaction-targets.ts';
 import type { TableInteractionLabelKey } from './table-chrome.ts';
 
-const HOVER_REVEAL_MS = 150;
 const HOVER_HIDE_MS = 120;
 const PT_TO_TWIPS = 20;
 
@@ -75,15 +79,24 @@ export interface SurfaceTableInteraction {
 interface DragState {
   readonly pointerId: number;
   readonly startClientX: number;
+  readonly startClientY: number;
   readonly startEdgePt: number;
   readonly leftTwips: number;
   readonly rightTwips: number;
   readonly tableWidthTwips: number;
-  readonly target: Extract<TableInteractionHit, { kind: 'columnDivider' | 'rightEdge' }>;
+  readonly rowHeightTwips: number;
+  readonly target: Extract<
+    TableInteractionHit,
+    { kind: 'columnDivider' | 'rightEdge' | 'rowDivider' }
+  >;
   readonly ref: TableOccurrenceRef;
-  readonly resizeTarget: TableColumnDividerResizeTarget | TableRightEdgeResizeTarget;
+  readonly resizeTarget:
+    | TableColumnDividerResizeTarget
+    | TableRightEdgeResizeTarget
+    | TableRowOccurrenceTarget;
   readonly captureElement: HTMLElement;
   readonly rightEdge: boolean;
+  readonly vertical: boolean;
   cancelled: boolean;
 }
 
@@ -142,7 +155,7 @@ function occurrenceRef(
   layout: SemanticLayout,
   hit: Extract<
     TableInteractionHit,
-    { kind: 'columnDivider' | 'rightEdge' | 'insertRow' | 'insertColumn' }
+    { kind: 'columnDivider' | 'rightEdge' | 'rowDivider' | 'insertRow' | 'insertColumn' }
   >
 ): TableOccurrenceRef | null {
   if (hit.kind === 'insertColumn') {
@@ -165,7 +178,6 @@ export function createSurfaceTableInteraction(
   layer.style.top = '0';
   layer.style.pointerEvents = 'none';
 
-  let revealTimer: ReturnType<typeof setTimeout> | null = null;
   let hideTimer: ReturnType<typeof setTimeout> | null = null;
   let hoverHit: TableInteractionHit | null = null;
   let index: TableInteractionIndex | null = null;
@@ -174,6 +186,7 @@ export function createSurfaceTableInteraction(
   let drag: DragState | null = null;
   let overInsertControl = false;
   let lastMoveClientX = 0;
+  let lastMoveClientY = 0;
   let lastPointerSheet: LastPointerSheet | null = null;
   let insertButton: HTMLButtonElement | null = null;
   let insertHit: TableInteractionHit | null = null;
@@ -210,10 +223,6 @@ export function createSurfaceTableInteraction(
   }
 
   function clearTimers(): void {
-    if (revealTimer !== null) {
-      clearTimeout(revealTimer);
-      revealTimer = null;
-    }
     if (hideTimer !== null) {
       clearTimeout(hideTimer);
       hideTimer = null;
@@ -266,7 +275,7 @@ export function createSurfaceTableInteraction(
 
   function paintPreview(
     edgePt: number,
-    hit: Extract<TableInteractionHit, { kind: 'columnDivider' | 'rightEdge' }>
+    hit: Extract<TableInteractionHit, { kind: 'columnDivider' | 'rightEdge' | 'rowDivider' }>
   ): void {
     const input = host.read();
     const table = findTableOnPage(input.layout, hit.tableId, hit.pageIndex);
@@ -275,11 +284,16 @@ export function createSurfaceTableInteraction(
     preview.className = 'docx-table-resize-preview';
     preview.style.position = 'absolute';
     preview.style.pointerEvents = 'none';
-    const pos = cssPoint(hit.pageIndex, table.box.x + edgePt, table.box.y);
+    const vertical = hit.kind !== 'rowDivider';
+    const pos = cssPoint(
+      hit.pageIndex,
+      vertical ? table.box.x + edgePt : table.box.x,
+      vertical ? table.box.y : table.box.y + edgePt
+    );
     preview.style.left = `${pos.left}px`;
     preview.style.top = `${pos.top}px`;
-    preview.style.width = '2px';
-    preview.style.height = `${table.box.height * host.scale()}px`;
+    preview.style.width = vertical ? '2px' : `${table.box.width * host.scale()}px`;
+    preview.style.height = vertical ? `${table.box.height * host.scale()}px` : '2px';
     layer.append(preview);
   }
 
@@ -395,11 +409,30 @@ export function createSurfaceTableInteraction(
       handle.style.position = 'absolute';
       handle.style.pointerEvents = 'auto';
       handle.style.cursor = 'col-resize';
+      handle.dataset.active = 'true';
       const pos = cssPoint(hit.pageIndex, table.box.x + hit.edgeX, table.box.y);
       handle.style.left = `${pos.left - 3}px`;
       handle.style.top = `${pos.top}px`;
       handle.style.width = '6px';
       handle.style.height = `${table.box.height * host.scale()}px`;
+      handle.addEventListener('pointerdown', onDividerPointerDown);
+      layer.append(handle);
+    }
+
+    if (hit.kind === 'rowDivider' && !hit.isHeaderRepeat) {
+      const table = findTableOnPage(input.layout, hit.tableId, hit.pageIndex);
+      if (!table) return;
+      const handle = document.createElement('div');
+      handle.className = 'docx-table-row-divider-handle layout-table-row-resize-handle';
+      handle.style.position = 'absolute';
+      handle.style.pointerEvents = 'auto';
+      handle.style.cursor = 'row-resize';
+      handle.dataset.active = 'true';
+      const pos = cssPoint(hit.pageIndex, table.box.x, table.box.y + hit.edgeY);
+      handle.style.left = `${pos.left}px`;
+      handle.style.top = `${pos.top - 3}px`;
+      handle.style.width = `${table.box.width * host.scale()}px`;
+      handle.style.height = '6px';
       handle.addEventListener('pointerdown', onDividerPointerDown);
       layer.append(handle);
     }
@@ -465,23 +498,33 @@ export function createSurfaceTableInteraction(
     if (event.button !== 0) return;
     const input = host.read();
     if (input.editingMode === 'view') return;
-    if (!hoverHit || (hoverHit.kind !== 'columnDivider' && hoverHit.kind !== 'rightEdge')) return;
+    if (
+      !hoverHit ||
+      (hoverHit.kind !== 'columnDivider' &&
+        hoverHit.kind !== 'rightEdge' &&
+        hoverHit.kind !== 'rowDivider')
+    )
+      return;
     event.preventDefault();
     event.stopPropagation();
     const target = hoverHit;
     const ref = occurrenceRef(input.layout, target);
     if (!ref) return;
     const topo = readEditableTableTopology(host.session().part().root, target.tableId);
-    if (!topo.ok || topo.topology.hasMerge) return;
+    if (!topo.ok || (target.kind !== 'rowDivider' && topo.topology.hasMerge)) return;
 
     let leftTwips = 0;
     let rightTwips = 0;
+    let rowHeightTwips = 0;
     const tableWidthTwips = topo.topology.gridColumns.reduce(
       (sum, col) => sum + gridWidthTwips(col),
       0
     );
 
-    let resizeTarget: TableColumnDividerResizeTarget | TableRightEdgeResizeTarget;
+    let resizeTarget:
+      | TableColumnDividerResizeTarget
+      | TableRightEdgeResizeTarget
+      | TableRowOccurrenceTarget;
     if (target.kind === 'columnDivider') {
       const leftCol = topo.topology.gridColumns.find((col) => col.id === target.leftGridColumnId);
       const rightCol = topo.topology.gridColumns.find((col) => col.id === target.rightGridColumnId);
@@ -494,7 +537,7 @@ export function createSurfaceTableInteraction(
         target.leftGridColumnId,
         target.rightGridColumnId
       );
-    } else {
+    } else if (target.kind === 'rightEdge') {
       const lastCol = topo.topology.gridColumns.find((col) => col.id === target.gridColumnId);
       if (!lastCol) return;
       leftTwips = gridWidthTwips(lastCol);
@@ -504,30 +547,37 @@ export function createSurfaceTableInteraction(
         ref,
         target.gridColumnId
       );
+    } else {
+      rowHeightTwips = Math.max(20, Math.round(ref.row.box.height * PT_TO_TWIPS));
+      resizeTarget = tableRowOccurrenceTargetFrom(target.sourceRevision, ref);
     }
 
     const captureElement = event.currentTarget as HTMLElement;
     captureElement.setPointerCapture(event.pointerId);
     lastMoveClientX = event.clientX;
+    lastMoveClientY = event.clientY;
 
     drag = {
       pointerId: event.pointerId,
       startClientX: event.clientX,
-      startEdgePt: target.edgeX,
+      startClientY: event.clientY,
+      startEdgePt: target.kind === 'rowDivider' ? target.edgeY : target.edgeX,
       leftTwips,
       rightTwips,
       tableWidthTwips,
+      rowHeightTwips,
       target,
       ref,
       resizeTarget,
       captureElement,
       rightEdge: target.kind === 'rightEdge',
+      vertical: target.kind === 'rowDivider',
       cancelled: false,
     };
     for (const child of [...layer.children]) {
       if (child !== captureElement) child.remove();
     }
-    paintPreview(target.edgeX, target);
+    paintPreview(target.kind === 'rowDivider' ? target.edgeY : target.edgeX, target);
   }
 
   function cancelDrag(): void {
@@ -561,18 +611,39 @@ export function createSurfaceTableInteraction(
       // ignore release failures in test hosts
     }
 
-    if (lastMoveClientX === activeDrag.startClientX) {
+    if (
+      activeDrag.vertical
+        ? lastMoveClientY === activeDrag.startClientY
+        : lastMoveClientX === activeDrag.startClientX
+    ) {
       clearFurniture();
       return;
     }
 
     const input = host.read();
     const mode = plannerMode(input);
-    const movePt = (lastMoveClientX - activeDrag.startClientX) / host.scale();
+    const movePt =
+      (activeDrag.vertical
+        ? lastMoveClientY - activeDrag.startClientY
+        : lastMoveClientX - activeDrag.startClientX) / host.scale();
     const moveTwips = Math.round(movePt * PT_TO_TWIPS);
 
     let plan: TableCommandPlan;
-    if (activeDrag.rightEdge && activeDrag.target.kind === 'rightEdge') {
+    if (activeDrag.target.kind === 'rowDivider') {
+      plan = planTableRowHeightResize(
+        {
+          part: host.session().part(),
+          layout: input.layout,
+          storeRevision: input.storeRevision,
+          selection: input.selection,
+          cellSelection: input.cellSelection,
+          themeColors: input.themeColors,
+          ...mode,
+        },
+        activeDrag.resizeTarget as TableRowOccurrenceTarget,
+        Math.max(20, activeDrag.rowHeightTwips + moveTwips)
+      );
+    } else if (activeDrag.rightEdge && activeDrag.target.kind === 'rightEdge') {
       const columnWidthTwips = Math.max(
         MIN_TABLE_COLUMN_WIDTH_TWIPS,
         activeDrag.leftTwips + moveTwips
@@ -698,7 +769,10 @@ export function createSurfaceTableInteraction(
     const input = host.read();
     if (drag && event.pointerId === drag.pointerId) {
       lastMoveClientX = event.clientX;
-      const deltaPt = (event.clientX - drag.startClientX) / host.scale();
+      lastMoveClientY = event.clientY;
+      const deltaPt =
+        (drag.vertical ? event.clientY - drag.startClientY : event.clientX - drag.startClientX) /
+        host.scale();
       for (const child of [...layer.children]) {
         if (child !== drag.captureElement) child.remove();
       }
@@ -741,30 +815,10 @@ export function createSurfaceTableInteraction(
       hideTimer = null;
     }
     if (hoverHit && tableInteractionHitIdentity(hit) === tableInteractionHitIdentity(hoverHit)) {
-      if (
-        revealTimer &&
-        (hit.kind === 'insertRow' || hit.kind === 'insertColumn')
-      ) {
-        clearTimeout(revealTimer);
-        revealTimer = null;
-      }
       return;
     }
-    if (hit.kind === 'insertRow' || hit.kind === 'insertColumn') {
-      if (revealTimer) {
-        clearTimeout(revealTimer);
-        revealTimer = null;
-      }
-      hoverHit = hit;
-      paintHover(hit, input);
-      return;
-    }
-    if (revealTimer) clearTimeout(revealTimer);
-    revealTimer = setTimeout(() => {
-      revealTimer = null;
-      hoverHit = hit;
-      paintHover(hit, input);
-    }, HOVER_REVEAL_MS);
+    hoverHit = hit;
+    paintHover(hit, input);
   }
 
   function onPointerUp(event: PointerEvent): void {

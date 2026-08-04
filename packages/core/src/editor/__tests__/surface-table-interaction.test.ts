@@ -14,6 +14,8 @@ import type { TableInteractionLabelKey } from '../surface-table-interaction.ts';
 import type { TableCommandPlan } from '../table-command-plan.ts';
 import { planTableCommand } from '../table-command-plan.ts';
 import { paragraphTextOf } from '../../store/store/tree-ops.ts';
+import { readEditableTableTopology } from '../../store/store/tree-op-table-topology.ts';
+import { wmlAttributeValue, wmlChildNamed } from '../../store/store/tree-op-table-shared.ts';
 import { cellSelectionBetween } from '../../layout/semantic-cell-selection.ts';
 import type { TableCellAddress } from '../../layout/semantic-hit-test.ts';
 import {
@@ -436,7 +438,7 @@ describe('surface table interaction furniture', () => {
     expect(control!.dataset.rowId).toBe(table.rows[1]!.id);
   });
 
-  test('returning to same insertion hit cancels pending resize reveal', async () => {
+  test('returning to an insertion hit replaces the immediate resize handle', () => {
     const mounted = mount(TABLE);
     const layout = mounted.surface.layout();
     const table = tableOnPage(layout);
@@ -451,27 +453,62 @@ describe('surface table interaction furniture', () => {
     mounted.pages.dispatchEvent(
       pointerAtPageContent(mounted.surface, mounted.pages, 0, dividerX, rowMidY)
     );
-    expect(mounted.furniture.querySelector('.docx-table-divider-handle')).toBeNull();
+    expect(mounted.furniture.querySelector('.docx-table-divider-handle')).not.toBeNull();
     mounted.pages.dispatchEvent(
       pointerAtPageContent(mounted.surface, mounted.pages, 0, insertX, rowMidY)
     );
-    await new Promise((resolve) => setTimeout(resolve, 180));
     expect(mounted.furniture.querySelector('.docx-table-divider-handle')).toBeNull();
     expect(mounted.furniture.querySelector('.docx-table-insert-row')).not.toBeNull();
   });
 
-  test('hover reveals divider handle after delay', async () => {
+  test('hover reveals a blue divider handle and resize cursor immediately', () => {
     const { pages, furniture, surface } = mount(TABLE);
     const layout = surface.layout();
     const table = tableOnPage(layout);
     const x = table.box.x + table.columnEdges[1]!;
     const y = table.box.y + table.rows[0]!.box.height / 2;
     pages.dispatchEvent(pointer('pointermove', x, y));
-    expect(furniture.querySelector('.docx-table-divider-handle')).toBeNull();
-    await new Promise((resolve) => setTimeout(resolve, 180));
-    pages.dispatchEvent(pointer('pointermove', x, y));
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(furniture.querySelector('.docx-table-divider-handle')).not.toBeNull();
+    const handle = furniture.querySelector<HTMLElement>('.docx-table-divider-handle');
+    expect(handle).not.toBeNull();
+    expect(handle!.style.cursor).toBe('col-resize');
+    expect(handle!.dataset.active).toBe('true');
+  });
+
+  test('hover reveals a horizontal row resize handle and drag commits row height', () => {
+    const mounted = mount(TABLE);
+    const table = tableOnPage(mounted.surface.layout());
+    const x = table.box.x + table.box.width / 4;
+    const edgeY = table.rows[0]!.box.y + table.rows[0]!.box.height;
+    mounted.pages.dispatchEvent(pointer('pointermove', x, edgeY));
+    const handle = mounted.furniture.querySelector<HTMLElement>('.docx-table-row-divider-handle');
+    expect(handle).not.toBeNull();
+    expect(handle!.style.cursor).toBe('row-resize');
+    expect(handle!.dataset.active).toBe('true');
+
+    const plans: TableCommandPlan[] = [];
+    const original = mounted.surface.applyTableCommandPlan.bind(mounted.surface);
+    mounted.surface.applyTableCommandPlan = (plan) => {
+      plans.push(plan);
+      return original(plan);
+    };
+    handle!.dispatchEvent(pointer('pointerdown', x, edgeY));
+    document.dispatchEvent(pointer('pointermove', x, edgeY + 12, { buttons: 1 }));
+    document.dispatchEvent(pointer('pointerup', x, edgeY + 12));
+
+    expect(plans).toHaveLength(1);
+    expect(plans[0]?.ok).toBe(true);
+    if (plans[0]?.ok) {
+      expect(plans[0].ops[0]?.op).toBe('setTableRowHeight');
+    }
+    const topology = readEditableTableTopology(mounted.surface.session.part().root, table.tableId);
+    expect(topology.ok).toBe(true);
+    if (topology.ok) {
+      const resizedRow = topology.topology.rows.find((entry) => entry.row.id === table.rows[0]!.id);
+      const trHeight =
+        resizedRow && wmlChildNamed(wmlChildNamed(resizedRow.row, 'trPr')!, 'trHeight');
+      expect(wmlAttributeValue(trHeight!, 'hRule')).toBe('exact');
+      expect(Number(wmlAttributeValue(trHeight!, 'val'))).toBeGreaterThan(0);
+    }
   });
 
   test('moving between same-kind targets refreshes furniture identity', async () => {

@@ -609,14 +609,12 @@ describe('table context rows (Task 10)', () => {
     const slots = rows(view).map((row) => row.dataset.slot);
     const tableStart = slots.indexOf('table.insertRowAbove');
     expect(tableStart).toBeGreaterThan(-1);
-    expect(slots.slice(tableStart, tableStart + TABLE_ROW_IDS.length)).toEqual([
-      ...TABLE_ROW_IDS,
-    ]);
+    expect(slots.slice(tableStart, tableStart + TABLE_ROW_IDS.length)).toEqual([...TABLE_ROW_IDS]);
     expect(slots).not.toContain('table.mergeCells');
     expect(slots).not.toContain('table.splitCell');
   });
 
-  test('destructive table rows carry the destructive treatment and sit last', () => {
+  test('destructive table rows carry the destructive treatment before cell alignment', () => {
     const { view, editor } = mountDocument(TABLE_2X2);
     act(() => {
       const paragraphId = editor().surface!.session.paragraphIds()[0]!;
@@ -634,7 +632,35 @@ describe('table context rows (Task 10)', () => {
       'table.deleteColumn',
       'table.deleteTable',
     ]);
-    expect(rows(view).at(-1)?.dataset.slot).toBe('table.deleteTable');
+    expect(
+      view.container.querySelectorAll('.docx-contextmenu__table-align-button[role="menuitemradio"]')
+        .length
+    ).toBe(3);
+  });
+
+  test('cell vertical alignment appears as a compact three-button group and executes', () => {
+    const { view, editor } = mountDocument(TABLE_2X2);
+    act(() => {
+      const paragraphId = editor().surface!.session.paragraphIds()[0]!;
+      editor().surface!.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 1 },
+      });
+    });
+    rightClick(view);
+    const buttons = view.container.querySelectorAll<HTMLButtonElement>(
+      '.docx-contextmenu__table-align-button'
+    );
+    expect(buttons.length).toBe(3);
+    expect([...buttons].map((button) => button.getAttribute('aria-label'))).toEqual([
+      'tableAdvanced.top',
+      'tableAdvanced.middle',
+      'tableAdvanced.bottom',
+    ]);
+    act(() => {
+      fireEvent.click(buttons[1]!);
+    });
+    expect(panel(view)).toBeNull();
   });
 
   test('insert row below executes through the engine and closes the panel', () => {

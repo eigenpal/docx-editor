@@ -500,6 +500,13 @@ export type TreeDocOp =
       readonly tableWidthTwips: number;
     }
   | {
+      /** Set one authored table row to an exact height in twips. */
+      readonly op: 'setTableRowHeight';
+      readonly tableId: string;
+      readonly rowId: string;
+      readonly heightTwips: number;
+    }
+  | {
       /** Clear the active edge target on a bounded rectangular cell selection. */
       readonly op: 'setTableCellBorders';
       readonly tableId: string;
@@ -521,6 +528,13 @@ export type TreeDocOp =
       readonly tableId: string;
       readonly cellIds: readonly string[];
       readonly color: TreeDocColorValue | null;
+    }
+  | {
+      /** Set direct selected-cell vertical alignment (`w:tcPr/w:vAlign`). */
+      readonly op: 'setTableCellVerticalAlignment';
+      readonly tableId: string;
+      readonly cellIds: readonly string[];
+      readonly alignment: 'top' | 'center' | 'bottom';
     }
   | {
       /** Allocate an empty header/footer part and declare it on a section. Package-level. */
@@ -661,8 +675,10 @@ export const TREE_DOC_OP_KINDS = [
   'deleteTableColumn',
   'setTableColumnWidths',
   'setTableRightEdgeWidth',
+  'setTableRowHeight',
   'setTableCellBorders',
   'setTableCellFill',
+  'setTableCellVerticalAlignment',
   'createHeaderFooter',
   'deleteHeaderFooter',
   'linkToPrevious',

@@ -691,6 +691,9 @@ export interface TableBorderSpec {
   readonly color: ColorValue;
 }
 
+/** Vertical placement of content inside selected table cells. @public */
+export type TableCellVerticalAlignment = 'top' | 'center' | 'bottom';
+
 /**
  * Adjacent grid columns addressed by an internal divider resize gesture.
  *
@@ -813,6 +816,8 @@ export interface EditorCommands
   splitCell: { rows: number; cols: number };
   /** Selected-cell fill. `null` clears direct fill so the table-style cascade applies again. */
   setCellFill: { color: ColorValue | null };
+  /** Vertically align content inside the selected table cells. */
+  setTableCellVerticalAlignment: { alignment: TableCellVerticalAlignment };
   toggleHeaderRow: Record<never, never>;
   /**
    * Selected-cell borders. Concrete edge scopes require a complete spec;

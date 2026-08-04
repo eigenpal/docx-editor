@@ -71,6 +71,16 @@ export interface TableInteractionOccurrence {
 
 export type TableInteractionHit =
   | {
+      readonly kind: 'rowDivider';
+      readonly pageIndex: number;
+      readonly sourceRevision: number;
+      readonly tableId: string;
+      readonly rowId: string;
+      readonly isHeaderRepeat: boolean;
+      readonly nestingDepth: number;
+      readonly edgeY: number;
+    }
+  | {
       readonly kind: 'columnDivider';
       readonly pageIndex: number;
       readonly sourceRevision: number;
@@ -137,6 +147,7 @@ const INSERT_ROW_BAND_PX = 6;
 const INSERT_COLUMN_BAND_PX = 14;
 
 const HIT_SPECIFICITY: Record<TableInteractionHit['kind'], number> = {
+  rowDivider: 4,
   columnDivider: 4,
   rightEdge: 4,
   insertRow: 3,
@@ -239,6 +250,8 @@ export function sheetToPageContent(
 export function tableInteractionHitIdentity(hit: TableInteractionHit): string {
   const revision = hit.sourceRevision;
   switch (hit.kind) {
+    case 'rowDivider':
+      return `${revision}:${hit.kind}:${hit.pageIndex}:${hit.tableId}:${hit.rowId}:${hit.isHeaderRepeat}:${hit.edgeY}`;
     case 'columnDivider':
       return `${revision}:${hit.kind}:${hit.pageIndex}:${hit.tableId}:${hit.rowId}:${hit.isHeaderRepeat}:${hit.leftGridColumnId}:${hit.rightGridColumnId}:${hit.edgeX}`;
     case 'rightEdge':
@@ -255,6 +268,8 @@ export function tableInteractionHitIdentity(hit: TableInteractionHit): string {
 /** Canonical target identity ignoring captured revision (for relayout refresh). */
 export function tableInteractionTargetIdentity(hit: TableInteractionHit): string {
   switch (hit.kind) {
+    case 'rowDivider':
+      return `${hit.kind}:${hit.pageIndex}:${hit.tableId}:${hit.rowId}:${hit.isHeaderRepeat}:${hit.edgeY}`;
     case 'columnDivider':
       return `${hit.kind}:${hit.pageIndex}:${hit.tableId}:${hit.rowId}:${hit.isHeaderRepeat}:${hit.leftGridColumnId}:${hit.rightGridColumnId}:${hit.edgeX}`;
     case 'rightEdge':
@@ -358,6 +373,27 @@ function dividerHit(
 ): TableInteractionHit | null {
   if (occ.row.isHeaderRepeat) return null;
   const table = occ.table;
+  const rowBottom = occ.row.box.y - table.box.y + occ.row.box.height;
+  const nearColumnEdge = table.columnEdges
+    .slice(1)
+    .some((edgeX) => Math.abs(localX - edgeX) <= DIVIDER_HIT_PX);
+  if (
+    !nearColumnEdge &&
+    localX >= 0 &&
+    localX <= table.box.width &&
+    Math.abs(localY - rowBottom) <= DIVIDER_HIT_PX
+  ) {
+    return {
+      kind: 'rowDivider',
+      pageIndex: occ.pageIndex,
+      sourceRevision: index.sourceRevision,
+      tableId: table.tableId,
+      rowId: occ.row.id,
+      isHeaderRepeat: occ.row.isHeaderRepeat,
+      nestingDepth: occ.nestingDepth,
+      edgeY: rowBottom,
+    };
+  }
   if (
     localY < occ.row.box.y - occ.table.box.y ||
     localY > occ.row.box.y - occ.table.box.y + occ.row.box.height
