@@ -3675,6 +3675,19 @@ a.docx-hyperlink:focus-visible {
 
 .docx-review__marker {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--doc-text-muted, #8a8f98);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
 /* ============================================================================
  * DOCUMENT NAVIGATION PANE  (`DocxEditor.Navigation`)
  *
@@ -3988,13 +4001,11 @@ a.docx-hyperlink:focus-visible {
   justify-content: center;
   width: 28px;
   height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--doc-text-muted, #8a8f98);
+  border: 1px solid var(--doc-border-input);
+  border-radius: 4px;
+  background: var(--doc-bg-input);
+  color: var(--doc-text-muted);
   cursor: pointer;
-  pointer-events: auto;
 }
 
 .docx-review__marker:hover {

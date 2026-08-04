@@ -940,10 +940,15 @@ describe('enabled state is the engine answer, not a registry constant', () => {
     // assertion inverts: nothing the default bar renders may report "not wired". The
     // remaining unwired slots (image, table, TOC) are contextual and not in this bar.
     const { view } = mountToolbar(<DocxEditorToolbar />);
-    const dead = [...view.container.querySelectorAll('[data-slot]')].filter(
+    // The compound parts put `data-slot` on a wrapper and the tooltip on the button inside
+    // it, so scanning `[data-slot]` for a title was blind to exactly the parts this covers.
+    // Scan every element carrying the reason, then name the slot by walking up to it.
+    const controls = [...view.container.querySelectorAll('[data-slot]')];
+    expect(controls.length).toBeGreaterThan(10);
+    const dead = [...view.container.querySelectorAll('[title]')].filter(
       (part) => part.getAttribute('title') === 'not wired to an editor command'
     );
-    expect(dead.map((part) => part.getAttribute('data-slot'))).toEqual([]);
+    expect(dead.map((part) => part.closest('[data-slot]')?.getAttribute('data-slot'))).toEqual([]);
   });
 
   test('a wired control the engine refuses NOW shows the engine reason', async () => {

@@ -22,6 +22,7 @@
     "build:packages": "bun run --filter '@docx-editor.dev/i18n' build && bun run --filter '@docx-editor.dev/react' build && bun run --filter '@docx-editor.dev/agents' --filter '@docx-editor.dev/vue' build && bun run --filter '@docx-editor.dev/nuxt' build",
     "build:packages:demo": "bun run --filter '@docx-editor.dev/i18n' build && bun run --filter '@docx-editor.dev/react' build",
     "build:react": "cd examples/vite && USE_PUBLISHED_PACKAGES=true VITE_BASE_PATH=/react/ vite build",
+    "check:app-build": "cd examples/vite && vite build --logLevel warn --outDir dist-check --emptyOutDir",
     "build:vue": "cd examples/vue && USE_PUBLISHED_PACKAGES=true VITE_BASE_PATH=/vue/ vite build",
     "changeset": "changeset",
     "check:adapter-css-thin": "node scripts/check-adapter-css-thin.mjs",

@@ -64,6 +64,13 @@ jobs:
       - name: Run tests
         run: bun test
 
+      # The React demo builds from LOCAL source, so this is the gate that a change to the
+      # engine or the shipped stylesheet still produces a working app. `build:packages`
+      # below does not catch it: a stylesheet that no CSS parser accepts passes typecheck,
+      # the whole suite and the adapter-CSS check, and only fails when an app bundles it.
+      - name: React demo app builds
+        run: bun run check:app-build
+
       - name: Install Playwright Chromium
         run: bunx playwright install chromium
 

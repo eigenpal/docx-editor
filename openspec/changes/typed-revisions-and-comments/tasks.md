@@ -185,3 +185,66 @@ See `openspec/changes/word-fidelity-review-findings.md`.
 - [ ] 11.10 Comment anchors are specified only inside a paragraph; `EG_RangeMarkupElements` also sits between paragraphs, rows, and cells (finding 2)
 - [ ] 11.11 State what a tracked note insertion, control value change, and drawing deletion are — the other four changes defer to requirements that do not yet exist (finding 3)
 - [ ] 11.12 Add the missing `## MODIFIED` spec delta for `core-comment-ops`
+
+## 12. Review findings from the docx-editor-v2 merge
+
+Two adversarial reviews over the merged branch. Each item below was REPRODUCED, not
+inferred. None is a merge artefact alone — the merge made several of them reachable — and
+none blocks the slice, so they land on their own branch rather than growing this one.
+
+- [ ] 12.1 **The offset model is forked.** `segmentsOf` (`store/tree-op-segments.ts`) is the
+  authority. Three private walkers disagree with it: `tree-op-tracked.ts` `lengthOf`,
+  `comment-anchors.ts` `textLengthOfRunChild`/`markersInParagraph`, and `review-model.ts`
+  `runLength`. None descends into `w:hyperlink`; none gives a note reference or an atomic
+  field its length of 1. Fix by delegating to `segmentsOf` rather than by patching each
+  walker, or they will drift again
+- [ ] 12.2 Consequence of 12.1 in comment anchors: a comment after a hyperlink anchors short
+  by the link's length; markers written INSIDE a `w:hyperlink` — what Word writes when you
+  comment on link text — yield no anchor at all and the comment reports `orphaned`
+- [ ] 12.3 Consequence of 12.1 in threading: two comments over two ADJACENT hyperlinks both
+  collapse to a zero-width anchor at the same offset, so the coincidence rule threads two
+  unrelated authors' comments into one card. Fix 12.1; additionally refuse coincidence on a
+  zero-width range, which is evidence of nothing
+- [ ] 12.4 Consequence of 12.1 in suggesting mode: in any paragraph carrying a footnote,
+  endnote or field, a tracked insert lands at the wrong offset, an insert at the true
+  paragraph end is refused `offset-out-of-range`, and a tracked delete strikes one character
+  too many while leaving the reference in place
+- [ ] 12.5 **Section addressing desyncs from the filtered block list.** `semantic-layout.ts`
+  filters `storyBlocks` by display mode; `enumerateDocumentSections` does not, and
+  `multi-section-layout.ts` slices the filtered list with unfiltered indices. Body text lands
+  under the wrong section's page geometry. The comment above `revisionRemovesParagraph`
+  predicted exactly this
+- [ ] 12.6 `MAX_INLINE_DEPTH = 8` in `revision-visibility.ts` against an effective 32 in
+  `field-projection.ts`: past depth 8 a paragraph is called empty while layout still emits its
+  spans, so file-controlled nesting drops visible text
+- [ ] 12.7 A comment reply publishes the body store's private package through
+  `replacePackageShell`, discarding a `numbering.xml` graft or a hyperlink relationship the
+  coordinator applied first — dangling `w:numPr` / `r:id` on save. `graftPackage`, the narrow
+  documented lane for this, is now unreferenced
+- [ ] 12.8 `commentsPartNameFor` trusts any relationship of the comments type without a
+  content-type check, so a crafted package redirects a comment write into another part while
+  the read side stays hardcoded to `/word/comments.xml`
+- [ ] 12.9 A reply to a reply is unreachable: the rail filters every `parentId` from the top
+  level and renders exactly one level of replies
+- [ ] 12.10 A multi-site revision (a tracked row insertion) yields two cards with identical
+  ids — the grouping key includes `localName`, the card id does not
+- [ ] 12.11 `w:rPrChange` has no anchor: `locateSites` stops at the run, so the card sorts to
+  the end of the rail, has no geometry, and the caret in tracked-formatted text activates
+  nothing while accept/reject stay offered
+- [ ] 12.12 `pairReplacements` is deletions x insertions and the thread walk is per-comment
+  ancestor chains: ~128ms at 2000 revisions, ~255ms at 4000 comments, both on file-controlled
+  input and both re-run per paint
+- [ ] 12.13 Accept/reject render live in Viewing and fail silently — the rail ignores editing
+  mode, `useReview.accept/reject` discard the `ExecResult`, and the facade replaces the
+  engine's refusal with an invented string
+- [ ] 12.14 `nextCommentId` returns `highest + 1` unguarded where `nextRevisionId` clamps to
+  signed 32-bit and wraps
+- [ ] 12.15 Headers, footers, notes and comment anchors call `storyBlocks` unfiltered, so they
+  resolve revisions in a different mode than the body on the same page
+- [ ] 12.16 `revisionRemovesParagraph` defaults to `'proposed'` while every call site defaults
+  to `'all-markup'`; its unit tests call it bare and assert behaviour no production path reaches
+- [ ] 12.17 The projection drops a mark-deleted paragraph only when it renders empty; it never
+  performs the join when content survives, so `proposed` still differs from accept-all on a
+  case the fixture does not contain
+- [ ] 12.18 `RevisionDisplayMode` is plumbed through all of layout with no editor facade — no
+  read, no command, no snapshot field — so the mode is permanently `all-markup` to any host
