@@ -119,6 +119,17 @@ describe('the context-fed ruler parts', () => {
     expect(view.container.querySelectorAll('.docx-ruler-indent').length).toBe(4);
   });
 
+  test('HorizontalRuler follows the document viewport horizontally', () => {
+    const { view } = mountWith(<DocxEditorHorizontalRuler />, PLAIN_SOURCE);
+    const viewport = view.container.querySelector('.docx-editor__scroll-container') as HTMLElement;
+    const ruler = view.container.querySelector('.docx-horizontal-ruler') as HTMLElement;
+
+    viewport.scrollLeft = 125;
+    fireEvent.scroll(viewport);
+
+    expect(ruler.style.transform).toBe('translateX(-125px)');
+  });
+
   test('dragging the left margin zone commits ONE setPageSetup step on release', async () => {
     const { view, editor } = mountWith(<DocxEditorHorizontalRuler />, PLAIN_SOURCE);
     const ruler = view.container.querySelector('.docx-horizontal-ruler') as HTMLElement;

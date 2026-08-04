@@ -10,18 +10,17 @@
 // no relayout storm at mousemove frequency. Editability follows what the engine reports
 // (`usePageSetup().isEnabled`), so against a read-only document the handles stay inert.
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { RulerIndent } from '@docx-editor.dev/core-contract/editor';
 import { HorizontalRuler, type RulerPageSetup } from '../components/ui/HorizontalRuler';
 import { VerticalRuler } from '../components/ui/VerticalRuler';
-import { useContext } from 'react';
 import { ReviewRailContext, useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { usePageSetup } from './usePageSetup';
 import { useParagraphIndent } from './useParagraphIndent';
-import { useNavigationShift } from './navigation/navigation-layout';
+import { useNavigationShift, useNavigationViewportElement } from './navigation/navigation-layout';
 
 const selectZoom = (snapshot: EditorSnapshot): number => snapshot.zoom;
 
@@ -149,6 +148,25 @@ function useIndentDrag(): IndentDrag {
   );
 }
 
+/** Horizontal viewport movement shared by the painted page and the ruler above it. */
+function useViewportScrollLeft(): number {
+  const viewport = useNavigationViewportElement();
+  const [scrollLeft, setScrollLeft] = useState(0);
+
+  useEffect(() => {
+    if (!viewport) {
+      setScrollLeft(0);
+      return undefined;
+    }
+    const sync = () => setScrollLeft(viewport.scrollLeft);
+    sync();
+    viewport.addEventListener('scroll', sync, { passive: true });
+    return () => viewport.removeEventListener('scroll', sync);
+  }, [viewport]);
+
+  return scrollLeft;
+}
+
 /**
  * The horizontal ruler as a context-fed part (`DocxEditor.HorizontalRuler`): page
  * width, margins and zoom straight from the editor. Left/right margin handles are
@@ -168,6 +186,7 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
   // the right. Same values, same easing, so the ticks stay over the page they measure.
   const shift = useNavigationShift();
   const reserved = useReviewGutter();
+  const scrollLeft = useViewportScrollLeft();
   return (
     <HorizontalRuler
       pageSetup={previewed(pageSetup, pending)}
@@ -196,6 +215,8 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
         // `margin`, not one edge: the review pane moves the other side, and animating only
         // `margin-inline-start` left the ruler snapping while the page glided.
         transition: 'margin 0.2s ease',
+        // The ruler lives above the scroller, so mirror its horizontal movement explicitly.
+        transform: `${props.style?.transform ? `${props.style.transform} ` : ''}translateX(${-scrollLeft}px)`,
       }}
     />
   );
