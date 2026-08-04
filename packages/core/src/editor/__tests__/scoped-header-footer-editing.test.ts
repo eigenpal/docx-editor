@@ -623,6 +623,57 @@ describe('surface-root pointer delegation for HF / notes', () => {
     return event;
   }
 
+  test('root listener: single press in top margin places body caret without entering HF', () => {
+    const { surface, container } = mount(
+      docx({ header: RIGHT_TAB_HEADER, footer: RIGHT_TAB_FOOTER, body: `${p('One')}${p('Two')}` })
+    );
+    const pages = container.querySelector<HTMLElement>('.docx-pages')!;
+    stubPagesRect(pages);
+    pages.focus();
+
+    const page = surface.layout().pages[0]!;
+    const header = page.header!;
+    const clientX = header.box.x + 8;
+    const clientY = Math.max(page.box.y + 2, header.box.y - 4);
+
+    const event = pressAt(pages, pages, clientX, clientY);
+    expect(event.defaultPrevented).toBe(true);
+    expect(surface.activeScope()).toEqual({ kind: 'body' });
+    expect(pages.classList.contains('docx-pages--hf-editing')).toBe(false);
+    const bodyIds = surface.session.paragraphIds();
+    const { head } = surface.state().selection;
+    expect(bodyIds).toContain(head.paragraphId);
+    expect(document.activeElement).toBe(pages);
+
+    surface.destroy();
+  });
+
+  test('root listener: single press in bottom margin places body caret without entering HF', () => {
+    const { surface, container } = mount(
+      docx({ header: p('H'), footer: p('FOOTER'), body: `${p('One')}${p('Two')}` })
+    );
+    const pages = container.querySelector<HTMLElement>('.docx-pages')!;
+    stubPagesRect(pages);
+    pages.focus();
+
+    const page = surface.layout().pages[0]!;
+    const footer = page.footer!;
+    const painted = container.querySelector('[data-docx-hf="footer"]') as HTMLElement;
+    const clientX = footer.box.x + 4;
+    const clientY = page.box.y + page.box.height - 4;
+
+    const event = pressAt(pages, painted, clientX, clientY);
+    expect(event.defaultPrevented).toBe(true);
+    expect(surface.activeScope()).toEqual({ kind: 'body' });
+    expect(pages.classList.contains('docx-pages--hf-editing')).toBe(false);
+    const bodyIds = surface.session.paragraphIds();
+    const { head } = surface.state().selection;
+    expect(bodyIds).toContain(head.paragraphId);
+    expect(document.activeElement).toBe(pages);
+
+    surface.destroy();
+  });
+
   test('root listener: double press on painted header band enters HF scope and dims body', () => {
     const { surface, container } = mount(
       docx({ header: RIGHT_TAB_HEADER, footer: RIGHT_TAB_FOOTER, body: `${p('One')}${p('Two')}` })
@@ -639,7 +690,7 @@ describe('surface-root pointer delegation for HF / notes', () => {
     const clientX = header.box.x + 8;
     const clientY = Math.max(page.box.y + 2, header.box.y - 4);
     const first = pressAt(pages, pages, clientX, clientY);
-    expect(first.defaultPrevented).toBe(false);
+    expect(first.defaultPrevented).toBe(true);
     expect(surface.activeScope()).toEqual({ kind: 'body' });
     const event = pressAt(pages, pages, clientX, clientY);
 
@@ -682,7 +733,7 @@ describe('surface-root pointer delegation for HF / notes', () => {
       footer.box.x + 4,
       footer.box.y + Math.max(1, footer.box.height / 2)
     );
-    expect(first.defaultPrevented).toBe(false);
+    expect(first.defaultPrevented).toBe(true);
     expect(surface.activeScope()).toEqual({ kind: 'body' });
     const event = pressAt(
       pages,
@@ -707,10 +758,10 @@ describe('surface-root pointer delegation for HF / notes', () => {
     const painted = container.querySelector('[data-docx-hf="header"]') as HTMLElement;
     expect(painted.dataset.docxRId).toBe('rId10');
 
-    // Dispatch on the furniture node far outside the sheet — storyHit misses, DOM fallback
-    // must still open the painted rId (proves listener composition after rebase).
+    // Dispatch on the furniture node far outside the sheet — storyHit misses, so the first
+    // press falls through to body hit-testing; the second uses the DOM rId fallback.
     const first = pressAt(pages, painted, -500, -500);
-    expect(first.defaultPrevented).toBe(false);
+    expect(first.defaultPrevented).toBe(true);
     const event = pressAt(pages, painted, -500, -500);
     expect(event.defaultPrevented).toBe(true);
     expect(surface.activeScope()).toEqual({ kind: 'headerFooter', rId: 'rId10' });

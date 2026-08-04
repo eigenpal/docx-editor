@@ -11,6 +11,7 @@ import {
   resolveFootnoteProperties,
 } from '../../store/package/note-properties.ts';
 import { createFixedMeasurer } from '../fixed-measurer.ts';
+import { createLayoutSession } from '../layout-session.ts';
 import { layoutSemanticDocument } from '../semantic-layout.ts';
 import { enumerateDocumentSections } from '../section-properties.ts';
 import {
@@ -343,5 +344,322 @@ describe('footnote bottom reservation', () => {
     expect(noteHeight).toBeGreaterThan(10);
     // Stale page-0 reserve would leave a note-sized unused band on the prior page.
     expect(page0.contentBox.height - bodyUsedHeight(page0)).toBeLessThan(noteHeight * 0.5);
+  });
+
+  test('stale seeded reserves still re-run body and drop the abandoned page', () => {
+    const { part, notes } = loadNotesDoc(singleRefFootnoteDoc());
+    const sections = enumerateDocumentSections(part);
+    const refs = collectNoteReferences(part);
+    const ref = refs[0]!;
+    const contentH = 400;
+    const fillerId = 'filler-para';
+    const reserveCalls: Array<ReadonlyMap<number, number>> = [];
+    const session = {
+      previous: null as SemanticLayout | null,
+      multi: null as unknown,
+      // Prior published layout reserved page 0; citation has since moved to page 1.
+      notePageBottomReserves: new Map<number, number>([[0, 80]]) as ReadonlyMap<
+        number,
+        number
+      > | null,
+    };
+
+    const runBody = (opts: {
+      pageBottomReserves?: ReadonlyMap<number, number>;
+    }): SemanticLayout => {
+      const reserves = opts.pageBottomReserves ?? new Map<number, number>();
+      reserveCalls.push(new Map(reserves));
+      const r0 = reserves.get(0) ?? 0;
+      const r1 = reserves.get(1) ?? 0;
+      const refFrag = paraFrag(ref.paragraphId, {
+        atomEnd: ref.atomOffset + 1,
+        y: 0,
+        height: 14,
+      });
+      const filler = paraFrag(fillerId, {
+        atomEnd: 4,
+        y: 0,
+        height: Math.max(14, contentH - r0 - 1),
+      });
+
+      if (r0 > 0 && r1 <= 0) {
+        return {
+          revision: 1,
+          pages: [mockPage(0, [filler], contentH), mockPage(1, [refFrag], contentH)],
+        };
+      }
+      return {
+        revision: 1,
+        pages: [
+          mockPage(0, [paraFrag(fillerId, { atomEnd: 4, y: 0, height: contentH })], contentH),
+          mockPage(1, [refFrag], contentH),
+        ],
+      };
+    };
+
+    const layout = layoutSemanticDocumentWithNotes(
+      part,
+      sections,
+      { session, measurer: notes.measurer, producer: 'stale-seed-drop' },
+      notes,
+      runBody
+    );
+
+    expect(reserveCalls.length).toBeGreaterThanOrEqual(2);
+    expect(reserveCalls[0]!.has(0)).toBe(true);
+    const last = reserveCalls[reserveCalls.length - 1]!;
+    expect(last.has(0)).toBe(false);
+    expect(last.get(1) ?? 0).toBeGreaterThan(0);
+    expect(session.notePageBottomReserves!.has(0)).toBe(false);
+
+    const page0 = layout.pages[0]!;
+    const host = layout.pages.find((page) =>
+      (page.footnotes?.notes ?? []).some((n) => n.noteId === 1 && !n.continuation)
+    );
+    expect(host).toBeTruthy();
+    expect(host!.index).toBeGreaterThan(0);
+    const noteHeight = host!.footnotes?.box.height ?? 0;
+    expect(page0.contentBox.height - bodyUsedHeight(page0)).toBeLessThan(noteHeight * 0.5);
+  });
+});
+
+describe('incremental notes layout (reserve persistence)', () => {
+  function multiPageFootnoteDoc(paragraphCount: number, footnoteEvery: number): Uint8Array {
+    const bodyParas = Array.from({ length: paragraphCount }, (_, i) => {
+      const text = `Body line ${i} ${'word '.repeat(18)}`;
+      if (i > 0 && i % footnoteEvery === 0) {
+        const id = Math.floor(i / footnoteEvery);
+        return `<w:p><w:r><w:t>${text}</w:t><w:footnoteReference w:id="${id}"/></w:r></w:p>`;
+      }
+      return `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+    }).join('');
+    const noteCount = Math.floor(paragraphCount / footnoteEvery);
+    const notesXml = Array.from({ length: noteCount }, (_, i) => {
+      const id = i + 1;
+      return (
+        `<w:footnote w:id="${id}">` +
+        `<w:p><w:r><w:t>Note ${id} ${'note '.repeat(8)}</w:t></w:r></w:p>` +
+        '</w:footnote>'
+      );
+    }).join('');
+    return zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+          bodyParas +
+          '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/></w:sectPr>' +
+          '</w:body></w:document>'
+      ),
+      'word/footnotes.xml': strToU8(
+        `<w:footnotes xmlns:w="${W}">` +
+          `<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
+          `<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>` +
+          notesXml +
+          '</w:footnotes>'
+      ),
+    });
+  }
+
+  function editedMultiPageFootnoteDoc(
+    paragraphCount: number,
+    footnoteEvery: number,
+    editIndex: number
+  ): Uint8Array {
+    const bodyParas = Array.from({ length: paragraphCount }, (_, i) => {
+      const text =
+        i === editIndex
+          ? `Body line ${i} EDITED ${'word '.repeat(18)}`
+          : `Body line ${i} ${'word '.repeat(18)}`;
+      if (i > 0 && i % footnoteEvery === 0) {
+        const id = Math.floor(i / footnoteEvery);
+        return `<w:p><w:r><w:t>${text}</w:t><w:footnoteReference w:id="${id}"/></w:r></w:p>`;
+      }
+      return `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+    }).join('');
+    const noteCount = Math.floor(paragraphCount / footnoteEvery);
+    const notesXml = Array.from({ length: noteCount }, (_, i) => {
+      const id = i + 1;
+      return (
+        `<w:footnote w:id="${id}">` +
+        `<w:p><w:r><w:t>Note ${id} ${'note '.repeat(8)}</w:t></w:r></w:p>` +
+        '</w:footnote>'
+      );
+    }).join('');
+    return zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+          bodyParas +
+          '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/></w:sectPr>' +
+          '</w:body></w:document>'
+      ),
+      'word/footnotes.xml': strToU8(
+        `<w:footnotes xmlns:w="${W}">` +
+          `<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
+          `<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>` +
+          notesXml +
+          '</w:footnotes>'
+      ),
+    });
+  }
+
+  const layoutShape = (layout: SemanticLayout): string =>
+    JSON.stringify(
+      layout.pages.map((page) => ({
+        index: page.index,
+        box: page.box,
+        contentBox: page.contentBox,
+        fragments: page.fragments.map((f) => ({
+          kind: f.kind,
+          id: f.id,
+          box: f.box,
+          ...(f.kind === 'paragraph'
+            ? { paragraphId: f.paragraphId, range: f.range, lines: f.lines.length }
+            : {}),
+        })),
+        footnoteHeight: page.footnotes?.box.height ?? 0,
+        footnoteNotes: (page.footnotes?.notes ?? []).map((n) => ({
+          id: n.noteId,
+          continuation: n.continuation,
+        })),
+      }))
+    );
+
+  test('unchanged footnote document reuses session without a second full body pass', () => {
+    const { part, notes } = loadNotesDoc(multiPageFootnoteDoc(120, 20));
+    const session = createLayoutSession();
+    const first = layoutSemanticDocument(part, 1, {
+      measurer: notes.measurer,
+      notes,
+      session,
+      producer: 'notes-incremental-unchanged',
+    });
+    expect(first.pages.length).toBeGreaterThan(1);
+    expect(session.notePageBottomReserves).not.toBeNull();
+    expect(session.notePageBottomReserves!.size).toBeGreaterThan(0);
+    const fullPassesAfterCold = session.stats.fullPasses;
+    // Cold start: empty seed then reserved reflow → two full body passes.
+    expect(fullPassesAfterCold).toBe(2);
+
+    const second = layoutSemanticDocument(part, 2, {
+      measurer: notes.measurer,
+      notes,
+      session,
+      producer: 'notes-incremental-unchanged',
+    });
+    expect(layoutShape(second)).toBe(layoutShape(first));
+    expect(session.stats.placed).toBe(0);
+    expect(session.stats.reusedPages).toBe(first.pages.length);
+    // Warm pass must not run another full body pagination.
+    expect(session.stats.fullPasses).toBe(fullPassesAfterCold);
+  });
+
+  test('mid-document edit with footnotes matches a clean layout and resumes', () => {
+    const { part, notes } = loadNotesDoc(multiPageFootnoteDoc(120, 20));
+    const session = createLayoutSession();
+    layoutSemanticDocument(part, 1, {
+      measurer: notes.measurer,
+      notes,
+      session,
+      producer: 'notes-incremental-edit',
+    });
+    const fullPassesAfterCold = session.stats.fullPasses;
+
+    const { part: editedPart, notes: editedNotes } = loadNotesDoc(
+      editedMultiPageFootnoteDoc(120, 20, 55)
+    );
+    const incremental = layoutSemanticDocument(editedPart, 2, {
+      measurer: editedNotes.measurer,
+      notes: editedNotes,
+      session,
+      producer: 'notes-incremental-edit',
+    });
+    const clean = layoutSemanticDocument(editedPart, 2, {
+      measurer: editedNotes.measurer,
+      notes: editedNotes,
+      producer: 'notes-incremental-edit',
+    });
+    expect(layoutShape(incremental)).toBe(layoutShape(clean));
+    expect(session.stats.placed).toBeLessThan(session.stats.total);
+    expect(session.stats.reusedPages).toBeGreaterThan(0);
+    // Seeded reserves: the edit resumes — no extra full pass for reserve rediscovery.
+    expect(session.stats.fullPasses).toBe(fullPassesAfterCold);
+  });
+
+  test('900-paragraph footnote document: warm pass is one resumed body layout', () => {
+    const { part, notes } = loadNotesDoc(multiPageFootnoteDoc(900, 40));
+    const session = createLayoutSession();
+    const cold = layoutSemanticDocument(part, 1, {
+      measurer: notes.measurer,
+      notes,
+      session,
+      producer: 'notes-900-bench',
+    });
+    expect(cold.pages.length).toBeGreaterThan(10);
+    const coldFull = session.stats.fullPasses;
+    expect(session.stats.placed).toBe(session.stats.total);
+    expect(coldFull).toBeGreaterThanOrEqual(1);
+
+    const warm = layoutSemanticDocument(part, 2, {
+      measurer: notes.measurer,
+      notes,
+      session,
+      producer: 'notes-900-bench',
+    });
+    expect(warm.pages.length).toBe(cold.pages.length);
+    expect(session.stats.placed).toBe(0);
+    expect(session.stats.reusedPages).toBe(cold.pages.length);
+    expect(session.stats.fullPasses).toBe(coldFull);
+
+    const sessionEdit = createLayoutSession();
+    layoutSemanticDocument(part, 1, {
+      measurer: notes.measurer,
+      notes,
+      session: sessionEdit,
+      producer: 'notes-900-edit',
+    });
+    const beforeEditFull = sessionEdit.stats.fullPasses;
+    const { part: editedPart, notes: editedNotes } = loadNotesDoc(
+      editedMultiPageFootnoteDoc(900, 40, 450)
+    );
+    const incremental = layoutSemanticDocument(editedPart, 2, {
+      measurer: editedNotes.measurer,
+      notes: editedNotes,
+      session: sessionEdit,
+      producer: 'notes-900-edit',
+    });
+    const clean = layoutSemanticDocument(editedPart, 2, {
+      measurer: editedNotes.measurer,
+      notes: editedNotes,
+      producer: 'notes-900-edit',
+    });
+    expect(layoutShape(incremental)).toBe(layoutShape(clean));
+    expect(sessionEdit.stats.placed).toBeLessThan(sessionEdit.stats.total);
+    expect(sessionEdit.stats.reusedPages).toBeGreaterThan(0);
+    expect(sessionEdit.stats.fullPasses).toBe(beforeEditFull);
   });
 });

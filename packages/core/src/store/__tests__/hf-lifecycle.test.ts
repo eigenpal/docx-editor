@@ -395,6 +395,8 @@ describe('linkToPrevious / unlinkFromPrevious', () => {
     ).toBe(true);
 
     // Relinking GCs the clone part, its owned relationship map entry, and its .rels part.
+    // Shell parking only remembers replacePackageShell-minted hyperlinks — lifecycle-cloned
+    // owned rels travel in package history snapshots and must not resurrect after GC.
     expect(
       store.applyLifecycleOp({
         op: 'linkToPrevious',

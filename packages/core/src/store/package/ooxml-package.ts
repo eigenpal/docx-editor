@@ -34,6 +34,7 @@ import {
 } from './relationships.ts';
 import {
   buildContentTypeIndex,
+  resolveContentType,
   type ContentTypeIndex,
   type DefaultRecord,
   type OverrideRecord,
@@ -182,11 +183,8 @@ function readContentTypes(xml: string, limits?: XmlLimits): ContentTypeIndex | n
 
 /** Resolve a part's declared content type: Override wins, then the extension Default. */
 function contentTypeFor(partName: string, index: ContentTypeIndex): string {
-  const override = index.overrides.get(partName.toLowerCase());
-  if (override !== undefined) return override;
-  const dot = partName.lastIndexOf('.');
-  if (dot === -1) return '';
-  return index.defaults.get(partName.slice(dot + 1).toLowerCase()) ?? '';
+  const resolved = resolveContentType(index, partName);
+  return resolved.ok ? resolved.contentType : '';
 }
 
 /**

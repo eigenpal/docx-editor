@@ -276,7 +276,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
       const paragraphId = range.from.paragraphId;
       if (range.to.paragraphId !== paragraphId) return false; // a link cannot span paragraphs
       const ops: TreeDocOp[] = [];
-      let start = range.from.offset;
+      const start = range.from.offset;
       let end = range.to.offset;
 
       if (collapsed) {

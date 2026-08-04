@@ -26,15 +26,14 @@ import { alignSpans, breakParagraph, type Alignment, type PendingLine } from './
 import {
   appliedSpaceBefore,
   paragraphBorderExtentPt,
-  cascadedParagraphBorders,
   collapsedSpaceBefore,
-  paragraphBorders,
   paragraphBordersFingerprint,
   paragraphBreaksBefore,
   type ParagraphBorders,
   type ParagraphLineSpacing,
   type ParagraphSpacing,
 } from './paragraph-style.ts';
+import { resolveParagraphBorders } from './paragraph-border-resolve.ts';
 import {
   adjustedBreakIndex,
   keepNextFlowKeys,
@@ -50,7 +49,6 @@ import {
   type ResolvedTabStops,
 } from './paragraph-tabs.ts';
 import {
-  cascadeParagraphFormatting,
   resolveParagraphLayoutInputs,
   cascadeRunProperties,
   type StyleCascadeTable,
@@ -247,50 +245,6 @@ interface PreparedBlockMemo {
 }
 
 const preparedBlocks = new WeakMap<OoxmlNode, PreparedBlockMemo>();
-
-/**
- * Does any style — or `w:docDefaults` — in this cascade declare a `w:pBdr`?
- *
- * Cached per table because it decides whether resolving a paragraph's borders needs the full
- * cascade at all. For the overwhelming majority of documents no style carries one, and there
- * the direct `w:pPr` IS the answer; running `cascadeParagraphFormatting` a second time per
- * paragraph to learn that would make the prepass, not placement, the cost of a layout.
- */
-const cascadeBorderDeclarations = new WeakMap<StyleCascadeTable, boolean>();
-
-function styleCascadeDeclaresBorders(table: StyleCascadeTable): boolean {
-  const cached = cascadeBorderDeclarations.get(table);
-  if (cached !== undefined) return cached;
-  const declaresPBdr = (props: readonly OoxmlProperty[]): boolean =>
-    props.some((property) => property.localName === 'pBdr');
-  let declares = declaresPBdr(table.docDefaultsParagraph);
-  if (!declares) {
-    for (const style of table.styles.values()) {
-      if (declaresPBdr(style.paragraphProperties)) {
-        declares = true;
-        break;
-      }
-    }
-  }
-  cascadeBorderDeclarations.set(table, declares);
-  return declares;
-}
-
-/**
- * Resolve `w:pBdr` for one paragraph, through the style cascade when a style could contribute.
- *
- * `resolveParagraphLayoutInputs` publishes the bottom edge only, so the full set is resolved
- * here from the same nodes it cascades — same last-`w:pBdr`-wins rule, all six edges.
- */
-function resolveParagraphBorders(
-  pPr: OoxmlNode | undefined,
-  styleCascade: StyleCascadeTable | undefined
-): ParagraphBorders {
-  if (!styleCascade || !styleCascadeDeclaresBorders(styleCascade)) return paragraphBorders(pPr);
-  return cascadedParagraphBorders(
-    cascadeParagraphFormatting(styleCascade, pPr).paragraphPropertyNodes
-  );
-}
 
 export function layoutSemanticDocument(
   part: OoxmlPart,

@@ -45,12 +45,14 @@ import {
 import { noteMarkKey, type NoteMarkContext } from './note-projection.ts';
 import type {
   BlockFragmentRecord,
+  LineRecord,
   NoteAreaRecord,
   NoteStoryRecord,
   PageNoteStream,
   PageRecord,
   ParagraphFragmentRecord,
   SemanticLayout,
+  StyleSpanRecord,
   TextMeasurer,
 } from './semantic-records.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
@@ -710,6 +712,101 @@ function bodyOnlyPage(page: PageRecord): PageRecord {
   void endnotes;
   void noteStream;
   return body;
+}
+
+/**
+ * Replace provisional body citation digits with page-aware marks after attach.
+ *
+ * Body layout runs with {@link provisionalNoteMarks} (no `pageIndex`, so `eachPage`
+ * behaves like continuous). {@link attachNotesToLayout} then derives final marks with
+ * page assignment. This walk updates only `to-note` projected span *display* text —
+ * source ranges, box geometry (reserved width), and note areas stay untouched — so
+ * digit refinement cannot reflow or corrupt interaction offsets.
+ *
+ * Structural sharing: unchanged spans/lines/fragments/pages keep identity.
+ */
+export function reprojectBodyNoteMarks(
+  layout: SemanticLayout,
+  noteMarks: NoteMarkContext
+): SemanticLayout {
+  if (noteMarks.marks.size === 0) return layout;
+
+  let anyPageChanged = false;
+  const pages = layout.pages.map((page) => {
+    const fragments = reprojectBodyBlocks(page.fragments, noteMarks);
+    if (fragments === page.fragments) return page;
+    anyPageChanged = true;
+    return { ...page, fragments };
+  });
+  return anyPageChanged ? { revision: layout.revision, pages } : layout;
+}
+
+function reprojectBodyBlocks(
+  blocks: readonly BlockFragmentRecord[],
+  noteMarks: NoteMarkContext
+): readonly BlockFragmentRecord[] {
+  let changed = false;
+  const next = blocks.map((block) => {
+    if (block.kind === 'paragraph') {
+      const updated = reprojectParagraphFragment(block, noteMarks);
+      if (updated !== block) changed = true;
+      return updated;
+    }
+    let rowsChanged = false;
+    const rows = block.rows.map((row) => {
+      let cellsChanged = false;
+      const cells = row.cells.map((cell) => {
+        const nested = reprojectBodyBlocks(cell.blocks, noteMarks);
+        if (nested === cell.blocks) return cell;
+        cellsChanged = true;
+        return { ...cell, blocks: nested };
+      });
+      if (!cellsChanged) return row;
+      rowsChanged = true;
+      return { ...row, cells };
+    });
+    if (!rowsChanged) return block;
+    changed = true;
+    return { ...block, rows };
+  });
+  return changed ? next : blocks;
+}
+
+function reprojectParagraphFragment(
+  fragment: ParagraphFragmentRecord,
+  noteMarks: NoteMarkContext
+): ParagraphFragmentRecord {
+  let linesChanged = false;
+  const lines = fragment.lines.map((line) => {
+    const updated = reprojectLine(line, noteMarks);
+    if (updated !== line) linesChanged = true;
+    return updated;
+  });
+  return linesChanged ? { ...fragment, lines } : fragment;
+}
+
+function reprojectLine(line: LineRecord, noteMarks: NoteMarkContext): LineRecord {
+  let spansChanged = false;
+  const spans = line.spans.map((span) => {
+    const updated = reprojectBodyCitationSpan(span, noteMarks);
+    if (updated !== span) spansChanged = true;
+    return updated;
+  });
+  return spansChanged ? { ...line, spans } : line;
+}
+
+function reprojectBodyCitationSpan(
+  span: StyleSpanRecord,
+  noteMarks: NoteMarkContext
+): StyleSpanRecord {
+  if (!span.projected || span.noteNav?.direction !== 'to-note') return span;
+  const mark = noteMarks.marks.get(span.noteNav.scopeId);
+  // Absent key: leave provisional text (dangling / unknown). null = customMarkFollows.
+  if (mark === undefined) return span;
+  const text = mark ?? '';
+  if (span.text === text) return span;
+  // Keep box.width — eachPage reserved measurement already sized for the widest mark.
+  return { ...span, text };
 }
 
 /**
@@ -1766,8 +1863,11 @@ export function attachNotesToLayout(
     pages = reindexAndFinalizeFields(pages);
   }
 
+  // Body was laid with provisional marks; publish page-aware citation digits without reflow.
+  const withBodyMarks = reprojectBodyNoteMarks({ revision: layout.revision, pages }, noteMarks);
+
   return {
-    layout: { revision: layout.revision, pages },
+    layout: withBodyMarks,
     fallbackReasons: reasons,
     noteMarks,
   };
@@ -1873,12 +1973,21 @@ function footnoteReservesFingerprint(reserves: ReadonlyMap<number, number>): str
  * needed. Monotonic growth covers the unstable path; a stable-but-mismatched compute
  * (citation moved off a reserved page) drops stale entries and re-runs. Revisited
  * reserve fingerprints fail closed via the grow envelope so the loop cannot oscillate.
+ *
+ * Reserves seed from {@link LayoutSession.notePageBottomReserves} so a warm session's
+ * first body pass already carries the prior published reserve set (and its context key).
+ * Reflow keeps the session: a changed reserve set changes the layout context, so resume
+ * falls through to a full pass without discarding the caller's session write-back.
  */
 export function layoutSemanticDocumentWithNotes<
   Opts extends {
     noteMarks?: NoteMarkContext;
     pageBottomReserves?: ReadonlyMap<number, number>;
-    session?: { previous: SemanticLayout | null; multi: unknown };
+    session?: {
+      previous: SemanticLayout | null;
+      multi: unknown;
+      notePageBottomReserves?: ReadonlyMap<number, number> | null;
+    };
   },
 >(
   part: OoxmlPart,
@@ -1891,7 +2000,10 @@ export function layoutSemanticDocumentWithNotes<
   const paragraphSectionIndex = paragraphSectionIndexOf(part, sections);
   const allHits = buildPageRefHits(packageRefs, paragraphSectionIndex);
   const noteMarks = provisionalNoteMarks(allHits, notesInput);
-  let usedReserves: ReadonlyMap<number, number> = new Map();
+  const seeded = optionsWithLists.session?.notePageBottomReserves;
+  let usedReserves: ReadonlyMap<number, number> = seeded
+    ? compactFootnoteReserves(seeded)
+    : new Map();
   let fallbackReasons: NotePaginationFallbackReason[] = [];
   let bodyLayout: SemanticLayout = runBody({
     ...optionsWithLists,
@@ -1931,12 +2043,12 @@ export function layoutSemanticDocumentWithNotes<
 
     usedReserves = next;
     appliedFingerprints.add(footnoteReservesFingerprint(usedReserves));
+    // Keep the caller's session: reserve changes alter the layout context key, so
+    // checkpoints from a different reserve set are not resumed — they are replaced.
     bodyLayout = runBody({
       ...optionsWithLists,
       noteMarks,
       pageBottomReserves: usedReserves,
-      // Reflow must not reuse checkpoints sized for a different reserve set.
-      session: undefined,
     });
     if (attempt === MAX_NOTE_REFLOW_ATTEMPTS - 1) {
       fallbackReasons.push('note-reflow-exhausted');
@@ -1949,13 +2061,15 @@ export function layoutSemanticDocumentWithNotes<
   });
   if (optionsWithLists.session) {
     optionsWithLists.session.previous = attached.layout;
+    optionsWithLists.session.notePageBottomReserves = compactFootnoteReserves(usedReserves);
   }
   return attached.layout;
 }
 
 /**
  * Build a continuous (pre-page) mark context for the first body layout pass.
- * eachPage reserves digit width; final marks refine after page assignment.
+ * eachPage reserves digit width; {@link reprojectBodyNoteMarks} publishes final marks
+ * onto body citations after page assignment in {@link attachNotesToLayout}.
  */
 export function provisionalNoteMarks(
   refs: readonly PageRefHit[],

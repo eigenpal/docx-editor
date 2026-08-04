@@ -6,10 +6,7 @@ import { zipSync, strToU8 } from 'fflate';
 import { readOoxmlPackage, writeOoxmlPackage } from '../package/ooxml-package.ts';
 import { serializeOoxmlPart } from '../package/ooxml-serialize.ts';
 import { ensureListDefinition } from '../package/numbering-part.ts';
-import {
-  ensureHyperlinkRelationship,
-  relationshipTargetIn,
-} from '../package/hyperlink-part.ts';
+import { ensureHyperlinkRelationship, relationshipTargetIn } from '../package/hyperlink-part.ts';
 import { HYPERLINK_RELATIONSHIP_TYPE } from '../package/hyperlink.ts';
 import { resolveNotesPart } from '../package/note-references.ts';
 import { TreePackageStore } from '../store/tree-package-store.ts';
@@ -337,8 +334,7 @@ describe('package shell persistence across lifecycle undo/redo', () => {
     expect(relationshipTargetIn(reopened.package, headerName, rId)?.target).toBe(url);
     expect(
       reopened.package.externalTargets.some(
-        (entry) =>
-          entry.ownerPart === reopened.package.mainDocumentPart && entry.rawTarget === url
+        (entry) => entry.ownerPart === reopened.package.mainDocumentPart && entry.rawTarget === url
       )
     ).toBe(false);
   });
@@ -418,8 +414,7 @@ describe('package shell persistence across lifecycle undo/redo', () => {
     expect(relationshipTargetIn(reopened.package, notesName, rId)?.target).toBe(url);
     expect(
       reopened.package.externalTargets.some(
-        (entry) =>
-          entry.ownerPart === reopened.package.mainDocumentPart && entry.rawTarget === url
+        (entry) => entry.ownerPart === reopened.package.mainDocumentPart && entry.rawTarget === url
       )
     ).toBe(false);
   });
@@ -479,5 +474,116 @@ describe('package shell persistence across lifecycle undo/redo', () => {
     expect(
       store.currentPackage().parts.has(`/word/_rels/${headerName.slice('/word/'.length)}.rels`)
     ).toBe(false);
+  });
+
+  test('reachability boundary: shell-minted parks; lifecycle-cloned owned rels GC', () => {
+    // Two hyperlink lanes must not be conflated:
+    // 1) replacePackageShell-minted scoped links park while history can restore the owner.
+    // 2) unlink-cloned owned .rels travel inside package snapshots and must GC with the orphan.
+    const HYPERLINK = `${R}/hyperlink`;
+    const REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
+    const inherited = (() => {
+      const result = readOoxmlPackage(
+        zipSync({
+          '[Content_Types].xml': strToU8(
+            `<Types xmlns="${CT}">` +
+              '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+              '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+              '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+              '</Types>'
+          ),
+          '_rels/.rels': strToU8(
+            `<Relationships xmlns="${REL_NS}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+          ),
+          'word/document.xml': strToU8(
+            `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+              '<w:p><w:pPr><w:sectPr><w:headerReference w:type="default" r:id="rId7"/></w:sectPr></w:pPr>' +
+              '<w:r><w:t>one</w:t></w:r></w:p>' +
+              '<w:p><w:r><w:t>two</w:t></w:r></w:p>' +
+              '<w:sectPr/>' +
+              '</w:body></w:document>'
+          ),
+          'word/_rels/document.xml.rels': strToU8(
+            `<Relationships xmlns="${REL_NS}">` +
+              `<Relationship Id="rId7" Type="${HEADER_REL_TYPE}" Target="header1.xml"/>` +
+              '</Relationships>'
+          ),
+          'word/header1.xml': strToU8(
+            `<w:hdr xmlns:w="${W}" xmlns:r="${R}">` +
+              '<w:p><w:hyperlink r:id="rId1"><w:r><w:t>link</w:t></w:r></w:hyperlink></w:p>' +
+              '</w:hdr>'
+          ),
+          'word/_rels/header1.xml.rels': strToU8(
+            `<Relationships xmlns="${REL_NS}">` +
+              `<Relationship Id="rId1" Type="${HYPERLINK}" Target="https://example.com/cloned" TargetMode="External"/>` +
+              '</Relationships>'
+          ),
+        })
+      );
+      if (!result.ok) throw new Error(result.reason);
+      const main = result.package.parts.get(result.package.mainDocumentPart);
+      if (!main) throw new Error('no main');
+      return new TreePackageStore(result.package, main);
+    })();
+
+    expect(
+      inherited.applyLifecycleOp({
+        op: 'unlinkFromPrevious',
+        sectionIndex: 1,
+        kind: 'header',
+        variant: 'default',
+      }).ok
+    ).toBe(true);
+    const cloneName = [...inherited.currentPackage().parts.keys()].find(
+      (name) => /\/header\d+\.xml$/.test(name) && name !== '/word/header1.xml'
+    )!;
+    const cloneRels = `/word/_rels/${cloneName.slice('/word/'.length)}.rels`;
+    expect(inherited.currentPackage().parts.has(cloneRels)).toBe(true);
+
+    expect(
+      inherited.applyLifecycleOp({
+        op: 'linkToPrevious',
+        sectionIndex: 1,
+        kind: 'header',
+        variant: 'default',
+      }).ok
+    ).toBe(true);
+    // Lane 2: clone owned rels are gone from the live package (history still has them for undo).
+    expect(inherited.currentPackage().parts.has(cloneName)).toBe(false);
+    expect(inherited.currentPackage().parts.has(cloneRels)).toBe(false);
+    expect(
+      inherited.currentPackage().externalTargets.some((entry) => entry.ownerPart === cloneName)
+    ).toBe(false);
+
+    // Lane 1: shell-minted link on a created header still parks across delete while undoable.
+    const shellStore = openStore();
+    const shellUrl = 'https://example.com/shell-park';
+    expect(
+      shellStore.applyLifecycleOp({
+        op: 'createHeaderFooter',
+        sectionIndex: 0,
+        kind: 'header',
+        variant: 'default',
+      }).ok
+    ).toBe(true);
+    const headerName = shellStore.partFor({
+      kind: 'headerFooter',
+      rId: headerRelationshipId(shellStore),
+    })!.name;
+    const ensured = ensureHyperlinkRelationship(shellStore.currentPackage(), shellUrl, headerName)!;
+    shellStore.replacePackageShell(ensured.pkg);
+    expect(
+      shellStore.applyLifecycleOp({
+        op: 'deleteHeaderFooter',
+        sectionIndex: 0,
+        kind: 'header',
+        variant: 'default',
+      }).ok
+    ).toBe(true);
+    expect(hasHeaderPart(shellStore)).toBe(false);
+    expect(scopedHyperlinkOwners(shellStore, headerName, shellUrl)).toHaveLength(1);
+    expect(
+      shellStore.currentPackage().parts.has(`/word/_rels/${headerName.slice('/word/'.length)}.rels`)
+    ).toBe(true);
   });
 });

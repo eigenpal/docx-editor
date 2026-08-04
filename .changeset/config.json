@@ -14,9 +14,5 @@
   "linked": [],
   "access": "public",
   "baseBranch": "main",
-  "updateInternalDependencies": "patch",
-  "ignore": [
-    "@docx-editor.dev/core-contract",
-    "@docx-editor.dev/fonts"
-  ]
+  "updateInternalDependencies": "patch"
 }

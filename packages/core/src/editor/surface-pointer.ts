@@ -612,10 +612,10 @@ export function createPointerController(
       } else {
         return;
       }
-    } else if (onFurniture) {
+    } else if (onFurniture && clicks() >= 2) {
       // Match Word's activation model: an inactive header/footer takes a double click.
-      // A single press in page-margin whitespace must not dim and lock the body.
-      if (clicks() < 2) return;
+      // A single press in page-margin whitespace must not dim and lock the body — fall
+      // through to body hit-testing below instead.
       // Enter from the activation band / story box (semantic furniture record). When the
       // DOM hit the painted `[data-docx-hf]` but sheet geometry missed (stale offset, etc.),
       // fall back to the painted relationship id so the press is never a silent no-op.

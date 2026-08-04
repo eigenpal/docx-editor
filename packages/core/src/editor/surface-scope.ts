@@ -6,6 +6,7 @@
 
 import {
   caretStopsForBlocks,
+  documentOrder,
   moveCaret,
   paragraphFragmentsOf,
 } from '@docx-editor.dev/core-contract/layout';
@@ -437,24 +438,20 @@ export function findStoryAtSheetPoint(
   return null;
 }
 
-/** Document-order paragraph ids for the active scope (deduped across shared page copies). */
+/**
+ * Document-order paragraph ids for the active scope (deduped across shared page copies).
+ *
+ * Body (no HF / no note) falls through to memoized {@link documentOrder} so per-keystroke
+ * callers of `paragraphOrder()` reuse the semantic-interaction WeakMap instead of rebuilding
+ * a Set+array over every page. HF and note scopes stay explicitly bounded to their story
+ * fragments — those paths are small and must not leak body ids.
+ */
 export function scopedDocumentOrder(
   layout: SemanticLayout,
   active: HeaderFooterScopeBinding | null,
   noteScopeId?: string | null
 ): string[] {
-  if (!active && !noteScopeId) {
-    const seen = new Set<string>();
-    const order: string[] = [];
-    for (const page of layout.pages) {
-      for (const fragment of paragraphFragmentsOf(page)) {
-        if (seen.has(fragment.paragraphId)) continue;
-        seen.add(fragment.paragraphId);
-        order.push(fragment.paragraphId);
-      }
-    }
-    return order;
-  }
+  if (!active && !noteScopeId) return documentOrder(layout);
   const seen = new Set<string>();
   const order: string[] = [];
   for (const page of layout.pages) {

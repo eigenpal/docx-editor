@@ -5,13 +5,16 @@
 // predate those writes. Replaying the snapshot alone would drop the shell resources while
 // a later story redo restores `w:numId` / `r:id` references — dead ids.
 //
-// Furniture and notes lifecycle parts stay snapshot-owned: undo must remove them. Scoped
-// hyperlink `.rels` / externalTargets for those owners are still re-applied — parked when
-// the owner part is temporarily absent — so a later lifecycle+story redo cannot leave a
-// dangling `r:id`. {@link pruneUnreachableHyperlinkShell} drops that parking once no live
-// part and no package/story history can restore the owner. Only monotonic shell resources
-// (numbering part + hyperlink externals) are re-applied, and only when their relationship
-// ids do not collide with internals the snapshot already declares.
+// Furniture and notes lifecycle parts stay snapshot-owned: undo must remove them. Only
+// hyperlinks recorded as shell-minted (via {@link rememberShellHyperlinks} on
+// `replacePackageShell`) are re-applied onto snapshots — parked when the owner part is
+// temporarily absent — so a later lifecycle+story redo cannot leave a dangling `r:id`.
+// Lifecycle-cloned owned relationships (unlink) travel inside package history snapshots and
+// must GC with the orphan part; merging every live external would incorrectly resurrect
+// those clone `.rels`. {@link pruneUnreachableHyperlinkShell} drops parked shell entries
+// once no live part and no package/story history can restore the owner. Only monotonic
+// shell resources (numbering part + shell hyperlink externals) are re-applied, and only
+// when their relationship ids do not collide with internals the snapshot already declares.
 
 import { strFromU8, strToU8 } from 'fflate';
 import { createNodeIdAllocator, insertChildren } from './ooxml-edit.ts';
@@ -33,18 +36,70 @@ const NUMBERING_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml';
 const NUMBERING_OVERRIDE = `<Override PartName="${NUMBERING_PART}" ContentType="${NUMBERING_CONTENT_TYPE}"/>`;
 
+/** Stable identity for a shell hyperlink row (owner + relationship id). */
+export function hyperlinkShellKey(entry: Pick<OoxmlExternalTarget, 'ownerPart' | 'id'>): string {
+  return `${entry.ownerPart}\u0000${entry.id}`;
+}
+
 /**
- * Re-apply session shell resources from `live` onto a historical `snapshot`.
+ * Fold newly minted hyperlink externals from a `replacePackageShell` write into the
+ * session shell set. Pure. Entries already remembered stay; lifecycle-cloned owned rels
+ * never pass through this path and therefore never park after GC.
+ */
+export function rememberShellHyperlinks(
+  remembered: readonly OoxmlExternalTarget[],
+  before: OoxmlPackage,
+  after: OoxmlPackage
+): readonly OoxmlExternalTarget[] {
+  const beforeKeys = new Set(
+    before.externalTargets
+      .filter((entry) => entry.type === HYPERLINK_RELATIONSHIP_TYPE)
+      .map(hyperlinkShellKey)
+  );
+  const minted = after.externalTargets.filter(
+    (entry) =>
+      entry.type === HYPERLINK_RELATIONSHIP_TYPE && !beforeKeys.has(hyperlinkShellKey(entry))
+  );
+  if (minted.length === 0) return remembered;
+  const known = new Set(remembered.map(hyperlinkShellKey));
+  const additions = minted.filter((entry) => !known.has(hyperlinkShellKey(entry)));
+  if (additions.length === 0) return remembered;
+  return Object.freeze([...remembered, ...additions]);
+}
+
+/**
+ * Drop remembered shell hyperlinks whose owner is no longer live and not history-retained.
+ * Main-document shell links are always kept (body never parks/evicts this way).
+ */
+export function retainShellHyperlinks(
+  remembered: readonly OoxmlExternalTarget[],
+  retainedOwnerParts: ReadonlySet<string>,
+  mainDocumentPart: string
+): readonly OoxmlExternalTarget[] {
+  const next = remembered.filter(
+    (entry) => entry.ownerPart === mainDocumentPart || retainedOwnerParts.has(entry.ownerPart)
+  );
+  return next.length === remembered.length ? remembered : Object.freeze(next);
+}
+
+/**
+ * Re-apply session shell resources from `live` / `shellHyperlinks` onto a historical
+ * `snapshot`.
  *
- * Pure: neither argument is mutated. Returns `snapshot` by identity when nothing to merge.
+ * Hyperlink merge uses `shellHyperlinks` (minted via {@link rememberShellHyperlinks}), not
+ * every live external — so lifecycle GC of cloned owned `.rels` is not undone by parking.
+ *
+ * Pure: neither package argument is mutated. Returns `snapshot` by identity when nothing to
+ * merge.
  */
 export function mergePersistentPackageShell(
   snapshot: OoxmlPackage,
-  live: OoxmlPackage
+  live: OoxmlPackage,
+  shellHyperlinks: readonly OoxmlExternalTarget[] = []
 ): OoxmlPackage {
   if (snapshot === live) return snapshot;
   let next = mergeNumberingShell(snapshot, live);
-  next = mergeHyperlinkShell(next, live);
+  next = mergeHyperlinkShell(next, live, shellHyperlinks);
   return next;
 }
 
@@ -113,12 +168,14 @@ function mergeNumberingShell(snapshot: OoxmlPackage, live: OoxmlPackage): OoxmlP
   return next;
 }
 
-function mergeHyperlinkShell(snapshot: OoxmlPackage, live: OoxmlPackage): OoxmlPackage {
-  // Persist hyperlink externals for every owning part (body, furniture, notes), not only
-  // the main document — a scoped insert mints onto the story's own `.rels`.
-  const liveLinks = live.externalTargets.filter(
-    (entry) => entry.type === HYPERLINK_RELATIONSHIP_TYPE
-  );
+function mergeHyperlinkShell(
+  snapshot: OoxmlPackage,
+  live: OoxmlPackage,
+  shellHyperlinks: readonly OoxmlExternalTarget[]
+): OoxmlPackage {
+  // Only shell-minted hyperlinks (replacePackageShell), for every owning part — not
+  // lifecycle-cloned owned externals that history snapshots already carry for undo.
+  const liveLinks = shellHyperlinks.filter((entry) => entry.type === HYPERLINK_RELATIONSHIP_TYPE);
   if (liveLinks.length === 0) return snapshot;
 
   let next = snapshot;
@@ -156,8 +213,8 @@ function mergeHyperlinkShell(snapshot: OoxmlPackage, live: OoxmlPackage): OoxmlP
  * Map a live owner part name onto the snapshot package (main-document name may differ).
  *
  * Scoped owners (header/footer/notes) are returned even when the snapshot temporarily
- * lacks the part — lifecycle undo removes furniture/notes while hyperlink shell resources
- * stay parked under the same owner name until redo or {@link pruneUnreachableHyperlinkShell}.
+ * lacks the part — shell-minted hyperlink resources stay parked under the same owner name
+ * until redo or {@link pruneUnreachableHyperlinkShell}.
  */
 function remapOwnerPart(
   snapshot: OoxmlPackage,

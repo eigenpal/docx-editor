@@ -14,7 +14,7 @@
 
 import type { OoxmlPart } from '../package/ooxml-tree.ts';
 import { normalizeParagraphIdentity } from '../package/para-id.ts';
-import { withPart, type OoxmlPackage } from '../package/ooxml-package.ts';
+import { withPart, type OoxmlExternalTarget, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { resolveRelationship, type RelationshipRecord } from '../package/relationships.ts';
 import {
   applyHeaderFooterLifecycleOp,
@@ -32,6 +32,8 @@ import type { NoteKind } from '../package/note-nodes.ts';
 import {
   mergePersistentPackageShell,
   pruneUnreachableHyperlinkShell,
+  rememberShellHyperlinks,
+  retainShellHyperlinks,
 } from '../package/package-shell-persistence.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import type { ImpactClass, TreeDocOp, TreeOpRejection } from './tree-ops.ts';
@@ -138,6 +140,12 @@ export class TreePackageStore {
   private readonly maxEditableStoryParts: number;
   private readonly cascadeNoteReferences: NoteCascadeFn;
   private lastChange: TreeModelChange | null = null;
+  /**
+   * Hyperlink externals minted via {@link replacePackageShell} (outside package history).
+   * Re-applied on snapshot install so lifecycle undo cannot drop shell `r:id`s; not used for
+   * lifecycle-cloned owned relationships, which history snapshots already restore.
+   */
+  private shellHyperlinks: readonly OoxmlExternalTarget[] = Object.freeze([]);
   /**
    * Open IME composition session. Captures the package/story checkpoint at begin so a
    * mid-composition note-ref cascade can promote the whole composition to one package
@@ -598,6 +606,9 @@ export class TreePackageStore {
    * content-types mutate the package outside story trees.
    */
   replacePackageShell(pkg: OoxmlPackage): void {
+    // Remember hyperlinks minted on this write before overlaying opened stores — delta is
+    // against the pre-replace shell so lifecycle-cloned owned rels are never recorded.
+    this.shellHyperlinks = rememberShellHyperlinks(this.shellHyperlinks, this.pkg, pkg);
     // Keep opened store parts authoritative over the shell's copies of those names.
     // Parked (deleted) stores are not re-injected.
     let next = pkg;
@@ -614,15 +625,15 @@ export class TreePackageStore {
    * Stores whose parts disappeared stay parked (history identity preserved) so a later
    * package undo can reconnect them; rId cache rebuilds from remaining relationships.
    *
-   * Numbering / hyperlink shell resources minted via {@link replacePackageShell} are merged
-   * from the live package onto the snapshot so lifecycle undo cannot orphan story `numId` /
-   * `r:id` references. Furniture and notes parts remain snapshot-owned; scoped hyperlink
-   * `.rels` for those owners park when the part is temporarily absent and are pruned once
-   * history can no longer restore the owner.
+   * Numbering / shell-minted hyperlink resources (via {@link replacePackageShell}) are merged
+   * onto the snapshot so lifecycle undo cannot orphan story `numId` / `r:id` references.
+   * Furniture and notes parts remain snapshot-owned; shell hyperlink `.rels` for those owners
+   * park when the part is temporarily absent and are pruned once history can no longer restore
+   * the owner. Lifecycle-cloned owned relationships are not shell-minted and GC with the part.
    */
   private installPackageSnapshot(snapshot: OoxmlPackage): void {
     // Capture live shell before replacing — snapshot may predate numbering/hyperlink writes.
-    const merged = mergePersistentPackageShell(snapshot, this.pkg);
+    const merged = mergePersistentPackageShell(snapshot, this.pkg, this.shellHyperlinks);
     const main = merged.parts.get(merged.mainDocumentPart);
     if (!main) return;
     this.body.replacePart(main);
@@ -794,6 +805,11 @@ export class TreePackageStore {
     const hyperlinkOwners = this.retainedHyperlinkOwnerParts(retained);
     const pruned = pruneUnreachableHyperlinkShell(this.pkg, hyperlinkOwners);
     if (pruned !== this.pkg) this.pkg = pruned;
+    this.shellHyperlinks = retainShellHyperlinks(
+      this.shellHyperlinks,
+      hyperlinkOwners,
+      this.pkg.mainDocumentPart
+    );
   }
 
   private retainedStoryPartNames(): Set<string> {

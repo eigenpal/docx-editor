@@ -199,10 +199,9 @@ describe('what the engine does NOT claim', () => {
     mounted.surface.destroy();
   });
 
-  test('a press on page furniture is a no-op, not a jump to the top of the body', () => {
+  test('a single press on page furniture in the margin places the body caret there', () => {
     const mounted = mount(paragraph('hello world'));
     press(mounted, 30, 5);
-    const before = offsets(mounted.surface);
 
     const furniture = document.createElement('div');
     furniture.dataset.docxHf = 'header';
@@ -217,8 +216,8 @@ describe('what the engine does NOT claim', () => {
     });
     furniture.dispatchEvent(event);
 
-    expect(event.defaultPrevented).toBe(false);
-    expect(offsets(mounted.surface)).toEqual(before);
+    expect(event.defaultPrevented).toBe(true);
+    expect(offsets(mounted.surface)).toEqual([0, 0]);
     mounted.surface.destroy();
   });
 
