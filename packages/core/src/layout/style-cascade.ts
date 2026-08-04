@@ -91,6 +91,13 @@ export interface StyleCascadeTable {
 export interface CascadedParagraphFormatting {
   /** Flat paragraph properties in cascade order (defaults → bases → style → direct). */
   readonly paragraphProperties: readonly OoxmlProperty[];
+  /**
+   * The same list WITHOUT the paragraph's own `w:pPr` — everything it inherits.
+   *
+   * Numbering needs the two tiers apart: a level's `w:pPr/w:ind` outranks the style's and is
+   * outranked by the paragraph's own, and a flattened list cannot say which is which.
+   */
+  readonly inheritedParagraphProperties: readonly OoxmlProperty[];
   /** Matching `w:pPr` nodes for nested border resolution. */
   readonly paragraphPropertyNodes: readonly OoxmlNode[];
   /** Inherited run properties for every run in the paragraph (before direct run `rPr`). */
@@ -465,12 +472,12 @@ export function cascadeParagraphFormatting(
   const styleId = styleIdFromProps(directProps, 'pStyle') ?? table.defaultParagraphStyleId;
   const chain = styleId ? styleChain(table, styleId, 'paragraph') : [];
 
-  const paragraphProperties: OoxmlProperty[] = [
+  const inheritedParagraphProperties: OoxmlProperty[] = [
     ...table.docDefaultsParagraph,
     ...(tableCellStyle?.paragraphProperties ?? []),
     ...chain.flatMap((style) => style.paragraphProperties),
-    ...directProps,
   ];
+  const paragraphProperties: OoxmlProperty[] = [...inheritedParagraphProperties, ...directProps];
 
   const paragraphPropertyNodes: OoxmlNode[] = [];
   if (table.docDefaultsParagraphNode) paragraphPropertyNodes.push(table.docDefaultsParagraphNode);
@@ -491,7 +498,13 @@ export function cascadeParagraphFormatting(
     ...propertiesOf(directMarkRun),
   ];
 
-  return { paragraphProperties, paragraphPropertyNodes, runProperties, styleId: styleId ?? null };
+  return {
+    paragraphProperties,
+    inheritedParagraphProperties,
+    paragraphPropertyNodes,
+    runProperties,
+    styleId: styleId ?? null,
+  };
 }
 
 /**

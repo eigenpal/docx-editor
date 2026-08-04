@@ -118,7 +118,20 @@ interface MarkerPoint {
  * yielded no anchor at all and reported the comment orphaned; and it gave a note reference or
  * an atomic field nothing where the model gives them one unit each.
  */
-function markersInParagraph(paragraph: OoxmlParagraphNode): MarkerPoint[] {
+function markersInParagraph(paragraph: OoxmlParagraphNode): readonly MarkerPoint[] {
+  // Memoized on the immutable paragraph node: the markers in a paragraph the last commit did
+  // not touch sit where they sat. The anchors are stitched across paragraphs by the caller,
+  // so only this paragraph-local step is cached.
+  const cached = markerCache.get(paragraph);
+  if (cached) return cached;
+  const points = collectMarkers(paragraph);
+  markerCache.set(paragraph, points);
+  return points;
+}
+
+const markerCache = new WeakMap<OoxmlParagraphNode, readonly MarkerPoint[]>();
+
+function collectMarkers(paragraph: OoxmlParagraphNode): MarkerPoint[] {
   const offsets = paragraphOffsetIndex(paragraph);
   const points: MarkerPoint[] = [];
   const walk = (children: readonly OoxmlNode[], depth: number): void => {

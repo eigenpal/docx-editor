@@ -28,6 +28,7 @@
 //     could lose eight of its nine levels in silence.
 
 import { hardBreakText } from './hard-break.ts';
+import { contentControlContentOf, isContentControl } from './content-control-walk.ts';
 import { MAX_XML_DEPTH } from './xml-reader.ts';
 import { paraIdOf } from './para-id.ts';
 import { canonicalOoxmlFingerprint, WML_NAMESPACE_URI } from './ooxml-tree.ts';
@@ -167,6 +168,13 @@ function textOf(node: OoxmlNode): string {
   if (node.kind === 'hardBreak') return hardBreakText(node);
   if (node.kind === 'runProperties' || node.kind === 'paragraphProperties') return '';
   if (node.kind === 'generic') return '';
+  if (node.kind === 'hyperlink' || isContentControl(node)) {
+    let text = '';
+    const children =
+      node.kind === 'hyperlink' ? node.children : (contentControlContentOf(node) ?? []);
+    for (const child of children) text += textOf(child);
+    return text;
+  }
   let text = '';
   for (const child of node.children) text += textOf(child);
   return text;
@@ -193,6 +201,11 @@ function collectGeneric(node: OoxmlNode, out: string[]): void {
   if (node.kind === 'generic') {
     out.push(canonicalOoxmlFingerprint(node));
     return; // fingerprint covers the whole subtree; do not double-count descendants
+  }
+  if (isContentControl(node)) {
+    // Unmodelled `w:sdtPr` chrome and type-specific payloads stay in genericStructure per D9.
+    out.push(canonicalOoxmlFingerprint(node));
+    return;
   }
   // Bookmark markers are TYPED but they are still preserved evidence, not structure the
   // digest reconstructs from anything else: they carry no text and no properties, so a
@@ -251,9 +264,18 @@ function digestParagraph(
       for (const inner of child.children) visit(inner);
       return;
     }
+    if (isContentControl(child)) {
+      genericStructure.push(canonicalOoxmlFingerprint(child));
+      const content = contentControlContentOf(child);
+      if (content) for (const inner of content) visit(inner);
+      return;
+    }
     collectGeneric(child, genericStructure);
   };
-  for (const child of paragraph.children) visit(child);
+  for (const child of paragraph.children) {
+    if (child.kind === 'paragraphProperties') continue;
+    visit(child);
+  }
   const paraId = paraIdOf(paragraph);
   return {
     ordinal,

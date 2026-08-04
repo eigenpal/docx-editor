@@ -48,6 +48,20 @@ function docx(body: string): Uint8Array {
 
 const SOURCE = docx('<w:p><w:r><w:t>hello world</w:t></w:r></w:p>');
 
+const TABLE_2X2 = docx(
+  '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="3600"/></w:tblGrid>' +
+    '<w:tr><w:tc><w:p><w:r><w:t>A1</w:t></w:r></w:p></w:tc>' +
+    '<w:tc><w:p><w:r><w:t>B1</w:t></w:r></w:p></w:tc></w:tr>' +
+    '<w:tr><w:tc><w:p><w:r><w:t>A2</w:t></w:r></w:p></w:tc>' +
+    '<w:tc><w:p><w:r><w:t>B2</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+);
+
+const MERGED_TABLE = docx(
+  '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="3600"/></w:tblGrid>' +
+    '<w:tr><w:tc><w:p><w:r><w:t>A1</w:t></w:r></w:p></w:tc>' +
+    '<w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr><w:p><w:r><w:t>span</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+);
+
 /** Resolve the packaged keys to themselves, so a row's label is its key in assertions. */
 const t = (key: string): string => key;
 
@@ -59,6 +73,30 @@ function mount(menu?: ReactNode): {
   const view = render(
     <DocxEditorRoot
       document={SOURCE}
+      onReady={(editor) => {
+        instance = editor as DocxEditorInstance;
+      }}
+    >
+      <DocxEditorViewport>
+        <DocxEditorContent />
+        {menu ?? <ContextMenu t={t} />}
+      </DocxEditorViewport>
+    </DocxEditorRoot>
+  );
+  return { view, editor: () => instance! };
+}
+
+function mountDocument(
+  source: Uint8Array,
+  menu?: ReactNode
+): {
+  view: ReturnType<typeof render>;
+  editor: () => DocxEditorInstance;
+} {
+  let instance: DocxEditorInstance | null = null;
+  const view = render(
+    <DocxEditorRoot
+      document={source}
       onReady={(editor) => {
         instance = editor as DocxEditorInstance;
       }}
@@ -536,5 +574,164 @@ describe('keyboard', () => {
     rightClick(view);
 
     for (const row of rows(view)) expect(row.tabIndex).toBe(-1);
+  });
+});
+
+describe('table context rows (Task 10)', () => {
+  const TABLE_ROW_IDS = [
+    'table.insertRowAbove',
+    'table.insertRowBelow',
+    'table.insertColumnLeft',
+    'table.insertColumnRight',
+    'table.deleteRow',
+    'table.deleteColumn',
+    'table.deleteTable',
+  ] as const;
+
+  test('table rows are absent outside a table', () => {
+    const { view } = mount();
+    rightClick(view);
+    expect(rows(view).map((row) => row.dataset.slot)).not.toEqual(
+      expect.arrayContaining([...TABLE_ROW_IDS])
+    );
+  });
+
+  test('table rows appear in fixed order when the caret is in a table', () => {
+    const { view, editor } = mountDocument(TABLE_2X2);
+    act(() => {
+      const paragraphId = editor().surface!.session.paragraphIds()[0]!;
+      editor().surface!.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 1 },
+      });
+    });
+    rightClick(view);
+    const slots = rows(view).map((row) => row.dataset.slot);
+    const tableStart = slots.indexOf('table.insertRowAbove');
+    expect(tableStart).toBeGreaterThan(-1);
+    expect(slots.slice(tableStart, tableStart + TABLE_ROW_IDS.length)).toEqual([...TABLE_ROW_IDS]);
+    expect(slots).not.toContain('table.mergeCells');
+    expect(slots).not.toContain('table.splitCell');
+  });
+
+  test('destructive table rows carry the destructive treatment before cell alignment', () => {
+    const { view, editor } = mountDocument(TABLE_2X2);
+    act(() => {
+      const paragraphId = editor().surface!.session.paragraphIds()[0]!;
+      editor().surface!.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 1 },
+      });
+    });
+    rightClick(view);
+    const destructive = rows(view).filter((row) =>
+      row.className.includes('docx-table-chrome__destructive-row')
+    );
+    expect(destructive.map((row) => row.dataset.slot)).toEqual([
+      'table.deleteRow',
+      'table.deleteColumn',
+      'table.deleteTable',
+    ]);
+    expect(
+      view.container.querySelectorAll('.docx-contextmenu__table-align-button[role="menuitemradio"]')
+        .length
+    ).toBe(3);
+  });
+
+  test('cell vertical alignment appears as a compact three-button group and executes', () => {
+    const { view, editor } = mountDocument(TABLE_2X2);
+    act(() => {
+      const paragraphId = editor().surface!.session.paragraphIds()[0]!;
+      editor().surface!.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 1 },
+      });
+    });
+    rightClick(view);
+    const buttons = view.container.querySelectorAll<HTMLButtonElement>(
+      '.docx-contextmenu__table-align-button'
+    );
+    expect(buttons.length).toBe(3);
+    expect([...buttons].map((button) => button.getAttribute('aria-label'))).toEqual([
+      'tableAdvanced.top',
+      'tableAdvanced.middle',
+      'tableAdvanced.bottom',
+    ]);
+    act(() => {
+      fireEvent.click(buttons[1]!);
+    });
+    expect(panel(view)).toBeNull();
+  });
+
+  test('insert row below executes through the engine and closes the panel', () => {
+    const { view, editor } = mountDocument(TABLE_2X2);
+    act(() => {
+      const paragraphId = editor().surface!.session.paragraphIds()[0]!;
+      editor().surface!.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 1 },
+      });
+    });
+    const before = editor().surface!.session.paragraphIds().length;
+    rightClick(view);
+    act(() => {
+      fireEvent.click(rowNamed(view, 'table.insertRowBelow'));
+    });
+    expect(editor().surface!.session.paragraphIds().length).toBeGreaterThan(before);
+    expect(panel(view)).toBeNull();
+  });
+
+  test('merged-table column insertion is disabled with the engine reason', () => {
+    const { view, editor } = mountDocument(MERGED_TABLE);
+    act(() => {
+      const paragraphId = editor().surface!.session.paragraphIds()[0]!;
+      editor().surface!.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 1 },
+      });
+    });
+    rightClick(view);
+    const row = rowNamed(view, 'table.insertColumnRight');
+    expect(row.getAttribute('aria-disabled')).toBe('true');
+    expect(row.getAttribute('title')).toBe('this table has merged cells');
+  });
+
+  test('a Fragment-wrapped table row override still replaces its row in place', () => {
+    const { view, editor } = mountDocument(
+      TABLE_2X2,
+      <ContextMenu t={t}>
+        <>
+          <ContextMenu.InsertRowAbove hidden />
+        </>
+      </ContextMenu>
+    );
+    act(() => {
+      const paragraphId = editor().surface!.session.paragraphIds()[0]!;
+      editor().surface!.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 1 },
+      });
+    });
+    rightClick(view);
+    expect(rows(view).map((row) => row.dataset.slot)).not.toContain('table.insertRowAbove');
+  });
+
+  test('mousedown on a table row is prevented so selection stays intact', () => {
+    const { view, editor } = mountDocument(TABLE_2X2);
+    act(() => {
+      const paragraphId = editor().surface!.session.paragraphIds()[0]!;
+      editor().surface!.setSelection({
+        anchor: { paragraphId, offset: 0 },
+        head: { paragraphId, offset: 2 },
+      });
+    });
+    const before = editor().query({ type: 'selectedText' });
+    rightClick(view);
+    const event = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    act(() => {
+      rowNamed(view, 'table.insertRowAbove').dispatchEvent(event);
+    });
+    expect(event.defaultPrevented).toBe(true);
+    expect(editor().query({ type: 'selectedText' })).toBe(before);
   });
 });

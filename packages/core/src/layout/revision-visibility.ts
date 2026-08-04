@@ -17,6 +17,11 @@
 // dropping it would lose text. Only the intersection is removed.
 
 import type { OoxmlNode } from '@docx-editor.dev/core-contract/store';
+import {
+  contentControlContentOf,
+  isContentControl,
+  MAX_CONTENT_CONTROL_NESTING,
+} from '../store/package/content-control-walk.ts';
 import { MAX_REVISION_DEPTH } from './revision-projection.ts';
 
 /**
@@ -58,7 +63,7 @@ export function paragraphMarkDeleted(paragraph: OoxmlNode): boolean {
  * accepted and the paragraph joined the next. There, deleted content is gone and inserted
  * content stays, so `w:del` and `w:moveFrom` render nothing while `w:ins` and `w:moveTo` are
  * descended into like any other run container — as is `w:hyperlink`, and either can hold the
- * other.
+ * other. Inline content controls flatten the same way layout does.
  *
  * Not mode-parameterised on purpose. `storyBlocks` is indexed by section addressing, so a
  * block list that changed shape with the display mode would move section boundaries under it.
@@ -70,30 +75,39 @@ export function paragraphMarkDeleted(paragraph: OoxmlNode): boolean {
 function rendersNoText(node: OoxmlNode, depth: number): boolean {
   if (node.kind === 'textValue') return true;
   if (depth > MAX_INLINE_DEPTH) return true;
-  for (const child of node.children) {
-    if (child.kind === 'textValue') continue;
-    if (child.kind === 'run') {
-      for (const grand of child.children) {
-        if (grand.kind === 'text') {
-          for (const value of grand.children) {
-            if (value.kind === 'textValue' && value.value.length > 0) return false;
+  const walkChildren = (children: readonly OoxmlNode[], childDepth: number): boolean => {
+    for (const child of children) {
+      if (child.kind === 'textValue') continue;
+      if (child.kind === 'run') {
+        for (const grand of child.children) {
+          if (grand.kind === 'text') {
+            for (const value of grand.children) {
+              if (value.kind === 'textValue' && value.value.length > 0) return false;
+            }
+            continue;
           }
-          continue;
+          // A tab, a break, or a drawing all occupy the line even with no characters. Anything
+          // unrecognised counts as rendering too: keeping a paragraph that renders nothing
+          // costs a blank line, dropping one that renders something loses content.
+          if (grand.kind !== 'runProperties') return false;
         }
-        // A tab, a break, or a drawing all occupy the line even with no characters. Anything
-        // unrecognised counts as rendering too: keeping a paragraph that renders nothing
-        // costs a blank line, dropping one that renders something loses content.
-        if (grand.kind !== 'runProperties') return false;
+        continue;
       }
-      continue;
+      if (isContentControl(child)) {
+        if (childDepth >= MAX_CONTENT_CONTROL_NESTING) continue;
+        const content = contentControlContentOf(child);
+        if (content && !walkChildren(content, childDepth + 1)) return false;
+        continue;
+      }
+      const descends =
+        child.kind === 'hyperlink' ||
+        child.kind === 'revisionInsert' ||
+        child.kind === 'revisionMoveTo';
+      if (descends && !rendersNoText(child, childDepth + 1)) return false;
     }
-    const descends =
-      child.kind === 'hyperlink' ||
-      child.kind === 'revisionInsert' ||
-      child.kind === 'revisionMoveTo';
-    if (descends && !rendersNoText(child, depth + 1)) return false;
-  }
-  return true;
+    return true;
+  };
+  return walkChildren(node.children, depth);
 }
 
 /**

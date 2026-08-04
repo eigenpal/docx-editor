@@ -16,6 +16,8 @@ import { baselineShiftPtOf, TAB_LEADER_GLYPH } from '@docx-editor.dev/core-contr
 import { authorSlotsOf, revisionPresentationOf } from './revision-presentation.ts';
 import { formatRevisionOf, type RevisionAttribution } from '@docx-editor.dev/core-contract/layout';
 import type {
+  ContentControlBoundaryRecord,
+  ContentControlMappedType,
   LineRecord,
   PageRecord,
   ParagraphBorderStrokeRecord,
@@ -106,6 +108,20 @@ export interface PaintOptions {
    * `data-docx-hf-active` / the engine caret when the same rId appears on many pages.
    */
   readonly activeHeaderFooterPageIndex?: number;
+  /**
+   * On-demand content-control boundary chrome (show-all and/or caret-entry).
+   *
+   * Furniture only — never contributes layout records or changes page geometry. Omitted or
+   * empty means no control chrome is painted. Folded into the paint-reuse key so a toggle
+   * rebuilds furniture without a layout pass.
+   */
+  readonly contentControlChrome?: {
+    readonly showAll?: boolean;
+    /** Control ids whose boundaries are visible because the caret is inside them. */
+    readonly activeIds?: ReadonlySet<string>;
+    /** Checkbox control ids whose canonical `w14:checked` state is on. */
+    readonly checkedIds?: ReadonlySet<string>;
+  };
 }
 
 const HEX = /^[0-9A-Fa-f]{6}$/;
@@ -1229,6 +1245,12 @@ function paintTableFragment(
   for (const row of fragment.rows) {
     const rowElement = positioned(document, 'div', row.box, scale);
     rowElement.className = 'docx-table-row';
+    if (row.revisionKind) {
+      rowElement.classList.add(
+        'docx-table-row--revision',
+        row.revisionKind === 'insert' ? 'layout-revision-ins' : 'layout-revision-del'
+      );
+    }
     rowElement.dataset.rowId = row.id;
     if (row.isHeaderRepeat) rowElement.dataset.headerRepeat = 'true';
     rowElement.style.left = `${(row.box.x - fragment.box.x) * scale}px`;
@@ -1249,6 +1271,7 @@ function paintPage(
     readonly ariaHidden: boolean;
     readonly activeHeaderFooterRId?: string;
     readonly activeHeaderFooterPageIndex?: number;
+    readonly contentControlChrome?: PaintOptions['contentControlChrome'];
   },
   materialize: boolean
 ): HTMLElement {
@@ -1347,7 +1370,165 @@ function paintPage(
     }
     element.append(container);
   }
+
+  paintContentControlChrome(document, element, page, options);
   return element;
+}
+
+/** Widget kinds the painted surface can activate without adapter chrome. */
+const WIDGET_TYPES = new Set<ContentControlMappedType>([
+  'dropdown',
+  'comboBox',
+  'date',
+  'checkbox',
+]);
+
+/**
+ * Paint on-demand content-control boundary furniture onto a page sheet.
+ *
+ * Absolute-positioned over the sheet (page coordinates), never inside flowing content —
+ * so toggling chrome cannot reflow. `data-docx-marker` excludes the nodes from native
+ * selection mapping; `contenteditable=false` keeps them furniture.
+ */
+function paintContentControlChrome(
+  document: Document,
+  pageElement: HTMLElement,
+  page: PageRecord,
+  options: {
+    readonly scale: number;
+    readonly contentControlChrome?: PaintOptions['contentControlChrome'];
+  }
+): void {
+  const chrome = options.contentControlChrome;
+  const controls = page.contentControls ?? [];
+  if (controls.length === 0) return;
+  const showAll = chrome?.showAll === true;
+  const activeIds = chrome?.activeIds;
+  for (const control of controls) {
+    const active = activeIds?.has(control.id) === true;
+    pageElement.append(
+      paintContentControlBoundary(
+        document,
+        page,
+        control,
+        options.scale,
+        active,
+        showAll || active,
+        chrome?.checkedIds?.has(control.id)
+      )
+    );
+  }
+}
+
+function paintContentControlBoundary(
+  document: Document,
+  page: PageRecord,
+  control: ContentControlBoundaryRecord,
+  scale: number,
+  active: boolean,
+  boundaryVisible: boolean,
+  checked: boolean | undefined
+): HTMLElement {
+  const layer = document.createElement('div');
+  layer.className = 'docx-content-control-chrome';
+  layer.dataset.docxContentControl = control.id;
+  layer.dataset.docxMarker = '';
+  layer.dataset.controlType = control.controlType;
+  layer.dataset.lock = control.effectiveLock;
+  if (control.bound) layer.dataset.bound = '';
+  if (control.placeholder) layer.dataset.placeholder = '';
+  if (active) layer.dataset.active = '';
+  if (boundaryVisible) layer.dataset.boundaryVisible = '';
+  layer.setAttribute('contenteditable', 'false');
+  layer.setAttribute('role', 'group');
+  // Alias and tag are document-authored control metadata.
+  if (control.alias) layer.dataset.alias = control.alias;
+  if (control.tag) layer.dataset.tag = control.tag;
+  if (control.alias) layer.setAttribute('aria-label', control.alias);
+  layer.style.position = 'absolute';
+  layer.style.inset = '0';
+  layer.style.pointerEvents = 'none';
+  layer.style.zIndex = '2';
+
+  // Boundary fragments use the same page-CONTENT coordinate space as paragraph/table
+  // fragments. This chrome layer is parented to the SHEET so it does not affect editable
+  // content or DOM-selection child indices, therefore translate through the content-box
+  // origin before painting. Omitting this offset puts every control in the page's top-left
+  // margin (and is especially obvious for controls inside table cells).
+  const contentLeft = page.contentBox.x - page.box.x;
+  const contentTop = page.contentBox.y - page.box.y;
+  for (const fragment of control.fragments) {
+    if (fragment.pageIndex !== page.index) continue;
+    const box = document.createElement('div');
+    box.className = 'docx-content-control-boundary';
+    box.dataset.docxMarker = '';
+    box.setAttribute('contenteditable', 'false');
+    box.setAttribute('aria-hidden', 'true');
+    box.style.position = 'absolute';
+    box.style.left = `${(contentLeft + fragment.box.x) * scale}px`;
+    box.style.top = `${(contentTop + fragment.box.y) * scale}px`;
+    box.style.width = `${Math.max(fragment.box.width, 1) * scale}px`;
+    box.style.height = `${Math.max(fragment.box.height, 1) * scale}px`;
+    box.style.pointerEvents = 'none';
+    layer.append(box);
+  }
+
+  const first = control.fragments.find((fragment) => fragment.pageIndex === page.index);
+  if (first && control.alias) {
+    const label = document.createElement('div');
+    label.className = 'docx-content-control-label';
+    label.dataset.docxMarker = '';
+    label.setAttribute('contenteditable', 'false');
+    label.setAttribute('aria-hidden', 'true');
+    label.textContent = control.alias;
+    label.style.position = 'absolute';
+    label.style.left = `${(contentLeft + first.box.x) * scale}px`;
+    label.style.top = `${Math.max(0, (contentTop + first.box.y) * scale - 16)}px`;
+    label.style.pointerEvents = 'none';
+    layer.append(label);
+  }
+  if (first && WIDGET_TYPES.has(control.controlType)) {
+    const widget = document.createElement('button');
+    widget.type = 'button';
+    widget.className = 'docx-content-control-widget';
+    widget.dataset.docxMarker = '';
+    widget.dataset.docxCcWidget = control.controlType;
+    widget.dataset.docxCcId = control.id;
+    widget.setAttribute('contenteditable', 'false');
+    widget.setAttribute('tabindex', '-1');
+    // Role / name / value come from data + state; adapters localize labels.
+    if (control.controlType === 'checkbox') widget.setAttribute('role', 'checkbox');
+    else if (control.controlType === 'dropdown' || control.controlType === 'comboBox') {
+      widget.setAttribute('role', 'listbox');
+    } else if (control.controlType === 'date') {
+      widget.setAttribute('role', 'button');
+    }
+    if (control.alias) widget.dataset.name = control.alias;
+    if (control.alias) widget.setAttribute('aria-label', control.alias);
+    if (control.controlType === 'checkbox') {
+      widget.setAttribute('data-checked', checked ? 'true' : 'false');
+      widget.setAttribute('aria-checked', checked ? 'true' : 'false');
+    }
+    const contentLocked =
+      control.effectiveLock === 'contentLocked' || control.effectiveLock === 'sdtContentLocked';
+    if (contentLocked || control.bound) {
+      widget.disabled = true;
+      widget.dataset.disabledReason = control.bound ? 'bound' : 'locked';
+      widget.setAttribute('aria-disabled', 'true');
+    }
+    widget.style.position = 'absolute';
+    widget.style.left = `${(contentLeft + first.box.x + first.box.width) * scale - 18}px`;
+    widget.style.top = `${(contentTop + first.box.y) * scale}px`;
+    widget.style.width = '16px';
+    widget.style.height = '16px';
+    widget.style.pointerEvents = 'auto';
+    widget.style.padding = '0';
+    widget.style.margin = '0';
+    widget.style.cursor = widget.disabled ? 'not-allowed' : 'pointer';
+    layer.append(widget);
+  }
+
+  return layer;
 }
 
 /**
@@ -1386,6 +1567,10 @@ export function paintSemanticLayout(
   layout: SemanticLayout,
   options: PaintOptions = {}
 ): void {
+  const chrome = options.contentControlChrome;
+  const chromeKey = chrome
+    ? `${chrome.showAll === true ? '1' : '0'}:${chrome.activeIds ? [...chrome.activeIds].sort().join(',') : ''}:${chrome.checkedIds ? [...chrome.checkedIds].sort().join(',') : ''}`
+    : '';
   const resolved = {
     scale: options.scale ?? 96 / 72,
     ariaHidden: options.ariaHidden ?? true,
@@ -1397,12 +1582,15 @@ export function paintSemanticLayout(
     ...(options.activeHeaderFooterPageIndex !== undefined
       ? { activeHeaderFooterPageIndex: options.activeHeaderFooterPageIndex }
       : {}),
+    ...(chrome ? { contentControlChrome: chrome } : {}),
   };
   const document = container.ownerDocument;
   // The alias lookup is part of the paint parameters: a page painted before fonts
   // registered must not be reused verbatim afterwards. Occurrence page is included so
   // moving the caret host across shared furniture copies rebuilds active markers.
-  const parameters = `${resolved.scale}|${resolved.ariaHidden}|${resolved.fontAlias ? aliasIdentity(resolved.fontAlias) : ''}|${resolved.activeHeaderFooterRId ?? ''}|${resolved.activeHeaderFooterPageIndex ?? ''}`;
+  // Content-control chrome is furniture only, but toggling it must rebuild painted pages
+  // so show-all / caret chrome appear.
+  const parameters = `${resolved.scale}|${resolved.ariaHidden}|${resolved.fontAlias ? aliasIdentity(resolved.fontAlias) : ''}|${resolved.activeHeaderFooterRId ?? ''}|${resolved.activeHeaderFooterPageIndex ?? ''}|cc:${chromeKey}`;
   const previous = retainedPaints.get(container);
   const reusable =
     previous && previous.parameters === parameters

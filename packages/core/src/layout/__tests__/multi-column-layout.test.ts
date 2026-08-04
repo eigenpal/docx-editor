@@ -116,7 +116,7 @@ describe('multi-column section layout', () => {
           columnSeparators?: readonly { x: number; y: number; width: number; height: number }[];
         }
       ).columnSeparators
-    ).toEqual([{ x: 104.625, y: 0, width: 0.75, height: 28 }]);
+    ).toEqual([{ x: 104.625, y: 0, width: 0.75, height: 25.454545454545453 }]);
   });
 
   test('inline content after a column break is rebroken in the new column', () => {

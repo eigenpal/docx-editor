@@ -4,7 +4,8 @@
 // module without importing it back — the two would otherwise form a cycle, and this is the
 // half both of them need.
 
-import { parentNodeOf, type OoxmlEditResult } from '../package/ooxml-edit.ts';
+import { findNode, parentNodeOf, type OoxmlEditResult } from '../package/ooxml-edit.ts';
+import { readOnOffChild, W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -15,6 +16,513 @@ import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import type { TreeOpEffect, TreeOpResult } from './tree-op-types.ts';
 
 export const TEXT_DEPS = [DEPENDENCY_KEY_IDS.story];
+
+/** `w15` wordml-2012 — `w15:repeatingSection` lives here. */
+const W15_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2012/wordml';
+
+/**
+ * Default namespaces for well-known `w:sdtPr` children that are not in WML.
+ * Explicit `namespaceUri` arguments still win.
+ */
+const SDT_PR_CHILD_NAMESPACE: Readonly<Record<string, string>> = {
+  checkbox: W14_NAMESPACE_URI,
+  repeatingSection: W15_NAMESPACE_URI,
+};
+
+/**
+ * Shared nesting budget for transparent content-control walks (layout / binding / ops).
+ * Beyond this depth the wrapper is treated as opaque rather than recursed.
+ */
+export const MAX_CONTENT_CONTROL_NESTING = 32;
+
+/** Kind string of a node — widened so typed SDT kinds typecheck before/while they land. */
+export function nodeKindOf(node: OoxmlNode): string {
+  return node.kind;
+}
+
+/**
+ * `w:sdt` — typed `contentControl` or still-generic during migration.
+ *
+ * Returns `boolean` (not `node is OoxmlElement`): a false result must not exclude every
+ * element from the union the way a broad type predicate would — callers that branch on
+ * `!isContentControlNode(x)` still need `x.kind === 'run'` / `.children` to typecheck.
+ */
+export function isContentControlNode(node: OoxmlNode): boolean {
+  if (node.kind === 'textValue') return false;
+  const kind = nodeKindOf(node);
+  if (kind === 'contentControl') return true;
+  return kind === 'generic' && node.localName === 'sdt' && node.namespaceUri === WML_NAMESPACE_URI;
+}
+
+/** `w:sdtContent` — typed or generic. */
+export function isContentControlContentNode(node: OoxmlNode): boolean {
+  if (node.kind === 'textValue') return false;
+  const kind = nodeKindOf(node);
+  if (kind === 'contentControlContent') return true;
+  return (
+    kind === 'generic' && node.localName === 'sdtContent' && node.namespaceUri === WML_NAMESPACE_URI
+  );
+}
+
+/** `w:sdtPr` — typed or generic. */
+export function isContentControlPropertiesNode(node: OoxmlNode): boolean {
+  if (node.kind === 'textValue') return false;
+  const kind = nodeKindOf(node);
+  if (kind === 'contentControlProperties') return true;
+  return (
+    kind === 'generic' && node.localName === 'sdtPr' && node.namespaceUri === WML_NAMESPACE_URI
+  );
+}
+
+/** `w:sdtEndPr` — typed or generic. */
+export function isContentControlEndPropertiesNode(node: OoxmlNode): boolean {
+  if (node.kind === 'textValue') return false;
+  const kind = nodeKindOf(node);
+  if (kind === 'contentControlEndProperties') return true;
+  return (
+    kind === 'generic' && node.localName === 'sdtEndPr' && node.namespaceUri === WML_NAMESPACE_URI
+  );
+}
+
+/** The control's `w:sdtPr`, if present. */
+export function contentControlPropertiesOf(control: OoxmlNode): OoxmlElement | undefined {
+  if (control.kind === 'textValue' || !isContentControlNode(control)) return undefined;
+  // Widen past the typed children's union so the element predicate is accepted by `.find`.
+  const children: readonly OoxmlNode[] = control.children;
+  return children.find(
+    (child): child is OoxmlElement =>
+      child.kind !== 'textValue' && isContentControlPropertiesNode(child)
+  );
+}
+
+/** The control's `w:sdtContent`, if present. */
+export function contentControlContentOf(control: OoxmlNode): OoxmlElement | undefined {
+  if (control.kind === 'textValue' || !isContentControlNode(control)) return undefined;
+  const children: readonly OoxmlNode[] = control.children;
+  return children.find(
+    (child): child is OoxmlElement =>
+      child.kind !== 'textValue' && isContentControlContentNode(child)
+  );
+}
+
+/**
+ * Payload to splice into the parent when unwrapping a content control.
+ *
+ * Walks children in authored order: drops `w:sdtPr` / `w:sdtEndPr`, expands a single
+ * `w:sdtContent`, and keeps every other non-property child (extension markup, including
+ * foreign-namespace siblings that reuse the `sdtPr`/`sdtEndPr` local names). Returns
+ * `null` when the control is ambiguous — more than one `w:sdtContent` — so callers fail
+ * closed instead of silently dropping duplicate containers or extension siblings.
+ */
+export function contentControlUnwrapPayload(control: OoxmlNode): readonly OoxmlNode[] | null {
+  if (control.kind === 'textValue' || !isContentControlNode(control)) return null;
+  const kept: OoxmlNode[] = [];
+  let contentCount = 0;
+  for (const child of control.children) {
+    if (child.kind === 'textValue') continue;
+    if (isContentControlPropertiesNode(child) || isContentControlEndPropertiesNode(child)) {
+      continue;
+    }
+    if (isContentControlContentNode(child)) {
+      contentCount += 1;
+      if (contentCount > 1) return null;
+      kept.push(...child.children);
+      continue;
+    }
+    kept.push(child);
+  }
+  return kept;
+}
+
+/**
+ * A child of `w:sdtPr` by expanded name. Defaults to WML, except well-known vendor
+ * extensions (`w14:checkbox`, `w15:repeatingSection`). Foreign siblings that reuse a
+ * WML local name cannot shadow the real property.
+ */
+export function sdtPrChild(
+  properties: OoxmlNode | undefined,
+  localName: string,
+  namespaceUri: string = SDT_PR_CHILD_NAMESPACE[localName] ?? WML_NAMESPACE_URI
+): OoxmlElement | undefined {
+  if (!properties || properties.kind === 'textValue') return undefined;
+  const children: readonly OoxmlNode[] = properties.children;
+  return children.find(
+    (child): child is OoxmlElement =>
+      child.kind !== 'textValue' &&
+      child.localName === localName &&
+      child.namespaceUri === namespaceUri
+  );
+}
+
+/**
+ * Attribute value by expanded name. Defaults to the element's own namespace so `w:val`
+ * and `w14:val` resolve correctly and a foreign `x:val` cannot shadow either.
+ */
+export function attributeValueOf(
+  node: OoxmlNode | undefined,
+  localName: string,
+  namespaceUri?: string
+): string | undefined {
+  if (!node || node.kind === 'textValue') return undefined;
+  const ns = namespaceUri ?? node.namespaceUri;
+  return node.attributes.find(
+    (attribute) => attribute.localName === localName && attribute.namespaceUri === ns
+  )?.value;
+}
+
+export type SdtLockValue = 'sdtLocked' | 'contentLocked' | 'sdtContentLocked' | 'unlocked';
+
+export interface ContentControlLockFlags {
+  /** `sdtLocked` or `sdtContentLocked` — wrapper removal refused. */
+  readonly wrapper: boolean;
+  /** `contentLocked` or `sdtContentLocked` — content / value edits refused. */
+  readonly content: boolean;
+}
+
+export function lockFlagsFromValue(value: string | undefined): ContentControlLockFlags {
+  switch (value) {
+    case 'sdtLocked':
+      return { wrapper: true, content: false };
+    case 'contentLocked':
+      return { wrapper: false, content: true };
+    case 'sdtContentLocked':
+      return { wrapper: true, content: true };
+    default:
+      return { wrapper: false, content: false };
+  }
+}
+
+export function unionLockFlags(
+  a: ContentControlLockFlags,
+  b: ContentControlLockFlags
+): ContentControlLockFlags {
+  return { wrapper: a.wrapper || b.wrapper, content: a.content || b.content };
+}
+
+/** Declared `w:lock/@w:val` on one control (absent → unlocked). */
+export function declaredLockOf(control: OoxmlNode): ContentControlLockFlags {
+  const lock = sdtPrChild(contentControlPropertiesOf(control), 'lock');
+  return lockFlagsFromValue(attributeValueOf(lock, 'val'));
+}
+
+/** Whether the control declares `w:dataBinding`. */
+export function isBoundContentControl(control: OoxmlNode): boolean {
+  return sdtPrChild(contentControlPropertiesOf(control), 'dataBinding') !== undefined;
+}
+
+/** Whether the control declares a repeating-section extension (`w15:repeatingSection`). */
+export function isRepeatingSectionControl(control: OoxmlNode): boolean {
+  return sdtPrChild(contentControlPropertiesOf(control), 'repeatingSection') !== undefined;
+}
+
+/** `w:showingPlcHdr` is present and on — content is a prompt, not user data. */
+export function isShowingPlaceholder(control: OoxmlNode): boolean {
+  const properties = contentControlPropertiesOf(control);
+  return properties ? readOnOffChild(properties, 'showingPlcHdr') : false;
+}
+
+/** `w:temporary` is present and on — first successful content edit unwraps the wrapper. */
+export function isTemporaryControl(control: OoxmlNode): boolean {
+  const properties = contentControlPropertiesOf(control);
+  return properties ? readOnOffChild(properties, 'temporary') : false;
+}
+
+/**
+ * `w:placeholder/w:docPart` names a glossary entry. This lane preserves the reference and
+ * never resolves the glossary, so emptying cannot restore a durable prompt from it.
+ */
+export function hasGlossaryPlaceholderRef(control: OoxmlNode): boolean {
+  const placeholder = sdtPrChild(contentControlPropertiesOf(control), 'placeholder');
+  if (!placeholder) return false;
+  const children: readonly OoxmlNode[] = placeholder.children;
+  return children.some(
+    (child) =>
+      child.kind !== 'textValue' &&
+      child.localName === 'docPart' &&
+      child.namespaceUri === WML_NAMESPACE_URI
+  );
+}
+
+/** Innermost content-control ancestor of a node (the node itself when it is one). */
+export function innermostContentControlAround(
+  part: OoxmlPart,
+  nodeId: string
+): OoxmlElement | null {
+  const self = findContentControl(part, nodeId);
+  if (self) return self;
+  const ancestors = contentControlAncestorsOf(part, nodeId);
+  return ancestors[ancestors.length - 1] ?? null;
+}
+
+/**
+ * Control type for value ops — checkbox is read before "untyped" (design S5).
+ * `repeatingSection` is detected separately and refused as unsupported.
+ */
+export type ContentControlValueType =
+  | 'text'
+  | 'dropdown'
+  | 'combo'
+  | 'checkbox'
+  | 'date'
+  | 'picture'
+  | 'richText'
+  | 'repeatingSection'
+  | 'other';
+
+export function contentControlValueTypeOf(control: OoxmlNode): ContentControlValueType {
+  const properties = contentControlPropertiesOf(control);
+  if (!properties) return 'richText';
+  if (sdtPrChild(properties, 'repeatingSection')) return 'repeatingSection';
+  if (sdtPrChild(properties, 'checkbox')) return 'checkbox';
+  if (sdtPrChild(properties, 'dropDownList')) return 'dropdown';
+  if (sdtPrChild(properties, 'comboBox')) return 'combo';
+  if (sdtPrChild(properties, 'date')) return 'date';
+  if (sdtPrChild(properties, 'picture')) return 'picture';
+  if (sdtPrChild(properties, 'text')) return 'text';
+  return 'richText';
+}
+
+/** Ancestor content controls of a node, outermost first. */
+export function contentControlAncestorsOf(part: OoxmlPart, nodeId: string): OoxmlElement[] {
+  const chain: OoxmlElement[] = [];
+  let current: OoxmlElement | null = parentOf(part, nodeId);
+  while (current) {
+    if (isContentControlNode(current)) chain.push(current);
+    current = parentOf(part, current.id);
+  }
+  return chain.reverse();
+}
+
+/** Nested lock union for a control including its own declaration. */
+export function effectiveLockOf(part: OoxmlPart, control: OoxmlNode): ContentControlLockFlags {
+  let flags = declaredLockOf(control);
+  for (const ancestor of contentControlAncestorsOf(part, control.id)) {
+    flags = unionLockFlags(flags, declaredLockOf(ancestor));
+  }
+  return flags;
+}
+
+/** Effective content-edit lock at a node (union of every enclosing control, and itself). */
+export function effectiveContentLockAt(part: OoxmlPart, nodeId: string): ContentControlLockFlags {
+  let flags: ContentControlLockFlags = { wrapper: false, content: false };
+  const self = findContentControl(part, nodeId);
+  if (self) flags = unionLockFlags(flags, declaredLockOf(self));
+  for (const ancestor of contentControlAncestorsOf(part, nodeId)) {
+    flags = unionLockFlags(flags, declaredLockOf(ancestor));
+  }
+  return flags;
+}
+
+export function findContentControl(part: OoxmlPart, controlId: string): OoxmlElement | null {
+  const node = findNode(part, controlId);
+  if (!node || node.kind === 'textValue' || !isContentControlNode(node)) return null;
+  return node;
+}
+
+/** Dropdown / combo `w:listItem` entries. */
+export function listItemsOf(control: OoxmlNode): readonly { displayText: string; value: string }[] {
+  const properties = contentControlPropertiesOf(control);
+  const list = sdtPrChild(properties, 'dropDownList') ?? sdtPrChild(properties, 'comboBox');
+  if (!list) return [];
+  const items: { displayText: string; value: string }[] = [];
+  for (const child of list.children) {
+    if (
+      child.kind === 'textValue' ||
+      child.localName !== 'listItem' ||
+      child.namespaceUri !== WML_NAMESPACE_URI
+    ) {
+      continue;
+    }
+    const value = attributeValueOf(child, 'value') ?? '';
+    const displayText = attributeValueOf(child, 'displayText') ?? value;
+    items.push({ displayText, value });
+  }
+  return items;
+}
+
+/** `w14:checkbox` payload pieces. */
+export function checkboxPayloadOf(control: OoxmlNode): {
+  readonly checkbox: OoxmlElement;
+  readonly checked: boolean;
+  readonly checkedGlyph: string;
+  readonly uncheckedGlyph: string;
+  readonly checkedFont: string | undefined;
+  readonly uncheckedFont: string | undefined;
+} | null {
+  const checkbox = sdtPrChild(contentControlPropertiesOf(control), 'checkbox');
+  if (!checkbox) return null;
+  const checkedNode = checkbox.children.find(
+    (child) =>
+      child.kind !== 'textValue' &&
+      child.localName === 'checked' &&
+      child.namespaceUri === W14_NAMESPACE_URI
+  );
+  const checkedVal = attributeValueOf(checkedNode, 'val');
+  const checked =
+    checkedVal === undefined ||
+    !(checkedVal === '0' || checkedVal === 'false' || checkedVal === 'off');
+  const checkedState = checkbox.children.find(
+    (child) =>
+      child.kind !== 'textValue' &&
+      child.localName === 'checkedState' &&
+      child.namespaceUri === W14_NAMESPACE_URI
+  );
+  const uncheckedState = checkbox.children.find(
+    (child) =>
+      child.kind !== 'textValue' &&
+      child.localName === 'uncheckedState' &&
+      child.namespaceUri === W14_NAMESPACE_URI
+  );
+  return {
+    checkbox,
+    checked,
+    checkedGlyph: attributeValueOf(checkedState, 'val') ?? '2612',
+    uncheckedGlyph: attributeValueOf(uncheckedState, 'val') ?? '2610',
+    checkedFont: attributeValueOf(checkedState, 'font'),
+    uncheckedFont: attributeValueOf(uncheckedState, 'font'),
+  };
+}
+
+/** Days in `month` (1–12) for a Gregorian `year`, or 0 when the month is out of range. */
+function daysInGregorianMonth(year: number, month: number): number {
+  if (month < 1 || month > 12) return 0;
+  if (month === 2) {
+    const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+    return leap ? 29 : 28;
+  }
+  return month === 4 || month === 6 || month === 9 || month === 11 ? 30 : 31;
+}
+
+/**
+ * Strict calendar date / date-time parse for content-control values destined for
+ * `@w:fullDate`. Accepts `YYYY-MM-DD` or an ISO-8601 local/Zulu/offset date-time; rejects
+ * impossible calendar dates (e.g. Feb 31), non-leap Feb 29, and malformed time suffixes.
+ * Returns a normalized `xsd:dateTime` string (`…T…Z` or with a numeric offset).
+ */
+export function normalizeSdtFullDate(value: string): string | null {
+  const trimmed = value.trim();
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})?)?$/.exec(
+      trimmed
+    );
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const maxDay = daysInGregorianMonth(year, month);
+  if (maxDay === 0 || day < 1 || day > maxDay) return null;
+
+  const date = `${match[1]}-${match[2]}-${match[3]}`;
+  if (match[4] === undefined) return `${date}T00:00:00Z`;
+
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  if (hour > 23 || minute > 59 || second > 59) return null;
+
+  const fraction = match[7] !== undefined ? `.${match[7]}` : '';
+  const zone = match[8] ?? 'Z';
+  if (zone !== 'Z') {
+    const zoneHour = Number(zone.slice(1, 3));
+    const zoneMinute = Number(zone.slice(4, 6));
+    if (zoneHour > 23 || zoneMinute > 59) return null;
+  }
+  return `${date}T${match[4]}:${match[5]}:${match[6]}${fraction}${zone}`;
+}
+
+/**
+ * Format a calendar date for `w:dateFormat` patterns Word commonly authors.
+ * Unrecognised tokens are left intact; invalid ISO input returns null.
+ */
+export function formatSdtDateDisplay(iso: string, pattern: string | undefined): string | null {
+  const normalized = normalizeSdtFullDate(iso);
+  if (!normalized) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(normalized);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const fmt = pattern && pattern.length > 0 ? pattern : 'M/d/yyyy';
+  const monthsShort = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  const monthsLong = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  return fmt.replace(/yyyy|yy|MMMM|MMM|MM|M|dd|d/g, (token) => {
+    switch (token) {
+      case 'yyyy':
+        return String(year);
+      case 'yy':
+        return String(year).slice(-2);
+      case 'MMMM':
+        return monthsLong[month - 1]!;
+      case 'MMM':
+        return monthsShort[month - 1]!;
+      case 'MM':
+        return String(month).padStart(2, '0');
+      case 'M':
+        return String(month);
+      case 'dd':
+        return String(day).padStart(2, '0');
+      case 'd':
+        return String(day);
+      default:
+        return token;
+    }
+  });
+}
+
+/** Whether a checkbox string value means checked. */
+export function parseCheckboxValue(value: string): boolean | null {
+  const normalized = value.trim().toLowerCase();
+  if (
+    normalized === 'true' ||
+    normalized === '1' ||
+    normalized === 'checked' ||
+    normalized === 'on'
+  ) {
+    return true;
+  }
+  if (
+    normalized === 'false' ||
+    normalized === '0' ||
+    normalized === 'unchecked' ||
+    normalized === 'off'
+  ) {
+    return false;
+  }
+  return null;
+}
+
+/** True when this node or any enclosing content control declares `w:dataBinding`. */
+export function isBoundAt(part: OoxmlPart, nodeId: string): boolean {
+  const self = findContentControl(part, nodeId);
+  if (self && isBoundContentControl(self)) return true;
+  return contentControlAncestorsOf(part, nodeId).some(isBoundContentControl);
+}
 
 export function ok(part: OoxmlPart, effect: TreeOpEffect): TreeOpResult {
   return { ok: true, part, effect };

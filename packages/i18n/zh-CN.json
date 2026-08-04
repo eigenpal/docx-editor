@@ -61,7 +61,8 @@
       "listFormatting": "列表格式",
       "image": "图片",
       "table": "表格",
-      "insert": "插入"
+      "insert": "插入",
+      "contentControl": "内容控件"
     },
     "undo": "撤销",
     "undoShortcut": "撤销(Ctrl+Z)",
@@ -87,7 +88,8 @@
     "clearFormatting": "清除格式",
     "commentsAndChanges": null,
     "moreItems": null,
-    "unavailableInPreview": null
+    "unavailableInPreview": null,
+    "more": null
   },
   "alignment": {
     "alignLeft": "左对齐",
@@ -732,7 +734,23 @@
       "gridTable4Accent5": "网格表 4 强调色 5",
       "gridTable4Accent6": "网格表 4 强调色 6"
     },
-    "selectTable": null
+    "selectTable": null,
+    "borderStyles": {
+      "dashed": null,
+      "dotted": null,
+      "double": null,
+      "single": null,
+      "thick": null,
+      "triple": null
+    },
+    "borderWidths": {
+      "halfPt": null,
+      "oneHalfPt": null,
+      "onePt": null,
+      "threePt": null,
+      "twoPt": null
+    },
+    "clearCellFill": null
   },
   "tableAdvanced": {
     "verticalAlignment": "垂直对齐",
@@ -993,6 +1011,44 @@
       "headings": null
     },
     "title": null
+  },
+  "contentControl": {
+    "formFill": "表单填写模式",
+    "group": "内容控件",
+    "inspector": "内容控件属性",
+    "inspectorPanel": {
+      "alias": "标题",
+      "bound": "已绑定数据",
+      "boundNote": "此控件已绑定外部数据，无法编辑。",
+      "empty": "—",
+      "lock": "锁定",
+      "lockedNote": "此控件已锁定内容编辑。",
+      "no": "否",
+      "placeholder": "占位符",
+      "tag": "标记",
+      "title": "内容控件",
+      "type": "类型",
+      "yes": "是"
+    },
+    "lock": {
+      "contentLocked": "内容已锁定",
+      "sdtContentLocked": "内容控件和内容均已锁定",
+      "sdtLocked": "内容控件已锁定",
+      "unlocked": "未锁定"
+    },
+    "noControl": "请将光标放在内容控件内",
+    "remove": "删除内容控件",
+    "showAll": "显示内容控件边框",
+    "types": {
+      "checkbox": "复选框",
+      "comboBox": "组合框",
+      "date": "日期",
+      "dropdown": "下拉列表",
+      "picture": "图片",
+      "plainText": "纯文本",
+      "repeatingSection": "重复节",
+      "richText": "格式文本"
+    }
   },
   "notes": {
     "editingBanner": "正在编辑脚注/尾注",

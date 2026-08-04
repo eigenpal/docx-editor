@@ -11,6 +11,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import { paragraphTextOf } from '../../store/store/tree-ops.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const W15 = 'http://schemas.microsoft.com/office/word/2012/wordml';
@@ -79,6 +80,24 @@ const DELETION =
   `<w:p><w:del w:id="2" w:author="Alan Turing" w:date="2026-02-03T04:05:06Z">` +
   `<w:r><w:delText>struck out</w:delText></w:r></w:del></w:p>`;
 
+const TWO_ROW_TABLE =
+  `<w:tbl><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid>` +
+  `<w:tr><w:tc><w:p><w:r><w:t>first</w:t></w:r></w:p></w:tc></w:tr>` +
+  `<w:tr><w:tc><w:p><w:r><w:t>second</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
+
+function tableRows(editor: DocxEditorInstance) {
+  const table = editor
+    .surface!.layout()
+    .pages.flatMap((page) => page.fragments)
+    .find((fragment) => fragment.kind === 'table');
+  if (!table || table.kind !== 'table') throw new Error('expected a table fragment');
+  return table.rows;
+}
+
+function tableRowCount(editor: DocxEditorInstance): number {
+  return tableRows(editor).length;
+}
+
 describe('the review queue the facade publishes', () => {
   test('a card arrives presentation-ready, so no host derives it from the tree', () => {
     const editor = mount({ body: INSERTION });
@@ -133,6 +152,89 @@ describe('the review queue the facade publishes', () => {
     const before = editor.getReviewRevision();
     editor.acceptReviewItem(editor.getReviewItems()[0]!.key);
     expect(editor.getReviewRevision()).not.toBe(before);
+  });
+});
+
+describe('tracked table rows', () => {
+  test('sequential suggesting keystrokes replace table-cell text beyond one character', () => {
+    const editor = mount({ body: TWO_ROW_TABLE });
+    editor.setEditingMode('suggesting');
+    const firstParagraph = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: firstParagraph, offset: 0 },
+      head: { paragraphId: firstParagraph, offset: 5 },
+    });
+
+    editor.surface!.type('s');
+    expect(editor.surface!.state().selection.head).toEqual({
+      paragraphId: firstParagraph,
+      offset: 6,
+    });
+    editor.surface!.type('e');
+
+    expect(editor.surface!.state().lastRejection).toBeNull();
+    expect(editor.surface!.state().selection.head).toEqual({
+      paragraphId: firstParagraph,
+      offset: 7,
+    });
+    const replacement = editor
+      .getReviewItems()
+      .find((item) => item.kind === 'revision' && item.revisionKind === 'replace');
+    expect(replacement?.replacedText).toBe('first');
+    expect(replacement?.text).toBe('se');
+  });
+
+  test('inserting a row paints immediately, opens one review card, and keeps typing', () => {
+    const editor = mount({ body: TWO_ROW_TABLE });
+    editor.setEditingMode('suggesting');
+    const firstParagraph = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: firstParagraph, offset: 0 },
+      head: { paragraphId: firstParagraph, offset: 0 },
+    });
+
+    expect(editor.exec({ type: 'insertRow', where: 'below' }).ok).toBe(true);
+    expect(tableRowCount(editor)).toBe(3);
+    expect(tableRows(editor).filter((row) => row.revisionKind === 'insert')).toHaveLength(1);
+    expect(editor.isReviewPaneOpen()).toBe(true);
+    const rowCard = editor
+      .getReviewItems()
+      .find((item) => item.kind === 'revision' && item.revisionKind === 'structural');
+    expect(rowCard).toBeDefined();
+    expect(rowCard?.readOnly).toBe(false);
+
+    const insertedParagraph = editor.surface!.state().selection.head.paragraphId;
+    editor.surface!.type('A');
+    expect(editor.surface!.state().selection.head).toEqual({
+      paragraphId: insertedParagraph,
+      offset: 1,
+    });
+    expect(paragraphTextOf(editor.surface!.session.part(), insertedParagraph)).toBe('A');
+    editor.surface!.type('B');
+    expect(editor.surface!.state().lastRejection).toBeNull();
+    expect(paragraphTextOf(editor.surface!.session.part(), insertedParagraph)).toBe('AB');
+    expect(tableRowCount(editor)).toBe(3);
+  });
+
+  test('deleting a row stays visible as a proposal until accepted', () => {
+    const editor = mount({ body: TWO_ROW_TABLE });
+    editor.setEditingMode('suggesting');
+    const firstParagraph = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: firstParagraph, offset: 0 },
+      head: { paragraphId: firstParagraph, offset: 0 },
+    });
+
+    expect(editor.exec({ type: 'deleteRow' }).ok).toBe(true);
+    expect(tableRowCount(editor)).toBe(2);
+    expect(tableRows(editor).filter((row) => row.revisionKind === 'delete')).toHaveLength(1);
+    const rowCard = editor
+      .getReviewItems()
+      .find((item) => item.kind === 'revision' && item.revisionKind === 'structural');
+    expect(rowCard).toBeDefined();
+    expect(rowCard?.readOnly).toBe(false);
+    expect(editor.acceptReviewItem(rowCard!.key).ok).toBe(true);
+    expect(tableRowCount(editor)).toBe(1);
   });
 });
 
@@ -667,6 +769,17 @@ describe('the review pane', () => {
     expect(editor.isReviewPaneOpen()).toBe(false);
     expect(editor.isActive({ type: 'toggleReviewPane' })).toBe(false);
     expect(editor.snapshot().reviewPaneOpen).toBe(false);
+  });
+
+  test('reopens when suggesting commits another tracked change', () => {
+    const editor = mount({ body: '<w:p><w:r><w:t>plain text</w:t></w:r></w:p>' });
+    editor.setEditingMode('suggesting');
+    editor.exec({ type: 'toggleReviewPane' });
+    expect(editor.isReviewPaneOpen()).toBe(false);
+
+    editor.surface!.type('X');
+
+    expect(editor.isReviewPaneOpen()).toBe(true);
   });
 
   test('the queue counter moves on a toggle, so a subscriber re-renders', () => {

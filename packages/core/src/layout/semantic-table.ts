@@ -19,6 +19,7 @@ import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core-contract/sto
 import { shadingFillFromElement } from './ooxml-shading.ts';
 import { revisionRemovesParagraph } from './revision-visibility.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';
+import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 import {
   EMPTY_TABLE_CELL_STYLE_FORMATTING,
   EMPTY_TABLE_FORMATTING,
@@ -144,6 +145,8 @@ export interface SemanticTableCell {
    * the vertical bands for every cell after it.
    */
   readonly gridColumn: number;
+  /** Canonical `w:gridCol` node id for this cell's start column, when the grid is authored. */
+  readonly gridColumnId?: string;
   /** A vMerge cell that is not the restart continues the cell above: box, no content. */
   readonly vMergeContinue: boolean;
   /** `w:vAlign` — defaults to top when omitted/unrecognised. */
@@ -169,12 +172,14 @@ export interface SemanticTableCell {
    * row's bold and centring live here, not in the cell's own properties.
    */
   readonly styleFormatting: TableCellStyleFormatting;
-  /** Block children in reading order: `paragraph` and `table` typed nodes only. */
+  /** Block children in reading order, with content-control wrappers flattened. */
   readonly blocks: readonly OoxmlElement[];
 }
 
 export interface SemanticTableRow {
   readonly id: string;
+  /** Pending Word row insertion/deletion authored in `w:trPr`. */
+  readonly revisionKind?: 'insert' | 'delete';
   /** `w:trPr/w:tblHeader` — the row repeats atop each page the table continues onto. */
   readonly isHeader: boolean;
   /**
@@ -718,18 +723,22 @@ export function readTableStructure(
         defaultMargins,
         readMarginSides(cellProperties && childNamed(cellProperties, 'tcMar'))
       );
-      const blocks: OoxmlElement[] = [];
-      for (const child of cellNode.children) {
+      // Content controls inside a cell flatten transparently — same rule as body
+      // `storyBlocks`. Without this a `w:sdt` wrapping the cell's paragraphs leaves the
+      // cell empty in layout while the tree still holds the text.
+      const blocks = collectFlowBlocks(cellNode.children, 0, (block) => {
         // A paragraph a tracked revision has removed claims a full line box while rendering
         // nothing; a cell of them is a stack of blank lines that pushes the rest of the table
         // down the page.
-        if (child.kind === 'paragraph' && revisionRemovesParagraph(child, displayMode)) continue;
-        if (child.kind === 'paragraph' || child.kind === 'table') blocks.push(child);
-      }
+        if (block.kind === 'paragraph' && revisionRemovesParagraph(block, displayMode))
+          return false;
+        return true;
+      });
       cells.push({
         id: cellNode.id,
         gridSpan,
         gridColumn,
+        ...(gridCols[gridColumn]?.id ? { gridColumnId: gridCols[gridColumn]!.id } : {}),
         vMergeContinue: readVMergeContinue(cellProperties),
         vAlign: readVAlign(cellProperties),
         margins: cellMargins,
@@ -745,6 +754,11 @@ export function readTableStructure(
     }
     rows.push({
       id: rowNode.id,
+      ...(rowProperties && childNamed(rowProperties, 'ins')
+        ? { revisionKind: 'insert' as const }
+        : rowProperties && childNamed(rowProperties, 'del')
+          ? { revisionKind: 'delete' as const }
+          : {}),
       isHeader: readFlag(rowProperties, 'tblHeader'),
       cantSplit: readFlag(rowProperties, 'cantSplit'),
       height: readRowHeight(rowProperties),

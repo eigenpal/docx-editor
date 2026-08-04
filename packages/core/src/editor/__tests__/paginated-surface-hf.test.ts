@@ -12,7 +12,11 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
 import { positionFromDomPoint } from '../dom-selection.ts';
-import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
+import {
+  mountPaginatedSurface,
+  setPaginatedSurfaceScale,
+  type PaginatedSurface,
+} from '../paginated-surface.ts';
 
 const COMPREHENSIVE_FIXTURE = resolve(
   import.meta.dir,
@@ -100,6 +104,39 @@ describe('headers and footers, read-only', () => {
     // Furniture sits OUTSIDE the content box, on the sheet itself.
     expect(header.closest('.docx-page')).not.toBeNull();
     expect(header.closest('.docx-page-content')).toBeNull();
+  });
+
+  test('the furniture rescales with the sheet it is painted on', () => {
+    // Header and footer stories are laid out once per variant and attached per page, so a zoom
+    // that scaled only body content would leave the furniture at the old size on every sheet.
+    const { surface, container } = mount(docx({ header: p('HEADER'), footer: p('FOOTER') }));
+    const geometry = (kind: 'header' | 'footer') => {
+      const box = container.querySelector<HTMLElement>(`[data-docx-hf="${kind}"]`)!;
+      return [
+        parseFloat(box.style.left),
+        parseFloat(box.style.top),
+        parseFloat(box.style.width),
+        parseFloat(box.style.height),
+      ];
+    };
+    const before = { header: geometry('header'), footer: geometry('footer') };
+
+    expect(setPaginatedSurfaceScale(surface, 2)).toBe(true);
+
+    for (const kind of ['header', 'footer'] as const) {
+      geometry(kind).forEach((value, axis) => {
+        expect(value).toBeCloseTo(before[kind][axis]! * 2, 5);
+      });
+      expect(
+        container.querySelector<HTMLElement>(`[data-docx-hf="${kind}"]`)!.textContent
+      ).toContain(kind.toUpperCase());
+    }
+    // Still furniture, not editable content, after the repaint.
+    expect(
+      container
+        .querySelector<HTMLElement>('[data-docx-hf="header"]')!
+        .getAttribute('contenteditable')
+    ).toBe('false');
   });
 
   test('the header box is sized to flow height, not to an anchored extent (#856)', () => {

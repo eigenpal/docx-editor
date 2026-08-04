@@ -81,7 +81,7 @@ const STEADY_MS = 530;
 
 export function createSurfaceCaret(
   pagesLayer: HTMLElement,
-  scale: number,
+  scale: () => number,
   read: () => SurfaceCaretInput
 ): SurfaceCaret {
   const document = pagesLayer.ownerDocument;
@@ -157,6 +157,7 @@ export function createSurfaceCaret(
       return;
     }
     const { layout, selection, scopedHost, scopedHostKind, preferredPageIndex, measurer } = read();
+    const currentScale = scale();
     // A range selection shows the browser's highlight; an insertion point inside it would
     // claim a position the selection does not have.
     if (!isCollapsed(selection)) {
@@ -184,9 +185,9 @@ export function createSurfaceCaret(
       hide();
       return;
     }
-    element.style.left = `${geometry.x * scale}px`;
-    element.style.top = `${geometry.y * scale}px`;
-    element.style.height = `${geometry.height * scale}px`;
+    element.style.left = `${geometry.x * currentScale}px`;
+    element.style.top = `${geometry.y * currentScale}px`;
+    element.style.height = `${geometry.height * currentScale}px`;
     if (element.parentNode !== host) host.append(element);
     // Suppress the native caret only while ours is up, and inline so it beats the
     // `[contenteditable='true']` rule in the stylesheet — pages layer AND scoped story.

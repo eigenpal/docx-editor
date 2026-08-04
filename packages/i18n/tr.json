@@ -61,7 +61,8 @@
       "listFormatting": "Liste biçimlendirme",
       "image": "Görsel",
       "table": "Tablo",
-      "insert": "Ekle"
+      "insert": "Ekle",
+      "contentControl": "İçerik denetimleri"
     },
     "undo": "Geri al",
     "undoShortcut": "Geri al (Ctrl+Z)",
@@ -87,7 +88,8 @@
     "clearFormatting": "Biçimlendirmeyi temizle",
     "commentsAndChanges": null,
     "moreItems": null,
-    "unavailableInPreview": null
+    "unavailableInPreview": null,
+    "more": null
   },
   "alignment": {
     "alignLeft": "Sola hizala",
@@ -735,7 +737,23 @@
       "gridTable4Accent5": "Izgara 4 vurgu 5",
       "gridTable4Accent6": "Izgara 4 vurgu 6"
     },
-    "selectTable": null
+    "selectTable": null,
+    "borderStyles": {
+      "dashed": null,
+      "dotted": null,
+      "double": null,
+      "single": null,
+      "thick": null,
+      "triple": null
+    },
+    "borderWidths": {
+      "halfPt": null,
+      "oneHalfPt": null,
+      "onePt": null,
+      "threePt": null,
+      "twoPt": null
+    },
+    "clearCellFill": null
   },
   "tableAdvanced": {
     "verticalAlignment": "Dikey hizalama",
@@ -993,6 +1011,44 @@
       "headings": null
     },
     "title": null
+  },
+  "contentControl": {
+    "formFill": "Form doldurma modu",
+    "group": "İçerik denetimleri",
+    "inspector": "İçerik denetimi özellikleri",
+    "inspectorPanel": {
+      "alias": "Başlık",
+      "bound": "Veriye bağlı",
+      "boundNote": "Bu denetim harici verilere bağlı. Düzenleme reddedildi.",
+      "empty": "—",
+      "lock": "Kilit",
+      "lockedNote": "Bu denetimde içerik düzenleme kilitli.",
+      "no": "Hayır",
+      "placeholder": "Yer tutucu",
+      "tag": "Etiket",
+      "title": "İçerik denetimi",
+      "type": "Tür",
+      "yes": "Evet"
+    },
+    "lock": {
+      "contentLocked": "İçerik kilitli",
+      "sdtContentLocked": "İçerik denetimi ve içerik kilitli",
+      "sdtLocked": "İçerik denetimi kilitli",
+      "unlocked": "Kilitsiz"
+    },
+    "noControl": "İmleci bir içerik denetiminin içine yerleştirin",
+    "remove": "İçerik denetimini kaldır",
+    "showAll": "İçerik denetimi sınırlarını göster",
+    "types": {
+      "checkbox": "Onay kutusu",
+      "comboBox": "Birleşik kutu",
+      "date": "Tarih",
+      "dropdown": "Açılan liste",
+      "picture": "Resim",
+      "plainText": "Düz metin",
+      "repeatingSection": "Yinelenen bölüm",
+      "richText": "Zengin metin"
+    }
   },
   "notes": {
     "editingBanner": "Not düzenleniyor",

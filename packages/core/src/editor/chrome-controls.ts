@@ -276,16 +276,22 @@ export const CHROME_GROUPS = [
   {
     id: 'script',
     labelKey: 'formattingBar.groups.script',
+    // The PLAIN labels, not the `...Shortcut` ones that spell out "(Ctrl+=)" and
+    // "(Ctrl+Shift+=)". React's live zoom owns Ctrl/Cmd `=` and its shifted spelling, so a
+    // tooltip naming that chord here would send a React user to a keystroke that zooms. Both
+    // toggles stay reachable from the button the label is on, and the engine keymap still
+    // binds the chord for a host that mounts no zoom handler — under-advertising a shortcut
+    // some hosts keep is the truthful trade against advertising one that no longer applies.
     controls: [
       {
         id: 'super',
-        labelKey: 'formattingBar.superscriptShortcut',
+        labelKey: 'formattingBar.superscript',
         paths: GENERATED_ICON_PATHS['superscript'],
         state: { kind: 'command' },
       },
       {
         id: 'sub',
-        labelKey: 'formattingBar.subscriptShortcut',
+        labelKey: 'formattingBar.subscript',
         paths: GENERATED_ICON_PATHS['subscript'],
         state: { kind: 'command' },
       },
@@ -401,6 +407,40 @@ export const CHROME_GROUPS = [
     ],
   },
   {
+    // Content-control authoring chrome (typed-content-controls). Show-all and form-fill are
+    // surface toggles; inspector and remove are contextual to the caret control. Slot ids are
+    // public forever — renaming any is a breaking change.
+    id: 'contentControl',
+    labelKey: 'contentControl.group',
+    contextual: true,
+    controls: [
+      {
+        id: 'showAll',
+        labelKey: 'contentControl.showAll',
+        paths: GENERATED_ICON_PATHS['visibility'],
+        state: { kind: 'command' },
+      },
+      {
+        id: 'formFill',
+        labelKey: 'contentControl.formFill',
+        paths: GENERATED_ICON_PATHS['edit_note'],
+        state: { kind: 'command' },
+      },
+      {
+        id: 'inspector',
+        labelKey: 'contentControl.inspector',
+        paths: GENERATED_ICON_PATHS['tune'],
+        state: { kind: 'command' },
+      },
+      {
+        id: 'remove',
+        labelKey: 'contentControl.remove',
+        paths: GENERATED_ICON_PATHS['delete'],
+        state: { kind: 'command' },
+      },
+    ],
+  },
+  {
     id: 'image',
     labelKey: 'formattingBar.groups.image',
     contextual: true,
@@ -429,6 +469,43 @@ export const CHROME_GROUPS = [
         labelKey: 'toolbar.table',
         paths: GENERATED_ICON_PATHS['table'],
         state: { kind: 'command' },
+      },
+      {
+        id: 'borderTarget',
+        shape: 'dropdown',
+        labelKey: 'table.borders.tooltip',
+        paths: GENERATED_ICON_PATHS['border_all'],
+        state: { kind: 'value' },
+      },
+      {
+        id: 'borderColor',
+        shape: 'colorSplit',
+        swatch: '#000000',
+        labelKey: 'table.borderColor',
+        paths: GENERATED_ICON_PATHS['border_color'],
+        state: { kind: 'value' },
+      },
+      {
+        id: 'borderStyle',
+        shape: 'dropdown',
+        labelKey: 'table.borders.styleAriaLabel',
+        paths: GENERATED_ICON_PATHS['border_horizontal'],
+        state: { kind: 'value' },
+      },
+      {
+        id: 'borderWidth',
+        shape: 'dropdown',
+        labelKey: 'table.borderWidth',
+        paths: GENERATED_ICON_PATHS['line_weight'],
+        state: { kind: 'value' },
+      },
+      {
+        id: 'cellFill',
+        shape: 'colorSplit',
+        swatch: '#ffffff',
+        labelKey: 'table.cellFillColor',
+        paths: GENERATED_ICON_PATHS['format_color_fill'],
+        state: { kind: 'value' },
       },
     ],
   },
@@ -578,6 +655,7 @@ export type ChromeGroupId =
   | 'list'
   | 'format'
   | 'review'
+  | 'contentControl'
   | 'image'
   | 'table'
   | 'file'
@@ -618,9 +696,18 @@ export type ChromeSlotId =
   | 'format.clear'
   | 'review.comments'
   | 'review.editingMode'
+  | 'contentControl.showAll'
+  | 'contentControl.formFill'
+  | 'contentControl.inspector'
+  | 'contentControl.remove'
   | 'image.insert'
   | 'image.properties'
   | 'table.insert'
+  | 'table.borderTarget'
+  | 'table.borderColor'
+  | 'table.borderStyle'
+  | 'table.borderWidth'
+  | 'table.cellFill'
   | 'file.open'
   | 'file.save'
   | 'file.pageSetup'

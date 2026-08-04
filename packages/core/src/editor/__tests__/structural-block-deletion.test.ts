@@ -200,20 +200,24 @@ describe('the comprehensive fixture', () => {
     surface.deleteSelection();
     const after = census(surface);
 
-    // What used to survive was 15 tables over 7 pages of blank skeletons. What survives now
-    // is only what the range could not be said to cover: two tables holding paragraphs
-    // inside content controls, which layout does not emit, so the gesture never selected
-    // them. Content-control blocks are likewise preserved, and each one that stays is a
-    // join boundary — hence one empty paragraph beside it.
-    expect(after.tables).toBe(2);
+    // What used to survive was 15 tables over 7 pages of blank skeletons. Before content
+    // controls participated in layout, two tables whose paragraphs lived only inside SDTs
+    // were invisible to select-all and stayed (with their text). Typed content-control
+    // layout now emits those paragraphs, so the gesture clears their cells and removes
+    // the form table entirely. One emptied six-row table shell still cannot be said to be
+    // fully covered for structural removal, and residual checkbox controls remain join
+    // boundaries — hence a handful of empty paragraphs beside them.
+    expect(after.tables).toBe(1);
     expect(after.pages).toBeLessThan(before.pages / 5);
     expect(after.paragraphs).toBeLessThan(before.paragraphs / 10);
-    // The only text left is in the paragraphs layout never emitted.
+    // Residual characters are checkbox-control markers layout still hosts, not body copy.
     expect(after.characters).toBeLessThan(before.characters / 100);
 
-    // And the document is still editable afterwards.
+    // And the document is still editable afterwards. The first surviving paragraph may host
+    // a field (TOC) whose projected object-replacement marker stays in the store text, so
+    // assert the typed characters land rather than exact paragraph equality.
     surface.type('after');
-    expect(paragraphTextOf(surface.session.part(), surface.session.paragraphIds()[0]!)).toBe(
+    expect(paragraphTextOf(surface.session.part(), surface.session.paragraphIds()[0]!)).toContain(
       'after'
     );
   });

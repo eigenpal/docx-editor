@@ -9,7 +9,31 @@ import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-
 import { findNode } from '../package/ooxml-edit.ts';
 import { isValidXmlText } from '../package/sinks.ts';
 import { validateDeleteBlock } from './tree-op-blocks.ts';
-import { paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
+import {
+  contentControlAncestorsOf,
+  contentControlValueTypeOf,
+  declaredLockOf,
+  effectiveContentLockAt,
+  effectiveLockOf,
+  findContentControl,
+  formatSdtDateDisplay,
+  innermostContentControlAround,
+  isBoundAt,
+  isBoundContentControl,
+  isContentControlNode,
+  isRepeatingSectionControl,
+  isShowingPlaceholder,
+  isTemporaryControl,
+  listItemsOf,
+  parseCheckboxValue,
+  paragraphPropertiesNodeOf,
+} from './tree-op-nodes.ts';
+import {
+  validateTableRowOp,
+  validateTableColumnOp,
+  validateTableResizeOp,
+  validateTableCellPropertyOp,
+} from './tree-op-tables.ts';
 import {
   bodyNodeOf,
   isTableNested,
@@ -93,6 +117,209 @@ function validateHyperlinkTarget(op: {
   return null;
 }
 
+/**
+ * The content control that owns a caret/range in a paragraph — innermost ancestor of the
+ * run under the caret. At a boundary, a `showingPlcHdr` control on either side wins so a
+ * first keystroke replaces the prompt rather than appending beside it.
+ */
+export function contentControlAtCaret(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  start: number,
+  end: number
+): ReturnType<typeof findContentControl> {
+  const segments = segmentsOf(paragraph);
+  const overlapping = segments.filter((segment) => segment.start < end && segment.end > start);
+  if (overlapping.length > 0) {
+    return innermostContentControlAround(part, overlapping[0]!.runId);
+  }
+  if (start !== end) {
+    return innermostContentControlAround(part, paragraph.id);
+  }
+  const after = segments.find((segment) => segment.start === start);
+  const before = [...segments].reverse().find((segment) => segment.end === start);
+  const afterControl = after ? innermostContentControlAround(part, after.runId) : null;
+  const beforeControl = before ? innermostContentControlAround(part, before.runId) : null;
+  if (afterControl && isShowingPlaceholder(afterControl)) return afterControl;
+  if (beforeControl && isShowingPlaceholder(beforeControl)) return beforeControl;
+  return afterControl ?? beforeControl ?? innermostContentControlAround(part, paragraph.id);
+}
+
+/**
+ * Whether `[start, end)` overlaps content that an enclosing content control forbids editing.
+ * A range that merely touches a lock boundary is refused whole — never partially applied.
+ *
+ * `dataBinding` refuses before placeholder/temporary transitions. A `w:temporary` control
+ * whose wrapper cannot be removed (effective `sdtLocked` / `sdtContentLocked`) refuses the
+ * whole content edit with `locked` — temporary's contract is unwrap-on-edit.
+ */
+function rangeTouchesContentRestriction(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  start: number,
+  end: number
+): TreeOpRejection | null {
+  const segments = segmentsOf(paragraph);
+  const overlappingRunIds = new Set(
+    segments.filter((segment) => segment.start < end && segment.end > start).map((s) => s.runId)
+  );
+  // A collapsed insert at `start` (end === start) still sits at a caret: the run that
+  // owns the character after the caret, or the one before when at the end.
+  if (overlappingRunIds.size === 0 && start === end) {
+    const at =
+      segments.find((segment) => segment.start === start) ??
+      [...segments].reverse().find((segment) => segment.end === start);
+    if (at) overlappingRunIds.add(at.runId);
+  }
+  for (const runId of overlappingRunIds) {
+    if (isBoundAt(part, runId)) return 'bound';
+    if (effectiveContentLockAt(part, runId).content) return 'locked';
+  }
+  const control = contentControlAtCaret(part, paragraph, start, end);
+  if (control) {
+    if (
+      isBoundContentControl(control) ||
+      contentControlAncestorsOf(part, control.id).some(isBoundContentControl)
+    ) {
+      return 'bound';
+    }
+    // Empty paragraphs have no overlapping runs, so content lock must be read from the
+    // control itself — otherwise an empty `contentLocked` / `sdtContentLocked` control
+    // would admit the first insertion.
+    if (effectiveLockOf(part, control).content) return 'locked';
+    if (isTemporaryControl(control) && effectiveLockOf(part, control).wrapper) {
+      return 'locked';
+    }
+  }
+  return null;
+}
+
+/** Refuse a content-bearing edit that would rewrite a locked or bound region. */
+function rejectContentEdit(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  start: number,
+  end: number
+): TreeOpRejection | null {
+  return rangeTouchesContentRestriction(part, paragraph, start, end);
+}
+
+/**
+ * Whether rewriting a node (hyperlink retarget/removal, and similar) would touch a locked or
+ * bound content control that encloses it. Same axes as {@link rangeTouchesContentRestriction}:
+ * `dataBinding` → `bound`, content lock → `locked`, temporary unwrap blocked by wrapper lock →
+ * `locked`.
+ */
+function nodeTouchesContentRestriction(part: OoxmlPart, nodeId: string): TreeOpRejection | null {
+  if (isBoundAt(part, nodeId)) return 'bound';
+  if (effectiveContentLockAt(part, nodeId).content) return 'locked';
+  const control = innermostContentControlAround(part, nodeId);
+  if (control) {
+    if (
+      isBoundContentControl(control) ||
+      contentControlAncestorsOf(part, control.id).some(isBoundContentControl)
+    ) {
+      return 'bound';
+    }
+    if (isTemporaryControl(control) && effectiveLockOf(part, control).wrapper) {
+      return 'locked';
+    }
+  }
+  return null;
+}
+
+/**
+ * Whether deleting `block` would destroy a locked or bound content control: enclosing content
+ * locks / bindings on the block itself, or any descendant control whose content lock, wrapper
+ * lock, or data binding would be removed with the subtree.
+ *
+ * Wrapper locks matter on descendants because `deleteBlock` removes the wrapper from the
+ * document; they do not matter on ancestors (deleting a paragraph inside an `sdtLocked`
+ * control leaves the wrapper in place).
+ */
+function deleteBlockTouchesContentRestriction(
+  part: OoxmlPart,
+  block: OoxmlNode
+): TreeOpRejection | null {
+  if (block.kind === 'textValue') return null;
+  if (isBoundAt(part, block.id)) return 'bound';
+  if (effectiveContentLockAt(part, block.id).content) return 'locked';
+
+  const walk = (node: OoxmlNode): TreeOpRejection | null => {
+    if (node.kind === 'textValue') return null;
+    if (isContentControlNode(node)) {
+      if (isBoundContentControl(node)) return 'bound';
+      const lock = declaredLockOf(node);
+      if (lock.content || lock.wrapper) return 'locked';
+    }
+    for (const child of node.children) {
+      const rejection = walk(child);
+      if (rejection) return rejection;
+    }
+    return null;
+  };
+  return walk(block);
+}
+
+function validateSetContentControlValue(
+  part: OoxmlPart,
+  controlId: string,
+  value: string
+): TreeOpRejection | null {
+  if (typeof controlId !== 'string' || controlId.length === 0) return 'unknown-control';
+  const control = findContentControl(part, controlId);
+  if (!control) return 'unknown-control';
+  if (
+    isRepeatingSectionControl(control) ||
+    contentControlValueTypeOf(control) === 'repeatingSection'
+  ) {
+    return 'unsupported';
+  }
+  if (
+    isBoundContentControl(control) ||
+    contentControlAncestorsOf(part, control.id).some(isBoundContentControl)
+  ) {
+    return 'bound';
+  }
+  if (effectiveLockOf(part, control).content) return 'locked';
+  // Temporary unwrap is part of a successful value write; refuse when the wrapper is locked.
+  if (isTemporaryControl(control) && effectiveLockOf(part, control).wrapper) return 'locked';
+  if (typeof value !== 'string' || !isValidXmlText(value)) return 'invalidArgs';
+
+  const type = contentControlValueTypeOf(control);
+  switch (type) {
+    case 'dropdown': {
+      const items = listItemsOf(control);
+      if (!items.some((item) => item.value === value)) return 'invalidArgs';
+      return null;
+    }
+    case 'combo':
+      return null;
+    case 'checkbox':
+      return parseCheckboxValue(value) === null ? 'typeMismatch' : null;
+    case 'date': {
+      if (formatSdtDateDisplay(value, undefined) === null) return 'invalidArgs';
+      return null;
+    }
+    case 'picture':
+      return 'typeMismatch';
+    case 'text':
+    case 'richText':
+    case 'other':
+      return null;
+    default:
+      return 'unsupported';
+  }
+}
+
+function validateRemoveContentControl(part: OoxmlPart, controlId: string): TreeOpRejection | null {
+  if (typeof controlId !== 'string' || controlId.length === 0) return 'unknown-control';
+  const control = findContentControl(part, controlId);
+  if (!control) return 'unknown-control';
+  if (effectiveLockOf(part, control).wrapper) return 'locked';
+  return null;
+}
+
 /** Structural validation, run before any tree work so a rejection changes nothing. */
 export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection | null {
   if (!TREE_DOC_OP_KINDS.includes(op.op)) return 'unknown-op';
@@ -139,6 +366,18 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     op.op === 'setNoteProperties'
   ) {
     return 'invalidArgs';
+  }
+
+  if (op.op === 'addRepeatingSectionItem' || op.op === 'removeRepeatingSectionItem') {
+    return 'unsupported';
+  }
+
+  if (op.op === 'setContentControlValue') {
+    return validateSetContentControlValue(part, op.controlId, op.value);
+  }
+
+  if (op.op === 'removeContentControl') {
+    return validateRemoveContentControl(part, op.controlId);
   }
 
   if (op.op === 'setSectionProperties') {
@@ -202,13 +441,52 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     return null;
   }
 
-  if (op.op === 'deleteBlock') return validateDeleteBlock(part, op.blockId);
+  if (op.op === 'deleteBlock') {
+    const block = findNode(part, op.blockId);
+    if (block && block.kind !== 'textValue') {
+      const restriction = deleteBlockTouchesContentRestriction(part, block);
+      if (restriction) return restriction;
+    }
+    return validateDeleteBlock(part, op.blockId);
+  }
+  if (op.op === 'insertTableRow' || op.op === 'deleteTableRow') return validateTableRowOp(part, op);
+  if (op.op === 'insertTableColumn' || op.op === 'deleteTableColumn')
+    return validateTableColumnOp(part, op);
+  if (
+    op.op === 'setTableColumnWidths' ||
+    op.op === 'setTableRightEdgeWidth' ||
+    op.op === 'setTableRowHeight'
+  ) {
+    return validateTableResizeOp(part, op);
+  }
+  if (
+    op.op === 'setTableCellBorders' ||
+    op.op === 'setTableCellFill' ||
+    op.op === 'setTableCellVerticalAlignment'
+  ) {
+    return validateTableCellPropertyOp(part, op);
+  }
 
   if (op.op === 'joinParagraphs') {
     const first = findNode(part, op.firstId);
     const second = findNode(part, op.secondId);
     if (!first || !second) return 'unknown-paragraph';
     if (!isParagraph(first) || !isParagraph(second)) return 'not-a-paragraph';
+    if (isBoundAt(part, op.firstId) || isBoundAt(part, op.secondId)) return 'bound';
+    if (
+      effectiveContentLockAt(part, op.firstId).content ||
+      effectiveContentLockAt(part, op.secondId).content
+    ) {
+      return 'locked';
+    }
+    // A join is a content edit for any temporary control enclosing either paragraph;
+    // refuse when the required unwrap is blocked by an effective wrapper lock.
+    for (const paragraphId of [op.firstId, op.secondId]) {
+      const control = innermostContentControlAround(part, paragraphId);
+      if (control && isTemporaryControl(control) && effectiveLockOf(part, control).wrapper) {
+        return 'locked';
+      }
+    }
     return null;
   }
 
@@ -216,6 +494,10 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     const link = findNode(part, op.linkId);
     if (!link) return 'unknown-paragraph';
     if (link.kind !== 'hyperlink') return 'not-a-paragraph';
+    {
+      const restriction = nodeTouchesContentRestriction(part, op.linkId);
+      if (restriction) return restriction;
+    }
     if (op.op === 'setHyperlinkTarget') return validateHyperlinkTarget(op);
     return null;
   }
@@ -267,10 +549,13 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       }
       if (typeof op.text !== 'string' || !isValidXmlText(op.text)) return 'invalid-text';
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
-      return null;
+      if (op.bias !== undefined && op.bias !== 'left' && op.bias !== 'right') return 'invalidArgs';
+      return rejectContentEdit(part, paragraph, op.offset, op.offset);
     }
     case 'setListLevel': {
       if (!Number.isInteger(op.level) || op.level < 0 || op.level > 8) return 'invalid-range';
+      if (isBoundAt(part, op.paragraphId)) return 'bound';
+      if (effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
       return null;
     }
     case 'proposeParagraphMerge': {
@@ -294,12 +579,20 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       // MINT any element name into `w:pPr/w:rPr` — `<w:rPr><w:sectPr/></w:rPr>` applied
       // clean and serialized — and skipped the attribute-name/value checks every other
       // property op runs before a value reaches the XML sink.
-      return validateProperties(op.properties, RUN_PROPERTY_SET);
+      {
+        const propertiesRejection = validateProperties(op.properties, RUN_PROPERTY_SET);
+        if (propertiesRejection) return propertiesRejection;
+      }
+      if (isBoundAt(part, op.paragraphId)) return 'bound';
+      if (effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
+      return null;
     case 'setListNumbering': {
       const level = op.level ?? 0;
       if (!Number.isInteger(level) || level < 0 || level > 8) return 'invalid-range';
       // A numId is file-addressable and becomes an attribute value: digits only.
       if (op.numId !== null && !/^\d{1,9}$/.test(op.numId)) return 'invalid-range';
+      if (isBoundAt(part, op.paragraphId)) return 'bound';
+      if (effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
       return null;
     }
     case 'insertTab':
@@ -309,7 +602,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
         return 'offset-out-of-range';
       }
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
-      return null;
+      return rejectContentEdit(part, paragraph, op.offset, op.offset);
     }
     case 'insertPageField': {
       if (!Number.isInteger(op.offset) || op.offset < 0 || op.offset > length) {
@@ -324,14 +617,14 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       ) {
         return 'invalidArgs';
       }
-      return null;
+      return rejectContentEdit(part, paragraph, op.offset, op.offset);
     }
     case 'splitParagraph': {
       if (!Number.isInteger(op.offset) || op.offset < 0 || op.offset > length) {
         return 'offset-out-of-range';
       }
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
-      return null;
+      return rejectContentEdit(part, paragraph, op.offset, op.offset);
     }
     case 'splitParagraphMany': {
       if (!Array.isArray(op.offsets) || op.offsets.length === 0) return 'invalid-range';
@@ -346,6 +639,8 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
         if (offset < previous) return 'invalid-range';
         previous = offset;
         if (splitsSurrogate(paragraph, offset)) return 'splits-surrogate-pair';
+        const restriction = rejectContentEdit(part, paragraph, offset, offset);
+        if (restriction) return restriction;
       }
       return null;
     }
@@ -356,16 +651,25 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (splitsSurrogate(paragraph, op.start) || splitsSurrogate(paragraph, op.end)) {
         return 'splits-surrogate-pair';
       }
-      return null;
+      return rejectContentEdit(part, paragraph, op.start, op.end);
     }
     case 'setRunProperties': {
       if (!Number.isInteger(op.start) || !Number.isInteger(op.end)) return 'invalid-range';
       if (op.start < 0 || op.end > length) return 'offset-out-of-range';
       if (op.start >= op.end) return 'invalid-range';
-      return validateProperties(op.properties, RUN_PROPERTY_SET);
+      {
+        const propertiesRejection = validateProperties(op.properties, RUN_PROPERTY_SET);
+        if (propertiesRejection) return propertiesRejection;
+      }
+      return rejectContentEdit(part, paragraph, op.start, op.end);
     }
-    case 'setParagraphProperties':
-      return validateProperties(op.properties, PARAGRAPH_PROPERTY_SET);
+    case 'setParagraphProperties': {
+      const propertiesRejection = validateProperties(op.properties, PARAGRAPH_PROPERTY_SET);
+      if (propertiesRejection) return propertiesRejection;
+      if (isBoundAt(part, op.paragraphId)) return 'bound';
+      if (effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
+      return null;
+    }
     case 'insertHyperlink': {
       if (!Number.isInteger(op.start) || !Number.isInteger(op.end)) return 'invalid-range';
       if (op.start < 0 || op.end > length) return 'offset-out-of-range';
@@ -388,6 +692,10 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
           return 'invalid-property-value';
         }
       }
+      {
+        const restriction = rejectContentEdit(part, paragraph, op.start, op.end);
+        if (restriction) return restriction;
+      }
       return validateHyperlinkTarget(op);
     }
     case 'setSectionMark': {
@@ -397,6 +705,8 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       // A section cannot end inside a table cell: Word never writes one there, and the
       // read side would ignore it — a committed no-op the user cannot see.
       if (isTableNested(part, op.paragraphId)) return 'invalid-property-value';
+      if (isBoundAt(part, op.paragraphId)) return 'bound';
+      if (effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
       return null;
     }
     default:

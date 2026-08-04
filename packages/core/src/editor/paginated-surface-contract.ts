@@ -12,6 +12,7 @@ import type { HyperlinkOps } from './surface-hyperlinks.ts';
 import type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
 import type {
   CellSelection,
+  ContentControlBoundaryRecord,
   NavigationCommand,
   SectionProperties,
   SemanticLayout,
@@ -27,6 +28,47 @@ import type {
  * refuses edits outright.
  */
 export type SurfaceEditingMode = 'edit' | 'suggest' | 'view';
+
+/**
+ * Content-control interaction lane on the paginated surface.
+ *
+ * Chrome toggles are surface state; value / remove commit through tree ops.
+ */
+export interface ContentControlOps {
+  /** Toggle show-all boundary chrome. No layout reflow. */
+  setShowAll(show: boolean): void;
+  /** Toggle form-fill Tab navigation mode. */
+  setFormFill(active: boolean): void;
+  /** Whether show-all chrome is on. */
+  showAll(): boolean;
+  /** Whether form-fill navigation is on. */
+  formFill(): boolean;
+  /** Innermost control at the caret from layout boundary records. */
+  atCaret(): ContentControlBoundaryRecord | null;
+  /**
+   * Move to the next or previous editable control (tabIndex, then document order).
+   *
+   * Skips content-locked and bound controls. Selects the control's content for replacement.
+   * Returns whether navigation landed somewhere.
+   */
+  navigate(direction: 'next' | 'previous'): boolean;
+  /**
+   * Set a control's value through `setContentControlValue`. Honours lock / bound refusals.
+   * Returns whether the op committed.
+   */
+  setValue(controlId: string, value: string): boolean;
+  /**
+   * Unwrap a control keeping its content (`removeContentControl`). Defaults to the control
+   * at the caret. Returns whether the op committed.
+   */
+  remove(controlId?: string): boolean;
+  /**
+   * Engine reason a widget or remove action is disabled, or null when allowed.
+   *
+   * `edit` covers content / value changes; `remove` covers unwrap.
+   */
+  disabledReason(controlId: string, action: 'edit' | 'remove'): string | null;
+}
 
 export interface PaginatedSurfaceOptions {
   readonly measurer?: TextMeasurer;
@@ -72,6 +114,13 @@ export interface PaginatedSurfaceOptions {
    * rather than doing something surprising with it.
    */
   readonly onRequestHyperlink?: () => void;
+  /**
+   * Localized accessible names for core-owned table insertion furniture.
+   * Defaults to English from `@docx-editor.dev/i18n` when omitted.
+   */
+  readonly tableInteractionLabel?: (
+    key: 'table.insertRowBelow' | 'table.insertColumnRight'
+  ) => string;
 }
 
 /**
@@ -184,8 +233,30 @@ export interface PaginatedSurfaceState {
    * it to decide whether to re-derive. See `toggleRunProperty` for the lane itself.
    */
   readonly pendingFormat: readonly { readonly localName: string }[] | null;
+  /**
+   * Content-control chrome and form-fill mode.
+   *
+   * Surface-owned (not document bytes). Updates report through the same `onChange` path as
+   * selection moves — hosts must not maintain a parallel channel.
+   */
+  readonly contentControls: ContentControlSurfaceState;
   /** Timing and reuse counters for the last pass. Diagnostics, not document state. */
   readonly perf: PaginatedSurfacePerf;
+}
+
+/**
+ * Observable content-control interaction state on the paginated surface.
+ *
+ * Boundary furniture visibility and form-fill navigation are surface chrome, not model
+ * bytes — toggling them never reflows layout records.
+ */
+export interface ContentControlSurfaceState {
+  /** Show boundary chrome for every control. */
+  readonly showAll: boolean;
+  /** Tab / Shift+Tab navigate between editable controls. */
+  readonly formFill: boolean;
+  /** Innermost control containing the caret, or null. */
+  readonly activeControlId: string | null;
 }
 
 export interface PaginatedSurface {
@@ -418,6 +489,13 @@ export interface PaginatedSurface {
    */
   readonly hyperlinks: HyperlinkOps;
   /**
+   * Content-control chrome, form-fill navigation, and value / remove verbs.
+   *
+   * Value and remove commit through `session.applyTreeOps` — the same write path as typing.
+   * Show-all and form-fill are surface chrome and never reflow layout.
+   */
+  readonly contentControls: ContentControlOps;
+  /**
    * Bookmark jumps and the ONE external-activation gate. A host's popover "open" action
    * calls `openExternal`; nothing else in the engine may call `window.open`.
    */
@@ -497,7 +575,21 @@ export interface PaginatedSurface {
   /** Reverse the last history entry and put the caret back where it was made. */
   undo(): void;
   redo(): void;
+  /**
+   * Refresh table insertion furniture labels without remounting or relayout.
+   *
+   * @public
+   */
+  refreshTableInteractionLabels(): void;
   focus(): void;
+  /**
+   * Refresh table insertion furniture labels without remounting the surface.
+   *
+   * @public
+   */
+  setTableInteractionLabel(
+    resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string
+  ): void;
   destroy(): void;
   /** Active editing view — body, or an open header/footer story by rId. */
   activeScope(): ViewScope;
@@ -578,6 +670,10 @@ export interface PaginatedSurface {
   notePropertiesState(): import('./surface-note-state.ts').NotePropertiesStateSnapshot | null;
   /** Plain-text preview for hover chrome — never returns markup. */
   notePreviewText(scopeId: string): string | null;
+  /** Commit one table-command plan as a single store transaction. */
+  applyTableCommandPlan(
+    plan: import('./table-command-plan.ts').TableCommandPlan
+  ): import('../contracts/editor.ts').ExecResult;
 }
 
 export type OpenPaginatedResult =

@@ -21,6 +21,7 @@ import { useEditorCommand } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
 import { guardToolbarMousedown } from './ToolbarButton';
 import type { ToolbarSlotPartProps, ToolbarSlotPartComponent } from './parts';
+import { ZOOM_LEVELS, stepZoomLevel } from '../zoom-levels';
 
 /** Engine bounds for `w:sz`: integer half-points, 2..3276 (docx-editor-support). */
 const MIN_HALF_POINTS = 2;
@@ -30,9 +31,6 @@ const MAX_HALF_POINTS = 3276;
 const FONT_SIZE_PRESETS_PT: readonly number[] = [
   8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72,
 ];
-
-/** The zoom levels: the − / + endpoints and the ▾ menu entries. */
-const ZOOM_LEVELS: readonly number[] = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
 const selectFontSizePt = (snapshot: EditorSnapshot) => snapshot.formatting?.fontSizePt ?? null;
 const selectZoom = (snapshot: EditorSnapshot) => snapshot.zoom;
@@ -343,8 +341,8 @@ function ToolbarZoomImpl({ className, hidden }: ToolbarSlotPartProps) {
 
   if (hidden) return null;
   const epsilon = 0.001;
-  const prevLevel = [...ZOOM_LEVELS].reverse().find((level) => level < zoom - epsilon);
-  const nextLevel = ZOOM_LEVELS.find((level) => level > zoom + epsilon);
+  const prevLevel = stepZoomLevel(zoom, 'out');
+  const nextLevel = stepZoomLevel(zoom, 'in');
   const display = `${Math.round(zoom * 100)}%`;
   return (
     <span ref={rootRef} className="docx-toolbar__zoom" data-slot="zoom.level">
@@ -371,10 +369,10 @@ function ToolbarZoomImpl({ className, hidden }: ToolbarSlotPartProps) {
             </span>
           </button>
         }
-        canDecrease={!!editor && prevLevel !== undefined}
-        canIncrease={!!editor && nextLevel !== undefined}
-        onDecrease={() => prevLevel !== undefined && apply(prevLevel)}
-        onIncrease={() => nextLevel !== undefined && apply(nextLevel)}
+        canDecrease={!!editor && prevLevel !== null}
+        canIncrease={!!editor && nextLevel !== null}
+        onDecrease={() => prevLevel !== null && apply(prevLevel)}
+        onIncrease={() => nextLevel !== null && apply(nextLevel)}
       />
       {open ? (
         <div className="docx-toolbar__menu docx-toolbar__zoom-menu" role="listbox">

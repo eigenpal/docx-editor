@@ -4,7 +4,14 @@
 /* eslint-disable max-lines -- composition root; seams live in surface-*.ts */
 
 import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import { hyperlinkTargetOf, type TreeDocOp } from '@docx-editor.dev/core-contract/store';
+import {
+  findNode,
+  hyperlinkTargetOf,
+  isContentControl,
+  type OoxmlElement,
+  type OoxmlNode,
+  type TreeDocOp,
+} from '@docx-editor.dev/core-contract/store';
 import {
   createLayoutScheduler,
   createLayoutSession,
@@ -18,6 +25,8 @@ import {
   selectionRects,
   caretAt,
   cellSelectionText,
+  contentControlAtSemantic,
+  contentControlsInLayout,
   layoutSemanticDocument,
   paragraphsInCells,
   resolveNumberingLevel,
@@ -25,6 +34,7 @@ import {
   withNumberingStyleLinks,
   wordBoundary,
   type CellSelection,
+  type ContentControlBoundaryRecord,
   type KeyedRange,
   type LayoutScope,
   type ReviewItem,
@@ -40,12 +50,15 @@ import {
 } from '@docx-editor.dev/core-contract/output';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import type {
+  ContentControlOps,
   OpenPaginatedResult,
   PaginatedSurface,
   PaginatedSurfaceOptions,
   PaginatedSurfaceState,
   SurfaceEditingMode,
 } from './paginated-surface-contract.ts';
+import type { ExecResult } from '../contracts/editor.ts';
+import type { TableCommandPlan } from './table-command-plan.ts';
 import {
   clampedToDocument,
   collapsedAt,
@@ -74,6 +87,8 @@ import {
   type SurfaceExtent,
 } from './surface-pages.ts';
 import { createSurfaceCaret } from './surface-caret.ts';
+import { defaultTableLabel, type TableInteractionLabelKey } from './table-chrome.ts';
+import { createSurfaceTableInteraction } from './surface-table-interaction.ts';
 import { createSurfaceFormat } from './surface-format.ts';
 import {
   authoredRunPropertiesAt,
@@ -101,6 +116,8 @@ import { notePropertiesStateOf, notePreviewTextOf } from './surface-note-state.t
 import type { ViewScope } from '../contracts/editor.ts';
 
 export type {
+  ContentControlOps,
+  ContentControlSurfaceState,
   OpenPaginatedResult,
   PaginatedSurface,
   PaginatedSurfaceOptions,
@@ -108,6 +125,23 @@ export type {
   PaginatedSurfaceState,
   SurfaceFormatting,
 } from './paginated-surface-contract.ts';
+
+type ScaleMutableSurface = PaginatedSurface & {
+  setScale(nextScale: number): boolean;
+};
+
+/**
+ * Rescale a mounted surface in place, or report that this one cannot be.
+ *
+ * Reaches an internal member rather than widening the surface contract, so it has to answer
+ * for a surface that does not carry one — a stub or a foreign implementation. `false`, not a
+ * TypeError: the caller is a host asking for zoom, and "cannot" is an answer it can render.
+ */
+export function setPaginatedSurfaceScale(surface: PaginatedSurface, scale: number): boolean {
+  const rescale = (surface as Partial<ScaleMutableSurface>).setScale;
+  if (typeof rescale !== 'function') return false;
+  return rescale.call(surface, scale);
+}
 
 /**
  * Mount a paginated surface over DOCX bytes.
@@ -121,6 +155,9 @@ export function mountPaginatedSurface(
   bytes: Uint8Array,
   options: PaginatedSurfaceOptions = {}
 ): OpenPaginatedResult {
+  const runtimeOptions = options as PaginatedSurfaceOptions & {
+    readonly onTrackedChange?: () => void;
+  };
   const opened = openTreeSession(bytes);
   if (!opened.ok) {
     return {
@@ -130,7 +167,11 @@ export function mountPaginatedSurface(
     };
   }
   const session = opened.session;
-  const scale = options.scale ?? 96 / 72;
+  let scale = options.scale ?? 96 / 72;
+  const tableLabelState = {
+    resolve:
+      options.tableInteractionLabel ?? ((key: TableInteractionLabelKey) => defaultTableLabel(key)),
+  };
   const VIEWING_REFUSAL = 'the document is open for viewing';
   /** Separates a decision's key from its per-range index. A NUL cannot occur in either. */
   const RANGE_SUFFIX = '\u0000range\u0000';
@@ -139,21 +180,33 @@ export function mountPaginatedSurface(
   // writes them, and two revisions differing only in milliseconds never group.
   const trackedDate = (): string => `${new Date().toISOString().slice(0, 19)}Z`;
   // Editor seam creates the canvas; layout only consumes the injected context.
-  const defaults = options.measurer
+  let defaults = options.measurer
     ? null
     : resolveDefaultSurfaceMeasurer(scale, {
         context: tryCreateBrowserCanvasContext(container.ownerDocument),
         // Measure with the same face paint draws with.
         ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
       });
-  const measurer = options.measurer ?? defaults!.measurer;
+  let measurer = options.measurer ?? defaults!.measurer;
   // Incremental layout machinery — without these every keystroke re-lays out the document.
   const layoutCache = createParagraphLayoutCache<never>();
   const layoutSession = createLayoutSession();
-  // Measurer identity folds into the cache key so a later font resolution cannot serve stale layout.
-  const producer =
-    options.producer ??
-    (options.measurer ? 'host-measurer' : (defaults?.producer ?? 'fixed-measurer'));
+  /**
+   * Measurer identity, folded into every layout cache key so a later font resolution cannot
+   * serve stale layout.
+   *
+   * A HOST measurer answers in POINTS, so it means the same thing at every zoom: its identity
+   * is stable, and suffixing it with the scale re-measured the whole document on every zoom
+   * click while telling the cache two identical answers differed. The DEFAULT measurer is
+   * resolved AT a scale — the canvas one rounds against device pixels — so its identity
+   * carries that scale, and it is read from the resolution currently in force rather than from
+   * whichever one mount happened to get.
+   */
+  function producerIdentity(): string {
+    if (options.measurer) return options.producer ?? 'host-measurer';
+    return `${options.producer ?? defaults?.producer ?? 'fixed-measurer'}@scale:${scale}`;
+  }
+  let producer = producerIdentity();
   const document = container.ownerDocument;
 
   const pagesLayer = document.createElement('div');
@@ -202,35 +255,47 @@ export function mountPaginatedSurface(
   commentLayer.style.top = '0';
   commentLayer.style.pointerEvents = 'none';
 
-  container.style.position = 'relative';
-  container.replaceChildren(pagesLayer, commentLayer, overlayLayer);
+  const tableFurnitureLayer = document.createElement('div');
+  tableFurnitureLayer.className = 'docx-table-furniture';
+  tableFurnitureLayer.contentEditable = 'false';
+  tableFurnitureLayer.style.position = 'absolute';
+  tableFurnitureLayer.style.left = '0';
+  tableFurnitureLayer.style.top = '0';
+  tableFurnitureLayer.style.pointerEvents = 'none';
 
-  const caret = createSurfaceCaret(pagesLayer, scale, () => {
-    const active = hfScope?.getActive() ?? null;
-    const activeNote = noteOps?.activeNoteScope() ?? null;
-    const notePageIndex = noteOps?.activeNotePageIndex() ?? null;
-    const scopedHost = active
-      ? furnitureCaretHost(pagesLayer, active.pageIndex)
-      : activeNote
-        ? noteCaretHost(pagesLayer, activeNote.id, notePageIndex)
-        : null;
-    return {
-      layout: currentLayout,
-      selection,
-      measurer,
-      ...(active
-        ? { preferredPageIndex: active.pageIndex }
-        : notePageIndex !== null
-          ? { preferredPageIndex: notePageIndex }
-          : {}),
-      scopedHost,
-      ...(active
-        ? { scopedHostKind: 'headerFooter' as const }
+  container.style.position = 'relative';
+  container.replaceChildren(pagesLayer, tableFurnitureLayer, commentLayer, overlayLayer);
+
+  const caret = createSurfaceCaret(
+    pagesLayer,
+    () => scale,
+    () => {
+      const active = hfScope?.getActive() ?? null;
+      const activeNote = noteOps?.activeNoteScope() ?? null;
+      const notePageIndex = noteOps?.activeNotePageIndex() ?? null;
+      const scopedHost = active
+        ? furnitureCaretHost(pagesLayer, active.pageIndex)
         : activeNote
-          ? { scopedHostKind: 'note' as const }
-          : {}),
-    };
-  });
+          ? noteCaretHost(pagesLayer, activeNote.id, notePageIndex)
+          : null;
+      return {
+        layout: currentLayout,
+        selection,
+        measurer,
+        ...(active
+          ? { preferredPageIndex: active.pageIndex }
+          : notePageIndex !== null
+            ? { preferredPageIndex: notePageIndex }
+            : {}),
+        scopedHost,
+        ...(active
+          ? { scopedHostKind: 'headerFooter' as const }
+          : activeNote
+            ? { scopedHostKind: 'note' as const }
+            : {}),
+      };
+    }
+  );
 
   const firstParagraph = session.paragraphIds()[0] ?? '';
   let selection: SemanticSelection = {
@@ -240,6 +305,10 @@ export function mountPaginatedSurface(
   /** Sibling of `selection`: rectangle of table cells, or null for ordinary text. */
   let cellSelection: CellSelection | null = null;
   let lastRejection: string | null = null;
+  /** Show-all content-control boundary chrome — surface furniture, never a layout input. */
+  let showAllContentControls = false;
+  /** Form-fill Tab navigation between editable controls. */
+  let formFillMode = false;
 
   /**
    * A range pinned to stay VISIBLY selected while the focus is somewhere else.
@@ -394,7 +463,7 @@ export function mountPaginatedSurface(
   // Styles/numbering are immutable in-session; cascade + index are built once and shared
   // by body layout and header/footer stories.
   const { styleCascade, numberingIndex, defaultTabStopPt } = createSurfaceStyleDeps(session);
-  const furnitureSource = createFurnitureSource({
+  let furnitureSource = createFurnitureSource({
     session,
     measurer,
     producer,
@@ -524,7 +593,7 @@ export function mountPaginatedSurface(
   const navigation = createSurfaceNavigation({
     pagesLayer,
     container,
-    scale,
+    scale: () => scale,
     layout: () => currentLayout,
     bookmarks: () => session.bookmarks(),
     linkById: (linkId) => hyperlinks.linkById(linkId),
@@ -622,6 +691,656 @@ export function mountPaginatedSurface(
     return scheduler.pending() ? scheduler.flush() : false;
   }
 
+  function contentControlChromeOptions():
+    | {
+        readonly showAll?: boolean;
+        readonly activeIds?: ReadonlySet<string>;
+        readonly checkedIds?: ReadonlySet<string>;
+      }
+    | undefined {
+    const active = contentControlAtCaret();
+    const activeIds = active ? new Set([active.id]) : undefined;
+    const checkedIds = new Set(
+      contentControlsInLayout(currentLayout)
+        .filter((control) => control.controlType === 'checkbox' && checkboxChecked(control.id))
+        .map((control) => control.id)
+    );
+    if (!showAllContentControls && !activeIds && checkedIds.size === 0) return undefined;
+    return {
+      ...(showAllContentControls ? { showAll: true } : {}),
+      ...(activeIds ? { activeIds } : {}),
+      ...(checkedIds.size > 0 ? { checkedIds } : {}),
+    };
+  }
+
+  /** Innermost layout boundary under the caret, or null outside every control. */
+  function contentControlAtCaret(): ContentControlBoundaryRecord | null {
+    const caret = caretAt(currentLayout, selection.head, measurer);
+    if (!caret) return null;
+    return contentControlAtSemantic(currentLayout, {
+      x: caret.x,
+      y: caret.y + caret.height / 2,
+      pageIndex: caret.pageIndex,
+    });
+  }
+
+  function contentLockedOrBound(control: ContentControlBoundaryRecord): string | null {
+    if (control.bound) return 'bound';
+    if (control.effectiveLock === 'contentLocked' || control.effectiveLock === 'sdtContentLocked') {
+      return 'locked';
+    }
+    return null;
+  }
+
+  function removalLocked(control: ContentControlBoundaryRecord): string | null {
+    if (control.effectiveLock === 'sdtLocked' || control.effectiveLock === 'sdtContentLocked') {
+      return 'locked';
+    }
+    return null;
+  }
+
+  function isContentControlElement(node: OoxmlNode): node is OoxmlElement {
+    // Shared walk predicate: typed `contentControl`, or generic WML `sdt` only.
+    // Foreign-namespace `<x:sdt>` stays opaque and is never treated as a Word control.
+    return isContentControl(node);
+  }
+
+  function findControl(controlId: string): OoxmlElement | null {
+    const node = findNode(session.part(), controlId);
+    if (!node || !isContentControlElement(node)) return null;
+    return node;
+  }
+
+  function tabIndexOfControl(controlId: string): number | null {
+    const control = findControl(controlId);
+    if (!control) return null;
+    for (const child of control.children) {
+      if (child.kind === 'textValue') continue;
+      if (
+        (child as { kind?: string }).kind === 'contentControlProperties' ||
+        child.localName === 'sdtPr'
+      ) {
+        for (const prop of child.children) {
+          if (prop.kind === 'textValue' || prop.localName !== 'tabIndex') continue;
+          const raw = prop.attributes.find((a) => a.localName === 'val')?.value;
+          if (raw === undefined) return null;
+          const n = Number(raw);
+          return Number.isFinite(n) ? n : null;
+        }
+      }
+    }
+    return null;
+  }
+
+  function editableControlsInOrder(): ContentControlBoundaryRecord[] {
+    const controls = [...contentControlsInLayout(currentLayout)];
+    return controls
+      .filter((control) => contentLockedOrBound(control) === null)
+      .sort((a, b) => {
+        const ta = tabIndexOfControl(a.id);
+        const tb = tabIndexOfControl(b.id);
+        if (ta !== null && tb !== null && ta !== tb) return ta - tb;
+        if (ta !== null && tb === null) return -1;
+        if (ta === null && tb !== null) return 1;
+        return 0; // document order already from layout
+      });
+  }
+
+  function addressableLength(node: OoxmlNode): number {
+    if (node.kind === 'textValue') return node.value.length;
+    if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
+    if (node.kind === 'runProperties' || node.kind === 'generic') return 0;
+    const kind = (node as { kind: string }).kind;
+    if (kind === 'contentControl') {
+      let total = 0;
+      for (const child of node.children) {
+        if (child.kind === 'textValue') continue;
+        if (
+          (child as { kind: string }).kind === 'contentControlContent' ||
+          child.localName === 'sdtContent'
+        ) {
+          for (const inner of child.children) total += addressableLength(inner);
+        }
+      }
+      return total;
+    }
+    let total = 0;
+    for (const child of node.children) total += addressableLength(child);
+    return total;
+  }
+
+  function contentChildrenOf(control: OoxmlElement): readonly OoxmlNode[] {
+    for (const child of control.children) {
+      if (child.kind === 'textValue') continue;
+      if (
+        (child as { kind: string }).kind === 'contentControlContent' ||
+        child.localName === 'sdtContent'
+      ) {
+        return child.children;
+      }
+    }
+    return [];
+  }
+
+  /** Select the control's addressable content for form-fill replacement. */
+  function selectControlContent(controlId: string): boolean {
+    const control = findControl(controlId);
+    if (!control) return false;
+    const content = contentChildrenOf(control);
+    const paragraphs: { id: string; length: number }[] = [];
+    const collectParagraphs = (nodes: readonly OoxmlNode[]): void => {
+      for (const node of nodes) {
+        if (node.kind === 'paragraph') {
+          paragraphs.push({ id: node.id, length: addressableLength(node) });
+          continue;
+        }
+        if (node.kind === 'textValue') continue;
+        const kind = (node as { kind: string }).kind;
+        if (kind === 'contentControl') {
+          collectParagraphs(contentChildrenOf(node as OoxmlElement));
+          continue;
+        }
+        collectParagraphs(node.children);
+      }
+    };
+    collectParagraphs(content);
+
+    if (paragraphs.length > 0) {
+      const first = paragraphs[0]!;
+      const last = paragraphs[paragraphs.length - 1]!;
+      setSelection({
+        anchor: { paragraphId: first.id, offset: 0 },
+        head: { paragraphId: last.id, offset: last.length },
+      });
+      return true;
+    }
+
+    // Inline control: locate the parent paragraph and UTF-16 range.
+    let hostParagraphId: string | null = null;
+    let start = 0;
+    let end = 0;
+    const scanInline = (nodes: readonly OoxmlNode[], offset: number, paraId: string): boolean => {
+      let cursor = offset;
+      for (const node of nodes) {
+        if (node.id === controlId) {
+          hostParagraphId = paraId;
+          start = cursor;
+          end = cursor + addressableLength(node);
+          return true;
+        }
+        if (node.kind === 'textValue') {
+          cursor += node.value.length;
+          continue;
+        }
+        const kind = (node as { kind: string }).kind;
+        if (kind === 'contentControl') {
+          const length = addressableLength(node);
+          if (scanInline(contentChildrenOf(node as OoxmlElement), cursor, paraId)) return true;
+          cursor += length;
+          continue;
+        }
+        if (node.kind === 'run' || node.kind === 'hyperlink') {
+          if (scanInline(node.children, cursor, paraId)) return true;
+          cursor += addressableLength(node);
+          continue;
+        }
+        if (node.kind === 'paragraph') {
+          if (scanInline(node.children, 0, node.id)) return true;
+          continue;
+        }
+        if (node.kind === 'tab' || node.kind === 'hardBreak') {
+          cursor += 1;
+          continue;
+        }
+        if (scanInline(node.children, cursor, paraId)) return true;
+        cursor += addressableLength(node);
+      }
+      return false;
+    };
+    scanInline(session.part().root.children, 0, '');
+    if (!hostParagraphId) return false;
+    setSelection({
+      anchor: { paragraphId: hostParagraphId, offset: start },
+      head: { paragraphId: hostParagraphId, offset: end },
+    });
+    return true;
+  }
+
+  function listItemsOfControl(
+    controlId: string
+  ): readonly { displayText: string; value: string }[] {
+    const control = findControl(controlId);
+    if (!control) return [];
+    for (const child of control.children) {
+      if (child.kind === 'textValue') continue;
+      if (
+        (child as { kind?: string }).kind !== 'contentControlProperties' &&
+        child.localName !== 'sdtPr'
+      ) {
+        continue;
+      }
+      for (const prop of child.children) {
+        if (prop.kind === 'textValue') continue;
+        if (prop.localName !== 'dropDownList' && prop.localName !== 'comboBox') continue;
+        const items: { displayText: string; value: string }[] = [];
+        for (const item of prop.children) {
+          if (item.kind === 'textValue' || item.localName !== 'listItem') continue;
+          const value = item.attributes.find((a) => a.localName === 'value')?.value ?? '';
+          const displayText =
+            item.attributes.find((a) => a.localName === 'displayText')?.value ?? value;
+          items.push({ displayText, value });
+        }
+        return items;
+      }
+    }
+    return [];
+  }
+
+  function checkboxChecked(controlId: string): boolean {
+    const control = findControl(controlId);
+    if (!control) return false;
+    for (const child of control.children) {
+      if (child.kind === 'textValue') continue;
+      if (
+        (child as { kind?: string }).kind !== 'contentControlProperties' &&
+        child.localName !== 'sdtPr'
+      ) {
+        continue;
+      }
+      for (const prop of child.children) {
+        if (prop.kind !== 'contentControlCheckbox') continue;
+        for (const state of prop.children) {
+          if (state.kind !== 'contentControlChecked') continue;
+          const val = state.attributes.find((a) => a.localName === 'val')?.value;
+          return !(val === '0' || val === 'false' || val === 'off');
+        }
+      }
+    }
+    return false;
+  }
+
+  function dateValueOfControl(controlId: string): string | undefined {
+    const control = findControl(controlId);
+    if (!control) return undefined;
+    for (const child of control.children) {
+      if (child.kind !== 'contentControlProperties') continue;
+      for (const property of child.children) {
+        if (property.kind !== 'contentControlDate') continue;
+        return property.attributes.find((attribute) => attribute.localName === 'fullDate')?.value;
+      }
+    }
+    return undefined;
+  }
+
+  function setContentControlWidgetOpen(controlId: string, open: boolean): void {
+    for (const chrome of pagesLayer.querySelectorAll<HTMLElement>('[data-docx-content-control]')) {
+      if (chrome.getAttribute('data-docx-content-control') !== controlId) continue;
+      if (open) chrome.dataset.open = '';
+      else delete chrome.dataset.open;
+    }
+  }
+
+  function closeContentControlMenu(menu: HTMLElement): void {
+    const controlId = menu.dataset.docxCcId;
+    menu.remove();
+    if (controlId) setContentControlWidgetOpen(controlId, false);
+  }
+
+  function removeExistingContentControlMenu(): void {
+    const existing = pagesLayer.querySelector<HTMLElement>('.docx-content-control-menu');
+    if (existing) closeContentControlMenu(existing);
+  }
+
+  function openContentControlWidget(controlId: string, kind: string): void {
+    const reason = contentControlsOps.disabledReason(controlId, 'edit');
+    if (reason) {
+      lastRejection = reason;
+      options.onChange?.(currentState());
+      return;
+    }
+    if (kind === 'checkbox') {
+      contentControlsOps.setValue(controlId, checkboxChecked(controlId) ? 'false' : 'true');
+      return;
+    }
+    if (kind === 'dropdown' || kind === 'comboBox') {
+      const items = listItemsOfControl(controlId);
+      if (items.length === 0 && kind === 'dropdown') return;
+      // Engine-level menu: no hardcoded English — displayText comes from the file.
+      removeExistingContentControlMenu();
+      const menu = document.createElement('div');
+      menu.className = 'docx-content-control-menu';
+      menu.dataset.docxMarker = '';
+      menu.dataset.docxCcId = controlId;
+      menu.setAttribute('contenteditable', 'false');
+      menu.setAttribute('role', 'listbox');
+      menu.style.position = 'absolute';
+      menu.style.zIndex = '20';
+      menu.style.pointerEvents = 'auto';
+      menu.addEventListener('pointerdown', (event) => event.stopPropagation());
+      const record = contentControlsInLayout(currentLayout).find((c) => c.id === controlId);
+      const frag = record?.fragments[0];
+      if (frag) {
+        const page = currentLayout.pages[frag.pageIndex];
+        const offsetX = materializedExtent?.pageOffsetX.get(frag.pageIndex) ?? 0;
+        if (page) {
+          const contentLeft = page.contentBox.x - page.box.x;
+          const contentTop = page.contentBox.y - page.box.y;
+          menu.style.left = `${(page.box.x + offsetX + contentLeft + frag.box.x + frag.box.width) * scale}px`;
+          menu.style.top = `${(page.box.y + contentTop + frag.box.y + frag.box.height) * scale}px`;
+          menu.style.transform = 'translateX(-100%)';
+        }
+      }
+      for (const item of items) {
+        const option = document.createElement('button');
+        option.type = 'button';
+        option.className = 'docx-content-control-menu-item';
+        option.dataset.docxMarker = '';
+        option.setAttribute('contenteditable', 'false');
+        option.setAttribute('role', 'option');
+        option.textContent = item.displayText;
+        option.addEventListener('mousedown', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          closeContentControlMenu(menu);
+          contentControlsOps.setValue(controlId, item.value);
+        });
+        menu.append(option);
+      }
+      if (kind === 'comboBox') {
+        const free = document.createElement('input');
+        free.type = 'text';
+        free.className = 'docx-content-control-menu-input';
+        free.dataset.docxMarker = '';
+        free.setAttribute('contenteditable', 'false');
+        free.addEventListener('mousedown', (event) => event.stopPropagation());
+        free.addEventListener('keydown', (event) => {
+          if (event.key !== 'Enter') return;
+          event.preventDefault();
+          closeContentControlMenu(menu);
+          contentControlsOps.setValue(controlId, free.value);
+        });
+        menu.append(free);
+      }
+      pagesLayer.append(menu);
+      setContentControlWidgetOpen(controlId, true);
+      const dismiss = (event: Event): void => {
+        if (menu.contains(event.target as Node)) return;
+        closeContentControlMenu(menu);
+        document.removeEventListener('mousedown', dismiss, true);
+      };
+      document.addEventListener('mousedown', dismiss, true);
+      return;
+    }
+    if (kind === 'date') {
+      removeExistingContentControlMenu();
+      const menu = document.createElement('div');
+      menu.className = 'docx-content-control-menu';
+      menu.dataset.docxMarker = '';
+      menu.dataset.docxCcId = controlId;
+      menu.setAttribute('contenteditable', 'false');
+      menu.style.position = 'absolute';
+      menu.style.zIndex = '20';
+      menu.style.pointerEvents = 'auto';
+      menu.addEventListener('pointerdown', (event) => event.stopPropagation());
+      const record = contentControlsInLayout(currentLayout).find((c) => c.id === controlId);
+      const frag = record?.fragments[0];
+      if (frag) {
+        const page = currentLayout.pages[frag.pageIndex];
+        const offsetX = materializedExtent?.pageOffsetX.get(frag.pageIndex) ?? 0;
+        if (page) {
+          const contentLeft = page.contentBox.x - page.box.x;
+          const contentTop = page.contentBox.y - page.box.y;
+          menu.style.left = `${(page.box.x + offsetX + contentLeft + frag.box.x + frag.box.width) * scale}px`;
+          menu.style.top = `${(page.box.y + contentTop + frag.box.y + frag.box.height) * scale}px`;
+          menu.style.transform = 'translateX(-100%)';
+        }
+      }
+      menu.classList.add('docx-content-control-calendar');
+      const authoredDate = dateValueOfControl(controlId);
+      const parsedDate = authoredDate ? new Date(authoredDate) : new Date();
+      const selectedDate = Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+      const initialDate = selectedDate ?? new Date();
+      let viewYear = initialDate.getFullYear();
+      let viewMonth = initialDate.getMonth();
+      const monthFormatter = new Intl.DateTimeFormat(undefined, {
+        month: 'long',
+        year: 'numeric',
+      });
+      const dayFormatter = new Intl.DateTimeFormat(undefined, {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+      const weekdayFormatter = new Intl.DateTimeFormat(undefined, { weekday: 'narrow' });
+      const isoDate = (date: Date): string =>
+        `${date.getFullYear().toString().padStart(4, '0')}-${(date.getMonth() + 1)
+          .toString()
+          .padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+      const sameDay = (left: Date, right: Date): boolean =>
+        left.getFullYear() === right.getFullYear() &&
+        left.getMonth() === right.getMonth() &&
+        left.getDate() === right.getDate();
+      let commitPendingManualDate: (() => boolean) | null = null;
+      const renderCalendar = (): void => {
+        const manual = document.createElement('input');
+        manual.type = 'date';
+        manual.className = 'docx-content-control-calendar-input';
+        manual.value = selectedDate ? isoDate(selectedDate) : '';
+        const initialManualValue = manual.value;
+        if (record?.alias) manual.setAttribute('aria-label', record.alias);
+        const commitManualDate = (): boolean => {
+          if (!manual.value || manual.value === initialManualValue) return false;
+          const value = manual.value;
+          closeContentControlMenu(menu);
+          contentControlsOps.setValue(controlId, value);
+          return true;
+        };
+        commitPendingManualDate = commitManualDate;
+        manual.addEventListener('keydown', (event) => {
+          if (event.key !== 'Enter') return;
+          event.preventDefault();
+          if (!commitManualDate()) closeContentControlMenu(menu);
+        });
+        manual.addEventListener('blur', () => {
+          queueMicrotask(() => {
+            if (!menu.isConnected || menu.contains(document.activeElement)) return;
+            if (!commitManualDate()) closeContentControlMenu(menu);
+          });
+        });
+        const header = document.createElement('div');
+        header.className = 'docx-content-control-calendar-header';
+        const previous = document.createElement('button');
+        previous.type = 'button';
+        previous.className = 'docx-content-control-calendar-nav';
+        previous.textContent = '‹';
+        const previousMonth = new Date(viewYear, viewMonth - 1, 1);
+        previous.setAttribute('aria-label', monthFormatter.format(previousMonth));
+        const title = document.createElement('div');
+        title.className = 'docx-content-control-calendar-title';
+        title.textContent = monthFormatter.format(new Date(viewYear, viewMonth, 1));
+        const next = document.createElement('button');
+        next.type = 'button';
+        next.className = 'docx-content-control-calendar-nav';
+        next.textContent = '›';
+        const nextMonth = new Date(viewYear, viewMonth + 1, 1);
+        next.setAttribute('aria-label', monthFormatter.format(nextMonth));
+        previous.addEventListener('mousedown', (event) => event.stopPropagation());
+        next.addEventListener('mousedown', (event) => event.stopPropagation());
+        previous.addEventListener('click', () => {
+          viewMonth -= 1;
+          if (viewMonth < 0) {
+            viewMonth = 11;
+            viewYear -= 1;
+          }
+          renderCalendar();
+        });
+        next.addEventListener('click', () => {
+          viewMonth += 1;
+          if (viewMonth > 11) {
+            viewMonth = 0;
+            viewYear += 1;
+          }
+          renderCalendar();
+        });
+        header.append(previous, title, next);
+
+        const weekdays = document.createElement('div');
+        weekdays.className = 'docx-content-control-calendar-weekdays';
+        for (let index = 0; index < 7; index += 1) {
+          const weekday = document.createElement('span');
+          weekday.textContent = weekdayFormatter.format(new Date(2024, 0, 1 + index));
+          weekdays.append(weekday);
+        }
+
+        const grid = document.createElement('div');
+        grid.className = 'docx-content-control-calendar-grid';
+        grid.setAttribute('role', 'grid');
+        const firstWeekday = (new Date(viewYear, viewMonth, 1).getDay() + 6) % 7;
+        const today = new Date();
+        for (let index = 0; index < 42; index += 1) {
+          const date = new Date(viewYear, viewMonth, index - firstWeekday + 1);
+          const day = document.createElement('button');
+          day.type = 'button';
+          day.className = 'docx-content-control-calendar-day';
+          day.textContent = String(date.getDate());
+          day.setAttribute('role', 'gridcell');
+          day.setAttribute('aria-label', dayFormatter.format(date));
+          if (date.getMonth() !== viewMonth) day.dataset.otherMonth = '';
+          if (selectedDate && sameDay(date, selectedDate)) {
+            day.dataset.selected = '';
+            day.setAttribute('aria-selected', 'true');
+          }
+          if (sameDay(date, today)) day.dataset.today = '';
+          day.addEventListener('mousedown', (event) => event.stopPropagation());
+          day.addEventListener('click', () => {
+            closeContentControlMenu(menu);
+            contentControlsOps.setValue(controlId, isoDate(date));
+          });
+          grid.append(day);
+        }
+        menu.replaceChildren(manual, header, weekdays, grid);
+      };
+      renderCalendar();
+      pagesLayer.append(menu);
+      setContentControlWidgetOpen(controlId, true);
+      const dismiss = (event: Event): void => {
+        if (menu.contains(event.target as Node)) return;
+        if (!commitPendingManualDate?.()) closeContentControlMenu(menu);
+        document.removeEventListener('mousedown', dismiss, true);
+      };
+      document.addEventListener('mousedown', dismiss, true);
+      menu
+        .querySelector<HTMLElement>(
+          '[data-selected], [data-today], .docx-content-control-calendar-day'
+        )
+        ?.focus({ preventScroll: true });
+    }
+  }
+
+  const contentControlsOps: ContentControlOps = {
+    setShowAll(show) {
+      if (showAllContentControls === show) return;
+      showAllContentControls = show;
+      // Furniture-only: rebuild paint without a layout pass.
+      render();
+    },
+    setFormFill(active) {
+      if (formFillMode === active) return;
+      formFillMode = active;
+      options.onChange?.(currentState());
+    },
+    showAll: () => showAllContentControls,
+    formFill: () => formFillMode,
+    atCaret: () => contentControlAtCaret(),
+    navigate(direction) {
+      const editable = editableControlsInOrder();
+      if (editable.length === 0) return false;
+      const current = contentControlAtCaret();
+      let index = current ? editable.findIndex((c) => c.id === current.id) : -1;
+      if (direction === 'next') {
+        index = index < 0 ? 0 : (index + 1) % editable.length;
+      } else {
+        index = index < 0 ? editable.length - 1 : (index - 1 + editable.length) % editable.length;
+      }
+      const target = editable[index]!;
+      return selectControlContent(target.id);
+    },
+    setValue(controlId, value) {
+      const reason = contentControlsOps.disabledReason(controlId, 'edit');
+      if (reason) {
+        lastRejection = reason;
+        options.onChange?.(currentState());
+        return false;
+      }
+      let committed = false;
+      commit(() => {
+        const result = session.applyTreeOps(
+          [{ op: 'setContentControlValue', controlId, value }],
+          selectionMark()
+        );
+        committed = result.committed;
+        return result;
+      });
+      return committed;
+    },
+    remove(controlId) {
+      const id = controlId ?? contentControlAtCaret()?.id;
+      if (!id) {
+        lastRejection = 'notFound';
+        options.onChange?.(currentState());
+        return false;
+      }
+      const reason = contentControlsOps.disabledReason(id, 'remove');
+      if (reason) {
+        lastRejection = reason;
+        options.onChange?.(currentState());
+        return false;
+      }
+      let committed = false;
+      commit(() => {
+        const result = session.applyTreeOps(
+          [{ op: 'removeContentControl', controlId: id }],
+          selectionMark()
+        );
+        committed = result.committed;
+        return result;
+      });
+      return committed;
+    },
+    disabledReason(controlId, action) {
+      const record = contentControlsInLayout(currentLayout).find((c) => c.id === controlId);
+      if (record) {
+        return action === 'remove' ? removalLocked(record) : contentLockedOrBound(record);
+      }
+      const control = findControl(controlId);
+      if (!control) return 'notFound';
+      // Layout has not published a boundary yet — refuse conservatively from tree props.
+      for (const child of control.children) {
+        if (child.kind === 'textValue') continue;
+        if (
+          (child as { kind?: string }).kind !== 'contentControlProperties' &&
+          child.localName !== 'sdtPr'
+        ) {
+          continue;
+        }
+        if (child.children.some((c) => c.kind !== 'textValue' && c.localName === 'dataBinding')) {
+          if (action === 'edit') return 'bound';
+        }
+        for (const prop of child.children) {
+          if (prop.kind === 'textValue' || prop.localName !== 'lock') continue;
+          const val = prop.attributes.find((a) => a.localName === 'val')?.value;
+          if (action === 'remove') {
+            if (val === 'sdtLocked' || val === 'sdtContentLocked') return 'locked';
+          } else if (val === 'contentLocked' || val === 'sdtContentLocked') {
+            return 'locked';
+          }
+        }
+      }
+      return null;
+    },
+  };
+
   function currentState(): PaginatedSurfaceState {
     return {
       revision: session.packageRevision(),
@@ -634,6 +1353,11 @@ export function mountPaginatedSurface(
       // Reference-stable while unchanged: `pendingAtCaret` hands back the stored array,
       // so a host can compare states to see whether the armed format moved.
       pendingFormat: pendingAtCaret(),
+      contentControls: {
+        showAll: showAllContentControls,
+        formFill: formFillMode,
+        activeControlId: contentControlAtCaret()?.id ?? null,
+      },
       perf: {
         layoutMs: lastLayoutMs,
         paintMs: lastPaintMs,
@@ -682,6 +1406,7 @@ export function mountPaginatedSurface(
     // `data-docx-hf-active`, so scroll cannot leave the caret host on a dematerialized sheet.
     hfScope?.reconcileOccurrence();
     const activeHf = hfScope?.getActive() ?? null;
+    const contentControlChrome = contentControlChromeOptions();
     paintSemanticLayout(pagesLayer, currentLayout, {
       scale,
       ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
@@ -693,6 +1418,7 @@ export function mountPaginatedSurface(
             activeHeaderFooterPageIndex: activeHf.pageIndex,
           }
         : {}),
+      ...(contentControlChrome ? { contentControlChrome } : {}),
     });
     setHeaderFooterEditingChrome(container, pagesLayer, activeHf != null);
     // The pages are absolutely positioned, so the layer has no intrinsic size and the
@@ -708,6 +1434,9 @@ export function mountPaginatedSurface(
     overlayLayer.style.height = `${materializedExtent.height * scale}px`;
     commentLayer.style.width = overlayLayer.style.width;
     commentLayer.style.height = overlayLayer.style.height;
+    tableFurnitureLayer.style.width = overlayLayer.style.width;
+    tableFurnitureLayer.style.height = overlayLayer.style.height;
+    tableInteraction.update();
     // Sizing included: the style writes above invalidate layout, and the selection sync
     // right after is what forces the browser to resolve it. Splitting the timer here would
     // book the paint's own cost to the selection phase.
@@ -787,7 +1516,12 @@ export function mountPaginatedSurface(
 
     // `storyScope()` so an edit inside a header, a footer or a note is applied to that story
     // rather than to the body.
-    return session.applyTreeOps(trackedOps(ops), selectionBefore, selectionAfter, storyScope());
+    const attributed = trackedOps(ops);
+    const result = session.applyTreeOps(attributed, selectionBefore, selectionAfter, storyScope());
+    if (result.committed && editingMode === 'suggest' && attributed.some(isTrackedEdit)) {
+      runtimeOptions.onTrackedChange?.();
+    }
+    return result;
   }
 
   /** Ops that change the DOCUMENT, as opposed to reading or resolving it. */
@@ -800,7 +1534,23 @@ export function mountPaginatedSurface(
     );
   }
 
-  /** Text ops become tracked ones while suggesting; everything else is untouched. */
+  /** Ops that create or extend a reviewable proposal. */
+  function isTrackedEdit(op: TreeDocOp): boolean {
+    switch (op.op) {
+      case 'insertText':
+      case 'deleteText':
+      case 'insertTableRow':
+      case 'deleteTableRow':
+        return op.revision !== undefined;
+      case 'setParagraphMarkRevision':
+      case 'proposeParagraphMerge':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /** Suggesting attributes text and structural row edits as Word tracked changes. */
   function trackedOps(ops: readonly TreeDocOp[]): TreeDocOp[] {
     const author = options.author?.trim();
     // `CT_TrackChange` makes `@w:author` required, so with no author there is nothing valid
@@ -809,7 +1559,14 @@ export function mountPaginatedSurface(
     if (editingMode !== 'suggest' || !author) return [...ops];
     const revision = { author, date: trackedDate() };
     return ops.flatMap((op): TreeDocOp[] => {
-      if (op.op === 'insertText' || op.op === 'deleteText') return [{ ...op, revision }];
+      if (
+        op.op === 'insertText' ||
+        op.op === 'deleteText' ||
+        op.op === 'insertTableRow' ||
+        op.op === 'deleteTableRow'
+      ) {
+        return [{ ...op, revision }];
+      }
       // A SPLIT becomes a real split plus a proposed mark on the first paragraph: the text
       // is already in two paragraphs, and what is being proposed is the break between them.
       // §17.13.5 puts the new mark on the FIRST paragraph, and rejecting it runs the two
@@ -931,6 +1688,7 @@ export function mountPaginatedSurface(
     // exact armed position (the mirror re-adopting the same caret) keeps it.
     reconcilePendingWith(next);
     releaseRetainedIfEscaped(next);
+    const previousActive = contentControlAtCaret()?.id ?? null;
     selection = next;
     // Any plain selection cancels a rectangle. A caret placed by a click, a keystroke or an
     // edit is a text selection by definition, and leaving the rectangle behind would keep
@@ -964,9 +1722,15 @@ export function mountPaginatedSurface(
     // A dismissal is dismissed for where the caret WAS; any move re-asks the question, which
     // is how the reader reopens an item — by clicking back into its text.
     dismissedReviewKey = null;
-    // The caret decides which item is OPEN, so a move re-classes the bands. The rectangles
+    // The caret decides which item is OPEN, so a move re-classifies the bands. The rectangles
     // themselves are cached against the layout and are not recomputed here.
     renderCommentHighlights();
+    // Content-control caret chrome is furniture keyed on the active control id. A caret move
+    // into / out of a control must rebuild paint without a layout pass.
+    const nextActive = contentControlAtCaret()?.id ?? null;
+    if (previousActive !== nextActive) {
+      render(false);
+    }
     options.onChange?.(currentState());
   }
 
@@ -1317,7 +2081,7 @@ export function mountPaginatedSurface(
     );
   }
 
-  const surface: PaginatedSurface = {
+  const surface: ScaleMutableSurface = {
     session,
     // Flushes first: a commit made straight on the session — undo, or another editor
     // sharing the store — must not leave a caller reading geometry for a revision the model
@@ -1335,6 +2099,97 @@ export function mountPaginatedSurface(
       }
       const caret = caretAt(currentLayout, selection.head);
       return caret ? caret.pageIndex + 1 : 1;
+    },
+
+    setScale(nextScale) {
+      if (!(nextScale > 0) || !Number.isFinite(nextScale)) return false;
+      if (nextScale === scale) return true;
+
+      const previous = { scale, defaults, measurer, producer, furnitureSource };
+
+      // TOTAL by construction: a zoom click gets an answer, never an exception. Everything a
+      // rescale touches — the anchor read, the measurer resolution, layout, paint — is inside
+      // the guard, and the rollback carries its own.
+      try {
+        const scroller = surfaceScroller(container);
+        // The anchor is kept in LAYOUT coordinates, the frame `visiblePageSet` and
+        // `viewportPage` read. The scroller is not the surface's offset parent in a real host —
+        // toolbar and ruler chrome sit above it — so the container's own offset comes out
+        // before the divide and goes back in on the way out, or the page under the viewport
+        // centre changes as the scale does.
+        const anchor = scroller
+          ? {
+              x: (scroller.scrollLeft - container.offsetLeft + scroller.clientWidth / 2) / scale,
+              y: (scroller.scrollTop - container.offsetTop + scroller.clientHeight / 2) / scale,
+            }
+          : null;
+        scale = nextScale;
+        if (!options.measurer) {
+          defaults = resolveDefaultSurfaceMeasurer(scale, {
+            context: tryCreateBrowserCanvasContext(container.ownerDocument),
+            ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+          });
+          measurer = defaults.measurer;
+        }
+        // Read from the resolution just made, not from mount's: a canvas that is available at
+        // mount and gone by the next zoom resolves to the fixed grid, and the identity has to
+        // say so.
+        producer = producerIdentity();
+        furnitureSource = createFurnitureSource({
+          session,
+          measurer,
+          producer,
+          cache: layoutCache,
+          styleCascade,
+          defaultTabStopPt,
+        });
+        // Dropped rather than trusted: both describe a paint made at the OLD scale, and a
+        // flush that publishes nothing (a revision already superseded) would otherwise leave
+        // the overlay painting against them.
+        materializedSet = undefined;
+        materializedExtent = undefined;
+        commentRectCache = null;
+        scheduler.invalidateAll(session.packageRevision(), 'zoom');
+        scheduler.flush();
+        if (scroller && anchor) {
+          const targetLeft = Math.max(
+            0,
+            anchor.x * scale + container.offsetLeft - scroller.clientWidth / 2
+          );
+          const targetTop = Math.max(
+            0,
+            anchor.y * scale + container.offsetTop - scroller.clientHeight / 2
+          );
+          const maxLeft = Number.isFinite(scroller.scrollWidth)
+            ? Math.max(0, scroller.scrollWidth - scroller.clientWidth)
+            : null;
+          const maxTop = Number.isFinite(scroller.scrollHeight)
+            ? Math.max(0, scroller.scrollHeight - scroller.clientHeight)
+            : null;
+          scroller.scrollLeft = maxLeft === null ? targetLeft : Math.min(targetLeft, maxLeft);
+          scroller.scrollTop = maxTop === null ? targetTop : Math.min(targetTop, maxTop);
+          // The paint above chose its pages for the scroll offset the viewport had BEFORE the
+          // restore. Building the destination band here keeps the zoom to one turn; leaving it
+          // to the scroll listener showed the user shells for a frame.
+          rematerialize();
+        }
+        return true;
+      } catch {
+        ({ scale, defaults, measurer, producer, furnitureSource } = previous);
+        materializedSet = undefined;
+        materializedExtent = undefined;
+        commentRectCache = null;
+        // NESTED, because the rollback lays out too: whatever failed the rescale can fail the
+        // recovery, and the caller still has to be told "no". The previous paint stands, and
+        // the next commit or scroll repaints it.
+        try {
+          scheduler.invalidateAll(session.packageRevision(), 'zoom-rollback');
+          scheduler.flush();
+        } catch {
+          /* nothing left to try; the answer below is the whole contract */
+        }
+        return false;
+      }
     },
 
     type(text) {
@@ -1615,6 +2470,7 @@ export function mountPaginatedSurface(
     },
 
     hyperlinks,
+    contentControls: contentControlsOps,
     retainSelection: () => {
       retainedSelection = selection;
       renderOverlay();
@@ -1757,6 +2613,42 @@ export function mountPaginatedSurface(
       return fresh;
     },
     notePreviewText: (scopeId) => notePreviewTextOf(session, scopeId),
+    applyTableCommandPlan(plan: TableCommandPlan): ExecResult {
+      if (!plan.ok) {
+        return { ok: false, code: plan.code, reason: plan.reason };
+      }
+      let committedCaret: {
+        readonly paragraphId: string;
+        readonly start: number;
+        readonly end: number;
+      } | null = null;
+      const unsub = session.subscribe((change) => {
+        committedCaret = change.caret ?? null;
+      });
+      try {
+        const selectionBefore = selectionMark();
+        const adoptCaret = plan.selection.kind === 'adoptCommittedCaret';
+        commit(
+          () => applyOps(plan.ops, selectionBefore),
+          adoptCaret
+            ? () => {
+                if (!committedCaret) return null;
+                return collapsedAt({
+                  paragraphId: committedCaret.paragraphId,
+                  offset: committedCaret.start,
+                });
+              }
+            : undefined,
+          plan.selection.kind === 'preserveSelection' ? { keepCellSelection: true } : undefined
+        );
+      } finally {
+        unsub();
+      }
+      if (lastRejection) {
+        return { ok: false, code: 'invalidArgs', reason: lastRejection };
+      }
+      return { ok: true, changed: true };
+    },
     enterHeaderFooter: (args) => hfScope!.enterHeaderFooter(args),
     exitHeaderFooter: () => hfScope!.exitHeaderFooter(),
     headerFooterState: () => hfScope!.headerFooterStateStable(session.packageRevision()),
@@ -1776,6 +2668,12 @@ export function mountPaginatedSurface(
     // threw the reader back to page 1 before the caret it had just placed could be seen.
     // The caret is positioned from layout regardless, so nothing needs the browser's scroll.
     focus: () => pagesLayer.focus({ preventScroll: true }),
+    setTableInteractionLabel(resolver) {
+      tableLabelState.resolve = resolver;
+    },
+    refreshTableInteractionLabels() {
+      tableInteraction.refreshLabels();
+    },
     destroy() {
       document.removeEventListener('selectionchange', onSelectionChange);
       pagesLayer.removeEventListener('keydown', onKeyDown);
@@ -1790,6 +2688,7 @@ export function mountPaginatedSurface(
       viewportObserver?.disconnect();
       observedScroller = null;
       pointer?.destroy();
+      tableInteraction.destroy();
       navigation.destroy();
       // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
       // another editor sharing this store would paint into a detached container.
@@ -2139,10 +3038,41 @@ export function mountPaginatedSurface(
         noteOps?.exitNote(restoreBody);
       },
       exitHeaderFooter: () => hfScope?.exitHeaderFooter(),
+      onContentControlWidget: (controlId, kind) => openContentControlWidget(controlId, kind),
     },
     options.pointer ? { mode: options.pointer } : {}
   );
 
+  const tableInteraction = createSurfaceTableInteraction({
+    pagesLayer,
+    furnitureLayer: tableFurnitureLayer,
+    scale: () => scale,
+    pageOffsetX: (pageIndex) => materializedExtent?.pageOffsetX.get(pageIndex) ?? 0,
+    read: () => ({
+      layout: currentLayout,
+      storeRevision: session.packageRevision(),
+      selection,
+      cellSelection,
+      editingMode,
+      themeColors: session.documentThemeColors(),
+    }),
+    session: () => session,
+    applyTableCommandPlan: (plan) => surface.applyTableCommandPlan(plan),
+    label: (key) => tableLabelState.resolve(key),
+  });
+
   render();
+  const originalSetEditingMode = surface.setEditingMode.bind(surface);
+  surface.setEditingMode = (mode) => {
+    originalSetEditingMode(mode);
+    tableInteraction.update();
+  };
+  surface.setTableInteractionLabel = (resolver) => {
+    tableLabelState.resolve = resolver;
+    tableInteraction.refreshLabels();
+  };
+  surface.refreshTableInteractionLabels = () => {
+    tableInteraction.refreshLabels();
+  };
   return { ok: true, surface };
 }

@@ -61,7 +61,8 @@
       "listFormatting": "עיצוב רשימה",
       "image": "תמונה",
       "table": "טבלה",
-      "insert": "הוספה"
+      "insert": "הוספה",
+      "contentControl": "מפקדי תוכן"
     },
     "undo": "בטל",
     "undoShortcut": "בטל (Ctrl+Z)",
@@ -87,7 +88,8 @@
     "clearFormatting": "נקה עיצוב",
     "commentsAndChanges": null,
     "moreItems": null,
-    "unavailableInPreview": null
+    "unavailableInPreview": null,
+    "more": null
   },
   "alignment": {
     "alignLeft": "יישור לשמאל",
@@ -732,7 +734,23 @@
       "gridTable4Accent5": "רשת טבלה 4 הדגשה 5",
       "gridTable4Accent6": "רשת טבלה 4 הדגשה 6"
     },
-    "selectTable": null
+    "selectTable": null,
+    "borderStyles": {
+      "dashed": null,
+      "dotted": null,
+      "double": null,
+      "single": null,
+      "thick": null,
+      "triple": null
+    },
+    "borderWidths": {
+      "halfPt": null,
+      "oneHalfPt": null,
+      "onePt": null,
+      "threePt": null,
+      "twoPt": null
+    },
+    "clearCellFill": null
   },
   "tableAdvanced": {
     "verticalAlignment": "יישור אנכי",
@@ -993,6 +1011,44 @@
       "headings": null
     },
     "title": null
+  },
+  "contentControl": {
+    "formFill": "מצב מילוי טפסים",
+    "group": "מפקדי תוכן",
+    "inspector": "מאפייני מפקד תוכן",
+    "inspectorPanel": {
+      "alias": "כותרת",
+      "bound": "קשור לנתונים",
+      "boundNote": "מפקד זה קשור לנתונים חיצוניים. עריכה נדחית.",
+      "empty": "—",
+      "lock": "נעילה",
+      "lockedNote": "עריכת התוכן נעולה במפקד זה.",
+      "no": "לא",
+      "placeholder": "טקסט מציין מיקום",
+      "tag": "תג",
+      "title": "מפקד תוכן",
+      "type": "סוג",
+      "yes": "כן"
+    },
+    "lock": {
+      "contentLocked": "תוכן נעול",
+      "sdtContentLocked": "מפקד תוכן ותוכן נעולים",
+      "sdtLocked": "מפקד תוכן נעול",
+      "unlocked": "לא נעול"
+    },
+    "noControl": "הצב את הסמן בתוך מפקד תוכן",
+    "remove": "הסר מפקד תוכן",
+    "showAll": "הצג גבולות מפקדי תוכן",
+    "types": {
+      "checkbox": "תיבת סימון",
+      "comboBox": "תיבה משולבת",
+      "date": "תאריך",
+      "dropdown": "רשימה נפתחת",
+      "picture": "תמונה",
+      "plainText": "טקסט רגיל",
+      "repeatingSection": "מקטע חוזר",
+      "richText": "טקסט מעוצב"
+    }
   },
   "notes": {
     "editingBanner": "עריכת הערה",

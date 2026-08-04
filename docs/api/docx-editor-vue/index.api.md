@@ -44,9 +44,18 @@ export type ChromeSlotId =
 | 'format.clear'
 | 'review.comments'
 | 'review.editingMode'
+| 'contentControl.showAll'
+| 'contentControl.formFill'
+| 'contentControl.inspector'
+| 'contentControl.remove'
 | 'image.insert'
 | 'image.properties'
 | 'table.insert'
+| 'table.borderTarget'
+| 'table.borderColor'
+| 'table.borderStyle'
+| 'table.borderWidth'
+| 'table.cellFill'
 | 'file.open'
 | 'file.save'
 | 'file.pageSetup'
@@ -508,6 +517,12 @@ export interface Editor {
         readonly underline?: boolean;
     } | null;
     getSelectionPlacement(): { readonly anchorY: number; readonly pageIndex: number } | null;
+    getTableCellSelection(): {
+        readonly tableId: string;
+        readonly rows: { readonly from: number; readonly to: number };
+        readonly columns: { readonly from: number; readonly to: number };
+        readonly cellIds: readonly string[];
+    } | null;
     // (undocumented)
     getTotalPages(): number;
     getTrackedChanges(): readonly {
@@ -542,6 +557,9 @@ export interface Editor {
     setActiveScope(scope: ViewScope): void;
     // (undocumented)
     setEditingMode(mode: DocumentEditingMode): ExecResult;
+    setTableInteractionLabel(
+    resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string
+    ): void;
     setZoom(zoom: number): ExecResult;
     // (undocumented)
     snapshot(options?: { scope?: EditorScope }): EditorSnapshot;
@@ -1226,6 +1244,55 @@ id: ChromeSlotId,
 value?: unknown
 ): ExecResult {
     if (!editor) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+    if (id === 'contentControl.showAll') {
+        const // (undocumented)
+        surface = surfaceOf(editor);
+        if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+        surface.contentControls.setShowAll(!surface.contentControls.showAll());
+        return { ok: true, changed: false };
+    }
+    if (id === 'contentControl.formFill') {
+        const // (undocumented)
+        surface = surfaceOf(editor);
+        if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+        surface.contentControls.setFormFill(!surface.contentControls.formFill());
+        return { ok: true, changed: false };
+    }
+    if (id === 'contentControl.inspector') {
+        // Inspector is a host chrome surface: the slot enables when a control is at the caret.
+        // Opening the panel is the adapter's job — there is nothing for the engine to execute.
+        const // (undocumented)
+        surface = surfaceOf(editor);
+        if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+        if (!surface.state().contentControls.activeControlId) {
+            return { ok: false, code: 'notFound', reason: 'no content control at the selection' };
+        }
+        return { ok: true, changed: false };
+    }
+    if (id === 'contentControl.remove') {
+        const // (undocumented)
+        surface = surfaceOf(editor);
+        if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+        const // (undocumented)
+        activeId = surface.state().contentControls.activeControlId;
+        if (!activeId) {
+            return { ok: false, code: 'notFound', reason: 'no content control at the selection' };
+        }
+        const // (undocumented)
+        reason = surface.contentControls.disabledReason(activeId, 'remove');
+        if (reason) return { ok: false, code: reason === 'bound' ? 'bound' : 'locked', reason };
+        const // (undocumented)
+        removed = surface.contentControls.remove(activeId);
+        return removed
+        ? { ok: true, changed: true }
+        : {
+            ok: false,
+            code:
+            (surface.state().lastRejection as 'locked' | 'bound' | 'notFound' | undefined) ??
+            'unsupported',
+            reason: surface.state().lastRejection ?? 'removeContentControl was refused',
+        };
+    }
     const // (undocumented)
     command =
     value === undefined
@@ -1278,6 +1345,9 @@ export interface ToolbarCommandState {
 // @public
 export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): ToolbarCommandState {
     if (!editor) return { id, enabled: false, disabledReason: 'editor is not ready', active: false };
+    if (isTableChromeSlot(id)) {
+        return tableChromeToolbarState(editor, id);
+    }
     if (id === 'review.editingMode') {
         const // (undocumented)
         mode = editor.getEditingMode?.() ?? 'editing';
@@ -1293,6 +1363,40 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
             disabledReason: probe.ok ? null : probe.reason,
             active: false,
             value: mode,
+        };
+    }
+    // Surface-owned content-control chrome toggles. Enabled whenever the editor is mounted;
+    // `active` reflects snapshot surface state when the facade publishes it, else false.
+    // Adapters that drive the surface directly also read `surface.state().contentControls`.
+    if (id === 'contentControl.showAll' || id === 'contentControl.formFill') {
+        const // (undocumented)
+        surface = surfaceOf(editor);
+        const // (undocumented)
+        cc = surface?.state().contentControls;
+        const // (undocumented)
+        active =
+        id === 'contentControl.showAll' ? (cc?.showAll ?? false) : (cc?.formFill ?? false);
+        return {
+            id,
+            enabled: surface !== null,
+            disabledReason: surface ? null : 'editor is not ready',
+            active,
+        };
+    }
+    if (id === 'contentControl.inspector') {
+        const // (undocumented)
+        surface = surfaceOf(editor);
+        if (!surface)
+        return { id, enabled: false, disabledReason: 'editor is not ready', active: false };
+        const // (undocumented)
+        activeId = surface.state().contentControls.activeControlId;
+        return activeId
+        ? { id, enabled: true, disabledReason: null, active: false }
+        : {
+            id,
+            enabled: false,
+            disabledReason: 'no content control at the selection',
+            active: false,
         };
     }
     const // (undocumented)

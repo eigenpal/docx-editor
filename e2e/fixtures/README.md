@@ -21,6 +21,7 @@ Some fixtures can be regenerated directly from this directory:
 
 ```bash
 bun run e2e/fixtures/generate-fixtures.ts
+bun e2e/fixtures/generate-table-editing-nested-fixture.ts
 bun e2e/fixtures/build-embedded-font-fixture.mjs
 ```
 

@@ -36,6 +36,20 @@ export interface NumberingLevelIndent {
   readonly right: number;
   readonly hanging: number;
   readonly firstLine: number;
+  /**
+   * Which of these the LEVEL actually authored.
+   *
+   * A level's `w:pPr/w:ind` sits between the paragraph style and direct formatting, so the
+   * merge has to tell "the level says left = 0" from "the level says nothing about left and
+   * the style's value stands". Absent (the default) reads as "says nothing", which is what a
+   * hand-built level in a test means.
+   */
+  readonly stated?: {
+    readonly left: boolean;
+    readonly right: boolean;
+    /** `w:hanging`/`w:firstLine` are one mutually exclusive slot (§17.3.1.10, §17.3.1.12). */
+    readonly firstLineOffset: boolean;
+  };
 }
 
 export interface NumberingLevel {
@@ -165,6 +179,11 @@ function parseIndent(pPr: OoxmlElement | undefined): NumberingLevelIndent {
     right: rightTwips === null ? 0 : clampSignedPt(rightTwips),
     hanging: hangingTwips === null ? 0 : clampNonNegativePt(hangingTwips),
     firstLine: firstLineTwips === null ? 0 : clampSignedPt(firstLineTwips),
+    stated: {
+      left: leftTwips !== null,
+      right: rightTwips !== null,
+      firstLineOffset: hangingTwips !== null || firstLineTwips !== null,
+    },
   };
 }
 

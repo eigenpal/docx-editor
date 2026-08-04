@@ -576,6 +576,14 @@ export function Toolbar(explicitProps: ToolbarProps) {
     if (!enableShortcuts) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      // FAIL SOFT on a chord someone else already claimed, like the shared engine keymap.
+      //
+      // This is a `document`-level BUBBLE listener, so anything the host claimed on the way
+      // down has already run: `DocxEditor.Viewport` takes Ctrl/Cmd `=` (and its shifted `+`
+      // spelling) for live zoom during capture, and Word's subscript/superscript is bound to
+      // the same chord below. Without this, a host that mounts this toolbar around the new
+      // viewport got the zoom AND the script toggle from one keystroke.
+      if (event.defaultPrevented) return;
       const target = event.target as HTMLElement;
       const editorContainer = editorRef?.current;
       const barContainer = barRef.current;

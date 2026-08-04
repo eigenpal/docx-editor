@@ -125,13 +125,22 @@ export {
   DocxEditorContextMenu,
   ContextMenuCopy,
   ContextMenuCut,
+  ContextMenuCellVerticalAlignment,
   ContextMenuDelete,
   ContextMenuItem,
   ContextMenuPaste,
   ContextMenuSelectAll,
+  ContextMenuDeleteTable,
+  ContextMenuDeleteTableColumn,
+  ContextMenuDeleteTableRow,
+  ContextMenuInsertColumnLeft,
+  ContextMenuInsertColumnRight,
+  ContextMenuInsertRowAbove,
+  ContextMenuInsertRowBelow,
   type ContextMenuAnchor,
   type ContextMenuCommandProps,
   type ContextMenuItemProps,
+  type ContextMenuTableRowProps,
   type DocxEditorContextMenuNamespace,
   type DocxEditorContextMenuProps,
 } from './editor/contextmenu';
@@ -153,6 +162,22 @@ export {
   type UseDocxSourceOptions,
   type UseDocxSourceResult,
 } from './editor/useDocxSource';
+export {
+  useContentControl,
+  useContentControlInstance,
+  CONTENT_CONTROL_SLOTS,
+  type ContentControlInspectorState,
+  type ContentControlLock,
+  type ContentControlSlotId,
+  type UseContentControlResult,
+} from './editor/useContentControl';
+export {
+  DocxEditorContentControl,
+  type DocxEditorContentControlNamespace,
+  type ContentControlActionProps,
+  type ContentControlPartProps,
+  type ContentControlProps,
+} from './editor/DocxEditorContentControl';
 export { useEditorState } from './editor/useEditorState';
 export { useEditorCommand, type EditorCommandState } from './editor/useEditorCommand';
 export { useEditorEvent } from './editor/useEditorEvent';
@@ -172,6 +197,7 @@ export {
   DocxEditorToolbar,
   useFontFamily,
   useParagraphStyle,
+  useTableBorderTargetLabel,
   type DocxEditorToolbarNamespace,
   type DocxEditorToolbarProps,
   type ToolbarActionProps,
@@ -194,6 +220,14 @@ export {
   type ToolbarTranslate,
   type UseFontFamilyResult,
   type UseParagraphStyleResult,
+  type TableBorderColorNamespace,
+  type TableBorderStyleNamespace,
+  type TableBorderTargetNamespace,
+  type TableBorderWidthNamespace,
+  type TableCellFillNamespace,
+  type TableChromeItemProps,
+  type TableChromePartComponent,
+  type TableChromePartProps,
 } from './editor/toolbar';
 
 // The compound menu bar (also reachable as `DocxEditor.Menu`): File · Format · Insert ·

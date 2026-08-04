@@ -8,15 +8,21 @@
 // take, so a click, a caret and an edit all speak one coordinate system: a hit test can be
 // handed straight to `insertText` without a translation step that could disagree.
 
-import { caretBoxOnLine, hitTestPage, spanOffsetX } from './semantic-hit-test.ts';
+import {
+  caretBoxOnLine,
+  contentControlAtPoint,
+  hitTestPage,
+  spanOffsetX,
+} from './semantic-hit-test.ts';
 import type {
   BlockFragmentRecord,
+  ContentControlBoundaryRecord,
   LineRecord,
   SemanticLayout,
   StyleSpanRecord,
   TextMeasurer,
 } from './semantic-records.ts';
-import { paragraphFragmentsOf } from './semantic-records.ts';
+import { contentControlsOfLayout, paragraphFragmentsOf } from './semantic-records.ts';
 
 /** A caret position in the model. */
 export interface SemanticPosition {
@@ -407,6 +413,27 @@ export function hitTestSemantic(
   const pageIndex =
     point.pageIndex !== undefined && layout.pages[point.pageIndex] ? point.pageIndex : 0;
   return hitTestPage(layout, pageIndex, point)?.caret ?? null;
+}
+
+/**
+ * Innermost content-control boundary at a page-content point, or null outside every control.
+ *
+ * Prefers the deepest nesting depth when nested boundaries share geometry.
+ */
+export function contentControlAtSemantic(
+  layout: SemanticLayout,
+  point: { readonly x: number; readonly y: number; readonly pageIndex?: number }
+): ContentControlBoundaryRecord | null {
+  const pageIndex =
+    point.pageIndex !== undefined && layout.pages[point.pageIndex] ? point.pageIndex : 0;
+  return contentControlAtPoint(layout, pageIndex, point);
+}
+
+/** Layout-published content-control boundaries in document order. */
+export function contentControlsInLayout(
+  layout: SemanticLayout
+): readonly ContentControlBoundaryRecord[] {
+  return contentControlsOfLayout(layout);
 }
 
 /** The rectangles covering a selection, one per line it spans. */

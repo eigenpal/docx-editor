@@ -33,9 +33,9 @@ import {
  * The toolbar groups in the chrome spec's bar order: history, zoom, styles, font,
  * then the text group carrying colour and highlight (B I U S · A · pen · link),
  * script, the merged-rendering alignment group, the list group carrying line
- * spacing, standalone clear, and the trailing review controls — with the
- * contextual image/table/file/insert groups (not in the default bar) closing the
- * registry.
+ * spacing, standalone clear, the trailing review controls, content-control
+ * authoring chrome — with the contextual image/table/file/insert groups (not in
+ * the default bar) closing the registry.
  */
 const EXPECTED_GROUPS = [
   'history',
@@ -48,6 +48,7 @@ const EXPECTED_GROUPS = [
   'list',
   'format',
   'review',
+  'contentControl',
   'image',
   'table',
   'file',
@@ -83,9 +84,18 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'format.clear',
   'review.comments',
   'review.editingMode',
+  'contentControl.showAll',
+  'contentControl.formFill',
+  'contentControl.inspector',
+  'contentControl.remove',
   'image.insert',
   'image.properties',
   'table.insert',
+  'table.borderTarget',
+  'table.borderColor',
+  'table.borderStyle',
+  'table.borderWidth',
+  'table.cellFill',
   'file.open',
   'file.save',
   'file.pageSetup',
@@ -141,12 +151,30 @@ describe('legacy chrome descriptor', () => {
       'font.family',
       'font.size',
       'styles.style',
+      'table.borderColor',
+      'table.borderStyle',
+      'table.borderTarget',
+      'table.borderWidth',
+      'table.cellFill',
       'text.color',
       'text.highlight',
     ]);
     for (const slot of valueSlots) {
-      // No fixed command, but a well-formed value resolves to one.
       expect(commandForSlot(slot)).toBeNull();
+      if (slot.startsWith('table.')) {
+        const probe =
+          slot === 'table.borderTarget'
+            ? 'all'
+            : slot === 'table.borderStyle'
+              ? 'single'
+              : slot === 'table.borderWidth'
+                ? 8
+                : slot === 'table.cellFill'
+                  ? { kind: 'hex', value: 'FF0000' }
+                  : { kind: 'hex', value: '000000' };
+        expect(commandForSlotValue(slot, probe)).not.toBeNull();
+        continue;
+      }
       expect(commandForSlotValue(slot, 'Arial')).not.toBeNull();
     }
   });
@@ -159,6 +187,20 @@ describe('legacy chrome descriptor', () => {
     expect(underline).toBeDefined();
     expect(underline!.state.kind).toBe('command');
     expect(commandForSlot('text.underline')).not.toBeNull();
+  });
+
+  test('the script controls name no keyboard chord, because React zoom owns that one', () => {
+    // `formattingBar.subscriptShortcut` / `...superscriptShortcut` render as
+    // "Subscript (Ctrl+=)" / "Superscript (Ctrl+Shift+=)". React's live zoom claims Ctrl/Cmd
+    // `=` and its shifted spelling, so those tooltips would tell a React user to press a chord
+    // that zooms instead. The plain keys are true in every host; both toggles stay reachable
+    // from the button the tooltip is on, and the engine keymap still binds the chord for hosts
+    // that mount no zoom handler.
+    const script = CHROME_GROUPS.find((group) => group.id === 'script')!;
+    expect(script.controls.map((control) => control.labelKey)).toEqual([
+      'formattingBar.superscript',
+      'formattingBar.subscript',
+    ]);
   });
 
   test('every control has a label key and no control hardcodes English', () => {
@@ -219,7 +261,24 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(chromeControlCount()).toBe(43);
+    expect(chromeControlCount()).toBe(52);
+  });
+
+  test('the table group is contextual and carries border/fill chrome slots', () => {
+    const table = CHROME_GROUPS.find((g) => g.id === 'table');
+    expect(table?.contextual).toBe(true);
+    const slots = table!.controls.map((c) => chromeSlotId(table!, c));
+    expect(slots).toEqual([
+      'table.insert',
+      'table.borderTarget',
+      'table.borderColor',
+      'table.borderStyle',
+      'table.borderWidth',
+      'table.cellFill',
+    ]);
+    for (const slot of slots.slice(1)) {
+      expect(commandForSlot(slot as ChromeSlotId)).toBeNull();
+    }
   });
 
   test('the menu region carries the chrome menus, in bar order', () => {

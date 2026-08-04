@@ -102,12 +102,41 @@ function toolbarElement(view: ReturnType<typeof render>): HTMLElement {
   return view.getByTestId('docx-toolbar');
 }
 
-/** Toolbar children flattened to comparable identities, for order assertions. */
-function childIdentities(toolbar: HTMLElement): string[] {
-  return [...toolbar.children].map((child) => {
+function entryIdentity(entry: Element): string {
+  if (entry.getAttribute('role') === 'separator') return 'separator';
+  return entry.getAttribute('data-slot') ?? entry.getAttribute('aria-label') ?? entry.className;
+}
+
+/** Flatten intentional top-level group wrappers; keep separators and direct children. */
+function toolbarArrangement(toolbar: HTMLElement): string[] {
+  return [...toolbar.children].flatMap((child) => {
     if (child.getAttribute('role') === 'separator') return 'separator';
-    return child.getAttribute('data-slot') ?? child.getAttribute('aria-label') ?? child.className;
+    if (child.classList.contains('docx-toolbar__group')) {
+      return [...child.children].map(entryIdentity);
+    }
+    return entryIdentity(child);
   });
+}
+
+function entryRootAtFlatIndex(toolbar: HTMLElement, index: number): Element | null {
+  let flat = 0;
+  for (const child of toolbar.children) {
+    if (child.getAttribute('role') === 'separator') {
+      if (flat === index) return child;
+      flat += 1;
+      continue;
+    }
+    if (child.classList.contains('docx-toolbar__group')) {
+      for (const entry of child.children) {
+        if (flat === index) return entry;
+        flat += 1;
+      }
+      continue;
+    }
+    if (flat === index) return child;
+    flat += 1;
+  }
+  return null;
 }
 
 afterEach(() => {
@@ -121,7 +150,7 @@ describe('the default arrangement', () => {
     // The arrangement is derived from the registry on both sides of this assertion —
     // the 10 non-contextual groups, alignment merged — so a registry change updates
     // both in lockstep.
-    expect(childIdentities(toolbar)).toEqual([...EXPECTED_ARRANGEMENT]);
+    expect(toolbarArrangement(toolbar)).toEqual([...EXPECTED_ARRANGEMENT]);
     // Every slot is present exactly once.
     for (const slot of EXPECTED_ARRANGEMENT) {
       if (slot === 'separator') continue;
@@ -145,15 +174,19 @@ describe('the default arrangement', () => {
     );
     const toolbar = toolbarElement(view);
     // Same full arrangement (plus the appended extra), with Bold still in its place.
-    const identities = childIdentities(toolbar);
+    const identities = toolbarArrangement(toolbar);
     expect(identities.slice(0, EXPECTED_ARRANGEMENT.length)).toEqual([...EXPECTED_ARRANGEMENT]);
-    expect(toolbar.children.length).toBe(EXPECTED_ARRANGEMENT.length + 1);
     // The Bold in the arrangement IS the override (its className landed).
     const bold = view.container.querySelector('[aria-label="formattingBar.boldShortcut"]')!;
     expect(bold.className).toContain('custom-bold');
-    expect(toolbar.children[EXPECTED_ARRANGEMENT.indexOf('text.bold')]).toBe(bold);
-    // The non-part child appended after the default set.
-    expect(toolbar.lastElementChild).toBe(view.getByTestId('extra'));
+    const boldIndex = EXPECTED_ARRANGEMENT.indexOf('text.bold');
+    expect(identities[boldIndex]).toBe('text.bold');
+    expect(entryRootAtFlatIndex(toolbar, boldIndex)!.contains(bold)).toBe(true);
+    // The non-part child appended in a fixed group after the default set.
+    const appended = toolbar.querySelector(
+      ':scope > .docx-toolbar__group[data-toolbar-fixed]:last-of-type'
+    )!;
+    expect(appended.contains(view.getByTestId('extra'))).toBe(true);
   });
 
   test('a hidden part child removes its slot from the arrangement', () => {
@@ -164,7 +197,7 @@ describe('the default arrangement', () => {
     );
     const toolbar = toolbarElement(view);
     expect(view.container.querySelector('[aria-label="formattingBar.strikethrough"]')).toBeNull();
-    expect(toolbar.children.length).toBe(EXPECTED_ARRANGEMENT.length - 1);
+    expect(toolbarArrangement(toolbar).length).toBe(EXPECTED_ARRANGEMENT.length - 1);
     // Neighbours unaffected: underline still present, alignment group intact.
     expect(
       view.container.querySelector('[aria-label="formattingBar.underlineShortcut"]')
@@ -180,7 +213,7 @@ describe('the default arrangement', () => {
       </DocxEditorToolbar>
     );
     const toolbar = toolbarElement(view);
-    expect(childIdentities(toolbar)).toEqual(['text.bold', 'separator', 'history.undo']);
+    expect(toolbarArrangement(toolbar)).toEqual(['text.bold', 'separator', 'history.undo']);
   });
 });
 
@@ -239,7 +272,10 @@ describe('live button state', () => {
     )!;
     // Appended after the whole default arrangement — it drives no slot.
     const toolbar = toolbarElement(view);
-    expect(toolbar.lastElementChild).toBe(action);
+    const appended = toolbar.querySelector(
+      ':scope > .docx-toolbar__group[data-toolbar-fixed]:last-of-type'
+    )!;
+    expect(appended.contains(action)).toBe(true);
     expect(action.className).toContain('docx-toolbar__button');
 
     // The caret guard is the reason this is a component and not a documented class name.
@@ -497,9 +533,9 @@ describe('the shaped parts', () => {
       trigger.click();
     });
     await act(async () => {
-      (
-        [...root.querySelectorAll('[role="menuitemradio"]')] as HTMLButtonElement[]
-      ).find((row) => row.textContent === '2.0')!.click();
+      ([...root.querySelectorAll('[role="menuitemradio"]')] as HTMLButtonElement[])
+        .find((row) => row.textContent === '2.0')!
+        .click();
     });
     await act(async () => {
       trigger.click();
@@ -512,20 +548,44 @@ describe('the shaped parts', () => {
     expect(editor().snapshot().formatting?.spaceAfterPt).toBe(10);
   });
 
-  test('the zoom stepper drives Editor.setZoom and reads the snapshot back', async () => {
+  test('the zoom stepper resizes the mounted page live, keeps edits and undo, and shows all zoom levels', async () => {
     const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    const instance = editor();
+    const mountedSurface = instance.surface;
+    instance.surface!.setSelection({
+      anchor: { paragraphId: instance.surface!.session.paragraphIds()[0]!, offset: 11 },
+      head: { paragraphId: instance.surface!.session.paragraphIds()[0]!, offset: 11 },
+    });
+    instance.surface!.type('!');
     const stepper = view.container.querySelector('[data-slot="zoom.level"]')!;
     const value = stepper.querySelector('.docx-toolbar__stepper-value')!;
+    const pageWidth = () =>
+      parseFloat((view.container.querySelector('.docx-page') as HTMLElement).style.width);
+    const widthBefore = pageWidth();
     // The middle is the "% ▾" menu button: the level plus the caret glyph.
     expect(value.textContent).toBe('100%▾');
+    await act(async () => {
+      (value as HTMLButtonElement).click();
+    });
+    expect(
+      [...stepper.querySelectorAll('[role="option"]')].map((option) => option.textContent)
+    ).toEqual(['50%', '75%', '100%', '125%', '150%', '200%']);
+    await act(async () => {
+      (value as HTMLButtonElement).click();
+    });
     const zoomIn = stepper.querySelector('[aria-label="zoom.zoomIn"]') as HTMLButtonElement;
     await act(async () => {
       zoomIn.click();
     });
     // The buttons walk the preset LEVELS (50/75/100/125/150/200), not a fixed
     // step: 100% steps to 125%.
+    expect(editor()).toBe(instance);
+    expect(editor().surface).toBe(mountedSurface);
     expect(editor().snapshot().zoom).toBe(1.25);
     expect(value.textContent).toBe('125%▾');
+    expect(pageWidth()).toBeCloseTo(widthBefore * 1.25);
+    expect(view.container.textContent).toContain('hello world!');
+    expect(editor().can({ type: 'undo' }).ok).toBe(true);
     const zoomOut = stepper.querySelector('[aria-label="zoom.zoomOut"]') as HTMLButtonElement;
     await act(async () => {
       zoomOut.click();
@@ -614,13 +674,14 @@ describe('the shaped parts', () => {
 
     expect(editor().getEditingMode()).toBe('suggesting');
     expect(
-      view.container.querySelector('[data-testid="editing-mode-trigger"]')!.getAttribute('data-mode')
+      view.container
+        .querySelector('[data-testid="editing-mode-trigger"]')!
+        .getAttribute('data-mode')
     ).toBe('suggesting');
   });
 
   test('the style picker lists the DOCUMENT paragraph styles and a pick applies one', async () => {
-    const STYLE_REL =
-      'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+    const STYLE_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
     const styled = zipSync({
       '[Content_Types].xml': strToU8(
         `<Types xmlns="${CT}">` +
@@ -859,6 +920,296 @@ describe('namespace statics', () => {
     expect(DocxEditorToolbar.Save.docxSlot).toBe('file.save');
     expect(DocxEditorToolbar.BulletList.docxSlot).toBe('list.bullet');
     expect(DocxEditorToolbar.TableInsert.docxSlot).toBe('table.insert');
+    expect(DocxEditorToolbar.TableBorderTarget.docxSlot).toBe('table.borderTarget');
+    expect(DocxEditorToolbar.TableBorderColor.docxSlot).toBe('table.borderColor');
+    expect(DocxEditorToolbar.TableBorderStyle.docxSlot).toBe('table.borderStyle');
+    expect(DocxEditorToolbar.TableBorderWidth.docxSlot).toBe('table.borderWidth');
+    expect(DocxEditorToolbar.TableCellFill.docxSlot).toBe('table.cellFill');
+  });
+});
+
+/** Two-by-two table for contextual table chrome tests. */
+const TABLE_2X2 = docx(
+  '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="3600"/></w:tblGrid>' +
+    '<w:tr><w:tc><w:p><w:r><w:t>A1</w:t></w:r></w:p></w:tc>' +
+    '<w:tc><w:p><w:r><w:t>B1</w:t></w:r></w:p></w:tc></w:tr>' +
+    '<w:tr><w:tc><w:p><w:r><w:t>A2</w:t></w:r></w:p></w:tc>' +
+    '<w:tc><w:p><w:r><w:t>B2</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+);
+
+const TABLE_CHROME_SLOTS = [
+  'table.borderTarget',
+  'table.borderColor',
+  'table.borderStyle',
+  'table.borderWidth',
+  'table.cellFill',
+] as const;
+
+function caretInCell(editor: DocxEditorInstance, paragraphIndex: number, offset = 1): void {
+  const paragraphId = editor.surface!.session.paragraphIds()[paragraphIndex]!;
+  act(() => {
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset },
+      head: { paragraphId, offset },
+    });
+  });
+}
+
+describe('contextual table chrome (Task 10)', () => {
+  test('table border controls are absent outside a table', () => {
+    const { view } = mountToolbar(<DocxEditorToolbar />);
+    for (const slot of TABLE_CHROME_SLOTS) {
+      expect(view.container.querySelector(`[data-slot="${slot}"]`)).toBeNull();
+    }
+  });
+
+  test('table border controls appear in registry order when the caret is in a table', async () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />, TABLE_2X2);
+    await act(async () => {
+      caretInCell(editor(), 0);
+    });
+    expect(editor().snapshot().table).not.toBeNull();
+    const toolbar = toolbarElement(view);
+    const identities = toolbarArrangement(toolbar);
+    const tableStart = identities.indexOf('table.borderTarget');
+    expect(tableStart).toBeGreaterThan(-1);
+    expect(identities.slice(tableStart, tableStart + TABLE_CHROME_SLOTS.length)).toEqual([
+      ...TABLE_CHROME_SLOTS,
+    ]);
+  });
+
+  test('a hidden table part removes its slot from the contextual group', async () => {
+    const { view, editor } = mountToolbar(
+      <DocxEditorToolbar>
+        <DocxEditorToolbar.TableBorderStyle hidden />
+      </DocxEditorToolbar>,
+      TABLE_2X2
+    );
+    await act(async () => {
+      caretInCell(editor(), 0);
+    });
+    expect(view.container.querySelector('[data-slot="table.borderStyle"]')).toBeNull();
+    expect(view.container.querySelector('[data-slot="table.borderTarget"]')).not.toBeNull();
+  });
+
+  test('preset={false} with composed table parts renders only those parts', async () => {
+    const { view, editor } = mountToolbar(
+      <DocxEditorToolbar preset={false}>
+        <DocxEditorToolbar.TableBorderTarget />
+        <DocxEditorToolbar.TableCellFill />
+      </DocxEditorToolbar>,
+      TABLE_2X2
+    );
+    await act(async () => {
+      caretInCell(editor(), 0);
+    });
+    expect(toolbarArrangement(toolbarElement(view))).toEqual([
+      'table.borderTarget',
+      'table.cellFill',
+    ]);
+  });
+
+  test('table controls share the toolbar horizontal axis', async () => {
+    const { view, editor } = mountToolbar(
+      <DocxEditorToolbar preset={false}>
+        <DocxEditorToolbar.TableBorderTarget />
+        <DocxEditorToolbar.TableBorderColor />
+        <DocxEditorToolbar.TableCellFill />
+      </DocxEditorToolbar>,
+      TABLE_2X2
+    );
+    await act(async () => {
+      caretInCell(editor(), 0);
+    });
+    for (const root of view.container.querySelectorAll<HTMLElement>('[data-slot^="table."]')) {
+      expect(root.style.display).toBe('inline-flex');
+      expect(root.style.alignItems).toBe('center');
+      expect(root.style.verticalAlign).toBe('middle');
+    }
+  });
+
+  test('target then color picks dispatch complete border commands through the shared draft', async () => {
+    const { view, editor } = mountToolbar(
+      <DocxEditorToolbar preset={false}>
+        <DocxEditorToolbar.TableBorderTarget />
+        <DocxEditorToolbar.TableBorderColor />
+      </DocxEditorToolbar>,
+      TABLE_2X2
+    );
+    await act(async () => {
+      caretInCell(editor(), 0);
+    });
+    const targetRoot = view.container.querySelector('[data-slot="table.borderTarget"]')!;
+    await act(async () => {
+      (targetRoot.querySelector('button') as HTMLButtonElement).click();
+    });
+    const inside = [...targetRoot.querySelectorAll('[role="menuitemradio"]')].find(
+      (row) => row.getAttribute('data-value') === 'inside'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      inside.click();
+    });
+    const colorRoot = view.container.querySelector('[data-slot="table.borderColor"]')!;
+    await act(async () => {
+      (colorRoot.querySelector('.docx-toolbar__colorsplit-caret') as HTMLButtonElement).click();
+    });
+    const swatch = colorRoot.querySelector('[data-value="4472C4"]') as HTMLButtonElement;
+    expect(swatch).not.toBeNull();
+    await act(async () => {
+      swatch.click();
+    });
+    expect(
+      editor().can({
+        type: 'setTableBorders',
+        scope: 'inside',
+        spec: { style: 'single', size: 8, color: { kind: 'hex', value: '4472C4' } },
+      }).ok
+    ).toBe(true);
+  });
+
+  test('none clears borders on the active target and clear fill removes direct fill', async () => {
+    const { view, editor } = mountToolbar(
+      <DocxEditorToolbar preset={false}>
+        <DocxEditorToolbar.TableBorderTarget />
+        <DocxEditorToolbar.TableCellFill />
+      </DocxEditorToolbar>,
+      TABLE_2X2
+    );
+    await act(async () => {
+      caretInCell(editor(), 0);
+    });
+    editor().exec({ type: 'setCellFill', color: { kind: 'hex', value: 'FF0000' } });
+    const targetRoot = view.container.querySelector('[data-slot="table.borderTarget"]')!;
+    await act(async () => {
+      (targetRoot.querySelector('button') as HTMLButtonElement).click();
+    });
+    const none = [...targetRoot.querySelectorAll('[role="menuitemradio"]')].find(
+      (row) => row.getAttribute('data-value') === 'none'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      none.click();
+    });
+    expect(editor().can({ type: 'setTableBorders', scope: 'none', target: 'all' }).ok).toBe(true);
+
+    const fillRoot = view.container.querySelector('[data-slot="table.cellFill"]')!;
+    await act(async () => {
+      (fillRoot.querySelector('.docx-toolbar__colorsplit-caret') as HTMLButtonElement).click();
+    });
+    await act(async () => {
+      (fillRoot.querySelector('.docx-toolbar__swatch-clear') as HTMLButtonElement).click();
+    });
+    expect(editor().can({ type: 'setCellFill', color: null }).ok).toBe(true);
+  });
+
+  test('disabled table controls expose the engine refusal as the accessible reason', async () => {
+    const { view, editor } = mountToolbar(
+      <DocxEditorToolbar preset={false}>
+        <DocxEditorToolbar.TableBorderTarget />
+      </DocxEditorToolbar>,
+      TABLE_2X2
+    );
+    await act(async () => {
+      caretInCell(editor(), 0);
+    });
+    await act(async () => {
+      editor().exec({ type: 'setEditingMode', mode: 'viewing' });
+    });
+    const trigger = view.container.querySelector(
+      '[data-slot="table.borderTarget"] button'
+    ) as HTMLButtonElement;
+    expect(trigger.getAttribute('aria-disabled')).toBe('true');
+    expect(trigger.title).toBe('the document is open for viewing');
+    const describedBy = trigger.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)?.textContent).toBe(
+      'the document is open for viewing'
+    );
+  });
+
+  test('table chrome labels resolve through t, not hardcoded English', async () => {
+    const { view, editor } = mountToolbar(
+      <DocxEditorToolbar t={(key) => key} preset={false}>
+        <DocxEditorToolbar.TableBorderStyle />
+      </DocxEditorToolbar>,
+      TABLE_2X2
+    );
+    await act(async () => {
+      caretInCell(editor(), 0);
+    });
+    const trigger = view.container.querySelector(
+      '[data-slot="table.borderStyle"] button'
+    ) as HTMLButtonElement;
+    expect(trigger.getAttribute('aria-label')).toBe('table.borders.styleAriaLabel');
+    await act(async () => {
+      trigger.click();
+    });
+    const labels = [
+      ...view.container.querySelectorAll('[data-slot="table.borderStyle"] [role="menuitemradio"]'),
+    ].map((row) => row.textContent);
+    expect(labels).toEqual([
+      'table.borderStyles.single',
+      'table.borderStyles.dashed',
+      'table.borderStyles.dotted',
+      'table.borderStyles.double',
+      'table.borderStyles.triple',
+      'table.borderStyles.thick',
+    ]);
+  });
+
+  test('table border color and cell fill use the full Word-style color picker', async () => {
+    const { view, editor } = mountToolbar(
+      <DocxEditorToolbar preset={false}>
+        <DocxEditorToolbar.TableBorderColor />
+        <DocxEditorToolbar.TableCellFill />
+      </DocxEditorToolbar>,
+      TABLE_2X2
+    );
+    await act(async () => {
+      caretInCell(editor(), 0);
+    });
+    for (const slot of ['table.borderColor', 'table.cellFill'] as const) {
+      const root = view.container.querySelector(`[data-slot="${slot}"]`)!;
+      await act(async () => {
+        (root.querySelector('.docx-toolbar__colorsplit-caret') as HTMLButtonElement).click();
+      });
+      const popup = root.querySelector('[role="dialog"]')!;
+      expect(popup.querySelector('.docx-toolbar__swatch-grid--theme')).not.toBeNull();
+      expect(
+        popup.querySelectorAll(
+          '.docx-toolbar__swatch-grid:not(.docx-toolbar__swatch-grid--theme) button'
+        )
+      ).toHaveLength(10);
+      expect(popup.querySelector('.docx-toolbar__swatch-hex')).not.toBeNull();
+      await act(async () => {
+        fireEvent.keyDown(popup, { key: 'Escape' });
+      });
+    }
+  });
+
+  test('table toolbar mousedown is prevented; swatch inputs remain usable', async () => {
+    const { view, editor } = mountToolbar(
+      <DocxEditorToolbar preset={false}>
+        <DocxEditorToolbar.TableBorderColor />
+        <input data-testid="toolbar-input" />
+      </DocxEditorToolbar>,
+      TABLE_2X2
+    );
+    await act(async () => {
+      caretInCell(editor(), 0);
+    });
+    const before = editor().surface!.selectedText();
+    const trigger = view.container.querySelector(
+      '[data-slot="table.borderColor"] .docx-toolbar__colorsplit-main'
+    )!;
+    const buttonEvent = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    trigger.dispatchEvent(buttonEvent);
+    expect(buttonEvent.defaultPrevented).toBe(true);
+    expect(editor().surface!.selectedText()).toBe(before);
+
+    const input = view.getByTestId('toolbar-input');
+    const inputEvent = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    input.dispatchEvent(inputEvent);
+    expect(inputEvent.defaultPrevented).toBe(false);
   });
 });
 
@@ -967,9 +1318,7 @@ describe('enabled state is the engine answer, not a registry constant', () => {
     expect(undo.title).toContain('nothing to undo');
 
     await act(async () => {
-      (
-        view.container.querySelector('[data-slot="text.underline"]') as HTMLButtonElement
-      ).click();
+      (view.container.querySelector('[data-slot="text.underline"]') as HTMLButtonElement).click();
     });
     expect(undo.disabled).toBe(false);
   });

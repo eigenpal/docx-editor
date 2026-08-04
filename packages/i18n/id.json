@@ -61,7 +61,8 @@
       "listFormatting": "Pemformatan Daftar",
       "image": "Gambar",
       "table": "Tabel",
-      "insert": "Sisipkan"
+      "insert": "Sisipkan",
+      "contentControl": "Kontrol konten"
     },
     "undo": "Urungkan",
     "undoShortcut": "Urungkan (Ctrl+Z)",
@@ -87,7 +88,8 @@
     "clearFormatting": "Hapus Pemformatan",
     "commentsAndChanges": "Komentar & Perubahan",
     "moreItems": "{count} item lainnya",
-    "unavailableInPreview": null
+    "unavailableInPreview": null,
+    "more": null
   },
   "alignment": {
     "alignLeft": "Rata Kiri",
@@ -751,7 +753,23 @@
       "gridTable4Accent5": null,
       "gridTable4Accent6": null
     },
-    "selectTable": null
+    "selectTable": null,
+    "borderStyles": {
+      "dashed": null,
+      "dotted": null,
+      "double": null,
+      "single": null,
+      "thick": null,
+      "triple": null
+    },
+    "borderWidths": {
+      "halfPt": null,
+      "oneHalfPt": null,
+      "onePt": null,
+      "threePt": null,
+      "twoPt": null
+    },
+    "clearCellFill": null
   },
   "tableAdvanced": {
     "verticalAlignment": "Perataan Vertikal",
@@ -993,6 +1011,44 @@
       "headings": null
     },
     "title": null
+  },
+  "contentControl": {
+    "formFill": "Mode isi formulir",
+    "group": "Kontrol konten",
+    "inspector": "Properti kontrol konten",
+    "inspectorPanel": {
+      "alias": "Judul",
+      "bound": "Terikat data",
+      "boundNote": "Kontrol ini terikat ke data eksternal. Pengeditan ditolak.",
+      "empty": "—",
+      "lock": "Kunci",
+      "lockedNote": "Pengeditan konten dikunci pada kontrol ini.",
+      "no": "Tidak",
+      "placeholder": "Placeholder",
+      "tag": "Tag",
+      "title": "Kontrol konten",
+      "type": "Jenis",
+      "yes": "Ya"
+    },
+    "lock": {
+      "contentLocked": "Konten terkunci",
+      "sdtContentLocked": "Kontrol konten dan konten terkunci",
+      "sdtLocked": "Kontrol konten terkunci",
+      "unlocked": "Tidak terkunci"
+    },
+    "noControl": "Letakkan kursor di dalam kontrol konten",
+    "remove": "Hapus kontrol konten",
+    "showAll": "Tampilkan batas kontrol konten",
+    "types": {
+      "checkbox": "Kotak centang",
+      "comboBox": "Kotak kombo",
+      "date": "Tanggal",
+      "dropdown": "Daftar drop-down",
+      "picture": "Gambar",
+      "plainText": "Teks biasa",
+      "repeatingSection": "Bagian berulang",
+      "richText": "Teks kaya"
+    }
   },
   "notes": {
     "editingBanner": "Mengedit catatan",

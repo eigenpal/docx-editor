@@ -161,6 +161,63 @@ describe('text operations over UTF-16 offsets (task 5.1)', () => {
     expect(out).toContain('drawing');
   });
 
+  test('typing at a run boundary takes the LEFT run, the way Word does', () => {
+    // A PDF-converted document writes every inter-word space as its own run carrying
+    // `w:spacing` (character tracking). Joining the run that STARTS at the offset gave typed
+    // text that run's tracking, so typing after a word came out letter-spaced: "x x x x".
+    const part = load(
+      '<w:p><w:r><w:t>word</w:t></w:r>' +
+        '<w:r><w:rPr><w:spacing w:val="60"/></w:rPr><w:t xml:space="preserve"> </w:t></w:r>' +
+        '<w:r><w:t>next</w:t></w:r></w:p>'
+    );
+    const [id] = paragraphIds(part);
+    const typed = apply(part, { op: 'insertText', paragraphId: id!, offset: 4, text: 'xx' });
+    expect(paragraphTextOf(typed, id!)).toBe('wordxx next');
+    // The characters joined "word", which authors no spacing — not the tracked space run.
+    expect(serializeOoxmlPart(typed)).toContain('<w:r><w:t>word</w:t><w:t>xx</w:t></w:r>');
+  });
+
+  test('typing at the START of a paragraph takes the run to its right', () => {
+    const part = load('<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>bold</w:t></w:r></w:p>');
+    const [id] = paragraphIds(part);
+    const typed = apply(part, { op: 'insertText', paragraphId: id!, offset: 0, text: 'X' });
+    expect(paragraphTextOf(typed, id!)).toBe('Xbold');
+    // No run to the left, so the bold run to the right owns it — Word's rule at offset 0.
+    expect(serializeOoxmlPart(typed)).toContain(
+      '<w:r><w:rPr><w:b/></w:rPr><w:t>X</w:t><w:t>bold</w:t></w:r>'
+    );
+  });
+
+  test('typing at the end of a hyperlink stays OUTSIDE the link', () => {
+    const part = load(
+      '<w:p><w:hyperlink r:id="rId1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+        '<w:r><w:t>link</w:t></w:r></w:hyperlink><w:r><w:t> after</w:t></w:r></w:p>'
+    );
+    const [id] = paragraphIds(part);
+    const typed = apply(part, { op: 'insertText', paragraphId: id!, offset: 4, text: 'X' });
+    expect(paragraphTextOf(typed, id!)).toBe('linkX after');
+    // The link's own text is unchanged; the new character landed in the run after it.
+    expect(serializeOoxmlPart(typed)).toContain('<w:t>link</w:t>');
+  });
+
+  test('bias right places text inside the run that starts at the offset', () => {
+    const part = load(
+      '<w:p><w:r><w:t>plain</w:t></w:r>' + '<w:r><w:rPr><w:b/></w:rPr><w:t>bold</w:t></w:r></w:p>'
+    );
+    const [id] = paragraphIds(part);
+    const typed = apply(part, {
+      op: 'insertText',
+      paragraphId: id!,
+      offset: 5,
+      text: 'X',
+      bias: 'right',
+    });
+    expect(paragraphTextOf(typed, id!)).toBe('plainXbold');
+    expect(serializeOoxmlPart(typed)).toContain(
+      '<w:r><w:rPr><w:b/></w:rPr><w:t>X</w:t><w:t>bold</w:t></w:r>'
+    );
+  });
+
   test('insertText at boundaries emits xml:space preserve on save/reopen', () => {
     const part = load('<w:p><w:r><w:t>Hello</w:t></w:r></w:p>');
     const [id] = paragraphIds(part);

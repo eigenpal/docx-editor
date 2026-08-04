@@ -71,6 +71,7 @@ import {
 import type {
   CanResult,
   ContainerRef,
+  ContentControlFilter,
   DocumentChange,
   DocumentHandle,
   EditorError,
@@ -120,7 +121,15 @@ import {
   selectionRangeOf,
   totalPages as totalPagesOf,
   tableContextOf,
+  selectedTableOf,
 } from './docx-editor-derive.ts';
+import {
+  canContentControlCommand,
+  contentControlAtOf,
+  contentControlsOf,
+  execContentControlCommand,
+  isContentControlEditorCommand,
+} from './content-controls.ts';
 import {
   createLayoutShaping,
   disposeLayoutShaping,
@@ -134,7 +143,9 @@ import {
 } from './embedded-font-faces.ts';
 import {
   mountPaginatedSurface,
+  setPaginatedSurfaceScale,
   type PaginatedSurface,
+  type PaginatedSurfaceOptions,
   type PaginatedSurfaceState,
 } from './paginated-surface.ts';
 import type {
@@ -331,11 +342,20 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         ? { measurer: shapedMeasurer, ...(shapedProducer ? { producer: shapedProducer } : {}) }
         : {}),
       ...(embeddedFaces ? { fontAlias: embeddedFaces.alias } : {}),
+      ...(config.tableInteractionLabel
+        ? { tableInteractionLabel: config.tableInteractionLabel }
+        : {}),
       // Read through the holder rather than captured: the popover mounts AFTER the editor
       // exists (the provider-first shape), and a document that reloads must not leave the
       // host's chrome wired to the surface it replaced.
       onHyperlinkPopover: (activation) => liveHyperlinkChrome().onPopover?.(activation),
       onRequestHyperlink: () => liveHyperlinkChrome().onRequest?.(),
+      onTrackedChange: () => {
+        if (reviewPaneOpen) return;
+        reviewPaneOpen = true;
+        bump();
+        emitSelectionChange();
+      },
       onChange: (state) => {
         // The mount-time render reports before `surface` is assigned; nothing observable
         // has changed at that point, so it is not a selection change.
@@ -363,7 +383,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         lastSelection = state.selection;
         emitSelectionChange();
       },
-    });
+    } as PaginatedSurfaceOptions & { readonly onTrackedChange?: () => void });
     if (!result.ok) {
       parseError = result.detail ? `${result.reason}: ${result.detail}` : result.reason;
       // Failure is observable state too: `snapshot().parseError` moved.
@@ -1155,6 +1175,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         emitSelectionChange();
         return { ok: true, changed: false };
       }
+      if (isContentControlEditorCommand(command)) {
+        const gated = canContentControlCommand(command, surface, mode, options);
+        if (!gated.ok) return gated;
+        return execContentControlCommand(surface!, command);
+      }
       // Viewing refuses every EDIT, reversibly — the reader chose it and can choose again.
       // Checked HERE as well as in `can`, because a host that calls `exec` directly is not
       // required to ask first and must not get a write it was told it could not have.
@@ -1174,7 +1199,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // revision would report HF / create-header edits as `changed: false`.
       const before = mounted.session.packageRevision();
 
-      const result = execEditorCommand(mounted, command);
+      const result = execEditorCommand(
+        mounted,
+        command,
+        gated.tablePlan ? { admittedTablePlan: gated.tablePlan } : undefined
+      );
       if (result) return result;
       // `changed` is read from the model, not assumed: reporting `changed: true` where the
       // document did not move would be a lie. It answers for the DOCUMENT, not for
@@ -1201,6 +1230,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           if (restriction) return restriction;
         }
         return { ok: true };
+      }
+      if (isContentControlEditorCommand(command)) {
+        return canContentControlCommand(command, surface, mode, options);
       }
       // Viewing refuses every EDIT, the same way `mode: 'view'` does at construction — but
       // reversibly, because the reader chose it and can choose again. Mutating only, so a
@@ -1304,7 +1336,22 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
 
     getSelectedImage: () => null,
-    getSelectedTable: () => null,
+    getSelectedTable: () => selectedTableOf(surface),
+
+    getTableCellSelection: () => {
+      const cells = surface?.state().cellSelection;
+      if (!cells) return null;
+      return {
+        tableId: cells.tableId,
+        rows: cells.rows,
+        columns: cells.columns,
+        cellIds: cells.cellIds,
+      };
+    },
+
+    setTableInteractionLabel(resolver) {
+      surface?.setTableInteractionLabel(resolver);
+    },
 
     getPageSetup: () => pageSetupOf(surface),
 
@@ -1466,10 +1513,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           return false as EditorQueryResults[K];
         case 'hyperlinkAt':
           return hyperlinkAtOf(surface) as EditorQueryResults[K];
+        case 'contentControls':
+          return contentControlsOf(
+            surface,
+            (query as { filter?: ContentControlFilter }).filter
+          ) as unknown as EditorQueryResults[K];
         case 'trackedChanges':
         case 'revisions':
         case 'findText':
-        case 'contentControls':
         case 'comments':
           return [] as unknown as EditorQueryResults[K];
         case 'styles':
@@ -1480,9 +1531,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           } as unknown as EditorQueryResults[K];
         case 'variables':
           return {} as EditorQueryResults[K];
+        case 'contentControlAt':
+          return contentControlAtOf(
+            surface,
+            (query as { filter?: ContentControlFilter }).filter
+          ) as unknown as EditorQueryResults[K];
+        case 'tableContext':
+          return tableContextOf(surface) as EditorQueryResults[K];
         default:
-          // tableContext, watermark, splitCellConfig, contentControlAt — all
-          // nullable, all underived.
+          // watermark, splitCellConfig and pageContent are nullable and underived.
           return null as EditorQueryResults[K];
       }
     },
@@ -1514,15 +1571,18 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         };
       }
       if (next === zoom) return { ok: true, changed: false };
+      if (surface && !setPaginatedSurfaceScale(surface, next * (96 / 72))) {
+        return {
+          ok: false,
+          code: 'unsupported',
+          reason: `the mounted surface could not apply zoom ${next}`,
+        };
+      }
       zoom = next;
       // Zoom is snapshot state: bump and tell subscribers, with the fresh snapshot on the
       // selectionChange channel (the store listens to both channels either way).
       bump();
       emitSelectionChange();
-      // The surface samples its scale at mount and exposes no rescale-in-place, and a
-      // remount here would discard the user's undo history for a zoom click. So the stored
-      // zoom applies from the NEXT mount (a `load`, or the shaped-measurer remount);
-      // repaint-at-current-scale lands when the surface grows a rescale path.
       return { ok: true, changed: true };
     },
 

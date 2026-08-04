@@ -61,7 +61,8 @@
       "listFormatting": "Format de liste",
       "image": "Image",
       "table": "Tableau",
-      "insert": "Insertion"
+      "insert": "Insertion",
+      "contentControl": "Contrôles de contenu"
     },
     "undo": "Annuler",
     "undoShortcut": "Annuler (Ctrl+Z)",
@@ -87,7 +88,8 @@
     "clearFormatting": "Effacer la mise en forme",
     "commentsAndChanges": null,
     "moreItems": null,
-    "unavailableInPreview": null
+    "unavailableInPreview": null,
+    "more": null
   },
   "alignment": {
     "alignLeft": "Aligner à gauche",
@@ -735,7 +737,23 @@
       "gridTable4Accent5": "Grille de tableau 4 Accent 5",
       "gridTable4Accent6": "Grille de tableau 4 Accent 6"
     },
-    "selectTable": null
+    "selectTable": null,
+    "borderStyles": {
+      "dashed": null,
+      "dotted": null,
+      "double": null,
+      "single": null,
+      "thick": null,
+      "triple": null
+    },
+    "borderWidths": {
+      "halfPt": null,
+      "oneHalfPt": null,
+      "onePt": null,
+      "threePt": null,
+      "twoPt": null
+    },
+    "clearCellFill": null
   },
   "tableAdvanced": {
     "verticalAlignment": "Alignement vertical",
@@ -993,6 +1011,44 @@
       "headings": null
     },
     "title": null
+  },
+  "contentControl": {
+    "formFill": "Mode remplissage de formulaire",
+    "group": "Contrôles de contenu",
+    "inspector": "Propriétés du contrôle de contenu",
+    "inspectorPanel": {
+      "alias": "Titre",
+      "bound": "Lié aux données",
+      "boundNote": "Ce contrôle est lié à des données externes. La modification est refusée.",
+      "empty": "—",
+      "lock": "Verrouillage",
+      "lockedNote": "La modification du contenu est verrouillée pour ce contrôle.",
+      "no": "Non",
+      "placeholder": "Espace réservé",
+      "tag": "Balise",
+      "title": "Contrôle de contenu",
+      "type": "Type",
+      "yes": "Oui"
+    },
+    "lock": {
+      "contentLocked": "Contenu verrouillé",
+      "sdtContentLocked": "Contrôle de contenu et contenu verrouillés",
+      "sdtLocked": "Contrôle de contenu verrouillé",
+      "unlocked": "Déverrouillé"
+    },
+    "noControl": "Placez le curseur dans un contrôle de contenu",
+    "remove": "Supprimer le contrôle de contenu",
+    "showAll": "Afficher les limites des contrôles de contenu",
+    "types": {
+      "checkbox": "Case à cocher",
+      "comboBox": "Zone de liste modifiable",
+      "date": "Date",
+      "dropdown": "Liste déroulante",
+      "picture": "Image",
+      "plainText": "Texte",
+      "repeatingSection": "Section répétitive",
+      "richText": "Texte enrichi"
+    }
   },
   "notes": {
     "editingBanner": "Modification de la note",

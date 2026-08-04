@@ -2,7 +2,11 @@
 // public `ChromeSlotId` vocabulary — one command table (`commandForSlot`) for both
 // adapters, replacing the drifted `ToolbarCommandId`/`ChromeCommandId` pair.
 
-import { describe, expect, test } from 'bun:test';
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+
+import { describe, expect, test, afterEach } from 'bun:test';
+import { zipSync, strToU8 } from 'fflate';
 import type {
   CanResult,
   Editor,
@@ -13,11 +17,43 @@ import {
   chromeProbeForSlot,
   commandForSlot,
   commandForSlotValue,
+  commandForTableChromeSlotValue,
+  DEFAULT_TABLE_CHROME_DRAFT,
   runSave,
+  runTableChromeCommand,
+  runTableCommand,
   runToolbarCommand,
+  tableChromeToolbarState,
+  tableCommandToolbarState,
   toolbarCommandState,
   toolbarCommandStates,
 } from '../toolbar-commands.ts';
+import {
+  applyTableChromePick,
+  defaultTableLabel,
+  TABLE_BORDER_STYLE_OPTIONS,
+  TABLE_BORDER_TARGET_OPTIONS,
+  TABLE_BORDER_WIDTH_OPTIONS,
+  TABLE_CHROME_SLOT_IDS,
+  tableChromeVisible,
+} from '../table-chrome.ts';
+import { tableCommandState } from '../docx-editor-derive.ts';
+import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import { paragraphTextOf } from '../../store/store/tree-ops.ts';
+
+const liveToolbarEditors: DocxEditorInstance[] = [];
+
+afterEach(() => {
+  while (liveToolbarEditors.length > 0) {
+    liveToolbarEditors.pop()?.destroy();
+  }
+  document.getSelection()?.removeAllRanges();
+  for (const node of [...document.body.children]) {
+    if (node instanceof HTMLElement && node.querySelector('.docx-pages')) {
+      node.remove();
+    }
+  }
+});
 
 interface Calls {
   readonly can: EditorCommand[];
@@ -290,5 +326,270 @@ describe('value-typed slots (commandForSlotValue)', () => {
       disabledReason: 'the document is read-only',
       active: false,
     });
+  });
+});
+
+// Task 7: table command can-before-exec parity. Chrome slot mapping remains Task 9.
+describe('table command toolbar state (Task 7)', () => {
+  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const TABLE_2X2 =
+    '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="3600"/></w:tblGrid>' +
+    '<w:tr><w:tc><w:p><w:r><w:t>A1</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>B1</w:t></w:r></w:p></w:tc></w:tr>' +
+    '<w:tr><w:tc><w:p><w:r><w:t>A2</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>B2</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+
+  function mountTable(body: string): DocxEditorInstance {
+    const doc = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
+      ),
+    });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({ container, document: doc });
+    if (!editor.surface) throw new Error('surface failed to mount');
+    liveToolbarEditors.push(editor);
+    return editor;
+  }
+
+  function paragraphByText(editor: DocxEditorInstance, text: string): string {
+    for (const id of editor.surface!.session.paragraphIds()) {
+      if (paragraphTextOf(editor.surface!.session.part(), id) === text) return id;
+    }
+    throw new Error(`paragraph ${text} not found`);
+  }
+
+  function caret(editor: DocxEditorInstance, paragraphId: string): void {
+    editor.surface!.setSelection({
+      head: { paragraphId, offset: 1 },
+      anchor: { paragraphId, offset: 1 },
+    });
+  }
+
+  test('tableCommandToolbarState matches Editor.can via tableCommandState', () => {
+    const editor = mountTable(TABLE_2X2);
+    const surface = editor.surface!;
+    caret(editor, paragraphByText(editor, 'A1'));
+    const cmd = { type: 'insertRow' as const, where: 'below' as const };
+    const can = editor.can(cmd);
+    expect(tableCommandToolbarState(surface, cmd)).toEqual({
+      enabled: can.ok,
+      disabledReason: can.ok ? null : can.reason,
+    });
+    expect(tableCommandState(cmd, surface).can).toEqual(can);
+  });
+
+  test('runTableCommand execs when enabled', () => {
+    const editor = mountTable(TABLE_2X2);
+    caret(editor, paragraphByText(editor, 'A1'));
+    const cmd = { type: 'insertRow' as const, where: 'below' as const };
+    expect(tableCommandToolbarState(editor.surface, cmd).enabled).toBe(true);
+    expect(runTableCommand(editor, cmd).ok).toBe(true);
+  });
+
+  test('final column refusal matches can and exec verbatim', () => {
+    const oneCol =
+      '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>' +
+      '<w:tr><w:tc><w:p><w:r><w:t>only</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+    const editor = mountTable(oneCol);
+    caret(editor, paragraphByText(editor, 'only'));
+    const cmd = { type: 'deleteColumn' as const };
+    const can = editor.can(cmd);
+    expect(tableCommandToolbarState(editor.surface, cmd)).toEqual({
+      enabled: false,
+      disabledReason: 'the table must keep at least one row or column',
+    });
+    expect(can.reason).toBe('the table must keep at least one row or column');
+    expect(runTableCommand(editor, cmd)).toEqual(can);
+  });
+
+  test('merged-cell refusal matches can and exec verbatim', () => {
+    const merged =
+      '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="3600"/></w:tblGrid>' +
+      '<w:tr><w:tc><w:p><w:r><w:t>A1</w:t></w:r></w:p></w:tc><w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr><w:p><w:r><w:t>span</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+    const editor = mountTable(merged);
+    caret(editor, paragraphByText(editor, 'A1'));
+    const cmd = { type: 'insertColumn' as const, where: 'right' as const };
+    const can = editor.can(cmd);
+    expect(tableCommandToolbarState(editor.surface, cmd).disabledReason).toBe(
+      'this table has merged cells'
+    );
+    expect(runTableCommand(editor, cmd)).toEqual(can);
+  });
+});
+
+describe('table chrome slots (Task 9)', () => {
+  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const TABLE_2X2 =
+    '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="3600"/></w:tblGrid>' +
+    '<w:tr><w:tc><w:p><w:r><w:t>A1</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>B1</w:t></w:r></w:p></w:tc></w:tr>' +
+    '<w:tr><w:tc><w:p><w:r><w:t>A2</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>B2</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+
+  function mountTable(body: string): DocxEditorInstance {
+    const doc = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
+      ),
+    });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({ container, document: doc });
+    if (!editor.surface) throw new Error('surface failed to mount');
+    liveToolbarEditors.push(editor);
+    return editor;
+  }
+
+  function paragraphByText(editor: DocxEditorInstance, text: string): string {
+    for (const id of editor.surface!.session.paragraphIds()) {
+      if (paragraphTextOf(editor.surface!.session.part(), id) === text) return id;
+    }
+    throw new Error(`paragraph ${text} not found`);
+  }
+
+  function caret(editor: DocxEditorInstance, paragraphId: string): void {
+    editor.surface!.setSelection({
+      head: { paragraphId, offset: 1 },
+      anchor: { paragraphId, offset: 1 },
+    });
+  }
+
+  test('registry exposes five contextual table chrome slots with preview vocabulary', () => {
+    expect(TABLE_CHROME_SLOT_IDS).toEqual([
+      'table.borderTarget',
+      'table.borderColor',
+      'table.borderStyle',
+      'table.borderWidth',
+      'table.cellFill',
+    ]);
+    expect(TABLE_BORDER_TARGET_OPTIONS).toHaveLength(8);
+    expect(TABLE_BORDER_STYLE_OPTIONS).toHaveLength(6);
+    expect(TABLE_BORDER_WIDTH_OPTIONS).toHaveLength(5);
+    for (const slot of TABLE_CHROME_SLOT_IDS) {
+      expect(commandForSlot(slot)).toBeNull();
+    }
+  });
+
+  test('table chrome is visible only under table context', () => {
+    const editor = mountTable(`<w:p><w:r><w:t>before</w:t></w:r></w:p>${TABLE_2X2}`);
+    expect(tableChromeVisible(editor.snapshot().table)).toBe(false);
+    caret(editor, paragraphByText(editor, 'A1'));
+    expect(tableChromeVisible(editor.snapshot().table)).toBe(true);
+  });
+
+  test('choosing a border target applies the current complete spec and updates active target', () => {
+    const draft = DEFAULT_TABLE_CHROME_DRAFT;
+    const pick = applyTableChromePick(draft, 'table.borderTarget', 'inside');
+    expect(pick?.command).toEqual({
+      type: 'setTableBorders',
+      scope: 'inside',
+      spec: draft.spec,
+    });
+    expect(pick?.nextDraft.activeTarget).toBe('inside');
+  });
+
+  test('choosing none clears the active target without changing it', () => {
+    const draft = { ...DEFAULT_TABLE_CHROME_DRAFT, activeTarget: 'top' as const };
+    const pick = applyTableChromePick(draft, 'table.borderTarget', 'none');
+    expect(pick?.command).toEqual({ type: 'setTableBorders', scope: 'none', target: 'top' });
+    expect(pick?.nextDraft.activeTarget).toBe('top');
+  });
+
+  test('color style and width picks dispatch complete specs against the active target', () => {
+    const draft = { ...DEFAULT_TABLE_CHROME_DRAFT, activeTarget: 'outside' as const };
+    expect(
+      applyTableChromePick(draft, 'table.borderColor', { kind: 'hex', value: '336699' })?.command
+    ).toEqual({
+      type: 'setTableBorders',
+      scope: 'outside',
+      spec: { ...draft.spec, color: { kind: 'hex', value: '336699' } },
+    });
+    expect(applyTableChromePick(draft, 'table.borderStyle', 'dotted')?.command).toEqual({
+      type: 'setTableBorders',
+      scope: 'outside',
+      spec: { ...draft.spec, style: 'dotted' },
+    });
+    expect(applyTableChromePick(draft, 'table.borderWidth', 12)?.command).toEqual({
+      type: 'setTableBorders',
+      scope: 'outside',
+      spec: { ...draft.spec, size: 12 },
+    });
+  });
+
+  test('clear fill dispatches setCellFill null', () => {
+    expect(
+      applyTableChromePick(DEFAULT_TABLE_CHROME_DRAFT, 'table.cellFill', null)?.command
+    ).toEqual({
+      type: 'setCellFill',
+      color: null,
+    });
+  });
+
+  test('tableChromeToolbarState matches Editor.can via the planner seam', () => {
+    const editor = mountTable(TABLE_2X2);
+    caret(editor, paragraphByText(editor, 'A1'));
+    for (const slot of TABLE_CHROME_SLOT_IDS) {
+      const state = tableChromeToolbarState(editor, slot);
+      const probe = commandForTableChromeSlotValue(
+        slot,
+        slot === 'table.cellFill'
+          ? { kind: 'hex', value: 'FF0000' }
+          : slot === 'table.borderTarget'
+            ? 'all'
+            : slot === 'table.borderStyle'
+              ? 'single'
+              : slot === 'table.borderWidth'
+                ? 8
+                : { kind: 'hex', value: '000000' },
+        DEFAULT_TABLE_CHROME_DRAFT
+      )!;
+      const can = editor.can(probe);
+      expect(state.enabled).toBe(can.ok);
+      expect(state.disabledReason).toBe(can.ok ? null : can.reason);
+    }
+  });
+
+  test('viewing mode refusal matches can and exec verbatim for table chrome', () => {
+    const editor = mountTable(TABLE_2X2);
+    caret(editor, paragraphByText(editor, 'A1'));
+    editor.exec({ type: 'setEditingMode', mode: 'viewing' });
+    const cmd = commandForTableChromeSlotValue(
+      'table.borderTarget',
+      'all',
+      DEFAULT_TABLE_CHROME_DRAFT
+    )!;
+    const can = editor.can(cmd);
+    expect(tableChromeToolbarState(editor, 'table.borderTarget').disabledReason).toBe(can.reason);
+    expect(
+      runTableChromeCommand(editor, 'table.borderTarget', 'all', DEFAULT_TABLE_CHROME_DRAFT).result
+    ).toEqual(can);
+  });
+
+  test('runTableChromeCommand execs when enabled and returns next draft', () => {
+    const editor = mountTable(TABLE_2X2);
+    caret(editor, paragraphByText(editor, 'A1'));
+    const { result, nextDraft } = runTableChromeCommand(
+      editor,
+      'table.borderTarget',
+      'inside',
+      DEFAULT_TABLE_CHROME_DRAFT
+    );
+    expect(result.ok).toBe(true);
+    expect(nextDraft?.activeTarget).toBe('inside');
+  });
+
+  test('defaultTableLabel resolves insertion labels from en.json', () => {
+    expect(defaultTableLabel('table.insertRowBelow')).toBe('Insert row below');
+    expect(defaultTableLabel('table.insertColumnRight')).toBe('Insert column right');
   });
 });

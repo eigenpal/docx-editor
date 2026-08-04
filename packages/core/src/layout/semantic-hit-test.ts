@@ -26,6 +26,7 @@ import { baselineShiftPtOf } from './run-style.ts';
 import type { CaretGeometry, SemanticPosition } from './semantic-interaction.ts';
 import type {
   BlockFragmentRecord,
+  ContentControlBoundaryRecord,
   LayoutBox,
   LineRecord,
   ParagraphFragmentRecord,
@@ -71,6 +72,13 @@ export interface SemanticHit {
    * claim the gesture at all — needs this, and cannot recover it from the position.
    */
   readonly onGlyphs: boolean;
+  /**
+   * Innermost content-control boundary covering the hit point, or null outside every control.
+   *
+   * Resolved from layout-published boundary geometry (not DOM). Nested controls prefer the
+   * deepest {@link ContentControlBoundaryRecord.nestingDepth}.
+   */
+  readonly contentControlId: string | null;
 }
 
 export interface HitTestOptions {
@@ -264,7 +272,12 @@ export function hitTestPage(
     measurer: options.measurer,
   };
   const hit = resolveBlocks(page.fragments, point, context, null);
-  if (hit) return hit;
+  if (hit) {
+    return {
+      ...hit,
+      contentControlId: contentControlIdAtPoint(layout, page.index, point),
+    };
+  }
 
   // This page paints no reachable text — a run of vertical-merge continuations whose origin
   // is pages back, or a table fragment carrying nothing at all. A press still has to land
@@ -280,7 +293,12 @@ export function hitTestPage(
         { ...context, pageIndex: neighbour.index },
         null
       );
-      if (found) return found;
+      if (found) {
+        return {
+          ...found,
+          contentControlId: contentControlIdAtPoint(layout, neighbour.index, point),
+        };
+      }
     }
   }
   return null;
@@ -340,6 +358,36 @@ function contains(box: LayoutBox, point: HitPoint): boolean {
     point.y >= box.y &&
     point.y < box.y + box.height
   );
+}
+
+/**
+ * Innermost content control whose published boundary geometry contains `point` on `pageIndex`.
+ *
+ * Nested controls that share the same content box resolve to the deepest nesting depth.
+ */
+export function contentControlAtPoint(
+  layout: SemanticLayout,
+  pageIndex: number,
+  point: HitPoint
+): ContentControlBoundaryRecord | null {
+  const controls = layout.contentControls ?? [];
+  let best: ContentControlBoundaryRecord | null = null;
+  for (const control of controls) {
+    for (const fragment of control.fragments) {
+      if (fragment.pageIndex !== pageIndex) continue;
+      if (!contains(fragment.box, point)) continue;
+      if (!best || control.nestingDepth > best.nestingDepth) best = control;
+    }
+  }
+  return best;
+}
+
+function contentControlIdAtPoint(
+  layout: SemanticLayout,
+  pageIndex: number,
+  point: HitPoint
+): string | null {
+  return contentControlAtPoint(layout, pageIndex, point)?.id ?? null;
 }
 
 /** Distance from a point to a box, with the vertical axis weighted. Zero means inside. */
@@ -463,6 +511,8 @@ function resolveParagraph(
       resolved.withinSpan &&
       point.y >= line.box.y &&
       point.y < line.box.y + line.box.height,
+    // Filled by {@link hitTestPage} once the point is known; keep null on the inner path.
+    contentControlId: null,
   };
 }
 

@@ -347,6 +347,13 @@ export interface TableFragmentRecord {
   readonly tableId: string;
   /** 0 for the first page the table touches, 1 for its continuation, and so on. */
   readonly fragmentIndex: number;
+  /** Nesting depth: 0 for body-level tables, increasing for nested tables. */
+  readonly nestingDepth: number;
+  /**
+   * Resolved column boundary x positions in table-local points, left edge through right edge.
+   * Length is column count + 1.
+   */
+  readonly columnEdges: readonly number[];
   readonly rows: readonly TableRowFragmentRecord[];
   readonly box: LayoutBox;
 }
@@ -354,6 +361,10 @@ export interface TableFragmentRecord {
 export interface TableRowFragmentRecord {
   /** Canonical node id of the `w:tr`. */
   readonly id: string;
+  /** Pending tracked row insertion/deletion, when authored in `w:trPr`. */
+  readonly revisionKind?: 'insert' | 'delete';
+  /** Authored row ordinal within the table; repeats share the original row's index. */
+  readonly rowIndex: number;
   /**
    * True for a `w:tblHeader` row RE-EMITTED at the top of a continuation page. Painted,
    * but excluded from interaction walks so each caret stop exists exactly once.
@@ -373,6 +384,8 @@ export interface TableCellFragmentRecord {
   readonly id: string;
   /** First grid column this cell occupies. */
   readonly gridColumn: number;
+  /** Canonical `w:gridCol` node id for this cell's start column, when authored. */
+  readonly gridColumnId?: string;
   /** Grid columns spanned, already clamped at read time. */
   readonly gridSpan: number;
   /** A vertical-merge continuation paints its box but holds no blocks. */
@@ -490,6 +503,72 @@ export interface NoteAreaRecord {
  */
 export type PageNoteStream = 'footnote-drain' | 'endnote-overflow';
 
+/**
+ * Raw `w:lock/@w:val` on one control, or `unlocked` when absent / unrecognised.
+ *
+ * Effective permissions across a nesting chain are the union of every ancestor's lock on two
+ * axes (content edit / removal); see {@link ContentControlBoundaryRecord.effectiveLock}.
+ */
+export type ContentControlLock = 'unlocked' | 'sdtLocked' | 'contentLocked' | 'sdtContentLocked';
+
+/**
+ * Mapped control type for layout / chrome — same members as the shipped public
+ * `ContentControlType`. Untyped and preserved-only kinds report as `richText`.
+ */
+export type ContentControlMappedType =
+  | 'richText'
+  | 'plainText'
+  | 'checkbox'
+  | 'dropdown'
+  | 'comboBox'
+  | 'date'
+  | 'picture'
+  | 'repeatingSection';
+
+/** Where the control sits in the tree relative to its content. */
+export type ContentControlLevel = 'block' | 'inline' | 'row' | 'cell';
+
+/**
+ * One page's worth of a control's content geometry.
+ *
+ * A block control that crosses a page break publishes one fragment per page rather than a
+ * single rectangle covering the inter-page gap. Coordinates match fragment boxes (page-content
+ * space).
+ */
+export interface ContentControlGeometryFragment {
+  readonly pageIndex: number;
+  readonly box: LayoutBox;
+}
+
+/**
+ * Layout-published boundary for one content control (`w:sdt` / typed `contentControl`).
+ *
+ * Chrome, lock feedback, and hit resolution read this record — never painted DOM. The wrapper
+ * itself is not a layout box; `fragments` cover the content that already flowed in place.
+ */
+export interface ContentControlBoundaryRecord {
+  /** Canonical node id of the control wrapper — not `w:id`. */
+  readonly id: string;
+  readonly alias?: string;
+  readonly tag?: string;
+  readonly controlType: ContentControlMappedType;
+  /** This control's own `w:lock`, before ancestor union. */
+  readonly lock: ContentControlLock;
+  /**
+   * Nested lock union with every ancestor control, collapsed back to a single `ST_Lock`
+   * vocabulary value (both axes locked → `sdtContentLocked`).
+   */
+  readonly effectiveLock: ContentControlLock;
+  /** `w:showingPlcHdr` is present on the control's properties. */
+  readonly placeholder: boolean;
+  /** `w:dataBinding` is present — content edits are refused as bound. */
+  readonly bound: boolean;
+  /** 0 for a top-level control; increments through nested wrappers under the shared nesting bound. */
+  readonly nestingDepth: number;
+  readonly level: ContentControlLevel;
+  readonly fragments: readonly ContentControlGeometryFragment[];
+}
+
 export interface PageRecord {
   readonly id: string;
   readonly index: number;
@@ -522,12 +601,34 @@ export interface PageRecord {
     readonly sectionPageCount: number;
     readonly format?: string;
   };
+  /**
+   * Content-control boundaries whose geometry intersects this page.
+   *
+   * Carried on the page so a consumer that only holds a page record still sees current
+   * metadata; identity reuse of an unchanged page keeps the same array only when the
+   * control-context token matches.
+   */
+  readonly contentControls?: readonly ContentControlBoundaryRecord[];
 }
 
 export interface SemanticLayout {
   /** The store revision these records were laid out from. */
   readonly revision: number;
   readonly pages: readonly PageRecord[];
+  /**
+   * Every content-control boundary in document order, including multi-page fragment lists.
+   *
+   * Always recomputed when a document layout pass finishes, so incremental page-identity
+   * reuse cannot publish stale alias/tag/lock metadata.
+   */
+  readonly contentControls?: readonly ContentControlBoundaryRecord[];
+  /**
+   * Fingerprint of wrapper-only control metadata (alias, tag, lock, type, placeholder, binding).
+   *
+   * Folded into the layout producer / session context so a metadata-only edit invalidates
+   * reuse paths that would otherwise return previous pages by identity with stale boundaries.
+   */
+  readonly controlContextToken?: string;
 }
 
 /** Page geometry, in points. */
@@ -628,4 +729,47 @@ export function lineAtPosition(
     if (offset >= line.range.start && offset <= line.range.end) return line;
   }
   return null;
+}
+
+/** Every content-control boundary on a layout, preferring the layout-level list. */
+export function contentControlsOfLayout(
+  layout: SemanticLayout
+): readonly ContentControlBoundaryRecord[] {
+  return layout.contentControls ?? [];
+}
+
+/**
+ * Axis-aligned union of boxes, or null when the list is empty.
+ *
+ * Used when a control's content spans several fragments or spans on one page.
+ */
+export function unionLayoutBoxes(boxes: readonly LayoutBox[]): LayoutBox | null {
+  if (boxes.length === 0) return null;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const box of boxes) {
+    minX = Math.min(minX, box.x);
+    minY = Math.min(minY, box.y);
+    maxX = Math.max(maxX, box.x + box.width);
+    maxY = Math.max(maxY, box.y + box.height);
+  }
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+/** Collapse raw + ancestor locks into one `ST_Lock` vocabulary value. */
+export function effectiveContentControlLock(
+  locks: readonly ContentControlLock[]
+): ContentControlLock {
+  let content = false;
+  let removal = false;
+  for (const lock of locks) {
+    if (lock === 'contentLocked' || lock === 'sdtContentLocked') content = true;
+    if (lock === 'sdtLocked' || lock === 'sdtContentLocked') removal = true;
+  }
+  if (content && removal) return 'sdtContentLocked';
+  if (content) return 'contentLocked';
+  if (removal) return 'sdtLocked';
+  return 'unlocked';
 }

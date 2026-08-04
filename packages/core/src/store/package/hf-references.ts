@@ -18,6 +18,7 @@
 import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import type { OoxmlPart } from './ooxml-tree.ts';
+import { walkStoryBlocks } from './content-control-walk.ts';
 import { readOnOffChild } from './ooxml-shared.ts';
 import { resolveRelationship, type RelationshipRecord } from './relationships.ts';
 
@@ -27,9 +28,6 @@ const FOOTER_REL_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
 const SETTINGS_REL_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings';
-
-/** Nested `w:sdt` wrappers deeper than this stop flattening; mirrors `storyBlocks`. */
-const MAX_SDT_NESTING = 32;
 
 /** `w:headerReference w:type` vocabulary (ECMA-376 §17.10.5): default, first page, even pages. */
 export type HeaderFooterVariant = 'default' | 'first' | 'even';
@@ -110,22 +108,7 @@ function findBody(root: OoxmlNode): OoxmlElement | undefined {
  */
 function bodyBlocks(body: OoxmlElement): OoxmlElement[] {
   const blocks: OoxmlElement[] = [];
-  const collect = (children: readonly OoxmlNode[], depth: number): void => {
-    for (const child of children) {
-      if (child.kind === 'paragraph' || child.kind === 'table') {
-        blocks.push(child);
-        continue;
-      }
-      if (child.kind === 'generic' && child.localName === 'sdt' && depth < MAX_SDT_NESTING) {
-        for (const inner of child.children) {
-          if (inner.kind !== 'textValue' && inner.localName === 'sdtContent') {
-            collect(inner.children, depth + 1);
-          }
-        }
-      }
-    }
-  };
-  collect(body.children, 0);
+  walkStoryBlocks(body.children, 0, (block) => blocks.push(block));
   return blocks;
 }
 

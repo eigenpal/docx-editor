@@ -7,6 +7,10 @@ const resolve = (localName: string, attributes?: Record<string, string>) =>
   resolveRunStyle([attributes ? { localName, attributes } : { localName }]);
 
 describe('every D8 run property resolves', () => {
+  test('Word falls back to 10pt when no style level authors a size', () => {
+    expect(resolveRunStyle([]).fontSizePt).toBe(10);
+  });
+
   test('font family from ascii, falling back to hAnsi', () => {
     expect(resolve('rFonts', { ascii: 'Calibri' }).fontFamily).toBe('Calibri');
     expect(resolve('rFonts', { hAnsi: 'Georgia' }).fontFamily).toBe('Georgia');

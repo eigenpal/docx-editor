@@ -18,7 +18,7 @@ const SRC = join(import.meta.dir, '..', 'src');
 // rules pin lives across the sugar component AND the primitives it composes. The rules
 // apply to the union: the facade must be created/destroyed somewhere in this set, and
 // the forbidden symbols must appear nowhere in it.
-const editorSource = [
+const editorSourcePaths = [
   join(SRC, 'components', 'DocxEditor.tsx'),
   join(SRC, 'editor', 'context.ts'),
   join(SRC, 'editor', 'loading-snapshot.ts'),
@@ -28,8 +28,14 @@ const editorSource = [
   join(SRC, 'editor', 'useEditorState.ts'),
   join(SRC, 'editor', 'useEditorCommand.ts'),
   join(SRC, 'editor', 'useEditorEvent.ts'),
-]
-  .map((path) => readFileSync(path, 'utf8'))
+];
+const editorSources = new Map(editorSourcePaths.map((path) => [path, readFileSync(path, 'utf8')]));
+const editorSource = [...editorSources.values()].join('\n');
+const viewportPath = join(SRC, 'editor', 'DocxEditorViewport.tsx');
+const viewportSource = editorSources.get(viewportPath)!;
+const nonViewportSource = [...editorSources.entries()]
+  .filter(([path]) => path !== viewportPath)
+  .map(([, source]) => source)
   .join('\n');
 
 describe('React tree-lane wiring (phase 3)', () => {
@@ -65,9 +71,25 @@ describe('React tree-lane wiring (phase 3)', () => {
     }
   });
 
-  test('no hand-rolled listeners for input the surface owns', () => {
-    // The paginated surface owns pointer, keyboard, caret, and selection internally.
-    for (const forbidden of ['onPointerDown=', 'onPointerMove=', 'onPointerUp=', 'onKeyDown=']) {
+  test('pointer input stays surface-owned, and keyboard zoom stays viewport-scoped', () => {
+    // Pointer, caret, and selection stay in the paginated surface. This task adds one
+    // viewport-scoped keyboard hook for zoom shortcuts; it must not turn into a global listener.
+    for (const forbidden of ['onPointerDown=', 'onPointerMove=', 'onPointerUp=']) {
+      expect(editorSource).not.toContain(forbidden);
+    }
+    expect(viewportSource).toContain('zoomLevelForShortcut');
+    // CAPTURE phase, and exactly one binding: the engine keymap on the painted pages binds
+    // the same Ctrl/Cmd+`=` chord, so zoom has to claim the event before the pages see it.
+    expect(viewportSource.match(/onKeyDownCapture=/g)?.length ?? 0).toBe(1);
+    expect(viewportSource).not.toContain('onKeyDown=');
+    expect(nonViewportSource).not.toContain('onKeyDown=');
+    expect(nonViewportSource).not.toContain('onKeyDownCapture=');
+    for (const forbidden of [
+      "document.addEventListener('keydown'",
+      "document.removeEventListener('keydown'",
+      "window.addEventListener('keydown'",
+      "window.removeEventListener('keydown'",
+    ]) {
       expect(editorSource).not.toContain(forbidden);
     }
   });
