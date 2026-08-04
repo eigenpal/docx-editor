@@ -67,6 +67,34 @@ export {
 } from './direct-properties.ts';
 export { collectRevisionSites, type RevisionAddress } from './tree-op-revisions.ts';
 export {
+  commentAnchorsOfStory,
+  commentsOfPart,
+  threadStateOfPart,
+  W15_NAMESPACE_URI,
+  type CommentAnchor,
+  type CommentPosition,
+  type CommentRecord,
+  type CommentThreadState,
+} from './comment-reads.ts';
+export {
+  collectReviewItems,
+  commentBodyText,
+  commentInitials,
+  commentItemsOf,
+  firstReviewRange,
+  paragraphOrderOfPart,
+  reviewItemKey,
+  reviewItemRanges,
+  revisionItemsOf,
+  type ReviewCommentItem,
+  type ReviewItem,
+  type ReviewModelInput,
+  type ReviewPosition,
+  type ReviewRange,
+  type ReviewRevisionItem,
+  type ReviewRevisionKind,
+} from './review-reads.ts';
+export {
   SEARCH_MATCH_LIMIT,
   SEARCH_QUERY_MAX,
   findOccurrences,
