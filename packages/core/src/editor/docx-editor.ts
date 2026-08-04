@@ -1394,7 +1394,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         case 'variables':
           return {} as EditorQueryResults[K];
         default:
-          // tableContext, watermark, splitCellConfig, contentControlAt, pageContent — all
+          // tableContext, watermark, splitCellConfig, contentControlAt — all
           // nullable, all underived.
           return null as EditorQueryResults[K];
       }

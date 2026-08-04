@@ -16,11 +16,7 @@ import {
   type EditorSnapshot,
 } from '../contracts/editor';
 import { type DisplayPage } from '../contracts/geometry';
-import {
-  type InteractionFrame,
-  type InteractionFrameId,
-  type SemanticTarget,
-} from '../contracts/interaction';
+import { type InteractionFrameId, type SemanticTarget } from '../contracts/interaction';
 import { type McpContext, type McpToolDefinition } from '../contracts/mcp';
 import { type Extension, type PluginContext, type RenderedPage } from '../contracts/plugin';
 import type { DocAnchor, DocxDocument } from '../contracts/types';
@@ -38,8 +34,7 @@ const tableCmd: EditorCommand = { type: 'insertTable', rows: 3, cols: 4 };
 // Declaration-only public entries must resolve for a consumer without exposing
 // any ProseMirror-facing types.
 declare const target: SemanticTarget;
-declare const frame: InteractionFrame;
-const frameId: InteractionFrameId = frame.id;
+declare const frameId: InteractionFrameId;
 const pages: readonly DisplayPage[] = [];
 void target;
 void frameId;

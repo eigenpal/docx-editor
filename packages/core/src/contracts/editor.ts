@@ -922,7 +922,6 @@ export interface EditorQueries extends DocQueries {
   contentControlAt: { filter?: ContentControlFilter };
   isInsideToc: { pos: number };
   trackedChanges: Record<never, never>;
-  pageContent: { page: number };
 }
 
 export type EditorQuery = {
@@ -941,7 +940,6 @@ export interface EditorQueryResults extends DocQueryResults {
   contentControlAt: ContentControlSummary | null;
   isInsideToc: boolean;
   trackedChanges: readonly Revision[];
-  pageContent: DisplayPage | null;
 }
 
 export interface TableContext {
