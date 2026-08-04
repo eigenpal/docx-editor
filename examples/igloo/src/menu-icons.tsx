@@ -4,6 +4,7 @@
 // scannable file — the same reason `icon-base.tsx` is split out of the library's own
 // `Icons.tsx`. Same drawing language: 1.6px strokes on a 24-box, no fills.
 
+import type { ReactNode } from 'react';
 import { Frost } from './frost-svg';
 
 /** Cut: an ice saw. */
@@ -54,4 +55,72 @@ export const IceCarve = (
     <path d="m4 20 3-1 10-10-2-2L5 17z" />
     <path d="m15 5 2-2 4 4-2 2z" />
   </Frost>
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Menu-bar trigger icons
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Smaller than the row icons (16 vs 18) because they sit inline with a text label rather
+// than in a reserved icon column, and a glyph matching the cap height reads as part of the
+// word instead of competing with it.
+
+function Trigger({ children }: { children: ReactNode }) {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {children}
+    </svg>
+  );
+}
+
+/** Expedition (File): a flag planted on a summit. */
+export const IceExpedition = (
+  <Trigger>
+    <path d="M7 21V4l10 3-10 3" />
+    <path d="M4 21h9" />
+  </Trigger>
+);
+
+/** Sculpt (Format): a chisel edge over a shaped block. */
+export const IceSculpt = (
+  <Trigger>
+    <path d="m14 4 6 6-9 9H5v-6z" />
+    <path d="M3 21h18" />
+  </Trigger>
+);
+
+/** Deposit (Insert): something dropping into a layer. */
+export const IceDeposit = (
+  <Trigger>
+    <path d="M12 3v10M8.5 9.5 12 13l3.5-3.5" />
+    <path d="M4 17h16v4H4z" />
+  </Trigger>
+);
+
+/** Survival guide (Help): a field manual. */
+export const IceGuide = (
+  <Trigger>
+    <path d="M5 4h11a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2z" />
+    <path d="M9 8h6M9 12h6" />
+  </Trigger>
+);
+
+/** Igloo: the dome itself. */
+export const IceIgloo = (
+  <Trigger>
+    <path d="M2 18a10 10 0 0 1 20 0z" />
+    <path d="M9 18v-4a3 3 0 0 1 6 0v4" />
+    <path d="M2 18h20" />
+  </Trigger>
 );

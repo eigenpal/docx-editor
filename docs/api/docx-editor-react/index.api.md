@@ -902,6 +902,7 @@ export interface MenuProps {
     // (undocumented)
     className?: string;
     hidden?: boolean;
+    icon?: ReactNode;
     id: MenuId;
     label?: string;
     labelKey?: string;

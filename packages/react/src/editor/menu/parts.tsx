@@ -691,6 +691,17 @@ export interface MenuProps {
    * host-defined menu uses — its name is not in our catalogue and never will be.
    */
   label?: string;
+  /**
+   * Icon shown before the trigger's label.
+   *
+   * OPT-IN and unset by default, because neither Word nor Docs puts icons on a menu bar and
+   * the packaged bar should look like the thing it is imitating. It exists because every
+   * other control in this library takes one — toolbar parts, menu rows — and a product with
+   * its own visual language should not have to rebuild the trigger to add a glyph to it.
+   *
+   * Decorative: the label is the accessible name, so the icon is hidden from assistive tech.
+   */
+  icon?: ReactNode;
   className?: string;
   /** Render nothing — inside the default bar this removes the menu. */
   hidden?: boolean;
@@ -717,6 +728,7 @@ export function Menu({
   id,
   labelKey,
   label: literal,
+  icon,
   className,
   hidden,
   preset = true,
@@ -807,6 +819,11 @@ export function Menu({
           switchedByHover.current = false;
         }}
       >
+        {icon ? (
+          <span className="docx-menubar__trigger-icon" aria-hidden="true">
+            {icon}
+          </span>
+        ) : null}
         {text}
       </button>
       {open ? (

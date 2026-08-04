@@ -4551,6 +4551,17 @@ a.docx-hyperlink:focus-visible {
   transition: background-color 0.12s ease;
 }
 
+/* An OPT-IN trigger icon. The bar has none by default — Word and Docs do not — so this
+ * only ever applies where a host passed one, and it inherits the trigger's colour so the
+ * glyph tracks hover and open state with the label. */
+.ep-root .docx-menubar__trigger-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 5px;
+  vertical-align: -2px;
+  color: inherit;
+}
+
 .ep-root .docx-menubar__trigger:hover,
 .ep-root .docx-menubar__trigger[data-open] {
   background: var(--doc-bg-hover);
