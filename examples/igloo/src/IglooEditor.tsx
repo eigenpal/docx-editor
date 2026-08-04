@@ -10,11 +10,9 @@
 // page that looked like ice would be a lie about what the file contains — so the theme lives
 // in the chrome, in the sea behind, and in the berg the page rides on.
 
-import { useEffect, useState } from 'react';
-import { DocxEditor } from '@docx-editor.dev/react';
-import type { FontConfiguration } from '@docx-editor.dev/react';
-import { composeFontConfiguration } from '@docx-editor.dev/react';
-import { installDefaultFontFaces, loadDefaultFonts } from '@docx-editor.dev/fonts';
+import { useState } from 'react';
+import { DocxEditor, useDocxSource } from '@docx-editor.dev/react';
+import { defaultFonts } from '@docx-editor.dev/fonts';
 import { IceSea } from './art/IceSea';
 import { Iceberg } from './art/Iceberg';
 import { IglooContextMenu } from './IglooContextMenu';
@@ -29,43 +27,13 @@ export interface IglooEditorProps {
 }
 
 export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
-  const [document_, setDocument] = useState<Uint8Array | null>(null);
-  const [fonts, setFonts] = useState<FontConfiguration | null>(null);
   const [blizzard, setBlizzard] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // Fonts first, then bytes. Both are same-origin reads started by the page load — no
-  // remote target from the file is ever fetched.
-  useEffect(() => {
-    let live = true;
-    void (async () => {
-      try {
-        const fragment = await loadDefaultFonts();
-        // Degradations are diagnosable, not silent: a face that failed falls back to
-        // fixed-width measurement for that family only.
-        for (const failure of fragment.failures) {
-          console.warn(`[fonts] ${failure.family} (${failure.file}): ${failure.diagnostic}`);
-        }
-        // Paint-side twin: registers the substitutes under the Word family names, so painted
-        // glyphs use the metrics layout measured with.
-        void installDefaultFontFaces();
-        if (live) setFonts(composeFontConfiguration(fragment));
-      } catch {
-        // A font failure is not a document failure: the engine substitutes and paints.
-      }
-      try {
-        const response = await fetch(fixtureUrl);
-        if (!response.ok) throw new Error(`${response.status}`);
-        const bytes = new Uint8Array(await response.arrayBuffer());
-        if (live) setDocument(bytes);
-      } catch (cause) {
-        if (live) setError(cause instanceof Error ? cause.message : 'could not open the document');
-      }
-    })();
-    return () => {
-      live = false;
-    };
-  }, [fixtureUrl]);
+  // The whole boot: fetch the bytes, load Word's default faces, register them for paint,
+  // compose the configuration, and cancel both if this unmounts. `defaultFonts` is passed
+  // rather than imported by the hook, so a host bringing its own faces — or none — does not
+  // ship the default font bytes.
+  const { document: bytes, fonts, error } = useDocxSource(fixtureUrl, { fonts: defaultFonts });
 
   return (
     <div className="ep-root igloo-shell">
@@ -74,7 +42,7 @@ export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
       {blizzard ? <Blizzard /> : null}
 
       <DocxEditor.Root
-        {...(document_ ? { document: document_ } : {})}
+        {...(bytes ? { document: bytes } : {})}
         {...(fonts ? { fonts } : {})}
         author="Igloo"
       >
@@ -118,7 +86,7 @@ export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
             <DocxEditor.Loading>
               <div className="igloo-loading">
                 <IglooMark spinning />
-                <span>{error ? `Could not open the document: ${error}` : 'Carving the berg…'}</span>
+                <span>{error ? error.message : 'Carving the berg…'}</span>
               </div>
             </DocxEditor.Loading>
 

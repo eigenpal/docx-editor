@@ -300,6 +300,22 @@ second row vocabulary.
 - `ContextMenuItemProps`
 - `ContextMenuAnchor` — where the panel opened, in client coordinates.
 
+### Opening a document
+
+`useDocxSource` is a React hook, and its Vue twin is a composable — the same capability in
+the other framework's idiom, landing with the rest of the provider/hooks layer. Nothing about
+it is engine-side: it fetches bytes, resolves whatever font loader the host passed, composes
+the fragment through the SHARED `composeFontConfiguration`, and cancels both on unmount.
+
+- `useDocxSource`
+- `DocxSource` — a URL or bytes.
+- `DocxFontsSource` — a font value, promise, or loader thunk. The thunk form is why
+  `@docx-editor.dev/fonts` is not a dependency of this package: font BYTES stay out of the
+  bundle of a consumer who brings their own faces.
+- `DocxFontsInput`
+- `UseDocxSourceOptions`
+- `UseDocxSourceResult`
+
 ## Vue-only
 
 - `DocxEditorShellProps`

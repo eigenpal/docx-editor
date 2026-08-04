@@ -679,6 +679,15 @@ export interface DocxEditorViewportProps {
     style?: CSSProperties;
 }
 
+// @public
+export type DocxFontsInput = FontConfiguration | FontConfigurationFragment;
+
+// @public
+export type DocxFontsSource = DocxFontsInput | Promise<DocxFontsInput> | (() => DocxFontsInput | Promise<DocxFontsInput>);
+
+// @public
+export type DocxSource = string | URL | Uint8Array | ArrayBuffer;
+
 export { Editor }
 
 export { EditorCommand }
@@ -1439,6 +1448,24 @@ export interface UseDocumentSearchResult {
 
 // @public
 export function useDocxEditor(): DocxEditorInstance | null;
+
+// @public
+export function useDocxSource(source: DocxSource | null | undefined, options?: UseDocxSourceOptions): UseDocxSourceResult;
+
+// @public
+export interface UseDocxSourceOptions {
+    fetchOptions?: RequestInit;
+    // (undocumented)
+    fonts?: DocxFontsSource;
+}
+
+// @public
+export interface UseDocxSourceResult {
+    readonly document: Uint8Array | undefined;
+    readonly error: Error | null;
+    readonly fonts: FontConfiguration | undefined;
+    readonly isLoading: boolean;
+}
 
 // @public
 export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCommandState;

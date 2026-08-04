@@ -262,4 +262,34 @@ export async function installDefaultFontFaces(
   return installed;
 }
 
+/**
+ * The whole default-font boot, in one call: load the bytes, register the paint-side faces,
+ * and hand back the fragment for the editor's `fonts` prop.
+ *
+ * The two halves have to happen together and almost nobody wants them apart —
+ * {@link loadDefaultFonts} alone measures correctly and paints with whatever the platform
+ * substitutes; {@link installDefaultFontFaces} alone paints correctly and paginates wrong.
+ * Every host was writing the same six lines to pair them, so this is that pairing.
+ *
+ * Failures are WARNED, not thrown: a face that will not load degrades that one family to
+ * fixed-width measurement, which is a worse-looking document rather than no document. Pass
+ * `onFailure` to route them somewhere other than the console.
+ */
+export async function defaultFonts(
+  options: LoadDefaultFontsOptions & {
+    readonly onFailure?: (failure: DefaultFontLoadFailure) => void;
+  } = {}
+): Promise<DefaultFontsFragment> {
+  const { onFailure, ...loadOptions } = options;
+  const fragment = await loadDefaultFonts(loadOptions);
+  for (const failure of fragment.failures) {
+    if (onFailure) onFailure(failure);
+    else console.warn(`[fonts] ${failure.family} (${failure.file}): ${failure.diagnostic}`);
+  }
+  // Not awaited: painting can start on the platform's substitute and swap when the real
+  // face arrives, and blocking the document on it would delay first paint for nothing.
+  void installDefaultFontFaces(loadOptions);
+  return fragment;
+}
+
 export { FONT_ASSET_MANIFEST, type FontAssetManifestEntry } from './manifest.generated.ts';

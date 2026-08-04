@@ -143,6 +143,16 @@ export {
   type HyperlinkPopupState,
   type UseHyperlinkPopupResult,
 } from './editor/useHyperlinkPopup';
+// Opening a document: the fetch, the fonts and the cancellation every host was writing by
+// hand before `DocxEditor` could be given anything to render.
+export {
+  useDocxSource,
+  type DocxFontsInput,
+  type DocxFontsSource,
+  type DocxSource,
+  type UseDocxSourceOptions,
+  type UseDocxSourceResult,
+} from './editor/useDocxSource';
 export { useEditorState } from './editor/useEditorState';
 export { useEditorCommand, type EditorCommandState } from './editor/useEditorCommand';
 export { useEditorEvent } from './editor/useEditorEvent';

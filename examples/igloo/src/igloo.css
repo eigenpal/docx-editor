@@ -348,9 +348,8 @@
 /* Panels get a white rim rather than a blur. A `backdrop-filter` behind a near-opaque
  * surface does not read as frost — it reads as a bright band wherever the chrome bar or the
  * ruler happens to sit behind the panel, which is worse than no effect at all. */
-.igloo-shell .docx-toolbar__menu,
-.igloo-shell .docx-menubar__menu {
-  border-color: rgba(255, 255, 255, 0.8);
+.igloo-shell {
+  --doc-border-light: rgba(255, 255, 255, 0.8);
 }
 
 /* ── The context menu, cut from a berg ────────────────────────────────────────────── */
@@ -388,12 +387,12 @@
   margin-top: 26px;
 }
 
-.igloo-menu .docx-menubar__item:hover:not([aria-disabled='true']) {
-  background: rgba(120, 200, 232, 0.4);
-}
-
-.igloo-menu .docx-toolbar__menu-separator {
-  background: rgba(120, 180, 210, 0.5);
+/* A stronger hover and a bluer rule than the rest of the chrome, because these rows sit on
+ * ice rather than on a panel. Both through the tokens the library already reads for them —
+ * no reaching into `.docx-menubar__item` or `.docx-toolbar__menu-separator`. */
+.igloo-menu {
+  --doc-bg-hover: rgba(120, 200, 232, 0.4);
+  --doc-border: rgba(120, 180, 210, 0.5);
 }
 
 /* ── The link popover as an ice shard ─────────────────────────────────────────────── */
