@@ -219,6 +219,9 @@ describe('DocxEditor.NotesChrome', () => {
     expect(editor().getActiveScope().kind).toBe('note');
 
     await act(async () => {
+      fireEvent.click(view.getByTestId('docx-notes-options'));
+    });
+    await act(async () => {
       fireEvent.click(view.getByTestId('docx-notes-close'));
     });
     expect(editor().getActiveScope()).toEqual({ kind: 'body' });
@@ -363,6 +366,9 @@ describe('DocxEditor.NotesChrome', () => {
     expect(props!.footnote.resolved.numFmt).toBe('decimal');
 
     await enterFootnote(editor());
+    await act(async () => {
+      fireEvent.click(view.getByTestId('docx-notes-options'));
+    });
     await act(async () => {
       fireEvent.click(view.getByTestId('docx-notes-properties'));
     });

@@ -3194,83 +3194,74 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* ── Scoped story chrome ──────────────────────────────────────────────────────────────
- * Compact controls follow the active header/footer/note story. React keeps them outside
- * the engine-painted subtree, while useScopedChromeAnchor places them beside its boundary. */
-.docx-context-chip {
+ * A quiet label rail follows the active header/footer/note story. React keeps it outside
+ * the engine-painted subtree, while useScopedChromeAnchor places it at the story boundary. */
+.docx-context-bar {
   position: absolute;
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 30px;
-  padding: 4px 5px 4px 10px;
-  background: var(--doc-surface);
-  border: 1px solid var(--doc-border);
-  border-radius: 8px;
-  box-shadow: 0 4px 14px var(--doc-shadow);
-  color: var(--doc-text);
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 24px;
+  box-sizing: border-box;
+  padding: 0 2px 5px;
+  color: var(--doc-primary);
+  background: transparent;
+  border-bottom: 1px dotted var(--doc-primary);
   font-size: 12px;
   white-space: nowrap;
   pointer-events: auto;
 }
 
-.docx-context-chip__title {
+.docx-context-bar__label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.docx-context-bar__title {
   min-width: 0;
   overflow: hidden;
   font-weight: 600;
   text-overflow: ellipsis;
 }
 
-.docx-context-chip__status {
+.docx-context-bar__status {
   max-width: 150px;
   overflow: hidden;
-  padding: 2px 6px;
   color: var(--doc-text-muted);
-  background: var(--doc-bg-subtle);
-  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 400;
   text-overflow: ellipsis;
 }
 
-.docx-context-chip__button {
-  min-height: 24px;
-  padding: 3px 8px;
+.docx-context-bar__options-trigger {
+  padding: 2px 0 2px 8px;
   font: inherit;
-  color: var(--doc-text);
+  font-weight: 500;
+  color: var(--doc-primary);
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: 5px;
+  border: 0;
   cursor: pointer;
 }
 
-.docx-context-chip__button:hover:not(:disabled) {
-  background: var(--doc-bg-hover);
-  border-color: var(--doc-border);
+.docx-context-bar__options-trigger::after {
+  content: ' ▾';
+  font-size: 9px;
 }
 
-.docx-context-chip__button--primary {
-  color: var(--doc-on-primary);
-  background: var(--doc-primary);
-  border-color: var(--doc-primary);
+.docx-context-bar__options-trigger:hover {
+  text-decoration: underline;
 }
 
-.docx-context-chip__button--primary:hover:not(:disabled) {
-  background: var(--doc-primary-hover);
-  border-color: var(--doc-primary-hover);
-}
-
-.docx-context-chip__button:disabled {
-  opacity: 0.45;
-  cursor: default;
+.docx-context-bar__options-trigger:focus-visible {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 2px;
 }
 
 .docx-hf-chrome__options {
   position: relative;
-}
-
-.docx-hf-chrome__actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  flex: none;
 }
 
 .docx-hf-chrome__options-menu {
@@ -3497,11 +3488,11 @@ a.docx-hyperlink:focus-visible {
 }
 
 @media (max-width: 640px) {
-  .docx-context-chip__status {
+  .docx-context-bar__status {
     display: none;
   }
 
-  .docx-context-chip {
+  .docx-context-bar {
     max-width: calc(100vw - 16px) !important;
   }
 
@@ -3520,7 +3511,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 @media print {
-  .docx-context-chip {
+  .docx-context-bar {
     display: none !important;
   }
 }

@@ -52,6 +52,74 @@ function useCommandGate(command: EditorCommand): { enabled: boolean; reason: str
   }, [editor, command]);
 }
 
+function NoteStoryOptions(props: {
+  readonly onOpenProperties: () => void;
+  readonly onClose: () => void;
+}): ReactElement {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDocumentMouseDown = (event: globalThis.MouseEvent) => {
+      if (menuRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocumentMouseDown);
+    return () => document.removeEventListener('mousedown', onDocumentMouseDown);
+  }, [open]);
+
+  return (
+    <div ref={menuRef} className="docx-hf-chrome__options">
+      <button
+        type="button"
+        className="docx-context-bar__options-trigger"
+        data-testid="docx-notes-options"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onMouseDown={guardToolbarMousedown}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {t('headerFooter.options')}
+      </button>
+      {open ? (
+        <div
+          className="docx-hf-chrome__options-menu"
+          role="menu"
+          onMouseDown={guardToolbarMousedown}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="docx-hf-chrome__menu-item"
+            data-testid="docx-notes-properties"
+            onClick={() => {
+              props.onOpenProperties();
+              setOpen(false);
+            }}
+          >
+            {t('dialogs.footnoteProperties.title')}
+          </button>
+          <div className="docx-hf-chrome__menu-separator" role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            className="docx-hf-chrome__menu-item"
+            data-testid="docx-notes-close"
+            onClick={() => {
+              props.onClose();
+              setOpen(false);
+            }}
+          >
+            {t('common.close')}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function DocxEditorNotesChrome({
   className,
 }: DocxEditorNotesChromeProps): ReactElement | null {
@@ -80,7 +148,7 @@ export function DocxEditorNotesChrome({
     },
     [noteScope]
   );
-  const anchor = useScopedChromeAnchor(findActiveNote, 'before');
+  const anchor = useScopedChromeAnchor(findActiveNote, 'story-label');
 
   const clearPreview = useCallback(() => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
@@ -255,32 +323,18 @@ export function DocxEditorNotesChrome({
       {noteScope && parsedActive ? (
         <div
           ref={anchor.ref}
-          className="docx-context-chip docx-notes-chrome__banner"
+          className="docx-context-bar docx-notes-chrome__banner"
           role="region"
           aria-label={t('notes.chromeAriaLabel')}
           data-testid="docx-notes-banner"
           data-note-scope={noteScope.id}
           style={{ ...anchor.style, zIndex: Z_INDEX.chrome }}
         >
-          <span className="docx-context-chip__title">{regionLabel}</span>
-          <button
-            type="button"
-            className="docx-context-chip__button"
-            data-testid="docx-notes-properties"
-            onMouseDown={guardToolbarMousedown}
-            onClick={() => setPropsOpen(true)}
-          >
-            {t('headerFooter.options')}
-          </button>
-          <button
-            type="button"
-            className="docx-context-chip__button docx-context-chip__button--primary"
-            data-testid="docx-notes-close"
-            onMouseDown={guardToolbarMousedown}
-            onClick={() => editor.setActiveScope({ kind: 'body' })}
-          >
-            {t('common.close')}
-          </button>
+          <span className="docx-context-bar__title">{regionLabel}</span>
+          <NoteStoryOptions
+            onOpenProperties={() => setPropsOpen(true)}
+            onClose={() => editor.setActiveScope({ kind: 'body' })}
+          />
         </div>
       ) : null}
 

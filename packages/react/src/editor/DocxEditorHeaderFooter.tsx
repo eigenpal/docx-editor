@@ -42,66 +42,6 @@ const PAGE_FIELDS = [
   { field: 'PAGE_X_OF_Y', labelKey: 'headerFooter.insertPageXofY' },
 ] as const;
 
-function PageFieldsMenu(props: {
-  readonly onMouseDown: (event: MouseEvent) => void;
-}): ReactElement {
-  const { onMouseDown } = props;
-  const { t } = useTranslation();
-  const editor = useDocxEditor();
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const onDocMouseDown = (event: globalThis.MouseEvent) => {
-      if (menuRef.current?.contains(event.target as Node)) return;
-      setOpen(false);
-    };
-    document.addEventListener('mousedown', onDocMouseDown);
-    return () => document.removeEventListener('mousedown', onDocMouseDown);
-  }, [open]);
-
-  return (
-    <div ref={menuRef} className="docx-hf-chrome__options" onMouseDown={onMouseDown}>
-      <button
-        type="button"
-        className="docx-context-chip__button"
-        aria-expanded={open}
-        aria-haspopup="menu"
-        onClick={() => setOpen((value) => !value)}
-        onMouseDown={onMouseDown}
-      >
-        {t('headerFooter.pageNumbers')}
-      </button>
-      {open ? (
-        <div className="docx-hf-chrome__options-menu" role="menu" onMouseDown={onMouseDown}>
-          {PAGE_FIELDS.map((item) => {
-            const command: EditorCommand = { type: 'insertPageField', field: item.field };
-            const gate = editor?.can(command);
-            return (
-              <button
-                key={item.field}
-                type="button"
-                role="menuitem"
-                className="docx-hf-chrome__menu-item"
-                disabled={!gate?.ok}
-                title={gate && !gate.ok ? gate.reason : undefined}
-                onClick={() => {
-                  editor?.exec(command);
-                  setOpen(false);
-                }}
-                onMouseDown={onMouseDown}
-              >
-                {t(item.labelKey)}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 function useCommandGate(command: EditorCommand): { enabled: boolean; reason: string | null } {
   const editor = useDocxEditor();
   return useMemo(() => {
@@ -182,7 +122,7 @@ function OptionsMenu(props: {
     <div ref={menuRef} className="docx-hf-chrome__options" onMouseDown={onMouseDown}>
       <button
         type="button"
-        className="docx-context-chip__button"
+        className="docx-context-bar__options-trigger"
         aria-expanded={open}
         aria-haspopup="menu"
         onClick={() => setOpen((value) => !value)}
@@ -192,6 +132,28 @@ function OptionsMenu(props: {
       </button>
       {open ? (
         <div className="docx-hf-chrome__options-menu" role="menu" onMouseDown={onMouseDown}>
+          {PAGE_FIELDS.map((item) => {
+            const command: EditorCommand = { type: 'insertPageField', field: item.field };
+            const gate = editor?.can(command);
+            return (
+              <button
+                key={item.field}
+                type="button"
+                role="menuitem"
+                className="docx-hf-chrome__menu-item"
+                disabled={!gate?.ok}
+                title={gate && !gate.ok ? gate.reason : undefined}
+                onClick={() => {
+                  editor?.exec(command);
+                  setOpen(false);
+                }}
+                onMouseDown={onMouseDown}
+              >
+                {t(item.labelKey)}
+              </button>
+            );
+          })}
+          <div className="docx-hf-chrome__menu-separator" role="separator" />
           <label className="docx-hf-chrome__menu-row">
             <input
               type="checkbox"
@@ -284,6 +246,20 @@ function OptionsMenu(props: {
               ? t('headerFooter.removeHeader')
               : t('headerFooter.removeFooter')}
           </button>
+          <div className="docx-hf-chrome__menu-separator" role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            className="docx-hf-chrome__menu-item"
+            data-testid="docx-hf-close"
+            onClick={() => {
+              editor?.exec({ type: 'exitHeaderFooter' });
+              setOpen(false);
+            }}
+            onMouseDown={onMouseDown}
+          >
+            {t('common.close')}
+          </button>
         </div>
       ) : null}
     </div>
@@ -291,8 +267,8 @@ function OptionsMenu(props: {
 }
 
 /**
- * Thin overlay while a header or footer scope is open: region label, inheritance warning,
- * page-number insert slots, options menu, and close. Mount beside `DocxEditor.Content`.
+ * Thin overlay while a header or footer scope is open: region label and contextual options.
+ * Mount beside `DocxEditor.Content`.
  *
  * @public
  */
@@ -300,65 +276,42 @@ export function DocxEditorHeaderFooterChrome({
   className,
 }: DocxEditorHeaderFooterChromeProps): ReactElement | null {
   const { t } = useTranslation();
-  const editor = useDocxEditor();
   const state = useHeaderFooterState();
   const findActiveFurniture = useCallback(
     (viewport: HTMLElement) => viewport.querySelector<HTMLElement>('[data-docx-hf-active]'),
     []
   );
-  const anchor = useScopedChromeAnchor(
-    findActiveFurniture,
-    state?.editing === 'footer' ? 'before' : 'after'
-  );
+  const anchor = useScopedChromeAnchor(findActiveFurniture, 'story-label');
 
   const onChromeMouseDown = guardToolbarMousedown;
-
-  const close = useCallback(() => {
-    editor?.exec({ type: 'exitHeaderFooter' });
-  }, [editor]);
 
   if (!state?.editing) return null;
 
   const regionKey = regionLabelKey(state.editing, state.variant);
-  const title = t('headerFooter.regionSection', {
-    region: t(regionKey),
-    section: state.sectionIndex + 1,
-  });
 
   return (
     <div
       ref={anchor.ref}
-      className={`docx-context-chip docx-hf-chrome${className ? ` ${className}` : ''}`}
+      className={`docx-context-bar docx-hf-chrome${className ? ` ${className}` : ''}`}
       role="region"
       aria-label={t('headerFooter.chromeAriaLabel')}
       data-testid="docx-hf-chrome"
       onMouseDown={onChromeMouseDown}
       style={{ ...anchor.style, zIndex: Z_INDEX.hfInlineEditor } as CSSProperties}
     >
-      <span className="docx-context-chip__title">{title}</span>
-      {state.inherited ? (
-        <span
-          className="docx-context-chip__status"
-          data-testid="docx-hf-inherited"
-          title={t('headerFooter.sameAsPreviousHint')}
-        >
-          {t('headerFooter.sameAsPrevious')}
-        </span>
-      ) : null}
-      <div className="docx-hf-chrome__actions">
-        <PageFieldsMenu onMouseDown={onChromeMouseDown} />
-        <OptionsMenu state={state} onMouseDown={onChromeMouseDown} />
-        <button
-          type="button"
-          className="docx-context-chip__button docx-context-chip__button--primary"
-          data-testid="docx-hf-close"
-          aria-label={t('headerFooter.closeEditing', { label: t(regionKey) })}
-          onClick={close}
-          onMouseDown={onChromeMouseDown}
-        >
-          {t('common.close')}
-        </button>
+      <div className="docx-context-bar__label">
+        <span className="docx-context-bar__title">{t(regionKey)}</span>
+        {state.inherited ? (
+          <span
+            className="docx-context-bar__status"
+            data-testid="docx-hf-inherited"
+            title={t('headerFooter.sameAsPreviousHint')}
+          >
+            {t('headerFooter.sameAsPrevious')}
+          </span>
+        ) : null}
       </div>
+      <OptionsMenu state={state} onMouseDown={onChromeMouseDown} />
     </div>
   );
 }

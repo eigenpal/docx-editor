@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useState } from 'react';
 import type { CSSProperties, RefCallback } from 'react';
 
-type AnchorPlacement = 'before' | 'after';
+type AnchorPlacement = 'before' | 'after' | 'story-label';
 
 export interface ScopedChromeAnchor {
   readonly ref: RefCallback<HTMLDivElement>;
@@ -57,18 +57,26 @@ export function useScopedChromeAnchor(
         ? anchorRect.left - viewportRect.left + viewport.scrollLeft
         : anchorRect.left;
       const documentTop = attachedInsideViewport
-        ? (placement === 'after' ? anchorRect.bottom + 6 : anchorRect.top - chromeHeight - 6) -
+        ? (placement === 'after' ? anchorRect.bottom + 6 : anchorRect.top - chromeHeight - 4) -
           viewportRect.top +
           viewport.scrollTop
         : placement === 'after'
           ? anchorRect.bottom + 6
-          : anchorRect.top - chromeHeight - 6;
+          : anchorRect.top - chromeHeight - 4;
+      const viewportEdge = attachedInsideViewport ? viewport.scrollLeft + 8 : 8;
 
       setStyle({
         position: attachedInsideViewport ? 'absolute' : 'fixed',
-        left: Math.max(attachedInsideViewport ? viewport.scrollLeft + 8 : 8, documentLeft + 8),
-        top: Math.max(8, documentTop),
-        maxWidth: Math.max(240, Math.min(anchorRect.width - 16, viewport.clientWidth - 16)),
+        left:
+          placement === 'story-label'
+            ? Math.max(viewportEdge, documentLeft)
+            : Math.max(viewportEdge, documentLeft + 8),
+        top: Math.max(attachedInsideViewport ? viewport.scrollTop + 8 : 8, documentTop),
+        ...(placement === 'story-label'
+          ? { width: Math.max(240, Math.min(anchorRect.width, viewport.clientWidth - 16)) }
+          : {
+              maxWidth: Math.max(240, Math.min(anchorRect.width - 16, viewport.clientWidth - 16)),
+            }),
         visibility: 'visible',
       });
     };
