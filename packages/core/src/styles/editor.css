@@ -2634,10 +2634,19 @@ a.docx-hyperlink:focus-visible {
   flex: none;
 }
 
-.docx-toolbar__style-trigger > span:first-child {
+/* The truncating label needs a line box TALLER than the glyphs.
+ *
+ * The toolbar sets `13px/1`, so an `overflow: hidden` box inherits a line box exactly as
+ * tall as the font size — and a descender sits below that, so "Heading 1" lost the tail of
+ * its g. The trigger is a 32px flex row centring this span, so the extra leading costs no
+ * layout; it just stops the clip. Same reason on the font-family trigger, where it went
+ * unnoticed only because "Arial" and "Calibri" have no descenders. */
+.docx-toolbar__style-trigger > span:first-child,
+.docx-toolbar__font-family-trigger > span:first-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.4;
 }
 
 .docx-toolbar__font-family-trigger,

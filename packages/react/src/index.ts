@@ -270,11 +270,6 @@ export type {
   EditorScope,
   PageSetup,
 } from '@docx-editor.dev/core-contract/contracts/editor';
-export type {
-  DisplayPage,
-  DisplayItem,
-  DocPoint,
-} from '@docx-editor.dev/core-contract/contracts/geometry';
 export type { DocxDocument } from '@docx-editor.dev/core-contract/contracts/types';
 export { DocxEditorShell } from './components/DocxEditor/DocxEditorShell';
 export { Toolbar, ToolbarButton, ToolbarGroup, type ToolbarProps } from './components/Toolbar';

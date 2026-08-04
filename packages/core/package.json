@@ -20,11 +20,6 @@
       "import": "./src/contracts/editor.ts",
       "default": "./src/contracts/editor.ts"
     },
-    "./contracts/geometry": {
-      "types": "./src/contracts/geometry.ts",
-      "import": "./src/contracts/geometry.ts",
-      "default": "./src/contracts/geometry.ts"
-    },
     "./contracts/interaction": {
       "types": "./src/contracts/interaction.ts",
       "import": "./src/contracts/interaction.ts",

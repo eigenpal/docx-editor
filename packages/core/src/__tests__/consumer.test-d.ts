@@ -15,7 +15,6 @@ import {
   type EditorHost,
   type EditorSnapshot,
 } from '../contracts/editor';
-import { type DisplayPage } from '../contracts/geometry';
 import { type InteractionFrameId, type SemanticTarget } from '../contracts/interaction';
 import { type McpContext, type McpToolDefinition } from '../contracts/mcp';
 import { type Extension, type PluginContext, type RenderedPage } from '../contracts/plugin';
@@ -35,7 +34,6 @@ const tableCmd: EditorCommand = { type: 'insertTable', rows: 3, cols: 4 };
 // any ProseMirror-facing types.
 declare const target: SemanticTarget;
 declare const frameId: InteractionFrameId;
-const pages: readonly DisplayPage[] = [];
 void target;
 void frameId;
 declare const extension: Extension;
@@ -43,7 +41,6 @@ declare const tool: McpToolDefinition;
 declare const pluginContext: PluginContext;
 const rendered: RenderedPage | null = pluginContext.getRenderedPage(1);
 const handlerResult: Promise<unknown> = tool.handler({}, {} as McpContext);
-void pages;
 void extension;
 void rendered;
 void handlerResult;

@@ -19,9 +19,6 @@ import { commandForSlot } from '@docx-editor.dev/core-contract/editor';
 import { composeFontConfiguration } from '@docx-editor.dev/core-contract/editor';
 import { createFontSource } from '@docx-editor.dev/core-contract/editor';
 import { CSSProperties } from 'react';
-import { DisplayItem } from '@docx-editor.dev/core-contract/contracts/geometry';
-import { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
-import { DocPoint } from '@docx-editor.dev/core-contract/contracts/geometry';
 import { DocumentChange } from '@docx-editor.dev/core-contract/contracts/editor';
 import { DocumentHandle } from '@docx-editor.dev/core-contract/contracts/editor';
 import { DocumentSource } from '@docx-editor.dev/core-contract/contracts/editor';
@@ -172,12 +169,6 @@ export const ContextMenuSelectAll: ((input: ContextMenuCommandProps) => react.JS
 };
 
 export { createFontSource }
-
-export { DisplayItem }
-
-export { DisplayPage }
-
-export { DocPoint }
 
 // @public (undocumented)
 export function DocumentName(input: DocumentNameProps): react__default.JSX.Element;
