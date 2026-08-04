@@ -585,6 +585,20 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       return command.footnote !== undefined || command.endnote !== undefined
         ? { supported: true, mutating: true }
         : { supported: false, reason: 'setNoteProperties requires footnote and/or endnote fields' };
+    // Selection is not document state, so neither selecting everything nor copying out of
+    // the selection mutates. `copy` stays available in a read-only document — reading a
+    // contract you may not edit and copying a clause out of it is the whole point of a
+    // viewer. Whether there is anything to copy is a question about the SELECTION, which
+    // this function cannot see; `gateCommand` asks it against the surface.
+    case 'selectAll':
+    case 'copy':
+      return { supported: true, mutating: false };
+    case 'cut':
+      return { supported: true, mutating: true };
+    case 'paste':
+      return typeof command.text === 'string'
+        ? { supported: true, mutating: true }
+        : { supported: false, code: 'invalidArgs', reason: 'paste requires text' };
     case 'setSelection':
       // Shape gate only: whether an anchor's paraId exists (and its `search` phrase is
       // unique) is a property of the DOCUMENT, checked at exec — the same split as

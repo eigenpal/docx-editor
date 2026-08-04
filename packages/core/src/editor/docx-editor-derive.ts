@@ -251,6 +251,16 @@ export function gateCommand(
       },
     };
   }
+  // Cut and Copy are gated on the SELECTION, for the reason directly above: a context-menu
+  // row that stays live over a collapsed caret writes nothing to the clipboard and looks
+  // broken. `selectedText()` is the same read `exec` will make, so the gate and the effect
+  // cannot disagree about whether there was anything there.
+  if ((command.type === 'copy' || command.type === 'cut') && surface.selectedText() === '') {
+    return {
+      ok: false,
+      refusal: { ok: false, code: 'unsupported', reason: 'nothing is selected' },
+    };
+  }
   // The style picker's probe promises "a well-formed pick would be honoured": on a
   // document that defines no paragraph styles, no pick can be — every styleId is refused
   // at exec — so the control must grey out rather than open an empty, dead listbox.

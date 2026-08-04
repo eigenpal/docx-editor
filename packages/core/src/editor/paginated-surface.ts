@@ -1354,6 +1354,12 @@ export function mountPaginatedSurface(
       );
     },
 
+    // The newline-aware sibling of `type`, declared below in this same scope. On the
+    // contract because text arriving from OUTSIDE the editor — a paste from the clipboard,
+    // whether the browser's own event delivered it or a menu row did — is not a lane the
+    // input handlers should own privately.
+    insertPlainText: (text: string) => insertPlainText(text),
+
     deleteBackward() {
       const plan = deleteSelectionPlan();
       if (plan.ops.length > 0) {

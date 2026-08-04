@@ -902,6 +902,52 @@ export interface EditorCommands
   undo: Record<never, never>;
   redo: Record<never, never>;
   setSelection: { anchor: EditorPosition } | { range: EditorSelection };
+
+  // ── Selection and clipboard ─────────────────────────────────────────────────────────
+  //
+  // None of these is new capability: the surface has selected the whole document, read its
+  // selected text and deleted a selection since it was written, and the browser's own
+  // `copy`/`cut`/`paste` events on the pages layer already service the keyboard. They are
+  // here so that a caller NAMING the operation — a right-click menu, a host's own button —
+  // gets one honest `can()` for it, instead of composing it from `selectedText` +
+  // `deleteText` and re-deriving enablement itself, differently, every time.
+
+  /** Select the whole body. Word's Ctrl+A, as a command rather than only a keystroke. */
+  selectAll: Record<never, never>;
+
+  /**
+   * Put the selected text on the clipboard. Reports `changed: false` — the document is
+   * untouched.
+   *
+   * Refused at a collapsed selection: there is nothing to copy, and a live Copy row over an
+   * empty selection silently no-ops.
+   */
+  copy: Record<never, never>;
+
+  /**
+   * Put the selected text on the clipboard and delete it. Refused at a collapsed selection,
+   * and — unlike `copy` — in a read-only document.
+   *
+   * The clipboard write is dispatched but NOT awaited, and its failure does not fail the
+   * command: the deletion has already happened by then, and reporting an edit as failed
+   * because a clipboard write lost a race would be a lie about the document.
+   */
+  cut: Record<never, never>;
+
+  /**
+   * Insert `text` at the selection, replacing it, with newlines becoming real paragraph
+   * boundaries.
+   *
+   * TEXT COMES IN. `exec` is synchronous and reading the clipboard is not — it prompts in
+   * Chrome and is refused outright by Firefox and Safari — so an engine-owned read would
+   * have to either turn every command's result into a promise or lie about this one's. The
+   * caller reads the clipboard inside the click or keystroke that asked for the paste,
+   * which is where the permission gesture belongs, and hands the engine a string.
+   *
+   * Plain text only. There is no rich lane and no `pastePlain` twin, because a second
+   * command would be a second name for exactly this behavior.
+   */
+  paste: { text: string };
 }
 
 export type EditorCommand = {
