@@ -669,6 +669,17 @@ describe('the review pane', () => {
     expect(editor.snapshot().reviewPaneOpen).toBe(false);
   });
 
+  test('reopens when suggesting commits another tracked change', () => {
+    const editor = mount({ body: '<w:p><w:r><w:t>plain text</w:t></w:r></w:p>' });
+    editor.setEditingMode('suggesting');
+    editor.exec({ type: 'toggleReviewPane' });
+    expect(editor.isReviewPaneOpen()).toBe(false);
+
+    editor.surface!.type('X');
+
+    expect(editor.isReviewPaneOpen()).toBe(true);
+  });
+
   test('the queue counter moves on a toggle, so a subscriber re-renders', () => {
     const editor = mount({ body: INSERTION });
     const before = editor.getReviewRevision();

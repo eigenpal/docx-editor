@@ -4237,7 +4237,7 @@ a.docx-hyperlink:focus-visible {
   border-radius: 8px;
   background: var(--doc-surface, #fff);
   box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
-  color: var(--doc-accent, #1a73e8);
+  color: var(--doc-primary, #1a73e8);
   cursor: pointer;
   pointer-events: auto;
 }
@@ -4248,14 +4248,14 @@ a.docx-hyperlink:focus-visible {
    through its right, split down the middle. Mixed into the surface colour it stays one
    solid shape wherever it sits. */
 .docx-review__add:hover {
-  background: color-mix(in srgb, var(--doc-accent, #1a73e8) 8%, var(--doc-surface, #fff));
-  border-color: color-mix(in srgb, var(--doc-accent, #1a73e8) 35%, var(--doc-border, #e3e5e8));
+  background: color-mix(in srgb, var(--doc-primary, #1a73e8) 8%, var(--doc-surface, #fff));
+  border-color: color-mix(in srgb, var(--doc-primary, #1a73e8) 35%, var(--doc-border, #e3e5e8));
   box-shadow: 0 2px 6px rgb(0 0 0 / 14%);
 }
 
 /* A card being composed reads as unfinished until it is committed. */
 .docx-review__card[data-draft] {
-  border-color: var(--doc-accent, #1a73e8);
+  border-color: var(--doc-primary, #1a73e8);
 }
 
 .docx-review__markers {
@@ -4820,7 +4820,7 @@ a.docx-hyperlink:focus-visible {
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: var(--doc-accent, #1a73e8);
+  color: var(--doc-primary, #1a73e8);
   font: inherit;
   font-weight: 500;
   cursor: pointer;
@@ -4834,7 +4834,7 @@ a.docx-hyperlink:focus-visible {
   padding: 6px 14px;
   border: 0;
   border-radius: 999px;
-  background: var(--doc-accent, #1a73e8);
+  background: var(--doc-primary, #1a73e8);
   color: #fff;
   font: inherit;
   font-weight: 500;
