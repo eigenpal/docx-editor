@@ -391,6 +391,51 @@ describe('surface table interaction furniture', () => {
     expect(furniture.style.pointerEvents).toBe('none');
   });
 
+  test('insert row control appears immediately on pointer move', () => {
+    const mounted = mount(TABLE);
+    const layout = mounted.surface.layout();
+    const table = tableOnPage(layout);
+    const rowMidY = table.rows[0]!.box.y + table.rows[0]!.box.height / 2;
+    mounted.pages.dispatchEvent(
+      pointerAtPageContent(mounted.surface, mounted.pages, 0, table.box.x + 4, rowMidY)
+    );
+    expect(mounted.furniture.querySelector('.docx-table-insert-row')).not.toBeNull();
+  });
+
+  test('insert column control appears immediately on pointer move', () => {
+    const mounted = mount(TABLE);
+    const layout = mounted.surface.layout();
+    const table = tableOnPage(layout);
+    const cell = table.rows[0]!.cells[0]!;
+    const left = table.columnEdges[cell.gridColumn] ?? 0;
+    const right = table.columnEdges[cell.gridColumn + 1] ?? table.box.width;
+    const colX = table.box.x + (left + right) / 2;
+    const colY = table.box.y - 6;
+    mounted.pages.dispatchEvent(
+      pointerAtPageContent(mounted.surface, mounted.pages, 0, colX, colY)
+    );
+    expect(mounted.furniture.querySelector('.docx-table-insert-column')).not.toBeNull();
+  });
+
+  test('retargeting row insert updates button identity synchronously', () => {
+    const mounted = mount(TABLE);
+    const layout = mounted.surface.layout();
+    const table = tableOnPage(layout);
+    const row0Y = table.rows[0]!.box.y + table.rows[0]!.box.height / 2;
+    const row1Y = table.rows[1]!.box.y + table.rows[1]!.box.height / 2;
+    mounted.pages.dispatchEvent(
+      pointerAtPageContent(mounted.surface, mounted.pages, 0, table.box.x + 4, row0Y)
+    );
+    const control = mounted.furniture.querySelector<HTMLButtonElement>('.docx-table-insert-row');
+    expect(control).not.toBeNull();
+    expect(control!.dataset.rowId).toBe(table.rows[0]!.id);
+    mounted.pages.dispatchEvent(
+      pointerAtPageContent(mounted.surface, mounted.pages, 0, table.box.x + 4, row1Y)
+    );
+    expect(mounted.furniture.querySelectorAll('.docx-table-insert-row').length).toBe(1);
+    expect(control!.dataset.rowId).toBe(table.rows[1]!.id);
+  });
+
   test('hover reveals divider handle after delay', async () => {
     const { pages, furniture, surface } = mount(TABLE);
     const layout = surface.layout();

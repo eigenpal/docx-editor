@@ -742,6 +742,15 @@ export function createSurfaceTableInteraction(
     }
     if (hoverHit && tableInteractionHitIdentity(hit) === tableInteractionHitIdentity(hoverHit))
       return;
+    if (hit.kind === 'insertRow' || hit.kind === 'insertColumn') {
+      if (revealTimer) {
+        clearTimeout(revealTimer);
+        revealTimer = null;
+      }
+      hoverHit = hit;
+      paintHover(hit, input);
+      return;
+    }
     if (revealTimer) clearTimeout(revealTimer);
     revealTimer = setTimeout(() => {
       revealTimer = null;

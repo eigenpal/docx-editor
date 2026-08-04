@@ -149,9 +149,15 @@ async function hoverEdge(
   );
   expect(point).not.toBeNull();
   await page.mouse.move(point!.x, point!.y);
-  await page.waitForTimeout(220);
-  await page.mouse.move(point!.x, point!.y);
-  await page.waitForTimeout(40);
+  if (kind === 'insert-row' || kind === 'insert-column') {
+    const selector =
+      kind === 'insert-row' ? '.docx-table-insert-row' : '.docx-table-insert-column';
+    await expect(page.locator(selector).first()).toBeVisible();
+  } else {
+    await page.waitForTimeout(220);
+    await page.mouse.move(point!.x, point!.y);
+    await page.waitForTimeout(40);
+  }
   return point!;
 }
 
