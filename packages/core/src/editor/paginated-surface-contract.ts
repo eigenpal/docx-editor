@@ -192,6 +192,8 @@ export interface PaginatedSurface {
   readonly session: TreeDocxSession;
   layout(): SemanticLayout;
   state(): PaginatedSurfaceState;
+  /** One-based page at the caret, or at the centre of the mounted viewport. */
+  currentPage(mode?: 'viewport' | 'caret'): number;
   type(text: string): void;
   /**
    * Insert text whose newlines are PARAGRAPH BOUNDARIES, in one commit.

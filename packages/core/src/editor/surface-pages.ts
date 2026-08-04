@@ -236,6 +236,46 @@ export function surfaceScroller(container: HTMLElement): HTMLElement | null {
   return container.closest('.docx-editor__scroll-container') as HTMLElement | null;
 }
 
+function viewportInLayout(
+  container: HTMLElement,
+  scroller: HTMLElement,
+  scale: number
+): { top: number; height: number } {
+  const containerRect = container.getBoundingClientRect();
+  const scrollerRect = scroller.getBoundingClientRect();
+  // Real browsers move the container rect as the ancestor scrolls. happy-dom leaves both
+  // rects at zero, so retain the offset fallback for DOM-free geometry tests.
+  const topPx =
+    scroller.scrollTop !== 0 && containerRect.top === 0 && scrollerRect.top === 0
+      ? scroller.scrollTop - container.offsetTop
+      : scrollerRect.top + scroller.clientTop - containerRect.top;
+  return { top: topPx / scale, height: scroller.clientHeight / scale };
+}
+
+/**
+ * The one-based page under the viewport centre, derived from semantic page records.
+ *
+ * `null` means there is no measurable viewport, so a caller can fall back to the caret
+ * rather than inventing a scroll position. A centre in a page gap belongs to the following
+ * page, matching the page a reader is scrolling toward.
+ */
+export function viewportPage(
+  container: HTMLElement,
+  layout: SemanticLayout,
+  scale: number
+): number | null {
+  const scroller = surfaceScroller(container);
+  if (!scroller || scroller.clientHeight <= 0 || layout.pages.length === 0 || scale <= 0) {
+    return null;
+  }
+  const viewport = viewportInLayout(container, scroller, scale);
+  const centerY = viewport.top + viewport.height / 2;
+  for (const page of layout.pages) {
+    if (centerY < page.box.y + page.box.height) return page.index + 1;
+  }
+  return layout.pages.length;
+}
+
 export function visiblePageSet(
   container: HTMLElement,
   layout: SemanticLayout,
@@ -244,6 +284,7 @@ export function visiblePageSet(
 ): ReadonlySet<number> | undefined {
   const scroller = surfaceScroller(container);
   if (!scroller || scroller.clientHeight === 0) return undefined;
+  const viewport = viewportInLayout(container, scroller, scale);
   const pinned: number[] = [];
   for (const position of [selection.anchor, selection.head]) {
     const caret = caretAt(layout, position);
@@ -251,12 +292,9 @@ export function visiblePageSet(
   }
   return pagesToMaterialize({
     layout,
-    // Surface coordinates back to layout units: the records are in points and the scroll
-    // offset is in CSS pixels.
-    viewport: {
-      top: (scroller.scrollTop - container.offsetTop) / scale,
-      height: scroller.clientHeight / scale,
-    },
+    // Surface coordinates back to layout units: the records are in points and the viewport
+    // may be nested below positioned wrappers inside the scroller.
+    viewport,
     overscanPages: 1,
     pinnedPages: pinned,
   });

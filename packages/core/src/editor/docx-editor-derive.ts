@@ -20,7 +20,7 @@ import { classifyCommand } from './docx-editor-support.ts';
 
 /** Whether a command may run, and the engine's own refusal when it may not. */
 export type CommandGate = { ok: true } | { ok: false; refusal: Exclude<ExecResult, { ok: true }> };
-import { caretAt, tableContextAt } from '@docx-editor.dev/core-contract/layout';
+import { tableContextAt } from '@docx-editor.dev/core-contract/layout';
 import { paragraphTextOf } from '@docx-editor.dev/core-contract/store';
 import { allParagraphs } from '../binding/tree-binding.ts';
 import { paragraphStyleId } from '../binding/document-outline.ts';
@@ -165,12 +165,11 @@ export function totalPages(surface: PaginatedSurface | null): number {
   return surface ? surface.state().pageCount : 0;
 }
 
-export function currentPage(surface: PaginatedSurface | null): number {
-  // Caret page from the layout records. There is no viewport tracking on this facade yet,
-  // so `'viewport'` honestly answers with the caret's page as the nearest derivable value.
-  if (!surface) return 1;
-  const caret = caretAt(surface.layout(), surface.state().selection.head);
-  return caret ? caret.pageIndex + 1 : 1;
+export function currentPage(
+  surface: PaginatedSurface | null,
+  mode: 'viewport' | 'caret' = 'caret'
+): number {
+  return surface ? surface.currentPage(mode) : 1;
 }
 
 export function gateCommand(

@@ -1490,7 +1490,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     snapshot: () => snapshotNow(),
 
     getTotalPages: () => totalPagesOf(surface),
-    getCurrentPage: () => currentPageOf(surface),
+    getCurrentPage: (mode) => currentPageOf(surface, mode),
 
     // Page NUMBERS are 1-based in this contract; the layout indexes from 0.
     scrollToPage: (pageNumber: number) =>

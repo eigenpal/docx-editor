@@ -34,6 +34,7 @@ function docx(body: string): Uint8Array {
 }
 
 const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+const pageBreak = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
 
 function mount(body: string, options: { mode?: 'edit' | 'view' } = {}): DocxEditorInstance {
   const container = document.createElement('div');
@@ -84,6 +85,55 @@ describe('getPageGeometry', () => {
   test('is empty with no document rather than inventing a page', () => {
     const editor = createDocxEditor({});
     expect(editor.getPageGeometry()).toEqual([]);
+  });
+});
+
+describe('getCurrentPage', () => {
+  test('viewport mode reports the page at the viewport center while caret mode stays put', () => {
+    const scroller = document.createElement('div');
+    scroller.className = 'docx-editor__scroll-container';
+    const positionedWrapper = document.createElement('div');
+    const container = document.createElement('div');
+    positionedWrapper.append(container);
+    scroller.append(positionedWrapper);
+    document.body.append(scroller);
+    Object.defineProperty(scroller, 'clientHeight', { value: 300, configurable: true });
+    Object.defineProperty(container, 'offsetTop', { value: 40, configurable: true });
+    const surfaceTop = 1_000;
+    scroller.getBoundingClientRect = () =>
+      ({ top: 20, left: 0, right: 800, bottom: 320, width: 800, height: 300 }) as DOMRect;
+    container.getBoundingClientRect = () =>
+      ({
+        top: 20 + surfaceTop - scroller.scrollTop,
+        left: 0,
+        right: 800,
+        bottom: 20 + surfaceTop - scroller.scrollTop + 3_000,
+        width: 800,
+        height: 3_000,
+      }) as DOMRect;
+
+    const editor = createDocxEditor({
+      container,
+      document: docx(p('first') + pageBreak + p('second') + pageBreak + p('third')),
+      zoom: 1.5,
+    });
+    if (!editor.surface) throw new Error('surface failed to mount');
+    const second = editor.surface.layout().pages[1]!;
+    const scale = 1.5 * (96 / 72);
+    scroller.scrollTop =
+      surfaceTop + (second.box.y + second.box.height / 2) * scale - scroller.clientHeight / 2;
+
+    expect(editor.getCurrentPage('viewport')).toBe(2);
+    expect(editor.getCurrentPage('caret')).toBe(1);
+
+    editor.destroy();
+    scroller.remove();
+  });
+
+  test('viewport mode falls back to the caret page without a measurable scroller', () => {
+    const editor = mount(p('first') + pageBreak + p('second'));
+    expect(editor.getCurrentPage('viewport')).toBe(editor.getCurrentPage('caret'));
+    editor.destroy();
   });
 });
 

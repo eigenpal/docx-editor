@@ -28,6 +28,7 @@ import { DocxEditor } from '../src/components/DocxEditor.tsx';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
+import { DocxEditorPageNumber } from '../src/editor/DocxEditorPageNumber.tsx';
 import { useDocxEditor } from '../src/editor/context.ts';
 import { useEditorState } from '../src/editor/useEditorState.ts';
 import { useEditorCommand, type EditorCommandState } from '../src/editor/useEditorCommand.ts';
@@ -260,6 +261,7 @@ describe('the sugar <DocxEditor> (namespace + ref parity)', () => {
     expect(DocxEditor.Root).toBe(DocxEditorRoot);
     expect(DocxEditor.Viewport).toBe(DocxEditorViewport);
     expect(DocxEditor.Content).toBe(DocxEditorContent);
+    expect(DocxEditor.PageNumber).toBe(DocxEditorPageNumber);
   });
 
   test('the target provider-first usage works through the namespace', async () => {

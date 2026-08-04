@@ -1896,6 +1896,21 @@ a.docx-hyperlink:focus-visible {
   pointer-events: none;
 }
 
+/* Public React page-number primitive. It is an overlay sibling of the viewport inside the
+ * positioned workspace, so scrolling the document never moves the readout itself. */
+.docx-editor__page-number {
+  position: absolute;
+  right: 24px;
+  top: 50%;
+  z-index: 1000;
+  opacity: 0;
+  transform: translateY(-50%);
+}
+
+.docx-editor__page-number[data-visible='true'] {
+  opacity: 1;
+}
+
 /* Display-only rulers (interactive-paginated-editing M4.4). No margin or tab
  * markers and no drag handles: this change owns no section-geometry contract,
  * so a draggable handle would be a control that silently does nothing. */
