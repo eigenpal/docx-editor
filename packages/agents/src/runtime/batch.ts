@@ -58,6 +58,8 @@ const HOST_CODES: Readonly<Record<AutomationErrorCode, DocxEditorErrorCode>> = O
   disposed: 'RuntimeDisposed',
   'transaction-refused': 'GeneralException',
   'unknown-operation': 'NotSupported',
+  'unsupported-content': 'InvalidArgument',
+  'conflicting-operations': 'ConflictingChanges',
   'document-unavailable': 'DocumentUnavailable',
 });
 

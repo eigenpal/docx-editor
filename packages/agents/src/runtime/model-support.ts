@@ -12,7 +12,14 @@
 export { ClientObject } from './client-object.ts';
 export { ClientResult, clientResult } from './client-result.ts';
 export { DocxEditorError, fail, type DocxEditorErrorCode } from './errors.ts';
-export { hydratedApplied, hydratedHandle, hydratedHandles, hydratedText } from './hydrate.ts';
+export {
+  hydratedApplied,
+  hydratedHandle,
+  hydratedHandles,
+  hydratedSpan,
+  hydratedSpans,
+  hydratedText,
+} from './hydrate.ts';
 export { internalsOf, type ContextInternals, type RootHandles } from './internals.ts';
 export { ObjectPath, type ObjectPathState } from './object-path.ts';
 export {
@@ -24,4 +31,9 @@ export {
 export type { ActionSort, QueuedAction } from './queue.ts';
 export { RequestContext } from './request-context.ts';
 export { selectedProperties } from './selection.ts';
-export type { AutomationHandle } from '@docx-editor.dev/core-contract/automation';
+export type {
+  AutomationHandle,
+  AutomationSearchOptions,
+  AutomationSpan,
+  AutomationSpanRef,
+} from '@docx-editor.dev/core-contract/automation';

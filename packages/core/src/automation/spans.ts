@@ -80,13 +80,20 @@ export function resolveEndpoint(
   return ok({ ...paragraph.value, offset });
 }
 
-/** A point: an endpoint, or one end of a story. */
+/** A point: an endpoint, or one edge of a paragraph or a story. */
 export function resolvePoint(
   point: AutomationPoint,
   handles: AutomationHandleTable,
   reads: AutomationDocumentReads,
 ): Resolution<ResolvedPoint> {
-  if ('paragraph' in point) return resolveEndpoint(point, handles, reads);
+  if ('paragraph' in point) {
+    if (!('at' in point)) return resolveEndpoint(point, handles, reads);
+    const paragraph = resolveParagraphHandle(point.paragraph, handles, reads);
+    if (!paragraph.ok) return paragraph;
+    if (point.at === 'start') return paragraph;
+    const length = (reads.paragraphText(paragraph.value.paragraphId) ?? '').length;
+    return ok({ ...paragraph.value, offset: length });
+  }
   const body = checkBody(point.body, handles);
   if (!body.ok) return body;
   const ids = reads.bodyParagraphIds;
@@ -118,7 +125,7 @@ function wholeStory(reads: AutomationDocumentReads): ResolvedSpan {
   };
 }
 
-/** A span: two points, or a whole story. */
+/** A span: two points, a whole paragraph, or a whole story. */
 export function resolveSpanRef(
   span: AutomationSpanRef,
   handles: AutomationHandleTable,
@@ -128,6 +135,12 @@ export function resolveSpanRef(
     const body = checkBody(span.body, handles);
     if (!body.ok) return body;
     return ok(wholeStory(reads));
+  }
+  if ('paragraph' in span) {
+    const paragraph = resolveParagraphHandle(span.paragraph, handles, reads);
+    if (!paragraph.ok) return paragraph;
+    const length = (reads.paragraphText(paragraph.value.paragraphId) ?? '').length;
+    return ok({ start: paragraph.value, end: { ...paragraph.value, offset: length } });
   }
   const start = resolvePoint(span.start, handles, reads);
   if (!start.ok) return start;

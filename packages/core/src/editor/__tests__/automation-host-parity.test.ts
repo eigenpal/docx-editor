@@ -358,9 +358,9 @@ describe('the whole operation vocabulary answers identically in both hosts', () 
           span: { start: { paragraph: first, offset: 0 }, end: { paragraph: second, offset: 0 } },
         },
         { op: 'getParagraphId', paragraph: first },
-        { op: 'search', body, text: 'e' },
-        { op: 'search', body, text: 'Region', options: { matchCase: true, matchWholeWord: true } },
-        { op: 'search', body, text: 'nothing here' },
+        { op: 'search', scope: { body }, text: 'e' },
+        { op: 'search', scope: { body }, text: 'Region', options: { matchCase: true, matchWholeWord: true } },
+        { op: 'search', scope: { body }, text: 'nothing here' },
       ],
     });
     return { ok: response.ok, changed: response.changed, results: response.results };

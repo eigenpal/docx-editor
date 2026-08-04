@@ -22,22 +22,31 @@ import type { AutomationEndpoint, AutomationHandle } from './protocol.ts';
 /**
  * A position in a story.
  *
- * Either exact, or one of a story's two edges. `{ body, at: 'end' }` is the position after the
- * last character of the last paragraph, which is what "append" means.
+ * Either exact, or an EDGE of something the host can measure: a story, or one paragraph.
+ * `{ body, at: 'end' }` is the position after the last character of the last paragraph, which is
+ * what "append to the document" means; `{ paragraph, at: 'end' }` is the same for one paragraph.
+ *
+ * The edges are not sugar. A caller has no way to know a paragraph's length without reading it
+ * first, so "insert at the end of this paragraph" would otherwise cost a round trip and then
+ * carry an offset that a concurrent edit could have invalidated. The host knows the length at
+ * the moment it plans, so the edge is both shorter and correct.
  */
 export type AutomationPoint =
   | AutomationEndpoint
+  | { readonly paragraph: AutomationHandle; readonly at: 'start' | 'end' }
   | { readonly body: AutomationHandle; readonly at: 'start' | 'end' };
 
 /**
  * A stretch of a story to read, replace, or select.
  *
- * `{ body }` is the whole story — every paragraph, first offset to last. Spelling it as its own
- * shape rather than making the caller find the edges keeps "replace the body" a single
- * operation, which is what makes it one transaction.
+ * `{ body }` is the whole story — every paragraph, first offset to last — and `{ paragraph }` is
+ * the whole of one paragraph. Spelling both as their own shapes rather than making the caller
+ * find the edges keeps "replace the body" and "clear this paragraph" single operations, which is
+ * what makes each of them one transaction.
  */
 export type AutomationSpanRef =
   | { readonly start: AutomationPoint; readonly end: AutomationPoint }
+  | { readonly paragraph: AutomationHandle }
   | { readonly body: AutomationHandle };
 
 /**
@@ -106,10 +115,16 @@ export type AutomationOperation =
    * it, and it is the same value a file written by Word carries.
    */
   | { readonly op: 'getParagraphId'; readonly paragraph: AutomationHandle }
-  /** Every occurrence of `text` in a story, in reading order, as spans. */
+  /**
+   * Every occurrence of `text` inside a scope, in reading order, as spans.
+   *
+   * The scope is a span, so `{ body }` searches a whole story and a pair of endpoints searches
+   * part of one. There is no "search the whole document" — a document is several stories, and
+   * answering one story's matches to that request would be a claim about the others.
+   */
   | {
       readonly op: 'search';
-      readonly body: AutomationHandle;
+      readonly scope: AutomationSpanRef;
       readonly text: string;
       readonly options?: AutomationSearchOptions;
     }

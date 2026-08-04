@@ -281,7 +281,7 @@ describe('searching a story', () => {
     const host = open(docx(`${p('one two one')}${p('one')}`));
     const { body } = roots(host);
     const list = paragraphsOf(host, body);
-    const response = host.execute({ operations: [{ op: 'search', body, text: 'one' }] });
+    const response = host.execute({ operations: [{ op: 'search', scope: { body }, text: 'one' }] });
     const spans = spansAt(response, 0);
     expect(spans).toEqual([
       { start: { paragraph: list[0]!, offset: 0 }, end: { paragraph: list[0]!, offset: 3 } },
@@ -293,19 +293,19 @@ describe('searching a story', () => {
   test('finds text inside a table cell, because those paragraphs are in the story', () => {
     const host = open(docx(`${p('head')}${table(row(cell(p('needle'))))}`));
     const { body } = roots(host);
-    const response = host.execute({ operations: [{ op: 'search', body, text: 'needle' }] });
+    const response = host.execute({ operations: [{ op: 'search', scope: { body }, text: 'needle' }] });
     expect(spansAt(response, 0)).toHaveLength(1);
   });
 
   test('is case-insensitive by default and case-sensitive when asked', () => {
     const host = open(docx(p('Alpha alpha')));
     const { body } = roots(host);
-    expect(spansAt(host.execute({ operations: [{ op: 'search', body, text: 'alpha' }] }), 0))
+    expect(spansAt(host.execute({ operations: [{ op: 'search', scope: { body }, text: 'alpha' }] }), 0))
       .toHaveLength(2);
     expect(
       spansAt(
         host.execute({
-          operations: [{ op: 'search', body, text: 'alpha', options: { matchCase: true } }],
+          operations: [{ op: 'search', scope: { body }, text: 'alpha', options: { matchCase: true } }],
         }),
         0
       )
@@ -318,7 +318,7 @@ describe('searching a story', () => {
     expect(
       spansAt(
         host.execute({
-          operations: [{ op: 'search', body, text: 'cat', options: { matchWholeWord: true } }],
+          operations: [{ op: 'search', scope: { body }, text: 'cat', options: { matchWholeWord: true } }],
         }),
         0
       )
@@ -328,14 +328,14 @@ describe('searching a story', () => {
   test('counts repeated text without overlapping', () => {
     const host = open(docx(p('aaaa')));
     const { body } = roots(host);
-    expect(spansAt(host.execute({ operations: [{ op: 'search', body, text: 'aa' }] }), 0))
+    expect(spansAt(host.execute({ operations: [{ op: 'search', scope: { body }, text: 'aa' }] }), 0))
       .toHaveLength(2);
   });
 
   test('stops at the result cap instead of allocating one entry per character', () => {
     const host = open(docx(p('x'.repeat(5000))));
     const { body } = roots(host);
-    const spans = spansAt(host.execute({ operations: [{ op: 'search', body, text: 'x' }] }), 0);
+    const spans = spansAt(host.execute({ operations: [{ op: 'search', scope: { body }, text: 'x' }] }), 0);
     expect(spans.length).toBeLessThanOrEqual(2000);
     expect(spans.length).toBe(2000);
   });
@@ -344,7 +344,7 @@ describe('searching a story', () => {
     const host = open(docx(p('alpha')));
     const { body } = roots(host);
     const response = host.execute({
-      operations: [{ op: 'search', body, text: 'x'.repeat(257) }],
+      operations: [{ op: 'search', scope: { body }, text: 'x'.repeat(257) }],
     });
     expect(refusal(response)).toBe('unsupported-content');
   });
@@ -352,7 +352,7 @@ describe('searching a story', () => {
   test('refuses empty search text rather than answering that it is everywhere', () => {
     const host = open(docx(p('alpha')));
     const { body } = roots(host);
-    const response = host.execute({ operations: [{ op: 'search', body, text: '' }] });
+    const response = host.execute({ operations: [{ op: 'search', scope: { body }, text: '' }] });
     expect(refusal(response)).toBe('unsupported-content');
   });
 
@@ -361,16 +361,67 @@ describe('searching a story', () => {
     const { body } = roots(host);
     for (const option of ['matchWildcards', 'ignorePunct', 'ignoreSpace'] as const) {
       const response = host.execute({
-        operations: [{ op: 'search', body, text: 'alpha', options: { [option]: true } }],
+        operations: [{ op: 'search', scope: { body }, text: 'alpha', options: { [option]: true } }],
       });
       expect(refusal(response)).toBe('unsupported-capability');
     }
   });
 
+  test('a search scoped to a span only looks inside it', () => {
+    const host = open(docx(`${p('one two')}${p('one three')}`));
+    const { body } = roots(host);
+    const list = paragraphsOf(host, body);
+    const response = host.execute({
+      operations: [{ op: 'search', scope: { paragraph: list[1]! }, text: 'one' }],
+    });
+    expect(spansAt(response, 0)).toEqual([
+      { start: { paragraph: list[1]!, offset: 0 }, end: { paragraph: list[1]!, offset: 3 } },
+    ]);
+  });
+
+  test('a scoped search will not report a match that only partly overlaps the scope', () => {
+    const host = open(docx(p('alphabet')));
+    const { body } = roots(host);
+    const [paragraph] = paragraphsOf(host, body);
+    const scope = {
+      start: { paragraph: paragraph!, offset: 0 },
+      end: { paragraph: paragraph!, offset: 4 },
+    };
+    // 'alph' is in scope; 'alpha' runs one character past its end, so it is not a match here.
+    expect(
+      spansAt(host.execute({ operations: [{ op: 'search', scope, text: 'alph' }] }), 0)
+    ).toHaveLength(1);
+    expect(
+      spansAt(host.execute({ operations: [{ op: 'search', scope, text: 'alpha' }] }), 0)
+    ).toHaveLength(0);
+  });
+
+  test('a scoped search still reads word boundaries from the whole paragraph', () => {
+    const host = open(docx(p('category')));
+    const { body } = roots(host);
+    const [paragraph] = paragraphsOf(host, body);
+    // The scope ends exactly where 'cat' does, but the paragraph carries on with 'egory', so
+    // 'cat' is not a whole word — a scope is a window on the text, not a truncation of it.
+    const response = host.execute({
+      operations: [
+        {
+          op: 'search',
+          scope: {
+            start: { paragraph: paragraph!, offset: 0 },
+            end: { paragraph: paragraph!, offset: 3 },
+          },
+          text: 'cat',
+          options: { matchWholeWord: true },
+        },
+      ],
+    });
+    expect(spansAt(response, 0)).toHaveLength(0);
+  });
+
   test('a span a search returned reads back as the text that was searched for', () => {
     const host = open(docx(p('find me here')));
     const { body } = roots(host);
-    const found = spansAt(host.execute({ operations: [{ op: 'search', body, text: 'me' }] }), 0);
+    const found = spansAt(host.execute({ operations: [{ op: 'search', scope: { body }, text: 'me' }] }), 0);
     const response = host.execute({ operations: [{ op: 'getSpanText', span: found[0]! }] });
     expect(textAt(response, 0)).toBe('me');
   });

@@ -31,8 +31,26 @@ export type DocxEditorErrorCode =
   | 'ObjectInUse'
   /** An argument or load option this API does not accept. */
   | 'InvalidArgument'
+  /** The collection has no such item — `getFirst()` on an empty one. */
+  | 'ItemNotFound'
   /** The host cannot do this at all — a capability it reports false. */
   | 'NotSupported'
+  /**
+   * The member exists in this API's shape but this version does not implement it.
+   *
+   * Distinct from `NotSupported`, which is about the HOST: a headless document really has no
+   * caret, and no version of this library will give it one. This code means the library, not the
+   * document, is the limit — so a consumer knows to check the release notes rather than the host.
+   */
+  | 'NotImplemented'
+  /**
+   * Two calls in one batch make claims on the same paragraph that cannot both hold.
+   *
+   * A batch is one transaction planned against the state at its start, which stops being
+   * unambiguous once two calls restructure the same paragraph. Split them across two `sync()`
+   * calls and each gets exactly what it asked for.
+   */
+  | 'ConflictingChanges'
   /** The request context's `run` has finished, so it can no longer be used. */
   | 'InvalidRequestContext'
   /** The runtime was disposed. Every later operation fails this way. */
@@ -62,7 +80,12 @@ const MESSAGES: Readonly<Record<DocxEditorErrorCode, string>> = Object.freeze({
     'the object still belongs to a run that has not finished. Await that run before passing the ' +
     'object to another one.',
   InvalidArgument: 'the argument is not one this API accepts.',
+  ItemNotFound: 'the collection has no such item.',
   NotSupported: 'this document host does not support that operation.',
+  NotImplemented: 'this version does not implement that yet.',
+  ConflictingChanges:
+    'two changes in this batch affect the same paragraph. Split them across two ' +
+    'context.sync() calls.',
   InvalidRequestContext: 'the request context has finished. Start another run to continue.',
   RuntimeDisposed: 'the runtime has been disposed.',
   StaleDocument: 'the document changed after this context read it, so nothing was applied.',

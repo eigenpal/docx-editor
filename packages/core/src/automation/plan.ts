@@ -59,6 +59,7 @@ import {
   spanValue,
   type ResolvedPoint,
   type ResolvedRange,
+  type ResolvedSpan,
 } from './spans.ts';
 
 /**
@@ -227,7 +228,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
 
   const spanOf = (range: ResolvedRange): AutomationSpan => spanValue(range, handles);
 
-  const searchStory = (
+  const searchScope = (
+    scope: ResolvedSpan,
     text: string,
     options: AutomationSearchOptions | undefined,
   ): PlannedOperation => {
@@ -246,14 +248,21 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     let budget = Math.min(requested ?? SEARCH_MATCH_LIMIT, SEARCH_MATCH_LIMIT);
 
     const spans: AutomationSpan[] = [];
+    // An empty story has nothing to scan. Answering no matches is the truth about it, and it is
+    // not the same answer as a refusal — there is no error in searching a document with no text.
+    const ids = spanParagraphIds(scope, reads);
+    const last = ids.length - 1;
     // Paragraph by paragraph, in reading order. A match never crosses a paragraph mark, which
     // is what Word's Find does too: a paragraph break is a boundary, not a character to match.
-    for (const paragraphId of reads.bodyParagraphIds) {
+    for (const [position, paragraphId] of ids.entries()) {
       if (budget <= 0) break;
       const paragraphText = reads.paragraphText(paragraphId) ?? '';
       const found = findOccurrences(paragraphText, text, budget, {
         matchCase: options?.matchCase === true,
         wholeWord: options?.matchWholeWord === true,
+        // The scope clips only its own two ends; everything between them is whole.
+        ...(position === 0 && scope ? { from: scope.start.offset } : {}),
+        ...(position === last && scope ? { to: scope.end.offset } : {}),
       });
       for (const occurrence of found.matches) {
         const paragraph = handles.paragraph(paragraphId);
@@ -582,9 +591,9 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       }
 
       case 'search': {
-        if (!handles.resolve(operation.body, 'body'))
-          return refuse('invalid-handle', 'that handle does not name a body', 'body');
-        return searchStory(operation.text, operation.options);
+        const scope = resolveSpanRef(operation.scope, handles, reads);
+        if (!scope.ok) return refuse(scope.code, 'that is not a scope to search', scope.detail);
+        return searchScope(scope.value, operation.text, operation.options);
       }
 
       case 'insertText': {

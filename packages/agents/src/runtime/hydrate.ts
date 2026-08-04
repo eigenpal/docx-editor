@@ -6,7 +6,11 @@
 // later, somewhere that has nothing to do with the cause; `GeneralException` here fails at the
 // exchange that actually disagreed.
 
-import type { AutomationHandle, AutomationValue } from '@docx-editor.dev/core-contract/automation';
+import type {
+  AutomationHandle,
+  AutomationSpan,
+  AutomationValue,
+} from '@docx-editor.dev/core-contract/automation';
 import { DocxEditorError } from './errors.ts';
 
 function wrongShape(target: string): DocxEditorError {
@@ -29,6 +33,19 @@ export function hydratedHandles(
 ): readonly AutomationHandle[] {
   if (value.kind !== 'handles') throw wrongShape(target);
   return value.handles;
+}
+
+export function hydratedSpan(value: AutomationValue, target: string): AutomationSpan {
+  if (value.kind !== 'span') throw wrongShape(target);
+  return value.span;
+}
+
+export function hydratedSpans(
+  value: AutomationValue,
+  target: string
+): readonly AutomationSpan[] {
+  if (value.kind !== 'spans') throw wrongShape(target);
+  return value.spans;
 }
 
 /** A command's answer. There is nothing in it: the effect is the batch having committed. */

@@ -33,6 +33,17 @@ const WORD_CHAR = /[\p{L}\p{N}_]/u;
 export interface TextMatchOptions {
   readonly matchCase?: boolean;
   readonly wholeWord?: boolean;
+  /**
+   * Report only matches lying wholly inside `[from, to)`.
+   *
+   * A WINDOW ON THE TEXT, not a slice of it: the whole-word test still reads the characters on
+   * either side of the window, so scanning the first three characters of `category` for `cat`
+   * finds nothing when whole words were asked for. Slicing first would answer a match, because
+   * the `e` that disqualifies it would have been cut off — the window is where a caller is
+   * looking, not what the paragraph says.
+   */
+  readonly from?: number;
+  readonly to?: number;
 }
 
 /** One occurrence, as UTF-16 offsets into the text that was scanned. */
@@ -104,10 +115,14 @@ export function findOccurrences(
   const needle = matchCase ? query : foldCase(query);
   const haystack = matchCase ? text : foldCase(text);
 
+  const from = Math.max(0, options.from ?? 0);
+  const to = Math.min(text.length, options.to ?? text.length);
+
   const matches: TextOccurrence[] = [];
-  let cursor = haystack.indexOf(needle);
+  let cursor = haystack.indexOf(needle, from);
   while (cursor >= 0) {
     const end = cursor + needle.length;
+    if (end > to) return { matches, truncated: false };
     if (!wholeWord || isWholeWord(text, cursor, end)) {
       if (matches.length >= limit) return { matches, truncated: true };
       matches.push({ start: cursor, length: needle.length });
