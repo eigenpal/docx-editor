@@ -39,6 +39,14 @@ function build(overrides: Record<string, string | Uint8Array> = {}): Uint8Array 
   return zipSync(entries);
 }
 
+function utf16Le(value: string): Uint8Array {
+  const bytes = new Uint8Array(2 + value.length * 2);
+  bytes.set([0xff, 0xfe]);
+  const view = new DataView(bytes.buffer);
+  for (let i = 0; i < value.length; i += 1) view.setUint16(2 + i * 2, value.charCodeAt(i), true);
+  return bytes;
+}
+
 describe('bounded OPC loading into canonical trees (task 4.4)', () => {
   test('loads parts as canonical trees and resolves the main document', () => {
     const result = readOoxmlPackage(build());
@@ -50,6 +58,25 @@ describe('bounded OPC loading into canonical trees (task 4.4)', () => {
     expect(JSON.stringify(main)).toContain('hello');
     // Relationship parts are XML and load as trees too; the root rels owner is `/`.
     expect([...(result.package.relationships.get('/') ?? [])].map((r) => r.id)).toEqual(['rId1']);
+  });
+
+  test('loads a UTF-16LE XML part with a byte-order mark', () => {
+    const types = CONTENT_TYPES.replace(
+      '</Types>',
+      '<Override PartName="/customXml/item1.xml" ContentType="application/xml"/></Types>'
+    );
+    const customXml = utf16Le(
+      '<?xml version="1.0" encoding="utf-16"?><properties><documentid>LEGAL!1</documentid></properties>'
+    );
+
+    const result = readOoxmlPackage(
+      build({ '[Content_Types].xml': types, 'customXml/item1.xml': customXml })
+    );
+
+    if (!result.ok)
+      throw new Error(`unexpected rejection: ${result.reason}: ${result.detail ?? ''}`);
+    expect(result.package.parts.get('/customXml/item1.xml')?.root.localName).toBe('properties');
+    expect(JSON.stringify(result.package.parts.get('/customXml/item1.xml'))).toContain('LEGAL!1');
   });
 
   test('a declared non-ASCII part name resolves through the canonical content-type key', () => {
