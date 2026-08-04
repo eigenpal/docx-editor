@@ -19,15 +19,31 @@ export interface ContextMenuAnchor {
 }
 
 export interface ContextMenuContextValue {
-  /** Close the panel and return focus to the document. */
-  readonly close: () => void;
+  /**
+   * Close the panel. `restoreFocus` on the paths where the user is FINISHING with the menu
+   * (selecting a row); not on the ones where they are already going elsewhere.
+   */
+  readonly close: (restoreFocus?: boolean) => void;
   /** Non-null exactly while the panel is open. */
   readonly anchor: ContextMenuAnchor | null;
+  /**
+   * The browser's reason for refusing a clipboard READ, once one has actually been refused.
+   *
+   * Lives on the ROOT rather than in the Paste row because selecting that row closes the
+   * panel, which unmounts the row — state kept there was written and discarded in the same
+   * batch, so the row it was meant to disable came back enabled on the next right-click and
+   * the documented behaviour never once happened. Firefox and Safari refuse every read, so
+   * "ask once, then stop offering it" has to outlive one open.
+   */
+  readonly clipboardRefusal: string | null;
+  readonly reportClipboardRefusal: (reason: string) => void;
 }
 
 export const ContextMenuContext = createContext<ContextMenuContextValue>({
   close: () => {},
   anchor: null,
+  clipboardRefusal: null,
+  reportClipboardRefusal: () => {},
 });
 
 export function useContextMenuContext(): ContextMenuContextValue {

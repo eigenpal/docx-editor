@@ -12,8 +12,9 @@
 // the menu context, which the root resolves once — host override, else the packaged
 // default — so the row itself holds no policy.
 
-import { Children, Fragment, isValidElement, useCallback, useId, useRef, useState } from 'react';
-import type { ReactElement, ReactNode } from 'react';
+import { isValidElement, useCallback, useId, useRef, useState } from 'react';
+import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
+import type { ReactNode } from 'react';
 import {
   CHROME_MENUS,
   chromeProbeForSlot,
@@ -629,11 +630,8 @@ export function MenuEntry({ entry }: { entry: ChromeMenuEntry }) {
  */
 function rowKeyOfChild(child: ReactNode): string | null {
   if (!isValidElement(child)) return null;
-  if (child.type === Fragment) {
-    const inner = Children.toArray((child.props as { children?: ReactNode }).children);
-    const keys = inner.map(rowKeyOfChild).filter((key): key is string => key !== null);
-    return keys.length === 1 ? keys[0]! : null;
-  }
+  const unwrapped = unwrapFragment(child, rowKeyOfChild);
+  if (unwrapped !== null) return unwrapped;
   const type = child.type as { docxSlot?: unknown; docxMenuRow?: unknown };
   if (typeof type !== 'function' && typeof type !== 'object') return null;
   if (typeof type.docxSlot === 'string') return type.docxSlot;
@@ -668,40 +666,14 @@ function mergePanel(
   children: ReactNode,
   preset: boolean
 ): ReactNode {
-  if (!preset) return children;
-  const kids = Children.toArray(children);
-  const overrides = new Map<string, ReactElement>();
-  const appended: ReactNode[] = [];
-  for (const child of kids) {
-    const key = rowKeyOfChild(child);
-    // Last override for a row wins, matching how later props win in a spread.
-    if (key) overrides.set(key, child as ReactElement);
-    else appended.push(child);
-  }
-  const base = (entries ?? []).map((entry, index) => {
-    const key = rowKeyOfEntry(entry, index);
-    const override = overrides.get(key);
-    // A `hidden` override renders null where it stands, removing the row.
-    if (override) return <Fragment key={key}>{override}</Fragment>;
-    return <MenuEntry key={key} entry={entry} />;
+  return mergeArrangement({
+    entries: entries ?? [],
+    children,
+    preset,
+    keyOfEntry: rowKeyOfEntry,
+    keyOfChild: rowKeyOfChild,
+    renderEntry: (entry) => <MenuEntry entry={entry} />,
   });
-  // Row children that matched no registry row are the host's OWN rows (or a packaged row
-  // in a menu the registry leaves empty, like Help): keep them, in the order given, after
-  // the default set. Dropping them would swallow a row silently. Taken from the overrides
-  // MAP rather than from `kids`, so two children naming the same row collapse to the last
-  // one — which is what makes `<Menu.ReportIssue hidden/>` remove the packaged row rather
-  // than render a second, invisible copy beside it.
-  const registryKeys = new Set((entries ?? []).map(rowKeyOfEntry));
-  const unmatched = [...overrides.entries()]
-    .filter(([key]) => !registryKeys.has(key))
-    .map(([key, element]) => <Fragment key={key}>{element}</Fragment>);
-  return (
-    <>
-      {base}
-      {unmatched}
-      {appended}
-    </>
-  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

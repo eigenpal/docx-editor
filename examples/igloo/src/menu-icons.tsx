@@ -4,26 +4,7 @@
 // scannable file — the same reason `icon-base.tsx` is split out of the library's own
 // `Icons.tsx`. Same drawing language: 1.6px strokes on a 24-box, no fills.
 
-import type { ReactNode } from 'react';
-
-function Frost({ children }: { children: ReactNode }) {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      {children}
-    </svg>
-  );
-}
+import { Frost } from './frost-svg';
 
 /** Cut: an ice saw. */
 export const IceCut = (

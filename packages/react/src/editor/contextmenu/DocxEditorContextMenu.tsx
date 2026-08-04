@@ -16,8 +16,6 @@
 // one thing fixed positioning cannot do is the one thing that never happens.
 
 import {
-  Children,
-  Fragment,
   isValidElement,
   useCallback,
   useEffect,
@@ -27,6 +25,7 @@ import {
   useState,
 } from 'react';
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
+import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import { useDocxEditor } from '../context';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import { MenuContext, type MenuContextValue } from '../menu/menu-context';
@@ -103,66 +102,39 @@ const DEFAULT_SET: readonly DefaultEntry[] = [
 /**
  * The row id a child drives, or null when it is the host's own content.
  *
- * Reads the `docxRow` static on the packaged parts and the `slot` PROP on the generic
- * slot row — the same two shapes the menu bar recognizes, and for the same reason: an
- * unrecognized child is APPENDED, so missing one renders that row twice.
+ * Reads EVERY marker a packaged row can carry — `docxRow` on this module's parts,
+ * `docxMenuRow` plus the `slot` prop on the menu bar's generic `MenuItem`, and `docxSlot`
+ * on its pinned parts — and unwraps a single-child Fragment, because `Children.toArray`
+ * does not flatten Fragment elements and a host mapping over its overrides will wrap them.
+ * Missing any of those shapes is not a no-op: an unrecognized child APPENDS, so the row it
+ * meant to replace renders twice.
  */
 function rowOfChild(child: ReactNode): string | null {
   if (!isValidElement(child)) return null;
-  const type = child.type as { docxRow?: string } | undefined;
-  if (typeof type?.docxRow === 'string') return type.docxRow;
-  if (type === MenuItem) {
-    const slot = (child.props as { slot?: string }).slot;
-    return typeof slot === 'string' ? slot : null;
+  const unwrapped = unwrapFragment(child, rowOfChild);
+  if (unwrapped !== null) return unwrapped;
+  const type = child.type as { docxRow?: unknown; docxMenuRow?: unknown; docxSlot?: unknown };
+  if (typeof type !== 'function' && typeof type !== 'object') return null;
+  if (typeof type.docxRow === 'string') return type.docxRow;
+  if (typeof type.docxSlot === 'string') return type.docxSlot;
+  if (type.docxMenuRow === true) {
+    const slot = (child.props as { slot?: unknown }).slot;
+    if (typeof slot === 'string') return slot;
   }
   return null;
 }
 
-/** Merge host children into the packaged set: override in place, append the rest. */
-function mergeRows(children: ReactNode, preset: boolean): ReactNode {
-  if (!preset) return children;
-  const overrides = new Map<string, ReactElement>();
-  const appended: ReactNode[] = [];
-  for (const child of Children.toArray(children)) {
-    const id = rowOfChild(child);
-    // Last override for a row wins, matching how later props win in a spread.
-    if (id) overrides.set(id, child as ReactElement);
-    else appended.push(child);
-  }
-  const base = DEFAULT_SET.map((entry) => {
-    const override = overrides.get(entry.id);
-    // A `hidden` override renders null where it stands, removing the row.
-    if (override) return <Fragment key={entry.id}>{override}</Fragment>;
-    return entry.kind === 'separator' ? (
-      <MenuSeparator key={entry.id} />
-    ) : (
-      <Fragment key={entry.id}>{entry.render()}</Fragment>
-    );
-  });
-  const known = new Set(DEFAULT_SET.map((entry) => entry.id));
-  const unmatched = [...overrides.entries()]
-    .filter(([id]) => !known.has(id))
-    .map(([id, element]) => <Fragment key={id}>{element}</Fragment>);
-  return (
-    <>
-      {base}
-      {unmatched}
-      {appended}
-    </>
-  );
-}
-
 /**
- * The painted surface this menu belongs to, found from the part's own position in the tree.
+ * The element this menu listens on: the SCROLL CONTAINER, not the painted surface.
  *
- * Walks up to the scroll container — the class the engine itself keys on — and takes the
- * paint target inside it, so a page with two editors gives each menu its own surface. Falls
- * back to the scroll container, which is where clicks in the margin around the page land.
+ * The class is the one the engine itself keys on, so a page with two editors gives each
+ * menu its own scroller. Listening here rather than on `.docx-paginated-surface` is
+ * deliberate: the surface is centred inside the scroller with a margin, and a right-click in
+ * the grey gutter beside the page originates on the scroller and never reaches a listener
+ * further in. Word opens its menu there too.
  */
-function surfaceFor(anchor: HTMLElement | null): HTMLElement | null {
-  const scroller = anchor?.closest<HTMLElement>('.docx-editor__scroll-container');
-  if (!scroller) return null;
-  return scroller.querySelector<HTMLElement>('.docx-paginated-surface') ?? scroller;
+function scrollerFor(anchor: HTMLElement | null): HTMLElement | null {
+  return anchor?.closest<HTMLElement>('.docx-editor__scroll-container') ?? null;
 }
 
 /**
@@ -191,33 +163,50 @@ export function DocxEditorContextMenu({
   // effect, before the browser paints.
   const [placement, setPlacement] = useState<ContextMenuAnchor | null>(null);
 
-  const close = useCallback(() => {
-    setAnchor(null);
-    setPlacement(null);
-    // Focus goes back to the document: every close path unmounts the panel, so without this
-    // the element holding focus disappears and focus falls to <body>.
-    editor?.focus();
-  }, [editor]);
+  /**
+   * Close the panel.
+   *
+   * `restoreFocus` only on the paths where the user is FINISHING with the menu — Escape, or
+   * selecting a row. On the others (a press elsewhere, a scroll, the window losing focus)
+   * the user is already going somewhere else, and calling `editor.focus()` would drag focus
+   * back into the document and can scroll the caret into view under them.
+   */
+  const close = useCallback(
+    (restoreFocus = false) => {
+      setAnchor(null);
+      setPlacement(null);
+      if (restoreFocus) editor?.focus();
+    },
+    [editor]
+  );
 
-  // Open on the surface's own contextmenu event.
+  // Open on the scroller's contextmenu event.
   useEffect(() => {
     if (disabled) return undefined;
-    const surface = surfaceFor(hostRef.current);
-    if (!surface) return undefined;
+    const scroller = scrollerFor(hostRef.current);
+    if (!scroller) return undefined;
     const onContextMenu = (event: MouseEvent) => {
       event.preventDefault();
       // A keyboard-triggered menu (Shift+F10, the Menu key) reports no pointer position.
       // Anchoring at the window's origin would drop the panel in the corner, so it opens at
-      // the surface instead — the best position available without a caret rect.
+      // the scroller's top-left instead — the best position available without a caret rect,
+      // and clamped like any other anchor below (a scrolled document puts that rect's `top`
+      // far off the top of the window).
       const keyboard = event.button === -1 || (event.clientX === 0 && event.clientY === 0);
-      const box = surface.getBoundingClientRect();
+      const box = scroller.getBoundingClientRect();
       setAnchor(
         keyboard ? { x: box.left + 16, y: box.top + 16 } : { x: event.clientX, y: event.clientY }
       );
     };
-    surface.addEventListener('contextmenu', onContextMenu);
-    return () => surface.removeEventListener('contextmenu', onContextMenu);
+    scroller.addEventListener('contextmenu', onContextMenu);
+    return () => scroller.removeEventListener('contextmenu', onContextMenu);
   }, [disabled, editor]);
+
+  // `disabled` flipping true closes an OPEN panel, not just the listener. The prop promises
+  // the browser's own menu back; leaving ours on screen would be the opposite.
+  useEffect(() => {
+    if (disabled) close();
+  }, [disabled, close]);
 
   // Close on everything that means "the user moved on": a press outside, Escape, a scroll
   // under the panel, and the window losing focus. Bound only while open, so a closed menu
@@ -230,6 +219,12 @@ export function DocxEditorContextMenu({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
+        close(true);
+      } else if (event.key === 'Tab') {
+        // Tab moves focus OUT of the menu, and neither the outside-press listener nor the
+        // window blur handler fires for an intra-page focus move — so without this the panel
+        // stays open, floating over the document, with nothing focused inside it. The menu
+        // bar closes on Tab for the same reason. Not prevented: the user asked to move on.
         close();
       }
     };
@@ -250,24 +245,47 @@ export function DocxEditorContextMenu({
     };
   }, [anchor, close]);
 
-  // Flip to stay on screen, then take focus so the arrow keys have somewhere to start.
+  // Flip to stay on screen.
   useLayoutEffect(() => {
     const panel = panelRef.current;
     if (!anchor || !panel) return;
     const { width, height } = panel.getBoundingClientRect();
     const maxX = window.innerWidth - width - VIEWPORT_INSET;
     const maxY = window.innerHeight - height - VIEWPORT_INSET;
-    // Flip to the other side of the pointer when there is room there, otherwise clamp: a
-    // panel taller than the window must sit at the top edge rather than above it.
-    const x = anchor.x > maxX ? Math.max(VIEWPORT_INSET, anchor.x - width) : anchor.x;
-    const y = anchor.y > maxY ? Math.max(VIEWPORT_INSET, anchor.y - height) : anchor.y;
+    // Flip to the other side of the pointer when there is no room past it, then clamp BOTH
+    // ends. The low end is not theoretical: a keyboard-invoked menu anchors on the scroller's
+    // client rect, whose `top` is far negative once the reader is on page ten, and an
+    // unclamped `position: fixed` panel then renders thousands of pixels above the window.
+    const x = Math.max(VIEWPORT_INSET, anchor.x > maxX ? anchor.x - width : anchor.x);
+    const y = Math.max(VIEWPORT_INSET, anchor.y > maxY ? anchor.y - height : anchor.y);
     setPlacement({ x, y });
-    panel.focus({ preventScroll: true });
   }, [anchor]);
 
+  // Focus AFTER placement commits, not in the same effect that computes it.
+  //
+  // The panel renders `visibility: hidden` until it has been measured, so that it is never
+  // seen at the pre-flip position — and a `visibility: hidden` element is not focusable.
+  // Calling `focus()` alongside `setPlacement` therefore did nothing at all, which left the
+  // whole keyboard layer dead: the arrow-key handler is on the panel, so it never fired.
+  useLayoutEffect(() => {
+    if (placement) panelRef.current?.focus({ preventScroll: true });
+  }, [placement]);
+
+  // Report only real TRANSITIONS.
+  //
+  // The handler lives in a ref so an unmemoized one — the normal case, and unavoidable via
+  // `contextMenu={{ onOpenChange }}`, which is a fresh object every render — cannot make
+  // this effect re-run and re-report. Without the previous-value guard it also announced
+  // `false` on mount, before the menu had ever existed.
+  const openChangeRef = useRef(onOpenChange);
+  openChangeRef.current = onOpenChange;
+  const wasOpen = useRef(false);
   useEffect(() => {
-    onOpenChange?.(anchor !== null);
-  }, [anchor, onOpenChange]);
+    const open = anchor !== null;
+    if (open === wasOpen.current) return;
+    wasOpen.current = open;
+    openChangeRef.current?.(open);
+  }, [anchor]);
 
   // The menu bar's rows close their panel through `setOpenMenu(null)`. Publishing a menu
   // context whose `setOpenMenu` closes THIS panel is the whole adapter between the two
@@ -276,7 +294,8 @@ export function DocxEditorContextMenu({
     () => ({
       t,
       openMenu: null,
-      setOpenMenu: () => close(),
+      // A row was selected: the user is finished with the menu, so focus goes back.
+      setOpenMenu: () => close(true),
       activeMenu: null,
       onOpen: undefined,
       onSave: undefined,
@@ -286,7 +305,12 @@ export function DocxEditorContextMenu({
     }),
     [t, close]
   );
-  const contextMenuContext = useMemo(() => ({ close, anchor }), [close, anchor]);
+  // Root-owned, so it survives the panel unmounting when a row is selected.
+  const [clipboardRefusal, setClipboardRefusal] = useState<string | null>(null);
+  const contextMenuContext = useMemo(
+    () => ({ close, anchor, clipboardRefusal, reportClipboardRefusal: setClipboardRefusal }),
+    [close, anchor, clipboardRefusal]
+  );
 
   const style: CSSProperties = {
     position: 'fixed',
@@ -304,7 +328,9 @@ export function DocxEditorContextMenu({
             <div
               ref={panelRef}
               role="menu"
-              aria-label="context menu"
+              // Resolved through the host's `t` like every row label. A hardcoded English
+              // string here would be the one piece of the panel a locale could not reach.
+              aria-label={t?.('contextMenu.ariaLabel') ?? 'contextMenu.ariaLabel'}
               // One tab stop for the whole panel, which is the menu pattern: rows are
               // reached with the arrows, never with Tab.
               tabIndex={-1}
@@ -329,7 +355,15 @@ export function DocxEditorContextMenu({
                 }
               }}
             >
-              {mergeRows(children, preset)}
+              {mergeArrangement({
+                entries: DEFAULT_SET,
+                children,
+                preset,
+                keyOfEntry: (entry) => entry.id,
+                keyOfChild: rowOfChild,
+                renderEntry: (entry) =>
+                  entry.kind === 'separator' ? <MenuSeparator /> : entry.render(),
+              })}
             </div>
           </ContextMenuContext.Provider>
         </MenuContext.Provider>

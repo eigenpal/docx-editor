@@ -13,8 +13,15 @@ import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
 
 const english = createT(en);
 
-/** Just the labels the Igloo theme renames. Everything else falls through to English. */
-const ICE_LABELS: Readonly<Record<string, string>> = {
+/**
+ * Just the labels the Igloo theme renames. Everything else falls through to English.
+ *
+ * A `Map`, not an object literal, because the key is CALLER input: an object answers
+ * `constructor` and `toString` off the prototype chain, so `iglooT('constructor')` would
+ * return a function rather than a string. Core spells `MARKS` and `HIGHLIGHT_NAMES` this way
+ * for exactly that reason; an example that teaches the API should teach that too.
+ */
+const ICE_LABELS = new Map<string, string>(Object.entries({
   // The clipboard rows, in the theme's own vocabulary.
   'contextMenu.cut': 'Carve out',
   'contextMenu.copy': 'Cast a replica',
@@ -46,7 +53,7 @@ const ICE_LABELS: Readonly<Record<string, string>> = {
   'toolbar.format': 'Sculpt',
   'toolbar.insert': 'Deposit',
   'toolbar.help': 'Survival guide',
-};
+}));
 
 /**
  * The resolver handed to every packaged part.
@@ -55,5 +62,5 @@ const ICE_LABELS: Readonly<Record<string, string>> = {
  * catalogue is its own, and the library does not require it to be keyed by our union.
  */
 export function iglooT(key: string): string {
-  return ICE_LABELS[key] ?? english(key as TranslationKey);
+  return ICE_LABELS.get(key) ?? english(key as TranslationKey);
 }

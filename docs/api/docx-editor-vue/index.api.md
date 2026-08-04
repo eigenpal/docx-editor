@@ -700,6 +700,7 @@ export interface EditorSnapshot {
     // (undocumented)
     readonly image: ImageContext | null;
     readonly isLoading: boolean;
+    readonly mode: 'edit' | 'view';
     // (undocumented)
     readonly page: { readonly current: number; readonly total: number };
     readonly pageSetup?: PageSetup | null;

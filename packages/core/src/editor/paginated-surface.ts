@@ -1571,6 +1571,14 @@ export function mountPaginatedSurface(
       return scrollToContentY(page.box.y + caret.y, caret.height, options);
     },
 
+    setEditable(editable) {
+      // The DOM affordance, not the document's own editability: `session.editable` says
+      // whether the FILE can be round-tripped, and this says whether the user may type into
+      // it right now. Both have to be true for an edit to land.
+      pagesLayer.contentEditable = editable ? 'true' : 'false';
+      pagesLayer.setAttribute('aria-readonly', editable ? 'false' : 'true');
+    },
+
     selectAll() {
       const ids = paragraphOrder();
       const first = ids[0];

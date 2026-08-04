@@ -56,6 +56,19 @@ function isSlot(target: ChromeSlotId | EditorCommand): target is ChromeSlotId {
 }
 
 /**
+ * A command's value identity, as a string a dependency array can compare.
+ *
+ * Keys are SORTED, so two spellings of the same command (`{ type, mark }` and
+ * `{ mark, type }`) produce one key and do not churn the memo. Commands are small flat
+ * objects of primitives; `insertImage`'s `data` is the one field that is not, and a
+ * `Uint8Array` stringifies to its indices — verbose but stable and correct, and nobody
+ * drives a live control off an image insert.
+ */
+function stableKey(command: EditorCommand): string {
+  return JSON.stringify(command, Object.keys(command).sort());
+}
+
+/**
  * Bind a chrome slot (`'text.bold'`, `'history.undo'`, …) or a raw `EditorCommand`
  * (`{ type: 'selectAll' }`) to the editor. The result object is identity-stable while its
  * fields are unchanged, so it can sit in dependency arrays and `memo` props without churn.
@@ -67,11 +80,22 @@ export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCo
 
   // A COMMAND OBJECT IS REBUILT EVERY RENDER by most callers (`useEditorCommand({ type:
   // 'cut' })`), so keying the memos on its identity would resubscribe `useEditorState` on
-  // every frame. The ref holds the latest value and the dependency is its `type`, which is
-  // what actually changes when a caller means a different command.
+  // every frame. The key is therefore the command BY VALUE.
+  //
+  // It has to be by value, not by `type`. Two commands can share a type and mean different
+  // things — `{ mark: 'bold' }` vs `{ mark: 'italic' }`, `value: 'cyan'` vs `'none'` — and
+  // both `can` and `isActive` answer differently for them. Keyed on `type` alone the
+  // selector was never rebuilt, and `useEditorState` short-circuits on snapshot identity
+  // while `snapshot()` is version-cached, so a caller that switched payloads kept the OLD
+  // answer until some unrelated engine event happened to bump the version. Worse, `execute`
+  // reads the live target, so the button rendered one state and ran the other command.
+  const key = isSlot(target) ? target : stableKey(target);
+
+  // Read at call/derivation time rather than closed over, so the value is always the one
+  // the caller last passed. Safe because `key` above changes whenever the value does, which
+  // is what actually drives re-derivation.
   const latest = useRef(target);
   latest.current = target;
-  const key = isSlot(target) ? target : target.type;
 
   // The snapshot argument is the change SIGNAL; the state itself comes from the engine,
   // re-read at the same version the snapshot describes.

@@ -8,6 +8,7 @@
 // scrolled away under it would read as the water being part of the page.
 
 import { useEffect, useRef } from 'react';
+import { makeRandom } from './random';
 
 /** One floe: a jagged polygon, drifting right and bobbing. */
 interface Floe {
@@ -27,20 +28,6 @@ interface Floe {
 }
 
 const FLOE_COUNT = 26;
-
-/**
- * Deterministic pseudo-random, so every reload draws the SAME sea.
- *
- * A demo that rearranges itself between screenshots is a demo whose visual regressions are
- * invisible. One integer of state, no dependency.
- */
-function makeRandom(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (state * 1664525 + 1013904223) >>> 0;
-    return state / 0x100000000;
-  };
-}
 
 function makeFloes(): Floe[] {
   const random = makeRandom(0x1ce);

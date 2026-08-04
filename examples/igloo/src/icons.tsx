@@ -8,26 +8,7 @@
 // strokes on a 24-box, round caps, no fills. A host swapping icons wants its own look, and
 // a demo that swapped them for near-identical glyphs would not show that anything happened.
 
-import type { ReactNode } from 'react';
-
-function Frost({ children }: { children: ReactNode }) {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      {children}
-    </svg>
-  );
-}
+import { Frost } from './frost-svg';
 
 export const IceUndo = (
   <Frost>
@@ -114,7 +95,7 @@ export const IceClear = (
   </Frost>
 );
 
-/** Freeze Document: a snowflake. Drives the editor's read-only mode. */
+/** Freeze: a snowflake. Highlights the selected passage (see `frost.ts`). */
 export const IceFreeze = (
   <Frost>
     <path d="M12 2v20M4 7l16 10M20 7 4 17" />

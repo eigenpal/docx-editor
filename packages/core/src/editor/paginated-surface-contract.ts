@@ -283,6 +283,15 @@ export interface PaginatedSurface {
   /** Select the whole document. */
   selectAll(): void;
   /**
+   * Turn the browser's editing affordance on the pages layer on or off.
+   *
+   * The facade's `mode` gates COMMANDS, which stops `exec` but not the keyboard: the pages
+   * layer is `contentEditable` and binds `beforeinput` itself, so a document the facade
+   * called read-only still accepted typing straight into it. Read-only has to reach the
+   * surface to be true.
+   */
+  setEditable(editable: boolean): void;
+  /**
    * Scroll a page, or the page a paragraph sits on, into view. Returns whether it
    * scrolled — false when the target is not laid out, or the surface is not inside a
    * scroll container, so a caller can tell "no such target" from "done".

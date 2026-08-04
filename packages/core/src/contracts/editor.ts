@@ -254,11 +254,6 @@ export interface EditorHost {
 
 export type CanResult = { ok: true } | { ok: false; code: ExecErrorCode; reason: string };
 
-export interface PendingScrollRestore {
-  readonly top: number;
-  readonly anchorParaId?: string;
-}
-
 export interface Editor {
   /** Load a new document (DOCX bytes or a handle), replacing the current one. */
   load(document: DocumentSource): void;
@@ -1050,6 +1045,15 @@ export interface EditorSnapshot {
    * to produce one bit, on every tick a host's selector runs.
    */
   readonly selectionCollapsed: boolean;
+  /**
+   * The editing mode the host asked for, as {@link Editor.setMode} left it.
+   *
+   * Distinct from `editable`, which is this AND whether the document can be round-tripped
+   * at all. A view/edit toggle needs to render its own position, and `editable` cannot
+   * supply it: `false` there means either "the host chose view" or "this file is not
+   * patchable", and the toggle must not show itself off for the second reason.
+   */
+  readonly mode: 'edit' | 'view';
   readonly formatting: RunFormatting | null;
   readonly table: TableContext | null;
   readonly image: ImageContext | null;

@@ -8,16 +8,9 @@
 // `transform` stay on the compositor, so the blizzard cannot steal frames from layout or
 // paint while the user is typing underneath it.
 
-const FLAKES = 60;
+import { makeRandom } from './random';
 
-/** Deterministic, so the blizzard looks the same every time it is switched on. */
-function makeRandom(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (state * 1664525 + 1013904223) >>> 0;
-    return state / 0x100000000;
-  };
-}
+const FLAKES = 60;
 
 const flakes = (() => {
   const random = makeRandom(0xb112);

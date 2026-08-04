@@ -644,7 +644,7 @@
     "tableDeleted": "Deleted table"
   },
   "contextMenu": {
-    "ariaLabel": "AI actions menu",
+    "ariaLabel": "Context menu",
     "textMenuAriaLabel": "Text editing menu",
     "customPromptPlaceholder": "Enter custom prompt...",
     "cut": "Cut",

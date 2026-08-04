@@ -34,8 +34,6 @@ export function deepFreezeValue<T>(value: T): T {
   return Object.freeze(value);
 }
 
-export const DEFAULT_PAGE_GAP_PX = 24;
-
 /**
  * Run-property spellings for the marks the surface can toggle, named as OOXML names them.
  *
@@ -551,9 +549,15 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
     case 'cut':
       return { supported: true, mutating: true };
     case 'paste':
-      return typeof command.text === 'string'
-        ? { supported: true, mutating: true }
-        : { supported: false, code: 'invalidArgs', reason: 'paste requires text' };
+      if (typeof command.text !== 'string') {
+        return { supported: false, code: 'invalidArgs', reason: 'paste requires text' };
+      }
+      // Empty text is refused rather than run. `paste` replaces the selection, so "paste
+      // nothing" over a select-all is a whole-document delete wearing the wrong name — and
+      // an empty clipboard is the ordinary way to reach it.
+      return command.text === ''
+        ? { supported: false, code: 'invalidArgs', reason: 'there is nothing to paste' }
+        : { supported: true, mutating: true };
     case 'setSelection':
       // Shape gate only: whether an anchor's paraId exists (and its `search` phrase is
       // unique) is a property of the DOCUMENT, checked at exec — the same split as
@@ -718,6 +722,7 @@ export function snapshotsEqual(a: EditorSnapshot, b: EditorSnapshot): boolean {
     a.isLoading === b.isLoading &&
     a.parseError === b.parseError &&
     a.editable === b.editable &&
+    a.mode === b.mode &&
     a.zoom === b.zoom &&
     a.selection === b.selection &&
     // Load-bearing: `selection` is a paraId range with no offsets, so collapsing a range

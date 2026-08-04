@@ -178,15 +178,67 @@ describe('opening', () => {
     expect(event.defaultPrevented).toBe(false);
   });
 
-  test('onOpenChange reports both edges', () => {
+  // TRANSITIONS only. It used to announce `false` on mount, before the menu had ever
+  // existed, and to re-announce on every unrelated parent render because the handler sat in
+  // the effect's dependency array.
+  test('onOpenChange reports transitions, and nothing on mount', () => {
     const seen: boolean[] = [];
     const { view } = mount(<ContextMenu t={t} onOpenChange={(open) => seen.push(open)} />);
+    expect(seen).toEqual([]);
+
     rightClick(view);
     act(() => {
       fireEvent.keyDown(document, { key: 'Escape' });
     });
 
-    expect(seen).toEqual([false, true, false]);
+    expect(seen).toEqual([true, false]);
+  });
+
+  test('disabled flipping true closes an OPEN panel', () => {
+    const view = render(
+      <DocxEditorRoot document={SOURCE}>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <ContextMenu t={t} />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    act(() => {
+      fireEvent.contextMenu(surface(view), { clientX: 120, clientY: 140 });
+    });
+    expect(panel(view)).not.toBeNull();
+
+    view.rerender(
+      <DocxEditorRoot document={SOURCE}>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <ContextMenu t={t} disabled />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+
+    expect(panel(view)).toBeNull();
+    cleanup();
+  });
+
+  // The scroller, not the painted surface: the page is centred inside the scroller with a
+  // margin, so a right-click in the grey gutter originates on the scroller and would never
+  // reach a listener bound further in.
+  test('opens from a right-click in the margin beside the page', () => {
+    const { view } = mount();
+    const scroller = view.container.querySelector<HTMLElement>('.docx-editor__scroll-container')!;
+    act(() => {
+      fireEvent.contextMenu(scroller, { clientX: 8, clientY: 300 });
+    });
+
+    expect(panel(view)).not.toBeNull();
+  });
+
+  test('the panel is labelled through t, not in hardcoded English', () => {
+    const { view } = mount();
+    rightClick(view);
+
+    expect(panel(view)!.getAttribute('aria-label')).toBe('contextMenu.ariaLabel');
   });
 });
 
@@ -310,6 +362,23 @@ describe('composition', () => {
     expect(rowNamed(view, 'edit.cut').textContent).toContain('igloo.carve');
   });
 
+  // `Children.toArray` does not flatten Fragment ELEMENTS, so a host mapping over its
+  // overrides reaches the scanner as a symbol-typed element. Unrecognised children APPEND,
+  // so missing this rendered a SECOND Cut row instead of overriding the packaged one.
+  test('a Fragment-wrapped override still replaces its row in place', () => {
+    const { view } = mount(
+      <ContextMenu t={t}>
+        <>
+          <ContextMenu.Cut hidden />
+        </>
+      </ContextMenu>
+    );
+    rightClick(view);
+
+    expect(rows(view).map((row) => row.dataset.slot)).not.toContain('edit.cut');
+    expect(rows(view).filter((row) => row.dataset.slot === 'edit.cut')).toHaveLength(0);
+  });
+
   test('hidden removes a row', () => {
     const { view } = mount(
       <ContextMenu t={t}>
@@ -403,6 +472,19 @@ describe('closing', () => {
     });
 
     expect(panel(view)).not.toBeNull();
+  });
+
+  // Tab moves focus out of the panel, and neither the outside-press listener nor window
+  // blur fires for an intra-page focus move — so the panel used to stay open with nothing
+  // focused inside it.
+  test('Tab closes', () => {
+    const { view } = mount();
+    rightClick(view);
+    act(() => {
+      fireEvent.keyDown(document, { key: 'Tab' });
+    });
+
+    expect(panel(view)).toBeNull();
   });
 
   test('scrolling closes', () => {

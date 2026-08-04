@@ -13,7 +13,7 @@
 // takes either form — the slot arm asks `toolbarCommandState`, the command arm asks
 // `Editor.can`/`isActive` directly, and both end at the same authority.
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { ReactNode } from 'react';
 import type { EditorCommand } from '@docx-editor.dev/core-contract/contracts/editor';
 import { useDocxEditor } from '../context';
@@ -74,7 +74,7 @@ function defineCommandRow(
         {...(disabledReason ? { title: disabledReason } : {})}
         onSelect={() => {
           editor?.exec(command);
-          close();
+          close(true);
         }}
         {...(className ? { className } : {})}
       >
@@ -144,22 +144,24 @@ export function ContextMenuPaste({
   hidden,
 }: ContextMenuCommandProps) {
   const editor = useDocxEditor();
-  const { close } = useContextMenuContext();
+  const { close, clipboardRefusal, reportClipboardRefusal } = useContextMenuContext();
   const label = useMenuLabel();
-  // `text: ''` probes the SHAPE and the mode — is a paste admissible here at all — without
-  // claiming to know what the clipboard holds.
-  const probe = useMemo((): EditorCommand => ({ type: 'paste', text: '' }), []);
+  // A single space probes the SHAPE and the mode — is a paste admissible here at all —
+  // without claiming to know what the clipboard holds. NOT the empty string: `paste` with
+  // no text still replaces the selection, so an empty probe asks about a destructive edit.
+  const probe = useMemo((): EditorCommand => ({ type: 'paste', text: ' ' }), []);
   const { isEnabled, disabledReason } = useEditorCommand(probe);
-  const [refusal, setRefusal] = useState<string | null>(null);
   if (hidden) return null;
-  const blocked = refusal !== null;
+  const blocked = clipboardRefusal !== null;
   return (
     <MenuRow
       slot="edit.paste"
       icon={icon ?? chromeIcon(PASTE_PATHS)}
       shortcut={label(shortcutKey ?? 'contextMenu.pasteShortcut')}
       disabled={!isEnabled || blocked}
-      {...((refusal ?? disabledReason) ? { title: refusal ?? disabledReason ?? '' } : {})}
+      {...((clipboardRefusal ?? disabledReason)
+        ? { title: clipboardRefusal ?? disabledReason ?? '' }
+        : {})}
       onSelect={() => {
         void (async () => {
           try {
@@ -167,9 +169,11 @@ export function ContextMenuPaste({
             // An empty clipboard is not a refusal — there is simply nothing to insert.
             if (text) editor?.exec({ type: 'paste', text });
           } catch (error) {
-            setRefusal(error instanceof Error ? error.message : 'the clipboard is not readable');
+            reportClipboardRefusal(
+              error instanceof Error ? error.message : 'the clipboard is not readable'
+            );
           } finally {
-            close();
+            close(true);
           }
         })();
       }}
@@ -234,7 +238,7 @@ export function ContextMenuItem({
       {...(active !== undefined ? { active } : {})}
       onSelect={() => {
         onSelect?.();
-        close();
+        close(true);
       }}
       {...(className ? { className } : {})}
     >
@@ -242,8 +246,3 @@ export function ContextMenuItem({
     </MenuRow>
   );
 }
-
-// The menu bar's parts, usable verbatim inside a context menu panel. `Slot` is `MenuItem`
-// under the name that says what it takes, so `<ContextMenu.Slot slot="text.bold" />` reads
-// as "the bold chrome slot, as a row" beside `<ContextMenu.Cut />`.
-export { MenuItem as ContextMenuSlot, MenuRow, MenuSeparator, MenuSubmenu } from '../menu/parts';
