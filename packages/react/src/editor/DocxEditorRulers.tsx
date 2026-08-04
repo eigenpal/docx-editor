@@ -184,6 +184,9 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
       unit={props.unit ?? 'inch'}
       className={props.className ?? ''}
       style={{
+        // A ruler always represents the full page width. In a narrow host its surrounding
+        // row overflows; shrinking the ruler would move its ticks off the document.
+        flexShrink: 0,
         marginRight: reserved,
         ...props.style,
         // The ruler is centred by its host row, so the same rule applies as to the page:

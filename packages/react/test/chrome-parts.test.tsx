@@ -114,6 +114,7 @@ describe('the context-fed ruler parts', () => {
     const ruler = view.container.querySelector('.docx-horizontal-ruler') as HTMLElement;
     expect(ruler).not.toBeNull();
     expect(ruler.style.width).toBe('816px');
+    expect(ruler.style.flexShrink).toBe('0');
     // Word's four indent handles: first-line, hanging, left, right.
     expect(view.container.querySelectorAll('.docx-ruler-indent').length).toBe(4);
   });
