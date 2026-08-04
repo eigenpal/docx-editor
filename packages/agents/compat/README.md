@@ -54,6 +54,15 @@ bun run compat:generate
 bun run compat:check-drift
 ```
 
+**De-selecting a member offline.** `reference/word.reference.json` is the
+manifest-selected _projection_ of upstream, so a member removed from
+`manifest.json` also has to leave the fixture — otherwise `compat:generate`
+keeps comparing a member the authored declarations no longer declare. Deleting
+that member's entry is exactly what the next `compat:fetch-reference` produces
+from the same upstream release, and it is the only edit to this file a
+maintainer may make by hand: a **removal**, never an addition or a change to
+what upstream says a member's shape is.
+
 `compat:check-drift` always fetches, extracts, and diffs whatever
 `@types/office-js` version is currently published — including one with no
 reviewed entry in `fetch-office-reference.mjs`'s

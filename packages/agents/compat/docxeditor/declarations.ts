@@ -87,14 +87,18 @@ export declare namespace DocxEditor {
     search(searchText: string, searchOptions?: SearchOptions): RangeCollection;
   }
 
+  // `start` and `end` are deliberately ABSENT. Upstream declares them as document-wide character
+  // offsets; DocxEditor addresses every position as a paragraph identity plus a UTF-16 offset in
+  // that paragraph, which is the vocabulary its ops validate against, and it maintains no
+  // document-wide counter for a range to report. Declaring the members and never implementing them
+  // would make this file a roadmap rather than an inventory. The recorded reasons are the
+  // `Word.Range#start` / `Word.Range#end` entries in `compat/manifest.json`'s omissions.
   export class Range {
     readonly bookmarks: BookmarkCollection;
     readonly contentControls: ContentControlCollection;
-    end: number;
     readonly font: Font;
     hyperlink: string;
     readonly paragraphs: ParagraphCollection;
-    start: number;
     style: string;
     readonly text: string;
     insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;

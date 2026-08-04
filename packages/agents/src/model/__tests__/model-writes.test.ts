@@ -13,6 +13,7 @@ import {
   TABLE_DOCUMENT,
   TWO_PARAGRAPHS,
   docx,
+  mainXmlOf,
   p,
   pWithId,
   reopen,
@@ -118,6 +119,51 @@ describe('clearing a story', () => {
       })
     );
     expect(code).toBe('InvalidArgument');
+  });
+
+  // A REPORT HAS TABLES IN IT. `clear()` on a story whose blocks include one is the ordinary case,
+  // not an exotic one, and the first version of this refused it: emptying a stretch of a story is
+  // done by joining what is left of its two ends, and two cells' paragraphs cannot be joined. So
+  // the whole story is emptied STRUCTURALLY instead — the blocks go, one paragraph stays.
+  test('empties a story whose blocks include a table, cell paragraphs and all', async () => {
+    const runtime = await serverRuntime(TABLE_DOCUMENT);
+    expect(await paragraphTexts(runtime)).toEqual(['before', 'in cell', 'other cell', 'after']);
+    await runtime.run(async (context) => {
+      context.document.body.clear();
+      await context.sync();
+    });
+    expect(await paragraphTexts(runtime)).toEqual(['']);
+    expect(await textsAfterReopen(runtime)).toEqual(['']);
+    // The table is gone rather than merely emptied: a cleared story that still paints a grid is
+    // not a cleared story.
+    expect(await mainXmlOf(runtime)).not.toContain('<w:tbl>');
+  });
+
+  test('and so does writing over the whole of such a story', async () => {
+    const runtime = await serverRuntime(TABLE_DOCUMENT);
+    const written = await runtime.run(async (context) => {
+      const range = context.document.body.insertText('only this', 'Replace');
+      await context.sync();
+      range.load('text');
+      await context.sync();
+      return range.text;
+    });
+    expect(written).toBe('only this');
+    expect(await paragraphTexts(runtime)).toEqual(['only this']);
+    expect(await textsAfterReopen(runtime)).toEqual(['only this']);
+  });
+
+  test('leaves the paragraph a caller already held, so a script can go on writing to it', async () => {
+    const runtime = await serverRuntime(TABLE_DOCUMENT);
+    await runtime.run(async (context) => {
+      const first = context.document.body.paragraphs.getFirst();
+      await context.sync();
+      context.document.body.clear();
+      await context.sync();
+      first.insertText('after the clear', 'End');
+      await context.sync();
+    });
+    expect(await paragraphTexts(runtime)).toEqual(['after the clear']);
   });
 });
 
@@ -381,6 +427,78 @@ describe('splitting a paragraph', () => {
     );
     expect(code).toBe('InvalidArgument');
   });
+
+  // THE PIECES ARE A COLLECTION LIKE ANY OTHER. What is different about the one a split answers is
+  // where its members come from: the operation that breaks the paragraph is the operation that says
+  // what the pieces are, so there is nothing to list afterwards — listing would describe the
+  // document the split produced, not the pieces it made. The edge accessors have to read that same
+  // answer; the first version of this refused them with `NotImplemented`, which made
+  // `paragraph.split(…).getFirst()` — the shape a caller writes without thinking — fail.
+  describe('reaching one piece of the answer', () => {
+    test('the first and the last piece come from the split\u2019s own answer', async () => {
+      const runtime = await serverRuntime(docx(p('a;b;c')));
+      const texts = await runtime.run(async (context) => {
+        const paragraph = context.document.body.paragraphs.getFirst();
+        await context.sync();
+        const pieces = paragraph.split([';'], true);
+        const head = pieces.getFirst();
+        const tail = pieces.getLast();
+        await context.sync();
+        head.load('text');
+        tail.load('text');
+        await context.sync();
+        return [head.text, tail.text];
+      });
+      expect(texts).toEqual(['a', 'c']);
+    });
+
+    test('and one sync is all it takes, because no second read is sent', async () => {
+      // The claim that matters: asking for an edge does not turn one atomic call into two. If a
+      // listing were sent, it would be a read of the document AFTER the split — and the split's
+      // own first piece is not necessarily the first paragraph of that document.
+      const runtime = await serverRuntime(docx(p('head') + p('a;b')));
+      const text = await runtime.run(async (context) => {
+        const paragraphs = context.document.body.paragraphs;
+        paragraphs.load();
+        await context.sync();
+        const first = paragraphs.items[1]!.split([';'], true).getFirst();
+        await context.sync();
+        first.load('text');
+        await context.sync();
+        return first.text;
+      });
+      expect(text).toBe('a');
+      expect(await paragraphTexts(runtime)).toEqual(['head', 'a', 'b']);
+    });
+
+    test('the or-null-object form says false, because a split always answers a piece', async () => {
+      const runtime = await serverRuntime(docx(p('nothing to split')));
+      const verdict = await runtime.run(async (context) => {
+        const paragraph = context.document.body.paragraphs.getFirst();
+        await context.sync();
+        const piece = paragraph.split([';']).getFirstOrNullObject();
+        await context.sync();
+        piece.load('text');
+        await context.sync();
+        return { isNull: piece.isNullObject, text: piece.text };
+      });
+      // No delimiter occurs, so the answer is the one paragraph, unchanged and present.
+      expect(verdict).toEqual({ isNull: false, text: 'nothing to split' });
+    });
+
+    test('a piece reached this way can be written through', async () => {
+      const runtime = await serverRuntime(docx(p('a;b')));
+      await runtime.run(async (context) => {
+        const paragraph = context.document.body.paragraphs.getFirst();
+        await context.sync();
+        const last = paragraph.split([';'], true).getLast();
+        await context.sync();
+        last.insertText('!', 'End');
+        await context.sync();
+      });
+      expect(await paragraphTexts(runtime)).toEqual(['a', 'b!']);
+    });
+  });
 });
 
 describe('writing through a range', () => {
@@ -510,14 +628,19 @@ describe('a batch of writes', () => {
     expect(await paragraphTexts(runtime)).toEqual(['anchor']);
   });
 
-  test('refuses a write that would join paragraphs across a table cell, and writes nothing', async () => {
-    // The whole story of this document runs `before`, into a row of two cells, and out again to
-    // `after`. Writing over all of it at once would have to join the two cells' paragraphs into
-    // one, which the document store refuses — so the whole batch is refused with it.
+  test('a refusal from the document store takes the writes beside it with it', async () => {
+    // The second write is one the store will not make: a `w:tc` must keep a paragraph (17.4.66), so
+    // emptying a cell of its only one is refused. What this pins is the FIRST write — an ordinary
+    // text insertion into another paragraph, planned and valid — not landing either. A batch is one
+    // transaction; half of it is not an outcome.
     const runtime = await serverRuntime(TABLE_DOCUMENT);
     const code = await codeOf(() =>
       runtime.run(async (context) => {
-        context.document.body.insertText('flat', 'Replace');
+        const paragraphs = context.document.body.paragraphs;
+        paragraphs.load();
+        await context.sync();
+        paragraphs.items[0]!.insertText('!', 'End');
+        paragraphs.items[1]!.delete();
         await context.sync();
       })
     );

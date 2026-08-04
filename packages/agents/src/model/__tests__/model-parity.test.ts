@@ -263,4 +263,81 @@ describe('selection is the one thing a consumer can tell the hosts apart by', ()
     runtime.dispose();
     server.dispose();
   });
+
+  // WHICHEVER ORDER THE TWO ARE WRITTEN IN. A selection is applied after the batch commits, so a
+  // batch that both selects a paragraph and changes it would leave the reader's caret at a position
+  // the change moved — or in a paragraph the change removed. Refusing the batch is the answer, and
+  // it cannot depend on which call the consumer happened to write first.
+  test('selecting a range and editing the same paragraph in one sync is refused either way round', async () => {
+    for (const selectFirst of [true, false]) {
+      const { runtime, editor } = browserRuntime();
+      const before = editor.surface?.state().selection;
+      const code = await runtime.run(async (context) => {
+        const found = context.document.body.search('North', { matchCase: true });
+        found.load();
+        await context.sync();
+        const range = found.items[0]!;
+        try {
+          if (selectFirst) {
+            range.select();
+            range.insertText('!', 'End');
+          } else {
+            range.insertText('!', 'End');
+            range.select();
+          }
+          await context.sync();
+        } catch (error) {
+          return isDocxEditorError(error) ? error.code : 'untyped';
+        }
+        return 'accepted';
+      });
+      expect(code).toBe('ConflictingChanges');
+      // Nothing moved: not the text, and not the caret.
+      expect(editor.surface?.state().selection).toEqual(before);
+      runtime.dispose();
+    }
+  });
+});
+
+describe('emptying a story that holds a table', () => {
+  test('is the same document in the browser as on the server, and survives a save', async () => {
+    // The write that takes BLOCKS out of a story: the browser host has to repaint pages rather than
+    // edit a run, so it is the one most likely to diverge — and the fixture's story runs through a
+    // two-row table.
+    const runtimes = await bothRuntimes();
+    const transcripts = await onBoth(runtimes, async (runtime) => {
+      await runtime.run(async (context) => {
+        context.document.body.clear();
+        await context.sync();
+      });
+      return runtime.run(async (context) => {
+        const body = context.document.body;
+        body.load('text');
+        const paragraphs = body.paragraphs;
+        paragraphs.load();
+        await context.sync();
+        for (const paragraph of paragraphs.items) paragraph.load('text');
+        await context.sync();
+        return { bodyText: body.text, texts: paragraphs.items.map((item) => item.text) };
+      });
+    });
+    expect(transcripts.browser).toEqual(transcripts.server);
+    expect(transcripts.server).toEqual({ bodyText: '', texts: [''] });
+
+    // And what the EDITOR the browser runtime borrowed saves reopens as the story the clear left
+    // behind — the edit reached the document, not the picture of it on screen.
+    const reopened = await createServer(new Uint8Array(await runtimes.editor.save()));
+    const after = await reopened.run(async (context) => {
+      const paragraphs = context.document.body.paragraphs;
+      paragraphs.load();
+      await context.sync();
+      for (const paragraph of paragraphs.items) paragraph.load('text');
+      await context.sync();
+      return paragraphs.items.map((item) => item.text);
+    });
+    expect(after).toEqual(['']);
+    reopened.dispose();
+    runtimes.server.dispose();
+    runtimes.browser.dispose();
+  });
 });

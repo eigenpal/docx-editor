@@ -18,8 +18,12 @@ const wrongDirection: Satisfies<Declared.ClientRequestContext, RequestContext> =
 
 // FALSE, and deliberately the claim the file next door does NOT make: the shipped `Range` is
 // narrower than the declared one, because formatting, hyperlinks, bookmarks and content controls
-// belong to later slices. If this ever compiles, either those slices landed — in which case the
-// assertion belongs next door — or the declarations were quietly widened to match what exists.
+// belong to LATER SLICES — members that are coming, not members that are not. What is no longer
+// among them is `start`/`end`: a range does not report document-wide character offsets, this engine
+// maintains no such coordinate space, and rather than leave a declaration the shipped object could
+// never satisfy, they were de-selected from the manifest and removed from the declarations. If this
+// ever compiles, either those later slices landed — in which case the assertion belongs next door —
+// or the declarations were quietly widened to match what exists.
 const wholeRangeIsImplemented: Satisfies<Range, Declared.Range> = true;
 
 void wrongDirection;

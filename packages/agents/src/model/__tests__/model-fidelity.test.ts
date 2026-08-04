@@ -70,6 +70,31 @@ describe('an edit made by script survives the serializer', () => {
     expect(again.fingerprint).toBe(once.fingerprint);
   });
 
+  test('and so does emptying the whole story, table and all', async () => {
+    // `clear()` on this document is the most structural edit the model can make: the story runs
+    // through a table, so the blocks come out rather than the text being deleted. What the oracles
+    // add to the paragraph reads next door is that the file it leaves is a file — one that reopens,
+    // saves again unchanged, and still declares the styles part its remaining paragraph resolves
+    // through.
+    const runtime = await serverRuntime(REPRESENTATIVE);
+    const before = await savedOracles(runtime);
+    await runtime.run(async (context) => {
+      context.document.body.clear();
+      await context.sync();
+    });
+
+    const once = await savedOracles(runtime);
+    const again = await savedOracles(await reopen(runtime));
+    expect(diffSemanticDigests(once.digest, again.digest)).toEqual([]);
+    expect(again.fingerprint).toBe(once.fingerprint);
+    // The story is empty and the table is gone, but the document's furniture is not: section
+    // properties and the styles part are still there, because emptying a story is not deleting a
+    // document.
+    expect(once.mainXml).not.toContain('<w:tbl>');
+    expect(once.mainXml).toContain('w:sectPr');
+    expect(once.partNames).toEqual(before.partNames);
+  });
+
   test('and so does a write, a split and a delete made in one batch', async () => {
     const runtime = await serverRuntime(REPRESENTATIVE);
     await runtime.run(async (context) => {

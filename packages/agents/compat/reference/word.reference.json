@@ -1625,17 +1625,6 @@
             }
           ]
         },
-        "end": {
-          "uid": "Word.Range#end",
-          "kind": "property",
-          "requirementSet": "WordApiDesktop 1.4",
-          "overloads": [
-            {
-              "params": [],
-              "returns": "number"
-            }
-          ]
-        },
         "font": {
           "uid": "Word.Range#font",
           "kind": "property",
@@ -1756,17 +1745,6 @@
                 }
               ],
               "returns": "void"
-            }
-          ]
-        },
-        "start": {
-          "uid": "Word.Range#start",
-          "kind": "property",
-          "requirementSet": "WordApiDesktop 1.4",
-          "overloads": [
-            {
-              "params": [],
-              "returns": "number"
             }
           ]
         },

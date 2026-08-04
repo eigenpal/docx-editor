@@ -51,8 +51,6 @@
         "bookmarks",
         "hyperlink",
         "style",
-        "start",
-        "end",
         "insertText",
         "insertParagraph",
         "search",
@@ -266,6 +264,18 @@
     {
       "uid": "Word.ContentControl#xmlMapping",
       "reason": "Custom-XML-bound content control writes are refused until XML mapping is a separate supported lane (per the redesign plan); the mapping object itself is out of scope here."
+    },
+    {
+      "uid": "Word.Range#start",
+      "reason": "De-selected deliberately, and not implementable in DocxEditor's addressing model: upstream's start/end are DOCUMENT-WIDE character offsets, a coordinate space no part of this engine maintains. DocxEditor addresses every position as a stable paragraph identity plus a UTF-16 offset in that paragraph — the vocabulary the tree ops validate against, the selection uses and the layout reports — so an offset a caller reads is an offset it can write at. A document-wide counter would change under every edit above it and would have to be recomputed by walking the whole story per access; publishing one anyway would mean handing back numbers that go stale silently. A range's endpoints are reachable through range.paragraphs and the paragraph's own text instead."
+    },
+    {
+      "uid": "Word.Range#end",
+      "reason": "See Word.Range#start: the same document-wide character coordinate space, de-selected for the same reason."
+    },
+    {
+      "uid": "Word.RangeCollection#getLast",
+      "reason": "Implemented by DocxEditor's object model as an extension, not a conformance claim: the pieces a Paragraph#split answers are a range collection whose LAST member is the one a caller most often wants (\"what did this paragraph end up as\"), and finding it by counting items means loading them all. The pinned reference fixture is pruned to the selected subset, so it cannot say offline whether upstream declares this member; it is therefore recorded here as DocxEditor's own rather than measured, and the authored declarations do not declare it."
     },
     {
       "uid": "Word.Paragraph#uniqueLocalId",

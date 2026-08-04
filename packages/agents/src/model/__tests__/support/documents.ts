@@ -4,7 +4,7 @@
 // `context.document.body.paragraphs` reaches the canonical tree and comes back with what the
 // document actually says. A fake host would let the model agree with itself.
 
-import { strToU8, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { createServer } from '../../../runtime/server.ts';
 import type { DocxEditorServerRuntime } from '../../../runtime/runtime.ts';
 
@@ -169,4 +169,10 @@ export function serverRuntime(
 /** Save what a runtime holds and open it again, so an assertion is about the document. */
 export async function reopen(runtime: DocxEditorServerRuntime): Promise<DocxEditorServerRuntime> {
   return createServer(await runtime.save());
+}
+
+/** The saved `word/document.xml`, for the assertions that are about markup rather than text. */
+export async function mainXmlOf(runtime: DocxEditorServerRuntime): Promise<string> {
+  const parts = unzipSync(await runtime.save());
+  return strFromU8(parts['word/document.xml'] as Uint8Array);
 }

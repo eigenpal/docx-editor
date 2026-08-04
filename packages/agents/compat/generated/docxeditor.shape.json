@@ -1625,17 +1625,6 @@
             }
           ]
         },
-        "end": {
-          "uid": "DocxEditor.Range#end",
-          "kind": "property",
-          "requirementSet": null,
-          "overloads": [
-            {
-              "params": [],
-              "returns": "number"
-            }
-          ]
-        },
         "font": {
           "uid": "DocxEditor.Range#font",
           "kind": "property",
@@ -1756,17 +1745,6 @@
                 }
               ],
               "returns": "void"
-            }
-          ]
-        },
-        "start": {
-          "uid": "DocxEditor.Range#start",
-          "kind": "property",
-          "requirementSet": null,
-          "overloads": [
-            {
-              "params": [],
-              "returns": "number"
             }
           ]
         },

@@ -8,10 +8,13 @@
 // live region in the document; this API does not have one, and pretending otherwise would answer
 // text from a place the caller was not looking at.
 //
-// That is also why `Range#start`/`Range#end` are not here. They are document-wide character
-// positions, and a document-wide position is a different addressing scheme from the one this whole
-// lane uses (paragraph plus offset) — one whose value changes when any earlier paragraph changes
-// length. See the recorded omissions in the model's README section of the task report.
+// That is also why `Range#start`/`Range#end` are not here, and why they are not merely unimplemented
+// either: they are document-wide character positions, a different addressing scheme from the one this
+// whole lane uses (paragraph identity plus UTF-16 offset) and one whose value changes whenever any
+// earlier paragraph changes length. This engine maintains no such counter, so the members were
+// DE-SELECTED — removed from `compat/manifest.json`'s selection and from the authored declarations,
+// with the reasons recorded as omissions there — rather than left declared for a shipped object that
+// could never satisfy them. A caller who wants the ends of a range asks it for its paragraphs.
 
 import {
   ObjectPath,

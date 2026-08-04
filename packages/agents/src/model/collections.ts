@@ -40,7 +40,25 @@ export interface PromisedItem {
   hydrateNull(): void;
 }
 
+/** An edge accessor waiting for the answer that will say what it names. */
+interface PendingEdge {
+  readonly edge: 'first' | 'last';
+  readonly target: string;
+  readonly nullable: boolean;
+  readonly item: PromisedItem;
+}
+
 abstract class ItemCollection<T extends ClientObject> extends ClientObject {
+  /**
+   * The answer a command already gave, once it has given it.
+   *
+   * Kept so an edge asked for AFTER the sync is answered from the same members `items` holds,
+   * rather than being told there is no read for it.
+   */
+  #answer: { readonly value: AutomationValue; readonly label: string } | undefined;
+  /** Edges asked for BEFORE that answer arrived. */
+  readonly #pending: PendingEdge[] = [];
+
   protected constructor(context: RequestContext, path: ObjectPath) {
     super(context, path);
   }
@@ -84,6 +102,12 @@ abstract class ItemCollection<T extends ClientObject> extends ClientObject {
   /** @internal Take the members straight from the command that produced them. */
   fill(value: AutomationValue, label: string): void {
     this.setLoadedProperty('items', this.#members(value, label, 0, undefined));
+    this.#answer = { value, label };
+    // The edges a caller asked for before this arrived. Settled in the order they were asked for,
+    // and a refusal here is the answer to THAT call — `getFirst()` on a collection that turned out
+    // to hold nothing is `ItemNotFound`, reported against the accessor the consumer wrote.
+    const waiting = this.#pending.splice(0, this.#pending.length);
+    for (const edge of waiting) this.#settleEdge(edge, value);
   }
 
   protected onLoad(request: ResolvedLoadOptions): void {
@@ -108,26 +132,40 @@ abstract class ItemCollection<T extends ClientObject> extends ClientObject {
   /** One member, by which end of the collection it is at. */
   protected edge(edge: 'first' | 'last', accessor: string, nullable: boolean): T {
     const target = `${this.path.label}.${accessor}()`;
-    const listing = this.listing();
-    if (!listing) fail({ code: 'NotImplemented', target });
     const item = this.promised(target, nullable);
+    const listing = this.listing();
+    // NO LISTING MEANS THE MEMBERS ARE AN ANSWER, NOT A QUESTION — the ranges a split produced.
+    // The edge is taken from that same answer: sending a listing instead would read the document
+    // the split had already made, where the split's first piece need not be the first paragraph,
+    // and it would turn one atomic call into two.
+    if (!listing) {
+      const pending: PendingEdge = { edge, target, nullable, item };
+      if (this.#answer) this.#settleEdge(pending, this.#answer.value);
+      else this.#pending.push(pending);
+      return item;
+    }
     this.enqueue({
       sort: 'read',
       label: target,
       plan: () => listing,
       settle: (value) => {
-        const total = this.size(value, target);
-        if (total === 0) {
-          if (!nullable) fail({ code: 'ItemNotFound', target });
-          item.hydrateNull();
-          return;
-        }
-        const address = this.addressAt(value, target, edge === 'first' ? 0 : total - 1);
-        if (!address) fail({ code: 'ItemNotFound', target });
-        item.hydrateAddress(address);
+        this.#settleEdge({ edge, target, nullable, item }, value);
       },
     });
     return item;
+  }
+
+  #settleEdge(pending: PendingEdge, value: AutomationValue): void {
+    const { edge, target, nullable, item } = pending;
+    const total = this.size(value, target);
+    if (total === 0) {
+      if (!nullable) fail({ code: 'ItemNotFound', target });
+      item.hydrateNull();
+      return;
+    }
+    const address = this.addressAt(value, target, edge === 'first' ? 0 : total - 1);
+    if (!address) fail({ code: 'ItemNotFound', target });
+    item.hydrateAddress(address);
   }
 
   #members(
@@ -232,6 +270,18 @@ export class RangeCollection extends ItemCollection<Range> {
   /** The first range. `ItemNotFound` at the sync if nothing matched. */
   getFirst(): Range {
     return this.edge('first', 'getFirst', false);
+  }
+
+  /**
+   * The last range. `ItemNotFound` at the sync if nothing matched.
+   *
+   * A DocxEditor member rather than a compatibility one: the reference's range collection publishes
+   * only its first, and the pieces of a split are the case that makes the other end worth having —
+   * "the paragraph this one ended up as" is the last piece, and counting `items` to find it means
+   * loading them all. Recorded as an omission in `compat/manifest.json` for that reason.
+   */
+  getLast(): Range {
+    return this.edge('last', 'getLast', false);
   }
 
   /** The first range, or an object that will report `isNullObject`. */

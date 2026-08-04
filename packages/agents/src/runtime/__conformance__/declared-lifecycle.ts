@@ -18,24 +18,25 @@
 //   `select`), which can be compared whole.
 //
 // WHY RETURN TYPES ARE NOT COMPARED WHOLE. A declared `Body#insertText` answers the declared
-// `Range`, which has `font`, `style`, `hyperlink`, `start`/`end` and a bookmark collection. This
-// slice implements text, paragraphs, search, insertion and selection; the formatting and
-// content-control slices own the rest. So the shipped `Range` is NARROWER than the declared one, and
-// asserting the whole return type would either fail or have to be faked. What is asserted instead is
-// that the method exists, takes exactly the declared arguments, and answers this package's own
-// object of the right sort — and the list below says, by name, what is still owed.
+// `Range`, which has `font`, `style`, `hyperlink` and a bookmark collection. This slice implements
+// text, paragraphs, search, insertion and selection; the formatting and content-control slices own
+// the rest. So the shipped `Range` is NARROWER than the declared one, and asserting the whole return
+// type would either fail or have to be faked. What is asserted instead is that the method exists,
+// takes exactly the declared arguments, and answers this package's own object of the right sort —
+// and the list below says, by name, what is still owed.
 //
-// WHAT IS NOT IMPLEMENTED YET, and therefore not asserted:
+// WHAT IS NOT IMPLEMENTED YET, and therefore not asserted. Every entry is a member a LATER SLICE
+// owes; nothing on this list is a member the declarations describe and nobody intends to ship. That
+// distinction is why `Range#start`/`end` are not here: document-wide character offsets are a second
+// addressing scheme for positions this lane already addresses by paragraph identity and UTF-16
+// offset, so rather than leave them declared and unimplementable they were de-selected from
+// `compat/manifest.json` and removed from the declarations.
 //
 //   Document       — `comments`, `contentControls`, `sections`
 //   Body           — `contentControls`, `font`, `lists`, `style`, `getComments`
-//   Range          — `bookmarks`, `contentControls`, `font`, `hyperlink`, `style`, `start`, `end`
+//   Range          — `bookmarks`, `contentControls`, `font`, `hyperlink`, `style`
 //   Paragraph      — `font`, `contentControls`, `list`, `listItem`, `style`, and the paragraph
 //                    formatting properties (`alignment`, the indents, `lineSpacing`, the spacing)
-//
-// `Range#start`/`end` are a different case from the rest: they are document-wide character offsets,
-// which is a second addressing scheme for the same positions this lane already addresses by
-// paragraph and UTF-16 offset. See `../../model/range.ts` for why that one is not merely deferred.
 //
 // The `Declared`/`Mine` naming keeps each assertion readable as a sentence: does mine satisfy the
 // declared one, in the position a consumer would use it.
@@ -180,6 +181,14 @@ const paragraphItemsAreParagraphs: Satisfies<ParagraphCollection['items'], reado
 const rangesAreReachable: Satisfies<ReturnType<RangeCollection['getFirst']>, Range> = true;
 const rangeItemsAreRanges: Satisfies<RangeCollection['items'], readonly Range[]> = true;
 
+// The two edges that are DocxEditor's own rather than the reference's — the or-null form, and the
+// other end, which the pieces of a split make worth having. Both recorded as omissions in
+// `compat/manifest.json`; asserted here so their types cannot drift from the declared `getFirst`'s.
+const rangeEdgesAgree: Satisfies<
+  [ReturnType<RangeCollection['getLast']>, ReturnType<RangeCollection['getFirstOrNullObject']>],
+  [Range, Range]
+> = true;
+
 // A declared search option object is accepted verbatim by this model's `search`.
 declare const declaredOptions: Declared.SearchOptions;
 declare const body: Body;
@@ -217,4 +226,5 @@ void paragraphsAreReachable;
 void paragraphItemsAreParagraphs;
 void rangesAreReachable;
 void rangeItemsAreRanges;
+void rangeEdgesAgree;
 void declaredOptionsAreAccepted;
