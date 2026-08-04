@@ -267,6 +267,39 @@ React-only.
 - `ChromeMenuSubmenuEntry`
 - `ChromeMenuSeparatorEntry`
 
+### The right-click menu
+
+The packaged context menu, part of the same React-first provider/hooks layer as the menu
+bar and the navigation pane. The ENGINE half is already shared and is not deferred:
+`selectAll`, `copy`, `cut` and `paste` are core `EditorCommand`s, every row's enabled state
+comes from the same `Editor.can` both adapters call, and the surface's pointer controller
+already ignores non-primary buttons so that a right-click reaches a menu with the selection
+intact. What defers is the panel.
+
+Its rows ARE the menu bar's rows — `MenuRow`, `MenuItem`, `MenuSubmenu`, `MenuSeparator`
+reused rather than reimplemented — so the Vue twin costs a panel and a placement rule, not a
+second row vocabulary.
+
+- `DocxEditorContextMenu` — the compound. Also reachable as `DocxEditor.ContextMenu`.
+- `DocxEditorContextMenuNamespace`
+- `DocxEditorContextMenuProps`
+  The five packaged rows below are each bound to a fixed `EditorCommand` rather than to a
+  `ChromeSlotId`, because none of the five is a toolbar or menu-bar control and adding
+  registry entries for them would put five dead controls in the default arrangement.
+
+- `ContextMenuCut`
+- `ContextMenuCopy`
+- `ContextMenuPaste`
+- `ContextMenuDelete`
+- `ContextMenuSelectAll`
+- `ContextMenuItem` — a host-owned row with no slot and no command, the right-click twin of
+  `ToolbarAction` and `Menu.Row`. Deliberately NOT a shared concept, for the same reason
+  `ToolbarActionProps` is not: it carries no engine wiring, so there is nothing for core to
+  own.
+- `ContextMenuCommandProps`
+- `ContextMenuItemProps`
+- `ContextMenuAnchor` — where the panel opened, in client coordinates.
+
 ## Vue-only
 
 - `DocxEditorShellProps`

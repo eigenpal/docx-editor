@@ -13,6 +13,7 @@ import type {
 } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
 import type { DocxEditorMenuProps } from './editor/menu';
+import type { DocxEditorContextMenuProps } from './editor/contextmenu';
 export { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
 export type {
   EditorFontErrorCode,
@@ -111,6 +112,15 @@ export interface DocxEditorProps {
    * panel loses the packaged UI and nothing else.
    */
   hyperlinkPopup?: boolean;
+  /**
+   * Render the packaged right-click menu (`false` removes it, restoring the browser's own).
+   *
+   * An object is passed through to `DocxEditor.ContextMenu` as props, so a host can compose
+   * its own rows — `{ children: <DocxEditor.ContextMenu.Item … /> }` — without dropping to
+   * the primitives. The engine's selection behavior is the same either way: a right-click
+   * never moves the caret, so the menu always acts on the selection the user already had.
+   */
+  contextMenu?: boolean | DocxEditorContextMenuProps;
   /**
    * Render the packaged navigation pane — headings and find — over the document's left
    * gutter (`false` removes it and its toggle).

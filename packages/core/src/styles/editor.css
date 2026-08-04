@@ -4664,3 +4664,39 @@ a.docx-hyperlink:focus-visible {
   line-height: 18px;
   color: var(--doc-text-muted);
 }
+
+/* ── The context menu ──────────────────────────────────────────────────────────────────
+ *
+ * The right-click panel over the painted document. It IS the shared `.docx-toolbar__menu`
+ * card holding `.docx-menubar__item` rows — the same object the menu bar drops under a
+ * trigger — so a row means the same thing in both places and the disabled treatment has
+ * one definition. What this block adds is only what differs: the panel is placed in client
+ * space by the component rather than relative to a trigger, and it sits above the dialogs
+ * and dropdowns (z-index 40) because it is opened ON them as often as on the page. */
+.ep-root .docx-contextmenu,
+.docx-contextmenu {
+  z-index: 45;
+  min-width: 240px;
+  /* A menu longer than the window scrolls rather than overflowing it. The flip in
+   * `DocxEditorContextMenu` clamps the panel to the top inset when it cannot fit; without
+   * a max height and a scroller, the rows below the fold would be unreachable. */
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+}
+
+/* The panel is `position: fixed`, so it renders OUTSIDE the `.ep-root` cascade's usual
+ * geometry but still inside its subtree — the token values resolve, and this block is
+ * duplicated unscoped above so a host that mounts the viewport without the wrapper class
+ * still gets the card. Focus ring on the panel itself is suppressed: it takes focus only
+ * to give the arrow keys a starting point, and a ring around the whole menu reads as a
+ * selected row. */
+.docx-contextmenu:focus {
+  outline: none;
+}
+
+/* Rows inside the context menu carry the menu bar's grid without the menu bar's class
+ * being present on an ancestor, so the icon and shortcut columns are restated here. */
+.docx-contextmenu .docx-menubar__item {
+  gap: 12px;
+  width: 100%;
+}

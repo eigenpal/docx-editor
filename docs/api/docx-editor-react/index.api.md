@@ -105,6 +105,72 @@ export { commandForSlot }
 
 export { composeFontConfiguration }
 
+// @public
+export interface ContextMenuAnchor {
+    // (undocumented)
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+}
+
+// @public
+export interface ContextMenuCommandProps {
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    icon?: ReactNode;
+    labelKey?: string;
+    shortcutKey?: string;
+}
+
+// @public
+export const ContextMenuCopy: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuCut: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuDelete: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export function ContextMenuItem(input: ContextMenuItemProps): react.JSX.Element;
+
+// @public
+export interface ContextMenuItemProps {
+    active?: boolean;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    disabled?: boolean;
+    disabledReason?: string;
+    // (undocumented)
+    icon?: ReactNode;
+    label: string;
+    // (undocumented)
+    onSelect?: () => void;
+    shortcut?: string;
+}
+
+// @public
+export function ContextMenuPaste(input: ContextMenuCommandProps): react.JSX.Element | null;
+
+// @public (undocumented)
+export namespace ContextMenuPaste {
+    var // (undocumented)
+    docxRow: "edit.paste";
+}
+
+// @public
+export const ContextMenuSelectAll: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
 export { createFontSource }
 
 export { DisplayItem }
@@ -127,6 +193,43 @@ export function DocxEditorContent(input: DocxEditorContentProps): react.JSX.Elem
 // @public
 export interface DocxEditorContentProps {
     className?: string;
+}
+
+// @public
+export function DocxEditorContextMenu(input: DocxEditorContextMenuProps): react.JSX.Element;
+
+// @public
+export interface DocxEditorContextMenuNamespace {
+    // (undocumented)
+    (props: DocxEditorContextMenuProps): ReactElement;
+    // (undocumented)
+    readonly Copy: typeof ContextMenuCopy;
+    // (undocumented)
+    readonly Cut: typeof ContextMenuCut;
+    // (undocumented)
+    readonly Delete: typeof ContextMenuDelete;
+    readonly Item: typeof ContextMenuItem;
+    // (undocumented)
+    readonly Paste: typeof ContextMenuPaste;
+    readonly Row: typeof MenuRow;
+    // (undocumented)
+    readonly SelectAll: typeof ContextMenuSelectAll;
+    // (undocumented)
+    readonly Separator: typeof MenuSeparator;
+    readonly Slot: typeof MenuItem;
+    // (undocumented)
+    readonly Submenu: typeof MenuSubmenu;
+}
+
+// @public
+export interface DocxEditorContextMenuProps {
+    // (undocumented)
+    children?: ReactNode;
+    className?: string;
+    disabled?: boolean;
+    onOpenChange?: (open: boolean) => void;
+    preset?: boolean;
+    t?: ToolbarTranslate;
 }
 
 // @public
@@ -253,6 +356,7 @@ export interface DocxEditorMenuProps {
 export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEditorProps & RefAttributes<DocxEditorRef>> {
     // (undocumented)
     readonly Content: typeof DocxEditorContent;
+    readonly ContextMenu: typeof ContextMenu;
     readonly DocumentOutline: typeof DocxEditorDocumentOutline;
     readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
     readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
@@ -337,6 +441,7 @@ export interface DocxEditorProps {
     // (undocumented)
     className?: string;
     readonly colorMode?: 'light' | 'dark' | 'system';
+    contextMenu?: boolean | DocxEditorContextMenuProps;
     document?: DocumentSource;
     fonts?: FontConfiguration | FontConfigurationFragment;
     hyperlinkPopup?: boolean;

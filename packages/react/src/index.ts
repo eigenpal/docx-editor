@@ -118,6 +118,23 @@ export {
   type HyperLinkPartProps,
   type HyperLinkProps,
 } from './editor/DocxEditorHyperLink';
+// The right-click menu (also reachable as `DocxEditor.ContextMenu`): the compound over the
+// painted surface and its rows. The rows ARE the menu bar's rows — one row presentation,
+// two panels — so only the parts unique to this surface are exported bare.
+export {
+  DocxEditorContextMenu,
+  ContextMenuCopy,
+  ContextMenuCut,
+  ContextMenuDelete,
+  ContextMenuItem,
+  ContextMenuPaste,
+  ContextMenuSelectAll,
+  type ContextMenuAnchor,
+  type ContextMenuCommandProps,
+  type ContextMenuItemProps,
+  type DocxEditorContextMenuNamespace,
+  type DocxEditorContextMenuProps,
+} from './editor/contextmenu';
 export {
   useHyperlinkPopup,
   useHyperlinkPopupInstance,
