@@ -58,15 +58,47 @@ function docx(header?: string): Uint8Array {
   return zipSync(entries);
 }
 
-function mount(options: { author?: string; header?: string } = {}): {
+/** A document with one footnote, so the note story has somewhere for a caret to be. */
+function noteDocx(): Uint8Array {
+  const body =
+    `<w:p><w:r><w:t>alpha</w:t></w:r>` +
+    `<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr>` +
+    `<w:footnoteReference w:id="1"/></w:r></w:p>`;
+  const footnotes =
+    `<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
+    `<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>` +
+    `<w:footnote w:id="1"><w:p><w:r><w:footnoteRef/><w:t>NOTE</w:t></w:r></w:p></w:footnote>`;
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}${p('beta')}<w:sectPr/></w:body></w:document>`
+    ),
+    'word/footnotes.xml': strToU8(`<w:footnotes xmlns:w="${W}">${footnotes}</w:footnotes>`),
+  });
+}
+
+function mount(options: { author?: string; header?: string; bytes?: Uint8Array } = {}): {
   editor: DocxEditorInstance;
   container: HTMLElement;
   host: AutomationHost;
 } {
   const container = document.createElement('div');
+  document.body.append(container);
   const editor = createDocxEditor({
     container,
-    document: docx(options.header),
+    document: options.bytes ?? docx(options.header),
     ...(options.author === undefined ? {} : { author: options.author }),
   });
   if (!editor.surface) throw new Error('surface failed to mount');
@@ -235,5 +267,89 @@ describe('a body handle names the body, wherever the reader is', () => {
     surface.type('Z');
     expect(surface.session.storyText({ kind: 'headerFooter', rId: 'rId10' })).toContain('Z');
     expect(textOf(host, paragraphs[0]!)).toBe('alpha');
+  });
+});
+
+describe('a body write does not drag the reader out of the story they are in', () => {
+  // The commit that follows a scripted edit re-clamps the caret, because an edit can remove the
+  // characters it was sitting in. Clamping against the BODY's paragraphs while the reader is in
+  // a header or a note is how a caret ends up naming a paragraph that story does not contain:
+  // the scope stays furniture, the caret moves into the document, and the next keystroke is
+  // applied to the header story with a body paragraph id — refused as `unknown-paragraph`, so
+  // the reader types and nothing happens.
+
+  test('the caret stays put in an open header, and typing still lands there', () => {
+    const { host, editor } = mount({ header: p('HEADER') });
+    const paragraphs = paragraphsOf(host);
+    const surface = editor.surface!;
+    surface.enterHeaderFooter({ rId: 'rId10' });
+    const headerId = surface.session.paragraphIdsIn({ kind: 'headerFooter', rId: 'rId10' })[0]!;
+    surface.setSelection({
+      anchor: { paragraphId: headerId, offset: 3 },
+      head: { paragraphId: headerId, offset: 3 },
+    });
+    const caretBefore = surface.state().selection;
+
+    const response = host.execute({
+      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'B' }],
+    });
+    expect(response.ok).toBe(true);
+
+    expect(surface.activeScope()).toEqual({ kind: 'headerFooter', rId: 'rId10' });
+    expect(surface.state().selection).toEqual(caretBefore);
+
+    surface.type('K');
+    expect(surface.state().lastRejection).toBeNull();
+    expect(surface.session.storyText({ kind: 'headerFooter', rId: 'rId10' })).toBe('HEAKDER');
+    // And the scripted edit itself still went to the body, unaffected by the caret's story.
+    expect(textOf(host, paragraphs[0]!)).toBe('Balpha');
+  });
+
+  test('the caret stays put in an open footnote, and typing still lands there', () => {
+    const { host, editor } = mount({ bytes: noteDocx() });
+    const paragraphs = paragraphsOf(host);
+    const surface = editor.surface!;
+    expect(surface.enterNote('footnote:1')).toBe(true);
+    const caretBefore = surface.state().selection;
+    expect(caretBefore.head.paragraphId).toContain('footnotes.xml');
+
+    const response = host.execute({
+      operations: [{ op: 'insertText', paragraph: paragraphs[1]!, offset: 0, text: 'B' }],
+    });
+    expect(response.ok).toBe(true);
+
+    expect(surface.activeScope()).toEqual({ kind: 'note', id: 'footnote:1' });
+    expect(surface.state().selection).toEqual(caretBefore);
+
+    surface.type('!');
+    expect(surface.state().lastRejection).toBeNull();
+    expect(surface.session.storyText({ kind: 'notesPart', noteKind: 'footnote' })).toContain('!');
+    expect(textOf(host, paragraphs[1]!)).toBe('Bbeta');
+    expect(textOf(host, paragraphs[0]!)).not.toContain('!');
+  });
+
+  test('a body reader is still re-clamped, so the clamp was scoped and not removed', () => {
+    // The control. Body selection must keep being clamped by the same commit — dropping the
+    // clamp instead of scoping it would leave a caret past the end of a shortened paragraph.
+    const { host, editor } = mount();
+    const paragraphs = paragraphsOf(host);
+    const surface = editor.surface!;
+    const bodyId = surface.session.paragraphIds()[0]!;
+    surface.setSelection({
+      anchor: { paragraphId: bodyId, offset: 5 },
+      head: { paragraphId: bodyId, offset: 5 },
+    });
+
+    host.execute({
+      operations: [{ op: 'insertText', paragraph: paragraphs[0]!, offset: 0, text: 'B' }],
+    });
+
+    const { anchor, head } = surface.state().selection;
+    expect(anchor.paragraphId).toBe(bodyId);
+    expect(head.paragraphId).toBe(bodyId);
+    expect(head.offset).toBeLessThanOrEqual(6);
+    surface.type('K');
+    expect(surface.state().lastRejection).toBeNull();
+    expect(textOf(host, paragraphs[0]!)).toContain('K');
   });
 });

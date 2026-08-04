@@ -1694,7 +1694,16 @@ export function mountPaginatedSurface(
           // needs post-edit lengths, and this thunk runs before the repaint.
           flushLayout();
           selectionSync.noteModelMoved();
-          return clampedToDocument(currentLayout, session.paragraphIds(), selection);
+          // Clamped within the story the READER is in, which is not necessarily the story that
+          // was just written. Clamping against the body's paragraphs while a header or a
+          // footnote was open moved the caret into the document while the scope stayed on the
+          // furniture, and the next keystroke — applied to the furniture story with a body
+          // paragraph id — was refused as `unknown-paragraph`: the reader typed and nothing
+          // happened. An empty order means the story is not painted yet; leaving the caret
+          // alone is right there, because a clamp with nothing to clamp to is a caret reset.
+          const order = paragraphOrder();
+          if (order.length === 0) return null;
+          return clampedToDocument(currentLayout, order, selection);
         }
       );
       return result;
