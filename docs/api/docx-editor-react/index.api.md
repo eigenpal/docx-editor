@@ -607,13 +607,13 @@ export interface DocxEditorToolbarNamespace {
     // (undocumented)
     readonly EditingMode: ToolbarSlotPartComponent;
     // (undocumented)
-    readonly FontColor: ToolbarSlotPartComponent;
+    readonly FontColor: ToolbarColorSplitComponent;
     // (undocumented)
     readonly FontFamily: typeof FontFamily;
     // (undocumented)
     readonly FontSize: ToolbarSlotPartComponent;
     // (undocumented)
-    readonly Highlight: ToolbarSlotPartComponent;
+    readonly Highlight: ToolbarColorSplitComponent;
     // (undocumented)
     readonly ImageInsert: ToolbarPartComponent;
     // (undocumented)

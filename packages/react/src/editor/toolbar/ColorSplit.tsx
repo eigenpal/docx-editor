@@ -21,8 +21,37 @@ import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
-import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
-import type { ToolbarSlotPartProps, ToolbarSlotPartComponent } from './parts';
+import {
+  ToolbarButton,
+  chromeControlForSlot,
+  chromeIcon,
+  guardToolbarMousedown,
+} from './ToolbarButton';
+import type { ToolbarSlotPartProps } from './parts';
+
+/**
+ * Props for the split colour controls. @public
+ *
+ * The one addition over a plain slot part is `icon`, and it belongs here rather than on
+ * `ToolbarSlotPartProps`: the other slot parts are steppers and pickers with no single glyph
+ * to replace, so an icon prop on the shared type would be a promise three of them could not
+ * keep.
+ */
+export interface ToolbarColorSplitProps extends ToolbarSlotPartProps {
+  /**
+   * Replaces the glyph above the colour bar — the registry's red "A" or highlighter pen.
+   *
+   * The BAR is not replaceable and still paints the live value, so a host swapping the glyph
+   * keeps the thing that makes this control readable at a glance.
+   */
+  icon?: ReactNode;
+}
+
+/** A split colour control pinned to one slot. @public */
+export interface ToolbarColorSplitComponent {
+  (props: ToolbarColorSplitProps): ReturnType<typeof ToolbarButton>;
+  readonly docxSlot: ChromeSlotId;
+}
 
 interface SwatchDef {
   /** The value dispatched to the engine (hex without '#', or an ST_HighlightColor name). */
@@ -325,11 +354,11 @@ function HighlightBody({ apply, label, current }: PopupBodyProps) {
   );
 }
 
-function createColorSplit(config: ColorSplitConfig): ToolbarSlotPartComponent {
+function createColorSplit(config: ColorSplitConfig): ToolbarColorSplitComponent {
   const { slot, defaultValue, cssOf, clear, body } = config;
   const isFontColor = slot === 'text.color';
 
-  const Part = ({ className, hidden }: ToolbarSlotPartProps) => {
+  const Part = ({ className, hidden, icon }: ToolbarColorSplitProps) => {
     const editor = useDocxEditor();
     const { isEnabled, disabledReason } = useEditorCommand(slot);
     const label = useToolbarLabel();
@@ -402,7 +431,7 @@ function createColorSplit(config: ColorSplitConfig): ToolbarSlotPartComponent {
           onMouseDown={guardToolbarMousedown}
           onClick={() => apply(lastValue)}
         >
-          {chromeIcon(control?.paths)}
+          {icon ?? chromeIcon(control?.paths)}
           <span
             className="docx-toolbar__colorsplit-bar"
             style={{ backgroundColor: cssOf(lastValue) }}
@@ -460,7 +489,7 @@ const HIGHLIGHT_CSS = new Map(HIGHLIGHT_SWATCHES.map((swatch) => [swatch.value, 
  * The seed is the registry swatch (the chrome spec's default red: the apply
  * half starts at `{ rgb: 'FF0000' }` before any pick).
  */
-export const ToolbarFontColor: ToolbarSlotPartComponent = createColorSplit({
+export const ToolbarFontColor: ToolbarColorSplitComponent = createColorSplit({
   slot: 'text.color',
   // The registry's `swatch: '#ff0000'`, as the hex value `w:color` takes.
   defaultValue: 'FF0000',
@@ -473,7 +502,7 @@ export const ToolbarFontColor: ToolbarSlotPartComponent = createColorSplit({
  * The highlight split button (`DocxEditorToolbar.Highlight`): wired to
  * `text.highlight`, values from the closed ST_HighlightColor palette.
  */
-export const ToolbarHighlight: ToolbarSlotPartComponent = createColorSplit({
+export const ToolbarHighlight: ToolbarColorSplitComponent = createColorSplit({
   slot: 'text.highlight',
   defaultValue: 'yellow',
   cssOf: (value) => HIGHLIGHT_CSS.get(value) ?? '#ffff00',

@@ -20,7 +20,9 @@ import {
   IceBold,
   IceBullets,
   IceClear,
+  IceFontColor,
   IceFreeze,
+  IceHighlight,
   IceItalic,
   IceLink,
   IceNumbers,
@@ -77,8 +79,10 @@ export function IglooToolbar({ blizzard, onBlizzard }: IglooActionsProps) {
       <DocxEditor.Toolbar.Italic icon={IceItalic} />
       <DocxEditor.Toolbar.Underline icon={IceUnderline} />
       <DocxEditor.Toolbar.Strike icon={IceStrike} />
-      <DocxEditor.Toolbar.FontColor />
-      <DocxEditor.Toolbar.Highlight />
+      {/* Only the GLYPH is the demo's. The colour bar under each is the library's and
+          still paints the live value, so the control stays readable at a glance. */}
+      <DocxEditor.Toolbar.FontColor icon={IceFontColor} />
+      <DocxEditor.Toolbar.Highlight icon={IceHighlight} />
       <DocxEditor.Toolbar.Separator />
 
       <DocxEditor.Toolbar.AlignLeft icon={IceAlignLeft} />

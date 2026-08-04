@@ -113,3 +113,33 @@ export const IceBlizzard = (
 
 // The context menu's own icons live in `menu-icons.tsx`, so each file stays short and
 // scannable — the same split the library makes between `Icons.tsx` and `icon-base.tsx`.
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The split colour controls
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Only the GLYPH is replaced. The colour bar under it is the library's and still paints the
+// live value, so these stay readable at a glance — which is the whole reason the control is
+// shaped this way. Both drop the baseline the packaged icons sit on, because the bar already
+// draws one.
+
+// A BADGE, not an overlay. Fusing the snowflake into the letterform crowded both at 18px
+// and read as a smudge; set beside the glyph it stays legible and still says "ice".
+
+/** Font colour: the "A", with a snowflake badge. */
+export const IceFontColor = (
+  <Frost>
+    <path d="M3 17.5 8.5 6 14 17.5" />
+    <path d="M5.3 13.2h6.4" />
+    <path d="M18.5 3.6v5.8M16 5.1l5 2.8M21 5.1l-5 2.8" />
+  </Frost>
+);
+
+/** Highlight: a marker, with a snowflake badge. */
+export const IceHighlight = (
+  <Frost>
+    <path d="m10 4.8 4.2 4.2-6.3 6.3H3.7v-4.2z" />
+    <path d="M3 19h10.5" />
+    <path d="M18.5 3.6v5.8M16 5.1l5 2.8M21 5.1l-5 2.8" />
+  </Frost>
+);
