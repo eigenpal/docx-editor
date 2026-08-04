@@ -17,14 +17,10 @@ import { ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
 import { ColorValue } from '@docx-editor.dev/core-contract/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core-contract/editor';
 import { composeFontConfiguration } from '@docx-editor.dev/core-contract/editor';
-import { ContentControlLock } from '@docx-editor.dev/core-contract/layout';
 import { ContentControlSummary } from '@docx-editor.dev/core-contract';
 import { ContentControlType } from '@docx-editor.dev/core-contract';
 import { createFontSource } from '@docx-editor.dev/core-contract/editor';
 import { CSSProperties } from 'react';
-import { DisplayItem } from '@docx-editor.dev/core-contract/contracts/geometry';
-import { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
-import { DocPoint } from '@docx-editor.dev/core-contract/contracts/geometry';
 import { DocumentChange } from '@docx-editor.dev/core-contract/contracts/editor';
 import { DocumentHandle } from '@docx-editor.dev/core-contract/contracts/editor';
 import { DocumentSource } from '@docx-editor.dev/core-contract/contracts/editor';
@@ -108,6 +104,7 @@ export { commandForSlot }
 
 export { composeFontConfiguration }
 
+// @public
 export const CONTENT_CONTROL_SLOTS: {
     readonly showAll: "contentControl.showAll";
     readonly formFill: "contentControl.formFill";
@@ -140,6 +137,9 @@ export interface ContentControlInspectorState {
     // (undocumented)
     readonly tag: string | null;
 }
+
+// @public
+export type ContentControlLock = 'unlocked' | 'sdtLocked' | 'contentLocked' | 'sdtContentLocked';
 
 // @public
 export interface ContentControlPartProps {
@@ -229,12 +229,6 @@ export const ContextMenuSelectAll: ((input: ContextMenuCommandProps) => react.JS
 
 export { createFontSource }
 
-export { DisplayItem }
-
-export { DisplayPage }
-
-export { DocPoint }
-
 // @public (undocumented)
 export function DocumentName(input: DocumentNameProps): react__default.JSX.Element;
 
@@ -246,6 +240,7 @@ export const DocxEditor: DocxEditorNamespace;
 // @public
 export function DocxEditorContent(input: DocxEditorContentProps): react.JSX.Element;
 
+// @public (undocumented)
 export const DocxEditorContentControl: DocxEditorContentControlNamespace;
 
 // @public
@@ -260,7 +255,6 @@ export interface DocxEditorContentControlNamespace {
     readonly Remove: typeof ContentControlRemove;
 }
 
-// @public
 // @public
 export interface DocxEditorContentProps {
     className?: string;
@@ -1496,6 +1490,7 @@ export interface ToolbarSlotPartProps {
 // @public
 export type ToolbarTranslate = (key: string) => string;
 
+// @public
 export function useContentControl(): UseContentControlResult;
 
 // @public
@@ -1530,7 +1525,6 @@ export interface UseContentControlResult {
     readonly toggleShowAll: () => void;
 }
 
-// @public
 // @public
 export function useDocumentOutline(): UseDocumentOutlineResult;
 
