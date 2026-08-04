@@ -73,6 +73,7 @@ describe('content-control surface chrome', () => {
     expect(slots).toContain('contentControl.inspector');
     expect(slots).toContain('contentControl.remove');
     expect(slots).toContain('text.bold');
+    expect(CHROME_GROUPS.find((group) => group.id === 'contentControl')?.contextual).toBe(true);
     expect(commandForSlot('contentControl.remove')).toEqual({ type: 'removeContentControl' });
     expect(commandForSlot('contentControl.showAll')).toBeNull();
   });
@@ -85,7 +86,11 @@ describe('content-control surface chrome', () => {
     // Park the caret outside every control so only show-all (not caret-entry) paints chrome.
     putCaret(surface, 0, 1);
     expect(surface.contentControls.atCaret()).toBeNull();
-    expect(container.querySelector('[data-docx-content-control]')).toBeNull();
+    expect(
+      container
+        .querySelector<HTMLElement>('[data-docx-content-control]')!
+        .hasAttribute('data-boundary-visible')
+    ).toBe(false);
 
     const before = pageGeometry(surface);
 
@@ -99,7 +104,11 @@ describe('content-control surface chrome', () => {
     expect(chrome!.hasAttribute('data-docx-marker')).toBe(true);
 
     surface.contentControls.setShowAll(false);
-    expect(container.querySelector('[data-docx-content-control]')).toBeNull();
+    expect(
+      container
+        .querySelector<HTMLElement>('[data-docx-content-control]')!
+        .hasAttribute('data-boundary-visible')
+    ).toBe(false);
     expect(pageGeometry(surface)).toEqual(before);
   });
 
@@ -111,9 +120,9 @@ describe('content-control surface chrome', () => {
     putCaret(surface, 1, 0);
     expect(surface.contentControls.atCaret()?.alias).toBe('A');
     const nodes = [...container.querySelectorAll('[data-docx-content-control]')];
-    expect(nodes.length).toBe(1);
-    expect((nodes[0] as HTMLElement).dataset.active).toBe('');
-    expect((nodes[0] as HTMLElement).dataset.alias).toBe('A');
+    expect(nodes.length).toBe(2);
+    const active = nodes.find((node) => (node as HTMLElement).hasAttribute('data-active'));
+    expect((active as HTMLElement | undefined)?.dataset.alias).toBe('A');
   });
 
   test('widget mousedown is prevented so chrome does not steal the caret', () => {
@@ -139,6 +148,122 @@ describe('content-control surface chrome', () => {
     widget!.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
     expect(surface.state().selection).toEqual(before);
+  });
+
+  test('widget menus open below controls in pages-layer coordinates', () => {
+    const body =
+      `<w:p>${sdt(
+        `<w:dropDownList><w:listItem w:displayText="One" w:value="1"/>` +
+          `<w:listItem w:displayText="Two" w:value="2"/></w:dropDownList>`,
+        `<w:r><w:t>One</w:t></w:r>`
+      )}</w:p>` +
+      `<w:p>${sdt(
+        `<w:date w:fullDate="2026-08-04T00:00:00Z"><w:dateFormat w:val="yyyy-MM-dd"/></w:date>`,
+        `<w:r><w:t>2026-08-04</w:t></w:r>`
+      )}</w:p>`;
+    const { surface, container } = mount(body);
+    const records = surface.layout().contentControls!;
+    const widgets = [...container.querySelectorAll<HTMLElement>('[data-docx-cc-widget]')].sort(
+      (left) => (left.dataset.docxCcWidget === 'date' ? -1 : 1)
+    );
+    expect(widgets).toHaveLength(2);
+
+    for (const [index, widget] of widgets.entries()) {
+      widget.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          pointerId: index + 1,
+          pointerType: 'mouse',
+        })
+      );
+      const menu = container.querySelector<HTMLElement>('.docx-content-control-menu');
+      expect(menu).not.toBeNull();
+      const controlId = widget.getAttribute('data-docx-cc-id');
+      const fragment = records.find((record) => record.id === controlId)!.fragments[0]!;
+      const page = surface.layout().pages[fragment.pageIndex]!;
+      expect(menu!.style.left).toBe(
+        `${page.box.x + (page.contentBox.x - page.box.x) + fragment.box.x + fragment.box.width}px`
+      );
+      expect(menu!.style.top).toBe(
+        `${page.box.y + (page.contentBox.y - page.box.y) + fragment.box.y + fragment.box.height}px`
+      );
+      expect(menu!.style.transform).toBe('translateX(-100%)');
+      if (widget.dataset.docxCcWidget === 'date') {
+        expect(menu!.classList.contains('docx-content-control-calendar')).toBe(true);
+        expect(menu!.querySelectorAll('.docx-content-control-calendar-day')).toHaveLength(42);
+        expect(menu!.querySelector('input[type="date"]')).not.toBeNull();
+      }
+      const owner = [
+        ...container.querySelectorAll<HTMLElement>('[data-docx-content-control]'),
+      ].find((chrome) => chrome.getAttribute('data-docx-content-control') === controlId);
+      expect(owner?.hasAttribute('data-open')).toBe(true);
+      if (widget.dataset.docxCcWidget === 'dropdown') {
+        const option = menu!.querySelectorAll<HTMLElement>('.docx-content-control-menu-item')[1]!;
+        const pointerDown = new PointerEvent('pointerdown', {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          pointerId: 10,
+          pointerType: 'mouse',
+        });
+        option.dispatchEvent(pointerDown);
+        expect(pointerDown.defaultPrevented).toBe(false);
+        option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+        expect(menu!.isConnected).toBe(false);
+        expect(container.querySelector('.docx-page-content')?.textContent).toContain('Two');
+      } else {
+        const beforeTitle = menu!.querySelector(
+          '.docx-content-control-calendar-title'
+        )?.textContent;
+        const next = menu!.querySelectorAll<HTMLElement>('.docx-content-control-calendar-nav')[1]!;
+        next.dispatchEvent(
+          new PointerEvent('pointerdown', {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+            pointerId: 11,
+            pointerType: 'mouse',
+          })
+        );
+        next.click();
+        expect(menu!.querySelector('.docx-content-control-calendar-title')?.textContent).not.toBe(
+          beforeTitle
+        );
+        expect(menu!.querySelector('.docx-content-control-calendar-input')).not.toBeNull();
+        document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        expect(menu!.isConnected).toBe(false);
+      }
+    }
+  });
+
+  test('manual calendar entry commits an ISO date', () => {
+    const body = `<w:p>${sdt(
+      `<w:date w:fullDate="2026-08-04T00:00:00Z"><w:dateFormat w:val="yyyy-MM-dd"/></w:date>`,
+      `<w:r><w:t>2026-08-04</w:t></w:r>`
+    )}</w:p>`;
+    const { container } = mount(body);
+    const widget = container.querySelector<HTMLElement>('[data-docx-cc-widget="date"]')!;
+    widget.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        pointerId: 12,
+        pointerType: 'mouse',
+      })
+    );
+    const manual = container.querySelector<HTMLInputElement>(
+      '.docx-content-control-calendar-input'
+    )!;
+    manual.value = '2026-09-15';
+    manual.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    manual.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(container.querySelector('.docx-content-control-menu')).not.toBeNull();
+    manual.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
+    expect(container.querySelector('.docx-content-control-menu')).toBeNull();
+    expect(container.querySelector('.docx-page-content')?.textContent).toContain('2026-09-15');
   });
 
   test('boundary furniture is excluded from native selection mapping', () => {
@@ -275,16 +400,34 @@ describe('content-control surface chrome', () => {
   });
 
   test('checkbox widget commit goes through setContentControlValue', () => {
-    const body = `<w:p>${sdt(
-      `<w14:checkbox><w14:checked w14:val="0"/>` +
-        `<w14:checkedState w14:val="2612" w14:font="MS Gothic"/>` +
-        `<w14:uncheckedState w14:val="2610" w14:font="MS Gothic"/>` +
-        `</w14:checkbox>`,
-      `<w:r><w:sym w:font="MS Gothic" w:char="2610"/></w:r>`
-    )}</w:p>`;
-    const { surface } = mount(body);
+    const body =
+      `<w:p>${sdt(
+        `<w14:checkbox><w14:checked w14:val="0"/>` +
+          `<w14:checkedState w14:val="2612" w14:font="MS Gothic"/>` +
+          `<w14:uncheckedState w14:val="2610" w14:font="MS Gothic"/>` +
+          `</w14:checkbox>`,
+        `<w:r><w:sym w:font="MS Gothic" w:char="2610"/></w:r>`
+      )}` + `<w:r><w:t> Task pending</w:t></w:r></w:p>`;
+    const { surface, container } = mount(body);
     const control = surface.layout().contentControls?.[0];
     expect(control?.controlType).toBe('checkbox');
-    expect(surface.contentControls.setValue(control!.id, 'true')).toBe(true);
+    surface.contentControls.setShowAll(true);
+    const before = container.querySelector<HTMLElement>('[data-docx-cc-widget="checkbox"]');
+    expect(before?.getAttribute('data-checked')).toBe('false');
+    expect(before?.getAttribute('aria-checked')).toBe('false');
+
+    before!.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        pointerId: 1,
+        pointerType: 'mouse',
+      })
+    );
+
+    const after = container.querySelector<HTMLElement>('[data-docx-cc-widget="checkbox"]');
+    expect(after?.getAttribute('data-checked')).toBe('true');
+    expect(after?.getAttribute('aria-checked')).toBe('true');
   });
 });

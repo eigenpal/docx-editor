@@ -406,6 +406,7 @@ export const CHROME_GROUPS = [
     // public forever — renaming any is a breaking change.
     id: 'contentControl',
     labelKey: 'contentControl.group',
+    contextual: true,
     controls: [
       {
         id: 'showAll',

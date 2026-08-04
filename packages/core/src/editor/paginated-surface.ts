@@ -643,14 +643,21 @@ export function mountPaginatedSurface(
     | {
         readonly showAll?: boolean;
         readonly activeIds?: ReadonlySet<string>;
+        readonly checkedIds?: ReadonlySet<string>;
       }
     | undefined {
     const active = contentControlAtCaret();
     const activeIds = active ? new Set([active.id]) : undefined;
-    if (!showAllContentControls && !activeIds) return undefined;
+    const checkedIds = new Set(
+      contentControlsInLayout(currentLayout)
+        .filter((control) => control.controlType === 'checkbox' && checkboxChecked(control.id))
+        .map((control) => control.id)
+    );
+    if (!showAllContentControls && !activeIds && checkedIds.size === 0) return undefined;
     return {
       ...(showAllContentControls ? { showAll: true } : {}),
       ...(activeIds ? { activeIds } : {}),
+      ...(checkedIds.size > 0 ? { checkedIds } : {}),
     };
   }
 
@@ -889,15 +896,47 @@ export function mountPaginatedSurface(
         continue;
       }
       for (const prop of child.children) {
-        if (prop.kind === 'textValue' || prop.localName !== 'checkbox') continue;
+        if (prop.kind !== 'contentControlCheckbox') continue;
         for (const state of prop.children) {
-          if (state.kind === 'textValue' || state.localName !== 'checked') continue;
+          if (state.kind !== 'contentControlChecked') continue;
           const val = state.attributes.find((a) => a.localName === 'val')?.value;
           return !(val === '0' || val === 'false' || val === 'off');
         }
       }
     }
-    return true;
+    return false;
+  }
+
+  function dateValueOfControl(controlId: string): string | undefined {
+    const control = findControl(controlId);
+    if (!control) return undefined;
+    for (const child of control.children) {
+      if (child.kind !== 'contentControlProperties') continue;
+      for (const property of child.children) {
+        if (property.kind !== 'contentControlDate') continue;
+        return property.attributes.find((attribute) => attribute.localName === 'fullDate')?.value;
+      }
+    }
+    return undefined;
+  }
+
+  function setContentControlWidgetOpen(controlId: string, open: boolean): void {
+    for (const chrome of pagesLayer.querySelectorAll<HTMLElement>('[data-docx-content-control]')) {
+      if (chrome.getAttribute('data-docx-content-control') !== controlId) continue;
+      if (open) chrome.dataset.open = '';
+      else delete chrome.dataset.open;
+    }
+  }
+
+  function closeContentControlMenu(menu: HTMLElement): void {
+    const controlId = menu.dataset.docxCcId;
+    menu.remove();
+    if (controlId) setContentControlWidgetOpen(controlId, false);
+  }
+
+  function removeExistingContentControlMenu(): void {
+    const existing = pagesLayer.querySelector<HTMLElement>('.docx-content-control-menu');
+    if (existing) closeContentControlMenu(existing);
   }
 
   function openContentControlWidget(controlId: string, kind: string): void {
@@ -915,24 +954,28 @@ export function mountPaginatedSurface(
       const items = listItemsOfControl(controlId);
       if (items.length === 0 && kind === 'dropdown') return;
       // Engine-level menu: no hardcoded English — displayText comes from the file.
-      const existing = pagesLayer.querySelector('.docx-content-control-menu');
-      existing?.remove();
+      removeExistingContentControlMenu();
       const menu = document.createElement('div');
       menu.className = 'docx-content-control-menu';
       menu.dataset.docxMarker = '';
+      menu.dataset.docxCcId = controlId;
       menu.setAttribute('contenteditable', 'false');
       menu.setAttribute('role', 'listbox');
       menu.style.position = 'absolute';
       menu.style.zIndex = '20';
       menu.style.pointerEvents = 'auto';
+      menu.addEventListener('pointerdown', (event) => event.stopPropagation());
       const record = contentControlsInLayout(currentLayout).find((c) => c.id === controlId);
       const frag = record?.fragments[0];
       if (frag) {
         const page = currentLayout.pages[frag.pageIndex];
         const offsetX = materializedExtent?.pageOffsetX.get(frag.pageIndex) ?? 0;
         if (page) {
-          menu.style.left = `${(page.box.x + offsetX + frag.box.x - page.box.x) * scale}px`;
-          menu.style.top = `${(page.box.y + frag.box.y + frag.box.height - page.box.y) * scale}px`;
+          const contentLeft = page.contentBox.x - page.box.x;
+          const contentTop = page.contentBox.y - page.box.y;
+          menu.style.left = `${(page.box.x + offsetX + contentLeft + frag.box.x + frag.box.width) * scale}px`;
+          menu.style.top = `${(page.box.y + contentTop + frag.box.y + frag.box.height) * scale}px`;
+          menu.style.transform = 'translateX(-100%)';
         }
       }
       for (const item of items) {
@@ -946,7 +989,7 @@ export function mountPaginatedSurface(
         option.addEventListener('mousedown', (event) => {
           event.preventDefault();
           event.stopPropagation();
-          menu.remove();
+          closeContentControlMenu(menu);
           contentControlsOps.setValue(controlId, item.value);
         });
         menu.append(option);
@@ -961,56 +1004,185 @@ export function mountPaginatedSurface(
         free.addEventListener('keydown', (event) => {
           if (event.key !== 'Enter') return;
           event.preventDefault();
-          menu.remove();
+          closeContentControlMenu(menu);
           contentControlsOps.setValue(controlId, free.value);
         });
         menu.append(free);
       }
       pagesLayer.append(menu);
+      setContentControlWidgetOpen(controlId, true);
       const dismiss = (event: Event): void => {
         if (menu.contains(event.target as Node)) return;
-        menu.remove();
+        closeContentControlMenu(menu);
         document.removeEventListener('mousedown', dismiss, true);
       };
       document.addEventListener('mousedown', dismiss, true);
       return;
     }
     if (kind === 'date') {
-      const existing = pagesLayer.querySelector('.docx-content-control-menu');
-      existing?.remove();
+      removeExistingContentControlMenu();
       const menu = document.createElement('div');
       menu.className = 'docx-content-control-menu';
       menu.dataset.docxMarker = '';
+      menu.dataset.docxCcId = controlId;
       menu.setAttribute('contenteditable', 'false');
       menu.style.position = 'absolute';
       menu.style.zIndex = '20';
       menu.style.pointerEvents = 'auto';
+      menu.addEventListener('pointerdown', (event) => event.stopPropagation());
       const record = contentControlsInLayout(currentLayout).find((c) => c.id === controlId);
       const frag = record?.fragments[0];
       if (frag) {
         const page = currentLayout.pages[frag.pageIndex];
         const offsetX = materializedExtent?.pageOffsetX.get(frag.pageIndex) ?? 0;
         if (page) {
-          menu.style.left = `${(page.box.x + offsetX + frag.box.x - page.box.x) * scale}px`;
-          menu.style.top = `${(page.box.y + frag.box.y + frag.box.height - page.box.y) * scale}px`;
+          const contentLeft = page.contentBox.x - page.box.x;
+          const contentTop = page.contentBox.y - page.box.y;
+          menu.style.left = `${(page.box.x + offsetX + contentLeft + frag.box.x + frag.box.width) * scale}px`;
+          menu.style.top = `${(page.box.y + contentTop + frag.box.y + frag.box.height) * scale}px`;
+          menu.style.transform = 'translateX(-100%)';
         }
       }
-      const input = document.createElement('input');
-      input.type = 'date';
-      input.className = 'docx-content-control-date';
-      input.dataset.docxMarker = '';
-      input.addEventListener('mousedown', (event) => {
-        event.stopPropagation();
+      menu.classList.add('docx-content-control-calendar');
+      const authoredDate = dateValueOfControl(controlId);
+      const parsedDate = authoredDate ? new Date(authoredDate) : new Date();
+      const selectedDate = Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+      const initialDate = selectedDate ?? new Date();
+      let viewYear = initialDate.getFullYear();
+      let viewMonth = initialDate.getMonth();
+      const monthFormatter = new Intl.DateTimeFormat(undefined, {
+        month: 'long',
+        year: 'numeric',
       });
-      input.addEventListener('change', () => {
-        if (!input.value) return;
-        menu.remove();
-        contentControlsOps.setValue(controlId, input.value);
+      const dayFormatter = new Intl.DateTimeFormat(undefined, {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
       });
-      menu.append(input);
+      const weekdayFormatter = new Intl.DateTimeFormat(undefined, { weekday: 'narrow' });
+      const isoDate = (date: Date): string =>
+        `${date.getFullYear().toString().padStart(4, '0')}-${(date.getMonth() + 1)
+          .toString()
+          .padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+      const sameDay = (left: Date, right: Date): boolean =>
+        left.getFullYear() === right.getFullYear() &&
+        left.getMonth() === right.getMonth() &&
+        left.getDate() === right.getDate();
+      let commitPendingManualDate: (() => boolean) | null = null;
+      const renderCalendar = (): void => {
+        const manual = document.createElement('input');
+        manual.type = 'date';
+        manual.className = 'docx-content-control-calendar-input';
+        manual.value = selectedDate ? isoDate(selectedDate) : '';
+        const initialManualValue = manual.value;
+        if (record?.alias) manual.setAttribute('aria-label', record.alias);
+        const commitManualDate = (): boolean => {
+          if (!manual.value || manual.value === initialManualValue) return false;
+          const value = manual.value;
+          closeContentControlMenu(menu);
+          contentControlsOps.setValue(controlId, value);
+          return true;
+        };
+        commitPendingManualDate = commitManualDate;
+        manual.addEventListener('keydown', (event) => {
+          if (event.key !== 'Enter') return;
+          event.preventDefault();
+          if (!commitManualDate()) closeContentControlMenu(menu);
+        });
+        manual.addEventListener('blur', () => {
+          queueMicrotask(() => {
+            if (!menu.isConnected || menu.contains(document.activeElement)) return;
+            if (!commitManualDate()) closeContentControlMenu(menu);
+          });
+        });
+        const header = document.createElement('div');
+        header.className = 'docx-content-control-calendar-header';
+        const previous = document.createElement('button');
+        previous.type = 'button';
+        previous.className = 'docx-content-control-calendar-nav';
+        previous.textContent = '‹';
+        const previousMonth = new Date(viewYear, viewMonth - 1, 1);
+        previous.setAttribute('aria-label', monthFormatter.format(previousMonth));
+        const title = document.createElement('div');
+        title.className = 'docx-content-control-calendar-title';
+        title.textContent = monthFormatter.format(new Date(viewYear, viewMonth, 1));
+        const next = document.createElement('button');
+        next.type = 'button';
+        next.className = 'docx-content-control-calendar-nav';
+        next.textContent = '›';
+        const nextMonth = new Date(viewYear, viewMonth + 1, 1);
+        next.setAttribute('aria-label', monthFormatter.format(nextMonth));
+        previous.addEventListener('mousedown', (event) => event.stopPropagation());
+        next.addEventListener('mousedown', (event) => event.stopPropagation());
+        previous.addEventListener('click', () => {
+          viewMonth -= 1;
+          if (viewMonth < 0) {
+            viewMonth = 11;
+            viewYear -= 1;
+          }
+          renderCalendar();
+        });
+        next.addEventListener('click', () => {
+          viewMonth += 1;
+          if (viewMonth > 11) {
+            viewMonth = 0;
+            viewYear += 1;
+          }
+          renderCalendar();
+        });
+        header.append(previous, title, next);
+
+        const weekdays = document.createElement('div');
+        weekdays.className = 'docx-content-control-calendar-weekdays';
+        for (let index = 0; index < 7; index += 1) {
+          const weekday = document.createElement('span');
+          weekday.textContent = weekdayFormatter.format(new Date(2024, 0, 1 + index));
+          weekdays.append(weekday);
+        }
+
+        const grid = document.createElement('div');
+        grid.className = 'docx-content-control-calendar-grid';
+        grid.setAttribute('role', 'grid');
+        const firstWeekday = (new Date(viewYear, viewMonth, 1).getDay() + 6) % 7;
+        const today = new Date();
+        for (let index = 0; index < 42; index += 1) {
+          const date = new Date(viewYear, viewMonth, index - firstWeekday + 1);
+          const day = document.createElement('button');
+          day.type = 'button';
+          day.className = 'docx-content-control-calendar-day';
+          day.textContent = String(date.getDate());
+          day.setAttribute('role', 'gridcell');
+          day.setAttribute('aria-label', dayFormatter.format(date));
+          if (date.getMonth() !== viewMonth) day.dataset.otherMonth = '';
+          if (selectedDate && sameDay(date, selectedDate)) {
+            day.dataset.selected = '';
+            day.setAttribute('aria-selected', 'true');
+          }
+          if (sameDay(date, today)) day.dataset.today = '';
+          day.addEventListener('mousedown', (event) => event.stopPropagation());
+          day.addEventListener('click', () => {
+            closeContentControlMenu(menu);
+            contentControlsOps.setValue(controlId, isoDate(date));
+          });
+          grid.append(day);
+        }
+        menu.replaceChildren(manual, header, weekdays, grid);
+      };
+      renderCalendar();
       pagesLayer.append(menu);
-      input.focus();
-      input.showPicker?.();
+      setContentControlWidgetOpen(controlId, true);
+      const dismiss = (event: Event): void => {
+        if (menu.contains(event.target as Node)) return;
+        if (!commitPendingManualDate?.()) closeContentControlMenu(menu);
+        document.removeEventListener('mousedown', dismiss, true);
+      };
+      document.addEventListener('mousedown', dismiss, true);
+      menu
+        .querySelector<HTMLElement>(
+          '[data-selected], [data-today], .docx-content-control-calendar-day'
+        )
+        ?.focus({ preventScroll: true });
     }
   }
 

@@ -11,12 +11,13 @@ The interactive control surface — widgets, form-fill navigation, boundary chro
 
 ### Requirement: Chrome slots wire the authoring surface
 
-`CHROME_GROUPS` SHALL gain a `contentControl` group with public `ChromeSlotId` values `contentControl.showAll`, `contentControl.formFill`, `contentControl.inspector`, and `contentControl.remove`. Toolbar and contextual chrome derive from these slots per the chrome registry rules.
+`CHROME_GROUPS` SHALL gain a contextual `contentControl` group with public `ChromeSlotId` values `contentControl.showAll`, `contentControl.formFill`, `contentControl.inspector`, and `contentControl.remove`. The slots remain available for explicit composition but SHALL NOT appear permanently in the default toolbar.
 
-#### Scenario: Show-all is a registered slot
+#### Scenario: Content-control slots are contextual
 
 - **WHEN** `DocxEditor.Toolbar` renders with default parts
-- **THEN** `contentControl.showAll` is wired through `CHROME_GROUPS`, not hand-listed
+- **THEN** the content-control group is omitted from the permanent toolbar
+- **AND** consumers may still compose its registered slots explicitly
 
 ### Requirement: Typed controls offer an interactive widget
 
@@ -84,12 +85,22 @@ The surface SHALL offer a navigation mode in which Tab and Shift+Tab move betwee
 
 ### Requirement: Control boundaries are visible on demand, not always
 
-Control chrome — a boundary indicator and the control's alias — SHALL be shown when the caret is inside the control or when a show-all-controls affordance is enabled, and SHALL NOT be painted permanently over every control.
+Value controls SHALL keep their compact type affordance visible. The active or hovered control SHALL show a boundary indicator and its alias. When show-all-controls is enabled, every inactive control SHALL show a subtle boundary indicator without its alias. Boundaries and aliases SHALL NOT be visibly painted permanently over every control.
 
 #### Scenario: Chrome on caret entry
 
 - **WHEN** the caret enters a control
 - **THEN** its boundary and alias are shown
+
+#### Scenario: Chrome on hover
+
+- **WHEN** the pointer hovers over a control
+- **THEN** it receives the same boundary and alias treatment as the active control
+
+#### Scenario: Value affordances remain discoverable
+
+- **WHEN** a dropdown, combo box, date, or checkbox control is inactive
+- **THEN** its compact widget remains visible without permanently showing its boundary or alias
 
 #### Scenario: Chrome is not document content
 
@@ -99,7 +110,8 @@ Control chrome — a boundary indicator and the control's alias — SHALL be sho
 #### Scenario: Show-all mode
 
 - **WHEN** the user enables show-all-controls
-- **THEN** every control's boundary is indicated, and disabling it removes them with no reflow
+- **THEN** every control's boundary is indicated subtly, while aliases remain hidden unless the control is active
+- **AND** disabling it removes the boundaries with no reflow
 
 ### Requirement: Control inspector and removal
 

@@ -136,9 +136,11 @@ describe('setContentControlValue', () => {
         '<w:listItem w:displayText="One" w:value="1"/>' +
         '<w:listItem w:displayText="Two" w:value="2"/>' +
         '</w:dropDownList></w:sdtPr>' +
-        '<w:sdtContent><w:p><w:r><w:t>One</w:t></w:r></w:p></w:sdtContent></w:sdt>'
+        '<w:sdtContent><w:p><w:pPr><w:spacing w:after="120"/></w:pPr>' +
+        '<w:r><w:t>One</w:t></w:r></w:p></w:sdtContent></w:sdt>'
     );
     const control = firstSdt(part);
+    const originalParagraph = childNamed(childNamed(control, 'sdtContent')!, 'p')!;
     expect(reject(part, { op: 'setContentControlValue', controlId: control.id, value: '9' })).toBe(
       'invalidArgs'
     );
@@ -152,6 +154,14 @@ describe('setContentControlValue', () => {
       'dropDownList'
     )!;
     expect(attributeOf(list, 'lastValue')).toBe('2');
+    const updatedParagraph = childNamed(
+      childNamed(findContentControl(next, control.id)!, 'sdtContent')!,
+      'p'
+    )!;
+    expect(updatedParagraph.id).toBe(originalParagraph.id);
+    expect(attributeOf(childNamed(childNamed(updatedParagraph, 'pPr')!, 'spacing')!, 'after')).toBe(
+      '120'
+    );
   });
 
   test('combo accepts a free value', () => {

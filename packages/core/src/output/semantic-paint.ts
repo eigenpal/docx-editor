@@ -119,6 +119,8 @@ export interface PaintOptions {
     readonly showAll?: boolean;
     /** Control ids whose boundaries are visible because the caret is inside them. */
     readonly activeIds?: ReadonlySet<string>;
+    /** Checkbox control ids whose canonical `w14:checked` state is on. */
+    readonly checkedIds?: ReadonlySet<string>;
   };
 }
 
@@ -1362,15 +1364,23 @@ function paintContentControlChrome(
   }
 ): void {
   const chrome = options.contentControlChrome;
-  if (!chrome) return;
   const controls = page.contentControls ?? [];
   if (controls.length === 0) return;
-  const showAll = chrome.showAll === true;
-  const activeIds = chrome.activeIds;
+  const showAll = chrome?.showAll === true;
+  const activeIds = chrome?.activeIds;
   for (const control of controls) {
     const active = activeIds?.has(control.id) === true;
-    if (!showAll && !active) continue;
-    pageElement.append(paintContentControlBoundary(document, page, control, options.scale, active));
+    pageElement.append(
+      paintContentControlBoundary(
+        document,
+        page,
+        control,
+        options.scale,
+        active,
+        showAll || active,
+        chrome?.checkedIds?.has(control.id)
+      )
+    );
   }
 }
 
@@ -1379,7 +1389,9 @@ function paintContentControlBoundary(
   page: PageRecord,
   control: ContentControlBoundaryRecord,
   scale: number,
-  active: boolean
+  active: boolean,
+  boundaryVisible: boolean,
+  checked: boolean | undefined
 ): HTMLElement {
   const layer = document.createElement('div');
   layer.className = 'docx-content-control-chrome';
@@ -1390,16 +1402,25 @@ function paintContentControlBoundary(
   if (control.bound) layer.dataset.bound = '';
   if (control.placeholder) layer.dataset.placeholder = '';
   if (active) layer.dataset.active = '';
+  if (boundaryVisible) layer.dataset.boundaryVisible = '';
   layer.setAttribute('contenteditable', 'false');
   layer.setAttribute('role', 'group');
-  // Alias / tag are data attributes — adapters supply localized accessible names.
+  // Alias and tag are document-authored control metadata.
   if (control.alias) layer.dataset.alias = control.alias;
   if (control.tag) layer.dataset.tag = control.tag;
+  if (control.alias) layer.setAttribute('aria-label', control.alias);
   layer.style.position = 'absolute';
   layer.style.inset = '0';
   layer.style.pointerEvents = 'none';
   layer.style.zIndex = '2';
 
+  // Boundary fragments use the same page-CONTENT coordinate space as paragraph/table
+  // fragments. This chrome layer is parented to the SHEET so it does not affect editable
+  // content or DOM-selection child indices, therefore translate through the content-box
+  // origin before painting. Omitting this offset puts every control in the page's top-left
+  // margin (and is especially obvious for controls inside table cells).
+  const contentLeft = page.contentBox.x - page.box.x;
+  const contentTop = page.contentBox.y - page.box.y;
   for (const fragment of control.fragments) {
     if (fragment.pageIndex !== page.index) continue;
     const box = document.createElement('div');
@@ -1408,8 +1429,8 @@ function paintContentControlBoundary(
     box.setAttribute('contenteditable', 'false');
     box.setAttribute('aria-hidden', 'true');
     box.style.position = 'absolute';
-    box.style.left = `${(fragment.box.x - page.box.x) * scale}px`;
-    box.style.top = `${(fragment.box.y - page.box.y) * scale}px`;
+    box.style.left = `${(contentLeft + fragment.box.x) * scale}px`;
+    box.style.top = `${(contentTop + fragment.box.y) * scale}px`;
     box.style.width = `${Math.max(fragment.box.width, 1) * scale}px`;
     box.style.height = `${Math.max(fragment.box.height, 1) * scale}px`;
     box.style.pointerEvents = 'none';
@@ -1417,6 +1438,19 @@ function paintContentControlBoundary(
   }
 
   const first = control.fragments.find((fragment) => fragment.pageIndex === page.index);
+  if (first && control.alias) {
+    const label = document.createElement('div');
+    label.className = 'docx-content-control-label';
+    label.dataset.docxMarker = '';
+    label.setAttribute('contenteditable', 'false');
+    label.setAttribute('aria-hidden', 'true');
+    label.textContent = control.alias;
+    label.style.position = 'absolute';
+    label.style.left = `${(contentLeft + first.box.x) * scale}px`;
+    label.style.top = `${Math.max(0, (contentTop + first.box.y) * scale - 16)}px`;
+    label.style.pointerEvents = 'none';
+    layer.append(label);
+  }
   if (first && WIDGET_TYPES.has(control.controlType)) {
     const widget = document.createElement('button');
     widget.type = 'button';
@@ -1434,6 +1468,11 @@ function paintContentControlBoundary(
       widget.setAttribute('role', 'button');
     }
     if (control.alias) widget.dataset.name = control.alias;
+    if (control.alias) widget.setAttribute('aria-label', control.alias);
+    if (control.controlType === 'checkbox') {
+      widget.setAttribute('data-checked', checked ? 'true' : 'false');
+      widget.setAttribute('aria-checked', checked ? 'true' : 'false');
+    }
     const contentLocked =
       control.effectiveLock === 'contentLocked' || control.effectiveLock === 'sdtContentLocked';
     if (contentLocked || control.bound) {
@@ -1442,15 +1481,13 @@ function paintContentControlBoundary(
       widget.setAttribute('aria-disabled', 'true');
     }
     widget.style.position = 'absolute';
-    widget.style.left = `${(first.box.x + first.box.width - page.box.x) * scale - 18}px`;
-    widget.style.top = `${(first.box.y - page.box.y) * scale}px`;
-    widget.style.width = `${16 * scale}px`;
-    widget.style.height = `${16 * scale}px`;
+    widget.style.left = `${(contentLeft + first.box.x + first.box.width) * scale - 18}px`;
+    widget.style.top = `${(contentTop + first.box.y) * scale}px`;
+    widget.style.width = '16px';
+    widget.style.height = '16px';
     widget.style.pointerEvents = 'auto';
     widget.style.padding = '0';
     widget.style.margin = '0';
-    widget.style.border = 'none';
-    widget.style.background = 'transparent';
     widget.style.cursor = widget.disabled ? 'not-allowed' : 'pointer';
     layer.append(widget);
   }
@@ -1496,7 +1533,7 @@ export function paintSemanticLayout(
 ): void {
   const chrome = options.contentControlChrome;
   const chromeKey = chrome
-    ? `${chrome.showAll === true ? '1' : '0'}:${chrome.activeIds ? [...chrome.activeIds].sort().join(',') : ''}`
+    ? `${chrome.showAll === true ? '1' : '0'}:${chrome.activeIds ? [...chrome.activeIds].sort().join(',') : ''}:${chrome.checkedIds ? [...chrome.checkedIds].sort().join(',') : ''}`
     : '';
   const resolved = {
     scale: options.scale ?? 96 / 72,
