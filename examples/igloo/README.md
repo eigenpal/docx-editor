@@ -48,6 +48,8 @@ both surfaces that expose the action.
 that looked like ice would be a lie about what the file contains, so the theme lives in the
 chrome, in the sea behind, and in the berg the page rides on.
 
+Full reference: [`docs/CUSTOMIZING.md`](../../docs/CUSTOMIZING.md).
+
 ## Notes
 
 - The berg is `position: fixed` rather than stretched behind the page. A document is any
@@ -55,6 +57,10 @@ chrome, in the sea behind, and in the berg the page rides on.
 - Neither the workspace row nor the viewport sets a `z-index`. Either would open a stacking
   context around the context menu, and a `position: fixed` panel cannot escape the context it
   is declared in — it would render under the chrome bar however high its own z-index went.
+- Nothing here styles a `docx-*` class or uses `!important`. Those names are implementation
+  details, so every visual change goes through a prop, a `--doc-*` token, or an element this
+  demo owns. Where that was not possible the library grew a prop instead — trigger icons,
+  colour-split icons, and the page's centring margin all came out of writing this.
 - The sea and the blizzard both honour `prefers-reduced-motion`.
 - The document is served straight from `e2e/fixtures/` by a vite plugin, so this demo and the
   e2e suite read the same bytes. `?fixture=<name>.docx` picks a different one.

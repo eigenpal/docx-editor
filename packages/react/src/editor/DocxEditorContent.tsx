@@ -10,10 +10,7 @@
 // keyed on the instance and attaches as soon as both the element and the editor exist.
 
 import { useLayoutEffect, useRef } from 'react';
-import type { CSSProperties } from 'react';
 import { useDocxEditor } from './context';
-
-const SURFACE_STYLE: CSSProperties = { margin: '24px auto' };
 
 /** Props for `DocxEditor.Content`. @public */
 export interface DocxEditorContentProps {
@@ -25,6 +22,12 @@ export interface DocxEditorContentProps {
  * The element the engine paints pages into. Must render inside a
  * `DocxEditor.Viewport`; the facade attaches here and detaches on unmount (stashing
  * the live document bytes, so remounting elsewhere restores the content).
+ *
+ * Its centring margin lives in the STYLESHEET, not in an inline style here, and behind
+ * `:where()` so it carries no specificity: a host that places the page itself — inside its
+ * own stage, beside its own art — overrides it with a plain class and no `!important`. An
+ * inline style could not be beaten by a class at all, which is exactly the trap that makes
+ * a library feel like something to fight.
  *
  * @public
  */
@@ -44,10 +47,6 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
   }, [editor]);
 
   return (
-    <div
-      ref={elementRef}
-      className={`docx-paginated-surface${className ? ` ${className}` : ''}`}
-      style={SURFACE_STYLE}
-    />
+    <div ref={elementRef} className={`docx-paginated-surface${className ? ` ${className}` : ''}`} />
   );
 }

@@ -309,20 +309,15 @@
   z-index: 1;
 }
 
+/* The stage does the centring, so the surface's own margin goes.
+ *
+ * A plain class, no `!important`: the library's default sits behind `:where()` and carries
+ * no specificity, so this wins on its own. There is no painted-page rule here either — the
+ * page's own presentation is the painter's, and the berg behind it is this theme's way of
+ * framing the page without reaching into it. */
 .igloo-page {
   position: relative;
-  /* Cancels the library's own centring margin: the stage does the centring now. */
-  margin: 0 !important;
-}
-
-/* A frost rim on the painted page. Applied to the SURFACE, not to page content — the
-   canvas inside stays Word-faithful. */
-.igloo-page .docx-page,
-.igloo-page [data-page] {
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.85),
-    0 0 22px rgba(180, 232, 252, 0.55),
-    0 18px 40px rgba(4, 32, 52, 0.4);
+  margin: 0;
 }
 
 /* ── The loading screen ───────────────────────────────────────────────────────────── */
@@ -431,28 +426,18 @@
   --doc-bg-input: rgba(255, 255, 255, 0.1);
   --doc-border: rgba(255, 255, 255, 0.28);
   --doc-border-input: rgba(255, 255, 255, 0.35);
-  --doc-border-light: rgba(255, 255, 255, 0.2);
-}
+  --doc-border-light: rgba(255, 255, 255, 0.45);
 
-.igloo-nav .docx-nav__panel-shell {
+  /* `--doc-bg-hover` does double duty in this component: it is the rows' hover AND the
+     collapsed toggle's RESTING plate. One value has to serve both, so it is pitched to read
+     as a visible disc over open water rather than as the faintest possible row tint. */
+  --doc-bg-hover: rgba(255, 255, 255, 0.2);
+
+  /* On the host's own element, because `text-shadow` INHERITS — no need to name a library
+     class to reach the rows. The sea runs from pale ice at the horizon to near black at the
+     bottom, so no single text colour has contrast against all of it; the shadow supplies the
+     dark side wherever the water goes light. */
   text-shadow: 0 1px 3px rgba(3, 26, 42, 0.85);
-}
-
-/* The toggle disc keeps a plate: it sits alone over the water with no label beside it, so
- * a bare outline would be hard to find. */
-.igloo-nav .docx-nav__toggle {
-  background: rgba(233, 248, 255, 0.22);
-  border-color: rgba(255, 255, 255, 0.4);
-  color: #f4fcff;
-}
-
-.igloo-nav .docx-nav__toggle:hover {
-  background: rgba(233, 248, 255, 0.34);
-}
-
-/* Strata: a layer line under each heading, so the outline reads as a drilled ice core. */
-.igloo-nav .docx-nav__heading {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 /* ── Pickers ──────────────────────────────────────────────────────────────────────── */

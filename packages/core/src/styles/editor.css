@@ -4685,6 +4685,15 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text-muted);
 }
 
+/* The painted page stack's default placement: centred, with breathing room above.
+ *
+ * `:where()` on purpose — it matches with ZERO specificity, so any host class on
+ * `DocxEditor.Content` wins without `!important` and without counting selectors. This used
+ * to be an inline style on the element, which a class cannot override at all. */
+:where(.docx-paginated-surface) {
+  margin: 24px auto;
+}
+
 /* ── The context menu ──────────────────────────────────────────────────────────────────
  *
  * The right-click panel over the painted document. It IS the shared `.docx-toolbar__menu`
