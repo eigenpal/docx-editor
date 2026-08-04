@@ -4,6 +4,12 @@ import { useEffect, useId, type ReactNode, type RefObject } from 'react';
 import { focusBy, focusEdge } from '../menu/menu-keyboard';
 import { guardToolbarMousedown } from './ToolbarButton';
 
+/** Return focus to the painted pages layer after a table colour dialog applies. */
+export function restoreToolbarDocumentFocus(from: HTMLElement | null): void {
+  const root = from?.closest('.ep-root') ?? from?.ownerDocument?.body;
+  root?.querySelector<HTMLElement>('.docx-pages')?.focus();
+}
+
 /** Outside mousedown closes a toolbar popup. */
 export function useDropdownClose(
   open: boolean,

@@ -36,6 +36,7 @@ import {
   useTableChromeTriggerA11y,
   useTableDialogKeyboard,
   useTableMenuKeyboard,
+  restoreToolbarDocumentFocus,
 } from './table-chrome-shared';
 
 function triggerKeyboardToggle(
@@ -715,6 +716,7 @@ function buildColorSplitCompound(
             onClick={() => {
               setOpen(false);
               apply(null);
+              restoreToolbarDocumentFocus(triggerRef.current);
             }}
           >
             <span
@@ -729,6 +731,7 @@ function buildColorSplitCompound(
             setOpen(false);
             setLastHex?.(hex);
             apply({ kind: 'hex', value: hex });
+            restoreToolbarDocumentFocus(triggerRef.current);
           }}
           current={pickerCurrent}
         />
@@ -745,7 +748,7 @@ function buildColorSplitCompound(
     className,
     children,
   }: TableChromeItemProps & { css?: string; labelKey?: string }) {
-    const { apply, setOpen, setLastHex } = useTableSlotContext(Ctx);
+    const { apply, setOpen, setLastHex, triggerRef } = useTableSlotContext(Ctx);
     const label = useToolbarLabel();
     const swatchCss = css ?? `#${value.toLowerCase()}`;
     const swatchLabel = labelKey ? label(labelKey) : value;
@@ -761,6 +764,7 @@ function buildColorSplitCompound(
         setOpen(false);
         setLastHex?.(value);
         apply({ kind: 'hex', value });
+        restoreToolbarDocumentFocus(triggerRef.current);
       },
     };
     if (asChild) return <Slot {...shared}>{children}</Slot>;
