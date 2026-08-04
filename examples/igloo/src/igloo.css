@@ -122,13 +122,30 @@
 
 /* ── Chrome ───────────────────────────────────────────────────────────────────────── */
 
+/* The frost is on a PSEUDO-ELEMENT, not on these boxes.
+ *
+ * `backdrop-filter` makes an element the containing block for `position: fixed`
+ * descendants. With it on the chrome bar itself, the Page Setup dialog — a fixed
+ * `inset: 0` overlay rendered from the menu inside this bar — resolved that inset against
+ * the 120px-tall bar and centred inside it, hanging off the top of the window. Moving the
+ * effect to `::before` keeps the look and leaves these boxes as ordinary containing
+ * blocks, so anything fixed the library renders here still means the viewport. */
 .igloo-chrome,
 .igloo-rulerbar {
   position: relative;
   flex-shrink: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.45);
+}
+
+.igloo-chrome::before,
+.igloo-rulerbar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   background: rgba(233, 248, 255, 0.72);
   backdrop-filter: blur(14px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.45);
+  pointer-events: none;
 }
 
 /* The chrome bar sits ABOVE the ruler bar, not beside it.
