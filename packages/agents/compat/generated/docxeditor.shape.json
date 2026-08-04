@@ -1,0 +1,2196 @@
+{
+  "schemaVersion": 1,
+  "generatedFrom": {
+    "package": "docxeditor-declarations (compat/docxeditor/declarations.ts)",
+    "version": "0.0.1"
+  },
+  "symbols": {
+    "Body": {
+      "uid": "DocxEditor.Body",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "clear": {
+          "uid": "DocxEditor.Body#clear",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "contentControls": {
+          "uid": "DocxEditor.Body#contentControls",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ContentControlCollection"
+            }
+          ]
+        },
+        "font": {
+          "uid": "DocxEditor.Body#font",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Font"
+            }
+          ]
+        },
+        "getComments": {
+          "uid": "DocxEditor.Body#getComments",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "CommentCollection"
+            }
+          ]
+        },
+        "insertParagraph": {
+          "uid": "DocxEditor.Body#insertParagraph",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "paragraphText",
+                  "type": "string"
+                },
+                {
+                  "name": "insertLocation",
+                  "type": "\"Start\" | \"End\""
+                }
+              ],
+              "returns": "Paragraph"
+            }
+          ]
+        },
+        "insertText": {
+          "uid": "DocxEditor.Body#insertText",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "text",
+                  "type": "string"
+                },
+                {
+                  "name": "insertLocation",
+                  "type": "\"Replace\" | \"Start\" | \"End\""
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
+        "lists": {
+          "uid": "DocxEditor.Body#lists",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ListCollection"
+            }
+          ]
+        },
+        "paragraphs": {
+          "uid": "DocxEditor.Body#paragraphs",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ParagraphCollection"
+            }
+          ]
+        },
+        "search": {
+          "uid": "DocxEditor.Body#search",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "searchText",
+                  "type": "string"
+                },
+                {
+                  "name": "searchOptions",
+                  "type": "SearchOptions",
+                  "optional": true
+                }
+              ],
+              "returns": "RangeCollection"
+            }
+          ]
+        },
+        "style": {
+          "uid": "DocxEditor.Body#style",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "text": {
+          "uid": "DocxEditor.Body#text",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        }
+      }
+    },
+    "Bookmark": {
+      "uid": "DocxEditor.Bookmark",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "delete": {
+          "uid": "DocxEditor.Bookmark#delete",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "end": {
+          "uid": "DocxEditor.Bookmark#end",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "name": {
+          "uid": "DocxEditor.Bookmark#name",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "range": {
+          "uid": "DocxEditor.Bookmark#range",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Range"
+            }
+          ]
+        },
+        "select": {
+          "uid": "DocxEditor.Bookmark#select",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "start": {
+          "uid": "DocxEditor.Bookmark#start",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        }
+      }
+    },
+    "BookmarkCollection": {
+      "uid": "DocxEditor.BookmarkCollection",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "items": {
+          "uid": "DocxEditor.BookmarkCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Bookmark[]"
+            }
+          ]
+        }
+      }
+    },
+    "ClientObject": {
+      "uid": "DocxEditor.ClientObject",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "context": {
+          "uid": "DocxEditor.ClientObject#context",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ClientRequestContext"
+            }
+          ]
+        },
+        "isNullObject": {
+          "uid": "DocxEditor.ClientObject#isNullObject",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        }
+      }
+    },
+    "Comment": {
+      "uid": "DocxEditor.Comment",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "authorEmail": {
+          "uid": "DocxEditor.Comment#authorEmail",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "authorName": {
+          "uid": "DocxEditor.Comment#authorName",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "content": {
+          "uid": "DocxEditor.Comment#content",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "creationDate": {
+          "uid": "DocxEditor.Comment#creationDate",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Date"
+            }
+          ]
+        },
+        "delete": {
+          "uid": "DocxEditor.Comment#delete",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "getRange": {
+          "uid": "DocxEditor.Comment#getRange",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Range"
+            }
+          ]
+        },
+        "id": {
+          "uid": "DocxEditor.Comment#id",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "replies": {
+          "uid": "DocxEditor.Comment#replies",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "CommentReplyCollection"
+            }
+          ]
+        },
+        "reply": {
+          "uid": "DocxEditor.Comment#reply",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "replyText",
+                  "type": "string"
+                }
+              ],
+              "returns": "CommentReply"
+            }
+          ]
+        },
+        "resolved": {
+          "uid": "DocxEditor.Comment#resolved",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        }
+      }
+    },
+    "CommentCollection": {
+      "uid": "DocxEditor.CommentCollection",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "getFirst": {
+          "uid": "DocxEditor.CommentCollection#getFirst",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Comment"
+            }
+          ]
+        },
+        "items": {
+          "uid": "DocxEditor.CommentCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Comment[]"
+            }
+          ]
+        }
+      }
+    },
+    "CommentReply": {
+      "uid": "DocxEditor.CommentReply",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "authorEmail": {
+          "uid": "DocxEditor.CommentReply#authorEmail",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "authorName": {
+          "uid": "DocxEditor.CommentReply#authorName",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "content": {
+          "uid": "DocxEditor.CommentReply#content",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "creationDate": {
+          "uid": "DocxEditor.CommentReply#creationDate",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Date"
+            }
+          ]
+        },
+        "delete": {
+          "uid": "DocxEditor.CommentReply#delete",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "id": {
+          "uid": "DocxEditor.CommentReply#id",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        }
+      }
+    },
+    "CommentReplyCollection": {
+      "uid": "DocxEditor.CommentReplyCollection",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "getFirst": {
+          "uid": "DocxEditor.CommentReplyCollection#getFirst",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "CommentReply"
+            }
+          ]
+        },
+        "items": {
+          "uid": "DocxEditor.CommentReplyCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "CommentReply[]"
+            }
+          ]
+        }
+      }
+    },
+    "ContentControl": {
+      "uid": "DocxEditor.ContentControl",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "appearance": {
+          "uid": "DocxEditor.ContentControl#appearance",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"BoundingBox\" | \"Tags\" | \"Hidden\""
+            }
+          ]
+        },
+        "cannotDelete": {
+          "uid": "DocxEditor.ContentControl#cannotDelete",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "cannotEdit": {
+          "uid": "DocxEditor.ContentControl#cannotEdit",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "color": {
+          "uid": "DocxEditor.ContentControl#color",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "contentControls": {
+          "uid": "DocxEditor.ContentControl#contentControls",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ContentControlCollection"
+            }
+          ]
+        },
+        "delete": {
+          "uid": "DocxEditor.ContentControl#delete",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "keepContent",
+                  "type": "boolean"
+                }
+              ],
+              "returns": "void"
+            }
+          ]
+        },
+        "getRange": {
+          "uid": "DocxEditor.ContentControl#getRange",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "rangeLocation",
+                  "type": "\"Whole\" | \"Start\" | \"End\" | \"Before\" | \"After\" | \"Content\"",
+                  "optional": true
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
+        "id": {
+          "uid": "DocxEditor.ContentControl#id",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "insertText": {
+          "uid": "DocxEditor.ContentControl#insertText",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "text",
+                  "type": "string"
+                },
+                {
+                  "name": "insertLocation",
+                  "type": "\"Replace\" | \"Start\" | \"End\""
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
+        "paragraphs": {
+          "uid": "DocxEditor.ContentControl#paragraphs",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ParagraphCollection"
+            }
+          ]
+        },
+        "placeholderText": {
+          "uid": "DocxEditor.ContentControl#placeholderText",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "subtype": {
+          "uid": "DocxEditor.ContentControl#subtype",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Unknown\" | \"RichTextInline\" | \"RichTextParagraphs\" | \"RichTextTableCell\" | \"RichTextTableRow\" | \"RichTextTable\" | \"PlainTextInline\" | \"PlainTextParagraph\" | \"Picture\" | \"BuildingBlockGallery\" | \"CheckBox\" | \"ComboBox\" | \"DropDownList\" | \"DatePicker\" | \"RepeatingSection\" | \"RichText\" | \"PlainText\" | \"Group\""
+            }
+          ]
+        },
+        "tag": {
+          "uid": "DocxEditor.ContentControl#tag",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "text": {
+          "uid": "DocxEditor.ContentControl#text",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "title": {
+          "uid": "DocxEditor.ContentControl#title",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        }
+      }
+    },
+    "ContentControlCollection": {
+      "uid": "DocxEditor.ContentControlCollection",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "getById": {
+          "uid": "DocxEditor.ContentControlCollection#getById",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "id",
+                  "type": "number"
+                }
+              ],
+              "returns": "ContentControl"
+            }
+          ]
+        },
+        "items": {
+          "uid": "DocxEditor.ContentControlCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ContentControl[]"
+            }
+          ]
+        }
+      }
+    },
+    "Document": {
+      "uid": "DocxEditor.Document",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "body": {
+          "uid": "DocxEditor.Document#body",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Body"
+            }
+          ]
+        },
+        "comments": {
+          "uid": "DocxEditor.Document#comments",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "CommentCollection"
+            }
+          ]
+        },
+        "contentControls": {
+          "uid": "DocxEditor.Document#contentControls",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ContentControlCollection"
+            }
+          ]
+        },
+        "paragraphs": {
+          "uid": "DocxEditor.Document#paragraphs",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ParagraphCollection"
+            }
+          ]
+        },
+        "sections": {
+          "uid": "DocxEditor.Document#sections",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "SectionCollection"
+            }
+          ]
+        }
+      }
+    },
+    "Font": {
+      "uid": "DocxEditor.Font",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "bold": {
+          "uid": "DocxEditor.Font#bold",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "color": {
+          "uid": "DocxEditor.Font#color",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "highlightColor": {
+          "uid": "DocxEditor.Font#highlightColor",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "italic": {
+          "uid": "DocxEditor.Font#italic",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "name": {
+          "uid": "DocxEditor.Font#name",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "size": {
+          "uid": "DocxEditor.Font#size",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        }
+      }
+    },
+    "List": {
+      "uid": "DocxEditor.List",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "getLevelParagraphs": {
+          "uid": "DocxEditor.List#getLevelParagraphs",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "level",
+                  "type": "number"
+                }
+              ],
+              "returns": "ParagraphCollection"
+            }
+          ]
+        },
+        "id": {
+          "uid": "DocxEditor.List#id",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "insertParagraph": {
+          "uid": "DocxEditor.List#insertParagraph",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "paragraphText",
+                  "type": "string"
+                },
+                {
+                  "name": "insertLocation",
+                  "type": "\"Start\" | \"End\" | \"Before\" | \"After\""
+                }
+              ],
+              "returns": "Paragraph"
+            }
+          ]
+        },
+        "paragraphs": {
+          "uid": "DocxEditor.List#paragraphs",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ParagraphCollection"
+            }
+          ]
+        }
+      }
+    },
+    "ListCollection": {
+      "uid": "DocxEditor.ListCollection",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "getById": {
+          "uid": "DocxEditor.ListCollection#getById",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "id",
+                  "type": "number"
+                }
+              ],
+              "returns": "List"
+            }
+          ]
+        },
+        "getFirst": {
+          "uid": "DocxEditor.ListCollection#getFirst",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "List"
+            }
+          ]
+        },
+        "items": {
+          "uid": "DocxEditor.ListCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "List[]"
+            }
+          ]
+        }
+      }
+    },
+    "ListItem": {
+      "uid": "DocxEditor.ListItem",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "level": {
+          "uid": "DocxEditor.ListItem#level",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "listString": {
+          "uid": "DocxEditor.ListItem#listString",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "siblingIndex": {
+          "uid": "DocxEditor.ListItem#siblingIndex",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        }
+      }
+    },
+    "NoteItem": {
+      "uid": "DocxEditor.NoteItem",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "body": {
+          "uid": "DocxEditor.NoteItem#body",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Body"
+            }
+          ]
+        },
+        "delete": {
+          "uid": "DocxEditor.NoteItem#delete",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "getNext": {
+          "uid": "DocxEditor.NoteItem#getNext",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "NoteItem"
+            }
+          ]
+        },
+        "type": {
+          "uid": "DocxEditor.NoteItem#type",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Footnote\" | \"Endnote\""
+            }
+          ]
+        }
+      }
+    },
+    "PageSetup": {
+      "uid": "DocxEditor.PageSetup",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "bottomMargin": {
+          "uid": "DocxEditor.PageSetup#bottomMargin",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "leftMargin": {
+          "uid": "DocxEditor.PageSetup#leftMargin",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "orientation": {
+          "uid": "DocxEditor.PageSetup#orientation",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Portrait\" | \"Landscape\""
+            }
+          ]
+        },
+        "pageHeight": {
+          "uid": "DocxEditor.PageSetup#pageHeight",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "pageWidth": {
+          "uid": "DocxEditor.PageSetup#pageWidth",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "rightMargin": {
+          "uid": "DocxEditor.PageSetup#rightMargin",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "topMargin": {
+          "uid": "DocxEditor.PageSetup#topMargin",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        }
+      }
+    },
+    "Paragraph": {
+      "uid": "DocxEditor.Paragraph",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "alignment": {
+          "uid": "DocxEditor.Paragraph#alignment",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Mixed\" | \"Unknown\" | \"Left\" | \"Centered\" | \"Right\" | \"Justified\""
+            }
+          ]
+        },
+        "clear": {
+          "uid": "DocxEditor.Paragraph#clear",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "contentControls": {
+          "uid": "DocxEditor.Paragraph#contentControls",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ContentControlCollection"
+            }
+          ]
+        },
+        "delete": {
+          "uid": "DocxEditor.Paragraph#delete",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "firstLineIndent": {
+          "uid": "DocxEditor.Paragraph#firstLineIndent",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "font": {
+          "uid": "DocxEditor.Paragraph#font",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Font"
+            }
+          ]
+        },
+        "insertParagraph": {
+          "uid": "DocxEditor.Paragraph#insertParagraph",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "paragraphText",
+                  "type": "string"
+                },
+                {
+                  "name": "insertLocation",
+                  "type": "\"Before\" | \"After\""
+                }
+              ],
+              "returns": "Paragraph"
+            }
+          ]
+        },
+        "insertText": {
+          "uid": "DocxEditor.Paragraph#insertText",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "text",
+                  "type": "string"
+                },
+                {
+                  "name": "insertLocation",
+                  "type": "\"Replace\" | \"Start\" | \"End\""
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
+        "leftIndent": {
+          "uid": "DocxEditor.Paragraph#leftIndent",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "lineSpacing": {
+          "uid": "DocxEditor.Paragraph#lineSpacing",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "list": {
+          "uid": "DocxEditor.Paragraph#list",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "List"
+            }
+          ]
+        },
+        "listItem": {
+          "uid": "DocxEditor.Paragraph#listItem",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ListItem"
+            }
+          ]
+        },
+        "rightIndent": {
+          "uid": "DocxEditor.Paragraph#rightIndent",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "spaceAfter": {
+          "uid": "DocxEditor.Paragraph#spaceAfter",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "spaceBefore": {
+          "uid": "DocxEditor.Paragraph#spaceBefore",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "split": {
+          "uid": "DocxEditor.Paragraph#split",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "delimiters",
+                  "type": "string[]"
+                },
+                {
+                  "name": "trimDelimiters",
+                  "type": "boolean",
+                  "optional": true
+                },
+                {
+                  "name": "trimSpacing",
+                  "type": "boolean",
+                  "optional": true
+                }
+              ],
+              "returns": "RangeCollection"
+            }
+          ]
+        },
+        "style": {
+          "uid": "DocxEditor.Paragraph#style",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "text": {
+          "uid": "DocxEditor.Paragraph#text",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        }
+      }
+    },
+    "ParagraphCollection": {
+      "uid": "DocxEditor.ParagraphCollection",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "getFirst": {
+          "uid": "DocxEditor.ParagraphCollection#getFirst",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Paragraph"
+            }
+          ]
+        },
+        "getLast": {
+          "uid": "DocxEditor.ParagraphCollection#getLast",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Paragraph"
+            }
+          ]
+        },
+        "items": {
+          "uid": "DocxEditor.ParagraphCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Paragraph[]"
+            }
+          ]
+        }
+      }
+    },
+    "ParagraphFormat": {
+      "uid": "DocxEditor.ParagraphFormat",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "alignment": {
+          "uid": "DocxEditor.ParagraphFormat#alignment",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Mixed\" | \"Unknown\" | \"Left\" | \"Centered\" | \"Right\" | \"Justified\""
+            }
+          ]
+        },
+        "firstLineIndent": {
+          "uid": "DocxEditor.ParagraphFormat#firstLineIndent",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "leftIndent": {
+          "uid": "DocxEditor.ParagraphFormat#leftIndent",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "lineSpacing": {
+          "uid": "DocxEditor.ParagraphFormat#lineSpacing",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "rightIndent": {
+          "uid": "DocxEditor.ParagraphFormat#rightIndent",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "spaceAfter": {
+          "uid": "DocxEditor.ParagraphFormat#spaceAfter",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "spaceBefore": {
+          "uid": "DocxEditor.ParagraphFormat#spaceBefore",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "widowControl": {
+          "uid": "DocxEditor.ParagraphFormat#widowControl",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        }
+      }
+    },
+    "Range": {
+      "uid": "DocxEditor.Range",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "bookmarks": {
+          "uid": "DocxEditor.Range#bookmarks",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "BookmarkCollection"
+            }
+          ]
+        },
+        "contentControls": {
+          "uid": "DocxEditor.Range#contentControls",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ContentControlCollection"
+            }
+          ]
+        },
+        "end": {
+          "uid": "DocxEditor.Range#end",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "font": {
+          "uid": "DocxEditor.Range#font",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Font"
+            }
+          ]
+        },
+        "hyperlink": {
+          "uid": "DocxEditor.Range#hyperlink",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "insertParagraph": {
+          "uid": "DocxEditor.Range#insertParagraph",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "paragraphText",
+                  "type": "string"
+                },
+                {
+                  "name": "insertLocation",
+                  "type": "\"Before\" | \"After\""
+                }
+              ],
+              "returns": "Paragraph"
+            }
+          ]
+        },
+        "insertText": {
+          "uid": "DocxEditor.Range#insertText",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "text",
+                  "type": "string"
+                },
+                {
+                  "name": "insertLocation",
+                  "type": "\"Replace\" | \"Start\" | \"End\" | \"Before\" | \"After\""
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
+        "paragraphs": {
+          "uid": "DocxEditor.Range#paragraphs",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ParagraphCollection"
+            }
+          ]
+        },
+        "search": {
+          "uid": "DocxEditor.Range#search",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "searchText",
+                  "type": "string"
+                },
+                {
+                  "name": "searchOptions",
+                  "type": "SearchOptions",
+                  "optional": true
+                }
+              ],
+              "returns": "RangeCollection"
+            }
+          ]
+        },
+        "select": {
+          "uid": "DocxEditor.Range#select",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "selectionMode",
+                  "type": "SelectionMode",
+                  "optional": true
+                }
+              ],
+              "returns": "void"
+            },
+            {
+              "params": [
+                {
+                  "name": "selectionMode",
+                  "type": "\"Select\" | \"Start\" | \"End\"",
+                  "optional": true
+                }
+              ],
+              "returns": "void"
+            }
+          ]
+        },
+        "start": {
+          "uid": "DocxEditor.Range#start",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "style": {
+          "uid": "DocxEditor.Range#style",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "text": {
+          "uid": "DocxEditor.Range#text",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        }
+      }
+    },
+    "RangeCollection": {
+      "uid": "DocxEditor.RangeCollection",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "getFirst": {
+          "uid": "DocxEditor.RangeCollection#getFirst",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Range"
+            }
+          ]
+        },
+        "items": {
+          "uid": "DocxEditor.RangeCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Range[]"
+            }
+          ]
+        }
+      }
+    },
+    "RequestContext": {
+      "uid": "DocxEditor.RequestContext",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "document": {
+          "uid": "DocxEditor.RequestContext#document",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Document"
+            }
+          ]
+        }
+      }
+    },
+    "Revision": {
+      "uid": "DocxEditor.Revision",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "accept": {
+          "uid": "DocxEditor.Revision#accept",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "author": {
+          "uid": "DocxEditor.Revision#author",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "date": {
+          "uid": "DocxEditor.Revision#date",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Date"
+            }
+          ]
+        },
+        "range": {
+          "uid": "DocxEditor.Revision#range",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Range"
+            }
+          ]
+        },
+        "reject": {
+          "uid": "DocxEditor.Revision#reject",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "type": {
+          "uid": "DocxEditor.Revision#type",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"None\" | \"Insert\" | \"Delete\" | \"Property\" | \"ParagraphNumber\" | \"DisplayField\" | \"Reconcile\" | \"Conflict\" | \"Style\" | \"Replace\" | \"ParagraphProperty\" | \"TableProperty\" | \"SectionProperty\" | \"StyleDefinition\" | \"MovedFrom\" | \"MovedTo\" | \"CellInsertion\" | \"CellDeletion\" | \"CellMerge\" | \"CellSplit\" | \"ConflictInsert\" | \"ConflictDelete\""
+            }
+          ]
+        }
+      }
+    },
+    "RevisionCollection": {
+      "uid": "DocxEditor.RevisionCollection",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "acceptAll": {
+          "uid": "DocxEditor.RevisionCollection#acceptAll",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "items": {
+          "uid": "DocxEditor.RevisionCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Revision[]"
+            }
+          ]
+        },
+        "rejectAll": {
+          "uid": "DocxEditor.RevisionCollection#rejectAll",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        }
+      }
+    },
+    "SearchOptions": {
+      "uid": "DocxEditor.SearchOptions",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "ignorePunct": {
+          "uid": "DocxEditor.SearchOptions#ignorePunct",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "ignoreSpace": {
+          "uid": "DocxEditor.SearchOptions#ignoreSpace",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "matchCase": {
+          "uid": "DocxEditor.SearchOptions#matchCase",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "matchWholeWord": {
+          "uid": "DocxEditor.SearchOptions#matchWholeWord",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "matchWildcards": {
+          "uid": "DocxEditor.SearchOptions#matchWildcards",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        }
+      }
+    },
+    "Section": {
+      "uid": "DocxEditor.Section",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "body": {
+          "uid": "DocxEditor.Section#body",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Body"
+            }
+          ]
+        },
+        "getFooter": {
+          "uid": "DocxEditor.Section#getFooter",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "type",
+                  "type": "HeaderFooterType"
+                }
+              ],
+              "returns": "Body"
+            },
+            {
+              "params": [
+                {
+                  "name": "type",
+                  "type": "\"Primary\" | \"FirstPage\" | \"EvenPages\""
+                }
+              ],
+              "returns": "Body"
+            }
+          ]
+        },
+        "getHeader": {
+          "uid": "DocxEditor.Section#getHeader",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "type",
+                  "type": "HeaderFooterType"
+                }
+              ],
+              "returns": "Body"
+            },
+            {
+              "params": [
+                {
+                  "name": "type",
+                  "type": "\"Primary\" | \"FirstPage\" | \"EvenPages\""
+                }
+              ],
+              "returns": "Body"
+            }
+          ]
+        },
+        "getNext": {
+          "uid": "DocxEditor.Section#getNext",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Section"
+            }
+          ]
+        },
+        "pageSetup": {
+          "uid": "DocxEditor.Section#pageSetup",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "PageSetup"
+            }
+          ]
+        }
+      }
+    },
+    "SectionCollection": {
+      "uid": "DocxEditor.SectionCollection",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "getFirst": {
+          "uid": "DocxEditor.SectionCollection#getFirst",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Section"
+            }
+          ]
+        },
+        "items": {
+          "uid": "DocxEditor.SectionCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Section[]"
+            }
+          ]
+        }
+      }
+    },
+    "run": {
+      "uid": "DocxEditor.run",
+      "kind": "function",
+      "requirementSet": null,
+      "overloads": [
+        {
+          "params": [
+            {
+              "name": "batch",
+              "type": "(context: RequestContext) => Promise<T>"
+            }
+          ],
+          "returns": "Promise<T>"
+        },
+        {
+          "params": [
+            {
+              "name": "object",
+              "type": "ClientObject"
+            },
+            {
+              "name": "batch",
+              "type": "(context: RequestContext) => Promise<T>"
+            }
+          ],
+          "returns": "Promise<T>"
+        },
+        {
+          "params": [
+            {
+              "name": "objects",
+              "type": "ClientObject[]"
+            },
+            {
+              "name": "batch",
+              "type": "(context: RequestContext) => Promise<T>"
+            }
+          ],
+          "returns": "Promise<T>"
+        }
+      ]
+    }
+  }
+}

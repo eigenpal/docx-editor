@@ -113,7 +113,10 @@
     "typecheck": "echo 'skip typecheck: @docx-editor.dev/agents is a legacy package pending rebuild over the new engine-core; its @docx-editor.dev/core/headless imports were removed in the greenfield migration. Restore vue-tsc --noEmit when reconnected.'",
     "typecheck:disabled": "vue-tsc --noEmit",
     "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/agents --local",
-    "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/agents"
+    "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/agents",
+    "compat:generate": "node scripts/generate-conformance.mjs",
+    "compat:fetch-reference": "node scripts/fetch-office-reference.mjs",
+    "compat:check-drift": "node scripts/fetch-office-reference.mjs --check"
   },
   "dependencies": {
     "@docx-editor.dev/core": "^0.0.1",

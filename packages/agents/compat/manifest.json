@@ -1,0 +1,267 @@
+{
+  "schemaVersion": 1,
+  "$comment": "Allowlisted subset of the Microsoft Word JavaScript API (Word.* namespace) that DocxEditor's public surface is measured against for source/shape compatibility. This file selects the upstream UIDs used as *reference-only conformance input*; it is not a dependency declaration and DocxEditor does not vendor, copy, or generate its own declarations from Microsoft's. See README.md in this directory for the full policy.",
+  "categories": {
+    "core": ["RequestContext", "ClientObject", "Document", "Body", "Range", "Paragraph"],
+    "collectionsAndSearch": ["ParagraphCollection", "RangeCollection", "SearchOptions"],
+    "fontAndParagraphFormatting": ["Font", "ParagraphFormat"],
+    "lists": ["List", "ListCollection", "ListItem"],
+    "hyperlinksAndBookmarks": ["Bookmark", "BookmarkCollection"],
+    "sectionsAndPageSetup": ["Section", "SectionCollection", "PageSetup"],
+    "headerFooterAndNoteBodies": ["NoteItem"],
+    "commentsAndRevisions": [
+      "Comment",
+      "CommentCollection",
+      "CommentReply",
+      "CommentReplyCollection",
+      "Revision",
+      "RevisionCollection"
+    ],
+    "contentControls": ["ContentControl", "ContentControlCollection"]
+  },
+  "symbols": {
+    "run": { "isFunction": true, "members": [] },
+    "RequestContext": { "members": ["document"] },
+    "ClientObject": {
+      "namespace": "OfficeExtension",
+      "members": ["context", "isNullObject"]
+    },
+    "Document": { "members": ["body", "paragraphs", "contentControls", "comments", "sections"] },
+    "Body": {
+      "members": [
+        "paragraphs",
+        "contentControls",
+        "font",
+        "lists",
+        "style",
+        "text",
+        "clear",
+        "getComments",
+        "insertParagraph",
+        "insertText",
+        "search"
+      ]
+    },
+    "Range": {
+      "members": [
+        "text",
+        "font",
+        "paragraphs",
+        "contentControls",
+        "bookmarks",
+        "hyperlink",
+        "style",
+        "start",
+        "end",
+        "insertText",
+        "insertParagraph",
+        "search",
+        "select"
+      ]
+    },
+    "Paragraph": {
+      "members": [
+        "font",
+        "contentControls",
+        "list",
+        "listItem",
+        "alignment",
+        "firstLineIndent",
+        "leftIndent",
+        "rightIndent",
+        "lineSpacing",
+        "spaceBefore",
+        "spaceAfter",
+        "style",
+        "text",
+        "clear",
+        "delete",
+        "insertParagraph",
+        "insertText",
+        "split"
+      ]
+    },
+    "ParagraphCollection": { "members": ["items", "getFirst", "getLast"] },
+    "RangeCollection": { "members": ["items", "getFirst"] },
+    "SearchOptions": {
+      "members": ["ignorePunct", "ignoreSpace", "matchCase", "matchWholeWord", "matchWildcards"]
+    },
+    "Font": {
+      "members": ["bold", "italic", "color", "highlightColor", "name", "size"]
+    },
+    "ParagraphFormat": {
+      "members": [
+        "alignment",
+        "firstLineIndent",
+        "leftIndent",
+        "rightIndent",
+        "lineSpacing",
+        "spaceBefore",
+        "spaceAfter",
+        "widowControl"
+      ]
+    },
+    "List": { "members": ["id", "paragraphs", "getLevelParagraphs", "insertParagraph"] },
+    "ListCollection": { "members": ["items", "getById", "getFirst"] },
+    "ListItem": { "members": ["level", "listString", "siblingIndex"] },
+    "Bookmark": { "members": ["name", "range", "start", "end", "delete", "select"] },
+    "BookmarkCollection": { "members": ["items"] },
+    "Section": { "members": ["body", "pageSetup", "getHeader", "getFooter", "getNext"] },
+    "SectionCollection": { "members": ["items", "getFirst"] },
+    "PageSetup": {
+      "members": ["topMargin", "bottomMargin", "leftMargin", "rightMargin", "orientation", "pageWidth", "pageHeight"]
+    },
+    "NoteItem": { "members": ["body", "type", "delete", "getNext"] },
+    "Comment": {
+      "members": [
+        "authorName",
+        "authorEmail",
+        "content",
+        "creationDate",
+        "id",
+        "resolved",
+        "replies",
+        "delete",
+        "getRange",
+        "reply"
+      ]
+    },
+    "CommentCollection": { "members": ["items", "getFirst"] },
+    "CommentReply": {
+      "members": ["authorName", "authorEmail", "content", "creationDate", "id", "delete"]
+    },
+    "CommentReplyCollection": { "members": ["items", "getFirst"] },
+    "Revision": { "members": ["author", "date", "type", "range", "accept", "reject"] },
+    "RevisionCollection": { "members": ["items", "acceptAll", "rejectAll"] },
+    "ContentControl": {
+      "members": [
+        "id",
+        "tag",
+        "title",
+        "appearance",
+        "cannotEdit",
+        "cannotDelete",
+        "placeholderText",
+        "color",
+        "subtype",
+        "text",
+        "paragraphs",
+        "contentControls",
+        "delete",
+        "getRange",
+        "insertText"
+      ]
+    },
+    "ContentControlCollection": { "members": ["items", "getById"] }
+  },
+  "omissions": [
+    {
+      "uid": "Word.Table",
+      "reason": "Tables are omitted from the published subset until the table engine lane lands. Not represented as a working stub anywhere in DocxEditor's declarations."
+    },
+    {
+      "uid": "Word.TableCollection",
+      "reason": "Depends on Word.Table; omitted for the same reason."
+    },
+    {
+      "uid": "Word.TableCell",
+      "reason": "Depends on Word.Table; omitted for the same reason."
+    },
+    {
+      "uid": "Word.InlinePicture",
+      "reason": "Images are omitted from the published subset until the image engine lane lands. Not represented as a working stub anywhere in DocxEditor's declarations."
+    },
+    {
+      "uid": "Word.InlinePictureCollection",
+      "reason": "Depends on Word.InlinePicture; omitted for the same reason."
+    },
+    {
+      "uid": "Word.Shape",
+      "reason": "Floating shapes/canvases are out of scope for the published subset; no engine lane targets them yet."
+    },
+    {
+      "uid": "Word.Body#getHtml",
+      "reason": "Returns OfficeExtension.ClientResult<string>. The ClientResult/RequestContext queuing wrapper is proxy-runtime plumbing (Task 3), not part of this contract-freeze task."
+    },
+    {
+      "uid": "Word.Body#getOoxml",
+      "reason": "Returns OfficeExtension.ClientResult<string>; see Word.Body#getHtml."
+    },
+    {
+      "uid": "Word.Paragraph#getText",
+      "reason": "Returns OfficeExtension.ClientResult<string>; see Word.Body#getHtml. Word.Paragraph#text is selected instead for the already-loaded case."
+    },
+    {
+      "uid": "Word.BookmarkCollection#exists",
+      "reason": "Returns OfficeExtension.ClientResult<boolean>; see Word.Body#getHtml."
+    },
+    {
+      "uid": "Word.List#getLevelPicture",
+      "reason": "Returns OfficeExtension.ClientResult<string> and is picture-related; omitted per both the ClientResult and image-omission reasons."
+    },
+    {
+      "uid": "Word.List#getLevelString",
+      "reason": "Returns OfficeExtension.ClientResult<string>; see Word.Body#getHtml."
+    },
+    {
+      "uid": "Word.Hyperlink",
+      "reason": "The standalone Hyperlink/HyperlinkCollection object model (WordApiDesktop 1.3) is deferred; Word.Range#hyperlink (get/set of the range's primary hyperlink, WordApi 1.3) covers this slice's hyperlink read/write needs."
+    },
+    {
+      "uid": "Word.HyperlinkCollection",
+      "reason": "Depends on Word.Hyperlink; omitted for the same reason."
+    },
+    {
+      "uid": "Word.Font#underline",
+      "reason": "Upstream type is Word.UnderlineType | <21 string literals>. Deferred pending a deliberate decision on modeling the full UnderlineType union; bold/italic/color/highlightColor/name/size cover this slice's font-formatting needs."
+    },
+    {
+      "uid": "Word.Style",
+      "reason": "The named-style object model (Word.Style, Word.StyleCollection) is deferred. Word.Body/Range/Paragraph/ContentControl#style (apply a style by name, WordApi 1.1) and Word.ParagraphFormat (formatting values themselves) cover this slice's styling needs without it."
+    },
+    {
+      "uid": "Word.NoteItemCollection",
+      "reason": "Collection wiring (Body#footnotes/endnotes) is deferred; Word.NoteItem itself is the selected symbol for the header/footer-and-note-bodies category in this slice."
+    },
+    {
+      "uid": "Word.ContentControl#checkboxContentControl",
+      "reason": "Typed content-control subtypes (checkbox/dropdown/combo-box/date/picture/repeating-section/group/building-block-gallery) are explicitly out of scope for this task; see typed-content-controls OpenSpec change. Common ContentControl members only."
+    },
+    {
+      "uid": "Word.ContentControl#comboBoxContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl."
+    },
+    {
+      "uid": "Word.ContentControl#datePickerContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl."
+    },
+    {
+      "uid": "Word.ContentControl#dropDownListContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl."
+    },
+    {
+      "uid": "Word.ContentControl#pictureContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl; also image-omission applies."
+    },
+    {
+      "uid": "Word.ContentControl#repeatingSectionContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl."
+    },
+    {
+      "uid": "Word.ContentControl#groupContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl."
+    },
+    {
+      "uid": "Word.ContentControl#buildingBlockGalleryContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl."
+    },
+    {
+      "uid": "Word.ContentControl#xmlMapping",
+      "reason": "Custom-XML-bound content control writes are refused until XML mapping is a separate supported lane (per the redesign plan); the mapping object itself is out of scope here."
+    },
+    {
+      "uid": "OfficeExtension.ClientRequestContext#sync",
+      "reason": "The batched request-context sync/flush call is the proxy runtime's own queuing mechanism (Task 3), not part of this contract-freeze task. Word.RequestContext inherits it from OfficeExtension.ClientRequestContext rather than redeclaring it, so it never appears as a Word.RequestContext member in this manifest; representative source-compat fixtures in compat/fixtures/ omit the trailing `await context.sync()` real Office.js samples always include, for the same reason."
+    }
+  ]
+}

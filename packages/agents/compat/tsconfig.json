@@ -1,0 +1,27 @@
+{
+  // Dedicated project for compiling DocxEditor's own compatibility
+  // declarations, the generated compile assertions, and the source-compat
+  // fixtures — kept separate from the (currently disabled)
+  // `packages/agents/tsconfig.json` so this real, offline compiler check
+  // can run in `bun test` independent of that package's broader state.
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "declaration": true,
+    // No ambient ".d.ts" package should be auto-pulled in: these files are
+    // pure type declarations with zero runtime dependencies, and without
+    // this, TypeScript scans every `@types/*` package in the workspace's
+    // node_modules and includes them all as global ambient types — which,
+    // in a monorepo with more than one `@types/node` version installed,
+    // produces hundreds of unrelated "Duplicate identifier" diagnostics.
+    "types": []
+  },
+  "include": ["docxeditor", "generated", "fixtures"],
+  "exclude": ["node_modules"]
+}

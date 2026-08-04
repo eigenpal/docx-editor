@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "upstreamPackage": {
+    "name": "@types/office-js",
+    "version": "1.0.604",
+    "integrity": "sha512-rFCYAprBv6EOpMpG+7/TCdjqJQRslAPN5DbUD5rViUq+ATAEbgPHmn0s6Jhdg09d0+EPQfVndI+LJaCE6k9BiA==",
+    "shasum": "ad9f54ce51dbb254a83316e3cee54c7ddb7f19e0",
+    "tarballUrl": "https://registry.npmjs.org/@types/office-js/-/office-js-1.0.604.tgz",
+    "typesPublisherContentHash": "838b56382872e45d865e1b978fcb4665b0f91bd5500ba03a1531800eab83248c",
+    "sourceRepository": {
+      "url": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+      "type": "git",
+      "directory": "types/office-js"
+    }
+  },
+  "license": "MIT",
+  "docsReference": {
+    "url": "https://learn.microsoft.com/en-us/javascript/api/word",
+    "note": "Requirement-set ([Api set: ...]) facts are read from the pinned declaration file itself, not scraped separately from the docs site."
+  },
+  "targetRequirementSets": [
+    "WordApi 1.1",
+    "WordApi 1.3",
+    "WordApi 1.4",
+    "WordApi 1.5",
+    "WordApiDesktop 1.3",
+    "WordApiDesktop 1.4"
+  ],
+  "fetchedAt": "2026-08-04T15:44:08.772Z",
+  "fetchedBy": "packages/agents/scripts/fetch-office-reference.mjs"
+}

@@ -1,0 +1,2192 @@
+{
+  "schemaVersion": 1,
+  "generatedFrom": {
+    "package": "@types/office-js",
+    "version": "1.0.604"
+  },
+  "symbols": {
+    "Body": {
+      "uid": "Word.Body",
+      "kind": "class",
+      "requirementSet": "WordApi 1.1",
+      "members": {
+        "clear": {
+          "uid": "Word.Body#clear",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "contentControls": {
+          "uid": "Word.Body#contentControls",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ContentControlCollection"
+            }
+          ]
+        },
+        "font": {
+          "uid": "Word.Body#font",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Font"
+            }
+          ]
+        },
+        "getComments": {
+          "uid": "Word.Body#getComments",
+          "kind": "method",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "CommentCollection"
+            }
+          ]
+        },
+        "insertParagraph": {
+          "uid": "Word.Body#insertParagraph",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "paragraphText",
+                  "type": "string"
+                },
+                {
+                  "name": "insertLocation",
+                  "type": "\"Start\" | \"End\""
+                }
+              ],
+              "returns": "Paragraph"
+            }
+          ]
+        },
+        "insertText": {
+          "uid": "Word.Body#insertText",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "text",
+                  "type": "string"
+                },
+                {
+                  "name": "insertLocation",
+                  "type": "\"Replace\" | \"Start\" | \"End\""
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
+        "lists": {
+          "uid": "Word.Body#lists",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ListCollection"
+            }
+          ]
+        },
+        "paragraphs": {
+          "uid": "Word.Body#paragraphs",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ParagraphCollection"
+            }
+          ]
+        },
+        "search": {
+          "uid": "Word.Body#search",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "searchText",
+                  "type": "string"
+                },
+                {
+                  "name": "searchOptions",
+                  "type": "SearchOptions",
+                  "optional": true
+                }
+              ],
+              "returns": "RangeCollection"
+            }
+          ]
+        },
+        "style": {
+          "uid": "Word.Body#style",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "text": {
+          "uid": "Word.Body#text",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        }
+      }
+    },
+    "Bookmark": {
+      "uid": "Word.Bookmark",
+      "kind": "class",
+      "requirementSet": "WordApiDesktop 1.4",
+      "members": {
+        "delete": {
+          "uid": "Word.Bookmark#delete",
+          "kind": "method",
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "end": {
+          "uid": "Word.Bookmark#end",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "name": {
+          "uid": "Word.Bookmark#name",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "range": {
+          "uid": "Word.Bookmark#range",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Range"
+            }
+          ]
+        },
+        "select": {
+          "uid": "Word.Bookmark#select",
+          "kind": "method",
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "start": {
+          "uid": "Word.Bookmark#start",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        }
+      }
+    },
+    "BookmarkCollection": {
+      "uid": "Word.BookmarkCollection",
+      "kind": "class",
+      "requirementSet": "WordApiDesktop 1.4",
+      "members": {
+        "items": {
+          "uid": "Word.BookmarkCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Bookmark[]"
+            }
+          ]
+        }
+      }
+    },
+    "ClientObject": {
+      "uid": "OfficeExtension.ClientObject",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "context": {
+          "uid": "OfficeExtension.ClientObject#context",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ClientRequestContext"
+            }
+          ]
+        },
+        "isNullObject": {
+          "uid": "OfficeExtension.ClientObject#isNullObject",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        }
+      }
+    },
+    "Comment": {
+      "uid": "Word.Comment",
+      "kind": "class",
+      "requirementSet": "WordApi 1.4",
+      "members": {
+        "authorEmail": {
+          "uid": "Word.Comment#authorEmail",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "authorName": {
+          "uid": "Word.Comment#authorName",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "content": {
+          "uid": "Word.Comment#content",
+          "kind": "property",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "creationDate": {
+          "uid": "Word.Comment#creationDate",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Date"
+            }
+          ]
+        },
+        "delete": {
+          "uid": "Word.Comment#delete",
+          "kind": "method",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "getRange": {
+          "uid": "Word.Comment#getRange",
+          "kind": "method",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Range"
+            }
+          ]
+        },
+        "id": {
+          "uid": "Word.Comment#id",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "replies": {
+          "uid": "Word.Comment#replies",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "CommentReplyCollection"
+            }
+          ]
+        },
+        "reply": {
+          "uid": "Word.Comment#reply",
+          "kind": "method",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "replyText",
+                  "type": "string"
+                }
+              ],
+              "returns": "CommentReply"
+            }
+          ]
+        },
+        "resolved": {
+          "uid": "Word.Comment#resolved",
+          "kind": "property",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        }
+      }
+    },
+    "CommentCollection": {
+      "uid": "Word.CommentCollection",
+      "kind": "class",
+      "requirementSet": "WordApi 1.4",
+      "members": {
+        "getFirst": {
+          "uid": "Word.CommentCollection#getFirst",
+          "kind": "method",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Comment"
+            }
+          ]
+        },
+        "items": {
+          "uid": "Word.CommentCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Comment[]"
+            }
+          ]
+        }
+      }
+    },
+    "CommentReply": {
+      "uid": "Word.CommentReply",
+      "kind": "class",
+      "requirementSet": "WordApi 1.4",
+      "members": {
+        "authorEmail": {
+          "uid": "Word.CommentReply#authorEmail",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "authorName": {
+          "uid": "Word.CommentReply#authorName",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "content": {
+          "uid": "Word.CommentReply#content",
+          "kind": "property",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "creationDate": {
+          "uid": "Word.CommentReply#creationDate",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Date"
+            }
+          ]
+        },
+        "delete": {
+          "uid": "Word.CommentReply#delete",
+          "kind": "method",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "id": {
+          "uid": "Word.CommentReply#id",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        }
+      }
+    },
+    "CommentReplyCollection": {
+      "uid": "Word.CommentReplyCollection",
+      "kind": "class",
+      "requirementSet": "WordApi 1.4",
+      "members": {
+        "getFirst": {
+          "uid": "Word.CommentReplyCollection#getFirst",
+          "kind": "method",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "CommentReply"
+            }
+          ]
+        },
+        "items": {
+          "uid": "Word.CommentReplyCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "CommentReply[]"
+            }
+          ]
+        }
+      }
+    },
+    "ContentControl": {
+      "uid": "Word.ContentControl",
+      "kind": "class",
+      "requirementSet": "WordApi 1.1",
+      "members": {
+        "appearance": {
+          "uid": "Word.ContentControl#appearance",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"BoundingBox\" | \"Tags\" | \"Hidden\""
+            }
+          ]
+        },
+        "cannotDelete": {
+          "uid": "Word.ContentControl#cannotDelete",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "cannotEdit": {
+          "uid": "Word.ContentControl#cannotEdit",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "color": {
+          "uid": "Word.ContentControl#color",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "contentControls": {
+          "uid": "Word.ContentControl#contentControls",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ContentControlCollection"
+            }
+          ]
+        },
+        "delete": {
+          "uid": "Word.ContentControl#delete",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "keepContent",
+                  "type": "boolean"
+                }
+              ],
+              "returns": "void"
+            }
+          ]
+        },
+        "getRange": {
+          "uid": "Word.ContentControl#getRange",
+          "kind": "method",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "rangeLocation",
+                  "type": "\"Whole\" | \"Start\" | \"End\" | \"Before\" | \"After\" | \"Content\"",
+                  "optional": true
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
+        "id": {
+          "uid": "Word.ContentControl#id",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "insertText": {
+          "uid": "Word.ContentControl#insertText",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "text",
+                  "type": "string"
+                },
+                {
+                  "name": "insertLocation",
+                  "type": "\"Replace\" | \"Start\" | \"End\""
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
+        "paragraphs": {
+          "uid": "Word.ContentControl#paragraphs",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ParagraphCollection"
+            }
+          ]
+        },
+        "placeholderText": {
+          "uid": "Word.ContentControl#placeholderText",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "subtype": {
+          "uid": "Word.ContentControl#subtype",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Unknown\" | \"RichTextInline\" | \"RichTextParagraphs\" | \"RichTextTableCell\" | \"RichTextTableRow\" | \"RichTextTable\" | \"PlainTextInline\" | \"PlainTextParagraph\" | \"Picture\" | \"BuildingBlockGallery\" | \"CheckBox\" | \"ComboBox\" | \"DropDownList\" | \"DatePicker\" | \"RepeatingSection\" | \"RichText\" | \"PlainText\" | \"Group\""
+            }
+          ]
+        },
+        "tag": {
+          "uid": "Word.ContentControl#tag",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "text": {
+          "uid": "Word.ContentControl#text",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "title": {
+          "uid": "Word.ContentControl#title",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        }
+      }
+    },
+    "ContentControlCollection": {
+      "uid": "Word.ContentControlCollection",
+      "kind": "class",
+      "requirementSet": "WordApi 1.1",
+      "members": {
+        "getById": {
+          "uid": "Word.ContentControlCollection#getById",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "id",
+                  "type": "number"
+                }
+              ],
+              "returns": "ContentControl"
+            }
+          ]
+        },
+        "items": {
+          "uid": "Word.ContentControlCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ContentControl[]"
+            }
+          ]
+        }
+      }
+    },
+    "Document": {
+      "uid": "Word.Document",
+      "kind": "class",
+      "requirementSet": "WordApi 1.1",
+      "members": {
+        "body": {
+          "uid": "Word.Document#body",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Body"
+            }
+          ]
+        },
+        "comments": {
+          "uid": "Word.Document#comments",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "CommentCollection"
+            }
+          ]
+        },
+        "contentControls": {
+          "uid": "Word.Document#contentControls",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ContentControlCollection"
+            }
+          ]
+        },
+        "paragraphs": {
+          "uid": "Word.Document#paragraphs",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ParagraphCollection"
+            }
+          ]
+        },
+        "sections": {
+          "uid": "Word.Document#sections",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "SectionCollection"
+            }
+          ]
+        }
+      }
+    },
+    "Font": {
+      "uid": "Word.Font",
+      "kind": "class",
+      "requirementSet": "WordApi 1.1",
+      "members": {
+        "bold": {
+          "uid": "Word.Font#bold",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "color": {
+          "uid": "Word.Font#color",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "highlightColor": {
+          "uid": "Word.Font#highlightColor",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "italic": {
+          "uid": "Word.Font#italic",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "name": {
+          "uid": "Word.Font#name",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "size": {
+          "uid": "Word.Font#size",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        }
+      }
+    },
+    "List": {
+      "uid": "Word.List",
+      "kind": "class",
+      "requirementSet": "WordApi 1.3",
+      "members": {
+        "getLevelParagraphs": {
+          "uid": "Word.List#getLevelParagraphs",
+          "kind": "method",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "level",
+                  "type": "number"
+                }
+              ],
+              "returns": "ParagraphCollection"
+            }
+          ]
+        },
+        "id": {
+          "uid": "Word.List#id",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "insertParagraph": {
+          "uid": "Word.List#insertParagraph",
+          "kind": "method",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "paragraphText",
+                  "type": "string"
+                },
+                {
+                  "name": "insertLocation",
+                  "type": "\"Start\" | \"End\" | \"Before\" | \"After\""
+                }
+              ],
+              "returns": "Paragraph"
+            }
+          ]
+        },
+        "paragraphs": {
+          "uid": "Word.List#paragraphs",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ParagraphCollection"
+            }
+          ]
+        }
+      }
+    },
+    "ListCollection": {
+      "uid": "Word.ListCollection",
+      "kind": "class",
+      "requirementSet": "WordApi 1.3",
+      "members": {
+        "getById": {
+          "uid": "Word.ListCollection#getById",
+          "kind": "method",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "id",
+                  "type": "number"
+                }
+              ],
+              "returns": "List"
+            }
+          ]
+        },
+        "getFirst": {
+          "uid": "Word.ListCollection#getFirst",
+          "kind": "method",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "List"
+            }
+          ]
+        },
+        "items": {
+          "uid": "Word.ListCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "List[]"
+            }
+          ]
+        }
+      }
+    },
+    "ListItem": {
+      "uid": "Word.ListItem",
+      "kind": "class",
+      "requirementSet": "WordApi 1.3",
+      "members": {
+        "level": {
+          "uid": "Word.ListItem#level",
+          "kind": "property",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "listString": {
+          "uid": "Word.ListItem#listString",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "siblingIndex": {
+          "uid": "Word.ListItem#siblingIndex",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        }
+      }
+    },
+    "NoteItem": {
+      "uid": "Word.NoteItem",
+      "kind": "class",
+      "requirementSet": "WordApi 1.5",
+      "members": {
+        "body": {
+          "uid": "Word.NoteItem#body",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Body"
+            }
+          ]
+        },
+        "delete": {
+          "uid": "Word.NoteItem#delete",
+          "kind": "method",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "getNext": {
+          "uid": "Word.NoteItem#getNext",
+          "kind": "method",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "NoteItem"
+            }
+          ]
+        },
+        "type": {
+          "uid": "Word.NoteItem#type",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Footnote\" | \"Endnote\""
+            }
+          ]
+        }
+      }
+    },
+    "PageSetup": {
+      "uid": "Word.PageSetup",
+      "kind": "class",
+      "requirementSet": "WordApiDesktop 1.3",
+      "members": {
+        "bottomMargin": {
+          "uid": "Word.PageSetup#bottomMargin",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "leftMargin": {
+          "uid": "Word.PageSetup#leftMargin",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "orientation": {
+          "uid": "Word.PageSetup#orientation",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Portrait\" | \"Landscape\""
+            }
+          ]
+        },
+        "pageHeight": {
+          "uid": "Word.PageSetup#pageHeight",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "pageWidth": {
+          "uid": "Word.PageSetup#pageWidth",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "rightMargin": {
+          "uid": "Word.PageSetup#rightMargin",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "topMargin": {
+          "uid": "Word.PageSetup#topMargin",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        }
+      }
+    },
+    "Paragraph": {
+      "uid": "Word.Paragraph",
+      "kind": "class",
+      "requirementSet": "WordApi 1.1",
+      "members": {
+        "alignment": {
+          "uid": "Word.Paragraph#alignment",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Mixed\" | \"Unknown\" | \"Left\" | \"Centered\" | \"Right\" | \"Justified\""
+            }
+          ]
+        },
+        "clear": {
+          "uid": "Word.Paragraph#clear",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "contentControls": {
+          "uid": "Word.Paragraph#contentControls",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ContentControlCollection"
+            }
+          ]
+        },
+        "delete": {
+          "uid": "Word.Paragraph#delete",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "firstLineIndent": {
+          "uid": "Word.Paragraph#firstLineIndent",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "font": {
+          "uid": "Word.Paragraph#font",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Font"
+            }
+          ]
+        },
+        "insertParagraph": {
+          "uid": "Word.Paragraph#insertParagraph",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "paragraphText",
+                  "type": "string"
+                },
+                {
+                  "name": "insertLocation",
+                  "type": "\"Before\" | \"After\""
+                }
+              ],
+              "returns": "Paragraph"
+            }
+          ]
+        },
+        "insertText": {
+          "uid": "Word.Paragraph#insertText",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "text",
+                  "type": "string"
+                },
+                {
+                  "name": "insertLocation",
+                  "type": "\"Replace\" | \"Start\" | \"End\""
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
+        "leftIndent": {
+          "uid": "Word.Paragraph#leftIndent",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "lineSpacing": {
+          "uid": "Word.Paragraph#lineSpacing",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "list": {
+          "uid": "Word.Paragraph#list",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "List"
+            }
+          ]
+        },
+        "listItem": {
+          "uid": "Word.Paragraph#listItem",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ListItem"
+            }
+          ]
+        },
+        "rightIndent": {
+          "uid": "Word.Paragraph#rightIndent",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "spaceAfter": {
+          "uid": "Word.Paragraph#spaceAfter",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "spaceBefore": {
+          "uid": "Word.Paragraph#spaceBefore",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "split": {
+          "uid": "Word.Paragraph#split",
+          "kind": "method",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "delimiters",
+                  "type": "string[]"
+                },
+                {
+                  "name": "trimDelimiters",
+                  "type": "boolean",
+                  "optional": true
+                },
+                {
+                  "name": "trimSpacing",
+                  "type": "boolean",
+                  "optional": true
+                }
+              ],
+              "returns": "RangeCollection"
+            }
+          ]
+        },
+        "style": {
+          "uid": "Word.Paragraph#style",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "text": {
+          "uid": "Word.Paragraph#text",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        }
+      }
+    },
+    "ParagraphCollection": {
+      "uid": "Word.ParagraphCollection",
+      "kind": "class",
+      "requirementSet": "WordApi 1.1",
+      "members": {
+        "getFirst": {
+          "uid": "Word.ParagraphCollection#getFirst",
+          "kind": "method",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Paragraph"
+            }
+          ]
+        },
+        "getLast": {
+          "uid": "Word.ParagraphCollection#getLast",
+          "kind": "method",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Paragraph"
+            }
+          ]
+        },
+        "items": {
+          "uid": "Word.ParagraphCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Paragraph[]"
+            }
+          ]
+        }
+      }
+    },
+    "ParagraphFormat": {
+      "uid": "Word.ParagraphFormat",
+      "kind": "class",
+      "requirementSet": "WordApi 1.5",
+      "members": {
+        "alignment": {
+          "uid": "Word.ParagraphFormat#alignment",
+          "kind": "property",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Mixed\" | \"Unknown\" | \"Left\" | \"Centered\" | \"Right\" | \"Justified\""
+            }
+          ]
+        },
+        "firstLineIndent": {
+          "uid": "Word.ParagraphFormat#firstLineIndent",
+          "kind": "property",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "leftIndent": {
+          "uid": "Word.ParagraphFormat#leftIndent",
+          "kind": "property",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "lineSpacing": {
+          "uid": "Word.ParagraphFormat#lineSpacing",
+          "kind": "property",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "rightIndent": {
+          "uid": "Word.ParagraphFormat#rightIndent",
+          "kind": "property",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "spaceAfter": {
+          "uid": "Word.ParagraphFormat#spaceAfter",
+          "kind": "property",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "spaceBefore": {
+          "uid": "Word.ParagraphFormat#spaceBefore",
+          "kind": "property",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "widowControl": {
+          "uid": "Word.ParagraphFormat#widowControl",
+          "kind": "property",
+          "requirementSet": "WordApi 1.5",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        }
+      }
+    },
+    "Range": {
+      "uid": "Word.Range",
+      "kind": "class",
+      "requirementSet": "WordApi 1.1",
+      "members": {
+        "bookmarks": {
+          "uid": "Word.Range#bookmarks",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "BookmarkCollection"
+            }
+          ]
+        },
+        "contentControls": {
+          "uid": "Word.Range#contentControls",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ContentControlCollection"
+            }
+          ]
+        },
+        "end": {
+          "uid": "Word.Range#end",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "font": {
+          "uid": "Word.Range#font",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Font"
+            }
+          ]
+        },
+        "hyperlink": {
+          "uid": "Word.Range#hyperlink",
+          "kind": "property",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "insertParagraph": {
+          "uid": "Word.Range#insertParagraph",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "paragraphText",
+                  "type": "string"
+                },
+                {
+                  "name": "insertLocation",
+                  "type": "\"Before\" | \"After\""
+                }
+              ],
+              "returns": "Paragraph"
+            }
+          ]
+        },
+        "insertText": {
+          "uid": "Word.Range#insertText",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "text",
+                  "type": "string"
+                },
+                {
+                  "name": "insertLocation",
+                  "type": "\"Replace\" | \"Start\" | \"End\" | \"Before\" | \"After\""
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
+        "paragraphs": {
+          "uid": "Word.Range#paragraphs",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "ParagraphCollection"
+            }
+          ]
+        },
+        "search": {
+          "uid": "Word.Range#search",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "searchText",
+                  "type": "string"
+                },
+                {
+                  "name": "searchOptions",
+                  "type": "SearchOptions",
+                  "optional": true
+                }
+              ],
+              "returns": "RangeCollection"
+            }
+          ]
+        },
+        "select": {
+          "uid": "Word.Range#select",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "selectionMode",
+                  "type": "SelectionMode",
+                  "optional": true
+                }
+              ],
+              "returns": "void"
+            },
+            {
+              "params": [
+                {
+                  "name": "selectionMode",
+                  "type": "\"Select\" | \"Start\" | \"End\"",
+                  "optional": true
+                }
+              ],
+              "returns": "void"
+            }
+          ]
+        },
+        "start": {
+          "uid": "Word.Range#start",
+          "kind": "property",
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "number"
+            }
+          ]
+        },
+        "style": {
+          "uid": "Word.Range#style",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "text": {
+          "uid": "Word.Range#text",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        }
+      }
+    },
+    "RangeCollection": {
+      "uid": "Word.RangeCollection",
+      "kind": "class",
+      "requirementSet": "WordApi 1.1",
+      "members": {
+        "getFirst": {
+          "uid": "Word.RangeCollection#getFirst",
+          "kind": "method",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Range"
+            }
+          ]
+        },
+        "items": {
+          "uid": "Word.RangeCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Range[]"
+            }
+          ]
+        }
+      }
+    },
+    "RequestContext": {
+      "uid": "Word.RequestContext",
+      "kind": "class",
+      "requirementSet": null,
+      "members": {
+        "document": {
+          "uid": "Word.RequestContext#document",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Document"
+            }
+          ]
+        }
+      }
+    },
+    "Revision": {
+      "uid": "Word.Revision",
+      "kind": "class",
+      "requirementSet": "WordApiDesktop 1.4",
+      "members": {
+        "accept": {
+          "uid": "Word.Revision#accept",
+          "kind": "method",
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "author": {
+          "uid": "Word.Revision#author",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "string"
+            }
+          ]
+        },
+        "date": {
+          "uid": "Word.Revision#date",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Date"
+            }
+          ]
+        },
+        "range": {
+          "uid": "Word.Revision#range",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Range"
+            }
+          ]
+        },
+        "reject": {
+          "uid": "Word.Revision#reject",
+          "kind": "method",
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "type": {
+          "uid": "Word.Revision#type",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"None\" | \"Insert\" | \"Delete\" | \"Property\" | \"ParagraphNumber\" | \"DisplayField\" | \"Reconcile\" | \"Conflict\" | \"Style\" | \"Replace\" | \"ParagraphProperty\" | \"TableProperty\" | \"SectionProperty\" | \"StyleDefinition\" | \"MovedFrom\" | \"MovedTo\" | \"CellInsertion\" | \"CellDeletion\" | \"CellMerge\" | \"CellSplit\" | \"ConflictInsert\" | \"ConflictDelete\""
+            }
+          ]
+        }
+      }
+    },
+    "RevisionCollection": {
+      "uid": "Word.RevisionCollection",
+      "kind": "class",
+      "requirementSet": "WordApiDesktop 1.4",
+      "members": {
+        "acceptAll": {
+          "uid": "Word.RevisionCollection#acceptAll",
+          "kind": "method",
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
+        "items": {
+          "uid": "Word.RevisionCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Revision[]"
+            }
+          ]
+        },
+        "rejectAll": {
+          "uid": "Word.RevisionCollection#rejectAll",
+          "kind": "method",
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        }
+      }
+    },
+    "SearchOptions": {
+      "uid": "Word.SearchOptions",
+      "kind": "class",
+      "requirementSet": "WordApi 1.1",
+      "members": {
+        "ignorePunct": {
+          "uid": "Word.SearchOptions#ignorePunct",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "ignoreSpace": {
+          "uid": "Word.SearchOptions#ignoreSpace",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "matchCase": {
+          "uid": "Word.SearchOptions#matchCase",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "matchWholeWord": {
+          "uid": "Word.SearchOptions#matchWholeWord",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        },
+        "matchWildcards": {
+          "uid": "Word.SearchOptions#matchWildcards",
+          "kind": "property",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "boolean"
+            }
+          ]
+        }
+      }
+    },
+    "Section": {
+      "uid": "Word.Section",
+      "kind": "class",
+      "requirementSet": "WordApi 1.1",
+      "members": {
+        "body": {
+          "uid": "Word.Section#body",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Body"
+            }
+          ]
+        },
+        "getFooter": {
+          "uid": "Word.Section#getFooter",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "type",
+                  "type": "HeaderFooterType"
+                }
+              ],
+              "returns": "Body"
+            },
+            {
+              "params": [
+                {
+                  "name": "type",
+                  "type": "\"Primary\" | \"FirstPage\" | \"EvenPages\""
+                }
+              ],
+              "returns": "Body"
+            }
+          ]
+        },
+        "getHeader": {
+          "uid": "Word.Section#getHeader",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "type",
+                  "type": "HeaderFooterType"
+                }
+              ],
+              "returns": "Body"
+            },
+            {
+              "params": [
+                {
+                  "name": "type",
+                  "type": "\"Primary\" | \"FirstPage\" | \"EvenPages\""
+                }
+              ],
+              "returns": "Body"
+            }
+          ]
+        },
+        "getNext": {
+          "uid": "Word.Section#getNext",
+          "kind": "method",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Section"
+            }
+          ]
+        },
+        "pageSetup": {
+          "uid": "Word.Section#pageSetup",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApiDesktop 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "PageSetup"
+            }
+          ]
+        }
+      }
+    },
+    "SectionCollection": {
+      "uid": "Word.SectionCollection",
+      "kind": "class",
+      "requirementSet": "WordApi 1.1",
+      "members": {
+        "getFirst": {
+          "uid": "Word.SectionCollection#getFirst",
+          "kind": "method",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Section"
+            }
+          ]
+        },
+        "items": {
+          "uid": "Word.SectionCollection#items",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "Section[]"
+            }
+          ]
+        }
+      }
+    },
+    "run": {
+      "uid": "Word.run",
+      "kind": "function",
+      "requirementSet": null,
+      "overloads": [
+        {
+          "params": [
+            {
+              "name": "objects",
+              "type": "ClientObject[]"
+            },
+            {
+              "name": "batch",
+              "type": "(context: RequestContext) => Promise<T>"
+            }
+          ],
+          "returns": "Promise<T>"
+        },
+        {
+          "params": [
+            {
+              "name": "object",
+              "type": "ClientObject"
+            },
+            {
+              "name": "batch",
+              "type": "(context: RequestContext) => Promise<T>"
+            }
+          ],
+          "returns": "Promise<T>"
+        },
+        {
+          "params": [
+            {
+              "name": "batch",
+              "type": "(context: RequestContext) => Promise<T>"
+            }
+          ],
+          "returns": "Promise<T>"
+        }
+      ]
+    }
+  }
+}
