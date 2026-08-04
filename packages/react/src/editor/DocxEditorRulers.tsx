@@ -217,6 +217,10 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
         transition: 'margin 0.2s ease',
         // The ruler lives above the scroller, so mirror its horizontal movement explicitly.
         transform: `${props.style?.transform ? `${props.style.transform} ` : ''}translateX(${-scrollLeft}px)`,
+        // Navigation is below this row and cannot physically cover the ruler. Clip the
+        // scrolled portion at the same boundary so ticks never show above the pane.
+        clipPath:
+          shift > 0 && scrollLeft > 0 ? `inset(0 0 0 ${scrollLeft}px)` : props.style?.clipPath,
       }}
     />
   );
