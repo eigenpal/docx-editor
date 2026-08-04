@@ -969,7 +969,7 @@ describe('contextual table chrome (Task 10)', () => {
     });
     expect(editor().snapshot().table).not.toBeNull();
     const toolbar = toolbarElement(view);
-    const identities = childIdentities(toolbar);
+    const identities = toolbarArrangement(toolbar);
     const tableStart = identities.indexOf('table.borderTarget');
     expect(tableStart).toBeGreaterThan(-1);
     expect(identities.slice(tableStart, tableStart + TABLE_CHROME_SLOTS.length)).toEqual([
@@ -1002,7 +1002,7 @@ describe('contextual table chrome (Task 10)', () => {
     await act(async () => {
       caretInCell(editor(), 0);
     });
-    expect(childIdentities(toolbarElement(view))).toEqual([
+    expect(toolbarArrangement(toolbarElement(view))).toEqual([
       'table.borderTarget',
       'table.cellFill',
     ]);

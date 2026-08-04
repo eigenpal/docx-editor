@@ -112,6 +112,7 @@
   /* Status */
   --doc-error: #c5221f; /* error states */
   --doc-error-bg: #fce8e6; /* error backgrounds */
+  --doc-danger: var(--doc-error); /* invalid and refused controls */
   --doc-destructive: var(--doc-error); /* destructive menu/context rows */
   --doc-destructive-hover-bg: var(--doc-error-bg);
   --doc-success: #34a853; /* success states */
