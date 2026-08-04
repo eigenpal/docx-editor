@@ -188,6 +188,21 @@ export type AutomationOperation =
    * so sizing a bulleted paragraph without it leaves the bullet at the old size.
    */
   | { readonly op: 'setFont'; readonly span: AutomationSpanRef; readonly font: AutomationFontWrite }
+  /**
+   * The paragraph style NAME every paragraph a span covers agrees on.
+   *
+   * The name a reader sees (`heading 1`), not the internal `w:styleId` (`Heading1`) — the two are
+   * routinely different, and the id is not the vocabulary an object model talks in.
+   */
+  | { readonly op: 'getStyle'; readonly span: AutomationSpanRef }
+  /**
+   * Apply a paragraph style, by name, to every paragraph a span covers.
+   *
+   * A name the document does not already define is REFUSED. Minting the definition would report a
+   * style applied for one with no formatting in it — the paragraph unchanged on screen, styled when
+   * read back — and would turn a caller's string into a new part.
+   */
+  | { readonly op: 'setStyle'; readonly span: AutomationSpanRef; readonly name: string }
   /** One paragraph's own paragraph properties, in points. */
   | { readonly op: 'getParagraphFormat'; readonly paragraph: AutomationParagraphRef }
   /** Author paragraph properties. Only the fields present are written. */
@@ -222,6 +237,7 @@ export const AUTOMATION_QUERY_OPERATIONS = [
   'search',
   'getFont',
   'getParagraphFormat',
+  'getStyle',
 ] as const satisfies readonly AutomationOperationKind[];
 
 /** Operations that write. Every one of these goes through the single transaction path. */
@@ -234,6 +250,7 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
   'selectSpan',
   'setFont',
   'setParagraphFormat',
+  'setStyle',
 ] as const satisfies readonly AutomationOperationKind[];
 
 // Compile-time exhaustiveness: a new operation must be classified as a query or a command, or

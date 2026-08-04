@@ -50,12 +50,23 @@ describe('the runtime satisfies the authored declarations', () => {
       'select',
       'getFirst',
       'items',
+      // The formatting and the style, which are properties rather than calls and are therefore
+      // compared whole — a conformance file that skipped them would be checking the easy half.
+      'font',
+      'bold',
+      'alignment',
+      'lineSpacing',
+      'style',
     ]) {
       expect(source).toContain(member);
     }
-    // And the deferred members are listed by name, not implied by their absence.
-    for (const owed of ['contentControls', 'font', 'sections', 'bookmarks', 'listItem']) {
-      expect(source).toContain(owed);
+    // And what is still owed is listed by name, not implied by its absence. It is one group now:
+    // everything else that is not implemented was de-selected from the manifest and removed from the
+    // declarations, so it is no longer a member the declarations describe and nobody ships.
+    expect(source).toContain('contentControls');
+    for (const gone of ['bookmarks', 'listItem', 'hyperlink', 'getComments']) {
+      // Named in the prose as de-selected, but never as a type the assertions reach for.
+      expect(source).not.toMatch(new RegExp(`Declared\\.[A-Za-z]*\\['${gone}'\\]`));
     }
   });
 });

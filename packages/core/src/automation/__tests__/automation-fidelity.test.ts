@@ -194,6 +194,39 @@ describe('a formatting edit survives the serializer, and stays where it was made
     expect([...savedBytes(host)]).toEqual([...savedBytes(open(savedBytes(host)))]);
   });
 
+  test('a style write names the id the part declares, and keeps the rest of the pPr', () => {
+    // The document names the style `heading 1` and identifies it as `Heading1`. A host that wrote
+    // the caller's string straight into `w:pStyle` would produce a paragraph pointing at a style
+    // definition that does not exist — Word would silently render it as the default.
+    const source = docx(
+      '<w:p w14:paraId="77777777"><w:pPr><w:spacing w:after="120"/></w:pPr>' +
+        '<w:r><w:t>plain</w:t></w:r></w:p>',
+      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+        '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/></w:style>'
+    );
+    const host = open(source);
+    const list = paragraphsOf(host, bodyOf(host));
+    const response = host.execute({
+      operations: [{ op: 'setStyle', span: { paragraph: list[0]! }, name: 'HEADING 1' }],
+    });
+    expect(response.ok).toBe(true);
+
+    const saved = savedMainXml(host);
+    expect(saved).toContain('<w:pStyle w:val="Heading1"/>');
+    expect(saved).toContain('w:after="120"');
+    expect([...savedBytes(host)]).toEqual([...savedBytes(open(savedBytes(host)))]);
+
+    // And reopening reads the name back, so the write and the read agree about the same document.
+    const reopened = open(savedBytes(host));
+    const answer = reopened.execute({
+      operations: [
+        { op: 'getStyle', span: { paragraph: paragraphsOf(reopened, bodyOf(reopened))[0]! } },
+      ],
+    });
+    const result = answer.results[0];
+    expect(result?.status === 'ok' && result.value).toEqual({ kind: 'style', name: 'heading 1' });
+  });
+
   test('a refused formatting write leaves the document structurally where it was', () => {
     const host = open(AUTHORED);
     const list = paragraphsOf(host, bodyOf(host));

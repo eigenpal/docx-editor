@@ -29,6 +29,7 @@ import {
   type ResolvedLoadOptions,
 } from '../runtime/model-support.ts';
 import { RangeCollection, type PromisedItem } from './collections.ts';
+import { requireStyleName } from './addressing.ts';
 import { Font } from './font.ts';
 import { besideLocation, insertableText, paragraphTextLocation } from './locations.ts';
 import { ModelObject } from './model-object.ts';
@@ -80,6 +81,21 @@ export class Paragraph extends ModelObject implements PromisedItem {
    */
   get uniqueLocalId(): string {
     return this.loadedProperty<string>('uniqueLocalId');
+  }
+
+  /**
+   * The paragraph style, by the name a reader sees in the styles gallery.
+   *
+   * `null` where the document names none. A name it does not already define is refused rather than
+   * created, and the write rides the same `w:pPr` rewrite the alignment and indent members do — so
+   * applying a style and adjusting a spacing in one sync is one write rather than a refusal.
+   */
+  get style(): string {
+    return this.loadedProperty<string>('style');
+  }
+
+  set style(value: string) {
+    this.#authorFormat('style', requireStyleName(value, `${this.path.label}.style`));
   }
 
   /** The character formatting of this paragraph's characters, and of its paragraph mark. */
@@ -316,6 +332,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
 
 /** The paragraph's own paragraph properties, as this model spells them. */
 const FORMAT_FIELDS = [
+  'style',
   'alignment',
   'firstLineIndent',
   'leftIndent',

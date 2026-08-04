@@ -30,10 +30,8 @@ import {
   type RequestContext,
   type ResolvedLoadOptions,
 } from '../runtime/model-support.ts';
+import { spanRefOf, type SpanOwner } from './addressing.ts';
 import { ModelObject } from './model-object.ts';
-
-/** What the owner is, which is what decides how it is spelled to the host. */
-export type FontOwner = 'body' | 'paragraph' | 'span';
 
 /** Every property a font both reads and writes. Order is the order a load answers them in. */
 const FIELDS = ['bold', 'italic', 'color', 'name', 'size'] as const;
@@ -41,15 +39,15 @@ const FIELDS = ['bold', 'italic', 'color', 'name', 'size'] as const;
 type FontField = (typeof FIELDS)[number];
 
 export class Font extends ModelObject {
-  readonly #owner: FontOwner;
+  readonly #owner: SpanOwner;
   #pending: Record<string, unknown> | undefined;
 
   /** @internal The font of the object `owner` addresses. */
-  static of(context: RequestContext, label: string, owner: ObjectPath, kind: FontOwner): Font {
+  static of(context: RequestContext, label: string, owner: ObjectPath, kind: SpanOwner): Font {
     return new Font(context, ObjectPath.derived(label, owner), kind);
   }
 
-  private constructor(context: RequestContext, path: ObjectPath, owner: FontOwner) {
+  private constructor(context: RequestContext, path: ObjectPath, owner: SpanOwner) {
     super(context, path);
     this.#owner = owner;
   }
@@ -147,13 +145,7 @@ export class Font extends ModelObject {
   /** How the owner is spelled to the host, read at plan time so a late release still refuses. */
   #span(): AutomationSpanRef {
     this.requireAddressable();
-    const address = this.path.address();
-    if (this.#owner === 'span') {
-      if (address.kind !== 'span') fail({ code: 'InvalidObjectPath', target: this.path.label });
-      return { start: address.span.start, end: address.span.end };
-    }
-    if (address.kind !== 'handle') fail({ code: 'InvalidObjectPath', target: this.path.label });
-    return this.#owner === 'body' ? { body: address.handle } : { paragraph: address.handle };
+    return spanRefOf(this.path, this.#owner);
   }
 }
 

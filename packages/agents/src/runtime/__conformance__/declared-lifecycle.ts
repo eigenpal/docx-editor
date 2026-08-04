@@ -18,25 +18,31 @@
 //   `select`), which can be compared whole.
 //
 // WHY RETURN TYPES ARE NOT COMPARED WHOLE. A declared `Body#insertText` answers the declared
-// `Range`, which has `font`, `style`, `hyperlink` and a bookmark collection. This slice implements
-// text, paragraphs, search, insertion and selection; the formatting and content-control slices own
-// the rest. So the shipped `Range` is NARROWER than the declared one, and asserting the whole return
-// type would either fail or have to be faked. What is asserted instead is that the method exists,
-// takes exactly the declared arguments, and answers this package's own object of the right sort —
-// and the list below says, by name, what is still owed.
+// `Range`, which also has `contentControls`. This package's `Range` does not, so the shipped type is
+// NARROWER than the declared one and asserting the whole return type would either fail or have to be
+// faked. What is asserted instead is that the method exists, takes exactly the declared arguments,
+// and answers this package's own object of the right sort — and the list below says, by name, what is
+// still owed.
 //
-// WHAT IS NOT IMPLEMENTED YET, and therefore not asserted. Every entry is a member a LATER SLICE
-// owes; nothing on this list is a member the declarations describe and nobody intends to ship. That
-// distinction is why `Range#start`/`end` are not here: document-wide character offsets are a second
-// addressing scheme for positions this lane already addresses by paragraph identity and UTF-16
-// offset, so rather than leave them declared and unimplementable they were de-selected from
-// `compat/manifest.json` and removed from the declarations.
+// WHAT IS NOT IMPLEMENTED YET, and therefore not asserted. One group, and a SCHEDULED one: content
+// controls, which the plan completes as its own step. Nothing else on the declared surface is
+// unimplemented, because everything that was not implemented has been de-selected from
+// `compat/manifest.json` — with a reason each — and removed from the declarations, so the authored
+// file is an inventory rather than a roadmap. `Range#start`/`end` were the first members treated that
+// way (document-wide character offsets are a second addressing scheme for positions this lane already
+// addresses by paragraph identity and UTF-16 offset); `ParagraphFormat`, lists, bookmarks,
+// hyperlinks, sections, page setup, note bodies, comments and revisions followed.
 //
-//   Document       — `comments`, `contentControls`, `sections`
-//   Body           — `contentControls`, `font`, `lists`, `style`, `getComments`
-//   Range          — `bookmarks`, `contentControls`, `font`, `hyperlink`, `style`
-//   Paragraph      — `font`, `contentControls`, `list`, `listItem`, `style`, and the paragraph
-//                    formatting properties (`alignment`, the indents, `lineSpacing`, the spacing)
+//   Document       — `contentControls`
+//   Body           — `contentControls`
+//   Range          — `contentControls`
+//   Paragraph      — `contentControls`
+//
+// A NULL A DECLARATION CANNOT SAY. `Font#bold`, `Paragraph#alignment` and `#style` are asserted
+// against upstream's own non-nullable declared types, and answer `null` (or `'Mixed'`/`'Unknown'`) at
+// runtime where the characters or paragraphs read disagree or nothing authors a value — the same
+// behavior upstream documents for the same declarations, which is why the declarations are not
+// widened: they would stop matching the reference they are measured against.
 //
 // The `Declared`/`Mine` naming keeps each assertion readable as a sentence: does mine satisfy the
 // declared one, in the position a consumer would use it.
@@ -45,6 +51,7 @@ import type { DocxEditor as Declared } from '../../../compat/docxeditor/declarat
 import type { Body } from '../../model/body.ts';
 import type { ParagraphCollection, RangeCollection } from '../../model/collections.ts';
 import type { Document } from '../../model/document.ts';
+import type { Font } from '../../model/font.ts';
 import type { Paragraph } from '../../model/paragraph.ts';
 import type { Range } from '../../model/range.ts';
 import type { ClientObject } from '../client-object.ts';
@@ -167,6 +174,56 @@ const paragraphAnswersItsOwnObjects: Satisfies<
 > = true;
 
 // ---------------------------------------------------------------------------
+// Formatting, and the style
+// ---------------------------------------------------------------------------
+
+// Every story, stretch and paragraph carries the same `Font`, so a consumer's helper that takes one
+// works wherever it came from.
+const fontsAreTheSameObject: Satisfies<
+  [Body['font'], Range['font'], Paragraph['font']],
+  [Font, Font, Font]
+> = true;
+
+// The character formatting, whole: five properties, read and written, compared against the declared
+// ones rather than by argument list, because a property has no argument list to compare.
+const fontMatchesTheDeclaredFont: Satisfies<
+  Pick<Font, 'bold' | 'color' | 'italic' | 'name' | 'size'>,
+  Pick<Declared.Font, 'bold' | 'color' | 'italic' | 'name' | 'size'>
+> = true;
+
+// The paragraph's own formatting values, in the flattened form the declarations give them — the
+// selected subset has no `ParagraphFormat` for them to hang off (a recorded omission), and this is the
+// shape upstream declares on `Paragraph` anyway.
+const paragraphFormattingMatches: Satisfies<
+  Pick<
+    Paragraph,
+    | 'alignment'
+    | 'firstLineIndent'
+    | 'leftIndent'
+    | 'lineSpacing'
+    | 'rightIndent'
+    | 'spaceAfter'
+    | 'spaceBefore'
+  >,
+  Pick<
+    Declared.Paragraph,
+    | 'alignment'
+    | 'firstLineIndent'
+    | 'leftIndent'
+    | 'lineSpacing'
+    | 'rightIndent'
+    | 'spaceAfter'
+    | 'spaceBefore'
+  >
+> = true;
+
+// And the style, by name, on all three of the objects that declare it.
+const stylesMatch: Satisfies<
+  [Pick<Body, 'style'>, Pick<Range, 'style'>, Pick<Paragraph, 'style'>],
+  [Pick<Declared.Body, 'style'>, Pick<Declared.Range, 'style'>, Pick<Declared.Paragraph, 'style'>]
+> = true;
+
+// ---------------------------------------------------------------------------
 // The collections
 // ---------------------------------------------------------------------------
 
@@ -228,3 +285,7 @@ void rangesAreReachable;
 void rangeItemsAreRanges;
 void rangeEdgesAgree;
 void declaredOptionsAreAccepted;
+void fontsAreTheSameObject;
+void fontMatchesTheDeclaredFont;
+void paragraphFormattingMatches;
+void stylesMatch;

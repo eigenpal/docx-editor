@@ -16,17 +16,35 @@
  * reference fixture — that would silently turn "DocxEditor owns its types"
  * into "Microsoft's declarations, renamed".
  *
- * Three support types exist purely to give a small number of
- * return/parameter positions — or, for `ClientRequestContext`, the batch
- * callback parameter every source-compat fixture actually calls — a name,
- * with zero runtime footprint (plain string-literal union types and a
- * declaration-only base class): the *runtime* enum objects and the real
- * queuing/flush behavior Office.js ships alongside these are proxy-runtime
- * plumbing, out of scope for this task:
- *   - `SelectionMode`, `HeaderFooterType`: Word.js's own declarations offer
- *     these positions as two overloads — one keyed on an enum type, one on
- *     the equivalent string-literal union — so a same-named type must exist
- *     for the enum-typed overload to type-check at all.
+ * WHAT IS HERE IS WHAT WORKS. This file is an inventory of the implemented
+ * subset, not a roadmap: a member whose engine backing does not exist is
+ * de-selected from `compat/manifest.json` with a specific reason and removed
+ * from here, rather than declared and left to fail. That is why the formatting
+ * values appear on `Paragraph` but there is no `ParagraphFormat`, why `Font`
+ * declares five members and not `highlightColor`, and why lists, bookmarks,
+ * hyperlinks, sections, page setup, note bodies, comments and revisions are
+ * absent. `ContentControl` is the one exception, and a scheduled one: the plan
+ * completes it as its own step, and its members are declared here from that
+ * contract freeze.
+ *
+ * A NULL A DECLARATION CANNOT SAY. `Font#bold`, `Paragraph#alignment` and
+ * `#style` are declared with upstream's own non-nullable types, and the runtime
+ * answers `null` (or `'Mixed'`/`'Unknown'` for alignment) where the characters
+ * or paragraphs read disagree, or where nothing authors the value. Upstream
+ * declares and behaves the same way; widening the declarations would make them
+ * stop matching the reference they are measured against.
+ *
+ * Two support types exist purely to give a small number of return/parameter
+ * positions — or, for `ClientRequestContext`, the batch callback parameter
+ * every source-compat fixture actually calls — a name, with zero runtime
+ * footprint (a plain string-literal union type and a declaration-only base
+ * class): the *runtime* enum objects and the real queuing/flush behavior
+ * Office.js ships alongside these are proxy-runtime plumbing, out of scope for
+ * this task:
+ *   - `SelectionMode`: Word.js's own declarations offer this position as two
+ *     overloads — one keyed on an enum type, one on the equivalent
+ *     string-literal union — so a same-named type must exist for the
+ *     enum-typed overload to type-check at all.
  *   - `ClientRequestContext`: the generic, Word-agnostic base type that
  *     `ClientObject#context` returns upstream (`Word.RequestContext`
  *     extends it, adding `document`). Upstream's own `sync` is generic and
@@ -45,7 +63,6 @@
  */
 export declare namespace DocxEditor {
   export type SelectionMode = 'Select' | 'Start' | 'End';
-  export type HeaderFooterType = 'Primary' | 'FirstPage' | 'EvenPages';
 
   /** Base request-context handle; see the file header for why only `sync` is declared here. */
   export class ClientRequestContext {
@@ -67,21 +84,17 @@ export declare namespace DocxEditor {
 
   export class Document {
     readonly body: Body;
-    readonly comments: CommentCollection;
     readonly contentControls: ContentControlCollection;
     readonly paragraphs: ParagraphCollection;
-    readonly sections: SectionCollection;
   }
 
   export class Body {
     readonly contentControls: ContentControlCollection;
     readonly font: Font;
-    readonly lists: ListCollection;
     readonly paragraphs: ParagraphCollection;
     style: string;
     readonly text: string;
     clear(): void;
-    getComments(): CommentCollection;
     insertParagraph(paragraphText: string, insertLocation: 'Start' | 'End'): Paragraph;
     insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range;
     search(searchText: string, searchOptions?: SearchOptions): RangeCollection;
@@ -94,10 +107,8 @@ export declare namespace DocxEditor {
   // would make this file a roadmap rather than an inventory. The recorded reasons are the
   // `Word.Range#start` / `Word.Range#end` entries in `compat/manifest.json`'s omissions.
   export class Range {
-    readonly bookmarks: BookmarkCollection;
     readonly contentControls: ContentControlCollection;
     readonly font: Font;
-    hyperlink: string;
     readonly paragraphs: ParagraphCollection;
     style: string;
     readonly text: string;
@@ -118,8 +129,6 @@ export declare namespace DocxEditor {
     readonly font: Font;
     leftIndent: number;
     lineSpacing: number;
-    readonly list: List;
-    readonly listItem: ListItem;
     rightIndent: number;
     spaceAfter: number;
     spaceBefore: number;
@@ -162,177 +171,9 @@ export declare namespace DocxEditor {
   export class Font {
     bold: boolean;
     color: string;
-    highlightColor: string;
     italic: boolean;
     name: string;
     size: number;
-  }
-
-  export class ParagraphFormat {
-    alignment: 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
-    firstLineIndent: number;
-    leftIndent: number;
-    lineSpacing: number;
-    rightIndent: number;
-    spaceAfter: number;
-    spaceBefore: number;
-    widowControl: boolean;
-  }
-
-  // ---------------------------------------------------------------------
-  // lists
-  // ---------------------------------------------------------------------
-
-  export class List {
-    readonly id: number;
-    readonly paragraphs: ParagraphCollection;
-    getLevelParagraphs(level: number): ParagraphCollection;
-    insertParagraph(
-      paragraphText: string,
-      insertLocation: 'Start' | 'End' | 'Before' | 'After'
-    ): Paragraph;
-  }
-
-  export class ListCollection {
-    readonly items: List[];
-    getById(id: number): List;
-    getFirst(): List;
-  }
-
-  export class ListItem {
-    level: number;
-    readonly listString: string;
-    readonly siblingIndex: number;
-  }
-
-  // ---------------------------------------------------------------------
-  // hyperlinksAndBookmarks
-  // ---------------------------------------------------------------------
-
-  export class Bookmark {
-    end: number;
-    readonly name: string;
-    readonly range: Range;
-    start: number;
-    delete(): void;
-    select(): void;
-  }
-
-  export class BookmarkCollection {
-    readonly items: Bookmark[];
-  }
-
-  // ---------------------------------------------------------------------
-  // sectionsAndPageSetup
-  // ---------------------------------------------------------------------
-
-  export class Section {
-    readonly body: Body;
-    readonly pageSetup: PageSetup;
-    getFooter(type: HeaderFooterType): Body;
-    getFooter(type: 'Primary' | 'FirstPage' | 'EvenPages'): Body;
-    getHeader(type: HeaderFooterType): Body;
-    getHeader(type: 'Primary' | 'FirstPage' | 'EvenPages'): Body;
-    getNext(): Section;
-  }
-
-  export class SectionCollection {
-    readonly items: Section[];
-    getFirst(): Section;
-  }
-
-  export class PageSetup {
-    bottomMargin: number;
-    leftMargin: number;
-    orientation: 'Portrait' | 'Landscape';
-    pageHeight: number;
-    pageWidth: number;
-    rightMargin: number;
-    topMargin: number;
-  }
-
-  // ---------------------------------------------------------------------
-  // headerFooterAndNoteBodies
-  // ---------------------------------------------------------------------
-
-  export class NoteItem {
-    readonly body: Body;
-    readonly type: 'Footnote' | 'Endnote';
-    delete(): void;
-    getNext(): NoteItem;
-  }
-
-  // ---------------------------------------------------------------------
-  // commentsAndRevisions
-  // ---------------------------------------------------------------------
-
-  export class Comment {
-    readonly authorEmail: string;
-    readonly authorName: string;
-    content: string;
-    readonly creationDate: Date;
-    readonly id: string;
-    readonly replies: CommentReplyCollection;
-    resolved: boolean;
-    delete(): void;
-    getRange(): Range;
-    reply(replyText: string): CommentReply;
-  }
-
-  export class CommentCollection {
-    readonly items: Comment[];
-    getFirst(): Comment;
-  }
-
-  export class CommentReply {
-    readonly authorEmail: string;
-    readonly authorName: string;
-    content: string;
-    readonly creationDate: Date;
-    readonly id: string;
-    delete(): void;
-  }
-
-  export class CommentReplyCollection {
-    readonly items: CommentReply[];
-    getFirst(): CommentReply;
-  }
-
-  export class Revision {
-    readonly author: string;
-    readonly date: Date;
-    readonly range: Range;
-    readonly type:
-      | 'None'
-      | 'Insert'
-      | 'Delete'
-      | 'Property'
-      | 'ParagraphNumber'
-      | 'DisplayField'
-      | 'Reconcile'
-      | 'Conflict'
-      | 'Style'
-      | 'Replace'
-      | 'ParagraphProperty'
-      | 'TableProperty'
-      | 'SectionProperty'
-      | 'StyleDefinition'
-      | 'MovedFrom'
-      | 'MovedTo'
-      | 'CellInsertion'
-      | 'CellDeletion'
-      | 'CellMerge'
-      | 'CellSplit'
-      | 'ConflictInsert'
-      | 'ConflictDelete';
-    accept(): void;
-    reject(): void;
-  }
-
-  export class RevisionCollection {
-    readonly items: Revision[];
-    acceptAll(): void;
-    rejectAll(): void;
   }
 
   // ---------------------------------------------------------------------

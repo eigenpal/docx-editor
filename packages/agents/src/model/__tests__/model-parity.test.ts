@@ -96,8 +96,9 @@ async function readEverything(runtime: DocxEditorRuntime): Promise<unknown> {
     const rangeFont = cased.items[0]?.font;
     rangeFont?.load();
     for (const paragraph of paragraphs.items) {
-      paragraph.load(['alignment', 'leftIndent', 'spaceBefore', 'lineSpacing']);
+      paragraph.load(['alignment', 'leftIndent', 'spaceBefore', 'lineSpacing', 'style']);
     }
+    body.load('style');
     await context.sync();
 
     return {
@@ -120,7 +121,9 @@ async function readEverything(runtime: DocxEditorRuntime): Promise<unknown> {
         leftIndent: paragraph.leftIndent,
         spaceBefore: paragraph.spaceBefore,
         lineSpacing: paragraph.lineSpacing,
+        style: paragraph.style,
       })),
+      storyStyle: body.style,
     };
   });
 }
@@ -207,11 +210,15 @@ describe('the same script reads the same document on either host', () => {
       bodyText: string;
       occurrences: string[];
       identities: string[];
+      paragraphFormat: readonly { readonly style: string | null }[];
     };
     expect(server.bodyText).toContain('Quarterly report');
     expect(server.occurrences.length).toBeGreaterThan(0);
     // The one the file wrote, plus a minted one per paragraph that had none.
     expect(server.identities[0]).toBe('0A0B0C0D');
+    // The fixture's styles part names `Heading1` `heading 1`, so a host answering the ID rather
+    // than the NAME would be caught here as well as by the comparison above.
+    expect(server.paragraphFormat[0]?.style).toBe('heading 1');
     expect(new Set(server.identities).size).toBe(server.identities.length);
     runtimes.server.dispose();
     runtimes.browser.dispose();

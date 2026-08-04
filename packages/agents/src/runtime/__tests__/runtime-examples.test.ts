@@ -11,13 +11,16 @@ import { join } from 'node:path';
 import { DocxEditor } from '../index.ts';
 import {
   appendToFirstParagraphLater,
+  boldnessOfWholeStory,
+  emphasizeEveryOccurrence,
   firstParagraphTextOrNull,
+  quoteEveryParagraph,
   prefixEveryParagraph,
   readBodyText,
   replaceEveryOccurrence,
   replaceFirstMatch,
 } from '../examples/batches.ts';
-import { docx, p } from './support/docx.ts';
+import { docx, p, style } from './support/docx.ts';
 
 const THREE = docx(`${p('one')}${p('two')}${p('three')}`);
 
@@ -55,6 +58,21 @@ describe('the authored examples run against a real document', () => {
   test('keeping an object past the run that found it', async () => {
     const runtime = await DocxEditor.createServer(docx(p('kept')));
     expect(await appendToFirstParagraphLater(runtime, 2)).toBe('kept!!');
+    runtime.dispose();
+  });
+
+  test('formatting the matches of a search', async () => {
+    const runtime = await DocxEditor.createServer(docx(`${p('find me')}${p('and me')}`));
+    expect(await emphasizeEveryOccurrence(runtime, 'me', '#B22222')).toBe(2);
+    expect(await boldnessOfWholeStory(runtime)).toBeNull();
+    runtime.dispose();
+  });
+
+  test('styling and spacing every paragraph together', async () => {
+    const runtime = await DocxEditor.createServer(
+      docx(`${p('one')}${p('two')}`, style('Quote', 'Quote'))
+    );
+    expect(await quoteEveryParagraph(runtime, 'Quote')).toEqual(['Quote', 'Quote']);
     runtime.dispose();
   });
 

@@ -275,6 +275,7 @@ describe('reading a paragraph format', () => {
     const [spaced] = paragraphsOf(host, body);
     expect(formatOf(host, spaced!)).toEqual({
       alignment: 'Centered',
+      style: null,
       firstLineIndent: 12,
       leftIndent: 36,
       rightIndent: 18,
@@ -291,6 +292,7 @@ describe('reading a paragraph format', () => {
     const [, plain] = paragraphsOf(host, body);
     expect(formatOf(host, plain!)).toEqual({
       alignment: 'Unknown',
+      style: null,
       firstLineIndent: null,
       leftIndent: null,
       rightIndent: null,
@@ -322,6 +324,7 @@ describe('writing a paragraph format', () => {
     const [again] = paragraphsOf(next.host, next.body);
     expect(formatOf(next.host, again!)).toEqual({
       alignment: 'Right',
+      style: null,
       firstLineIndent: 12,
       leftIndent: 18,
       rightIndent: 18,

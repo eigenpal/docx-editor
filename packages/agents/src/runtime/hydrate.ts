@@ -60,6 +60,12 @@ export function hydratedParagraphFormat(
   return value.format;
 }
 
+/** A paragraph style name, or null where nothing names one. */
+export function hydratedStyle(value: AutomationValue, target: string): string | null {
+  if (value.kind !== 'style') throw wrongShape(target);
+  return value.name;
+}
+
 /** A command's answer. There is nothing in it: the effect is the batch having committed. */
 export function hydratedApplied(value: AutomationValue, target: string): void {
   if (value.kind !== 'applied') throw wrongShape(target);

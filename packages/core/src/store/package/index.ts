@@ -209,6 +209,8 @@ export {
 } from './field-nodes.ts';
 export {
   deriveOoxmlIndexes,
+  indexStyles,
+  stylesPartOf,
   type OoxmlIndexes,
   type ParagraphIndexEntry,
   type StoryIndexEntry,

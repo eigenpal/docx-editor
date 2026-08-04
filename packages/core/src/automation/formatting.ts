@@ -38,6 +38,7 @@ import {
   paragraphPropertiesNodeOf,
   runPropertiesNodeOf,
 } from '../store/store/tree-op-nodes.ts';
+import { paragraphStyleName, styleIdFor, type AutomationStyleIndex } from './styles.ts';
 import type { OoxmlProperty } from '../store/store/tree-ops.ts';
 
 /** Twips per point (ECMA-376 measures most lengths in twentieths of a point). */
@@ -80,6 +81,14 @@ export interface AutomationFontWrite {
 /** One paragraph's own paragraph properties, in points. `null` = the paragraph authors none. */
 export interface AutomationParagraphFormatRead {
   readonly alignment: AutomationAlignment;
+  /**
+   * The paragraph style's NAME, or null where the document names none.
+   *
+   * Read here rather than through its own operation so that one load of a paragraph's properties is
+   * one round trip: the style lives in the same `w:pPr`, and a caller asking for its name and its
+   * indent should not pay for two.
+   */
+  readonly style: string | null;
   readonly firstLineIndent: number | null;
   readonly leftIndent: number | null;
   readonly rightIndent: number | null;
@@ -91,6 +100,14 @@ export interface AutomationParagraphFormatRead {
 
 export interface AutomationParagraphFormatWrite {
   readonly alignment?: AutomationAlignment;
+  /**
+   * A paragraph style name the document already defines. An unknown name is refused.
+   *
+   * In the same request as the rest so that applying a style and adjusting a spacing is ONE write:
+   * both rewrite `w:pPr`, and two ops naming it in one batch are refused because the second would
+   * carry properties the first had already replaced.
+   */
+  readonly style?: string;
   readonly firstLineIndent?: number;
   readonly leftIndent?: number;
   readonly rightIndent?: number;
@@ -246,7 +263,8 @@ function alignmentOf(properties: OoxmlElement | undefined): AutomationAlignment 
  */
 export function paragraphFormatRead(
   part: OoxmlPart,
-  paragraphId: string
+  paragraphId: string,
+  styles: AutomationStyleIndex
 ): AutomationParagraphFormatRead | null {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return null;
@@ -255,6 +273,7 @@ export function paragraphFormatRead(
   const indent = namedChild(pPr, 'ind');
   return {
     alignment: alignmentOf(pPr),
+    style: paragraphStyleName(part, paragraphId, styles),
     firstLineIndent: firstLineIndentOf(indent),
     leftIndent: pointsFromTwips(attributeOf(indent, 'left') ?? attributeOf(indent, 'start')),
     rightIndent: pointsFromTwips(attributeOf(indent, 'right') ?? attributeOf(indent, 'end')),
@@ -357,12 +376,19 @@ export function fontProperties(request: AutomationFontWrite): FormattingPlan<Oox
 export function paragraphFormatProperties(
   part: OoxmlPart,
   paragraphId: string,
-  request: AutomationParagraphFormatWrite
+  request: AutomationParagraphFormatWrite,
+  styles: AutomationStyleIndex
 ): FormattingPlan<OoxmlProperty[]> {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return { ok: false, detail: 'not a paragraph' };
   const pPr = paragraphPropertiesNodeOf(paragraph);
   const properties: OoxmlProperty[] = [];
+
+  if (request.style !== undefined) {
+    const resolved = styleIdFor(request.style, styles);
+    if (!resolved.ok) return { ok: false, detail: resolved.detail };
+    properties.push({ localName: 'pStyle', attributes: { val: resolved.styleId } });
+  }
 
   if (request.alignment !== undefined) {
     const jc = JC_BY_ALIGNMENT[request.alignment];

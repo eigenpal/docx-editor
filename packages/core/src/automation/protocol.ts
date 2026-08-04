@@ -152,6 +152,11 @@ export type AutomationValue =
    */
   | { readonly kind: 'font'; readonly font: AutomationFontRead }
   | { readonly kind: 'paragraphFormat'; readonly format: AutomationParagraphFormatRead }
+  /**
+   * A paragraph style NAME, or null where nothing names one — the paragraphs disagree, or the
+   * document declares no styles at all.
+   */
+  | { readonly kind: 'style'; readonly name: string | null }
   /** A command that committed. The observable effect is the response's revision/changed. */
   | { readonly kind: 'applied' };
 

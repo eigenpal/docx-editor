@@ -20,6 +20,7 @@ export {
   hydratedParagraphFormat,
   hydratedSpan,
   hydratedSpans,
+  hydratedStyle,
   hydratedText,
 } from './hydrate.ts';
 export { internalsOf, type ContextInternals, type RootHandles } from './internals.ts';

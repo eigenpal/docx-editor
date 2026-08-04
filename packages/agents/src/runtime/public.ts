@@ -14,6 +14,7 @@
 export {
   Body,
   Document,
+  Font,
   Paragraph,
   ParagraphCollection,
   Range,

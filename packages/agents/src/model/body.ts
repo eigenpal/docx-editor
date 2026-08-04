@@ -15,12 +15,14 @@ import {
   ObjectPath,
   fail,
   hydratedSpan,
+  hydratedStyle,
   internalsOf,
   type AutomationHandle,
   type RequestContext,
   type ResolvedLoadOptions,
 } from '../runtime/model-support.ts';
 import { ParagraphCollection, RangeCollection } from './collections.ts';
+import { requireStyleName, spanRefOf } from './addressing.ts';
 import { Font } from './font.ts';
 import { bodyParagraphLocation, bodyTextLocation, insertableText } from './locations.ts';
 import { ModelObject } from './model-object.ts';
@@ -71,6 +73,25 @@ export class Body extends ModelObject {
    */
   paragraphsUnder(label: string): ParagraphCollection {
     return ParagraphCollection.of(this.context, label, this.path);
+  }
+
+  /**
+   * The paragraph style, by the name a reader sees in the styles gallery.
+   *
+   * Reading answers the name every paragraph in the story agrees on, and `null` where they do not or
+   * where the document names no style. Writing applies it to all of them, and a name the document
+   * does not already define is refused rather than created — a minted style would report itself
+   * applied while the text stayed exactly as it looked.
+   */
+  get style(): string {
+    return this.loadedProperty<string>('style');
+  }
+
+  set style(value: string) {
+    const target = `${this.path.label}.style`;
+    const name = requireStyleName(value, target);
+    this.requireAddressable();
+    this.command('style', () => ({ op: 'setStyle', span: spanRefOf(this.path, 'body'), name }));
   }
 
   /** Every occurrence of `searchText` in this story, as ranges, in reading order. */
@@ -145,9 +166,24 @@ export class Body extends ModelObject {
   }
 
   protected override onLoad(request: ResolvedLoadOptions): void {
-    if (!this.selection(request, ['text']).includes('text')) return;
-    const handle = this.#handle();
-    this.loadTextInto('text', () => ({ op: 'getText', target: handle }));
+    const selected = this.selection(request, ['text', 'style']);
+    if (selected.includes('text')) {
+      const handle = this.#handle();
+      this.loadTextInto('text', () => ({ op: 'getText', target: handle }));
+    }
+    if (selected.includes('style')) this.#loadStyle();
+  }
+
+  #loadStyle(): void {
+    const label = `${this.path.label}.style`;
+    this.requireAddressable();
+    this.read(
+      label,
+      () => ({ op: 'getStyle', span: spanRefOf(this.path, 'body') }),
+      (value) => {
+        this.setLoadedProperty('style', hydratedStyle(value, label));
+      }
+    );
   }
 
   #handle(): AutomationHandle {

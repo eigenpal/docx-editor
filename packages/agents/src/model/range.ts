@@ -20,6 +20,7 @@ import {
   ObjectPath,
   fail,
   hydratedSpan,
+  hydratedStyle,
   hydratedText,
   type AutomationSpan,
   type ObjectAddress,
@@ -27,6 +28,7 @@ import {
   type ResolvedLoadOptions,
 } from '../runtime/model-support.ts';
 import { ParagraphCollection, RangeCollection, type PromisedItem } from './collections.ts';
+import { requireStyleName, spanRefOf } from './addressing.ts';
 import { Font } from './font.ts';
 import {
   insertableText,
@@ -92,6 +94,25 @@ export class Range extends ModelObject implements PromisedItem {
       this.path
     );
     return this.#paragraphs;
+  }
+
+  /**
+   * The paragraph style, by the name a reader sees in the styles gallery.
+   *
+   * Reading answers the name every paragraph this range covers agrees on, and `null` where they do not or
+   * where the document names no style. Writing applies it to all of them, and a name the document
+   * does not already define is refused rather than created — a minted style would report itself
+   * applied while the text stayed exactly as it looked.
+   */
+  get style(): string {
+    return this.loadedProperty<string>('style');
+  }
+
+  set style(value: string) {
+    const target = `${this.path.label}.style`;
+    const name = requireStyleName(value, target);
+    this.requireAddressable();
+    this.command('style', () => ({ op: 'setStyle', span: spanRefOf(this.path, 'span'), name }));
   }
 
   /** Every occurrence of `searchText` inside this range, as ranges. */
@@ -188,14 +209,26 @@ export class Range extends ModelObject implements PromisedItem {
   }
 
   protected override onLoad(request: ResolvedLoadOptions): void {
-    if (!this.selection(request, ['text']).includes('text')) return;
-    const span = this.#span();
-    const label = `${this.path.label}.text`;
+    const selected = this.selection(request, ['text', 'style']);
+    if (selected.includes('text')) {
+      const span = this.#span();
+      const label = `${this.path.label}.text`;
+      this.read(
+        label,
+        () => ({ op: 'getSpanText', span }),
+        (value) => {
+          this.setLoadedProperty('text', hydratedText(value, label));
+        }
+      );
+    }
+    if (!selected.includes('style')) return;
+    const label = `${this.path.label}.style`;
+    this.requireAddressable();
     this.read(
       label,
-      () => ({ op: 'getSpanText', span }),
+      () => ({ op: 'getStyle', span: spanRefOf(this.path, 'span') }),
       (value) => {
-        this.setLoadedProperty('text', hydratedText(value, label));
+        this.setLoadedProperty('style', hydratedStyle(value, label));
       }
     );
   }

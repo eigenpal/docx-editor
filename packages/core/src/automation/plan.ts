@@ -28,7 +28,7 @@
 // the transaction lands, the ids the engine actually created are matched to those slots in
 // reading order. No index is ever handed back to a consumer and no DOM is consulted.
 
-import type { TreeDocOp } from '../store/store/tree-ops.ts';
+import type { OoxmlProperty, TreeDocOp } from '../store/store/tree-ops.ts';
 import {
   findOccurrences,
   isSearchableQuery,
@@ -36,6 +36,7 @@ import {
 } from '../store/store/text-match.ts';
 import {
   directParagraphMarkProperties,
+  directParagraphProperties,
   mergedProperties,
   runPropertyEdits,
 } from '../store/store/direct-properties.ts';
@@ -75,6 +76,7 @@ import {
   type ResolvedRange,
   type ResolvedSpan,
 } from './spans.ts';
+import { paragraphStyleName, styleIdFor } from './styles.ts';
 
 /**
  * Characters that mean "a new paragraph" in a document but are merely characters in a run.
@@ -773,13 +775,55 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     return { ok: true, kind: 'command', ops, answer: () => APPLIED };
   };
 
+  /**
+   * Apply a paragraph style to every paragraph a span covers.
+   *
+   * One `setParagraphProperties` op per paragraph, each carrying that paragraph's own authored
+   * properties with `w:pStyle` merged over them — the same rule every property write follows, and
+   * the reason a style change does not delete a paragraph's indents and numbering. The style is
+   * resolved ONCE for the whole span: it is a property of the document, not of a paragraph.
+   */
+  const planSetStyle = (range: ResolvedRange, name: string): PlannedOperation => {
+    const part = reads.bodyPart;
+    if (!part) return refuse('document-unavailable', 'this host holds no document right now');
+    const resolved = styleIdFor(name, reads.styles());
+    if (!resolved.ok)
+      return refuse(
+        'unsupported-content',
+        'that is not a style this document has',
+        resolved.detail
+      );
+    const style: OoxmlProperty = {
+      localName: 'pStyle',
+      attributes: { val: resolved.styleId },
+    };
+    const ops: TreeDocOp[] = [];
+    for (const paragraphId of spanParagraphIds(range, reads)) {
+      const conflict = claimFormatting(paragraphId, 'paragraph');
+      if (conflict) return conflict;
+      ops.push({
+        op: 'setParagraphProperties',
+        paragraphId,
+        properties: mergedProperties(directParagraphProperties(part, paragraphId), style),
+      });
+    }
+    if (ops.length === 0)
+      return refuse('invalid-offset', 'that story holds no paragraph to style', 'empty-story');
+    return { ok: true, kind: 'command', ops, answer: () => APPLIED };
+  };
+
   const planSetParagraphFormat = (
     paragraph: ResolvedPoint,
     request: AutomationParagraphFormatWrite
   ): PlannedOperation => {
     const part = reads.bodyPart;
     if (!part) return refuse('document-unavailable', 'this host holds no document right now');
-    const properties = paragraphFormatProperties(part, paragraph.paragraphId, request ?? {});
+    const properties = paragraphFormatProperties(
+      part,
+      paragraph.paragraphId,
+      request ?? {},
+      reads.styles()
+    );
     if (!properties.ok)
       return refuse(
         'unsupported-content',
@@ -960,13 +1004,39 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         return planSetFont(resolved.value, operation.font);
       }
 
+      case 'getStyle': {
+        const resolved = resolveSpanRef(operation.span, handles, reads);
+        if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
+        const part = reads.bodyPart;
+        if (!part) return refuse('document-unavailable', 'this host holds no document right now');
+        const styles = reads.styles();
+        const names = spanParagraphIds(resolved.value, reads).map((paragraphId) =>
+          paragraphStyleName(part, paragraphId, styles)
+        );
+        // Agreement, same as a formatting read: one name if every paragraph the span covers states
+        // it, and no answer where they differ or where the document names none.
+        const agreed =
+          names.length > 0 && names.every((name) => name !== null && name === names[0])
+            ? (names[0] as string)
+            : null;
+        return query({ kind: 'style', name: agreed });
+      }
+
+      case 'setStyle': {
+        const resolved = resolveSpanRef(operation.span, handles, reads);
+        if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
+        if (!resolved.value)
+          return refuse('invalid-offset', 'that story holds no paragraph to style', 'empty-story');
+        return planSetStyle(resolved.value, operation.name);
+      }
+
       case 'getParagraphFormat': {
         const paragraph = resolveParagraphRef(operation.paragraph, handles, reads);
         if (!paragraph.ok)
           return refuse(paragraph.code, 'that is not a paragraph', paragraph.detail);
         const part = reads.bodyPart;
         if (!part) return refuse('document-unavailable', 'this host holds no document right now');
-        const format = paragraphFormatRead(part, paragraph.value.paragraphId);
+        const format = paragraphFormatRead(part, paragraph.value.paragraphId, reads.styles());
         if (!format) return refuse('invalid-handle', 'that handle does not name a paragraph');
         return query({ kind: 'paragraphFormat', format });
       }

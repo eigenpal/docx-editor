@@ -108,6 +108,79 @@ export async function replaceEveryOccurrence(
 }
 
 /**
+ * Format the matches of a search, in one atomic batch.
+ *
+ * The statements are those of `compat/fixtures/source-compat/search-and-format.ts` — a
+ * namespace-rewritten Office.js sample — and the syncs are where this runtime needs them: one to
+ * find the ranges, one to apply the formatting to all of them. Several properties set on one `font`
+ * are ONE write, so a batch that bolds and colours a hundred matches sends a hundred writes, not
+ * two hundred.
+ */
+export async function emphasizeEveryOccurrence(
+  runtime: DocxEditorRuntime,
+  searchText: string,
+  colour: string
+): Promise<number> {
+  return runtime.run(async (context) => {
+    const found = context.document.body.search(searchText, { matchCase: true });
+    found.load();
+    await context.sync();
+
+    for (const range of found.items) {
+      range.font.bold = true;
+      range.font.color = colour;
+    }
+    await context.sync();
+    return found.items.length;
+  });
+}
+
+/**
+ * Apply a paragraph style and adjust the paragraph's own spacing together.
+ *
+ * Both of these rewrite the same paragraph properties, and doing them in one batch is deliberate:
+ * they are collected into a single write, so either the whole appearance change happens or none of
+ * it does. A style name the document does not define is refused here rather than created.
+ */
+export async function quoteEveryParagraph(
+  runtime: DocxEditorRuntime,
+  styleName: string
+): Promise<readonly (string | null)[]> {
+  return runtime.run(async (context) => {
+    const paragraphs = context.document.body.paragraphs;
+    paragraphs.load();
+    await context.sync();
+
+    for (const paragraph of paragraphs.items) {
+      paragraph.style = styleName;
+      paragraph.leftIndent = 36;
+      paragraph.spaceAfter = 6;
+    }
+    await context.sync();
+
+    for (const paragraph of paragraphs.items) paragraph.load('style');
+    await context.sync();
+    return paragraphs.items.map((paragraph) => paragraph.style);
+  });
+}
+
+/**
+ * What a stretch of text agrees about, and what it does not.
+ *
+ * The interesting answer is `null`: it is what a font property reads when the characters covered
+ * disagree, or when nothing sets the property at all. Code that formats a selection needs to tell
+ * "they are all bold" from "some of them are".
+ */
+export async function boldnessOfWholeStory(runtime: DocxEditorRuntime): Promise<boolean | null> {
+  return runtime.run(async (context) => {
+    const font = context.document.body.font;
+    font.load('bold');
+    await context.sync();
+    return font.bold;
+  });
+}
+
+/**
  * Keep a paragraph past the run that found it.
  *
  * Tracking is the deliberate half; handing the object to the next `run` is the other. Without

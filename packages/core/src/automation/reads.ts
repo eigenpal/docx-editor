@@ -31,6 +31,7 @@ import {
 } from '../store/package/story-blocks.ts';
 import { namedChild, paragraphPropertiesNodeOf } from '../store/store/tree-op-nodes.ts';
 import { paragraphTextOf } from '../store/store/tree-ops.ts';
+import { styleIndex, type AutomationStyleIndex } from './styles.ts';
 
 /** The separator Word's own text properties put at a paragraph mark. */
 export const PARAGRAPH_MARK = '\r';
@@ -79,9 +80,24 @@ export interface AutomationDocumentReads {
   paragraphText(paragraphId: string): string | null;
   /** The story's paragraphs joined by a paragraph mark. */
   bodyText(): string;
+  /**
+   * What the package's `styles.xml` declares, for the reads and writes that speak style NAMES.
+   *
+   * Built once per package and shared, because a style write over a stretch resolves one name for
+   * every paragraph it covers and indexing the part per paragraph would make that O(styles x
+   * paragraphs) for a value that cannot change inside a batch.
+   */
+  styles(): AutomationStyleIndex;
 }
 
 const NONE: readonly string[] = Object.freeze([]);
+/** What a host with no document declares about styles: nothing. */
+const NO_STYLE_INDEX: AutomationStyleIndex = Object.freeze({
+  nameOf: () => null,
+  idOf: () => null,
+  defaultId: null,
+  present: false,
+});
 const NO_BLOCKS: readonly AutomationBlockRead[] = Object.freeze([]);
 
 const EMPTY_READS: AutomationDocumentReads = Object.freeze({
@@ -93,6 +109,7 @@ const EMPTY_READS: AutomationDocumentReads = Object.freeze({
   paragraph: () => null,
   paragraphText: () => null,
   bodyText: () => '',
+  styles: () => NO_STYLE_INDEX,
 });
 
 /** The story root's own children, each with what it holds and whether it can be removed. */
@@ -142,6 +159,7 @@ export function documentReads(pkg: OoxmlPackage): AutomationDocumentReads {
 
   // Text is read lazily and memoized: a story search touches every paragraph, while reading
   // one paragraph must not walk the whole body.
+  let styles: AutomationStyleIndex | undefined;
   const texts = new Map<string, string>();
   const textOf = (paragraphId: string): string | null => {
     if (!positions.has(paragraphId)) return null;
@@ -165,5 +183,6 @@ export function documentReads(pkg: OoxmlPackage): AutomationDocumentReads {
     },
     paragraphText: textOf,
     bodyText: () => bodyParagraphIds.map((id) => textOf(id) ?? '').join(PARAGRAPH_MARK),
+    styles: () => (styles ??= styleIndex(pkg)),
   };
 }
