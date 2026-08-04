@@ -284,13 +284,16 @@ async function clickInsertColumnFurniture(
 ): Promise<{ gridColumnId: string }> {
   let clicked = false;
   let gridColumnId: string | null = null;
+  const selector = `.docx-table-insert-column[data-table-id="${expectedTableId}"]`;
   for (const deltaY of [0, -4, -8, 4, 8, -12, 12, -16]) {
     await page.mouse.move(insertPoint.x, insertPoint.y + deltaY);
-    await page.waitForTimeout(180);
-    const selector = `.docx-table-insert-column[data-table-id="${expectedTableId}"]`;
-    const control = page.locator(selector);
-    if ((await control.count()) === 0) continue;
-    gridColumnId = await control.first().getAttribute('data-grid-column-id');
+    const control = page.locator(selector).first();
+    try {
+      await expect(control).toBeVisible({ timeout: 150 });
+    } catch {
+      continue;
+    }
+    gridColumnId = await control.getAttribute('data-grid-column-id');
     if (!gridColumnId) continue;
     try {
       await pointerClickVerifiedControl(page, selector, expectedTableId);
