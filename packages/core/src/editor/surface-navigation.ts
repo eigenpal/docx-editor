@@ -36,7 +36,7 @@ export interface HyperlinkActivation {
 export interface NavigationDeps {
   readonly pagesLayer: HTMLElement;
   readonly container: HTMLElement;
-  readonly scale: number;
+  readonly scale: () => number;
   readonly layout: () => SemanticLayout;
   readonly bookmarks: () => BookmarkIndex;
   readonly linkById: (linkId: string) => SurfaceHyperlink | null;
@@ -106,7 +106,7 @@ export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation
     const sheetY = page.box.y + (page.contentBox.y - page.box.y) + caret.y;
     const element = scroller();
     if (element) {
-      element.scrollTop = Math.max(0, sheetY * deps.scale - JUMP_MARGIN_PX);
+      element.scrollTop = Math.max(0, sheetY * deps.scale() - JUMP_MARGIN_PX);
     }
     // The caret moves whether or not there was anywhere to scroll: the jump's POINT is that
     // the user is now editing at the target, and a document short enough to need no scroll

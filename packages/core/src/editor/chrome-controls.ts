@@ -276,16 +276,22 @@ export const CHROME_GROUPS = [
   {
     id: 'script',
     labelKey: 'formattingBar.groups.script',
+    // The PLAIN labels, not the `...Shortcut` ones that spell out "(Ctrl+=)" and
+    // "(Ctrl+Shift+=)". React's live zoom owns Ctrl/Cmd `=` and its shifted spelling, so a
+    // tooltip naming that chord here would send a React user to a keystroke that zooms. Both
+    // toggles stay reachable from the button the label is on, and the engine keymap still
+    // binds the chord for a host that mounts no zoom handler — under-advertising a shortcut
+    // some hosts keep is the truthful trade against advertising one that no longer applies.
     controls: [
       {
         id: 'super',
-        labelKey: 'formattingBar.superscriptShortcut',
+        labelKey: 'formattingBar.superscript',
         paths: GENERATED_ICON_PATHS['superscript'],
         state: { kind: 'command' },
       },
       {
         id: 'sub',
-        labelKey: 'formattingBar.subscriptShortcut',
+        labelKey: 'formattingBar.subscript',
         paths: GENERATED_ICON_PATHS['subscript'],
         state: { kind: 'command' },
       },

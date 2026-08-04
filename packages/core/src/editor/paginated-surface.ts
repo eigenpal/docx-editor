@@ -122,6 +122,23 @@ export type {
   SurfaceFormatting,
 } from './paginated-surface-contract.ts';
 
+type ScaleMutableSurface = PaginatedSurface & {
+  setScale(nextScale: number): boolean;
+};
+
+/**
+ * Rescale a mounted surface in place, or report that this one cannot be.
+ *
+ * Reaches an internal member rather than widening the surface contract, so it has to answer
+ * for a surface that does not carry one — a stub or a foreign implementation. `false`, not a
+ * TypeError: the caller is a host asking for zoom, and "cannot" is an answer it can render.
+ */
+export function setPaginatedSurfaceScale(surface: PaginatedSurface, scale: number): boolean {
+  const rescale = (surface as Partial<ScaleMutableSurface>).setScale;
+  if (typeof rescale !== 'function') return false;
+  return rescale.call(surface, scale);
+}
+
 /**
  * Mount a paginated surface over DOCX bytes.
  *
@@ -143,7 +160,7 @@ export function mountPaginatedSurface(
     };
   }
   const session = opened.session;
-  const scale = options.scale ?? 96 / 72;
+  let scale = options.scale ?? 96 / 72;
   const VIEWING_REFUSAL = 'the document is open for viewing';
   /** Separates a decision's key from its per-range index. A NUL cannot occur in either. */
   const RANGE_SUFFIX = '\u0000range\u0000';
@@ -152,21 +169,33 @@ export function mountPaginatedSurface(
   // writes them, and two revisions differing only in milliseconds never group.
   const trackedDate = (): string => `${new Date().toISOString().slice(0, 19)}Z`;
   // Editor seam creates the canvas; layout only consumes the injected context.
-  const defaults = options.measurer
+  let defaults = options.measurer
     ? null
     : resolveDefaultSurfaceMeasurer(scale, {
         context: tryCreateBrowserCanvasContext(container.ownerDocument),
         // Measure with the same face paint draws with.
         ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
       });
-  const measurer = options.measurer ?? defaults!.measurer;
+  let measurer = options.measurer ?? defaults!.measurer;
   // Incremental layout machinery — without these every keystroke re-lays out the document.
   const layoutCache = createParagraphLayoutCache<never>();
   const layoutSession = createLayoutSession();
-  // Measurer identity folds into the cache key so a later font resolution cannot serve stale layout.
-  const producer =
-    options.producer ??
-    (options.measurer ? 'host-measurer' : (defaults?.producer ?? 'fixed-measurer'));
+  /**
+   * Measurer identity, folded into every layout cache key so a later font resolution cannot
+   * serve stale layout.
+   *
+   * A HOST measurer answers in POINTS, so it means the same thing at every zoom: its identity
+   * is stable, and suffixing it with the scale re-measured the whole document on every zoom
+   * click while telling the cache two identical answers differed. The DEFAULT measurer is
+   * resolved AT a scale — the canvas one rounds against device pixels — so its identity
+   * carries that scale, and it is read from the resolution currently in force rather than from
+   * whichever one mount happened to get.
+   */
+  function producerIdentity(): string {
+    if (options.measurer) return options.producer ?? 'host-measurer';
+    return `${options.producer ?? defaults?.producer ?? 'fixed-measurer'}@scale:${scale}`;
+  }
+  let producer = producerIdentity();
   const document = container.ownerDocument;
 
   const pagesLayer = document.createElement('div');
@@ -218,32 +247,36 @@ export function mountPaginatedSurface(
   container.style.position = 'relative';
   container.replaceChildren(pagesLayer, commentLayer, overlayLayer);
 
-  const caret = createSurfaceCaret(pagesLayer, scale, () => {
-    const active = hfScope?.getActive() ?? null;
-    const activeNote = noteOps?.activeNoteScope() ?? null;
-    const notePageIndex = noteOps?.activeNotePageIndex() ?? null;
-    const scopedHost = active
-      ? furnitureCaretHost(pagesLayer, active.pageIndex)
-      : activeNote
-        ? noteCaretHost(pagesLayer, activeNote.id, notePageIndex)
-        : null;
-    return {
-      layout: currentLayout,
-      selection,
-      measurer,
-      ...(active
-        ? { preferredPageIndex: active.pageIndex }
-        : notePageIndex !== null
-          ? { preferredPageIndex: notePageIndex }
-          : {}),
-      scopedHost,
-      ...(active
-        ? { scopedHostKind: 'headerFooter' as const }
+  const caret = createSurfaceCaret(
+    pagesLayer,
+    () => scale,
+    () => {
+      const active = hfScope?.getActive() ?? null;
+      const activeNote = noteOps?.activeNoteScope() ?? null;
+      const notePageIndex = noteOps?.activeNotePageIndex() ?? null;
+      const scopedHost = active
+        ? furnitureCaretHost(pagesLayer, active.pageIndex)
         : activeNote
-          ? { scopedHostKind: 'note' as const }
-          : {}),
-    };
-  });
+          ? noteCaretHost(pagesLayer, activeNote.id, notePageIndex)
+          : null;
+      return {
+        layout: currentLayout,
+        selection,
+        measurer,
+        ...(active
+          ? { preferredPageIndex: active.pageIndex }
+          : notePageIndex !== null
+            ? { preferredPageIndex: notePageIndex }
+            : {}),
+        scopedHost,
+        ...(active
+          ? { scopedHostKind: 'headerFooter' as const }
+          : activeNote
+            ? { scopedHostKind: 'note' as const }
+            : {}),
+      };
+    }
+  );
 
   const firstParagraph = session.paragraphIds()[0] ?? '';
   let selection: SemanticSelection = {
@@ -411,7 +444,7 @@ export function mountPaginatedSurface(
   // Styles/numbering are immutable in-session; cascade + index are built once and shared
   // by body layout and header/footer stories.
   const { styleCascade, numberingIndex, defaultTabStopPt } = createSurfaceStyleDeps(session);
-  const furnitureSource = createFurnitureSource({
+  let furnitureSource = createFurnitureSource({
     session,
     measurer,
     producer,
@@ -541,7 +574,7 @@ export function mountPaginatedSurface(
   const navigation = createSurfaceNavigation({
     pagesLayer,
     container,
-    scale,
+    scale: () => scale,
     layout: () => currentLayout,
     bookmarks: () => session.bookmarks(),
     linkById: (linkId) => hyperlinks.linkById(linkId),
@@ -1998,7 +2031,7 @@ export function mountPaginatedSurface(
     );
   }
 
-  const surface: PaginatedSurface = {
+  const surface: ScaleMutableSurface = {
     session,
     // Flushes first: a commit made straight on the session — undo, or another editor
     // sharing the store — must not leave a caller reading geometry for a revision the model
@@ -2016,6 +2049,97 @@ export function mountPaginatedSurface(
       }
       const caret = caretAt(currentLayout, selection.head);
       return caret ? caret.pageIndex + 1 : 1;
+    },
+
+    setScale(nextScale) {
+      if (!(nextScale > 0) || !Number.isFinite(nextScale)) return false;
+      if (nextScale === scale) return true;
+
+      const previous = { scale, defaults, measurer, producer, furnitureSource };
+
+      // TOTAL by construction: a zoom click gets an answer, never an exception. Everything a
+      // rescale touches — the anchor read, the measurer resolution, layout, paint — is inside
+      // the guard, and the rollback carries its own.
+      try {
+        const scroller = surfaceScroller(container);
+        // The anchor is kept in LAYOUT coordinates, the frame `visiblePageSet` and
+        // `viewportPage` read. The scroller is not the surface's offset parent in a real host —
+        // toolbar and ruler chrome sit above it — so the container's own offset comes out
+        // before the divide and goes back in on the way out, or the page under the viewport
+        // centre changes as the scale does.
+        const anchor = scroller
+          ? {
+              x: (scroller.scrollLeft - container.offsetLeft + scroller.clientWidth / 2) / scale,
+              y: (scroller.scrollTop - container.offsetTop + scroller.clientHeight / 2) / scale,
+            }
+          : null;
+        scale = nextScale;
+        if (!options.measurer) {
+          defaults = resolveDefaultSurfaceMeasurer(scale, {
+            context: tryCreateBrowserCanvasContext(container.ownerDocument),
+            ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+          });
+          measurer = defaults.measurer;
+        }
+        // Read from the resolution just made, not from mount's: a canvas that is available at
+        // mount and gone by the next zoom resolves to the fixed grid, and the identity has to
+        // say so.
+        producer = producerIdentity();
+        furnitureSource = createFurnitureSource({
+          session,
+          measurer,
+          producer,
+          cache: layoutCache,
+          styleCascade,
+          defaultTabStopPt,
+        });
+        // Dropped rather than trusted: both describe a paint made at the OLD scale, and a
+        // flush that publishes nothing (a revision already superseded) would otherwise leave
+        // the overlay painting against them.
+        materializedSet = undefined;
+        materializedExtent = undefined;
+        commentRectCache = null;
+        scheduler.invalidateAll(session.packageRevision(), 'zoom');
+        scheduler.flush();
+        if (scroller && anchor) {
+          const targetLeft = Math.max(
+            0,
+            anchor.x * scale + container.offsetLeft - scroller.clientWidth / 2
+          );
+          const targetTop = Math.max(
+            0,
+            anchor.y * scale + container.offsetTop - scroller.clientHeight / 2
+          );
+          const maxLeft = Number.isFinite(scroller.scrollWidth)
+            ? Math.max(0, scroller.scrollWidth - scroller.clientWidth)
+            : null;
+          const maxTop = Number.isFinite(scroller.scrollHeight)
+            ? Math.max(0, scroller.scrollHeight - scroller.clientHeight)
+            : null;
+          scroller.scrollLeft = maxLeft === null ? targetLeft : Math.min(targetLeft, maxLeft);
+          scroller.scrollTop = maxTop === null ? targetTop : Math.min(targetTop, maxTop);
+          // The paint above chose its pages for the scroll offset the viewport had BEFORE the
+          // restore. Building the destination band here keeps the zoom to one turn; leaving it
+          // to the scroll listener showed the user shells for a frame.
+          rematerialize();
+        }
+        return true;
+      } catch {
+        ({ scale, defaults, measurer, producer, furnitureSource } = previous);
+        materializedSet = undefined;
+        materializedExtent = undefined;
+        commentRectCache = null;
+        // NESTED, because the rollback lays out too: whatever failed the rescale can fail the
+        // recovery, and the caller still has to be told "no". The previous paint stands, and
+        // the next commit or scroll repaints it.
+        try {
+          scheduler.invalidateAll(session.packageRevision(), 'zoom-rollback');
+          scheduler.flush();
+        } catch {
+          /* nothing left to try; the answer below is the whole contract */
+        }
+        return false;
+      }
     },
 
     type(text) {

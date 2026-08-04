@@ -1777,9 +1777,10 @@ a.docx-hyperlink:focus-visible {
  * Every box that carries document geometry is positioned by the engine in
  * content pixels through inline styles. Nothing here invents or overrides a
  * width, height, x, or y for a page or a display item — the rules below only
- * supply painting, stacking, and pointer policy. Zoom is applied by the host
- * as a transform on `.ep-one-surface__pages`; the engine is told about it
- * through InteractionHostMetrics, so geometry and paint agree.
+ * supply painting, stacking, and pointer policy. Zoom is NOT a CSS transform:
+ * the engine holds the scale itself and repaints (re-laying out where the scale
+ * changes measurement), so every box above is already sized in zoomed pixels
+ * and geometry and paint agree by construction.
  * ======================================================================== */
 
 .ep-one-surface {
@@ -1814,8 +1815,10 @@ a.docx-hyperlink:focus-visible {
   width: max-content;
   margin-inline: auto;
   gap: var(--doc-page-gap);
-  /* Zoom origin must match the engine's assumption: scale about the top-left
-   * of the stack, so client→content conversion is a plain divide by zoom. */
+  /* Zoom repaints rather than transforms, so nothing here is scaled. The origin
+   * is pinned anyway so a host that adds a transform of its own (a print
+   * preview, a fit-to-width gesture) scales about the stack's top-left, keeping
+   * client→content conversion a plain divide. */
   transform-origin: 0 0;
 }
 

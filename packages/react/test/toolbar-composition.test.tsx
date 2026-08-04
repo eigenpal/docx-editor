@@ -512,20 +512,44 @@ describe('the shaped parts', () => {
     expect(editor().snapshot().formatting?.spaceAfterPt).toBe(10);
   });
 
-  test('the zoom stepper drives Editor.setZoom and reads the snapshot back', async () => {
+  test('the zoom stepper resizes the mounted page live, keeps edits and undo, and shows all zoom levels', async () => {
     const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    const instance = editor();
+    const mountedSurface = instance.surface;
+    instance.surface!.setSelection({
+      anchor: { paragraphId: instance.surface!.session.paragraphIds()[0]!, offset: 11 },
+      head: { paragraphId: instance.surface!.session.paragraphIds()[0]!, offset: 11 },
+    });
+    instance.surface!.type('!');
     const stepper = view.container.querySelector('[data-slot="zoom.level"]')!;
     const value = stepper.querySelector('.docx-toolbar__stepper-value')!;
+    const pageWidth = () =>
+      parseFloat((view.container.querySelector('.docx-page') as HTMLElement).style.width);
+    const widthBefore = pageWidth();
     // The middle is the "% ▾" menu button: the level plus the caret glyph.
     expect(value.textContent).toBe('100%▾');
+    await act(async () => {
+      (value as HTMLButtonElement).click();
+    });
+    expect(
+      [...stepper.querySelectorAll('[role="option"]')].map((option) => option.textContent)
+    ).toEqual(['50%', '75%', '100%', '125%', '150%', '200%']);
+    await act(async () => {
+      (value as HTMLButtonElement).click();
+    });
     const zoomIn = stepper.querySelector('[aria-label="zoom.zoomIn"]') as HTMLButtonElement;
     await act(async () => {
       zoomIn.click();
     });
     // The buttons walk the preset LEVELS (50/75/100/125/150/200), not a fixed
     // step: 100% steps to 125%.
+    expect(editor()).toBe(instance);
+    expect(editor().surface).toBe(mountedSurface);
     expect(editor().snapshot().zoom).toBe(1.25);
     expect(value.textContent).toBe('125%▾');
+    expect(pageWidth()).toBeCloseTo(widthBefore * 1.25);
+    expect(view.container.textContent).toContain('hello world!');
+    expect(editor().can({ type: 'undo' }).ok).toBe(true);
     const zoomOut = stepper.querySelector('[aria-label="zoom.zoomOut"]') as HTMLButtonElement;
     await act(async () => {
       zoomOut.click();

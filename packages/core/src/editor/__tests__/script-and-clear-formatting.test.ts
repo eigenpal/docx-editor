@@ -223,6 +223,36 @@ describe('superscript and subscript', () => {
     });
   });
 
+  test('a chord a host already claimed is left alone rather than scripted as well', () => {
+    // Hosts bind Ctrl/Cmd+`=` too — React's live zoom claims it in the CAPTURE phase, so it
+    // reaches this keymap already default-prevented. Without failing soft the one keystroke
+    // both zoomed and rewrote the selection's `w:vertAlign`.
+    const claimed = (init: Partial<KeyboardEvent> & { key: string }) =>
+      ({
+        preventDefault: () => {},
+        defaultPrevented: true,
+        shiftKey: false,
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        ...init,
+      }) as KeyboardEvent;
+
+    withEditor(p(textRun('x2')), (editor) => {
+      const onKeyDown = createKeyDownHandler(editor.surface!);
+      select(editor, [0, 1], [0, 2]);
+      const revisionBefore = editor.surface!.state().revision;
+
+      onKeyDown(claimed({ key: '=', ctrlKey: true }));
+      onKeyDown(claimed({ key: '+', ctrlKey: true, shiftKey: true }));
+
+      expect(editor.snapshot().formatting?.subscript).toBe(false);
+      expect(editor.snapshot().formatting?.superscript).toBe(false);
+      expect(editor.surface!.state().revision).toBe(revisionBefore);
+      expect(editor.surface!.state().canUndo).toBe(false);
+    });
+  });
+
   test('it applies across a multi-paragraph selection like the other marks', () => {
     withEditor(p(textRun('alpha')) + p(textRun('beta')), (editor) => {
       select(editor, [0, 0], [1, 4]);

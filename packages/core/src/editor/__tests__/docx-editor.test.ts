@@ -496,6 +496,72 @@ describe('createDocxEditor', () => {
     expect(editor.setZoom(1.5)).toEqual({ ok: true, changed: false });
   });
 
+  test('setZoom rescales the mounted surface without losing edits or undo', () => {
+    const { editor, container } = mount(p('hello'));
+    const mounted = editor.surface;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: editor.surface!.session.paragraphIds()[0]!, offset: 5 },
+      head: { paragraphId: editor.surface!.session.paragraphIds()[0]!, offset: 5 },
+    });
+    editor.surface!.type('!');
+    const widthBefore = parseFloat(container.querySelector<HTMLElement>('.docx-page')!.style.width);
+    const selectionBefore = editor.surface!.state().selection;
+
+    expect(editor.setZoom(1.5)).toEqual({ ok: true, changed: true });
+
+    expect(editor.surface).toBe(mounted);
+    expect(editor.surface!.state().selection).toEqual(selectionBefore);
+    expect(parseFloat(container.querySelector<HTMLElement>('.docx-page')!.style.width)).toBeCloseTo(
+      widthBefore * 1.5
+    );
+    expect(container.textContent).toContain('hello!');
+    expect(editor.can({ type: 'undo' }).ok).toBe(true);
+  });
+
+  test('a rescale the surface cannot make is reported, and leaves the zoom where it was', () => {
+    const { editor, container } = mount(p('hello'));
+    const widthBefore = parseFloat(container.querySelector<HTMLElement>('.docx-page')!.style.width);
+    // The rescale and its rollback both invalidate against the session's revision, so a
+    // session that cannot answer fails the forward pass and the recovery alike — the case that
+    // used to throw out of a zoom click instead of returning a result.
+    const session = editor.surface!.session as { packageRevision: () => number };
+    const revision = session.packageRevision;
+    session.packageRevision = () => {
+      throw new Error('revision unavailable');
+    };
+
+    let result: ReturnType<typeof editor.setZoom>;
+    try {
+      result = editor.setZoom(1.5);
+    } finally {
+      session.packageRevision = revision;
+    }
+
+    expect(result).toMatchObject({ ok: false, code: 'unsupported' });
+    // Nothing moved: not the reported zoom, and not the scale the surface is painted at.
+    expect(editor.getZoom()).toBe(1);
+    expect(parseFloat(container.querySelector<HTMLElement>('.docx-page')!.style.width)).toBe(
+      widthBefore
+    );
+    // The refusal is not terminal — the same call succeeds once the session answers again.
+    expect(editor.setZoom(1.5)).toEqual({ ok: true, changed: true });
+    expect(editor.getZoom()).toBe(1.5);
+  });
+
+  test('setZoom while detached scales the page on the next attach', () => {
+    const editor = createDocxEditor({ document: docx(p('hello')) });
+    expect(editor.surface).toBeNull();
+
+    expect(editor.setZoom(1.5)).toEqual({ ok: true, changed: true });
+
+    const container = document.createElement('div');
+    editor.attach(container);
+    expect(editor.surface).not.toBeNull();
+    expect(parseFloat(container.querySelector<HTMLElement>('.docx-page')!.style.width)).toBeCloseTo(
+      1224
+    );
+  });
+
   test('the honest-empty members answer with typed empty values', () => {
     const { editor } = mount(p('hello'));
     expect(editor.isActive({ type: 'toggleMark', mark: 'bold' })).toBe(false);

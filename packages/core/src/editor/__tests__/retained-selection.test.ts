@@ -16,7 +16,11 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
-import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
+import {
+  mountPaginatedSurface,
+  setPaginatedSurfaceScale,
+  type PaginatedSurface,
+} from '../paginated-surface.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -90,6 +94,38 @@ describe('a retained selection stays lit while focus is elsewhere', () => {
     // Drawn on the engine's overlay, which is what survives the browser moving its one
     // selection into a panel's input.
     expect(retainedRects(mounted)).toBeGreaterThan(0);
+  });
+
+  test('a rescale redraws the pinned range at the new scale', () => {
+    // The overlay is a sibling of the pages, painted from the same layout geometry at the same
+    // scale. A zoom that moved the sheets and left the highlight behind would light up the
+    // wrong words while the panel is asking about them.
+    const mounted = mount();
+    select(mounted, 0, 6, 13);
+    mounted.surface.retainSelection();
+    const geometry = () =>
+      [...mounted.container.querySelectorAll<HTMLElement>('.docx-retained-selection-rect')].map(
+        (rect) => [
+          parseFloat(rect.style.left),
+          parseFloat(rect.style.top),
+          parseFloat(rect.style.width),
+          parseFloat(rect.style.height),
+        ]
+      );
+    const before = geometry();
+    expect(before.length).toBeGreaterThan(0);
+
+    // The surface mounted at the default 96/72; twice that is a 200% zoom.
+    expect(setPaginatedSurfaceScale(mounted.surface, (96 / 72) * 2)).toBe(true);
+
+    const after = geometry();
+    expect(after.length).toBe(before.length);
+    after.forEach((rect, index) => {
+      rect.forEach((value, axis) => {
+        expect(value).toBeCloseTo(before[index]![axis]! * 2, 5);
+      });
+    });
+    expect(mounted.surface.retainedSelection()).not.toBeNull();
   });
 
   test('the MODEL selection is untouched, so the op still addresses the same text', () => {

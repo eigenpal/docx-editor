@@ -11,9 +11,10 @@
 import { useCallback, useContext } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
-import { ReviewRailContext } from './context';
+import { ReviewRailContext, useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
+import { zoomLevelForShortcut } from './zoom-levels';
 
 const selectPaneOpen = (snapshot: EditorSnapshot): boolean => snapshot.reviewPaneOpen ?? true;
 
@@ -32,6 +33,7 @@ export interface DocxEditorViewportProps {
  * @public
  */
 export function DocxEditorViewport({ className, style, children }: DocxEditorViewportProps) {
+  const editor = useDocxEditor();
   // The open pane is given its own gutter rather than allowed to overlap: the page centres
   // inside the padding box, so reserving the rail's width shifts the sheet left by half of
   // it and the two read as one centred pair. Purely presentational — no layout input
@@ -53,11 +55,31 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
     (element: HTMLDivElement | null) => layout?.setViewport(element),
     [layout]
   );
+  // CAPTURE, not bubble: the engine's keymap is bound to the painted pages inside this
+  // element and binds Word's subscript/superscript to the same Ctrl/Cmd+`=` chord. On the way
+  // up it had already scripted the selection by the time zoom ran, so one keystroke both
+  // zoomed and rewrote run properties. Zoom wins on these keys, so it claims the event before
+  // the pages see it; the keymap fails soft on an event that is already default-prevented.
+  const onKeyDownCapture = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (!editor || !(event.metaKey || event.ctrlKey) || event.altKey) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest('input, textarea, select, [role="dialog"]')) {
+        return;
+      }
+      const next = zoomLevelForShortcut(event.key, editor.getZoom());
+      if (next === null) return;
+      event.preventDefault();
+      editor.setZoom(next);
+    },
+    [editor]
+  );
 
   return (
     <div
       ref={attach}
       data-testid="docx-editor-scroll"
+      onKeyDownCapture={onKeyDownCapture}
       {...(reserve ? { 'data-review-pane': paneOpen ? 'open' : 'closed' } : {})}
       className={`ep-root ep-one-surface ep-one-surface__viewport docx-editor__scroll-container${
         className ? ` ${className}` : ''

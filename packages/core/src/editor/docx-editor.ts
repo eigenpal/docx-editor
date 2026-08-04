@@ -142,6 +142,7 @@ import {
 } from './embedded-font-faces.ts';
 import {
   mountPaginatedSurface,
+  setPaginatedSurfaceScale,
   type PaginatedSurface,
   type PaginatedSurfaceState,
 } from './paginated-surface.ts';
@@ -1538,15 +1539,18 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         };
       }
       if (next === zoom) return { ok: true, changed: false };
+      if (surface && !setPaginatedSurfaceScale(surface, next * (96 / 72))) {
+        return {
+          ok: false,
+          code: 'unsupported',
+          reason: `the mounted surface could not apply zoom ${next}`,
+        };
+      }
       zoom = next;
       // Zoom is snapshot state: bump and tell subscribers, with the fresh snapshot on the
       // selectionChange channel (the store listens to both channels either way).
       bump();
       emitSelectionChange();
-      // The surface samples its scale at mount and exposes no rescale-in-place, and a
-      // remount here would discard the user's undo history for a zoom click. So the stored
-      // zoom applies from the NEXT mount (a `load`, or the shaped-measurer remount);
-      // repaint-at-current-scale lands when the surface grows a rescale path.
       return { ok: true, changed: true };
     },
 

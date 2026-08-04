@@ -16,7 +16,11 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { caretAt } from '@docx-editor.dev/core-contract/layout';
-import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
+import {
+  mountPaginatedSurface,
+  setPaginatedSurfaceScale,
+  type PaginatedSurface,
+} from '../paginated-surface.ts';
 import { positionFromDomPoint } from '../dom-selection.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -125,6 +129,19 @@ describe('the painted caret', () => {
     expect(painted!.closest('[data-page-index]')?.getAttribute('data-page-index')).toBe(
       String(expected.pageIndex)
     );
+  });
+
+  test('it rescales with the surface without moving the semantic caret', () => {
+    const { surface, container } = mount(paragraph('hello world'));
+    putCaret(surface, 6);
+
+    expect(setPaginatedSurfaceScale(surface, 2)).toBe(true);
+
+    const expected = caretAt(surface.layout(), surface.state().selection.head)!;
+    const painted = caretElement(container)!;
+    expect(parseFloat(painted.style.left)).toBeCloseTo(expected.x * 2);
+    expect(parseFloat(painted.style.height)).toBeCloseTo(expected.height * 2);
+    surface.destroy();
   });
 
   test('it survives the dark page inversion it is painted inside', () => {
