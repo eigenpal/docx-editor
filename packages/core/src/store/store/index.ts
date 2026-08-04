@@ -34,3 +34,4 @@ export {
   type AddCommentResult,
   type CommentAnchorRequest,
 } from './comment-writes.ts';
+export { collectRevisionSites, type RevisionAddress } from './tree-op-revisions.ts';

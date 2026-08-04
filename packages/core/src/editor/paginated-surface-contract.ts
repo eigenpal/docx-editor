@@ -17,8 +17,21 @@ import type {
   TextMeasurer,
 } from '@docx-editor.dev/core-contract/layout';
 
+/**
+ * How an edit is written.
+ *
+ * `'suggest'` is the one that changes what the ops MEAN: the same keystroke becomes a `w:ins`
+ * and the same Backspace becomes a `w:del` over the words it would have removed. `'view'`
+ * refuses edits outright.
+ */
+export type SurfaceEditingMode = 'edit' | 'suggest' | 'view';
+
 export interface PaginatedSurfaceOptions {
   readonly measurer?: TextMeasurer;
+  /** Ambient author for tracked edits. Required before suggesting can write anything. */
+  readonly author?: string;
+  /** Opening mode; changeable at runtime with `setEditingMode`. */
+  readonly editingMode?: SurfaceEditingMode;
   /**
    * Identifies the measurer for cache invalidation.
    *
@@ -343,6 +356,50 @@ export interface PaginatedSurface {
   releaseSelection(): void;
   /** The pinned range, or null once it was released or escaped. */
   retainedSelection(): SemanticSelection | null;
+  /**
+   * How edits are written right now.
+   *
+   * Lives on the SURFACE, not on the store. The store's write vocabulary stays explicit —
+   * an op says whether it is tracked — and the surface is the one thing that knows a
+   * keystroke happened, so it is the right place to decide what that keystroke becomes.
+   */
+  editingMode(): SurfaceEditingMode;
+  setEditingMode(mode: SurfaceEditingMode): void;
+  /**
+   * Commit review ops — accept, reject, a new comment — through the SAME path a keystroke
+   * takes: layout, paint, and a caret clamped to what the document now holds.
+   *
+   * Applying them straight to the session skipped all three. Rejecting an insertion left the
+   * pages painting text the tree no longer had, every card anchored where it used to be, and
+   * the caret past the end of the paragraph — after which every keystroke was refused with
+   * `offset-out-of-range` until the user happened to click somewhere else.
+   */
+  commitReviewOps(run: () => { readonly committed: boolean; readonly reason?: unknown }): void;
+  /**
+   * The layout as last PUBLISHED, without forcing pending work.
+   *
+   * `layout()` flushes first, which is right for a caller that is about to act on geometry
+   * and wrong for one that merely decorates it. The review rail read through `layout()` and
+   * so forced a synchronous full pass on every keystroke — eleven seconds per read on a
+   * 2432-block document. A card whose anchor is one frame stale is invisible; the paint that
+   * follows the flush republishes it.
+   */
+  publishedLayout(): SemanticLayout;
+  /**
+   * The comment or tracked change the caret is in, as the painted bands report it.
+   *
+   * ONE source for "which item is open". The band under the text and the card beside it are
+   * two views of the same answer, and deriving it twice let them disagree — the card closed
+   * while the text stayed highlighted.
+   */
+  activeReviewKey(): string | null;
+  /**
+   * Close the open item until the caret next moves.
+   *
+   * What a click on the canvas means. The caret does not move when someone clicks the grey
+   * around the page, so nothing else would ever put the item away.
+   */
+  dismissActiveReview(): void;
   /**
    * `bookmarkName -> position` over the current revision, for resolving an internal link.
    * First in document order wins a duplicate name, matching Word.

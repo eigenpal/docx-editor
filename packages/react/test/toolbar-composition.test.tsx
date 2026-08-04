@@ -352,7 +352,9 @@ describe('the shaped parts', () => {
 
   test('an undriven dropdown renders as a DISABLED combobox-lookalike, never a control', () => {
     const { view } = mountToolbar(<DocxEditorToolbar />);
-    for (const slot of ['review.editingMode']) {
+    // `review.editingMode` graduated to a driven control when suggesting landed; line
+    // spacing is the remaining dropdown-SHAPED slot the engine does not own yet.
+    for (const slot of ['list.lineSpacing']) {
       const picker = view.container.querySelector(`[data-slot="${slot}"]`)!;
       expect(picker.tagName).toBe('SPAN');
       expect(picker.getAttribute('aria-disabled')).toBe('true');
@@ -360,6 +362,25 @@ describe('the shaped parts', () => {
       // No interactive element inside: nothing to click, nothing faked.
       expect(picker.querySelector('button')).toBeNull();
     }
+  });
+
+  test('the editing-mode control shows the current mode and switches it', () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    const trigger = view.container.querySelector('[data-testid="editing-mode-trigger"]')!;
+    expect(trigger.getAttribute('data-mode')).toBe('editing');
+
+    act(() => {
+      (trigger as HTMLButtonElement).click();
+    });
+    const suggesting = view.container.querySelector('[data-testid="editing-mode-suggesting"]')!;
+    act(() => {
+      (suggesting as HTMLButtonElement).click();
+    });
+
+    expect(editor().getEditingMode()).toBe('suggesting');
+    expect(
+      view.container.querySelector('[data-testid="editing-mode-trigger"]')!.getAttribute('data-mode')
+    ).toBe('suggesting');
   });
 
   test('the style picker lists the DOCUMENT paragraph styles and a pick applies one', async () => {

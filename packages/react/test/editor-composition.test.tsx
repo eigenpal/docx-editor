@@ -192,9 +192,9 @@ describe('useEditorCommand', () => {
     let binding: EditorCommandState | null = null;
     let instance: DocxEditorInstance | null = null;
     function Probe() {
-      // `review.comments` has no command and no probe. (`text.link` used to be the
+      // `list.lineSpacing` has no command and no probe. (`text.link` used to be the
       // example here; it is now chrome-driven, so it enables through the engine.)
-      binding = useEditorCommand('review.comments');
+      binding = useEditorCommand('list.lineSpacing');
       return null;
     }
     render(

@@ -724,8 +724,12 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
       data-testid="composed-mount"
     >
       {bytes && fonts.settled ? (
+        // Authoring is ambient: comments and tracked changes take their `@w:author` from
+        // `author`, the way the Office JS API sources it from context. A real app supplies
+        // the signed-in user; a demo supplies a name so replies can be written at all.
         <DocxEditor.Root
           document={bytes}
+          author="Demo Reviewer"
           {...(fonts.configuration ? { fonts: fonts.configuration } : {})}
           onFontError={(error) => console.warn(`[fonts] ${error.code}: ${error.message}`)}
         >
@@ -781,6 +785,10 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
                   scrolling. `<DocxEditor>` mounts it for you; a composition like this one
                   places it by name, exactly like the rulers above. */}
               <DocxEditor.HyperLink />
+              {/* The review rail: tracked changes and comments as cards beside the page,
+                  with accept / reject / reply. Inside the viewport for the same reason as
+                  the popover — it scrolls with the document rather than chasing it. */}
+              <DocxEditor.Review />
             </DocxEditor.Viewport>
             {/* Floating diagnostics chrome, above the overlay panels. */}
             <PerfHud />

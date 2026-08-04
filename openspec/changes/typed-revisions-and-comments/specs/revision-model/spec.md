@@ -1,5 +1,14 @@
 ## ADDED Requirements
 
+### Requirement: ECMA-376 Part 1 governs the revision markup
+
+Every rule below SHALL be read against ECMA-376 Part 1 as the governing authority: `CT_TrackChange` and the revision elements of §17.13.5, `CT_Markup/@w:id` as `ST_DecimalNumber`, and `w:delText`/`w:delInstrText` as defined there. Where a producer's behaviour is narrower than the schema — a bound on `@w:id`, a date it omits — that SHALL be recorded as an observation about real files and SHALL NOT be presented as a schema requirement. Markup outside Part 1 SHALL be treated as optional evidence whose absence is never an error.
+
+#### Scenario: A schema-valid file is never refused for a producer convention
+
+- **WHEN** a file is valid against Part 1 but does not follow a convention this engine observed elsewhere
+- **THEN** it loads and edits, and the convention informs only what this engine WRITES
+
 ### Requirement: The revision family is typed with required provenance
 
 The canonical tree SHALL type `w:ins`, `w:del`, `w:delText`, `w:delInstrText`, `w:moveFrom`, `w:moveTo`, the four move-range markers, the property-change wrappers (`w:rPrChange`, `w:pPrChange`, `w:tblPrChange`, `w:tblPrExChange`, `w:tcPrChange`, `w:trPrChange`, `w:sectPrChange`, `w:tblGridChange`), and the cell-revision elements (`w:cellIns`, `w:cellDel`, `w:cellMerge`).

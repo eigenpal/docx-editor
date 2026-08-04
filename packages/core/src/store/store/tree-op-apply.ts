@@ -26,6 +26,13 @@ import { W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import { resolveRevisions } from './tree-op-revisions.ts';
 import { applyInsertCommentMarker } from './tree-op-comments.ts';
 import {
+  applyDeleteTracked,
+  applyInsertTracked,
+  applyParagraphMarkRevision,
+  applyProposeParagraphMerge,
+  retractsOwnParagraphMark,
+} from './tree-op-tracked.ts';
+import {
   isValidParaId,
   mintParaId,
   mintedParagraphIdentityAttributes,
@@ -70,13 +77,25 @@ import {
   type TreeOpResult,
 } from './tree-op-validate.ts';
 
-function textElement(nextId: () => string, text: string): OoxmlNode {
+/**
+ * A `w:t`, or a `w:delText` when the text being rebuilt was already struck.
+ *
+ * SPLITTING a run must not change what the run is. This built a `w:t` unconditionally, so
+ * every ordinary gesture that splits a run inside a `w:del` — commenting on struck text,
+ * bolding across it — silently re-labelled the deletion as live text (§17.3.3.7 requires
+ * `w:delText` there), and the damage only showed when the file reached Word.
+ */
+function textElement(
+  nextId: () => string,
+  text: string,
+  kind: 'text' | 'deletedText' = 'text'
+): OoxmlNode {
   const valueId = nextId();
   return {
     id: nextId(),
-    kind: 'text',
+    kind,
     namespaceUri: WML_NAMESPACE_URI,
-    localName: 't',
+    localName: kind === 'deletedText' ? 'delText' : 't',
     prefix: 'w',
     namespaceBindings: [],
     // `xml:space="preserve"` is not added here: the serializer owns lexical form, and a
@@ -163,6 +182,9 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
 
   switch (op.op) {
     case 'insertText':
+      if (op.revision) {
+        return applyInsertTracked(part, paragraph, op.offset, op.text, op.revision, options);
+      }
       return applyInsertContent(
         part,
         paragraph,
@@ -201,9 +223,26 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
         options
       );
     case 'deleteText':
+      if (op.revision) {
+        return applyDeleteTracked(part, paragraph, op.start, op.end, op.revision, options);
+      }
       return applyDeleteText(part, paragraph, op.start, op.end, options);
     case 'insertHyperlink':
       return applyInsertHyperlink(part, paragraph, op, options);
+    case 'setParagraphMarkRevision': {
+      // Taking your own proposed break back is a real join, not a second proposal.
+      if (op.kind === 'del' && retractsOwnParagraphMark(paragraph, op.revision.author)) {
+        const parent = parentOf(part, paragraph.id);
+        const at = parent?.children.findIndex((child) => child.id === paragraph.id) ?? -1;
+        const next = at >= 0 ? parent?.children[at + 1] : undefined;
+        if (next && next.kind === 'paragraph') {
+          return applyJoin(part, paragraph.id, next.id, options);
+        }
+      }
+      return applyParagraphMarkRevision(part, paragraph, op.kind, op.revision, options);
+    }
+    case 'proposeParagraphMerge':
+      return applyProposeParagraphMerge(part, paragraph, op.revision, options);
     case 'splitParagraph':
       return applySplit(part, paragraph, op.offset, options);
     case 'splitParagraphMany':
@@ -280,8 +319,9 @@ function applyInsertContent(
     if (!textNode) return { ok: false, reason: 'tree-invariant', detail: 'orphan text value' };
     const run = findNode(part, segment.runId);
     if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
-    const head = textElement(nextId, value.slice(0, local));
-    const tail = textElement(nextId, value.slice(local));
+    const kind = textNode.kind === 'deletedText' ? 'deletedText' : 'text';
+    const head = textElement(nextId, value.slice(0, local), kind);
+    const tail = textElement(nextId, value.slice(local), kind);
     const rebuilt = run.children.flatMap((child) =>
       child.id === textNode.id ? [head, ...nodes, tail] : [child]
     );
@@ -322,6 +362,25 @@ function contains(node: OoxmlNode, id: string): boolean {
 }
 
 /** The `w:t` element that owns a text value. */
+/** Whether the element holding a text value is a `w:t` or a `w:delText`. */
+function textKindOfValue(root: OoxmlNode, valueId: string): 'text' | 'deletedText' {
+  const walk = (node: OoxmlNode): 'text' | 'deletedText' | null => {
+    if (node.kind === 'textValue') return null;
+    if (
+      (node.kind === 'text' || node.kind === 'deletedText') &&
+      node.children.some((child) => child.id === valueId)
+    ) {
+      return node.kind;
+    }
+    for (const child of node.children) {
+      const found = walk(child);
+      if (found) return found;
+    }
+    return null;
+  };
+  return walk(root) ?? 'text';
+}
+
 function findTextParent(paragraph: OoxmlParagraphNode, valueId: string): OoxmlNode | null {
   const walk = (node: OoxmlNode): OoxmlNode | null => {
     if (node.kind === 'textValue') return null;
@@ -370,7 +429,12 @@ function applyDeleteText(
     const edited =
       value.length === 0
         ? removeNode(current, owner.id, options)
-        : replaceNode(current, owner.id, textElement(nextId, value), options);
+        : replaceNode(
+            current,
+            owner.id,
+            textElement(nextId, value, owner.kind === 'deletedText' ? 'deletedText' : 'text'),
+            options
+          );
     if (!edited.ok) return fromEdit(edited, effect);
     current = edited.part;
   }
@@ -982,8 +1046,9 @@ function divideInline(
     else if (segment.start >= offset) tailContent.push(grand);
     else if (segment.node.kind === 'textValue') {
       const local = offset - segment.start;
-      headContent.push(textElement(nextId, segment.node.value.slice(0, local)));
-      tailContent.push(textElement(nextId, segment.node.value.slice(local)));
+      const splitKind = textKindOfValue(child, segment.node.id);
+      headContent.push(textElement(nextId, segment.node.value.slice(0, local), splitKind));
+      tailContent.push(textElement(nextId, segment.node.value.slice(local), splitKind));
     } else headContent.push(grand);
   }
   const clonedRpr = rPr ? cloneWithNewIds(rPr, nextId) : null;
@@ -1211,6 +1276,8 @@ function distributeInline(
     let sliceStart = from;
     let piece = pieceIndexOf(offsets, from);
     let cut = false;
+    // The element the value hangs off, so a split inside a `w:del` keeps writing `w:delText`.
+    const segmentOwner = grand;
     for (const boundary of offsets) {
       if (boundary <= from) continue;
       if (boundary >= until) break;
@@ -1219,7 +1286,11 @@ function distributeInline(
       // equivalent single splits never produce — so the piece advances and nothing is
       // emitted, exactly as a split at a paragraph edge emits no text.
       const slice = segment.node.value.slice(sliceStart - from, boundary - from);
-      if (slice.length > 0) contentByPiece[piece]!.push(textElement(nextId, slice));
+      if (slice.length > 0) {
+        contentByPiece[piece]!.push(
+          textElement(nextId, slice, textKindOfValue(segmentOwner, segment.node.id))
+        );
+      }
       sliceStart = boundary;
       piece += 1;
       cut = true;
@@ -1230,7 +1301,11 @@ function distributeInline(
       continue;
     }
     const lastSlice = segment.node.value.slice(sliceStart - from);
-    if (lastSlice.length > 0) contentByPiece[piece]!.push(textElement(nextId, lastSlice));
+    if (lastSlice.length > 0) {
+      contentByPiece[piece]!.push(
+        textElement(nextId, lastSlice, textKindOfValue(segmentOwner, segment.node.id))
+      );
+    }
   }
   let keptOriginalRpr = false;
   for (let piece = 0; piece < pieceCount; piece += 1) {
@@ -1574,8 +1649,9 @@ export function splitRunsAt(
     else if (segment.start >= offset) tailContent.push(child);
     else if (segment.node.kind === 'textValue') {
       const local = offset - segment.start;
-      headContent.push(textElement(nextId, segment.node.value.slice(0, local)));
-      tailContent.push(textElement(nextId, segment.node.value.slice(local)));
+      const splitKind = textKindOfValue(child, segment.node.id);
+      headContent.push(textElement(nextId, segment.node.value.slice(0, local), splitKind));
+      tailContent.push(textElement(nextId, segment.node.value.slice(local), splitKind));
     } else headContent.push(child);
   }
   const head = runElement(nextId, rPr ? [rPr, ...headContent] : headContent);

@@ -166,7 +166,6 @@ function definePicker(slot: ChromeSlotId): ToolbarSlotPartComponent {
   return Object.assign(Part, { docxSlot: slot });
 }
 
-export const ToolbarEditingMode = definePicker('review.editingMode');
 // Line spacing is dropdown-SHAPED in the chrome spec (icon + caret), so its
 // undriven rendering is the picker lookalike, not a bare icon button.
 export const ToolbarLineSpacing = definePicker('list.lineSpacing');

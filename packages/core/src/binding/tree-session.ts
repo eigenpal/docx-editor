@@ -12,6 +12,8 @@
 // collapse to a single honest statement of what the part contains.
 
 import type { Node as PMNode } from 'prosemirror-model';
+import { collectReviewItems, type ReviewItem } from '../layout/review-model.ts';
+import { addComment } from '../store/store/comment-writes.ts';
 import {
   ORIGIN_IDS,
   TreeDocumentStore,
@@ -201,6 +203,24 @@ export interface TreeDocxSession {
    * in-session.
    */
   documentOutline(): readonly DocumentOutlineEntry[];
+
+  /**
+   * Every pending review decision in the document, memoized per revision.
+   *
+   * Derived from the canonical TREE — the queue is a property of the document, and one derived
+   * from laid-out spans empties by half whenever the reader switches to a resolved view.
+   */
+  reviewItems(): readonly ReviewItem[];
+
+  /** Reply to a comment, or add one over a revision's range. Returns the new comment's id. */
+  replyToComment(
+    parentCommentId: string | null,
+    anchor: { paragraphId: string; start: number; end: number; endParagraphId?: string },
+    text: string,
+    author: string,
+    /** ISO-8601. Omitted writes no `@w:date`, because inventing one is a content change. */
+    date?: string
+  ): string | null;
   /**
    * The faces the package EMBEDS (`word/fontTable.xml` embed relationships),
    * deobfuscated — the only font source that needs neither a substitute nor a network.
@@ -313,6 +333,8 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
   // publication and one undo entry. `store.part` still answers with the main document part.
   const store = new TreeDocumentStore(pkg, pkg.mainDocumentPart);
   let headerFooterBySection: readonly HeaderFooterParts[] | null = null;
+  /** Memoized per store revision: the queue only changes when the document does. */
+  let reviewCache: { revision: number; items: readonly ReviewItem[] } | null = null;
   let lastChange: TreeModelChange | null = null;
   store.subscribe((change) => {
     lastChange = change;
@@ -676,6 +698,42 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
           pkg = ensured.pkg;
         }
         return ensured.relationshipId;
+      },
+
+      reviewItems() {
+        if (!reviewCache || reviewCache.revision !== store.revision) {
+          const pkg = currentPackage();
+          reviewCache = {
+            revision: store.revision,
+            items: collectReviewItems({
+              storyPart: store.part,
+              commentsPart: pkg.parts.get('/word/comments.xml'),
+              commentsExtendedPart: pkg.parts.get('/word/commentsExtended.xml'),
+            }),
+          };
+        }
+        return reviewCache.items;
+      },
+
+      replyToComment(parentCommentId, anchor, text, author, date) {
+        const result = addComment(store, {
+          anchor: {
+            paragraphId: anchor.paragraphId,
+            start: anchor.start,
+            end: anchor.end,
+            // A range that ends in a LATER paragraph is ordinary in OOXML: the start and end
+            // markers are independent elements. Dropping the end paragraph would anchor the
+            // comment to an offset in the wrong one.
+            ...(anchor.endParagraphId === undefined
+              ? {}
+              : { endParagraphId: anchor.endParagraphId }),
+          },
+          author,
+          text,
+          ...(date === undefined ? {} : { date }),
+          ...(parentCommentId === null ? {} : { replyToCommentId: parentCommentId }),
+        });
+        return result.ok ? result.commentId : null;
       },
 
       ensureListDefinition(kind) {

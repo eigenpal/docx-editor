@@ -34,6 +34,9 @@ import type { ChromeSlotId } from './chrome-controls.ts';
  * the save control `kind: 'save'`.
  */
 const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
+  // A VIEW toggle, wired here like any other button so its pressed state comes from
+  // `isActive` rather than from a flag each host keeps for itself.
+  'review.comments': { type: 'toggleReviewPane' },
   'history.undo': { type: 'undo' },
   'history.redo': { type: 'redo' },
   'text.bold': { type: 'toggleMark', mark: 'bold' },
@@ -127,6 +130,11 @@ export function commandForSlotValue(slotId: ChromeSlotId, value: unknown): Edito
   // The style picker is value-typed but not a MARK: its value is a paragraph styleId.
   // Passed through unvalidated like the mark values — the engine's own gate refuses a
   // malformed one (`classifyCommand`) and an unknown one (`exec`), with typed reasons.
+  // The editing-mode pill: its command carries the chosen mode, so it is value-typed even
+  // though the value is not a mark.
+  if (slotId === 'review.editingMode') {
+    return { type: 'setEditingMode', mode: value as 'editing' | 'suggesting' | 'viewing' };
+  }
   if (slotId === 'styles.style') {
     return { type: 'setParagraphStyle', styleId: value as string };
   }
@@ -145,6 +153,15 @@ export interface ToolbarCommandState {
   readonly enabled: boolean;
   /** The engine's reason when disabled — surfaced as a tooltip, never invented. */
   readonly disabledReason: string | null;
+  /**
+   * What the control currently SHOWS, for the slots whose answer is a value rather than a
+   * pressed state — the editing-mode pill, and image wrap when it lands.
+   *
+   * `active` cannot express this: "the mode is Suggesting" is not a boolean about one
+   * command, and a parallel channel for it would be a second place a control could read its
+   * own state from. Absent for every slot whose state really is just pressed-or-not.
+   */
+  readonly value?: string;
   /** Whether the command is currently APPLIED at the selection, from `Editor.isActive` —
    *  derived in the engine for marks and alignment, honest-false elsewhere. */
   readonly active: boolean;
@@ -157,6 +174,21 @@ export interface ToolbarCommandState {
  */
 export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): ToolbarCommandState {
   if (!editor) return { id, enabled: false, disabledReason: 'editor is not ready', active: false };
+  if (id === 'review.editingMode') {
+    const mode = editor.getEditingMode?.() ?? 'editing';
+    // Enabled state comes from the ENGINE, like every other control: a document opened
+    // read-only refuses the switch, and the control must say so rather than look live.
+    const probe = editor.can(
+      commandForSlotValue(id, mode === 'editing' ? 'suggesting' : 'editing')!
+    );
+    return {
+      id,
+      enabled: probe.ok,
+      disabledReason: probe.ok ? null : probe.reason,
+      active: false,
+      value: mode,
+    };
+  }
   const command = commandForSlot(id);
   if (!command) {
     // A value-typed slot has no fixed command, but it still has an honest enabled
@@ -182,7 +214,12 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
         active: false,
       };
     }
-    return { id, enabled: false, disabledReason: 'not wired to an editor command', active: false };
+    return {
+      id,
+      enabled: false,
+      disabledReason: 'not wired to an editor command',
+      active: false,
+    };
   }
   const result: CanResult = editor.can(command);
   // Optional call: `isActive` is newer than this helper's callers, and a host or test
@@ -213,9 +250,17 @@ export function toolbarCommandStates(
  *
  * @public
  */
-export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId): ExecResult {
+export function runToolbarCommand(
+  editor: Editor | null,
+  id: ChromeSlotId,
+  /** The chosen value, for a slot whose command carries one (the editing-mode pill). */
+  value?: unknown
+): ExecResult {
   if (!editor) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
-  const command = commandForSlot(id);
+  const command =
+    value === undefined
+      ? commandForSlot(id)
+      : (commandForSlotValue(id, value) ?? commandForSlot(id));
   if (!command) {
     if (id === 'file.save') {
       return {

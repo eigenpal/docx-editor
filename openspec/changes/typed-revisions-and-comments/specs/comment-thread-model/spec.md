@@ -1,5 +1,14 @@
 ## ADDED Requirements
 
+### Requirement: ECMA-376 Part 1 governs the comment markup
+
+Every rule below SHALL be read against ECMA-376 Part 1 as the governing authority: `CT_Comment` (§17.13.4.2) and the range markers `w:commentRangeStart`/`w:commentRangeEnd` (§17.13.4.4, §17.13.4.3). Part 1 defines no thread parent and no resolved flag; the `w14`/`w15`/`w16cid`/`w16cex` namespaces that carry them are outside it and SHALL be read as optional evidence whose absence is never an error.
+
+#### Scenario: A package with comments and no extension parts is fully supported
+
+- **WHEN** a package holds `comments.xml` and none of the extension parts
+- **THEN** its comments load, anchor, and edit, with threading taken from Part 1 markup alone
+
 ### Requirement: Comment markup and comment bodies are typed
 
 The canonical tree SHALL type `w:commentRangeStart`, `w:commentRangeEnd`, `w:commentReference`, and `CT_Comment` in `word/comments.xml` — which extends `CT_TrackChange` with `@w:initials` and block content. A comment body SHALL be a story, so its paragraphs flow through the same path the body uses.
@@ -24,18 +33,35 @@ The canonical tree SHALL type `w:commentRangeStart`, `w:commentRangeEnd`, `w:com
 - **WHEN** a package declares no comments relationship
 - **THEN** no comment part, relationship, or content-type override is fabricated on save
 
-### Requirement: Thread state is read from the sibling parts, never inferred from text
+### Requirement: Thread state is read from structure, never inferred from text
 
-Threading, resolved state, durable ids, and UTC dates SHALL be read from `commentsExtended.xml` (`w15:commentEx` with `@w15:paraIdParent` and `@w15:done`), `commentsIds.xml` (`w16cid`), and `commentsExtensible.xml` (`w16cex`). Thread structure SHALL NOT be inferred from a comment's text.
+ECMA-376 §17.13.4.2 gives `CT_Comment` no parent pointer and no resolved flag, so neither is something Part 1 states. Threading, resolved state, durable ids, and UTC dates SHALL therefore be read as optional evidence from `commentsExtended.xml` (`w15:commentEx` with `@w15:paraIdParent` and `@w15:done`), `commentsIds.xml` (`w16cid`, including `@w16cid:parentId` on `w:comment`), and `commentsExtensible.xml` (`w16cex`) — all outside Part 1 — and their absence SHALL NOT be an error.
+
+Where no part names a parent, a reply SHALL be recognised from its ANCHOR: a comment whose `w:commentRangeStart`/`w:commentRangeEnd` (§17.13.4.4, §17.13.4.3) cover exactly the characters an earlier comment's cover is a reply to it. Those markers are Part 1's own vocabulary and all that survives a producer that omits the sibling parts. Coincidence SHALL be the last resort, SHALL NOT override a stated link, and SHALL NOT apply to a comment the file gives a `w15:commentEx` record — such a record without `@w15:paraIdParent` states that the comment is top-level. A merely NARROWER range inside another comment's range SHALL NOT be read as a reply. Thread structure SHALL NOT be inferred from a comment's text.
 
 #### Scenario: Reply linkage comes from commentsExtended
 
 - **WHEN** `commentsExtended.xml` declares `@w15:paraIdParent` for a comment
 - **THEN** that comment is presented as a reply to the named parent
 
+#### Scenario: Reply linkage comes from `@w16cid:parentId`
+
+- **WHEN** a `w:comment` carries `@w16cid:parentId` naming another comment in the same part
+- **THEN** it is presented as a reply to that comment
+
+#### Scenario: A coincident anchor is a thread
+
+- **WHEN** two comments are anchored over exactly the same characters and no part names a parent for either, as comments `w:id="2"` and `w:id="3"` in the comprehensive fixture are
+- **THEN** the later comment is presented as a reply to the earlier one
+
+#### Scenario: A narrower range inside another comment is a separate comment
+
+- **WHEN** one comment's range covers a span strictly inside another comment's range
+- **THEN** both are presented as top-level, because commenting on a word inside a commented sentence is a new remark rather than a reply
+
 #### Scenario: Prose that looks like a reply is not a reply
 
-- **WHEN** a comment's text begins "Reply:", as comment `w:id="3"` in the comprehensive fixture does, and no `commentsExtended.xml` links it
+- **WHEN** a comment's text begins "Reply:", no part names a parent for it, and its range covers characters no other comment covers
 - **THEN** it is presented as an independent top-level comment on its own anchor range
 - **AND** no thread is inferred from its wording
 
@@ -48,13 +74,14 @@ Threading, resolved state, durable ids, and UTC dates SHALL be read from `commen
 
 - **WHEN** `commentsExtended.xml` is present and every `w15:commentEx` carries `@w15:done` with no `@w15:paraIdParent`, as `issue-68-large-comments-suggestions.docx` does for all 212 of its comments
 - **THEN** resolved state is read from it
-- **AND** every comment is still presented as top-level, because the part's presence is not itself evidence of a thread
+- **AND** every comment is still presented as top-level, even where two share an anchor, because the record states the answer and no inference may overrule it
 
-#### Scenario: Absent sibling parts mean no threads and no resolved state
+#### Scenario: Absent sibling parts mean no resolved state
 
-- **WHEN** a package contains `comments.xml` but none of the three sibling parts, as the comprehensive fixture does
-- **THEN** every comment is a top-level unresolved comment
-- **AND** the absence is reported so the surface can explain why reply and resolve are unavailable rather than showing them as broken
+- **WHEN** a package contains `comments.xml` but none of the three sibling parts
+- **THEN** every comment is unresolved
+- **AND** threading is whatever the anchors state and nothing more
+- **AND** the absence is reported so the surface can explain why resolve is unavailable rather than showing it as broken
 
 #### Scenario: Sibling parts round-trip
 
@@ -225,7 +252,7 @@ Comment ids share `ST_DecimalNumber`'s unbounded schema type and Word's signed 3
 #### Scenario: paraId is well-formed
 
 - **WHEN** a `w14:paraId` is allocated on first thread write
-- **THEN** it is exactly 8 hex digits, is not `00000000`, and collides with no existing value in the document
+- **THEN** it is exactly 8 hex digits, is not all zeros, and collides with no existing value in the document
 
 #### Scenario: Exported ids open in Word
 

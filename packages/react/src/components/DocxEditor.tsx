@@ -12,6 +12,7 @@ import { DocxEditorToolbar } from '../editor/toolbar';
 import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/DocxEditorRulers';
 import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
+import { DocxEditorReview } from '../editor/DocxEditorReview';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
 import { useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
@@ -262,6 +263,11 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
    * default inside the viewport; `hyperlinkPopup={false}` removes it.
    */
   readonly HyperLink: typeof DocxEditorHyperLink;
+  /**
+   * The review rail — tracked changes and comments as cards beside the page, with accept,
+   * reject and reply. Place it inside the Viewport, beside `DocxEditor.Content`.
+   */
+  readonly Review: typeof DocxEditorReview;
 }
 
 export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
@@ -275,4 +281,5 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   DocumentOutline: DocxEditorDocumentOutline,
   PageSetupDialog: DocxEditorPageSetupDialog,
   HyperLink: DocxEditorHyperLink,
+  Review: DocxEditorReview,
 });

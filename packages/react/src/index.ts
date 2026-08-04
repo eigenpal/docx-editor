@@ -43,6 +43,23 @@ export {
   DocxEditorPageSetupDialog,
   type DocxEditorPageSetupDialogProps,
 } from './editor/DocxEditorPageSetup';
+// The review rail (also reachable as `DocxEditor.Review`) and its headless hook. The parts
+// live on the namespace statics; a host that wants a different surface takes the hook, which
+// is where the queue, the anchors and the accept/reject/reply actions actually live.
+export {
+  DocxEditorReview,
+  type DocxEditorReviewNamespace,
+  type ReviewActionProps,
+  type ReviewPartProps,
+  type ReviewProps,
+} from './editor/DocxEditorReview';
+export {
+  useReview,
+  useReviewOf,
+  useStackedReviewPositions,
+  type ReviewItemView,
+  type UseReviewReturn,
+} from './editor/useReview';
 // The link popover (also reachable as `DocxEditor.HyperLink`) and its headless hook. The
 // parts live on the namespace statics; a host that wants a different panel takes the hook.
 export {

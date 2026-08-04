@@ -925,6 +925,28 @@
   },
   "editingMode": {
     "label": "Editing mode",
-    "editing": "Editing"
+    "editing": "Editing",
+    "editingHint": "Edit document directly",
+    "suggesting": "Suggesting",
+    "suggestingHint": "Edits become suggestions",
+    "viewing": "Viewing",
+    "viewingHint": "Read-only, no edits"
+  },
+  "review": {
+    "ariaLabel": "Review",
+    "empty": "No changes or comments",
+    "accept": "Accept",
+    "reject": "Reject",
+    "reply": "Reply",
+    "inserted": "Added",
+    "deleted": "Deleted",
+    "movedFrom": "Moved from here",
+    "movedTo": "Moved here",
+    "structural": "Changed the document structure",
+    "replyRefused": "Could not post the reply",
+    "showPane": "Show comments",
+    "replaced": "Replaced",
+    "replacedWith": "with",
+    "commentRefused": "Could not add the comment"
   }
 }

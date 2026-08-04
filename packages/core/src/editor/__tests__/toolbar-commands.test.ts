@@ -96,14 +96,15 @@ describe('toolbar command wiring (task M4.0)', () => {
 
   test('an unwired slot is disabled without ever calling the editor', () => {
     const { editor, calls } = fakeEditor(ALLOW);
-    // `review.comments` has no command and no probe: genuinely unwired, and it says so
-    // without troubling the engine. (`text.highlight` graduated to a value-typed slot and
-    // `text.link` to a chrome-driven one; both now ASK the engine, which is the point.)
-    const state = toolbarCommandState(editor, 'review.comments');
+    // `list.lineSpacing` has no command and no probe: genuinely unwired, and it says so
+    // without troubling the engine. (`text.highlight` graduated to a value-typed slot,
+    // `text.link` to a chrome-driven one, and `review.comments` now toggles the review pane;
+    // all three ASK the engine, which is the point.)
+    const state = toolbarCommandState(editor, 'list.lineSpacing');
     expect(state.enabled).toBe(false);
     expect(state.disabledReason).toBe('not wired to an editor command');
     expect(calls.can).toEqual([]);
-    expect(runToolbarCommand(editor, 'review.comments')).toEqual({
+    expect(runToolbarCommand(editor, 'list.lineSpacing')).toEqual({
       ok: false,
       code: 'unsupported',
       reason: 'not wired to an editor command',

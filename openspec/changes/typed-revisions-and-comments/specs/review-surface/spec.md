@@ -1,5 +1,14 @@
 ## ADDED Requirements
 
+### Requirement: The surface presents the document's markup, and invents none
+
+The review surface SHALL present what ECMA-376 Part 1 markup states — who proposed a change, over which characters, and of which kind — and SHALL NOT synthesize a decision the markup does not carry. Where the surface groups several elements into one card, the grouping SHALL be derived from their recorded identity or their anchors, never from the wording of their text.
+
+#### Scenario: Nothing on a card comes from prose
+
+- **WHEN** a revision or comment carries text that reads like a classification
+- **THEN** the card's kind, author, date, and grouping still come from the markup alone
+
 ### Requirement: The declared review chrome slots become wired
 
 `review.comments` and `review.editingMode` already exist in the chrome registry and are absent from the slot→command table, so they render disabled with "not wired to an editor command". Both SHALL be wired. The registry SHALL additionally gain `review.accept`, `review.reject`, `review.acceptAll`, `review.rejectAll`, and `review.displayMode`. `ChromeSlotId` is public API forever, so these ids SHALL NOT be renamed after they ship.

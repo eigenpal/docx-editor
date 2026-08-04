@@ -45,6 +45,18 @@ function textLengthOfRun(run: OoxmlNode): number {
   return length;
 }
 
+/** A child's length whether it is a run or another container holding runs. */
+function containerLength(node: OoxmlNode): number {
+  if (node.kind === 'textValue') return 0;
+  if (node.kind === 'run') return textLengthOfRun(node);
+  if (isContentRevisionKind(node.kind) || node.kind === 'hyperlink') {
+    let total = 0;
+    for (const child of node.children) total += containerLength(child);
+    return total;
+  }
+  return 0;
+}
+
 /**
  * Where in a container's child list an offset falls, descending into revision wrappers.
  *
@@ -70,9 +82,13 @@ function locateOffset(
       cursor += textLengthOfRun(child);
       continue;
     }
-    if (isContentRevisionKind(child.kind) && depth < 32) {
+    // A HYPERLINK is a run container exactly as a revision wrapper is, and `segmentsOf`
+    // descends into both. Skipping it here meant the paragraph measured shorter than the
+    // validator said it was, so commenting on link text — or on anything after a link, or at
+    // the end of that paragraph — was refused with `offset-out-of-range`.
+    if ((isContentRevisionKind(child.kind) || child.kind === 'hyperlink') && depth < 32) {
       let inner = 0;
-      for (const grand of child.children) inner += textLengthOfRun(grand);
+      for (const grand of child.children) inner += containerLength(grand);
       if (offset > cursor && offset < cursor + inner) {
         return locateOffset(child, offset, cursor, depth + 1);
       }

@@ -21,3 +21,23 @@ export const DocxEditorContext = createContext<DocxEditorInstance | null>(null);
 export function useDocxEditor(): DocxEditorInstance | null {
   return useContext(DocxEditorContext);
 }
+
+/**
+ * Whether a review rail is mounted under this Root, and how much room it wants.
+ *
+ * The GUTTER is the reason this exists. `DocxEditor.Viewport` reserves space beside the
+ * page for the pane, and the ruler shifts by the same amount — but neither of them can see
+ * whether a rail was actually composed in. Keyed on the pane's open state alone, every
+ * consumer of the tier-2 `<DocxEditor>` sugar (which mounts no rail) had its page pushed
+ * 158px off centre beside an empty column.
+ *
+ * A rail registers on mount and unregisters on unmount, so the reservation follows what is
+ * really on screen. Count rather than boolean: StrictMode mounts twice, and a host may
+ * legitimately compose two rails.
+ */
+export interface ReviewRailRegistry {
+  readonly mounted: number;
+  readonly register: () => () => void;
+}
+
+export const ReviewRailContext = createContext<ReviewRailRegistry | null>(null);

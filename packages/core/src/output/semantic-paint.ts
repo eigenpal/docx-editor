@@ -365,10 +365,15 @@ function applyRevisionPresentation(
     element.style.color = presentation.color;
     // The TINT is what makes a change findable when scanning rather than reading. A decoration
     // alone is a hairline: on a dense page of small type it disappears, and a reviewer skims
-    // straight past an edit. The band is faint enough to leave the text legible.
+    // straight past an edit.
+    //
+    // The WASH, not the full tint. This layer covers every tracked change in the document; the
+    // band layer covers only the open one and adds the full tint over this. Painting both at
+    // full strength gave pending and open changes the same weight — the pale/open distinction
+    // the band exists to draw never appeared, because this was already at the band's colour.
     element.style.backgroundColor = presentation.deleted
-      ? 'var(--doc-revision-deletion-tint)'
-      : 'var(--doc-revision-insertion-tint)';
+      ? 'var(--doc-revision-deletion-wash)'
+      : 'var(--doc-revision-insertion-wash)';
     if (presentation.line) {
       element.style.textDecorationLine = presentation.line;
       element.style.textDecorationStyle = presentation.decorationStyle;

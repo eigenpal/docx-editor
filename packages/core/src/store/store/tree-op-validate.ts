@@ -80,18 +80,63 @@ export interface OoxmlProperty {
   readonly attributes?: Readonly<Record<string, string>>;
 }
 
+/** Who a tracked edit is attributed to. `CT_TrackChange` requires an author. */
+export interface RevisionAttributionInput {
+  readonly author: string;
+  /** ISO-8601. Omitted writes no `@w:date`. */
+  readonly date?: string;
+}
+
 export type TreeDocOp =
   | {
       readonly op: 'insertText';
       readonly paragraphId: string;
       readonly offset: number;
       readonly text: string;
+      /**
+       * Write this as a TRACKED insertion, attributed here.
+       *
+       * On the op rather than on the store, so suggesting stays a decision the surface makes
+       * per edit and the write vocabulary stays explicit — a global "everything is tracked
+       * now" flag is exactly what `DocEdits` refuses, because it makes the meaning of an op
+       * depend on state the op does not carry.
+       */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       readonly op: 'deleteText';
       readonly paragraphId: string;
       readonly start: number;
       readonly end: number;
+      /** Strike the words instead of removing them, attributed here. */
+      readonly revision?: RevisionAttributionInput;
+    }
+  | {
+      /**
+       * Propose the paragraph's own MARK as inserted or deleted.
+       *
+       * `w:pPr/w:rPr/w:ins|w:del` — the pilcrow, not the text. Written instead of a split or
+       * a join when the surface is suggesting: the paragraphs stay as they are and the
+       * PROPOSAL to add or remove the break between them is what gets recorded.
+       */
+      readonly op: 'setParagraphMarkRevision';
+      readonly paragraphId: string;
+      readonly kind: 'ins' | 'del';
+      readonly revision: RevisionAttributionInput;
+    }
+  | {
+      /**
+       * Propose merging a paragraph into the one before it.
+       *
+       * Addressed by the SECOND paragraph, like `joinParagraphs`, because the mark being
+       * proposed for removal belongs to the paragraph before it — and only the tree knows
+       * which that is. Naming the first paragraph instead made a multi-paragraph delete
+       * mark the same paragraph N times and leave the others' marks untouched, so accepting
+       * left one empty paragraph per selected paragraph.
+       */
+      readonly op: 'proposeParagraphMerge';
+      readonly paragraphId: string;
+      readonly revision: RevisionAttributionInput;
     }
   | { readonly op: 'insertTab'; readonly paragraphId: string; readonly offset: number }
   | { readonly op: 'insertHardBreak'; readonly paragraphId: string; readonly offset: number }
@@ -303,6 +348,8 @@ export const TREE_DOC_OP_KINDS = [
   'setListLevel',
   'setListNumbering',
   'setParagraphMarkProperties',
+  'setParagraphMarkRevision',
+  'proposeParagraphMerge',
   'splitParagraph',
   'splitParagraphMany',
   'joinParagraphs',
@@ -893,6 +940,20 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     }
     case 'setListLevel': {
       if (!Number.isInteger(op.level) || op.level < 0 || op.level > 8) return 'invalid-range';
+      return null;
+    }
+    case 'proposeParagraphMerge': {
+      if (typeof op.revision?.author !== 'string' || op.revision.author.length === 0) {
+        return 'invalid-property-value';
+      }
+      return null;
+    }
+    case 'setParagraphMarkRevision': {
+      if (op.kind !== 'ins' && op.kind !== 'del') return 'invalid-range';
+      // `CT_TrackChange` makes `@w:author` required, so a mark with none is invalid XML.
+      if (typeof op.revision?.author !== 'string' || op.revision.author.length === 0) {
+        return 'invalid-property-value';
+      }
       return null;
     }
     case 'setParagraphMarkProperties':

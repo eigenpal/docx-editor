@@ -5,10 +5,19 @@
 // that sit between runs, so they contribute no characters and mark a position rather than
 // occupying one.
 //
-// Threading and resolved state are NOT in `comments.xml`. It has no parent pointer and no
-// resolved flag. Both live in `commentsExtended.xml`, keyed by the `w14:paraId` of a comment's
-// first paragraph. A file without that part has no threads, and the surface says so rather than
-// inferring them — a comment whose text opens with "Reply:" is prose, not structure.
+// ECMA-376 governs the anchor: `CT_Comment` (§17.13.4.2) carries `@w:id`, `@w:author`,
+// `@w:initials` and `@w:date` and a body, and `CT_Markup`-derived range markers (§17.13.4.4,
+// §17.13.4.3) place it. It defines NEITHER threading nor a resolved flag — a comment in Part 1
+// is flat and open. Both live in namespaces outside Part 1, so this reader treats them as
+// optional evidence rather than as structure the standard promises:
+//
+//   - `commentsExtended.xml`, `w15:commentEx` `@paraIdParent` / `@done`, keyed by `w14:paraId`.
+//   - `@w16cid:parentId` on `w:comment`, naming the parent's `w:id` directly.
+//
+// A file using neither can still state a reply in Part 1 terms alone, by anchoring it over
+// exactly the characters the parent covers — the ranges are the only part of a thread that
+// survives a producer dropping the extension parts. Read all three, explicit before inferred;
+// a comment whose text merely opens with "Reply:" is prose and is never treated as structure.
 
 import {
   WML_NAMESPACE_URI,
@@ -23,6 +32,13 @@ import { storyBlocks } from './story-roots.ts';
 export const W15_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2012/wordml';
 /** The `w14` namespace, where `paraId` lives. */
 const W14_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordml';
+/**
+ * The `w16cid` namespace: `@parentId` on `w:comment`, a thread link by comment id.
+ *
+ * Outside ECMA-376 Part 1, like `w14` and `w15`. Carried in an `mc:Ignorable` namespace, which
+ * is exactly the contract that lets this reader use it when present and ignore it when not.
+ */
+const W16CID_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2016/wordml/cid';
 
 /** A position in one story: a paragraph node id plus a UTF-16 offset inside it. */
 export interface CommentPosition {
@@ -57,6 +73,8 @@ export interface CommentRecord {
   readonly blocks: readonly OoxmlElement[];
   /** `w14:paraId` of the first body paragraph — the key thread state is stored under. */
   readonly paraId?: string;
+  /** `@w16cid:parentId` — the `w:id` of the comment this replies to, when the file names it. */
+  readonly parentCommentId?: string;
 }
 
 /** Thread state for one comment, read from `commentsExtended.xml`. */
@@ -233,6 +251,9 @@ export function commentsOfPart(part: OoxmlPart): CommentRecord[] {
         const date = wml(node, 'date');
         const first = blocks.find((block) => block.kind === 'paragraph');
         const paraId = first ? attribute(first, W14_NAMESPACE_URI, 'paraId') : undefined;
+        // A comment naming ITSELF as parent is a file defect, not a cycle to propagate.
+        const rawParent = attribute(node, W16CID_NAMESPACE_URI, 'parentId');
+        const parentCommentId = rawParent === id ? undefined : rawParent;
         comments.push({
           id,
           author: wml(node, 'author') ?? '',
@@ -240,6 +261,7 @@ export function commentsOfPart(part: OoxmlPart): CommentRecord[] {
           ...(date === undefined ? {} : { date }),
           blocks,
           ...(paraId === undefined ? {} : { paraId }),
+          ...(parentCommentId === undefined ? {} : { parentCommentId }),
         });
       }
       return;

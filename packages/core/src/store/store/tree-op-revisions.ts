@@ -91,7 +91,7 @@ interface MoveRange {
   readonly markers: OoxmlElement[];
 }
 
-interface RevisionSite {
+export interface RevisionSite {
   readonly node: OoxmlElement;
   readonly parent: OoxmlElement | null;
   /** True when this site cannot be resolved and the whole op must refuse. */
@@ -124,6 +124,18 @@ function sameRevision(a: RevisionAddress, b: RevisionAddress): boolean {
 }
 
 /**
+ * The key a revision is grouped under: its address PLUS the element it is written on.
+ *
+ * `@w:id` carries no uniqueness constraint, and Word writes one `w:date` for a whole editing
+ * burst — so an insertion and a deletion can legally share all three. Grouping on the triple
+ * alone showed them as one card reading `insert` with both texts concatenated, and Accept
+ * then deleted the half the card said it was inserting.
+ */
+export function revisionGroupKey(address: RevisionAddress, localName: string): string {
+  return `${localName}\u0000${address.id}\u0000${address.author}\u0000${address.date ?? ''}`;
+}
+
+/**
  * Every revision-bearing element in the part, with the classification that decides whether it
  * can be resolved.
  *
@@ -131,9 +143,15 @@ function sameRevision(a: RevisionAddress, b: RevisionAddress): boolean {
  */
 export function collectRevisionSites(part: OoxmlPart): RevisionSite[] {
   const sites: RevisionSite[] = [];
-  const visit = (node: OoxmlNode, parent: OoxmlElement | null): void => {
+  const visit = (
+    node: OoxmlNode,
+    parent: OoxmlElement | null,
+    grandparent: OoxmlElement | null
+  ): void => {
     if (node.kind === 'textValue') return;
     const parentName = parent?.namespaceUri === WML_NAMESPACE_URI ? parent.localName : undefined;
+    const grandparentName =
+      grandparent?.namespaceUri === WML_NAMESPACE_URI ? grandparent.localName : undefined;
     if (node.namespaceUri === WML_NAMESPACE_URI) {
       const isContent = isContentRevisionKind(node.kind);
       const isNamedRevision =
@@ -143,13 +161,27 @@ export function collectRevisionSites(part: OoxmlPart): RevisionSite[] {
         node.localName === 'ins' ||
         node.localName === 'del';
       if (isNamedRevision && addressOf(node) !== null) {
+        // A revision on a RUN's `w:rPr` is not schema-valid — the paragraph mark is the only
+        // `w:rPr` that carries one — so it is refused rather than resolved. Treating it as a
+        // paragraph mark made accepting it merge two paragraphs; treating it as ordinary
+        // content would make accepting it edit a run's properties. Neither is what the file
+        // says, and the file says something impossible.
+        const misplacedMark =
+          parentName === 'rPr' &&
+          grandparentName !== 'pPr' &&
+          (node.localName === 'ins' || node.localName === 'del');
         const structural =
+          misplacedMark ||
           REFUSED_REVISION_NAMES.has(node.localName) ||
           (parentName !== undefined && STRUCTURAL_REVISION_PARENTS.has(parentName));
         // `w:pPr/w:rPr/w:ins` marks the paragraph mark. `w:rPr` also appears inside a run,
         // where an `ins` child is not schema-valid; treating both as a paragraph mark would
         // be wrong, so the grandparent decides.
-        const paragraphMark = !isContent && parentName === 'rPr' && !structural;
+        // ...and now it does. A `w:rPr` inside a RUN carrying a `w:del` is malformed input,
+        // not a paragraph mark, and treating it as one made accepting it merge two
+        // paragraphs — a silent structural edit from markup no valid file contains.
+        const paragraphMark =
+          !isContent && parentName === 'rPr' && grandparentName === 'pPr' && !structural;
         sites.push({
           node,
           parent,
@@ -159,9 +191,9 @@ export function collectRevisionSites(part: OoxmlPart): RevisionSite[] {
         });
       }
     }
-    for (const child of node.children) visit(child, node);
+    for (const child of node.children) visit(child, node, parent);
   };
-  visit(part.root, null);
+  visit(part.root, null, null);
   return sites;
 }
 
@@ -343,7 +375,7 @@ function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): Oox
   /** Content of paragraphs whose mark was resolved away, waiting for the paragraph after. */
   let carried: OoxmlNode[] = [];
 
-  for (const child of children) {
+  for (const [index, child] of children.entries()) {
     if (child.kind !== 'textValue' && plan.dropMarks.has(child.id)) continue;
     if (child.kind !== 'textValue' && plan.restoreProperties.has(child.id)) continue;
     const action = child.kind === 'textValue' ? undefined : plan.actions.get(child.id);
@@ -375,16 +407,25 @@ function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): Oox
           continue;
         }
         if (plan.mergeForward.has(child.id)) {
-          carried = paragraph.children.filter((entry) => !isWmlNamed(entry, 'pPr'));
-          continue;
+          // Only when there IS a following paragraph in this container. Otherwise the
+          // paragraph keeps its content and simply loses the mark revision — spilling its
+          // runs into `w:body` or `w:tc` produced a tree the invariants reject, so the whole
+          // transaction was refused and Accept All failed for the entire document with an
+          // opaque reason. Deleting a trailing paragraph with tracking on is exactly what
+          // Word writes, so this was not an exotic file.
+          const followed = children.slice(index + 1).some((entry) => entry.kind === 'paragraph');
+          if (followed) {
+            carried = paragraph.children.filter((entry) => !isWmlNamed(entry, 'pPr'));
+            continue;
+          }
         }
       }
     }
     out.push(...rebuilt);
   }
 
-  // A merge with nothing after it — the last paragraph in a container — keeps its content
-  // rather than dropping it. There is no following mark to join, so the paragraph stands.
+  // Unreachable now that the merge only starts when a paragraph follows; kept as a belt
+  // against a plan built some other way, where losing the content would be silent.
   if (carried.length > 0) out.push(...carried);
   return out;
 }

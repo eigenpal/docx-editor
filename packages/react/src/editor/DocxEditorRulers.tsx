@@ -15,6 +15,8 @@ import type { CSSProperties, ReactElement } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
 import { HorizontalRuler, type RulerPageSetup } from '../components/ui/HorizontalRuler';
 import { VerticalRuler } from '../components/ui/VerticalRuler';
+import { useContext } from 'react';
+import { ReviewRailContext } from './context';
 import { useEditorState } from './useEditorState';
 import { usePageSetup } from './usePageSetup';
 
@@ -87,6 +89,11 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
   const { pageSetup, isEnabled } = usePageSetup();
   const zoom = useEditorState(selectZoom);
   const { pending, preview, commit } = useMarginDrag();
+  // The ruler measures the page, so it has to move with the page. The review pane shifts the
+  // sheet by reserving a gutter in the scroller; the ruler lives ABOVE that scroller and
+  // would otherwise stay centred on a page that is no longer under it. The same reservation
+  // as a right margin moves it by the same half.
+  const reserved = useReviewGutter();
   return (
     <HorizontalRuler
       pageSetup={previewed(pageSetup, pending)}
@@ -97,10 +104,32 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
       onMarginDragEnd={commit}
       unit={props.unit ?? 'inch'}
       className={props.className ?? ''}
-      style={props.style}
+      style={{ marginRight: reserved, ...props.style }}
     />
   );
 }
+
+/**
+ * The gutter the review pane reserves, in pixels.
+ *
+ * Read from the engine's pane state rather than from a prop, because the ruler and the
+ * scroller must agree: two components deciding independently is how a ruler ends up an inch
+ * off the page it is measuring.
+ */
+function useReviewGutter(): number {
+  // The SNAPSHOT, not the review hook — the ruler needs one boolean, not the queue. And no
+  // gutter at all unless a rail is mounted to occupy it.
+  const paneOpen = useEditorState(selectPaneOpen);
+  const rail = useContext(ReviewRailContext);
+  if ((rail?.mounted ?? 0) === 0) return 0;
+  return paneOpen ? REVIEW_PANE_GUTTER : REVIEW_MARKERS_GUTTER;
+}
+
+const selectPaneOpen = (snapshot: EditorSnapshot): boolean => snapshot.reviewPaneOpen ?? true;
+
+/** Kept in step with the `[data-review-pane]` rules in the core stylesheet. */
+const REVIEW_PANE_GUTTER = 316;
+const REVIEW_MARKERS_GUTTER = 44;
 
 /**
  * The vertical ruler as a context-fed part (`DocxEditor.VerticalRuler`): page height,

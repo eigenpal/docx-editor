@@ -48,12 +48,13 @@ import { PageSetup } from '@docx-editor.dev/core-contract/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core-contract/editor';
 import { PX_PER_CM } from '@docx-editor.dev/core-contract/editor';
 import { PX_PER_INCH } from '@docx-editor.dev/core-contract/editor';
-import * as React$1 from 'react';
-import React__default from 'react';
+import * as react from 'react';
+import react__default from 'react';
 import { ReactElement } from 'react';
 import { ReactNode } from 'react';
 import { Ref } from 'react';
 import { RefAttributes } from 'react';
+import { ReviewItemPlacement } from '@docx-editor.dev/core-contract/contracts/editor';
 import { rulerPageBox } from '@docx-editor.dev/core-contract/editor';
 import { RulerTick } from '@docx-editor.dev/core-contract/editor';
 import { RulerUnit } from '@docx-editor.dev/core-contract/editor';
@@ -85,7 +86,7 @@ export { DisplayPage }
 export { DocPoint }
 
 // @public (undocumented)
-export function DocumentName(input: DocumentNameProps): React__default.JSX.Element;
+export function DocumentName(input: DocumentNameProps): react__default.JSX.Element;
 
 export { DocxDocument }
 
@@ -93,7 +94,7 @@ export { DocxDocument }
 export const DocxEditor: DocxEditorNamespace;
 
 // @public
-export function DocxEditorContent(input: DocxEditorContentProps): React$1.JSX.Element;
+export function DocxEditorContent(input: DocxEditorContentProps): react.JSX.Element;
 
 // @public
 export interface DocxEditorContentProps {
@@ -156,7 +157,7 @@ export interface DocxEditorLoadingProps {
 }
 
 // @public
-export function DocxEditorLoadingSpinner(input: DocxEditorLoadingSpinnerProps): React$1.JSX.Element;
+export function DocxEditorLoadingSpinner(input: DocxEditorLoadingSpinnerProps): react.JSX.Element;
 
 // @public
 export interface DocxEditorLoadingSpinnerProps {
@@ -172,6 +173,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly HyperLink: typeof DocxEditorHyperLink;
     readonly Loading: typeof DocxEditorLoading;
     readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
+    readonly Review: typeof DocxEditorReview;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
     // (undocumented)
@@ -236,8 +238,42 @@ export interface DocxEditorRef {
     }): EditorSnapshot;
 }
 
+// @public (undocumented)
+export const DocxEditorReview: DocxEditorReviewNamespace;
+
 // @public
-export function DocxEditorRoot(props: DocxEditorRootProps): React$1.JSX.Element;
+export interface DocxEditorReviewNamespace {
+    // (undocumented)
+    (props: ReviewProps): ReturnType<typeof ReviewRoot>;
+    // (undocumented)
+    readonly Accept: typeof ReviewAccept;
+    readonly AddComment: typeof ReviewAddComment;
+    // (undocumented)
+    readonly Author: typeof ReviewAuthor;
+    // (undocumented)
+    readonly Avatar: typeof ReviewAvatar;
+    // (undocumented)
+    readonly Card: typeof ReviewCard;
+    readonly Draft: typeof ReviewDraft;
+    // (undocumented)
+    readonly Empty: typeof ReviewEmpty;
+    // (undocumented)
+    readonly List: typeof ReviewList;
+    readonly Markers: typeof ReviewMarkers;
+    // (undocumented)
+    readonly Reject: typeof ReviewReject;
+    // (undocumented)
+    readonly Replies: typeof ReviewReplies;
+    // (undocumented)
+    readonly Reply: typeof ReviewReply;
+    // (undocumented)
+    readonly Summary: typeof ReviewSummary;
+    // (undocumented)
+    readonly Time: typeof ReviewTime;
+}
+
+// @public
+export function DocxEditorRoot(props: DocxEditorRootProps): react.JSX.Element;
 
 // @public
 export interface DocxEditorRootProps {
@@ -304,7 +340,7 @@ export function DocxEditorShell(input: {
     overlays: ReactNode;
     dialogs: ReactNode;
     fileInputs: ReactNode;
-}): React$1.JSX.Element;
+}): react.JSX.Element;
 
 // @public
 export const DocxEditorToolbar: DocxEditorToolbarNamespace;
@@ -397,7 +433,7 @@ export interface DocxEditorToolbarProps {
 export function DocxEditorVerticalRuler(props: DocxEditorRulerProps): ReactElement;
 
 // @public
-export function DocxEditorViewport(input: DocxEditorViewportProps): React$1.JSX.Element;
+export function DocxEditorViewport(input: DocxEditorViewportProps): react.JSX.Element;
 
 // @public
 export interface DocxEditorViewportProps {
@@ -490,7 +526,7 @@ export { FontUrlSource }
 export { generateRulerTicks }
 
 // @public (undocumented)
-export function HorizontalRuler(input: HorizontalRulerProps): React__default.ReactElement;
+export function HorizontalRuler(input: HorizontalRulerProps): react__default.ReactElement;
 
 // @public (undocumented)
 export interface HorizontalRulerProps {
@@ -590,17 +626,17 @@ export { LoadFontsRequest }
 export { LoadFontsResult }
 
 // @public (undocumented)
-export function Logo(input: LogoProps): React__default.JSX.Element;
+export function Logo(input: LogoProps): react__default.JSX.Element;
 
 // @public (undocumented)
-export function MenuBar(): React__default.JSX.Element;
+export function MenuBar(): react__default.JSX.Element;
 
 // @public
 export function PageIndicator(input: {
     currentPage: number;
     totalPages: number;
     visible: boolean;
-}): React$1.JSX.Element;
+}): react.JSX.Element;
 
 export { PageSetup }
 
@@ -625,7 +661,7 @@ export interface PageSetupUpdate {
 }
 
 // @public (undocumented)
-export function PaginatedDocxEditor(input: PaginatedDocxEditorProps): React$1.JSX.Element;
+export function PaginatedDocxEditor(input: PaginatedDocxEditorProps): react.JSX.Element;
 
 // @public
 interface PaginatedDocxEditorHandle {
@@ -669,7 +705,7 @@ export interface PaginatedDocxEditorProps {
 }
 
 // @public (undocumented)
-export function PaginatedDocxEditorShell(input: PaginatedDocxEditorShellProps): React$1.JSX.Element;
+export function PaginatedDocxEditorShell(input: PaginatedDocxEditorShellProps): react.JSX.Element;
 
 // @public (undocumented)
 export interface PaginatedDocxEditorShellProps {
@@ -749,6 +785,32 @@ export { PX_PER_CM }
 
 export { PX_PER_INCH }
 
+// @public
+export interface ReviewActionProps extends ReviewPartProps {
+    icon?: ReactNode;
+}
+
+// @public
+export type ReviewItemView = ReviewItemPlacement;
+
+// @public
+export interface ReviewPartProps {
+    asChild?: boolean;
+    // (undocumented)
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+}
+
+// @public
+export interface ReviewProps extends ReviewPartProps {
+    filter?: (item: ReviewItemView) => boolean;
+    gap?: number;
+    preset?: boolean;
+    stack?: boolean;
+}
+
 // @public (undocumented)
 export const RULER_WIDTH = 20;
 
@@ -761,13 +823,13 @@ export { RulerUnit }
 export { runToolbarCommand }
 
 // @public
-export function TitleBar(input: TitleBarProps): React__default.JSX.Element;
+export function TitleBar(input: TitleBarProps): react__default.JSX.Element;
 
 // @public (undocumented)
-export function TitleBarRight(input: TitleBarRightProps): React__default.JSX.Element;
+export function TitleBarRight(input: TitleBarRightProps): react__default.JSX.Element;
 
 // @public
-export function Toolbar(explicitProps: ToolbarProps): React__default.JSX.Element;
+export function Toolbar(explicitProps: ToolbarProps): react__default.JSX.Element;
 
 // @public
 export interface ToolbarAlignmentComponent {
@@ -778,7 +840,7 @@ export interface ToolbarAlignmentComponent {
 }
 
 // @public
-export function ToolbarButton(input: ToolbarButtonProps_2): React__default.JSX.Element;
+export function ToolbarButton(input: ToolbarButtonProps_2): react__default.JSX.Element;
 
 // @public
 export interface ToolbarButtonProps {
@@ -797,7 +859,7 @@ export { ToolbarCommandState }
 export { toolbarCommandState }
 
 // @public
-export function ToolbarGroup(input: ToolbarGroupProps): React__default.JSX.Element;
+export function ToolbarGroup(input: ToolbarGroupProps): react__default.JSX.Element;
 
 // @public (undocumented)
 export interface ToolbarPartComponent {
@@ -820,7 +882,7 @@ export interface ToolbarProps {
     disabled?: boolean;
     documentFonts?: readonly FontOption[];
     documentStyles?: readonly DocumentStyleSummary[];
-    editorRef?: React__default.RefObject<HTMLElement>;
+    editorRef?: react__default.RefObject<HTMLElement>;
     enableShortcuts?: boolean;
     fontFamilies?: ReadonlyArray<string | FontOption>;
     imageContext?: {
@@ -980,10 +1042,40 @@ export interface UseParagraphStyleResult {
 }
 
 // @public
+export function useReview(): UseReviewReturn;
+
+// @public
+export function useReviewOf(editor: Editor | null): UseReviewReturn;
+
+// @public (undocumented)
+export interface UseReviewReturn {
+    readonly accept: (item: ReviewItemView) => void;
+    readonly activeKey: string | null;
+    readonly comment: (text: string, author?: string) => boolean;
+    readonly items: readonly ReviewItemView[];
+    readonly paneOpen: boolean;
+    readonly ready: boolean;
+    readonly reject: (item: ReviewItemView) => void;
+    readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
+    readonly selectionAnchorY: number | null;
+    readonly setActive: (key: string | null) => void;
+    readonly setPaneOpen: (open: boolean) => void;
+}
+
+// @public
+export function useStackedReviewPositions(items: readonly {
+    readonly key: string;
+    readonly anchorY: number | null;
+}[], heights: ReadonlyMap<string, number>, options?: {
+    readonly gap?: number;
+    readonly scale?: number;
+}): ReadonlyMap<string, number>;
+
+// @public
 export const VERSION = "0.0.2";
 
 // @public (undocumented)
-export function VerticalRuler(input: VerticalRulerProps): React__default.ReactElement;
+export function VerticalRuler(input: VerticalRulerProps): react__default.ReactElement;
 
 // @public
 export interface VerticalRulerProps {

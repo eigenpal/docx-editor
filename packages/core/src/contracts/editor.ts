@@ -6,6 +6,9 @@
 
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from '../index';
 import type { DisplayPage } from './geometry';
+// Type-only, so the adapters reach the review vocabulary through THIS contract rather than
+// naming the layout lane, which they are not allowed to import.
+import type { ReviewItem, ReviewRevisionKind } from '../layout/review-model.ts';
 import type {
   AccessibilityObservation,
   CaretGeometry,
@@ -405,6 +408,99 @@ export interface Editor {
     readonly kind: string;
     readonly author?: string;
   }[];
+
+  /**
+   * Every pending decision in the document, with where its card belongs.
+   *
+   * Derived from the document TREE, not from what is painted: a queue derived from laid-out
+   * spans empties by half the moment the reader switches to a resolved display mode, and the
+   * changes that vanished become unreachable from the surface meant to resolve them.
+   *
+   * `anchorY` comes from layout records. A surface must not measure painted DOM for it — that
+   * is a repaint behind the document and fails outright during pagination.
+   */
+  getReviewItems(): readonly ReviewItemPlacement[];
+
+  /**
+   * How edits are written: directly, as suggestions, or not at all.
+   *
+   * Runtime state, unlike the construction-time `EditorConfig.mode` — a reader who switches
+   * to Viewing and back expects the same document, not a remount.
+   */
+  getEditingMode(): DocumentEditingMode;
+  setEditingMode(mode: DocumentEditingMode): ExecResult;
+
+  /**
+   * Whether the review pane is showing its cards.
+   *
+   * Engine-owned, like zoom: the toolbar toggles it, the rail renders from it, and the
+   * document shifts to make room for it. Three consumers, one answer.
+   */
+  isReviewPaneOpen(): boolean;
+
+  /**
+   * Layout points to CSS pixels, zoom included.
+   *
+   * Published because {@link ReviewItemPlacement.anchorY} is in the engine's own unit, and a
+   * host that re-derived the factor would own a second copy of the points-to-pixels rule.
+   * The first copy drifted the moment it was written: a rail that used zoom alone put every
+   * card at three quarters of its true height.
+   */
+  getRenderScale(): number;
+
+  /**
+   * A counter that changes exactly when {@link getReviewItems} would return something new.
+   *
+   * Lets a subscriber re-derive on a real change rather than on every event.
+   */
+  getReviewRevision(): number;
+
+  /**
+   * Comment on the current selection.
+   *
+   * Anchored to the RETAINED range when there is one, so a compose box that took focus does
+   * not lose the words it is about — that is what retention exists for. Refused on a
+   * collapsed caret: a comment with no range has nothing to point at, and Word writes none.
+   */
+  addComment(text: string, author?: string): ExecResult;
+
+  /**
+   * Where a comment on the current selection would sit, in the same space as
+   * {@link ReviewItemPlacement.anchorY}, or null when nothing is selected.
+   *
+   * Published so a host can place an "add a comment" affordance beside the selected text
+   * without deriving document geometry, which is the one thing an adapter must not do.
+   */
+  getSelectionPlacement(): { readonly anchorY: number; readonly pageIndex: number } | null;
+
+  /** Card to document: select the item's range and scroll to it. `null` clears the active item. */
+  setActiveReviewItem(key: string | null): void;
+
+  /**
+   * Accept or reject the revision behind a card.
+   *
+   * Every site carrying the revision's `(id, author, date)` triple resolves in ONE transaction
+   * and one undo step: a tracked row insertion is `w:trPr/w:ins` on the row plus `w:cellIns`
+   * on each cell, and resolving them separately would leave the row half-tracked.
+   *
+   * Refused for a card whose kind the engine cannot resolve structurally, which is why
+   * `readOnly` is on the item — a surface should not offer the button in the first place.
+   */
+  acceptReviewItem(key: string): ExecResult;
+  rejectReviewItem(key: string): ExecResult;
+
+  /**
+   * Reply to a review item.
+   *
+   * Against a comment this is a threaded reply. Against a REVISION it is a comment anchored
+   * over that revision's range: OOXML gives `w:ins` and `w:del` no body and no thread, so
+   * there is nowhere else for the text to live.
+   *
+   * The author is AMBIENT — `EditorConfig.author`, the way the rest of the authored commands
+   * source it — and the argument overrides it for one call. `CT_Comment` makes `@w:author`
+   * required, so a reply with neither is refused rather than written as an empty attribute.
+   */
+  replyToReviewItem(key: string, text: string, author?: string): ExecResult;
   setActiveScope(scope: ViewScope): void;
   getActiveScope(): ViewScope;
 
@@ -522,7 +618,85 @@ type EditorCommandShape<T> = {
     (T[K] extends { author: infer A } ? { author?: A } : unknown);
 };
 
+/**
+ * One review card's data plus where it sits beside the page.
+ *
+ * Flat and presentation-ready ON PURPOSE. A card needs an author, initials, a date and some
+ * text; deriving those from the canonical tree means walking runs and reading `w15:commentsEx`,
+ * which is engine work. Handing an adapter the raw node and letting it walk would put document
+ * derivation in the hosts — the one thing they are not allowed to own — and would have to be
+ * written twice, once per framework. {@link item} stays for a host that wants more.
+ */
+export type { ReviewItem, ReviewRevisionKind };
+
+export interface ReviewItemPlacement {
+  /** Stable and unique per DECISION — a revision with three ranges is one entry. */
+  readonly key: string;
+  /** The engine's own id for the comment or the revision. */
+  readonly id: string;
+  readonly kind: 'comment' | 'revision';
+  /** Which decision this is, when {@link kind} is `'revision'`. */
+  readonly revisionKind?: ReviewRevisionKind;
+  readonly author: string;
+  /** Initials for an avatar: `@w:initials` when the file carries one, else from the name. */
+  readonly initials: string;
+  /** `@w:date`, absent when the file omits it — Word does when date stamping is off. */
+  readonly date?: string;
+  /**
+   * The words a REPLACEMENT removes, when {@link revisionKind} is `'replace'`.
+   *
+   * Paired with {@link text}, which holds the words it puts in their place, so a card can
+   * say `Replaced "x" with "y"` — one decision, the way Word presents it.
+   */
+  readonly replacedText?: string;
+
+  /**
+   * The comment's body, or the words the revision covers.
+   *
+   * PLAIN TEXT, and it must be rendered as text: a `.docx` is a zip of XML an attacker
+   * controls end to end, so this string is untrusted and never markup.
+   */
+  readonly text: string;
+  /** Comments only: whether `w15:commentsEx` marks the thread done. */
+  readonly resolved?: boolean;
+  /** Comments only: the comment this replies to, absent at the top of a thread. */
+  readonly parentId?: string;
+  /** Comments only: replies to this comment, in document order. */
+  readonly replyIds: readonly string[];
+  /**
+   * True when the engine cannot resolve this kind structurally, so accept and reject must
+   * not be offered. A card offering a button the engine will refuse is worse than one that
+   * explains why it cannot.
+   */
+  readonly readOnly: boolean;
+  /** Document-space Y of the anchor, or null when the item has no resolvable range. */
+  readonly anchorY: number | null;
+  readonly pageIndex: number | null;
+  readonly isActive: boolean;
+  /** The engine's `ReviewItem`, for a host that wants past the card fields. */
+  readonly item: ReviewItem;
+}
+
+/**
+ * How a keystroke reaches the document.
+ *
+ * `'suggesting'` changes what an edit MEANS rather than whether it is allowed: typing writes
+ * `w:ins` and deleting writes `w:del` over the words it would have removed, so every change
+ * arrives as a proposal somebody else accepts or rejects.
+ */
+export type DocumentEditingMode = 'editing' | 'suggesting' | 'viewing';
+
 export interface EditorCommands extends EditorCommandShape<DocEdits> {
+  /** Switch how edits are written. A view command: it changes no document state. */
+  setEditingMode: { mode: DocumentEditingMode };
+  /**
+   * Show or hide the review pane.
+   *
+   * A view command rather than a document edit, and a COMMAND rather than a host flag so the
+   * toolbar button gets its pressed state from the same place every other button does. Both
+   * adapters and any host chrome read one answer.
+   */
+  toggleReviewPane: Record<never, never>;
   toggleMark: { mark: string };
   setMarkAttr: { mark: string; attr: string; value: unknown };
   setAlignment: { align: 'left' | 'center' | 'right' | 'justify' };
@@ -820,6 +994,31 @@ export interface EditorSnapshot {
    * derived it, `null` means no document is loaded.
    */
   readonly pageSetup?: PageSetup | null;
+  /**
+   * Whether the review pane is showing its cards.
+   *
+   * In the SNAPSHOT because chrome reflects it: the toolbar's comments button is pressed
+   * while it is open, and a button reads its pressed state from the snapshot like every
+   * other button. Kept off the snapshot it stayed pressed after the pane closed, because a
+   * value-equal snapshot correctly refuses to re-render.
+   */
+  readonly reviewPaneOpen?: boolean;
+  /**
+   * How edits are written right now.
+   *
+   * In the snapshot for the same reason `reviewPaneOpen` is: the editing-mode control shows
+   * it, and a control reads what it shows from the snapshot like every other control.
+   */
+  readonly editingMode?: DocumentEditingMode;
+  /**
+   * Why the last edit was refused, or null.
+   *
+   * The engine knew — `lastRejection` has been on the surface all along — and nothing
+   * published it, so a keystroke refused because the document is open for viewing, or
+   * because suggesting has no author to attribute a proposal to, looked to the user like
+   * the editor had simply stopped responding.
+   */
+  readonly lastRejection?: string | null;
 }
 
 export interface ImageContext {

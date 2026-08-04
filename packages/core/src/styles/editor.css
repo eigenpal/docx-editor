@@ -126,6 +126,12 @@
   --doc-revision-deletion: #c62828;
   --doc-revision-insertion-tint: rgba(46, 125, 50, 0.09);
   --doc-revision-deletion-tint: rgba(198, 40, 40, 0.09);
+  /* The wash a PENDING change wears. The painter puts this on the run itself, so it covers
+     tracked text anywhere in the document rather than only where the band layer reaches; the
+     band adds the full tint on top for the one the caret is in, and the two multiply into a
+     clearly deeper colour. Keep the two pairs in step — this is the faint end of that ramp. */
+  --doc-revision-insertion-wash: rgba(46, 125, 50, 0.05);
+  --doc-revision-deletion-wash: rgba(198, 40, 40, 0.05);
   /* A tracked FORMAT change: the words are unchanged, so it takes neither the insertion nor
      the deletion colour, and it carries no fill — a document can be almost entirely
      reformatted, and tinting all of it says nothing. The rule alone marks it. */
@@ -1904,6 +1910,20 @@ a.docx-hyperlink:focus-visible {
   height: 22px;
 }
 
+/* The review pane's gutter reaches the ruler as a right MARGIN and the page as the scroller's
+   right PADDING. Both move by the same distance, so both have to move on the same curve —
+   without this the sheet glided left and the ruler above it snapped, and for the length of the
+   animation the ruler measured a page that was no longer under it. */
+.docx-horizontal-ruler {
+  transition: margin 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docx-horizontal-ruler {
+    transition: none;
+  }
+}
+
 .ep-ruler--vertical {
   height: 100%;
 }
@@ -3291,4 +3311,502 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-error);
   font-size: 12px;
   line-height: 1.35;
+}
+
+/* Room for the review pane. The page centres inside the scroller's padding box, so
+ * reserving the rail's width here shifts the sheet left by half of it and the document and
+ * its cards read as one centred pair. Closed, only the marker strip is reserved. */
+.docx-editor__scroll-container[data-review-pane='open'] {
+  padding-right: 316px;
+}
+
+.docx-editor__scroll-container[data-review-pane='closed'] {
+  padding-right: 44px;
+}
+
+/* The review rail (`DocxEditor.Review` / the Vue equivalent): one card per pending decision,
+ * anchored beside the text it is about.
+ *
+ * Geometry only here. Where a card SITS comes from layout records through the adapter, not
+ * from CSS and never from measuring painted DOM — that is a repaint behind the document and
+ * fails outright while pagination is in flight. These rules supply appearance and the rail's
+ * own position; the inline `top` on each slot is the anchor. */
+.docx-review {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 300px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* Closed, the rail is a strip of markers: it keeps every anchor and gives up the width. */
+.docx-review:not([data-open]) {
+  width: 32px;
+}
+
+/* The "comment on this" button. Pulled OUT of the card column, onto the page's own edge:
+   the column is where comments live, and a button standing in it lands on whichever card
+   already annotates the text being re-selected. On the edge there is nothing to collide
+   with, and the affordance still reads as belonging to the selection it sits beside. */
+.docx-review__add {
+  /* Straddling the sheet's right edge — one rail gutter back, plus HALF the button's width.
+     Centred on the edge it belongs to both sides: attached to the text it will comment on,
+     and clear of the column where the cards live. */
+  margin-left: calc(-16px - 17px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--doc-border, #e3e5e8);
+  border-radius: 8px;
+  background: var(--doc-surface, #fff);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
+  color: var(--doc-accent, #1a73e8);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+/* The hover fill must be OPAQUE. `--doc-surface-hover` is a translucent wash, which is right
+   for a control sitting on a flat surface and wrong for this one: it straddles the sheet's
+   edge, so a see-through fill showed white paper through its left half and grey canvas
+   through its right, split down the middle. Mixed into the surface colour it stays one
+   solid shape wherever it sits. */
+.docx-review__add:hover {
+  background: color-mix(in srgb, var(--doc-accent, #1a73e8) 8%, var(--doc-surface, #fff));
+  border-color: color-mix(in srgb, var(--doc-accent, #1a73e8) 35%, var(--doc-border, #e3e5e8));
+  box-shadow: 0 2px 6px rgb(0 0 0 / 14%);
+}
+
+/* A card being composed reads as unfinished until it is committed. */
+.docx-review__card[data-draft] {
+  border-color: var(--doc-accent, #1a73e8);
+}
+
+.docx-review__markers {
+  position: relative;
+  height: 100%;
+}
+
+.docx-review__marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--doc-text-muted, #8a8f98);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.docx-review__marker:hover {
+  background: var(--doc-surface-hover, rgb(0 0 0 / 6%));
+  color: var(--doc-text, #1f2328);
+}
+
+.docx-review__list {
+  position: relative;
+  height: 100%;
+}
+
+.docx-review__slot {
+  width: 100%;
+  pointer-events: auto;
+  transition: top 120ms ease-out;
+}
+
+.docx-review__card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* No bottom margin. The slot is absolutely positioned and its height IS the spacing input,
+     so a margin here was a second gutter the stacking hook could not see — every card sat a
+     card-margin plus a gap apart. Spacing belongs to `gap`, in one place. */
+  margin: 0 12px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--doc-border, #e3e5e8);
+  /* The card is CHROME, so it is themed; the document canvas beside it never is. */
+  border-radius: 12px;
+  background: var(--doc-surface, #fff);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 6%);
+  color: var(--doc-text, #1f2328);
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+  transition:
+    box-shadow 120ms ease-out,
+    border-color 120ms ease-out;
+}
+
+.docx-review__card:focus-visible {
+  outline: 2px solid var(--doc-focus-ring, #3b82f6);
+  outline-offset: 1px;
+}
+
+/* The OPEN card lifts. It is not tinted and gains no coloured edge: the band under the text
+   already says which conversation is open, and repeating it here in the author's colour made
+   the rail read as eight competing highlights. */
+.docx-review__card[data-active] {
+  box-shadow: 0 4px 14px rgb(0 0 0 / 12%);
+  border-color: var(--doc-border-strong, #c8ccd2);
+}
+
+.docx-review__card[data-resolved] {
+  opacity: 0.55;
+}
+
+.docx-review__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.docx-review__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  /* Softened against white: the ramp is chosen to stay legible as TEXT on the page, and the
+     same values as a 30px filled disc read as eight warning lights down the margin. */
+  background: color-mix(in srgb, var(--doc-review-author, #c0392b) 82%, white);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.docx-review__meta {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.docx-review__author {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.docx-review__time {
+  color: var(--doc-text-muted, #8a8f98);
+  font-size: 12px;
+}
+
+.docx-review__actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+}
+
+.docx-review__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--doc-text-muted, #8a8f98);
+  cursor: pointer;
+}
+
+.docx-review__action:hover:not(:disabled) {
+  background: var(--doc-surface-hover, rgb(0 0 0 / 6%));
+  color: var(--doc-text, #1f2328);
+}
+
+.docx-review__action:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.docx-review__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* A deletion can be a page of text. The card summarises; the document shows it in full. */
+  max-height: 7em;
+  overflow: hidden;
+}
+
+.docx-review__label {
+  color: var(--doc-text-muted, #8a8f98);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* In the change's own colour, the one the text already wears on the page. */
+.docx-review__label[data-kind='insert'],
+.docx-review__label[data-kind='moveTo'] {
+  color: var(--doc-revision-insertion);
+}
+
+.docx-review__label[data-kind='delete'],
+.docx-review__label[data-kind='moveFrom'] {
+  color: var(--doc-revision-deletion);
+}
+
+.docx-review__text {
+  overflow-wrap: anywhere;
+}
+
+/* A REVISION's quote is clamped, not scrolled: it quotes text that is already on the page the
+   card points at, so pasting a paragraph should not push every card below it off the rail.
+   A comment is exempt — there the text is the content and nowhere else, and truncating it
+   would hide what someone wrote. */
+.docx-review__card:not([data-kind='comment']) .docx-review__text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
+}
+
+/* Replies live INSIDE the card they answer, divided by a hairline — one conversation, one
+   card. Given cards of their own they would double the rail and lose the thread. */
+.docx-review__replies {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 2px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--doc-border, #e3e5e8);
+  list-style: none;
+}
+
+.docx-review__reply-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.docx-review__input {
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 7px 14px;
+  border: 1px solid var(--doc-border, #e3e5e8);
+  border-radius: 999px;
+  background: var(--doc-surface, #fff);
+  color: inherit;
+  font: inherit;
+}
+
+.docx-review__input:focus-visible {
+  outline: 2px solid var(--doc-focus-ring, #3b82f6);
+  outline-offset: -1px;
+}
+
+/* A reply needs a visible way to send it. Enter posts too, but a field with no button is a
+   field people fill in and then look for the button that is not there. */
+.docx-review__reply-actions {
+  display: flex;
+  flex: 1 0 100%;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.docx-review__text-button {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--doc-accent, #1a73e8);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.docx-review__text-button:hover {
+  background: var(--doc-surface-hover, rgb(0 0 0 / 6%));
+}
+
+.docx-review__submit {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--doc-accent, #1a73e8);
+  color: #fff;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.docx-review__submit:disabled {
+  background: var(--doc-surface-hover, rgb(0 0 0 / 8%));
+  color: var(--doc-text-muted, #8a8f98);
+  cursor: default;
+}
+
+.docx-review__refused {
+  flex: 1 0 100%;
+  color: var(--doc-danger, #b3261e);
+  font-size: 11px;
+}
+
+.docx-review__empty {
+  padding: 12px;
+  color: var(--doc-text-muted, #8a8f98);
+  font-size: 12px;
+}
+
+/* Commented text, highlighted the way Word highlights it.
+ *
+ * The layer sits OVER the pages and MULTIPLIES: under them the band would be hidden by the
+ * opaque sheet, and a plain translucent wash on top greys the very text it is drawing
+ * attention to. Multiply is what a highlighter does — the paper darkens, the glyphs do not.
+ * The bands come from layout records through `keyedRangeRects`, so a comment spanning three
+ * lines gets three of them and one on an unmaterialized page gets none. */
+.docx-comment-overlay {
+  mix-blend-mode: multiply;
+}
+
+/* Pending, not open. Held back from the open one but still plainly a highlight — this is the
+   only layer a comment gets, unlike a revision, whose run the painter washes as well. The
+   rule under it thins rather than disappearing; the OPEN one deepens both. */
+.docx-comment-band {
+  background: color-mix(in srgb, var(--doc-comment-bg) 80%, transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--doc-comment-border) 55%, transparent);
+}
+
+/* The one the caret is in. Word deepens the same yellow rather than switching colour, so the
+   reader sees "this one" without having to learn a second meaning. */
+.docx-comment-band--active {
+  background: var(--doc-comment-active-bg);
+  box-shadow: inset 0 -1px 0 var(--doc-comment-active-border);
+}
+
+/* Tracked changes carry a band always, in the change's OWN colour, so it never contradicts
+ * the decoration it sits behind — green where text is arriving, red where it is leaving. A
+ * replacement gets both, red over the struck half and green over what replaced it.
+ *
+ * Pending changes stay faint and the open one deepens, which is the same relationship the
+ * comment bands have. Tinting only the active one made every other change look resolved. */
+/* Nothing for a PENDING change: the painter already washed the run itself, everywhere in the
+   document rather than only where this layer reaches. Repeating it here doubled the colour on
+   whichever pages the band happened to cover, which read as some changes being darker than
+   others for no reason a reader could name. */
+.docx-revision-band--insert,
+.docx-revision-band--delete {
+  background: transparent;
+}
+
+.docx-revision-band--insert.docx-revision-band--active {
+  background: var(--doc-revision-insertion-tint);
+  box-shadow: inset 0 -1px 0 var(--doc-revision-insertion);
+}
+
+.docx-revision-band--delete.docx-revision-band--active {
+  background: var(--doc-revision-deletion-tint);
+  box-shadow: inset 0 -1px 0 var(--doc-revision-deletion);
+}
+
+/* A formatting or structural change decorates no characters of its own, so it gets the
+   neutral band rather than a colour that would claim text was added or removed. Only when
+   open: a faint grey wash over unchanged-looking text says nothing a reader can act on. */
+.docx-revision-band--other {
+  background: transparent;
+}
+
+.docx-revision-band--other.docx-revision-band--active {
+  background: color-mix(in srgb, var(--doc-text-muted, #8a8f98) 14%, transparent);
+}
+
+/* Dark paper inverts the arithmetic: multiplying a tint into a dark sheet drives it to
+   black, so the band disappears exactly where it is needed. Screen lightens instead, which
+   is the same relationship the light theme has — the paper shifts, the glyphs do not. */
+.ep-root.dark .docx-comment-overlay {
+  mix-blend-mode: screen;
+}
+
+/* The editing-mode control: a pill that shows the current mode and a menu that changes it.
+ * The one toolbar control whose state is a VALUE, so it renders what it shows rather than a
+ * pressed flag. */
+.docx-toolbar__mode {
+  position: relative;
+  display: inline-flex;
+}
+
+.docx-toolbar__mode-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  display: flex;
+  min-width: 260px;
+  flex-direction: column;
+  padding: 6px;
+  border: 1px solid var(--doc-border, #e3e5e8);
+  border-radius: 10px;
+  background: var(--doc-surface, #fff);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
+}
+
+.docx-toolbar__mode-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--doc-text, #1f2328);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.docx-toolbar__mode-item:hover {
+  background: var(--doc-surface-hover, rgb(0 0 0 / 6%));
+}
+
+.docx-toolbar__mode-text {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.docx-toolbar__mode-label {
+  font-weight: 500;
+}
+
+.docx-toolbar__mode-hint {
+  color: var(--doc-text-muted, #8a8f98);
+  font-size: 12px;
+}
+
+.docx-toolbar__mode-check {
+  display: inline-flex;
+  width: 18px;
+  flex: 0 0 auto;
+  color: var(--doc-accent, #1a73e8);
+}
+
+/* A replacement's two halves, in the colours the document draws them in: what goes, and
+   what takes its place. */
+.docx-review__removed {
+  color: var(--doc-revision-deletion);
+  font-weight: 500;
+}
+
+.docx-review__added {
+  color: var(--doc-revision-insertion);
+  font-weight: 500;
 }

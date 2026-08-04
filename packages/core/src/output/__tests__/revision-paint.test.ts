@@ -242,11 +242,15 @@ describe('tracked text is findable when scanning, not only when reading', () => 
   test('an insertion and a deletion each carry a tint', () => {
     // A hairline decoration disappears on a dense page of small type, and a reviewer skims
     // straight past the edit.
+    //
+    // The WASH, which is the pending end of the ramp. This layer covers every tracked change
+    // in the document; the band layer adds the full tint over the one the caret is in. Painting
+    // the full tint here made pending and open changes the same weight.
     const root = paint(`<w:p>${ins('1', run('added'))}${del('2', delRun('gone'))}</w:p>`);
     const spans = trackedSpans(root);
     expect(spans.map((span) => span.style.backgroundColor)).toEqual([
-      'var(--doc-revision-insertion-tint)',
-      'var(--doc-revision-deletion-tint)',
+      'var(--doc-revision-insertion-wash)',
+      'var(--doc-revision-deletion-wash)',
     ]);
   });
 

@@ -17,6 +17,14 @@ export interface OverlayRect {
   readonly y: number;
   readonly width: number;
   readonly height: number;
+  /**
+   * Class for THIS rectangle, overriding the layer's default.
+   *
+   * One layer draws bands that mean different things — every commented range, and the one the
+   * caret is in — and splitting them into two layers would stack two absolutely positioned
+   * sheets over the pages just to vary a colour.
+   */
+  readonly className?: string;
 }
 
 export interface SelectionOverlayOptions {
@@ -61,7 +69,7 @@ export function paintSelectionOverlay(
     const page = layout.pages[rect.pageIndex];
     if (!page) continue;
     const element = document.createElement('div');
-    element.className = options.className ?? 'docx-cell-selection-rect';
+    element.className = rect.className ?? options.className ?? 'docx-cell-selection-rect';
     element.style.position = 'absolute';
     // Page-content coordinates to the sheet space the layer is laid out in.
     const offsetX = options.pageOffsetX?.get(rect.pageIndex) ?? 0;

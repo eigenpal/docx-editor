@@ -12,7 +12,7 @@
 // the first dies unused, the second is the one the tree sees. Identity of the published
 // instance flows through `useState`, so consumers re-render when it lands.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type {
   DocumentChange,
@@ -26,7 +26,7 @@ import type {
   DocxEditorInstance,
   FontConfigurationFragment,
 } from '@docx-editor.dev/core-contract/editor';
-import { DocxEditorContext } from './context';
+import { DocxEditorContext, ReviewRailContext, type ReviewRailRegistry } from './context';
 import { HyperlinkPopupContext, useHyperlinkPopupInstance } from './useHyperlinkPopup';
 
 /**
@@ -116,13 +116,29 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     if (zoom !== undefined) editor?.setZoom(zoom);
   }, [editor, zoom]);
 
+  // A rail registers itself here so the viewport only reserves a gutter when one is
+  // actually composed in. See `ReviewRailContext`.
+  const [rails, setRails] = useState(0);
+  const railRegistry = useMemo<ReviewRailRegistry>(
+    () => ({
+      mounted: rails,
+      register: () => {
+        setRails((count) => count + 1);
+        return () => setRails((count) => Math.max(0, count - 1));
+      },
+    }),
+    [rails]
+  );
+
   return (
-    <DocxEditorContext.Provider value={editor}>
-      {/* ONE link-popover state per editor, published here so a TOOLBAR button and the
+    <ReviewRailContext.Provider value={railRegistry}>
+      <DocxEditorContext.Provider value={editor}>
+        {/* ONE link-popover state per editor, published here so a TOOLBAR button and the
           popover panel — which are siblings, not ancestor and descendant — see the same
           open/closed state and only one of them registers with the engine's gestures. */}
-      <HyperlinkPopupProvider>{children}</HyperlinkPopupProvider>
-    </DocxEditorContext.Provider>
+        <HyperlinkPopupProvider>{children}</HyperlinkPopupProvider>
+      </DocxEditorContext.Provider>
+    </ReviewRailContext.Provider>
   );
 }
 

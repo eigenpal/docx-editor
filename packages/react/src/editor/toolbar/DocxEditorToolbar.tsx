@@ -20,6 +20,7 @@
 // slot (the part renders null where it stands). Non-part children append after the
 // default set. `preset={false}` opts out entirely: children render verbatim.
 
+import { ToolbarEditingMode } from './EditingMode';
 import { Children, Fragment, isValidElement, useMemo } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import {
@@ -38,7 +39,6 @@ import {
   ToolbarBulletList,
   ToolbarClearFormatting,
   ToolbarComments,
-  ToolbarEditingMode,
   ToolbarImageInsert,
   ToolbarImageProperties,
   ToolbarIndent,

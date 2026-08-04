@@ -57,6 +57,13 @@ function paragraphWithText(story: OoxmlPart, length: number): { id: string; text
   throw new Error('no paragraph long enough');
 }
 
+/** The `w14:paraId` a comment's first paragraph carries, read straight from the XML. */
+function paraIdOfCommentInPart(part: Parameters<typeof serializeOoxmlPart>[0], commentId: string) {
+  const xml = serializeOoxmlPart(part);
+  const comment = xml.split(`<w:comment `).find((chunk) => chunk.includes(`w:id="${commentId}"`));
+  return comment?.match(/w14:paraId="([0-9A-Fa-f]{8})"/)?.[1] ?? null;
+}
+
 describe('adding a comment', () => {
   test('one call is one publication and one undo entry', () => {
     const store = open();
@@ -276,16 +283,43 @@ describe('replying', () => {
     ).not.toContain('5');
   });
 
-  test('a reply to a parent with no paraId is refused rather than guessed', () => {
-    // The fixture's own comments have no `w14:paraId`, and thread state is keyed by it.
-    // Linking by position is what the design refuses.
+  test('a reply to a parent with no paraId mints one for the parent rather than guessing', () => {
+    // The fixture's own comments carry no `w14:paraId` — it is an extension, and files from
+    // other editors omit it — while `w15:commentsEx` keys the thread by exactly that. Linking
+    // by position is what the design refuses, so the parent is STAMPED in the same
+    // transaction. Only the comment being replied to is touched; an untouched document is
+    // never rewritten on load.
     const store = open();
     const target = paragraphWithText(store.part, 10);
     const result = addComment(store, {
       anchor: { paragraphId: target.id, start: 0, end: 4 },
       author: 'Dev',
-      text: 'reply to a comment that cannot be addressed',
+      text: 'reply to a comment the file never stamped',
       replyToCommentId: '0',
+    });
+    expect(result.ok).toBe(true);
+    // One undo takes the whole reply back, the parent's new id included.
+    expect(store.historyDepth).toBe(1);
+
+    const comments = store.package.parts.get('/word/comments.xml')!;
+    const parentParaId = paraIdOfCommentInPart(comments, '0');
+    expect(parentParaId).toMatch(/^[0-9A-F]{8}$/);
+
+    // The thread entry names that same id as its parent, which is what makes Word draw the
+    // reply under the comment instead of beside it.
+    const extended = store.package.parts.get('/word/commentsExtended.xml');
+    expect(extended).toBeDefined();
+    expect(serializeOoxmlPart(extended!)).toContain(`w15:paraIdParent="${parentParaId}"`);
+  });
+
+  test('a reply to a comment the part does not hold is refused', () => {
+    const store = open();
+    const target = paragraphWithText(store.part, 10);
+    const result = addComment(store, {
+      anchor: { paragraphId: target.id, start: 0, end: 4 },
+      author: 'Dev',
+      text: 'reply to nothing',
+      replyToCommentId: 'no-such-comment',
     });
     expect(result.ok).toBe(false);
     expect(store.historyDepth).toBe(0);

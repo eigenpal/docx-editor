@@ -553,6 +553,12 @@ export function snapshotsEqual(a: EditorSnapshot, b: EditorSnapshot): boolean {
     a.page === b.page &&
     a.canUndo === b.canUndo &&
     a.canRedo === b.canRedo &&
-    a.pageSetup === b.pageSetup
+    a.pageSetup === b.pageSetup &&
+    // Every member the snapshot carries has to be compared here or it cannot move a
+    // subscriber: the comments button stayed pressed after the pane closed because this
+    // list did not know the pane existed.
+    a.reviewPaneOpen === b.reviewPaneOpen &&
+    a.editingMode === b.editingMode &&
+    a.lastRejection === b.lastRejection
   );
 }

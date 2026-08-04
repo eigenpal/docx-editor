@@ -925,6 +925,28 @@
   },
   "editingMode": {
     "editing": null,
-    "label": null
+    "label": null,
+    "editingHint": null,
+    "suggesting": null,
+    "suggestingHint": null,
+    "viewing": null,
+    "viewingHint": null
+  },
+  "review": {
+    "accept": null,
+    "ariaLabel": null,
+    "deleted": null,
+    "empty": null,
+    "inserted": null,
+    "movedFrom": null,
+    "movedTo": null,
+    "reject": null,
+    "reply": null,
+    "structural": null,
+    "replyRefused": null,
+    "showPane": null,
+    "replaced": null,
+    "replacedWith": null,
+    "commentRefused": null
   }
 }
