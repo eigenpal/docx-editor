@@ -196,50 +196,22 @@ interface SiteLocation {
 function locateSites(part: OoxmlPart): Map<string, SiteLocation> {
   const located = new Map<string, SiteLocation>();
   const walkParagraph = (paragraph: OoxmlParagraphNode): void => {
-    const offsets = paragraphOffsetIndex(paragraph);
-    const place = (node: OoxmlNode, start: number, end: number, depth: number): void => {
-      if (node.kind === 'textValue' || depth > 64) return;
-      located.set(node.id, { paragraphId: paragraph.id, start, end });
-      for (const child of node.children) place(child, start, end, depth + 1);
-    };
-    const visit = (node: OoxmlNode, depth: number): void => {
-      if (node.kind === 'textValue' || depth > 64) return;
-      const span = offsets.spanOf(node);
-      if (node.kind === 'run') {
-        if (!span) return;
-        located.set(node.id, { paragraphId: paragraph.id, start: span.start, end: span.end });
-        // A run's OWN properties anchor over the run. `w:rPrChange` is a revision that
-        // decorates no characters and lives in `w:rPr`, so stopping at the run left it with
-        // no geometry at all: its card sorted to the end of the rail, painted no band, and
-        // the caret in tracked-formatted text activated nothing while accept and reject
-        // stayed on offer.
-        for (const child of node.children) {
-          if (child.kind === 'runProperties') place(child, span.start, span.end, depth + 1);
-        }
-        return;
-      }
-      if (span)
-        located.set(node.id, { paragraphId: paragraph.id, start: span.start, end: span.end });
-      for (const child of node.children) visit(child, depth + 1);
-    };
-    for (const child of paragraph.children) {
-      if (child.kind === 'paragraphProperties') continue;
-      visit(child, 0);
+    // Paragraph-local by construction: every offset here is measured inside this paragraph,
+    // so an unchanged paragraph's answer is still true and is reused rather than re-walked.
+    // A keystroke otherwise re-derived the location of every node in the document.
+    const memo = paragraphLocationsCache.get(paragraph);
+    if (memo) {
+      for (const [id, location] of memo) located.set(id, location);
+      return;
     }
-    // The paragraph MARK is the pilcrow — it sits at the END of the paragraph, not at
-    // offset 0 where its `w:pPr` happens to be written. Anchored at 0, a tracked Enter's
-    // card never opened when the caret was at the break that made it, `setActiveReviewItem`
-    // threw the caret to the paragraph start, and the zero-width range painted no band.
-    const properties = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-    if (properties) place(properties, offsets.length, offsets.length, 0);
+    const own = new Map<string, SiteLocation>();
+    locateInParagraph(paragraph, own);
+    paragraphLocationsCache.set(paragraph, own);
+    for (const [id, location] of own) located.set(id, location);
   };
   const walk = (node: OoxmlNode, depth: number): void => {
     if (node.kind === 'textValue' || depth > 64) return;
     if (node.kind === 'paragraph') {
-      // `walkParagraph` already places everything, the `w:pPr` subtree included: a property
-      // revision anchors at the paragraph's END, where its pilcrow is. A second pass used to
-      // collapse the whole subtree to offset 0 afterwards, which is what left every tracked
-      // Enter's card pointing at the start of the paragraph instead of at the break.
       walkParagraph(node);
       return;
     }
@@ -247,6 +219,50 @@ function locateSites(part: OoxmlPart): Map<string, SiteLocation> {
   };
   walk(part.root, 0);
   return located;
+}
+
+/** Node id → paragraph-local offsets, memoized on the immutable paragraph node. */
+const paragraphLocationsCache = new WeakMap<OoxmlNode, ReadonlyMap<string, SiteLocation>>();
+
+function locateInParagraph(
+  paragraph: OoxmlParagraphNode,
+  located: Map<string, SiteLocation>
+): void {
+  const offsets = paragraphOffsetIndex(paragraph);
+  const place = (node: OoxmlNode, start: number, end: number, depth: number): void => {
+    if (node.kind === 'textValue' || depth > 64) return;
+    located.set(node.id, { paragraphId: paragraph.id, start, end });
+    for (const child of node.children) place(child, start, end, depth + 1);
+  };
+  const visit = (node: OoxmlNode, depth: number): void => {
+    if (node.kind === 'textValue' || depth > 64) return;
+    const span = offsets.spanOf(node);
+    if (node.kind === 'run') {
+      if (!span) return;
+      located.set(node.id, { paragraphId: paragraph.id, start: span.start, end: span.end });
+      // A run's OWN properties anchor over the run. `w:rPrChange` is a revision that
+      // decorates no characters and lives in `w:rPr`, so stopping at the run left it with
+      // no geometry at all: its card sorted to the end of the rail, painted no band, and
+      // the caret in tracked-formatted text activated nothing while accept and reject
+      // stayed on offer.
+      for (const child of node.children) {
+        if (child.kind === 'runProperties') place(child, span.start, span.end, depth + 1);
+      }
+      return;
+    }
+    if (span) located.set(node.id, { paragraphId: paragraph.id, start: span.start, end: span.end });
+    for (const child of node.children) visit(child, depth + 1);
+  };
+  for (const child of paragraph.children) {
+    if (child.kind === 'paragraphProperties') continue;
+    visit(child, 0);
+  }
+  // The paragraph MARK is the pilcrow — it sits at the END of the paragraph, not at
+  // offset 0 where its `w:pPr` happens to be written. Anchored at 0, a tracked Enter's
+  // card never opened when the caret was at the break that made it, `setActiveReviewItem`
+  // threw the caret to the paragraph start, and the zero-width range painted no band.
+  const properties = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  if (properties) place(properties, offsets.length, offsets.length, 0);
 }
 
 function addressKey(address: RevisionAddress): string {

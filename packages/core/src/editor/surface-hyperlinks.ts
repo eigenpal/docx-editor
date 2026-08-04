@@ -389,9 +389,14 @@ function withinLink(
  * display text of an existing link silently unlinked it while reporting success. That is
  * the ordinary Ctrl+K-then-change-the-text flow.
  *
- * Inserting at `start` first puts the new text inside the link (the offset is a boundary of
- * the link's first run), and the old text — now shifted right by the inserted length — is
- * deleted after. The link is never empty at any point, so nothing sweeps it away.
+ * Inserting at `start` first puts the new text inside the link, and the old text — now
+ * shifted right by the inserted length — is deleted after. The link is never empty at any
+ * point, so nothing sweeps it away.
+ *
+ * `bias: 'right'` is what keeps the insert INSIDE the link. A boundary insert otherwise joins
+ * the run to its LEFT (Word's typing rule, see `applyInsertContent`), which at a link's start
+ * is whatever plain text precedes it. This caller is not typing — it is rewriting the link's
+ * own display text, so it names the run it means.
  */
 function replaceTextOps(
   paragraphId: string,
@@ -400,7 +405,7 @@ function replaceTextOps(
   text: string
 ): TreeDocOp[] | null {
   if (text.length === 0) return null;
-  const ops: TreeDocOp[] = [{ op: 'insertText', paragraphId, offset: start, text }];
+  const ops: TreeDocOp[] = [{ op: 'insertText', paragraphId, offset: start, text, bias: 'right' }];
   if (end > start) {
     ops.push({
       op: 'deleteText',

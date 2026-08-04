@@ -208,7 +208,8 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
         paragraph,
         op.offset,
         [(mint) => textElement(mint, op.text)],
-        options
+        options,
+        op.bias
       );
     case 'insertTab':
       return applyInsertContent(
@@ -330,7 +331,8 @@ function applyInsertContent(
   paragraph: OoxmlParagraphNode,
   offset: number,
   builders: readonly ((mint: () => string) => OoxmlNode)[],
-  options?: EditOptions
+  options?: EditOptions,
+  bias: 'left' | 'right' = 'left'
 ): TreeOpResult {
   const nextId = createNodeIdAllocator(part);
   const nodes = builders.map((build) => build(nextId));
@@ -362,12 +364,40 @@ function applyInsertContent(
     return fromEdit(replaceChildren(part, run.id, rebuilt, options), effect);
   }
 
-  // At a boundary: append to the run holding the offset, or to the last run.
-  const boundary = segments.find((segment) => segment.start === offset);
-  if (boundary) {
-    const run = findNode(part, boundary.runId);
+  // AT A BOUNDARY, THE RUN TO THE LEFT WINS.
+  //
+  // Word types into the run holding the character BEFORE the caret; `authoredRunPropertiesAt`
+  // states the same rule for what the toolbar reports, and the two have to agree or the
+  // toolbar describes formatting the next keystroke will not use. Joining the run that
+  // STARTS at the offset gave typed text the FOLLOWING run's properties — which on a
+  // PDF-converted document, where every inter-word space is its own run carrying
+  // `w:spacing`, meant typing after a word came out letter-spaced ("x x x x x x").
+  //
+  // The left run is refused in the two cases where inheriting from it would move the text
+  // somewhere it does not belong rather than merely format it: an ATOM (a field or a note
+  // reference, whose nodes must stay together), and a run inside a hyperlink or field when
+  // the run on the right is not — typing at the end of a link extends the link's text
+  // otherwise. Both fall back to the previous rule.
+  const before = findLast(segments, (segment) => segment.end === offset);
+  const after = segments.find((segment) => segment.start === offset);
+  if (
+    bias === 'left' &&
+    before &&
+    before.removeNodeIds === undefined &&
+    !leavesContainer(paragraph, before, after)
+  ) {
+    const run = findNode(part, before.runId);
     if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
-    const index = run.children.findIndex((child) => contains(child, boundary.node.id));
+    const index = run.children.findIndex((child) => contains(child, before.node.id));
+    return fromEdit(
+      insertChildren(part, run.id, index < 0 ? run.children.length : index + 1, nodes, options),
+      effect
+    );
+  }
+  if (after) {
+    const run = findNode(part, after.runId);
+    if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
+    const index = run.children.findIndex((child) => contains(child, after.node.id));
     return fromEdit(insertChildren(part, run.id, Math.max(0, index), nodes, options), effect);
   }
 
@@ -387,6 +417,48 @@ function applyInsertContent(
     ),
     effect
   );
+}
+
+function findLast<T>(items: readonly T[], predicate: (item: T) => boolean): T | undefined {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]!;
+    if (predicate(item)) return item;
+  }
+  return undefined;
+}
+
+/**
+ * Whether typing into `before`'s run would carry the text INTO a container the caret is
+ * leaving — a hyperlink or a field whose last character this is, with ordinary paragraph
+ * content on the other side of the boundary.
+ */
+function leavesContainer(
+  paragraph: OoxmlParagraphNode,
+  before: { readonly runId: string },
+  after: { readonly runId: string } | undefined
+): boolean {
+  const container = (runId: string): OoxmlNode | null => {
+    let held: OoxmlNode | null = null;
+    const visit = (node: OoxmlNode, inside: OoxmlNode | null): void => {
+      if (node.kind === 'textValue' || held) return;
+      if (node.id === runId) {
+        held = inside;
+        return;
+      }
+      const nested =
+        node.kind === 'hyperlink' ||
+        node.kind === 'fldSimple' ||
+        (node.kind === 'generic' && node.localName === 'fldSimple')
+          ? node
+          : inside;
+      for (const child of node.children) visit(child, nested);
+    };
+    for (const child of paragraph.children) visit(child, null);
+    return held;
+  };
+  const held = container(before.runId);
+  if (held === null) return false;
+  return after === undefined || container(after.runId) !== held;
 }
 
 function contains(node: OoxmlNode, id: string): boolean {
