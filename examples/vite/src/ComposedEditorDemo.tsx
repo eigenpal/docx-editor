@@ -518,19 +518,6 @@ function EditorChrome({
           document-derived family in its own typeface. Save is
           live because the toolbar was given an onSave handler. */}
       <DocxEditor.Toolbar t={translate} className="demo-toolbar" onSave={saveDocument}>
-        {/* A host-owned action: no chrome slot, our styling and caret guard. */}
-        <DocxEditor.Toolbar.Action
-          label="Send for review"
-          onSelect={() => window.alert('Sent for review.')}
-          icon={
-            <svg viewBox="0 -960 960 960" width={18} height={18} aria-hidden="true">
-              <path
-                d="M120-160v-640l760 320-760 320Zm80-120 474-200-474-200v140l240 60-240 60v140Z"
-                fill="currentColor"
-              />
-            </svg>
-          }
-        />
         <DocxEditor.Toolbar.FontFamily>
           <DocxEditor.Toolbar.FontFamily.Trigger className="demo-font-trigger" />
           <DocxEditor.Toolbar.FontFamily.Content className="demo-font-menu">
