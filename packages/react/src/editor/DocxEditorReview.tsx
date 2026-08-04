@@ -387,6 +387,13 @@ function ReviewRoot({
     // `<body>` with Tab restarting at the top of the page.
     editor?.focus();
   }, [editor]);
+  useEffect(() => {
+    if (open || draftAnchorY === null) return;
+    // Closing the pane abandons its uncommitted draft. Release the pinned range without
+    // moving focus away from the toolbar control that closed it.
+    editor?.surface?.releaseSelection();
+    setDraftAnchorY(null);
+  }, [open, draftAnchorY, editor]);
 
   // The compose CARD stacks with the cards, because it is one: rendered outside the run it
   // landed on top of the card whose text had just been re-selected, and its anchor IS that
@@ -448,7 +455,7 @@ function ReviewRoot({
         'AddComment',
         <ReviewAddComment top={composeTop} drafting={draftAnchorY !== null} />
       )}
-      {draftAnchorY === null || composeTop === null
+      {!open || draftAnchorY === null || composeTop === null
         ? null
         : takeRoot('Draft', <ReviewDraft top={composeTop} />)}
     </>

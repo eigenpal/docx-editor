@@ -256,6 +256,37 @@ describe('the review sidebar', () => {
     expect(editor.isReviewPaneOpen()).toBe(true);
     expect(view.getByTestId('review-draft')).toBeDefined();
   });
+
+  test('removes an open comment draft when the sidebar closes', async () => {
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={SOURCE}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const editor = instance!;
+    await act(async () => {
+      editor.surface!.selectAll();
+    });
+    await act(async () => {
+      view.getByTestId('review-add-comment').click();
+    });
+    expect(view.getByTestId('review-draft')).toBeDefined();
+
+    await act(async () => {
+      editor.exec({ type: 'toggleReviewPane' });
+    });
+
+    expect(view.queryByTestId('review-draft')).toBeNull();
+  });
 });
 
 describe('useEditorEvent', () => {
