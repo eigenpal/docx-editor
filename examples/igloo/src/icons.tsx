@@ -123,23 +123,39 @@ export const IceBlizzard = (
 // shaped this way. Both drop the baseline the packaged icons sit on, because the bar already
 // draws one.
 
-// A BADGE, not an overlay. Fusing the snowflake into the letterform crowded both at 18px
-// and read as a smudge; set beside the glyph it stays legible and still says "ice".
+/**
+ * A CORNER of a snowflake, in ice blue.
+ *
+ * Six arms from a centre that sits just outside the top-right of the box, so the SVG
+ * viewport clips it and what shows is the corner of a much larger flake rather than a small
+ * whole one. Blue on purpose: it is the only part of these icons that does not inherit
+ * `currentColor`, which is what keeps it reading as ice against the glyph it garnishes
+ * rather than as another stroke of it.
+ *
+ * `--doc-accent` rather than a literal, so it tracks the theme like everything else here.
+ */
+const SnowflakeCorner = (
+  <g stroke="var(--doc-accent)" strokeWidth="1.5">
+    <path d="M14.5 3h13" />
+    <path d="m17.75 -2.63 6.5 11.26" />
+    <path d="m17.75 8.63 6.5-11.26" />
+  </g>
+);
 
-/** Font colour: the "A", with a snowflake badge. */
+/** Font colour: the "A", under a corner of ice. */
 export const IceFontColor = (
   <Frost>
     <path d="M3 17.5 8.5 6 14 17.5" />
     <path d="M5.3 13.2h6.4" />
-    <path d="M18.5 3.6v5.8M16 5.1l5 2.8M21 5.1l-5 2.8" />
+    {SnowflakeCorner}
   </Frost>
 );
 
-/** Highlight: a marker, with a snowflake badge. */
+/** Highlight: a marker, under a corner of ice. */
 export const IceHighlight = (
   <Frost>
     <path d="m10 4.8 4.2 4.2-6.3 6.3H3.7v-4.2z" />
     <path d="M3 19h10.5" />
-    <path d="M18.5 3.6v5.8M16 5.1l5 2.8M21 5.1l-5 2.8" />
+    {SnowflakeCorner}
   </Frost>
 );
