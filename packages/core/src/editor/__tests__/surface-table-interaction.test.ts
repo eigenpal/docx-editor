@@ -436,6 +436,30 @@ describe('surface table interaction furniture', () => {
     expect(control!.dataset.rowId).toBe(table.rows[1]!.id);
   });
 
+  test('returning to same insertion hit cancels pending resize reveal', async () => {
+    const mounted = mount(TABLE);
+    const layout = mounted.surface.layout();
+    const table = tableOnPage(layout);
+    const rowMidY = table.rows[0]!.box.y + table.rows[0]!.box.height / 2;
+    const insertX = table.box.x + 4;
+    const dividerX = table.box.x + table.columnEdges[1]!;
+    mounted.pages.dispatchEvent(
+      pointerAtPageContent(mounted.surface, mounted.pages, 0, insertX, rowMidY)
+    );
+    expect(mounted.furniture.querySelector('.docx-table-insert-row')).not.toBeNull();
+    expect(mounted.furniture.querySelector('.docx-table-divider-handle')).toBeNull();
+    mounted.pages.dispatchEvent(
+      pointerAtPageContent(mounted.surface, mounted.pages, 0, dividerX, rowMidY)
+    );
+    expect(mounted.furniture.querySelector('.docx-table-divider-handle')).toBeNull();
+    mounted.pages.dispatchEvent(
+      pointerAtPageContent(mounted.surface, mounted.pages, 0, insertX, rowMidY)
+    );
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    expect(mounted.furniture.querySelector('.docx-table-divider-handle')).toBeNull();
+    expect(mounted.furniture.querySelector('.docx-table-insert-row')).not.toBeNull();
+  });
+
   test('hover reveals divider handle after delay', async () => {
     const { pages, furniture, surface } = mount(TABLE);
     const layout = surface.layout();

@@ -740,8 +740,16 @@ export function createSurfaceTableInteraction(
       clearTimeout(hideTimer);
       hideTimer = null;
     }
-    if (hoverHit && tableInteractionHitIdentity(hit) === tableInteractionHitIdentity(hoverHit))
+    if (hoverHit && tableInteractionHitIdentity(hit) === tableInteractionHitIdentity(hoverHit)) {
+      if (
+        revealTimer &&
+        (hit.kind === 'insertRow' || hit.kind === 'insertColumn')
+      ) {
+        clearTimeout(revealTimer);
+        revealTimer = null;
+      }
       return;
+    }
     if (hit.kind === 'insertRow' || hit.kind === 'insertColumn') {
       if (revealTimer) {
         clearTimeout(revealTimer);
