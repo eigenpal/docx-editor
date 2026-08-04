@@ -59,7 +59,8 @@ function dualNoteDoc(): Uint8Array {
   const body =
     `<w:p><w:r><w:t>Body</w:t></w:r>` +
     `<w:r><w:footnoteReference w:id="1"/></w:r>` +
-    `<w:r><w:endnoteReference w:id="1"/></w:r></w:p>`;
+    `<w:r><w:endnoteReference w:id="1"/></w:r>` +
+    `<w:r><w:endnoteReference w:id="2"/></w:r></w:p>`;
   const footnotes =
     `<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
     `<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>` +
@@ -67,7 +68,8 @@ function dualNoteDoc(): Uint8Array {
   const endnotes =
     `<w:endnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:endnote>` +
     `<w:endnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:endnote>` +
-    `<w:endnote w:id="1"><w:p><w:r><w:endnoteRef/><w:t>En</w:t></w:r></w:p></w:endnote>`;
+    `<w:endnote w:id="1"><w:p><w:r><w:endnoteRef/><w:t>En one</w:t></w:r></w:p></w:endnote>` +
+    `<w:endnote w:id="2"><w:p><w:r><w:endnoteRef/><w:t>En two</w:t></w:r></w:p></w:endnote>`;
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}">` +
@@ -172,6 +174,26 @@ describe('DocxEditor.NotesChrome', () => {
     const banner = view.getByTestId('docx-notes-banner');
     expect(banner.getAttribute('data-note-scope')).toBe('endnote:1');
     expect(banner.textContent).toContain('Endnote');
+  });
+
+  test('endnote bar stays above its note area when selection changes', async () => {
+    const { view, editor } = mountChrome(dualNoteDoc());
+    await act(async () => {
+      editor().setActiveScope({ kind: 'note', id: 'endnote:1' });
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    const banner = view.getByTestId('docx-notes-banner');
+    const initialLeft = banner.style.left;
+    const initialTop = banner.style.top;
+
+    await act(async () => {
+      editor().setActiveScope({ kind: 'note', id: 'endnote:2' });
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+
+    expect(banner.getAttribute('data-note-scope')).toBe('endnote:2');
+    expect(banner.style.left).toBe(initialLeft);
+    expect(banner.style.top).toBe(initialTop);
   });
 
   test('note scope keeps insertion in the main toolbar instead of duplicating disabled icons', async () => {
