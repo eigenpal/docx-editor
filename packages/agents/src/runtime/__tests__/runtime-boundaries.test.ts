@@ -24,11 +24,15 @@ import { typecheckProject } from '../../../scripts/lib/typecheck-compat.mjs';
 const RUNTIME = join(import.meta.dir, '..');
 const PACKAGE_SRC = join(RUNTIME, '..');
 
-/** Every shipped source file of the runtime — tests excluded, examples included. */
+/**
+ * Every SHIPPED source file of the runtime — examples included, tests and the conformance
+ * assertions excluded. `__conformance__` reads `compat/` on purpose; it is compiled, never bundled,
+ * and the test at the bottom of this file holds that line.
+ */
 function runtimeFiles(directory: string = RUNTIME): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(directory)) {
-    if (entry === '__tests__') continue;
+    if (entry === '__tests__' || entry === '__conformance__' || entry === '__typings__') continue;
     const path = join(directory, entry);
     if (statSync(path).isDirectory()) out.push(...runtimeFiles(path));
     else if (entry.endsWith('.ts')) out.push(path);
@@ -294,6 +298,20 @@ describe('the claims that are compiled rather than scanned', () => {
 
   test('the whole runtime, browser entry included, compiles with zero diagnostics', () => {
     expect(typecheckProject(fullProject)).toEqual([]);
+  });
+
+  test('the conformance assertions are compiled but never shipped', () => {
+    // They import `compat/` — fine for a compiler, wrong for a bundle. Neither shipped entry may
+    // reach them, and neither lane project may include them.
+    const shipped = ['index.ts', 'browser-entry.ts', 'public.ts'];
+    for (const name of shipped) {
+      expect(readFileSync(join(RUNTIME, name), 'utf8')).not.toContain('__conformance__');
+    }
+    for (const project of [neutralProject, fullProject]) {
+      const include = readProject(project).include ?? [];
+      expect(include.some((pattern) => pattern.includes('__conformance__'))).toBe(false);
+    }
+    expect(existsSync(join(RUNTIME, '__conformance__', 'declared-lifecycle.ts'))).toBe(true);
   });
 
   test('both projects include the runtime sources, and neither drags in the rest of the package', () => {
