@@ -19,6 +19,16 @@
       "import": "./dist/server.mjs",
       "require": "./dist/server.js"
     },
+    "./runtime": {
+      "types": "./dist/runtime.d.ts",
+      "import": "./dist/runtime.mjs",
+      "require": "./dist/runtime.js"
+    },
+    "./runtime/browser": {
+      "types": "./dist/runtime/browser.d.ts",
+      "import": "./dist/runtime/browser.mjs",
+      "require": "./dist/runtime/browser.js"
+    },
     "./react": {
       "types": "./dist/react.d.ts",
       "import": "./dist/react.mjs",
@@ -54,6 +64,12 @@
     "*": {
       "server": [
         "./dist/server.d.ts"
+      ],
+      "runtime": [
+        "./dist/runtime.d.ts"
+      ],
+      "runtime/browser": [
+        "./dist/runtime/browser.d.ts"
       ],
       "react": [
         "./dist/react.d.ts"
@@ -96,6 +112,7 @@
     }
   },
   "devDependencies": {
+    "@docx-editor.dev/core-contract": "workspace:*",
     "@microsoft/api-extractor": "^7.50.0",
     "@vitejs/plugin-vue": "^6.0.4",
     "ai": "^6.0.169",
@@ -121,6 +138,7 @@
   "dependencies": {
     "@docx-editor.dev/core": "^0.0.1",
     "docxtemplater": "^3.50.0",
+    "harfbuzzjs": "1.4.0",
     "jszip": "^3.10.1",
     "pizzip": "^3.1.7",
     "xml-js": "^1.6.11"

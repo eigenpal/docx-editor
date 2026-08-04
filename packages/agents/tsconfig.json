@@ -18,6 +18,8 @@
     "declarationMap": true,
     "baseUrl": ".",
     "paths": {
+      "@docx-editor.dev/core-contract/automation": ["../core/src/automation/index.ts"],
+      "@docx-editor.dev/core-contract/editor": ["../core/src/editor/index.ts"],
       "@docx-editor.dev/core": ["../core/src/core.ts"],
       "@docx-editor.dev/core/headless": ["../core/src/headless.ts"],
       "@docx-editor.dev/core/utils/paragraphFlashTypes": [

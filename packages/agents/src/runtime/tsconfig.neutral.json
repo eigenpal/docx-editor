@@ -1,0 +1,44 @@
+{
+  // The neutrality claim, made to the compiler instead of to a reader.
+  //
+  // `lib` is the ES language library and nothing else: no DOM, no Node. Touch `document`, `window`,
+  // `fetch`, `Buffer` or `process` anywhere in the lifecycle and this project fails to compile —
+  // which is a stronger statement than a grep, because it also catches the reference that arrives
+  // through a TYPE rather than through a name. The two WHATWG globals the bounded package reader
+  // genuinely needs are declared, deliberately by hand, in `__typings__/platform-neutral.d.ts`.
+  //
+  // ES2022 rather than ES2020 because core's sources use `Array.prototype.at`. That is a statement
+  // about the language level this code needs, which is a different axis from the platform.
+  //
+  // The two modules that legitimately name the browser host (`browser.ts` and the entry point that
+  // re-exports it) are excluded here and checked by `tsconfig.json` next to it.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    // Deliberately the same strictness as `packages/core/tsconfig.json` and no more. These programs
+    // necessarily contain core's automation lane, and this project's job is to prove WHICH LIB the
+    // runtime needs — not to hold another package's existing code to flags the repository has never
+    // turned on. The runtime's own files are held to the package's `bun run typecheck` as well.
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    // Same reason as `compat/tsconfig.json`: without this, TypeScript pulls in every `@types/*` in
+    // the workspace, one of which would hand the "neutral" program the Node globals this project
+    // exists to prove are absent.
+    "types": [],
+    "baseUrl": ".",
+    "paths": {
+      "@docx-editor.dev/core-contract/automation": ["../../../core/src/automation/index.ts"]
+    }
+  },
+  "include": ["*.ts", "examples/*.ts", "__typings__/platform-neutral.d.ts"],
+  // `index.ts` is INCLUDED: the neutral subpath's own entry point is the thing most worth proving
+  // neutral. Only the editor adapter and the entry that publishes it are excluded.
+  "exclude": ["node_modules", "__tests__", "browser.ts", "browser-entry.ts"]
+}
