@@ -23,12 +23,10 @@ export function useEditorSnapshot(editor: Editor | null): number {
     const bump = (): void => setRevision((n) => n + 1);
     const offChange = editor.on('change', bump);
     const offSelection = editor.on('selectionChange', bump);
-    const offDisplay = editor.on('display', bump);
     bump();
     return () => {
       offChange();
       offSelection();
-      offDisplay();
     };
   }, [editor]);
 

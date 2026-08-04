@@ -1449,7 +1449,7 @@ export interface UseDocumentSearchResult {
 export function useDocxEditor(): DocxEditorInstance | null;
 
 // @public
-export function useEditorCommand(slotId: ChromeSlotId): EditorCommandState;
+export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCommandState;
 
 // @public
 export function useEditorEvent<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): void;

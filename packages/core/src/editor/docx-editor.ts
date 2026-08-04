@@ -16,9 +16,23 @@
 //   change/selectionChange/error events, focus, destroy, attach/detach, `query` for
 //   `selectedText` and `selectionFormatting`, and the document catalogs
 //   (`getDocumentFonts`/`getDocumentStyles`, derived from the canonical trees).
-// - HONEST EMPTY: outline, comments, tracked changes, find, image/table context,
-//   watermark, and the geometry/interaction cluster (`getInteractionFrame`, `hitTest`,
-//   `dispatchInteraction`, …) — typed empty values, never invented geometry.
+// - HONEST EMPTY: outline, comments, tracked changes, find, image/table
+//   context, watermark and header/footer state. Every member returns its typed empty
+//   value, never an invented one.
+//
+// THE GEOMETRY/INTERACTION CLUSTER IS GONE, not stubbed. `getInteractionFrame`, `hitTest`,
+// `dispatchInteraction`, `resolvePointer`, the caret and selection rect readers and the
+// accessibility observation were all placeholders here, and none of them had a caller. They
+// were removed from the contract rather than filled in, because the honest-empty rule does
+// NOT extend to them: `getComments()` returning `[]` is a true statement about a document,
+// while `hitTest` returning `null` is indistinguishable from "you clicked the page margin",
+// so a caller could not tell an unimplemented member from a real answer. `getPageGeometry`
+// is the one survivor and is now REAL — it had the cluster's only consumer, and returning
+// `[]` had silently made both Vue rulers render nothing.
+//
+// The surface still owns caret, selection and hit testing internally, through the browser's
+// own selection and `layout/semantic-hit-test.ts`. Re-exposing any of it on this facade is
+// a small wiring job on the day a host needs it.
 // - The `display` event never fires: the surface paints its own pages into the container
 //   rather than handing the host a render list.
 //
@@ -118,7 +132,6 @@ import {
   type PaginatedSurface,
   type PaginatedSurfaceState,
 } from './paginated-surface.ts';
-import { createHonestEmptyInteractionApi } from './docx-editor-interaction.ts';
 import type {
   DocxEditorConfig,
   DocxEditorInstance,
@@ -231,7 +244,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const handlers: { [E in keyof EditorEvents]: Set<EditorEvents[E]> } = {
     change: new Set(),
     selectionChange: new Set(),
-    display: new Set(),
     error: new Set(),
   };
 
@@ -615,6 +627,18 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         editingMode !== 'viewing',
       zoom,
       selection: selectionRangeOf(surface),
+      // Whether the selection is a CARET rather than a range.
+      //
+      // Cheap on purpose. The only way to ask this used to be
+      // `query({ type: 'selectedText' }) === ''`, which materializes the whole selected
+      // string to answer a boolean — and hosts ask it from selector functions that re-run on
+      // every tick, so a select-all on a long document allocated megabytes per tick to learn
+      // one bit. `selection` cannot carry it: `DocRange` addresses paragraphs by paraId and
+      // has no offsets, so a caret and a within-paragraph range look identical there.
+      selectionCollapsed:
+        state === null ||
+        (state.selection.anchor.paragraphId === state.selection.head.paragraphId &&
+          state.selection.anchor.offset === state.selection.head.offset),
       formatting: runFormattingOf(surface),
       table: tableContextOf(surface),
       image: null,
@@ -1388,12 +1412,22 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       return { ok: true, changed: true };
     },
 
-    // Geometry / interaction cluster: typed empties — the surface owns interaction.
-    ...createHonestEmptyInteractionApi({
-      getSurface: () => surface,
-      getMode: () => mode,
-      getEditingMode: () => editingMode,
-    }),
+    /**
+     * Page boxes from the LAYOUT, never from the DOM.
+     *
+     * `layout()` flushes any pending commit first, so a caller measuring straight after an
+     * edit reads the geometry that edit produced rather than the one before it. Virtualized
+     * pages are included: a page with no element yet still has a box, and that is usually
+     * the page a caller is asking about.
+     */
+    getPageGeometry: () =>
+      surface
+        ? surface.layout().pages.map((page) => ({
+            index: page.index,
+            box: page.box,
+            contentBox: page.contentBox,
+          }))
+        : [],
 
     relayout() {
       // `layout()` flushes any commit the scheduler has not published yet; the surface

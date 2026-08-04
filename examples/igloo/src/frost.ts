@@ -9,7 +9,7 @@
 // round-trips to DOCX like any other formatting. A demo action that only moved local state
 // would look the same on screen and prove nothing about the API.
 
-import { useDocxEditor, useEditorState } from '@docx-editor.dev/react';
+import { useDocxEditor, useEditorCommand, useEditorState } from '@docx-editor.dev/react';
 import type { EditorCommand } from '@docx-editor.dev/react';
 
 const frostCommand = (value: string): EditorCommand => ({
@@ -30,30 +30,26 @@ export interface FrostActions {
 
 export function useFrost(): FrostActions {
   const editor = useDocxEditor();
-  // Re-asked on every editor tick, like any other control's enabled state.
+
+  // TWO gates, because they answer two different questions.
   //
-  // TWO gates, because `can` only answers one of the two questions. It reports whether the
-  // engine would honour the command — false in a read-only document — but it says yes at a
-  // COLLAPSED CARET, where the command arms the typing format rather than painting
-  // anything. A control that stays live there is one the user presses and sees nothing
-  // happen, which reads as broken. The selection read is the same one the engine's own
-  // `copy` gate makes, so both greys out for the same reason and says so the same way.
-  const gate = useEditorState(
-    () => {
-      const allowed = editor?.can(frostCommand('cyan'));
-      if (!allowed) return { enabled: false, disabledReason: null };
-      if (!allowed.ok) return { enabled: false, disabledReason: allowed.reason ?? null };
-      const selected = editor?.query({ type: 'selectedText' }) ?? '';
-      return selected === ''
-        ? { enabled: false, disabledReason: 'nothing is selected' }
-        : { enabled: true, disabledReason: null };
-    },
-    (a, b) => a.enabled === b.enabled && a.disabledReason === b.disabledReason
-  );
+  // `useEditorCommand` reports whether the ENGINE would honour the command — false in a
+  // read-only document. But the engine says yes at a collapsed caret, and correctly so:
+  // `setMarkAttr` there arms the typing format, which is exactly what Word's Bold does. It
+  // paints nothing, though, so a highlight button that stays live at a caret is one the user
+  // presses and sees nothing happen.
+  //
+  // The second gate is the demo's own judgement, not a defect in `can`: THIS action is only
+  // meaningful over a range. `selectionCollapsed` answers it for the cost of a boolean —
+  // asking `query({ type: 'selectedText' })` would build the entire selected string, on
+  // every tick this selector runs, to learn one bit.
+  const { isEnabled, disabledReason } = useEditorCommand(frostCommand('cyan'));
+  const collapsed = useEditorState((snapshot) => snapshot.selectionCollapsed);
+
   return {
     freeze: () => editor?.exec(frostCommand('cyan')),
     thaw: () => editor?.exec(frostCommand('none')),
-    enabled: gate.enabled,
-    disabledReason: gate.disabledReason,
+    enabled: isEnabled && !collapsed,
+    disabledReason: collapsed && isEnabled ? 'nothing is selected' : disabledReason,
   };
 }

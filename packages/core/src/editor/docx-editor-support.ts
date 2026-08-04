@@ -2,8 +2,8 @@
 //
 // Everything here is a function of its arguments — no surface, no session, no DOM.
 // The facade closure stays in docx-editor.ts; this module owns command classification,
-// the empty interaction frame, source normalization, and the value-equality rules the
-// cached snapshot uses to keep sub-object references stable across re-derivations.
+// source normalization, and the value-equality rules the cached snapshot uses to keep
+// sub-object references stable across re-derivations.
 
 import type {
   DocAnchor,
@@ -15,10 +15,6 @@ import type {
   PageSetup,
   RunFormatting,
 } from '@docx-editor.dev/core-contract/contracts/editor';
-import type {
-  InteractionFrame,
-  SemanticPositionIndex,
-} from '@docx-editor.dev/core-contract/contracts/interaction';
 import type { SemanticSelection as SurfaceSelection } from '@docx-editor.dev/core-contract/layout';
 // Direct, not through the layout barrel: this is an internal bound the write shares with
 // the reader, not something the layout package publishes.
@@ -39,47 +35,6 @@ export function deepFreezeValue<T>(value: T): T {
 }
 
 export const DEFAULT_PAGE_GAP_PX = 24;
-
-function emptySemanticIndex(storyId = ''): SemanticPositionIndex {
-  return {
-    stories: [{ storyId, scope: { kind: 'body' }, blocks: [] }],
-    caretStops: [],
-    ownershipRegions: [],
-  };
-}
-
-let emptyFrameSingleton: InteractionFrame | null = null;
-
-/** The single immutable frame every frame-shaped contract member answers with. */
-export function emptyInteractionFrame(): InteractionFrame {
-  if (emptyFrameSingleton) return emptyFrameSingleton;
-  emptyFrameSingleton = deepFreezeValue({
-    id: { value: 0 },
-    revisions: {
-      modelRevision: 0,
-      layoutRevision: 0,
-      resourceEpoch: 0,
-      configurationEpoch: 0,
-      shapingProvenance: {
-        extensionFingerprint: 'empty',
-        shapingHash: 'empty',
-        producerVersion: 0,
-      },
-    },
-    completeness: { kind: 'complete' as const },
-    display: [],
-    semanticIndex: emptySemanticIndex(),
-    pageGeometry: [],
-    scrollGeometry: { contentHeight: 0, pageTops: [], pageGapPx: DEFAULT_PAGE_GAP_PX },
-    selection: null,
-    caret: null,
-    selectionGeometry: null,
-    focus: { scope: null, focused: false },
-    composition: { active: false, scope: null },
-    currentPage: { viewport: 0, caret: 0 },
-  }) as InteractionFrame;
-  return emptyFrameSingleton;
-}
 
 /**
  * Run-property spellings for the marks the surface can toggle, named as OOXML names them.
@@ -765,6 +720,10 @@ export function snapshotsEqual(a: EditorSnapshot, b: EditorSnapshot): boolean {
     a.editable === b.editable &&
     a.zoom === b.zoom &&
     a.selection === b.selection &&
+    // Load-bearing: `selection` is a paraId range with no offsets, so collapsing a range
+    // INSIDE one paragraph leaves it identical. Without this compare, a control gated on
+    // the caret/range distinction would never see the moment it changed.
+    a.selectionCollapsed === b.selectionCollapsed &&
     a.formatting === b.formatting &&
     a.table === b.table &&
     a.image === b.image &&

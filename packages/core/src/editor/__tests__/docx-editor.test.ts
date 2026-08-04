@@ -504,24 +504,12 @@ describe('createDocxEditor', () => {
     expect(editor.getComments()).toEqual([]);
     expect(editor.getSelectedTable()).toBeNull();
     expect(editor.getWatermark()).toBeNull();
-    expect(editor.getDisplay()).toEqual([]);
-    expect(editor.getCaretRect()).toBeNull();
-    expect(editor.hitTest({ x: 0, y: 0 })).toBeNull();
     // No longer honest-empty: `paragraphs` and `selection` answer in paraId vocabulary.
     const paragraphs = editor.query({ type: 'paragraphs' });
     expect(paragraphs).toHaveLength(1);
     expect(paragraphs[0]!.text).toBe('hello');
     expect(paragraphs[0]!.paraId).toMatch(/^[0-9A-F]{8}$/);
     expect(editor.query({ type: 'selection' })).toEqual(editor.snapshot().selection);
-    const dispatch = editor.dispatchInteraction({
-      kind: 'focus',
-      frameId: { value: 0 },
-    });
-    expect(dispatch.outcome.ok).toBe(false);
-    expect(dispatch.hostEffects).toEqual([]);
-    const frame = editor.getInteractionFrame();
-    expect(frame.display).toEqual([]);
-    expect(frame.selection).toBeNull();
   });
 
   // ── State tick + cached snapshot identity ──────────────────────────────────────────

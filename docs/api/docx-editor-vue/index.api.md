@@ -50,12 +50,6 @@ export type ChromeSlotId =
 | 'file.open'
 | 'file.save'
 | 'file.pageSetup'
-| 'insert.footnote'
-| 'insert.endnote'
-| 'insert.pageNumber'
-| 'insert.totalPages'
-| 'insert.sectionPages'
-| 'insert.pageXofY'
 | 'insert.pageBreak'
 | 'insert.sectionBreakNextPage'
 | 'insert.sectionBreakContinuous'
@@ -332,8 +326,8 @@ onReady?: ((_editor: Editor) => any) | undefined;
 onFontError?: ((_error: EditorFontError) => any) | undefined;
 }>, {
 author: string;
-fonts: FontConfiguration | FontConfigurationFragment;
 document: DocumentSource;
+fonts: FontConfiguration | FontConfigurationFragment;
 zoom: number;
 mode: EditorMode;
 locale: string;
@@ -414,8 +408,8 @@ default: () => never[];
 }>> & Readonly<{
 onClose?: (() => any) | undefined;
 }>, {
-editor: Editor | null;
 open: boolean;
+editor: Editor | null;
 panels: readonly SidebarPanel[];
 }, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
 
@@ -512,15 +506,9 @@ export interface DocxEditorToolbarProps {
 
 // @public (undocumented)
 export interface Editor {
-    acceptReviewItem(key: string): ExecResult;
-    addComment(text: string, author?: string): ExecResult;
     can(command: EditorCommand, options?: { scope?: EditorScope }): CanResult;
     // (undocumented)
     destroy(): void;
-    dispatchInteraction(
-    intent: InteractionIntent,
-    options?: { hostMetrics?: InteractionHostMetrics }
-    ): InteractionDispatchResult;
     // (undocumented)
     exec(command: EditorCommand, options?: { scope?: EditorScope }): ExecResult;
     findMatches(
@@ -529,12 +517,8 @@ export interface Editor {
     ): readonly TextMatch[];
     // (undocumented)
     focus(scope?: EditorScope): InteractionOutcome<void>;
-    getAccessibilityObservation(): AccessibilityObservation;
     // (undocumented)
     getActiveScope(): ViewScope;
-    getCaretClientRect(): Rect | null;
-    getCaretGeometry(pos?: EditorPosition): CaretGeometry | null;
-    getCaretRect(pos?: EditorPosition): Rect | null;
     getComments(): readonly {
         readonly id: string;
         readonly text: string;
@@ -542,7 +526,6 @@ export interface Editor {
     }[];
     // (undocumented)
     getCurrentPage(mode?: 'viewport' | 'caret'): number;
-    getDisplay(): readonly DisplayPage[];
     getDocumentFonts(): readonly string[];
     getDocumentHandle(): DocumentHandle;
     getDocumentStyles(): readonly {
@@ -558,13 +541,10 @@ export interface Editor {
         };
     }[];
     getDocumentThemeColors(): readonly { readonly slot: string; readonly hex: string }[];
-    getEditingMode(): DocumentEditingMode;
-    getHeaderFooterState(): HeaderFooterState | null;
-    getInputHostObservation(): InputHostObservation | null;
-    getInteractionFrame(): InteractionFrame;
-    getInteractionHostMetrics(): InteractionHostMetrics | null;
-    getNotePreviewText(scopeId: string): string | null;
-    getNotePropertiesState(): NotePropertiesState | null;
+    getHeaderFooterState(): {
+        readonly editing: 'header' | 'footer' | null;
+        readonly sectionIndex: number;
+    } | null;
     getOutline(): readonly {
         readonly text: string;
         readonly level: number;
@@ -572,10 +552,6 @@ export interface Editor {
     }[];
     getPageGeometry(): readonly { index: number; box: Rect; contentBox: Rect }[];
     getPageSetup(): PageSetup | null;
-    getRenderScale(): number;
-    getReviewItems(): readonly ReviewItemPlacement[];
-    getReviewRevision(): number;
-    getScrollGeometry(): ScrollGeometry;
     getSelectedImage(): {
         readonly id: string;
         readonly widthEmu: number;
@@ -596,12 +572,6 @@ export interface Editor {
         readonly italic?: boolean;
         readonly underline?: boolean;
     } | null;
-    getSelectionGeometry(
-    range?: EditorSelection,
-    options?: SelectionGeometryOptions
-    ): SelectionGeometry | null;
-    getSelectionPlacement(): { readonly anchorY: number; readonly pageIndex: number } | null;
-    getSelectionRects(range?: EditorSelection, options?: SelectionGeometryOptions): readonly Rect[];
     // (undocumented)
     getTotalPages(): number;
     getTrackedChanges(): readonly {
@@ -612,9 +582,7 @@ export interface Editor {
     getWatermark(): { readonly kind: 'text' | 'image'; readonly text?: string } | null;
     // (undocumented)
     getZoom(): number;
-    hitTest(point: Point, options?: HitTestOptions): SemanticHitTarget | null;
     isActive(command: EditorCommand, options?: { scope?: EditorScope }): boolean;
-    isReviewPaneOpen(): boolean;
     load(document: DocumentSource): void;
     // (undocumented)
     on<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): Unsubscribe;
@@ -623,21 +591,15 @@ export interface Editor {
     query: { type: K } & EditorQueries[K],
     options?: { scope?: EditorScope }
     ): EditorQueryResults[K];
-    // (undocumented)
-    rejectReviewItem(key: string): ExecResult;
     relayout(options?: { sync?: boolean }): void;
-    replyToReviewItem(key: string, text: string, author?: string): ExecResult;
-    resolvePointer(point: Point, options?: HitTestOptions): InteractionOutcome<SemanticHitTarget>;
     save(): Promise<ArrayBuffer>;
     // (undocumented)
     scrollToBlock(blockId: string): boolean;
     scrollToPage(pageNumber: number): boolean;
     selectMatch(match: TextMatch): ExecResult;
-    setActiveReviewItem(key: string | null): void;
     // (undocumented)
     setActiveScope(scope: ViewScope): void;
-    // (undocumented)
-    setEditingMode(mode: DocumentEditingMode): ExecResult;
+    setMode(mode: 'edit' | 'view'): ExecResult;
     setZoom(zoom: number): ExecResult;
     // (undocumented)
     snapshot(options?: { scope?: EditorScope }): EditorSnapshot;
@@ -698,14 +660,9 @@ export interface EditorHost {
     getBodyHostEl(): HTMLElement | null;
     // (undocumented)
     getHfHostEl(rId: string): HTMLElement | null;
-    getInteractionHostMetrics?(): InteractionHostMetrics | null;
     // (undocumented)
     getPagesContainer(): HTMLElement | null;
-    getRenderedTextGeometry?(): RenderedTextGeometryPort | null;
     getScrollContainer(): HTMLElement | null;
-    onDisplay?(pages: readonly DisplayPage[]): void;
-    // (undocumented)
-    onScrollRestore?(pending: PendingScrollRestore): void;
     // (undocumented)
     onSelectionChange?(snapshot: EditorSnapshot): void;
     // (undocumented)
@@ -725,13 +682,7 @@ export type EditorQuery = {
 export type EditorScope =
 | { kind: 'body' }
 | { kind: 'headerFooter'; rId: string }
-/**
-* A footnote/endnote region.
-*
-* `id` encodes kind + signed note id as `footnote:<id>` or `endnote:<id>`
-* (e.g. `footnote:2`). Use `formatNoteScopeId` / `parseNoteScopeId` from the
-* store package. Do not invent a parallel `{ noteKind, noteId }` scope arm.
-*/
+/** A footnote/endnote region, addressed by note id. */
 | { kind: 'note'; id: string }
 /** A text box or floating frame with its own content, addressed by id. */
 | { kind: 'frame'; id: string }
@@ -744,23 +695,21 @@ export interface EditorSnapshot {
     readonly canRedo?: boolean;
     readonly canUndo?: boolean;
     readonly editable: boolean;
-    readonly editingMode?: DocumentEditingMode;
     // (undocumented)
     readonly formatting: RunFormatting | null;
     // (undocumented)
     readonly image: ImageContext | null;
     readonly isLoading: boolean;
-    readonly lastRejection?: string | null;
     // (undocumented)
     readonly page: { readonly current: number; readonly total: number };
     readonly pageSetup?: PageSetup | null;
     // (undocumented)
     readonly parseError: string | null;
-    readonly reviewPaneOpen?: boolean;
     // (undocumented)
     readonly scope: EditorScope;
     // (undocumented)
     readonly selection: DocRange | null;
+    readonly selectionCollapsed: boolean;
     // (undocumented)
     readonly table: TableContext | null;
     // (undocumented)
@@ -1320,17 +1269,10 @@ export function runSave(editor: Editor | null): Promise<ArrayBuffer> {
 }
 
 // @public
-export function runToolbarCommand(
-editor: Editor | null,
-id: ChromeSlotId,
-value?: unknown
-): ExecResult {
+export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId): ExecResult {
     if (!editor) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
     const // (undocumented)
-    command =
-    value === undefined
-    ? commandForSlot(id)
-    : (commandForSlotValue(id, value) ?? commandForSlot(id));
+    command = commandForSlot(id);
     if (!command) {
         if (id === 'file.save') {
             return {
@@ -1372,29 +1314,11 @@ export interface ToolbarCommandState {
     readonly enabled: boolean;
     // (undocumented)
     readonly id: ChromeSlotId;
-    readonly value?: string;
 }
 
 // @public
 export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): ToolbarCommandState {
     if (!editor) return { id, enabled: false, disabledReason: 'editor is not ready', active: false };
-    if (id === 'review.editingMode') {
-        const // (undocumented)
-        mode = editor.getEditingMode?.() ?? 'editing';
-        // Enabled state comes from the ENGINE, like every other control: a document opened
-        // read-only refuses the switch, and the control must say so rather than look live.
-        const // (undocumented)
-        probe = editor.can(
-        commandForSlotValue(id, mode === 'editing' ? 'suggesting' : 'editing')!
-        );
-        return {
-            id,
-            enabled: probe.ok,
-            disabledReason: probe.ok ? null : probe.reason,
-            active: false,
-            value: mode,
-        };
-    }
     const // (undocumented)
     command = commandForSlot(id);
     if (!command) {

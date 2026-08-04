@@ -19,8 +19,6 @@ import { type DisplayPage } from '../contracts/geometry';
 import {
   type InteractionFrame,
   type InteractionFrameId,
-  type SelectionGeometryOptions,
-  type SemanticHitTarget,
   type SemanticTarget,
 } from '../contracts/interaction';
 import { type McpContext, type McpToolDefinition } from '../contracts/mcp';
@@ -100,29 +98,24 @@ export function exercise(editor: Editor, doc: DocxDocument): void {
   const bold: boolean | undefined = snap.formatting?.bold;
   void bold;
 
-  // Geometry queries are typed and never expose an editing engine's positions.
-  const frame: InteractionFrame = editor.getInteractionFrame();
-  const firstPage: number | undefined = frame.display[0]?.index;
-  const scrollGap: number = editor.getScrollGeometry().pageGapPx;
-  const rectCount: number = editor.getSelectionRects().length;
-  const caretX: number | undefined = editor.getCaretRect()?.x;
-  const hit: SemanticHitTarget | null = editor.hitTest({ x: 10, y: 20 });
-  const hitFrame: InteractionFrameId | undefined = hit?.frameId;
-  const pointer = editor.resolvePointer({ x: 10, y: 20 });
-  const viewportOptions: SelectionGeometryOptions = { visiblePageIndices: [0] };
-  const filteredRects: number = editor.getSelectionRects(undefined, viewportOptions).length;
-  const filteredGeometry = editor.getSelectionGeometry(undefined, viewportOptions);
-  if (!pointer.ok) {
-    const code: string = pointer.code;
-    void code;
+  // Geometry: ONE member, and it is typed without exposing an editing engine's positions.
+  // The interaction/hit-test/caret-rect cluster that used to be exercised here was deleted
+  // rather than implemented — every member was a stub with no caller, and a stub whose empty
+  // answer is indistinguishable from a real one is worse than an absent member.
+  const pages = editor.getPageGeometry();
+  const pageIndex: number | undefined = pages[0]?.index;
+  const pageWidth: number | undefined = pages[0]?.box.width;
+  const textLeft: number | undefined = pages[0]?.contentBox.x;
+  void pageIndex;
+  void pageWidth;
+  void textLeft;
+
+  // Mode moves at runtime, without rebuilding the editor.
+  const modeResult = editor.setMode('view');
+  if (modeResult.ok) {
+    const modeChanged: boolean = modeResult.changed;
+    void modeChanged;
   }
-  void firstPage;
-  void scrollGap;
-  void rectCount;
-  void caretX;
-  void hitFrame;
-  void filteredRects;
-  void filteredGeometry;
 
   const focus = editor.focus();
   if (focus.ok) {
@@ -131,17 +124,6 @@ export function exercise(editor: Editor, doc: DocxDocument): void {
     const focusCode: string = focus.code;
     void focusCode;
   }
-
-  const dispatch = editor.dispatchInteraction({ kind: 'focus', frameId: frame.id });
-  void dispatch.hostEffects.length;
-  if (!dispatch.outcome.ok) {
-    const dispatchCode: string = dispatch.outcome.code;
-    void dispatchCode;
-  }
-
-  const a11y = editor.getAccessibilityObservation();
-  void a11y.owner;
-  void a11y.entries.length;
 
   // Document-layer queries are typed the same way.
   const paras = queryDoc(doc, { type: 'paragraphs' });

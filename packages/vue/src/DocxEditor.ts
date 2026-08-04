@@ -36,6 +36,7 @@ const PRE_MOUNT_SNAPSHOT: EditorSnapshot = {
   editable: false,
   zoom: 1,
   selection: null,
+  selectionCollapsed: true,
   formatting: null,
   table: null,
   image: null,

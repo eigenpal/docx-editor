@@ -9,14 +9,15 @@
 //
 // WHY NOT SLOTS. Cut, Copy, Paste, Delete and Select All are not in `CHROME_GROUPS`, and
 // putting them there would place five controls in the default toolbar arrangement that
-// nothing renders. They carry a fixed command instead and ask `Editor.can` about it
-// directly — the same authority `toolbarCommandState` asks on a slot's behalf.
+// nothing renders. They pass a fixed `EditorCommand` to `useEditorCommand` instead, which
+// takes either form — the slot arm asks `toolbarCommandState`, the command arm asks
+// `Editor.can`/`isActive` directly, and both end at the same authority.
 
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { EditorCommand } from '@docx-editor.dev/core-contract/contracts/editor';
 import { useDocxEditor } from '../context';
-import { useEditorState } from '../useEditorState';
+import { useEditorCommand } from '../useEditorCommand';
 import { MenuRow } from '../menu/parts';
 import { useMenuLabel } from '../menu/menu-context';
 import { useContextMenuContext } from './contextmenu-context';
@@ -28,45 +29,6 @@ import {
   SELECT_ALL_PATHS,
 } from './contextmenu-icons';
 import { chromeIcon } from '../toolbar/ToolbarButton';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// One command's live state
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface CommandSlice {
-  readonly enabled: boolean;
-  readonly disabledReason: string | null;
-}
-
-function sliceEqual(a: CommandSlice, b: CommandSlice): boolean {
-  return a.enabled === b.enabled && a.disabledReason === b.disabledReason;
-}
-
-/**
- * The enabled state of one raw `EditorCommand`, tracked across editor ticks.
- *
- * The slot-bound sibling of this is `useEditorCommand`; this is the same derivation for a
- * command that has no slot. Field-wise equality keeps a row asleep through the caret moves
- * that do not change ITS answer.
- */
-function useCommandState(command: EditorCommand): CommandSlice {
-  const editor = useDocxEditor();
-  // The command object is rebuilt on every render by its caller, so the selector is keyed
-  // on the command's TYPE rather than its identity — otherwise `useEditorState` resubscribes
-  // every frame.
-  const select = useCallback(
-    (_snapshot: unknown): CommandSlice => {
-      if (!editor) return { enabled: false, disabledReason: null };
-      const allowed = editor.can(command);
-      return allowed.ok
-        ? { enabled: true, disabledReason: null }
-        : { enabled: false, disabledReason: allowed.reason ?? null };
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the command's shape
-    [editor, command.type]
-  );
-  return useEditorState(select, sliceEqual);
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The generic command row
@@ -101,14 +63,14 @@ function defineCommandRow(
     const editor = useDocxEditor();
     const { close } = useContextMenuContext();
     const label = useMenuLabel();
-    const { enabled, disabledReason } = useCommandState(command);
+    const { isEnabled, disabledReason } = useEditorCommand(command);
     if (hidden) return null;
     return (
       <MenuRow
         slot={rowId}
         icon={icon ?? chromeIcon(defaults.paths)}
         shortcut={label(shortcutKey ?? defaults.shortcutKey)}
-        disabled={!enabled}
+        disabled={!isEnabled}
         {...(disabledReason ? { title: disabledReason } : {})}
         onSelect={() => {
           editor?.exec(command);
@@ -187,7 +149,7 @@ export function ContextMenuPaste({
   // `text: ''` probes the SHAPE and the mode — is a paste admissible here at all — without
   // claiming to know what the clipboard holds.
   const probe = useMemo((): EditorCommand => ({ type: 'paste', text: '' }), []);
-  const { enabled, disabledReason } = useCommandState(probe);
+  const { isEnabled, disabledReason } = useEditorCommand(probe);
   const [refusal, setRefusal] = useState<string | null>(null);
   if (hidden) return null;
   const blocked = refusal !== null;
@@ -196,7 +158,7 @@ export function ContextMenuPaste({
       slot="edit.paste"
       icon={icon ?? chromeIcon(PASTE_PATHS)}
       shortcut={label(shortcutKey ?? 'contextMenu.pasteShortcut')}
-      disabled={!enabled || blocked}
+      disabled={!isEnabled || blocked}
       {...((refusal ?? disabledReason) ? { title: refusal ?? disabledReason ?? '' } : {})}
       onSelect={() => {
         void (async () => {

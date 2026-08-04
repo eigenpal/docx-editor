@@ -35,8 +35,8 @@ import {
 
 /**
  * Props for `DocxEditor.Root`. Creation parameters (`document`, `fonts`, `author`,
- * `locale`, `mode`, and the initial `zoom`) are sampled when the instance is created;
- * only `document` and `fonts` identity remount it. A later `zoom` change flows through
+ * `locale`, and the initial `mode`/`zoom`) are sampled when the instance is created;
+ * only `document` and `fonts` identity remount it. Later `mode` and `zoom` changes flow through
  * `Editor.setZoom` so edits, the caret, and the undo history survive.
  *
  * @public
@@ -76,7 +76,7 @@ export interface DocxEditorRootProps {
  * @public
  */
 export function DocxEditorRoot(props: DocxEditorRootProps) {
-  const { document: doc, fonts, zoom, children } = props;
+  const { document: doc, fonts, mode, zoom, children } = props;
 
   // Latest props, read inside effects without retriggering them.
   const propsRef = useRef(props);
@@ -113,6 +113,14 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   useEffect(() => {
     if (editor) propsRef.current.onReady?.(editor);
   }, [editor]);
+
+  // Mode is a facade parameter too, and for a stronger reason than zoom: a host toggling
+  // read-only mid-session must not lose the user's undo history or their place in the
+  // document to change a permission. Follows the prop on every change, so the packaged
+  // `review.editingMode` control and a host's own toggle stay in agreement.
+  useEffect(() => {
+    if (mode !== undefined) editor?.setMode(mode);
+  }, [editor, mode]);
 
   // Zoom is a facade parameter, not a remount: tearing the editor down for a zoom
   // change would discard the user's edits and undo history.
