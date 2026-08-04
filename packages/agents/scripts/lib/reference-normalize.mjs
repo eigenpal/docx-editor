@@ -30,6 +30,13 @@ function normalizeOverload(overload) {
   };
 }
 
+// `requirementSet: null` means the upstream `.d.ts` had no `[Api set: ...]`
+// doc-comment tag on this declaration — it is NOT a claim that the member
+// is universally available or requirement-free. Members inherited onto a
+// symbol whose *class* itself carries a requirement set (e.g. every member
+// of `Word.Body`) commonly have no per-member tag of their own; read the
+// enclosing symbol's `requirementSet` for that case. `extract-word-reference.mjs`'s
+// `getRequirementSet` is the sole place this fact is read from source.
 function normalizeMember(member) {
   return {
     uid: member.uid,
@@ -44,6 +51,8 @@ function normalizeSymbol(symbol) {
   const normalized = {
     uid: symbol.uid,
     kind: symbol.kind,
+    // See the `requirementSet: null` note above `normalizeMember`; applies
+    // identically at the symbol level.
     requirementSet: symbol.requirementSet ?? null,
   };
   if (symbol.kind === 'function') {

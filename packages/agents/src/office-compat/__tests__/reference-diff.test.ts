@@ -1,8 +1,15 @@
 import { describe, test, expect } from 'bun:test';
-import { diffReferenceFixtures, formatReferenceDiff } from '../../../scripts/lib/reference-diff.mjs';
+import {
+  diffReferenceFixtures,
+  formatReferenceDiff,
+} from '../../../scripts/lib/reference-diff.mjs';
 
 function fixture(symbols) {
-  return { schemaVersion: 1, generatedFrom: { package: '@types/office-js', version: '1.0.0' }, symbols };
+  return {
+    schemaVersion: 1,
+    generatedFrom: { package: '@types/office-js', version: '1.0.0' },
+    symbols,
+  };
 }
 
 describe('diffReferenceFixtures', () => {
@@ -13,7 +20,13 @@ describe('diffReferenceFixtures', () => {
         kind: 'class',
         requirementSet: 'WordApi 1.1',
         members: {
-          text: { uid: 'Word.Body#text', kind: 'property', readonly: true, requirementSet: null, overloads: [{ params: [], returns: 'string' }] },
+          text: {
+            uid: 'Word.Body#text',
+            kind: 'property',
+            readonly: true,
+            requirementSet: null,
+            overloads: [{ params: [], returns: 'string' }],
+          },
         },
       },
     });
@@ -50,7 +63,12 @@ describe('diffReferenceFixtures', () => {
         kind: 'class',
         requirementSet: 'WordApi 1.1',
         members: {
-          text: { uid: 'Word.Body#text', kind: 'property', requirementSet: null, overloads: [{ params: [], returns: 'string' }] },
+          text: {
+            uid: 'Word.Body#text',
+            kind: 'property',
+            requirementSet: null,
+            overloads: [{ params: [], returns: 'string' }],
+          },
         },
       },
     });
@@ -60,8 +78,18 @@ describe('diffReferenceFixtures', () => {
         kind: 'class',
         requirementSet: 'WordApi 1.1',
         members: {
-          text: { uid: 'Word.Body#text', kind: 'property', requirementSet: null, overloads: [{ params: [], returns: 'string' }] },
-          newMember: { uid: 'Word.Body#newMember', kind: 'method', requirementSet: 'WordApi 1.6', overloads: [{ params: [], returns: 'void' }] },
+          text: {
+            uid: 'Word.Body#text',
+            kind: 'property',
+            requirementSet: null,
+            overloads: [{ params: [], returns: 'string' }],
+          },
+          newMember: {
+            uid: 'Word.Body#newMember',
+            kind: 'method',
+            requirementSet: 'WordApi 1.6',
+            overloads: [{ params: [], returns: 'void' }],
+          },
         },
       },
     });
@@ -80,7 +108,12 @@ describe('diffReferenceFixtures', () => {
         kind: 'class',
         requirementSet: null,
         members: {
-          gone: { uid: 'Word.Body#gone', kind: 'method', requirementSet: null, overloads: [{ params: [], returns: 'void' }] },
+          gone: {
+            uid: 'Word.Body#gone',
+            kind: 'method',
+            requirementSet: null,
+            overloads: [{ params: [], returns: 'void' }],
+          },
         },
       },
     });
@@ -103,7 +136,13 @@ describe('diffReferenceFixtures', () => {
             kind: 'method',
             requirementSet: null,
             overloads: [
-              { params: [{ name: 'text', type: 'string' }, { name: 'loc', type: '"Start" | "End"' }], returns: 'Range' },
+              {
+                params: [
+                  { name: 'text', type: 'string' },
+                  { name: 'loc', type: '"Start" | "End"' },
+                ],
+                returns: 'Range',
+              },
             ],
           },
         },
@@ -121,7 +160,10 @@ describe('diffReferenceFixtures', () => {
             requirementSet: null,
             overloads: [
               {
-                params: [{ name: 'text', type: 'string' }, { name: 'loc', type: '"Start" | "End" | "Replace"' }],
+                params: [
+                  { name: 'text', type: 'string' },
+                  { name: 'loc', type: '"Start" | "End" | "Replace"' },
+                ],
                 returns: 'Range',
               },
             ],
@@ -143,7 +185,12 @@ describe('diffReferenceFixtures', () => {
         kind: 'class',
         requirementSet: null,
         members: {
-          start: { uid: 'Word.Range#start', kind: 'property', requirementSet: null, overloads: [{ params: [], returns: 'number' }] },
+          start: {
+            uid: 'Word.Range#start',
+            kind: 'property',
+            requirementSet: null,
+            overloads: [{ params: [], returns: 'number' }],
+          },
         },
       },
     });
@@ -153,7 +200,13 @@ describe('diffReferenceFixtures', () => {
         kind: 'class',
         requirementSet: null,
         members: {
-          start: { uid: 'Word.Range#start', kind: 'property', readonly: true, requirementSet: null, overloads: [{ params: [], returns: 'number' }] },
+          start: {
+            uid: 'Word.Range#start',
+            kind: 'property',
+            readonly: true,
+            requirementSet: null,
+            overloads: [{ params: [], returns: 'number' }],
+          },
         },
       },
     });
@@ -169,7 +222,12 @@ describe('diffReferenceFixtures', () => {
         kind: 'class',
         requirementSet: null,
         members: {
-          text: { uid: 'Word.Body#text', kind: 'property', requirementSet: 'WordApi 1.1', overloads: [{ params: [], returns: 'string' }] },
+          text: {
+            uid: 'Word.Body#text',
+            kind: 'property',
+            requirementSet: 'WordApi 1.1',
+            overloads: [{ params: [], returns: 'string' }],
+          },
         },
       },
     });
@@ -179,7 +237,12 @@ describe('diffReferenceFixtures', () => {
         kind: 'class',
         requirementSet: null,
         members: {
-          text: { uid: 'Word.Body#text', kind: 'property', requirementSet: 'WordApi 1.2', overloads: [{ params: [], returns: 'string' }] },
+          text: {
+            uid: 'Word.Body#text',
+            kind: 'property',
+            requirementSet: 'WordApi 1.2',
+            overloads: [{ params: [], returns: 'string' }],
+          },
         },
       },
     });
@@ -194,7 +257,12 @@ describe('diffReferenceFixtures', () => {
         uid: 'Word.run',
         kind: 'function',
         requirementSet: null,
-        overloads: [{ params: [{ name: 'batch', type: '(context: RequestContext) => Promise<T>' }], returns: 'Promise<T>' }],
+        overloads: [
+          {
+            params: [{ name: 'batch', type: '(context: RequestContext) => Promise<T>' }],
+            returns: 'Promise<T>',
+          },
+        ],
       },
     });
     const newFixture = fixture({
@@ -203,7 +271,10 @@ describe('diffReferenceFixtures', () => {
         kind: 'function',
         requirementSet: null,
         overloads: [
-          { params: [{ name: 'batch', type: '(context: RequestContext) => Promise<T>' }], returns: 'Promise<T>' },
+          {
+            params: [{ name: 'batch', type: '(context: RequestContext) => Promise<T>' }],
+            returns: 'Promise<T>',
+          },
           {
             params: [
               { name: 'object', type: 'ClientObject' },

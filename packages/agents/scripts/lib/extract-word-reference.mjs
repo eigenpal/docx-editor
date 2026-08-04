@@ -139,7 +139,10 @@ function extractClassOrInterface(sourceFile, namespaceName, name, stmt, selectio
 
     const method = isMethodLike(member);
     const overload = method
-      ? { params: extractParams(sourceFile, member.parameters), returns: extractReturns(sourceFile, member) }
+      ? {
+          params: extractParams(sourceFile, member.parameters),
+          returns: extractReturns(sourceFile, member),
+        }
       : { params: [], returns: extractReturns(sourceFile, member) };
 
     if (!byName.has(memberName)) {
@@ -173,7 +176,10 @@ function extractFunction(sourceFile, namespaceName, name, stmt) {
     kind: 'function',
     requirementSet: getRequirementSet(sourceFile, stmt),
     overloads: [
-      { params: extractParams(sourceFile, stmt.parameters), returns: extractReturns(sourceFile, stmt) },
+      {
+        params: extractParams(sourceFile, stmt.parameters),
+        returns: extractReturns(sourceFile, stmt),
+      },
     ],
   };
 }
@@ -240,7 +246,13 @@ export function extractWordReference(sourceText, manifestSymbols) {
         if (!selection || selection.isFunction) continue;
         if ((selection.namespace ?? 'Word') !== namespaceName) continue;
 
-        const extracted = extractClassOrInterface(sourceFile, namespaceName, name, inner, selection);
+        const extracted = extractClassOrInterface(
+          sourceFile,
+          namespaceName,
+          name,
+          inner,
+          selection
+        );
         if (result[name]) {
           Object.assign(result[name].members, extracted.members);
         } else {

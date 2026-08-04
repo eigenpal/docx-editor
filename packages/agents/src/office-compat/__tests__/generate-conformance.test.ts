@@ -18,7 +18,12 @@ const referenceFixture = {
       kind: 'class',
       requirementSet: 'WordApi 1.1',
       members: {
-        bold: { uid: 'Word.Font#bold', kind: 'property', requirementSet: 'WordApi 1.1', overloads: [{ params: [], returns: 'boolean' }] },
+        bold: {
+          uid: 'Word.Font#bold',
+          kind: 'property',
+          requirementSet: 'WordApi 1.1',
+          overloads: [{ params: [], returns: 'boolean' }],
+        },
       },
     },
     Body: {
@@ -54,7 +59,10 @@ const referenceFixture = {
       kind: 'function',
       requirementSet: null,
       overloads: [
-        { params: [{ name: 'batch', type: '(context: RequestContext) => Promise<T>' }], returns: 'Promise<T>' },
+        {
+          params: [{ name: 'batch', type: '(context: RequestContext) => Promise<T>' }],
+          returns: 'Promise<T>',
+        },
       ],
     },
   },
@@ -125,7 +133,7 @@ describe('generateConformance', () => {
       docxEditorSourceText: conformantSource,
       docxEditorPackageVersion: '0.0.1',
     });
-    expect(result.assertionsSource).toContain("import type { IsExact, Expect }");
+    expect(result.assertionsSource).toContain('import type { IsExact, Expect }');
     // `font` returns `Font` — a manifest-known symbol name — so it must be
     // re-qualified to `DocxEditor.Font` for use outside the namespace block.
     expect(result.assertionsSource).toContain('DocxEditor.Font');
@@ -212,8 +220,12 @@ describe('generateConformance', () => {
       docxEditorSourceText: conformantSource,
       docxEditorPackageVersion: '0.0.1',
     });
-    expect(result.assertionsSource).toMatch(/type Ref_Body_font_readonly_\d+ = \{ readonly value: DocxEditor\.Font \};/);
-    expect(result.assertionsSource).toMatch(/type Auth_Body_font_readonly_\d+ = \{ readonly value: DocxEditor\.Font \};/);
+    expect(result.assertionsSource).toMatch(
+      /type Ref_Body_font_readonly_\d+ = \{ readonly value: DocxEditor\.Font \};/
+    );
+    expect(result.assertionsSource).toMatch(
+      /type Auth_Body_font_readonly_\d+ = \{ readonly value: DocxEditor\.Font \};/
+    );
   });
 
   test('flags a dropped readonly modifier as a conformance issue even when the getter-shaped overload text is identical', () => {

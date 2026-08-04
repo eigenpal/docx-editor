@@ -2,3 +2,9 @@
 # Prettier would reformat union types onto multiple lines and the next
 # run of api:check would flag the result as drift.
 docs/api/**/*.api.md
+
+# Office.js compat generator output — owned by
+# `node scripts/generate-conformance.mjs`, never hand-edit. Checked in
+# byte-exact against a fresh regeneration (see conformance-live.test.ts);
+# reformatting here would make that comparison flag drift that isn't real.
+packages/agents/compat/generated/**

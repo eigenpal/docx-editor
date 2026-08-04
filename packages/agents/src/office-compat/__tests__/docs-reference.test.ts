@@ -103,7 +103,10 @@ describe('validateDocsReferenceMetadata', () => {
   });
 
   test('flags an htmlUrl that is not a github.com URL', () => {
-    const issues = validateDocsReferenceMetadata({ ...wellFormed(), htmlUrl: 'javascript:alert(1)' });
+    const issues = validateDocsReferenceMetadata({
+      ...wellFormed(),
+      htmlUrl: 'javascript:alert(1)',
+    });
     expect(issues.some((i) => /htmlUrl/.test(i))).toBe(true);
   });
 });
@@ -125,7 +128,8 @@ describe('fetchDocsReferenceCommitMetadata', () => {
       html_url: `https://github.com/${DOCS_REFERENCE_REPOSITORY}/commit/${commit}`,
       commit: {
         author: { date: '2026-08-04T15:36:00Z' },
-        message: 'Automatically generated docs (#2601)\n\nCo-authored-by: github-actions <github-actions@github.com>',
+        message:
+          'Automatically generated docs (#2601)\n\nCo-authored-by: github-actions <github-actions@github.com>',
       },
     });
     const metadata = await fetchDocsReferenceCommitMetadata(commit, { fetchImpl });
@@ -133,15 +137,17 @@ describe('fetchDocsReferenceCommitMetadata', () => {
     expect(metadata.commit).toBe(commit);
     expect(metadata.commitDate).toBe('2026-08-04T15:36:00Z');
     expect(metadata.commitMessage).toBe('Automatically generated docs (#2601)');
-    expect(metadata.htmlUrl).toBe(`https://github.com/${DOCS_REFERENCE_REPOSITORY}/commit/${commit}`);
+    expect(metadata.htmlUrl).toBe(
+      `https://github.com/${DOCS_REFERENCE_REPOSITORY}/commit/${commit}`
+    );
     expect(validateDocsReferenceMetadata(metadata)).toEqual([]);
   });
 
   test('throws when the GitHub API request fails (non-ok response) rather than silently skipping verification', async () => {
     const fetchImpl = fakeGitHubResponse({}, { ok: false, status: 404, statusText: 'Not Found' });
-    await expect(fetchDocsReferenceCommitMetadata(PINNED_DOCS_REFERENCE_COMMIT, { fetchImpl })).rejects.toThrow(
-      /404/
-    );
+    await expect(
+      fetchDocsReferenceCommitMetadata(PINNED_DOCS_REFERENCE_COMMIT, { fetchImpl })
+    ).rejects.toThrow(/404/);
   });
 
   test('throws when the returned commit sha does not match the requested pinned commit (validation, not blind trust)', async () => {

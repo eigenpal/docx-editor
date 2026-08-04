@@ -109,7 +109,15 @@
     "Section": { "members": ["body", "pageSetup", "getHeader", "getFooter", "getNext"] },
     "SectionCollection": { "members": ["items", "getFirst"] },
     "PageSetup": {
-      "members": ["topMargin", "bottomMargin", "leftMargin", "rightMargin", "orientation", "pageWidth", "pageHeight"]
+      "members": [
+        "topMargin",
+        "bottomMargin",
+        "leftMargin",
+        "rightMargin",
+        "orientation",
+        "pageWidth",
+        "pageHeight"
+      ]
     },
     "NoteItem": { "members": ["body", "type", "delete", "getNext"] },
     "Comment": {

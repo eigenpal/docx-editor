@@ -16,7 +16,12 @@ function makeReferenceFixture() {
         requirementSet: 'WordApi 1.1',
         members: {
           text: { uid: 'Word.Body#text', kind: 'property', requirementSet: null, overloads: [] },
-          insertText: { uid: 'Word.Body#insertText', kind: 'method', requirementSet: null, overloads: [] },
+          insertText: {
+            uid: 'Word.Body#insertText',
+            kind: 'method',
+            requirementSet: null,
+            overloads: [],
+          },
         },
       },
       run: { uid: 'Word.run', kind: 'function', requirementSet: null, overloads: [] },
@@ -77,7 +82,9 @@ describe('validateManifestAgainstReference', () => {
   test('flags an omission uid that contradicts an active selection for the same member', () => {
     const manifest = makeManifest({
       symbols: { Body: { members: ['text', 'insertText'] } },
-      omissions: [{ uid: 'Word.Body#insertText', reason: 'accidentally both selected and omitted' }],
+      omissions: [
+        { uid: 'Word.Body#insertText', reason: 'accidentally both selected and omitted' },
+      ],
     });
     const issues = validateManifestAgainstReference(manifest, makeReferenceFixture());
     expect(issues.some((i) => /Word\.Body#insertText/.test(i) && /contradict/i.test(i))).toBe(true);

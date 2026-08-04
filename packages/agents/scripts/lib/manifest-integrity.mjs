@@ -26,7 +26,11 @@ const SUPPORTED_MANIFEST_SCHEMA_VERSION = 1;
  * header comment. Every other exported name must be a selected manifest
  * symbol; see `validateAuthoredExportsAgainstManifest`.
  */
-const ALLOWLISTED_SUPPORT_TYPES = new Set(['ClientRequestContext', 'SelectionMode', 'HeaderFooterType']);
+const ALLOWLISTED_SUPPORT_TYPES = new Set([
+  'ClientRequestContext',
+  'SelectionMode',
+  'HeaderFooterType',
+]);
 
 function symbolLabel(symbolName) {
   return symbolName;
@@ -83,7 +87,9 @@ export function validateManifestAgainstReference(manifest, referenceFixture) {
   for (const [symbolName, selection] of Object.entries(manifestSymbols)) {
     const referenceSymbol = referenceSymbols[symbolName];
     if (!referenceSymbol) {
-      issues.push(`manifest.symbols.${symbolLabel(symbolName)}: no corresponding reference symbol (stale manifest entry?)`);
+      issues.push(
+        `manifest.symbols.${symbolLabel(symbolName)}: no corresponding reference symbol (stale manifest entry?)`
+      );
       continue;
     }
     if (selection.isFunction) continue;

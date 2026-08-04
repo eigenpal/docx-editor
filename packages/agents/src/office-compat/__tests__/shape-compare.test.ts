@@ -27,10 +27,7 @@ describe('overloadEquals', () => {
     // directions, which is exactly the failure mode this helper must catch.
     const narrowed = {
       ...insertTextReference,
-      params: [
-        insertTextReference.params[0],
-        { name: 'insertLocation', type: '"Start" | "End"' },
-      ],
+      params: [insertTextReference.params[0], { name: 'insertLocation', type: '"Start" | "End"' }],
     };
     expect(overloadEquals(insertTextReference, narrowed)).toBe(false);
   });
@@ -43,10 +40,7 @@ describe('overloadEquals', () => {
   test('is false when a param becomes optional (arity/shape changed)', () => {
     const madeOptional = {
       ...insertTextReference,
-      params: [
-        insertTextReference.params[0],
-        { ...insertTextReference.params[1], optional: true },
-      ],
+      params: [insertTextReference.params[0], { ...insertTextReference.params[1], optional: true }],
     };
     expect(overloadEquals(insertTextReference, madeOptional)).toBe(false);
   });
@@ -89,10 +83,7 @@ describe('compareMemberOverloads', () => {
   test('flags a narrowed overload as variance, not as merely missing', () => {
     const narrowed = {
       ...insertTextReference,
-      params: [
-        insertTextReference.params[0],
-        { name: 'insertLocation', type: '"Start" | "End"' },
-      ],
+      params: [insertTextReference.params[0], { name: 'insertLocation', type: '"Start" | "End"' }],
     };
     const issues = compareMemberOverloads([insertTextReference], [narrowed]);
     expect(issues).toHaveLength(1);
@@ -217,13 +208,22 @@ describe('compareFixtures', () => {
         uid: 'Word.Body',
         kind: 'class',
         members: {
-          insertText: { uid: 'Word.Body#insertText', kind: 'method', overloads: [insertTextReference] },
+          insertText: {
+            uid: 'Word.Body#insertText',
+            kind: 'method',
+            overloads: [insertTextReference],
+          },
         },
       },
       run: {
         uid: 'Word.run',
         kind: 'function',
-        overloads: [{ params: [{ name: 'batch', type: '(context: RequestContext) => Promise<T>' }], returns: 'Promise<T>' }],
+        overloads: [
+          {
+            params: [{ name: 'batch', type: '(context: RequestContext) => Promise<T>' }],
+            returns: 'Promise<T>',
+          },
+        ],
       },
     },
   };
@@ -234,7 +234,10 @@ describe('compareFixtures', () => {
         Body: { members: { insertText: { overloads: [insertTextReference] } } },
         run: {
           overloads: [
-            { params: [{ name: 'batch', type: '(context: RequestContext) => Promise<T>' }], returns: 'Promise<T>' },
+            {
+              params: [{ name: 'batch', type: '(context: RequestContext) => Promise<T>' }],
+              returns: 'Promise<T>',
+            },
           ],
         },
       },

@@ -54,9 +54,7 @@ describe('extractFileFromTarGzip', () => {
     ]);
     const gz = gzipSync(tar);
     const content = extractFileFromTarGzip(gz, 'package/index.d.ts');
-    expect(content?.toString('utf8')).toBe(
-      'declare namespace Word { function run(): void; }'
-    );
+    expect(content?.toString('utf8')).toBe('declare namespace Word { function run(): void; }');
   });
 
   test('returns null when the target file is not present', () => {

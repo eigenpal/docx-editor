@@ -128,7 +128,13 @@ function emitAssertionPair(label, refOverload, authoredOverload, knownNames, cou
  * for property-kind members — `readonly` has no meaning on a method
  * overload or a top-level function, so there is nothing to represent there.
  */
-function emitPropertyReadonlyAssertionPair(label, referenceMember, authoredMember, knownNames, counterState) {
+function emitPropertyReadonlyAssertionPair(
+  label,
+  referenceMember,
+  authoredMember,
+  knownNames,
+  counterState
+) {
   const index = counterState.next++;
   const baseName = sanitizeIdentifier(`${label}_readonly_${index}`);
   const referenceOverload = referenceMember.overloads?.[0] ?? { returns: 'never' };
@@ -227,15 +233,15 @@ function renderAssertionsFile(referenceFixture, authoredFixture, knownNames) {
     '//',
     '// Produced by packages/agents/scripts/generate-conformance.mjs from',
     '// compat/reference/word.reference.json (upstream-derived facts, never',
-    '// upstream source) and compat/docxeditor/declarations.ts (DocxEditor\'s',
+    "// upstream source) and compat/docxeditor/declarations.ts (DocxEditor's",
     '// own, independently authored public interfaces).',
     '//',
     "// Each `_assert_*` alias fails to compile — via IsExact's bidirectional",
-    "// `extends` check, not one-directional structural `extends` — the moment a",
+    '// `extends` check, not one-directional structural `extends` — the moment a',
     '// selected Word.* overload (per compat/manifest.json) stops having an exact',
     "// structural match in DocxEditor's own declarations. Referencing `DocxEditor.*`",
-    '// names also means a typo\'d or unexported authored type name fails here as a',
-    "// real \"Cannot find name\" compiler error, not just a silent textual mismatch.",
+    "// names also means a typo'd or unexported authored type name fails here as a",
+    '// real "Cannot find name" compiler error, not just a silent textual mismatch.',
     '',
     "import type { IsExact, Expect } from '../docxeditor/type-assert';",
     "import type { DocxEditor } from '../docxeditor/declarations';",
@@ -273,7 +279,9 @@ export function generateConformance({
 
 async function main() {
   const compatDir = path.join(__dirname, '..', 'compat');
-  const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+  const packageJson = JSON.parse(
+    fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')
+  );
   const referenceFixture = JSON.parse(
     fs.readFileSync(path.join(compatDir, 'reference', 'word.reference.json'), 'utf8')
   );
@@ -313,7 +321,8 @@ async function main() {
 // See the identical guard in `fetch-office-reference.mjs` for why
 // `pathToFileURL` is used instead of the fragile `file://${argv[1]}` string
 // build.
-const isMainModule = process.argv[1] != null && import.meta.url === pathToFileURL(process.argv[1]).href;
+const isMainModule =
+  process.argv[1] != null && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMainModule) {
   main().catch((error) => {
     console.error(error);

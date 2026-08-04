@@ -13,11 +13,12 @@
  * optional-vs-required differences all fail, not just outright unrelated
  * types.
  */
-export type IsExact<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
-  ? (<T>() => T extends B ? 1 : 2) extends <T>() => T extends A ? 1 : 2
-    ? true
-    : false
-  : false;
+export type IsExact<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+    ? (<T>() => T extends B ? 1 : 2) extends <T>() => T extends A ? 1 : 2
+      ? true
+      : false
+    : false;
 
 /**
  * Fails to compile (constraint violation) unless `T` is literally `true`.

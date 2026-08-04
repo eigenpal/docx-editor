@@ -125,7 +125,9 @@ export function diffReferenceFixtures(previousFixture, nextFixture) {
 }
 
 function formatOverload(overload) {
-  const params = overload.params.map((p) => `${p.name}${p.optional ? '?' : ''}: ${p.type}`).join(', ');
+  const params = overload.params
+    .map((p) => `${p.name}${p.optional ? '?' : ''}: ${p.type}`)
+    .join(', ');
   return `(${params}) => ${overload.returns}`;
 }
 
@@ -168,7 +170,12 @@ export function formatReferenceDiff(diff) {
       for (const uid of change.removedMembers ?? []) lines.push(`      - member removed: ${uid}`);
       for (const memberChange of change.changedMembers ?? []) {
         lines.push(`      ~ member changed: ${memberChange.uid}`);
-        formatOverloadChanges(memberChange.uid, memberChange.addedOverloads, memberChange.removedOverloads, lines);
+        formatOverloadChanges(
+          memberChange.uid,
+          memberChange.addedOverloads,
+          memberChange.removedOverloads,
+          lines
+        );
         if (memberChange.readonlyChanged) {
           lines.push(
             `        readonly: ${memberChange.readonlyChanged.from} -> ${memberChange.readonlyChanged.to}`
@@ -183,7 +190,9 @@ export function formatReferenceDiff(diff) {
       // Function-kind symbols (e.g. Word.run) carry addedOverloads/removedOverloads directly.
       formatOverloadChanges(change.uid, change.addedOverloads, change.removedOverloads, lines);
       if (change.readonlyChanged) {
-        lines.push(`      readonly: ${change.readonlyChanged.from} -> ${change.readonlyChanged.to}`);
+        lines.push(
+          `      readonly: ${change.readonlyChanged.from} -> ${change.readonlyChanged.to}`
+        );
       }
       if (change.requirementSetChanged) {
         lines.push(

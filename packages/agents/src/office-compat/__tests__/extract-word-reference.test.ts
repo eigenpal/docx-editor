@@ -108,16 +108,16 @@ describe('extractWordReference', () => {
   });
 
   test('normalizeTypeText: drops an inline object-literal alternative in favor of the named class', () => {
-    expect(
-      normalizeTypeText('Word.SearchOptions | {\n  matchCase?: boolean;\n}')
-    ).toBe('SearchOptions');
+    expect(normalizeTypeText('Word.SearchOptions | {\n  matchCase?: boolean;\n}')).toBe(
+      'SearchOptions'
+    );
   });
 
   test('normalizeTypeText: keeps a bare class reference when there is no literal alternative', () => {
     expect(normalizeTypeText('Word.Range')).toBe('Range');
   });
 
-  test('normalizeTypeText: canonicalizes single-quoted string literals to double quotes (quote style is not part of a literal type\'s identity)', () => {
+  test("normalizeTypeText: canonicalizes single-quoted string literals to double quotes (quote style is not part of a literal type's identity)", () => {
     expect(normalizeTypeText("'Start' | 'End'")).toBe('"Start" | "End"');
   });
 

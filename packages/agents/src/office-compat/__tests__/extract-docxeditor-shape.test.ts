@@ -85,7 +85,7 @@ describe('extractDocxEditorShape', () => {
     expect(result.ClientObject.members.isNullObject).toBeDefined();
   });
 
-  test('canonicalizes single-quoted string literals to double quotes, matching the reference fixture\'s convention', () => {
+  test("canonicalizes single-quoted string literals to double quotes, matching the reference fixture's convention", () => {
     const source = `
       export declare namespace DocxEditor {
         class Font {
@@ -94,7 +94,9 @@ describe('extractDocxEditorShape', () => {
       }
     `;
     const result = extractDocxEditorShape(source, { Font: { members: ['selectionMode'] } });
-    expect(result.Font.members.selectionMode.overloads[0].returns).toBe('"Select" | "Start" | "End"');
+    expect(result.Font.members.selectionMode.overloads[0].returns).toBe(
+      '"Select" | "Start" | "End"'
+    );
   });
 
   test('drops the spurious empty leading alternative from a Prettier-style leading-pipe multi-line union', () => {

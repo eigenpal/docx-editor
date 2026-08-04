@@ -183,7 +183,10 @@ export declare namespace DocxEditor {
     readonly id: number;
     readonly paragraphs: ParagraphCollection;
     getLevelParagraphs(level: number): ParagraphCollection;
-    insertParagraph(paragraphText: string, insertLocation: 'Start' | 'End' | 'Before' | 'After'): Paragraph;
+    insertParagraph(
+      paragraphText: string,
+      insertLocation: 'Start' | 'End' | 'Before' | 'After'
+    ): Paragraph;
   }
 
   export class ListCollection {
@@ -364,9 +367,7 @@ export declare namespace DocxEditor {
     readonly text: string;
     title: string;
     delete(keepContent: boolean): void;
-    getRange(
-      rangeLocation?: 'Whole' | 'Start' | 'End' | 'Before' | 'After' | 'Content'
-    ): Range;
+    getRange(rangeLocation?: 'Whole' | 'Start' | 'End' | 'Before' | 'After' | 'Content'): Range;
     insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range;
   }
 
@@ -380,7 +381,10 @@ export declare namespace DocxEditor {
   // ---------------------------------------------------------------------
 
   export function run<T>(batch: (context: RequestContext) => Promise<T>): Promise<T>;
-  export function run<T>(object: ClientObject, batch: (context: RequestContext) => Promise<T>): Promise<T>;
+  export function run<T>(
+    object: ClientObject,
+    batch: (context: RequestContext) => Promise<T>
+  ): Promise<T>;
   export function run<T>(
     objects: ClientObject[],
     batch: (context: RequestContext) => Promise<T>

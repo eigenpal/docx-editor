@@ -45,9 +45,7 @@ export function compareMemberOverloads(referenceOverloads, authoredOverloads) {
       overloadEquals(referenceOverload, authored)
     );
     if (!hasExactMatch) {
-      issues.push(
-        `missing exact overload match for ${describeOverload(referenceOverload)}`
-      );
+      issues.push(`missing exact overload match for ${describeOverload(referenceOverload)}`);
     }
   }
   return issues;

@@ -45,7 +45,10 @@ import { extractFileFromTarGzip } from './lib/tar.mjs';
 import { extractWordReference } from './lib/extract-word-reference.mjs';
 import { buildReferenceFixture, validateReferenceFixture } from './lib/reference-normalize.mjs';
 import { buildProvenance, validateProvenance } from './lib/provenance.mjs';
-import { PINNED_DOCS_REFERENCE_COMMIT, fetchDocsReferenceCommitMetadata } from './lib/docs-reference.mjs';
+import {
+  PINNED_DOCS_REFERENCE_COMMIT,
+  fetchDocsReferenceCommitMetadata,
+} from './lib/docs-reference.mjs';
 import { diffReferenceFixtures, formatReferenceDiff } from './lib/reference-diff.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -222,7 +225,8 @@ async function main() {
 // in a bare path string. `pathToFileURL` performs the same normalization
 // Node used to construct `import.meta.url` in the first place, so the two
 // sides compare correctly regardless of how this script's own path looks.
-const isMainModule = process.argv[1] != null && import.meta.url === pathToFileURL(process.argv[1]).href;
+const isMainModule =
+  process.argv[1] != null && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMainModule) {
   main().catch((error) => {
     console.error(error);

@@ -40,12 +40,15 @@ describe('the checked-in compat/generated/ output', () => {
     docxEditorPackageVersion: packageJson.version,
   });
 
-  test('DocxEditor\'s own declarations have zero conformance issues against the frozen reference', () => {
+  test("DocxEditor's own declarations have zero conformance issues against the frozen reference", () => {
     expect(result.issues).toEqual([]);
   });
 
   test('compat/generated/docxeditor.shape.json matches a fresh regeneration', () => {
-    const checkedIn = fs.readFileSync(path.join(compatDir, 'generated', 'docxeditor.shape.json'), 'utf8');
+    const checkedIn = fs.readFileSync(
+      path.join(compatDir, 'generated', 'docxeditor.shape.json'),
+      'utf8'
+    );
     expect(checkedIn).toBe(`${JSON.stringify(result.authoredFixture, null, 2)}\n`);
   });
 

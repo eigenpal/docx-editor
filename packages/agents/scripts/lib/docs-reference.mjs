@@ -35,7 +35,13 @@ export function isWellFormedCommitSha(value) {
  * validation step (same split as `buildReferenceFixture`/
  * `validateReferenceFixture` elsewhere in this task).
  */
-export function buildDocsReferenceMetadata({ repository, commit, commitDate, commitMessage, htmlUrl }) {
+export function buildDocsReferenceMetadata({
+  repository,
+  commit,
+  commitDate,
+  commitMessage,
+  htmlUrl,
+}) {
   return {
     repository,
     commit,
@@ -55,13 +61,17 @@ export function validateDocsReferenceMetadata(metadata) {
     );
   }
   if (!isWellFormedCommitSha(m.commit)) {
-    issues.push(`docsReference.commit: expected a 40-character hex commit sha, got ${JSON.stringify(m.commit)}`);
+    issues.push(
+      `docsReference.commit: expected a 40-character hex commit sha, got ${JSON.stringify(m.commit)}`
+    );
   }
   if (typeof m.commitDate !== 'string' || m.commitDate.length === 0) {
     issues.push('docsReference.commitDate: required (non-empty string)');
   }
   if (typeof m.htmlUrl !== 'string' || !m.htmlUrl.startsWith('https://github.com/')) {
-    issues.push(`docsReference.htmlUrl: expected an https://github.com/... URL, got ${JSON.stringify(m.htmlUrl)}`);
+    issues.push(
+      `docsReference.htmlUrl: expected an https://github.com/... URL, got ${JSON.stringify(m.htmlUrl)}`
+    );
   }
   return issues;
 }
@@ -101,7 +111,8 @@ export async function fetchDocsReferenceCommitMetadata(commit, { fetchImpl = fet
       `GitHub API response for ${DOCS_REFERENCE_REPOSITORY}@${commit} is missing commit.author.date`
     );
   }
-  const commitMessage = typeof data.commit?.message === 'string' ? data.commit.message.split('\n')[0] : null;
+  const commitMessage =
+    typeof data.commit?.message === 'string' ? data.commit.message.split('\n')[0] : null;
 
   return buildDocsReferenceMetadata({
     repository: DOCS_REFERENCE_REPOSITORY,

@@ -18,7 +18,9 @@ export async function fillFirstPlainTextContentControl(newText: string): Promise
   });
 }
 
-export async function replyToFirstUnresolvedComment(replyText: string): Promise<DocxEditor.CommentReply | undefined> {
+export async function replyToFirstUnresolvedComment(
+  replyText: string
+): Promise<DocxEditor.CommentReply | undefined> {
   // NOTE: `Word.Comment`'s constructor path in real Office.js is
   // `range.insertComment(...)` (WordApiOnline 1.1) — not part of this
   // task's frozen `commentsAndRevisions` subset (only reading/replying to

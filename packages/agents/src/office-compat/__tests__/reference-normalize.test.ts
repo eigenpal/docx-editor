@@ -72,9 +72,7 @@ describe('buildReferenceFixture', () => {
 
   test('produces byte-identical JSON for the same logical input regardless of key order', () => {
     const build = (symbols: Record<string, unknown>) =>
-      JSON.stringify(
-        buildReferenceFixture({ packageName: 'x', packageVersion: '1.0.0', symbols })
-      );
+      JSON.stringify(buildReferenceFixture({ packageName: 'x', packageVersion: '1.0.0', symbols }));
 
     const a = build({
       Body: { uid: 'Word.Body', kind: 'class', requirementSet: null, members: {} },
