@@ -8,6 +8,7 @@ bun run dev
 
 # Pick one
 bun run dev:react   # examples/vite
+bun run dev:igloo   # examples/igloo
 bun run dev:vue     # examples/vue
 bun run dev:nextjs  # examples/nextjs
 bun run dev:nuxt    # examples/nuxt
@@ -20,6 +21,7 @@ bun run dev:astro   # examples/astro
 | Path                     | What it shows                                                                                                   |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------- |
 | `vite/`                  | Vanilla Vite + React. Default React dev target; point new contributors here first.                              |
+| `igloo/`                 | Deep customization: every `DocxEditor.*` part re-skinned, re-iconed and re-labelled under one theme, plus a host-composed context menu. Point people here who ask "how far can I take this?" |
 | `vue/`                   | Vue 3 adapter, mirrors the Vite example.                                                                        |
 | `nextjs/`                | Next.js App Router integration.                                                                                 |
 | `nuxt/`                  | Nuxt 3/4 module (`@docx-editor.dev/nuxt`).                                                                      |

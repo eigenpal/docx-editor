@@ -1,0 +1,368 @@
+/* The Igloo theme.
+ *
+ * Almost all of it is TOKEN OVERRIDES. The library's chrome — toolbar, menu bar, panels,
+ * pickers, rulers, the navigation pane — is already built on the `--doc-*` palette, so
+ * restating that palette under one scope re-skins every one of those at once without a
+ * single component being reimplemented or a single library class being overridden.
+ *
+ * What is left after the tokens is genuinely this demo's: the sea, the berg, the blizzard,
+ * the brand header, and a handful of shapes (frosted glass, the menu's ice panel) that are
+ * a look rather than a colour.
+ *
+ * The DOCUMENT CANVAS is untouched. `--doc-page-bg` and friends stay Word's.
+ */
+
+/* In a standalone app this is `@import '@docx-editor.dev/react/styles.css'`. The demo reads
+   the canonical core chrome stylesheet from source, so editing it repaints the page. */
+@import '../../../packages/core/src/styles/editor.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.igloo-shell {
+  /* Surfaces: frosted glass over the sea rather than opaque panels. */
+  --doc-surface: rgba(232, 248, 255, 0.82);
+  --doc-card: rgba(240, 251, 255, 0.9);
+  --doc-bg: transparent;
+  --doc-bg-subtle: rgba(210, 238, 250, 0.35);
+  --doc-bg-hover: rgba(150, 210, 238, 0.35);
+  --doc-bg-input: rgba(255, 255, 255, 0.6);
+
+  /* Glacier blue where the library uses Google blue. */
+  --doc-primary: #1b7fa8;
+  --doc-primary-hover: #135f80;
+  --doc-primary-light: rgba(140, 214, 240, 0.4);
+  --doc-accent: #2f9dc7;
+  --doc-accent-bg: rgba(190, 234, 250, 0.5);
+  --doc-on-primary: #f2fbff;
+
+  /* Deep-water text on pale ice. */
+  --doc-text: #0d3149;
+  --doc-text-muted: #3d6d89;
+  --doc-text-subtle: #7ba4bb;
+  --doc-text-placeholder: #8fb4c7;
+
+  --doc-border: rgba(148, 205, 231, 0.55);
+  --doc-border-light: rgba(178, 224, 243, 0.5);
+  --doc-border-dark: rgba(120, 180, 210, 0.65);
+  --doc-border-input: rgba(140, 200, 228, 0.7);
+
+  --doc-link: #0f6f95;
+  --doc-focus-ring: rgba(70, 180, 225, 0.55);
+  --doc-selection: rgba(70, 180, 225, 0.32);
+
+  --doc-shadow: rgba(6, 42, 66, 0.22);
+  --doc-shadow-strong: rgba(6, 42, 66, 0.4);
+  --doc-shadow-subtle: rgba(6, 42, 66, 0.08);
+  --doc-shadow-lg: 0 18px 40px -18px rgba(4, 34, 54, 0.6);
+  --doc-overlay: rgba(6, 34, 54, 0.55);
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  /* The water itself: deep below, bright at the horizon. */
+  background:
+    radial-gradient(120% 70% at 50% -10%, #9fd9f2 0%, #4a9fc8 38%, #17547a 72%, #0b2740 100%);
+  color: var(--doc-text);
+}
+
+/* ── The sea and the weather ──────────────────────────────────────────────────────── */
+
+.igloo-sea,
+.igloo-blizzard {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.igloo-sea {
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+.igloo-blizzard {
+  /* Above the page, below the chrome: snow falls in FRONT of the document (it is weather,
+     not a watermark) but must never obscure the controls being demonstrated. */
+  z-index: 3;
+  overflow: hidden;
+}
+
+.igloo-blizzard__flake {
+  position: absolute;
+  top: -12px;
+  border-radius: 50%;
+  background: #ffffff;
+  animation-name: igloo-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes igloo-fall {
+  to {
+    transform: translate3d(var(--igloo-drift), 105vh, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .igloo-blizzard__flake {
+    animation: none;
+  }
+}
+
+/* ── Chrome ───────────────────────────────────────────────────────────────────────── */
+
+.igloo-chrome,
+.igloo-rulerbar {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  background: rgba(233, 248, 255, 0.72);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.45);
+}
+
+.igloo-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px 4px;
+}
+
+.igloo-brand__text h1 {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--doc-text);
+}
+
+.igloo-brand__text p {
+  font-size: 12px;
+  color: var(--doc-text-muted);
+}
+
+.igloo-mark {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 4px rgba(6, 42, 66, 0.3));
+}
+
+.igloo-mark--spin {
+  animation: igloo-bob 2.4s ease-in-out infinite;
+}
+
+@keyframes igloo-bob {
+  50% {
+    transform: translateY(-6px) rotate(-3deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .igloo-mark--spin {
+    animation: none;
+  }
+}
+
+.igloo-menubar,
+.igloo-toolbar {
+  padding: 2px 12px;
+}
+
+.igloo-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+  padding-bottom: 8px;
+}
+
+.igloo-toolbar__spacer {
+  flex: 1;
+}
+
+.igloo-rulerbar {
+  padding: 4px 0 2px;
+  border-bottom-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Icicle ticks: the ruler's own marks, lengthened downward and tinted. */
+.igloo-ruler {
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.6));
+}
+
+/* ── The page on its berg ─────────────────────────────────────────────────────────── */
+
+/* The positioned row the floating navigation pane anchors to.
+ *
+ * NO `z-index` here or on the viewport, deliberately. Either one would open a stacking
+ * context around the context menu, and a `position: fixed` panel cannot escape the context
+ * it is declared in — it would render UNDER the chrome bar however high its own z-index
+ * went. `position: relative` with an auto z-index still paints above the sea (same layer,
+ * later in DOM order), which is all the ordering these two actually need. */
+.igloo-workspace {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.igloo-viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: transparent;
+}
+
+.igloo-stage {
+  position: relative;
+  width: fit-content;
+  margin: 0 auto;
+  padding: 120px 0 160px;
+}
+
+/* The berg is FIXED, not stretched behind the page.
+ *
+ * A document is any number of pages tall; stretching one berg over that box smears the
+ * crown into a spike and puts the waterline wherever the page happens to end. Fixed to the
+ * viewport at its own proportions, the page scrolls over a berg that stays put — which is
+ * what riding on something looks like. */
+.igloo-berg {
+  position: fixed;
+  left: 50%;
+  top: 46%;
+  width: min(1180px, 96vw);
+  height: 78vh;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 30px 60px rgba(4, 32, 52, 0.6));
+}
+
+/* The page rides ON it. */
+.igloo-stage > .igloo-page {
+  z-index: 1;
+}
+
+.igloo-page {
+  position: relative;
+  /* Cancels the library's own centring margin: the stage does the centring now. */
+  margin: 0 !important;
+}
+
+/* A frost rim on the painted page. Applied to the SURFACE, not to page content — the
+   canvas inside stays Word-faithful. */
+.igloo-page .docx-page,
+.igloo-page [data-page] {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.85),
+    0 0 22px rgba(180, 232, 252, 0.55),
+    0 18px 40px rgba(4, 32, 52, 0.4);
+}
+
+/* ── The loading screen ───────────────────────────────────────────────────────────── */
+
+.igloo-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 60vh;
+  color: #e6f7ff;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 6px rgba(4, 32, 52, 0.7);
+}
+
+.igloo-loading .igloo-mark {
+  width: 52px;
+  height: 52px;
+}
+
+/* ── The context menu, cut from a berg ────────────────────────────────────────────── */
+
+.igloo-menu {
+  position: fixed;
+  /* The card's own background is replaced by the SVG behind the rows. */
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  padding: 8px 6px 6px;
+  overflow: visible;
+  filter: drop-shadow(0 16px 30px rgba(4, 32, 52, 0.55));
+}
+
+.igloo-menu__berg {
+  position: absolute;
+  /* Up past the panel's top edge, so the crown reads as sticking out of the menu. */
+  inset: -12px 0 0;
+  width: 100%;
+  height: calc(100% + 12px);
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* The rows sit on the ice. `position: relative` lifts them out of the SVG's stacking
+   position without a z-index war. */
+.igloo-menu > *:not(.igloo-menu__berg) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Room for the crown: the first row must clear the jagged top edge. */
+.igloo-menu > *:not(.igloo-menu__berg):first-of-type {
+  margin-top: 26px;
+}
+
+.igloo-menu .docx-menubar__item:hover:not([aria-disabled='true']) {
+  background: rgba(120, 200, 232, 0.4);
+}
+
+.igloo-menu .docx-toolbar__menu-separator {
+  background: rgba(120, 180, 210, 0.5);
+}
+
+/* ── The link popover as an ice shard ─────────────────────────────────────────────── */
+
+.igloo-shard {
+  background: rgba(240, 252, 255, 0.94);
+  border: 1px solid rgba(150, 214, 240, 0.8);
+  border-radius: 4px 14px 4px 14px;
+  box-shadow: 0 12px 26px rgba(4, 32, 52, 0.45);
+}
+
+/* ── The navigation pane as an ice core ───────────────────────────────────────────── */
+
+/* The PANEL, not the pane root. The root spans the whole gutter whether the pane is open
+   or shut, so skinning it paints a large empty slab beside a closed pane. */
+.igloo-nav .docx-nav__panel-shell {
+  background: rgba(233, 248, 255, 0.92);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 14px;
+  box-shadow: 0 18px 36px rgba(4, 32, 52, 0.45);
+  overflow: hidden;
+}
+
+/* Nothing is drawn at all while the pane is shut, except its toggle. */
+.igloo-nav:not(.docx-nav--open) .docx-nav__panel-shell {
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* Strata: each heading row gets a layer line, so the outline reads as a drilled core. */
+.igloo-nav .docx-nav--open [role='treeitem'] {
+  border-bottom: 1px solid rgba(150, 205, 232, 0.35);
+}
+
+/* ── Pickers ──────────────────────────────────────────────────────────────────────── */
+
+.igloo-picker {
+  border-radius: 8px;
+}

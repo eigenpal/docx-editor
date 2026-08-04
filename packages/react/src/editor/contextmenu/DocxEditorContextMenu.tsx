@@ -79,8 +79,25 @@ const DEFAULT_SET: readonly DefaultEntry[] = [
   { kind: 'row', id: 'edit.delete', render: () => <ContextMenuDelete /> },
   { kind: 'row', id: 'edit.selectAll', render: () => <ContextMenuSelectAll /> },
   { kind: 'separator', id: 'sep.selection' },
-  { kind: 'row', id: 'text.link', render: () => <MenuItem slot="text.link" /> },
-  { kind: 'row', id: 'review.comments', render: () => <MenuItem slot="review.comments" /> },
+  // PLAIN-LABEL keys, stated rather than inherited. A slot's registry `labelKey` is
+  // tooltip-shaped — `text.link` carries "Insert link (Ctrl+K)" — which is right above a
+  // toolbar button and wrong on a menu row that already has its own shortcut column. The
+  // menu bar states them for the same reason; these two slots are in no registry menu, so
+  // there is no entry to inherit from.
+  {
+    kind: 'row',
+    id: 'text.link',
+    render: () => (
+      // No shortcut column: the catalogue has no plain "Ctrl+K" key, and inventing one
+      // here would put a literal English keystroke in a row every locale renders.
+      <MenuItem slot="text.link" labelKey="formattingBar.insertLink" />
+    ),
+  },
+  {
+    kind: 'row',
+    id: 'review.comments',
+    render: () => <MenuItem slot="review.comments" labelKey="comments.addComment" />,
+  },
 ];
 
 /**
