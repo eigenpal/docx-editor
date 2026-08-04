@@ -3354,6 +3354,148 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text-muted);
 }
 
+.docx-note-properties {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 20px;
+  background: var(--doc-overlay);
+}
+
+.docx-note-properties__panel {
+  width: min(620px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 10px;
+  box-shadow: 0 12px 36px var(--doc-shadow-strong);
+}
+
+.docx-note-properties__title {
+  margin: 0;
+  padding: 18px 20px 14px;
+  font-size: 16px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--doc-border);
+}
+
+.docx-note-properties__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 20px;
+}
+
+.docx-note-properties__scope {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.docx-note-properties__section {
+  min-width: 0;
+  margin: 0;
+  padding: 14px 16px 16px;
+  background: var(--doc-bg-subtle);
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+}
+
+.docx-note-properties__legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 5px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.docx-note-properties__badge {
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--doc-text-muted);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 9999px;
+}
+
+.docx-note-properties__fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.docx-note-properties__field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--doc-text-muted);
+}
+
+.docx-note-properties__select {
+  width: 100%;
+  min-height: 34px;
+  box-sizing: border-box;
+  padding: 6px 30px 6px 9px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-input);
+  border-radius: 5px;
+}
+
+.docx-note-properties__select:focus-visible {
+  border-color: var(--doc-primary);
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 1px;
+}
+
+.docx-note-properties__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--doc-border);
+}
+
+.docx-note-properties__button {
+  min-height: 32px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.docx-note-properties__button:hover {
+  background: var(--doc-bg-hover);
+}
+
+.docx-note-properties__button--primary {
+  color: var(--doc-on-primary);
+  background: var(--doc-primary);
+  border-color: var(--doc-primary);
+}
+
+.docx-note-properties__button--primary:hover {
+  background: var(--doc-primary-hover);
+  border-color: var(--doc-primary-hover);
+}
+
 @media (max-width: 640px) {
   .docx-context-chip__status {
     display: none;
@@ -3361,6 +3503,19 @@ a.docx-hyperlink:focus-visible {
 
   .docx-context-chip {
     max-width: calc(100vw - 16px) !important;
+  }
+
+  .docx-note-properties {
+    padding: 12px;
+  }
+
+  .docx-note-properties__panel {
+    max-height: calc(100vh - 24px);
+  }
+
+  .docx-note-properties__scope,
+  .docx-note-properties__fields {
+    grid-template-columns: 1fr;
   }
 }
 

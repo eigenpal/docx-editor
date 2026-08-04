@@ -368,6 +368,9 @@ describe('DocxEditor.NotesChrome', () => {
     });
     const dialog = view.getByTestId('docx-notes-properties-dialog');
     expect(dialog.getAttribute('aria-label')).toBe('Footnote & Endnote Properties');
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.querySelectorAll('.docx-note-properties__section')).toHaveLength(2);
+    expect(dialog.querySelector('.docx-note-properties__button--primary')).toBeTruthy();
     expect(dialog.textContent).toContain('(inherited)');
 
     const positionSelect = view.getByTestId('docx-notes-endnote-position') as HTMLSelectElement;
