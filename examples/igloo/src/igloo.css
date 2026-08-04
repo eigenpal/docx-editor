@@ -428,16 +428,32 @@
   --doc-border-input: rgba(255, 255, 255, 0.35);
   --doc-border-light: rgba(255, 255, 255, 0.45);
 
-  /* `--doc-bg-hover` does double duty in this component: it is the rows' hover AND the
-     collapsed toggle's RESTING plate. One value has to serve both, so it is pitched to read
-     as a visible disc over open water rather than as the faintest possible row tint. */
-  --doc-bg-hover: rgba(255, 255, 255, 0.2);
+  --doc-bg-hover: rgba(255, 255, 255, 0.14);
 
   /* On the host's own element, because `text-shadow` INHERITS — no need to name a library
      class to reach the rows. The sea runs from pale ice at the horizon to near black at the
      bottom, so no single text colour has contrast against all of it; the shadow supplies the
      dark side wherever the water goes light. */
   text-shadow: 0 1px 3px rgba(3, 26, 42, 0.85);
+}
+
+/* The toggle keeps a plate of its own: it sits alone over open water with no label beside
+   it, so the faint row-hover tint that suits the list would lose it entirely. Its own class,
+   passed through `toggle={{ className }}` — no library selector. */
+.igloo-nav__toggle {
+  background: rgba(233, 248, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.45);
+  color: #f4fcff;
+}
+
+.igloo-nav__toggle:hover {
+  background: rgba(233, 248, 255, 0.36);
+}
+
+/* Strata: a layer line under each heading, so the outline reads as a drilled ice core.
+   On the demo's own class, hung on `Navigation.Headings`. */
+.igloo-nav__headings [role='treeitem'] {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 /* ── Pickers ──────────────────────────────────────────────────────────────────────── */

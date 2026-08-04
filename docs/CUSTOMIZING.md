@@ -27,6 +27,34 @@ adding something the library does not model.
 The same shape applies to `DocxEditor.Menu`, `DocxEditor.ContextMenu` and
 `DocxEditor.Navigation`.
 
+### Prefer your own classes over styling ours
+
+Every compound exposes its internals as statics, and every part takes a `className`. So
+instead of writing CSS against our class names, **compose the parts and hang your own class
+on each one**:
+
+```tsx
+<DocxEditor.Navigation className="my-nav" toggle={{ className: 'my-nav__toggle' }}>
+  <DocxEditor.Navigation.Header className="my-nav__header">
+    <DocxEditor.Navigation.Close className="my-nav__close" />
+    <DocxEditor.Navigation.Title className="my-nav__title" />
+  </DocxEditor.Navigation.Header>
+  <DocxEditor.Navigation.Tabs className="my-nav__tabs" />
+  <DocxEditor.Navigation.Headings className="my-nav__headings" />
+  <DocxEditor.Navigation.Find className="my-nav__find" />
+</DocxEditor.Navigation>
+```
+
+The parts still do all the work — that headings list is still fed by the engine's outline.
+You have only taken ownership of the class names, which is the difference between customizing
+the API and working around it. A selector you wrote cannot break in a release; one of ours
+can.
+
+Where a sub-element is rendered outside `children` and so cannot be composed — the
+navigation toggle, which has to stay clickable while the panel is `inert` — the prop takes
+props: `toggle={{ className }}`. `menu` and `contextMenu` on `<DocxEditor>` accept
+`boolean | Props` the same way.
+
 **What you can pass**
 
 | Prop | Where | Notes |

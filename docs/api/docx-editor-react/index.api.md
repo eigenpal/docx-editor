@@ -401,7 +401,7 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
     // (undocumented)
     style?: CSSProperties;
     t?: (key: string, params?: Record<string, string | number>) => string;
-    toggle?: boolean;
+    toggle?: boolean | NavigationPartProps;
 }
 
 // @public (undocumented)

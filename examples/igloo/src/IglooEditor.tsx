@@ -69,7 +69,24 @@ export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
             over the gutter and absolutely positions against this box, so without the
             positioning context it would lay out in the flow and push the page down. */}
         <div className="igloo-workspace">
-          <DocxEditor.Navigation className="igloo-nav" t={iglooT} />
+          {/* COMPOSED, not just re-themed. The pane's parts are statics, so the demo can
+              hang its OWN class on each one rather than styling the library's internals —
+              which is the difference between customizing the API and working around it. The
+              parts still do all the work: the headings list is still `Navigation.Headings`,
+              still fed by the engine's outline. */}
+          <DocxEditor.Navigation
+            className="igloo-nav"
+            t={iglooT}
+            toggle={{ className: 'igloo-nav__toggle' }}
+          >
+            <DocxEditor.Navigation.Header className="igloo-nav__header">
+              <DocxEditor.Navigation.Close className="igloo-nav__close" />
+              <DocxEditor.Navigation.Title className="igloo-nav__title" />
+            </DocxEditor.Navigation.Header>
+            <DocxEditor.Navigation.Tabs className="igloo-nav__tabs" />
+            <DocxEditor.Navigation.Headings className="igloo-nav__headings" />
+            <DocxEditor.Navigation.Find className="igloo-nav__find" />
+          </DocxEditor.Navigation>
 
           <DocxEditor.Viewport className="igloo-viewport">
             {/* The vertical ruler sits at the EDITING AREA's left edge, where Word and Docs
