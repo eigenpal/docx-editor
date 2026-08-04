@@ -20,6 +20,7 @@ import { strFromU8, strToU8 } from 'fflate';
 import { createNodeIdAllocator, insertChildren } from './ooxml-edit.ts';
 import { readOoxmlPart, type OoxmlNode, type OoxmlPart } from './ooxml-tree.ts';
 import { withPart, type OoxmlExternalTarget, type OoxmlPackage } from './ooxml-package.ts';
+import { partNameKey } from './opc-names.ts';
 import { escapeXmlChecked } from './sinks.ts';
 import { HYPERLINK_RELATIONSHIP_TYPE } from './hyperlink.ts';
 import type { RelationshipRecord } from './relationships.ts';
@@ -160,7 +161,7 @@ function mergeNumberingShell(snapshot: OoxmlPackage, live: OoxmlPackage): OoxmlP
     }
   }
 
-  if (next.contentTypes.overrides.get(NUMBERING_PART.toLowerCase()) !== NUMBERING_CONTENT_TYPE) {
+  if (next.contentTypes.overrides.get(partNameKey(NUMBERING_PART)) !== NUMBERING_CONTENT_TYPE) {
     const declared = withNumberingContentTypeOverride(next);
     if (declared) next = declared;
   }
@@ -366,7 +367,7 @@ function withoutOwnedHyperlinkShell(pkg: OoxmlPackage, ownerPart: string): Ooxml
  * or deleted furniture overrides would resurrect with the shell merge.
  */
 function withNumberingContentTypeOverride(pkg: OoxmlPackage): OoxmlPackage | null {
-  const declared = pkg.contentTypes.overrides.get(NUMBERING_PART.toLowerCase());
+  const declared = pkg.contentTypes.overrides.get(partNameKey(NUMBERING_PART));
   if (declared === NUMBERING_CONTENT_TYPE) return pkg;
   if (declared !== undefined) return null;
 
@@ -399,7 +400,7 @@ function withNumberingContentTypeOverride(pkg: OoxmlPackage): OoxmlPackage | nul
       defaults: pkg.contentTypes.defaults,
       overrides: new Map([
         ...pkg.contentTypes.overrides,
-        [NUMBERING_PART.toLowerCase(), NUMBERING_CONTENT_TYPE],
+        [partNameKey(NUMBERING_PART), NUMBERING_CONTENT_TYPE],
       ]),
     }),
   });

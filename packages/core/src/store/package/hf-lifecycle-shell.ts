@@ -5,7 +5,7 @@ import { strFromU8, strToU8 } from 'fflate';
 import { createNodeIdAllocator, insertChildren, removeNode } from './ooxml-edit.ts';
 import { readOoxmlPart, type OoxmlNode } from './ooxml-tree.ts';
 import type { OoxmlExternalTarget, OoxmlPackage } from './ooxml-package.ts';
-import { resolveInternalTarget, validateExternalTarget } from './opc-names.ts';
+import { partNameKey, resolveInternalTarget, validateExternalTarget } from './opc-names.ts';
 import type { RelationshipRecord } from './relationships.ts';
 import { readXml, type XmlNode } from './xml-reader.ts';
 
@@ -315,7 +315,7 @@ export function withContentTypeOverride(
   partName: string,
   contentType: string
 ): OoxmlPackage | null {
-  const key = partName.toLowerCase();
+  const key = partNameKey(partName);
   const declared = pkg.contentTypes.overrides.get(key);
   if (declared === contentType) return pkg;
   if (declared !== undefined) return null;
@@ -354,7 +354,7 @@ export function withoutContentTypeOverride(
   pkg: OoxmlPackage,
   partName: string
 ): OoxmlPackage | null {
-  const key = partName.toLowerCase();
+  const key = partNameKey(partName);
   if (!pkg.contentTypes.overrides.has(key)) return pkg;
 
   const bytes = pkg.partBytes.get(CONTENT_TYPES_PART);
