@@ -329,8 +329,20 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
       return children.every((child) => child.kind === 'generic');
     case 'instrText':
       return children.every((child) => child.kind === 'textValue');
+    /**
+     * `CT_SimpleField`'s content model is `EG_PContent` (§17.16.19), exactly like a
+     * hyperlink's — so a revision wrapper inside one is schema-legal and must not demote it.
+     *
+     * It is also the ONLY way to strike a simple field: `CT_RunTrackChange` takes
+     * `EG_ContentRunContent`, which has no `w:fldSimple` in it, so the deletion cannot go
+     * around the field and has to go inside it. Word writes that shape, and refusing it here
+     * demoted every such field to `generic` on READ as well — losing its addressing.
+     */
     case 'fldSimple':
-      return children.every((child) => child.kind === 'run' || child.kind === 'generic');
+      return children.every(
+        (child) =>
+          child.kind === 'run' || isContentRevisionKind(child.kind) || isPreservedChild(child)
+      );
     case 'footnotes':
     case 'endnotes':
       return children.every((child) => child.kind === 'note' || child.kind === 'generic');

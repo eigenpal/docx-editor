@@ -116,23 +116,47 @@ function element(
   } as OoxmlElement;
 }
 
+/**
+ * The part a relationship of `type` names, when the package agrees it is that kind of part.
+ *
+ * The relationship alone is not enough. `Type` is an attacker-controlled attribute in a file
+ * an attacker wrote, so a crafted package can declare a comments relationship pointing at
+ * `settings.xml`, `document.xml`, or any other part it wants a comment write to land in.
+ * Requiring the target's declared CONTENT TYPE to be the comments type as well means a
+ * redirect can only ever aim at a part that already is what it claims — and a name the
+ * package does not hold yet is fine, because this write is the thing that will create it with
+ * the right type.
+ */
+function relatedPartName(
+  pkg: OoxmlPackage,
+  storyPartName: string,
+  relationshipType: string,
+  contentType: string,
+  conventional: string
+): string {
+  for (const record of relationshipsOf(pkg, storyPartName)) {
+    if (record.type !== relationshipType) continue;
+    const resolved = resolveInternalTarget(storyPartName, record.rawTarget);
+    if (!resolved.ok) continue;
+    if (!pkg.parts.has(resolved.partName)) return resolved.partName;
+    if (resolveContentTypeOf(pkg, resolved.partName) === contentType) return resolved.partName;
+  }
+  return conventional;
+}
+
 /** The comment part this story points at, or the conventional name when it has none yet. */
 function commentsPartNameFor(pkg: OoxmlPackage, storyPartName: string): string {
-  for (const record of relationshipsOf(pkg, storyPartName)) {
-    if (record.type !== COMMENTS_REL) continue;
-    const resolved = resolveInternalTarget(storyPartName, record.rawTarget);
-    if (resolved.ok) return resolved.partName;
-  }
-  return COMMENTS_PART;
+  return relatedPartName(pkg, storyPartName, COMMENTS_REL, COMMENTS_TYPE, COMMENTS_PART);
 }
 
 function extendedPartNameFor(pkg: OoxmlPackage, storyPartName: string): string {
-  for (const record of relationshipsOf(pkg, storyPartName)) {
-    if (record.type !== COMMENTS_EXTENDED_REL) continue;
-    const resolved = resolveInternalTarget(storyPartName, record.rawTarget);
-    if (resolved.ok) return resolved.partName;
-  }
-  return COMMENTS_EXTENDED_PART;
+  return relatedPartName(
+    pkg,
+    storyPartName,
+    COMMENTS_EXTENDED_REL,
+    COMMENTS_EXTENDED_TYPE,
+    COMMENTS_EXTENDED_PART
+  );
 }
 
 /** Highest `w:comment/@w:id` in the part, so the next is seeded from the document. */
@@ -551,6 +575,17 @@ export function hasCommentPart(pkg: OoxmlPackage, storyPartName: string): boolea
 /** Exposed so a surface can tell "no comment part yet" from "no comments". */
 export function commentPartNameOf(pkg: OoxmlPackage, storyPartName: string): string {
   return commentsPartNameFor(pkg, storyPartName);
+}
+
+/**
+ * The `commentsExtended.xml` a story points at.
+ *
+ * Exported for the same reason as {@link commentPartNameOf}: the READER has to resolve the
+ * same name the writer does. Hardcoding `/word/comments.xml` on one side and following the
+ * relationship on the other is a split that shows up as a comment written and never read back.
+ */
+export function commentsExtendedPartNameOf(pkg: OoxmlPackage, storyPartName: string): string {
+  return extendedPartNameFor(pkg, storyPartName);
 }
 
 /** Re-exported so callers do not re-derive the node lookup. */

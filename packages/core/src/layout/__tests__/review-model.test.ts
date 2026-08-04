@@ -522,3 +522,103 @@ describe('where a card sits', () => {
     expect(reviewItemGeometry(comment('p1', 45), index)).toEqual({ pageIndex: 0, y: 100 });
   });
 });
+
+// Offsets come from `paragraphOffsetIndex` — `segmentsOf`'s own walk — rather than from a
+// private character count per module. These are the cases where the private counts and the
+// authority disagreed, and every one of them is markup Word writes.
+describe('the offset model has ONE authority', () => {
+  const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const link = (text: string, id = 'rId9') =>
+    `<w:hyperlink r:id="${id}" xmlns:r="${R}">${run(text)}</w:hyperlink>`;
+
+  test('a comment after a hyperlink anchors past the link, not short by its length', () => {
+    const part = story(`<w:p>${link('anthropic')}${cStart('1')}${run('here')}${cEnd('1')}</w:p>`);
+    const items = collectReviewItems({
+      storyPart: part,
+      commentsPart: commentsPart(comment('1', 'on the word here')),
+    });
+    const item = items.find((entry) => entry.kind === 'comment')!;
+    expect(item.kind === 'comment' && item.orphaned).toBe(false);
+    // "anthropic" is nine characters of ordinary paragraph text; skipping the container
+    // anchored this comment at 0 and reported it over the link instead.
+    expect(item.kind === 'comment' && item.range).toEqual({
+      partName: '/word/document.xml',
+      start: { paragraphId: expect.any(String), offset: 9 },
+      end: { paragraphId: expect.any(String), offset: 13 },
+    });
+  });
+
+  test('markers written INSIDE a hyperlink still yield an anchor', () => {
+    // What Word writes when you comment on link text: the markers go inside `w:hyperlink`.
+    const part = story(
+      `<w:p><w:hyperlink r:id="rId9" xmlns:r="${R}">` +
+        `${cStart('1')}${run('link')}${cEnd('1')}</w:hyperlink></w:p>`
+    );
+    const item = collectReviewItems({
+      storyPart: part,
+      commentsPart: commentsPart(comment('1', 'on the link')),
+    }).find((entry) => entry.kind === 'comment')!;
+    // Not descending into the link found neither marker, so the comment reported orphaned.
+    expect(item.kind === 'comment' && item.orphaned).toBe(false);
+    expect(item.kind === 'comment' && item.range?.end.offset).toBe(4);
+  });
+
+  test('two comments on two ADJACENT links are not threaded into one card', () => {
+    const part = story(
+      `<w:p>${cStart('1')}${link('alpha')}${cEnd('1')}` +
+        `${cStart('2')}${link('beta', 'rId10')}${cEnd('2')}</w:p>`
+    );
+    const items = collectReviewItems({
+      storyPart: part,
+      commentsPart: commentsPart(comment('1', 'first') + comment('2', 'second')),
+    });
+    const comments = items.filter((entry) => entry.kind === 'comment');
+    expect(comments).toHaveLength(2);
+    // Each anchors over its own link. Collapsed to a zero-width anchor at the same offset,
+    // the coincidence rule read them as one thread and put two authors in one card.
+    for (const entry of comments) {
+      expect(entry.kind === 'comment' && entry.parentId).toBeUndefined();
+    }
+  });
+
+  test('a ZERO-WIDTH range is never evidence of a thread', () => {
+    // Both ranges cover nothing, at the same offset. That is a coincidence of position and
+    // says nothing about the comments — the rule needs characters to argue from.
+    const part = story(
+      `<w:p>${cStart('1')}${cEnd('1')}${cStart('2')}${cEnd('2')}${run('x')}</w:p>`
+    );
+    const comments = collectReviewItems({
+      storyPart: part,
+      commentsPart: commentsPart(comment('1', 'first') + comment('2', 'second')),
+    }).filter((entry) => entry.kind === 'comment');
+    for (const entry of comments) {
+      expect(entry.kind === 'comment' && entry.parentId).toBeUndefined();
+    }
+  });
+
+  test('a tracked FORMAT change anchors over the run it decorates', () => {
+    const part = story(
+      `<w:p>${run('before ')}<w:r><w:rPr><w:b/>` +
+        `<w:rPrChange w:id="5" w:author="QA" w:date="D"><w:rPr/></w:rPrChange></w:rPr>` +
+        `<w:t>bolded</w:t></w:r></w:p>`
+    );
+    const item = revisionsOf(collectReviewItems({ storyPart: part }))[0]!;
+    expect(item.revisionKind).toBe('format');
+    // `locateSites` used to stop at the run, so this card had no range at all: it sorted to
+    // the end of the rail, painted no band, and the caret in it activated nothing.
+    expect(item.ranges).toHaveLength(1);
+    expect(item.ranges[0]!.start.offset).toBe(7);
+    expect(item.ranges[0]!.end.offset).toBe(13);
+  });
+
+  test('a revision in a paragraph holding a note reference reports the true range', () => {
+    const part = story(
+      `<w:p>${run('ab')}<w:r><w:footnoteReference w:id="1"/></w:r>` + `${ins('9', run('cd'))}</w:p>`
+    );
+    const item = revisionsOf(collectReviewItems({ storyPart: part }))[0]!;
+    // The reference measures one unit, so the insertion starts at 3. Counting it as nothing
+    // put the card's range — and the highlight band — one character early.
+    expect(item.ranges[0]!.start.offset).toBe(3);
+    expect(item.ranges[0]!.end.offset).toBe(5);
+  });
+});

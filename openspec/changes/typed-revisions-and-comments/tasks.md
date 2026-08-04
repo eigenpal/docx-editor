@@ -174,17 +174,17 @@ Counts are measured per part; see the fixture-evidence tables in `proposal.md`. 
 See `openspec/changes/word-fidelity-review-findings.md`.
 
 - [x] 11.1 **Settled: the mode lives on the SURFACE, the ops stay explicit.** `insertText`/`deleteText` carry an optional `revision` attribution, so an op still says on its face whether it is tracked and there is no global toggle for `DocEdits` to reject. The surface — the one thing that knows a keystroke happened — attaches the attribution at a single interception point, so no emit site can forget and silently write an untracked edit in suggesting mode. Implemented in `store/store/tree-op-tracked.ts`, with Word's merge rules: typing extends your own `w:ins`, deleting your own insertion removes it rather than nesting `w:del`, and deleting inside an existing `w:del` is a no-op
-- [ ] 11.2 Reconcile `Revision.date` (required, must become optional), `Revision.part` (optional 3-value, must be required and widened), `Revision.type` (no move/cell/paragraph-mark), and `DocComment` (no anchor/story/orphan) — with the semver consequence stated (finding 1)
+- [x] 11.2 Reconciled in `contracts/types.ts` and specified in `revision-model`. `Revision.date` and `DocComment.date` are optional (`CT_TrackChange` makes `@w:date` optional; requiring it forced a fabricated date or a dropped revision); `Revision.part` is a required part NAME, not a 3-value enum, because `@w:id` is unique only within a part and revisions live in `header3.xml`, `comments.xml` and `styles.xml` too; `Revision.type` gains `replace`, `moveFrom`, `moveTo`, `paragraphMark` and `structural`; `DocComment` gains `anchor` (a `DocAnchorRange` naming its story) and `orphaned`. **Semver: BREAKING.** Both are `@public`, and the corrections narrow (`part` required) as well as widen. It ships as a major, and the time to do it is before a consumer depends on a contract that describes a document the engine does not read
 - [x] 11.3 Spec scenarios for **paragraph-mark revisions** (`EG_ParaRPrTrackChanges`) added to `revision-model`, covering accept-merges and reject-merges in both directions
-- [ ] 11.4 Add accept/reject semantics for **row and cell revisions** — `w:trPr/w:ins`/`w:del`, `w:cellIns`/`w:cellDel`/`w:cellMerge`. Until they exist, `design.md` R11 refuses these kinds with `unsupported` (task 3.8) rather than removing the markup and leaving the row, which is the corruption finding 2.3 identified
+- [ ] 11.4 **The one §11 item still open, and the largest.** Accept/reject semantics for **row and cell revisions** — `w:trPr/w:ins`/`w:del`, `w:cellIns`/`w:cellDel`/`w:cellMerge`. It is a design pass, not a wiring job: accepting a row deletion has to remove the row AND reconcile `w:tblGrid`, vMerge continuation and any `w:cellMerge` the row participates in, and getting it half right corrupts the table. Until it exists, `design.md` R11 refuses these kinds with `unsupported` (task 3.8) rather than removing the markup and leaving the row, which is the corruption finding 2.3 identified — so the current behaviour is safe, just incomplete
 - [x] 11.5 `@w:name` is now the stated move-pairing key in `revision-model`, alongside the separate `@w:id` join that pairs a range start to its range end. Both are asserted against `list-pagination-break.docx`
-- [ ] 11.6 Read and write document-level `w:trackRevisions`; handle `w:documentProtection/@w:edit="trackedChanges"`, `w:doNotTrackMoves`, `w:doNotTrackFormatting` — the last two contradict current requirements
-- [ ] 11.7 Add the four `w:customXml*RangeStart`/`End` pairs, `w:tblPrExChange`, `CT_ParaRPrChange`, `w:numPr/w:ins`, `w:delInstrText`
-- [ ] 11.8 Declare a D12 impact class, and say how a display-mode switch invalidates a change-scoped layout session without a `ModelChange` (finding 4)
-- [ ] 11.9 Add an IME rule: one composition in suggesting mode is ONE `w:ins` and one D10 history entry, not a chain
-- [ ] 11.10 Comment anchors are specified only inside a paragraph; `EG_RangeMarkupElements` also sits between paragraphs, rows, and cells (finding 2)
-- [ ] 11.11 State what a tracked note insertion, control value change, and drawing deletion are — the other four changes defer to requirements that do not yet exist (finding 3)
-- [ ] 11.12 Add the missing `## MODIFIED` spec delta for `core-comment-ops`
+- [~] 11.6 **READ side landed, write side outstanding.** `store/package/tracking-settings.ts` reads `w:trackRevisions`, `w:documentProtection/@w:edit` + `@w:enforcement`, `w:doNotTrackMoves` and `w:doNotTrackFormatting` as `ST_OnOff` (so `w:val="0"` means off, not present-means-on), and the editor honours the first two: a document declaring `w:trackRevisions` opens in SUGGESTING with an author configured — and publishes the refusal reason rather than dropping the request when there is none — while `@w:edit="trackedChanges"` refuses leaving suggesting with `locked`. Advisory, never enforcement: the password hash is not verified and is not presented as if it were. The reader outranks the file, and a reload does not undo their choice. Specified in `revision-model`. Still to do: WRITING `w:trackRevisions` back into `settings.xml` when the mode is toggled (needs the package-transaction lane `setEvenAndOddHeaders` already uses), and honouring `w:doNotTrackMoves` / `w:doNotTrackFormatting` on write — neither has a write path to gate yet, since there is no move producer and formatting-as-`w:rPrChange` is task 4.4
+- [x] 11.7 Specified in `revision-model` — "The revision vocabulary covers the markup Word writes around a revision": the four `w:customXml*RangeStart`/`End` pairs, `w:tblPrExChange` (on the ROW, which is why a `w:tblPr` walker never finds it), `CT_ParaRPrChange` (the paragraph MARK's own run properties, not the run-level `w:rPrChange`), `w:numPr/w:ins`, and `w:delInstrText`. Each with what it costs to leave out
+- [x] 11.8 Specified in `revision-model`: the display mode is a D12 PRESENTATION input, classed with zoom rather than with a `TreeDocOp`, and invalidation rides the layout cache KEY through the measurement producer — so a mode change invalidates per-block caches and flow checkpoints by ordinary key comparison, with no `ModelChange`. Matches what task 2.6 implemented
+- [x] 11.9 Specified in `revision-model`: one composition is ONE `w:ins` and ONE history entry, an abandoned composition writes nothing, and one undo retracts the whole word
+- [x] 11.10 Specified in `comment-thread-model`: an anchor is a range over two positions that may sit in different paragraphs, cells and rows; a marker written between blocks anchors at the boundary and does not demote its container; and the offset space has ONE authority — descending into `w:hyperlink`, counting a note reference, an atomic field, a tab and a break as one unit each. Which is what §12.1 then implemented
+- [x] 11.11 Specified in `revision-model`: a tracked note insertion wraps the REFERENCE (never the body, which cascades away with it on reject); a content-control value change tracks the runs inside `w:sdtContent` and never `w:sdtPr`; a tracked drawing deletion wraps the run and leaves the drawing untouched inside it, so rejecting restores it by canonical fingerprint
+- [x] 11.12 `specs/core-comment-ops/spec.md` added with `## MODIFIED Requirements`: the mark-based `createCommentTr`/`replyTr`/`proposeChangeTr` builders are withdrawn with the lane they belonged to (a mark cannot express markup spanning five parts), replaced by the package-transaction seam and revision-attributed text ops; and the id-allocation requirement now states that comment ids and revision ids are SEPARATE spaces, seeded from the document, clamped to signed 32-bit, taking the lowest free id rather than wrapping into one the file uses
 
 ## 12. Review findings from the docx-editor-v2 merge
 
@@ -192,45 +192,60 @@ Two adversarial reviews over the merged branch. Each item below was REPRODUCED, 
 inferred. None is a merge artefact alone — the merge made several of them reachable — and
 none blocks the slice, so they land on their own branch rather than growing this one.
 
-- [ ] 12.1 **The offset model is forked.** `segmentsOf` (`store/tree-op-segments.ts`) is the
-  authority. Three private walkers disagree with it: `tree-op-tracked.ts` `lengthOf`,
-  `comment-anchors.ts` `textLengthOfRunChild`/`markersInParagraph`, and `review-model.ts`
-  `runLength`. None descends into `w:hyperlink`; none gives a note reference or an atomic
-  field its length of 1. Fix by delegating to `segmentsOf` rather than by patching each
-  walker, or they will drift again
-- [ ] 12.2 Consequence of 12.1 in comment anchors: a comment after a hyperlink anchors short
-  by the link's length; markers written INSIDE a `w:hyperlink` — what Word writes when you
-  comment on link text — yield no anchor at all and the comment reports `orphaned`
-- [ ] 12.3 Consequence of 12.1 in threading: two comments over two ADJACENT hyperlinks both
-  collapse to a zero-width anchor at the same offset, so the coincidence rule threads two
-  unrelated authors' comments into one card. Fix 12.1; additionally refuse coincidence on a
-  zero-width range, which is evidence of nothing
-- [ ] 12.4 Consequence of 12.1 in suggesting mode: in any paragraph carrying a footnote,
-  endnote or field, a tracked insert lands at the wrong offset, an insert at the true
-  paragraph end is refused `offset-out-of-range`, and a tracked delete strikes one character
-  too many while leaving the reference in place
-- [ ] 12.5 **Section addressing desyncs from the filtered block list.** `semantic-layout.ts`
-  filters `storyBlocks` by display mode; `enumerateDocumentSections` does not, and
-  `multi-section-layout.ts` slices the filtered list with unfiltered indices. Body text lands
-  under the wrong section's page geometry. The comment above `revisionRemovesParagraph`
-  predicted exactly this
-- [ ] 12.6 `MAX_INLINE_DEPTH = 8` in `revision-visibility.ts` against an effective 32 in
-  `field-projection.ts`: past depth 8 a paragraph is called empty while layout still emits its
-  spans, so file-controlled nesting drops visible text
-- [ ] 12.7 A comment reply publishes the body store's private package through
-  `replacePackageShell`, discarding a `numbering.xml` graft or a hyperlink relationship the
-  coordinator applied first — dangling `w:numPr` / `r:id` on save. `graftPackage`, the narrow
-  documented lane for this, is now unreferenced
-- [ ] 12.8 `commentsPartNameFor` trusts any relationship of the comments type without a
-  content-type check, so a crafted package redirects a comment write into another part while
-  the read side stays hardcoded to `/word/comments.xml`
+- [x] 12.1 **The offset model is forked — closed by delegation, not by patching.**
+  `paragraphOffsetIndex` (`store/tree-op-segments.ts`) records every node's `[start, end)`
+  from `segmentsOf`'s OWN walk, at no cost to `segmentsOf` itself, and the three private
+  walkers are gone: `tree-op-tracked.ts` `lengthOf`, `comment-anchors.ts`
+  `textLengthOfRunChild`, and `review-model.ts` `runLength`. Was: none descends into
+  `w:hyperlink`; none gives a note reference or an atomic field its length of 1; one counted a
+  field's `w:instrText` as visible characters
+- [x] 12.2 Comment anchors delegate. A comment after a hyperlink anchors past it, and markers
+  written INSIDE a `w:hyperlink` — what Word writes when you comment on link text — yield an
+  anchor instead of reporting the comment `orphaned`
+- [x] 12.3 Threading: two comments over two ADJACENT hyperlinks anchor over their own links.
+  Coincidence is additionally refused on a ZERO-WIDTH range, which is evidence of nothing —
+  two remarks covering no characters sit at the same offset for any number of reasons
+- [x] 12.4 Suggesting mode delegates. In a paragraph carrying a footnote, endnote or field a
+  tracked insert lands where asked, an insert at the true paragraph end is accepted, and a
+  delete strikes exactly the selected units
+- [x] 12.4a **Beyond the finding, and found by the losslessness sweep it made possible.** An
+  ATOM is one addressable unit spread over several nodes, and the tracked writer now respects
+  that grouping: striking a complex field strikes all of it (`w:instrText` becoming
+  `w:delInstrText`) rather than leaving a `w:del` around the `begin` with the `end` outside it,
+  which accepting then turned into an orphaned field; typing at a field's model end lands
+  after the field instead of between its chrome runs, where the words were invisible and
+  stayed invisible. A `w:fldSimple` is struck from INSIDE, because `CT_RunTrackChange` takes
+  `EG_ContentRunContent` and that has no `fldSimple` in it — which also widened the tree
+  invariant, since the same shape in a file Word wrote was demoting the field on READ. An
+  insertion whose offset falls INSIDE another author's deletion is placed after it rather than
+  refused `offset-out-of-range`; a `w:fldSimple` or `w:hyperlink` the resolution empties is
+  dropped, matching what the untracked delete does. Gated by
+  `store/__tests__/tracked-edit-losslessness.test.ts`: over every insert position, delete
+  range and replacement range of nine paragraph shapes, reject-all returns the D9 semantic
+  digest through a save and reopen, and accept-all equals the untracked edit
+- [x] 12.5 **Section addressing desyncs from the filtered block list.** `enumerateDocumentSections`
+  takes the display mode and passes it to `storyBlocks`, so the indices it hands out belong to
+  the list `semantic-layout.ts` slices. Was: body text landed under the wrong section's page
+  geometry. The comment above `revisionRemovesParagraph` predicted exactly this
+- [x] 12.6 `MAX_INLINE_DEPTH` is now `MAX_REVISION_DEPTH`, taken from the layout walk rather
+  than restated. At a local 8 against layout's 32, a paragraph nested past 8 was called empty
+  while layout still emitted its spans, so file-controlled nesting dropped visible text
+- [x] 12.7 A comment reply grafts the coordinator's package into the story store before the
+  write (`graftPackage`, the narrow documented lane, referenced again), so publishing the
+  result no longer discards a `numbering.xml` graft or a minted hyperlink relationship — the
+  dangling `w:numPr` / `r:id` on save
+- [x] 12.8 A comments relationship is honoured only when the target's declared CONTENT TYPE
+  agrees, or when the package does not hold that part yet — so a crafted package cannot
+  redirect a comment write into `settings.xml`. The READ side resolves the same way the write
+  side does instead of hardcoding `/word/comments.xml`
 - [ ] 12.9 A reply to a reply is unreachable: the rail filters every `parentId` from the top
   level and renders exactly one level of replies
 - [ ] 12.10 A multi-site revision (a tracked row insertion) yields two cards with identical
   ids — the grouping key includes `localName`, the card id does not
-- [ ] 12.11 `w:rPrChange` has no anchor: `locateSites` stops at the run, so the card sorts to
-  the end of the rail, has no geometry, and the caret in tracked-formatted text activates
-  nothing while accept/reject stay offered
+- [x] 12.11 `w:rPrChange` anchors over the RUN it decorates: `locateSites` places a run's own
+  `w:rPr` subtree at the run's range. It stopped at the run, so the card sorted to the end of
+  the rail, had no geometry, painted no band, and the caret in tracked-formatted text
+  activated nothing while accept/reject stayed offered
 - [ ] 12.12 `pairReplacements` is deletions x insertions and the thread walk is per-comment
   ancestor chains: ~128ms at 2000 revisions, ~255ms at 4000 comments, both on file-controlled
   input and both re-run per paint

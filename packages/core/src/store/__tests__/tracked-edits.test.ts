@@ -478,3 +478,237 @@ describe('a tracked deletion', () => {
     expect(ids.some((id) => Number(id) > 7)).toBe(true);
   });
 });
+
+// Offsets come from `paragraphOffsetIndex`, which is `segmentsOf`'s own walk. Before that,
+// this module carried a private length function that disagreed with the authority about three
+// things at once, and every one of them is a paragraph shape Word writes routinely.
+describe('the offset model is the shared one', () => {
+  /** "ab" + a footnote reference + "cd": five model units, not four. */
+  const WITH_NOTE =
+    `<w:p><w:r><w:t>ab</w:t></w:r>` +
+    `<w:r><w:footnoteReference w:id="1"/></w:r>` +
+    `<w:r><w:t>cd</w:t></w:r></w:p>`;
+
+  test('a note reference measures ONE unit, so an insert past it lands where asked', () => {
+    const before = part(WITH_NOTE);
+    // Offset 4 is between "c" and "d". Counting the reference as nothing put it between
+    // "b" and "c" instead — one character early for every reference in the paragraph.
+    const after = apply(before, {
+      op: 'insertText',
+      paragraphId: paragraphId(before),
+      offset: 4,
+      text: 'X',
+      revision: ADA,
+    });
+    const text = xml(after)
+      .match(/<w:t[^>]*>([^<]*)<\/w:t>/g)!
+      .map((node) => node.replace(/<[^>]+>/g, ''))
+      .join('');
+    expect(text).toBe('abcXd');
+  });
+
+  test('an insert at the TRUE paragraph end is accepted, not refused as out of range', () => {
+    const before = part(WITH_NOTE);
+    // Length 5: "ab" + the reference + "cd". The private walker said 4, so this offset was
+    // past the end it believed in and the op was refused with `offset-out-of-range`.
+    const result = applyTreeOp(before, {
+      op: 'insertText',
+      paragraphId: paragraphId(before),
+      offset: 5,
+      text: 'X',
+      revision: ADA,
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  test('a delete strikes exactly the selected units, leaving the reference alone', () => {
+    const before = part(WITH_NOTE);
+    // [0, 2) is "ab" and nothing else.
+    const after = apply(before, {
+      op: 'deleteText',
+      paragraphId: paragraphId(before),
+      start: 0,
+      end: 2,
+      revision: ADA,
+    });
+    const serialized = xml(after);
+    expect(serialized).toContain('<w:delText>ab</w:delText>');
+    // The reference is outside the range, so it is neither struck nor moved.
+    expect(serialized).toContain('<w:footnoteReference w:id="1"/>');
+    const struck = serialized.match(/<w:del\b[^>]*>([\s\S]*?)<\/w:del>/)![1]!;
+    expect(struck).not.toContain('footnoteReference');
+  });
+
+  test("a field's instruction text measures nothing, so text after it addresses correctly", () => {
+    const before = part(
+      `<w:p><w:r><w:t>ab</w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+        `<w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:t>7</w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+        `<w:r><w:t>cd</w:t></w:r></w:p>`
+    );
+    // "ab" + the field as one atom + "cd" = five units. Counting " PAGE " and the cached
+    // result as visible characters made this offset land inside the field's own markup.
+    const after = apply(before, {
+      op: 'insertText',
+      paragraphId: paragraphId(before),
+      offset: 5,
+      text: 'X',
+      revision: ADA,
+    });
+    const serialized = xml(after);
+    expect(serialized).toMatch(/<w:t>cd<\/w:t>[\s\S]*<w:ins[^>]*>[\s\S]*<w:t>X<\/w:t>/);
+    // The instruction is untouched: it was never text to address into.
+    expect(serialized).toContain('<w:instrText xml:space="preserve"> PAGE </w:instrText>');
+  });
+
+  test('a tracked insert inside a HYPERLINK splits the link run, not the paragraph', () => {
+    const before = part(
+      `<w:p><w:hyperlink r:id="rId9" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<w:r><w:t>link</w:t></w:r></w:hyperlink></w:p>`
+    );
+    const after = apply(before, {
+      op: 'insertText',
+      paragraphId: paragraphId(before),
+      offset: 2,
+      text: 'X',
+      revision: ADA,
+    });
+    // Inside the link element, because that is where offset 2 is.
+    expect(xml(after)).toMatch(
+      /<w:hyperlink[^>]*>[\s\S]*<w:ins[^>]*>[\s\S]*X[\s\S]*<\/w:hyperlink>/
+    );
+  });
+});
+
+// An ATOM is one addressable unit spread over several nodes, and a tracked edit has to respect
+// that grouping. These are the cases where not respecting it produces markup that is valid XML
+// and a broken document: a field whose halves disagree about whether it was deleted, and typed
+// words parked inside a field instruction where nothing will ever show them again.
+describe('an atomic field survives a tracked edit whole', () => {
+  const FIELD =
+    `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+    `<w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>` +
+    `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+    `<w:r><w:t>7</w:t></w:r>` +
+    `<w:r><w:fldChar w:fldCharType="end"/></w:r>`;
+  const WITH_FIELD = `<w:p><w:r><w:t>ab</w:t></w:r>${FIELD}<w:r><w:t>cd</w:t></w:r></w:p>`;
+
+  /** Every field-chrome node, and whether it sits inside a `w:del` element. */
+  function chromeInDeletion(serialized: string): boolean[] {
+    const deletions: { from: number; to: number }[] = [];
+    for (const match of serialized.matchAll(/<w:del\s[^>]*>[\s\S]*?<\/w:del>/g)) {
+      deletions.push({ from: match.index, to: match.index + match[0].length });
+    }
+    const struck: boolean[] = [];
+    for (const match of serialized.matchAll(/<w:(?:fldChar|instrText|delInstrText)\b/g)) {
+      struck.push(deletions.some((span) => match.index > span.from && match.index < span.to));
+    }
+    return struck;
+  }
+
+  test('striking the field strikes ALL of it, not only its begin marker', () => {
+    const before = part(WITH_FIELD);
+    // [2, 3) is the field's one model unit and nothing else.
+    const after = apply(before, {
+      op: 'deleteText',
+      paragraphId: paragraphId(before),
+      start: 2,
+      end: 3,
+      revision: ADA,
+    });
+    const serialized = xml(after);
+    // Every piece of the field is inside the deletion. A `begin` struck with its `end` left
+    // standing is a field that cannot be accepted: accepting removed the begin and orphaned
+    // the instruction, the separator and the end.
+    expect(chromeInDeletion(serialized)).toEqual([true, true, true, true]);
+    // The instruction is re-labelled the way §17.16.23 requires inside a deletion.
+    expect(serialized).toContain('<w:delInstrText');
+    expect(serialized).not.toContain('<w:instrText');
+    // The words around it are untouched.
+    expect(serialized).toContain('<w:t>ab</w:t>');
+    expect(serialized).toContain('<w:t>cd</w:t>');
+  });
+
+  test('a selection running through the field takes the whole field with it', () => {
+    const before = part(WITH_FIELD);
+    const after = apply(before, {
+      op: 'deleteText',
+      paragraphId: paragraphId(before),
+      start: 1,
+      end: 4,
+      revision: ADA,
+    });
+    expect(chromeInDeletion(xml(after))).toEqual([true, true, true, true]);
+  });
+
+  test('a selection that stops SHORT of the field leaves it alone', () => {
+    const before = part(WITH_FIELD);
+    const after = apply(before, {
+      op: 'deleteText',
+      paragraphId: paragraphId(before),
+      start: 0,
+      end: 2,
+      revision: ADA,
+    });
+    expect(chromeInDeletion(xml(after))).toEqual([false, false, false, false]);
+    expect(xml(after)).toContain('<w:instrText');
+  });
+
+  test('typing at the field’s end lands after it, not inside its instruction', () => {
+    const before = part(WITH_FIELD);
+    const after = apply(before, {
+      op: 'insertText',
+      paragraphId: paragraphId(before),
+      offset: 3,
+      text: 'X',
+      revision: ADA,
+    });
+    const serialized = xml(after);
+    // After the field's `end` marker. Between `begin` and the instruction — which is where
+    // the first zero-width run at that offset sits — the words become part of the field's
+    // own markup and no reader ever shows them again.
+    // `<w:ins ` with the space: `<w:instrText` also starts with `<w:ins`.
+    const insertion = serialized.indexOf('<w:ins ');
+    expect(serialized.indexOf('w:fldCharType="end"')).toBeLessThan(insertion);
+    expect(insertion).toBeLessThan(serialized.indexOf('<w:t>cd</w:t>'));
+  });
+
+  test('typing at the field’s start lands before it', () => {
+    const before = part(WITH_FIELD);
+    const after = apply(before, {
+      op: 'insertText',
+      paragraphId: paragraphId(before),
+      offset: 2,
+      text: 'X',
+      revision: ADA,
+    });
+    const serialized = xml(after);
+    expect(serialized.indexOf('<w:ins ')).toBeLessThan(serialized.indexOf('w:fldCharType="begin"'));
+  });
+
+  test('a simple field is struck from INSIDE, because w:del cannot hold one', () => {
+    // `CT_RunTrackChange` takes `EG_ContentRunContent`, and `w:fldSimple` is not in it —
+    // so the deletion goes inside the field, which is what Word writes.
+    const before = part(
+      `<w:p><w:r><w:t>ab</w:t></w:r>` +
+        `<w:fldSimple w:instr=" PAGE "><w:r><w:t>7</w:t></w:r></w:fldSimple>` +
+        `<w:r><w:t>cd</w:t></w:r></w:p>`
+    );
+    const after = apply(before, {
+      op: 'deleteText',
+      paragraphId: paragraphId(before),
+      start: 2,
+      end: 3,
+      revision: ADA,
+    });
+    const serialized = xml(after);
+    expect(serialized).toMatch(/<w:fldSimple[^>]*><w:del\b/);
+    expect(serialized).toContain('<w:delText>7</w:delText>');
+    // The field element itself survives: it is the thing being proposed for deletion, not
+    // something to dissolve.
+    expect(serialized).toContain('w:instr=" PAGE "');
+  });
+});

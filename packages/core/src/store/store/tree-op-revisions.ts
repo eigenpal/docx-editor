@@ -379,6 +379,23 @@ function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): Oox
     }
 
     const rebuilt = rebuild(child, plan);
+    // A run CONTAINER the resolution emptied goes with its content. A `w:fldSimple` with no
+    // runs is not a field any more — striking a simple field puts the `w:del` INSIDE it, since
+    // `CT_RunTrackChange` takes `EG_ContentRunContent` and that has no `fldSimple` in it, so
+    // accepting leaves a hollow one still occupying the model position the reviewer agreed to
+    // remove. A `w:hyperlink` with no runs is a link to nowhere holding a relationship alive.
+    // Word drops both, and an untracked delete over the same range already does.
+    if (child.kind === 'fldSimple' || child.kind === 'hyperlink') {
+      const survivor = rebuilt[0];
+      if (
+        rebuilt.length === 1 &&
+        survivor !== undefined &&
+        survivor.kind !== 'textValue' &&
+        survivor.children.length === 0
+      ) {
+        continue;
+      }
+    }
     if (child.kind === 'paragraph') {
       const paragraph = rebuilt[0];
       if (paragraph !== undefined && paragraph.kind !== 'textValue') {

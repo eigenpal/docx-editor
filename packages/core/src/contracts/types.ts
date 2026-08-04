@@ -247,22 +247,91 @@ export interface ContentControlFilter {
   readonly controlType?: ContentControlType;
 }
 
+/**
+ * A position in one story: a paragraph and a UTF-16 offset inside it.
+ *
+ * The same offset space the ops and the caret use, so an anchor read here can be handed
+ * straight back to a selection without re-deriving anything.
+ */
+export interface DocAnchorRange {
+  /** Canonical part name of the story the range lives in, e.g. `/word/document.xml`. */
+  readonly part: string;
+  readonly startParagraphId: string;
+  readonly startOffset: number;
+  /** May sit in a later paragraph: the range markers are independent elements. */
+  readonly endParagraphId: string;
+  readonly endOffset: number;
+}
+
 export interface DocComment {
   readonly id: string;
   readonly author: string;
-  readonly date: string;
+  /**
+   * OPTIONAL, because `CT_Comment` makes `@w:date` optional and files omit it. A comment
+   * with no date is a comment, not a defect, and fabricating one is a content change.
+   */
+  readonly date?: string;
   readonly text: string;
   readonly parentId?: string;
   readonly resolved?: boolean;
+  /**
+   * Where the comment is anchored, absent when the file gave it no usable range.
+   *
+   * A comment lives in `comments.xml` and is placed by markers in a STORY, so the story is
+   * part of the address: a comment anchored in a header belongs to a part the body never saw.
+   */
+  readonly anchor?: DocAnchorRange;
+  /**
+   * True when the file gave this comment no usable range — a reference with no markers, or a
+   * start with no end. Reported rather than dropped: a reviewer's remark vanishing silently
+   * is worse than one that says it lost its text.
+   */
+  readonly orphaned?: boolean;
 }
+
+/**
+ * What kind of decision a revision represents.
+ *
+ * Wider than insert/delete/format, and it has to be. `w:moveFrom`/`w:moveTo` are not a
+ * deletion and an insertion — resolving one half alone duplicates or loses the content;
+ * `w:pPr/w:rPr/w:ins|w:del` decorates no characters at all and merges paragraphs when
+ * resolved; a row or cell revision is structural. A reviewer shown only three kinds is a
+ * reviewer who never learns about the rest.
+ */
+export type RevisionType =
+  | 'insert'
+  | 'delete'
+  /** A deletion and an insertion that are one edit: text typed over a selection. */
+  | 'replace'
+  | 'moveFrom'
+  | 'moveTo'
+  /** `w:rPrChange` / `w:pPrChange` — the words are unchanged, their formatting is not. */
+  | 'format'
+  /** `w:pPr/w:rPr/w:ins|w:del` — a paragraph split or merge. */
+  | 'paragraphMark'
+  /** A row, cell, section or grid revision. */
+  | 'structural';
 
 export interface Revision {
   /** Numeric, and unique only WITHIN a part. Pair with `part` to address one. */
   readonly id: number;
-  readonly type: 'insert' | 'delete' | 'format';
+  readonly type: RevisionType;
   readonly author: string;
-  readonly date: string;
-  readonly part?: 'body' | 'footnote' | 'endnote';
+  /**
+   * OPTIONAL. `CT_TrackChange` requires `@w:id` and `@w:author` and makes `@w:date`
+   * optional, and producers that omit it are ordinary. Requiring it here forced either a
+   * fabricated date — a content change — or dropping the revision from the list.
+   */
+  readonly date?: string;
+  /**
+   * REQUIRED, and a canonical PART NAME rather than a three-value enum.
+   *
+   * `@w:id` is unique only within a part, so an address without one names two revisions in a
+   * package that has both. The enum could not express the parts revisions actually occur in:
+   * `header3.xml`, `footer1.xml`, `comments.xml`, and `styles.xml`, which carries
+   * `w:pPrChange` inside style definitions with ids that collide with `document.xml`.
+   */
+  readonly part: string;
 }
 
 export interface SectionProperties {

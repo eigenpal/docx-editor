@@ -138,3 +138,77 @@ describe('the differential holds on a real document', () => {
     expect(laidOut(part, 'proposed')).toEqual(laidOut(resolveAll(part, 'accept')));
   });
 });
+
+// Section addressing and the block list are ONE list.
+//
+// `blockStart` / `blockEndExclusive` index into `storyBlocks`, and that list changes shape with
+// the display mode: `proposed` drops a paragraph whose mark AND content a revision removed.
+// Enumerating sections over the unfiltered list and then slicing the filtered one lands body
+// text under another section's page geometry. The comment above `revisionRemovesParagraph`
+// predicted exactly this before it happened.
+describe('sections are addressed in the mode the blocks were filtered in', () => {
+  const A5_PORTRAIT = '<w:pgSz w:w="8391" w:h="11906"/>';
+  const LETTER_LANDSCAPE = '<w:pgSz w:w="15840" w:h="12240" w:orient="landscape"/>';
+  /** A paragraph the proposed view removes: its mark is struck and its content is deleted. */
+  const REMOVED =
+    `<w:p><w:pPr><w:rPr><w:del w:id="90" w:author="QA" w:date="D"/></w:rPr></w:pPr>` +
+    `${del('91', delRun('gone'))}</w:p>`;
+  const part = load(
+    `${REMOVED}` +
+      `<w:p><w:pPr><w:sectPr>${A5_PORTRAIT}</w:sectPr></w:pPr>${run('first section')}</w:p>` +
+      `<w:p>${run('second section')}</w:p>` +
+      `<w:sectPr>${LETTER_LANDSCAPE}</w:sectPr>`
+  );
+
+  test('the second section keeps its own page size in the proposed view', () => {
+    const layout = layoutSemanticDocument(part, 1, { measurer, displayMode: 'proposed' });
+    const pageOf = (text: string): (typeof layout.pages)[number] | undefined =>
+      layout.pages.find((page) =>
+        page.fragments.some(
+          (fragment) =>
+            fragment.kind === 'paragraph' &&
+            fragment.lines.some((line) =>
+              line.spans
+                .map((span) => span.text)
+                .join('')
+                .includes(text)
+            )
+        )
+      );
+    // A5 portrait is 8391 twips wide; Letter landscape is 15840. Sliced with unfiltered
+    // indices, "second section" fell inside the FIRST section's range and paginated onto A5.
+    expect(pageOf('first section')?.box.width).toBeCloseTo(8391 / 20, 5);
+    expect(pageOf('second section')?.box.width).toBeCloseTo(15840 / 20, 5);
+  });
+
+  test('all-markup, where nothing is filtered, agrees with it', () => {
+    const layout = layoutSemanticDocument(part, 1, { measurer, displayMode: 'all-markup' });
+    const last = layout.pages[layout.pages.length - 1]!;
+    expect(last.box.width).toBeCloseTo(15840 / 20, 5);
+  });
+});
+
+// Nesting is the cheapest unbounded axis in a file an attacker wrote, so every walk over one
+// is capped. The caps have to AGREE: two walks over the same tree with different limits means
+// one of them is describing a document the other one is not.
+describe('the emptiness test and the layout walk cap nesting at the same depth', () => {
+  /** `w:ins` wrappers, `depth` deep, around one run of real text. */
+  function nested(depth: number, inner: string): string {
+    let markup = inner;
+    for (let level = 0; level < depth; level += 1) {
+      markup = `<w:ins w:id="${100 + level}" w:author="QA" w:date="D">${markup}</w:ins>`;
+    }
+    return markup;
+  }
+
+  test('a mark-deleted paragraph whose content is nested deeply still renders it', () => {
+    const part = load(
+      `<w:p><w:pPr><w:rPr><w:del w:id="99" w:author="QA" w:date="D"/></w:rPr></w:pPr>` +
+        `${nested(12, run('deeply nested but visible'))}</w:p>`
+    );
+    // Below the layout walk's own limit, so layout emits these spans. At a local cap of 8 the
+    // emptiness test called the paragraph empty, the block was dropped from the story, and
+    // visible text left the page for no reason a reader could see.
+    expect(laidOut(part, 'proposed').join('')).toContain('deeply nested but visible');
+  });
+});

@@ -339,3 +339,8 @@ export {
   type NoteLifecycleRejection,
   type NoteLifecycleResult,
 } from './note-lifecycle.ts';
+export {
+  NO_TRACKING_SETTINGS,
+  readTrackingSettings,
+  type DocumentTrackingSettings,
+} from './tracking-settings.ts';

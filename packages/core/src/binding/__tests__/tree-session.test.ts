@@ -298,3 +298,61 @@ describe('hostile prefix shadowing end to end', () => {
     expect(new Set(ids).size).toBe(3);
   });
 });
+
+// Package-level writes and story-level writes reach the package by different lanes, and a
+// comment write is the one intent that uses both.
+describe('a comment write does not publish over package-level writes', () => {
+  const BODY = '<w:p><w:r><w:t>alpha beta gamma delta</w:t></w:r></w:p>';
+
+  test('a reply keeps a numbering part grafted earlier in the same session', () => {
+    const session = open(docx(BODY));
+    // The list definition lives on the PACKAGE, not in the story tree, and the file had no
+    // `numbering.xml` at all — this creates it.
+    const numId = session.ensureListDefinition('bullet');
+    expect(numId).not.toBeNull();
+    expect(session.currentPackage().parts.has('/word/numbering.xml')).toBe(true);
+
+    const paragraphId = session.paragraphIds()[0]!;
+    const commentId = session.replyToComment(
+      null,
+      { paragraphId, start: 0, end: 5 },
+      'a remark',
+      'QA Reviewer',
+      '2026-08-03T10:00:00Z'
+    );
+    expect(commentId).not.toBeNull();
+
+    const after = session.currentPackage();
+    // Both, not one: the comment write used to publish the story store's own package back
+    // over the coordinator's, and the graft — which never reached the story store — went with
+    // it. Every `w:numPr` in the document was left pointing at a part that no longer existed.
+    expect(after.parts.has('/word/numbering.xml')).toBe(true);
+    expect(after.parts.has('/word/comments.xml')).toBe(true);
+  });
+
+  test('a reply keeps a hyperlink relationship minted earlier in the same session', () => {
+    const session = open(docx(BODY));
+    const relationshipId = session.ensureHyperlinkRelationship('https://example.com/');
+    expect(relationshipId).not.toBeNull();
+
+    const paragraphId = session.paragraphIds()[0]!;
+    expect(
+      session.replyToComment(
+        null,
+        { paragraphId, start: 0, end: 5 },
+        'a remark',
+        'QA Reviewer',
+        '2026-08-03T10:00:00Z'
+      )
+    ).not.toBeNull();
+
+    // A dangling `r:id` on save is what losing this produces: the link is in the story and
+    // the relationship it names is not in the package.
+    const owner = session.currentPackage().mainDocumentPart;
+    expect(
+      session
+        .currentPackage()
+        .externalTargets.some((entry) => entry.id === relationshipId && entry.ownerPart === owner)
+    ).toBe(true);
+  });
+});

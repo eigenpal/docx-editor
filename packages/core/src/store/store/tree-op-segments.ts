@@ -52,8 +52,69 @@ export function isParagraph(node: OoxmlNode | null): node is OoxmlParagraphNode 
  * nothing.
  */
 export function segmentsOf(paragraph: OoxmlParagraphNode): Segment[] {
+  return walkParagraph(paragraph, null);
+}
+
+/** Half-open `[start, end)` of one node in its paragraph's model offset space. */
+export interface OffsetSpan {
+  readonly start: number;
+  readonly end: number;
+}
+
+/**
+ * Every node's place in the paragraph's model offset space, from the SAME walk `segmentsOf`
+ * uses.
+ *
+ * The offset model has exactly one authority, and this is how a caller borrows it. Three
+ * private walkers used to re-derive it — one in the tracked-change writer, one in the comment
+ * anchor reader, one in the review queue — and all three disagreed with `segmentsOf` and with
+ * each other: none gave a note reference or an atomic field its length of one, one counted a
+ * field's instruction text as visible characters, and one never descended into `w:hyperlink`
+ * at all. The consequences were an anchor short by a link's length, two unrelated comments
+ * threaded onto one zero-width offset, and a tracked insert landing a character out in any
+ * paragraph carrying a footnote. Patching each walker only resets the clock on the next drift.
+ *
+ * A node the walk never reaches — content under a `generic` container, or past the nesting cap
+ * — has NO span, and {@link ParagraphOffsetIndex.lengthOf} reports zero for it. That is the
+ * same answer `segmentsOf` gives: it contributes no addressable characters.
+ */
+export interface ParagraphOffsetIndex {
+  /** The paragraph's own length, identical to {@link paragraphLength}. */
+  readonly length: number;
+  readonly segments: readonly Segment[];
+  /** Where a node sits, or null when the offset walk never reached it. */
+  spanOf(node: OoxmlNode | string): OffsetSpan | null;
+  /** A node's model length: `end - start` of its span, and 0 when it has none. */
+  lengthOf(node: OoxmlNode | string): number;
+}
+
+export function paragraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOffsetIndex {
+  const spans = new Map<string, OffsetSpan>();
+  const segments = walkParagraph(paragraph, spans);
+  const length = segments.length === 0 ? 0 : segments[segments.length - 1]!.end;
+  const lookup = (node: OoxmlNode | string): OffsetSpan | null =>
+    spans.get(typeof node === 'string' ? node : node.id) ?? null;
+  return {
+    length,
+    segments,
+    spanOf: lookup,
+    lengthOf: (node) => {
+      const span = lookup(node);
+      return span === null ? 0 : span.end - span.start;
+    },
+  };
+}
+
+function walkParagraph(
+  paragraph: OoxmlParagraphNode,
+  spans: Map<string, OffsetSpan> | null
+): Segment[] {
   const segments: Segment[] = [];
   let offset = 0;
+  /** Record a node's span. No-op for `segmentsOf`, which asks for none. */
+  const record = (node: OoxmlNode, start: number): void => {
+    if (spans !== null) spans.set(node.id, { start, end: offset });
+  };
   const atoms = atomicFieldSpansOf(paragraph);
   const noteAtoms = atomicNoteSpansOf(paragraph);
   const atomByBeginId = new Map(atoms.map((span) => [span.node.id, span]));
@@ -84,20 +145,27 @@ export function segmentsOf(paragraph: OoxmlParagraphNode): Segment[] {
   };
 
   const visitRunChild = (node: OoxmlNode, runId: string): void => {
+    const start = offset;
     const atom = atomByBeginId.get(node.id);
     if (atom && atom.kind === 'complex') {
       emitAtom(atom);
+      record(node, start);
       return;
     }
-    if (covered.has(node.id)) return;
+    if (covered.has(node.id)) {
+      record(node, start);
+      return;
+    }
     const noteAtom = noteAtomById.get(node.id);
     if (noteAtom) {
       emitAtom(noteAtom);
+      record(node, start);
       return;
     }
     if (isNoteAtomNode(node)) {
       // Should not happen — typed atoms are always in noteAtomById — but fail soft.
       emitAtom({ runId, node, removeNodeIds: [node.id] });
+      record(node, start);
       return;
     }
     if (
@@ -108,34 +176,43 @@ export function segmentsOf(paragraph: OoxmlParagraphNode): Segment[] {
       isInstrText(node)
     ) {
       // Demoted / orphan markers: no model contribution; content preserved in the tree.
+      record(node, start);
       return;
     }
     if (node.kind === 'textValue') {
       segments.push({ runId, node, start: offset, end: offset + node.value.length });
       offset += node.value.length;
+      record(node, start);
       return;
     }
     if (node.kind === 'tab' || node.kind === 'hardBreak') {
       segments.push({ runId, node, start: offset, end: offset + 1 });
       offset += 1;
+      record(node, start);
       return;
     }
-    if (node.kind === 'runProperties' || node.kind === 'generic') return;
-    if (node.kind === 'text' || node.kind === 'deletedText') {
-      for (const child of node.children) visitRunChild(child, runId);
+    if (node.kind === 'runProperties' || node.kind === 'generic') {
+      record(node, start);
       return;
     }
     for (const child of node.children) visitRunChild(child, runId);
+    record(node, start);
   };
   const visitInline = (child: OoxmlNode, depth: number): void => {
-    if (child.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) return;
+    const start = offset;
+    if (child.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) {
+      record(child, start);
+      return;
+    }
     if (isFldSimple(child)) {
       const atom = atomByBeginId.get(child.id);
       if (atom) emitAtom(atom);
+      record(child, start);
       return;
     }
     if (child.kind === 'run') {
       for (const grand of child.children) visitRunChild(grand, child.id);
+      record(child, start);
       return;
     }
     // Bookmark and range markers measure nothing; only a run CONTAINER descends. A link and a
@@ -145,6 +222,7 @@ export function segmentsOf(paragraph: OoxmlParagraphNode): Segment[] {
     if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
       for (const inner of child.children) visitInline(inner, depth + 1);
     }
+    record(child, start);
   };
   for (const child of paragraph.children) visitInline(child, 0);
   return segments;

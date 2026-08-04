@@ -23,6 +23,7 @@ import {
 } from '@docx-editor.dev/core-contract/store';
 import { DEFAULT_PAGE_GEOMETRY, type PageGeometry } from './semantic-records.ts';
 import { storyBlocks } from './story-roots.ts';
+import type { RevisionDisplayMode } from './revision-projection.ts';
 
 /**
  * Hard ceiling on sections enumerated from a document (matches write-path
@@ -321,9 +322,18 @@ export function readSectionProperties(part: OoxmlPart): SectionProperties {
  *
  * Enumeration is capped at {@link MAX_DOCUMENT_SECTIONS}. Further paragraph-level section
  * breaks are ignored and remaining blocks fold into the last accepted section (fail closed).
+ *
+ * `displayMode` MUST match the one the caller passes to `storyBlocks`. `blockStart` /
+ * `blockEndExclusive` are indices into that list, and the list changes shape with the mode:
+ * the proposed view drops a paragraph whose mark and content a revision both removed. Slicing
+ * a filtered list with indices counted over an unfiltered one puts body text under another
+ * section's page geometry — the wrong paper size, the wrong margins, the wrong header.
  */
-export function enumerateDocumentSections(part: OoxmlPart): DocumentSection[] {
-  return enumerateDocumentSectionsBounded(part).sections;
+export function enumerateDocumentSections(
+  part: OoxmlPart,
+  displayMode: RevisionDisplayMode = 'all-markup'
+): DocumentSection[] {
+  return enumerateDocumentSectionsBounded(part, displayMode).sections;
 }
 
 export interface DocumentSectionsEnumeration {
@@ -337,8 +347,11 @@ export interface DocumentSectionsEnumeration {
  * hostile input. Prefer the plain enumerator for normal layout; use this when a caller
  * needs a named fail-closed diagnostic.
  */
-export function enumerateDocumentSectionsBounded(part: OoxmlPart): DocumentSectionsEnumeration {
-  const blocks = storyBlocks(part);
+export function enumerateDocumentSectionsBounded(
+  part: OoxmlPart,
+  displayMode: RevisionDisplayMode = 'all-markup'
+): DocumentSectionsEnumeration {
+  const blocks = storyBlocks(part, displayMode);
   const sections: DocumentSection[] = [];
   let blockStart = 0;
   let truncated = false;

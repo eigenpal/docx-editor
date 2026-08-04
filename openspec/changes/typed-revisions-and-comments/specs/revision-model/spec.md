@@ -310,3 +310,193 @@ This is a range the schema does not enforce: `CT_Markup/@w:id` is `ST_DecimalNum
 
 - **WHEN** the signed 32-bit space has no value left
 - **THEN** allocation fails with `invalidArgs` and publishes no `ModelChange`, rather than wrapping or truncating
+
+### Requirement: The revision vocabulary covers the markup Word writes around a revision
+
+Typing the four content wrappers is not enough to round-trip a reviewed document. The canonical tree SHALL additionally cover:
+
+| Markup | Why it cannot be left out |
+| --- | --- |
+| `w:customXmlInsRangeStart`/`End`, `w:customXmlDelRangeStart`/`End`, `w:customXmlMoveFromRangeStart`/`End`, `w:customXmlMoveToRangeStart`/`End` | `EG_RangeMarkupElements` members that record a revision spanning a custom-XML boundary. Dropping one half leaves a start with no end |
+| `w:tblPrExChange` | The table-property-exception change. It sits on a ROW (`w:tblPrEx`), not on the table, so a walker looking only at `w:tblPr` never finds it |
+| `CT_ParaRPrChange` (`w:pPr/w:rPr/w:rPrChange`) | The paragraph MARK's own run-property change — the pilcrow's formatting. It is not the run-level `w:rPrChange` and resolving it as one applies the change to the wrong thing |
+| `w:numPr/w:ins` | A tracked change to a paragraph's NUMBERING. Its `@w:id` is a revision id and it must not be missed by allocation |
+| `w:delInstrText` | A field instruction inside a deletion (§17.16.23). A writer that emits `w:instrText` there produces markup its own reject path exists to undo |
+
+Each SHALL round-trip, SHALL contribute its `@w:id` to revision-id allocation where it carries one, and SHALL be presented on the review surface as part of the decision it belongs to rather than as a decision of its own.
+
+#### Scenario: A custom-XML revision range round-trips whole
+
+- **WHEN** a document carries `w:customXmlDelRangeStart` and its matching end
+- **THEN** both survive a save and reopen, paired by `@w:id`
+- **AND** neither is presented as a revision card of its own
+
+#### Scenario: A row's property-exception change is found
+
+- **WHEN** a row carries `w:tblPrEx/w:tblPrExChange`
+- **THEN** it is listed as a pending decision and its `@w:id` is counted by allocation
+
+#### Scenario: The paragraph mark's own formatting change is distinct
+
+- **WHEN** a paragraph carries `w:pPr/w:rPr/w:rPrChange`
+- **THEN** it resolves against the paragraph MARK's run properties
+- **AND** it is never resolved as if it were a `w:rPrChange` on a run in that paragraph
+
+#### Scenario: A numbering change carries a revision id
+
+- **WHEN** a paragraph carries `w:pPr/w:numPr/w:ins`
+- **THEN** allocation counts its `@w:id`, so a new revision cannot be minted onto it
+
+#### Scenario: An instruction inside a deletion is `w:delInstrText`
+
+- **WHEN** a field's instruction is struck by a tracked deletion
+- **THEN** it is written as `w:delInstrText`
+- **AND** rejecting the deletion renames it back to `w:instrText`
+
+### Requirement: Document-level tracking settings are read and honoured
+
+`settings.xml` states whether the DOCUMENT asks for tracking. The engine SHALL read `w:trackRevisions` and SHALL enter suggesting mode when a document declares it, rather than presenting a document that asks for tracking as an ordinary editable one. Saving SHALL preserve the setting, and turning suggesting mode on or off SHALL write it, because that is where Word looks.
+
+`w:documentProtection/@w:edit="trackedChanges"` states something stronger: the document permits editing ONLY as tracked changes. The engine SHALL honour it by refusing to leave suggesting mode. It SHALL NOT be treated as a security boundary — the protection is advisory, the password hash in `@w:hash` is not verified, and a file is editable by anyone holding it — but ignoring it silently produces untracked edits in a document whose author asked for the opposite.
+
+`w:doNotTrackMoves` and `w:doNotTrackFormatting` narrow what tracking produces: with the first, a move is written as an ordinary deletion and insertion rather than as a `w:moveFrom`/`w:moveTo` pair; with the second, a formatting change is applied without a `w:rPrChange`. Both SHALL be honoured on WRITE. Neither changes how existing markup is READ: a `w:moveFrom` in a document declaring `w:doNotTrackMoves` is still a move, because the setting governs what a producer emits from now on.
+
+#### Scenario: A document asking for tracking opens in suggesting mode
+
+- **WHEN** a package whose `settings.xml` declares `w:trackRevisions` is opened with an author configured
+- **THEN** the editor is in suggesting mode, and the first keystroke commits as a `w:ins`
+
+#### Scenario: Toggling the mode writes the setting
+
+- **WHEN** suggesting mode is turned off and the package is saved
+- **THEN** `w:trackRevisions` is absent from `settings.xml`
+- **AND** every other setting in that part is unchanged
+
+#### Scenario: A document with no author still reports what it asked for
+
+- **WHEN** a document declaring `w:trackRevisions` is opened with no author configured
+- **THEN** suggesting mode is not entered, and the refusal reason is published rather than the request being dropped silently
+
+#### Scenario: Protection restricted to tracked changes cannot be left
+
+- **WHEN** `w:documentProtection/@w:edit="trackedChanges"` is declared and the user selects Editing
+- **THEN** the change is refused with `locked` and the mode stays Suggesting
+
+#### Scenario: Protection is not presented as security
+
+- **WHEN** a document declares `w:documentProtection` with a password hash
+- **THEN** the hash is neither verified nor presented as one that was, because the file is editable by anyone holding it
+
+#### Scenario: Moves are not tracked when the document says not to
+
+- **WHEN** `w:doNotTrackMoves` is declared and content is moved in suggesting mode
+- **THEN** the result is a `w:del` and a `w:ins`, not a `w:moveFrom`/`w:moveTo` pair
+
+#### Scenario: An existing move is still a move
+
+- **WHEN** the same document already contains a `w:moveFrom`/`w:moveTo` pair
+- **THEN** it is presented and resolved as a move, because the setting governs writing rather than reading
+
+#### Scenario: Formatting is applied untracked when the document says not to track it
+
+- **WHEN** `w:doNotTrackFormatting` is declared and bold is applied in suggesting mode
+- **THEN** the run's properties change and no `w:rPrChange` is written
+
+### Requirement: One composition is one revision and one history entry
+
+An IME composition SHALL commit as ONE `w:ins` and ONE D10 history entry, regardless of how many intermediate compositions the browser reports. A composition of a Japanese word produces a readback per keystroke; recording each as its own revision fills the review pane with a card per character and makes one word take a dozen undos to retract.
+
+#### Scenario: A composed word is one card
+
+- **WHEN** a five-keystroke composition commits in suggesting mode
+- **THEN** the review surface lists one insertion whose text is the composed word
+
+#### Scenario: A composed word is one undo
+
+- **WHEN** the same composition is undone
+- **THEN** the whole word is retracted in one step
+
+#### Scenario: An abandoned composition writes nothing
+
+- **WHEN** a composition is cancelled before it commits
+- **THEN** no revision is written and the document is fingerprint-identical
+
+### Requirement: A tracked edit outside the run vocabulary states what it becomes
+
+Four other changes defer to this one for what tracking means in their vocabulary, and a requirement that does not exist cannot be deferred to. Each SHALL be stated here:
+
+- **A tracked note insertion.** Inserting a footnote or endnote in suggesting mode SHALL wrap the REFERENCE in `w:ins` in the story. The note BODY in `footnotes.xml`/`endnotes.xml` SHALL NOT be wrapped: the reference is the thing that exists in the document, and rejecting the insertion removes the reference and cascades the body away with it, exactly as an untracked deletion of a reference does.
+- **A tracked content-control value change.** Editing inside a `w:sdt` in suggesting mode SHALL track the CONTENT — the runs inside `w:sdtContent` — like any other run content. The `w:sdtPr` binding SHALL NOT be tracked, because a value change is not a change to the control.
+- **A tracked drawing deletion.** Deleting a drawing in suggesting mode SHALL wrap its run in `w:del`. The drawing itself is not text and gets no `w:delText`; it stays inside the deletion unchanged, so rejecting restores it byte-identically and accepting removes the run and its relationship together.
+
+#### Scenario: Rejecting a tracked note insertion takes the body with it
+
+- **WHEN** a footnote inserted in suggesting mode is rejected
+- **THEN** the reference is removed from the story and the note body is removed from `footnotes.xml`
+- **AND** no orphan note body is left behind
+
+#### Scenario: A content control's value tracks, its binding does not
+
+- **WHEN** text inside a `w:sdt` is edited in suggesting mode
+- **THEN** the runs inside `w:sdtContent` carry the revision
+- **AND** `w:sdtPr` is unchanged
+
+#### Scenario: A rejected drawing deletion restores the drawing exactly
+
+- **WHEN** a tracked deletion of a drawing is rejected
+- **THEN** the drawing subtree matches its input by canonical fingerprint
+- **AND** its media relationship is still in the package
+
+### Requirement: A display-mode switch invalidates layout without a model change
+
+A display mode is a D12 **presentation** input, not a model input: it changes what layout produces and never what the document holds. It SHALL therefore be classed alongside zoom and page-view settings rather than alongside a `TreeDocOp`, and it SHALL NOT publish a `ModelChange`.
+
+That leaves the invalidation question a `ModelChange` would otherwise answer. The mode SHALL be part of the layout cache KEY, carried by the measurement producer, so a change to it invalidates the per-block cache and the flow checkpoints of a change-scoped layout session by the ordinary key comparison. A session that only watched for `ModelChange` would hand back the pages it laid out in the previous mode.
+
+#### Scenario: Switching modes re-lays out
+
+- **WHEN** the display mode changes from all-markup to the proposed result
+- **THEN** layout runs again and the pages reflect the new mode
+- **AND** no `ModelChange` is published and no undo entry is created
+
+#### Scenario: The document is untouched
+
+- **WHEN** the mode is switched several times and the package is saved
+- **THEN** the saved package matches the input by canonical fingerprint
+
+#### Scenario: A cached session does not answer in the wrong mode
+
+- **WHEN** a layout session has cached pages for all-markup and the mode changes
+- **THEN** no cached page is returned by identity, because the mode is part of the cache key
+
+### Requirement: The public revision and comment contracts describe what the engine models
+
+`Revision` and `DocComment` are `@public`. They SHALL describe the document the engine actually reads, and where they did not, the correction is BREAKING and SHALL be released as such:
+
+| Member | Was | Is | Why |
+| --- | --- | --- | --- |
+| `Revision.date` | required `string` | optional | `CT_TrackChange` makes `@w:date` optional. Required forced either a fabricated date — a content change — or dropping the revision |
+| `Revision.part` | optional `'body' \| 'footnote' \| 'endnote'` | required part NAME | `@w:id` is unique only within a part, so an address without one names two revisions. The enum cannot express `header3.xml`, `comments.xml`, or `styles.xml`, which carries revisions whose ids collide with `document.xml` |
+| `Revision.type` | `'insert' \| 'delete' \| 'format'` | plus `replace`, `moveFrom`, `moveTo`, `paragraphMark`, `structural` | A move resolved as a delete and an insert duplicates or loses content; a paragraph-mark revision decorates no characters and merges paragraphs; a row revision is structural. A reviewer shown three kinds never learns about the rest |
+| `DocComment.date` | required | optional | Same as `Revision.date` |
+| `DocComment` | no anchor | `anchor`, `orphaned` | A comment lives in `comments.xml` and is PLACED by markers in a story. Without the anchor a consumer cannot say where a comment is, and cannot tell a comment with no usable range from one anchored at offset zero |
+
+#### Scenario: A dateless revision is listed
+
+- **WHEN** a document carries a `w:ins` with no `@w:date`
+- **THEN** it is listed with no date, and saving does not fabricate one
+
+#### Scenario: A header revision is attributable
+
+- **WHEN** a document's only revision is in `header3.xml`
+- **THEN** it is listed with that part as its address, and resolving it names the same part
+
+#### Scenario: Colliding ids in two parts are two revisions
+
+- **WHEN** `styles.xml` and `document.xml` each carry a revision `w:id="0"`
+- **THEN** they are two entries with different `part` values, and resolving one leaves the other untouched
+
+#### Scenario: An orphaned comment says so
+
+- **WHEN** a comment's range markers are missing
+- **THEN** it is listed with `orphaned` set and no anchor, rather than being dropped or reported at offset zero

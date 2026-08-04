@@ -258,3 +258,65 @@ Comment ids share `ST_DecimalNumber`'s unbounded schema type and Word's signed 3
 
 - **WHEN** a document with engine-authored comments and replies is saved and opened in Word
 - **THEN** it opens without a repair prompt and the thread structure is intact
+
+### Requirement: A comment range is not confined to one paragraph
+
+A comment anchor SHALL be a RANGE over two positions, each a paragraph identity plus a UTF-16 offset, and the two positions SHALL be allowed to sit in different paragraphs, different cells, and different rows.
+
+`EG_RangeMarkupElements` — which is where `w:commentRangeStart` and `w:commentRangeEnd` live — sits in `EG_PContent` AND between block-level siblings, so Word writes the markers between paragraphs, between table rows, and between cells as freely as it writes them between runs. A model that anchors a comment inside one paragraph therefore describes only some of the comments a real file holds.
+
+A marker written between blocks SHALL anchor to the nearest position in reading order rather than being dropped, and the container holding it SHALL NOT be demoted for holding it — a demoted `w:tbl` is a table nothing downstream finds a row in.
+
+#### Scenario: A range spanning two paragraphs
+
+- **WHEN** `w:commentRangeStart` sits in one paragraph and its end in the next
+- **THEN** the comment anchors over both, and its range reports the two paragraph identities
+
+#### Scenario: A marker between two paragraphs
+
+- **WHEN** a marker is written as a direct child of `w:body`, between two paragraphs
+- **THEN** it types, round-trips, and anchors at the boundary it sits on
+- **AND** `w:body` is not demoted for holding it
+
+#### Scenario: A range spanning a table boundary
+
+- **WHEN** a comment starts in the paragraph before a table and ends inside a cell
+- **THEN** it anchors over that range, and neither the table nor the row is demoted
+
+#### Scenario: A range across two cells
+
+- **WHEN** a comment starts in one cell and ends in another
+- **THEN** both positions resolve, and the comment is presented once rather than once per cell
+
+#### Scenario: Ordering is reading order, not marker order
+
+- **WHEN** a file writes an end marker before its start
+- **THEN** the range is reported unusable and the comment is marked orphaned, rather than being silently reversed
+
+### Requirement: A comment anchor is a range over identities, and offsets come from one authority
+
+An anchor SHALL be resolved in the SAME UTF-16 offset space the tree ops and the caret use, and that space SHALL have exactly one implementation. A reader that re-derives offsets with its own walk will disagree with the ops about where a comment is, and the disagreement is invisible until a file contains the shape the two walks treat differently.
+
+In particular, offsets SHALL descend into `w:hyperlink` — a link's characters are ordinary paragraph text — and SHALL count a note reference, an atomic field, a tab and a hard break as ONE unit each.
+
+Both boundaries of a range SHALL activate the comment, so a caret resting at a range's end is inside it.
+
+#### Scenario: A comment after a link is not short by the link's length
+
+- **WHEN** a comment is anchored on text following a hyperlink
+- **THEN** its reported range covers that text, with the link's characters counted before it
+
+#### Scenario: Markers inside a link yield an anchor
+
+- **WHEN** the range markers are written inside `w:hyperlink`, as Word writes them for a comment on link text
+- **THEN** the comment anchors over the link text rather than reporting orphaned
+
+#### Scenario: A note reference occupies one position
+
+- **WHEN** a comment is anchored after a footnote reference
+- **THEN** its offset counts that reference as one unit, matching the caret and the ops
+
+#### Scenario: A zero-width range is never evidence of a thread
+
+- **WHEN** two comments both resolve to a range covering no characters at the same offset
+- **THEN** neither is presented as a reply to the other, because a coincidence of position with no characters in it says nothing about the comments
