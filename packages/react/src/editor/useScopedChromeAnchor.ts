@@ -1,10 +1,10 @@
-import { useLayoutEffect, useRef, useState } from 'react';
-import type { CSSProperties, RefObject } from 'react';
+import { useCallback, useLayoutEffect, useState } from 'react';
+import type { CSSProperties, RefCallback } from 'react';
 
 type AnchorPlacement = 'before' | 'after';
 
 export interface ScopedChromeAnchor {
-  readonly ref: RefObject<HTMLDivElement | null>;
+  readonly ref: RefCallback<HTMLDivElement>;
   readonly style: CSSProperties;
 }
 
@@ -19,26 +19,18 @@ export function useScopedChromeAnchor(
   findAnchor: (viewport: HTMLElement) => HTMLElement | null,
   placement: AnchorPlacement
 ): ScopedChromeAnchor {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [style, setStyle] = useState<CSSProperties>({
-    position: 'absolute',
-    left: 8,
-    top: 8,
-    visibility: 'visible',
-  });
+  const [chrome, setChrome] = useState<HTMLDivElement | null>(null);
+  const ref = useCallback<RefCallback<HTMLDivElement>>((node) => setChrome(node), []);
+  const [style, setStyle] = useState<CSSProperties>({ visibility: 'hidden' });
 
   useLayoutEffect(() => {
-    const chrome = ref.current;
     const containingViewport = chrome?.closest<HTMLElement>('.docx-editor__scroll-container');
     const viewport =
       containingViewport ??
       chrome?.parentElement?.querySelector<HTMLElement>('.docx-editor__scroll-container');
-    const surface = viewport?.querySelector<HTMLElement>('.docx-paginated-surface');
-    if (!chrome || !viewport || !surface) return undefined;
+    if (!chrome || !viewport) return undefined;
 
     let frame = 0;
-    let missingAnchorRetries = 0;
-    let disposed = false;
     let observedAnchor: HTMLElement | null = null;
     const resizeObserver = new ResizeObserver(() => schedule());
 
@@ -53,15 +45,9 @@ export function useScopedChromeAnchor(
         observedAnchor = anchor;
       }
       if (!anchor || !anchor.isConnected) {
-        if (missingAnchorRetries < 2) {
-          missingAnchorRetries += 1;
-          queueMicrotask(() => {
-            if (!disposed) update();
-          });
-        }
+        setStyle({ visibility: 'hidden' });
         return;
       }
-      missingAnchorRetries = 0;
 
       const viewportRect = viewport.getBoundingClientRect();
       const anchorRect = anchor.getBoundingClientRect();
@@ -95,7 +81,7 @@ export function useScopedChromeAnchor(
     resizeObserver.observe(viewport);
     resizeObserver.observe(chrome);
     const mutationObserver = new MutationObserver(schedule);
-    mutationObserver.observe(surface, {
+    mutationObserver.observe(viewport, {
       subtree: true,
       childList: true,
       attributes: true,
@@ -106,14 +92,13 @@ export function useScopedChromeAnchor(
     update();
 
     return () => {
-      disposed = true;
       if (frame) cancelAnimationFrame(frame);
       resizeObserver.disconnect();
       mutationObserver.disconnect();
       viewport.removeEventListener('scroll', schedule);
       window.removeEventListener('resize', schedule);
     };
-  }, [findAnchor, placement]);
+  }, [chrome, findAnchor, placement]);
 
   return { ref, style };
 }

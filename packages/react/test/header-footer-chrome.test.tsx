@@ -128,9 +128,12 @@ describe('DocxEditor.HeaderFooterChrome', () => {
     await act(async () => {
       const opened = editor().exec({ type: 'editHeaderFooter', position: 'header' });
       expect(opened.ok).toBe(true);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     });
     const chrome = view.getByTestId('docx-hf-chrome');
     expect(chrome).toBeTruthy();
+    expect(chrome.style.visibility).toBe('visible');
+    expect(chrome.style.position).toBe('absolute');
     expect(chrome.textContent).toContain('Header');
     expect(chrome.textContent).toContain('Section 1');
     expect(chrome.getAttribute('aria-label')).toBe('Header and footer editing');
