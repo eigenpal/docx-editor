@@ -19,7 +19,6 @@ import type {
 } from '@docx-editor.dev/core-contract/automation';
 import { createRuntime } from '../runtime.ts';
 import { messageFor, type DocxEditorErrorCode } from '../errors.ts';
-import { MiniDocument } from '../examples/minimal-model.ts';
 import { openHost, spyHost, stubHost } from './support/hosts.ts';
 import { docx, p } from './support/docx.ts';
 
@@ -50,17 +49,20 @@ async function caught(work: Promise<unknown>): Promise<{ code?: unknown; message
 }
 
 describe('a refused batch', () => {
+  // The refusal used throughout: two changes in one batch that both claim one paragraph. The
+  // document refuses the batch rather than planning the second against coordinates the first
+  // moved, which makes it a real host refusal arriving in the middle of a consumer's work.
   test('writes nothing at all, including the operations queued before the bad one', async () => {
     const runtime = createRuntime({ host: openHost(docx(p('intact'))), save: true });
     const text = await runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
       const first = paragraphs.items[0]!;
-      first.insertText('good ', 0);
-      first.insertText('bad ', 9_999);
+      first.insertText('good ', 'Start');
+      first.insertParagraph('beside', 'After');
       const failure = await caught(context.sync());
-      expect(failure).toMatchObject({ code: 'InvalidArgument' });
+      expect(failure).toMatchObject({ code: 'ConflictingChanges' });
       first.load('text');
       await context.sync();
       return first.text;
@@ -73,10 +75,12 @@ describe('a refused batch', () => {
     const spy = spyHost(openHost(docx(p('intact'))));
     const runtime = createRuntime({ host: spy.host, save: true });
     await runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
-      paragraphs.items[0]!.insertText('bad ', 9_999);
+      const first = paragraphs.items[0]!;
+      first.insertText('bad ', 'Start');
+      first.insertParagraph('beside', 'After');
       await caught(context.sync());
       spy.reset();
       await context.sync();
@@ -88,13 +92,14 @@ describe('a refused batch', () => {
   test('leaves the context able to run a later batch that succeeds on its own', async () => {
     const runtime = createRuntime({ host: openHost(docx(p('base'))), save: true });
     const text = await runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
       const first = paragraphs.items[0]!;
-      first.insertText('bad ', 9_999);
+      first.insertText('bad ', 'Start');
+      first.insertParagraph('beside', 'After');
       await caught(context.sync());
-      first.insertText('fine ', 0);
+      first.insertText('fine ', 'Start');
       await context.sync();
       first.load('text');
       await context.sync();
@@ -105,22 +110,18 @@ describe('a refused batch', () => {
   });
 
   test('a batch that cannot even be planned sends nothing', async () => {
-    // The write's target stopped being addressable between the call and the sync. Planning
-    // refuses before anything is dispatched, so this is not a document failure at all.
-    const spy = spyHost(openHost());
+    // A lookup that found nothing never became addressable, so an action against it cannot be
+    // planned. That refusal happens at the call, before anything is dispatched, so it is not a
+    // document failure at all — and the live object's read still goes out as one batch.
+    const spy = spyHost(openHost(docx('')));
     const runtime = createRuntime({ host: spy.host, save: true });
     await runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
-      paragraphs.load();
-      await context.sync();
-      const missing = paragraphs.getItemOrNullObject(9);
+      const body = context.document.body;
+      const missing = body.paragraphs.getFirstOrNullObject();
       await context.sync();
       expect(missing.isNullObject).toBe(true);
       spy.reset();
-      // Queue a read against a live object, then break one of the queue's targets by hand: the
-      // pending item never became addressable, so an action against it cannot be planned.
-      const first = paragraphs.items[0]!;
-      first.load('text');
+      body.load('text');
       expect(() => missing.load('text')).toThrow();
       await context.sync();
       expect(spy.requests).toHaveLength(1);
@@ -133,21 +134,21 @@ describe('a write made from a read the document has moved past', () => {
   test('is refused, and the error carries the revision it expected and the one it found', async () => {
     const runtime = createRuntime({ host: openHost(docx(p('base'))), save: true });
     const failure = await runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
       const first = paragraphs.items[0]!;
 
       // Another run moves the document underneath this one.
       await runtime.run(async (inner) => {
-        const theirs = MiniDocument.open(inner).body.paragraphs;
+        const theirs = inner.document.body.paragraphs;
         theirs.load();
         await inner.sync();
-        theirs.items[0]!.insertText('theirs ', 0);
+        theirs.items[0]!.insertText('theirs ', 'Start');
         await inner.sync();
       });
 
-      first.insertText('mine ', 0);
+      first.insertText('mine ', 'Start');
       return caught(context.sync());
     });
     expect(failure).toMatchObject({ code: 'StaleDocument' });
@@ -163,21 +164,21 @@ describe('a write made from a read the document has moved past', () => {
   test('applied nothing: only the other run is in the document', async () => {
     const runtime = createRuntime({ host: openHost(docx(p('base'))), save: true });
     await runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
       await runtime.run(async (inner) => {
-        const theirs = MiniDocument.open(inner).body.paragraphs;
+        const theirs = inner.document.body.paragraphs;
         theirs.load();
         await inner.sync();
-        theirs.items[0]!.insertText('theirs ', 0);
+        theirs.items[0]!.insertText('theirs ', 'Start');
         await inner.sync();
       });
-      paragraphs.items[0]!.insertText('mine ', 0);
+      paragraphs.items[0]!.insertText('mine ', 'Start');
       await caught(context.sync());
     });
     const text = await runtime.run(async (context) => {
-      const body = MiniDocument.open(context).body;
+      const body = context.document.body;
       body.load('text');
       await context.sync();
       return body.text;
@@ -196,12 +197,12 @@ describe('a write made from a read the document has moved past', () => {
     const runtime = createRuntime({ host: spy.host, save: true });
 
     const kept = await runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
       spy.reset();
       const first = paragraphs.items[0]!;
-      first.insertText('read-then-write ', 0);
+      first.insertText('read-then-write ', 'Start');
       await context.sync();
       expect(spy.requests[0]?.expectedRevision).toBeDefined();
       context.trackedObjects.add(first);
@@ -211,7 +212,7 @@ describe('a write made from a read the document has moved past', () => {
     const readAt = spy.host.revision();
     spy.reset();
     await runtime.run(kept, async (context) => {
-      kept.insertText('adopted-then-write ', 0);
+      kept.insertText('adopted-then-write ', 'Start');
       await context.sync();
     });
     expect(spy.requests).toHaveLength(1);
@@ -236,7 +237,7 @@ describe('every host refusal arrives as one of this runtime\u2019s codes', () =>
       const runtime = createRuntime({ host: refusingHost(host).host, save: true });
       const failure = await caught(
         runtime.run(async (context) => {
-          MiniDocument.open(context).body.load('text');
+          context.document.body.load('text');
           await context.sync();
         })
       );
@@ -252,7 +253,7 @@ describe('every host refusal arrives as one of this runtime\u2019s codes', () =>
     });
     const failure = (await caught(
       runtime.run(async (context) => {
-        MiniDocument.open(context).body.load('text');
+        context.document.body.load('text');
         await context.sync();
       })
     )) as { message: string; code: DocxEditorErrorCode; target?: string };
@@ -282,7 +283,7 @@ describe('every host refusal arrives as one of this runtime\u2019s codes', () =>
     const failure = await caught(
       runtime.run(async (context) => {
         // Root resolution itself asks for a handle, so this host cannot even name the document.
-        MiniDocument.open(context).body.load('text');
+        context.document.body.load('text');
         await context.sync();
       })
     );
@@ -317,7 +318,7 @@ describe('every host refusal arrives as one of this runtime\u2019s codes', () =>
     });
     const failure = await caught(
       runtime.run(async (context) => {
-        MiniDocument.open(context).body.load('text');
+        context.document.body.load('text');
         await context.sync();
       })
     );
@@ -332,7 +333,7 @@ describe('disposal', () => {
     const runtime = createRuntime({ host, save: true });
     const failure = await caught(
       runtime.run(async (context) => {
-        const body = MiniDocument.open(context).body;
+        const body = context.document.body;
         host.dispose();
         body.load('text');
         await context.sync();

@@ -8,7 +8,6 @@
 
 import { describe, expect, test } from 'bun:test';
 import { createRuntime } from '../runtime.ts';
-import { MiniDocument } from '../examples/minimal-model.ts';
 import type { LoadOption } from '../load-options.ts';
 import { openHost, spyHost } from './support/hosts.ts';
 import { docx, p } from './support/docx.ts';
@@ -19,7 +18,7 @@ describe('a property is only readable once a sync has filled it', () => {
   test('reading before any load names the property that was not loaded', async () => {
     const runtime = createRuntime({ host: openHost(), save: true });
     await runtime.run(async (context) => {
-      const body = MiniDocument.open(context).body;
+      const body = context.document.body;
       expect(() => body.text).toThrowError(
         expect.objectContaining({ code: 'PropertyNotLoaded', target: 'document.body.text' })
       );
@@ -30,11 +29,11 @@ describe('a property is only readable once a sync has filled it', () => {
   test('reading after load but before sync is still not loaded', async () => {
     const runtime = createRuntime({ host: openHost(), save: true });
     await runtime.run(async (context) => {
-      const body = MiniDocument.open(context).body;
+      const body = context.document.body;
       body.load('text');
       expect(() => body.text).toThrowError(expect.objectContaining({ code: 'PropertyNotLoaded' }));
       await context.sync();
-      expect(body.text).toBe('alpha\nbeta');
+      expect(body.text).toBe('alpha\rbeta');
     });
     runtime.dispose();
   });
@@ -42,7 +41,7 @@ describe('a property is only readable once a sync has filled it', () => {
   test('a collection item is not loaded by the load that produced the item', async () => {
     const runtime = createRuntime({ host: openHost(), save: true });
     await runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       expect(() => paragraphs.items).toThrowError(
         expect.objectContaining({ code: 'PropertyNotLoaded' })
       );
@@ -71,10 +70,10 @@ describe('the shapes load accepts', () => {
     test(`${what} selects the property`, async () => {
       const runtime = createRuntime({ host: openHost(), save: true });
       await runtime.run(async (context) => {
-        const body = MiniDocument.open(context).body;
+        const body = context.document.body;
         body.load(option);
         await context.sync();
-        expect(body.text).toBe('alpha\nbeta');
+        expect(body.text).toBe('alpha\rbeta');
       });
       runtime.dispose();
     });
@@ -83,10 +82,10 @@ describe('the shapes load accepts', () => {
   test('no argument at all loads what the object offers', async () => {
     const runtime = createRuntime({ host: openHost(), save: true });
     await runtime.run(async (context) => {
-      const body = MiniDocument.open(context).body;
+      const body = context.document.body;
       body.load();
       await context.sync();
-      expect(body.text).toBe('alpha\nbeta');
+      expect(body.text).toBe('alpha\rbeta');
     });
     runtime.dispose();
   });
@@ -95,7 +94,7 @@ describe('the shapes load accepts', () => {
     const spy = spyHost(openHost());
     const runtime = createRuntime({ host: spy.host, save: true });
     await runtime.run(async (context) => {
-      const body = MiniDocument.open(context).body;
+      const body = context.document.body;
       body.load('text,text');
       spy.reset();
       await context.sync();
@@ -107,7 +106,7 @@ describe('the shapes load accepts', () => {
   test('top and skip select a window of a collection', async () => {
     const runtime = createRuntime({ host: openHost(FOUR), save: true });
     const texts = await runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load({ select: 'items', top: 2, skip: 1 });
       await context.sync();
       for (const item of paragraphs.items) item.load('text');
@@ -138,7 +137,7 @@ describe('what load refuses, at the load call', () => {
     test(`${what} is InvalidArgument naming ${target}`, async () => {
       const runtime = createRuntime({ host: openHost(), save: true });
       await runtime.run(async (context) => {
-        const body = MiniDocument.open(context).body;
+        const body = context.document.body;
         expect(() => body.load(option as LoadOption)).toThrowError(
           expect.objectContaining({ code: 'InvalidArgument', target })
         );
@@ -151,7 +150,7 @@ describe('what load refuses, at the load call', () => {
     const spy = spyHost(openHost());
     const runtime = createRuntime({ host: spy.host, save: true });
     await runtime.run(async (context) => {
-      const body = MiniDocument.open(context).body;
+      const body = context.document.body;
       expect(() => body.load('nope')).toThrow();
       spy.reset();
       await context.sync();
@@ -166,13 +165,13 @@ describe('what load refuses, at the load call', () => {
     // rather than the filter, because the filter is the part that can be relaxed by mistake.
     const runtime = createRuntime({ host: openHost(), save: true });
     await runtime.run(async (context) => {
-      const body = MiniDocument.open(context).body;
+      const body = context.document.body;
       expect(() => body.load(['__proto__'] as unknown as LoadOption)).toThrow();
       expect(Object.prototype).not.toHaveProperty('polluted');
       expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
       body.load('text');
       await context.sync();
-      expect(body.text).toBe('alpha\nbeta');
+      expect(body.text).toBe('alpha\rbeta');
     });
     runtime.dispose();
   });

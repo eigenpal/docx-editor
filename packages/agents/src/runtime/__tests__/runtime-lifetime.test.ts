@@ -13,7 +13,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { createRuntime } from '../runtime.ts';
-import { MiniDocument, type MiniParagraph } from '../examples/minimal-model.ts';
+import type { Paragraph } from '../../model/index.ts';
 import { openHost, spyHost } from './support/hosts.ts';
 import { docx, p } from './support/docx.ts';
 
@@ -22,9 +22,9 @@ const INVALID_PATH = expect.objectContaining({ code: 'InvalidObjectPath' });
 async function firstParagraph(
   runtime: ReturnType<typeof createRuntime>,
   options: { track: boolean }
-): Promise<MiniParagraph> {
+): Promise<Paragraph> {
   return runtime.run(async (context) => {
-    const paragraphs = MiniDocument.open(context).body.paragraphs;
+    const paragraphs = context.document.body.paragraphs;
     paragraphs.load();
     await context.sync();
     const first = paragraphs.items[0]!;
@@ -40,8 +40,8 @@ describe('a proxy dies with its run unless something kept it', () => {
     const runtime = createRuntime({ host: openHost(), save: true });
     const escaped = await firstParagraph(runtime, { track: false });
     expect(() => escaped.load('text')).toThrowError(INVALID_PATH);
-    expect(() => escaped.insertText('x', 0)).toThrowError(INVALID_PATH);
-    expect(() => escaped.getText()).toThrowError(INVALID_PATH);
+    expect(() => escaped.insertText('x', 'Start')).toThrowError(INVALID_PATH);
+    expect(() => escaped.delete()).toThrowError(INVALID_PATH);
     expect(() => escaped.isNullObject).toThrowError(INVALID_PATH);
     runtime.dispose();
   });
@@ -68,7 +68,7 @@ describe('a proxy dies with its run unless something kept it', () => {
     const runtime = createRuntime({ host: openHost(docx(p('kept'))), save: true });
     const kept = await firstParagraph(runtime, { track: true });
     const text = await runtime.run(kept, async (context) => {
-      kept.insertText('still ', 0);
+      kept.insertText('still ', 'Start');
       await context.sync();
       kept.load('text');
       await context.sync();
@@ -120,7 +120,7 @@ describe('a proxy dies with its run unless something kept it', () => {
   test('remove withdraws the intent: the object is released when the run ends', async () => {
     const runtime = createRuntime({ host: openHost(), save: true });
     const dropped = await runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
       const first = paragraphs.items[0]!;
@@ -135,7 +135,7 @@ describe('a proxy dies with its run unless something kept it', () => {
   test('add and remove are both idempotent', async () => {
     const runtime = createRuntime({ host: openHost(), save: true });
     const kept = await runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
       const first = paragraphs.items[0]!;
@@ -172,17 +172,17 @@ describe('a callback that throws', () => {
   test('rejects with what was thrown, applies nothing, and releases the objects', async () => {
     const spy = spyHost(openHost(docx(p('untouched'))));
     const runtime = createRuntime({ host: spy.host, save: true });
-    let escaped: MiniParagraph | undefined;
+    let escaped: Paragraph | undefined;
     const boom = new Error('callback gave up');
 
     await expect(
       runtime.run(async (context) => {
-        const paragraphs = MiniDocument.open(context).body.paragraphs;
+        const paragraphs = context.document.body.paragraphs;
         paragraphs.load();
         await context.sync();
         escaped = paragraphs.items[0]!;
         // Queued and never synced: a callback that threw did not ask for this to happen.
-        escaped.insertText('WRITTEN ', 0);
+        escaped.insertText('WRITTEN ', 'Start');
         spy.reset();
         throw boom;
       })
@@ -193,7 +193,7 @@ describe('a callback that throws', () => {
     expect(() => escaped!.load('text')).toThrowError(INVALID_PATH);
 
     const after = await runtime.run(async (context) => {
-      const body = MiniDocument.open(context).body;
+      const body = context.document.body;
       body.load('text');
       await context.sync();
       return body.text;
@@ -204,10 +204,10 @@ describe('a callback that throws', () => {
 
   test('a tracked object still survives a callback that threw', async () => {
     const runtime = createRuntime({ host: openHost(), save: true });
-    let kept: MiniParagraph | undefined;
+    let kept: Paragraph | undefined;
     await expect(
       runtime.run(async (context) => {
-        const paragraphs = MiniDocument.open(context).body.paragraphs;
+        const paragraphs = context.document.body.paragraphs;
         paragraphs.load();
         await context.sync();
         kept = paragraphs.items[0]!;

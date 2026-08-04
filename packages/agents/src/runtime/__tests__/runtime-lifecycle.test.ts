@@ -9,7 +9,6 @@
 
 import { describe, expect, test } from 'bun:test';
 import { createRuntime } from '../runtime.ts';
-import { MiniDocument } from '../examples/minimal-model.ts';
 import { openHost, spyHost } from './support/hosts.ts';
 import { docx, p } from './support/docx.ts';
 
@@ -17,12 +16,12 @@ describe('a run, its queue, and its one batch', () => {
   test('run answers with the callback value', async () => {
     const runtime = createRuntime({ host: openHost(), save: true });
     const text = await runtime.run(async (context) => {
-      const body = MiniDocument.open(context).body;
+      const body = context.document.body;
       body.load('text');
       await context.sync();
       return body.text;
     });
-    expect(text).toBe('alpha\nbeta');
+    expect(text).toBe('alpha\rbeta');
     runtime.dispose();
   });
 
@@ -30,7 +29,7 @@ describe('a run, its queue, and its one batch', () => {
     const spy = spyHost(openHost());
     const runtime = createRuntime({ host: spy.host, save: true });
     await runtime.run(async (context) => {
-      const body = MiniDocument.open(context).body;
+      const body = context.document.body;
       body.load('text');
       body.paragraphs.load();
       // The proxies exist, the queue is full, and the host has not been asked anything since
@@ -47,7 +46,7 @@ describe('a run, its queue, and its one batch', () => {
     const spy = spyHost(openHost());
     const runtime = createRuntime({ host: spy.host, save: true });
     await runtime.run(async (context) => {
-      const document = MiniDocument.open(context);
+      const { document } = context;
       document.body.paragraphs.load();
       document.body.load('text');
       spy.reset();
@@ -78,12 +77,12 @@ describe('a run, its queue, and its one batch', () => {
     // the result, which is exactly why this is the ordering test.
     const runtime = createRuntime({ host: openHost(), save: true });
     const text = await runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
       const first = paragraphs.items[0]!;
-      first.insertText('one ', 0);
-      first.insertText('two ', 0);
+      first.insertText('one ', 'Start');
+      first.insertText('two ', 'Start');
       await context.sync();
       first.load('text');
       await context.sync();
@@ -93,31 +92,21 @@ describe('a run, its queue, and its one batch', () => {
     runtime.dispose();
   });
 
-  test('a returned result carries no value until the sync that fills it', async () => {
-    const runtime = createRuntime({ host: openHost(), save: true });
-    await runtime.run(async (context) => {
-      const result = MiniDocument.open(context).body.getText();
-      expect(() => result.value).toThrow(/not been filled in/);
-      await context.sync();
-      expect(result.value).toBe('alpha\nbeta');
-    });
-    runtime.dispose();
-  });
-
   test('a collection hydrates into proxies that can be read and written', async () => {
     const runtime = createRuntime({ host: openHost(), save: true });
     const read = await runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
       expect(paragraphs.items).toHaveLength(2);
       // An item's own property is its own load: it had no handle to be asked about until the
-      // batch above answered. See `minimal-model.ts` for why that is a protocol property.
+      // batch above answered. An operation names its target with a handle, and a handle is DATA
+      // in the request, so nothing can be asked of an object before some answer has named it.
       for (const item of paragraphs.items) item.load('text');
       await context.sync();
       expect(paragraphs.items.map((item) => item.text)).toEqual(['alpha', 'beta']);
       const second = paragraphs.items[1]!;
-      second.insertText('!', 4);
+      second.insertText('!', 'End');
       await context.sync();
       second.load('text');
       await context.sync();
@@ -131,11 +120,11 @@ describe('a run, its queue, and its one batch', () => {
     const spy = spyHost(openHost());
     const runtime = createRuntime({ host: spy.host, save: true });
     await runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       spy.reset();
       await context.sync();
-      paragraphs.items[0]!.insertText('x', 0);
+      paragraphs.items[0]!.insertText('x', 'Start');
       await context.sync();
       expect(spy.requests.map((request) => request.operations.map((o) => o.op))).toEqual([
         ['getParagraphs'],
@@ -152,16 +141,17 @@ describe('a run, its queue, and its one batch', () => {
     // rather than a surprise discovered in production.
     const runtime = createRuntime({ host: openHost(), save: true });
     const [duringBatch, afterBatch] = await runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
       const first = paragraphs.items[0]!;
-      first.insertText('new ', 0);
-      const sameBatch = first.getText();
+      first.insertText('new ', 'Start');
+      first.load('text');
       await context.sync();
-      const nextBatch = first.getText();
+      const sameBatch = first.text;
+      first.load('text');
       await context.sync();
-      return [sameBatch.value, nextBatch.value];
+      return [sameBatch, first.text];
     });
     expect(duringBatch).toBe('alpha');
     expect(afterBatch).toBe('new alpha');
@@ -173,10 +163,10 @@ describe('the server runtime around the lifecycle', () => {
   test('save answers the edited document as bytes that reopen with the edit', async () => {
     const runtime = createRuntime({ host: openHost(docx(p('before'))), save: true });
     await runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
-      paragraphs.items[0]!.insertText('after ', 0);
+      paragraphs.items[0]!.insertText('after ', 'Start');
       await context.sync();
     });
     const bytes = await runtime.save();
@@ -184,7 +174,7 @@ describe('the server runtime around the lifecycle', () => {
 
     const reopened = createRuntime({ host: openHost(bytes), save: true });
     const text = await reopened.run(async (context) => {
-      const body = MiniDocument.open(context).body;
+      const body = context.document.body;
       body.load('text');
       await context.sync();
       return body.text;

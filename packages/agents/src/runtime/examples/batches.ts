@@ -1,21 +1,20 @@
 // Independently authored examples of what a batch looks like from the outside.
 //
-// Written the way a consumer writes: build up work against proxies, end with `await
-// context.sync()`, read what came back. They are compiled and executed by
+// Written the way a consumer writes: reach an object from `context.document`, build up work against
+// it, end with `await context.sync()`, read what came back. They are compiled and executed by
 // `__tests__/runtime-examples.test.ts` against a real document, so they cannot drift into
 // pseudocode — which is the whole reason they are here rather than in prose.
 //
-// They deliberately use the minimal model next door rather than the published object model,
-// which is a later slice. What they demonstrate is the LIFECYCLE, and that part will not change
-// when the real objects arrive.
+// They use the published object model. Anyone who has written against Word's own JavaScript API
+// should recognize every line; what is worth reading them for is WHERE the syncs are, because that
+// is the part a batching API cannot hide and the part that decides what is atomic.
 
 import type { DocxEditorRuntime } from '../runtime.ts';
-import { MiniDocument } from './minimal-model.ts';
 
 /** Read the whole story: one load, one sync, one property. */
 export async function readBodyText(runtime: DocxEditorRuntime): Promise<string> {
   return runtime.run(async (context) => {
-    const body = MiniDocument.open(context).body;
+    const body = context.document.body;
     body.load('text');
     await context.sync();
     return body.text;
@@ -34,11 +33,11 @@ export async function prefixEveryParagraph(
   prefix: string
 ): Promise<number> {
   return runtime.run(async (context) => {
-    const paragraphs = MiniDocument.open(context).body.paragraphs;
+    const paragraphs = context.document.body.paragraphs;
     paragraphs.load();
     await context.sync();
 
-    for (const paragraph of paragraphs.items) paragraph.insertText(prefix, 0);
+    for (const paragraph of paragraphs.items) paragraph.insertText(prefix, 'Start');
     await context.sync();
     return paragraphs.items.length;
   });
@@ -50,18 +49,61 @@ export async function prefixEveryParagraph(
  * The lookup answers an object immediately so the batch can keep being built; whether it found
  * anything is only known after the sync, which is what `isNullObject` is for.
  */
-export async function paragraphTextOrNull(
-  runtime: DocxEditorRuntime,
-  index: number
-): Promise<string | null> {
+export async function firstParagraphTextOrNull(runtime: DocxEditorRuntime): Promise<string | null> {
   return runtime.run(async (context) => {
-    const paragraph = MiniDocument.open(context).body.paragraphs.getItemOrNullObject(index);
+    const paragraph = context.document.body.paragraphs.getFirstOrNullObject();
     await context.sync();
     if (paragraph.isNullObject) return null;
 
     paragraph.load('text');
     await context.sync();
     return paragraph.text;
+  });
+}
+
+/**
+ * A Word sample, run against a real document.
+ *
+ * The statements are those of `compat/fixtures/source-compat/search-and-format.ts#replaceFirstMatch`
+ * — a namespace-rewritten Office.js sample, type-checked against the authored declarations — plus
+ * ONE MORE SYNC, and the extra sync is the interesting part.
+ *
+ * `getFirst()` answers a proxy the runtime cannot address yet: which range it names is the answer to
+ * a read, and a read's answer arrives with a sync. Writing through it before then is refused rather
+ * than guessed, because the alternative is sending several batches per `sync()` and giving up "one
+ * sync is one atomic batch". Upstream resolves item paths on its own side and needs no such sync, so
+ * this is a real difference in what runs — the sample's source compiles unchanged either way, which
+ * is what `__tests__/runtime-examples.test.ts` holds in place.
+ */
+export async function replaceFirstMatch(
+  runtime: DocxEditorRuntime,
+  searchText: string,
+  replacement: string
+): Promise<void> {
+  await runtime.run(async (context) => {
+    const results = context.document.body.search(searchText);
+    await context.sync();
+    const first = results.getFirst();
+    await context.sync();
+    first.insertText(replacement, 'Replace');
+    await context.sync();
+  });
+}
+
+/** Replace every occurrence of some text, in one atomic batch. */
+export async function replaceEveryOccurrence(
+  runtime: DocxEditorRuntime,
+  searchText: string,
+  replacement: string
+): Promise<number> {
+  return runtime.run(async (context) => {
+    const found = context.document.body.search(searchText, { matchCase: true });
+    found.load();
+    await context.sync();
+
+    for (const range of found.items) range.insertText(replacement, 'Replace');
+    await context.sync();
+    return found.items.length;
   });
 }
 
@@ -76,12 +118,8 @@ export async function appendToFirstParagraphLater(
   suffixLength: number
 ): Promise<string> {
   const first = await runtime.run(async (context) => {
-    const paragraphs = MiniDocument.open(context).body.paragraphs;
-    paragraphs.load();
+    const paragraph = context.document.body.paragraphs.getFirst();
     await context.sync();
-
-    const paragraph = paragraphs.items[0];
-    if (!paragraph) throw new Error('the document has no paragraphs');
     paragraph.load('text');
     await context.sync();
     context.trackedObjects.add(paragraph);
@@ -89,7 +127,7 @@ export async function appendToFirstParagraphLater(
   });
 
   return runtime.run(first, async (context) => {
-    first.insertText('!'.repeat(suffixLength), first.text.length);
+    first.insertText('!'.repeat(suffixLength), 'End');
     await context.sync();
 
     first.load('text');

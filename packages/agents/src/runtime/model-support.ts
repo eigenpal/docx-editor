@@ -21,7 +21,7 @@ export {
   hydratedText,
 } from './hydrate.ts';
 export { internalsOf, type ContextInternals, type RootHandles } from './internals.ts';
-export { ObjectPath, type ObjectPathState } from './object-path.ts';
+export { ObjectPath, type ObjectAddress, type ObjectPathState } from './object-path.ts';
 export {
   resolveLoadOption,
   type LoadOption,
@@ -33,7 +33,10 @@ export { RequestContext } from './request-context.ts';
 export { selectedProperties } from './selection.ts';
 export type {
   AutomationHandle,
+  AutomationOperation,
+  AutomationPoint,
   AutomationSearchOptions,
   AutomationSpan,
   AutomationSpanRef,
+  AutomationValue,
 } from '@docx-editor.dev/core-contract/automation';

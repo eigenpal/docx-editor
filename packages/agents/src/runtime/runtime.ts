@@ -27,6 +27,7 @@ import type {
   AutomationHandle,
   AutomationHost,
 } from '@docx-editor.dev/core-contract/automation';
+import { Document } from '../model/document.ts';
 import { hostFailure } from './batch.ts';
 import type { ClientObject } from './client-object.ts';
 import { DocxEditorError, fail } from './errors.ts';
@@ -104,6 +105,7 @@ export function createRuntime(options: CreateRuntimeOptions): DocxEditorServerRu
     id: {},
     roots: resolveRoots,
     assertLive,
+    openDocument: (context) => Document.open(context),
   };
 
   // Best effort at construction: with the roots already known, a run reaches the host only when

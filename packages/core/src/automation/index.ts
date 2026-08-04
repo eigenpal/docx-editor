@@ -34,6 +34,7 @@ export type {
   AutomationObjectKind,
   AutomationOperationResult,
   AutomationSaveResult,
+  AutomationSpan,
   AutomationUnsubscribe,
   AutomationValue,
 } from './protocol.ts';
@@ -45,6 +46,11 @@ export {
   isAutomationCommand,
   type AutomationOperation,
   type AutomationOperationKind,
+  type AutomationParagraphRef,
+  type AutomationPoint,
+  type AutomationSearchOptions,
+  type AutomationSelectionMode,
+  type AutomationSpanRef,
 } from './operations.ts';
 
 // The headless host. The browser host adapter ships from the editor subpath, because it takes

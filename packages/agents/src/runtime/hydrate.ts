@@ -40,10 +40,7 @@ export function hydratedSpan(value: AutomationValue, target: string): Automation
   return value.span;
 }
 
-export function hydratedSpans(
-  value: AutomationValue,
-  target: string
-): readonly AutomationSpan[] {
+export function hydratedSpans(value: AutomationValue, target: string): readonly AutomationSpan[] {
   if (value.kind !== 'spans') throw wrongShape(target);
   return value.spans;
 }

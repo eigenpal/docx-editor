@@ -23,19 +23,24 @@ import { typecheckProject } from '../../../scripts/lib/typecheck-compat.mjs';
 
 const RUNTIME = join(import.meta.dir, '..');
 const PACKAGE_SRC = join(RUNTIME, '..');
+/** The object model: a sibling directory, the same shipped lane, the same rules. */
+const MODEL = join(PACKAGE_SRC, 'model');
+const LANE = [RUNTIME, MODEL];
 
 /**
- * Every SHIPPED source file of the runtime — examples included, tests and the conformance
+ * Every SHIPPED source file of the lane — examples included, tests and the conformance
  * assertions excluded. `__conformance__` reads `compat/` on purpose; it is compiled, never bundled,
  * and the test at the bottom of this file holds that line.
  */
-function runtimeFiles(directory: string = RUNTIME): string[] {
+function runtimeFiles(directories: readonly string[] = LANE): string[] {
   const out: string[] = [];
-  for (const entry of readdirSync(directory)) {
-    if (entry === '__tests__' || entry === '__conformance__' || entry === '__typings__') continue;
-    const path = join(directory, entry);
-    if (statSync(path).isDirectory()) out.push(...runtimeFiles(path));
-    else if (entry.endsWith('.ts')) out.push(path);
+  for (const directory of directories) {
+    for (const entry of readdirSync(directory)) {
+      if (entry === '__tests__' || entry === '__conformance__' || entry === '__typings__') continue;
+      const path = join(directory, entry);
+      if (statSync(path).isDirectory()) out.push(...runtimeFiles([path]));
+      else if (entry.endsWith('.ts')) out.push(path);
+    }
   }
   return out;
 }
@@ -106,12 +111,13 @@ function readProject(path: string): { compilerOptions?: { lib?: string[] }; incl
 describe('what the runtime imports', () => {
   const files = runtimeFiles();
 
-  test('the scan found the runtime, so the assertions below are about something', () => {
+  test('the scan found the lane, so the assertions below are about something', () => {
     expect(files.length).toBeGreaterThanOrEqual(12);
-    const names = files.map((file) => relative(RUNTIME, file));
-    expect(names).toContain('index.ts');
-    expect(names).toContain('request-context.ts');
-    expect(names).toContain('browser.ts');
+    const names = files.map((file) => relative(PACKAGE_SRC, file));
+    expect(names).toContain(join('runtime', 'index.ts'));
+    expect(names).toContain(join('runtime', 'request-context.ts'));
+    expect(names).toContain(join('runtime', 'browser.ts'));
+    expect(names).toContain(join('model', 'document.ts'));
   });
 
   test('the neutral modules import the automation protocol and nothing else', () => {
@@ -159,15 +165,18 @@ describe('what the runtime imports', () => {
     expect(hits).toEqual([]);
   });
 
-  test('no relative import escapes the runtime directory', () => {
-    // The legacy package around this slice is mid-rebuild. Reaching into it would tie a brand new
-    // public surface to code the cutover slice is going to delete.
+  test('no relative import escapes the lane', () => {
+    // The lane is the runtime plus the object model built on it. The legacy package around them is
+    // mid-rebuild, and reaching into it would tie a brand new public surface to code the cutover
+    // slice is going to delete.
     const escapes: string[] = [];
     for (const file of files) {
       for (const specifier of specifiersOf(file)) {
         if (!specifier.startsWith('.')) continue;
         const target = resolve(dirname(file), specifier);
-        if (!target.startsWith(RUNTIME)) escapes.push(`${relative(RUNTIME, file)} -> ${specifier}`);
+        if (!LANE.some((directory) => target.startsWith(directory))) {
+          escapes.push(`${relative(PACKAGE_SRC, file)} -> ${specifier}`);
+        }
       }
     }
     expect(escapes).toEqual([]);
@@ -314,14 +323,20 @@ describe('the claims that are compiled rather than scanned', () => {
     expect(existsSync(join(RUNTIME, '__conformance__', 'declared-lifecycle.ts'))).toBe(true);
   });
 
-  test('both projects include the runtime sources, and neither drags in the rest of the package', () => {
+  test('both projects include the whole lane, and neither drags in the rest of the package', () => {
     for (const project of [neutralProject, fullProject]) {
-      expect(readProject(project).include?.length ?? 0).toBeGreaterThan(0);
+      const include = readProject(project).include ?? [];
+      expect(include.length).toBeGreaterThan(0);
+      // The object model is a sibling directory, so it is reached with `..` — and that is the
+      // ONLY thing above the runtime either project may name. The package around this slice is
+      // mid-rebuild, so a project that reached the rest of it would fail for reasons that have
+      // nothing to do with the lane. That file exists, and is not included.
+      expect(include).toContain('../model/*.ts');
+      const escaping = include.filter(
+        (pattern) => pattern.includes('..') && pattern !== '../model/*.ts'
+      );
+      expect(escaping).toEqual([]);
     }
-    // The package around this slice is mid-rebuild, so a project that reached it would fail for
-    // reasons that have nothing to do with the runtime. That file exists, and is not included.
     expect(existsSync(join(PACKAGE_SRC, 'DocxReviewer.ts'))).toBe(true);
-    const neutral = readProject(neutralProject).include ?? [];
-    expect(neutral.some((pattern) => pattern.includes('..'))).toBe(false);
   });
 });

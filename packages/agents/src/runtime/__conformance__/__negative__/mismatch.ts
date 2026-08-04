@@ -7,6 +7,7 @@
 // there.
 
 import type { DocxEditor as Declared } from '../../../../compat/docxeditor/declarations.ts';
+import type { Range } from '../../../model/range.ts';
 import type { RequestContext } from '../../request-context.ts';
 
 type Satisfies<A extends B, B> = A extends B ? true : false;
@@ -15,4 +16,11 @@ type Satisfies<A extends B, B> = A extends B ? true : false;
 // consumer uses to reach `trackedObjects` and the capabilities of the host it is running on.
 const wrongDirection: Satisfies<Declared.ClientRequestContext, RequestContext> = true;
 
+// FALSE, and deliberately the claim the file next door does NOT make: the shipped `Range` is
+// narrower than the declared one, because formatting, hyperlinks, bookmarks and content controls
+// belong to later slices. If this ever compiles, either those slices landed — in which case the
+// assertion belongs next door — or the declarations were quietly widened to match what exists.
+const wholeRangeIsImplemented: Satisfies<Range, Declared.Range> = true;
+
 void wrongDirection;
+void wholeRangeIsImplemented;

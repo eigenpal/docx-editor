@@ -268,6 +268,22 @@
       "reason": "Custom-XML-bound content control writes are refused until XML mapping is a separate supported lane (per the redesign plan); the mapping object itself is out of scope here."
     },
     {
+      "uid": "Word.Paragraph#uniqueLocalId",
+      "reason": "Implemented by DocxEditor's object model (a paragraph's identity, from w14:paraId where the file wrote one) but deliberately NOT selected for exact conformance against the reference: the identity a DocxEditor session hands back is the canonical tree's, and pinning its shape to upstream's session-scoped string would freeze an engine detail into the compatibility contract. Recorded here so the divergence is a decision rather than an accident."
+    },
+    {
+      "uid": "Word.ParagraphCollection#getFirstOrNullObject",
+      "reason": "Implemented by DocxEditor's object model — the null-object half of the proxy lifecycle needs one, and code that expects an empty document wants it — but not selected for exact conformance: the collection accessors selected for this subset are items/getFirst/getLast, and adding a member to the manifest requires re-extracting the reference fixture, which is the one network step CI never takes. The authored declarations therefore do not declare it, and the conformance assertions do not measure it."
+    },
+    {
+      "uid": "Word.ParagraphCollection#getLastOrNullObject",
+      "reason": "See Word.ParagraphCollection#getFirstOrNullObject."
+    },
+    {
+      "uid": "Word.RangeCollection#getFirstOrNullObject",
+      "reason": "See Word.ParagraphCollection#getFirstOrNullObject."
+    },
+    {
       "uid": "OfficeExtension.ClientRequestContext#sync",
       "reason": "The batched request-context sync/flush call's real proxying/queuing behavior is the proxy runtime's own mechanism (Task 3), not part of this contract-freeze task. Word.RequestContext inherits the member from OfficeExtension.ClientRequestContext rather than redeclaring it, so it never appears as a Word.RequestContext member in this manifest. Upstream's actual signature is generic and pass-through (`sync<T>(passThroughValue?: T): Promise<T>`); rather than selecting and exactly matching that shape here, DocxEditor.ClientRequestContext independently authors a deliberately simplified, declaration-only `sync(): Promise<void>` \u2014 the zero-argument call shape every real Office.js sample actually uses \u2014 purely so representative source-compat fixtures in compat/fixtures/ can end a batch with `await context.sync()`, same as real Office.js samples do. This declaration has no runtime behavior and is not asserted against the upstream reference for exact conformance."
     }

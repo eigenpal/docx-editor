@@ -5,10 +5,13 @@
 // those declarations describe — otherwise the compatibility story is two documents that happen to
 // use the same words.
 //
-// The lifecycle half of that surface is small and exists today: `sync()`, a context on every proxy,
-// `isNullObject`, and a `run` that returns the callback's value. The object model half (`document`,
-// `Body`, `Paragraph`, …) is a later slice, and `__conformance__/declared-lifecycle.ts` says exactly
-// which members are checked and which are still owed.
+// Two halves are checked now. The lifecycle — `sync()`, a context on every proxy, `isNullObject`,
+// and a `run` that returns the callback's value — and the object model's call shapes: every member
+// `Document`, `Body`, `Range`, `Paragraph` and the collections implement, compared against the
+// declared parameter tuples so a consumer's own call sites compile against either.
+// `__conformance__/declared-lifecycle.ts` says exactly what is compared, what is compared only by
+// argument list, and which declared members are still owed by the formatting and content-control
+// slices.
 //
 // Type-level assertions only mean something if a compiler reads them, and `bun test` does not
 // typecheck. So this compiles them — and compiles a deliberately wrong copy to prove the compiling
@@ -35,12 +38,25 @@ describe('the runtime satisfies the authored declarations', () => {
     expect(diagnostics.some((line) => line.includes('mismatch.ts'))).toBe(true);
   });
 
-  test('the assertions name what the lifecycle owes the object-model slice', () => {
+  test('the assertions reach the object model, and name what is still owed', () => {
     // A conformance file that quietly checks three easy members and calls it done is worse than
-    // none. This one has to say what it is not checking yet.
+    // none. This one has to reach the model AND say what it is not checking yet.
     const source = readFileSync(join(CONFORMANCE, 'declared-lifecycle.ts'), 'utf8');
-    expect(source).toContain('document');
-    expect(source).toContain('Paragraph');
+    for (const member of [
+      'insertText',
+      'insertParagraph',
+      'search',
+      'split',
+      'select',
+      'getFirst',
+      'items',
+    ]) {
+      expect(source).toContain(member);
+    }
+    // And the deferred members are listed by name, not implied by their absence.
+    for (const owed of ['contentControls', 'font', 'sections', 'bookmarks', 'listItem']) {
+      expect(source).toContain(owed);
+    }
   });
 });
 

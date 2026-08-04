@@ -23,6 +23,7 @@ import type {
   AutomationCapabilities,
   AutomationHost,
 } from '@docx-editor.dev/core-contract/automation';
+import type { Document } from '../model/document.ts';
 import { batchFailure, planBatch, settleBatch } from './batch.ts';
 import type { ClientObject } from './client-object.ts';
 import { DocxEditorError, fail } from './errors.ts';
@@ -45,6 +46,13 @@ export interface RuntimeSession {
   roots(): RootHandles;
   /** Refuse if the runtime has been disposed. */
   assertLive(target?: string): void;
+  /**
+   * Build the document proxy for a context.
+   *
+   * Injected rather than imported, so this module does not depend on the object model that
+   * depends on it. The runtime composes the two; the context only knows it can ask for one.
+   */
+  openDocument(context: RequestContext): Document;
 }
 
 export class RequestContext {
@@ -54,6 +62,7 @@ export class RequestContext {
   readonly #tracked = new Set<ClientObject>();
   readonly #internals: ContextInternals;
   readonly #trackedObjects: TrackedObjects;
+  #document: Document | undefined;
   #finished = false;
   /** The revision this context last saw. `null` until it has read from the document. */
   #readRevision: number | null = null;
@@ -95,6 +104,19 @@ export class RequestContext {
     this.#trackedObjects = new TrackedObjects(this.#internals, (object) =>
       this.#created.has(object)
     );
+  }
+
+  /**
+   * The document this run is against.
+   *
+   * The SAME object for the life of the context, like every navigation property in this API: a
+   * consumer who loads `context.document.body` and then reads its text is talking about one
+   * object, and a fresh proxy per access would put the load on one and the read on another.
+   */
+  get document(): Document {
+    this.#internals.assertUsable('document');
+    this.#document ??= this.#session.openDocument(this);
+    return this.#document;
   }
 
   /** What the document host behind this context can do. */

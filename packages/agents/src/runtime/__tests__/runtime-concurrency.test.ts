@@ -15,7 +15,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { createRuntime } from '../runtime.ts';
-import { MiniDocument, type MiniParagraph } from '../examples/minimal-model.ts';
+import type { Paragraph } from '../../model/index.ts';
 import { openHost, spyHost } from './support/hosts.ts';
 import { docx, p } from './support/docx.ts';
 
@@ -38,7 +38,7 @@ async function caught(work: Promise<unknown>): Promise<{ code?: unknown }> {
 
 function bodyText(runtime: ReturnType<typeof createRuntime>): Promise<string> {
   return runtime.run(async (context) => {
-    const body = MiniDocument.open(context).body;
+    const body = context.document.body;
     body.load('text');
     await context.sync();
     return body.text;
@@ -50,12 +50,12 @@ describe('a run inside a run', () => {
     const spy = spyHost(openHost());
     const runtime = createRuntime({ host: spy.host, save: true });
     const both = await runtime.run(async (outer) => {
-      const body = MiniDocument.open(outer).body;
+      const body = outer.document.body;
       body.load('text');
       spy.reset();
       const inner = await runtime.run(async (context) => {
         expect(context).not.toBe(outer);
-        const paragraphs = MiniDocument.open(context).body.paragraphs;
+        const paragraphs = context.document.body.paragraphs;
         paragraphs.load();
         // The outer run's queued read is not in this batch, and this sync does not empty it.
         await context.sync();
@@ -67,7 +67,7 @@ describe('a run inside a run', () => {
       await outer.sync();
       return [body.text, inner] as const;
     });
-    expect(both).toEqual(['alpha\nbeta', 2]);
+    expect(both).toEqual(['alpha\rbeta', 2]);
     runtime.dispose();
   });
 
@@ -75,13 +75,13 @@ describe('a run inside a run', () => {
     const runtime = createRuntime({ host: openHost(docx(p('base'))), save: true });
     const text = await runtime.run(async (outer) => {
       await runtime.run(async (context) => {
-        const paragraphs = MiniDocument.open(context).body.paragraphs;
+        const paragraphs = context.document.body.paragraphs;
         paragraphs.load();
         await context.sync();
-        paragraphs.items[0]!.insertText('inner ', 0);
+        paragraphs.items[0]!.insertText('inner ', 'Start');
         await context.sync();
       });
-      const body = MiniDocument.open(outer).body;
+      const body = outer.document.body;
       body.load('text');
       await outer.sync();
       return body.text;
@@ -93,12 +93,12 @@ describe('a run inside a run', () => {
   test('the inner run releases its own objects when it ends, and leaves the outer run\u2019s alone', async () => {
     const runtime = createRuntime({ host: openHost(), save: true });
     await runtime.run(async (outer) => {
-      const ours = MiniDocument.open(outer).body.paragraphs;
+      const ours = outer.document.body.paragraphs;
       ours.load();
       await outer.sync();
-      let theirs: MiniParagraph | undefined;
+      let theirs: Paragraph | undefined;
       await runtime.run(async (context) => {
-        const paragraphs = MiniDocument.open(context).body.paragraphs;
+        const paragraphs = context.document.body.paragraphs;
         paragraphs.load();
         await context.sync();
         theirs = paragraphs.items[0]!;
@@ -122,7 +122,7 @@ describe('two runs overlapping on one runtime', () => {
     spy.reset();
 
     const first = runtime.run(async (context) => {
-      const body = MiniDocument.open(context).body;
+      const body = context.document.body;
       body.load('text');
       // Queued, then deliberately overtaken: the other run syncs while this one is waiting.
       await held.wait;
@@ -130,14 +130,14 @@ describe('two runs overlapping on one runtime', () => {
       return body.text;
     });
     const second = runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
       held.open();
       return paragraphs.items.length;
     });
 
-    expect(await Promise.all([first, second])).toEqual(['alpha\nbeta', 2]);
+    expect(await Promise.all([first, second])).toEqual(['alpha\rbeta', 2]);
     expect(spy.requests.map((request) => request.operations.map((o) => o.op))).toEqual([
       ['getParagraphs'],
       ['getText'],
@@ -151,22 +151,22 @@ describe('two runs overlapping on one runtime', () => {
     const firstWrote = gate();
 
     const winner = runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
       await bothRead.wait;
-      paragraphs.items[0]!.insertText('winner ', 0);
+      paragraphs.items[0]!.insertText('winner ', 'Start');
       await context.sync();
       firstWrote.open();
       return 'applied';
     });
     const loser = runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
       bothRead.open();
       await firstWrote.wait;
-      paragraphs.items[0]!.insertText('loser ', 0);
+      paragraphs.items[0]!.insertText('loser ', 'Start');
       return caught(context.sync());
     });
 
@@ -185,10 +185,10 @@ describe('separate runtimes', () => {
 
     const write = (runtime: ReturnType<typeof createRuntime>, text: string) =>
       runtime.run(async (context) => {
-        const paragraphs = MiniDocument.open(context).body.paragraphs;
+        const paragraphs = context.document.body.paragraphs;
         paragraphs.load();
         await context.sync();
-        paragraphs.items[0]!.insertText(text, 0);
+        paragraphs.items[0]!.insertText(text, 'Start');
         await context.sync();
       });
 

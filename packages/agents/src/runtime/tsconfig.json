@@ -31,6 +31,6 @@
       "@docx-editor.dev/core-contract/editor": ["../../../core/src/editor/index.ts"]
     }
   },
-  "include": ["*.ts", "examples/*.ts"],
+  "include": ["*.ts", "examples/*.ts", "../model/*.ts"],
   "exclude": ["node_modules", "__tests__"]
 }

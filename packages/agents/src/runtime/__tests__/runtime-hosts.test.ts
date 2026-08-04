@@ -17,7 +17,6 @@ import { describe, expect, test } from 'bun:test';
 import { createDocxEditor } from '@docx-editor.dev/core-contract/editor';
 import { DocxEditor } from '../index.ts';
 import { DocxEditor as DocxEditorBrowser } from '../browser-entry.ts';
-import { MiniDocument } from '../examples/minimal-model.ts';
 import { docx, p, TWO_PARAGRAPHS } from './support/docx.ts';
 
 function bodyText(runtime: Parameters<typeof read>[0]): Promise<string> {
@@ -28,7 +27,7 @@ function read(runtime: {
   run: <T>(callback: (context: never) => Promise<T>) => Promise<T>;
 }): Promise<string> {
   return (runtime as ReturnType<typeof DocxEditorBrowser.createBrowser>).run(async (context) => {
-    const body = MiniDocument.open(context).body;
+    const body = context.document.body;
     body.load('text');
     await context.sync();
     return body.text;
@@ -41,10 +40,10 @@ describe('DocxEditor.createServer', () => {
     expect(await bodyText(runtime)).toBe('server');
 
     await runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
-      paragraphs.items[0]!.insertText('the ', 0);
+      paragraphs.items[0]!.insertText('the ', 'Start');
       await context.sync();
     });
 
@@ -108,7 +107,7 @@ describe('DocxEditor.createBrowser', () => {
   test('reads the document that is already open', async () => {
     const { editor } = mount();
     const runtime = DocxEditorBrowser.createBrowser(editor);
-    expect(await bodyText(runtime)).toBe('alpha\nbeta');
+    expect(await bodyText(runtime)).toBe('alpha\rbeta');
     runtime.dispose();
   });
 
@@ -118,14 +117,14 @@ describe('DocxEditor.createBrowser', () => {
     const before = editor.snapshot();
 
     await runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
-      paragraphs.items[0]!.insertText('ZZ', 0);
+      paragraphs.items[0]!.insertText('ZZ', 'Start');
       await context.sync();
     });
 
-    expect(await bodyText(runtime)).toBe('ZZalpha\nbeta');
+    expect(await bodyText(runtime)).toBe('ZZalpha\rbeta');
     expect(container.textContent).toContain('ZZalpha');
     expect(editor.snapshot()).not.toBe(before);
     runtime.dispose();
@@ -157,14 +156,17 @@ describe('DocxEditor.createBrowser', () => {
     const { editor, container } = mount();
     const runtime = DocxEditorBrowser.createBrowser(editor);
     await runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
-      paragraphs.items[0]!.insertText('good ', 0);
-      paragraphs.items[1]!.insertText('bad ', 500);
-      await expect(context.sync()).rejects.toMatchObject({ code: 'InvalidArgument' });
+      // Two changes that both claim the second paragraph: refused as a batch, so the first
+      // paragraph's insertion never reaches the open document either.
+      paragraphs.items[0]!.insertText('good ', 'Start');
+      paragraphs.items[1]!.insertParagraph('beside', 'After');
+      paragraphs.items[1]!.insertText('bad ', 'Start');
+      await expect(context.sync()).rejects.toMatchObject({ code: 'ConflictingChanges' });
     });
-    expect(await bodyText(runtime)).toBe('alpha\nbeta');
+    expect(await bodyText(runtime)).toBe('alpha\rbeta');
     expect(container.textContent).not.toContain('good');
     runtime.dispose();
   });

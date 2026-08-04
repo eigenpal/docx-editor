@@ -37,7 +37,7 @@
       "@docx-editor.dev/core-contract/automation": ["../../../core/src/automation/index.ts"]
     }
   },
-  "include": ["*.ts", "examples/*.ts", "__typings__/platform-neutral.d.ts"],
+  "include": ["*.ts", "examples/*.ts", "../model/*.ts", "__typings__/platform-neutral.d.ts"],
   // `index.ts` is INCLUDED: the neutral subpath's own entry point is the thing most worth proving
   // neutral. Only the editor adapter and the entry that publishes it are excluded.
   "exclude": ["node_modules", "__tests__", "browser.ts", "browser-entry.ts"]

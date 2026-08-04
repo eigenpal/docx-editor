@@ -29,7 +29,7 @@ import { messageFor } from '../errors.ts';
 import { hydratedHandle, hydratedHandles } from '../hydrate.ts';
 import { internalsOf } from '../internals.ts';
 import type { RequestContext } from '../request-context.ts';
-import { MiniDocument, MiniParagraph } from '../examples/minimal-model.ts';
+import { Paragraph } from '../../model/paragraph.ts';
 import { openHost, spyHost } from './support/hosts.ts';
 import { docx, p } from './support/docx.ts';
 
@@ -51,11 +51,11 @@ async function caught(work: Promise<unknown>): Promise<{
 
 /** Read the first paragraph and its text, track it, and hand back the run's context too. */
 function keptParagraph(runtime: ReturnType<typeof createRuntime>): Promise<{
-  paragraph: MiniParagraph;
+  paragraph: Paragraph;
   source: RequestContext;
 }> {
   return runtime.run(async (context) => {
-    const paragraphs = MiniDocument.open(context).body.paragraphs;
+    const paragraphs = context.document.body.paragraphs;
     paragraphs.load();
     await context.sync();
     const first = paragraphs.items[0]!;
@@ -68,7 +68,7 @@ function keptParagraph(runtime: ReturnType<typeof createRuntime>): Promise<{
 
 function bodyText(runtime: ReturnType<typeof createRuntime>): Promise<string> {
   return runtime.run(async (context) => {
-    const body = MiniDocument.open(context).body;
+    const body = context.document.body;
     body.load('text');
     await context.sync();
     return body.text;
@@ -78,10 +78,10 @@ function bodyText(runtime: ReturnType<typeof createRuntime>): Promise<string> {
 /** Another run, prepending to the first paragraph, so the document moves under everyone else. */
 async function moveDocument(runtime: ReturnType<typeof createRuntime>): Promise<void> {
   await runtime.run(async (context) => {
-    const paragraphs = MiniDocument.open(context).body.paragraphs;
+    const paragraphs = context.document.body.paragraphs;
     paragraphs.load();
     await context.sync();
-    paragraphs.items[0]!.insertText('theirs ', 0);
+    paragraphs.items[0]!.insertText('theirs ', 'Start');
     await context.sync();
   });
 }
@@ -122,7 +122,7 @@ describe('adoption while the owner is still running', () => {
   test('is refused, and says the object is in use rather than pretending it is gone', async () => {
     const runtime = createRuntime({ host: openHost(), save: true });
     await runtime.run(async (outer) => {
-      const paragraphs = MiniDocument.open(outer).body.paragraphs;
+      const paragraphs = outer.document.body.paragraphs;
       paragraphs.load();
       await outer.sync();
       const first = paragraphs.items[0]!;
@@ -140,7 +140,7 @@ describe('adoption while the owner is still running', () => {
     // still have moved the object, which is the worst of both.
     const runtime = createRuntime({ host: openHost(), save: true });
     await runtime.run(async (outer) => {
-      const paragraphs = MiniDocument.open(outer).body.paragraphs;
+      const paragraphs = outer.document.body.paragraphs;
       paragraphs.load();
       await outer.sync();
       const first = paragraphs.items[0]!;
@@ -160,7 +160,7 @@ describe('adoption while the owner is still running', () => {
     const spy = spyHost(openHost());
     const runtime = createRuntime({ host: spy.host, save: true });
     await runtime.run(async (outer) => {
-      const paragraphs = MiniDocument.open(outer).body.paragraphs;
+      const paragraphs = outer.document.body.paragraphs;
       paragraphs.load();
       await outer.sync();
       const first = paragraphs.items[0]!;
@@ -169,14 +169,14 @@ describe('adoption while the owner is still running', () => {
 
       await caught(
         runtime.run(first, async (inner) => {
-          first.insertText('never ', 0);
+          first.insertText('never ', 'Start');
           await inner.sync();
         })
       );
       expect(spy.requests).toHaveLength(0);
       expect(internalsOf(outer).queue.size).toBe(0);
     });
-    expect(await bodyText(runtime)).toBe('alpha\nbeta');
+    expect(await bodyText(runtime)).toBe('alpha\rbeta');
     runtime.dispose();
   });
 
@@ -185,7 +185,7 @@ describe('adoption while the owner is still running', () => {
     // been released, and it has not — its run is still going.
     const runtime = createRuntime({ host: openHost(), save: true });
     await runtime.run(async (outer) => {
-      const paragraphs = MiniDocument.open(outer).body.paragraphs;
+      const paragraphs = outer.document.body.paragraphs;
       paragraphs.load();
       await outer.sync();
       await expect(runtime.run(paragraphs.items[0]!, async () => 1)).rejects.toThrowError(IN_USE);
@@ -199,10 +199,10 @@ describe('adoption while the owner is still running', () => {
     const runtime = createRuntime({ host: openHost(), save: true });
     const published = gate();
     const attempted = gate();
-    let held: MiniParagraph | undefined;
+    let held: Paragraph | undefined;
 
     const owner = runtime.run(async (context) => {
-      const paragraphs = MiniDocument.open(context).body.paragraphs;
+      const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
       held = paragraphs.items[0]!;
@@ -248,7 +248,7 @@ describe('a handover leaves exactly one owner', () => {
     spy.reset();
 
     const text = await runtime.run(paragraph, async (context) => {
-      paragraph.insertText('still ', 0);
+      paragraph.insertText('still ', 'Start');
       expect(internalsOf(context).queue.size).toBe(1);
       expect(internalsOf(source).queue.size).toBe(0);
       await context.sync();
@@ -289,7 +289,7 @@ describe('the revision an adopted read was taken at', () => {
     // range: unconditionally, this would write inside the other run's word.
     const failure = await caught(
       runtime.run(paragraph, async (context) => {
-        paragraph.insertText('!', paragraph.text.length);
+        paragraph.insertText('!', 'End');
         await context.sync();
       })
     );
@@ -308,7 +308,7 @@ describe('the revision an adopted read was taken at', () => {
     spy.reset();
 
     await runtime.run(paragraph, async (context) => {
-      paragraph.insertText('mine ', 0);
+      paragraph.insertText('mine ', 'Start');
       await context.sync();
     });
 
@@ -328,7 +328,7 @@ describe('the revision an adopted read was taken at', () => {
     const text = await runtime.run(paragraph, async (context) => {
       paragraph.load('text');
       await context.sync();
-      paragraph.insertText('mine ', 0);
+      paragraph.insertText('mine ', 'Start');
       await context.sync();
       paragraph.load('text');
       await context.sync();
@@ -353,7 +353,7 @@ describe('the revision an adopted read was taken at', () => {
 
     const failure = await caught(
       runtime.run([early, late], async (context) => {
-        late.insertText('!', 0);
+        late.insertText('!', 'Start');
         await context.sync();
       })
     );
@@ -372,7 +372,10 @@ describe('the revision an adopted read was taken at', () => {
     spy.reset();
 
     await runtime.run(async (context) => {
-      MiniParagraph.at(context, 'document.body.paragraphs.items[0]', handle).insertText('mine ', 0);
+      Paragraph.at(context, 'document.body.paragraphs.items[0]', {
+        kind: 'handle',
+        handle,
+      }).insertText('mine ', 'Start');
       await context.sync();
     });
 
