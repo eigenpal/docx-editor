@@ -1033,7 +1033,7 @@ describe('contextual table chrome (Task 10)', () => {
     await act(async () => {
       (colorRoot.querySelector('.docx-toolbar__colorsplit-caret') as HTMLButtonElement).click();
     });
-    const swatch = colorRoot.querySelector('[data-value="336699"]') as HTMLButtonElement;
+    const swatch = colorRoot.querySelector('[data-value="4472C4"]') as HTMLButtonElement;
     expect(swatch).not.toBeNull();
     await act(async () => {
       swatch.click();
@@ -1042,7 +1042,7 @@ describe('contextual table chrome (Task 10)', () => {
       editor().can({
         type: 'setTableBorders',
         scope: 'inside',
-        spec: { style: 'single', size: 8, color: { kind: 'hex', value: '336699' } },
+        spec: { style: 'single', size: 8, color: { kind: 'hex', value: '4472C4' } },
       }).ok
     ).toBe(true);
   });
@@ -1134,6 +1134,34 @@ describe('contextual table chrome (Task 10)', () => {
       'table.borderStyles.triple',
       'table.borderStyles.thick',
     ]);
+  });
+
+  test('table border color and cell fill use the full Word-style color picker', async () => {
+    const { view, editor } = mountToolbar(
+      <DocxEditorToolbar preset={false}>
+        <DocxEditorToolbar.TableBorderColor />
+        <DocxEditorToolbar.TableCellFill />
+      </DocxEditorToolbar>,
+      TABLE_2X2
+    );
+    await act(async () => {
+      caretInCell(editor(), 0);
+    });
+    for (const slot of ['table.borderColor', 'table.cellFill'] as const) {
+      const root = view.container.querySelector(`[data-slot="${slot}"]`)!;
+      await act(async () => {
+        (root.querySelector('.docx-toolbar__colorsplit-caret') as HTMLButtonElement).click();
+      });
+      const popup = root.querySelector('[role="dialog"]')!;
+      expect(popup.querySelector('.docx-toolbar__swatch-grid--theme')).not.toBeNull();
+      expect(
+        popup.querySelectorAll('.docx-toolbar__swatch-grid:not(.docx-toolbar__swatch-grid--theme) button')
+      ).toHaveLength(10);
+      expect(popup.querySelector('.docx-toolbar__swatch-hex')).not.toBeNull();
+      await act(async () => {
+        fireEvent.keyDown(popup, { key: 'Escape' });
+      });
+    }
   });
 
   test('table toolbar mousedown is prevented; swatch inputs remain usable', async () => {

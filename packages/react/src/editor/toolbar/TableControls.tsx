@@ -29,6 +29,7 @@ import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './Toolb
 import type { ToolbarSlotPartComponent } from './parts';
 import { ToolbarSeparator } from './parts';
 import { Slot } from './Slot';
+import { ToolbarHexColorPickerBody } from './ColorSplit';
 import { useTableChromeProviderVisible, useTableChromeSlot } from './useTableChrome';
 import {
   useDropdownClose,
@@ -535,32 +536,18 @@ export const ToolbarTableBorderWidth: TableBorderWidthNamespace = Object.assign(
 
 // ── Color split controls (border color + cell fill) ─────────────────────────
 
-const STANDARD_BORDER_SWATCHES = [
-  { value: '000000', labelKey: 'colorPicker.colors.black', css: '#000000' },
-  { value: 'FF0000', labelKey: 'colorPicker.colors.red', css: '#ff0000' },
-  { value: '336699', labelKey: 'colorPicker.colors.blue', css: '#336699' },
-  { value: 'FFFF00', labelKey: 'colorPicker.colors.yellow', css: '#ffff00' },
-] as const;
-
-const FILL_SWATCHES = [
-  { value: 'FFFF00', labelKey: 'colorPicker.colors.yellow', css: '#ffff00' },
-  { value: '92D050', labelKey: 'colorPicker.colors.lightGreen', css: '#92d050' },
-  { value: '0070C0', labelKey: 'colorPicker.colors.blue', css: '#0070c0' },
-  { value: '7030A0', labelKey: 'colorPicker.colors.purple', css: '#7030a0' },
-] as const;
-
 function buildColorSplitCompound(
   slot: 'table.borderColor' | 'table.cellFill',
   defaultLabelKey: string,
-  swatches: readonly { value: string; labelKey: string; css: string }[],
-  options?: { clearFill?: boolean }
+  options?: { clearFill?: boolean; defaultHex?: string }
 ) {
+  const defaultHex = options?.defaultHex ?? 'FF0000';
   const Ctx = createTableSlotContext();
 
   function Root({ hidden, asChild, className, children }: TableChromePartProps) {
     const { visible, enabled, disabledReason, draft, apply } = useTableChromeSlot(slot);
     const [open, setOpen] = useState(false);
-    const [lastHex, setLastHex] = useState(swatches[0]!.value);
+    const [lastHex, setLastHex] = useState(defaultHex);
     const rootRef = useRef<HTMLDivElement | null>(null);
     const triggerRef = useRef<HTMLButtonElement | null>(null);
     useDropdownClose(open, setOpen, rootRef);
@@ -591,7 +578,7 @@ function buildColorSplitCompound(
       <>
         <Main />
         <Trigger />
-        <Content swatches={swatches} clearFill={options?.clearFill ?? false} />
+        <Content clearFill={options?.clearFill ?? false} />
       </>
     );
     return (
@@ -622,7 +609,7 @@ function buildColorSplitCompound(
     const barHex =
       slot === 'table.borderColor' && draft.spec.color.kind === 'hex'
         ? draft.spec.color.value
-        : (lastHex ?? swatches[0]!.value);
+        : (lastHex ?? defaultHex);
     const props = {
       ...shared,
       className: `docx-toolbar__button docx-toolbar__colorsplit-main${className ? ` ${className}` : ''}`,
@@ -696,18 +683,21 @@ function buildColorSplitCompound(
     asChild,
     className,
     children,
-    swatches: swatchList,
     clearFill,
   }: TableChromePartProps & {
-    swatches: readonly { value: string; labelKey: string; css: string }[];
     clearFill: boolean;
   }) {
-    const { open, setOpen, enabled, apply, triggerRef } = useTableSlotContext(Ctx);
+    const { open, setOpen, enabled, apply, draft, triggerRef, lastHex, setLastHex } =
+      useTableSlotContext(Ctx);
     const label = useToolbarLabel();
     const dialogRef = useRef<HTMLDivElement | null>(null);
     useTableDialogKeyboard(open && enabled, setOpen, dialogRef, triggerRef);
     if (!open || !enabled) return null;
     const text = label(defaultLabelKey);
+    const pickerCurrent =
+      slot === 'table.borderColor' && draft.spec.color.kind === 'hex'
+        ? draft.spec.color.value
+        : (lastHex ?? defaultHex);
     const shared = {
       ref: dialogRef,
       role: 'dialog' as const,
@@ -734,19 +724,14 @@ function buildColorSplitCompound(
             {label('table.clearCellFill')}
           </button>
         ) : null}
-        <div className="docx-toolbar__swatch-section">
-          <div className="docx-toolbar__swatch-heading">{label('colorPicker.standardColors')}</div>
-          <div className="docx-toolbar__swatch-grid" role="group">
-            {swatchList.map((swatch) => (
-              <Item
-                key={swatch.value}
-                value={swatch.value}
-                css={swatch.css}
-                labelKey={swatch.labelKey}
-              />
-            ))}
-          </div>
-        </div>
+        <ToolbarHexColorPickerBody
+          apply={(hex) => {
+            setLastHex?.(hex);
+            setOpen(false);
+            apply({ kind: 'hex', value: hex });
+          }}
+          current={pickerCurrent}
+        />
       </>
     );
     return asChild ? <Slot {...shared}>{body}</Slot> : <div {...shared}>{body}</div>;
@@ -759,16 +744,18 @@ function buildColorSplitCompound(
     asChild,
     className,
     children,
-  }: TableChromeItemProps & { css: string; labelKey: string }) {
+  }: TableChromeItemProps & { css?: string; labelKey?: string }) {
     const { apply, setOpen, setLastHex } = useTableSlotContext(Ctx);
     const label = useToolbarLabel();
+    const swatchCss = css ?? `#${value.toLowerCase()}`;
+    const swatchLabel = labelKey ? label(labelKey) : value;
     const shared = {
       type: 'button' as const,
       className: `docx-toolbar__swatch docx-table-chrome__swatch${className ? ` ${className}` : ''}`,
-      style: { backgroundColor: css },
+      style: { backgroundColor: swatchCss },
       'data-value': value,
-      'aria-label': label(labelKey),
-      title: label(labelKey),
+      'aria-label': swatchLabel,
+      title: swatchLabel,
       onMouseDown: guardToolbarMousedown,
       onClick: () => {
         setOpen(false);
@@ -783,22 +770,22 @@ function buildColorSplitCompound(
   return { Root, Main, Trigger, Content, Item, Ctx };
 }
 
-const borderColorCompound = buildColorSplitCompound(
-  'table.borderColor',
-  'table.borderColor',
-  STANDARD_BORDER_SWATCHES
-);
+const borderColorCompound = buildColorSplitCompound('table.borderColor', 'table.borderColor', {
+  defaultHex: '000000',
+});
 
 function TableBorderColorContent(props: TableChromePartProps) {
-  return (
-    <borderColorCompound.Content {...props} swatches={STANDARD_BORDER_SWATCHES} clearFill={false} />
-  );
+  return <borderColorCompound.Content {...props} clearFill={false} />;
 }
 
 function TableBorderColorItem(props: TableChromeItemProps) {
-  const swatch = STANDARD_BORDER_SWATCHES.find((entry) => entry.value === props.value);
-  if (!swatch) return null;
-  return <borderColorCompound.Item {...props} css={swatch.css} labelKey={swatch.labelKey} />;
+  return (
+    <borderColorCompound.Item
+      {...props}
+      css={`#${props.value.toLowerCase()}`}
+      labelKey="colorPicker.customColor"
+    />
+  );
 }
 
 function TableBorderColorRoot(props: TableChromePartProps) {
@@ -821,23 +808,23 @@ export const ToolbarTableBorderColor: TableBorderColorNamespace = Object.assign(
   }
 );
 
-const fillCompound = buildColorSplitCompound(
-  'table.cellFill',
-  'table.cellFillColor',
-  FILL_SWATCHES,
-  {
-    clearFill: true,
-  }
-);
+const fillCompound = buildColorSplitCompound('table.cellFill', 'table.cellFillColor', {
+  clearFill: true,
+  defaultHex: 'FFFF00',
+});
 
 function TableCellFillContent(props: TableChromePartProps) {
-  return <fillCompound.Content {...props} swatches={FILL_SWATCHES} clearFill={true} />;
+  return <fillCompound.Content {...props} clearFill={true} />;
 }
 
 function TableCellFillItem(props: TableChromeItemProps) {
-  const swatch = FILL_SWATCHES.find((entry) => entry.value === props.value);
-  if (!swatch) return null;
-  return <fillCompound.Item {...props} css={swatch.css} labelKey={swatch.labelKey} />;
+  return (
+    <fillCompound.Item
+      {...props}
+      css={`#${props.value.toLowerCase()}`}
+      labelKey="colorPicker.customColor"
+    />
+  );
 }
 
 function TableCellFillRoot(props: TableChromePartProps) {

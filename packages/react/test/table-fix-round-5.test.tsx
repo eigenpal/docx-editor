@@ -650,6 +650,80 @@ describe('Task 10 fix round 5', () => {
     unmount();
   });
 
+  test('table color pickers: theme swatch and custom hex dispatch through table chrome', async () => {
+    const THEME_ACCENT1 = '4472C4';
+    const CUSTOM_FILL = 'AABBCC';
+
+    const { view, editor } = mount(
+      <DocxEditorToolbar preset={false}>
+        <DocxEditorToolbar.TableBorderTarget />
+        <DocxEditorToolbar.TableBorderStyle />
+        <DocxEditorToolbar.TableBorderWidth />
+        <DocxEditorToolbar.TableBorderColor />
+        <DocxEditorToolbar.TableCellFill />
+      </DocxEditorToolbar>,
+      TABLE_FOREIGN
+    );
+    await waitReady(editor);
+    caretInCell(editor());
+    await pickTargetAsync(view, 'top');
+
+    async function pickMenuItem(slot: string, match: (row: Element) => boolean): Promise<void> {
+      const root = view.container.querySelector(`[data-slot="${slot}"]`)!;
+      await act(async () => {
+        (root.querySelector('button') as HTMLButtonElement).click();
+      });
+      const item = [...root.querySelectorAll('[role="menuitemradio"]')].find(match) as
+        | HTMLButtonElement
+        | undefined;
+      if (!item) throw new Error(`menu item missing for ${slot}`);
+      await act(async () => {
+        item.click();
+      });
+    }
+
+    await pickMenuItem('table.borderStyle', (row) =>
+      Boolean(row.querySelector('.docx-table-line--dashed'))
+    );
+    await pickMenuItem(
+      'table.borderWidth',
+      (row) => row.textContent === 'table.borderWidths.oneHalfPt'
+    );
+
+    const colorRoot = view.container.querySelector('[data-slot="table.borderColor"]')!;
+    await act(async () => {
+      (colorRoot.querySelector('.docx-toolbar__colorsplit-caret') as HTMLButtonElement).click();
+    });
+    const themeSwatch = colorRoot.querySelector(
+      `[data-value="${THEME_ACCENT1}"]`
+    ) as HTMLButtonElement;
+    expect(themeSwatch).not.toBeNull();
+    await act(async () => {
+      themeSwatch.click();
+    });
+    const topBorder = borderSideAttrs(firstCell(editor()), 'top');
+    expect(topBorder.color?.toUpperCase()).toBe(THEME_ACCENT1);
+    expect(topBorder.val).toBe('dashed');
+    expect(topBorder.sz).toBe('12');
+
+    const fillRoot = view.container.querySelector('[data-slot="table.cellFill"]')!;
+    await act(async () => {
+      (fillRoot.querySelector('.docx-toolbar__colorsplit-caret') as HTMLButtonElement).click();
+    });
+    const hexInput = fillRoot.querySelector('.docx-toolbar__swatch-hex') as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(hexInput, { target: { value: CUSTOM_FILL } });
+    });
+    await act(async () => {
+      (fillRoot.querySelector('.docx-toolbar__swatch-apply') as HTMLButtonElement).click();
+    });
+    const tcPr = wmlChild(firstCell(editor()), 'tcPr');
+    const shd = tcPr && wmlChild(tcPr, 'shd');
+    expect(shd?.attributes.find((a) => a.localName === 'fill')?.value?.toUpperCase()).toBe(
+      CUSTOM_FILL
+    );
+  });
+
   test('border-color and cell-fill dialogs: keyboard swatch/clear, one revision, Escape', async () => {
     const { view, editor } = mount(
       <DocxEditorToolbar preset={false}>
@@ -665,7 +739,7 @@ describe('Task 10 fix round 5', () => {
     const cellId = firstCell(editor()).id;
 
     for (const [slot, hex, readBorder] of [
-      ['table.borderColor', '336699', true],
+      ['table.borderColor', '0070C0', true],
       ['table.cellFill', 'FFFF00', false],
     ] as const) {
       const root = view.container.querySelector(`[data-slot="${slot}"]`)!;
