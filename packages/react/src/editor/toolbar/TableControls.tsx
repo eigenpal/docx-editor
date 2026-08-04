@@ -726,8 +726,8 @@ function buildColorSplitCompound(
         ) : null}
         <ToolbarHexColorPickerBody
           apply={(hex) => {
-            setLastHex?.(hex);
             setOpen(false);
+            setLastHex?.(hex);
             apply({ kind: 'hex', value: hex });
           }}
           current={pickerCurrent}

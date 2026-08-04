@@ -421,7 +421,14 @@ describe('Task 10 fix round 2', () => {
       (colorRoot.querySelector('.docx-toolbar__colorsplit-caret') as HTMLButtonElement).click();
     });
     await act(async () => {
-      (colorRoot.querySelector('[data-value="336699"]') as HTMLButtonElement).click();
+      const swatch = colorRoot.querySelector('[data-value="336699"]') as HTMLButtonElement | null;
+      if (swatch) {
+        swatch.click();
+        return;
+      }
+      const hexInput = colorRoot.querySelector('.docx-toolbar__swatch-hex') as HTMLInputElement;
+      fireEvent.change(hexInput, { target: { value: '336699' } });
+      (colorRoot.querySelector('.docx-toolbar__swatch-apply') as HTMLButtonElement).click();
     });
     const cell = collectByKind(documentPart(editor()).root, 'tableCell')[0]!;
     expect(borderSideAttrs(cell, 'top').color?.toUpperCase()).toBe('336699');

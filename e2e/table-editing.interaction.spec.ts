@@ -339,6 +339,23 @@ const BORDER_WIDTH_INDEX: Record<string, number> = {
 
 async function pickToolbarOption(page: Page, slot: string, value: string) {
   const root = page.locator(`[data-slot="${slot}"]`).first();
+  if (slot === 'table.borderColor' || slot === 'table.cellFill') {
+    await root.locator('.docx-toolbar__colorsplit-caret').click();
+    await expect(root.locator('[role="dialog"]')).toBeVisible();
+    const swatch = root.locator(`[data-value="${value}"]`).first();
+    if ((await swatch.count()) > 0) {
+      await swatch.click();
+    } else {
+      const hexInput = root.locator('.docx-toolbar__swatch-hex');
+      await hexInput.fill(value);
+      const apply = root.locator('.docx-toolbar__swatch-apply');
+      await expect(apply).toBeEnabled();
+      await apply.click();
+    }
+    await expect(root.locator('[role="dialog"]')).toHaveCount(0);
+    await settle(page);
+    return;
+  }
   await root.locator('button').first().click();
   const byValue = root.locator(`[data-value="${value}"]`).first();
   if ((await byValue.count()) > 0) {
@@ -549,13 +566,8 @@ test.describe('nested table editing acceptance', () => {
     await pickToolbarOption(page, 'table.borderTarget', 'inside');
     await pickToolbarOption(page, 'table.borderStyle', 'dotted');
     await pickToolbarOption(page, 'table.borderWidth', '8');
-    const borderColor = page.locator('[data-slot="table.borderColor"]').first();
-    await borderColor.locator('.docx-toolbar__colorsplit-caret').click();
-    await borderColor.locator('[data-value="336699"]').click();
-    await settle(page);
-    const fillColor = page.locator('[data-slot="table.cellFill"]').first();
-    await fillColor.locator('.docx-toolbar__colorsplit-caret').click();
-    await fillColor.locator('[data-value="0070C0"]').click();
+    await pickToolbarOption(page, 'table.borderColor', '336699');
+    await pickToolbarOption(page, 'table.cellFill', '0070C0');
     await settle(page);
 
     const postFormatDetailed = await e2eDetailedTopology(page, 'inner');

@@ -322,8 +322,15 @@ async function pickColorAsync(view: ReturnType<typeof render>, hex: string): Pro
   });
   await act(async () => {
     const swatch = root.querySelector(`[data-value="${hex}"]`) as HTMLButtonElement | null;
-    if (!swatch) throw new Error(`border color swatch missing: ${hex}`);
-    swatch.click();
+    if (swatch) {
+      swatch.click();
+      return;
+    }
+    const hexInput = root.querySelector('.docx-toolbar__swatch-hex') as HTMLInputElement | null;
+    const apply = root.querySelector('.docx-toolbar__swatch-apply') as HTMLButtonElement | null;
+    if (!hexInput || !apply) throw new Error(`border color swatch missing: ${hex}`);
+    fireEvent.change(hexInput, { target: { value: hex } });
+    apply.click();
   });
 }
 
@@ -334,8 +341,15 @@ async function pickFillAsync(view: ReturnType<typeof render>, hex: string): Prom
   });
   await act(async () => {
     const swatch = root.querySelector(`[data-value="${hex}"]`) as HTMLButtonElement | null;
-    if (!swatch) throw new Error(`fill swatch missing: ${hex}`);
-    swatch.click();
+    if (swatch) {
+      swatch.click();
+      return;
+    }
+    const hexInput = root.querySelector('.docx-toolbar__swatch-hex') as HTMLInputElement | null;
+    const apply = root.querySelector('.docx-toolbar__swatch-apply') as HTMLButtonElement | null;
+    if (!hexInput || !apply) throw new Error(`fill swatch missing: ${hex}`);
+    fireEvent.change(hexInput, { target: { value: hex } });
+    apply.click();
   });
 }
 
@@ -365,7 +379,16 @@ function pickColor(view: ReturnType<typeof render>, hex: string): void {
     (root.querySelector('.docx-toolbar__colorsplit-caret') as HTMLButtonElement).click();
   });
   act(() => {
-    (root.querySelector(`[data-value="${hex}"]`) as HTMLButtonElement).click();
+    const swatch = root.querySelector(`[data-value="${hex}"]`) as HTMLButtonElement | null;
+    if (swatch) {
+      swatch.click();
+      return;
+    }
+    const hexInput = root.querySelector('.docx-toolbar__swatch-hex') as HTMLInputElement | null;
+    const apply = root.querySelector('.docx-toolbar__swatch-apply') as HTMLButtonElement | null;
+    if (!hexInput || !apply) throw new Error(`border color swatch missing: ${hex}`);
+    fireEvent.change(hexInput, { target: { value: hex } });
+    apply.click();
   });
 }
 
@@ -375,7 +398,16 @@ function pickFill(view: ReturnType<typeof render>, hex: string): void {
     (root.querySelector('.docx-toolbar__colorsplit-caret') as HTMLButtonElement).click();
   });
   act(() => {
-    (root.querySelector(`[data-value="${hex}"]`) as HTMLButtonElement).click();
+    const swatch = root.querySelector(`[data-value="${hex}"]`) as HTMLButtonElement | null;
+    if (swatch) {
+      swatch.click();
+      return;
+    }
+    const hexInput = root.querySelector('.docx-toolbar__swatch-hex') as HTMLInputElement | null;
+    const apply = root.querySelector('.docx-toolbar__swatch-apply') as HTMLButtonElement | null;
+    if (!hexInput || !apply) throw new Error(`fill swatch missing: ${hex}`);
+    fireEvent.change(hexInput, { target: { value: hex } });
+    apply.click();
   });
 }
 
