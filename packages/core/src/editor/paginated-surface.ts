@@ -1040,6 +1040,20 @@ export function mountPaginatedSurface(
     setSelection: (next) => setSelection(next),
     noteModelMoved: () => selectionSync.noteModelMoved(),
     render: () => render(),
+    revealNote: (scopeId) => {
+      for (const page of currentLayout.pages) {
+        const note = [...(page.footnotes?.notes ?? []), ...(page.endnotes?.notes ?? [])].find(
+          (candidate) => candidate.scopeId === scopeId
+        );
+        if (!note) continue;
+        scrollToContentY(note.box.y, note.box.height, {
+          block: 'nearest',
+          offsetPx: 48,
+        });
+        return page.index;
+      }
+      return null;
+    },
     notify: () => options.onChange?.(currentState()),
     lastRejection: () => lastRejection,
     setLastRejection: (reason) => {

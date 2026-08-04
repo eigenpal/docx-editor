@@ -114,9 +114,9 @@ function mountChrome(
         <DocxEditorToolbar.Button slot="insert.footnote" />
         <DocxEditorToolbar.Button slot="insert.endnote" />
       </DocxEditorToolbar>
-      <DocxEditorNotesChrome />
       {extra}
       <DocxEditorViewport>
+        <DocxEditorNotesChrome />
         <DocxEditorContent />
       </DocxEditorViewport>
     </DocxEditorRoot>
@@ -174,7 +174,7 @@ describe('DocxEditor.NotesChrome', () => {
     expect(banner.textContent).toContain('Endnote');
   });
 
-  test('insert.footnote / insert.endnote enabled in body, disabled in note scope', async () => {
+  test('note scope keeps insertion in the main toolbar instead of duplicating disabled icons', async () => {
     const { view, editor } = mountChrome(footnoteDoc());
     const footnoteSlot = () =>
       view.container.querySelector('[data-slot="insert.footnote"]') as HTMLButtonElement | null;
@@ -186,14 +186,9 @@ describe('DocxEditor.NotesChrome', () => {
     expect(editor().can({ type: 'insertNote', noteKind: 'footnote' }).ok).toBe(true);
 
     await enterFootnote(editor());
-    const bannerFootnote = view
-      .getByTestId('docx-notes-banner')
-      .querySelector('[data-slot="insert.footnote"]') as HTMLButtonElement;
-    const bannerEndnote = view
-      .getByTestId('docx-notes-banner')
-      .querySelector('[data-slot="insert.endnote"]') as HTMLButtonElement;
-    expect(bannerFootnote.disabled).toBe(true);
-    expect(bannerEndnote.disabled).toBe(true);
+    expect(view.getByTestId('docx-notes-banner').querySelector('[data-slot]')).toBeNull();
+    expect(footnoteSlot()?.disabled).toBe(true);
+    expect(endnoteSlot()?.disabled).toBe(true);
     expect(editor().can({ type: 'insertNote', noteKind: 'footnote' }).ok).toBe(false);
     expect(editor().can({ type: 'insertNote', noteKind: 'footnote' }).reason).toContain(
       'body scope'
@@ -261,6 +256,11 @@ describe('DocxEditor.NotesChrome', () => {
     };
     preview.dispatchEvent(event);
     expect(prevented).toBe(true);
+
+    await act(async () => {
+      fireEvent.click(ref);
+    });
+    expect(view.queryByTestId('docx-notes-preview')).toBeNull();
   });
 
   test('touch primary skips hover preview', async () => {
@@ -378,9 +378,13 @@ describe('DocxEditor.NotesChrome', () => {
     await act(async () => {
       fireEvent.click(view.getByTestId('docx-notes-properties-apply'));
     });
-    expect(editor().can({ type: 'setNoteProperties', scope: 'document', footnote: { numFmt: 'decimal' } }).ok).toBe(
-      true
-    );
+    expect(
+      editor().can({
+        type: 'setNoteProperties',
+        scope: 'document',
+        footnote: { numFmt: 'decimal' },
+      }).ok
+    ).toBe(true);
   });
 
   test('engine refuses endnote pageBottom for setNoteProperties', () => {

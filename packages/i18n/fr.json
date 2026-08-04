@@ -872,7 +872,8 @@
     "insertSectionPages": "Insérer le nombre de pages de la section",
     "insertPageXofY": "Insérer page X sur Y",
     "pageXofYLabel": "Page",
-    "pageXofYSeparator": "sur"
+    "pageXofYSeparator": "sur",
+    "pageNumbers": null
   },
   "image": {
     "placeholder": "Insérer une image",

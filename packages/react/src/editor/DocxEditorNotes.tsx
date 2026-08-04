@@ -7,18 +7,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MouseEvent, ReactElement } from 'react';
 import type { EditorCommand } from '@docx-editor.dev/core-contract/contracts/editor';
-import { CHROME_GROUPS, chromeSlotId } from '@docx-editor.dev/core-contract/editor';
 import { useTranslation } from '../i18n';
-import type { TranslationKey } from '../i18n';
 import { Z_INDEX } from '../styles/zIndex';
 import { useDocxEditor } from './context';
 import { guardToolbarMousedown } from './toolbar/ToolbarButton';
-import { ToolbarButton } from './toolbar/ToolbarButton';
-import { ToolbarContext } from './toolbar/toolbar-context';
 import { useNotePropertiesState, useNoteScopeState } from './useNoteScopeState';
+import { useScopedChromeAnchor } from './useScopedChromeAnchor';
 
 const NOTE_SCOPE_RE = /^(footnote|endnote):(-?\d{1,10})$/;
-const INSERT_GROUP = CHROME_GROUPS.find((group) => group.id === 'insert')!;
 
 function parseNoteScopeId(
   id: string
@@ -70,6 +66,21 @@ export function DocxEditorNotesChrome({
   } | null>(null);
   const [propsOpen, setPropsOpen] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const findActiveNote = useCallback(
+    (viewport: HTMLElement) => {
+      if (!noteScope) return null;
+      const candidates = viewport.querySelectorAll<HTMLElement>('[data-docx-note-scope]');
+      return (
+        [...candidates].find(
+          (candidate) =>
+            candidate.matches('[data-docx-note]') &&
+            candidate.dataset.docxNoteScope === noteScope.id
+        ) ?? null
+      );
+    },
+    [noteScope]
+  );
+  const anchor = useScopedChromeAnchor(findActiveNote, 'before');
 
   const clearPreview = useCallback(() => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
@@ -88,12 +99,16 @@ export function DocxEditorNotesChrome({
       const ref = target.closest<HTMLElement>('[data-docx-note-ref]');
       if (ref?.dataset.docxNoteScope) {
         event.preventDefault();
+        clearPreview();
+        setMenu(null);
         editor.setActiveScope({ kind: 'note', id: ref.dataset.docxNoteScope });
         return;
       }
       const mark = target.closest<HTMLElement>('[data-docx-note-mark-back]');
       if (mark) {
         event.preventDefault();
+        clearPreview();
+        setMenu(null);
         editor.setActiveScope({ kind: 'body' });
       }
     };
@@ -239,54 +254,32 @@ export function DocxEditorNotesChrome({
     >
       {noteScope && parsedActive ? (
         <div
-          className="docx-notes-chrome__banner"
+          ref={anchor.ref}
+          className="docx-context-chip docx-notes-chrome__banner"
           role="region"
           aria-label={t('notes.chromeAriaLabel')}
           data-testid="docx-notes-banner"
           data-note-scope={noteScope.id}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            zIndex: Z_INDEX.chrome,
-            display: 'flex',
-            gap: 8,
-            alignItems: 'center',
-            padding: '4px 8px',
-            background: 'var(--doc-banner-bg, #f5f5f5)',
-            borderBottom: '1px solid var(--doc-border, #ddd)',
-            fontSize: 12,
-          }}
+          style={{ ...anchor.style, zIndex: Z_INDEX.chrome }}
         >
-          <span>{regionLabel}</span>
-          <ToolbarContext.Provider
-            value={{ t: (key) => t(key as TranslationKey), onSave: undefined }}
-          >
-            <div aria-label={t('formattingBar.groups.insert')}>
-              {INSERT_GROUP.controls
-                .filter((control) => control.id === 'footnote' || control.id === 'endnote')
-                .map((control) => {
-                  const slot = chromeSlotId(INSERT_GROUP, control);
-                  return <ToolbarButton key={slot} slot={slot} />;
-                })}
-            </div>
-          </ToolbarContext.Provider>
+          <span className="docx-context-chip__title">{regionLabel}</span>
           <button
             type="button"
-            data-testid="docx-notes-close"
-            onMouseDown={guardToolbarMousedown}
-            onClick={() => editor.setActiveScope({ kind: 'body' })}
-          >
-            {t('notes.closeNote')}
-          </button>
-          <button
-            type="button"
+            className="docx-context-chip__button"
             data-testid="docx-notes-properties"
             onMouseDown={guardToolbarMousedown}
             onClick={() => setPropsOpen(true)}
           >
-            {t('dialogs.footnoteProperties.title')}
+            {t('headerFooter.options')}
+          </button>
+          <button
+            type="button"
+            className="docx-context-chip__button docx-context-chip__button--primary"
+            data-testid="docx-notes-close"
+            onMouseDown={guardToolbarMousedown}
+            onClick={() => editor.setActiveScope({ kind: 'body' })}
+          >
+            {t('common.close')}
           </button>
         </div>
       ) : null}

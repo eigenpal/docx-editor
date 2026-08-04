@@ -872,7 +872,8 @@
     "insertSectionPages": "Bölüm sayfa sayısını ekle",
     "insertPageXofY": "X / Y sayfasını ekle",
     "pageXofYLabel": "Sayfa",
-    "pageXofYSeparator": "/"
+    "pageXofYSeparator": "/",
+    "pageNumbers": null
   },
   "image": {
     "placeholder": "Görsel yer tutucu",

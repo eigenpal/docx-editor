@@ -869,7 +869,8 @@
     "insertSectionPages": "הוסף מספר עמודים במקטע",
     "insertPageXofY": "הוסף עמוד X מתוך Y",
     "pageXofYLabel": "עמוד",
-    "pageXofYSeparator": "מתוך"
+    "pageXofYSeparator": "מתוך",
+    "pageNumbers": null
   },
   "image": {
     "placeholder": "מיקום תמונה",

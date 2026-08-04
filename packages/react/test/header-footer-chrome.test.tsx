@@ -96,9 +96,9 @@ function mountChrome(
         instance = editor as DocxEditorInstance;
       }}
     >
-      <DocxEditorHeaderFooterChrome />
       {extra}
       <DocxEditorViewport>
+        <DocxEditorHeaderFooterChrome />
         <DocxEditorContent />
       </DocxEditorViewport>
     </DocxEditorRoot>
@@ -145,7 +145,7 @@ describe('DocxEditor.HeaderFooterChrome', () => {
     expect(view.getByTestId('docx-hf-inherited').textContent).toContain('Same as previous');
   });
 
-  test('insert slots disabled in body, enabled in scope', async () => {
+  test('page fields are explicit menu items enabled in furniture scope', async () => {
     const { view, editor } = mountChrome(docxWithHeader());
     const pageNumber = () => view.queryByRole('button', { name: 'Insert current page number' });
     expect(pageNumber()).toBeNull();
@@ -153,8 +153,17 @@ describe('DocxEditor.HeaderFooterChrome', () => {
     await act(async () => {
       editor().exec({ type: 'editHeaderFooter', position: 'header' });
     });
-    const button = view.getByRole('button', { name: 'Insert current page number' });
-    expect(button.disabled).toBe(false);
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    const trigger = view.getByRole('button', { name: 'Page numbers', hidden: true });
+    expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
+    fireEvent.click(trigger);
+    const menuItem = view.getByRole('menuitem', {
+      name: 'Insert current page number',
+      hidden: true,
+    }) as HTMLButtonElement;
+    expect(menuItem.disabled).toBe(false);
     const disabled = editor().can({ type: 'insertPageField', field: 'PAGE' });
     expect(disabled.ok).toBe(true);
   });

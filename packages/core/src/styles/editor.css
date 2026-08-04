@@ -3193,89 +3193,84 @@ a.docx-hyperlink:focus-visible {
   cursor: default;
 }
 
-/* ── Header/footer scope chrome (`docx-hf-chrome` family) — React overlay while editing
- * page furniture. UI-only; no document canvas geometry. */
-.docx-hf-chrome {
-  position: sticky;
-  top: 0;
+/* ── Scoped story chrome ──────────────────────────────────────────────────────────────
+ * Compact controls follow the active header/footer/note story. React keeps them outside
+ * the engine-painted subtree, while useScopedChromeAnchor places them beside its boundary. */
+.docx-context-chip {
+  position: absolute;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
-  padding: 8px 12px;
-  margin: 0 auto 8px;
-  max-width: 100%;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 5px 4px 10px;
   background: var(--doc-surface);
   border: 1px solid var(--doc-border);
-  border-radius: 6px;
-  box-shadow: 0 1px 4px var(--doc-shadow);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px var(--doc-shadow);
   color: var(--doc-text);
-}
-
-.docx-hf-chrome__title-block {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1 1 160px;
-}
-
-.docx-hf-chrome__title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--doc-text);
-}
-
-.docx-hf-chrome__inheritance {
   font-size: 12px;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.docx-context-chip__title {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
+.docx-context-chip__status {
+  max-width: 150px;
+  overflow: hidden;
+  padding: 2px 6px;
   color: var(--doc-text-muted);
+  background: var(--doc-bg-subtle);
+  border-radius: 9999px;
+  text-overflow: ellipsis;
 }
 
-.docx-hf-chrome__inheritance-hint {
-  display: block;
-  font-size: 11px;
-  color: var(--doc-text-subtle);
+.docx-context-chip__button {
+  min-height: 24px;
+  padding: 3px 8px;
+  font: inherit;
+  color: var(--doc-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
 }
 
-.docx-hf-chrome__inserts {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  flex: none;
+.docx-context-chip__button:hover:not(:disabled) {
+  background: var(--doc-bg-hover);
+  border-color: var(--doc-border);
 }
 
-.docx-hf-chrome__actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex: none;
+.docx-context-chip__button--primary {
+  color: var(--doc-on-primary);
+  background: var(--doc-primary);
+  border-color: var(--doc-primary);
+}
+
+.docx-context-chip__button--primary:hover:not(:disabled) {
+  background: var(--doc-primary-hover);
+  border-color: var(--doc-primary-hover);
+}
+
+.docx-context-chip__button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .docx-hf-chrome__options {
   position: relative;
 }
 
-.docx-hf-chrome__options-trigger,
-.docx-hf-chrome__close {
-  font: inherit;
-  font-size: 13px;
-  color: var(--doc-text);
-  background: var(--doc-bg-input);
-  border: 1px solid var(--doc-border-input);
-  border-radius: 4px;
-  padding: 4px 10px;
-  cursor: pointer;
-}
-
-.docx-hf-chrome__options-trigger:hover:not(:disabled),
-.docx-hf-chrome__close:hover:not(:disabled) {
-  background: var(--doc-bg-hover);
-}
-
-.docx-hf-chrome__options-trigger:disabled,
-.docx-hf-chrome__close:disabled {
-  opacity: 0.5;
-  cursor: default;
+.docx-hf-chrome__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
 }
 
 .docx-hf-chrome__options-menu {
@@ -3357,6 +3352,22 @@ a.docx-hyperlink:focus-visible {
 .docx-hf-chrome__unit {
   font-size: 11px;
   color: var(--doc-text-muted);
+}
+
+@media (max-width: 640px) {
+  .docx-context-chip__status {
+    display: none;
+  }
+
+  .docx-context-chip {
+    max-width: calc(100vw - 16px) !important;
+  }
+}
+
+@media print {
+  .docx-context-chip {
+    display: none !important;
+  }
 }
 
 /* ── Vue registry-toolbar (`ep-toolbar` family) additions for the same shapes:

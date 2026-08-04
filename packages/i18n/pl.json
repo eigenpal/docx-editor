@@ -869,7 +869,8 @@
     "insertSectionPages": "Wstaw liczbę stron sekcji",
     "insertPageXofY": "Wstaw stronę X z Y",
     "pageXofYLabel": "Strona",
-    "pageXofYSeparator": "z"
+    "pageXofYSeparator": "z",
+    "pageNumbers": null
   },
   "image": {
     "placeholder": "Symbol zastępczy obrazu",
