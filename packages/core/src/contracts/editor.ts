@@ -503,6 +503,10 @@ export interface Editor {
   snapshot(options?: { scope?: EditorScope }): EditorSnapshot;
 
   getTotalPages(): number;
+  /**
+   * One-based page at the caret (default), or at the centre of the mounted scroll viewport.
+   * Viewport mode falls back to the caret when no measurable viewport is attached.
+   */
   getCurrentPage(mode?: 'viewport' | 'caret'): number;
 
   /**

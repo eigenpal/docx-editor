@@ -70,6 +70,7 @@ import {
   surfaceExtent,
   surfaceScroller,
   visiblePageSet,
+  viewportPage,
   type SurfaceExtent,
 } from './surface-pages.ts';
 import { createSurfaceCaret } from './surface-caret.ts';
@@ -1326,6 +1327,15 @@ export function mountPaginatedSurface(
       return currentLayout;
     },
     state: currentState,
+    currentPage: (mode = 'caret') => {
+      flushLayout();
+      if (mode === 'viewport') {
+        const page = viewportPage(container, currentLayout, scale);
+        if (page !== null) return page;
+      }
+      const caret = caretAt(currentLayout, selection.head);
+      return caret ? caret.pageIndex + 1 : 1;
+    },
 
     type(text) {
       // Insert at the selection's START, not at its head. Deleting a selection removes the
