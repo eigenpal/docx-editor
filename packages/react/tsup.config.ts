@@ -12,6 +12,13 @@ export default defineConfig({
   // exactly what the Vite-built vue adapter already ships; the CJS output stays
   // SSR-safe because fflate touches Worker/Blob only inside its async APIs,
   // which the editor never calls.
+  //
+  // fflate reaches this bundle transitively, through the contract package below.
+  // It is listed in this package's devDependencies only because the tests build
+  // DOCX fixtures with it; tsup externalizes `dependencies`/`peerDependencies`
+  // and bundles everything else, so moving that entry into `dependencies` would
+  // silently externalize fflate and change the published output. Leave it where
+  // it is.
   platform: 'browser',
   format: ['cjs', 'esm'],
   dts: true,
