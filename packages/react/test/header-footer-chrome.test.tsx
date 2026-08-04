@@ -41,6 +41,14 @@ function rect(left: number, top: number, width: number, height: number): DOMRect
 const findActiveProbe = (viewport: HTMLElement): HTMLElement | null =>
   viewport.querySelector<HTMLElement>('[data-docx-hf-active]');
 
+function setStoryRect(node: HTMLDivElement | null, left: number, top: number, width: number): void {
+  if (!node) return;
+  node.getBoundingClientRect = () => {
+    const viewport = node.closest<HTMLElement>('.docx-editor__scroll-container');
+    return rect(left - (viewport?.scrollLeft ?? 0), top - (viewport?.scrollTop ?? 0), width, 30);
+  };
+}
+
 function AnchorProbe({ active }: { active: 'first' | 'second' }): ReactNode {
   const anchor = useScopedChromeAnchor(findActiveProbe, 'story-label');
   return (
@@ -57,17 +65,13 @@ function AnchorProbe({ active }: { active: 'first' | 'second' }): ReactNode {
           <div
             key="first"
             data-docx-hf-active=""
-            ref={(node) => {
-              if (node) node.getBoundingClientRect = () => rect(120, 80, 500, 30);
-            }}
+            ref={(node) => setStoryRect(node, 120, 80, 500)}
           />
         ) : (
           <div
             key="second"
             data-docx-hf-active=""
-            ref={(node) => {
-              if (node) node.getBoundingClientRect = () => rect(420, 280, 320, 30);
-            }}
+            ref={(node) => setStoryRect(node, 420, 280, 320)}
           />
         )}
       </div>
@@ -191,6 +195,27 @@ describe('DocxEditor.HeaderFooterChrome', () => {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     });
     expect(view.getByTestId('anchor-probe').style.left).toBe('420px');
+  });
+
+  test('story bar scrolls away with its focused occurrence', async () => {
+    const view = render(<AnchorProbe active="first" />);
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    const bar = view.getByTestId('anchor-probe');
+    const initialLeft = bar.style.left;
+    const initialTop = bar.style.top;
+    const viewport = view.container.querySelector('.docx-editor__scroll-container') as HTMLElement;
+
+    viewport.scrollLeft = 50;
+    viewport.scrollTop = 200;
+    await act(async () => {
+      fireEvent.scroll(viewport);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+
+    expect(bar.style.left).toBe(initialLeft);
+    expect(bar.style.top).toBe(initialTop);
   });
 
   test('shows the active region after editHeaderFooter', async () => {

@@ -67,11 +67,11 @@ export function useScopedChromeAnchor(
 
       setStyle({
         position: attachedInsideViewport ? 'absolute' : 'fixed',
-        left:
+        left: placement === 'story-label' ? documentLeft : Math.max(viewportEdge, documentLeft + 8),
+        top:
           placement === 'story-label'
-            ? Math.max(viewportEdge, documentLeft)
-            : Math.max(viewportEdge, documentLeft + 8),
-        top: Math.max(attachedInsideViewport ? viewport.scrollTop + 8 : 8, documentTop),
+            ? documentTop
+            : Math.max(attachedInsideViewport ? viewport.scrollTop + 8 : 8, documentTop),
         ...(placement === 'story-label'
           ? { width: Math.max(240, Math.min(anchorRect.width, viewport.clientWidth - 16)) }
           : {
