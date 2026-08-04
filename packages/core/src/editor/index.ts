@@ -95,6 +95,10 @@ export {
   type DocxEditorConfig,
   type HyperlinkChromeHandlers,
 } from './docx-editor.ts';
+// Automation over an editor that is already open. The protocol itself lives in the neutral
+// automation subpath — only the adapter that needs a live editor ships from here, and only as
+// a factory: there is no composition hook a consumer could point at a second document model.
+export { BROWSER_AUTOMATION_CAPABILITIES, createBrowserAutomationHost } from './automation-host.ts';
 export type { HyperlinkOps, SurfaceHyperlink } from './surface-hyperlinks.ts';
 export type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
 // The types an adapter needs to CALL the surface, re-exported from the composition root.

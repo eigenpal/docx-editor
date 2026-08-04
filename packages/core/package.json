@@ -10,6 +10,11 @@
       "import": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./automation": {
+      "types": "./src/automation/index.ts",
+      "import": "./src/automation/index.ts",
+      "default": "./src/automation/index.ts"
+    },
     "./binding": {
       "types": "./src/binding/index.ts",
       "import": "./src/binding/index.ts",
