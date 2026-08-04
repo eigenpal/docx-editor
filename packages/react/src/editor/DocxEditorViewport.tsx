@@ -8,11 +8,12 @@
 //   rematerialization and page-visibility work. Without it the engine falls back to
 //   document scrolling and virtualization degrades.
 
+import { useCallback, useContext } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { useContext } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
 import { ReviewRailContext } from './context';
 import { useEditorState } from './useEditorState';
+import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
 
 const selectPaneOpen = (snapshot: EditorSnapshot): boolean => snapshot.reviewPaneOpen ?? true;
 
@@ -41,15 +42,27 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
   const paneOpen = useEditorState(selectPaneOpen);
   const rail = useContext(ReviewRailContext);
   const reserve = (rail?.mounted ?? 0) > 0;
+  // The navigation pane needs this element's width to decide whether it has to move the
+  // page at all, and publishes the answer back as `--docx-nav-shift`. Both directions are
+  // no-ops when no pane is mounted: the store stays at 0 and the custom property falls
+  // back to 0 in the stylesheet. The two panes compose — one displaces the page from the
+  // left, the other reserves a gutter on the right, and a document can have both open.
+  const layout = useNavigationLayoutStore();
+  const shift = useNavigationShift();
+  const attach = useCallback(
+    (element: HTMLDivElement | null) => layout?.setViewport(element),
+    [layout]
+  );
 
   return (
     <div
+      ref={attach}
       data-testid="docx-editor-scroll"
       {...(reserve ? { 'data-review-pane': paneOpen ? 'open' : 'closed' } : {})}
       className={`ep-root ep-one-surface ep-one-surface__viewport docx-editor__scroll-container${
         className ? ` ${className}` : ''
       }`}
-      style={style}
+      style={{ ...style, ['--docx-nav-shift' as string]: `${shift}px` } as CSSProperties}
     >
       {children}
     </div>

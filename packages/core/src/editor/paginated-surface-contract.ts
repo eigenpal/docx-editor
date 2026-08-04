@@ -4,8 +4,10 @@
 // the formatting snapshot and the surface interface itself. The composition root in
 // paginated-surface.ts implements and re-exports them, so importers keep one entry point.
 
+import type { IndentFormatting } from '../contracts/types.ts';
 import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
 import type { BookmarkIndex } from '@docx-editor.dev/core-contract/store';
+import type { ViewScope } from '../contracts/editor.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
 import type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
 import type {
@@ -93,6 +95,27 @@ export interface SurfaceFormatting {
   readonly highlight: string | null;
   readonly alignment: 'left' | 'center' | 'right' | 'both' | null;
   readonly styleId: string | null;
+  /**
+   * `w:spacing`'s line rule and its value: LINES for `multiple`, points for the other two
+   * (`w:line` is 240ths of a line under `auto` and twentieths of a point otherwise).
+   * Null when the selection's paragraphs disagree, or state no line spacing at all.
+   */
+  readonly lineSpacing: {
+    readonly rule: 'multiple' | 'exact' | 'atLeast';
+    readonly value: number;
+  } | null;
+  /** `w:spacing/@w:before` and `@w:after` in points, null when the selection disagrees. */
+  readonly spaceBeforePt: number | null;
+  readonly spaceAfterPt: number | null;
+  /**
+   * Effective indent at the selection, in twips, or null with no selection or inside a
+   * table.
+   *
+   * The one field here that does NOT go null on disagreement: the values are the FIRST
+   * touched paragraph's and `mixed` reports the disagreement per field, because a ruler
+   * must draw its handles somewhere and Word draws them at the first selected paragraph.
+   */
+  readonly indent: IndentFormatting | null;
 }
 
 /**
@@ -200,6 +223,22 @@ export interface PaginatedSurface {
    */
   adjustIndent(direction: 'increase' | 'decrease'): boolean;
   /**
+   * Set indent to exact values on every paragraph the selection touches — what a ruler
+   * drag and an indent spinner both need, where {@link adjustIndent} only steps.
+   *
+   * Twips. Omitting a field leaves it as authored; `null` CLEARS it, so the paragraph
+   * falls back to its style — distinct from zero, which blocks the cascade.
+   *
+   * `firstLine` is ONE SIGNED offset, negative for a hanging indent; the two OOXML
+   * spellings are written for it, the unused one as an explicit zero. Answers whether
+   * anything was committed.
+   */
+  setIndent(update: {
+    readonly left?: number | null;
+    readonly right?: number | null;
+    readonly firstLine?: number | null;
+  }): boolean;
+  /**
    * Whether Increase/Decrease Indent would do anything right now.
    *
    * A list item at level 0 cannot outdent and one at level 8 cannot indent — `w:ilvl`
@@ -272,8 +311,30 @@ export interface PaginatedSurface {
    * terms as `toggleRunProperty`.
    */
   setRunProperty(localName: string, attributes?: Record<string, string>): void;
-  /** Set a property on every paragraph the selection touches — alignment, style, spacing. */
-  setParagraphProperty(localName: string, attributes?: Record<string, string>): void;
+  /**
+   * Set a property on every paragraph the selection touches — alignment, style, spacing.
+   *
+   * `mergeAttributes` keeps the attributes the call does not name, for the properties that
+   * carry several independent settings in one element: `w:spacing` holds the line rule and
+   * the space before and after, so a line-spacing pick must not delete the space-before. A
+   * null-valued attribute removes just that one.
+   */
+  setParagraphProperty(
+    localName: string,
+    attributes?: Record<string, string | null>,
+    options?: { readonly mergeAttributes?: boolean }
+  ): void;
+  /**
+   * Word's Clear All Formatting: direct run properties off the selected text, and every
+   * paragraph the selection touches back to the default style with its direct paragraph
+   * properties and mark dropped.
+   *
+   * Only what the document states DIRECTLY — formatting inherited from a style survives, so
+   * the text falls back to its style rather than to nothing. Properties an op cannot name
+   * (`w:rStyle`, `w:lang`, `w:sectPr`, `w:pBdr`) are preserved for the same reason every
+   * other write preserves them.
+   */
+  clearFormatting(): void;
   /**
    * Formatting as it stands at the selection, for a toolbar to reflect.
    *
@@ -415,6 +476,85 @@ export interface PaginatedSurface {
   redo(): void;
   focus(): void;
   destroy(): void;
+  /** Active editing view — body, or an open header/footer story by rId. */
+  activeScope(): ViewScope;
+  /** Activate a view scope. Returns false when a header/footer rId cannot be opened. */
+  setActiveScope(scope: ViewScope): boolean;
+  /**
+   * Open a header/footer story for editing on the painted surface.
+   * Refuses dangling / unknown relationship ids.
+   */
+  enterHeaderFooter(args: {
+    readonly rId: string;
+    readonly pageIndex?: number;
+    readonly sectionIndex?: number;
+    readonly kind?: 'header' | 'footer';
+    readonly variant?: 'default' | 'first' | 'even';
+    readonly position?: import('@docx-editor.dev/core-contract/layout').SemanticPosition;
+  }): boolean;
+  /** Leave furniture editing and restore the prior body selection. */
+  exitHeaderFooter(): void;
+  /** Chrome read-model for the open furniture scope, or null when editing the body. */
+  headerFooterState(): {
+    readonly editing: 'header' | 'footer' | null;
+    readonly sectionIndex: number;
+    readonly variant?: 'default' | 'first' | 'even';
+    readonly rId?: string;
+    readonly partName?: string;
+    readonly inherited?: boolean;
+    readonly titlePage?: boolean;
+    readonly evenAndOddHeaders?: boolean;
+    readonly headerDistanceTwips?: number;
+    readonly footerDistanceTwips?: number;
+  } | null;
+  /**
+   * Commit one package-level furniture lifecycle op (create/delete/link/unlink/options).
+   * Flushes layout so the next enter/rebind sees the new resolution.
+   */
+  applyHeaderFooterLifecycle(op: {
+    readonly op:
+      | 'createHeaderFooter'
+      | 'deleteHeaderFooter'
+      | 'linkToPrevious'
+      | 'unlinkFromPrevious'
+      | 'setSectionFurnitureOptions';
+    readonly sectionIndex?: number;
+    readonly kind?: 'header' | 'footer';
+    readonly variant?: 'default' | 'first' | 'even';
+    readonly titlePage?: boolean;
+    readonly evenAndOddHeaders?: boolean;
+    readonly headerDistanceTwips?: number;
+    readonly footerDistanceTwips?: number;
+  }): { readonly ok: true } | { readonly ok: false; readonly reason: string };
+  /** Insert an allowlisted page field at the caret in the open HF story. */
+  insertPageField(field: 'PAGE' | 'NUMPAGES' | 'SECTIONPAGES' | 'PAGE_X_OF_Y'): boolean;
+  /** Insert a footnote/endnote at the body caret. */
+  insertNote(noteKind: 'footnote' | 'endnote'): boolean;
+  deleteNote(noteKind: 'footnote' | 'endnote', noteId: number): boolean;
+  convertNote(fromKind: 'footnote' | 'endnote', noteId: number): boolean;
+  convertAllNotes(fromKind: 'footnote' | 'endnote'): boolean;
+  setNoteProperties(args: {
+    readonly scope: 'document' | 'section';
+    readonly sectionIndex?: number;
+    readonly footnote?: {
+      readonly numFmt?: string;
+      readonly numRestart?: string;
+      readonly position?: string;
+      readonly numStart?: number;
+    };
+    readonly endnote?: {
+      readonly numFmt?: string;
+      readonly numRestart?: string;
+      readonly position?: string;
+      readonly numStart?: number;
+    };
+  }): boolean;
+  enterNote(scopeId: string, position?: { paragraphId: string; offset: number }): boolean;
+  exitNote(): void;
+  /** Resolved/authored note properties for the caret section — chrome read-model. */
+  notePropertiesState(): import('./surface-note-state.ts').NotePropertiesStateSnapshot | null;
+  /** Plain-text preview for hover chrome — never returns markup. */
+  notePreviewText(scopeId: string): string | null;
 }
 
 export type OpenPaginatedResult =

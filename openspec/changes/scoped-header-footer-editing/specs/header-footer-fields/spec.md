@@ -51,6 +51,8 @@ The canonical tree SHALL type the complex field form — `w:fldChar` with `@w:fl
 
 `PAGE`, `NUMPAGES`, and `SECTIONPAGES` SHALL be evaluated during layout for the page the story is being attached to, and the evaluated text SHALL be what is measured. Evaluation SHALL NOT be a paint-time substitution into a line whose width was computed from the cached result: a line measured for `1` and painted with `12` mis-positions every tab stop, right-alignment, and centring on that line.
 
+**Shipped for `PAGE` and `NUMPAGES`:** `field-projection.ts` / `finalizePageFieldProjection`, pinned by `field-projection.test.ts` and `paginated-surface-hf.test.ts`. **`SECTIONPAGES` and `w:pgNumType` honouring are not shipped.**
+
 A header or footer story SHALL be laid out once per variant **per distinct evaluated-result geometry**. Pages whose field results measure to the same widths share one laid-out story; a page whose results measure differently gets its own. Evaluation SHALL apply no `TreeDocOp` and publish no `ModelChange`.
 
 #### Scenario: One footer, many pages

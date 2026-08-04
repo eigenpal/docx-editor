@@ -61,6 +61,14 @@ exemptions go when it lands.
   `setPageSetup` command; Vue twin is a composable, lands with the composable layer.
 - `PageSetupUpdate` — the fields `usePageSetup().apply` accepts.
 - `UsePageSetupReturn` — the hook's return type.
+- `useParagraphIndent` — paragraph-indent read/write hook over
+  `snapshot().formatting.indent` and the `setIndent` command; the indent twin of
+  `usePageSetup`, and what the horizontal ruler's four handles are built from. Vue twin
+  is a composable, lands with the composable layer. The read derivation and the ruler
+  drag geometry both live in core (`ruler-indent.ts`), so the Vue twin is wiring rather
+  than reimplementation.
+- `IndentUpdate` — the fields `useParagraphIndent().apply` accepts.
+- `UseParagraphIndentReturn` — the hook's return type.
 - `DocxEditorPageSetupDialog` — context-fed Page Setup dialog part
   (`DocxEditor.PageSetupDialog`) over `usePageSetup`; Vue twin lands with the
   composable layer.
@@ -78,6 +86,25 @@ exemptions go when it lands.
   hand-copying its class name.
 - `DocxEditorLoadingSpinnerProps`
 - `DocxEditorLoadingComponent` — the part plus its `.Spinner` static.
+- `DocxEditorHeaderFooterChrome` — React-only scoped HF chrome (region label, options,
+  field inserts) over `useHeaderFooterState`; Vue twin deferred with notes/HF editing.
+- `DocxEditorHeaderFooterChromeProps`
+- `useHeaderFooterState` — selector hook for open HF scope state; Vue twin deferred.
+- `HeaderFooterState` — non-null header/footer snapshot type returned by
+  `useHeaderFooterState`.
+- `DocxEditorNotesChrome` — React-only note chrome (banner, hover preview, context menu,
+  properties dialog); Vue twin deferred — notes editing is React-only this change.
+- `DocxEditorNotesChromeProps`
+- `useNoteScopeState` — selector hook for the open note scope; Vue twin deferred with
+  `DocxEditorNotesChrome`.
+- `useNotePropertiesState` — selector hook over `Editor.getNotePropertiesState()`; Vue
+  twin deferred.
+- `NotePropertiesState` — non-null note-properties snapshot type returned by
+  `useNotePropertiesState`.
+
+These HF/notes exports are intentional React-first surface. Pairing them into Vue
+composables/parts is a tracked follow-up before any adapter-support claim; do not treat
+preservation of disabled Vue slots as parity.
 
 The compound toolbar (default set with in-place slot overrides, generic Button part,
 FontFamily compound + hook) landed React-first on the composition layer above. Vue's
@@ -159,6 +186,86 @@ the contract. Publishing retain/release on `Editor` is the prerequisite.
 - `useStackedReviewPositions`
 - `ReviewItemView`
 - `UseReviewReturn`
+The navigation pane rides the same provider/hooks layer: a compound plus three behavior
+hooks over the context-published editor, so its Vue twin is the composable form and lands
+with the rest of that layer. The ENGINE half is already adapter-neutral — the search
+derivation, the session memo, `findMatches`/`selectMatch` and the outline all live in core,
+and Vue reaches them through the same facade. Only the panel and the displacement rule are
+React-only.
+
+- `DocxEditorNavigation` — the pane compound (`DocxEditor.Navigation`) with Headings and
+  Find tabs.
+- `DocxEditorNavigationNamespace` — the compound plus its `.Header` / `.Close` / `.Title` /
+  `.Tabs` / `.Tab` / `.Headings` / `.Find` / `.Toggle` statics.
+- `DocxEditorNavigationProps`
+- `NavigationHeader` — the pane's title row part.
+- `NavigationClose`
+- `NavigationTitle`
+- `NavigationTabs`
+- `NavigationTab`
+- `NavigationTabProps`
+- `NavigationHeadings` — the heading list part, over `useDocumentOutline`.
+- `NavigationFind` — the find panel part, over `useDocumentSearch`.
+- `NavigationToggle` — the collapsed disc.
+- `NavigationPartProps` — the parts' shared props.
+- `NavigationTabValue` — the tab union (`'headings' | 'find'`).
+- `useNavigationPane` — open state, active tab, and the displacement an open pane is
+  entitled to; Vue twin is a composable, future task.
+- `UseNavigationPaneOptions`
+- `UseNavigationPaneResult`
+- `useNavigationShift` — the px the chrome is currently displaced by, for a host placing
+  its own chrome alongside the pane.
+- `useDocumentOutline` — headings, nesting depth, and the jump, over `Editor.getOutline`.
+- `UseDocumentOutlineResult`
+- `OutlineHeading` — one heading of the engine's outline.
+- `OutlineHeadingItem` — a heading plus its rendering depth.
+- `useDocumentSearch` — the find panel's behavior over `Editor.findMatches` /
+  `selectMatch`.
+- `UseDocumentSearchResult`
+- `SEARCH_DEBOUNCE_MS` — the quiet period before a typed query is run.
+- `SEARCH_MATCH_LIMIT` — the engine's cap, so a caller can report "2000+" honestly.
+- `navigationShift` — the displacement rule as a pure function (viewport width, page width,
+  reservation → padding), exported so a host can reuse or test it rather than
+  reverse-engineering the centring behaviour.
+- `NavigationShiftInput`
+- `navigationPaneReservation` — the left space an open pane needs.
+- `NAVIGATION_PANE_WIDTH`
+- `NAVIGATION_PANE_INSET`
+- `NAVIGATION_PANE_GAP`
+
+- `DocxEditorMenu` — the compound menu bar (`DocxEditor.Menu`): File · Format · Insert ·
+  Help, derived from `CHROME_MENUS` so a row and its toolbar twin share one label, icon,
+  command and enabled state. It is a consumer of the composition layer above (context,
+  `useEditorCommand`, the Page Setup part), so the Vue twin lands with the composable
+  layer. The registry, the command rows and the styles already live in core, so the Vue
+  part is markup only.
+- `DocxEditorMenuNamespace` — the bar plus its parts as statics.
+- `DocxEditorMenuProps`
+- `MenuProps` — one menu of the bar (`DocxEditor.Menu.Menu`).
+- `MenuItemProps` — one chrome slot as a row.
+- `MenuRowProps` — a presentational row, for a host action that is not a slot.
+- `MenuActionProps` — the pinned Open/Save/Page-setup rows' props.
+- `MenuId` — a menu's identity: one of the registry's four, or a host's own. The
+  `(string & {})` arm is what lets a product add a menu the library knows nothing about.
+- `ToolbarActionProps` — a host-owned toolbar action with no chrome slot, the twin of
+  `Menu.Row`. Deliberately NOT a shared concept: it carries no engine wiring, so there is
+  nothing for core to own. The Vue twin is markup, and lands with the composable layer.
+- `MenuReportIssueProps` — Help's one packaged row, named so a host can drop it or point
+  it at its own support channel rather than this project's tracker.
+- `MenuSeparatorProps`
+- `MenuSubmenuProps`
+- `MenuTableGridProps` — Word's 6×6 insert-table size picker.
+- `MenuPartComponent` — a menu pinned to one registry id.
+- `CHROME_MENUS` — the core menu registry, re-exported for hook-built menu bars beside
+  `CHROME_GROUPS` above; Vue re-exports it when its composable layer lands.
+- `chromeMenuSlots` — every slot the menu bar places, for a parity assertion or a host
+  enumerating reachable capabilities.
+- `ChromeMenu`
+- `ChromeMenuId`
+- `ChromeMenuEntry`
+- `ChromeMenuItemEntry`
+- `ChromeMenuSubmenuEntry`
+- `ChromeMenuSeparatorEntry`
 
 ## Vue-only
 

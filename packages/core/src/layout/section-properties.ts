@@ -24,6 +24,13 @@ import {
 import { DEFAULT_PAGE_GEOMETRY, type PageGeometry } from './semantic-records.ts';
 import { storyBlocks } from './story-roots.ts';
 
+/**
+ * Hard ceiling on sections enumerated from a document (matches write-path
+ * `MAX_SECTIONS` in note/hf lifecycle). Hostile packages with unbounded `w:sectPr`
+ * marks fail closed here rather than amplifying layout props arrays.
+ */
+export const MAX_DOCUMENT_SECTIONS = 4_096;
+
 export interface SectionMargins {
   readonly topTwips: number;
   readonly rightTwips: number;
@@ -45,6 +52,28 @@ export interface SectionMargins {
  */
 export type SectionBreakType = 'nextPage' | 'continuous' | 'evenPage' | 'oddPage' | 'nextColumn';
 
+/**
+ * Authored `w:pgNumType` (ECMA-376 CT_PageNumber).
+ *
+ * Distinguishes three states via {@link SectionProperties.pageNumbering}:
+ * - element absent → `undefined` (Word defaults; no empty element to re-emit)
+ * - empty `<w:pgNumType/>` → `{}` (present, no authored attrs; must round-trip empty)
+ * - attributes set → only those keys appear (never invent schema defaults like `fmt=decimal`)
+ *
+ * `chapStyle` / `chapSep` are preserved for consumers; PAGE projection does not yet compose
+ * chapter numbers (heading outline resolution is out of this slice).
+ */
+export interface SectionPageNumbering {
+  /** Authored `@w:start` when present and in range; otherwise omitted. */
+  readonly start?: number;
+  /** Authored `@w:fmt` (ST_NumberFormat) when present; otherwise omitted. */
+  readonly fmt?: string;
+  /** Authored `@w:chapStyle` outline level when present and in range. */
+  readonly chapStyle?: number;
+  /** Authored `@w:chapSep` when present (hyphen / period / colon / emDash / enDash). */
+  readonly chapSep?: string;
+}
+
 export interface SectionProperties {
   readonly pageSize: { readonly widthTwips: number; readonly heightTwips: number };
   readonly margins: SectionMargins;
@@ -53,6 +82,11 @@ export interface SectionProperties {
   readonly titlePage: boolean;
   /** Absent `w:type` defaults to `nextPage`. */
   readonly breakType: SectionBreakType;
+  /**
+   * Authored page-number type. Absent when `w:pgNumType` is missing; empty object when the
+   * element is present with no attributes (comprehensive-fixture shape).
+   */
+  readonly pageNumbering?: SectionPageNumbering;
 }
 
 /**
@@ -142,6 +176,53 @@ function breakTypeOf(sectPr: OoxmlNode | undefined): SectionBreakType {
   return 'nextPage';
 }
 
+const CHAPTER_SEPS = new Set(['hyphen', 'period', 'colon', 'emDash', 'enDash']);
+
+/**
+ * Parse authored `w:pgNumType` without inventing schema defaults.
+ *
+ * Returns `undefined` when the element is absent. An empty element yields `{}` so callers
+ * can tell "present but unauthored" from "missing" and serialization can re-emit empty.
+ * Hostile / out-of-range attribute values are dropped rather than clamped into meaning.
+ */
+export function parsePageNumbering(sectPr: OoxmlNode): SectionPageNumbering | undefined {
+  const pgNumType = childNamed(sectPr, 'pgNumType');
+  if (!pgNumType || pgNumType.kind === 'textValue') return undefined;
+
+  const numbering: {
+    start?: number;
+    fmt?: string;
+    chapStyle?: number;
+    chapSep?: string;
+  } = {};
+
+  const startRaw = attribute(pgNumType, 'start');
+  if (startRaw !== undefined && /^-?\d{1,7}$/.test(startRaw)) {
+    const start = Number(startRaw);
+    // Page starts are positive; Word rejects 0 / negative in practice. Cap hostile sizes.
+    if (Number.isFinite(start) && start >= 0 && start <= 9999) numbering.start = start;
+  }
+
+  const fmt = attribute(pgNumType, 'fmt');
+  if (fmt !== undefined && fmt.length > 0 && fmt.length <= 64 && !/[<>&"']/.test(fmt)) {
+    numbering.fmt = fmt;
+  }
+
+  const chapStyleRaw = attribute(pgNumType, 'chapStyle');
+  if (chapStyleRaw !== undefined && /^\d{1,2}$/.test(chapStyleRaw)) {
+    const chapStyle = Number(chapStyleRaw);
+    // Outline levels are 0…9 in WordprocessingML heading practice.
+    if (Number.isFinite(chapStyle) && chapStyle >= 0 && chapStyle <= 9) {
+      numbering.chapStyle = chapStyle;
+    }
+  }
+
+  const chapSep = attribute(pgNumType, 'chapSep');
+  if (chapSep !== undefined && CHAPTER_SEPS.has(chapSep)) numbering.chapSep = chapSep;
+
+  return numbering;
+}
+
 /** Parse one `w:sectPr` into geometry/break properties (null reads as Word's defaults). */
 export function parseSectionProperties(sectPr: OoxmlNode | null | undefined): SectionProperties {
   if (!sectPr) return DEFAULT_SECTION_PROPERTIES;
@@ -158,6 +239,8 @@ export function parseSectionProperties(sectPr: OoxmlNode | null | undefined): Se
   const height = pgSz
     ? twips(attribute(pgSz, 'h'), defaults.pageSize.heightTwips)
     : defaults.pageSize.heightTwips;
+
+  const pageNumbering = parsePageNumbering(sectPr);
 
   return {
     pageSize: { widthTwips: width, heightTwips: height },
@@ -191,6 +274,7 @@ export function parseSectionProperties(sectPr: OoxmlNode | null | undefined): Se
     landscape: orientation === 'landscape' || width > height,
     titlePage: readOnOffChild(sectPr, 'titlePg'),
     breakType: breakTypeOf(sectPr),
+    ...(pageNumbering !== undefined ? { pageNumbering } : {}),
   };
 }
 
@@ -234,17 +318,40 @@ export function readSectionProperties(part: OoxmlPart): SectionProperties {
  * A paragraph carrying `w:pPr/w:sectPr` ends the current section (that paragraph is IN the
  * section being ended). The body-level `w:sectPr` ends the final section. A document with
  * neither yields one section of Word defaults covering every block.
+ *
+ * Enumeration is capped at {@link MAX_DOCUMENT_SECTIONS}. Further paragraph-level section
+ * breaks are ignored and remaining blocks fold into the last accepted section (fail closed).
  */
 export function enumerateDocumentSections(part: OoxmlPart): DocumentSection[] {
+  return enumerateDocumentSectionsBounded(part).sections;
+}
+
+export interface DocumentSectionsEnumeration {
+  readonly sections: DocumentSection[];
+  /** True when paragraph-level sectPr marks beyond {@link MAX_DOCUMENT_SECTIONS} were dropped. */
+  readonly truncated: boolean;
+}
+
+/**
+ * Like {@link enumerateDocumentSections}, but reports whether the section bound clipped
+ * hostile input. Prefer the plain enumerator for normal layout; use this when a caller
+ * needs a named fail-closed diagnostic.
+ */
+export function enumerateDocumentSectionsBounded(part: OoxmlPart): DocumentSectionsEnumeration {
   const blocks = storyBlocks(part);
   const sections: DocumentSection[] = [];
   let blockStart = 0;
+  let truncated = false;
 
   for (let index = 0; index < blocks.length; index += 1) {
     const block = blocks[index]!;
     if (block.kind !== 'paragraph') continue;
     const sectPr = paragraphSectionNode(block);
     if (!sectPr) continue;
+    if (sections.length >= MAX_DOCUMENT_SECTIONS) {
+      truncated = true;
+      continue;
+    }
     sections.push({
       index: sections.length,
       properties: parseSectionProperties(sectPr),
@@ -254,12 +361,29 @@ export function enumerateDocumentSections(part: OoxmlPart): DocumentSection[] {
     blockStart = index + 1;
   }
 
+  if (truncated) {
+    // Hostile extra breaks ignored: extend the last accepted section over remaining blocks.
+    if (sections.length > 0) {
+      const last = sections[sections.length - 1]!;
+      sections[sections.length - 1] = {
+        ...last,
+        blockEndExclusive: blocks.length,
+      };
+    }
+    return { sections, truncated: true };
+  }
+
   const bodySectPr = bodySectionNode(part);
   // Final section: remaining blocks governed by the body-level `w:sectPr`. When every block
   // already closed a paragraph-level section, still honour a trailing body-level `sectPr` as
   // an empty final section (common in multi-section packages). A document with neither yields
   // one default section covering every block.
   if (blockStart < blocks.length || sections.length === 0) {
+    if (sections.length >= MAX_DOCUMENT_SECTIONS) {
+      const last = sections[sections.length - 1]!;
+      sections[sections.length - 1] = { ...last, blockEndExclusive: blocks.length };
+      return { sections, truncated: true };
+    }
     sections.push({
       index: sections.length,
       properties: parseSectionProperties(bodySectPr),
@@ -267,6 +391,9 @@ export function enumerateDocumentSections(part: OoxmlPart): DocumentSection[] {
       blockEndExclusive: blocks.length,
     });
   } else if (bodySectPr) {
+    if (sections.length >= MAX_DOCUMENT_SECTIONS) {
+      return { sections, truncated: true };
+    }
     sections.push({
       index: sections.length,
       properties: parseSectionProperties(bodySectPr),
@@ -275,7 +402,7 @@ export function enumerateDocumentSections(part: OoxmlPart): DocumentSection[] {
     });
   }
 
-  return sections;
+  return { sections, truncated };
 }
 
 /**

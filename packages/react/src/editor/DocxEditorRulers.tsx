@@ -10,15 +10,18 @@
 // no relayout storm at mousemove frequency. Editability follows what the engine reports
 // (`usePageSetup().isEnabled`), so against a read-only document the handles stay inert.
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { RulerIndent } from '@docx-editor.dev/core-contract/editor';
 import { HorizontalRuler, type RulerPageSetup } from '../components/ui/HorizontalRuler';
 import { VerticalRuler } from '../components/ui/VerticalRuler';
 import { useContext } from 'react';
-import { ReviewRailContext } from './context';
+import { ReviewRailContext, useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { usePageSetup } from './usePageSetup';
+import { useParagraphIndent } from './useParagraphIndent';
+import { useNavigationShift } from './navigation/navigation-layout';
 
 const selectZoom = (snapshot: EditorSnapshot): number => snapshot.zoom;
 
@@ -77,6 +80,75 @@ function useMarginDrag(): {
   return { pending, preview, commit };
 }
 
+/** What the ruler needs to drive the four indent handles. */
+interface IndentDrag {
+  /** The paragraph's indent with any in-flight drag folded in; null hides the handles. */
+  readonly indent: RulerIndent | null;
+  readonly isEnabled: boolean;
+  readonly preview: (next: RulerIndent) => void;
+  readonly commit: () => void;
+}
+
+/** The selection as a comparable key, for noticing that it moved under a drag. */
+function selectionKey(editor: ReturnType<typeof useDocxEditor>): string {
+  const selection = editor?.snapshot().selection ?? null;
+  return selection ? JSON.stringify(selection) : '';
+}
+
+/**
+ * Indent drags: preview locally, commit ONCE on release, like the margin drags above.
+ *
+ * `snapshot().formatting` is reference-stable across ticks that did not change it (the
+ * engine's own value-equality cache), so the nested `indent` is too and the default
+ * comparator is enough — no fresh object reaches a subscriber on every keystroke.
+ */
+function useIndentDrag(): IndentDrag {
+  const editor = useDocxEditor();
+  // The READ and the WRITE both come from the public hook, so the ruler is exactly the
+  // chrome a host could build itself — no privileged path.
+  const { indent: stored, isEnabled, apply } = useParagraphIndent();
+  const [pending, setPending] = useState<RulerIndent | null>(null);
+  const pendingRef = useRef<RulerIndent | null>(null);
+  // The selection the drag STARTED against.
+  const anchorRef = useRef<string | null>(null);
+
+  const preview = useCallback(
+    (next: RulerIndent) => {
+      if (anchorRef.current === null) anchorRef.current = selectionKey(editor);
+      pendingRef.current = next;
+      setPending(next);
+    },
+    [editor]
+  );
+
+  const commit = useCallback(() => {
+    const next = pendingRef.current;
+    const anchor = anchorRef.current;
+    pendingRef.current = null;
+    anchorRef.current = null;
+    setPending(null);
+    if (!next) return;
+    // A drag describes the paragraphs that were selected when it began, and `setIndent`
+    // carries no target — it writes wherever the selection is NOW. An agent write or a
+    // layout catch-up between press and release would otherwise land the drag on somebody
+    // else's paragraphs.
+    if (anchor !== null && anchor !== selectionKey(editor)) return;
+    apply({ left: next.left, right: next.right, firstLine: next.firstLine });
+  }, [editor, apply]);
+
+  const indent = useMemo(
+    () =>
+      pending ??
+      (stored ? { left: stored.left, right: stored.right, firstLine: stored.firstLine } : null),
+    [pending, stored]
+  );
+
+  return useMemo(
+    () => ({ indent, isEnabled, preview, commit }),
+    [indent, isEnabled, preview, commit]
+  );
+}
+
 /**
  * The horizontal ruler as a context-fed part (`DocxEditor.HorizontalRuler`): page
  * width, margins and zoom straight from the editor. Left/right margin handles are
@@ -89,10 +161,12 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
   const { pageSetup, isEnabled } = usePageSetup();
   const zoom = useEditorState(selectZoom);
   const { pending, preview, commit } = useMarginDrag();
-  // The ruler measures the page, so it has to move with the page. The review pane shifts the
-  // sheet by reserving a gutter in the scroller; the ruler lives ABOVE that scroller and
-  // would otherwise stay centred on a page that is no longer under it. The same reservation
-  // as a right margin moves it by the same half.
+  const indentDrag = useIndentDrag();
+  // The ruler measures the page, so it has to move with the page — and BOTH panes move it.
+  // The ruler sits ABOVE the scroll container, so it has to be told about each: the
+  // navigation pane displaces the page from the left, the review pane reserves a gutter on
+  // the right. Same values, same easing, so the ticks stay over the page they measure.
+  const shift = useNavigationShift();
   const reserved = useReviewGutter();
   return (
     <HorizontalRuler
@@ -102,9 +176,24 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
       onLeftMarginChange={preview('left')}
       onRightMarginChange={preview('right')}
       onMarginDragEnd={commit}
+      showIndentHandles={indentDrag.indent !== null}
+      indent={indentDrag.indent}
+      indentEditable={indentDrag.isEnabled}
+      onIndentChange={indentDrag.preview}
+      onIndentDragEnd={indentDrag.commit}
       unit={props.unit ?? 'inch'}
       className={props.className ?? ''}
-      style={{ marginRight: reserved, ...props.style }}
+      style={{
+        marginRight: reserved,
+        ...props.style,
+        // The ruler is centred by its host row, so the same rule applies as to the page:
+        // a left offset of S moves a centred box by S/2. Feeding the ruler the SAME px the
+        // viewport pads by keeps the two in lockstep at every window width.
+        marginInlineStart: shift,
+        // `margin`, not one edge: the review pane moves the other side, and animating only
+        // `margin-inline-start` left the ruler snapping while the page glided.
+        transition: 'margin 0.2s ease',
+      }}
     />
   );
 }

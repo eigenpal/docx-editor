@@ -60,6 +60,55 @@ export {
   type ReviewItemView,
   type UseReviewReturn,
 } from './editor/useReview';
+// The navigation pane (also reachable as `DocxEditor.Navigation`): the compound over the
+// left gutter, its parts, and the three hooks a custom pane is built from. The pane FLOATS
+// — it displaces the page only when the gutter is too narrow to hold it, and
+// `navigationShift` is that rule as a pure function a host can reuse or test.
+export {
+  DocxEditorNavigation,
+  NavigationClose,
+  NavigationFind,
+  NavigationHeader,
+  NavigationHeadings,
+  NavigationTab,
+  NavigationTabs,
+  NavigationTitle,
+  NavigationToggle,
+  NAVIGATION_PANE_GAP,
+  NAVIGATION_PANE_INSET,
+  NAVIGATION_PANE_WIDTH,
+  SEARCH_DEBOUNCE_MS,
+  SEARCH_MATCH_LIMIT,
+  navigationPaneReservation,
+  navigationShift,
+  useDocumentOutline,
+  useDocumentSearch,
+  useNavigationPane,
+  useNavigationShift,
+  type DocxEditorNavigationNamespace,
+  type DocxEditorNavigationProps,
+  type NavigationPartProps,
+  type NavigationShiftInput,
+  type NavigationTabProps,
+  type NavigationTabValue,
+  type OutlineHeading,
+  type OutlineHeadingItem,
+  type UseDocumentOutlineResult,
+  type UseDocumentSearchResult,
+  type UseNavigationPaneOptions,
+  type UseNavigationPaneResult,
+} from './editor/navigation';
+export {
+  DocxEditorHeaderFooterChrome,
+  type DocxEditorHeaderFooterChromeProps,
+} from './editor/DocxEditorHeaderFooter';
+export { DocxEditorNotesChrome, type DocxEditorNotesChromeProps } from './editor/DocxEditorNotes';
+export { useHeaderFooterState, type HeaderFooterState } from './editor/useHeaderFooterState';
+export {
+  useNotePropertiesState,
+  useNoteScopeState,
+  type NotePropertiesState,
+} from './editor/useNoteScopeState';
 // The link popover (also reachable as `DocxEditor.HyperLink`) and its headless hook. The
 // parts live on the namespace statics; a host that wants a different panel takes the hook.
 export {
@@ -81,6 +130,11 @@ export { useEditorState } from './editor/useEditorState';
 export { useEditorCommand, type EditorCommandState } from './editor/useEditorCommand';
 export { useEditorEvent } from './editor/useEditorEvent';
 export { usePageSetup, type PageSetupUpdate, type UsePageSetupReturn } from './editor/usePageSetup';
+export {
+  useParagraphIndent,
+  type IndentUpdate,
+  type UseParagraphIndentReturn,
+} from './editor/useParagraphIndent';
 
 // The compound toolbar (also reachable as `DocxEditor.Toolbar`): default set with
 // in-place slot overrides, generic Button, and the font-family compound + hook. The
@@ -93,6 +147,7 @@ export {
   useParagraphStyle,
   type DocxEditorToolbarNamespace,
   type DocxEditorToolbarProps,
+  type ToolbarActionProps,
   type ToolbarAlignmentComponent,
   type FontFamilyItemProps,
   type FontFamilyNamespace,
@@ -114,13 +169,41 @@ export {
   type UseParagraphStyleResult,
 } from './editor/toolbar';
 
+// The compound menu bar (also reachable as `DocxEditor.Menu`): File · Format · Insert ·
+// Help, derived FROM `CHROME_MENUS` so a row and its toolbar twin cannot describe the same
+// capability differently. The parts live on the namespace statics; the index exports the
+// namespace and the part prop types.
+export {
+  DocxEditorMenu,
+  type DocxEditorMenuNamespace,
+  type DocxEditorMenuProps,
+  type MenuActionProps,
+  type MenuId,
+  type MenuItemProps,
+  type MenuPartComponent,
+  type MenuProps,
+  type MenuReportIssueProps,
+  type MenuRowProps,
+  type MenuSeparatorProps,
+  type MenuSubmenuProps,
+  type MenuTableGridProps,
+} from './editor/menu';
+
 // The shared engine helpers both adapters expose, so the two package surfaces
 // match (enforced by `bun run check:export-parity`).
 export {
   CHROME_GROUPS,
+  CHROME_MENUS,
+  chromeMenuSlots,
   commandForSlot,
   runToolbarCommand,
   toolbarCommandState,
+  type ChromeMenu,
+  type ChromeMenuEntry,
+  type ChromeMenuId,
+  type ChromeMenuItemEntry,
+  type ChromeMenuSeparatorEntry,
+  type ChromeMenuSubmenuEntry,
   type ChromeSlotId,
   type ToolbarCommandState,
 } from '@docx-editor.dev/core-contract/editor';

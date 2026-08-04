@@ -90,6 +90,15 @@ describe('scope accumulates from the store, and only widens (task 9.1)', () => {
     expect(scope.structural).toBe(true);
   });
 
+  test('a global header/footer story edit widens past flow-structural', () => {
+    const h = harness();
+    h.scheduler.notify(change({ dirty: ['p1'], impact: 'text-local' }));
+    h.scheduler.notify(change({ dirty: ['hf1'], impact: 'global', toRevision: 2 }));
+    const scope = h.scheduler.pending()!;
+    expect(scope.impact).toBe('global');
+    expect(scope.structural).toBe(true);
+  });
+
   test('a split marks the batch structural and names both endpoints', () => {
     const h = harness();
     h.scheduler.notify(

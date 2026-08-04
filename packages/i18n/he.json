@@ -45,7 +45,9 @@
     "watermark": "סימן מים",
     "break": null,
     "sectionBreakContinuous": null,
-    "sectionBreakNextPage": null
+    "sectionBreakNextPage": null,
+    "insertFootnote": "הוסף הערת שוליים",
+    "insertEndnote": "הוסף הערת סוף"
   },
   "formattingBar": {
     "groups": {
@@ -58,7 +60,8 @@
       "alignment": "יישור טקסט",
       "listFormatting": "עיצוב רשימה",
       "image": "תמונה",
-      "table": "טבלה"
+      "table": "טבלה",
+      "insert": "הוספה"
     },
     "undo": "בטל",
     "undoShortcut": "בטל (Ctrl+Z)",
@@ -110,7 +113,11 @@
     "double": "כפול",
     "lineSpacingTitle": "מרחק בין שורות: {label}",
     "blockSpacingRules": "מרחק בין פסקאות",
-    "label": null
+    "label": null,
+    "addSpaceAfter": null,
+    "addSpaceBefore": null,
+    "removeSpaceAfter": null,
+    "removeSpaceBefore": null
   },
   "styles": {
     "selectAriaLabel": "בחר סגנון פסקה",
@@ -841,7 +848,28 @@
     "insertPageNumber": "הוסף מספר עמוד נוכחי",
     "insertTotalPages": "הוסף סך כל העמודים",
     "remove": "הסר {label}",
-    "closeEditing": "סגור עריכת {label}"
+    "closeEditing": "סגור עריכת {label}",
+    "chromeAriaLabel": "עריכת כותרות עליונה ותחתונה",
+    "firstPageHeader": "כותרת עליונה של העמוד הראשון",
+    "firstPageFooter": "כותרת תחתונה של העמוד הראשון",
+    "evenPageHeader": "כותרת עליונה של עמודים זוגיים",
+    "evenPageFooter": "כותרת תחתונה של עמודים זוגיים",
+    "regionSection": "{region} — מקטע {section}",
+    "sameAsPrevious": "זהה לקודם",
+    "sameAsPreviousHint": "עריכות חלות גם על עמודי המקטע הקודם.",
+    "differentFirstPage": "עמוד ראשון שונה",
+    "differentOddEven": "עמודים זוגיים ואי-זוגיים שונים",
+    "differentOddEvenHint": "חל על כל המסמך.",
+    "linkToPrevious": "קשר לקודם",
+    "unlinkFromPrevious": "נתק מהקודם",
+    "headerDistance": "מרחק כותרת עליונה מהקצה",
+    "footerDistance": "מרחק כותרת תחתונה מהקצה",
+    "removeHeader": "הסר כותרת עליונה",
+    "removeFooter": "הסר כותרת תחתונה",
+    "insertSectionPages": "הוסף מספר עמודים במקטע",
+    "insertPageXofY": "הוסף עמוד X מתוך Y",
+    "pageXofYLabel": "עמוד",
+    "pageXofYSeparator": "מתוך"
   },
   "image": {
     "placeholder": "מיקום תמונה",
@@ -855,7 +883,8 @@
     "leftIndent": "כניסה שמאלית",
     "rightIndent": "כניסה ימנית",
     "topMargin": "שוליים עליונים",
-    "bottomMargin": "שוליים תחתונים"
+    "bottomMargin": "שוליים תחתונים",
+    "hangingIndent": null
   },
   "print": {
     "label": "הדפסה",
@@ -932,21 +961,71 @@
     "viewing": null,
     "viewingHint": null
   },
+  "navigation": {
+    "ariaLabel": null,
+    "closeAriaLabel": null,
+    "closeTitle": null,
+    "find": {
+      "clearAriaLabel": null,
+      "counter": null,
+      "counterTruncated": null,
+      "inputAriaLabel": null,
+      "matchCase": null,
+      "nextAriaLabel": null,
+      "noResults": null,
+      "optionsAriaLabel": null,
+      "placeholder": null,
+      "previousAriaLabel": null,
+      "resultsAriaLabel": null,
+      "searching": null,
+      "wholeWord": null,
+      "total": null,
+      "totalTruncated": null
+    },
+    "headings": {
+      "noHeadings": null
+    },
+    "openAriaLabel": null,
+    "openTitle": null,
+    "tabs": {
+      "find": null,
+      "headings": null
+    },
+    "title": null
+  },
+  "notes": {
+    "editingBanner": "עריכת הערה",
+    "closeNote": "סגור הערה",
+    "delete": "מחק הערה",
+    "convertToEndnote": "המר להערת סוף",
+    "convertToFootnote": "המר להערת שוליים",
+    "scope": "החל על",
+    "scopeDocument": "כל המסמך",
+    "scopeSection": "מקטע זה",
+    "previewFallback": "הערת שוליים",
+    "chromeAriaLabel": "עריכת הערות",
+    "editingRegion": "{kind} {number}",
+    "footnoteKind": "הערת שוליים",
+    "endnoteKind": "הערת סוף",
+    "convertAllFootnotes": "המר את כל הערות השוליים להערות סוף",
+    "convertAllEndnotes": "המר את כל הערות הסוף להערות שוליים",
+    "inheritedValue": "(בירושה)"
+  },
   "review": {
     "accept": null,
     "ariaLabel": null,
+    "commentRefused": null,
     "deleted": null,
     "empty": null,
     "inserted": null,
     "movedFrom": null,
     "movedTo": null,
     "reject": null,
-    "reply": null,
-    "structural": null,
-    "replyRefused": null,
-    "showPane": null,
     "replaced": null,
     "replacedWith": null,
-    "commentRefused": null
+    "reply": null,
+    "replyRefused": null,
+    "showPane": null,
+    "structural": null
   }
 }

@@ -45,7 +45,9 @@
     "watermark": "वॉटरमार्क",
     "break": null,
     "sectionBreakContinuous": null,
-    "sectionBreakNextPage": null
+    "sectionBreakNextPage": null,
+    "insertFootnote": "फ़ुटनोट डालें",
+    "insertEndnote": "एंडनोट डालें"
   },
   "formattingBar": {
     "groups": {
@@ -58,7 +60,8 @@
       "alignment": "संरेखण",
       "listFormatting": "सूची प्रारूपण",
       "image": "चित्र",
-      "table": "तालिका"
+      "table": "तालिका",
+      "insert": "सम्मिलित करें"
     },
     "undo": "पूर्ववत करें",
     "undoShortcut": "पूर्ववत करें (Ctrl+Z)",
@@ -110,7 +113,11 @@
     "double": "दुगुना",
     "lineSpacingTitle": "लाइन स्पेसिंग: {label}",
     "blockSpacingRules": "पैराग्राफ स्पेसिंग",
-    "label": null
+    "label": null,
+    "addSpaceAfter": null,
+    "addSpaceBefore": null,
+    "removeSpaceAfter": null,
+    "removeSpaceBefore": null
   },
   "styles": {
     "selectAriaLabel": "पैराग्राफ शैली चुनें",
@@ -844,7 +851,28 @@
     "insertPageNumber": "वर्तमान पेज नंबर डालें",
     "insertTotalPages": "कुल पेज संख्या डालें",
     "remove": "{label} हटाएं",
-    "closeEditing": "{label} संपादन बंद करें"
+    "closeEditing": "{label} संपादन बंद करें",
+    "chromeAriaLabel": "हेडर और फ़ुटर संपादन",
+    "firstPageHeader": "पहले पृष्ठ का हेडर",
+    "firstPageFooter": "पहले पृष्ठ का फ़ुटर",
+    "evenPageHeader": "सम पृष्ठ का हेडर",
+    "evenPageFooter": "सम पृष्ठ का फ़ुटर",
+    "regionSection": "{region} — अनुभाग {section}",
+    "sameAsPrevious": "पिछले जैसा",
+    "sameAsPreviousHint": "संपादन पिछले अनुभाग के पृष्ठों पर भी लागू होते हैं।",
+    "differentFirstPage": "अलग पहला पृष्ठ",
+    "differentOddEven": "अलग विषम और सम पृष्ठ",
+    "differentOddEvenHint": "पूरे दस्तावेज़ पर लागू होता है।",
+    "linkToPrevious": "पिछले से लिंक करें",
+    "unlinkFromPrevious": "पिछले से अनलिंक करें",
+    "headerDistance": "हेडर की दूरी किनारे से",
+    "footerDistance": "फ़ुटर की दूरी किनारे से",
+    "removeHeader": "हेडर हटाएं",
+    "removeFooter": "फ़ुटर हटाएं",
+    "insertSectionPages": "अनुभाग पृष्ठ संख्या डालें",
+    "insertPageXofY": "पृष्ठ X of Y डालें",
+    "pageXofYLabel": "पृष्ठ",
+    "pageXofYSeparator": "में से"
   },
   "image": {
     "placeholder": "चित्र प्लेसहोल्डर",
@@ -864,7 +892,8 @@
     "leftIndent": "बायां इंडेंट",
     "rightIndent": "दायां इंडेंट",
     "topMargin": "शीर्ष मार्जिन",
-    "bottomMargin": "तल मार्जिन"
+    "bottomMargin": "तल मार्जिन",
+    "hangingIndent": null
   },
   "print": {
     "label": "प्रिंट करें",
@@ -932,21 +961,71 @@
     "viewing": null,
     "viewingHint": null
   },
+  "navigation": {
+    "ariaLabel": null,
+    "closeAriaLabel": null,
+    "closeTitle": null,
+    "find": {
+      "clearAriaLabel": null,
+      "counter": null,
+      "counterTruncated": null,
+      "inputAriaLabel": null,
+      "matchCase": null,
+      "nextAriaLabel": null,
+      "noResults": null,
+      "optionsAriaLabel": null,
+      "placeholder": null,
+      "previousAriaLabel": null,
+      "resultsAriaLabel": null,
+      "searching": null,
+      "wholeWord": null,
+      "total": null,
+      "totalTruncated": null
+    },
+    "headings": {
+      "noHeadings": null
+    },
+    "openAriaLabel": null,
+    "openTitle": null,
+    "tabs": {
+      "find": null,
+      "headings": null
+    },
+    "title": null
+  },
+  "notes": {
+    "editingBanner": "नोट संपादित कर रहे हैं",
+    "closeNote": "नोट बंद करें",
+    "delete": "नोट हटाएं",
+    "convertToEndnote": "एंडनोट में बदलें",
+    "convertToFootnote": "फ़ुटनोट में बदलें",
+    "scope": "लागू करें",
+    "scopeDocument": "पूरा दस्तावेज़",
+    "scopeSection": "यह अनुभाग",
+    "previewFallback": "फ़ुटनोट",
+    "chromeAriaLabel": "नोट संपादन",
+    "editingRegion": "{kind} {number}",
+    "footnoteKind": "फ़ुटनोट",
+    "endnoteKind": "एंडनोट",
+    "convertAllFootnotes": "सभी फ़ुटनोट को एंडनोट में बदलें",
+    "convertAllEndnotes": "सभी एंडनोट को फ़ुटनोट में बदलें",
+    "inheritedValue": "(विरासत में)"
+  },
   "review": {
     "accept": null,
     "ariaLabel": null,
+    "commentRefused": null,
     "deleted": null,
     "empty": null,
     "inserted": null,
     "movedFrom": null,
     "movedTo": null,
     "reject": null,
-    "reply": null,
-    "structural": null,
-    "replyRefused": null,
-    "showPane": null,
     "replaced": null,
     "replacedWith": null,
-    "commentRefused": null
+    "reply": null,
+    "replyRefused": null,
+    "showPane": null,
+    "structural": null
   }
 }

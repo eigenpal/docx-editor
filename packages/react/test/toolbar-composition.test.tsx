@@ -18,7 +18,7 @@ import './dom-setup.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { ReactNode } from 'react';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
 import {
   chromeSlotId,
@@ -204,7 +204,7 @@ describe('live button state', () => {
     expect(editor().snapshot().formatting?.bold).toBe(true);
   });
 
-  test('a generic Button on an unwired slot is disabled with the not-wired reason', () => {
+  test('a generic Button on an unwired slot is disabled, quoting the ENGINE', () => {
     const { view } = mountToolbar(
       <DocxEditorToolbar preset={false}>
         <DocxEditorToolbar.Button slot="image.insert" />
@@ -215,9 +215,61 @@ describe('live button state', () => {
     ) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
     expect(button.hasAttribute('data-disabled')).toBe(true);
-    expect(button.title).toBe('not wired to an editor command');
+    // `insertImage` IS in the edit vocabulary — it is simply not executed by this engine
+    // yet — so the slot carries a probe and the tooltip is the engine's own refusal.
+    // Chrome's "not wired to an editor command" would have been a guess about a question
+    // the engine can answer, and would have gone stale the day the engine wires it.
+    expect(button.title).toBe("command 'insertImage' is not supported by the tree editor");
     // Not a toggle: no aria-pressed claim.
     expect(button.hasAttribute('aria-pressed')).toBe(false);
+  });
+
+  test('Action is a host-owned control: no slot, our styling, our caret guard', () => {
+    // `Button` is slot-bound on purpose — that is what stops a control and its menu twin
+    // describing one capability two ways. An action the ENGINE does not model has no slot
+    // and never will, and before this the host hand-wrote our private class name.
+    let ran = 0;
+    const { view } = mountToolbar(
+      <DocxEditorToolbar>
+        <DocxEditorToolbar.Action label="Send for review" onSelect={() => (ran += 1)} />
+      </DocxEditorToolbar>
+    );
+    const action = view.container.querySelector<HTMLButtonElement>(
+      '[aria-label="Send for review"]'
+    )!;
+    // Appended after the whole default arrangement — it drives no slot.
+    const toolbar = toolbarElement(view);
+    expect(toolbar.lastElementChild).toBe(action);
+    expect(action.className).toContain('docx-toolbar__button');
+
+    // The caret guard is the reason this is a component and not a documented class name.
+    const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    action.dispatchEvent(down);
+    expect(down.defaultPrevented).toBe(true);
+
+    act(() => {
+      action.click();
+    });
+    expect(ran).toBe(1);
+  });
+
+  test('Action carries pressed and disabled state the host owns', () => {
+    const { view } = mountToolbar(
+      <DocxEditorToolbar preset={false}>
+        <DocxEditorToolbar.Action label="Track changes" active />
+        <DocxEditorToolbar.Action label="Publish" disabled disabledReason="Needs approval" />
+      </DocxEditorToolbar>
+    );
+    const tracked = view.container.querySelector<HTMLButtonElement>(
+      '[aria-label="Track changes"]'
+    )!;
+    expect(tracked.getAttribute('aria-pressed')).toBe('true');
+    expect(tracked.hasAttribute('data-active')).toBe(true);
+
+    const publish = view.container.querySelector<HTMLButtonElement>('[aria-label="Publish"]')!;
+    expect(publish.disabled).toBe(true);
+    // Say WHY, the way the engine's own controls do.
+    expect(publish.title).toBe('Needs approval');
   });
 
   test('asChild merges onto the child: className concat, click toggles, data-active flows', async () => {
@@ -259,8 +311,8 @@ describe('the shaped parts', () => {
       editor().surface!.selectAll();
     });
     const stepper = view.container.querySelector('[data-slot="font.size"]')!;
-    const value = stepper.querySelector('.docx-toolbar__stepper-value')!;
-    expect(value.textContent).toBe('12');
+    const value = stepper.querySelector('.docx-toolbar__stepper-value') as HTMLInputElement;
+    expect(value.value).toBe('12');
     const increase = stepper.querySelector('[aria-label="fontSize.increase"]') as HTMLButtonElement;
     expect(increase.disabled).toBe(false);
     await act(async () => {
@@ -269,12 +321,195 @@ describe('the shaped parts', () => {
     // The stepper walks the PRESET ladder (8..12, 14, 16, ...), not a fixed
     // increment: 12pt steps to 14pt, read back from the engine's snapshot.
     expect(editor().snapshot().formatting?.fontSizePt).toBe(14);
-    expect(value.textContent).toBe('14');
+    expect(value.value).toBe('14');
     const decrease = stepper.querySelector('[aria-label="fontSize.decrease"]') as HTMLButtonElement;
     await act(async () => {
       decrease.click();
     });
     expect(editor().snapshot().formatting?.fontSizePt).toBe(12);
+  });
+
+  test('the font-size box opens a preset list, and a pick applies it', async () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />, SIZED_SOURCE);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const root = view.container.querySelector('[data-slot="font.size"]')!;
+    const input = root.querySelector('input') as HTMLInputElement;
+    expect(input.getAttribute('role')).toBe('combobox');
+    expect(root.querySelector('[role="listbox"]')).toBeNull();
+
+    await act(async () => {
+      input.click();
+    });
+    const list = root.querySelector('[role="listbox"]')!;
+    expect(list).not.toBeNull();
+    const options = [...list.querySelectorAll('[role="option"]')] as HTMLButtonElement[];
+    expect(options.map((option) => option.textContent)).toEqual([
+      '8',
+      '9',
+      '10',
+      '11',
+      '12',
+      '14',
+      '16',
+      '18',
+      '20',
+      '24',
+      '28',
+      '36',
+      '48',
+      '72',
+    ]);
+    // The size in force is the ticked row, so the list opens on the current value.
+    expect(options.find((option) => option.hasAttribute('data-selected'))!.textContent).toBe('12');
+
+    await act(async () => {
+      options.find((option) => option.textContent === '36')!.click();
+    });
+    expect(editor().snapshot().formatting?.fontSizePt).toBe(36);
+    // Picking closes the list and hands the caret back to the document.
+    expect(root.querySelector('[role="listbox"]')).toBeNull();
+  });
+
+  test('a size typed into the box applies on Enter, including one off the ladder', async () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />, SIZED_SOURCE);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const root = view.container.querySelector('[data-slot="font.size"]')!;
+    const input = root.querySelector('input') as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(input, { target: { value: '13.5' } });
+    });
+    // The draft is what the box shows while it is being typed, not the document's value.
+    expect(input.value).toBe('13.5');
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter' });
+    });
+    expect(editor().snapshot().formatting?.fontSizePt).toBe(13.5);
+    expect(root.querySelector('[role="listbox"]')).toBeNull();
+  });
+
+  test('Escape abandons the typed value, and nonsense reverts rather than clamping', async () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />, SIZED_SOURCE);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const root = view.container.querySelector('[data-slot="font.size"]')!;
+    const input = root.querySelector('input') as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(input, { target: { value: '48' } });
+      fireEvent.keyDown(input, { key: 'Escape' });
+    });
+    expect(editor().snapshot().formatting?.fontSizePt).toBe(12);
+    expect(input.value).toBe('12');
+
+    // Out of `w:sz`'s range and not a number at all: neither is a size, so neither is
+    // silently turned into one the user did not ask for.
+    for (const nonsense of ['0', '9999', 'huge', '']) {
+      await act(async () => {
+        fireEvent.change(input, { target: { value: nonsense } });
+        fireEvent.blur(input);
+      });
+      expect([nonsense, editor().snapshot().formatting?.fontSizePt]).toEqual([nonsense, 12]);
+    }
+  });
+
+  test('the line-spacing menu applies a multiple and ticks the one in force', async () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const root = view.container.querySelector('[data-slot="list.lineSpacing"]')!;
+    const trigger = root.querySelector('button') as HTMLButtonElement;
+    expect(trigger.disabled).toBe(false);
+
+    await act(async () => {
+      trigger.click();
+    });
+    const rows = [...root.querySelectorAll('[role="menuitemradio"]')] as HTMLButtonElement[];
+    expect(rows.map((row) => row.textContent)).toEqual(['1.0', '1.15', '1.5', '2.0', '2.5', '3.0']);
+    // Nothing is ticked before a pick: the fixture states no line spacing at all.
+    expect(rows.some((row) => row.hasAttribute('data-selected'))).toBe(false);
+
+    await act(async () => {
+      rows.find((row) => row.textContent === '1.5')!.click();
+    });
+    expect(editor().snapshot().formatting?.lineSpacing).toEqual({ rule: 'multiple', value: 1.5 });
+    expect(root.querySelector('[role="menu"]')).toBeNull();
+
+    // Reopened, the menu reflects the paragraph rather than a fixed list.
+    await act(async () => {
+      trigger.click();
+    });
+    const ticked = [...root.querySelectorAll('[role="menuitemradio"]')].find((row) =>
+      row.hasAttribute('data-selected')
+    );
+    expect(ticked?.textContent).toBe('1.5');
+  });
+
+  test('the space before/after rows flip between Add and Remove on what is there', async () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const root = view.container.querySelector('[data-slot="list.lineSpacing"]')!;
+    const trigger = root.querySelector('button') as HTMLButtonElement;
+    const rows = () => [...root.querySelectorAll('[role="menuitem"]')] as HTMLButtonElement[];
+
+    await act(async () => {
+      trigger.click();
+    });
+    expect(rows().map((row) => row.textContent)).toEqual([
+      'lineSpacing.addSpaceBefore',
+      'lineSpacing.addSpaceAfter',
+    ]);
+
+    await act(async () => {
+      rows()[0]!.click();
+    });
+    expect(editor().snapshot().formatting?.spaceBeforePt).toBe(10);
+
+    await act(async () => {
+      trigger.click();
+    });
+    // Word never offers to add space that is already there.
+    expect(rows()[0]!.textContent).toBe('lineSpacing.removeSpaceBefore');
+    await act(async () => {
+      rows()[0]!.click();
+    });
+    expect(editor().snapshot().formatting?.spaceBeforePt).toBeUndefined();
+  });
+
+  test('line spacing and paragraph space are independent settings of one w:spacing', async () => {
+    // They share one element, so a replacing write made each pick delete the other.
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const root = view.container.querySelector('[data-slot="list.lineSpacing"]')!;
+    const trigger = root.querySelector('button') as HTMLButtonElement;
+
+    await act(async () => {
+      trigger.click();
+    });
+    await act(async () => {
+      (
+        [...root.querySelectorAll('[role="menuitemradio"]')] as HTMLButtonElement[]
+      ).find((row) => row.textContent === '2.0')!.click();
+    });
+    await act(async () => {
+      trigger.click();
+    });
+    await act(async () => {
+      ([...root.querySelectorAll('[role="menuitem"]')] as HTMLButtonElement[])[1]!.click();
+    });
+
+    expect(editor().snapshot().formatting?.lineSpacing).toEqual({ rule: 'multiple', value: 2 });
+    expect(editor().snapshot().formatting?.spaceAfterPt).toBe(10);
   });
 
   test('the zoom stepper drives Editor.setZoom and reads the snapshot back', async () => {
@@ -350,17 +585,17 @@ describe('the shaped parts', () => {
     expect(editor().snapshot().formatting?.highlight).toBe('cyan');
   });
 
-  test('an undriven dropdown renders as a DISABLED combobox-lookalike, never a control', () => {
+  test('every dropdown-shaped slot is now a real control, so none renders as a lookalike', () => {
+    // This used to pin the picker LOOKALIKE — a disabled combobox for a dropdown-shaped slot
+    // the engine did not own. Both slots that needed it grew real controls (`list.lineSpacing`
+    // and `review.editingMode`), so the lookalike has no subject left and the helper that
+    // built it is gone. What matters now is the opposite: neither renders inert.
     const { view } = mountToolbar(<DocxEditorToolbar />);
-    // `review.editingMode` graduated to a driven control when suggesting landed; line
-    // spacing is the remaining dropdown-SHAPED slot the engine does not own yet.
-    for (const slot of ['list.lineSpacing']) {
-      const picker = view.container.querySelector(`[data-slot="${slot}"]`)!;
-      expect(picker.tagName).toBe('SPAN');
-      expect(picker.getAttribute('aria-disabled')).toBe('true');
-      expect(picker.className).toContain('docx-toolbar__picker');
-      // No interactive element inside: nothing to click, nothing faked.
-      expect(picker.querySelector('button')).toBeNull();
+    for (const slot of ['list.lineSpacing', 'review.editingMode']) {
+      const part = view.container.querySelector(`[data-slot="${slot}"]`)!;
+      expect(part).not.toBeNull();
+      expect(part.getAttribute('aria-disabled')).not.toBe('true');
+      expect(part.querySelector('button')).not.toBeNull();
     }
   });
 
@@ -654,6 +889,33 @@ describe('enabled state is the engine answer, not a registry constant', () => {
     expect(underline.hasAttribute('data-active')).toBe(true);
   });
 
+  test('superscript, subscript and clear-formatting are live in the default bar', async () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const button = (slot: string) =>
+      view.container.querySelector(`[data-slot="${slot}"]`) as HTMLButtonElement;
+    for (const slot of ['script.super', 'script.sub', 'format.clear']) {
+      expect(button(slot).disabled, slot).toBe(false);
+      expect(button(slot).title, slot).not.toBe('not wired to an editor command');
+    }
+
+    await act(async () => {
+      button('script.sub').click();
+    });
+    expect(editor().snapshot().formatting?.subscript).toBe(true);
+    expect(button('script.sub').hasAttribute('data-active')).toBe(true);
+    // One property, two values: raising text must not leave BOTH controls pressed.
+    expect(button('script.super').hasAttribute('data-active')).toBe(false);
+
+    await act(async () => {
+      button('format.clear').click();
+    });
+    expect(editor().snapshot().formatting?.subscript).toBe(false);
+    expect(button('script.sub').hasAttribute('data-active')).toBe(false);
+  });
+
   test('the list controls are live, and outdent tracks the engine rather than a flag', async () => {
     const { view, editor } = mountToolbar(<DocxEditorToolbar />);
     await act(async () => {
@@ -671,22 +933,23 @@ describe('enabled state is the engine answer, not a registry constant', () => {
     expect(outdent.disabled).toBe(false);
   });
 
-  test('a slot with no command is dead with the engine reason, inside the default bar', () => {
+  test('the default bar has no dead controls left', () => {
+    // This test carried a shrinking list of slots the default bar rendered with no command
+    // behind them — `text.link`, then `script.super`/`script.sub`/`format.clear`, and last
+    // `review.comments`, which now toggles the review pane. The list is empty, so the
+    // assertion inverts: nothing the default bar renders may report "not wired". The
+    // remaining unwired slots (image, table, TOC) are contextual and not in this bar.
     const { view } = mountToolbar(<DocxEditorToolbar />);
-    // `text.link` is deliberately absent: it graduated to a chrome-driven slot (enabled
-    // by the engine, dispatched by the popover), so it is no longer an example of one.
-    for (const slot of ['script.super', 'script.sub', 'format.clear']) {
-      const button = view.container.querySelector(`[data-slot="${slot}"]`) as HTMLButtonElement;
-      expect(button.disabled, slot).toBe(true);
-      expect(button.title, slot).toBe('not wired to an editor command');
-    }
+    const dead = [...view.container.querySelectorAll('[data-slot]')].filter(
+      (part) => part.getAttribute('title') === 'not wired to an editor command'
+    );
+    expect(dead.map((part) => part.getAttribute('data-slot'))).toEqual([]);
   });
 
   test('a wired control the engine refuses NOW shows the engine reason', async () => {
-    // Run formatting is written within ONE paragraph: over a multi-paragraph selection
-    // the engine refuses, and the tooltip is its refusal — not a permanent
-    // "unavailable in preview". (A collapsed caret no longer refuses: it arms the
-    // stored-marks lane instead.)
+    // Undo over an empty history: the engine refuses, and the tooltip is its refusal —
+    // not a permanent "unavailable in preview". A refusal that lifts as soon as the
+    // document moves is the whole point; a registry constant could not.
     const twoParagraphs = docx(
       '<w:p><w:r><w:t>alpha</w:t></w:r></w:p><w:p><w:r><w:t>beta</w:t></w:r></w:p>'
     );
@@ -694,11 +957,15 @@ describe('enabled state is the engine answer, not a registry constant', () => {
     await act(async () => {
       editor().surface!.selectAll();
     });
-    const underline = view.container.querySelector(
-      '[data-slot="text.underline"]'
-    ) as HTMLButtonElement;
-    expect(underline.disabled).toBe(true);
-    expect(underline.title).not.toBe('formattingBar.underlineShortcut');
-    expect(underline.title).toContain('one paragraph');
+    const undo = view.container.querySelector('[data-slot="history.undo"]') as HTMLButtonElement;
+    expect(undo.disabled).toBe(true);
+    expect(undo.title).toContain('nothing to undo');
+
+    await act(async () => {
+      (
+        view.container.querySelector('[data-slot="text.underline"]') as HTMLButtonElement
+      ).click();
+    });
+    expect(undo.disabled).toBe(false);
   });
 });

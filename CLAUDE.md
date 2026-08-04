@@ -8,8 +8,7 @@ layout.
 
 This repo contains contracts, production engine packages, and adapters.
 
-- `packages/core` is the private `@docx-editor.dev/core-contract`; production
-  modules must not import `packages/core/spike/**`.
+- `packages/core` is the private `@docx-editor.dev/core-contract`.
 - `packages/engine-*` contains the in-tree engine. Package responsibilities and
   dependency rules live in `docs/architecture/production-engine-packages.md`.
 - Adapters live in `packages/react`, `packages/vue`, and `packages/nuxt`.
@@ -108,11 +107,13 @@ All chrome — ours and consumers' — is hook consumers:
 - Public surface language: describe capabilities, never engine history; no
   implementation names (e.g. "tree") in exported symbols.
 
-Out of scope so far: structural table ops (insert row/column, merge), HF
-editing, comments/tracked-changes derivation, caret scroll-into-view,
-zoom-without-remount, the Vue twin of provider/hooks. Vue's toolbar now derives
-its enabled state from the same `toolbarCommandState`, but it has grown no
-value chrome (font list, size, colour), so those slots stay disabled there.
+Out of scope so far: structural table ops (insert row/column, merge),
+comments/tracked-changes derivation, caret scroll-into-view,
+zoom-without-remount, the Vue twin of provider/hooks. React ships scoped
+header/footer and footnote/endnote editing chrome; Vue furniture/notes chrome
+is deferred. Vue's toolbar now derives its enabled state from the same
+`toolbarCommandState`, but it has grown no value chrome (font list, size,
+colour), so those slots stay disabled there.
 
 ## Verify
 

@@ -38,6 +38,8 @@
     "image": "Image",
     "table": "Table",
     "break": "Break",
+    "insertFootnote": "Insert Footnote",
+    "insertEndnote": "Insert Endnote",
     "pageBreak": "Page break",
     "sectionBreakNextPage": "Section break (next page)",
     "sectionBreakContinuous": "Section break (continuous)",
@@ -61,7 +63,8 @@
       "alignment": "Alignment",
       "listFormatting": "List formatting",
       "image": "Image",
-      "table": "Table"
+      "table": "Table",
+      "insert": "Insert"
     },
     "undo": "Undo",
     "undoShortcut": "Undo (Ctrl+Z)",
@@ -113,7 +116,11 @@
     "single": "Single",
     "double": "Double",
     "lineSpacingTitle": "Line spacing: {label}",
-    "blockSpacingRules": "Paragraph spacing"
+    "blockSpacingRules": "Paragraph spacing",
+    "addSpaceBefore": "Add space before paragraph",
+    "removeSpaceBefore": "Remove space before paragraph",
+    "addSpaceAfter": "Add space after paragraph",
+    "removeSpaceAfter": "Remove space after paragraph"
   },
   "styles": {
     "selectAriaLabel": "Select paragraph style",
@@ -674,6 +681,38 @@
     "title": "Outline",
     "noHeadings": "No headings found. Add headings to your document to see them here."
   },
+  "navigation": {
+    "ariaLabel": "Document navigation",
+    "title": "Navigation",
+    "openAriaLabel": "Open navigation",
+    "openTitle": "Navigation",
+    "closeAriaLabel": "Close navigation",
+    "closeTitle": "Close navigation",
+    "tabs": {
+      "headings": "Headings",
+      "find": "Find"
+    },
+    "headings": {
+      "noHeadings": "No headings found. Add headings to your document to see them here."
+    },
+    "find": {
+      "placeholder": "Search document",
+      "inputAriaLabel": "Search document",
+      "clearAriaLabel": "Clear search",
+      "previousAriaLabel": "Previous result",
+      "nextAriaLabel": "Next result",
+      "matchCase": "Match case",
+      "wholeWord": "Whole words only",
+      "optionsAriaLabel": "Search options",
+      "resultsAriaLabel": "Search results",
+      "noResults": "No results",
+      "searching": "Searching…",
+      "counter": "Result {current} of {total}",
+      "counterTruncated": "Result {current} of {total}+",
+      "total": "{total, plural, one {# result} other {# results}}",
+      "totalTruncated": "{total, plural, other {#+ results}}"
+    }
+  },
   "sidebar": {
     "ariaLabel": "Annotations sidebar"
   },
@@ -857,11 +896,32 @@
     "refused": "That link could not be applied. Check the address and try again."
   },
   "headerFooter": {
+    "chromeAriaLabel": "Header and footer editing",
     "header": "Header",
     "footer": "Footer",
+    "firstPageHeader": "First page header",
+    "firstPageFooter": "First page footer",
+    "evenPageHeader": "Even page header",
+    "evenPageFooter": "Even page footer",
+    "regionSection": "{region} — Section {section}",
+    "sameAsPrevious": "Same as previous",
+    "sameAsPreviousHint": "Edits apply to the preceding section's pages too.",
     "options": "Options",
+    "differentFirstPage": "Different first page",
+    "differentOddEven": "Different odd and even pages",
+    "differentOddEvenHint": "Applies to the whole document.",
+    "linkToPrevious": "Link to previous",
+    "unlinkFromPrevious": "Unlink from previous",
+    "headerDistance": "Header distance from edge",
+    "footerDistance": "Footer distance from edge",
+    "removeHeader": "Remove header",
+    "removeFooter": "Remove footer",
     "insertPageNumber": "Insert current page number",
     "insertTotalPages": "Insert total page count",
+    "insertSectionPages": "Insert section page count",
+    "insertPageXofY": "Insert page X of Y",
+    "pageXofYLabel": "Page",
+    "pageXofYSeparator": "of",
     "remove": "Remove {label}",
     "closeEditing": "Close {label} editing"
   },
@@ -880,6 +940,7 @@
     "horizontal": "Horizontal ruler",
     "vertical": "Vertical ruler",
     "firstLineIndent": "First line indent",
+    "hangingIndent": "Hanging indent",
     "leftIndent": "Left indent",
     "rightIndent": "Right indent",
     "topMargin": "Top margin",
@@ -901,6 +962,24 @@
   },
   "loading": {
     "label": "Loading"
+  },
+  "notes": {
+    "editingBanner": "Editing note",
+    "closeNote": "Close note",
+    "delete": "Delete note",
+    "convertToEndnote": "Convert to endnote",
+    "convertToFootnote": "Convert to footnote",
+    "scope": "Apply to",
+    "scopeDocument": "Whole document",
+    "scopeSection": "This section",
+    "previewFallback": "Footnote",
+    "chromeAriaLabel": "Note editing",
+    "editingRegion": "{kind} {number}",
+    "footnoteKind": "Footnote",
+    "endnoteKind": "Endnote",
+    "convertAllFootnotes": "Convert all footnotes to endnotes",
+    "convertAllEndnotes": "Convert all endnotes to footnotes",
+    "inheritedValue": "(inherited)"
   },
   "agentPanel": {
     "defaultTitle": "Assistant",

@@ -45,7 +45,9 @@
     "watermark": "水印",
     "break": null,
     "sectionBreakContinuous": null,
-    "sectionBreakNextPage": null
+    "sectionBreakNextPage": null,
+    "insertFootnote": "插入脚注",
+    "insertEndnote": "插入尾注"
   },
   "formattingBar": {
     "groups": {
@@ -58,7 +60,8 @@
       "alignment": "对齐",
       "listFormatting": "列表格式",
       "image": "图片",
-      "table": "表格"
+      "table": "表格",
+      "insert": "插入"
     },
     "undo": "撤销",
     "undoShortcut": "撤销(Ctrl+Z)",
@@ -110,7 +113,11 @@
     "double": "双倍行距",
     "lineSpacingTitle": "行距: {label}",
     "blockSpacingRules": "段间距",
-    "label": null
+    "label": null,
+    "addSpaceAfter": null,
+    "addSpaceBefore": null,
+    "removeSpaceAfter": null,
+    "removeSpaceBefore": null
   },
   "styles": {
     "selectAriaLabel": "选择段落样式",
@@ -841,7 +848,28 @@
     "insertPageNumber": "插入当前页码",
     "insertTotalPages": "插入总页数",
     "remove": "删除 {label}",
-    "closeEditing": "关闭 {label} 编辑"
+    "closeEditing": "关闭 {label} 编辑",
+    "chromeAriaLabel": "页眉页脚编辑",
+    "firstPageHeader": "首页页眉",
+    "firstPageFooter": "首页页脚",
+    "evenPageHeader": "偶数页页眉",
+    "evenPageFooter": "偶数页页脚",
+    "regionSection": "{region} — 第 {section} 节",
+    "sameAsPrevious": "与上一节相同",
+    "sameAsPreviousHint": "编辑也会应用于上一节的页面。",
+    "differentFirstPage": "首页不同",
+    "differentOddEven": "奇偶页不同",
+    "differentOddEvenHint": "应用于整个文档。",
+    "linkToPrevious": "链接到上一节",
+    "unlinkFromPrevious": "取消与上一节的链接",
+    "headerDistance": "页眉距边缘的距离",
+    "footerDistance": "页脚距边缘的距离",
+    "removeHeader": "删除页眉",
+    "removeFooter": "删除页脚",
+    "insertSectionPages": "插入本节页数",
+    "insertPageXofY": "插入第 X 页，共 Y 页",
+    "pageXofYLabel": "第",
+    "pageXofYSeparator": "页，共"
   },
   "image": {
     "placeholder": "图片占位符",
@@ -855,7 +883,8 @@
     "leftIndent": "左缩进",
     "rightIndent": "右缩进",
     "topMargin": "上边距",
-    "bottomMargin": "下边距"
+    "bottomMargin": "下边距",
+    "hangingIndent": null
   },
   "print": {
     "label": "打印",
@@ -932,21 +961,71 @@
     "viewing": null,
     "viewingHint": null
   },
+  "navigation": {
+    "ariaLabel": null,
+    "closeAriaLabel": null,
+    "closeTitle": null,
+    "find": {
+      "clearAriaLabel": null,
+      "counter": null,
+      "counterTruncated": null,
+      "inputAriaLabel": null,
+      "matchCase": null,
+      "nextAriaLabel": null,
+      "noResults": null,
+      "optionsAriaLabel": null,
+      "placeholder": null,
+      "previousAriaLabel": null,
+      "resultsAriaLabel": null,
+      "searching": null,
+      "wholeWord": null,
+      "total": null,
+      "totalTruncated": null
+    },
+    "headings": {
+      "noHeadings": null
+    },
+    "openAriaLabel": null,
+    "openTitle": null,
+    "tabs": {
+      "find": null,
+      "headings": null
+    },
+    "title": null
+  },
+  "notes": {
+    "editingBanner": "正在编辑脚注/尾注",
+    "closeNote": "关闭脚注/尾注",
+    "delete": "删除脚注/尾注",
+    "convertToEndnote": "转换为尾注",
+    "convertToFootnote": "转换为脚注",
+    "scope": "应用于",
+    "scopeDocument": "整个文档",
+    "scopeSection": "本节",
+    "previewFallback": "脚注",
+    "chromeAriaLabel": "脚注/尾注编辑",
+    "editingRegion": "{kind} {number}",
+    "footnoteKind": "脚注",
+    "endnoteKind": "尾注",
+    "convertAllFootnotes": "将所有脚注转换为尾注",
+    "convertAllEndnotes": "将所有尾注转换为脚注",
+    "inheritedValue": "（继承）"
+  },
   "review": {
     "accept": null,
     "ariaLabel": null,
+    "commentRefused": null,
     "deleted": null,
     "empty": null,
     "inserted": null,
     "movedFrom": null,
     "movedTo": null,
     "reject": null,
-    "reply": null,
-    "structural": null,
-    "replyRefused": null,
-    "showPane": null,
     "replaced": null,
     "replacedWith": null,
-    "commentRefused": null
+    "reply": null,
+    "replyRefused": null,
+    "showPane": null,
+    "structural": null
   }
 }

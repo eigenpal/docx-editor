@@ -26,6 +26,7 @@ than reading the output.
 - [x] 3.2 Reconcile or replace archived-spike disposability and retired-migration guards so archive moves remain intentional.
 - [x] 3.3 Re-record `baseline.md` from a repaired run, naming every remaining failure, so later comparisons read the output instead of re-running against a stash.
 - [x] 3.4 Keep each browser gate scoped to the adapter it exercises and free of external network dependencies. — Done for the checkpoint gate (React-only config; navigation no longer waits on a `fonts.gstatic.com` request that blocks `load`); the other configs still boot both adapters.
+- [x] 3.5 Remove the old spike implementation and the ADR-S9 isolation rule it existed to constrain, so a fresh checkout reports one honest baseline. — `packages/core/spike` (185 files) held the spike architecture for decisions the production lanes now implement, and no production module ever imported it, so removal was doc-and-gate work only. It was never a workspace member while `bunfig.toml` still collected its tests, so a fresh clone reported 43 failures and 403 uncollected tests that existed only because its own dependencies were never installed. Removed with it: `spike-disposability.test.ts`, the five `*:spike*` root scripts, the CI oracle step, and the four stale `ADR-S9: production modules MUST NOT import` lane comments. KEPT: the conformance fixture in `conformance.test.ts`, which is inline JSON, not code — the spike's recorded outcomes survive as data exactly as ADR-S9 intended.
 
 ## 4. Canonical Typed OOXML Tree
 

@@ -27,6 +27,8 @@ import { collapsedAt } from './surface-selection-ops.ts';
 /** What the composition root lends this lane. */
 export interface SurfaceSelectionSyncDeps {
   readonly session: TreeDocxSession;
+  /** Active story for IME commits and composition — body or open furniture. */
+  storyScope(): import('@docx-editor.dev/core-contract/store').StoryScope;
   /**
    * The document the surface was MOUNTED into, never the ambient global.
    *
@@ -205,19 +207,25 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     // Composed text takes the armed caret format like typed text would — same transaction,
     // one undo step. Asked BEFORE the commit (which retires the armed state), and only for
     // an insert landing exactly on the armed anchor; a diff that resolved elsewhere simply
-    // forgets the format.
+    // forgets the format. Story scope routes IME commits into an open HF/note part.
     const insert = plan.ops.find(
       (op): op is Extract<(typeof plan.ops)[number], { op: 'insertText' }> => op.op === 'insertText'
     );
     const formatOps = insert
       ? (deps.pendingFormatOps?.(paragraphId, insert.offset, insert.text.length) ?? [])
       : [];
+    const scope = deps.storyScope();
     deps.commit(() => {
-      const result = session.applyTreeOps([...plan.ops, ...formatOps], deps.selectionMark());
+      const result = session.applyTreeOps(
+        [...plan.ops, ...formatOps],
+        deps.selectionMark(),
+        undefined,
+        scope
+      );
       // The composed text is not the armed format's hostage: a refused format op must not
       // take the IME's own edit down with it (the same rule `type()` follows).
       if (formatOps.length === 0 || !result.rejected) return result;
-      return session.applyTreeOps(plan.ops, deps.selectionMark());
+      return session.applyTreeOps(plan.ops, deps.selectionMark(), undefined, scope);
     });
     deps.setSelection(collapsedAt({ paragraphId, offset: plan.caret }));
   }
@@ -301,7 +309,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     onCompositionStart: (): void => {
       composing = true;
       composingParagraph = deps.selection().head.paragraphId;
-      session.beginComposition();
+      session.beginComposition(deps.storyScope());
     },
 
     onCompositionEnd: (): void => {

@@ -6,7 +6,7 @@
 // selection and part, so every function is a plain input-to-output computation.
 
 import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import { parentNodeOf, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { parentNodeOf, type OoxmlNode, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
 import {
   documentOrder,
   paragraphTextFromLayout,
@@ -34,17 +34,24 @@ export function selectionMarkOf(
   return { paragraphId: selection.head.paragraphId, start, end };
 }
 
-/** The selection in DOCUMENT order, whichever way the user dragged it. */
+/**
+ * The selection in DOCUMENT order, whichever way the user dragged it.
+ *
+ * `order` defaults to the body's document order; a header/footer scope passes its own
+ * (scoped) paragraph order so a selection dragged inside furniture orders correctly instead
+ * of falling back to indices from a document order it does not belong to.
+ */
 export function orderedRangeOf(
   layout: SemanticLayout,
-  selection: SemanticSelection
+  selection: SemanticSelection,
+  order?: readonly string[]
 ): { from: SemanticPosition; to: SemanticPosition } {
   const { anchor, head } = selection;
   if (anchor.paragraphId === head.paragraphId) {
     return anchor.offset <= head.offset ? { from: anchor, to: head } : { from: head, to: anchor };
   }
-  const order = documentOrder(layout);
-  return order.indexOf(anchor.paragraphId) <= order.indexOf(head.paragraphId)
+  const effectiveOrder = order ?? documentOrder(layout);
+  return effectiveOrder.indexOf(anchor.paragraphId) <= effectiveOrder.indexOf(head.paragraphId)
     ? { from: anchor, to: head }
     : { from: head, to: anchor };
 }
@@ -70,18 +77,19 @@ export function clampedToDocument(
 export function selectedTextIn(
   layout: SemanticLayout,
   from: SemanticPosition,
-  to: SemanticPosition
+  to: SemanticPosition,
+  order?: readonly string[]
 ): string {
   if (from.paragraphId === to.paragraphId) {
     return paragraphTextFromLayout(layout, from.paragraphId).slice(from.offset, to.offset);
   }
-  const order = documentOrder(layout);
-  const firstIndex = order.indexOf(from.paragraphId);
-  const lastIndex = order.indexOf(to.paragraphId);
+  const effectiveOrder = order ?? documentOrder(layout);
+  const firstIndex = effectiveOrder.indexOf(from.paragraphId);
+  const lastIndex = effectiveOrder.indexOf(to.paragraphId);
   if (firstIndex === -1 || lastIndex === -1) return '';
   const parts = [paragraphTextFromLayout(layout, from.paragraphId).slice(from.offset)];
   for (let index = firstIndex + 1; index < lastIndex; index += 1) {
-    parts.push(paragraphTextFromLayout(layout, order[index]!));
+    parts.push(paragraphTextFromLayout(layout, effectiveOrder[index]!));
   }
   parts.push(paragraphTextFromLayout(layout, to.paragraphId).slice(0, to.offset));
   // Paragraphs are newline-separated, which is what a paste target expects.
@@ -89,59 +97,161 @@ export function selectedTextIn(
 }
 
 /**
- * Ops that remove a document-ordered range, or none when it is collapsed.
+ * What removing a document-ordered range takes, and where the caret ends up.
+ *
+ * `collapseTo` is not always the range's start. A table the plan removes takes its cell
+ * paragraphs with it, and if the range began in one of those the start no longer exists —
+ * so the survivor is promoted and the caller must address THAT position. An op naming a
+ * paragraph the same transaction deleted is refused, and one refused op vetoes the whole
+ * atomic transaction: a paste over such a selection would silently do nothing at all.
+ */
+export interface RangeDeletionPlan {
+  readonly ops: Parameters<TreeDocxSession['applyTreeOps']>[0];
+  readonly collapseTo: SemanticPosition;
+}
+
+/** Every paragraph id inside a subtree, in document order. */
+function paragraphIdsUnder(node: OoxmlNode): string[] {
+  const ids: string[] = [];
+  const walk = (current: OoxmlNode): void => {
+    if (current.kind === 'textValue') return;
+    if (current.kind === 'paragraph') ids.push(current.id);
+    for (const child of current.children) walk(child);
+  };
+  walk(node);
+  return ids;
+}
+
+/**
+ * The OUTERMOST tables whose every paragraph is inside `covered`, mapped to the paragraphs
+ * they take with them.
+ *
+ * Outermost because removing a table removes what is nested in it; naming the inner one too
+ * would be a second removal of a node that is already gone. A table with no paragraph at all
+ * is left alone — there is nothing the range could have covered to justify removing it.
+ */
+function removableTablesIn(
+  part: OoxmlPart,
+  covered: ReadonlySet<string>
+): Map<string, readonly string[]> {
+  const removable = new Map<string, readonly string[]>();
+  const walk = (node: OoxmlNode): void => {
+    if (node.kind === 'textValue') return;
+    if (node.kind === 'table') {
+      const paragraphs = paragraphIdsUnder(node);
+      if (paragraphs.length > 0 && paragraphs.every((id) => covered.has(id))) {
+        removable.set(node.id, paragraphs);
+        return;
+      }
+    }
+    for (const child of node.children) walk(child);
+  };
+  walk(part.root);
+  return removable;
+}
+
+/**
+ * The plan that removes a document-ordered range, or an empty one when it is collapsed.
  *
  * A selection spanning paragraphs is trimmed at both ends and then JOINED back into one,
- * which is what makes selecting three paragraphs and typing behave like every other
- * editor. The order matters: trim first, join after, so each join sees the text that is
- * meant to survive rather than the text being removed.
+ * which is what makes selecting three paragraphs and typing behave like every other editor.
+ * The order matters: trim first, remove blocks, join last, so each join sees the text that
+ * is meant to survive and the sibling sequence the removals leave behind.
  */
-export function deleteRangeOps(
+export function planRangeDeletion(
   layout: SemanticLayout,
   part: OoxmlPart,
   from: SemanticPosition,
-  to: SemanticPosition
-): Parameters<TreeDocxSession['applyTreeOps']>[0] {
+  to: SemanticPosition,
+  order?: readonly string[]
+): RangeDeletionPlan {
   const textOf = (paragraphId: string): string => paragraphTextFromLayout(layout, paragraphId);
   if (from.paragraphId === to.paragraphId) {
-    if (from.offset === to.offset) return [];
-    return [
-      { op: 'deleteText', paragraphId: from.paragraphId, start: from.offset, end: to.offset },
-    ];
+    if (from.offset === to.offset) return { ops: [], collapseTo: from };
+    return {
+      ops: [
+        { op: 'deleteText', paragraphId: from.paragraphId, start: from.offset, end: to.offset },
+      ],
+      collapseTo: from,
+    };
   }
 
-  const order = documentOrder(layout);
-  const firstIndex = order.indexOf(from.paragraphId);
-  const lastIndex = order.indexOf(to.paragraphId);
-  if (firstIndex === -1 || lastIndex === -1) return [];
+  const effectiveOrder = order ?? documentOrder(layout);
+  const firstIndex = effectiveOrder.indexOf(from.paragraphId);
+  const lastIndex = effectiveOrder.indexOf(to.paragraphId);
+  if (firstIndex === -1 || lastIndex === -1) return { ops: [], collapseTo: from };
+
+  // FULLY covered: the range holds the whole paragraph, mark to mark. The endpoints qualify
+  // only when the range reaches their far edge — a table is removed for containing text the
+  // gesture actually covered, never for being adjacent to it.
+  const covered = new Set<string>();
+  for (let index = firstIndex; index <= lastIndex; index += 1) {
+    const id = effectiveOrder[index]!;
+    const wholeParagraph =
+      index === firstIndex
+        ? from.offset === 0
+        : index === lastIndex
+          ? to.offset === textOf(id).length
+          : true;
+    if (wholeParagraph) covered.add(id);
+  }
+
+  const removableTables = removableTablesIn(part, covered);
+  const tableOfParagraph = new Map<string, string>();
+  for (const [tableId, paragraphs] of removableTables) {
+    for (const id of paragraphs) tableOfParagraph.set(id, tableId);
+  }
+
+  // The SURVIVOR hosts the caret and everything joined into it, so it cannot be a paragraph
+  // this plan removes. When the range starts inside a removable table, the first covered
+  // paragraph outside every removable table is promoted in its place.
+  let survivorIndex = firstIndex;
+  if (tableOfParagraph.has(from.paragraphId)) {
+    survivorIndex = -1;
+    for (let index = firstIndex + 1; index <= lastIndex; index += 1) {
+      if (!tableOfParagraph.has(effectiveOrder[index]!)) {
+        survivorIndex = index;
+        break;
+      }
+    }
+    if (survivorIndex === -1) {
+      // Every covered paragraph sits inside one table — a document that IS a table. Nothing
+      // outside it could host the caret, so that table stays and is emptied instead. Tables
+      // nested inside it go with it, so they stay too rather than being removed piecemeal.
+      const kept = tableOfParagraph.get(from.paragraphId)!;
+      for (const id of removableTables.get(kept) ?? []) tableOfParagraph.delete(id);
+      removableTables.delete(kept);
+      survivorIndex = firstIndex;
+    }
+  }
+  const survivorId = effectiveOrder[survivorIndex]!;
+  const collapseTo: SemanticPosition =
+    survivorIndex === firstIndex ? from : { paragraphId: survivorId, offset: 0 };
 
   const ops: Parameters<TreeDocxSession['applyTreeOps']>[0][number][] = [];
-  // Tail of the first paragraph.
-  const firstText = textOf(from.paragraphId);
-  if (from.offset < firstText.length) {
-    ops.push({
-      op: 'deleteText',
-      paragraphId: from.paragraphId,
-      start: from.offset,
-      end: firstText.length,
-    });
-  }
-  // Whole paragraphs in between.
-  for (let index = firstIndex + 1; index < lastIndex; index += 1) {
-    const id = order[index]!;
+  // Text first, and only for paragraphs that will still be there — a paragraph inside a
+  // removed table needs no trimming, and trimming it would be work the removal undoes.
+  for (let index = firstIndex; index <= lastIndex; index += 1) {
+    const id = effectiveOrder[index]!;
+    if (tableOfParagraph.has(id)) continue;
     const length = textOf(id).length;
-    if (length > 0) ops.push({ op: 'deleteText', paragraphId: id, start: 0, end: length });
+    const start = index === firstIndex ? from.offset : 0;
+    const end = index === lastIndex ? to.offset : length;
+    if (start < end) ops.push({ op: 'deleteText', paragraphId: id, start, end });
   }
-  // Head of the last paragraph.
-  if (to.offset > 0) {
-    ops.push({ op: 'deleteText', paragraphId: to.paragraphId, start: 0, end: to.offset });
-  }
-  // Then collapse the emptied paragraphs — but only WITHIN runs of consecutive sibling
-  // `w:p` elements. A join across a table (or any block this lane does not own) is not a
-  // paragraph edit: the store rightly refuses it, and one refused join vetoes the whole
-  // atomic transaction — Select All + Delete on any document containing a table deleted
-  // nothing at all. Text still clears everywhere; each block boundary keeps one empty
-  // paragraph beside it, which is the honest paragraph-lane reading of the gesture.
+  // Then the blocks the range fully contains. Nothing in the paragraph vocabulary can do
+  // this: a body paragraph and a cell paragraph have different parents, so collapsing
+  // across a table is not a paragraph edit and the store refuses it. Without a structural
+  // removal the text cleared everywhere while every row, cell and border stayed — pages of
+  // blank table skeletons, and a paste over the selection that looked like a no-op.
+  for (const tableId of removableTables.keys()) ops.push({ op: 'deleteBlock', blockId: tableId });
+
+  // Then collapse the emptied paragraphs, WITHIN runs of consecutive sibling `w:p` elements
+  // — reading a removed table as transparent, because by the time a join applies that table
+  // is gone and the paragraphs either side of it really are adjacent. A join the store still
+  // refuses (across a table this plan did not remove, or out of a cell) is not planned at
+  // all: it would veto the whole atomic transaction, and the honest reading of that gesture
+  // is one empty paragraph left beside each block boundary the range did not fully cover.
   const positionsByParent = new Map<string, Map<string, number>>();
   const consecutiveSiblings = (before: string, after: string): boolean => {
     const parent = parentNodeOf(part, after);
@@ -152,20 +262,27 @@ export function deleteRangeOps(
       for (const [at, child] of parent.children.entries()) positions.set(child.id, at);
       positionsByParent.set(parent.id, positions);
     }
-    return positions.get(after) === (positions.get(before) ?? Number.NaN) + 1;
+    const start = positions.get(before);
+    const end = positions.get(after);
+    if (start === undefined || end === undefined || end <= start) return false;
+    for (let at = start + 1; at < end; at += 1) {
+      if (!removableTables.has(parent.children[at]!.id)) return false;
+    }
+    return true;
   };
-  let groupHead = from.paragraphId;
-  let previous = from.paragraphId;
-  for (let index = firstIndex + 1; index <= lastIndex; index += 1) {
-    const id = order[index]!;
+  let groupHead = survivorId;
+  let previous = survivorId;
+  for (let index = survivorIndex + 1; index <= lastIndex; index += 1) {
+    const id = effectiveOrder[index]!;
+    if (tableOfParagraph.has(id)) continue; // going with its table; nothing to join
     if (consecutiveSiblings(previous, id)) {
       ops.push({ op: 'joinParagraphs', firstId: groupHead, secondId: id });
     } else {
-      // Something that is not a selected paragraph sits between: start a new join group
-      // on ITS far side rather than joining across it.
+      // Something this plan does not remove sits between: start a new join group on ITS far
+      // side rather than joining across it.
       groupHead = id;
     }
     previous = id;
   }
-  return ops;
+  return { ops, collapseTo };
 }

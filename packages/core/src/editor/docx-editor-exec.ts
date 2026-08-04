@@ -10,6 +10,21 @@ import type { EditorCommand, ExecResult } from '../contracts/editor.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { MARKS, isSurfaceSelection, resolveMarkAttr } from './docx-editor-support.ts';
 import { isDocAnchor, isDocAnchorRange, resolveAnchorSelection } from './anchor-resolution.ts';
+import {
+  execEditHeaderFooter,
+  execInsertPageField,
+  execLinkHeaderFooter,
+  execRemoveHeaderFooter,
+  execSetHeaderFooterOptions,
+  execUnlinkHeaderFooter,
+} from './docx-editor-hf.ts';
+import {
+  execConvertAllNotes,
+  execConvertNote,
+  execDeleteNote,
+  execInsertNote,
+  execSetNoteProperties,
+} from './docx-editor-notes.ts';
 
 /**
  * Run one admitted command against the surface.
@@ -24,7 +39,7 @@ export function execEditorCommand(
 ): ExecResult | null {
   switch (command.type) {
     case 'toggleMark': {
-      const mark = MARKS[command.mark]!;
+      const mark = MARKS.get(command.mark)!;
       mounted.toggleRunProperty(mark.localName, mark.attributes);
       break;
     }
@@ -36,6 +51,42 @@ export function execEditorCommand(
       mounted.setRunProperty(resolved.localName, resolved.attributes);
       break;
     }
+    case 'clearFormatting':
+      mounted.clearFormatting();
+      break;
+    case 'setLineSpacing':
+      // `w:line` is 240ths of a line under `auto` and twentieths of a point otherwise —
+      // one attribute, two units, which is exactly why the command takes the rule's own.
+      mounted.setParagraphProperty(
+        'spacing',
+        command.rule === 'multiple'
+          ? { line: String(Math.round(command.value * 240)), lineRule: 'auto' }
+          : {
+              line: String(Math.round(command.value * 20)),
+              lineRule: command.rule === 'exact' ? 'exact' : 'atLeast',
+            },
+        { mergeAttributes: true }
+      );
+      break;
+    case 'setParagraphSpacing':
+      mounted.setParagraphProperty(
+        'spacing',
+        {
+          // `null` REMOVES the attribute (Word's "Remove space before paragraph"), which is
+          // not the same as writing a zero: a removed value inherits from the style again.
+          ...(command.beforePt !== undefined
+            ? {
+                before:
+                  command.beforePt === null ? null : String(Math.round(command.beforePt * 20)),
+              }
+            : {}),
+          ...(command.afterPt !== undefined
+            ? { after: command.afterPt === null ? null : String(Math.round(command.afterPt * 20)) }
+            : {}),
+        },
+        { mergeAttributes: true }
+      );
+      break;
     case 'setAlignment':
       // The contract says `justify`; `w:jc` spells it `both`.
       mounted.setParagraphProperty('jc', {
@@ -61,12 +112,14 @@ export function execEditorCommand(
       break;
     }
     case 'setIndent': {
-      const attributes: Record<string, string> = {};
-      if (command.left !== undefined) attributes.left = String(command.left);
-      if (command.right !== undefined) attributes.right = String(command.right);
-      if (command.firstLine !== undefined) attributes.firstLine = String(command.firstLine);
-      if (command.hanging !== undefined) attributes.hanging = String(command.hanging);
-      mounted.setParagraphProperty('ind', attributes);
+      // Not `setParagraphProperty`: the write needs the paragraph's AUTHORED attributes to
+      // pick between the `w:left`/`w:start` spellings and to keep the first-line pair
+      // consistent, so it lives beside `adjustIndent` on the surface.
+      mounted.setIndent({
+        ...(command.left !== undefined ? { left: command.left } : {}),
+        ...(command.right !== undefined ? { right: command.right } : {}),
+        ...(command.firstLine !== undefined ? { firstLine: command.firstLine } : {}),
+      });
       break;
     }
     case 'setPageSetup': {
@@ -185,6 +238,32 @@ export function execEditorCommand(
     case 'redo':
       mounted.redo();
       break;
+    case 'editHeaderFooter':
+      return execEditHeaderFooter(mounted, command);
+    case 'exitHeaderFooter': {
+      if (typeof mounted.exitHeaderFooter === 'function') mounted.exitHeaderFooter();
+      return { ok: true, changed: false };
+    }
+    case 'removeHeaderFooter':
+      return execRemoveHeaderFooter(mounted, command);
+    case 'linkHeaderFooterToPrevious':
+      return execLinkHeaderFooter(mounted, command);
+    case 'unlinkHeaderFooterFromPrevious':
+      return execUnlinkHeaderFooter(mounted, command);
+    case 'setHeaderFooterOptions':
+      return execSetHeaderFooterOptions(mounted, command);
+    case 'insertPageField':
+      return execInsertPageField(mounted, command);
+    case 'insertNote':
+      return execInsertNote(mounted, command);
+    case 'deleteNote':
+      return execDeleteNote(mounted, command);
+    case 'convertNote':
+      return execConvertNote(mounted, command);
+    case 'convertAllNotes':
+      return execConvertAllNotes(mounted, command);
+    case 'setNoteProperties':
+      return execSetNoteProperties(mounted, command);
     case 'setSelection': {
       if ('range' in command && isSurfaceSelection(command.range)) {
         mounted.setSelection(command.range);

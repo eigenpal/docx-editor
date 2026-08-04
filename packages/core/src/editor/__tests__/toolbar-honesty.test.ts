@@ -3,10 +3,12 @@
 //
 // Three lies this pins down, all of one family (a control that looks live and is not):
 //
-// 1. A mark command the surface CANNOT write reported `can: ok` and then
+// 1. A mark command the surface could not write reported `can: ok` and then
 //    `{ ok: true, changed: false }`. Bold over several paragraphs left the button
-//    enabled, un-pressed, and the document untouched. (A collapsed caret is NOT such a
-//    selection: it arms the stored-marks lane, pinned below.)
+//    enabled, un-pressed, and the document untouched. The surface writes that range now,
+//    so the pin is that the control is live AND the press lands — `can`, `exec` and the
+//    pressed state agreeing over a cross-paragraph selection. (A collapsed caret is a
+//    third case: it arms the stored-marks lane, pinned below.)
 // 2. `snapshot()` reused its previous REFERENCE across an edit that changed only
 //    structure, so a `useSyncExternalStore` host never re-rendered and every control that
 //    re-asks `Editor.can`/`isActive` on a store tick kept its stale answer — the bullet
@@ -69,24 +71,23 @@ function select(
 }
 
 describe('a run-formatting control never looks live over a selection it cannot write', () => {
-  test('Bold across a paragraph boundary is refused, not silently dropped', () => {
+  test('Bold across a paragraph boundary is live, and the press lands', () => {
     const editor = mount(p('alpha') + p('beta'));
     select(editor, [0, 0], [1, 4]);
     const revision = editor.surface!.session.revision();
 
-    const answer = editor.can({ type: 'toggleMark', mark: 'bold' });
-    expect(answer.ok).toBe(false);
-    if (!answer.ok) expect(answer.reason).toContain('one paragraph');
+    // Enabled with no reason to show, because the surface can write this range.
+    const before = toolbarCommandState(editor, 'text.bold');
+    expect(before.enabled).toBe(true);
+    expect(before.disabledReason).toBe(null);
+    expect(before.active).toBe(false);
+    expect(editor.can({ type: 'toggleMark', mark: 'bold' }).ok).toBe(true);
 
-    // `exec` agrees with `can` — the press cannot report success for a no-op.
-    const result = editor.exec({ type: 'toggleMark', mark: 'bold' });
-    expect(result.ok).toBe(false);
-    expect(editor.surface!.session.revision()).toBe(revision);
-
-    // And the button the user sees is disabled, with the engine's own reason.
-    const state = toolbarCommandState(editor, 'text.bold');
-    expect(state.enabled).toBe(false);
-    expect(state.disabledReason).toContain('one paragraph');
+    // `exec` agrees with `can`, and the document actually moves — the failure this pins is
+    // a press that reports success over an unchanged document.
+    expect(editor.exec({ type: 'toggleMark', mark: 'bold' }).ok).toBe(true);
+    expect(editor.surface!.session.revision()).not.toBe(revision);
+    expect(toolbarCommandState(editor, 'text.bold').active).toBe(true);
   });
 
   test('a collapsed caret arms pending formatting instead of disabling the marks', () => {
@@ -255,7 +256,7 @@ describe('no wired toggle is a lie of omission', () => {
     const state = toolbarCommandState(editor, 'file.save');
     expect(state.disabledReason).toBe('save is not a command; run it with runSave(editor)');
     // A genuinely unwired slot keeps the original wording.
-    expect(toolbarCommandState(editor, 'list.lineSpacing').disabledReason).toBe(
+    expect(toolbarCommandState(editor, 'insert.toc').disabledReason).toBe(
       'not wired to an editor command'
     );
   });

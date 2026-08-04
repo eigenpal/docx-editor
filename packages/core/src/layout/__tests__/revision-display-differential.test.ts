@@ -127,20 +127,14 @@ describe('the differential holds on a real document', () => {
     );
   });
 
-  test('KNOWN GAP: the resolved display modes do not merge paragraph marks', () => {
-    // Accepting a deleted paragraph mark merges the paragraph with the next one, and the op
-    // does that. The display-mode projection does not: it suppresses CONTENT by containment,
-    // and a paragraph whose mark is resolved away still occupies a block. So the two agree on
-    // what the document says and disagree on how many paragraphs say it.
-    //
-    // This asserts the gap rather than hiding it behind a content-only comparison, so the test
-    // fails — and this comment comes off — when block-level projection lands.
+  test('the projection agrees LINE FOR LINE, not only on what the words are', () => {
+    // This was a documented gap: accepting a deleted paragraph mark merges the paragraph with
+    // the next one, and the op did that while the projection left an empty block behind. It
+    // closed when block-level projection landed — a paragraph whose mark is struck and which
+    // renders nothing in the proposed result is now dropped from the flow rather than kept as
+    // a blank line. Asserting the LINE ARRAY rather than the joined text is what keeps it
+    // closed: a content-only comparison would pass with the blank lines back.
     const part = bodyPart();
-    const projected = laidOut(part, 'proposed');
-    const resolved = laidOut(resolveAll(part, 'accept'));
-    expect(projected).not.toEqual(resolved);
-    expect(projected.length).toBeGreaterThan(resolved.length);
-    // The difference is entirely empty lines left where a merged paragraph used to be.
-    expect(projected.filter((line) => line !== '')).toEqual(resolved.filter((line) => line !== ''));
+    expect(laidOut(part, 'proposed')).toEqual(laidOut(resolveAll(part, 'accept')));
   });
 });

@@ -5,8 +5,6 @@
 // Production placement is fixed by document-engine task 1.4. Responsibilities and
 // dependency rules: docs/architecture/production-engine-packages.md. This is a
 // greenfield skeleton; capability implementation lands in the sections that own it.
-//
-// ADR-S9: production modules MUST NOT import from packages/core/spike/**.
 
 /** Stable package identity used by the import-graph / package-authority checks. */
 export const ENGINE_LAYOUT_PACKAGE = '@docx-editor.dev/core-contract/layout' as const;
@@ -147,6 +145,7 @@ export {
   type ParagraphBorderSide,
   type ParagraphBorderStrokeRecord,
   type ParagraphFragmentRecord,
+  type ParagraphIndent,
   type ParagraphSpacing,
   type SemanticLayout,
   type SourceRange,
@@ -271,7 +270,48 @@ export {
   type ResolvedSurfaceMeasurer,
 } from './canvas-measurer.ts';
 export { layoutHeaderFooterStory } from './hf-layout.ts';
-export { storyBlocks } from './story-roots.ts';
+export {
+  deriveNoteDisplayMarks,
+  deriveNoteDisplayMarksResolved,
+  noteDisplayMarkMap,
+  type NoteDisplayMark,
+  type NoteReferenceSite,
+} from './note-numbering.ts';
+export {
+  layoutNoteStory,
+  layoutNoteById,
+  layoutNoteSeparator,
+  noteLineIdPrefix,
+  normalNotesOf,
+  findSeparatorNote,
+  isMarkerOnlySeparatorNote,
+  defaultNoteSeparatorRuleStyle,
+  noteSeparatorAreaBox,
+  syntheticSeparatorBox,
+  MAX_NOTES_LAID_OUT,
+  MAX_NOTE_FRAGMENTS,
+  type NoteStoryLayout,
+  type NoteSeparatorLayout,
+  type NoteSeparatorRuleStyle,
+  type NoteLayoutFallbackReason,
+} from './note-layout.ts';
+export {
+  attachNotesToLayout,
+  buildPageRefIndex,
+  computeFootnoteReserves,
+  filterRefsOnPage,
+  fragmentOwnsAtomOffset,
+  provisionalNoteMarks,
+  MAX_NOTE_OVERFLOW_PAGES,
+  MAX_NOTE_REFLOW_ATTEMPTS,
+  MAX_EACH_PAGE_MARK_CANDIDATES,
+  type NotesLayoutInput,
+  type NotesAttachResult,
+  type NotePaginationFallbackReason,
+  type PageRefIndex,
+} from './note-pagination.ts';
+export { noteMarkKey, projectedNoteMarkText, type NoteMarkContext } from './note-projection.ts';
+export { storyBlocks, noteStoryBlocks } from './story-roots.ts';
 export {
   commentAnchorsOfStory,
   commentsOfPart,
@@ -321,13 +361,18 @@ export {
 export {
   DEFAULT_SECTION_PROPERTIES,
   enumerateDocumentSections,
+  enumerateDocumentSectionsBounded,
   geometryOfSection,
+  MAX_DOCUMENT_SECTIONS,
   paragraphSectionNode,
+  parsePageNumbering,
   parseSectionProperties,
   readSectionProperties,
   type DocumentSection,
+  type DocumentSectionsEnumeration,
   type SectionBreakType,
   type SectionMargins,
+  type SectionPageNumbering,
   type SectionProperties,
 } from './section-properties.ts';
 export { pagesToMaterialize, type MaterializationInput, type ViewportWindow } from './viewport.ts';
@@ -399,6 +444,7 @@ export {
 export {
   caretAt,
   caretStops,
+  caretStopsForBlocks,
   compositionAnchor,
   documentOrder,
   // `hitTest` is already taken by the legacy painted-geometry lane; this one answers in
@@ -410,7 +456,9 @@ export {
   selectionRects,
   spansInSelection,
   wordBoundary,
+  type CaretAtOptions,
   type CaretGeometry,
+  type MoveCaretOptions,
   type NavigationCommand,
   type KeyedRange,
   type SelectionRect,
@@ -418,17 +466,26 @@ export {
   type SemanticSelection,
 } from './semantic-interaction.ts';
 export {
+  AUTO_PREFERRED_WIDTH,
   CELL_PAD,
   DEFAULT_CELL_MARGINS,
   MAX_TABLE_COLUMNS,
   MAX_TABLE_NESTING,
+  MAX_TABLE_ROW_HEIGHT_PT,
   readTableStructure,
+  tableOriginX,
   type CellMarginsPt,
   type CellVerticalAlign,
+  type PreferredWidth,
+  type PreferredWidthType,
   type SemanticTableCell,
   type SemanticTableRow,
   type SemanticTableStructure,
+  type TableAlignment,
+  type TableRowHeight,
+  type TableRowHeightRule,
 } from './semantic-table.ts';
+export { paragraphMarkDeleted, revisionRemovesParagraph } from './revision-visibility.ts';
 export {
   MAX_TABLE_ROW_FRAGMENTS,
   TablePaginationError,

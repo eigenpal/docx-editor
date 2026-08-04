@@ -149,6 +149,59 @@ export interface RunFormatting {
   readonly alignment?: 'left' | 'center' | 'right' | 'both';
   /** Paragraph style id (`w:pStyle`) at the selection. */
   readonly styleId?: string;
+  /**
+   * Line spacing at the selection, in the unit its rule implies — LINES for `multiple`,
+   * points for `exact` and `atLeast`. The same vocabulary `setLineSpacing` takes, so a
+   * control can show what it reads and send back what it shows. Absent when the
+   * selection's paragraphs disagree or state no line spacing.
+   */
+  readonly lineSpacing?: {
+    readonly rule: 'multiple' | 'exact' | 'atLeast';
+    readonly value: number;
+  };
+  /** Space above and below the paragraph at the selection, in points. */
+  readonly spaceBeforePt?: number;
+  readonly spaceAfterPt?: number;
+  /**
+   * The EFFECTIVE paragraph indent at the selection — cascade and numbering merge
+   * included, so a numbered item that authors no `w:ind` reports the indent its list
+   * definition gives it. Absent when nothing is loaded, or when the selection is inside a
+   * table (see {@link IndentFormatting}).
+   */
+  readonly indent?: IndentFormatting;
+}
+
+/**
+ * Indent at the selection, in twips.
+ *
+ * Unlike every other field here, this does NOT go absent when the selection's paragraphs
+ * disagree. A ruler has to draw its handles somewhere, and Word draws them at the FIRST
+ * selected paragraph's values — Select All is the commonest indent gesture, and hiding the
+ * handles for it would be worse than showing one paragraph's truth. The values are
+ * therefore always the first touched paragraph's, and {@link mixed} records per field
+ * whether the rest agree.
+ *
+ * `firstLine` is ONE SIGNED offset: negative is a hanging indent. OOXML spells it as two
+ * mutually exclusive attributes and this collapses them hanging-wins (§17.3.1.12), which
+ * is the model Word itself keeps.
+ *
+ * Absent inside a table. The value would be correct there, but it is measured from the
+ * cell's content edge while a ruler is drawn against the page's margin, and the ruler does
+ * not know the cell.
+ */
+export interface IndentFormatting {
+  /** Left indent, signed. Negative pulls text into the margin, as Word allows. */
+  readonly left: number;
+  /** Right indent, signed. */
+  readonly right: number;
+  /** First-line offset from {@link left}, signed. Negative is a hanging indent. */
+  readonly firstLine: number;
+  /** Per field, whether the selection's paragraphs disagree about it. */
+  readonly mixed: {
+    readonly left: boolean;
+    readonly right: boolean;
+    readonly firstLine: boolean;
+  };
 }
 
 export interface Table {

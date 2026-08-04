@@ -34,9 +34,9 @@ import {
 } from './style-cascade.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import {
-  CELL_PAD,
   MAX_TABLE_NESTING,
   readTableStructure,
+  tableOriginX,
   type CellMarginsPt,
   type SemanticTableCell,
   type SemanticTableRow,
@@ -86,6 +86,9 @@ export {
 /** Soft ceiling on fragments emitted for one authored row (hostile / runaway splits). */
 export const MAX_TABLE_ROW_FRAGMENTS = 4096;
 
+/** A cell box never narrows below this, however wide a `w:tblCellSpacing` gap is stated. */
+const MIN_CELL_BOX_PT = 1;
+
 export type TablePaginationErrorCode =
   | 'table-row-overheight'
   | 'table-row-split-unsupported'
@@ -113,6 +116,8 @@ export interface TableFlowDeps {
   readonly styleCascade?: StyleCascadeTable;
   /** When set (header/footer page projection), PAGE/NUMPAGES resolve against this context. */
   readonly pageContext?: FieldPageContext;
+  /** Derived footnote/endnote marks for noteReference / noteRef projection. */
+  readonly noteMarks?: import('./note-projection.ts').NoteMarkContext;
   /**
    * Precomputed body-story list items (including cell paragraphs). Absent for header/footer
    * stories that do not share the body counter stream.
@@ -335,6 +340,7 @@ function placeCellParagraph(
       marginExtent: { left: 0, right: indent.left + available + indent.right },
       ...(deps.projectLink ? { projectLink: deps.projectLink } : {}),
       displayMode: deps.displayMode,
+      ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
     }
   );
 
@@ -536,6 +542,7 @@ function placeCellParagraph(
       },
       props,
       spacing: { before: appliedBefore, after: appliedAfter },
+      indent,
       ...(bottomBorderRecord ? { bottomBorder: bottomBorderRecord } : {}),
       ...(strokes.length > 0 ? { borders: strokes } : {}),
       ...(shading === undefined ? {} : { shading }),
@@ -768,7 +775,8 @@ export function layoutRowFragment(
   rowTop: number,
   isHeaderRepeat: boolean,
   depth: number,
-  deps: TableFlowDeps
+  deps: TableFlowDeps,
+  cellSpacingPt = 0
 ): { readonly record: TableRowFragmentRecord; readonly bottom: number } {
   const placed = layoutRowFragmentBounded(
     row,
@@ -780,7 +788,8 @@ export function layoutRowFragment(
     false,
     depth,
     deps,
-    initialCellCursors(row)
+    initialCellCursors(row),
+    cellSpacingPt
   );
   return { record: placed.record, bottom: placed.bottom };
 }
@@ -803,6 +812,12 @@ export interface LayoutRowBoundedResult {
  * Height-budgeted row layout for pagination. Content stays at or above `rowTop` and at or
  * below `maxBottom`. Cells that cannot place anything leave empty boxes; callers decide
  * whether to move the row, continue splitting, or fail closed.
+ *
+ * `w:trHeight` (17.4.81):
+ * - `auto` — content-sized (no invented floor);
+ * - `atLeast` — floor the finished fragment to the authored minimum when it fits the
+ *   budget; mid-row page splits stay content-driven so the floor cannot overflow the page;
+ * - `exact` — fixed height, content clipped (Word 17.18.37). Overflow is not continued.
  */
 export function layoutRowFragmentBounded(
   row: SemanticTableRow,
@@ -814,10 +829,25 @@ export function layoutRowFragmentBounded(
   isContinuation: boolean,
   depth: number,
   deps: TableFlowDeps,
-  cursors: readonly CellPlaceCursor[]
+  cursors: readonly CellPlaceCursor[],
+  cellSpacingPt = 0
 ): LayoutRowBoundedResult {
   const total = sumCols(cols, 0, cols.length);
+  // `w:tblCellSpacing`: each cell gives up half of every gap it shares with a neighbour.
+  // `w:tblCellSpacing` (17.4.45) separates ADJACENT cell edges, so each of the two cells
+  // sharing a gap gives up half of it. Applied inside the grid slot rather than by widening
+  // the table, which keeps every column boundary, border interval and hit box where the
+  // resolved grid put it.
+  const gap = Number.isFinite(cellSpacingPt) && cellSpacingPt > 0 ? cellSpacingPt / 2 : 0;
   const defaultLineHeight = deps.measurer.lineMetrics(DEFAULT_RUN_STYLE).height;
+  const heightRule = row.height;
+  const exactHeightPt = heightRule.rule === 'exact' ? heightRule.valuePt : undefined;
+  const atLeastHeightPt = heightRule.rule === 'atLeast' ? heightRule.valuePt : undefined;
+  // Exact rows clip to their authored box; never flow past it even when the page allows more.
+  const flowMaxBottom =
+    exactHeightPt === undefined
+      ? maxBottom
+      : Math.min(maxBottom, rowTop + Math.max(0, exactHeightPt));
 
   interface FlowedCell {
     readonly cell: SemanticTableCell;
@@ -836,8 +866,11 @@ export function layoutRowFragmentBounded(
   const flowed: FlowedCell[] = [];
   let anyFitted = false;
   let anyNestedBlocked = false;
-  // Minimum row band even for empty/vMerge-continue cells.
-  let rowBottom = Math.min(maxBottom, rowTop + defaultLineHeight + 2 * CELL_PAD);
+  // Grow from the row top. Empty / vMerge-continue cells contribute one default line plus
+  // THEIR authored insets below; fitted cells contribute measured content only. Seeding with
+  // `defaultLineHeight + 2 * CELL_PAD` used to force ~20pt rows even when tcMar was tighter
+  // and the cell's own line was shorter — nested tables picked that up as blank bottom pad.
+  let rowBottom = rowTop;
 
   for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
     const cell = row.cells[cellIndex]!;
@@ -852,13 +885,17 @@ export function layoutRowFragmentBounded(
     // of grid intervals in the border pass). Never re-derived by accumulating spans here.
     const span = cell.gridSpan;
     const gridColumn = cell.gridColumn;
-    const cellX = left + sumCols(cols, 0, gridColumn);
-    const cellW = sumCols(cols, gridColumn, Math.min(gridColumn + span, cols.length)) || total;
+    const slotX = left + sumCols(cols, 0, gridColumn);
+    const slotW = sumCols(cols, gridColumn, Math.min(gridColumn + span, cols.length)) || total;
+    // Never let the gap consume the cell: a spacing wider than the column keeps a hairline.
+    const inset = Math.min(gap, Math.max((slotW - MIN_CELL_BOX_PT) / 2, 0));
+    const cellX = slotX + inset;
+    const cellW = Math.max(slotW - 2 * inset, MIN_CELL_BOX_PT);
     const insets = contentInsets(cell.margins, cell.borders);
     const topInset = isContinuation ? borderExtentPt(cell.borders.top) : insets.top;
     const contentTop = rowTop + topInset;
     // Always reserve bottom inset so the fragment never paints into the margin/border band.
-    const contentMaxBottom = maxBottom - insets.bottom;
+    const contentMaxBottom = flowMaxBottom - insets.bottom;
 
     let blocks: readonly BlockFragmentRecord[] = [];
     let contentBottom = contentTop;
@@ -893,9 +930,12 @@ export function layoutRowFragmentBounded(
       }
     }
 
+    // Fitted content owns the height (including its final paragraph's spaceAfter). Do not
+    // re-floor with defaultLineHeight — that invented bottom pad when the measured line was
+    // shorter than the DEFAULT_RUN_STYLE line. Empty / continue cells still need one line.
     const cellBottom = Math.min(
-      maxBottom,
-      Math.max(contentBottom + insets.bottom, rowTop + topInset + defaultLineHeight + insets.bottom)
+      flowMaxBottom,
+      fitted ? contentBottom + insets.bottom : rowTop + topInset + defaultLineHeight + insets.bottom
     );
     if (cellBottom > rowBottom) rowBottom = cellBottom;
 
@@ -915,14 +955,35 @@ export function layoutRowFragmentBounded(
     });
   }
 
-  // Coordinate fragment height: tallest placed content, never past maxBottom.
-  rowBottom = Math.min(maxBottom, Math.max(rowBottom, rowTop));
+  // Coordinate fragment height: tallest placed content, never past the flow budget.
+  rowBottom = Math.min(flowMaxBottom, Math.max(rowBottom, rowTop));
   for (const entry of flowed) {
     const needed = entry.fitted
       ? entry.contentBottom + entry.insets.bottom
       : rowTop + entry.insets.top + defaultLineHeight + entry.insets.bottom;
-    if (needed > rowBottom && needed <= maxBottom + 0.001) {
+    if (needed > rowBottom && needed <= flowMaxBottom + 0.001) {
       rowBottom = needed;
+    }
+  }
+  rowBottom = Math.min(flowMaxBottom, rowBottom);
+
+  // Exact: force the authored height (clamped to the page budget) and clip leftover content.
+  // atLeast: floor a finished fragment when the minimum fits; never push past maxBottom.
+  let clipExact = false;
+  if (exactHeightPt !== undefined) {
+    const exactBottom = rowTop + exactHeightPt;
+    if (exactBottom <= maxBottom + 0.001) {
+      rowBottom = exactBottom;
+      clipExact = true;
+    } else {
+      // Exact taller than remaining band — keep content-sized clamp; pagination fails closed.
+      rowBottom = Math.min(maxBottom, rowBottom);
+    }
+  } else if (atLeastHeightPt !== undefined) {
+    const minBottom = rowTop + atLeastHeightPt;
+    const contentComplete = flowed.every((entry) => entry.complete);
+    if (contentComplete && minBottom <= maxBottom + 0.001) {
+      if (minBottom > rowBottom) rowBottom = minBottom;
     }
   }
   rowBottom = Math.min(maxBottom, rowBottom);
@@ -931,9 +992,10 @@ export function layoutRowFragmentBounded(
   const cells: TableCellFragmentRecord[] = flowed.map((entry) => {
     let blocks = entry.blocks;
     // vAlign only when the cell finished on this fragment (no more continuation).
+    const cellComplete = clipExact ? true : entry.complete;
     if (
       !entry.cell.vMergeContinue &&
-      entry.complete &&
+      cellComplete &&
       entry.cell.vAlign !== 'top' &&
       blocks.length > 0
     ) {
@@ -957,8 +1019,13 @@ export function layoutRowFragmentBounded(
     };
   });
 
-  const remainderCursors = flowed.map((entry) => entry.nextCursor);
-  const complete = flowed.every((entry) => entry.complete);
+  // Exact clips: leftover cell content is not continued onto the next page (17.18.37).
+  const remainderCursors = clipExact
+    ? null
+    : flowed.every((entry) => entry.complete)
+      ? null
+      : flowed.map((entry) => entry.nextCursor);
+  const complete = clipExact || flowed.every((entry) => entry.complete);
 
   return {
     record: {
@@ -970,7 +1037,7 @@ export function layoutRowFragmentBounded(
     },
     bottom: rowBottom,
     remainder: complete ? null : remainderCursors,
-    fitted: anyFitted || row.cells.every((cell) => cell.vMergeContinue),
+    fitted: anyFitted || row.cells.every((cell) => cell.vMergeContinue) || clipExact,
     nestedSplitBlocked: anyNestedBlocked,
   };
 }
@@ -984,14 +1051,15 @@ export function measureRowHeight(
   cols: readonly number[],
   left: number,
   depth: number,
-  deps: TableFlowDeps
+  deps: TableFlowDeps,
+  cellSpacingPt = 0
 ): number {
   let lineCounter = 0;
   const probeDeps: TableFlowDeps = {
     ...deps,
     nextLineId: () => `probe-${lineCounter++}`,
   };
-  const placed = layoutRowFragment(row, cols, left, 0, false, depth, probeDeps);
+  const placed = layoutRowFragment(row, cols, left, 0, false, depth, probeDeps, cellSpacingPt);
   return placed.record.box.height;
 }
 
@@ -1136,12 +1204,31 @@ function emitNestedTable(
   deps: TableFlowDeps
 ): { readonly fragment: TableFragmentRecord; readonly bottom: number } | null {
   if (depth >= MAX_TABLE_NESTING) return null;
-  const structure = readTableStructure(table, Math.max(1, right - left), depth, deps.styleCascade);
+  const containerWidth = Math.max(1, right - left);
+  const structure = readTableStructure(
+    table,
+    containerWidth,
+    depth,
+    deps.styleCascade,
+    deps.displayMode
+  );
   if (!structure || structure.rows.length === 0) return null;
+  // A nested table is placed inside its CELL's content box by the same rules a top-level one
+  // is placed inside the text column.
+  const tableLeft = left + tableOriginX(structure, containerWidth);
   const rawRows: TableRowFragmentRecord[] = [];
   let y = top;
   for (const row of structure.rows) {
-    const placed = layoutRowFragment(row, structure.columnWidthsPt, left, y, false, depth, deps);
+    const placed = layoutRowFragment(
+      row,
+      structure.columnWidthsPt,
+      tableLeft,
+      y,
+      false,
+      depth,
+      deps,
+      structure.cellSpacingPt
+    );
     rawRows.push(placed.record);
     y = placed.bottom;
   }
@@ -1162,7 +1249,7 @@ function emitNestedTable(
       tableId: table.id,
       fragmentIndex: 0,
       rows,
-      box: { x: left, y: top, width, height: y - top },
+      box: { x: tableLeft, y: top, width, height: y - top },
     },
     bottom: y,
   };
@@ -1189,7 +1276,8 @@ export function layoutTableFragment(
       y,
       isHeaderRepeat(row),
       depth,
-      deps
+      deps,
+      structure.cellSpacingPt
     );
     rawRows.push(placed.record);
     y = placed.bottom;

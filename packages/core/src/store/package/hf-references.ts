@@ -34,12 +34,37 @@ const MAX_SDT_NESTING = 32;
 /** `w:headerReference w:type` vocabulary (ECMA-376 §17.10.5): default, first page, even pages. */
 export type HeaderFooterVariant = 'default' | 'first' | 'even';
 
+/** Header vs footer region kind for chrome and lifecycle ops. */
+export type HeaderFooterKind = 'header' | 'footer';
+
 export interface HeaderFooterParts {
   readonly headers: ReadonlyMap<HeaderFooterVariant, OoxmlPart>;
   readonly footers: ReadonlyMap<HeaderFooterVariant, OoxmlPart>;
   /** `w:evenAndOddHeaders` in settings.xml — without it the `even` variant is ignored. */
   readonly evenAndOddHeaders: boolean;
   /** Whether this section enables first-page header/footer furniture (`w:titlePg`). */
+  readonly titlePage: boolean;
+}
+
+/**
+ * One resolved furniture slot with enough metadata for "Same as previous" chrome.
+ *
+ * `inherited: true` means this section has no declared reference for the slot and the
+ * part comes from a predecessor. The first section never reports inherited — omitting a
+ * ref there is blank furniture, not inheritance from a later section.
+ */
+export interface HeaderFooterSlotMeta {
+  readonly part: OoxmlPart;
+  readonly partName: string;
+  readonly rId: string;
+  readonly inherited: boolean;
+}
+
+/** Per-section resolution including declared-vs-inherited metadata. */
+export interface HeaderFooterSectionResolution {
+  readonly headers: ReadonlyMap<HeaderFooterVariant, HeaderFooterSlotMeta>;
+  readonly footers: ReadonlyMap<HeaderFooterVariant, HeaderFooterSlotMeta>;
+  readonly evenAndOddHeaders: boolean;
   readonly titlePage: boolean;
 }
 
@@ -141,16 +166,24 @@ export function collectSectionPropertyNodes(root: OoxmlNode): Array<OoxmlElement
   return found;
 }
 
+interface DeclaredSlot {
+  readonly part: OoxmlPart;
+  readonly rId: string;
+}
+
 function referencesFromSectPr(
   sectPr: OoxmlElement,
-  partForReference: (relId: string | undefined, typeUri: string) => OoxmlPart | undefined
+  partForReference: (
+    relId: string | undefined,
+    typeUri: string
+  ) => { part: OoxmlPart; rId: string } | undefined
 ): {
-  headers: Map<HeaderFooterVariant, OoxmlPart>;
-  footers: Map<HeaderFooterVariant, OoxmlPart>;
+  headers: Map<HeaderFooterVariant, DeclaredSlot>;
+  footers: Map<HeaderFooterVariant, DeclaredSlot>;
   titlePage: boolean;
 } {
-  const headers = new Map<HeaderFooterVariant, OoxmlPart>();
-  const footers = new Map<HeaderFooterVariant, OoxmlPart>();
+  const headers = new Map<HeaderFooterVariant, DeclaredSlot>();
+  const footers = new Map<HeaderFooterVariant, DeclaredSlot>();
   for (const child of elementChildren(sectPr)) {
     if (child.kind === 'textValue') continue;
     const isHeader = child.localName === 'headerReference';
@@ -158,14 +191,14 @@ function referencesFromSectPr(
     if (!isHeader && !isFooter) continue;
     const variant = variantOf(attributeValue(child, 'type'));
     if (!variant) continue;
-    const part = partForReference(
+    const resolved = partForReference(
       attributeValue(child, 'id'),
       isHeader ? HEADER_REL_TYPE : FOOTER_REL_TYPE
     );
-    if (!part) continue;
+    if (!resolved) continue;
     const target = isHeader ? headers : footers;
     // Word honours the FIRST reference of a given type; a duplicate is ignored.
-    if (!target.has(variant)) target.set(variant, part);
+    if (!target.has(variant)) target.set(variant, resolved);
   }
   return {
     headers,
@@ -174,17 +207,92 @@ function referencesFromSectPr(
   };
 }
 
-function inheritMaps(
-  previous: ReadonlyMap<HeaderFooterVariant, OoxmlPart> | undefined,
-  declared: ReadonlyMap<HeaderFooterVariant, OoxmlPart>
+function inheritSlots(
+  previous: ReadonlyMap<HeaderFooterVariant, HeaderFooterSlotMeta> | undefined,
+  declared: ReadonlyMap<HeaderFooterVariant, DeclaredSlot>
+): Map<HeaderFooterVariant, HeaderFooterSlotMeta> {
+  const result = new Map<HeaderFooterVariant, HeaderFooterSlotMeta>();
+  if (previous) {
+    for (const [variant, slot] of previous) {
+      // Inherited slots stay marked inherited — a later section that declares nothing
+      // keeps the predecessor's furniture without claiming authorship.
+      result.set(variant, { ...slot, inherited: true });
+    }
+  }
+  for (const [variant, slot] of declared) {
+    result.set(variant, {
+      part: slot.part,
+      partName: slot.part.name,
+      rId: slot.rId,
+      inherited: false,
+    });
+  }
+  return result;
+}
+
+function partsFromSlots(
+  slots: ReadonlyMap<HeaderFooterVariant, HeaderFooterSlotMeta>
 ): Map<HeaderFooterVariant, OoxmlPart> {
   const result = new Map<HeaderFooterVariant, OoxmlPart>();
-  if (previous) {
-    for (const [variant, part] of previous) result.set(variant, part);
+  for (const [variant, slot] of slots) result.set(variant, slot.part);
+  return result;
+}
+
+/**
+ * Resolve header/footer parts for every section with declared-vs-inherited metadata.
+ *
+ * Index aligns with `enumerateDocumentSections` in the layout package. Existing merged
+ * maps stay available via {@link resolveHeaderFooterPartsBySection}.
+ */
+export function resolveHeaderFooterResolutionBySection(
+  pkg: OoxmlPackage
+): readonly HeaderFooterSectionResolution[] {
+  const main = pkg.parts.get(pkg.mainDocumentPart);
+  if (!main) return [];
+
+  const relationships = pkg.relationships.get(pkg.mainDocumentPart) ?? [];
+  const evenAndOddHeaders = readEvenAndOddHeaders(pkg, relationships);
+  const partForReference = (
+    relId: string | undefined,
+    typeUri: string
+  ): { part: OoxmlPart; rId: string } | undefined => {
+    if (!relId) return undefined;
+    const record = relationships.find((rel) => rel.id === relId && rel.type === typeUri);
+    if (!record) return undefined;
+    const resolved = resolveRelationship(record);
+    if (resolved.mode !== 'Internal' || !resolved.target.ok) return undefined;
+    const part = pkg.parts.get(resolved.target.partName);
+    if (!part) return undefined;
+    return { part, rId: relId };
+  };
+
+  const sectPrNodes = collectSectionPropertyNodes(main.root);
+  if (sectPrNodes.length === 0) {
+    return [
+      Object.freeze({
+        headers: new Map(),
+        footers: new Map(),
+        evenAndOddHeaders,
+        titlePage: false,
+      }),
+    ];
   }
-  // Declared refs replace inherited ones per variant; a section that declares nothing keeps
-  // the full previous map.
-  for (const [variant, part] of declared) result.set(variant, part);
+
+  const result: HeaderFooterSectionResolution[] = [];
+  let previous: HeaderFooterSectionResolution | undefined;
+  for (const sectPr of sectPrNodes) {
+    const declared = sectPr
+      ? referencesFromSectPr(sectPr, partForReference)
+      : { headers: new Map(), footers: new Map(), titlePage: false };
+    const resolved: HeaderFooterSectionResolution = {
+      headers: inheritSlots(previous?.headers, declared.headers),
+      footers: inheritSlots(previous?.footers, declared.footers),
+      evenAndOddHeaders,
+      titlePage: declared.titlePage,
+    };
+    result.push(resolved);
+    previous = resolved;
+  }
   return result;
 }
 
@@ -194,39 +302,12 @@ function inheritMaps(
  * Index aligns with `enumerateDocumentSections` in the layout package.
  */
 export function resolveHeaderFooterPartsBySection(pkg: OoxmlPackage): readonly HeaderFooterParts[] {
-  const main = pkg.parts.get(pkg.mainDocumentPart);
-  if (!main) return [];
-
-  const relationships = pkg.relationships.get(pkg.mainDocumentPart) ?? [];
-  const evenAndOddHeaders = readEvenAndOddHeaders(pkg, relationships);
-  const partForReference = (relId: string | undefined, typeUri: string): OoxmlPart | undefined => {
-    if (!relId) return undefined;
-    const record = relationships.find((rel) => rel.id === relId && rel.type === typeUri);
-    if (!record) return undefined;
-    const resolved = resolveRelationship(record);
-    if (resolved.mode !== 'Internal' || !resolved.target.ok) return undefined;
-    return pkg.parts.get(resolved.target.partName);
-  };
-
-  const sectPrNodes = collectSectionPropertyNodes(main.root);
-  if (sectPrNodes.length === 0) return [EMPTY];
-
-  const result: HeaderFooterParts[] = [];
-  let previous: HeaderFooterParts | undefined;
-  for (const sectPr of sectPrNodes) {
-    const declared = sectPr
-      ? referencesFromSectPr(sectPr, partForReference)
-      : { headers: new Map(), footers: new Map(), titlePage: false };
-    const resolved: HeaderFooterParts = {
-      headers: inheritMaps(previous?.headers, declared.headers),
-      footers: inheritMaps(previous?.footers, declared.footers),
-      evenAndOddHeaders,
-      titlePage: declared.titlePage,
-    };
-    result.push(resolved);
-    previous = resolved;
-  }
-  return result;
+  return resolveHeaderFooterResolutionBySection(pkg).map((section) => ({
+    headers: partsFromSlots(section.headers),
+    footers: partsFromSlots(section.footers),
+    evenAndOddHeaders: section.evenAndOddHeaders,
+    titlePage: section.titlePage,
+  }));
 }
 
 /**

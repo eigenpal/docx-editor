@@ -12,6 +12,8 @@ import {
   paragraphFragmentsOf,
   spansInCells,
   spansInSelection,
+  type BlockFragmentRecord,
+  type ParagraphIndent,
   type SemanticLayout,
   type SemanticSelection,
   type StyleSpanRecord,
@@ -21,6 +23,7 @@ import {
   ACCEPTED_RUN_PROPERTIES,
   findNode,
   nullRecord,
+  segmentsOf,
   WML_NAMESPACE_URI,
   type OoxmlNode,
   type OoxmlPart,
@@ -68,6 +71,52 @@ export function paragraphPropertiesOf(
     fragmentPropsByLayout.set(layout, index);
   }
   return index.get(paragraphId) ?? [];
+}
+
+/** A paragraph's effective indent, plus whether it sits inside a table. */
+export interface ParagraphIndentEntry {
+  readonly indent: ParagraphIndent;
+  readonly inTable: boolean;
+}
+
+const fragmentIndentByLayout = new WeakMap<SemanticLayout, Map<string, ParagraphIndentEntry>>();
+
+/**
+ * A paragraph's EFFECTIVE indent — cascade plus the numbering merge — from the layout
+ * records, or null for a paragraph the published layout does not carry.
+ *
+ * Not derivable from {@link paragraphPropertiesOf}: a list paragraph's indent comes from
+ * `numbering.xml` and is merged in after the cascade, so a numbered item authoring no
+ * `w:ind` reads zero there while its text sits indented.
+ *
+ * Table membership rides along because it is the ruler's gate, and this is the one walk
+ * that already knows it.
+ */
+export function paragraphIndentOf(
+  layout: SemanticLayout,
+  paragraphId: string
+): ParagraphIndentEntry | null {
+  let index = fragmentIndentByLayout.get(layout);
+  if (!index) {
+    const built = new Map<string, ParagraphIndentEntry>();
+    // Walked here rather than through `paragraphFragmentsOf`, which flattens cell
+    // paragraphs in with body ones — that difference is exactly what this index carries.
+    const visit = (blocks: readonly BlockFragmentRecord[], inTable: boolean): void => {
+      for (const block of blocks) {
+        if (block.kind === 'paragraph') {
+          if (!built.has(block.paragraphId)) {
+            built.set(block.paragraphId, { indent: block.indent, inTable });
+          }
+          continue;
+        }
+        for (const row of block.rows) for (const cell of row.cells) visit(cell.blocks, true);
+      }
+    };
+    for (const page of layout.pages) visit(page.fragments, false);
+    index = built;
+    fragmentIndentByLayout.set(layout, built);
+  }
+  return index.get(paragraphId) ?? null;
 }
 
 /** The D8 paragraph op vocabulary — the only names an op is allowed to carry. */
@@ -201,23 +250,65 @@ export interface RunPropertyEdit {
   readonly start: number;
   readonly end: number;
   readonly properties: readonly SurfaceProperty[];
+  /**
+   * When set, `setRunProperties` formats only these runs (field result ownership). Needed
+   * when several result runs share one atom offset so each keeps its own merged bag.
+   */
+  readonly targetRunIds?: readonly string[];
 }
 
 /**
- * The characters a node contributes to its paragraph's UTF-16 offsets.
+ * A range run-property change, split into ONE edit per run it covers, each merged over that
+ * run's own `w:rPr`.
  *
- * Mirrors the store's segment model exactly (`segmentsOf`): text counts its code units, a
- * `w:tab` and a `w:br` count one, and `w:rPr` and generic content count nothing. The op
- * offsets computed here have to be the ones the applier will resolve, or a range edit would
- * land on the wrong run.
+ * Neither half of that is optional. The base MUST be the run's own properties: the layout
+ * publishes the CASCADE (`w:docDefaults` + the style chain + direct), and echoing it back had
+ * two effects a user could see. It was refused outright — `setRunProperties` rejects any name
+ * outside D8, and Word's own `styles.xml` puts `w:lang` and `w:noProof` in
+ * `docDefaults/rPrDefault` (17.7.5.3), so on a document Word wrote, Bold did nothing at all
+ * and said nothing. What did get through restated inherited values as DIRECT formatting, so a
+ * run that merely inherited its font now stated it and editing the style no longer moved it.
+ *
+ * And the split MUST be per run: the op REPLACES the properties it names across its whole
+ * range, so one op carrying one run's bag over a mixed selection homogenised it — bolding
+ * `hello ` + `Georgia` rewrote the second run's `w:rFonts` with the first's. Runs are addressed
+ * by offset rather than by id because these edits apply in sequence and the applier splits
+ * runs at the range edges; offsets are unmoved by a property write, ids are not.
  */
-function addressableLength(node: OoxmlNode): number {
-  if (node.kind === 'textValue') return node.value.length;
-  if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
-  if (node.kind === 'runProperties' || node.kind === 'generic') return 0;
-  let total = 0;
-  for (const child of node.children) total += addressableLength(child);
-  return total;
+/** Per-run UTF-16 ranges from `segmentsOf` (fields/notes collapse to one unit on begin). */
+function runAddressRanges(
+  paragraph: Extract<OoxmlNode, { kind: 'paragraph' }>
+): Map<string, { start: number; end: number }> {
+  const runRanges = new Map<string, { start: number; end: number }>();
+  for (const segment of segmentsOf(paragraph)) {
+    const ids =
+      segment.formatRunIds && segment.formatRunIds.length > 0
+        ? segment.formatRunIds
+        : segment.runId
+          ? [segment.runId]
+          : [];
+    for (const runId of ids) {
+      const existing = runRanges.get(runId);
+      if (!existing) runRanges.set(runId, { start: segment.start, end: segment.end });
+      else {
+        existing.start = Math.min(existing.start, segment.start);
+        existing.end = Math.max(existing.end, segment.end);
+      }
+    }
+  }
+  return runRanges;
+}
+
+/** Runs that own field-result formatting for atoms in this paragraph. */
+function formatOwnedRunIds(
+  paragraph: Extract<OoxmlNode, { kind: 'paragraph' }>
+): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const segment of segmentsOf(paragraph)) {
+    if (!segment.formatRunIds) continue;
+    for (const runId of segment.formatRunIds) ids.add(runId);
+  }
+  return ids;
 }
 
 /**
@@ -246,32 +337,30 @@ export function runPropertyEdits(
   incoming: SurfaceProperty
 ): readonly RunPropertyEdit[] {
   const paragraph = findNode(part, paragraphId);
-  if (!paragraph || paragraph.kind === 'textValue') return [];
+  if (!paragraph || paragraph.kind !== 'paragraph') return [];
   const edits: RunPropertyEdit[] = [];
-  let offset = 0;
-  /**
-   * Every run the range covers, at the depth it actually sits at.
-   *
-   * A `w:hyperlink` holds ordinary runs, and skipping it outright was wrong twice over: the
-   * link's own text could not be formatted at all, and — because the offset did not advance
-   * across it either — every run AFTER the link was addressed as if the link's characters did
-   * not exist. Colouring a link then wrote the FOLLOWING run's properties over the link's
-   * text, one character short. This descends exactly where `segmentsOf` does, so the offsets
-   * computed here are the ones the applier resolves.
-   */
+  // Field/note atoms contribute one unit on the begin run (segmentsOf). Hyperlink descent
+  // keeps link text addressable — skipping `w:hyperlink` used to mis-offset every run after.
+  // Field format ownership maps the atom onto result runs via `formatRunIds`.
+  const runRanges = runAddressRanges(paragraph);
+  const formatOwned = formatOwnedRunIds(paragraph);
   const visit = (child: OoxmlNode): void => {
     if (child.kind === 'hyperlink') {
       for (const inner of child.children) visit(inner);
       return;
     }
+    if (
+      child.kind === 'fldSimple' ||
+      (child.kind === 'generic' && child.localName === 'fldSimple')
+    ) {
+      for (const inner of child.children) visit(inner);
+      return;
+    }
     if (child.kind !== 'run') return;
-    const runStart = offset;
-    offset += addressableLength(child);
-    // A run with no addressable content — a field character, a bare `w:rPr` — is not
-    // reachable by any range, so no op should name one.
-    if (offset === runStart) return;
-    const from = Math.max(runStart, start);
-    const to = Math.min(offset, end);
+    const range = runRanges.get(child.id);
+    if (!range || range.end <= range.start) return;
+    const from = Math.max(range.start, start);
+    const to = Math.min(range.end, end);
     if (from >= to) return;
     edits.push({
       start: from,
@@ -283,10 +372,62 @@ export function runPropertyEdits(
         ),
         incoming
       ),
+      ...(formatOwned.has(child.id) ? { targetRunIds: [child.id] } : {}),
     });
   };
   for (const child of paragraph.children) visit(child);
   return edits;
+}
+
+/**
+ * Whether any run the range covers authors a property an op could clear.
+ *
+ * The eraser's "is there anything here to erase" question. Asked because an op that names
+ * nothing still COUNTS as applied: the store publishes a revision and pushes an undo entry
+ * for it even though the tree comes back identical, so pressing Clear Formatting on already
+ * clean text reported `changed: true` and cost an undo press that undid nothing.
+ *
+ * Walks exactly where `runPropertyEdits` walks, so the two can never disagree about which
+ * runs a range covers.
+ */
+export function hasAuthoredRunProperties(
+  part: OoxmlPart,
+  paragraphId: string,
+  start: number,
+  end: number
+): boolean {
+  const paragraph = findNode(part, paragraphId);
+  if (!paragraph || paragraph.kind !== 'paragraph') return false;
+  const runRanges = runAddressRanges(paragraph);
+  let found = false;
+  const visit = (child: OoxmlNode): void => {
+    if (found) return;
+    if (child.kind === 'hyperlink') {
+      for (const inner of child.children) visit(inner);
+      return;
+    }
+    if (
+      child.kind === 'fldSimple' ||
+      (child.kind === 'generic' && child.localName === 'fldSimple')
+    ) {
+      for (const inner of child.children) visit(inner);
+      return;
+    }
+    if (child.kind !== 'run') return;
+    const range = runRanges.get(child.id);
+    if (!range || range.end <= range.start) return;
+    if (Math.max(range.start, start) >= Math.min(range.end, end)) return;
+    if (
+      authoredProperties(
+        propertyContainer(child, 'runProperties', 'rPr'),
+        AUTHORABLE_RUN_PROPERTIES
+      ).length > 0
+    ) {
+      found = true;
+    }
+  };
+  for (const child of paragraph.children) visit(child);
+  return found;
 }
 
 /**
@@ -304,18 +445,29 @@ export function authoredRunPropertiesAt(
   offset: number
 ): readonly SurfaceProperty[] {
   const paragraph = findNode(part, paragraphId);
-  if (!paragraph || paragraph.kind === 'textValue') return [];
-  let cursor = 0;
+  if (!paragraph || paragraph.kind !== 'paragraph') return [];
+  const runRanges = runAddressRanges(paragraph);
   let left: OoxmlNode | null = null;
   let right: OoxmlNode | null = null;
-  for (const child of paragraph.children) {
-    if (child.kind !== 'run') continue;
-    const runStart = cursor;
-    cursor += addressableLength(child);
-    if (cursor === runStart) continue;
-    if (runStart < offset && offset <= cursor) left = child;
-    if (right === null && runStart <= offset && offset < cursor) right = child;
-  }
+  const visit = (child: OoxmlNode): void => {
+    if (child.kind === 'hyperlink') {
+      for (const inner of child.children) visit(inner);
+      return;
+    }
+    if (
+      child.kind === 'fldSimple' ||
+      (child.kind === 'generic' && child.localName === 'fldSimple')
+    ) {
+      for (const inner of child.children) visit(inner);
+      return;
+    }
+    if (child.kind !== 'run') return;
+    const range = runRanges.get(child.id);
+    if (!range || range.end <= range.start) return;
+    if (range.start < offset && offset <= range.end) left = child;
+    if (right === null && range.start <= offset && offset < range.end) right = child;
+  };
+  for (const child of paragraph.children) visit(child);
   const owner = left ?? right;
   if (owner) {
     return authoredProperties(
@@ -334,11 +486,19 @@ export function authoredRunPropertiesAt(
  */
 export function pendingPropertyState(
   pending: readonly SurfaceProperty[] | null,
-  localName: string
+  localName: string,
+  /** The value being toggled, for a property whose ON state is one member of an
+   *  enumeration rather than a boolean (`w:vertAlign`). */
+  value?: string
 ): boolean | null {
   const entry = pending?.find((property) => property.localName === localName);
   if (!entry) return null;
   const val = entry.attributes?.val;
+  // `w:vertAlign` armed as `superscript` says NOTHING about whether subscript is on — it
+  // says subscript is off. Comparing presence alone made pressing Subscript over an armed
+  // superscript read as "already on" and write `baseline`, so the press did the opposite of
+  // its label.
+  if (localName === 'vertAlign') return val === value;
   if (localName === 'u') return val !== 'none';
   // ST_OnOff's full off vocabulary (17.17.4): `0`, `false` and `off` all mean off, and the
   // read lane treats them alike. Listing only the two this module WRITES would let a host
@@ -438,7 +598,10 @@ export function isRunPropertyActive(
   layout: SemanticLayout,
   selection: SemanticSelection,
   localName: string,
-  cells?: readonly string[]
+  cells?: readonly string[],
+  /** The value being toggled, for a property whose ON state is one member of an
+   *  enumeration rather than a boolean (`w:vertAlign`). */
+  value?: string
 ): boolean {
   const spans = selectionSpans(layout, selection, cells);
   if (spans.length === 0) return false;
@@ -452,6 +615,11 @@ export function isRunPropertyActive(
         return span.style.underline !== null;
       case 'strike':
         return span.style.strike;
+      case 'vertAlign':
+        // Its OWN value, not "is raised or lowered at all". Presence alone would make
+        // Subscript over superscripted text read as already on, so the press would write
+        // `baseline` and un-raise the text instead of lowering it.
+        return span.style.verticalAlign === value;
       default:
         // Every toggleable mark MUST be listed: answering false for one that is
         // active makes its toggle re-apply forever instead of clearing.
@@ -541,6 +709,65 @@ export function formattingAt(
         defaultParagraphStyleId ??
         undefined
     ) ?? null;
+  // `w:spacing` carries three independent things, so they are read as three: the line rule
+  // and its value, and the space before/after. All in the vocabulary a toolbar shows —
+  // LINES for a multiple, points for everything else — because 276 twentieths and 276
+  // 240ths are the same attribute meaning two different quantities, and a control that
+  // showed the raw number would be right half the time.
+  const spacing = (properties: readonly SurfaceProperty[]) =>
+    properties.find((property) => property.localName === 'spacing')?.attributes;
+  const lineSpacingText = paragraphValue((properties) => {
+    const attributes = spacing(properties);
+    const line = Number(attributes?.line);
+    if (!Number.isFinite(line)) return '';
+    // `w:lineRule` defaults to `auto` (17.3.1.33), which is Word's "Multiple".
+    const rule = attributes?.lineRule ?? 'auto';
+    if (rule === 'auto') return `multiple:${Math.round((line / 240) * 100) / 100}`;
+    return `${rule === 'exact' ? 'exact' : 'atLeast'}:${Math.round((line / 20) * 100) / 100}`;
+  });
+  const lineSpacing = ((): SurfaceFormatting['lineSpacing'] => {
+    if (!lineSpacingText) return null;
+    const [rule, value] = lineSpacingText.split(':');
+    return { rule: rule as 'multiple' | 'exact' | 'atLeast', value: Number(value) };
+  })();
+  const spacePt = (attribute: 'before' | 'after') =>
+    paragraphValue((properties) => {
+      const raw = Number(spacing(properties)?.[attribute]);
+      return Number.isFinite(raw) ? Math.round((raw / 20) * 100) / 100 : null;
+    });
+  // Indent does NOT go null on disagreement, unlike everything above it: the values are the
+  // FIRST touched paragraph's and `mixed` reports the rest per field. A ruler has to draw
+  // its handles somewhere, and hiding them for Select All — the commonest indent gesture —
+  // is worse than showing the first paragraph's truth, which is what Word shows.
+  const indent = ((): SurfaceFormatting['indent'] => {
+    const entries = touchedParagraphs.map((id) => paragraphIndentOf(layout, id));
+    const first = entries[0];
+    if (!first) return null;
+    // Inside a table the value is correct but unplaceable: it is measured from the cell's
+    // content edge, and a ruler drawn against the page margin does not know the cell.
+    if (entries.some((entry) => entry === null || entry.inTable)) return null;
+    // Points to twips at this boundary, so one representation crosses into the contract.
+    const twips = (points: number): number => Math.round(points * 20);
+    // ONE signed first-line offset, hanging-wins (ECMA-376 §17.3.1.12) — the two spellings
+    // are mutually exclusive, never summed.
+    const signedFirstLine = (value: ParagraphIndent): number =>
+      twips(value.hanging > 0 ? -value.hanging : value.firstLine);
+    const resolved = entries as readonly ParagraphIndentEntry[];
+    const left = twips(first.indent.left);
+    const right = twips(first.indent.right);
+    const firstLine = signedFirstLine(first.indent);
+    return {
+      left,
+      right,
+      firstLine,
+      mixed: {
+        left: resolved.some((entry) => twips(entry.indent.left) !== left),
+        right: resolved.some((entry) => twips(entry.indent.right) !== right),
+        firstLine: resolved.some((entry) => signedFirstLine(entry.indent) !== firstLine),
+      },
+    };
+  })();
+
   return {
     bold: styles.length > 0 && styles.every((entry) => entry.bold),
     italic: styles.length > 0 && styles.every((entry) => entry.italic),
@@ -558,6 +785,10 @@ export function formattingAt(
     highlight: agreed((entry) => entry.highlight),
     alignment,
     styleId: style,
+    lineSpacing,
+    spaceBeforePt: spacePt('before'),
+    spaceAfterPt: spacePt('after'),
+    indent,
   } satisfies SurfaceFormatting;
 }
 

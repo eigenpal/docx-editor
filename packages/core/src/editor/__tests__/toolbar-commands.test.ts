@@ -62,6 +62,11 @@ describe('slot → command table (commandForSlot)', () => {
     expect(commandForSlot('alignment.center')).toEqual({ type: 'setAlignment', align: 'center' });
     expect(commandForSlot('alignment.right')).toEqual({ type: 'setAlignment', align: 'right' });
     expect(commandForSlot('alignment.justify')).toEqual({ type: 'setAlignment', align: 'justify' });
+    expect(commandForSlot('insert.pageNumber')).toEqual({ type: 'insertPageField', field: 'PAGE' });
+    expect(commandForSlot('insert.pageXofY')).toEqual({
+      type: 'insertPageField',
+      field: 'PAGE_X_OF_Y',
+    });
   });
 
   test('an unwired slot answers null, never an invented command', () => {
@@ -96,15 +101,15 @@ describe('toolbar command wiring (task M4.0)', () => {
 
   test('an unwired slot is disabled without ever calling the editor', () => {
     const { editor, calls } = fakeEditor(ALLOW);
-    // `list.lineSpacing` has no command and no probe: genuinely unwired, and it says so
-    // without troubling the engine. (`text.highlight` graduated to a value-typed slot,
-    // `text.link` to a chrome-driven one, and `review.comments` now toggles the review pane;
-    // all three ASK the engine, which is the point.)
-    const state = toolbarCommandState(editor, 'list.lineSpacing');
+    // `insert.toc` has no command and no probe: genuinely unwired, and it says so without
+    // troubling the engine. (`text.highlight` graduated to a value-typed slot, `text.link` to
+    // a chrome-driven one, `review.comments` now toggles the review pane and
+    // `list.lineSpacing` got its own picker; all of them ASK the engine, which is the point.)
+    const state = toolbarCommandState(editor, 'insert.toc');
     expect(state.enabled).toBe(false);
     expect(state.disabledReason).toBe('not wired to an editor command');
     expect(calls.can).toEqual([]);
-    expect(runToolbarCommand(editor, 'list.lineSpacing')).toEqual({
+    expect(runToolbarCommand(editor, 'insert.toc')).toEqual({
       ok: false,
       code: 'unsupported',
       reason: 'not wired to an editor command',
@@ -125,12 +130,46 @@ describe('toolbar command wiring (task M4.0)', () => {
       disabledReason: 'not wired to an editor command',
       active: false,
     });
-    expect(calls.can).toEqual([]);
+    // The shared table DOES consult the probe — `can` is a pure predicate — but an
+    // ALLOWED probe never enables the control: the gap is the adapter's UI, not the
+    // engine's capability, so the answer stays the unwired one.
+    expect(calls.can).toEqual([{ type: 'insertHyperlink', href: 'https://example.com' }]);
 
     const probe = chromeProbeForSlot('text.link');
     expect(probe).toEqual({ type: 'insertHyperlink', href: 'https://example.com' });
     // The probe is a real command the engine can answer — that is the whole point of it.
     expect(editor.can(probe!).ok).toBe(true);
+  });
+
+  test("a REFUSED probe is quoted verbatim, so the reason is the engine's own words", () => {
+    // The reason a menu row for image or table insertion is greyed out should be the
+    // engine saying it cannot do it, not chrome guessing. Both have a real command shape
+    // (`insertImage`/`insertTable` are in the edit vocabulary) that the engine can judge.
+    const { editor } = fakeEditor(
+      DENY("command 'insertTable' is not supported by the tree editor")
+    );
+    expect(commandForSlot('table.insert')).toBeNull();
+    expect(toolbarCommandState(editor, 'table.insert')).toEqual({
+      id: 'table.insert',
+      enabled: false,
+      disabledReason: "command 'insertTable' is not supported by the tree editor",
+      active: false,
+    });
+    expect(toolbarCommandState(editor, 'image.insert').disabledReason).toBe(
+      "command 'insertTable' is not supported by the tree editor"
+    );
+  });
+
+  test("a slot with NO command shape still says so in chrome's words, honestly", () => {
+    // `insert.toc` has no entry in the edit vocabulary at all, so there is nothing to
+    // probe with and no engine opinion to quote. Chrome answers, and says which of the
+    // two situations it is.
+    const { editor, calls } = fakeEditor(ALLOW);
+    expect(chromeProbeForSlot('insert.toc')).toBeNull();
+    expect(toolbarCommandState(editor, 'insert.toc').disabledReason).toBe(
+      'not wired to an editor command'
+    );
+    expect(calls.can).toEqual([]);
   });
 
   test('a slot with no link UI has no probe', () => {

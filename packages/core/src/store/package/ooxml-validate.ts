@@ -38,6 +38,17 @@ const KNOWN_ELEMENT_NAMES: Readonly<
   paragraphProperties: [WML_NAMESPACE_URI, 'pPr'],
   tab: [WML_NAMESPACE_URI, 'tab'],
   hardBreak: [WML_NAMESPACE_URI, 'br'],
+  fldChar: [WML_NAMESPACE_URI, 'fldChar'],
+  instrText: [WML_NAMESPACE_URI, 'instrText'],
+  fldSimple: [WML_NAMESPACE_URI, 'fldSimple'],
+  footnotes: [WML_NAMESPACE_URI, 'footnotes'],
+  endnotes: [WML_NAMESPACE_URI, 'endnotes'],
+  // Note localName is `footnote` | `endnote`; validate accepts either.
+  note: [WML_NAMESPACE_URI, 'footnote'],
+  noteReference: [WML_NAMESPACE_URI, 'footnoteReference'],
+  noteRef: [WML_NAMESPACE_URI, 'footnoteRef'],
+  separator: [WML_NAMESPACE_URI, 'separator'],
+  continuationSeparator: [WML_NAMESPACE_URI, 'continuationSeparator'],
   table: [WML_NAMESPACE_URI, 'tbl'],
   tableRow: [WML_NAMESPACE_URI, 'tr'],
   tableCell: [WML_NAMESPACE_URI, 'tc'],
@@ -186,9 +197,17 @@ function runValidation(part: OoxmlPart, previous: OoxmlPart | null): OoxmlInvari
 
     if (node.kind !== 'generic') {
       const [namespaceUri, localName] = KNOWN_ELEMENT_NAMES[node.kind];
+      const localNameOk =
+        node.kind === 'note'
+          ? node.localName === 'footnote' || node.localName === 'endnote'
+          : node.kind === 'noteReference'
+            ? node.localName === 'footnoteReference' || node.localName === 'endnoteReference'
+            : node.kind === 'noteRef'
+              ? node.localName === 'footnoteRef' || node.localName === 'endnoteRef'
+              : node.localName === localName;
       if (
         node.namespaceUri !== namespaceUri ||
-        node.localName !== localName ||
+        !localNameOk ||
         !knownAttributesAreValid(node.attributes) ||
         !validKnownKind(node.kind, node.children)
       )

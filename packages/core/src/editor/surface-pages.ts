@@ -8,6 +8,7 @@
 
 import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
 import type { OoxmlElement, OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { resolveRelationship } from '@docx-editor.dev/core-contract/store';
 import {
   buildNumberingIndex,
   buildStyleCascadeTable,
@@ -17,7 +18,10 @@ import {
   geometryOfSection,
   layoutHeaderFooterStory,
   pagesToMaterialize,
+  paragraphSectionNode,
+  storyBlocks,
   type HeaderFooterVariantName,
+  type NotesLayoutInput,
   type NumberingIndex,
   type PageFurniture,
   type SemanticLayout,
@@ -25,6 +29,16 @@ import {
   type StyleCascadeTable,
   type TextMeasurer,
 } from '@docx-editor.dev/core-contract/layout';
+import {
+  authoredDocumentEndnoteProperties,
+  authoredDocumentFootnoteProperties,
+  authoredEndnotePropertiesFromSectPr,
+  authoredFootnotePropertiesFromSectPr,
+  resolveEndnoteProperties,
+  resolveFootnoteProperties,
+  settingsPartOf,
+} from '../store/package/note-properties.ts';
+import { resolveNotesPart } from '../store/package/note-references.ts';
 
 export interface FurnitureSource {
   /** Single-section / final-section furniture fallback. */
@@ -53,12 +67,11 @@ export function createFurnitureSource(env: {
   const { session, measurer, producer, cache, styleCascade, defaultTabStopPt } = env;
 
   /**
-   * Header/footer stories, laid out once per part for baseline height (phase 2, read-only).
+   * Header/footer stories, laid out once per distinct part object for baseline height.
    *
-   * Keyed by part object identity plus width and producer: HF parts are immutable for the
-   * session's lifetime, but a section-width edit or a late-arriving font re-measures them.
-   * The default-tab interval is not in the key because it is fixed for the life of THIS
-   * source — it is captured once from the settings part, which cannot change in-session.
+   * Keyed by part object identity plus width and producer. Edited HF parts are new objects
+   * (store replace), so the WeakMap cannot serve a stale story after a commit — callers must
+   * still re-resolve parts from `session.currentPackage()` / `headerFooterPartsBySection()`.
    * PAGE/NUMPAGES projection is applied later only for stories that contain those fields,
    * via `withPageContext` during layout finalize — not paint-time substitution.
    */
@@ -67,10 +80,22 @@ export function createFurnitureSource(env: {
     { width: number; producer: string; story: ReturnType<typeof layoutHeaderFooterStory> }
   >();
 
+  let rIdByPartName: Map<string, string> | null = null;
+  let rIdMapPackageRevision = -1;
+
+  function rIdOfPart(partName: string): string | undefined {
+    const revision = session.packageRevision();
+    if (!rIdByPartName || rIdMapPackageRevision !== revision) {
+      rIdByPartName = headerFooterRIdIndex(session.currentPackage());
+      rIdMapPackageRevision = revision;
+    }
+    return rIdByPartName.get(partName);
+  }
+
   function storyOf(part: OoxmlPart, width: number): ReturnType<typeof layoutHeaderFooterStory> {
     const memo = hfStoryMemo.get(part);
     if (memo && memo.width === width && memo.producer === producer) return memo.story;
-    const story = layoutHeaderFooterStory(
+    const baseline = layoutHeaderFooterStory(
       part,
       width,
       measurer,
@@ -81,6 +106,8 @@ export function createFurnitureSource(env: {
       undefined,
       defaultTabStopPt
     );
+    const rId = rIdOfPart(part.name);
+    const story = rId ? stampStoryRId(baseline, rId) : baseline;
     hfStoryMemo.set(part, { width, producer, story });
     return story;
   }
@@ -124,6 +151,37 @@ export function createFurnitureSource(env: {
   }
 
   return { furniture, sectionFurniture };
+}
+
+const HEADER_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
+const FOOTER_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
+
+/** Map header/footer part names to the main-document relationship id that targets them. */
+function headerFooterRIdIndex(
+  pkg: ReturnType<TreeDocxSession['currentPackage']>
+): Map<string, string> {
+  const index = new Map<string, string>();
+  const relationships = pkg.relationships.get(pkg.mainDocumentPart) ?? [];
+  for (const record of relationships) {
+    if (record.type !== HEADER_REL && record.type !== FOOTER_REL) continue;
+    const resolved = resolveRelationship(record);
+    if (resolved.mode !== 'Internal' || !resolved.target.ok) continue;
+    const partName = resolved.target.partName;
+    if (!index.has(partName)) index.set(partName, record.id);
+  }
+  return index;
+}
+
+function stampStoryRId(
+  story: ReturnType<typeof layoutHeaderFooterStory>,
+  rId: string
+): ReturnType<typeof layoutHeaderFooterStory> {
+  if (story.rId === rId) return story;
+  return {
+    ...story,
+    rId,
+    withPageContext: (ctx) => stampStoryRId(story.withPageContext(ctx), rId),
+  };
 }
 
 /** Immutable-in-session style + numbering projections shared by body and furniture layout. */
@@ -269,4 +327,80 @@ export function equalSurfaceExtents(a: SurfaceExtent, b: SurfaceExtent): boolean
     if (b.pageOffsetX.get(index) !== offset) return false;
   }
   return true;
+}
+
+/**
+ * Build {@link NotesLayoutInput} from the live package for semantic layout.
+ *
+ * Returns `undefined` when the package has neither footnotes nor endnotes parts — body
+ * layout then skips the notes path entirely (no reservation, no mark projection).
+ */
+export function createNotesLayoutInput(env: {
+  readonly session: TreeDocxSession;
+  readonly measurer: TextMeasurer;
+  readonly producer: string;
+  readonly cache: Parameters<typeof layoutHeaderFooterStory>[4];
+  readonly styleCascade?: StyleCascadeTable;
+  readonly defaultTabStopPt?: number;
+}): NotesLayoutInput | undefined {
+  const pkg = env.session.currentPackage();
+  const footnotesPart = resolveNotesPart(pkg, 'footnote');
+  const endnotesPart = resolveNotesPart(pkg, 'endnote');
+  if (!footnotesPart && !endnotesPart) return undefined;
+
+  const settings = settingsPartOf(pkg);
+  const docFnAuthored = authoredDocumentFootnoteProperties(settings);
+  const docEnAuthored = authoredDocumentEndnoteProperties(settings);
+  const documentFootnoteProps = resolveFootnoteProperties(undefined, docFnAuthored);
+  const documentEndnoteProps = resolveEndnoteProperties(undefined, docEnAuthored);
+
+  const part = env.session.part();
+  const sections = enumerateDocumentSections(part);
+  const sectPrBySection = sectionSectPrNodes(part, sections);
+  const footnotePropsBySection = sections.map((_, index) =>
+    resolveFootnoteProperties(
+      authoredFootnotePropertiesFromSectPr(sectPrBySection[index]),
+      docFnAuthored
+    )
+  );
+  const endnotePropsBySection = sections.map((_, index) =>
+    resolveEndnoteProperties(
+      authoredEndnotePropertiesFromSectPr(sectPrBySection[index]),
+      docEnAuthored
+    )
+  );
+
+  return {
+    footnotesPart,
+    endnotesPart,
+    footnotePropsBySection:
+      footnotePropsBySection.length > 0 ? footnotePropsBySection : [documentFootnoteProps],
+    endnotePropsBySection:
+      endnotePropsBySection.length > 0 ? endnotePropsBySection : [documentEndnoteProps],
+    documentFootnoteProps,
+    documentEndnoteProps,
+    measurer: env.measurer,
+    producer: env.producer,
+    cache: env.cache,
+    styleCascade: env.styleCascade,
+    defaultTabStopPt: env.defaultTabStopPt,
+  };
+}
+
+/** SectPr nodes index-aligned with {@link enumerateDocumentSections}. */
+function sectionSectPrNodes(
+  part: OoxmlPart,
+  sections: ReturnType<typeof enumerateDocumentSections>
+): readonly (OoxmlElement | undefined)[] {
+  const blocks = storyBlocks(part);
+  const nodes: (OoxmlElement | undefined)[] = [];
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index]!;
+    if (block.kind !== 'paragraph') continue;
+    const sectPr = paragraphSectionNode(block);
+    if (!sectPr) continue;
+    nodes.push(sectPr);
+  }
+  while (nodes.length < sections.length) nodes.push(undefined);
+  return nodes;
 }

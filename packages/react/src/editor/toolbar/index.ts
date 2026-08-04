@@ -6,6 +6,7 @@ export {
   type DocxEditorToolbarProps,
 } from './DocxEditorToolbar';
 export { ToolbarButton, type ToolbarButtonProps } from './ToolbarButton';
+export { ToolbarAction, type ToolbarActionProps } from './ToolbarAction';
 export {
   ToolbarSeparator,
   type ToolbarPartComponent,

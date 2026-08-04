@@ -5,6 +5,14 @@
 ```ts
 
 import { CHROME_GROUPS } from '@docx-editor.dev/core-contract/editor';
+import { CHROME_MENUS } from '@docx-editor.dev/core-contract/editor';
+import { ChromeMenu } from '@docx-editor.dev/core-contract/editor';
+import { ChromeMenuEntry } from '@docx-editor.dev/core-contract/editor';
+import { ChromeMenuId } from '@docx-editor.dev/core-contract/editor';
+import { ChromeMenuItemEntry } from '@docx-editor.dev/core-contract/editor';
+import { ChromeMenuSeparatorEntry } from '@docx-editor.dev/core-contract/editor';
+import { chromeMenuSlots } from '@docx-editor.dev/core-contract/editor';
+import { ChromeMenuSubmenuEntry } from '@docx-editor.dev/core-contract/editor';
 import { ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
 import { ColorValue } from '@docx-editor.dev/core-contract/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core-contract/editor';
@@ -40,6 +48,7 @@ import { FontSourceSubstitution } from '@docx-editor.dev/core-contract/contracts
 import { FontUrlSource } from '@docx-editor.dev/core-contract/editor';
 import { ForwardRefExoticComponent } from 'react';
 import { generateRulerTicks } from '@docx-editor.dev/core-contract/editor';
+import { IndentFormatting } from '@docx-editor.dev/core-contract/contracts/editor';
 import { loadFonts } from '@docx-editor.dev/core-contract/editor';
 import { LoadFontsRequest } from '@docx-editor.dev/core-contract/editor';
 import { LoadFontsResult } from '@docx-editor.dev/core-contract/editor';
@@ -55,6 +64,7 @@ import { ReactNode } from 'react';
 import { Ref } from 'react';
 import { RefAttributes } from 'react';
 import { ReviewItemPlacement } from '@docx-editor.dev/core-contract/contracts/editor';
+import { RulerIndent } from '@docx-editor.dev/core-contract/editor';
 import { rulerPageBox } from '@docx-editor.dev/core-contract/editor';
 import { RulerTick } from '@docx-editor.dev/core-contract/editor';
 import { RulerUnit } from '@docx-editor.dev/core-contract/editor';
@@ -62,14 +72,32 @@ import { runToolbarCommand } from '@docx-editor.dev/core-contract/editor';
 import { SectionProperties } from '@docx-editor.dev/core-contract/editor';
 import { SurfaceFormatting } from '@docx-editor.dev/core-contract/editor';
 import { SurfaceHyperlink } from '@docx-editor.dev/core-contract/editor';
+import { TextMatch } from '@docx-editor.dev/core-contract/contracts/editor';
 import { TextMeasurer } from '@docx-editor.dev/core-contract/editor';
 import { Theme } from '@docx-editor.dev/core-contract/contracts/editor';
 import { ToolbarCommandState } from '@docx-editor.dev/core-contract/editor';
 import { toolbarCommandState } from '@docx-editor.dev/core-contract/editor';
 import { Translations } from '@docx-editor.dev/i18n';
+import { ViewScope } from '@docx-editor.dev/core-contract/contracts/editor';
 import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core-contract/editor';
 
 export { CHROME_GROUPS }
+
+export { CHROME_MENUS }
+
+export { ChromeMenu }
+
+export { ChromeMenuEntry }
+
+export { ChromeMenuId }
+
+export { ChromeMenuItemEntry }
+
+export { ChromeMenuSeparatorEntry }
+
+export { chromeMenuSlots }
+
+export { ChromeMenuSubmenuEntry }
 
 export { ChromeSlotId }
 
@@ -109,6 +137,15 @@ export interface DocxEditorDocumentOutlineProps {
     leftOffset?: number;
     onClose?: () => void;
     topOffset?: number;
+}
+
+// @public
+export function DocxEditorHeaderFooterChrome(input: DocxEditorHeaderFooterChromeProps): ReactElement | null;
+
+// @public
+export interface DocxEditorHeaderFooterChromeProps {
+    // (undocumented)
+    className?: string;
 }
 
 // @public
@@ -165,13 +202,66 @@ export interface DocxEditorLoadingSpinnerProps {
 }
 
 // @public
+export const DocxEditorMenu: DocxEditorMenuNamespace;
+
+// @public
+export interface DocxEditorMenuNamespace {
+    // (undocumented)
+    (props: DocxEditorMenuProps): ReactNode;
+    readonly Entry: typeof MenuEntry;
+    // (undocumented)
+    readonly File: MenuPartComponent;
+    // (undocumented)
+    readonly Format: MenuPartComponent;
+    // (undocumented)
+    readonly Help: MenuPartComponent;
+    // (undocumented)
+    readonly Insert: MenuPartComponent;
+    readonly Item: typeof MenuItem;
+    readonly Menu: typeof Menu;
+    // (undocumented)
+    readonly Open: typeof MenuOpen;
+    // (undocumented)
+    readonly PageSetup: typeof MenuPageSetup;
+    readonly ReportIssue: typeof MenuReportIssue;
+    readonly Row: typeof MenuRow;
+    // (undocumented)
+    readonly Save: typeof MenuSave;
+    // (undocumented)
+    readonly Separator: typeof MenuSeparator;
+    // (undocumented)
+    readonly Submenu: typeof MenuSubmenu;
+    readonly TableGrid: typeof MenuTableGrid;
+}
+
+// @public
+export interface DocxEditorMenuProps {
+    // (undocumented)
+    children?: ReactNode;
+    className?: string;
+    fileName?: string;
+    onOpen?: () => void;
+    onPageSetup?: () => void;
+    onReportIssue?: () => void;
+    onSave?: () => void;
+    preset?: boolean;
+    reportIssue?: boolean;
+    t?: ToolbarTranslate;
+}
+
+// @public
 export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEditorProps & RefAttributes<DocxEditorRef>> {
     // (undocumented)
     readonly Content: typeof DocxEditorContent;
     readonly DocumentOutline: typeof DocxEditorDocumentOutline;
+    readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
     readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
     readonly HyperLink: typeof DocxEditorHyperLink;
     readonly Loading: typeof DocxEditorLoading;
+    readonly Menu: typeof DocxEditorMenu;
+    readonly Navigation: typeof Navigation;
+    // (undocumented)
+    readonly NotesChrome: typeof DocxEditorNotesChrome;
     readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
     readonly Review: typeof DocxEditorReview;
     // (undocumented)
@@ -181,6 +271,51 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly VerticalRuler: typeof DocxEditorVerticalRuler;
     // (undocumented)
     readonly Viewport: typeof DocxEditorViewport;
+}
+
+// @public
+export function DocxEditorNavigation(props: DocxEditorNavigationProps): ReactElement;
+
+// @public
+export interface DocxEditorNavigationNamespace {
+    // (undocumented)
+    (props: DocxEditorNavigationProps): ReactElement;
+    // (undocumented)
+    readonly Close: typeof NavigationClose;
+    // (undocumented)
+    readonly Find: typeof NavigationFind;
+    // (undocumented)
+    readonly Header: typeof NavigationHeader;
+    // (undocumented)
+    readonly Headings: typeof NavigationHeadings;
+    // (undocumented)
+    readonly Tab: typeof NavigationTab;
+    // (undocumented)
+    readonly Tabs: typeof NavigationTabs;
+    // (undocumented)
+    readonly Title: typeof NavigationTitle;
+    // (undocumented)
+    readonly Toggle: typeof NavigationToggle;
+}
+
+// @public
+export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    style?: CSSProperties;
+    t?: (key: string, params?: Record<string, string | number>) => string;
+    toggle?: boolean;
+}
+
+// @public (undocumented)
+export function DocxEditorNotesChrome(input: DocxEditorNotesChromeProps): ReactElement | null;
+
+// @public
+export interface DocxEditorNotesChromeProps {
+    // (undocumented)
+    className?: string;
 }
 
 // @public
@@ -207,9 +342,12 @@ export interface DocxEditorProps {
     hyperlinkPopup?: boolean;
     // (undocumented)
     locale?: string;
+    menu?: boolean | DocxEditorMenuProps;
     mode?: EditorMode;
+    navigation?: boolean;
     onChange?: (change: DocumentChange) => void;
     onFontError?: (error: EditorFontError) => void;
+    onOpen?: () => void;
     onReady?: (editor: Editor) => void;
     onSave?: () => void;
     onTitleChange?: (title: string) => void;
@@ -349,6 +487,7 @@ export const DocxEditorToolbar: DocxEditorToolbarNamespace;
 export interface DocxEditorToolbarNamespace {
     // (undocumented)
     (props: DocxEditorToolbarProps): ReactNode;
+    readonly Action: typeof ToolbarAction;
     // (undocumented)
     readonly AlignCenter: ToolbarPartComponent;
     // (undocumented)
@@ -525,6 +664,9 @@ export { FontUrlSource }
 
 export { generateRulerTicks }
 
+// @public
+export type HeaderFooterState = Exclude<ReturnType<Editor['getHeaderFooterState']>, null>;
+
 // @public (undocumented)
 export function HorizontalRuler(input: HorizontalRulerProps): react__default.ReactElement;
 
@@ -532,22 +674,11 @@ export function HorizontalRuler(input: HorizontalRulerProps): react__default.Rea
 export interface HorizontalRulerProps {
     // (undocumented)
     className?: string;
-    // (undocumented)
     editable?: boolean;
-    // (undocumented)
-    firstLineIndent?: number;
-    // (undocumented)
-    hangingIndent?: boolean;
-    // (undocumented)
-    indentLeft?: number;
-    // (undocumented)
-    indentRight?: number;
-    // (undocumented)
-    onFirstLineIndentChange?: (indentTwips: number) => void;
-    // (undocumented)
-    onIndentLeftChange?: (indentTwips: number) => void;
-    // (undocumented)
-    onIndentRightChange?: (indentTwips: number) => void;
+    indent?: RulerIndent | null;
+    indentEditable?: boolean;
+    onIndentChange?: (indent: RulerIndent) => void;
+    onIndentDragEnd?: () => void;
     // (undocumented)
     onLeftMarginChange?: (marginTwips: number) => void;
     onMarginDragEnd?: () => void;
@@ -557,8 +688,7 @@ export interface HorizontalRulerProps {
     onTabMarkRemove?: (positionTwips: number) => void;
     // (undocumented)
     pageSetup?: RulerPageSetup | null;
-    // (undocumented)
-    showFirstLineIndent?: boolean;
+    showIndentHandles?: boolean;
     // (undocumented)
     style?: CSSProperties;
     // (undocumented)
@@ -619,6 +749,16 @@ export interface HyperLinkProps extends HyperLinkPartProps {
     preset?: boolean;
 }
 
+// @public
+export interface IndentUpdate {
+    // (undocumented)
+    readonly firstLine?: number | null;
+    // (undocumented)
+    readonly left?: number | null;
+    // (undocumented)
+    readonly right?: number | null;
+}
+
 export { loadFonts }
 
 export { LoadFontsRequest }
@@ -628,8 +768,176 @@ export { LoadFontsResult }
 // @public (undocumented)
 export function Logo(input: LogoProps): react__default.JSX.Element;
 
+// @public
+export interface MenuActionProps {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
+}
+
 // @public (undocumented)
 export function MenuBar(): react__default.JSX.Element;
+
+// @public
+export type MenuId = ChromeMenuId | (string & {});
+
+// @public
+export interface MenuItemProps {
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    labelKey?: string;
+    shortcutKey?: string;
+    slot: ChromeSlotId;
+}
+
+// @public
+export interface MenuPartComponent {
+    // (undocumented)
+    (props: Omit<MenuProps, 'id'>): ReactNode;
+    // (undocumented)
+    readonly docxMenu: ChromeMenuId;
+}
+
+// @public
+export interface MenuProps {
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    id: MenuId;
+    label?: string;
+    labelKey?: string;
+    preset?: boolean;
+}
+
+// @public
+export interface MenuReportIssueProps {
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    onSelect?: () => void;
+}
+
+// @public
+export interface MenuRowProps {
+    active?: boolean;
+    // (undocumented)
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    disabled?: boolean;
+    icon?: ReactNode;
+    // (undocumented)
+    onSelect?: () => void;
+    selected?: true;
+    shortcut?: string;
+    slot?: string;
+    title?: string;
+}
+
+// @public
+export interface MenuSeparatorProps {
+    // (undocumented)
+    className?: string;
+}
+
+// @public
+export interface MenuSubmenuProps {
+    // (undocumented)
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+    labelKey: string;
+    paths?: readonly string[] | null;
+}
+
+// @public
+export interface MenuTableGridProps {
+    // (undocumented)
+    className?: string;
+    slot?: ChromeSlotId;
+}
+
+// @public
+export const NAVIGATION_PANE_GAP = 16;
+
+// @public
+export const NAVIGATION_PANE_INSET = 32;
+
+// @public
+export const NAVIGATION_PANE_WIDTH = 280;
+
+// @public
+export function NavigationClose(input: NavigationPartProps): ReactElement;
+
+// @public
+export function NavigationFind(input: NavigationPartProps): ReactElement;
+
+// @public
+export function NavigationHeader(input: NavigationPartProps): ReactElement;
+
+// @public
+export function NavigationHeadings(input: NavigationPartProps): ReactElement;
+
+// @public
+export function navigationPaneReservation(paneWidth?: number): number;
+
+// @public
+export interface NavigationPartProps {
+    // (undocumented)
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    style?: CSSProperties;
+}
+
+// @public
+export function navigationShift(input: NavigationShiftInput): number;
+
+// @public (undocumented)
+export interface NavigationShiftInput {
+    readonly pageWidthPx: number;
+    readonly reservation: number;
+    readonly viewportWidth: number;
+}
+
+// @public
+export function NavigationTab(input: NavigationTabProps): ReactElement;
+
+// @public
+export interface NavigationTabProps extends NavigationPartProps {
+    // (undocumented)
+    value: NavigationTabValue;
+}
+
+// @public
+export function NavigationTabs(input: NavigationPartProps): ReactElement;
+
+// @public
+export type NavigationTabValue = 'headings' | 'find';
+
+// @public
+export function NavigationTitle(input: NavigationPartProps): ReactElement;
+
+// @public
+export function NavigationToggle(input: NavigationPartProps): ReactElement;
+
+// @public (undocumented)
+export type NotePropertiesState = Exclude<ReturnType<Editor['getNotePropertiesState']>, null>;
+
+// @public
+export type OutlineHeading = ReturnType<Editor['getOutline']>[number];
+
+// @public
+export interface OutlineHeadingItem {
+    readonly depth: number;
+    // (undocumented)
+    readonly heading: OutlineHeading;
+}
 
 // @public
 export function PageIndicator(input: {
@@ -823,6 +1131,12 @@ export { RulerUnit }
 export { runToolbarCommand }
 
 // @public
+export const SEARCH_DEBOUNCE_MS = 150;
+
+// @public
+export const SEARCH_MATCH_LIMIT = 2000;
+
+// @public
 export function TitleBar(input: TitleBarProps): react__default.JSX.Element;
 
 // @public (undocumented)
@@ -830,6 +1144,23 @@ export function TitleBarRight(input: TitleBarRightProps): react__default.JSX.Ele
 
 // @public
 export function Toolbar(explicitProps: ToolbarProps): react__default.JSX.Element;
+
+// @public
+export interface ToolbarActionProps {
+    active?: boolean;
+    asChild?: boolean;
+    // (undocumented)
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    disabled?: boolean;
+    disabledReason?: string;
+    icon?: ReactNode;
+    label: string;
+    // (undocumented)
+    onSelect?: () => void;
+}
 
 // @public
 export interface ToolbarAlignmentComponent {
@@ -970,6 +1301,46 @@ export interface ToolbarSlotPartProps {
 export type ToolbarTranslate = (key: string) => string;
 
 // @public
+export function useDocumentOutline(): UseDocumentOutlineResult;
+
+// @public
+export interface UseDocumentOutlineResult {
+    readonly goTo: (blockId: string) => void;
+    readonly headings: readonly OutlineHeading[];
+    // (undocumented)
+    readonly isEmpty: boolean;
+    readonly items: readonly OutlineHeadingItem[];
+    readonly selectedBlockId: string | null;
+}
+
+// @public
+export function useDocumentSearch(): UseDocumentSearchResult;
+
+// @public
+export interface UseDocumentSearchResult {
+    readonly activeIndex: number;
+    readonly clear: () => void;
+    readonly goTo: (index: number) => void;
+    readonly isPending: boolean;
+    // (undocumented)
+    readonly matchCase: boolean;
+    readonly matches: readonly TextMatch[];
+    readonly next: () => void;
+    // (undocumented)
+    readonly previous: () => void;
+    readonly query: string;
+    // (undocumented)
+    readonly setMatchCase: (value: boolean) => void;
+    // (undocumented)
+    readonly setQuery: (query: string) => void;
+    // (undocumented)
+    readonly setWholeWord: (value: boolean) => void;
+    readonly truncated: boolean;
+    // (undocumented)
+    readonly wholeWord: boolean;
+}
+
+// @public
 export function useDocxEditor(): DocxEditorInstance | null;
 
 // @public
@@ -994,6 +1365,9 @@ export interface UseFontFamilyResult {
     readonly setValue: (family: string) => void;
     readonly value: string | null;
 }
+
+// @public
+export function useHeaderFooterState(): HeaderFooterState | null;
 
 // @public
 export function useHyperlinkPopup(): UseHyperlinkPopupResult;
@@ -1021,6 +1395,50 @@ export interface UseHyperlinkPopupResult {
 }
 
 // @public
+export function useNavigationPane(options?: UseNavigationPaneOptions): UseNavigationPaneResult;
+
+// @public
+export interface UseNavigationPaneOptions {
+    defaultOpen?: boolean;
+    defaultTab?: NavigationTabValue;
+    // (undocumented)
+    onOpenChange?: (open: boolean) => void;
+    // (undocumented)
+    onTabChange?: (tab: NavigationTabValue) => void;
+    open?: boolean;
+    paneWidth?: number;
+    tab?: NavigationTabValue;
+}
+
+// @public
+export interface UseNavigationPaneResult {
+    // (undocumented)
+    readonly open: boolean;
+    // (undocumented)
+    readonly paneWidth: number;
+    // (undocumented)
+    readonly setOpen: (open: boolean) => void;
+    // (undocumented)
+    readonly setTab: (tab: NavigationTabValue) => void;
+    readonly shift: number;
+    // (undocumented)
+    readonly tab: NavigationTabValue;
+    // (undocumented)
+    readonly toggle: () => void;
+}
+
+// @public
+export function useNavigationShift(): number;
+
+// @public
+export function useNotePropertiesState(): NotePropertiesState | null;
+
+// @public
+export function useNoteScopeState(): Extract<ViewScope, {
+    kind: 'note';
+}> | null;
+
+// @public
 export function usePageSetup(): UsePageSetupReturn;
 
 // @public
@@ -1028,6 +1446,16 @@ export interface UsePageSetupReturn {
     readonly apply: (update: PageSetupUpdate) => boolean;
     readonly isEnabled: boolean;
     readonly pageSetup: PageSetup | null;
+}
+
+// @public
+export function useParagraphIndent(): UseParagraphIndentReturn;
+
+// @public
+export interface UseParagraphIndentReturn {
+    readonly apply: (update: IndentUpdate) => boolean;
+    readonly indent: IndentFormatting | null;
+    readonly isEnabled: boolean;
 }
 
 // @public

@@ -287,6 +287,30 @@ export function hitTestPage(
 }
 
 /**
+ * Hit test story-relative fragments (header/footer boxes use this coordinate space).
+ *
+ * Unlike `hitTestPage`, there is no cross-page neighbour walk — furniture stories are
+ * self-contained on one sheet.
+ */
+export function hitTestFragments(
+  layout: SemanticLayout,
+  pageIndex: number,
+  fragments: readonly BlockFragmentRecord[],
+  point: HitPoint,
+  options: HitTestOptions = {}
+): SemanticHit | null {
+  const page = layout.pages[pageIndex];
+  if (!page) return null;
+  const context: HitContext = {
+    layout,
+    pageIndex: page.index,
+    verticalWeight: options.verticalWeight ?? DEFAULT_VERTICAL_WEIGHT,
+    measurer: options.measurer,
+  };
+  return resolveBlocks(fragments, point, context, null);
+}
+
+/**
  * Hit test a point given in SHEET coordinates — the space `page.box` lives in, and the space
  * a surface's own pixel offsets convert into.
  */
@@ -326,6 +350,31 @@ function weightedDistance(box: LayoutBox, point: HitPoint, verticalWeight: numbe
 }
 
 /**
+ * How far a point is from a BLOCK, which is not the same question as how far it is from the
+ * block's box.
+ *
+ * A table owns its whole horizontal band. Its box is only as wide as its columns, so the
+ * blank strip beside a narrow table sits outside every box on the page, and plain
+ * nearest-box hands that strip to whichever PARAGRAPH above or below happens to be closer —
+ * a click level with row three lands two paragraphs up. Word puts the caret in the nearest
+ * cell of the row you clicked beside, so a table level with the point is at distance zero
+ * horizontally and the row resolution below picks the cell.
+ *
+ * Paragraphs keep the plain measure: their boxes start at the left indent, and the indent
+ * strip must stay reachable by real proximity.
+ */
+function blockDistance(
+  block: BlockFragmentRecord,
+  point: HitPoint,
+  verticalWeight: number
+): number {
+  if (block.kind !== 'table') return weightedDistance(block.box, point, verticalWeight);
+  const dy = Math.max(block.box.y - point.y, 0, point.y - (block.box.y + block.box.height));
+  if (dy > 0) return weightedDistance(block.box, point, verticalWeight);
+  return 0;
+}
+
+/**
  * The block a point means, then the position within it.
  *
  * A paragraph's box starts at its left INDENT, so the indent strip — the most common place to
@@ -359,7 +408,7 @@ function resolveBlocks(
   // answer for a press.
   const ranked = blocks
     .filter((block) => block !== contained)
-    .map((block) => ({ block, score: weightedDistance(block.box, point, context.verticalWeight) }))
+    .map((block) => ({ block, score: blockDistance(block, point, context.verticalWeight) }))
     .sort((left, right) => left.score - right.score);
   for (const { block } of ranked) {
     const hit = resolveOneBlock(block, point, context, cell);
@@ -606,6 +655,19 @@ function prefixWidth(span: StyleSpanRecord, utf16: number, measurer: TextMeasure
 }
 
 /**
+ * True when the span's painted advance is owned by layout, not by measuring `span.text`.
+ *
+ * Tabs keep a 1:1 `\t` model range but a stop-sized box; measuring U+0009 returns a narrow
+ * native advance and would place the caret after a right/center/decimal/left tab next to the
+ * preceding run instead of at the aligned destination. Projected fields and other non-1:1
+ * substitutions are the same class.
+ */
+function usesPublishedAdvance(span: StyleSpanRecord): boolean {
+  if (span.text === '\t' || span.projected) return true;
+  return span.text.length !== span.range.end - span.range.start;
+}
+
+/**
  * The x of a model offset inside a span — the inverse of {@link offsetWithinSpan}.
  *
  * Shares the measurement, and the cache, with the hit test. Interpolating across the span's
@@ -621,7 +683,9 @@ export function spanOffsetX(
   const length = span.range.end - span.range.start;
   if (length <= 0) return span.box.x;
   const within = Math.max(0, Math.min(offset - span.range.start, length));
-  if (!measurer || span.text.length !== length) {
+  // Layout-owned advances (tabs, projected fields): always use the published box. Measuring
+  // `\t` or multi-digit PAGE ink would disagree with breakParagraph's stop geometry.
+  if (!measurer || usesPublishedAdvance(span)) {
     return span.box.x + span.box.width * (within / length);
   }
   return span.box.x + prefixWidth(span, within, measurer);
@@ -636,8 +700,12 @@ export function spanOffsetX(
  * would type into, which is also how the painter already draws the selection band: every run
  * is its own inline box, and the band steps with the text.
  *
- * At a boundary the run BEFORE the offset wins — that is the run a keystroke would continue —
- * except at the start of the line, where there is nothing before it.
+ * Affinity at a shared model boundary:
+ *   - after a layout-sized atom (tab / projected field), prefer the DOWNSTREAM span so the
+ *     caret sits at the aligned destination (e.g. before CONFIDENTIAL after a right tab),
+ *     matching hit-testing and caretStops;
+ *   - otherwise the run BEFORE the offset wins — the run a keystroke would continue —
+ *     except at the start of the line, where there is nothing before it.
  */
 export function caretBoxOnLine(
   line: LineRecord,
@@ -659,11 +727,23 @@ export function caretBoxOnLine(
     };
   }
   let chosen = spans[0]!;
-  for (const span of spans) {
-    if (offset > span.range.start && offset >= span.range.end) chosen = span;
-    else if (offset > span.range.start && offset < span.range.end) {
+  for (let index = 0; index < spans.length; index += 1) {
+    const span = spans[index]!;
+    if (offset > span.range.start && offset < span.range.end) {
       chosen = span;
       break;
+    }
+    if (offset === span.range.end) {
+      const next = spans[index + 1];
+      // Trailing edge of a tab/field: downstream affinity — same model offset as the next
+      // span's start, but the visual insertion point belongs with the following text.
+      if (next && next.range.start === offset && usesPublishedAdvance(span)) {
+        chosen = next;
+        break;
+      }
+      chosen = span;
+    } else if (offset > span.range.end) {
+      chosen = span;
     }
   }
   const x = spanOffsetX(chosen, offset, measurer);
@@ -688,9 +768,9 @@ function offsetWithinSpan(span: StyleSpanRecord, x: number, context: HitContext)
   const target = x - span.box.x;
   const length = span.range.end - span.range.start;
 
-  // A span whose painted text is not a 1:1 projection of its model range is an ATOM — a tab, a
-  // field result. The caret goes before it or after it, never inside, so the midpoint decides.
-  if (length <= 0 || span.text.length !== length) {
+  // Layout-owned advances (tabs, projected fields, other non-1:1 substitutions) are ATOMS —
+  // the caret goes before or after the published box, never inside via measure(`\t`).
+  if (length <= 0 || usesPublishedAdvance(span)) {
     const after = target > span.box.width / 2;
     return {
       offset: after ? span.range.end : span.range.start,

@@ -8,6 +8,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
 import {
+  caretBoxOnLine,
   DEFAULT_VERTICAL_WEIGHT,
   hitTestPage,
   hitTestSheet,
@@ -16,7 +17,7 @@ import {
   pageAtY,
   spanOffsetX,
 } from '../semantic-hit-test.ts';
-import { caretAt } from '../semantic-interaction.ts';
+import { caretAt, caretStops, moveCaret } from '../semantic-interaction.ts';
 import { resetGraphemeBoundary, setGraphemeBoundary } from '../grapheme.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import type { ResolvedRunStyle } from '../run-style.ts';
@@ -638,4 +639,56 @@ describe('the caret is aligned the way the text is', () => {
     expect(caret.y).toBe(line.box.y);
     expect(caret.height).toBe(line.box.height);
   });
+});
+
+describe('tab stops own caret geometry (layout advance, not measure(\\t))', () => {
+  // Fixed measurer charges 6pt per code unit — including U+0009 — so a regression that
+  // measures the tab character instead of using the published stop advance places the
+  // post-tab caret ~6pt after the preceding run instead of at the aligned destination.
+  const tabParagraph = (
+    val: 'left' | 'center' | 'right' | 'decimal',
+    posTwips: number,
+    after: string
+  ) =>
+    `<w:p><w:pPr><w:tabs><w:tab w:val="${val}" w:pos="${posTwips}"/></w:tabs></w:pPr>` +
+    `<w:r><w:t>L</w:t><w:tab/><w:t>${after}</w:t></w:r></w:p>`;
+
+  for (const { val, pos, after } of [
+    { val: 'left' as const, pos: 1440, after: 'X' },
+    { val: 'center' as const, pos: 2400, after: 'ABCD' },
+    { val: 'right' as const, pos: 2400, after: 'ABCD' },
+    { val: 'decimal' as const, pos: 2400, after: '12.5' },
+  ]) {
+    test(`${val} tab: offset after \\t paints at following text, not after L`, () => {
+      const layout = lay(tabParagraph(val, pos, after), measurer);
+      const line = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!;
+      const tab = line.spans.find((span) => span.text === '\t')!;
+      const following = line.spans[line.spans.indexOf(tab) + 1]!;
+      expect(tab.box.width).toBeGreaterThan(measurer.measure('\t', tab.style));
+
+      const afterTab = tab.range.end;
+      expect(following.range.start).toBe(afterTab);
+
+      const painted = caretAt(layout, { paragraphId: P0, offset: afterTab }, measurer)!;
+      expect(painted.x).toBeCloseTo(following.box.x, 5);
+      expect(painted.x).toBeGreaterThan(tab.box.x + 10);
+
+      const beforeTab = caretAt(layout, { paragraphId: P0, offset: tab.range.start }, measurer)!;
+      expect(beforeTab.x).toBeCloseTo(tab.box.x, 5);
+
+      // Hit the post-tab destination → same model offset; Left/Right round-trip.
+      const clicked = hit(layout, following.box.x + 1, line.box.y + 2, measurer)!;
+      expect(clicked.position.offset).toBe(afterTab);
+      const right = moveCaret(layout, { paragraphId: P0, offset: tab.range.start }, 'right')!;
+      expect(right.position.offset).toBe(afterTab);
+      const left = moveCaret(layout, right.position, 'left')!;
+      expect(left.position.offset).toBe(tab.range.start);
+
+      const stop = caretStops(layout, measurer).find(
+        (entry) => entry.position.offset === afterTab
+      )!;
+      expect(stop.x).toBeCloseTo(following.box.x, 5);
+      expect(caretBoxOnLine(line, afterTab, measurer).x).toBeCloseTo(following.box.x, 5);
+    });
+  }
 });

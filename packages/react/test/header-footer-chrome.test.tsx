@@ -1,0 +1,220 @@
+// Header/footer scope chrome against the real engine: overlay state, options, inserts,
+// mousedown caret contract, ARIA, and selector stability.
+
+import './dom-setup.ts';
+
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+import { afterEach, describe, expect, test } from 'bun:test';
+import type { ReactNode } from 'react';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
+import { zipSync, strToU8 } from 'fflate';
+import type { DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
+import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
+import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
+import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
+import { DocxEditorHeaderFooterChrome } from '../src/editor/DocxEditorHeaderFooter.tsx';
+import { useHeaderFooterState } from '../src/editor/useHeaderFooterState.ts';
+
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+
+const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+
+function docxWithHeader(headerText = 'Hdr'): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}">` +
+        '<Relationship Id="rId10" Type="' +
+        R +
+        '/header" Target="header1.xml"/>' +
+        '</Relationships>'
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+        p('body') +
+        `<w:sectPr><w:headerReference w:type="default" r:id="rId10"/></w:sectPr>` +
+        '</w:body></w:document>'
+    ),
+    'word/header1.xml': strToU8(`<w:hdr xmlns:w="${W}">${p(headerText)}</w:hdr>`),
+  });
+}
+
+/** Two sections: section 2 inherits section 1's default header. */
+function docxInheritedHeader(): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}">` +
+        '<Relationship Id="rId10" Type="' +
+        R +
+        '/header" Target="header1.xml"/>' +
+        '</Relationships>'
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+        p('sec1') +
+        `<w:p><w:pPr><w:sectPr><w:headerReference w:type="default" r:id="rId10"/></w:sectPr></w:pPr></w:p>` +
+        p('sec2') +
+        '<w:sectPr/>' +
+        '</w:body></w:document>'
+    ),
+    'word/header1.xml': strToU8(`<w:hdr xmlns:w="${W}">${p('Shared')}</w:hdr>`),
+  });
+}
+
+function mountChrome(
+  source: Uint8Array,
+  extra?: ReactNode
+): { editor: () => DocxEditorInstance; view: ReturnType<typeof render> } {
+  let instance: DocxEditorInstance | null = null;
+  const view = render(
+    <DocxEditorRoot
+      document={source}
+      onReady={(editor) => {
+        instance = editor as DocxEditorInstance;
+      }}
+    >
+      <DocxEditorHeaderFooterChrome />
+      {extra}
+      <DocxEditorViewport>
+        <DocxEditorContent />
+      </DocxEditorViewport>
+    </DocxEditorRoot>
+  );
+  return { view, editor: () => instance! };
+}
+
+function SelectorProbe(): null {
+  const state = useHeaderFooterState();
+  (globalThis as unknown as { __hfProbe?: unknown }).__hfProbe = state;
+  return null;
+}
+
+afterEach(() => {
+  cleanup();
+  delete (globalThis as unknown as { __hfProbe?: unknown }).__hfProbe;
+});
+
+describe('DocxEditor.HeaderFooterChrome', () => {
+  test('hidden until a furniture scope opens', () => {
+    const { view } = mountChrome(docxWithHeader());
+    expect(view.queryByTestId('docx-hf-chrome')).toBeNull();
+  });
+
+  test('shows region and section after editHeaderFooter', async () => {
+    const { view, editor } = mountChrome(docxWithHeader());
+    await act(async () => {
+      const opened = editor().exec({ type: 'editHeaderFooter', position: 'header' });
+      expect(opened.ok).toBe(true);
+    });
+    const chrome = view.getByTestId('docx-hf-chrome');
+    expect(chrome).toBeTruthy();
+    expect(chrome.textContent).toContain('Header');
+    expect(chrome.textContent).toContain('Section 1');
+    expect(chrome.getAttribute('aria-label')).toBe('Header and footer editing');
+  });
+
+  test('shows inherited warning for inherited header', async () => {
+    const { view, editor } = mountChrome(docxInheritedHeader());
+    await act(async () => {
+      editor().exec({ type: 'editHeaderFooter', position: 'header', sectionIndex: 1 });
+    });
+    expect(view.getByTestId('docx-hf-inherited')).toBeTruthy();
+    expect(view.getByTestId('docx-hf-inherited').textContent).toContain('Same as previous');
+  });
+
+  test('insert slots disabled in body, enabled in scope', async () => {
+    const { view, editor } = mountChrome(docxWithHeader());
+    const pageNumber = () => view.queryByRole('button', { name: 'Insert current page number' });
+    expect(pageNumber()).toBeNull();
+
+    await act(async () => {
+      editor().exec({ type: 'editHeaderFooter', position: 'header' });
+    });
+    const button = view.getByRole('button', { name: 'Insert current page number' });
+    expect(button.disabled).toBe(false);
+    const disabled = editor().can({ type: 'insertPageField', field: 'PAGE' });
+    expect(disabled.ok).toBe(true);
+  });
+
+  test('options menu exposes link on declared section and unlink when inherited', async () => {
+    const declared = mountChrome(docxWithHeader());
+    await act(async () => {
+      declared.editor().exec({ type: 'editHeaderFooter', position: 'header' });
+    });
+    fireEvent.click(declared.view.getByText('Options'));
+    expect(declared.view.getByText('Link to previous')).toBeTruthy();
+    cleanup();
+
+    const inherited = mountChrome(docxInheritedHeader());
+    await act(async () => {
+      inherited.editor().exec({ type: 'editHeaderFooter', position: 'header', sectionIndex: 1 });
+    });
+    fireEvent.click(inherited.view.getByText('Options'));
+    expect(inherited.view.getByText('Unlink from previous')).toBeTruthy();
+  });
+
+  test('close dispatches exitHeaderFooter', async () => {
+    const { view, editor } = mountChrome(docxWithHeader());
+    await act(async () => {
+      editor().exec({ type: 'editHeaderFooter', position: 'header' });
+    });
+    await act(async () => {
+      fireEvent.click(view.getByTestId('docx-hf-close'));
+    });
+    expect(editor().getHeaderFooterState()).toBeNull();
+    expect(view.queryByTestId('docx-hf-chrome')).toBeNull();
+  });
+
+  test('chrome mousedown preventDefault on buttons', async () => {
+    const { view, editor } = mountChrome(docxWithHeader());
+    await act(async () => {
+      editor().exec({ type: 'editHeaderFooter', position: 'header' });
+    });
+    const close = view.getByTestId('docx-hf-close');
+    const event = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    let prevented = false;
+    event.preventDefault = () => {
+      prevented = true;
+    };
+    close.dispatchEvent(event);
+    expect(prevented).toBe(true);
+  });
+
+  test('useHeaderFooterState keeps reference when unrelated state moves', async () => {
+    const { editor } = mountChrome(docxWithHeader(), <SelectorProbe />);
+    await act(async () => {
+      const opened = editor().exec({ type: 'editHeaderFooter', position: 'header' });
+      expect(opened.ok).toBe(true);
+    });
+    const first = (globalThis as unknown as { __hfProbe?: unknown }).__hfProbe;
+    expect(first).not.toBeNull();
+    await act(async () => {
+      editor().setZoom(1.1);
+    });
+    const second = (globalThis as unknown as { __hfProbe?: unknown }).__hfProbe;
+    expect(first).toBe(second);
+  });
+});

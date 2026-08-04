@@ -29,6 +29,8 @@ Header and footer references SHALL be resolved for every section the document de
 
 A section declaring no reference for a needed kind and variant SHALL use what the preceding section resolves to for that kind and variant. The first section has no predecessor: declaring none renders that region empty.
 
+**Shipped:** `inheritMaps` in `hf-references.ts` merges inherited and declared parts per variant. Layout and paint already consume the merged maps.
+
 #### Scenario: Inheritance chain
 
 - **WHEN** section 2 declares a default header and section 3 declares none
@@ -45,10 +47,22 @@ A section declaring no reference for a needed kind and variant SHALL use what th
 - **WHEN** a section declares a footer but no header
 - **THEN** it uses its own footer and the inherited header
 
-#### Scenario: Resolution reports inheritance
+### Requirement: Resolution exposes inherited versus declared metadata
 
-- **WHEN** a caller asks which part applies to a page in a section that declares none
-- **THEN** the result names the resolved part and reports that it is inherited
+Merged resolution maps are not sufficient for editing chrome: a user editing an inherited header must be warned before the edit propagates backwards. The engine SHALL expose, per section/kind/variant, the resolved part **and** whether that part is declared on the section or inherited from a predecessor.
+
+**Not shipped today.** `resolveHeaderFooterPartsBySection` returns merged maps only; `getHeaderFooterState()` returns a stub without `inherited` or `rId`.
+
+#### Scenario: Declared part is reported as own
+
+- **WHEN** a section declares its own `default` header reference
+- **THEN** the resolution query reports `inherited: false` for that kind and variant
+
+#### Scenario: Inherited part is reported with warning metadata
+
+- **WHEN** a section declares no header and inherits section 2's default header
+- **THEN** the resolution query names section 2's resolved part and reports `inherited: true`
+- **AND** the chrome can show "Same as previous" before any edit
 
 ### Requirement: Variant selection is section-relative for `first` and document-scoped for `even`
 
@@ -94,6 +108,8 @@ The `first` variant SHALL apply to the first page **of its own section** when th
 - **WHEN** a header story's flow height exceeds the space between `@w:header` and `@w:top`
 - **THEN** the body content area starts lower so the header is not clipped and does not overlap body text
 - **AND** the box is sized by the story's flow height, never by an anchored object's extent
+
+**Shipped:** `semantic-layout.ts` computes `effectiveTop`/`effectiveBottom` from worst-case furniture flow height (40% cap). Conformance fixture `hf-tall-header.docx` is still required.
 
 #### Scenario: Empty pgNumType round-trips as empty
 
@@ -148,10 +164,23 @@ A `w:tab` node SHALL advance to the next tab stop. The treatment of U+0009 insid
 - **THEN** a new part holding a copy of the inherited content is created and the section gains its own reference
 - **AND** editing the new part does not change the previous section's pages
 
+#### Scenario: Unlink clones owned relationships
+
+- **WHEN** an inherited header owns hyperlink or embedded-media relationships and unlink-from-previous runs
+- **THEN** the clone receives the same relationship ids, types, raw targets, modes, and order under the new part owner
+- **AND** save/reopen preserves those relationships on the clone
+- **AND** external relationship metadata is retained inertly without fetching
+
 #### Scenario: Link garbage-collects an orphan
 
 - **WHEN** link-to-previous removes a section's only reference to a part and no other section references it
-- **THEN** the part, its relationship, and its content-type override are removed in the same transaction
+- **THEN** the part, its main-document relationship, its content-type override, and its owned relationship-map / `.rels` entries are removed in the same transaction
+
+#### Scenario: Create first variant enables titlePg atomically
+
+- **WHEN** create-header-footer runs for the `first` variant with `titlePage: true`
+- **THEN** the part reference and section `w:titlePg` commit as one package transaction
+- **AND** one undo removes both, and one redo restores both
 
 #### Scenario: Link on the first section is refused
 

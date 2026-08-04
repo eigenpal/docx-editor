@@ -351,7 +351,7 @@ function serializeNode(
     // `xml:space` normalization. Without it, striking " b " wrote `<w:delText> b </w:delText>`
     // with no attribute, a conformant reader dropped the edge spaces, and REJECTING the
     // deletion later restored the words with the spacing already gone.
-    node.kind === 'text' || node.kind === 'deletedText'
+    node.kind === 'text' || node.kind === 'deletedText' || node.kind === 'instrText'
       ? normalizedWmlTextAttributes(node.attributes, wmlTextValueOf(node))
       : node.attributes;
   validateQNameAttributeValues(elementAttributes, bindings, node.namespaceUri, node.localName);
@@ -438,6 +438,7 @@ function significantChildren(node: OoxmlElement, preserve: boolean): readonly Oo
       child.kind !== 'textValue' ||
       preserve ||
       node.kind === 'text' ||
+      node.kind === 'instrText' ||
       !hasElementChild ||
       hasNonWhitespaceText ||
       !/^\s*$/.test(child.value)
@@ -457,7 +458,7 @@ function fingerprintNode(
     // `xml:space` normalization. Without it, striking " b " wrote `<w:delText> b </w:delText>`
     // with no attribute, a conformant reader dropped the edge spaces, and REJECTING the
     // deletion later restored the words with the spacing already gone.
-    node.kind === 'text' || node.kind === 'deletedText'
+    node.kind === 'text' || node.kind === 'deletedText' || node.kind === 'instrText'
       ? normalizedWmlTextAttributes(node.attributes, wmlTextValueOf(node))
       : node.attributes;
   const ownSpace = xmlSpaceValue(elementAttributes);

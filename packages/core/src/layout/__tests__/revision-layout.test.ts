@@ -193,6 +193,7 @@ describe('display mode selects what layout produces', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       'proposed'
     );
     expect(pieces.map((piece) => piece.text).join('')).toBe('keep new ');
@@ -202,6 +203,7 @@ describe('display mode selects what layout produces', () => {
     const pieces = piecesOfParagraph(
       firstParagraph(body),
       [],
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -219,6 +221,7 @@ describe('display mode selects what layout produces', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       'proposed'
     );
     expect(proposed.map((piece) => [piece.text, piece.start])).toEqual([
@@ -228,6 +231,7 @@ describe('display mode selects what layout produces', () => {
     const original = piecesOfParagraph(
       firstParagraph(body),
       [],
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -246,14 +250,26 @@ describe('display mode selects what layout produces', () => {
       '<w:moveTo w:id="2" w:author="QA">' +
       `${run('there')}</w:moveTo></w:p>`;
     expect(
-      piecesOfParagraph(firstParagraph(moved), [], undefined, undefined, undefined, 'proposed').map(
-        (piece) => piece.text
-      )
+      piecesOfParagraph(
+        firstParagraph(moved),
+        [],
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'proposed'
+      ).map((piece) => piece.text)
     ).toEqual(['there']);
     expect(
-      piecesOfParagraph(firstParagraph(moved), [], undefined, undefined, undefined, 'original').map(
-        (piece) => piece.text
-      )
+      piecesOfParagraph(
+        firstParagraph(moved),
+        [],
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'original'
+      ).map((piece) => piece.text)
     ).toEqual(['here']);
   });
 
@@ -313,12 +329,21 @@ describe('display mode selects what layout produces', () => {
     // result, because the deletion it sits in was accepted.
     const nested = `<w:p>${del('9', ins('8', run('x')))}</w:p>`;
     expect(
-      piecesOfParagraph(firstParagraph(nested), [], undefined, undefined, undefined, 'proposed')
+      piecesOfParagraph(
+        firstParagraph(nested),
+        [],
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'proposed'
+      )
     ).toEqual([]);
     expect(
       piecesOfParagraph(
         firstParagraph(nested),
         [],
+        undefined,
         undefined,
         undefined,
         undefined,

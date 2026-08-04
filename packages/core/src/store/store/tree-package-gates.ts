@@ -1,0 +1,77 @@
+// Cheap package-level gates for `TreePackageStore`.
+
+import { findNode } from '../package/ooxml-edit.ts';
+import type { OoxmlPackage } from '../package/ooxml-package.ts';
+import { resolveNotesPart } from '../package/note-references.ts';
+import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import { segmentsOf } from './tree-op-segments.ts';
+import type { TreeDocOp } from './tree-ops.ts';
+
+/** Cap on nodes visited while probing one `deleteBlock` subtree for note refs. */
+export const MAX_DELETE_BLOCK_NOTE_GATE_NODES = 4_000;
+
+/** Nesting depth cap for the same probe (nested tables / SDT husks). */
+export const MAX_DELETE_BLOCK_NOTE_GATE_DEPTH = 64;
+
+/** Whether the package declares a footnotes or endnotes part at all. */
+export function hasNotesPart(pkg: OoxmlPackage): boolean {
+  return resolveNotesPart(pkg, 'footnote') !== null || resolveNotesPart(pkg, 'endnote') !== null;
+}
+
+/**
+ * Whether one text delete can strand a note body and therefore needs a package cascade.
+ * Ambiguous repeated deletes in one paragraph fail closed into the bounded cascade.
+ */
+export function deleteMayStrandNote(
+  pkg: OoxmlPackage,
+  part: OoxmlPart,
+  op: Extract<TreeDocOp, { op: 'deleteText' }>,
+  seenParagraphs: Set<string>
+): boolean {
+  if (!hasNotesPart(pkg)) return false;
+  if (seenParagraphs.has(op.paragraphId)) return true;
+  seenParagraphs.add(op.paragraphId);
+  const paragraph = findNode(part, op.paragraphId);
+  if (!paragraph || paragraph.kind !== 'paragraph') return true;
+  return segmentsOf(paragraph).some(
+    (segment) =>
+      segment.node.kind === 'noteReference' && segment.start < op.end && segment.end > op.start
+  );
+}
+
+/**
+ * Whether removing a block subtree can strand a note body.
+ *
+ * Range deletion of a fully selected table uses `deleteBlock` (no `deleteText` on cell
+ * paragraphs), so this gate walks only that subtree — never the whole package — and uses
+ * the same segment model as text deletes. Budget overrun or a missing block fails closed.
+ */
+export function deleteBlockMayStrandNote(
+  pkg: OoxmlPackage,
+  part: OoxmlPart,
+  op: Extract<TreeDocOp, { op: 'deleteBlock' }>,
+  seenBlocks: Set<string>
+): boolean {
+  if (!hasNotesPart(pkg)) return false;
+  if (seenBlocks.has(op.blockId)) return true;
+  seenBlocks.add(op.blockId);
+  const block = findNode(part, op.blockId);
+  if (!block || block.kind === 'textValue') return true;
+
+  let visited = 0;
+  const walk = (node: OoxmlNode, depth: number): boolean => {
+    if (visited >= MAX_DELETE_BLOCK_NOTE_GATE_NODES || depth > MAX_DELETE_BLOCK_NOTE_GATE_DEPTH) {
+      return true;
+    }
+    visited += 1;
+    if (node.kind === 'textValue') return false;
+    if (node.kind === 'paragraph') {
+      return segmentsOf(node).some((segment) => segment.node.kind === 'noteReference');
+    }
+    for (const child of node.children) {
+      if (walk(child, depth + 1)) return true;
+    }
+    return false;
+  };
+  return walk(block, 0);
+}

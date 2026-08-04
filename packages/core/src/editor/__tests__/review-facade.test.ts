@@ -411,9 +411,11 @@ describe('suggesting mode', () => {
 
     expect(editor.acceptReviewItem(editor.getReviewItems()[0]!.key).ok).toBe(true);
     // Nothing left pending: every `w:del` the one edit produced is resolved, not just the
-    // first. "ence and second endn" is gone and "note" took its place.
+    // first. The struck words are gone and "note" took their place; the endnote reference
+    // survives as the object-replacement atom it occupies one model position as, because the
+    // selection ran through it rather than removing the note.
     expect(editor.getReviewItems()).toHaveLength(0);
-    expect(bodyTextOf(editor)).toBe('First endnote refernoteote');
+    expect(bodyTextOf(editor)).toBe('First endnote refer\ufffcnoteote');
   });
 
   test('typing over a selection is ONE card: replaced x with y', () => {

@@ -15,6 +15,7 @@ import {
   hyperlinkTargetOf,
   type OoxmlNode,
   type OoxmlPart,
+  type StoryScope,
   type TreeDocOp,
 } from '@docx-editor.dev/core-contract/store';
 import type { SemanticPosition, SemanticSelection } from '@docx-editor.dev/core-contract/layout';
@@ -135,6 +136,8 @@ export function hyperlinkAtPosition(
 
 export interface HyperlinkOpsDeps {
   readonly session: TreeDocxSession;
+  /** Active story for reads/writes — body, header/footer, or notes part. */
+  storyScope(): StoryScope;
   readonly selection: () => SemanticSelection;
   readonly orderedRange: () => { from: SemanticPosition; to: SemanticPosition };
   readonly selectionMark: () => { paragraphId: string; start: number; end: number } | null;
@@ -169,10 +172,21 @@ export interface HyperlinkOps {
 }
 
 export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
-  const resolve = (relationshipId: string) => deps.session.relationshipTarget(relationshipId);
+  const scope = () => deps.storyScope();
+  const storyPart = (): OoxmlPart | null => deps.session.partFor(scope());
+  const resolve = (relationshipId: string) =>
+    deps.session.relationshipTarget(relationshipId, scope());
+  const applyOps = (
+    ops: Parameters<TreeDocxSession['applyTreeOps']>[0],
+    before?: Parameters<TreeDocxSession['applyTreeOps']>[1],
+    after?: Parameters<TreeDocxSession['applyTreeOps']>[2]
+  ) => deps.session.applyTreeOps(ops, before, after, scope());
 
-  const linksIn = (paragraphId: string): SurfaceHyperlink[] =>
-    hyperlinksInParagraph(deps.session.part(), paragraphId, resolve, deps.textOf);
+  const linksIn = (paragraphId: string): SurfaceHyperlink[] => {
+    const part = storyPart();
+    if (!part) return [];
+    return hyperlinksInParagraph(part, paragraphId, resolve, deps.textOf);
+  };
 
   const linkAtCaret = (): SurfaceHyperlink | null =>
     hyperlinkAtPosition(linksIn(deps.selection().head.paragraphId), deps.selection().head);
@@ -183,7 +197,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
     const caretParagraph = deps.selection().head.paragraphId;
     const near = linksIn(caretParagraph).find((link) => link.id === linkId);
     if (near) return near;
-    for (const paragraphId of deps.session.paragraphIds()) {
+    for (const paragraphId of deps.session.paragraphIdsIn(scope())) {
       const found = linksIn(paragraphId).find((link) => link.id === linkId);
       if (found) return found;
     }
@@ -202,11 +216,16 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
       // not know which it wants, and picking one for it writes a link nobody chose.
       if (wantsExternal === wantsInternal) return false;
 
+      // Refuse before minting when the active story cannot be resolved: a scoped insert that
+      // fell back to the body would leave a stray main-document relationship behind.
+      const active = scope();
+      if (!storyPart()) return false;
+
       // The relationship is minted BEFORE the transaction: it lives on the package, outside
       // the undo stack, and a refused URL must not leave a half-applied edit behind.
       let relationshipId: string | undefined;
       if (wantsExternal) {
-        const minted = deps.session.ensureHyperlinkRelationship(input.url!);
+        const minted = deps.session.ensureHyperlinkRelationship(input.url!, active);
         if (!minted) return false;
         relationshipId = minted;
       }
@@ -241,7 +260,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
         let committed = false;
         deps.commit(
           () => {
-            const result = deps.session.applyTreeOps(ops, deps.selectionMark());
+            const result = applyOps(ops, deps.selectionMark());
             committed = result.committed;
             return result;
           },
@@ -257,7 +276,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
       const paragraphId = range.from.paragraphId;
       if (range.to.paragraphId !== paragraphId) return false; // a link cannot span paragraphs
       const ops: TreeDocOp[] = [];
-      let start = range.from.offset;
+      const start = range.from.offset;
       let end = range.to.offset;
 
       if (collapsed) {
@@ -295,7 +314,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
       const after = { paragraphId, offset: end };
       deps.commit(
         () => {
-          const result = deps.session.applyTreeOps(ops, deps.selectionMark(), {
+          const result = applyOps(ops, deps.selectionMark(), {
             paragraphId,
             start: end,
             end,
@@ -309,6 +328,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
     },
 
     removeHyperlink(linkId) {
+      if (!storyPart()) return false;
       const link = linkId ? linkById(linkId) : linkAtCaret();
       if (!link) return false;
       let committed = false;
@@ -317,7 +337,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
       const after = { paragraphId: link.paragraphId, offset: link.end };
       deps.commit(
         () => {
-          const result = deps.session.applyTreeOps(
+          const result = applyOps(
             [{ op: 'removeHyperlink', linkId: link.id }],
             deps.selectionMark()
           );

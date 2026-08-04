@@ -1,28 +1,26 @@
 // The FLAGSHIP demo: the provider-first composition API, end to end.
 //
 // Everything on screen is composed under `<DocxEditor.Root>`: the library's compound
-// toolbar (the FULL chrome registry by default, with the FontFamily slot overridden
-// in place by a composed picker), and a completely demo-owned header — File / Format /
-// Help menus, an editable title, live status, Open/New/Save actions — built from
-// nothing but the public hooks (`useDocxEditor`, `useEditorState`, `useEditorCommand`,
-// `useFontFamily`). No library chrome components are used for the header on purpose:
-// it demonstrates that ANY React tree composes under Root.
+// toolbar (the FULL chrome registry by default, with the FontFamily slot overridden in
+// place by a composed picker), the library's compound MENU BAR (with a demo-owned row
+// appended into File and the whole Help menu replaced), and a demo-owned header shell
+// around them — brand, title, status, Open/New/Save buttons, the perf HUD — built from
+// nothing but the public hooks (`useDocxEditor`, `useEditorEvent`, `useFontFamily`).
+// Between them they show both halves of the contract: packaged chrome you customize in
+// place, and arbitrary React that composes under Root.
 //
-// The library toolbar's styling comes from the CORE stylesheet (`docx-toolbar`
-// family); this demo styles only its own header and menus.
+// The library chrome's styling comes from the CORE stylesheet (`docx-toolbar` and
+// `docx-menubar` families); this demo styles only its own header.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import { zipSync, strToU8 } from 'fflate';
 import {
   DocxEditor,
   useDocxEditor,
-  useEditorCommand,
   useEditorEvent,
-  useEditorState,
   useFontFamily,
   composeFontConfiguration,
-  type ChromeSlotId,
   type FontConfiguration,
 } from '@docx-editor.dev/react';
 import { installDefaultFontFaces, loadDefaultFonts } from '@docx-editor.dev/fonts';
@@ -80,149 +78,6 @@ function downloadDocx(buffer: ArrayBuffer, name: string): void {
   anchor.download = name;
   anchor.click();
   URL.revokeObjectURL(url);
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Demo-local dropdown menu (plain React, not library parts — that is the point)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function DemoMenu({ label, children }: { label: string; children: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const onMouseDown = (event: globalThis.MouseEvent) => {
-      const root = rootRef.current;
-      if (root && event.target instanceof Node && root.contains(event.target)) return;
-      setOpen(false);
-    };
-    document.addEventListener('mousedown', onMouseDown);
-    return () => document.removeEventListener('mousedown', onMouseDown);
-  }, [open]);
-
-  return (
-    <div className="demo-menu" ref={rootRef}>
-      <button
-        type="button"
-        className={`demo-menu__trigger${open ? ' demo-menu__trigger--open' : ''}`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onMouseDown={keepCaret}
-        onClick={() => setOpen((current) => !current)}
-      >
-        {label}
-      </button>
-      {open ? (
-        <div role="menu" className="demo-menu__list" onClick={() => setOpen(false)}>
-          {children}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function MenuItem({
-  onSelect,
-  checked,
-  disabled,
-  title,
-  children,
-}: {
-  onSelect: () => void;
-  checked?: boolean;
-  disabled?: boolean;
-  title?: string;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      className="demo-menu__item"
-      disabled={disabled}
-      title={title}
-      onMouseDown={keepCaret}
-      onClick={onSelect}
-    >
-      <span className="demo-menu__check" aria-hidden="true">
-        {checked ? '✓' : ''}
-      </span>
-      <span className="demo-menu__label">{children}</span>
-    </button>
-  );
-}
-
-/** A menu item bound to one chrome slot through `useEditorCommand`. */
-function CommandMenuItem({ slot, children }: { slot: ChromeSlotId; children: ReactNode }) {
-  const command = useEditorCommand(slot);
-  return (
-    <MenuItem
-      onSelect={command.execute}
-      checked={command.isActive}
-      disabled={!command.isEnabled}
-      title={command.disabledReason ?? undefined}
-    >
-      {children}
-    </MenuItem>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Header menus: File / Format / Help — all hook-built
-// ─────────────────────────────────────────────────────────────────────────────
-
-function FormatMenu() {
-  return (
-    <DemoMenu label="Format">
-      <CommandMenuItem slot="text.bold">Bold</CommandMenuItem>
-      <CommandMenuItem slot="text.italic">Italic</CommandMenuItem>
-      <CommandMenuItem slot="text.underline">Underline</CommandMenuItem>
-      <CommandMenuItem slot="text.strike">Strikethrough</CommandMenuItem>
-      <div className="demo-menu__separator" role="separator" />
-      <CommandMenuItem slot="alignment.left">Align left</CommandMenuItem>
-      <CommandMenuItem slot="alignment.center">Align center</CommandMenuItem>
-      <CommandMenuItem slot="alignment.right">Align right</CommandMenuItem>
-      <CommandMenuItem slot="alignment.justify">Justify</CommandMenuItem>
-    </DemoMenu>
-  );
-}
-
-function InsertMenu() {
-  // The chrome spec's menu row is File · Format · Insert · Help. Image and table
-  // insertion are UNWIRED engine slots (`image.insert` / `table.insert`), so the items
-  // bind through `useEditorCommand` and render disabled with the engine's own reason —
-  // present but disabled, never faked. The section break is a live engine command.
-  const editor = useDocxEditor();
-  return (
-    <DemoMenu label="Insert">
-      <CommandMenuItem slot="image.insert">Image</CommandMenuItem>
-      <CommandMenuItem slot="table.insert">Table</CommandMenuItem>
-      <MenuItem
-        onSelect={() => editor?.exec({ type: 'insertBreak', kind: 'section' })}
-        disabled={!editor}
-      >
-        Section break (next page)
-      </MenuItem>
-    </DemoMenu>
-  );
-}
-
-function HelpMenu() {
-  return (
-    <DemoMenu label="Help">
-      <a
-        className="demo-menu__item"
-        href="https://docx-editor.dev"
-        target="_blank"
-        rel="noreferrer"
-        role="menuitem"
-      >
-        <span className="demo-menu__check" aria-hidden="true" />
-        <span className="demo-menu__label">Documentation</span>
-      </a>
-    </DemoMenu>
-  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -542,7 +397,19 @@ function EditorChrome({
           <ExampleSwitcher current="Vite" />
         </div>
 
-        {/* Title with the File / Format / Help menu row beneath, Docs-style. */}
+        {/* Title with the LIBRARY menu bar beneath, Docs-style.
+
+            `DocxEditor.Menu` is the packaged bar: every row is a chrome slot, so it
+            shares its label, icon, command and enabled state with the toolbar control
+            for the same capability, and a row the engine cannot honour yet shows the
+            engine's own reason. Two customizations demonstrate the ladder:
+
+            - a demo-owned "New" row appended into the File menu by name;
+            - the whole Help menu replaced in place, because documentation is the
+              product's, not the library's.
+
+            Open is handled by the demo (it already owns the file input the Open DOCX
+            button uses); Save routes to the same download the header button runs. */}
         <div className="demo-header__title-block">
           <input
             className="demo-title"
@@ -551,25 +418,53 @@ function EditorChrome({
             aria-label="Document title"
             spellCheck={false}
           />
-          <nav className="demo-header__menus" aria-label="Document menus">
-            <DemoMenu label="File">
-              <MenuItem onSelect={() => fileInputRef.current?.click()} disabled={!editor}>
-                Open&hellip;
-              </MenuItem>
-              <MenuItem onSelect={newDocument} disabled={!editor}>
+          <DocxEditor.Menu
+            t={translate}
+            onOpen={() => fileInputRef.current?.click()}
+            onSave={saveDocument}
+            onPageSetup={() => setShowPageSetup(true)}
+          >
+            {/* preset={false}: the demo wants New BETWEEN Open and Save, and stating the
+                order is clearer than merging into it. */}
+            <DocxEditor.Menu.File preset={false}>
+              <DocxEditor.Menu.Open />
+              <DocxEditor.Menu.Row onSelect={newDocument} disabled={!editor}>
                 New
-              </MenuItem>
-              <MenuItem onSelect={saveDocument} disabled={!editor}>
-                Save as .docx
-              </MenuItem>
-              <MenuItem onSelect={() => setShowPageSetup(true)} disabled={!editor}>
-                Page setup&hellip;
-              </MenuItem>
-            </DemoMenu>
-            <FormatMenu />
-            <InsertMenu />
-            <HelpMenu />
-          </nav>
+              </DocxEditor.Menu.Row>
+              <DocxEditor.Menu.Save />
+              <DocxEditor.Menu.Separator />
+              <DocxEditor.Menu.PageSetup />
+            </DocxEditor.Menu.File>
+            {/* Row-level override: the packaged rows stay, one is swapped in place. */}
+            <DocxEditor.Menu.Insert>
+              <DocxEditor.Menu.Row
+                icon={<span aria-hidden="true">✎</span>}
+                onSelect={() => window.alert('A host action, in the packaged menu.')}
+              >
+                Clause library
+              </DocxEditor.Menu.Row>
+            </DocxEditor.Menu.Insert>
+            {/* Help is the host's: drop the packaged report row, keep the menu. */}
+            <DocxEditor.Menu.Help>
+              <DocxEditor.Menu.ReportIssue hidden />
+              <a
+                className="docx-toolbar__menu-item docx-menubar__item"
+                href="https://docx-editor.dev/docs"
+                target="_blank"
+                rel="noreferrer"
+                role="menuitem"
+              >
+                <span className="docx-menubar__item-icon" aria-hidden="true" />
+                <span className="docx-menubar__item-label">Documentation</span>
+              </a>
+            </DocxEditor.Menu.Help>
+            {/* A menu the library knows nothing about, with the host's own id and label. */}
+            <DocxEditor.Menu.Menu id="review" label="Review">
+              <DocxEditor.Menu.Row onSelect={() => window.alert('Sent for approval.')}>
+                Send for approval
+              </DocxEditor.Menu.Row>
+            </DocxEditor.Menu.Menu>
+          </DocxEditor.Menu>
         </div>
 
         <div className="demo-header__right">
@@ -623,6 +518,19 @@ function EditorChrome({
           document-derived family in its own typeface. Save is
           live because the toolbar was given an onSave handler. */}
       <DocxEditor.Toolbar t={translate} className="demo-toolbar" onSave={saveDocument}>
+        {/* A host-owned action: no chrome slot, our styling and caret guard. */}
+        <DocxEditor.Toolbar.Action
+          label="Send for review"
+          onSelect={() => window.alert('Sent for review.')}
+          icon={
+            <svg viewBox="0 -960 960 960" width={18} height={18} aria-hidden="true">
+              <path
+                d="M120-160v-640l760 320-760 320Zm80-120 474-200-474-200v140l240 60-240 60v140Z"
+                fill="currentColor"
+              />
+            </svg>
+          }
+        />
         <DocxEditor.Toolbar.FontFamily>
           <DocxEditor.Toolbar.FontFamily.Trigger className="demo-font-trigger" />
           <DocxEditor.Toolbar.FontFamily.Content className="demo-font-menu">
@@ -639,18 +547,15 @@ function EditorChrome({
 
 /**
  * The context-fed horizontal ruler: the first workspace row, sitting on the gray
- * `--doc-bg` BELOW the chrome seam, centered over the page column. When the
- * outline panel is open the row gains matching left padding so the ruler stays
- * centered over the (shifted) page, with the same 0.2s ease the panel uses.
- * Read-only — the engine has no margin commands yet, so nothing here pretends
- * to drag.
+ * `--doc-bg` BELOW the chrome seam, centered over the page column. It follows an
+ * open navigation pane on its own — the part reads the pane's published shift —
+ * so this row carries no pane-aware class of its own.
  */
-function RulerRow({ outlineOpen }: { outlineOpen: boolean }) {
+function RulerRow() {
+  // NOT `aria-hidden`: the ruler carries four operable indent sliders, and hiding the row
+  // from assistive tech would hide them along with it.
   return (
-    <div
-      className={`demo-ruler-row${outlineOpen ? ' demo-ruler-row--outline' : ''}`}
-      aria-hidden="true"
-    >
+    <div className="demo-ruler-row">
       <DocxEditor.HorizontalRuler />
     </div>
   );
@@ -739,47 +644,30 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
             colorMode={colorMode}
             onColorModeChange={setColorMode}
           />
-          <RulerRow outlineOpen={showOutline} />
+          <RulerRow />
           {/* The viewport stays FULL-WIDTH so the vertical ruler (an absolute
               child of the scroll container, pinned at left: 0) never moves. The
-              outline is an absolutely positioned overlay panel inset past the
-              vertical ruler's ticks; opening it shifts the page column right via
-              a padding on the viewport (and the ruler row above, via the
-              matching padding), both on the same 0.2s ease. A future comments
-              rail overlays symmetrically on the right with a mirrored padding. */}
+              navigation pane floats over the gutter to the LEFT of the centered
+              page and moves the document only when the window is too narrow to
+              hold both — it owns that measurement, so the demo supplies nothing
+              but the positioned row it anchors to. */}
           <div className="demo-main">
-            <aside
-              className={`demo-outline${showOutline ? '' : ' demo-outline--closed'}`}
-              inert={!showOutline}
-            >
-              <DocxEditor.DocumentOutline onClose={() => setShowOutline(false)} />
-            </aside>
-            {!showOutline && (
-              <button
-                type="button"
-                className="docx-outline-toggle demo-outline-toggle"
-                aria-label="Show document outline"
-                title="Show document outline"
-                onMouseDown={keepCaret}
-                onClick={() => setShowOutline(true)}
-              >
-                <svg viewBox="0 -960 960 960" width={20} height={20} aria-hidden="true">
-                  <path
-                    d="M120-240v-80h240v80H120Zm0-200v-80h480v80H120Zm0-200v-80h720v80H120Z"
-                    fill="currentColor"
-                  />
-                </svg>
-              </button>
-            )}
-            <DocxEditor.Viewport
-              className={`demo-viewport${showOutline ? ' demo-viewport--outline' : ''}`}
-            >
+            <DocxEditor.Navigation
+              open={showOutline}
+              onOpenChange={setShowOutline}
+              paneWidth={280}
+            />
+            <DocxEditor.Viewport className="demo-viewport">
               {/* The vertical ruler rides INSIDE the scroll container as an
                   absolutely positioned child, so it scrolls with the document and
                   its top offset lines up with the first page's top edge. */}
               <div className="demo-vruler" aria-hidden="true">
                 <DocxEditor.VerticalRuler />
               </div>
+              {/* Furniture / note chrome — sugar `<DocxEditor chrome>` mounts these; a
+                  composed tree must place them by name or enter/exit has no overlay UI. */}
+              <DocxEditor.HeaderFooterChrome />
+              <DocxEditor.NotesChrome />
               <DocxEditor.Content />
               {/* The link popover. Inside the viewport so it stays with the page while
                   scrolling. `<DocxEditor>` mounts it for you; a composition like this one

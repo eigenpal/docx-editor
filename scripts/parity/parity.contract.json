@@ -20,7 +20,10 @@
       "onTitleChange": "M6V.1 chrome title editing. Deferred to 10V.1 with `t`.",
       "onSave": "M6V.1 chrome save control. Deferred to 10V.1 with `t`.",
       "chrome": "M6V.1 chrome toggle: React renders the packaged title bar + toolbar by default and `chrome={false}` opts out. Deferred to 10V.1 with `t`.",
-      "hyperlinkPopup": "The packaged link popover, part of the React-first provider/hooks layer: a context-backed hook plus a compound over it, whose Vue twin lands with the rest of that layer. The ENGINE half is already shared — typed links, the sanitized target projection, click classification, bookmark jumps, the insert/edit/unlink ops and hyperlinkAt all live in core, and Vue's `text.link` control enables from the same toolbarCommandState React's does — so this defers the panel, not the capability."
+      "hyperlinkPopup": "The packaged link popover, part of the React-first provider/hooks layer: a context-backed hook plus a compound over it, whose Vue twin lands with the rest of that layer. The ENGINE half is already shared — typed links, the sanitized target projection, click classification, bookmark jumps, the insert/edit/unlink ops and hyperlinkAt all live in core, and Vue's `text.link` control enables from the same toolbarCommandState React's does — so this defers the panel, not the capability.",
+      "navigation": "The packaged navigation pane — headings and find — part of the React-first provider/hooks layer: three hooks plus a compound over them, whose Vue twin lands with the rest of that layer. The ENGINE half is already shared: `getOutline`, `findMatches` and `selectMatch` live in core, so this defers the pane, not the capability.",
+      "menu": "The packaged menu bar — File · Format · Insert · Help — part of the React-first provider/hooks layer. The ENGINE half is already shared: `CHROME_MENUS` is the core registry both adapters read, every actionable row is a `ChromeSlotId` whose enabled state comes from the same `toolbarCommandState`, and the styles live in the core stylesheet — so this defers the markup, not the capability.",
+      "onOpen": "Open handler for the menu bar's File › Open row. Deferred to the Vue menu bar with `menu`; the engine half (`Editor.load`) is already shared."
     },
     "vueExclusive": {}
   },

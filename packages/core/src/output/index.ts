@@ -5,8 +5,6 @@
 //
 // Production placement is fixed by document-engine task 1.4. Responsibilities and
 // dependency rules: docs/architecture/production-engine-packages.md.
-//
-// ADR-S9: production modules MUST NOT import from packages/core/spike/**.
 
 /** Stable package identity used by the import-graph / package-authority checks. */
 export const ENGINE_OUTPUT_PACKAGE = '@docx-editor.dev/core-contract/output' as const;

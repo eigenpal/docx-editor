@@ -29,20 +29,8 @@ import {
 } from '../package/ooxml-tree.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
+import type { RevisionAddress } from './tree-op-types.ts';
 import type { TreeOpEffect, TreeOpRejection } from './tree-op-validate.ts';
-
-/**
- * A revision's identity within one part.
- *
- * `date` is optional because `@w:date` is optional on `CT_TrackChange`. An address that omits
- * it matches only sites that also omit it — an absent date is a distinguishing value, not a
- * wildcard, or one author's dated revision would resolve another's undated one.
- */
-export interface RevisionAddress {
-  readonly id: string;
-  readonly author: string;
-  readonly date?: string;
-}
 
 /** What resolving does to one wrapper. */
 type Resolution = 'unwrap' | 'remove' | 'restore';
@@ -570,3 +558,5 @@ export function resolveRevisions(
     },
   };
 }
+
+export type { RevisionAddress };

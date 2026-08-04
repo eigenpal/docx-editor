@@ -35,13 +35,6 @@ interface HorizontalRulerProps {
   editable: boolean;
   onLeftMarginChange: (marginTwips: number) => void;
   onRightMarginChange: (marginTwips: number) => void;
-  indentLeft: number;
-  indentRight: number;
-  onIndentLeftChange: (twips: number) => void;
-  onIndentRightChange: (twips: number) => void;
-  firstLineIndent: number;
-  hangingIndent: boolean;
-  onFirstLineIndentChange: (twips: number) => void;
   tabMarks: RulerTabStop[] | null;
   onTabMarkRemove: (positionTwips: number) => void;
 }

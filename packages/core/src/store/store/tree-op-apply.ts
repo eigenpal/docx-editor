@@ -2,10 +2,12 @@
 //
 // This module owns turning a VALIDATED op into a new part plus its structural effect.
 // Application is pure: `applyTreeOp` never mutates its input, and it validates first via
-// tree-op-validate.ts so a rejected op is a true no-op. The op vocabulary and the segment
-// model live in tree-op-validate.ts; both are re-exported via tree-ops.ts.
+// tree-op-validate.ts so a rejected op is a true no-op. Vocabulary, segmentation, and
+// validation live in sibling tree-op-* modules; tree-ops.ts re-exports the public surface.
+/* eslint-disable max-lines -- pre-existing size; furniture lifecycle only adds union narrowing */
 
 import { hardBreakAttributes, hardBreakText } from '../package/hard-break.ts';
+import { fieldAtomText } from '../package/field-nodes.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlAttribute,
@@ -51,6 +53,7 @@ import {
   parentOf,
   runPropertiesNodeOf,
 } from './tree-op-nodes.ts';
+import { paragraphIdsWithin } from './tree-op-blocks.ts';
 import {
   PARAGRAPH_VOCABULARY,
   RUN_VOCABULARY,
@@ -64,18 +67,16 @@ import {
   applySetSectionMark,
   applySetSectionProperties,
 } from './tree-op-section.ts';
-import {
-  isParagraph,
-  runsUnder,
-  segmentsOf,
-  type Segment,
-  validateTreeOp,
-  type OoxmlProperty,
-  type TreeDocOp,
-  type TreeOpEffect,
-  type TreeOpRejection,
-  type TreeOpResult,
-} from './tree-op-validate.ts';
+import { pageFieldContentBuilders } from './tree-op-fields.ts';
+import { isParagraph, runsUnder, segmentsOf, type Segment } from './tree-op-segments.ts';
+import type {
+  OoxmlProperty,
+  TreeDocOp,
+  TreeOpEffect,
+  TreeOpRejection,
+  TreeOpResult,
+} from './tree-op-types.ts';
+import { validateTreeOp } from './tree-op-validate.ts';
 
 /**
  * A `w:t`, or a `w:delText` when the text being rebuilt was already struck.
@@ -150,6 +151,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   const rejection = validateTreeOp(part, op);
   if (rejection) return { ok: false, reason: rejection };
 
+  if (op.op === 'deleteBlock') return applyDeleteBlock(part, op.blockId, options);
   if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);
   if (op.op === 'setHyperlinkTarget') return applySetHyperlinkTarget(part, op, options);
   if (op.op === 'removeHyperlink') return applyRemoveHyperlink(part, op.linkId, options);
@@ -176,6 +178,22 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   }
   if (op.op === 'setSectionProperties') return applySetSectionProperties(part, op, options);
   if (op.op === 'setSectionMark') return applySetSectionMark(part, op.paragraphId, options);
+  // Package-lifecycle / note-part ops are refused by validateTreeOp; this arm narrows the
+  // union so the story appliers below can address paragraphId safely.
+  if (
+    op.op === 'createHeaderFooter' ||
+    op.op === 'deleteHeaderFooter' ||
+    op.op === 'linkToPrevious' ||
+    op.op === 'unlinkFromPrevious' ||
+    op.op === 'setSectionFurnitureOptions' ||
+    op.op === 'insertNote' ||
+    op.op === 'deleteNote' ||
+    op.op === 'convertNote' ||
+    op.op === 'convertAllNotes' ||
+    op.op === 'setNoteProperties'
+  ) {
+    return { ok: false, reason: 'invalidArgs', detail: 'package-lifecycle-op' };
+  }
 
   const paragraph = findNode(part, op.paragraphId) as OoxmlParagraphNode;
   const nextId = createNodeIdAllocator(part);
@@ -222,6 +240,14 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
         [(mint) => simpleElement(mint, 'br', 'page')],
         options
       );
+    case 'insertPageField':
+      return applyInsertContent(
+        part,
+        paragraph,
+        op.offset,
+        pageFieldContentBuilders(op.field),
+        options
+      );
     case 'deleteText':
       if (op.revision) {
         return applyDeleteTracked(part, paragraph, op.start, op.end, op.revision, options);
@@ -248,7 +274,15 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     case 'splitParagraphMany':
       return applySplitMany(part, paragraph, op.offsets, options);
     case 'setRunProperties':
-      return applySetRunProperties(part, paragraph, op.start, op.end, op.properties, options);
+      return applySetRunProperties(
+        part,
+        paragraph,
+        op.start,
+        op.end,
+        op.properties,
+        options,
+        op.targetRunIds
+      );
     case 'setParagraphProperties': {
       const existing = paragraphPropertiesNodeOf(paragraph);
       const children = mergedPropertyChildren(
@@ -415,6 +449,17 @@ function applyDeleteText(
   // Highest offset first, so earlier segment positions stay valid as edits apply.
   for (const segment of [...segments].reverse()) {
     if (segment.end <= start || segment.start >= end) continue;
+    if (segment.removeNodeIds && segment.removeNodeIds.length > 0) {
+      // Atomic field: remove begin→end (or fldSimple) as one unit. Partial overlap still
+      // deletes the whole field — caret cannot land inside the unit.
+      for (const nodeId of segment.removeNodeIds) {
+        if (!findNode(current, nodeId)) continue;
+        const removed = removeNode(current, nodeId, options);
+        if (!removed.ok) return fromEdit(removed, effect);
+        current = removed.part;
+      }
+      continue;
+    }
     if (segment.node.kind !== 'textValue') {
       const removed = removeNode(current, segment.node.id, options);
       if (!removed.ok) return fromEdit(removed, effect);
@@ -548,13 +593,20 @@ function hyperlinkElement(
       value: target.tooltip,
     });
   }
+  // Declare xmlns:r on the link when it carries r:id. Body stories usually inherit
+  // that binding from w:document, but header/footer and notes parts often only declare
+  // xmlns:w - without a local binding the attribute fails the part invariant.
+  const namespaceBindings =
+    target.relationshipId !== undefined
+      ? [{ prefix: 'r', namespaceUri: RELATIONSHIP_NAMESPACE_URI }]
+      : [];
   return {
     id: nextId(),
     kind: 'hyperlink',
     namespaceUri: WML_NAMESPACE_URI,
     localName: 'hyperlink',
     prefix: 'w',
-    namespaceBindings: [],
+    namespaceBindings,
     attributes,
     children,
   } as unknown as OoxmlNode;
@@ -782,7 +834,23 @@ function applySetHyperlinkTarget(
       value: op.tooltip,
     });
   }
-  const next = { ...link, attributes: [...retained, ...target] } as OoxmlNode;
+  let namespaceBindings = link.namespaceBindings;
+  if (
+    op.relationshipId !== undefined &&
+    !namespaceBindings.some(
+      (binding) => binding.prefix === 'r' && binding.namespaceUri === RELATIONSHIP_NAMESPACE_URI
+    )
+  ) {
+    namespaceBindings = [
+      ...namespaceBindings,
+      { prefix: 'r', namespaceUri: RELATIONSHIP_NAMESPACE_URI },
+    ];
+  }
+  const next = {
+    ...link,
+    namespaceBindings,
+    attributes: [...retained, ...target],
+  } as OoxmlNode;
   const effect: TreeOpEffect = {
     dirty: [owner.id],
     created: [],
@@ -1434,6 +1502,31 @@ function applySplitMany(
   return fromEdit(replaceChildren(part, parent.id, siblings, options), effect);
 }
 
+/**
+ * Take a whole block out of the tree.
+ *
+ * All of the thinking is in validation — which containers a removal may not empty, which
+ * kinds are removable at all — so the application is the `removeNode` primitive plus an
+ * honest effect. `deleted` names the block AND every paragraph that went with it: a
+ * consumer scoping work by node id has to invalidate the paragraphs, and the block id alone
+ * would leave a layout cache holding entries for paragraphs that no longer exist.
+ */
+function applyDeleteBlock(part: OoxmlPart, blockId: string, options?: EditOptions): TreeOpResult {
+  const block = findNode(part, blockId);
+  if (!block) return { ok: false, reason: 'unknown-block' };
+  const paragraphs = paragraphIdsWithin(block);
+  const effect: TreeOpEffect = {
+    dirty: [],
+    created: [],
+    deleted: [blockId, ...paragraphs.filter((id) => id !== blockId)],
+    dependencyKeys: TEXT_DEPS,
+    // The block SEQUENCE changed, so everything after it can move even though no surviving
+    // paragraph is dirty.
+    impact: 'flow-structural',
+  };
+  return fromEdit(removeNode(part, blockId, options), effect);
+}
+
 function applyJoin(
   part: OoxmlPart,
   firstId: string,
@@ -1540,7 +1633,8 @@ function applySetRunProperties(
   start: number,
   end: number,
   properties: readonly OoxmlProperty[],
-  options?: EditOptions
+  options?: EditOptions,
+  targetRunIds?: readonly string[]
 ): TreeOpResult {
   const effect: TreeOpEffect = {
     dirty: [paragraph.id],
@@ -1550,6 +1644,7 @@ function applySetRunProperties(
     impact: 'text-local',
   };
   // Split at both edges first, so the range lands on whole runs and only those runs change.
+  // Field atoms keep result runs off the segment map, so splits never touch format targets.
   let current = part;
   for (const boundary of [end, start]) {
     const target = findNode(current, paragraph.id) as OoxmlParagraphNode;
@@ -1560,11 +1655,19 @@ function applySetRunProperties(
 
   const target = findNode(current, paragraph.id) as OoxmlParagraphNode;
   const segments = segmentsOf(target);
-  const runIds = new Set(
-    segments
-      .filter((segment) => segment.start >= start && segment.end <= end)
-      .map((segment) => segment.runId)
-  );
+  const runIds = new Set<string>();
+  if (targetRunIds && targetRunIds.length > 0) {
+    for (const runId of targetRunIds) runIds.add(runId);
+  } else {
+    for (const segment of segments) {
+      if (segment.start < start || segment.end > end) continue;
+      if (segment.formatRunIds && segment.formatRunIds.length > 0) {
+        for (const runId of segment.formatRunIds) runIds.add(runId);
+      } else if (segment.runId) {
+        runIds.add(segment.runId);
+      }
+    }
+  }
   const nextId = createNodeIdAllocator(current);
   for (const runId of runIds) {
     const run = findNode(current, runId);
@@ -1676,9 +1779,21 @@ export function paragraphTextOf(part: OoxmlPart, paragraphId: string): string | 
   if (!isParagraph(paragraph)) return null;
   let text = '';
   for (const segment of segmentsOf(paragraph)) {
+    if (segment.removeNodeIds && segment.removeNodeIds.length > 0) {
+      text += fieldAtomText();
+      continue;
+    }
     if (segment.node.kind === 'textValue') text += segment.node.value;
     else if (segment.node.kind === 'tab') text += '\t';
     else if (segment.node.kind === 'hardBreak') text += hardBreakText(segment.node);
+    else if (
+      segment.node.kind === 'fldChar' ||
+      segment.node.kind === 'fldSimple' ||
+      (segment.node.kind === 'generic' &&
+        (segment.node.localName === 'fldChar' || segment.node.localName === 'fldSimple'))
+    ) {
+      text += fieldAtomText();
+    }
   }
   return text;
 }

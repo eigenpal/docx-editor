@@ -52,6 +52,22 @@ describe('bounded OPC loading into canonical trees (task 4.4)', () => {
     expect([...(result.package.relationships.get('/') ?? [])].map((r) => r.id)).toEqual(['rId1']);
   });
 
+  test('a declared non-ASCII part name resolves through the canonical content-type key', () => {
+    const partName = 'word/café.xml';
+    const types = CONTENT_TYPES.replace(
+      '</Types>',
+      '<Override PartName="/word/café.xml" ContentType="application/xml"/></Types>'
+    );
+    const result = readOoxmlPackage(
+      build({
+        '[Content_Types].xml': types,
+        [partName]: '<root><value>kept</value></root>',
+      })
+    );
+    if (!result.ok) throw new Error(`unexpected rejection: ${result.reason}`);
+    expect(result.package.parts.get('/word/café.xml')?.root.localName).toBe('root');
+  });
+
   test('a non-XML part keeps its bytes and gets no tree', () => {
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 1, 2, 3]);
     const result = readOoxmlPackage(build({ 'word/media/image1.png': png }));

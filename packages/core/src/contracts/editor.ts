@@ -43,9 +43,16 @@ import type {
   Unsubscribe,
   Watermark,
 } from './types';
+import type {
+  EditorHeaderFooterCommands,
+  EditorNoteCommands,
+  HeaderFooterState,
+  NotePropertiesState,
+} from './editor-hf-notes.ts';
 
 export type * from './types';
 export type * from './interaction';
+export type * from './editor-hf-notes.ts';
 
 const NOT_IMPLEMENTED = 'contract-only stub: no implementation';
 
@@ -197,7 +204,13 @@ export interface EditorConfig {
 export type EditorScope =
   | { kind: 'body' }
   | { kind: 'headerFooter'; rId: string }
-  /** A footnote/endnote region, addressed by note id. */
+  /**
+   * A footnote/endnote region.
+   *
+   * `id` encodes kind + signed note id as `footnote:<id>` or `endnote:<id>`
+   * (e.g. `footnote:2`). Use `formatNoteScopeId` / `parseNoteScopeId` from the
+   * store package. Do not invent a parallel `{ noteKind, noteId }` scope arm.
+   */
   | { kind: 'note'; id: string }
   /** A text box or floating frame with its own content, addressed by id. */
   | { kind: 'frame'; id: string }
@@ -397,10 +410,13 @@ export interface Editor {
   getWatermark(): { readonly kind: 'text' | 'image'; readonly text?: string } | null;
 
   /** Header/footer editing state: which region is being edited, if any. */
-  getHeaderFooterState(): {
-    readonly editing: 'header' | 'footer' | null;
-    readonly sectionIndex: number;
-  } | null;
+  getHeaderFooterState(): HeaderFooterState | null;
+
+  /** Resolved and authored note properties for the caret section — properties dialog read-model. */
+  getNotePropertiesState(): NotePropertiesState | null;
+
+  /** Plain-text note preview for hover chrome. */
+  getNotePreviewText(scopeId: string): string | null;
 
   /** Tracked changes in the document, for the review sidebar. */
   getTrackedChanges(): readonly {
@@ -686,7 +702,8 @@ export interface ReviewItemPlacement {
  */
 export type DocumentEditingMode = 'editing' | 'suggesting' | 'viewing';
 
-export interface EditorCommands extends EditorCommandShape<DocEdits> {
+export interface EditorCommands
+  extends EditorCommandShape<DocEdits>, EditorHeaderFooterCommands, EditorNoteCommands {
   /** Switch how edits are written. A view command: it changes no document state. */
   setEditingMode: { mode: DocumentEditingMode };
   /**
@@ -699,8 +716,58 @@ export interface EditorCommands extends EditorCommandShape<DocEdits> {
   toggleReviewPane: Record<never, never>;
   toggleMark: { mark: string };
   setMarkAttr: { mark: string; attr: string; value: unknown };
+  /**
+   * Word's Clear All Formatting (Home > Font > the eraser).
+   *
+   * Takes direct CHARACTER formatting off the selected text, and resets every paragraph the
+   * selection touches to the document's default paragraph style with its direct paragraph
+   * properties dropped — alignment, indents, spacing, list membership. Character formatting
+   * is a range and paragraph formatting is not, so a partial selection clears the text it
+   * covers and still resets the paragraph it sits in, which is Word's split.
+   *
+   * Formatting inherited from a style is not touched: this removes what the document states
+   * DIRECTLY, so the text falls back to what its style gives it rather than to nothing.
+   *
+   * A CHARACTER STYLE survives, and so do paragraph borders and hidden text. Those live
+   * outside the property vocabulary an edit can name — a run's `w:rStyle`, `w:vanish` and
+   * `w:bdr`, a paragraph's `w:pBdr` and `w:outlineLvl` — and are preserved rather than
+   * dropped, which is where this stops short of Word: clearing a run that carries a
+   * character style leaves that style's face on it.
+   */
+  clearFormatting: Record<never, never>;
   setAlignment: { align: 'left' | 'center' | 'right' | 'justify' };
-  setIndent: { left?: number; right?: number; firstLine?: number; hanging?: number };
+  /**
+   * Word's Line Spacing, on every paragraph the selection touches.
+   *
+   * `value` is in the unit the RULE implies, which is the unit Word's own dialog uses:
+   * LINES for `multiple` (1, 1.15, 1.5, 2), points for `exact` and `atLeast`. The
+   * OOXML attribute is one number meaning two different quantities depending on
+   * `w:lineRule`, and a caller should not have to know which.
+   */
+  setLineSpacing: { rule: 'multiple' | 'exact' | 'atLeast'; value: number };
+  /**
+   * Space above and below a paragraph, in points, on every paragraph the selection
+   * touches. Omitting a field leaves it as authored; `null` clears it, which is how
+   * Word's "Remove space before/after paragraph" differs from setting it to zero.
+   */
+  setParagraphSpacing: { beforePt?: number | null; afterPt?: number | null };
+  /**
+   * Exact paragraph indent, in twips, on every paragraph the selection touches.
+   *
+   * Omitting a field leaves it as authored; `null` clears it so the paragraph falls back to
+   * its style, the same distinction `setParagraphSpacing` draws — a zero blocks the cascade,
+   * a missing attribute does not.
+   *
+   * `firstLine` is ONE SIGNED offset from the left indent: negative IS the hanging indent.
+   * OOXML spells it as two mutually exclusive attributes (`w:firstLine`/`w:hanging`, where
+   * hanging wins per §17.3.1.12); collapsing them here means a caller cannot state a
+   * contradiction, and matches the single signed value Word's own model keeps.
+   */
+  setIndent: {
+    left?: number | null;
+    right?: number | null;
+    firstLine?: number | null;
+  };
   toggleList: { kind: 'bullet' | 'ordered' };
 
   insertRow: { where: 'above' | 'below' };
@@ -768,19 +835,6 @@ export interface EditorCommands extends EditorCommandShape<DocEdits> {
   removeTabMark: { positionTwips: number };
 
   /**
-   * Open a header or footer for editing, materialising an empty one if the section has
-   * none — which is what a double-click on the header band means in Word. `firstPage`
-   * selects the `w:titlePg` variant.
-   */
-  editHeaderFooter: { position: 'header' | 'footer'; firstPage?: boolean; sectionIndex?: number };
-
-  /** Leave header/footer editing and return to the body. */
-  exitHeaderFooter: Record<never, never>;
-
-  /** Delete the header or footer being edited, and its relationship. */
-  removeHeaderFooter: { position: 'header' | 'footer'; firstPage?: boolean };
-
-  /**
    * Replace one found match with `text`. Addressed by {@link TextMatch} rather than a
    * `DocTarget` because that is what `findMatches` hands back, and re-deriving a target
    * from it in the caller is where an off-by-one would come from. An empty `text`
@@ -840,15 +894,6 @@ export interface EditorCommands extends EditorCommandShape<DocEdits> {
     alt?: string;
     borderWidthEmu?: number;
     borderColor?: ColorValue;
-  };
-
-  /**
-   * Footnote and endnote properties for the section — numbering format, restart rule
-   * and position, as Word's dialog offers them.
-   */
-  setNoteProperties: {
-    footnote?: { numFmt?: string; numRestart?: string; position?: string; numStart?: number };
-    endnote?: { numFmt?: string; numRestart?: string; position?: string; numStart?: number };
   };
 
   setWatermark: { watermark: Watermark | null };
@@ -927,6 +972,17 @@ export interface TextMatch {
   readonly runOffset: number;
   /** The matched text as it appears in the document. */
   readonly text: string;
+  /**
+   * Paragraph text immediately before and after the match, bounded at the derivation
+   * boundary. A results list shows the match in its sentence — "…as described in this
+   * **Exhi**bit A" — and nothing else in the contract can reach paragraph text, so a
+   * caller would otherwise have to re-read the document to render one row.
+   *
+   * Optional and additive: an implementation that has not derived them omits them, and a
+   * consumer treats absent as empty.
+   */
+  readonly contextBefore?: string;
+  readonly contextAfter?: string;
 }
 
 export interface HyperlinkInfo {

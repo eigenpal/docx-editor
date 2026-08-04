@@ -5,13 +5,14 @@
 // extent — is what sizes the box on every page (the #856 rule).
 //
 // Baseline stories are laid out once per variant for furniture height / content-area
-// push-down. Allowlisted PAGE/NUMPAGES fields need context-sensitive projection because
-// digit widths affect right-tab alignment. Callers obtain those via
+// push-down. Allowlisted PAGE/NUMPAGES/SECTIONPAGES fields need context-sensitive projection
+// because digit widths affect right-tab alignment. Callers obtain those via
 // {@link HeaderFooterStoryLayout.withPageContext}:
 //
 //   - no dynamic fields → identity reuse of the baseline
 //   - NUMPAGES only → one cached layout per page count
-//   - PAGE (with or without NUMPAGES) → bounded LRU over `(pageNumber, pageCount)`
+//   - SECTIONPAGES only → one cached layout per section page count
+//   - PAGE (alone or combined) → bounded LRU over the distinct evaluated values
 //
 // Scope stays furniture-only; body field projection remains deferred.
 
@@ -21,6 +22,7 @@ import { canonicalOoxmlFingerprint } from '../store/package/ooxml-tree.ts';
 import {
   detectStoryPageFields,
   fieldPageContextToken,
+  storyNeedsPageFields,
   type FieldPageContext,
   type StoryPageFieldNeeds,
 } from './field-projection.ts';
@@ -49,13 +51,15 @@ export const DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES = 128;
 
 export interface HeaderFooterStoryLayout {
   readonly partName: string;
+  /** Main-document relationship id when the furniture source knows it. */
+  readonly rId?: string;
   /**
    * Bounded identity of the story's canonical OOXML content.
    *
    * Furniture cache keys must not rely on {@link flowHeight} alone: equal-height A→B edits
    * would otherwise reuse stale page furniture. Derived as a 16-hex FNV-1a over the part's
    * canonical fingerprint — never DOM identity or unbounded raw serialization in the key.
-   * PAGE/NUMPAGES projection shares this key; page context is cached separately.
+   * PAGE/NUMPAGES/SECTIONPAGES projection shares this key; page context is cached separately.
    */
   readonly contentKey: string;
   /** Story-relative fragments; origin at the story box's top-left. */
@@ -63,7 +67,7 @@ export interface HeaderFooterStoryLayout {
   /** The height the blocks actually flow to — what sizes the box on every page. */
   readonly flowHeight: number;
   /**
-   * Allowlisted complex PAGE / NUMPAGES presence detected for this story.
+   * Allowlisted complex PAGE / NUMPAGES / SECTIONPAGES presence detected for this story.
    *
    * Callers use this to skip attaching a page-field projector when the baseline is enough.
    */
@@ -71,8 +75,8 @@ export interface HeaderFooterStoryLayout {
   /**
    * Re-layout this story under a page-field context.
    *
-   * Field-free stories return `this`. NUMPAGES-only stories cache by page count. PAGE
-   * stories cache by `(pageNumber, pageCount)` with a bounded LRU.
+   * Field-free stories return `this`. Count-only stories cache by the counts they read.
+   * PAGE stories cache by the distinct evaluated values (including format) with a bounded LRU.
    */
   readonly withPageContext: (ctx: FieldPageContext) => HeaderFooterStoryLayout;
 }
@@ -118,9 +122,9 @@ function createBoundedContextCache(maxEntries: number): {
  * Line ids are namespaced by part so the body's `line-N` counter — which incremental
  * convergence compares — never moves because a header changed.
  *
- * When `pageContext` is set, allowlisted PAGE/NUMPAGES instructions project live values;
- * otherwise those fields contribute only cached result text (often empty). Field-free
- * stories ignore `pageContext` and share one baseline layout.
+ * When `pageContext` is set, allowlisted PAGE/NUMPAGES/SECTIONPAGES instructions project
+ * live values; otherwise those fields contribute only cached result text (often empty).
+ * Field-free stories ignore `pageContext` and share one baseline layout.
  *
  * `defaultTabStopPt` is the document's `w:settings/w:defaultTabStop` (ECMA-376 §17.15.1.25)
  * in points; absent keeps the 0.5" schema default. Furniture tabs on the SAME grid as the
@@ -143,12 +147,12 @@ export function layoutHeaderFooterStory(
   const needs = detectStoryPageFields(part.root);
   const contextCache = createBoundedContextCache(maxPageContextEntries);
   const blocks = storyBlocks(part);
-  // Content identity is of the authored part, not of a PAGE/NUMPAGES projection.
+  // Content identity is of the authored part, not of a page-field projection.
   const contentKey = headerFooterContentKey(part);
   let baseline: HeaderFooterStoryLayout | undefined;
 
   const layoutOnce = (ctx: FieldPageContext | undefined): HeaderFooterStoryLayout => {
-    const effectiveCtx = needs.hasPage || needs.hasNumPages ? ctx : undefined;
+    const effectiveCtx = storyNeedsPageFields(needs) ? ctx : undefined;
     const token = fieldPageContextToken(effectiveCtx, needs);
 
     if (token === '') {
@@ -179,7 +183,7 @@ export function layoutHeaderFooterStory(
       flowHeight: flow.bottom,
       pageFieldNeeds: needs,
       withPageContext: (next) => {
-        if (!needs.hasPage && !needs.hasNumPages) return baseline ?? story;
+        if (!storyNeedsPageFields(needs)) return baseline ?? story;
         return layoutOnce(next);
       },
     };
@@ -203,7 +207,7 @@ export function layoutHeaderFooterStory(
  *
  * Furniture boxes must move with the sheet. The attach-time `pageFieldProjector` closes over
  * the section-local page box, so a bare shift of the current story box is not enough —
- * document-level PAGE/NUMPAGES finalize would re-place at the pre-stack origin and paint
+ * document-level page-field finalize would re-place at the pre-stack origin and paint
  * would compute `(story.box.y - page.box.y)` as a negative full-page offset onto the prior
  * sheet. Wrap the projector so projected furniture receives the same `dy`.
  */
@@ -225,8 +229,23 @@ export function remapPage(page: PageRecord, globalIndex: number, sheetY: number)
       },
     };
   };
+  const shiftNoteArea = (
+    area: import('./semantic-records.ts').NoteAreaRecord | undefined
+  ): import('./semantic-records.ts').NoteAreaRecord | undefined => {
+    if (!area) return undefined;
+    return {
+      ...area,
+      box: shiftBox(area.box),
+      ...(area.separator
+        ? { separator: { ...area.separator, box: shiftBox(area.separator.box) } }
+        : {}),
+      notes: area.notes.map((note) => ({ ...note, box: shiftBox(note.box) })),
+    };
+  };
   const header = shiftFurniture(page.header);
   const footer = shiftFurniture(page.footer);
+  const footnotes = shiftNoteArea(page.footnotes);
+  const endnotes = shiftNoteArea(page.endnotes);
   return {
     ...page,
     id: `page-${globalIndex}`,
@@ -235,5 +254,7 @@ export function remapPage(page: PageRecord, globalIndex: number, sheetY: number)
     contentBox: shiftBox(page.contentBox),
     ...(header ? { header } : {}),
     ...(footer ? { footer } : {}),
+    ...(footnotes ? { footnotes } : {}),
+    ...(endnotes ? { endnotes } : {}),
   };
 }

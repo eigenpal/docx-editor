@@ -22,6 +22,7 @@ export {
   type TreeDocxSession,
   type TreeSessionRejection,
 } from './tree-session.ts';
+export type { StoryScope, StoryTargetRejection } from '@docx-editor.dev/core-contract/store';
 export {
   mountTreeSurface,
   type TreeSurface,

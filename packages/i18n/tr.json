@@ -45,7 +45,9 @@
     "watermark": "Filigran",
     "break": null,
     "sectionBreakContinuous": null,
-    "sectionBreakNextPage": null
+    "sectionBreakNextPage": null,
+    "insertFootnote": "Dipnot ekle",
+    "insertEndnote": "Sonnot ekle"
   },
   "formattingBar": {
     "groups": {
@@ -58,7 +60,8 @@
       "alignment": "Hizalama",
       "listFormatting": "Liste biçimlendirme",
       "image": "Görsel",
-      "table": "Tablo"
+      "table": "Tablo",
+      "insert": "Ekle"
     },
     "undo": "Geri al",
     "undoShortcut": "Geri al (Ctrl+Z)",
@@ -110,7 +113,11 @@
     "double": "Çift",
     "lineSpacingTitle": "Satır aralığı: {label}",
     "blockSpacingRules": "Paragraf aralığı",
-    "label": null
+    "label": null,
+    "addSpaceAfter": null,
+    "addSpaceBefore": null,
+    "removeSpaceAfter": null,
+    "removeSpaceBefore": null
   },
   "styles": {
     "selectAriaLabel": "Paragraf stili seç",
@@ -844,7 +851,28 @@
     "insertPageNumber": "Mevcut sayfa numarasını ekle",
     "insertTotalPages": "Toplam sayfa sayısını ekle",
     "remove": "{label} kaldır",
-    "closeEditing": "{label} düzenlemeyi kapat"
+    "closeEditing": "{label} düzenlemeyi kapat",
+    "chromeAriaLabel": "Üstbilgi ve altbilgi düzenleme",
+    "firstPageHeader": "İlk sayfa üstbilgisi",
+    "firstPageFooter": "İlk sayfa altbilgisi",
+    "evenPageHeader": "Çift sayfa üstbilgisi",
+    "evenPageFooter": "Çift sayfa altbilgisi",
+    "regionSection": "{region} — Bölüm {section}",
+    "sameAsPrevious": "Öncekiyle aynı",
+    "sameAsPreviousHint": "Düzenlemeler önceki bölümün sayfalarına da uygulanır.",
+    "differentFirstPage": "Farklı ilk sayfa",
+    "differentOddEven": "Farklı tek ve çift sayfalar",
+    "differentOddEvenHint": "Tüm belgeye uygulanır.",
+    "linkToPrevious": "Öncekine bağla",
+    "unlinkFromPrevious": "Öncekinden bağlantıyı kaldır",
+    "headerDistance": "Üstbilginin kenardan uzaklığı",
+    "footerDistance": "Altbilginin kenardan uzaklığı",
+    "removeHeader": "Üstbilgiyi kaldır",
+    "removeFooter": "Altbilgiyi kaldır",
+    "insertSectionPages": "Bölüm sayfa sayısını ekle",
+    "insertPageXofY": "X / Y sayfasını ekle",
+    "pageXofYLabel": "Sayfa",
+    "pageXofYSeparator": "/"
   },
   "image": {
     "placeholder": "Görsel yer tutucu",
@@ -858,7 +886,8 @@
     "leftIndent": "Sol girinti",
     "rightIndent": "Sağ girinti",
     "topMargin": "Üst kenar boşluğu",
-    "bottomMargin": "Alt kenar boşluğu"
+    "bottomMargin": "Alt kenar boşluğu",
+    "hangingIndent": null
   },
   "print": {
     "label": "Yazdır",
@@ -932,21 +961,71 @@
     "viewing": null,
     "viewingHint": null
   },
+  "navigation": {
+    "ariaLabel": null,
+    "closeAriaLabel": null,
+    "closeTitle": null,
+    "find": {
+      "clearAriaLabel": null,
+      "counter": null,
+      "counterTruncated": null,
+      "inputAriaLabel": null,
+      "matchCase": null,
+      "nextAriaLabel": null,
+      "noResults": null,
+      "optionsAriaLabel": null,
+      "placeholder": null,
+      "previousAriaLabel": null,
+      "resultsAriaLabel": null,
+      "searching": null,
+      "wholeWord": null,
+      "total": null,
+      "totalTruncated": null
+    },
+    "headings": {
+      "noHeadings": null
+    },
+    "openAriaLabel": null,
+    "openTitle": null,
+    "tabs": {
+      "find": null,
+      "headings": null
+    },
+    "title": null
+  },
+  "notes": {
+    "editingBanner": "Not düzenleniyor",
+    "closeNote": "Notu kapat",
+    "delete": "Notu sil",
+    "convertToEndnote": "Son nota dönüştür",
+    "convertToFootnote": "Dip nota dönüştür",
+    "scope": "Uygula",
+    "scopeDocument": "Tüm belge",
+    "scopeSection": "Bu bölüm",
+    "previewFallback": "Dipnot",
+    "chromeAriaLabel": "Not düzenleme",
+    "editingRegion": "{kind} {number}",
+    "footnoteKind": "Dipnot",
+    "endnoteKind": "Sonnot",
+    "convertAllFootnotes": "Tüm dip notları son notlara dönüştür",
+    "convertAllEndnotes": "Tüm son notları dip notlara dönüştür",
+    "inheritedValue": "(devralınan)"
+  },
   "review": {
     "accept": null,
     "ariaLabel": null,
+    "commentRefused": null,
     "deleted": null,
     "empty": null,
     "inserted": null,
     "movedFrom": null,
     "movedTo": null,
     "reject": null,
-    "reply": null,
-    "structural": null,
-    "replyRefused": null,
-    "showPane": null,
     "replaced": null,
     "replacedWith": null,
-    "commentRefused": null
+    "reply": null,
+    "replyRefused": null,
+    "showPane": null,
+    "structural": null
   }
 }

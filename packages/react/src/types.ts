@@ -12,6 +12,7 @@ import type {
   FontConfiguration,
 } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
+import type { DocxEditorMenuProps } from './editor/menu';
 export { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
 export type {
   EditorFontErrorCode,
@@ -72,8 +73,36 @@ export interface DocxEditorProps {
   title?: string;
   /** Called when the title is edited. Omitting it makes the title read-only. */
   onTitleChange?: (title: string) => void;
-  /** Save handler for the chrome's save control. Runs `Editor.save()` at the host. */
+  /**
+   * Save handler for the chrome's save control and the menu's File › Save row. Runs
+   * `Editor.save()` at the host.
+   *
+   * Without it the title-bar button is absent and File › Save falls back to the packaged
+   * behaviour: `Editor.save()` and a download named after `title`.
+   */
   onSave?: () => void;
+  /**
+   * Open handler for the menu's File › Open row.
+   *
+   * Without it the row falls back to the packaged behaviour: a file picker whose bytes go
+   * to `Editor.load`. Supply this to drive the load from your own storage — the row is
+   * still a user-initiated file READ either way, never a fetch the document can trigger.
+   */
+  onOpen?: () => void;
+  /**
+   * The packaged menu bar — File · Format · Insert · Help — under the document title.
+   *
+   * `false` removes it. An OBJECT is `DocxEditorMenuProps`, passed straight through, so a
+   * host can redirect one row without giving up the bar: `menu={{ reportIssue: false }}`
+   * drops the report-an-issue row, `menu={{ onPageSetup: openMine }}` swaps the dialog,
+   * and `menu={{ children: <DocxEditor.Menu.File>…</DocxEditor.Menu.File> }}` replaces a
+   * whole menu in place. Before this took an object the only way to change any of that was
+   * `menu={false}` plus rebuilding the entire title block.
+   *
+   * Every actionable row is a chrome slot, so it shares its label, icon, command and
+   * enabled state with the toolbar control for the same capability.
+   */
+  menu?: boolean | DocxEditorMenuProps;
   /**
    * Render the packaged hyperlink popover (`false` removes it).
    *
@@ -82,6 +111,16 @@ export interface DocxEditorProps {
    * panel loses the packaged UI and nothing else.
    */
   hyperlinkPopup?: boolean;
+  /**
+   * Render the packaged navigation pane — headings and find — over the document's left
+   * gutter (`false` removes it and its toggle).
+   *
+   * On by default because an open pane costs the document nothing: it floats over gutter
+   * space that is already empty, and only moves the page when the window is genuinely too
+   * narrow to hold both. Compose `DocxEditor.Navigation` yourself, or build on
+   * `useNavigationPane` / `useDocumentOutline` / `useDocumentSearch`, for a different one.
+   */
+  navigation?: boolean;
   /** A document to load: DOCX bytes or an existing handle. */
   document?: DocumentSource;
   /** 'edit' (default) or 'view' (read-only). Applied at mount only — not reactive; remount to change. */

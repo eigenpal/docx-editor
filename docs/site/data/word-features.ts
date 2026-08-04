@@ -553,34 +553,36 @@ export const wordFeatures: WordFeature[] = [
     id: 'layout.headers-footers',
     name: 'Headers & footers (edit in place)',
     category: 'layout',
-    editing: 'full',
+    editing: 'partial',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Same editing model as the body: tracked changes, fields, images and tables work inside headers/footers.',
+      'React: typed scoped header/footer editing (enter/exit story, create/remove, link/unlink to previous, title-page and even/odd options) with PAGE/NUMPAGES/SECTIONPAGES insert chrome. `editHeaderFooter` accepts `variant` / `evenPage` / `firstPage` on the shared Editor contract. Per-section first/even/default variants paint like Word. Vue chrome deferred; Vue can still call the shared commands. Tracked changes, watermark/drawing authoring, and structural table ops inside furniture are not claimed.',
     docsLink: '/docs/1.x/guides/headers-footers',
   },
   {
     id: 'layout.watermarks',
     name: 'Watermarks (text & image)',
     category: 'layout',
-    editing: 'full',
-    rendering: 'full',
-    roundTrip: 'full',
+    editing: 'none',
+    rendering: 'planned',
+    roundTrip: 'preserved',
     tier: 'community',
+    notes:
+      'Watermarks live as VML/drawings inside header parts. Typing, layout, and editing are deferred to the drawings lane; Editor.getWatermark() is a stub. Structural markup may survive in the header part but is not a supported watermark feature.',
     docsLink: '/docs/1.x/guides/headers-footers',
   },
   {
     id: 'layout.footnotes',
     name: 'Footnotes & endnotes',
     category: 'layout',
-    editing: 'full',
-    rendering: 'full',
+    editing: 'partial',
+    rendering: 'partial',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Editable note bodies with auto-numbering; tracked changes work inside notes; note references inside tables paginate correctly.',
+      'React: typed note model, layout (pageBottom/beneathText/sectEnd/docEnd), scoped note editing, insert/delete/convert, chrome slots. Vue deferred. Tracked note inserts and notes-in-HF layout out of scope.',
   },
   {
     id: 'layout.columns',
@@ -622,7 +624,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'First, even, and default variants are selected by the page\'s number in the document (so the alternation carries across section breaks) and editable in place. The section setting that enables different even and odd pages has no UI.',
+      'First, even, and default variants are selected by the page\'s number in the document (so the alternation carries across section breaks) and editable in an open furniture scope. Programmatic `editHeaderFooter({ variant: \'even\' })` (or `evenPage: true`) creates/opens the even story and enables `w:evenAndOddHeaders` in one undo unit. React header/footer chrome can toggle different even and odd pages; Vue chrome deferred.',
   },
   {
     id: 'layout.vertical-align',
@@ -649,11 +651,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'Page number format (pgNumType)',
     category: 'layout',
     editing: 'none',
-    rendering: 'none',
+    rendering: 'partial',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Section numbering start, format, chapter style, and chapter separator parse and serialize. PAGE field display still renders as decimal rather than applying pgNumType formatting.',
+      'Section numbering start, format, chapter style, and chapter separator parse and serialize. Allowlisted PAGE fields in headers/footers honour authored start and fmt (e.g. lowerRoman); NUMPAGES/SECTIONPAGES stay decimal. There is no pgNumType authoring UI yet.',
   },
 
   // --- Review ---------------------------------------------------------------
@@ -742,13 +744,14 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'fields.page-numbers',
-    name: 'PAGE / NUMPAGES fields',
+    name: 'PAGE / NUMPAGES / SECTIONPAGES fields',
     category: 'fields',
-    editing: 'full',
+    editing: 'partial',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'Insertable in headers/footers; values recompute as the layout paginates.',
+    notes:
+      'Allowlisted complex PAGE, NUMPAGES, and SECTIONPAGES project in headers/footers at layout time (PAGE respects section pgNumType start/fmt). Insertable from React header/footer chrome (including Page X of Y). Other field instructions stay inert; body field evaluation is deferred.',
   },
   {
     id: 'fields.toc',

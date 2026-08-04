@@ -9,11 +9,15 @@ import { DocxEditorRoot } from '../editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../editor/DocxEditorViewport';
 import { useDocxEditorRefApi } from './DocxEditor/hooks/useDocxEditorRefApi';
 import { DocxEditorToolbar } from '../editor/toolbar';
+import { DocxEditorMenu } from '../editor/menu';
 import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/DocxEditorRulers';
 import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
+import { Navigation as DocxEditorNavigationCompound } from '../editor/navigation';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
 import { DocxEditorReview } from '../editor/DocxEditorReview';
+import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
+import { DocxEditorNotesChrome } from '../editor/DocxEditorNotes';
 import { useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
@@ -64,6 +68,19 @@ const SCROLL_AREA_STYLE: CSSProperties = {
   overflowAnchor: 'none',
 };
 
+/**
+ * The workspace row: the positioning context an overlay pane anchors to, wrapped around
+ * the scroll container. `position: relative` is load-bearing — the navigation pane is
+ * absolutely positioned against this box's left edge.
+ */
+const WORKSPACE_STYLE: CSSProperties = {
+  position: 'relative',
+  display: 'flex',
+  flex: 1,
+  minHeight: 0,
+  minWidth: 0,
+};
+
 const TITLE_BAR_STYLE: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -72,6 +89,19 @@ const TITLE_BAR_STYLE: CSSProperties = {
   borderBottom: '1px solid var(--doc-border)',
   backgroundColor: 'var(--doc-surface)',
   color: 'var(--doc-text)',
+};
+
+/**
+ * Title over menus, the way Word and Docs stack them: the document's name identifies what
+ * you are looking at, the menu bar acts on it. They share a column so the left slot (a
+ * logo) and the right slot (host actions) span both rows.
+ */
+const TITLE_BLOCK_STYLE: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  flex: 1,
+  minWidth: 0,
+  gap: 2,
 };
 
 const TITLE_INPUT_STYLE: CSSProperties = {
@@ -117,8 +147,11 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
     onReady,
     onChange,
     onFontError,
+    onOpen,
     onSave,
     hyperlinkPopup,
+    menu = true,
+    navigation = true,
   } = props;
 
   // Chrome colour mode: 'system' subscribes to the OS setting. Only the chrome
@@ -160,6 +193,8 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
       className={chrome ? (isDark ? 'dark' : undefined) : className}
       style={chrome ? SCROLL_AREA_STYLE : undefined}
     >
+      {chrome ? <DocxEditorHeaderFooterChrome /> : null}
+      {chrome ? <DocxEditorNotesChrome /> : null}
       <DocxEditorContent />
       <DocxEditorHyperLink hidden={hyperlinkPopup === false} />
     </DocxEditorViewport>
@@ -172,19 +207,36 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
     >
       <div style={TITLE_BAR_STYLE}>
         {renderTitleBarLeft?.()}
-        {onTitleChange ? (
-          <input
-            aria-label={translate('titleBar.documentNameAriaLabel')}
-            value={title ?? ''}
-            placeholder={translate('titleBar.untitled')}
-            onChange={(event) => onTitleChange(event.target.value)}
-            style={TITLE_INPUT_STYLE}
-          />
-        ) : (
-          <span style={{ flex: 1, minWidth: 0, padding: '2px 6px' }}>
-            {title ?? translate('titleBar.untitled')}
-          </span>
-        )}
+        <div style={TITLE_BLOCK_STYLE}>
+          {onTitleChange ? (
+            <input
+              aria-label={translate('titleBar.documentNameAriaLabel')}
+              value={title ?? ''}
+              placeholder={translate('titleBar.untitled')}
+              onChange={(event) => onTitleChange(event.target.value)}
+              style={TITLE_INPUT_STYLE}
+            />
+          ) : (
+            <span style={{ minWidth: 0, padding: '2px 6px' }}>
+              {title ?? translate('titleBar.untitled')}
+            </span>
+          )}
+          {/* File · Format · Insert · Help. Every row is a chrome slot, so it shares its
+              label, icon and enabled state with the toolbar control for the same
+              capability. Open and Save work with no configuration; `onOpen`/`onSave`
+              replace them. */}
+          {menu !== false ? (
+            <DocxEditorMenu
+              t={translate}
+              {...(title !== undefined ? { fileName: title } : {})}
+              {...(onOpen ? { onOpen } : {})}
+              {...(onSave ? { onSave } : {})}
+              // An object `menu` is menu props, spread LAST so a host's own handler wins
+              // over the ones derived from the top-level props above.
+              {...(typeof menu === 'object' ? menu : {})}
+            />
+          ) : null}
+        </div>
         {onSave ? (
           <button
             type="button"
@@ -208,7 +260,14 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
           so `defaultChromeGroups()` filters it out and only explicit composition mounts it.
           The title bar above carries the save control instead. */}
       <DocxEditorToolbar t={translate} />
-      {viewport}
+      {/* The navigation pane is a SIBLING of the viewport inside a positioned row, not a
+          column beside it: it floats over the gutter to the left of the centred page and
+          leaves the page alone until the window is too narrow to hold both. Without a
+          pane this wrapper is an inert flex row around the same viewport. */}
+      <div style={WORKSPACE_STYLE}>
+        {navigation ? <DocxEditorNavigationCompound t={translate} /> : null}
+        {viewport}
+      </div>
     </div>
   ) : (
     viewport
@@ -248,6 +307,12 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly Viewport: typeof DocxEditorViewport;
   readonly Content: typeof DocxEditorContent;
   readonly Toolbar: typeof DocxEditorToolbar;
+  /**
+   * The menu bar — File · Format · Insert · Help — with its parts as statics (`.File`,
+   * `.Format`, `.Insert`, `.Help`, `.Item`, `.Row`, `.Submenu`, `.TableGrid`, …). Mounted
+   * by default under the title; `menu={false}` removes it.
+   */
+  readonly Menu: typeof DocxEditorMenu;
   /** Conditional loading screen: renders while there is no document to paint. */
   readonly Loading: typeof DocxEditorLoading;
   /** Context-fed horizontal ruler with draggable margins (props-driven export stays). */
@@ -256,8 +321,17 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly VerticalRuler: typeof DocxEditorVerticalRuler;
   /** Context-fed heading outline over `Editor.getOutline()`. */
   readonly DocumentOutline: typeof DocxEditorDocumentOutline;
+  /**
+   * The navigation pane — Headings and Find — with its parts as statics (`.Header`,
+   * `.Close`, `.Title`, `.Tabs`, `.Tab`, `.Headings`, `.Find`, `.Toggle`). Mounted by
+   * default; `navigation={false}` removes it.
+   */
+  readonly Navigation: typeof DocxEditorNavigationCompound;
   /** Page Setup dialog — size, orientation, margins — applied as one undo step. */
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
+  /** Header/footer scope chrome while editing page furniture. */
+  readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
+  readonly NotesChrome: typeof DocxEditorNotesChrome;
   /**
    * The link popover — target readout, copy, edit, unlink — and its parts. Mounted by
    * default inside the viewport; `hyperlinkPopup={false}` removes it.
@@ -275,11 +349,15 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   Viewport: DocxEditorViewport,
   Content: DocxEditorContent,
   Toolbar: DocxEditorToolbar,
+  Menu: DocxEditorMenu,
   Loading: DocxEditorLoading,
   HorizontalRuler: DocxEditorHorizontalRuler,
   VerticalRuler: DocxEditorVerticalRuler,
   DocumentOutline: DocxEditorDocumentOutline,
+  Navigation: DocxEditorNavigationCompound,
   PageSetupDialog: DocxEditorPageSetupDialog,
+  HeaderFooterChrome: DocxEditorHeaderFooterChrome,
+  NotesChrome: DocxEditorNotesChrome,
   HyperLink: DocxEditorHyperLink,
   Review: DocxEditorReview,
 });

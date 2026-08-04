@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': minor
+'@docx-editor.dev/react': minor
 ---
 
 Hyperlinks and bookmarks: link text now renders, and links can be inserted, edited, followed and removed.

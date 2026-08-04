@@ -7,8 +7,13 @@
 // instead of three hand-written keymaps that drift.
 
 import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import type { NavigationCommand } from '@docx-editor.dev/core-contract/layout';
+import type { NavigationCommand, SemanticSelection } from '@docx-editor.dev/core-contract/layout';
+import type { StoryScope, TreeDocOp } from '@docx-editor.dev/core-contract/store';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import { plainTextFromTransfer } from './clipboard-plain-text.ts';
+
+type SelectionMark = { paragraphId: string; start: number; end: number };
+type TreeApplyResult = ReturnType<TreeDocxSession['applyTreeOps']>;
 
 const NAVIGATION: Record<string, NavigationCommand> = {
   ArrowLeft: 'left',
@@ -58,7 +63,34 @@ export function createKeyDownHandler(
   } = {}
 ): (event: KeyboardEvent) => void {
   return (event: KeyboardEvent): void => {
+    if (event.key === 'Escape' && surface.activeScope().kind === 'headerFooter') {
+      surface.exitHeaderFooter();
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'Escape' && surface.activeScope().kind === 'note') {
+      surface.exitNote();
+      event.preventDefault();
+      return;
+    }
+    // Word: Ctrl/Cmd+Alt+F footnote, Ctrl/Cmd+Alt+D endnote.
+    if ((event.ctrlKey || event.metaKey) && event.altKey && !event.shiftKey) {
+      const key = event.key.toLowerCase();
+      if (key === 'f') {
+        event.preventDefault();
+        surface.insertNote('footnote');
+        return;
+      }
+      if (key === 'd') {
+        event.preventDefault();
+        surface.insertNote('endnote');
+        return;
+      }
+    }
     const accel = event.metaKey || event.ctrlKey;
+    // Engine-driven navigation owns caret motion in body AND open furniture. Furniture
+    // stops come from story-scoped layout geometry (tab advances, projected fields), so
+    // the browser never walks a painted `\t` width as if it were model offsets.
     const command = NAVIGATION[event.key];
     if (command) {
       let scoped: NavigationCommand = command;
@@ -72,6 +104,12 @@ export function createKeyDownHandler(
         (event.altKey || event.ctrlKey)
       ) {
         scoped = event.key === 'ArrowLeft' ? 'wordLeft' : 'wordRight';
+      } else if (event.metaKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+        // Cmd+Arrow is the LINE gesture on macOS, where most keyboards carry no Home/End
+        // key — binding line motion to those alone left it unreachable, and this branch
+        // fell through to character motion that then preventDefault'd the native one.
+        // Keyed on Cmd specifically, not on `accel`: Ctrl+Arrow is word motion above.
+        scoped = event.key === 'ArrowLeft' ? 'lineStart' : 'lineEnd';
       } else if (accel && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
         scoped = event.key === 'ArrowUp' ? 'documentStart' : 'documentEnd';
       }
@@ -81,7 +119,8 @@ export function createKeyDownHandler(
     }
     if (event.key === 'PageUp' || event.key === 'PageDown') {
       // A page is a real unit here — every caret stop knows its sheet — so this moves ONE
-      // page. Ctrl/Cmd is Word's jump to the document edge.
+      // page. Ctrl/Cmd is Word's jump to the document edge. Open furniture stays within the
+      // story stops (single-sheet furniture → document edge of that story).
       surface.navigate(
         accel
           ? event.key === 'PageUp'
@@ -153,6 +192,21 @@ export function createKeyDownHandler(
       event.preventDefault();
       return;
     }
+    // Word's Ctrl+= / Ctrl+Shift+= — the shortcuts the two controls' own tooltips
+    // advertise, so leaving them unbound would make the label a lie.
+    //
+    // WHICH of the two is decided by Shift alone, never by the character: `event.key` is
+    // the PRODUCED character, so shifting `=` reports `+` on a US layout, and reading the
+    // character to choose sent Ctrl+`+` to superscript on the layouts where `+` is
+    // unshifted (German) — the opposite of what was pressed. `event.code` is matched as
+    // well so the US pair keeps working whatever the key happens to produce.
+    if (accel && (event.key === '=' || event.key === '+' || event.code === 'Equal')) {
+      surface.toggleRunProperty('vertAlign', {
+        val: event.shiftKey ? 'superscript' : 'subscript',
+      });
+      event.preventDefault();
+      return;
+    }
     if (accel && event.shiftKey && event.key.toLowerCase() === 'm') {
       surface.adjustIndent('decrease');
       event.preventDefault();
@@ -200,6 +254,10 @@ export function createKeyDownHandler(
  * PLAIN TEXT only, deliberately: writing HTML would invite reading it back, and pasted
  * HTML is attacker-controlled markup that has no business reaching a sink here. Rich
  * paste belongs behind the same bounded parse the file path uses.
+ *
+ * A payload carrying ONLY `text/html` is still pasted, for its text — see
+ * clipboard-plain-text.ts. That is a fallback for applications that omit the plain
+ * flavour, not a rich lane: no structure, no markup, no DOM built from the payload.
  */
 export function createClipboardHandlers(
   surface: PaginatedSurface,
@@ -225,7 +283,7 @@ export function createClipboardHandlers(
   };
 
   const onPaste = (event: ClipboardEvent): void => {
-    const text = event.clipboardData?.getData('text/plain');
+    const text = plainTextFromTransfer(event.clipboardData);
     event.preventDefault();
     if (!text) return;
     insertPlainText(text);
@@ -236,10 +294,11 @@ export function createClipboardHandlers(
 
 /** Plain text from an input event's data transfer, if it carries any. */
 function dataTransferText(event: InputEvent): string | null {
-  const data = event.dataTransfer;
-  if (!data) return null;
-  // `text/plain` ONLY. `text/html` from a drag is markup from anywhere on the machine.
-  const text = data.getData('text/plain');
+  // TEXT ONLY, never structure. A drag carries markup from anywhere on the machine, so
+  // the HTML flavour is read for the text inside it and nothing else — see
+  // clipboard-plain-text.ts. Dropping a payload that omits `text/plain` outright is what
+  // made a drop from those applications look like a dead gesture.
+  const text = plainTextFromTransfer(event.dataTransfer);
   return text.length > 0 ? text : null;
 }
 
@@ -372,4 +431,66 @@ export function paragraphReplacePlan(
   }
   if (ops.length === 0) return null;
   return { ops, caret: prefix + inserted.length };
+}
+
+/**
+ * Plain-text insert used by clipboard paste and beforeinput insertText: one
+ * commit that inserts joined lines then splits at every newline boundary.
+ */
+export function createInsertPlainText(deps: {
+  orderedStart: () => { paragraphId: string; offset: number };
+  deleteSelectionOps: () => readonly TreeDocOp[];
+  selectionMark: () => SelectionMark | null;
+  storyScope: () => StoryScope;
+  session: TreeDocxSession;
+  commit: (
+    run: () => TreeApplyResult | boolean,
+    selectionAfter?: () => SemanticSelection | null
+  ) => void;
+  applyOps: (ops: readonly TreeDocOp[], mark: SelectionMark | null) => TreeApplyResult;
+  collapsedAt: (pos: { paragraphId: string; offset: number }) => SemanticSelection;
+}): (text: string) => void {
+  return (text: string): void => {
+    const lines = text.replace(/\r\n?/g, '\n').split('\n');
+    const start = deps.orderedStart();
+    const joined = lines.join('');
+    const ops: TreeDocOp[] = [...deps.deleteSelectionOps()];
+    if (joined.length > 0) {
+      ops.push({
+        op: 'insertText',
+        paragraphId: start.paragraphId,
+        offset: start.offset,
+        text: joined,
+      });
+    }
+    const boundaries: number[] = [];
+    let consumed = 0;
+    for (let index = 0; index < lines.length - 1; index += 1) {
+      consumed += lines[index]!.length;
+      boundaries.push(start.offset + consumed);
+    }
+    if (boundaries.length > 0) {
+      ops.push({ op: 'splitParagraphMany', paragraphId: start.paragraphId, offsets: boundaries });
+    }
+    if (ops.length === 0) return;
+
+    const before = new Set(deps.session.paragraphIdsIn(deps.storyScope()));
+    const lastLine = lines[lines.length - 1]!;
+    deps.commit(
+      () => deps.applyOps(ops, deps.selectionMark()),
+      () => {
+        if (boundaries.length === 0) {
+          return deps.collapsedAt({
+            paragraphId: start.paragraphId,
+            offset: start.offset + lastLine.length,
+          });
+        }
+        const minted = deps.session
+          .paragraphIdsIn(deps.storyScope())
+          .filter((id) => !before.has(id));
+        const landing = minted[minted.length - 1];
+        return landing ? deps.collapsedAt({ paragraphId: landing, offset: lastLine.length }) : null;
+      }
+    );
+  };
 }

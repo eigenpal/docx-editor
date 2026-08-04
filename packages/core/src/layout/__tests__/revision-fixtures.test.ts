@@ -38,9 +38,17 @@ function project(part: OoxmlPart, mode: RevisionDisplayMode): Projection {
   let text = '';
   let tracked = 0;
   const nested: (readonly RevisionAttribution[])[] = [];
-  for (const block of storyBlocks(part)) {
+  for (const block of storyBlocks(part, mode)) {
     if (block.kind !== 'paragraph') continue;
-    for (const piece of piecesOfParagraph(block, [], undefined, undefined, undefined, mode)) {
+    for (const piece of piecesOfParagraph(
+      block,
+      [],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      mode
+    )) {
       text += piece.text;
       if (!piece.revisions) continue;
       tracked += 1;
