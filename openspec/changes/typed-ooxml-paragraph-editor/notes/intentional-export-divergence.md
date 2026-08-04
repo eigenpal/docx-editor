@@ -106,6 +106,24 @@ These HF/notes exports are intentional React-first surface. Pairing them into Vu
 composables/parts is a tracked follow-up before any adapter-support claim; do not treat
 preservation of disabled Vue slots as parity.
 
+The typed-content-controls lane likewise lands its authoring surface in React first.
+Core owns the typed model, layout, store enforcement, value operations, widgets, and
+chrome slots; Vue can consume those engine capabilities but does not yet expose the
+provider/composable inspector surface.
+
+- `useContentControl`
+- `useContentControlInstance`
+- `CONTENT_CONTROL_SLOTS`
+- `ContentControlLock`
+- `ContentControlInspectorState`
+- `ContentControlSlotId`
+- `UseContentControlResult`
+- `DocxEditorContentControl`
+- `DocxEditorContentControlNamespace`
+- `ContentControlActionProps`
+- `ContentControlPartProps`
+- `ContentControlProps`
+
 The compound toolbar (default set with in-place slot overrides, generic Button part,
 FontFamily compound + hook) landed React-first on the composition layer above. Vue's
 `DocxEditorToolbar` (the registry-driven toolbar) is the twin surface — `DocxEditorToolbar`

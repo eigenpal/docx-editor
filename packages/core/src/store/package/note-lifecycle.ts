@@ -65,6 +65,7 @@ import {
 } from './note-references.ts';
 import { isValidXmlText } from './sinks.ts';
 import { atomicFieldSpansOf, isFldSimple } from './field-nodes.ts';
+import { isContentControl, walkParagraphInline } from './content-control-walk.ts';
 
 const W = WML_NAMESPACE_URI;
 const FOOTNOTES_REL =
@@ -864,7 +865,8 @@ function modelSegments(paragraph: OoxmlParagraphNode): ModelSegment[] {
       emit(runId, node);
       return;
     }
-    if (node.kind === 'runProperties' || node.kind === 'generic') return;
+    // Generic / misplaced run-inner control husks contribute no atoms.
+    if (node.kind === 'runProperties' || node.kind === 'generic' || isContentControl(node)) return;
     if (node.kind === 'text') {
       for (const child of node.children) visit(child, runId);
       return;
@@ -872,15 +874,15 @@ function modelSegments(paragraph: OoxmlParagraphNode): ModelSegment[] {
     for (const child of node.children) visit(child, runId);
   };
 
-  for (const child of paragraph.children) {
+  walkParagraphInline(paragraph.children, 0, (child) => {
     if (isFldSimple(child)) {
       const field = fieldById.get(child.id);
       if (field) emit('', child);
-      continue;
+      return;
     }
-    if (child.kind !== 'run') continue;
+    if (child.kind !== 'run') return;
     for (const grand of child.children) visit(grand, child.id);
-  }
+  });
   return segments;
 }
 

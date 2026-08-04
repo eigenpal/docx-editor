@@ -82,6 +82,24 @@ export {
   type OoxmlNoteRefNode,
   type OoxmlSeparatorNode,
   type OoxmlContinuationSeparatorNode,
+  type OoxmlContentControlNode,
+  type OoxmlContentControlPropertiesNode,
+  type OoxmlContentControlEndPropertiesNode,
+  type OoxmlContentControlContentNode,
+  type OoxmlContentControlDropDownListNode,
+  type OoxmlContentControlComboBoxNode,
+  type OoxmlContentControlListItemNode,
+  type OoxmlContentControlDateNode,
+  type OoxmlContentControlDateFormatNode,
+  type OoxmlContentControlLidNode,
+  type OoxmlContentControlStoreMappedDataAsNode,
+  type OoxmlContentControlCalendarNode,
+  type OoxmlContentControlTextNode,
+  type OoxmlContentControlDataBindingNode,
+  type OoxmlContentControlCheckboxNode,
+  type OoxmlContentControlCheckedNode,
+  type OoxmlContentControlCheckedStateNode,
+  type OoxmlContentControlUncheckedStateNode,
   type OoxmlGenericElementNode,
   type OoxmlTextNode,
   type OoxmlElement,
@@ -234,6 +252,17 @@ export {
 } from './para-id.ts';
 export { ensureListDefinition, ensureNumberingLevel, type ListKind } from './numbering-part.ts';
 export { buildBookmarkIndex, type BookmarkAnchor, type BookmarkIndex } from './bookmarks.ts';
+export {
+  MAX_CONTENT_CONTROL_NESTING,
+  collectFlowBlocks,
+  contentControlContentChildren,
+  contentControlContentOf,
+  isContentControl,
+  isContentControlContent,
+  walkAllStoryParagraphs,
+  walkParagraphInline,
+  walkStoryBlocks,
+} from './content-control-walk.ts';
 export {
   ensureHyperlinkRelationship,
   relationshipTargetIn,

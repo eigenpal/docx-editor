@@ -7,12 +7,15 @@
 
 import { readXml, type XmlLimits, type XmlNode, type XmlRejection } from './xml-reader.ts';
 import { isValidNCName } from './qname.ts';
+import { candidateSdtKind } from './ooxml-sdt.ts';
 import {
   TreeReadError,
+  W14_NAMESPACE_URI,
   WML_NAMESPACE_URI,
   XML_NAMESPACE_URI,
   XMLNS_NAMESPACE_URI,
   expandedKey,
+  knownKindAllowsWmlVal,
   splitQName,
   validKnownKind,
   validateQNameAttributeValues,
@@ -97,7 +100,12 @@ export interface OoxmlDocumentNode extends OoxmlElementBase<
 }
 
 export interface OoxmlBodyNode extends OoxmlElementBase<
-  readonly (OoxmlParagraphNode | OoxmlTableNode | OoxmlGenericElementNode)[],
+  readonly (
+    | OoxmlParagraphNode
+    | OoxmlTableNode
+    | OoxmlContentControlNode
+    | OoxmlGenericElementNode
+  )[],
   readonly OoxmlKnownNodeAttribute[]
 > {
   readonly kind: 'body';
@@ -110,6 +118,7 @@ export interface OoxmlTableNode extends OoxmlElementBase<
     | OoxmlTablePropertiesNode
     | OoxmlTableGridNode
     | OoxmlTableRowNode
+    | OoxmlContentControlNode
     | OoxmlGenericElementNode
   )[],
   readonly OoxmlKnownNodeAttribute[]
@@ -120,7 +129,7 @@ export interface OoxmlTableNode extends OoxmlElementBase<
 }
 
 export interface OoxmlTableRowNode extends OoxmlElementBase<
-  readonly (OoxmlTableCellNode | OoxmlGenericElementNode)[],
+  readonly (OoxmlTableCellNode | OoxmlContentControlNode | OoxmlGenericElementNode)[],
   readonly OoxmlKnownNodeAttribute[]
 > {
   readonly kind: 'tableRow';
@@ -129,7 +138,12 @@ export interface OoxmlTableRowNode extends OoxmlElementBase<
 }
 
 export interface OoxmlTableCellNode extends OoxmlElementBase<
-  readonly (OoxmlParagraphNode | OoxmlTableNode | OoxmlGenericElementNode)[],
+  readonly (
+    | OoxmlParagraphNode
+    | OoxmlTableNode
+    | OoxmlContentControlNode
+    | OoxmlGenericElementNode
+  )[],
   readonly OoxmlKnownNodeAttribute[]
 > {
   readonly kind: 'tableCell';
@@ -162,6 +176,7 @@ export interface OoxmlParagraphNode extends OoxmlElementBase<
     | OoxmlParagraphPropertiesNode
     | OoxmlRunNode
     | OoxmlHyperlinkNode
+    | OoxmlContentControlNode
     | OoxmlBookmarkStartNode
     | OoxmlBookmarkEndNode
     | OoxmlRevisionContentNode
@@ -219,6 +234,7 @@ export interface OoxmlHyperlinkNode extends OoxmlElementBase<
   readonly (
     | OoxmlRunNode
     | OoxmlHyperlinkNode
+    | OoxmlContentControlNode
     | OoxmlBookmarkStartNode
     | OoxmlBookmarkEndNode
     | OoxmlRevisionContentNode
@@ -572,6 +588,238 @@ export interface OoxmlContinuationSeparatorNode extends OoxmlElementBase<
   readonly localName: 'continuationSeparator';
 }
 
+/**
+ * `w:sdt` — structured document tag (content control) at block, inline, row, or cell level.
+ *
+ * Placement is not a separate kind: the same element name appears in every `EG_*Content`
+ * group. Child shape is the union of those placements; parents admit the control wherever
+ * `generic` was previously accepted (see `isPreservedChild`). Identity is the node id —
+ * `w:id` inside `w:sdtPr` is optional, preserved when present, never fabricated here.
+ */
+export interface OoxmlContentControlNode extends OoxmlElementBase<
+  readonly (
+    | OoxmlContentControlPropertiesNode
+    | OoxmlContentControlEndPropertiesNode
+    | OoxmlContentControlContentNode
+    | OoxmlGenericElementNode
+  )[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'contentControl';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'sdt';
+}
+
+/**
+ * `w:sdtPr` (`CT_SdtPr`) — schema-ordered properties. Unmodelled children (alias/tag/id/lock
+ * leaves with `w:val`, `w15:*`, empty type markers) stay `generic` in position. Typed
+ * payloads: dropdown/combo/listItem, date (+ leaves), text, dataBinding, `w14:checkbox`.
+ */
+export interface OoxmlContentControlPropertiesNode extends OoxmlElementBase<
+  readonly (
+    | OoxmlRunPropertiesNode
+    | OoxmlContentControlDataBindingNode
+    | OoxmlContentControlDropDownListNode
+    | OoxmlContentControlComboBoxNode
+    | OoxmlContentControlDateNode
+    | OoxmlContentControlTextNode
+    | OoxmlContentControlCheckboxNode
+    | OoxmlGenericElementNode
+  )[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'contentControlProperties';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'sdtPr';
+}
+
+/** `w:sdtEndPr` — end-character properties; children are `w:rPr` or generic. */
+export interface OoxmlContentControlEndPropertiesNode extends OoxmlElementBase<
+  readonly (OoxmlRunPropertiesNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'contentControlEndProperties';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'sdtEndPr';
+}
+
+/**
+ * `w:sdtContent` — control contents for every placement. Block content is paragraphs/tables;
+ * inline content is runs/hyperlinks; row/cell content is rows/cells. Nested controls stay typed.
+ */
+export interface OoxmlContentControlContentNode extends OoxmlElementBase<
+  readonly (
+    | OoxmlParagraphNode
+    | OoxmlTableNode
+    | OoxmlRunNode
+    | OoxmlTableRowNode
+    | OoxmlTableCellNode
+    | OoxmlContentControlNode
+    | OoxmlHyperlinkNode
+    | OoxmlBookmarkStartNode
+    | OoxmlBookmarkEndNode
+    | OoxmlGenericElementNode
+  )[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'contentControlContent';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'sdtContent';
+}
+
+/** `w:dropDownList` — `@w:lastValue` plus typed `w:listItem` children. */
+export interface OoxmlContentControlDropDownListNode extends OoxmlElementBase<
+  readonly (OoxmlContentControlListItemNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'contentControlDropDownList';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'dropDownList';
+}
+
+/** `w:comboBox` — same payload shape as dropdown; free entry is an editing concern. */
+export interface OoxmlContentControlComboBoxNode extends OoxmlElementBase<
+  readonly (OoxmlContentControlListItemNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'contentControlComboBox';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'comboBox';
+}
+
+/** `w:listItem` — `@w:displayText` / `@w:value` as preserved attributes (not `w:val`). */
+export interface OoxmlContentControlListItemNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'contentControlListItem';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'listItem';
+}
+
+/**
+ * `w:date` — `@w:fullDate` plus typed dateFormat/lid/storeMappedDataAs/calendar leaves.
+ * Those leaves allow `w:val` (the only known kinds that do) so they are not demoted.
+ */
+export interface OoxmlContentControlDateNode extends OoxmlElementBase<
+  readonly (
+    | OoxmlContentControlDateFormatNode
+    | OoxmlContentControlLidNode
+    | OoxmlContentControlStoreMappedDataAsNode
+    | OoxmlContentControlCalendarNode
+    | OoxmlGenericElementNode
+  )[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'contentControlDate';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'date';
+}
+
+export interface OoxmlContentControlDateFormatNode extends OoxmlElementBase<
+  readonly [],
+  readonly (OoxmlKnownNodeAttribute | OoxmlWmlValAttribute)[]
+> {
+  readonly kind: 'contentControlDateFormat';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'dateFormat';
+}
+
+export interface OoxmlContentControlLidNode extends OoxmlElementBase<
+  readonly [],
+  readonly (OoxmlKnownNodeAttribute | OoxmlWmlValAttribute)[]
+> {
+  readonly kind: 'contentControlLid';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'lid';
+}
+
+export interface OoxmlContentControlStoreMappedDataAsNode extends OoxmlElementBase<
+  readonly [],
+  readonly (OoxmlKnownNodeAttribute | OoxmlWmlValAttribute)[]
+> {
+  readonly kind: 'contentControlStoreMappedDataAs';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'storeMappedDataAs';
+}
+
+export interface OoxmlContentControlCalendarNode extends OoxmlElementBase<
+  readonly [],
+  readonly (OoxmlKnownNodeAttribute | OoxmlWmlValAttribute)[]
+> {
+  readonly kind: 'contentControlCalendar';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'calendar';
+}
+
+/** `w:text` (`CT_SdtText`) — distinct from `w:t` (`kind: 'text'`). `@w:multiLine` preserved. */
+export interface OoxmlContentControlTextNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'contentControlText';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'text';
+}
+
+/**
+ * `w:dataBinding` — xpath / storeItemID / prefixMappings preserved as attributes.
+ * This tree never resolves or fetches the binding target.
+ */
+export interface OoxmlContentControlDataBindingNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'contentControlDataBinding';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'dataBinding';
+}
+
+/**
+ * `w14:checkbox` — Microsoft extension, not an ECMA-376 type choice. Distinguishable from
+ * untyped rich-text controls that merely wrap a `w:sym`.
+ */
+export interface OoxmlContentControlCheckboxNode extends OoxmlElementBase<
+  readonly (
+    | OoxmlContentControlCheckedNode
+    | OoxmlContentControlCheckedStateNode
+    | OoxmlContentControlUncheckedStateNode
+    | OoxmlGenericElementNode
+  )[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'contentControlCheckbox';
+  readonly namespaceUri: typeof W14_NAMESPACE_URI;
+  readonly localName: 'checkbox';
+}
+
+export interface OoxmlContentControlCheckedNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'contentControlChecked';
+  readonly namespaceUri: typeof W14_NAMESPACE_URI;
+  readonly localName: 'checked';
+}
+
+export interface OoxmlContentControlCheckedStateNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'contentControlCheckedState';
+  readonly namespaceUri: typeof W14_NAMESPACE_URI;
+  readonly localName: 'checkedState';
+}
+
+export interface OoxmlContentControlUncheckedStateNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'contentControlUncheckedState';
+  readonly namespaceUri: typeof W14_NAMESPACE_URI;
+  readonly localName: 'uncheckedState';
+}
+
 export interface OoxmlGenericElementNode extends OoxmlElementBase<readonly OoxmlNode[]> {
   readonly kind: 'generic';
 }
@@ -616,6 +864,24 @@ export type OoxmlElement =
   | OoxmlCommentReferenceNode
   | OoxmlCommentsNode
   | OoxmlCommentNode
+  | OoxmlContentControlNode
+  | OoxmlContentControlPropertiesNode
+  | OoxmlContentControlEndPropertiesNode
+  | OoxmlContentControlContentNode
+  | OoxmlContentControlDropDownListNode
+  | OoxmlContentControlComboBoxNode
+  | OoxmlContentControlListItemNode
+  | OoxmlContentControlDateNode
+  | OoxmlContentControlDateFormatNode
+  | OoxmlContentControlLidNode
+  | OoxmlContentControlStoreMappedDataAsNode
+  | OoxmlContentControlCalendarNode
+  | OoxmlContentControlTextNode
+  | OoxmlContentControlDataBindingNode
+  | OoxmlContentControlCheckboxNode
+  | OoxmlContentControlCheckedNode
+  | OoxmlContentControlCheckedStateNode
+  | OoxmlContentControlUncheckedStateNode
   | OoxmlGenericElementNode;
 
 export type OoxmlNode = OoxmlElement | OoxmlTextNode;
@@ -850,10 +1116,12 @@ function resolveAttributes(
 ): {
   readonly attributes: readonly OoxmlAttribute[];
   readonly compatibleWithKnownNode: boolean;
+  readonly hasWmlVal: boolean;
 } {
   const attributes: OoxmlAttribute[] = [];
   const seen = new Set<string>();
   let compatibleWithKnownNode = true;
+  let hasWmlVal = false;
   for (const [authoredName, value] of Object.entries(element.attributes)) {
     if (authoredName === 'xmlns' || authoredName.startsWith('xmlns:')) continue;
     const name = splitQName(authoredName);
@@ -886,7 +1154,7 @@ function resolveAttributes(
         });
       }
     } else if (namespaceUri === WML_NAMESPACE_URI && name.localName === 'val') {
-      compatibleWithKnownNode = false;
+      hasWmlVal = true;
       attributes.push({
         kind: 'wmlVal',
         namespaceUri: WML_NAMESPACE_URI,
@@ -904,7 +1172,7 @@ function resolveAttributes(
       });
     }
   }
-  return { attributes, compatibleWithKnownNode };
+  return { attributes, compatibleWithKnownNode, hasWmlVal };
 }
 
 function resolvedXmlSpace(
@@ -956,7 +1224,8 @@ function convertElement(
   partName: string,
   path: string,
   inheritedPreserve: boolean,
-  parentWmlLocalName?: string
+  parentWmlLocalName?: string,
+  parentCandidate: KnownKind | 'generic' | undefined = undefined
 ): OoxmlElement {
   const declarations = namespaceDeclarations(element, inherited);
   const name = resolveElementName(element.name, declarations.bindings);
@@ -970,7 +1239,15 @@ function convertElement(
   );
   const preserve = resolvedXmlSpace(attributes, inheritedPreserve);
   const isWml = name.namespaceUri === WML_NAMESPACE_URI;
-  const candidateKind = isWml ? wmlKindFor(name.localName, parentWmlLocalName) : 'generic';
+  // SDT vocabulary first (parent-contextual `w:lid` / checkbox states / run-misplaced
+  // `w:sdt`), then WML known kinds including parent-gated content revisions.
+  const sdtKind = candidateSdtKind(name.namespaceUri, name.localName, parentCandidate);
+  const candidateKind: KnownKind | 'generic' =
+    sdtKind !== undefined
+      ? (sdtKind as KnownKind)
+      : isWml
+        ? wmlKindFor(name.localName, parentWmlLocalName)
+        : 'generic';
   const retainedChildren = canonicalLegacyChildren(
     element.children,
     preserve,
@@ -994,12 +1271,17 @@ function convertElement(
       partName,
       childPath,
       preserve,
-      childParentName
+      childParentName,
+      candidateKind
     );
   });
+  const attributesOk =
+    resolvedAttributes.compatibleWithKnownNode &&
+    (!resolvedAttributes.hasWmlVal ||
+      (candidateKind !== 'generic' && knownKindAllowsWmlVal(candidateKind)));
   const kind =
     candidateKind !== 'generic' &&
-    resolvedAttributes.compatibleWithKnownNode &&
+    attributesOk &&
     validKnownKind(candidateKind, children) &&
     (candidateKind !== 'fldChar' ||
       attributes.some((attribute) => {

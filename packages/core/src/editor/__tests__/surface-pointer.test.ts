@@ -11,6 +11,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
+import { absorbPlaceholderControls } from '../surface-pointer.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -723,6 +724,126 @@ describe('the gesture cannot be stranded', () => {
     release(12, 5);
     press(mounted, 12, 5, { shiftKey: true });
     expect(offsets(mounted.surface)).toEqual([2, 2]);
+    mounted.surface.destroy();
+  });
+});
+
+describe('showingPlcHdr placeholder selection is atomic', () => {
+  const run = (text: string) => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
+  const inlinePlc = (prompt: string) =>
+    `<w:sdt><w:sdtPr><w:showingPlcHdr/><w:text/></w:sdtPr>` +
+    `<w:sdtContent>${run(prompt)}</w:sdtContent></w:sdt>`;
+  const blockPlc = (inner: string) =>
+    `<w:sdt><w:sdtPr><w:showingPlcHdr/></w:sdtPr><w:sdtContent>${inner}</w:sdtContent></w:sdt>`;
+
+  function controlCenter(surface: PaginatedSurface, index = 0): { x: number; y: number } {
+    const control = surface.layout().contentControls?.[index];
+    if (!control || control.fragments.length === 0) throw new Error('no control fragment');
+    const box = control.fragments[0]!.box;
+    return { x: box.x + Math.max(1, box.width / 2), y: box.y + Math.max(1, box.height / 2) };
+  }
+
+  test('click inside a placeholder selects the whole prompt', () => {
+    const mounted = mount(`<w:p>${run('aa')}${inlinePlc('Enter name')}${run('zz')}</w:p>`);
+    const { x, y } = controlCenter(mounted.surface);
+    press(mounted, x, y);
+    // "aa" (2) + "Enter name" (10) → whole prompt [2, 12)
+    expect(offsets(mounted.surface)).toEqual([2, 12]);
+    mounted.surface.destroy();
+  });
+
+  test('drag through a placeholder selects the control as a unit', () => {
+    const mounted = mount(`<w:p>${run('aa')}${inlinePlc('Enter name')}${run('zz')}</w:p>`);
+    const { x, y } = controlCenter(mounted.surface);
+    press(mounted, 0, y);
+    move(x, y);
+    // Anchor before the prompt; head inside expands to absorb the whole unit.
+    expect(offsets(mounted.surface)).toEqual([0, 12]);
+    release(x, y);
+    mounted.surface.destroy();
+  });
+
+  test('shift-click into a placeholder absorbs the whole prompt', () => {
+    const mounted = mount(`<w:p>${run('aa')}${inlinePlc('Enter name')}${run('zz')}</w:p>`);
+    const { x, y } = controlCenter(mounted.surface);
+    press(mounted, 0, y);
+    release(0, y);
+    press(mounted, x, y, { shiftKey: true });
+    expect(offsets(mounted.surface)).toEqual([0, 12]);
+    mounted.surface.destroy();
+  });
+
+  test('keyboard-style extend absorbs a placeholder the caret enters', () => {
+    const mounted = mount(`<w:p>${run('aa')}${inlinePlc('Enter name')}${run('zz')}</w:p>`);
+    const paragraphId = mounted.surface.session.paragraphIds()[0]!;
+    // Simulate Shift+Arrow landing mid-prompt: a partial range must snap to the unit.
+    const absorbed = absorbPlaceholderControls(mounted.surface.layout(), {
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 5 },
+    });
+    expect([absorbed.anchor.offset, absorbed.head.offset]).toEqual([0, 12]);
+    mounted.surface.destroy();
+  });
+
+  test('keyboard absorb descends into a table cell inline placeholder', () => {
+    const mounted = mount(
+      `<w:tbl>${row(
+        cell(`<w:p>${run('aa')}${inlinePlc('Enter name')}${run('zz')}</w:p>`) +
+          cell(paragraph('B1'))
+      )}</w:tbl>`
+    );
+    const paragraphId = mounted.surface.session.paragraphIds()[0]!;
+    const absorbed = absorbPlaceholderControls(mounted.surface.layout(), {
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 5 },
+    });
+    expect([absorbed.anchor.offset, absorbed.head.offset]).toEqual([0, 12]);
+    expect(absorbed.anchor.paragraphId).toBe(paragraphId);
+    expect(absorbed.head.paragraphId).toBe(paragraphId);
+    mounted.surface.destroy();
+  });
+
+  test('keyboard absorb covers a block placeholder wrapping a table', () => {
+    const mounted = mount(
+      paragraph('before') +
+        blockPlc(
+          `<w:tbl>${row(cell(paragraph('A1')) + cell(paragraph('B1')))}` +
+            `${row(cell(paragraph('A2')) + cell(paragraph('B2')))}</w:tbl>`
+        ) +
+        paragraph('after')
+    );
+    const ids = mounted.surface.session.paragraphIds();
+    expect(ids.length).toBeGreaterThanOrEqual(6);
+    const firstCell = ids[1]!;
+    const lastCell = ids[4]!;
+    const absorbed = absorbPlaceholderControls(mounted.surface.layout(), {
+      anchor: { paragraphId: firstCell, offset: 0 },
+      head: { paragraphId: firstCell, offset: 1 },
+    });
+    expect(absorbed.anchor.paragraphId).toBe(firstCell);
+    expect(absorbed.anchor.offset).toBe(0);
+    expect(absorbed.head.paragraphId).toBe(lastCell);
+    expect(absorbed.head.offset).toBe(2); // "B2"
+    mounted.surface.destroy();
+  });
+
+  test('keyboard absorb covers nested block controls that contain a table', () => {
+    const mounted = mount(
+      blockPlc(
+        blockPlc(
+          `<w:tbl>${row(cell(`<w:p>${run('aa')}${inlinePlc('Enter name')}${run('zz')}</w:p>`))}</w:tbl>`
+        )
+      )
+    );
+    const paragraphId = mounted.surface.session.paragraphIds()[0]!;
+    const absorbed = absorbPlaceholderControls(mounted.surface.layout(), {
+      anchor: { paragraphId, offset: 3 },
+      head: { paragraphId, offset: 6 },
+    });
+    // Mid-prompt intersects the inline unit, then the nested block wrappers absorb the
+    // whole cell paragraph so table-contained placeholders cannot stay partial.
+    expect([absorbed.anchor.offset, absorbed.head.offset]).toEqual([0, 14]);
+    expect(absorbed.anchor.paragraphId).toBe(paragraphId);
     mounted.surface.destroy();
   });
 });

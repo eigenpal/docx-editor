@@ -1,5 +1,23 @@
 ## ADDED Requirements
 
+### Requirement: The React adapter owns the full authoring surface
+
+The interactive control surface — widgets, form-fill navigation, boundary chrome, inspector, and remove-control — SHALL land in the React adapter. Vue is explicitly deferred; no paired production support claim follows from this change alone.
+
+#### Scenario: Vue does not claim parity
+
+- **WHEN** this change merges without a Vue follow-up
+- **THEN** no documentation or gate describes content-control authoring as adapter-paired
+
+### Requirement: Chrome slots wire the authoring surface
+
+`CHROME_GROUPS` SHALL gain a `contentControl` group with public `ChromeSlotId` values `contentControl.showAll`, `contentControl.formFill`, `contentControl.inspector`, and `contentControl.remove`. Toolbar and contextual chrome derive from these slots per the chrome registry rules.
+
+#### Scenario: Show-all is a registered slot
+
+- **WHEN** `DocxEditor.Toolbar` renders with default parts
+- **THEN** `contentControl.showAll` is wired through `CHROME_GROUPS`, not hand-listed
+
 ### Requirement: Typed controls offer an interactive widget
 
 The painted surface SHALL offer a widget for each control type that has a value: a menu of `w:listItem` entries for a dropdown and a combo box, a date picker for a date control, and a toggle for a `w14:checkbox` control. Each widget SHALL commit through set-content-control-value, so it is an ordinary undoable edit.
@@ -91,6 +109,13 @@ The adapter SHALL expose an inspector reporting a control's tag, alias, type, lo
 
 - **WHEN** the caret is inside a control
 - **THEN** the inspector shows that control's tag, alias, type, and lock, read from the boundary record
+- **AND** `locked` reflects content-edit lock per the nested lock union, not removal-only `sdtLocked`
+
+#### Scenario: Inspector reports removal lock separately
+
+- **WHEN** the caret is inside a control that is `sdtLocked` only
+- **THEN** the inspector shows `locked: false` for content edit
+- **AND** the remove action is disabled with the engine's reason
 
 #### Scenario: Remove keeps content
 

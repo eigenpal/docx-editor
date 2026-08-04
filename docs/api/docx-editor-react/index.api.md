@@ -17,8 +17,14 @@ import { ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
 import { ColorValue } from '@docx-editor.dev/core-contract/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core-contract/editor';
 import { composeFontConfiguration } from '@docx-editor.dev/core-contract/editor';
+import { ContentControlLock } from '@docx-editor.dev/core-contract/layout';
+import { ContentControlSummary } from '@docx-editor.dev/core-contract';
+import { ContentControlType } from '@docx-editor.dev/core-contract';
 import { createFontSource } from '@docx-editor.dev/core-contract/editor';
 import { CSSProperties } from 'react';
+import { DisplayItem } from '@docx-editor.dev/core-contract/contracts/geometry';
+import { DisplayPage } from '@docx-editor.dev/core-contract/contracts/geometry';
+import { DocPoint } from '@docx-editor.dev/core-contract/contracts/geometry';
 import { DocumentChange } from '@docx-editor.dev/core-contract/contracts/editor';
 import { DocumentHandle } from '@docx-editor.dev/core-contract/contracts/editor';
 import { DocumentSource } from '@docx-editor.dev/core-contract/contracts/editor';
@@ -102,6 +108,59 @@ export { commandForSlot }
 
 export { composeFontConfiguration }
 
+export const CONTENT_CONTROL_SLOTS: {
+    readonly showAll: "contentControl.showAll";
+    readonly formFill: "contentControl.formFill";
+    readonly inspector: "contentControl.inspector";
+    readonly remove: "contentControl.remove";
+};
+
+// @public
+export interface ContentControlActionProps extends ContentControlPartProps {
+    // (undocumented)
+    icon?: ReactNode;
+}
+
+// @public
+export interface ContentControlInspectorState {
+    // (undocumented)
+    readonly alias: string | null;
+    // (undocumented)
+    readonly bound: boolean;
+    // (undocumented)
+    readonly controlType: ContentControlType;
+    // (undocumented)
+    readonly effectiveLock: ContentControlLock | null;
+    // (undocumented)
+    readonly id: string;
+    readonly locked: boolean;
+    // (undocumented)
+    readonly placeholder: boolean;
+    readonly removalLocked: boolean;
+    // (undocumented)
+    readonly tag: string | null;
+}
+
+// @public
+export interface ContentControlPartProps {
+    // (undocumented)
+    asChild?: boolean;
+    // (undocumented)
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
+}
+
+// @public
+export interface ContentControlProps extends ContentControlPartProps {
+    preset?: boolean;
+}
+
+// @public (undocumented)
+export type ContentControlSlotId = (typeof CONTENT_CONTROL_SLOTS)[keyof typeof CONTENT_CONTROL_SLOTS];
+
 // @public
 export interface ContextMenuAnchor {
     // (undocumented)
@@ -170,6 +229,12 @@ export const ContextMenuSelectAll: ((input: ContextMenuCommandProps) => react.JS
 
 export { createFontSource }
 
+export { DisplayItem }
+
+export { DisplayPage }
+
+export { DocPoint }
+
 // @public (undocumented)
 export function DocumentName(input: DocumentNameProps): react__default.JSX.Element;
 
@@ -181,6 +246,21 @@ export const DocxEditor: DocxEditorNamespace;
 // @public
 export function DocxEditorContent(input: DocxEditorContentProps): react.JSX.Element;
 
+export const DocxEditorContentControl: DocxEditorContentControlNamespace;
+
+// @public
+export interface DocxEditorContentControlNamespace {
+    // (undocumented)
+    (props: ContentControlProps): ReturnType<typeof ContentControlRoot>;
+    // (undocumented)
+    readonly Fields: typeof ContentControlFields;
+    // (undocumented)
+    readonly Header: typeof ContentControlHeader;
+    // (undocumented)
+    readonly Remove: typeof ContentControlRemove;
+}
+
+// @public
 // @public
 export interface DocxEditorContentProps {
     className?: string;
@@ -347,6 +427,7 @@ export interface DocxEditorMenuProps {
 export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEditorProps & RefAttributes<DocxEditorRef>> {
     // (undocumented)
     readonly Content: typeof DocxEditorContent;
+    readonly ContentControl: typeof DocxEditorContentControl;
     readonly ContextMenu: typeof ContextMenu;
     readonly DocumentOutline: typeof DocxEditorDocumentOutline;
     readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
@@ -605,6 +686,14 @@ export interface DocxEditorToolbarNamespace {
     readonly ClearFormatting: ToolbarPartComponent;
     // (undocumented)
     readonly Comments: ToolbarPartComponent;
+    // (undocumented)
+    readonly ContentControlFormFill: ToolbarPartComponent;
+    // (undocumented)
+    readonly ContentControlInspector: ToolbarPartComponent;
+    // (undocumented)
+    readonly ContentControlRemove: ToolbarPartComponent;
+    // (undocumented)
+    readonly ContentControlShowAll: ToolbarPartComponent;
     // (undocumented)
     readonly EditingMode: ToolbarSlotPartComponent;
     // (undocumented)
@@ -1407,6 +1496,41 @@ export interface ToolbarSlotPartProps {
 // @public
 export type ToolbarTranslate = (key: string) => string;
 
+export function useContentControl(): UseContentControlResult;
+
+// @public
+export function useContentControlInstance(): UseContentControlResult;
+
+// @public
+export interface UseContentControlResult {
+    readonly canRemove: boolean;
+    readonly canSetValue: boolean;
+    // (undocumented)
+    readonly closeInspector: () => void;
+    readonly control: ContentControlInspectorState | null;
+    readonly controls: readonly ContentControlSummary[];
+    readonly formFill: boolean;
+    readonly inspectorOpen: boolean;
+    // (undocumented)
+    readonly openInspector: () => void;
+    readonly remove: () => ExecResult;
+    readonly removeDisabledReason: string | null;
+    // (undocumented)
+    readonly setFormFill: (on: boolean) => void;
+    // (undocumented)
+    readonly setShowAll: (show: boolean) => void;
+    readonly setValue: (value: string) => ExecResult;
+    readonly setValueDisabledReason: string | null;
+    readonly showAll: boolean;
+    // (undocumented)
+    readonly toggleFormFill: () => void;
+    // (undocumented)
+    readonly toggleInspector: () => void;
+    // (undocumented)
+    readonly toggleShowAll: () => void;
+}
+
+// @public
 // @public
 export function useDocumentOutline(): UseDocumentOutlineResult;
 

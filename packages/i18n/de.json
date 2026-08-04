@@ -61,7 +61,8 @@
       "listFormatting": "Listenformatierung",
       "image": "Grafik",
       "table": "Tabelle",
-      "insert": "Einfügen"
+      "insert": "Einfügen",
+      "contentControl": "Inhaltssteuerelemente"
     },
     "undo": "Rückgängig",
     "undoShortcut": "Rückgängig (Strg+Z)",
@@ -993,6 +994,44 @@
       "headings": null
     },
     "title": null
+  },
+  "contentControl": {
+    "formFill": "Formularfüllmodus",
+    "group": "Inhaltssteuerelemente",
+    "inspector": "Eigenschaften des Inhaltssteuerelements",
+    "inspectorPanel": {
+      "alias": "Titel",
+      "bound": "Datenbindung",
+      "boundNote": "Dieses Steuerelement ist an externe Daten gebunden. Bearbeiten ist nicht möglich.",
+      "empty": "—",
+      "lock": "Sperre",
+      "lockedNote": "Die Inhaltsbearbeitung ist für dieses Steuerelement gesperrt.",
+      "no": "Nein",
+      "placeholder": "Platzhaltertext",
+      "tag": "Tag",
+      "title": "Inhaltssteuerelement",
+      "type": "Typ",
+      "yes": "Ja"
+    },
+    "lock": {
+      "contentLocked": "Inhalt gesperrt",
+      "sdtContentLocked": "Inhaltssteuerelement und Inhalt gesperrt",
+      "sdtLocked": "Inhaltssteuerelement gesperrt",
+      "unlocked": "Nicht gesperrt"
+    },
+    "noControl": "Setzen Sie den Cursor in ein Inhaltssteuerelement",
+    "remove": "Inhaltssteuerelement entfernen",
+    "showAll": "Grenzen der Inhaltssteuerelemente anzeigen",
+    "types": {
+      "checkbox": "Kontrollkästchen",
+      "comboBox": "Kombinationsfeld",
+      "date": "Datum",
+      "dropdown": "Dropdown-Liste",
+      "picture": "Bild",
+      "plainText": "Nur Text",
+      "repeatingSection": "Wiederholungsabschnitt",
+      "richText": "Rich Text"
+    }
   },
   "notes": {
     "editingBanner": "Fußnote bearbeiten",

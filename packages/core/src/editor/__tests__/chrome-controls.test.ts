@@ -33,9 +33,9 @@ import {
  * The toolbar groups in the chrome spec's bar order: history, zoom, styles, font,
  * then the text group carrying colour and highlight (B I U S · A · pen · link),
  * script, the merged-rendering alignment group, the list group carrying line
- * spacing, standalone clear, and the trailing review controls — with the
- * contextual image/table/file/insert groups (not in the default bar) closing the
- * registry.
+ * spacing, standalone clear, the trailing review controls, content-control
+ * authoring chrome — with the contextual image/table/file/insert groups (not in
+ * the default bar) closing the registry.
  */
 const EXPECTED_GROUPS = [
   'history',
@@ -48,6 +48,7 @@ const EXPECTED_GROUPS = [
   'list',
   'format',
   'review',
+  'contentControl',
   'image',
   'table',
   'file',
@@ -83,6 +84,10 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'format.clear',
   'review.comments',
   'review.editingMode',
+  'contentControl.showAll',
+  'contentControl.formFill',
+  'contentControl.inspector',
+  'contentControl.remove',
   'image.insert',
   'image.properties',
   'table.insert',
@@ -219,7 +224,7 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(chromeControlCount()).toBe(43);
+    expect(chromeControlCount()).toBe(47);
   });
 
   test('the menu region carries the chrome menus, in bar order', () => {

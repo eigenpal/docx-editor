@@ -61,6 +61,12 @@ Layout SHALL emit, for each control, a record carrying its identity, tag, alias,
 
 `w:sdtPr/w:lock` SHALL be enforced during `TreeDocOp` validation, so a keystroke, a command, and an agent are refused identically. `sdtLocked` forbids removing the control; `contentLocked` forbids editing its content; `sdtContentLocked` forbids both; `unlocked` and an absent lock forbid neither. A refused operation SHALL return `locked` and publish no `ModelChange`.
 
+**Nested lock union.** Effective permissions are the union of the control's own lock and every ancestor control's lock, evaluated on two axes: content edit is forbidden when any ancestor or self declares `contentLocked` or `sdtContentLocked`; removal is forbidden when any ancestor or self declares `sdtLocked` or `sdtContentLocked`. The strictest ancestor on each axis wins.
+
+**Document-level form protection is deferred.** `w:documentProtection/@w:edit="forms"` and section `w:formProt` are not read or enforced in this change.
+
+The shipped `ContentControlSummary.locked?: boolean` reports only the content-edit axis: `true` when the nested union forbids editing content; absent or `false` when editing is allowed. It does not encode removal-only `sdtLocked`.
+
 #### Scenario: contentLocked refuses a text edit
 
 - **WHEN** a text insertion targets a range inside a control declaring `contentLocked`
@@ -87,6 +93,17 @@ Layout SHALL emit, for each control, a record carrying its identity, tag, alias,
 - **WHEN** a delete spans from unlocked text into a `contentLocked` control
 - **THEN** the whole operation is refused rather than partially applied
 
+#### Scenario: An inner control inherits an ancestor content lock
+
+- **WHEN** an outer control declares `contentLocked` and an inner control declares `unlocked`
+- **THEN** editing the inner control's content is refused with `locked`
+
+#### Scenario: An inner control inherits an ancestor removal lock
+
+- **WHEN** an outer control declares `sdtLocked` and an inner control declares `unlocked`
+- **THEN** removing the inner control is refused with `locked`
+- **AND** editing the inner control's content is allowed
+
 #### Scenario: The surface reflects the lock before the refusal
 
 - **WHEN** the caret sits inside a `contentLocked` control
@@ -94,7 +111,13 @@ Layout SHALL emit, for each control, a record carrying its identity, tag, alias,
 
 ### Requirement: Placeholder text is a state, not authored content
 
-A control with `w:showingPlcHdr` SHALL render its content as placeholder: visually distinguished, and replaced wholesale on first input rather than appended to. Committing content SHALL clear `w:showingPlcHdr`; clearing content back to empty SHALL restore it.
+A control with `w:showingPlcHdr` SHALL render its content as placeholder: visually distinguished via `w:sdtPr/w:rPr`, and replaced wholesale on first input rather than appended to. First input SHALL clear `w:showingPlcHdr`. For literal-only placeholders, there is no durable prompt source after replacement; emptying content later SHALL leave the control empty and SHALL NOT reassert `w:showingPlcHdr`. Undo through D10 history MAY restore the prior placeholder state.
+
+#### Scenario: Placeholder styling comes from sdtPr rPr
+
+- **WHEN** a control sets `w:showingPlcHdr` and declares `w:sdtPr/w:rPr`
+- **THEN** paint applies that `rPr` to the placeholder display
+- **AND** authored `w:rPr` on runs inside `w:sdtContent` is not the placeholder style source
 
 #### Scenario: Typing replaces the prompt
 
@@ -102,10 +125,16 @@ A control with `w:showingPlcHdr` SHALL render its content as placeholder: visual
 - **THEN** the entire placeholder content is replaced by the typed text in one transaction
 - **AND** `w:showingPlcHdr` is cleared in the same transaction
 
-#### Scenario: Emptying restores the prompt
+#### Scenario: Emptying after replace does not restore the prompt
 
-- **WHEN** the user deletes all content from a control that has a placeholder
-- **THEN** the placeholder content and `w:showingPlcHdr` are restored
+- **WHEN** the user replaces a literal-only placeholder and later deletes all content from the control
+- **THEN** the control remains empty
+- **AND** `w:showingPlcHdr` is not reasserted
+
+#### Scenario: Undo may restore placeholder state
+
+- **WHEN** the user replaces a literal-only placeholder and then undoes that edit through history
+- **THEN** the prior placeholder content and `w:showingPlcHdr` state are restored from the undo stack
 
 #### Scenario: Placeholder is not selectable as ordinary text
 
@@ -121,9 +150,25 @@ A control with `w:showingPlcHdr` SHALL render its content as placeholder: visual
 
 - **WHEN** a control declares `w:placeholder/w:docPart`
 - **THEN** the reference is preserved on round trip
-- **AND** the glossary part is not read in this change; the control's own content is what renders
+- **AND** the glossary part is not read in this change
+- **AND** replacing and emptying content does not invent a restore from the glossary reference
 
 #### Scenario: Saved file does not lie about placeholder state
 
 - **WHEN** a user replaces a prompt with real content and saves
 - **THEN** `w:showingPlcHdr` is absent from that control in the output
+
+### Requirement: Temporary controls self-remove on first successful content edit
+
+When `w:sdtPr/w:temporary` is present, the control SHALL unwrap — remove the wrapper while keeping its content at the same position — in the same transaction as the first successful content edit. Clearing content back to empty after that edit does not restore the wrapper.
+
+#### Scenario: First edit unwraps a temporary control
+
+- **WHEN** the user commits the first successful content edit inside a control declaring `w:temporary`
+- **THEN** the wrapper is removed and the content remains in place
+- **AND** the published `ModelChange` carries an impact class no narrower than `flow-structural`
+
+#### Scenario: Temporary is independent of placeholder
+
+- **WHEN** a control declares `w:temporary` without `w:showingPlcHdr` and receives its first successful content edit
+- **THEN** the wrapper is removed in the same transaction

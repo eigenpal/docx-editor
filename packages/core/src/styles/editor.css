@@ -769,9 +769,75 @@ a.docx-hyperlink:focus-visible {
 .docx-bookmark-end,
 .docx-field,
 .docx-drawing-placeholder,
-.docx-shape-placeholder {
+.docx-shape-placeholder,
+.docx-content-control-chrome,
+.docx-content-control-boundary,
+.docx-content-control-widget {
   cursor: default;
   user-select: none;
+}
+
+/* Content-control boundary furniture — overlay only; never contributes layout. */
+.docx-content-control-boundary {
+  box-sizing: border-box;
+  border: 1px solid rgba(66, 133, 244, 0.55);
+  background: rgba(66, 133, 244, 0.06);
+  pointer-events: none;
+}
+
+.docx-content-control-chrome[data-active] .docx-content-control-boundary {
+  border-color: rgba(66, 133, 244, 0.9);
+  background: rgba(66, 133, 244, 0.1);
+}
+
+.docx-content-control-widget {
+  box-sizing: border-box;
+  border-radius: 2px;
+  background: rgba(66, 133, 244, 0.15);
+  border: 1px solid rgba(66, 133, 244, 0.45) !important;
+  cursor: pointer !important;
+}
+
+.docx-content-control-widget:disabled,
+.docx-content-control-widget[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed !important;
+}
+
+.docx-content-control-menu {
+  min-width: 8rem;
+  max-width: 16rem;
+  max-height: 12rem;
+  overflow: auto;
+  background: var(--doc-popover-bg, #fff);
+  border: 1px solid var(--doc-border, rgba(0, 0, 0, 0.15));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  padding: 0.25rem 0;
+  user-select: none;
+}
+
+.docx-content-control-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.35rem 0.75rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.docx-content-control-menu-item:hover {
+  background: rgba(66, 133, 244, 0.12);
+}
+
+.docx-content-control-menu-input,
+.docx-content-control-date {
+  display: block;
+  width: calc(100% - 1rem);
+  margin: 0.35rem 0.5rem;
+  box-sizing: border-box;
 }
 
 /* ============================================================================

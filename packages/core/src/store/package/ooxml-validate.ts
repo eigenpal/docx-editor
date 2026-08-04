@@ -8,10 +8,12 @@
 import { isValidNCName } from './qname.ts';
 import { isValidXmlText } from './sinks.ts';
 import {
+  W14_NAMESPACE_URI,
   WML_NAMESPACE_URI,
   XML_NAMESPACE_URI,
   XMLNS_NAMESPACE_URI,
   expandedKey,
+  knownKindAllowsWmlVal,
   validKnownKind,
   validateQNameAttributeValues,
   type KnownKind,
@@ -71,11 +73,29 @@ const KNOWN_ELEMENT_NAMES: Readonly<
   commentReference: [WML_NAMESPACE_URI, 'commentReference'],
   comments: [WML_NAMESPACE_URI, 'comments'],
   comment: [WML_NAMESPACE_URI, 'comment'],
+  contentControl: [WML_NAMESPACE_URI, 'sdt'],
+  contentControlProperties: [WML_NAMESPACE_URI, 'sdtPr'],
+  contentControlEndProperties: [WML_NAMESPACE_URI, 'sdtEndPr'],
+  contentControlContent: [WML_NAMESPACE_URI, 'sdtContent'],
+  contentControlDropDownList: [WML_NAMESPACE_URI, 'dropDownList'],
+  contentControlComboBox: [WML_NAMESPACE_URI, 'comboBox'],
+  contentControlListItem: [WML_NAMESPACE_URI, 'listItem'],
+  contentControlDate: [WML_NAMESPACE_URI, 'date'],
+  contentControlDateFormat: [WML_NAMESPACE_URI, 'dateFormat'],
+  contentControlLid: [WML_NAMESPACE_URI, 'lid'],
+  contentControlStoreMappedDataAs: [WML_NAMESPACE_URI, 'storeMappedDataAs'],
+  contentControlCalendar: [WML_NAMESPACE_URI, 'calendar'],
+  contentControlText: [WML_NAMESPACE_URI, 'text'],
+  contentControlDataBinding: [WML_NAMESPACE_URI, 'dataBinding'],
+  contentControlCheckbox: [W14_NAMESPACE_URI, 'checkbox'],
+  contentControlChecked: [W14_NAMESPACE_URI, 'checked'],
+  contentControlCheckedState: [W14_NAMESPACE_URI, 'checkedState'],
+  contentControlUncheckedState: [W14_NAMESPACE_URI, 'uncheckedState'],
 };
 
-function knownAttributesAreValid(attributes: readonly OoxmlAttribute[]): boolean {
+function knownAttributesAreValid(kind: KnownKind, attributes: readonly OoxmlAttribute[]): boolean {
   return attributes.every((attribute) => {
-    if (attribute.kind === 'wmlVal') return false;
+    if (attribute.kind === 'wmlVal') return knownKindAllowsWmlVal(kind);
     if (attribute.kind === 'xmlSpace')
       return (
         attribute.namespaceUri === XML_NAMESPACE_URI &&
@@ -208,7 +228,7 @@ function runValidation(part: OoxmlPart, previous: OoxmlPart | null): OoxmlInvari
       if (
         node.namespaceUri !== namespaceUri ||
         !localNameOk ||
-        !knownAttributesAreValid(node.attributes) ||
+        !knownAttributesAreValid(node.kind, node.attributes) ||
         !validKnownKind(node.kind, node.children)
       )
         report('known-node-invariant', path, node.id);

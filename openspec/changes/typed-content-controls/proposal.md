@@ -20,6 +20,7 @@ A template-driven document — which is most of what content controls are for �
 
 - Add `contentControl` and `contentControlContent` to the node-kind union in `packages/core/src/store/package/ooxml-tree.ts`, at block, inline, row, and cell level. The wrapper stops being generic.
 - Type `CT_SdtPr` in the order the schema declares it: `rPr`, `alias`, `tag`, `id`, `lock`, `placeholder`, `temporary`, `showingPlcHdr`, `dataBinding`, `label`, `tabIndex`, then exactly one type element from `equation | comboBox | date | docPartObj | docPartList | dropDownList | picture | richText | text | citation | group | bibliography`. `w14:checkbox` is the Microsoft extension, not an ECMA-376 type, and is typed as such.
+- Type `w:sdtEndPr` at every SDT level (`CT_SdtBlock`, `CT_SdtRun`, `CT_SdtCell`, `CT_SdtRow`) in schema position; unmodelled children stay generic.
 - Type the type-specific payloads that carry data: `CT_SdtDropDownList` (`w:listItem`, `@w:lastValue`), `CT_SdtComboBox`, `CT_SdtDate` (`w:dateFormat`, `w:lid`, `w:storeMappedDataAs`, `w:calendar`, `@w:fullDate`), `CT_SdtText` (`@w:multiLine`).
 - `CT_DataBinding` (`@w:xpath`, `@w:storeItemID`, `@w:prefixMappings`) is typed and **preserved but not resolved** — see below.
 - Everything in `w:sdtPr` outside this vocabulary stays generic and round-trips, per D1.
@@ -33,24 +34,31 @@ A template-driven document — which is most of what content controls are for �
 **Locks are enforced at the store**
 
 - `TreeDocOp` validation refuses an operation whose target violates the resolved lock, returning `locked`, matching the taxonomy `ExecResult` already uses.
-- `sdtLocked` forbids removing the control; `contentLocked` forbids editing its content; `sdtContentLocked` forbids both. Enforcement lives in `tree-op-validate.ts`, so an agent, a command, and a keystroke are all refused identically.
+- `sdtLocked` forbids removing the control; `contentLocked` forbids editing its content; `sdtContentLocked` forbids both. Nested controls use a **lock union**: the strictest ancestor on each axis wins — content edit is forbidden when any ancestor or self declares `contentLocked` or `sdtContentLocked`; removal is forbidden when any ancestor or self declares `sdtLocked` or `sdtContentLocked`. Enforcement lives in `tree-op-validate.ts`, so an agent, a command, and a keystroke are all refused identically. `w:documentProtection/@w:edit="forms"` and section `w:formProt` are **deferred** — not read or enforced here.
 
 **Placeholder text becomes a state, not a string**
 
-- A control with `w:showingPlcHdr` is rendered as placeholder: visually distinguished, not selectable as ordinary text, and replaced wholesale on first input rather than appended to.
-- Committing content clears `w:showingPlcHdr`; clearing content back to empty restores it, matching Word.
-- `w:placeholder/w:docPart` names a glossary entry. The fixture has none — its prompt text is literal content inside `w:sdtContent`. Both cases are specified; the glossary part is not read in this change.
+- A control with `w:showingPlcHdr` is rendered as placeholder: visually distinguished via `w:sdtPr/w:rPr`, not selectable as ordinary text, and replaced wholesale on first input rather than appended to.
+- First input replaces the literal prompt and clears `w:showingPlcHdr`. Undo through history may restore the prior state; emptying content after a replace leaves the control empty and does not reassert the flag (no durable prompt source without glossary resolution).
+- A control with `w:temporary` removes itself — unwraps while keeping content — in the same transaction as the first successful content edit.
+- `w:placeholder/w:docPart` names a glossary entry. The fixture has none — its prompt text is literal content inside `w:sdtContent`. The reference is preserved; glossary resolution and restore-from-glossary remain deferred.
 
 **Typed value operations**
 
-- `TreeDocOp` gains set-content-control-value, addressed by control identity, with a value shape per type: a dropdown or combo takes a `w:listItem` value; a date takes an ISO date written to `@w:fullDate` and formatted into the content per `w:dateFormat`; a checkbox toggles; a text control takes a string.
+- `TreeDocOp` gains set-content-control-value, addressed by control identity, with per-type validation internally. The shipped public `DocEdits.setContentControlValue: { value: string }` is unchanged — the engine maps the string by control type (list-item value, ISO date, checkbox boolean string, plain text).
 - A value that is not among a dropdown's `w:listItem` values is refused with `invalidArgs`. A combo box accepts a free value, because that is what distinguishes it from a dropdown.
+- Dropdown and combo `w:listItem` children are bounded by `MAX_SDT_LIST_ITEMS` (256) at read time; excess items preserve as generic children in position.
+- `w:dataBinding` controls refuse content and value edits with `bound`.
+- Shipped `addRepeatingSectionItem` / `removeRepeatingSectionItem` remain in the public vocabulary but refuse with `unsupported` until a dedicated repeating-section change lands.
 
 **React adapter**
 
 - Interactive widgets on the painted surface: a dropdown menu from `w:listItem`, a date picker, a checkbox toggle.
 - A form-fill navigation mode: Tab moves between unlocked controls in `w:tabIndex` order, then document order.
 - A control inspector showing tag, alias, type, and lock, and a context menu to remove a control while keeping its content.
+- Chrome slots: `contentControl.showAll`, `contentControl.formFill`, `contentControl.inspector`, `contentControl.remove`.
+
+**Vue** is explicitly deferred. No paired support claim follows from this change alone.
 
 ## Capabilities
 
@@ -99,7 +107,7 @@ Not present, so not claimable from this file:
 - `packages/core/src/store/store/tree-op-validate.ts` — lock enforcement, refusing with `locked`.
 - `packages/core/src/store/store/tree-ops.ts`, `tree-op-apply.ts` — value and removal operations.
 - `packages/core/src/output/semantic-paint.ts` — boundary chrome and placeholder styling.
-- `packages/core/src/editor/chrome-controls.ts`, `toolbar-commands.ts` — inspector slot.
+- `packages/core/src/editor/chrome-controls.ts`, `toolbar-commands.ts` — `contentControl` chrome group and inspector slots.
 - `packages/react/src` — widgets, form-fill navigation, inspector, i18n.
-- **Vue**: out of scope by request; no support claim follows from this change alone.
-- **Not included**: `w:dataBinding` resolution against a custom XML part, the glossary document for `w:placeholder`, repeating sections, and `w:docPartObj` gallery behaviour. All are preserved and none is resolved.
+- **Vue**: explicitly deferred; no paired support claim.
+- **Not included**: `w:dataBinding` resolution against a custom XML part, the glossary document for `w:placeholder`, repeating-section add/remove operations, `w:documentProtection`/`w:formProt` form mode, and `w:docPartObj` gallery behaviour. All are preserved and none is resolved.

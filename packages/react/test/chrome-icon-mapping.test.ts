@@ -57,6 +57,10 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'review.comments': 'comment',
   // The "✎ Editing ▾" mode pill's leading pencil glyph.
   'review.editingMode': 'edit_note',
+  'contentControl.showAll': 'visibility',
+  'contentControl.formFill': 'edit_note',
+  'contentControl.inspector': 'tune',
+  'contentControl.remove': 'delete',
   'file.open': 'file_upload',
   'file.save': 'file_download',
   'file.pageSetup': 'settings',

@@ -13,6 +13,7 @@
 // EditorScope note ids encode kind + signed id: `footnote:<id>` / `endnote:<id>`.
 
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
+import { walkParagraphInline } from './content-control-walk.ts';
 import type {
   OoxmlEndnotesNode,
   OoxmlFootnotesNode,
@@ -246,28 +247,27 @@ export interface AtomicNoteSpan {
   readonly removeNodeIds: readonly string[];
 }
 
-/** Collect typed note atoms in document order (one segment each). */
+/**
+ * Collect typed note atoms in document order (one segment each).
+ *
+ * Walks the same paragraph-inline surface as `segmentsOf` / `walkParagraphInline`:
+ * hyperlinks and content controls flatten; only direct run children contribute atoms.
+ * A demoted run-inner SDT husk stays opaque — no phantom addressable hit.
+ */
 export function atomicNoteSpansOf(paragraph: OoxmlParagraphNode): readonly AtomicNoteSpan[] {
   const spans: AtomicNoteSpan[] = [];
-  const visitInline = (child: OoxmlNode): void => {
-    if (child.kind === 'run') {
-      for (const grand of child.children) {
-        if (!isNoteAtomNode(grand)) continue;
-        spans.push({
-          kind: grand.kind as AtomicNoteSpan['kind'],
-          node: grand,
-          runId: child.id,
-          removeNodeIds: [grand.id],
-        });
-      }
-      return;
+  walkParagraphInline(paragraph.children, 0, (child) => {
+    if (child.kind !== 'run') return;
+    for (const grand of child.children) {
+      if (!isNoteAtomNode(grand)) continue;
+      spans.push({
+        kind: grand.kind as AtomicNoteSpan['kind'],
+        node: grand,
+        runId: child.id,
+        removeNodeIds: [grand.id],
+      });
     }
-    // Note refs inside a link are still paragraph atoms (same as field spans).
-    if (child.kind === 'hyperlink') {
-      for (const inner of child.children) visitInline(inner);
-    }
-  };
-  for (const child of paragraph.children) visitInline(child);
+  });
   return spans;
 }
 

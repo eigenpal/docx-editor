@@ -20,6 +20,10 @@ import {
   type OoxmlProperty,
   type TreeDocOp,
 } from '@docx-editor.dev/core-contract/store';
+import {
+  walkAllStoryParagraphs,
+  walkParagraphInline,
+} from '../store/package/content-control-walk.ts';
 import { runPropsOf, treeSchema } from './tree-schema.ts';
 
 export type TreeBindingRejection =
@@ -101,16 +105,11 @@ function unknownLabel(node: OoxmlNode): string {
 function tokensOfParagraph(paragraph: OoxmlNode): Token[] {
   if (paragraph.kind === 'textValue') return [];
   const tokens: Token[] = [];
-  for (const child of paragraph.children) {
-    if (child.kind === 'paragraphProperties') continue;
-    if (child.kind !== 'run') {
-      // Paragraph-level unknown content keeps a position in the inline sequence.
-      tokens.push({ kind: 'unknown', nodeId: child.id, label: unknownLabel(child) });
-      continue;
-    }
-    const rPr = child.children.find((grand) => grand.kind === 'runProperties');
+  const emitRun = (run: OoxmlNode): void => {
+    if (run.kind !== 'run') return;
+    const rPr = run.children.find((grand) => grand.kind === 'runProperties');
     const props = propertiesOf(rPr);
-    for (const grand of child.children) {
+    for (const grand of run.children) {
       if (grand.kind === 'runProperties') continue;
       if (grand.kind === 'tab') {
         tokens.push({ kind: 'tab' });
@@ -130,7 +129,15 @@ function tokensOfParagraph(paragraph: OoxmlNode): Token[] {
       }
       tokens.push({ kind: 'unknown', nodeId: grand.id, label: unknownLabel(grand) });
     }
-  }
+  };
+  walkParagraphInline(paragraph.children, 0, (child) => {
+    if (child.kind === 'run') {
+      emitRun(child);
+      return;
+    }
+    // Paragraph-level unknown content keeps a position in the inline sequence.
+    tokens.push({ kind: 'unknown', nodeId: child.id, label: unknownLabel(child) });
+  });
   return tokens;
 }
 
@@ -163,45 +170,18 @@ export function bodyParagraphs(part: OoxmlPart): OoxmlNode[] {
  * select-all all need the full set.
  */
 export function allParagraphs(part: OoxmlPart): OoxmlNode[] {
-  const MAX_SDT_NESTING = 32;
   const paragraphs: OoxmlNode[] = [];
-  const walkBlocks = (children: readonly OoxmlNode[], sdtDepth = 0): void => {
-    for (const child of children) {
-      if (child.kind === 'paragraph') {
-        paragraphs.push(child);
-      } else if (child.kind === 'table') {
-        for (const row of child.children) {
-          if (row.kind !== 'tableRow') continue;
-          for (const cell of row.children) {
-            if (cell.kind !== 'tableCell') continue;
-            walkBlocks(cell.children, sdtDepth);
-          }
-        }
-      } else if (
-        child.kind === 'generic' &&
-        child.localName === 'sdt' &&
-        sdtDepth < MAX_SDT_NESTING
-      ) {
-        // Block SDT content flattens transparently, matching the layout's story walk —
-        // the paragraphs inside a content control are editable plain paragraphs.
-        for (const inner of child.children) {
-          if (inner.kind !== 'textValue' && inner.localName === 'sdtContent') {
-            walkBlocks(inner.children, sdtDepth + 1);
-          }
-        }
-      }
-    }
-  };
   const walk = (node: OoxmlNode): void => {
     if (node.kind === 'textValue') return;
     // Body, header, footer, and typed note bodies are the story roots that hold editable
     // block content. Notes parts nest notes under footnotes/endnotes; each note is a story.
+    // Flatten block SDTs / tables the same way layout and the store index do.
     if (node.kind === 'body' || node.localName === 'hdr' || node.localName === 'ftr') {
-      walkBlocks(node.children);
+      walkAllStoryParagraphs(node.children, 0, (paragraph) => paragraphs.push(paragraph));
       return;
     }
     if (node.kind === 'note') {
-      walkBlocks(node.children);
+      walkAllStoryParagraphs(node.children, 0, (paragraph) => paragraphs.push(paragraph));
       return;
     }
     if (node.kind === 'footnotes' || node.kind === 'endnotes') {

@@ -25,6 +25,15 @@ The canonical tree SHALL type `w:sdt` and `w:sdtContent` at block, inline, row, 
 - **WHEN** a `w:sdtContent` contains `w:tr` or `w:tc`
 - **THEN** the control types at that level and the rows or cells remain typed table content
 
+### Requirement: `w:sdtEndPr` is typed at every SDT level
+
+Every `w:sdt` SHALL type its optional `w:sdtEndPr` child in schema position. Unmodelled children inside `w:sdtEndPr` SHALL be preserved as generic children in position.
+
+#### Scenario: End properties round-trip
+
+- **WHEN** a control declares `w:sdtEndPr` with typed or generic children
+- **THEN** an unedited load and serialize matches by canonical tree fingerprint
+
 ### Requirement: `CT_SdtPr` is typed in schema order
 
 Control properties SHALL be typed per `CT_SdtPr`, which is an `xsd:sequence`: `rPr`, `alias`, `tag`, `id`, `lock`, `placeholder`, `temporary`, `showingPlcHdr`, `dataBinding`, `label`, `tabIndex`, followed by at most one type element from `equation`, `comboBox`, `date`, `docPartObj`, `docPartList`, `dropDownList`, `picture`, `richText`, `text`, `citation`, `group`, `bibliography`. Serialization SHALL re-emit them in that order. Properties outside this vocabulary SHALL be preserved as generic children in position.
@@ -43,6 +52,13 @@ Control properties SHALL be typed per `CT_SdtPr`, which is an `xsd:sequence`: `r
 
 - **WHEN** a control declares no type element, as seven controls in the comprehensive fixture do
 - **THEN** it is typed as an untyped control — a rich-text container — rather than being assigned a type it does not declare
+- **AND** public summaries and queries report `controlType: 'richText'`, the closest shipped `ContentControlType` member, without extending the public union
+
+#### Scenario: Preserved type without a shipped member
+
+- **WHEN** a control declares `group`, `docPartObj`, `citation`, `bibliography`, or `equation`
+- **THEN** it round-trips by canonical fingerprint
+- **AND** public summaries report `controlType: 'richText'` and offer no value widget
 
 #### Scenario: Unmodelled property survives
 
@@ -51,7 +67,13 @@ Control properties SHALL be typed per `CT_SdtPr`, which is an `xsd:sequence`: `r
 
 ### Requirement: Type-specific payloads are typed where they carry data
 
-`CT_SdtDropDownList` and `CT_SdtComboBox` SHALL type their `w:listItem` children and `@w:lastValue`. `CT_SdtDate` SHALL type `w:dateFormat`, `w:lid`, `w:storeMappedDataAs`, `w:calendar`, and `@w:fullDate`. `CT_SdtText` SHALL type `@w:multiLine`. `CT_DataBinding` SHALL type `@w:xpath`, `@w:storeItemID`, and `@w:prefixMappings`.
+`CT_SdtDropDownList` and `CT_SdtComboBox` SHALL type their `w:listItem` children and `@w:lastValue`, bounded to `MAX_SDT_LIST_ITEMS` (256) at read time. Items within the cap are typed; items beyond the cap are preserved as generic children in position and are excluded from widgets and value validation. `CT_SdtDate` SHALL type `w:dateFormat`, `w:lid`, `w:storeMappedDataAs`, `w:calendar`, and `@w:fullDate`. `CT_SdtText` SHALL type `@w:multiLine`. `CT_DataBinding` SHALL type `@w:xpath`, `@w:storeItemID`, and `@w:prefixMappings`.
+
+#### Scenario: List items are bounded
+
+- **WHEN** a dropdown declares more than `MAX_SDT_LIST_ITEMS` `w:listItem` children
+- **THEN** the first 256 are typed and the remainder are preserved as generic children in position
+- **AND** widgets and value validation consider only the typed items
 
 #### Scenario: Dropdown items are readable
 
@@ -94,6 +116,11 @@ Control properties SHALL be typed per `CT_SdtPr`, which is an `xsd:sequence`: `r
 - **THEN** it is refused with `bound`
 - **AND** the control's content and its binding stay consistent with the file as loaded
 
+#### Scenario: Content edits on a bound control are refused
+
+- **WHEN** a text insertion, deletion, or paste targets content inside a control declaring `w:dataBinding`
+- **THEN** it is refused with `bound`
+
 #### Scenario: No fetch from binding metadata
 
 - **WHEN** a document containing a bound control is loaded, laid out, painted, and saved
@@ -120,7 +147,28 @@ Each control SHALL carry a stable node identity independent of `w:id`, since `w:
 
 ### Requirement: Typed value operations per control type
 
-`TreeDocOp` SHALL include set-content-control-value, addressed by control identity, with a value shape determined by the control's type. Each SHALL validate before committing.
+`TreeDocOp` SHALL include set-content-control-value, addressed by control identity, with per-type validation before committing. The shipped public `DocEdits.setContentControlValue: { value: string }` SHALL remain `string`; the engine maps the string internally by control type.
+
+#### Scenario: Public string maps to dropdown item value
+
+- **WHEN** `setContentControlValue` is called with a string matching a dropdown `w:listItem` value
+- **THEN** the internal operation commits that item and updates `@w:lastValue`
+
+#### Scenario: Public string maps to ISO date
+
+- **WHEN** `setContentControlValue` is called with an ISO 8601 date string on a date control
+- **THEN** `@w:fullDate` receives the value and content is formatted per `w:dateFormat` and `w:lid`
+
+#### Scenario: Public string maps to checkbox state
+
+- **WHEN** `setContentControlValue` is called with `"true"` or `"false"` on a checkbox control
+- **THEN** `w14:checked` and the content glyph update in one transaction
+
+#### Scenario: Repeating-section edits are unsupported
+
+- **WHEN** `addRepeatingSectionItem` or `removeRepeatingSectionItem` is invoked
+- **THEN** it is refused with `unsupported`
+- **AND** no add/remove behaviour is claimed in this change
 
 #### Scenario: Dropdown accepts only its own items
 
@@ -146,6 +194,30 @@ Each control SHALL carry a stable node identity independent of `w:id`, since `w:
 
 - **WHEN** a value is set through a widget
 - **THEN** the property change and the content change commit in one transaction, producing one `ModelChange` and one D10 history entry
+
+### Requirement: Control operations publish D12 impact classes
+
+Committed control operations SHALL publish a `ModelChange` impact class no narrower than the safe minimum for the operation kind.
+
+#### Scenario: In-paragraph value edit
+
+- **WHEN** a value operation changes visible text within a single paragraph without changing block structure
+- **THEN** the published `ModelChange` carries an impact class no narrower than `paragraph-local`
+
+#### Scenario: Checkbox toggle in place
+
+- **WHEN** a checkbox toggle changes only the glyph within unchanged paragraph metrics
+- **THEN** the published `ModelChange` may carry `text-local`
+
+#### Scenario: Block content height change
+
+- **WHEN** a value or placeholder replacement changes multi-paragraph or block-level content height
+- **THEN** the published `ModelChange` carries an impact class no narrower than `flow-structural`
+
+#### Scenario: Temporary unwrap and remove-control
+
+- **WHEN** a `w:temporary` control self-removes or a remove-control operation unwraps a control
+- **THEN** the published `ModelChange` carries an impact class no narrower than `flow-structural`
 
 ### Requirement: Controls satisfy both D9 oracles
 

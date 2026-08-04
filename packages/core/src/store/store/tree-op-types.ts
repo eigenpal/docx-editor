@@ -358,6 +358,41 @@ export type TreeDocOp =
     }
   | {
       /**
+       * Set a content control's value by control identity.
+       *
+       * The public edit is a string (`DocEdits.setContentControlValue`); interpretation is
+       * per control type — dropdown item value, combo free text, checkbox true/false,
+       * ISO date, or plain/rich text replacement. Property and content changes commit as
+       * one effect.
+       */
+      readonly op: 'setContentControlValue';
+      readonly controlId: string;
+      readonly value: string;
+    }
+  | {
+      /**
+       * Remove a content control wrapper while keeping its content in place.
+       *
+       * Same unwrap shape as `removeHyperlink`: children of `w:sdtContent` (and any other
+       * non-property children) splice into the parent where the control sat.
+       */
+      readonly op: 'removeContentControl';
+      readonly controlId: string;
+    }
+  | {
+      /** Repeating-section item insert — unsupported at this layer (out of scope). */
+      readonly op: 'addRepeatingSectionItem';
+      readonly controlId: string;
+      readonly index?: number;
+    }
+  | {
+      /** Repeating-section item remove — unsupported at this layer (out of scope). */
+      readonly op: 'removeRepeatingSectionItem';
+      readonly controlId: string;
+      readonly index: number;
+    }
+  | {
+      /**
        * Remove a typed block and everything under it.
        *
        * Validation restricts this structural operation to `w:p`, `w:tbl`, and `w:tr`, and
@@ -494,6 +529,10 @@ export const TREE_DOC_OP_KINDS = [
   'insertHyperlink',
   'setHyperlinkTarget',
   'removeHyperlink',
+  'setContentControlValue',
+  'removeContentControl',
+  'addRepeatingSectionItem',
+  'removeRepeatingSectionItem',
   'deleteBlock',
   'createHeaderFooter',
   'deleteHeaderFooter',
@@ -567,6 +606,11 @@ export type TreeOpRejection =
    */
   | 'unsupported-revision'
   | 'tree-invariant'
+  | 'unknown-control'
+  | 'locked'
+  | 'bound'
+  | 'typeMismatch'
+  | 'unsupported'
   /** Malformed lifecycle args / first-section link — mirrors Editor `invalidArgs`. */
   | 'invalidArgs';
 

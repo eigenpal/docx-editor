@@ -125,6 +125,19 @@ const AUTHORABLE_PARAGRAPH_PROPERTIES: ReadonlySet<string> = new Set(ACCEPTED_PA
 /** The D8 run op vocabulary, for `w:rPr` on a run and on the paragraph mark alike. */
 const AUTHORABLE_RUN_PROPERTIES: ReadonlySet<string> = new Set(ACCEPTED_RUN_PROPERTIES);
 
+/** Inline `w:sdt` nesting bound — matches `storyBlocks` and `segmentsOf`. */
+const MAX_SDT_NESTING = 32;
+
+/** Typed inline control wrapper (`w:sdt`). Assumed by this module; not yet on every `OoxmlNode` union. */
+function isContentControl(node: OoxmlNode): boolean {
+  return node.kind !== 'textValue' && (node as { kind: string }).kind === 'contentControl';
+}
+
+/** Typed `w:sdtContent` payload. */
+function isContentControlContent(node: OoxmlNode): boolean {
+  return node.kind !== 'textValue' && (node as { kind: string }).kind === 'contentControlContent';
+}
+
 /**
  * Whether an op may name this run property at all.
  *
@@ -257,24 +270,6 @@ export interface RunPropertyEdit {
   readonly targetRunIds?: readonly string[];
 }
 
-/**
- * A range run-property change, split into ONE edit per run it covers, each merged over that
- * run's own `w:rPr`.
- *
- * Neither half of that is optional. The base MUST be the run's own properties: the layout
- * publishes the CASCADE (`w:docDefaults` + the style chain + direct), and echoing it back had
- * two effects a user could see. It was refused outright — `setRunProperties` rejects any name
- * outside D8, and Word's own `styles.xml` puts `w:lang` and `w:noProof` in
- * `docDefaults/rPrDefault` (17.7.5.3), so on a document Word wrote, Bold did nothing at all
- * and said nothing. What did get through restated inherited values as DIRECT formatting, so a
- * run that merely inherited its font now stated it and editing the style no longer moved it.
- *
- * And the split MUST be per run: the op REPLACES the properties it names across its whole
- * range, so one op carrying one run's bag over a mixed selection homogenised it — bolding
- * `hello ` + `Georgia` rewrote the second run's `w:rFonts` with the first's. Runs are addressed
- * by offset rather than by id because these edits apply in sequence and the applier splits
- * runs at the range edges; offsets are unmoved by a property write, ids are not.
- */
 /** Per-run UTF-16 ranges from `segmentsOf` (fields/notes collapse to one unit on begin). */
 function runAddressRanges(
   paragraph: Extract<OoxmlNode, { kind: 'paragraph' }>
@@ -311,6 +306,45 @@ function formatOwnedRunIds(
   return ids;
 }
 
+function elementChildren(node: OoxmlNode): readonly OoxmlNode[] {
+  return node.kind === 'textValue' ? [] : node.children;
+}
+
+/**
+ * Every run-bearing inline child at `depth`, in document order.
+ *
+ * Descends `w:hyperlink`, `w:fldSimple`, and typed inline `w:sdt` the same way `segmentsOf`
+ * does so offsets stay aligned with what the applier resolves.
+ */
+function visitInlineChildren(
+  children: readonly OoxmlNode[],
+  depth: number,
+  visit: (child: OoxmlNode) => void
+): void {
+  for (const child of children) {
+    if (child.kind === 'hyperlink') {
+      visitInlineChildren(child.children, depth, visit);
+      continue;
+    }
+    if (
+      child.kind === 'fldSimple' ||
+      (child.kind === 'generic' && child.localName === 'fldSimple')
+    ) {
+      visitInlineChildren(child.children, depth, visit);
+      continue;
+    }
+    if (isContentControl(child)) {
+      if (depth >= MAX_SDT_NESTING) continue;
+      for (const inner of elementChildren(child)) {
+        if (!isContentControlContent(inner)) continue;
+        visitInlineChildren(elementChildren(inner), depth + 1, visit);
+      }
+      continue;
+    }
+    visit(child);
+  }
+}
+
 /**
  * A range run-property change, split into ONE edit per run it covers, each merged over that
  * run's own `w:rPr`.
@@ -339,23 +373,13 @@ export function runPropertyEdits(
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return [];
   const edits: RunPropertyEdit[] = [];
-  // Field/note atoms contribute one unit on the begin run (segmentsOf). Hyperlink descent
-  // keeps link text addressable — skipping `w:hyperlink` used to mis-offset every run after.
-  // Field format ownership maps the atom onto result runs via `formatRunIds`.
+  // Field/note atoms contribute one unit on the begin run (segmentsOf). Hyperlink / fldSimple /
+  // typed inline `w:sdt` descent keeps wrapped runs addressable — skipping any of those used
+  // to mis-offset every run after. Field format ownership maps the atom onto result runs via
+  // `formatRunIds`.
   const runRanges = runAddressRanges(paragraph);
   const formatOwned = formatOwnedRunIds(paragraph);
-  const visit = (child: OoxmlNode): void => {
-    if (child.kind === 'hyperlink') {
-      for (const inner of child.children) visit(inner);
-      return;
-    }
-    if (
-      child.kind === 'fldSimple' ||
-      (child.kind === 'generic' && child.localName === 'fldSimple')
-    ) {
-      for (const inner of child.children) visit(inner);
-      return;
-    }
+  const visitRun = (child: OoxmlNode): void => {
     if (child.kind !== 'run') return;
     const range = runRanges.get(child.id);
     if (!range || range.end <= range.start) return;
@@ -375,7 +399,7 @@ export function runPropertyEdits(
       ...(formatOwned.has(child.id) ? { targetRunIds: [child.id] } : {}),
     });
   };
-  for (const child of paragraph.children) visit(child);
+  visitInlineChildren(paragraph.children, 0, visitRun);
   return edits;
 }
 
@@ -400,19 +424,8 @@ export function hasAuthoredRunProperties(
   if (!paragraph || paragraph.kind !== 'paragraph') return false;
   const runRanges = runAddressRanges(paragraph);
   let found = false;
-  const visit = (child: OoxmlNode): void => {
+  const visitRun = (child: OoxmlNode): void => {
     if (found) return;
-    if (child.kind === 'hyperlink') {
-      for (const inner of child.children) visit(inner);
-      return;
-    }
-    if (
-      child.kind === 'fldSimple' ||
-      (child.kind === 'generic' && child.localName === 'fldSimple')
-    ) {
-      for (const inner of child.children) visit(inner);
-      return;
-    }
     if (child.kind !== 'run') return;
     const range = runRanges.get(child.id);
     if (!range || range.end <= range.start) return;
@@ -426,7 +439,7 @@ export function hasAuthoredRunProperties(
       found = true;
     }
   };
-  for (const child of paragraph.children) visit(child);
+  visitInlineChildren(paragraph.children, 0, visitRun);
   return found;
 }
 
@@ -449,25 +462,14 @@ export function authoredRunPropertiesAt(
   const runRanges = runAddressRanges(paragraph);
   let left: OoxmlNode | null = null;
   let right: OoxmlNode | null = null;
-  const visit = (child: OoxmlNode): void => {
-    if (child.kind === 'hyperlink') {
-      for (const inner of child.children) visit(inner);
-      return;
-    }
-    if (
-      child.kind === 'fldSimple' ||
-      (child.kind === 'generic' && child.localName === 'fldSimple')
-    ) {
-      for (const inner of child.children) visit(inner);
-      return;
-    }
+  const visitRun = (child: OoxmlNode): void => {
     if (child.kind !== 'run') return;
     const range = runRanges.get(child.id);
     if (!range || range.end <= range.start) return;
     if (range.start < offset && offset <= range.end) left = child;
     if (right === null && range.start <= offset && offset < range.end) right = child;
   };
-  for (const child of paragraph.children) visit(child);
+  visitInlineChildren(paragraph.children, 0, visitRun);
   const owner = left ?? right;
   if (owner) {
     return authoredProperties(
