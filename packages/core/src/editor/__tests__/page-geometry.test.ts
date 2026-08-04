@@ -1,12 +1,9 @@
-// `getPageGeometry` and `setMode` — the two members that replaced a cluster of stubs.
+// `getPageGeometry` — the one member that survived a cluster of stubs.
 //
 // `getPageGeometry` was the ONLY member of the old geometry cluster with a real caller (both
 // Vue rulers), and it returned `[]`, so those rulers rendered nothing for as long as they
 // shipped. These tests exist so that cannot come back silently: a ruler asking for the page
 // box must get a real one.
-//
-// `setMode` replaced "recreate the editor to change the mode". The point of the test is that
-// the change is felt WITHOUT a remount — same instance, same undo history, different gate.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -15,7 +12,6 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { rulerPageBox } from '../ruler-ticks.ts';
-import { paragraphTextOf } from '../../store/store/tree-ops.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -39,21 +35,10 @@ function docx(body: string): Uint8Array {
 
 const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-/** Every addressed paragraph's text, in reading order. */
-function texts(editor: DocxEditorInstance): string[] {
-  const surface = editor.surface!;
-  const part = surface.session.part();
-  return surface.session.paragraphIds().map((id) => paragraphTextOf(part, id) ?? '');
-}
-
-/** The container each editor painted into, so a test can look inside its OWN subtree. */
-const containers = new WeakMap<DocxEditorInstance, HTMLElement>();
-
 function mount(body: string, options: { mode?: 'edit' | 'view' } = {}): DocxEditorInstance {
   const container = document.createElement('div');
   const editor = createDocxEditor({ container, document: docx(body), ...options });
   if (!editor.surface) throw new Error('surface failed to mount');
-  containers.set(editor, container);
   return editor;
 }
 
@@ -99,87 +84,6 @@ describe('getPageGeometry', () => {
   test('is empty with no document rather than inventing a page', () => {
     const editor = createDocxEditor({});
     expect(editor.getPageGeometry()).toEqual([]);
-  });
-});
-
-describe('setMode', () => {
-  test('view refuses mutating commands on the SAME instance', () => {
-    const editor = mount(p('hello'));
-    expect(editor.can({ type: 'toggleMark', mark: 'bold' })).toEqual({ ok: true });
-
-    const result = editor.setMode('view');
-
-    expect(result).toEqual({ ok: true, changed: true });
-    expect(editor.can({ type: 'toggleMark', mark: 'bold' })).toEqual({
-      ok: false,
-      code: 'locked',
-      reason: 'the document is read-only',
-    });
-  });
-
-  test('going back to edit re-enables them', () => {
-    const editor = mount(p('hello'), { mode: 'view' });
-    editor.setMode('edit');
-
-    expect(editor.can({ type: 'toggleMark', mark: 'bold' })).toEqual({ ok: true });
-  });
-
-  test('the snapshot reports editable, and a new one is published', () => {
-    const editor = mount(p('hello'));
-    const before = editor.snapshot();
-    expect(before.editable).toBe(true);
-
-    editor.setMode('view');
-    const after = editor.snapshot();
-
-    // A NEW snapshot object: controls read `editable` off this, so reusing the cached one
-    // would leave every one of them showing the old permission.
-    expect(after).not.toBe(before);
-    expect(after.editable).toBe(false);
-  });
-
-  test('notifies subscribers, so chrome re-derives on the same tick', () => {
-    const editor = mount(p('hello'));
-    let ticks = 0;
-    editor.on('selectionChange', () => {
-      ticks += 1;
-    });
-
-    editor.setMode('view');
-
-    expect(ticks).toBe(1);
-  });
-
-  test('a no-op change reports changed: false and does not notify', () => {
-    const editor = mount(p('hello'));
-    let ticks = 0;
-    editor.on('selectionChange', () => {
-      ticks += 1;
-    });
-
-    expect(editor.setMode('edit')).toEqual({ ok: true, changed: false });
-    expect(ticks).toBe(0);
-  });
-
-  test('rejects a value outside the union rather than coercing it', () => {
-    const editor = mount(p('hello'));
-    const result = editor.setMode('readonly' as 'edit' | 'view');
-
-    expect(result.ok).toBe(false);
-    expect(editor.snapshot().editable).toBe(true);
-  });
-
-  // The undo history is the reason this is a setter rather than a remount.
-  test('keeps the document and its history across a mode round trip', () => {
-    const editor = mount(p('hello'));
-    editor.exec({ type: 'insertText', text: '!' });
-    const revision = editor.snapshot().revision;
-
-    editor.setMode('view');
-    editor.setMode('edit');
-
-    expect(editor.snapshot().revision).toBe(revision);
-    expect(editor.can({ type: 'undo' })).toEqual({ ok: true });
   });
 });
 
@@ -258,46 +162,41 @@ describe('page geometry units', () => {
   });
 });
 
-describe('read-only actually stops typing', () => {
-  /**
-   * The element the surface makes editable.
-   *
-   * Scoped to this editor's OWN container: the containers are never attached to the
-   * document, so a global query finds nothing, and several editors mount per file.
-   */
-  function pagesLayer(editor: DocxEditorInstance): HTMLElement {
-    const el = containers.get(editor)?.querySelector<HTMLElement>('.docx-pages');
-    if (!el) throw new Error('no pages layer');
-    return el;
+// The op gate and the DOM affordance are different things: the engine refusing a write
+// still leaves a `contenteditable` pages layer, which draws a caret, opens an IME, and
+// tells a screen reader the document is writable.
+describe('viewing turns the pages layer read-only, not just the commands', () => {
+  /** Mount and hand back the pages layer — the element the affordance lands on. */
+  function mountLayer(options: { mode?: 'edit' | 'view' } = {}): {
+    editor: DocxEditorInstance;
+    layer: HTMLElement;
+  } {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({ container, document: docx(p('hello')), ...options });
+    if (!editor.surface) throw new Error('surface failed to mount');
+    const layer = container.querySelector<HTMLElement>('[contenteditable]');
+    if (!layer) throw new Error('no contenteditable pages layer');
+    return { editor, layer };
   }
 
-  // `mode` gated COMMANDS, which stops `exec` but not the keyboard: the pages layer is
-  // contentEditable and binds beforeinput itself, so a document the facade called read-only
-  // still accepted typing straight into it.
-  test('view mode makes the pages layer non-editable', () => {
-    const editor = mount(p('hello'), { mode: 'view' });
-    expect(pagesLayer(editor).isContentEditable).toBe(false);
+  test('a document opened for viewing comes up non-editable', () => {
+    const { layer } = mountLayer({ mode: 'view' });
+
+    expect(layer.getAttribute('contenteditable')).toBe('false');
+    expect(layer.getAttribute('aria-readonly')).toBe('true');
   });
 
-  test('setMode flips it both ways at runtime', () => {
-    const editor = mount(p('hello'));
-    expect(pagesLayer(editor).isContentEditable).toBe(true);
+  test('switching to viewing at runtime takes the affordance with it, and back', () => {
+    const { editor, layer } = mountLayer();
+    expect(layer.getAttribute('contenteditable')).toBe('true');
 
-    editor.setMode('view');
-    expect(pagesLayer(editor).isContentEditable).toBe(false);
+    editor.exec({ type: 'setEditingMode', mode: 'viewing' });
+    expect(layer.getAttribute('contenteditable')).toBe('false');
+    expect(layer.getAttribute('aria-readonly')).toBe('true');
 
-    editor.setMode('edit');
-    expect(pagesLayer(editor).isContentEditable).toBe(true);
-  });
-
-  // The toggle used to be one-way on a document the engine cannot round-trip: construction
-  // accepted `mode: 'edit'` there, but `setMode('edit')` was refused `locked`, so view was
-  // a trap.
-  test('edit is never refused, so the toggle cannot get stuck in view', () => {
-    const editor = mount(p('hello'));
-    editor.setMode('view');
-
-    expect(editor.setMode('edit')).toEqual({ ok: true, changed: true });
+    editor.exec({ type: 'setEditingMode', mode: 'editing' });
+    expect(layer.getAttribute('contenteditable')).toBe('true');
+    expect(layer.getAttribute('aria-readonly')).toBe('false');
   });
 });
 
@@ -337,6 +236,7 @@ describe('rows that would do nothing are refused', () => {
       reason: 'there is nothing to paste',
     });
     expect(editor.exec({ type: 'paste', text: '' }).ok).toBe(false);
-    expect(texts(editor)).toEqual(['hello world']);
+    // The selection it would have replaced is still there.
+    expect(editor.query({ type: 'selectedText' })).toContain('hello world');
   });
 });

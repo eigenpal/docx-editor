@@ -93,6 +93,7 @@ import {
   type TextMeasurer,
 } from '@docx-editor.dev/core-contract/layout';
 import {
+  classifyCommand,
   deepFreezeValue,
   docRangeEqual,
   editorError,
@@ -165,7 +166,6 @@ function toContentPixels(box: { x: number; y: number; width: number; height: num
     height: box.height * scale,
   };
 }
-
 
 /** The one frozen scope object every snapshot shares, so scope stays reference-equal. */
 const SCOPE_BODY: EditorScope = Object.freeze({ kind: 'body' as const });
@@ -360,11 +360,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }
     parseError = null;
     surface = result.surface;
-    // Every mount, not just `setMode`: a surface is rebuilt on load and on the font remount,
-    // and it comes up editable. Without this a document opened with `mode: 'view'` — or one
-    // switched to view and then reloaded — accepted typing despite the facade refusing every
-    // command, which is the same gap `setMode` closes at runtime.
-    surface.setEditable(mode === 'edit');
+    // A surface is rebuilt on load and on the font remount, and it comes up editable. The
+    // engine's own guards refuse the WRITE, but the pages layer stays `contenteditable`
+    // without this — so a document open for viewing still drew a caret, still opened an IME,
+    // and still told a screen reader it was writable. Reads the CURRENT mode, not just the
+    // constructed one, so a remount after `setEditingMode('viewing')` comes up right.
+    surface.setEditable(editingMode !== 'viewing');
     lastSelection = surface.state().selection;
     unsubscribeSession = surface.session.subscribe((change) => {
       const documentChange: DocumentChange = {
@@ -1070,6 +1071,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         surface?.setEditingMode(
           command.mode === 'suggesting' ? 'suggest' : command.mode === 'viewing' ? 'view' : 'edit'
         );
+        // The DOM affordance is separate from the op gate: `setEditingMode` decides what a
+        // write becomes, this decides whether the browser offers one at all.
+        surface?.setEditable(command.mode !== 'viewing');
         bump();
         emitSelectionChange();
         return { ok: true, changed: false };
@@ -1080,10 +1084,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         emitSelectionChange();
         return { ok: true, changed: false };
       }
-      // Viewing refuses every edit, reversibly — the reader chose it and can choose again.
+      // Viewing refuses every EDIT, reversibly — the reader chose it and can choose again.
       // Checked HERE as well as in `can`, because a host that calls `exec` directly is not
       // required to ask first and must not get a write it was told it could not have.
-      if (editingMode === 'viewing') {
+      //
+      // Mutating only. A blanket refusal also blocked `selectAll` and `copy`, which is a
+      // viewer that cannot select or copy the document it exists to show — and it disagreed
+      // with the construction-time `mode: 'view'` path, which has always gated on `mutating`
+      // through `gateCommand`. Same visible state, two behaviours.
+      const viewingGate = classifyCommand(command);
+      if (editingMode === 'viewing' && viewingGate.supported && viewingGate.mutating) {
         return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
       }
       const gated = gateCommand(command, surface, mode, options);
@@ -1117,9 +1127,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         }
         return { ok: true };
       }
-      // Viewing refuses every edit, the same way `mode: 'view'` does at construction — but
-      // reversibly, because the reader chose it and can choose again.
-      if (editingMode === 'viewing') {
+      // Viewing refuses every EDIT, the same way `mode: 'view'` does at construction — but
+      // reversibly, because the reader chose it and can choose again. Mutating only, so a
+      // reader can still select and copy; see the note at the `exec` twin.
+      const viewingSupport = classifyCommand(command);
+      if (editingMode === 'viewing' && viewingSupport.supported && viewingSupport.mutating) {
         return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
       }
       const gated = gateCommand(command, surface, mode, options);

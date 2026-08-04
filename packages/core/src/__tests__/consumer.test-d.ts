@@ -102,13 +102,6 @@ export function exercise(editor: Editor, doc: DocxDocument): void {
   void pageWidth;
   void textLeft;
 
-  // Mode moves at runtime, without rebuilding the editor.
-  const modeResult = editor.setMode('view');
-  if (modeResult.ok) {
-    const modeChanged: boolean = modeResult.changed;
-    void modeChanged;
-  }
-
   const focus = editor.focus();
   if (focus.ok) {
     void focus.value;

@@ -182,7 +182,7 @@ describe('cut', () => {
     expect(editor.can({ type: 'cut' })).toEqual({
       ok: false,
       code: 'locked',
-      reason: 'the document is read-only',
+      reason: 'the document is open for viewing',
     });
     expect(texts(editor)).toEqual(['hello world']);
     expect(written).toEqual([]);
@@ -274,7 +274,7 @@ describe('paste', () => {
     expect(editor.can({ type: 'paste', text: 'x' })).toEqual({
       ok: false,
       code: 'locked',
-      reason: 'the document is read-only',
+      reason: 'the document is open for viewing',
     });
     expect(texts(editor)).toEqual(['hello']);
   });

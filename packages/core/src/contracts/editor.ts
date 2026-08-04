@@ -5,7 +5,6 @@
  */
 
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from '../index';
-import type { DisplayPage } from './geometry';
 // Type-only, so the adapters reach the review vocabulary through THIS contract rather than
 // naming the layout lane, which they are not allowed to import.
 import type { ReviewItem, ReviewRevisionKind } from '../layout/review-model.ts';
@@ -169,8 +168,8 @@ export interface EditorConfig {
   zoom?: number;
   /** `'view'` opens the document read-only even when it is otherwise editable; `'edit'`
    *  (default) mounts the editing surface for a patchable document. This is the INITIAL
-   *  value only — move it afterwards with {@link Editor.setMode}, which does not rebuild the
-   *  editor and so keeps the undo history and the reader's place. */
+   *  value only — move it afterwards with {@link Editor.setEditingMode}, which does not
+   *  rebuild the editor and so keeps the undo history and the reader's place. */
   mode?: 'edit' | 'view';
 }
 
@@ -527,19 +526,6 @@ export interface Editor {
    * clamped silently, so a caller learns its input was refused.
    */
   setZoom(zoom: number): ExecResult;
-
-  /**
-   * The editing mode, changed WITHOUT rebuilding the editor.
-   *
-   * `mode` at construction sets the initial value; this moves it afterwards, so a host can
-   * offer the view/edit toggle the `review.editingMode` chrome slot describes. A remount
-   * would be the wrong mechanism: it would discard the undo history and the user's place in
-   * the document to change a permission.
-   *
-   * Rejected rather than silently ignored when the document itself is not editable — a
-   * file whose content the engine cannot round-trip stays read-only whatever the host asks.
-   */
-  setMode(mode: 'edit' | 'view'): ExecResult;
 
   // ─── Geometry ──────────────────────────────────────────────────────────────
   //
@@ -1043,15 +1029,6 @@ export interface EditorSnapshot {
    * to produce one bit, on every tick a host's selector runs.
    */
   readonly selectionCollapsed: boolean;
-  /**
-   * The editing mode the host asked for, as {@link Editor.setMode} left it.
-   *
-   * Distinct from `editable`, which is this AND whether the document can be round-tripped
-   * at all. A view/edit toggle needs to render its own position, and `editable` cannot
-   * supply it: `false` there means either "the host chose view" or "this file is not
-   * patchable", and the toggle must not show itself off for the second reason.
-   */
-  readonly mode: 'edit' | 'view';
   readonly formatting: RunFormatting | null;
   readonly table: TableContext | null;
   readonly image: ImageContext | null;

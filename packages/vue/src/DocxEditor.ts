@@ -37,7 +37,6 @@ const PRE_MOUNT_SNAPSHOT: EditorSnapshot = {
   zoom: 1,
   selection: null,
   selectionCollapsed: true,
-  mode: 'edit',
   formatting: null,
   table: null,
   image: null,
@@ -85,8 +84,8 @@ export default defineComponent({
     };
 
     // Create the facade once per document/fonts identity, mirroring the React effect:
-    // `locale`, `author`, and the initial `mode`/`zoom` are sampled at mount; later
-    // mode and zoom changes flow through `setMode`/`setZoom` below rather than a teardown, so undo history
+    // `mode`, `locale`, `author`, and the initial `zoom` are sampled at mount; later
+    // zoom changes flow through `setZoom` below rather than a teardown, so undo history
     // and the caret survive re-renders.
     const mount = (): void => {
       teardown();
@@ -117,15 +116,6 @@ export default defineComponent({
       () => props.zoom,
       (zoom) => {
         if (zoom !== undefined) editor?.setZoom(zoom);
-      }
-    );
-    // Mode follows the prop, in lockstep with React's `DocxEditorRoot`. Tearing the editor
-    // down to change a permission would take the undo history and the reader's place with
-    // it, so this is a facade call like zoom rather than a remount.
-    watch(
-      () => props.mode,
-      (mode) => {
-        if (mode !== undefined) editor?.setMode(mode);
       }
     );
 

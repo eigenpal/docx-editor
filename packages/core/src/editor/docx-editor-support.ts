@@ -722,7 +722,6 @@ export function snapshotsEqual(a: EditorSnapshot, b: EditorSnapshot): boolean {
     a.isLoading === b.isLoading &&
     a.parseError === b.parseError &&
     a.editable === b.editable &&
-    a.mode === b.mode &&
     a.zoom === b.zoom &&
     a.selection === b.selection &&
     // Load-bearing: `selection` is a paraId range with no offsets, so collapsing a range

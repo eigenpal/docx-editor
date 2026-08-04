@@ -353,6 +353,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
    * reject and reply. Place it inside the Viewport, beside `DocxEditor.Content`.
    */
   readonly Review: typeof DocxEditorReview;
+  /**
    * The right-click menu over the painted document, with its rows as statics (`.Cut`,
    * `.Copy`, `.Paste`, `.Delete`, `.SelectAll`, `.Item`, `.Slot`, `.Submenu`, …). Mounted
    * by default inside the viewport; `contextMenu={false}` removes it and lets the
