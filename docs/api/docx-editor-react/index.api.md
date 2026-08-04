@@ -744,6 +744,7 @@ export interface DocxEditorToolbarProps {
     children?: ReactNode;
     className?: string;
     onSave?: () => void;
+    overflow?: boolean;
     preset?: boolean;
     t?: ToolbarTranslate;
 }

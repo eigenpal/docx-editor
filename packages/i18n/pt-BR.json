@@ -88,7 +88,8 @@
     "clearFormatting": "Limpar formatação",
     "commentsAndChanges": null,
     "moreItems": null,
-    "unavailableInPreview": null
+    "unavailableInPreview": null,
+    "more": null
   },
   "alignment": {
     "alignLeft": "Alinhar à esquerda",

@@ -20,6 +20,11 @@ export const ToolbarContext = createContext<ToolbarContextValue>({
   onSave: undefined,
 });
 
+/** The toolbar root's published value. Internal: parts read it, hosts pass props. */
+export function useToolbarContext(): ToolbarContextValue {
+  return useContext(ToolbarContext);
+}
+
 /** The label for an i18n key: the host's translation, or the key itself. */
 export function useToolbarLabel(): (key: string) => string {
   const { t } = useContext(ToolbarContext);

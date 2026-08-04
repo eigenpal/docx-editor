@@ -102,12 +102,41 @@ function toolbarElement(view: ReturnType<typeof render>): HTMLElement {
   return view.getByTestId('docx-toolbar');
 }
 
-/** Toolbar children flattened to comparable identities, for order assertions. */
-function childIdentities(toolbar: HTMLElement): string[] {
-  return [...toolbar.children].map((child) => {
+function entryIdentity(entry: Element): string {
+  if (entry.getAttribute('role') === 'separator') return 'separator';
+  return entry.getAttribute('data-slot') ?? entry.getAttribute('aria-label') ?? entry.className;
+}
+
+/** Flatten intentional top-level group wrappers; keep separators and direct children. */
+function toolbarArrangement(toolbar: HTMLElement): string[] {
+  return [...toolbar.children].flatMap((child) => {
     if (child.getAttribute('role') === 'separator') return 'separator';
-    return child.getAttribute('data-slot') ?? child.getAttribute('aria-label') ?? child.className;
+    if (child.classList.contains('docx-toolbar__group')) {
+      return [...child.children].map(entryIdentity);
+    }
+    return entryIdentity(child);
   });
+}
+
+function entryRootAtFlatIndex(toolbar: HTMLElement, index: number): Element | null {
+  let flat = 0;
+  for (const child of toolbar.children) {
+    if (child.getAttribute('role') === 'separator') {
+      if (flat === index) return child;
+      flat += 1;
+      continue;
+    }
+    if (child.classList.contains('docx-toolbar__group')) {
+      for (const entry of child.children) {
+        if (flat === index) return entry;
+        flat += 1;
+      }
+      continue;
+    }
+    if (flat === index) return child;
+    flat += 1;
+  }
+  return null;
 }
 
 afterEach(() => {
@@ -121,7 +150,7 @@ describe('the default arrangement', () => {
     // The arrangement is derived from the registry on both sides of this assertion —
     // the 10 non-contextual groups, alignment merged — so a registry change updates
     // both in lockstep.
-    expect(childIdentities(toolbar)).toEqual([...EXPECTED_ARRANGEMENT]);
+    expect(toolbarArrangement(toolbar)).toEqual([...EXPECTED_ARRANGEMENT]);
     // Every slot is present exactly once.
     for (const slot of EXPECTED_ARRANGEMENT) {
       if (slot === 'separator') continue;
@@ -145,15 +174,19 @@ describe('the default arrangement', () => {
     );
     const toolbar = toolbarElement(view);
     // Same full arrangement (plus the appended extra), with Bold still in its place.
-    const identities = childIdentities(toolbar);
+    const identities = toolbarArrangement(toolbar);
     expect(identities.slice(0, EXPECTED_ARRANGEMENT.length)).toEqual([...EXPECTED_ARRANGEMENT]);
-    expect(toolbar.children.length).toBe(EXPECTED_ARRANGEMENT.length + 1);
     // The Bold in the arrangement IS the override (its className landed).
     const bold = view.container.querySelector('[aria-label="formattingBar.boldShortcut"]')!;
     expect(bold.className).toContain('custom-bold');
-    expect(toolbar.children[EXPECTED_ARRANGEMENT.indexOf('text.bold')]).toBe(bold);
-    // The non-part child appended after the default set.
-    expect(toolbar.lastElementChild).toBe(view.getByTestId('extra'));
+    const boldIndex = EXPECTED_ARRANGEMENT.indexOf('text.bold');
+    expect(identities[boldIndex]).toBe('text.bold');
+    expect(entryRootAtFlatIndex(toolbar, boldIndex)!.contains(bold)).toBe(true);
+    // The non-part child appended in a fixed group after the default set.
+    const appended = toolbar.querySelector(
+      ':scope > .docx-toolbar__group[data-toolbar-fixed]:last-of-type'
+    )!;
+    expect(appended.contains(view.getByTestId('extra'))).toBe(true);
   });
 
   test('a hidden part child removes its slot from the arrangement', () => {
@@ -164,7 +197,7 @@ describe('the default arrangement', () => {
     );
     const toolbar = toolbarElement(view);
     expect(view.container.querySelector('[aria-label="formattingBar.strikethrough"]')).toBeNull();
-    expect(toolbar.children.length).toBe(EXPECTED_ARRANGEMENT.length - 1);
+    expect(toolbarArrangement(toolbar).length).toBe(EXPECTED_ARRANGEMENT.length - 1);
     // Neighbours unaffected: underline still present, alignment group intact.
     expect(
       view.container.querySelector('[aria-label="formattingBar.underlineShortcut"]')
@@ -180,7 +213,7 @@ describe('the default arrangement', () => {
       </DocxEditorToolbar>
     );
     const toolbar = toolbarElement(view);
-    expect(childIdentities(toolbar)).toEqual(['text.bold', 'separator', 'history.undo']);
+    expect(toolbarArrangement(toolbar)).toEqual(['text.bold', 'separator', 'history.undo']);
   });
 });
 
@@ -239,7 +272,10 @@ describe('live button state', () => {
     )!;
     // Appended after the whole default arrangement — it drives no slot.
     const toolbar = toolbarElement(view);
-    expect(toolbar.lastElementChild).toBe(action);
+    const appended = toolbar.querySelector(
+      ':scope > .docx-toolbar__group[data-toolbar-fixed]:last-of-type'
+    )!;
+    expect(appended.contains(action)).toBe(true);
     expect(action.className).toContain('docx-toolbar__button');
 
     // The caret guard is the reason this is a component and not a documented class name.

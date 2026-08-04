@@ -2803,8 +2803,9 @@ a.docx-hyperlink:focus-visible {
   align-items: center;
   /* NOT overflow-scroll like the chrome spec's pill: this toolbar hosts LIVE popups
    * (font menu, swatch grids) positioned absolutely inside their parts, and any
-   * overflow clipping on the bar would cut them off. Narrow viewports wrap to a
-   * second row instead. */
+   * overflow clipping on the bar would cut them off. A bar that does not measure
+   * itself wraps to a second row instead; one that does collapses groups into the
+   * "⋯" menu and stays on one row (`[data-overflow]` below). */
   flex-wrap: wrap;
   flex-shrink: 0;
   gap: 2px;
@@ -2859,6 +2860,148 @@ a.docx-hyperlink:focus-visible {
 .docx-toolbar__button:disabled {
   opacity: 0.3;
   cursor: default;
+}
+
+/* ── Overflow ("⋯") ────────────────────────────────────────────────────────────────
+ *
+ * The bar that measures itself is ONE ROW: groups that do not fit move into the menu
+ * rather than wrapping. The adapter sets `data-overflow` only while it is actually
+ * measuring, so a hand-composed bar (or `overflow={false}`) keeps the wrapping above
+ * and nothing about it changes. */
+.docx-toolbar[data-overflow] {
+  flex-wrap: nowrap;
+}
+
+/* The collapse unit: one registry group. Rendered even when nothing overflows, so the
+ * measured width of a group is the width it will have when it comes back. */
+.docx-toolbar__group {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 2px;
+}
+
+/* The trigger sits at the row's end, whatever is in front of it. */
+.docx-toolbar__more {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  margin-inline-start: auto;
+}
+
+/* The panel SCROLLS when it is taller than the room under the bar. That does clip a
+ * popup opened from a control inside it (a font list, a swatch grid) — the same
+ * trade every scrolling menu makes — and the alternative, a panel that runs off the
+ * bottom of a short window, loses the rows entirely. */
+.docx-toolbar__more-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  inset-inline-end: 0;
+  z-index: 60;
+  box-sizing: border-box;
+  inline-size: min(340px, calc(100vw - 16px));
+  min-inline-size: min(260px, calc(100vw - 16px));
+  max-inline-size: min(340px, calc(100vw - 16px));
+  max-height: min(72vh, 560px);
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+  box-shadow: var(--doc-shadow-lg);
+}
+
+.docx-toolbar__more-section + .docx-toolbar__more-section {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--doc-border-light);
+}
+
+.docx-toolbar__more-heading {
+  display: block;
+  padding: 6px 10px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--doc-text-muted);
+  user-select: none;
+}
+
+/* A control row: the registry's name on the left, the real control on the right. */
+.docx-toolbar__more-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 2px 6px 2px 10px;
+}
+
+.docx-toolbar__more-control-label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--doc-text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.docx-toolbar__more-control-body {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 2px;
+}
+
+/* One command row in the overflow dialog: ordinary button, shared chrome vocabulary. */
+.docx-toolbar__more-command {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--doc-text);
+  cursor: pointer;
+  font: inherit;
+  text-align: start;
+}
+
+.docx-toolbar__more-command:hover:not(:disabled) {
+  background: var(--doc-border);
+}
+
+.docx-toolbar__more-command[data-active],
+.docx-toolbar__more-command[data-active]:hover {
+  background: var(--doc-toggle-active-bg);
+  color: var(--doc-toggle-active-fg);
+}
+
+.docx-toolbar__more-command:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.docx-toolbar__more-command-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--doc-text-muted);
+}
+
+.docx-toolbar__more-command-label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* Separator: `w-px h-6 bg-border mx-1.5`. */
