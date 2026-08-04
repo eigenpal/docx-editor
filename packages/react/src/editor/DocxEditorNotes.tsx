@@ -134,21 +134,21 @@ export function DocxEditorNotesChrome({
   } | null>(null);
   const [propsOpen, setPropsOpen] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const findActiveNote = useCallback(
+  const findActiveNoteArea = useCallback(
     (viewport: HTMLElement) => {
       if (!noteScope) return null;
       const candidates = viewport.querySelectorAll<HTMLElement>('[data-docx-note-scope]');
-      return (
+      const active =
         [...candidates].find(
           (candidate) =>
             candidate.matches('[data-docx-note]') &&
             candidate.dataset.docxNoteScope === noteScope.id
-        ) ?? null
-      );
+        ) ?? null;
+      return active?.closest<HTMLElement>('[data-docx-notes]') ?? active;
     },
     [noteScope]
   );
-  const anchor = useScopedChromeAnchor(findActiveNote, 'story-label');
+  const anchor = useScopedChromeAnchor(findActiveNoteArea, 'story-label');
 
   const clearPreview = useCallback(() => {
     if (hideTimer.current) clearTimeout(hideTimer.current);

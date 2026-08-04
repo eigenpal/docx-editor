@@ -186,7 +186,7 @@ describe('DocxEditor.HeaderFooterChrome', () => {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     });
     expect(view.getByTestId('anchor-probe').style.left).toBe('120px');
-    expect(view.getByTestId('anchor-probe').style.top).toBe('48px');
+    expect(view.getByTestId('anchor-probe').style.top).toBe('46px');
 
     await act(async () => {
       view.rerender(<AnchorProbe active="second" />);

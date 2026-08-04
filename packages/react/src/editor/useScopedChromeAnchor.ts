@@ -53,17 +53,20 @@ export function useScopedChromeAnchor(
       const anchorRect = anchor.getBoundingClientRect();
       const chromeHeight =
         placement === 'story-label' ? Math.max(chrome.offsetHeight, 28) : chrome.offsetHeight;
+      const clearance = placement === 'story-label' ? 6 : 4;
       const attachedInsideViewport = containingViewport === viewport;
       const documentLeft = attachedInsideViewport
         ? anchorRect.left - viewportRect.left + viewport.scrollLeft
         : anchorRect.left;
       const documentTop = attachedInsideViewport
-        ? (placement === 'after' ? anchorRect.bottom + 6 : anchorRect.top - chromeHeight - 4) -
+        ? (placement === 'after'
+            ? anchorRect.bottom + 6
+            : anchorRect.top - chromeHeight - clearance) -
           viewportRect.top +
           viewport.scrollTop
         : placement === 'after'
           ? anchorRect.bottom + 6
-          : anchorRect.top - chromeHeight - 4;
+          : anchorRect.top - chromeHeight - clearance;
       const viewportEdge = attachedInsideViewport ? viewport.scrollLeft + 8 : 8;
 
       setStyle({

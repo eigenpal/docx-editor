@@ -3206,11 +3206,12 @@ a.docx-hyperlink:focus-visible {
   box-sizing: border-box;
   padding: 0 2px 5px;
   color: var(--doc-primary);
-  background: transparent;
-  border-bottom: 1px dotted var(--doc-primary);
+  background: var(--doc-page-bg-rendered);
+  border: 0;
+  border-bottom: 1px dashed var(--doc-primary);
   font-size: 12px;
   white-space: nowrap;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .docx-context-bar__label {
@@ -3262,6 +3263,7 @@ a.docx-hyperlink:focus-visible {
 
 .docx-hf-chrome__options {
   position: relative;
+  pointer-events: auto;
 }
 
 .docx-hf-chrome__options-menu {
