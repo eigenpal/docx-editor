@@ -99,12 +99,12 @@ describe('border conflict (zero cell spacing)', () => {
     expect(tie).toMatchObject({ style: 'double' });
   });
 
-  test('effective cascade: cell edge wins over table; none yields to table on outer only', () => {
+  test('effective cascade: cell edge wins over table; explicit none suppresses table', () => {
     const tableSingle = edge('single', null, 0.5);
     expect(effectiveBorderSide(edge('single', '999999', 0.125), tableSingle)).toEqual(
       edge('single', '999999', 0.125)
     );
-    expect(effectiveBorderSide(none, tableSingle)).toEqual(tableSingle);
+    expect(effectiveBorderSide(none, tableSingle)).toEqual(none);
     expect(effectiveBorderSide(none, tableSingle, { interior: true })).toEqual(none);
     expect(effectiveBorderSide(omitted, tableSingle)).toEqual(tableSingle);
   });
@@ -161,8 +161,8 @@ describe('border conflict (zero cell spacing)', () => {
     expect(grid[0]![0]!.bottom).toEqual({ style: 'double', color: '2E75B6', widthPt: 0.375 });
     expect(grid[0]![1]!.bottom).toEqual({ style: 'dotted', color: '339933', widthPt: 0.125 });
     expect(grid[1]![1]!.bottom).toEqual({ style: 'triple', color: '9933CC', widthPt: 0.375 });
-    // BL bottom none → table single shows on outer edge.
-    expect(grid[1]![0]!.bottom).toEqual({ style: 'single', color: null, widthPt: 0.5 });
+    // BL bottom none → explicit none suppresses table outer edge.
+    expect(grid[1]![0]!.bottom).toBeUndefined();
     // Interior left of TR/BR not painted (owned by left cell).
     expect(grid[0]![1]!.left).toBeUndefined();
     expect(grid[1]![1]!.left).toBeUndefined();
