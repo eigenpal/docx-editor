@@ -2,7 +2,7 @@
  * Adapted from a representative Word JavaScript API sample ("search the
  * document body and highlight matches"), namespace-rewritten `Word` ->
  * `DocxEditor`. See `insert-text.ts` for why the trailing `context.sync()`
- * call is omitted.
+ * call is included.
  */
 import { DocxEditor } from '../../docxeditor/declarations';
 
@@ -19,18 +19,22 @@ export async function highlightAllMatches(searchText: string): Promise<void> {
     searchOptions.matchCase = false;
     searchOptions.matchWholeWord = true;
     const searchResults = body.search(searchText, searchOptions);
+    await context.sync();
 
     for (const range of searchResults.items) {
       range.font.highlightColor = 'yellow';
       range.font.bold = true;
     }
+    await context.sync();
   });
 }
 
 export async function replaceFirstMatch(searchText: string, replacement: string): Promise<void> {
   await DocxEditor.run(async (context) => {
     const results = context.document.body.search(searchText);
+    await context.sync();
     const first = results.getFirst();
     first.insertText(replacement, 'Replace');
+    await context.sync();
   });
 }

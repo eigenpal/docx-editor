@@ -1,5 +1,9 @@
 import { describe, test, expect } from 'bun:test';
-import { validateManifestAgainstReference } from '../../../scripts/lib/manifest-integrity.mjs';
+import {
+  validateManifestAgainstReference,
+  validateManifestSchemaVersion,
+  validateAuthoredExportsAgainstManifest,
+} from '../../../scripts/lib/manifest-integrity.mjs';
 
 function makeReferenceFixture() {
   return {
@@ -81,5 +85,43 @@ describe('validateManifestAgainstReference', () => {
 
   test('does not flag a legitimate omission that is not also selected', () => {
     expect(validateManifestAgainstReference(makeManifest(), makeReferenceFixture())).toEqual([]);
+  });
+});
+
+describe('validateManifestSchemaVersion', () => {
+  test('accepts the current supported schema version', () => {
+    expect(validateManifestSchemaVersion({ schemaVersion: 1 })).toEqual([]);
+  });
+
+  test('flags a missing schemaVersion field', () => {
+    const issues = validateManifestSchemaVersion({});
+    expect(issues.some((i) => /schemaVersion/.test(i))).toBe(true);
+  });
+
+  test('flags an unsupported schemaVersion value', () => {
+    const issues = validateManifestSchemaVersion({ schemaVersion: 99 });
+    expect(issues.some((i) => /schemaVersion/.test(i) && /99/.test(i))).toBe(true);
+  });
+});
+
+describe('validateAuthoredExportsAgainstManifest', () => {
+  const manifest = makeManifest();
+
+  test('accepts exported names that are all selected manifest symbols', () => {
+    const issues = validateAuthoredExportsAgainstManifest(['Body', 'run'], manifest);
+    expect(issues).toEqual([]);
+  });
+
+  test('accepts the documented zero-runtime-footprint support types even though they are not manifest symbols', () => {
+    const issues = validateAuthoredExportsAgainstManifest(
+      ['Body', 'run', 'ClientRequestContext', 'SelectionMode', 'HeaderFooterType'],
+      manifest
+    );
+    expect(issues).toEqual([]);
+  });
+
+  test('flags an exported symbol that is neither a selected manifest symbol nor an allowlisted support type (the Table/Image "stub sneaks in" scenario)', () => {
+    const issues = validateAuthoredExportsAgainstManifest(['Body', 'run', 'Table'], manifest);
+    expect(issues.some((i) => /Table/.test(i))).toBe(true);
   });
 });

@@ -16,8 +16,63 @@
 
 const OMISSION_UID_PATTERN = /^(Word|OfficeExtension)\.[A-Za-z0-9_]+(#[A-Za-z0-9_]+)?$/;
 
+/** Kept in lockstep with `reference-normalize.mjs`'s/`provenance.mjs`'s own `SCHEMA_VERSION` by convention, not by import — this file validates the *manifest's* schema, a separate document. */
+const SUPPORTED_MANIFEST_SCHEMA_VERSION = 1;
+
+/**
+ * The small set of zero-runtime-footprint support types
+ * `compat/docxeditor/declarations.ts` is allowed to export without a
+ * corresponding `manifest.symbols` entry — documented in that file's own
+ * header comment. Every other exported name must be a selected manifest
+ * symbol; see `validateAuthoredExportsAgainstManifest`.
+ */
+const ALLOWLISTED_SUPPORT_TYPES = new Set(['ClientRequestContext', 'SelectionMode', 'HeaderFooterType']);
+
 function symbolLabel(symbolName) {
   return symbolName;
+}
+
+/**
+ * Validates `manifest.json`'s own `schemaVersion` field — offline, no
+ * reference fixture needed. Catches both a manifest that predates
+ * versioning (field missing) and one written against a schema shape this
+ * version of the tooling (`reference-normalize.mjs`, `shape-compare.mjs`,
+ * etc.) does not understand.
+ */
+export function validateManifestSchemaVersion(manifest) {
+  const version = manifest?.schemaVersion;
+  if (version !== SUPPORTED_MANIFEST_SCHEMA_VERSION) {
+    return [
+      `manifest.schemaVersion: expected ${SUPPORTED_MANIFEST_SCHEMA_VERSION}, got ${JSON.stringify(version)}`,
+    ];
+  }
+  return [];
+}
+
+/**
+ * Asserts that every name `compat/docxeditor/declarations.ts` actually
+ * exports (from `listExportedSymbolNames`, in `extract-docxeditor-shape.mjs`)
+ * is either a selected `manifest.symbols` key or one of the documented
+ * zero-runtime-footprint support types. This is the guard against the
+ * "Table/Image stub sneaks in" failure mode: `manifest.json` records tables
+ * and images as deliberate *omissions*, but nothing before this check
+ * actually enforced that an omitted (or simply never-mentioned) symbol
+ * cannot still be exported from the authored declarations — the
+ * conformance generator only ever *reads* the manifest-selected subset of
+ * `declarations.ts`, so an extra, unselected export is invisible to it by
+ * design and would otherwise ship silently.
+ */
+export function validateAuthoredExportsAgainstManifest(exportedNames, manifest) {
+  const manifestSymbolNames = new Set(Object.keys(manifest?.symbols ?? {}));
+  const issues = [];
+  for (const name of exportedNames) {
+    if (manifestSymbolNames.has(name)) continue;
+    if (ALLOWLISTED_SUPPORT_TYPES.has(name)) continue;
+    issues.push(
+      `compat/docxeditor/declarations.ts exports "${name}", which is neither a selected manifest.symbols entry nor an allowlisted zero-runtime-footprint support type (${[...ALLOWLISTED_SUPPORT_TYPES].join(', ')}) — an omitted or unselected symbol must not be exported`
+    );
+  }
+  return issues;
 }
 
 export function validateManifestAgainstReference(manifest, referenceFixture) {

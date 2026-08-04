@@ -1,9 +1,12 @@
 /**
  * Builds and validates the provenance record checked in alongside the
  * normalized reference fixture: exactly which upstream package
- * version/integrity, source repository, license, and Word requirement sets
- * the fixture's facts were derived from.
+ * version/integrity, source repository, license, Word requirement sets,
+ * and verified `office-js-docs-reference` docs commit the fixture's facts
+ * were derived from.
  */
+
+import { isWellFormedCommitSha, validateDocsReferenceMetadata } from './docs-reference.mjs';
 
 const SCHEMA_VERSION = 1;
 
@@ -31,10 +34,7 @@ export function buildProvenance({ upstreamPackage, fixture, fetchedAt, docsRefer
       sourceRepository: upstreamPackage.sourceRepository ?? null,
     },
     license: upstreamPackage.license,
-    docsReference: docsReference ?? {
-      url: 'https://learn.microsoft.com/en-us/javascript/api/word',
-      note: 'Requirement-set ([Api set: ...]) facts are read from the pinned declaration file itself, not scraped separately from the docs site.',
-    },
+    docsReference,
     targetRequirementSets: collectRequirementSets(fixture),
     fetchedAt,
     fetchedBy: 'packages/agents/scripts/fetch-office-reference.mjs',
@@ -55,12 +55,28 @@ export function validateProvenance(provenance) {
   if (!up.tarballUrl) errors.push('upstreamPackage.tarballUrl: required');
   if (!up.sourceRepository || !up.sourceRepository.url) {
     errors.push('upstreamPackage.sourceRepository: required (with a url)');
+  } else {
+    if (!isWellFormedCommitSha(up.sourceRepository.commit)) {
+      errors.push(
+        `upstreamPackage.sourceRepository.commit: expected a 40-character hex commit sha, got ${JSON.stringify(up.sourceRepository.commit)}`
+      );
+    }
+    if (
+      typeof up.sourceRepository.sourceUrl !== 'string' ||
+      !up.sourceRepository.sourceUrl.startsWith('https://github.com/') ||
+      !up.sourceRepository.sourceUrl.includes(up.sourceRepository.commit ?? '')
+    ) {
+      errors.push(
+        'upstreamPackage.sourceRepository.sourceUrl: expected an immutable https://github.com/... URL containing the recorded commit'
+      );
+    }
   }
   if (!p.license) errors.push('license: required');
   if (!p.fetchedAt) errors.push('fetchedAt: required');
   if (!Array.isArray(p.targetRequirementSets)) {
     errors.push('targetRequirementSets: expected an array');
   }
+  errors.push(...validateDocsReferenceMetadata(p.docsReference));
 
   return errors;
 }

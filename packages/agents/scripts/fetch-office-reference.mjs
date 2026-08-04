@@ -28,12 +28,16 @@
  *   --check             Regenerate into a temp comparison file and exit
  *                        non-zero if it differs from the checked-in
  *                        fixture, without overwriting anything (used by the
- *                        scheduled drift-check workflow).
+ *                        scheduled drift-check workflow). Also prints a
+ *                        symbol/member-level delta (added/removed/changed
+ *                        symbols and members, including overload-level
+ *                        changes) via `reference-diff.mjs`, which the
+ *                        scheduled workflow embeds in the drift issue body.
  */
 
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
-import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
 import { verifySubresourceIntegrity } from './lib/integrity.mjs';
@@ -41,6 +45,8 @@ import { extractFileFromTarGzip } from './lib/tar.mjs';
 import { extractWordReference } from './lib/extract-word-reference.mjs';
 import { buildReferenceFixture, validateReferenceFixture } from './lib/reference-normalize.mjs';
 import { buildProvenance, validateProvenance } from './lib/provenance.mjs';
+import { PINNED_DOCS_REFERENCE_COMMIT, fetchDocsReferenceCommitMetadata } from './lib/docs-reference.mjs';
+import { diffReferenceFixtures, formatReferenceDiff } from './lib/reference-diff.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const AGENTS_ROOT = join(__dirname, '..');
@@ -50,6 +56,9 @@ const PROVENANCE_PATH = join(AGENTS_ROOT, 'compat', 'provenance.json');
 
 const REGISTRY_URL = 'https://registry.npmjs.org/@types/office-js';
 const PACKAGE_NAME = '@types/office-js';
+const PINNED_DEFINITELY_TYPED_COMMITS = {
+  '1.0.604': '929735ef7d8bafb29c17e39b26042ada8529e670',
+};
 
 async function fetchRegistryMetadata(version) {
   const url = version ? `${REGISTRY_URL}/${version}` : `${REGISTRY_URL}/latest`;
@@ -84,6 +93,14 @@ async function loadManifest() {
  */
 export async function regenerate({ version, fetchedAt = new Date().toISOString() } = {}) {
   const registryMetadata = await fetchRegistryMetadata(version);
+  const definitelyTypedCommit = PINNED_DEFINITELY_TYPED_COMMITS[registryMetadata.version];
+  if (!definitelyTypedCommit) {
+    throw new Error(
+      `No reviewed DefinitelyTyped commit is pinned for ${PACKAGE_NAME}@${registryMetadata.version}. ` +
+        'Add the exact source commit before regenerating or adopting upstream drift.'
+    );
+  }
+  const sourceRepository = registryMetadata.repository ?? null;
   const upstreamPackage = {
     name: PACKAGE_NAME,
     version: registryMetadata.version,
@@ -91,7 +108,13 @@ export async function regenerate({ version, fetchedAt = new Date().toISOString()
     shasum: registryMetadata.dist.shasum,
     tarballUrl: registryMetadata.dist.tarball,
     typesPublisherContentHash: registryMetadata.typesPublisherContentHash ?? null,
-    sourceRepository: registryMetadata.repository ?? null,
+    sourceRepository: sourceRepository
+      ? {
+          ...sourceRepository,
+          commit: definitelyTypedCommit,
+          sourceUrl: `https://github.com/DefinitelyTyped/DefinitelyTyped/tree/${definitelyTypedCommit}/types/office-js`,
+        }
+      : null,
     license: registryMetadata.license ?? 'MIT',
   };
 
@@ -121,7 +144,14 @@ export async function regenerate({ version, fetchedAt = new Date().toISOString()
     throw new Error(`generated reference fixture failed validation:\n${fixtureErrors.join('\n')}`);
   }
 
-  const provenance = buildProvenance({ upstreamPackage, fixture, fetchedAt });
+  // Second (and only other) network call this script makes: verifies the
+  // pinned `office-js-docs-reference` commit is still reachable and
+  // records its metadata, exactly as it verifies the `@types/office-js`
+  // tarball above. Never invoked outside this network-capable script, so
+  // `bun test`/`typecheck`/`build`/`install` stay offline.
+  const docsReference = await fetchDocsReferenceCommitMetadata(PINNED_DOCS_REFERENCE_COMMIT);
+
+  const provenance = buildProvenance({ upstreamPackage, fixture, fetchedAt, docsReference });
   const provenanceErrors = validateProvenance(provenance);
   if (provenanceErrors.length > 0) {
     throw new Error(`generated provenance failed validation:\n${provenanceErrors.join('\n')}`);
@@ -155,17 +185,26 @@ async function main() {
       return;
     }
 
+    // The temp dir is deliberately left on disk (no cleanup call here): the
+    // scheduled workflow uploads it as a build artifact, and the caller's
+    // process lifetime — a single scheduled job run, or a maintainer's own
+    // shell — owns removing it afterwards.
     const tempDir = await mkdtemp(join(tmpdir(), 'office-compat-drift-'));
-    try {
-      await writeFile(join(tempDir, 'word.reference.json'), fixtureJson);
-      await writeFile(join(tempDir, 'provenance.json'), provenanceJson);
-      console.log(`Drift detected. Regenerated files written to ${tempDir} for review.`);
-      console.log(`Upstream version: ${provenance.upstreamPackage.version}`);
-    } finally {
-      // Leave the temp dir for CI to upload as an artifact; the caller's
-      // process lifetime (a single scheduled job run) owns cleanup.
-      void rm;
-    }
+    await writeFile(join(tempDir, 'word.reference.json'), fixtureJson);
+    await writeFile(join(tempDir, 'provenance.json'), provenanceJson);
+    console.log(`Drift detected. Regenerated files written to ${tempDir} for review.`);
+    console.log(`Upstream version: ${provenance.upstreamPackage.version}`);
+    console.log('');
+    // The scheduled workflow captures this entire stdout stream into the
+    // drift-tracking issue body (see .github/workflows/office-compat-drift.yml)
+    // — without this, the issue only ever said "something changed", never
+    // what. `previousFixture` is `null` the very first time this ever runs
+    // against a repository with no checked-in fixture yet; diff against an
+    // empty one rather than skip the summary.
+    const previousFixture = existingFixture != null ? JSON.parse(existingFixture) : { symbols: {} };
+    const diff = diffReferenceFixtures(previousFixture, fixture);
+    console.log('Symbol/member-level delta vs the checked-in reference fixture:');
+    console.log(formatReferenceDiff(diff));
     process.exitCode = 1;
     return;
   }
@@ -176,7 +215,15 @@ async function main() {
   console.log(`Wrote ${PROVENANCE_PATH}`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// `file://${process.argv[1]}` (the pattern this repository's other entry
+// guards used to use) mis-detects on any path npm/bun/node's own argv
+// quoting doesn't happen to already be a clean file URL — spaces, `#`, `?`,
+// and non-ASCII characters all encode differently in a real file URL than
+// in a bare path string. `pathToFileURL` performs the same normalization
+// Node used to construct `import.meta.url` in the first place, so the two
+// sides compare correctly regardless of how this script's own path looks.
+const isMainModule = process.argv[1] != null && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMainModule) {
   main().catch((error) => {
     console.error(error);
     process.exitCode = 1;

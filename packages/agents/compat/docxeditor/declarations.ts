@@ -16,10 +16,12 @@
  * reference fixture — that would silently turn "DocxEditor owns its types"
  * into "Microsoft's declarations, renamed".
  *
- * Two support types exist purely to give a small number of return/parameter
- * positions a name, with zero runtime footprint (plain string-literal union
- * types and an intentionally-opaque marker interface) — the *runtime* enum
- * objects Office.js ships alongside its enum types are proxy-runtime
+ * Three support types exist purely to give a small number of
+ * return/parameter positions — or, for `ClientRequestContext`, the batch
+ * callback parameter every source-compat fixture actually calls — a name,
+ * with zero runtime footprint (plain string-literal union types and a
+ * declaration-only base class): the *runtime* enum objects and the real
+ * queuing/flush behavior Office.js ships alongside these are proxy-runtime
  * plumbing, out of scope for this task:
  *   - `SelectionMode`, `HeaderFooterType`: Word.js's own declarations offer
  *     these positions as two overloads — one keyed on an enum type, one on
@@ -27,27 +29,40 @@
  *     for the enum-typed overload to type-check at all.
  *   - `ClientRequestContext`: the generic, Word-agnostic base type that
  *     `ClientObject#context` returns upstream (`Word.RequestContext`
- *     extends it, adding `document`). None of its own members are part of
- *     this task's frozen subset, so it is intentionally left opaque here.
+ *     extends it, adding `document`). Upstream's own `sync` is generic and
+ *     pass-through (`sync<T>(passThroughValue?: T): Promise<T>`) — batching
+ *     semantics that are this task's proxy-runtime successor's job (Task 3),
+ *     not this contract-freeze task's. Rather than selecting and exactly
+ *     matching that shape, this file independently authors a deliberately
+ *     simplified, declaration-only `sync(): Promise<void>` — the
+ *     zero-argument call every real Office.js sample actually makes — purely
+ *     so representative source-compat fixtures in `compat/fixtures/` can end
+ *     a batch with `await context.sync()`, same as real Office.js samples
+ *     do. See the `OfficeExtension.ClientRequestContext#sync` entry in
+ *     `compat/manifest.json`'s `omissions`: this member is intentionally
+ *     *not* selected for exact conformance against the reference, precisely
+ *     because it is a deliberate simplification, not a faithful mirror.
  */
 export declare namespace DocxEditor {
   export type SelectionMode = 'Select' | 'Start' | 'End';
   export type HeaderFooterType = 'Primary' | 'FirstPage' | 'EvenPages';
 
-  /** Opaque base request-context handle; see the file header. */
-  export interface ClientRequestContext {}
+  /** Base request-context handle; see the file header for why only `sync` is declared here. */
+  export class ClientRequestContext {
+    sync(): Promise<void>;
+  }
 
   // ---------------------------------------------------------------------
   // core: RequestContext, ClientObject, Document, Body, Range, Paragraph
   // ---------------------------------------------------------------------
 
-  export class RequestContext {
+  export class RequestContext extends ClientRequestContext {
     readonly document: Document;
   }
 
   export class ClientObject {
-    readonly context: ClientRequestContext;
-    readonly isNullObject: boolean;
+    context: ClientRequestContext;
+    isNullObject: boolean;
   }
 
   export class Document {
@@ -75,11 +90,11 @@ export declare namespace DocxEditor {
   export class Range {
     readonly bookmarks: BookmarkCollection;
     readonly contentControls: ContentControlCollection;
-    readonly end: number;
+    end: number;
     readonly font: Font;
     hyperlink: string;
     readonly paragraphs: ParagraphCollection;
-    readonly start: number;
+    start: number;
     style: string;
     readonly text: string;
     insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;

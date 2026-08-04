@@ -154,6 +154,51 @@ function isDocxEditorNamespace(stmt) {
  * @returns Raw authored symbol facts, in exactly the shape
  *   `buildReferenceFixture`/`compareFixtures` expect.
  */
+function hasExportModifier(node) {
+  if (!ts.canHaveModifiers(node)) return false;
+  const modifiers = ts.getModifiers(node) ?? [];
+  return modifiers.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
+}
+
+/**
+ * Lists every *exported* class/interface/function/type-alias name declared
+ * directly inside a `declare namespace DocxEditor { ... }` block —
+ * regardless of whether the manifest selected it. This is the raw fact the
+ * "no Table/Image stub can sneak in" guard (`manifest-integrity.mjs`'s
+ * `validateAuthoredExportsAgainstManifest`) is built on: it is not enough
+ * for `extractDocxEditorShape` to silently ignore an unselected symbol (as
+ * it does, by design, for the conformance comparison itself) — a name that
+ * is exported from `declarations.ts` but neither selected in
+ * `manifest.symbols` nor on the small documented support-type allowlist
+ * must fail a test, not pass one by omission.
+ */
+export function listExportedSymbolNames(sourceText) {
+  const sourceFile = ts.createSourceFile(
+    'docxeditor-declarations.ts',
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true
+  );
+  const names = [];
+
+  for (const stmt of sourceFile.statements) {
+    if (!isDocxEditorNamespace(stmt)) continue;
+
+    for (const inner of stmt.body.statements) {
+      const isNameableDeclaration =
+        ts.isClassDeclaration(inner) ||
+        ts.isInterfaceDeclaration(inner) ||
+        ts.isFunctionDeclaration(inner) ||
+        ts.isTypeAliasDeclaration(inner);
+      if (!isNameableDeclaration) continue;
+      if (!hasExportModifier(inner)) continue;
+      if (inner.name?.text) names.push(inner.name.text);
+    }
+  }
+
+  return names;
+}
+
 export function extractDocxEditorShape(sourceText, manifestSymbols) {
   const sourceFile = ts.createSourceFile(
     'docxeditor-declarations.ts',

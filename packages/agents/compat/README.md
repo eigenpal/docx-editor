@@ -83,11 +83,16 @@ textual mismatch.
   class alternative already covered by its own selected symbol (e.g.
   `search(text, options)`'s "or a plain options object" overload) — deep
   structural comparison of anonymous object types is out of scope.
-- **`OfficeExtension.ClientRequestContext#sync` is omitted** (see
-  `manifest.json`'s `omissions`) — it is the proxy runtime's own batching
-  flush call, not part of this contract-freeze task. Representative source
-  fixtures omit the trailing `await context.sync()` real Office.js samples
-  always end a batch with, for the same reason.
+- **`OfficeExtension.ClientRequestContext#sync` is not selected for exact
+  conformance** (see `manifest.json`'s `omissions`) — upstream's real
+  batching/flush behavior and its generic pass-through signature
+  (`sync<T>(passThroughValue?: T): Promise<T>`) are the proxy runtime's job
+  (Task 3), not this contract-freeze task's. `docxeditor/declarations.ts`
+  still independently authors a deliberately simplified, declaration-only
+  `sync(): Promise<void>` on `ClientRequestContext` purely so representative
+  source-compat fixtures can end a batch with `await context.sync()`, same
+  as real Office.js samples do — this has no runtime behavior and is not
+  compared against the reference.
 - **Tables and images are omitted, not stubbed** — no engine lane targets
   them yet, so no `Word.Table`/`Word.InlinePicture`-shaped type appears
   anywhere in `docxeditor/declarations.ts`, working or not.

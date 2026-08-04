@@ -268,7 +268,6 @@
         "context": {
           "uid": "DocxEditor.ClientObject#context",
           "kind": "property",
-          "readonly": true,
           "requirementSet": null,
           "overloads": [
             {
@@ -280,7 +279,6 @@
         "isNullObject": {
           "uid": "DocxEditor.ClientObject#isNullObject",
           "kind": "property",
-          "readonly": true,
           "requirementSet": null,
           "overloads": [
             {
@@ -1630,7 +1628,6 @@
         "end": {
           "uid": "DocxEditor.Range#end",
           "kind": "property",
-          "readonly": true,
           "requirementSet": null,
           "overloads": [
             {
@@ -1765,7 +1762,6 @@
         "start": {
           "uid": "DocxEditor.Range#start",
           "kind": "property",
-          "readonly": true,
           "requirementSet": null,
           "overloads": [
             {

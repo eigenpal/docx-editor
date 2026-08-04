@@ -54,6 +54,31 @@ export function compareMemberOverloads(referenceOverloads, authoredOverloads) {
 }
 
 /**
+ * Compares readonly-ness for a property-kind member. Deliberately a
+ * separate check from `compareMemberOverloads`: `readonly` is a modifier on
+ * the member declaration, not part of an overload's parameter/return
+ * *shape*, so two overload lists can be textually identical while one side
+ * is assignable and the other is not — a real API-surface difference this
+ * task's strict conformance model must not silently pass. Both directions
+ * are flagged: dropping `readonly` (authored callers can now assign a
+ * property Office.js never lets them assign) and adding it (authored
+ * callers lose a legitimate assignment Office.js allows) are each variance,
+ * not just the direction that happens to compile without error either way.
+ * A no-op for method-kind members, which have no notion of readonly.
+ */
+export function comparePropertyReadonly(referenceMember, authoredMember) {
+  if (referenceMember.kind !== 'property') return [];
+  const referenceReadonly = Boolean(referenceMember.readonly);
+  const authoredReadonly = Boolean(authoredMember.readonly);
+  if (referenceReadonly === authoredReadonly) return [];
+  return [
+    `readonly mismatch: reference is ${referenceReadonly ? 'readonly' : 'writable'}, authored is ${
+      authoredReadonly ? 'readonly' : 'writable'
+    }`,
+  ];
+}
+
+/**
  * Compares one reference symbol's selected members against the authored
  * declarations for the same local name. `authored` is `undefined` when the
  * symbol itself is missing from the authored declarations.
@@ -75,6 +100,9 @@ export function compareSymbol(referenceSymbol, authored) {
       authoredMember.overloads ?? []
     );
     for (const issue of memberIssues) {
+      issues.push(`${referenceSymbol.uid}#${memberName}: ${issue}`);
+    }
+    for (const issue of comparePropertyReadonly(referenceMember, authoredMember)) {
       issues.push(`${referenceSymbol.uid}#${memberName}: ${issue}`);
     }
   }

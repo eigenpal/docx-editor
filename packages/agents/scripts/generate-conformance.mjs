@@ -21,7 +21,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { extractDocxEditorShape } from './lib/extract-docxeditor-shape.mjs';
 import { buildReferenceFixture } from './lib/reference-normalize.mjs';
 import { compareFixtures, overloadEquals } from './lib/shape-compare.mjs';
@@ -76,13 +76,20 @@ function overloadToFunctionTypeText(overload, knownNames) {
   return substituteGenericPlaceholder(`(${params}) => ${returns}`);
 }
 
+/**
+ * Names that may legitimately appear as a bare type reference inside a
+ * generated overload's parameter/return type text, and so must be
+ * re-qualified to `DocxEditor.Name` for use outside the namespace block.
+ * Deliberately excludes `isFunction` manifest entries (e.g. `run`): a
+ * function is never a valid type-position reference, so keeping it out of
+ * this set means the regex in `qualifyKnownTypeNames` can never rewrite an
+ * incidental identifier that happens to share a function's name.
+ */
 function collectKnownTypeNames(manifest) {
-  return new Set([
-    ...Object.keys(manifest.symbols ?? {}),
-    'ClientRequestContext',
-    'SelectionMode',
-    'HeaderFooterType',
-  ]);
+  const typeSymbolNames = Object.entries(manifest.symbols ?? {})
+    .filter(([, selection]) => !selection.isFunction)
+    .map(([name]) => name);
+  return new Set([...typeSymbolNames, 'ClientRequestContext', 'SelectionMode', 'HeaderFooterType']);
 }
 
 function sanitizeIdentifier(text) {
@@ -100,6 +107,43 @@ function emitAssertionPair(label, refOverload, authoredOverload, knownNames, cou
   return [
     `type Ref_${baseName} = ${refText};`,
     `type Auth_${baseName} = ${authoredText};`,
+    `type _check_${baseName} = IsExact<Ref_${baseName}, Auth_${baseName}>;`,
+    `type _assert_${baseName} = Expect<_check_${baseName}>;`,
+    '',
+  ];
+}
+
+/**
+ * A bare function-type comparison (`() => T`, what `emitAssertionPair`
+ * builds for every overload including property getters) cannot distinguish
+ * `readonly` from writable: `readonly` is a member modifier, not part of a
+ * function type. Wrapping the return type in a single-property object
+ * literal — `{ readonly value: T }` vs `{ value: T }` — moves the
+ * comparison onto ground where `IsExact`'s bidirectional-`extends` trick
+ * *does* see the modifier (verified empirically: TypeScript's structural
+ * `extends` ignores `readonly` for plain object types too in general, but
+ * the conditional-distribution trick `IsExact` uses does not — the two
+ * property shapes compare as `false`, not `true`). Emitted in addition to,
+ * not instead of, the getter-shaped pair from `emitAssertionPair`, and only
+ * for property-kind members — `readonly` has no meaning on a method
+ * overload or a top-level function, so there is nothing to represent there.
+ */
+function emitPropertyReadonlyAssertionPair(label, referenceMember, authoredMember, knownNames, counterState) {
+  const index = counterState.next++;
+  const baseName = sanitizeIdentifier(`${label}_readonly_${index}`);
+  const referenceOverload = referenceMember.overloads?.[0] ?? { returns: 'never' };
+  const authoredOverload = authoredMember?.overloads?.[0] ?? { returns: 'never' };
+  const refType = qualifyKnownTypeNames(referenceOverload.returns, knownNames);
+  const authType = qualifyKnownTypeNames(authoredOverload.returns, knownNames);
+  const refText = substituteGenericPlaceholder(
+    `{ ${referenceMember.readonly ? 'readonly ' : ''}value: ${refType} }`
+  );
+  const authText = substituteGenericPlaceholder(
+    `{ ${authoredMember?.readonly ? 'readonly ' : ''}value: ${authType} }`
+  );
+  return [
+    `type Ref_${baseName} = ${refText};`,
+    `type Auth_${baseName} = ${authText};`,
     `type _check_${baseName} = IsExact<Ref_${baseName}, Auth_${baseName}>;`,
     `type _assert_${baseName} = Expect<_check_${baseName}>;`,
     '',
@@ -151,13 +195,25 @@ function renderAssertionsFile(referenceFixture, authoredFixture, knownNames) {
       continue;
     }
     for (const [memberName, referenceMember] of Object.entries(referenceSymbol.members ?? {})) {
-      const authoredOverloads = authoredSymbol?.members?.[memberName]?.overloads ?? [];
+      const authoredMember = authoredSymbol?.members?.[memberName];
+      const authoredOverloads = authoredMember?.overloads ?? [];
       for (const overload of referenceMember.overloads ?? []) {
         body.push(
           ...emitAssertionPair(
             `${symbolName}_${memberName}`,
             overload,
             findAuthoredOverload(overload, authoredOverloads),
+            knownNames,
+            counterState
+          )
+        );
+      }
+      if (referenceMember.kind === 'property') {
+        body.push(
+          ...emitPropertyReadonlyAssertionPair(
+            `${symbolName}_${memberName}`,
+            referenceMember,
+            authoredMember,
             knownNames,
             counterState
           )
@@ -254,6 +310,13 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main();
+// See the identical guard in `fetch-office-reference.mjs` for why
+// `pathToFileURL` is used instead of the fragile `file://${argv[1]}` string
+// build.
+const isMainModule = process.argv[1] != null && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMainModule) {
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
 }

@@ -129,7 +129,7 @@ describe('generateConformance', () => {
     // `font` returns `Font` — a manifest-known symbol name — so it must be
     // re-qualified to `DocxEditor.Font` for use outside the namespace block.
     expect(result.assertionsSource).toContain('DocxEditor.Font');
-    expect(result.assertionsSource).toContain('type Ref_Body_insertText_1');
+    expect(result.assertionsSource).toMatch(/type Ref_Body_insertText_\d+/);
     expect(result.assertionsSource).toContain('IsExact<');
     expect(result.assertionsSource).toContain('Expect<');
     // The generic `run` overload's free type parameter is substituted with
@@ -197,6 +197,45 @@ describe('generateConformance', () => {
     expect(result.assertionsSource).toContain(
       `type Auth_run_${pairIndex} = (objects: ClientObject[], batch: (context: RequestContext) => Promise<unknown>) => Promise<unknown>;`
     );
+  });
+
+  test('emits an extra readonly-sensitive object-type assertion pair for property members, in addition to the getter-shaped function assertion', () => {
+    // `Word.Body#font` is `readonly` upstream (see `referenceFixture` above).
+    // A bare `() => Font` function-type comparison cannot distinguish
+    // `readonly font: Font` from a plain `font: Font` (readonly is not part
+    // of a function type at all), so the generator must additionally emit
+    // an object-type-literal pair — `{ readonly value: T }` vs `{ value: T }`
+    // — which IS sensitive to the modifier under `IsExact`.
+    const result = generateConformance({
+      referenceFixture,
+      manifest,
+      docxEditorSourceText: conformantSource,
+      docxEditorPackageVersion: '0.0.1',
+    });
+    expect(result.assertionsSource).toMatch(/type Ref_Body_font_readonly_\d+ = \{ readonly value: DocxEditor\.Font \};/);
+    expect(result.assertionsSource).toMatch(/type Auth_Body_font_readonly_\d+ = \{ readonly value: DocxEditor\.Font \};/);
+  });
+
+  test('flags a dropped readonly modifier as a conformance issue even when the getter-shaped overload text is identical', () => {
+    const readonlyDroppedSource = `
+      export declare namespace DocxEditor {
+        class Font {
+          bold: boolean;
+        }
+        class Body {
+          insertText(text: string, insertLocation: "Replace" | "Start" | "End"): Range;
+          font: Font;
+        }
+        function run<T>(batch: (context: RequestContext) => Promise<T>): Promise<T>;
+      }
+    `;
+    const result = generateConformance({
+      referenceFixture,
+      manifest,
+      docxEditorSourceText: readonlyDroppedSource,
+      docxEditorPackageVersion: '0.0.1',
+    });
+    expect(result.issues.some((i) => /Word\.Body#font/.test(i) && /readonly/i.test(i))).toBe(true);
   });
 
   test('the generator never emits a `Word.` qualifier inside a generated type alias (no upstream leakage into code, only into prose comments)', () => {
