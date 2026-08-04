@@ -30,16 +30,23 @@ export interface FrostActions {
 
 export function useFrost(): FrostActions {
   const editor = useDocxEditor();
-  // Re-asked on every editor tick, like any other control's enabled state: a read-only
-  // document, or one with no selection to format, must grey these out rather than offer an
-  // action that will be refused.
+  // Re-asked on every editor tick, like any other control's enabled state.
+  //
+  // TWO gates, because `can` only answers one of the two questions. It reports whether the
+  // engine would honour the command — false in a read-only document — but it says yes at a
+  // COLLAPSED CARET, where the command arms the typing format rather than painting
+  // anything. A control that stays live there is one the user presses and sees nothing
+  // happen, which reads as broken. The selection read is the same one the engine's own
+  // `copy` gate makes, so both greys out for the same reason and says so the same way.
   const gate = useEditorState(
     () => {
       const allowed = editor?.can(frostCommand('cyan'));
       if (!allowed) return { enabled: false, disabledReason: null };
-      return allowed.ok
-        ? { enabled: true, disabledReason: null }
-        : { enabled: false, disabledReason: allowed.reason ?? null };
+      if (!allowed.ok) return { enabled: false, disabledReason: allowed.reason ?? null };
+      const selected = editor?.query({ type: 'selectedText' }) ?? '';
+      return selected === ''
+        ? { enabled: false, disabledReason: 'nothing is selected' }
+        : { enabled: true, disabledReason: null };
     },
     (a, b) => a.enabled === b.enabled && a.disabledReason === b.disabledReason
   );

@@ -81,9 +81,12 @@ export function BergPanel() {
     >
       <defs>
         <linearGradient id="igloo-panel-ice" x1="0" y1="0" x2="0.3" y2="1">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.97" />
-          <stop offset="45%" stopColor="#e8f7ff" stopOpacity="0.95" />
-          <stop offset="100%" stopColor="#c3e6f7" stopOpacity="0.95" />
+          {/* OPAQUE. This is a menu panel, and the document reading through its rows is
+              the same legibility problem the chrome panels had — the ice look has to come
+              from the colour and the crown, not from letting the page show through. */}
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="45%" stopColor="#eaf8ff" />
+          <stop offset="100%" stopColor="#cbe9f8" />
         </linearGradient>
       </defs>
       {/* Body plus crown in one path: the top edge is jagged, the sides and bottom are the

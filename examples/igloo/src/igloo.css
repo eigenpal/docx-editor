@@ -21,9 +21,15 @@
 @tailwind utilities;
 
 .igloo-shell {
-  /* Surfaces: frosted glass over the sea rather than opaque panels. */
-  --doc-surface: rgba(232, 248, 255, 0.82);
-  --doc-card: rgba(240, 251, 255, 0.9);
+  /* Surfaces: pale ice, and OPAQUE.
+   *
+   * `--doc-surface` is what every dropdown, menu panel and popover paints on. Translucent,
+   * the ruler and the page read straight through an open menu and its rows become
+   * unreadable. The frosted-glass look belongs to the chrome BAR, which sets its own
+   * translucent background below — a panel floating over content is the one place the effect
+   * costs more than it gives. */
+  --doc-surface: #f1fbff;
+  --doc-card: #f6fdff;
   --doc-bg: transparent;
   --doc-bg-subtle: rgba(210, 238, 250, 0.35);
   --doc-bg-hover: rgba(150, 210, 238, 0.35);
@@ -88,6 +94,7 @@
   /* Above the page, below the chrome: snow falls in FRONT of the document (it is weather,
      not a watermark) but must never obscure the controls being demonstrated. */
   z-index: 3;
+  /* stays under `.igloo-rulerbar` (4) and `.igloo-chrome` (5) */
   overflow: hidden;
 }
 
@@ -118,11 +125,23 @@
 .igloo-chrome,
 .igloo-rulerbar {
   position: relative;
-  z-index: 2;
   flex-shrink: 0;
   background: rgba(233, 248, 255, 0.72);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.45);
+}
+
+/* The chrome bar sits ABOVE the ruler bar, not beside it.
+ *
+ * Both are translucent and `backdrop-filter` makes each one its own stacking context, so at
+ * equal z-index the later element in DOM order — the ruler bar — painted over any menu
+ * opened from the bar above it. The panel was solid; the ruler was simply on top of it. */
+.igloo-chrome {
+  z-index: 5;
+}
+
+.igloo-rulerbar {
+  z-index: 4;
 }
 
 .igloo-brand {
@@ -184,8 +203,14 @@
   flex: 1;
 }
 
+/* The ruler sizes ITSELF to the page width and follows an open navigation pane on its own,
+ * so this row only has to centre it over the page column. Without the centring the ruler
+ * sits at the row's left edge and its inch marks line up with nothing. */
 .igloo-rulerbar {
-  padding: 4px 0 2px;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  padding: 4px 20px 2px;
   border-bottom-color: rgba(255, 255, 255, 0.3);
 }
 
@@ -282,6 +307,14 @@
 .igloo-loading .igloo-mark {
   width: 52px;
   height: 52px;
+}
+
+/* Panels get a white rim rather than a blur. A `backdrop-filter` behind a near-opaque
+ * surface does not read as frost — it reads as a bright band wherever the chrome bar or the
+ * ruler happens to sit behind the panel, which is worse than no effect at all. */
+.igloo-shell .docx-toolbar__menu,
+.igloo-shell .docx-menubar__menu {
+  border-color: rgba(255, 255, 255, 0.8);
 }
 
 /* ── The context menu, cut from a berg ────────────────────────────────────────────── */
