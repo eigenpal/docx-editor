@@ -131,6 +131,7 @@ import {
   DEFAULT_SECTION_PROPERTIES,
   enumerateDocumentSections,
   geometryOfSection,
+  paragraphSectionNode,
   type SectionColumns,
 } from './section-properties.ts';
 import { resolveSectionColumns, type ResolvedSectionColumns } from './section-columns.ts';
@@ -1177,6 +1178,34 @@ function layoutBlocksPass(
     regionFragmentStart = 0;
   };
 
+  /**
+   * Whether a laid-out paragraph would put nothing on the sheet.
+   *
+   * Asked of a section break mark before letting it skip pagination, so the exemption covers
+   * only a mark with nothing to show: any glyph, marker, drawing, rule or shading makes the
+   * paragraph content, and content paginates.
+   */
+  const paintsNothing = (entry: PreparedBlock, lines: readonly PendingLine[]): boolean => {
+    if (entry.kind !== 'paragraph') return false;
+    if (entry.listItem !== undefined || entry.shading !== undefined) return false;
+    const { top, bottom, left, right, between } = entry.borders;
+    if (top ?? bottom ?? left ?? right ?? between) return false;
+    const drawingContext = options.inlineDrawingLayout;
+    if (
+      drawingContext &&
+      anchoredDrawingAtomsInParagraph(entry.paragraph, drawingContext).length > 0
+    ) {
+      return false;
+    }
+    return lines.every(
+      (line) =>
+        line.drawings.length === 0 &&
+        !line.pageBreakAfter &&
+        !line.columnBreakAfter &&
+        line.spans.every((span) => span.text.length === 0)
+    );
+  };
+
   const advanceColumn = (): void => {
     if (columnIndex + 1 < columns.count) {
       columnIndex += 1;
@@ -1864,6 +1893,22 @@ function layoutBlocksPass(
       // Cross-paragraph TOC field chrome: tree preserved, no painted row or flow height.
       continue;
     }
+    // A SECTION BREAK IS NOT CONTENT. The paragraph mark that carries a paragraph-level
+    // `w:sectPr` (ECMA-376 §17.6.18) IS the section break; `w:type` (§17.6.22) says where the
+    // NEXT section starts, never that the mark itself claims a sheet. So a mark that paints
+    // nothing may not OPEN A SHEET: it rides out the bottom of the page its section already
+    // ended on. Without this a mark missing the bottom margin by a point flushed a sheet, the
+    // following `nextPage` section started after it, and the document rendered a wholly blank
+    // page between two sections Word sets adjacent.
+    //
+    // Only the sheet. Moving into the next COLUMN of the same sheet manufactures nothing, and
+    // the mark is part of what a balanced multi-column section distributes (§17.6.4) — so a
+    // balance trial, which asks how short the region can be while still holding one sheet,
+    // has to see the mark's own demand for room or it converges on a band too tight for it.
+    const marksSectionBreak =
+      paragraphSectionNode(paragraph) !== undefined && paintsNothing(entry, lines);
+    const holdsSheet = (): boolean =>
+      marksSectionBreak && columnRegionBottom === undefined && columnIndex + 1 >= columns.count;
     const rebreakInCurrentColumn = (startOffset: number): void => {
       const next = prepareBlock(paragraph, columnWidth());
       if (next.kind !== 'paragraph') return;
@@ -1909,7 +1954,7 @@ function layoutBlocksPass(
           needed = Math.max(needed, group + topExtent);
         }
       }
-      if (cursorY + needed > contentHeight() && cursorY > 0) {
+      if (cursorY + needed > contentHeight() && cursorY > 0 && !holdsSheet()) {
         advanceColumn();
         previousSpaceAfter = 0;
         rebreakInCurrentColumn(0);
@@ -2259,6 +2304,7 @@ function layoutBlocksPass(
       const lineExtent = skipBefore + pendingLine.height + tail;
       const overflowsPage =
         cursorY + lineExtent > contentHeight() &&
+        !holdsSheet() &&
         (pending.length > 0 || pageFragments.length > 0 || pages.length > 0);
       if (overflowsPage) {
         // `w:widowControl` (§17.3.1.44) / `w:keepLines` (§17.3.1.16) change where a paragraph

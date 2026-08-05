@@ -567,4 +567,58 @@ describe('per-section pagination (the per-section lane)', () => {
     expect(layout.pages).toHaveLength(1);
     expect([layout.pages[0]!.box.width, layout.pages[0]!.box.height]).toEqual([200, 300]);
   });
+
+  describe('a section break mark never manufactures a page', () => {
+    // 200x100pt sheets with 10pt margins: six lines fill the 80pt column exactly, so the
+    // seventh has nothing left. That seventh line is what a section boundary lands on in a
+    // real document, and whether it fits is a matter of a point or two.
+    const SHORT = sect(4000, 2000);
+    /** A paragraph that is nothing but the section break it carries. */
+    const breakMark = (pPr: string) => `<w:p><w:pPr>${pPr}</w:pPr></w:p>`;
+    const FILL = ['a', 'b', 'c', 'd', 'e', 'f'].map((text) => paragraph(text)).join('');
+    const pageTexts = (layout: ReturnType<typeof lay>) =>
+      layout.pages.map((page) =>
+        page.fragments
+          .flatMap((fragment) =>
+            fragment.kind === 'paragraph'
+              ? fragment.lines.flatMap((line) => line.spans.map((span) => span.text))
+              : []
+          )
+          .join('')
+      );
+
+    test('an unfittable break mark rides the page its section ended on', () => {
+      const part = load(FILL + breakMark(SHORT) + paragraph('two') + SHORT);
+      const layout = lay(part);
+      // Two sheets, not three: the mark paints nothing, so a sheet holding only the mark
+      // would be a blank page between two sections Word sets adjacent.
+      expect(layout.pages).toHaveLength(2);
+      expect(pageTexts(layout)).toEqual(['abcdef', 'two']);
+      // The mark is still laid out — it is the section's last paragraph and the caret has to
+      // reach it — and it is laid out on the page the section already filled.
+      expect(layout.pages[0]!.fragments).toHaveLength(7);
+      expect(layout.pages[1]!.fragments).toHaveLength(1);
+    });
+
+    test('a break mark WITH text is content, and moves to its own page when it must', () => {
+      const part = load(
+        FILL +
+          `<w:p><w:pPr>${SHORT}</w:pPr><w:r><w:t>tail</w:t></w:r></w:p>` +
+          paragraph('two') +
+          SHORT
+      );
+      const layout = lay(part);
+      expect(layout.pages).toHaveLength(3);
+      expect(pageTexts(layout)).toEqual(['abcdef', 'tail', 'two']);
+    });
+
+    test('an ordinary empty paragraph still paginates', () => {
+      // The exemption belongs to the break, not to emptiness: a plain empty paragraph is a
+      // line of the document and takes the next page when the column is full.
+      const part = load(FILL + '<w:p/>' + SHORT);
+      const layout = lay(part);
+      expect(layout.pages).toHaveLength(2);
+      expect(pageTexts(layout)).toEqual(['abcdef', '']);
+    });
+  });
 });
