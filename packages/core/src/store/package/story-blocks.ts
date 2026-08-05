@@ -16,6 +16,10 @@
 // would meet them reading the page. SDT nesting is bounded, because the nesting depth is
 // file-supplied and a document is untrusted input.
 
+import {
+  contentControlContentChildren,
+  isContentControlWrapper,
+} from './content-control-nodes.ts';
 import type { OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 
 /** How deep block-level content controls may nest before the walk stops descending. */
@@ -106,12 +110,8 @@ export function collectStoryParagraphs(
       }
       continue;
     }
-    if (child.kind === 'generic' && child.localName === 'sdt' && sdtDepth < MAX_STORY_SDT_NESTING) {
-      for (const inner of child.children) {
-        if (inner.kind !== 'textValue' && inner.localName === 'sdtContent') {
-          collectStoryParagraphs(inner.children, out, sdtDepth + 1);
-        }
-      }
+    if (isContentControlWrapper(child) && sdtDepth < MAX_STORY_SDT_NESTING) {
+      collectStoryParagraphs(contentControlContentChildren(child), out, sdtDepth + 1);
     }
   }
 }

@@ -1,6 +1,10 @@
 // Resolve paragraph `numPr` against a numbering index and produce per-paragraph list
 // layout inputs (marker text, effective indent, marker face) for one story walk.
 
+import {
+  contentControlContentChildren,
+  isContentControlWrapper,
+} from '@docx-editor.dev/core-contract/store';
 import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core-contract/store';
 import { createListCounterState } from './list-counters.ts';
 import {
@@ -200,15 +204,9 @@ export function walkStoryParagraphs(
           const inner: OoxmlElement[] = [];
           for (const child of cell.children) {
             if (child.kind === 'paragraph' || child.kind === 'table') inner.push(child);
-            if (child.kind === 'generic' && child.localName === 'sdt' && depth < maxTableDepth) {
-              for (const sdtChild of child.children) {
-                if (isElement(sdtChild) && sdtChild.localName === 'sdtContent') {
-                  for (const content of sdtChild.children) {
-                    if (content.kind === 'paragraph' || content.kind === 'table') {
-                      inner.push(content);
-                    }
-                  }
-                }
+            if (isContentControlWrapper(child) && depth < maxTableDepth) {
+              for (const content of contentControlContentChildren(child)) {
+                if (content.kind === 'paragraph' || content.kind === 'table') inner.push(content);
               }
             }
           }

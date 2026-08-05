@@ -71,6 +71,10 @@ const KNOWN_ELEMENT_NAMES: Readonly<
   commentReference: [WML_NAMESPACE_URI, 'commentReference'],
   comments: [WML_NAMESPACE_URI, 'comments'],
   comment: [WML_NAMESPACE_URI, 'comment'],
+  contentControl: [WML_NAMESPACE_URI, 'sdt'],
+  contentControlProperties: [WML_NAMESPACE_URI, 'sdtPr'],
+  contentControlEndProperties: [WML_NAMESPACE_URI, 'sdtEndPr'],
+  contentControlContent: [WML_NAMESPACE_URI, 'sdtContent'],
 };
 
 function knownAttributesAreValid(attributes: readonly OoxmlAttribute[]): boolean {

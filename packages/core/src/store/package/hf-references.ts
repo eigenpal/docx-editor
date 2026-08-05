@@ -15,6 +15,10 @@
 // Fail-open per reference, exactly as Word behaves: a dangling r:id renders no header
 // rather than refusing the document. Traversal safety was already enforced at load.
 
+import {
+  contentControlContentChildren,
+  isContentControlWrapper,
+} from './content-control-nodes.ts';
 import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import type { OoxmlPart } from './ooxml-tree.ts';
@@ -116,12 +120,8 @@ function bodyBlocks(body: OoxmlElement): OoxmlElement[] {
         blocks.push(child);
         continue;
       }
-      if (child.kind === 'generic' && child.localName === 'sdt' && depth < MAX_SDT_NESTING) {
-        for (const inner of child.children) {
-          if (inner.kind !== 'textValue' && inner.localName === 'sdtContent') {
-            collect(inner.children, depth + 1);
-          }
-        }
+      if (isContentControlWrapper(child) && depth < MAX_SDT_NESTING) {
+        collect(contentControlContentChildren(child), depth + 1);
       }
     }
   };

@@ -572,6 +572,87 @@ export interface OoxmlContinuationSeparatorNode extends OoxmlElementBase<
   readonly localName: 'continuationSeparator';
 }
 
+/**
+ * `w:sdt` — a content control, at block, inline, row or cell level.
+ *
+ * ONE kind for all four levels. `CT_SdtBlock`, `CT_SdtRun`, `CT_SdtRow` and `CT_SdtCell`
+ * differ only in what their `w:sdtContent` may hold, and the wrapper itself is the same
+ * element with the same properties everywhere; {@link OoxmlContentControlContentNode}
+ * carries the level distinction, which `contentControlLevelOf` reads off the content.
+ *
+ * The wrapper is TRANSPARENT to flow — Word renders a control's content in place — and
+ * typing it is orthogonal to that. While it was generic, every question about it (is it
+ * locked, is this a prompt, what type is it, where does it start) was answered by walking
+ * `localName` strings, which D1 exists to prevent, and an inline one contributed no
+ * defined UTF-16 offset so a selection crossing it addressed a paragraph whose length the
+ * store and the layout disagreed about.
+ */
+export interface OoxmlContentControlNode extends OoxmlElementBase<
+  readonly (
+    | OoxmlContentControlPropertiesNode
+    | OoxmlContentControlEndPropertiesNode
+    | OoxmlContentControlContentNode
+    | OoxmlGenericElementNode
+  )[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'contentControl';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'sdt';
+}
+
+/**
+ * `w:sdtPr` (`CT_SdtPr`) — the control's properties.
+ *
+ * Children stay generic, exactly as `w:rPr`'s and `w:tblPr`'s do: the container is what
+ * needs a kind, and the property vocabulary is projected by `contentControlPropertiesOf`
+ * rather than duplicated into one node type per property. `w:rPr` inside it is admitted
+ * typed because that is where a placeholder's grey italic comes from.
+ *
+ * `CT_SdtPr` is an `xsd:sequence`, so a write must re-emit in schema order — see
+ * `orderedContentControlProperties`, which is the only sanctioned way to rebuild it.
+ */
+export interface OoxmlContentControlPropertiesNode extends OoxmlElementBase<
+  readonly (OoxmlRunPropertiesNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'contentControlProperties';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'sdtPr';
+}
+
+/**
+ * `w:sdtEndPr` (`CT_SdtEndPr`) — a member of every `CT_Sdt*` sequence, holding the run
+ * properties of the control's end mark. Nothing reads it; it is typed so it keeps its
+ * position in the sequence instead of riding along as an unclassified generic.
+ */
+export interface OoxmlContentControlEndPropertiesNode extends OoxmlElementBase<
+  readonly (OoxmlRunPropertiesNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'contentControlEndProperties';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'sdtEndPr';
+}
+
+/**
+ * `w:sdtContent` — the control's content, at whatever level the control sits.
+ *
+ * Deliberately permissive about its children (block, inline, row and cell content all
+ * appear here depending on the wrapper), matching the table arms: demotion to generic is
+ * the safe fallback and generic round-trips losslessly, whereas a strict union would
+ * demote the WRAPPER of any shape this reader had not anticipated and take the control's
+ * identity with it.
+ */
+export interface OoxmlContentControlContentNode extends OoxmlElementBase<
+  readonly OoxmlNode[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'contentControlContent';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'sdtContent';
+}
+
 export interface OoxmlGenericElementNode extends OoxmlElementBase<readonly OoxmlNode[]> {
   readonly kind: 'generic';
 }
@@ -616,6 +697,10 @@ export type OoxmlElement =
   | OoxmlCommentReferenceNode
   | OoxmlCommentsNode
   | OoxmlCommentNode
+  | OoxmlContentControlNode
+  | OoxmlContentControlPropertiesNode
+  | OoxmlContentControlEndPropertiesNode
+  | OoxmlContentControlContentNode
   | OoxmlGenericElementNode;
 
 export type OoxmlNode = OoxmlElement | OoxmlTextNode;
@@ -726,6 +811,35 @@ const KNOWN_WML_ELEMENTS: Readonly<Record<string, KnownKind>> = {
   commentReference: 'commentReference',
   comments: 'comments',
   comment: 'comment',
+  sdt: 'contentControl',
+};
+
+/**
+ * The three `w:sdt` members that are only themselves INSIDE a `w:sdt`.
+ *
+ * Typed by parent for the same reason the revision wrappers are: a stray `w:sdtContent`
+ * elsewhere in a document is not a control's content, and typing it there would demote
+ * whatever container held it — a body with one misplaced element would stop reporting
+ * its own paragraphs.
+ */
+const CONTENT_CONTROL_INVALID_PARENTS: ReadonlySet<string> = new Set([
+  'r',
+  'rPr',
+  'pPr',
+  'trPr',
+  'tcPr',
+  'tblPr',
+  'tblPrEx',
+  'numPr',
+  'sectPr',
+  'sdtPr',
+  'sdtEndPr',
+]);
+
+const SDT_MEMBER_KINDS: Readonly<Record<string, KnownKind>> = {
+  sdtPr: 'contentControlProperties',
+  sdtEndPr: 'contentControlEndProperties',
+  sdtContent: 'contentControlContent',
 };
 
 /**
@@ -788,6 +902,16 @@ function wmlKindFor(localName: string, parentLocalName: string | undefined): Kno
     return parentLocalName !== undefined && PROPERTY_REVISION_PARENTS.has(parentLocalName)
       ? 'generic'
       : revision;
+  }
+  const sdtMember = SDT_MEMBER_KINDS[localName];
+  if (sdtMember !== undefined) return parentLocalName === 'sdt' ? sdtMember : 'generic';
+  // A `w:sdt` reaches every CONTENT position WML has, but never a run's or a property
+  // container's inside. Typed there it would demote the run that holds it, and a demoted
+  // run takes its own text out of the addressable flow — the control stays generic.
+  if (localName === 'sdt') {
+    return parentLocalName !== undefined && CONTENT_CONTROL_INVALID_PARENTS.has(parentLocalName)
+      ? 'generic'
+      : 'contentControl';
   }
   return KNOWN_WML_ELEMENTS[localName] ?? 'generic';
 }

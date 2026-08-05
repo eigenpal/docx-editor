@@ -198,6 +198,11 @@ function isPreservedChild(child: OoxmlNode): boolean {
     child.kind === 'bookmarkStart' ||
     child.kind === 'bookmarkEnd' ||
     child.kind === 'hyperlink' ||
+    // A `w:sdt` sits in EVERY content position WML has — between paragraphs, between runs,
+    // around a row, around a cell — so it joins this class for the same reason a bookmark
+    // does: a container that stopped recognising its own children because one of them is a
+    // content control would demote, and a demoted body reports no paragraphs at all.
+    child.kind === 'contentControl' ||
     isRangeMarkerKind(child.kind)
   );
 }
@@ -379,6 +384,41 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
     case 'tableGrid':
     case 'tableProperties':
       return children.every((child) => child.kind === 'generic');
+    /**
+     * `CT_Sdt*` is `w:sdtPr?`, `w:sdtEndPr?`, `w:sdtContent?` — at most one of each, in that
+     * order. Anything else demotes the wrapper, which is the safe fallback: a generic `w:sdt`
+     * still round-trips and still flattens, it just carries no control semantics.
+     */
+    case 'contentControl': {
+      let seen = 0;
+      for (const child of children) {
+        const rank =
+          child.kind === 'contentControlProperties'
+            ? 1
+            : child.kind === 'contentControlEndProperties'
+              ? 2
+              : child.kind === 'contentControlContent'
+                ? 3
+                : 0;
+        if (rank === 0) {
+          if (child.kind !== 'generic') return false;
+          continue;
+        }
+        if (rank <= seen) return false;
+        seen = rank;
+      }
+      return true;
+    }
+    // `w:sdtPr/w:rPr` is where a placeholder's grey italic comes from, so the run-property
+    // container is admitted typed; every other property child stays generic, as in `w:tblPr`.
+    case 'contentControlProperties':
+    case 'contentControlEndProperties':
+      return children.every((child) => child.kind === 'runProperties' || child.kind === 'generic');
+    // Deliberately unconstrained: block, inline, row and cell content all appear here
+    // depending on the wrapper's level, and a strict union would demote the control itself
+    // for a shape this reader had not anticipated.
+    case 'contentControlContent':
+      return true;
   }
 }
 

@@ -14,6 +14,10 @@
 // Note parts (`w:footnotes` / `w:endnotes`) are NOT story roots: each typed `w:footnote` /
 // `w:endnote` child is its own story via {@link noteStoryBlocks}.
 
+import {
+  contentControlContentChildren,
+  isContentControlWrapper,
+} from '@docx-editor.dev/core-contract/store';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core-contract/store';
 import { revisionRemovesParagraph } from './revision-visibility.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';
@@ -49,12 +53,8 @@ function collectStoryBlocks(root: OoxmlElement, displayMode: RevisionDisplayMode
         blocks.push(child);
         continue;
       }
-      if (child.kind === 'generic' && child.localName === 'sdt' && depth < MAX_SDT_NESTING) {
-        for (const inner of child.children) {
-          if (inner.kind !== 'textValue' && inner.localName === 'sdtContent') {
-            collect(inner.children, depth + 1);
-          }
-        }
+      if (isContentControlWrapper(child) && depth < MAX_SDT_NESTING) {
+        collect(contentControlContentChildren(child), depth + 1);
       }
     }
   };
