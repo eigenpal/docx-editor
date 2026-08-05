@@ -45,7 +45,7 @@ import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../i18n';
 import { ReviewRailContext, useDocxEditor } from './context';
 import { Slot } from './toolbar/Slot';
-import { useReview, useStackedReviewPositions, type ReviewItemView } from './useReview';
+import { useReview, type ReviewItemView } from './useReview';
 
 /** The rail's data, provided once by the Root so a card never re-subscribes. */
 const ReviewContext = createContext<ReviewRailValue | null>(null);
@@ -54,6 +54,12 @@ const ReviewItemContext = createContext<ReviewItemView | null>(null);
 
 interface ReviewRailValue {
   readonly review: ReturnType<typeof useReview>;
+  /**
+   * The UNFILTERED queue. The rail's cards render `review.items`, which the structural and
+   * formatting defaults and the host's `filter` have already narrowed — but the balloon
+   * exists precisely for the items those filters hide, so it matches against everything.
+   */
+  readonly allItems: readonly ReviewItemView[];
   /** Author colour slot per author, by order of first appearance — Word's own rule. */
   readonly authorSlots: ReadonlyMap<string, number>;
   /** Comment items by id, so a card can render its replies without walking the list. */
@@ -97,6 +103,9 @@ const RAIL_OVERSCAN = 600;
 /** How many author slots the token ramp defines; past it, colours repeat. */
 const AUTHOR_SLOTS = 8;
 
+/** What an unmeasured card reserves in the stacking run, in CSS px. */
+const DEFAULT_CARD_HEIGHT = 72;
+
 /** Keeps the caret: a mousedown that bubbles to the editor moves it. Inputs are exempt. */
 function guardMousedown(event: React.MouseEvent): void {
   const tag = (event.target as HTMLElement | null)?.tagName;
@@ -126,6 +135,7 @@ const INERT_RAIL: ReviewRailValue = {
     setPaneOpen: () => {},
     ready: false,
   },
+  allItems: [],
   authorSlots: new Map(),
   byId: new Map(),
   measure: () => {},
@@ -166,12 +176,19 @@ export interface ReviewProps extends ReviewPartProps {
   /** Show only some of the queue — comments in one rail, revisions in another. */
   filter?: (item: ReviewItemView) => boolean;
   /**
-   * Show the read-only "changed the document structure" cards. Default `false`: a heavily
-   * revised document carries one per structural site, they cannot be accepted or rejected
-   * from the rail, and together they crowd out the cards a reviewer can act on. The
-   * revisions themselves stay in the document either way — this hides only their cards.
+   * Show the "changed the document structure" cards. Default `false`: a heavily revised
+   * document carries one per structural site and together they crowd out the cards a
+   * reviewer can act on. The revisions stay marked in the document, where clicking one
+   * opens its balloon — this hides only their rail cards.
    */
   structural?: boolean;
+  /**
+   * Show the "changed text formatting" cards. Default `false`, same reasoning as
+   * {@link structural}: a restyled document mints one per run, and the decision is
+   * reachable by clicking the grey-marked text instead. The rail keeps the decisions a
+   * reviewer reads in order — content changes and comments.
+   */
+  formatting?: boolean;
 }
 
 // Inline SVG, like the toolbar's icons: this package ships no icon font.
@@ -208,6 +225,7 @@ function ReviewRoot({
   gap = 8,
   filter,
   structural = false,
+  formatting = false,
 }: ReviewProps) {
   const editor = useDocxEditor();
   const review = useReview();
@@ -223,11 +241,13 @@ function ReviewRoot({
   const open = review.paneOpen;
 
   const items = useMemo(() => {
-    const shown = structural
-      ? review.items
-      : review.items.filter((entry) => entry.revisionKind !== 'structural');
+    const shown = review.items.filter(
+      (entry) =>
+        (structural || entry.revisionKind !== 'structural') &&
+        (formatting || entry.revisionKind !== 'format')
+    );
     return filter ? shown.filter((entry) => filter(entry)) : shown;
-  }, [review.items, filter, structural]);
+  }, [review.items, filter, structural, formatting]);
 
   // Word's rule: a colour per author by ORDER OF FIRST APPEARANCE. A hash of the name is
   // stable but collides, and two reviewers drawn in one colour tells the reader the wrong
@@ -250,6 +270,10 @@ function ReviewRoot({
   // a rail that guessed would overlap the moment a comment ran to three lines.
   const [heights, setHeights] = useState<ReadonlyMap<string, number>>(() => new Map());
   const measure = useCallback((key: string, height: number) => {
+    // A real card is never 0px tall — zero is a layout-less read (a DOM without a
+    // renderer, or a mid-transition detach), and recording it collapses the stacking run
+    // to gaps. The content-derived estimate keeps standing in until a real height lands.
+    if (height <= 0) return;
     setHeights((previous) => {
       if (previous.get(key) === height) return previous;
       const next = new Map(previous);
@@ -364,8 +388,17 @@ function ReviewRoot({
           : { top, bottom };
       });
     };
+    // While the reader scrolls, the slots' `top` transition is suppressed (a DOM attribute
+    // so no React work happens at scroll frequency). Restacks DURING a scroll come from
+    // cards entering the window and correcting an estimated height to a measured one; each
+    // correction shifts every card below it, and ANIMATING those shifts while the page
+    // itself moves read as a second, faster scroll layered over the document.
+    let settle = 0;
     const onScroll = (): void => {
       if (frame === 0) frame = requestAnimationFrame(sync);
+      rail?.setAttribute('data-scrolling', '');
+      window.clearTimeout(settle);
+      settle = window.setTimeout(() => rail?.removeAttribute('data-scrolling'), 150);
     };
     sync();
     scroller.addEventListener('scroll', onScroll, { passive: true });
@@ -373,6 +406,7 @@ function ReviewRoot({
     observer.observe(scroller);
     return () => {
       if (frame !== 0) cancelAnimationFrame(frame);
+      window.clearTimeout(settle);
       scroller.removeEventListener('scroll', onScroll);
       observer.disconnect();
     };
@@ -426,15 +460,96 @@ function ReviewRoot({
     return at === -1 ? [...roots, compose] : [...roots.slice(0, at), compose, ...roots.slice(at)];
   }, [roots, draftAnchorY]);
 
-  const stacked = useStackedReviewPositions(stackInput, heights, {
-    gap,
-    scale: metrics.scale,
-    // An unmeasured card — below the virtualization window, or in its first frame — still
-    // reserves a plausible card's worth of room. Without this the run advanced by the gap
-    // alone and a dense redline opened as a column of cards painted over each other until
-    // every one had reported its height.
-    defaultHeight: 72,
-  });
+  // An unmeasured card — below the virtualization window, or in its first frame — reserves
+  // an estimate derived from ITS OWN text, not a flat constant. The estimate's error is the
+  // distance every card below it jumps at the moment the real measurement lands, and with
+  // hundreds of cards those corrections during a scroll compounded into the rail visibly
+  // sliding against the page. Card chrome (padding, head, gaps) is ~64px; summary lines
+  // wrap at roughly 36 characters of 20px line height.
+  const estimatedHeights = useMemo(() => {
+    const merged = new Map(heights);
+    for (const entry of roots) {
+      if (merged.has(entry.key)) continue;
+      const textLength = entry.text.length + (entry.replacedText?.length ?? 0);
+      const lines = Math.min(6, Math.max(1, Math.ceil(textLength / 36)));
+      merged.set(entry.key, 64 + lines * 20);
+    }
+    return merged;
+  }, [heights, roots]);
+
+  // CLUSTERED stacking, the way Google Docs places its cards. Push-down alone cannot be
+  // cheated: a dense cluster of cards needs more room than its text region has, and
+  // one-directional overflow marched full cards page after page below their text. Here
+  // colliding cards merge into a CLUSTER that centres on its members' anchors — spreading
+  // the overflow both up and down, so every card stays a full card and sits as close to
+  // its text as geometry allows. A cluster holding the ACTIVE card shifts so that card
+  // sits exactly at its own text, which is what makes click-to-review feel anchored.
+  // One deterministic pass over document-ordered entries: each entry opens a cluster, and
+  // clusters merge while they collide, the standard 1-D label-placement algorithm.
+  const stacked = useMemo(() => {
+    const scale = metrics.scale;
+    interface ClusterEntry {
+      readonly key: string;
+      readonly anchorY: number;
+      /** This entry's offset from the cluster top, in LAYOUT points. */
+      offset: number;
+      readonly heightPt: number;
+      readonly isActive: boolean;
+    }
+    interface Cluster {
+      entries: ClusterEntry[];
+      /** Sum over entries of (anchor − offset): the numerator of the centred top. */
+      desiredSum: number;
+      heightPt: number;
+      top: number;
+    }
+    const clusters: Cluster[] = [];
+    const place = (cluster: Cluster): void => {
+      // Centred on its members' anchors; the active member overrides the centre so ITS
+      // card aligns with its text; never above the document.
+      const active = cluster.entries.find((entry) => entry.isActive);
+      const centred = cluster.desiredSum / cluster.entries.length;
+      cluster.top = Math.max(0, active ? active.anchorY - active.offset : centred);
+    };
+    for (const entry of stackInput) {
+      if (entry.anchorY === null) continue;
+      const heightPt = ((estimatedHeights.get(entry.key) ?? DEFAULT_CARD_HEIGHT) + gap) / scale;
+      const member: ClusterEntry = {
+        key: entry.key,
+        anchorY: entry.anchorY,
+        offset: 0,
+        heightPt,
+        isActive: 'isActive' in entry && entry.isActive === true,
+      };
+      clusters.push({
+        entries: [member],
+        desiredSum: entry.anchorY,
+        heightPt,
+        top: Math.max(0, entry.anchorY),
+      });
+      place(clusters[clusters.length - 1]!);
+      // Merge while the new cluster overlaps the one before it; merging can push the
+      // combined cluster up into ITS predecessor, so the loop continues until clear.
+      while (clusters.length > 1) {
+        const previous = clusters[clusters.length - 2]!;
+        const current = clusters[clusters.length - 1]!;
+        if (previous.top + previous.heightPt <= current.top) break;
+        for (const moved of current.entries) {
+          moved.offset += previous.heightPt;
+          previous.desiredSum += moved.anchorY - moved.offset;
+          previous.entries.push(moved);
+        }
+        previous.heightPt += current.heightPt;
+        clusters.pop();
+        place(previous);
+      }
+    }
+    const positions = new Map<string, number>();
+    for (const cluster of clusters) {
+      for (const entry of cluster.entries) positions.set(entry.key, cluster.top + entry.offset);
+    }
+    return positions;
+  }, [stackInput, estimatedHeights, gap, metrics.scale]);
   const composeTop =
     composeAnchorY === null
       ? null
@@ -443,6 +558,7 @@ function ReviewRoot({
   const value = useMemo<ReviewRailValue>(
     () => ({
       review: { ...review, items },
+      allItems: review.items,
       authorSlots,
       byId,
       measure: observeSlot,
@@ -483,6 +599,9 @@ function ReviewRoot({
       {!open || draftAnchorY === null || composeTop === null
         ? null
         : takeRoot('Draft', <ReviewDraft top={composeTop} />)}
+      {/* Mounted open OR closed: the balloon is how a reader inspects a change whose rail
+          card is filtered away, and a closed pane filters ALL of them away. */}
+      {takeRoot('Balloon', <ReviewBalloon />)}
     </>
   ) : null;
 
@@ -829,6 +948,306 @@ function ReviewDraft({ top, className, hidden }: ReviewPartProps & { top: number
 }
 ReviewDraft.docxReviewPart = 'Draft' as const;
 
+/** What a clicked tracked change tells us before any item matching — straight off its DOM. */
+interface BalloonAnchor {
+  readonly revisionId: string;
+  readonly author: string;
+  readonly date?: string;
+  readonly kind?: string;
+  /** True when the pressed element is a tracked table ROW — a structural site. */
+  readonly structuralSite: boolean;
+  /** The pressed span's own range, for the position rung of the match. */
+  readonly paragraphId?: string;
+  readonly start?: number;
+  readonly end?: number;
+  /** Rail-relative CSS px of the pressed element's box. */
+  readonly left: number;
+  readonly top: number;
+  readonly bottom: number;
+  /** True when the balloon opens upward — the target sits low in the window. */
+  readonly above: boolean;
+}
+
+/**
+ * The decision balloon: CLICKING a format or structural change in the PAGE opens its card
+ * beside the text — author, what changed, when, and accept/reject where the engine can
+ * resolve it — and the card stays until a press lands somewhere that is neither a tracked
+ * change nor the balloon itself. Click-opened on purpose: a hover-opened card vanished
+ * under the pointer travelling toward its own buttons.
+ *
+ * ONLY the kinds whose rail cards are hidden by default. Content changes and comments are
+ * the rail's — a balloon over "added" text repeats a card already beside the page — while
+ * a format or structural change has nothing but its grey/washed marking, so the click on
+ * that marking is where its decision lives.
+ *
+ * Matches the pressed element against the UNFILTERED queue, attribution first and POSITION
+ * last: the `(id, author, date)` triple, then `(id, author)`, then the id, then the span's
+ * own paragraph range against the items' ranges — real files drift on attribution, and the
+ * range is the one thing the painter and the review model cannot disagree about. An
+ * element matching nothing still shows what its DOM carries, just without actions.
+ *
+ * @public
+ */
+function ReviewBalloon({ className, hidden }: ReviewPartProps) {
+  const { review, allItems, authorSlots } = useRail();
+  const { t } = useTranslation();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [anchor, setAnchor] = useState<BalloonAnchor | null>(null);
+  // Whether a balloon is up, readable from the listener without re-binding it.
+  const openRef = useRef(false);
+  openRef.current = anchor !== null;
+
+  useEffect(() => {
+    const host = rootRef.current;
+    const rail = host?.closest('.docx-review') as HTMLElement | null;
+    // The engine's own scroll-container class first: `offsetParent` needs layout, which a
+    // DOM without a renderer (happy-dom) does not do, and the viewport always carries it.
+    const scroller = (rail?.closest('.docx-editor__scroll-container') ??
+      rail?.offsetParent) as HTMLElement | null;
+    if (!host || !rail || !scroller) return undefined;
+
+    const open = (element: HTMLElement, structuralSite: boolean): void => {
+      const railRect = rail.getBoundingClientRect();
+      const rect = element.getBoundingClientRect();
+      const viewportBottom = element.ownerDocument.defaultView?.innerHeight ?? Infinity;
+      const start = Number(element.dataset.start);
+      const end = Number(element.dataset.end);
+      setAnchor({
+        revisionId: element.dataset.revisionId!,
+        author: element.dataset.revisionAuthor ?? '',
+        ...(element.dataset.revisionDate !== undefined
+          ? { date: element.dataset.revisionDate }
+          : {}),
+        ...(element.dataset.revisionKind !== undefined
+          ? { kind: element.dataset.revisionKind }
+          : {}),
+        structuralSite,
+        ...(element.dataset.paragraphId !== undefined
+          ? { paragraphId: element.dataset.paragraphId }
+          : {}),
+        ...(Number.isFinite(start) ? { start } : {}),
+        ...(Number.isFinite(end) ? { end } : {}),
+        left: rect.left - railRect.left,
+        top: rect.top - railRect.top,
+        bottom: rect.bottom - railRect.top,
+        // Opens upward when there is no room below — a change on the last visible line
+        // would otherwise push its balloon under the fold.
+        above: rect.bottom + 220 > viewportBottom,
+      });
+    };
+
+    // Capture-phase press listeners; nothing runs at pointer-movement frequency.
+    // Observation only: the press still moves the caret exactly as it did before the
+    // balloon existed. A press anywhere that is not a qualifying change closes the card —
+    // including on an insertion or deletion, whose decision lives in the rail.
+    const onDown = (event: Event): void => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      // Pressing the balloon itself (accept, reject) is not a dismissal.
+      if (host.contains(target)) return;
+      const element = target.closest('[data-revision-id]');
+      if (element instanceof HTMLElement && scroller.contains(element)) {
+        const structuralSite = element.classList.contains('docx-table-row--revision');
+        if (element.dataset.revisionKind === 'format' || structuralSite) {
+          open(element, structuralSite);
+          return;
+        }
+      }
+      if (openRef.current) setAnchor(null);
+    };
+    // BOTH press events, not mousedown alone. The surface cancels `pointerdown` when it
+    // places the caret, and a cancelled pointerdown SUPPRESSES the compatibility mousedown
+    // outright — a mousedown-only listener never heard a real click on the page, only
+    // synthetic ones, which is exactly how that bug shipped. The rare double delivery
+    // (chrome areas cancel nothing) re-runs a handler that converges on the same state.
+    scroller.addEventListener('pointerdown', onDown, true);
+    scroller.addEventListener('mousedown', onDown, true);
+    return () => {
+      scroller.removeEventListener('pointerdown', onDown, true);
+      scroller.removeEventListener('mousedown', onDown, true);
+    };
+  }, []);
+
+  // The decision the pressed SITE belongs to. Sites coalesce into decisions by the
+  // `(id, author, date)` triple, which is what the painted element carries — but real
+  // files drift: producers reuse ids, omit dates on one wrapper and not another, and a
+  // strict triple left the balloon informational over changes the rail could resolve. So
+  // the match RELAXES in steps, taking the strictest interpretation with a single answer:
+  // the full triple, then `(id, author)`, then the id alone — and never a guess between
+  // two candidates.
+  // ONE allocation-free pass, not one filter per rung: this re-derives on every review
+  // tick while a balloon is up, and the queue behind a heavy redline runs to thousands.
+  // The exact triple returns the FIRST hit immediately (Word reuses ids across an editing
+  // burst, and reading order picks the right one); the relaxed rungs each keep a single
+  // candidate and disqualify themselves on a second distinct hit. The POSITION rung runs
+  // over the same pass: the pressed span's own paragraph range against the item's ranges,
+  // restricted to the balloon's kinds — attribution can drift between the painter's read
+  // and the review model's, but both took the range from the same characters.
+  const entry = useMemo(() => {
+    if (!anchor) return null;
+    let byAuthor: ReviewItemView | null = null;
+    let byAuthorAmbiguous = false;
+    let byId: ReviewItemView | null = null;
+    let byIdAmbiguous = false;
+    let byRange: ReviewItemView | null = null;
+    let byRangeAmbiguous = false;
+    for (const candidate of allItems) {
+      if (candidate.kind !== 'revision' || candidate.item.kind !== 'revision') continue;
+      for (const address of candidate.item.addresses) {
+        if (address.id !== anchor.revisionId) continue;
+        if (address.author === anchor.author) {
+          if (address.date === anchor.date) return candidate;
+          if (byAuthor === null) byAuthor = candidate;
+          else if (byAuthor !== candidate) byAuthorAmbiguous = true;
+        }
+        if (byId === null) byId = candidate;
+        else if (byId !== candidate) byIdAmbiguous = true;
+      }
+      if (
+        anchor.paragraphId !== undefined &&
+        anchor.start !== undefined &&
+        anchor.end !== undefined &&
+        (candidate.revisionKind === 'format' || candidate.revisionKind === 'structural')
+      ) {
+        for (const range of candidate.item.ranges) {
+          if (
+            range.start.paragraphId === anchor.paragraphId &&
+            range.start.offset < anchor.end &&
+            range.end.offset > anchor.start
+          ) {
+            if (byRange === null) byRange = candidate;
+            else if (byRange !== candidate) byRangeAmbiguous = true;
+            break;
+          }
+        }
+      }
+    }
+    if (byAuthor !== null && !byAuthorAmbiguous) return byAuthor;
+    if (byId !== null && !byIdAmbiguous) return byId;
+    if (byRange !== null && !byRangeAmbiguous) return byRange;
+    return null;
+  }, [allItems, anchor]);
+
+  // The balloon serves the kinds the rail does not; a drifted id that happened to land on
+  // a CONTENT decision must not raise a balloon over text whose card is beside the page.
+  const served =
+    entry && (entry.revisionKind === 'format' || entry.revisionKind === 'structural')
+      ? entry
+      : null;
+
+  // Resolving the decision removes it from the queue; the balloon it was resolved from
+  // must not linger over the text the accept just changed.
+  const hadEntry = useRef(false);
+  useEffect(() => {
+    if (served) {
+      hadEntry.current = true;
+      return;
+    }
+    if (hadEntry.current) {
+      hadEntry.current = false;
+      setAnchor(null);
+    }
+  }, [served]);
+
+  if (hidden) return null;
+  const fallbackKind = anchor?.kind === 'format' ? ('format' as const) : ('structural' as const);
+
+  return (
+    // The wrapper always mounts — it is what the wiring effect climbs from — and carries
+    // no box of its own until there is a balloon to show.
+    <div ref={rootRef} className={`docx-review__balloon-root${className ? ` ${className}` : ''}`}>
+      {anchor === null ? null : (
+        <div
+          className="docx-review__balloon"
+          data-testid="review-balloon"
+          style={{
+            left: anchor.left,
+            top: anchor.above ? anchor.top - 6 : anchor.bottom + 6,
+            transform: anchor.above ? 'translateY(-100%)' : undefined,
+          }}
+          onMouseDown={guardMousedown}
+        >
+          {served ? (
+            <ReviewItemContext.Provider value={served}>
+              <div
+                className="docx-review__card"
+                data-testid="review-balloon-card"
+                data-kind={served.revisionKind ?? 'revision'}
+                style={
+                  {
+                    '--doc-review-author': `var(--doc-review-author-${(authorSlots.get(served.author) ?? 0) % AUTHOR_SLOTS})`,
+                  } as CSSProperties
+                }
+                onClick={() => review.setActive(served.key)}
+              >
+                <div className="docx-review__head">
+                  <ReviewAvatar />
+                  <div className="docx-review__meta">
+                    <ReviewAuthor />
+                    <ReviewTime />
+                  </div>
+                  {served.kind === 'revision' && !served.readOnly ? (
+                    <div className="docx-review__actions">
+                      <ReviewAccept />
+                      <ReviewReject />
+                    </div>
+                  ) : null}
+                </div>
+                <ReviewSummary />
+              </div>
+            </ReviewItemContext.Provider>
+          ) : (
+            <div
+              className="docx-review__card"
+              data-testid="review-balloon-card"
+              data-kind={fallbackKind}
+            >
+              <div className="docx-review__head">
+                <span className="docx-review__avatar" aria-hidden="true">
+                  {initialsOf(anchor.author)}
+                </span>
+                <div className="docx-review__meta">
+                  <span className="docx-review__author">
+                    {anchor.author || t('comments.unknown')}
+                  </span>
+                  {anchor.date ? <BalloonTime raw={anchor.date} /> : null}
+                </div>
+              </div>
+              <div className="docx-review__summary">
+                <span className="docx-review__label" data-kind={fallbackKind}>
+                  {t(revisionLabelKey(fallbackKind))}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+ReviewBalloon.docxReviewPart = 'Balloon' as const;
+
+/** Initials for the dataset-only fallback, matching the engine's own derivation. */
+function initialsOf(author: string): string {
+  const words = author.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '?';
+  return words
+    .slice(0, 2)
+    .map((word) => word[0]!.toUpperCase())
+    .join('');
+}
+
+/** `ReviewTime` for a raw dataset date, outside any item context. */
+function BalloonTime({ raw }: { raw: string }) {
+  const when = new Date(raw);
+  if (Number.isNaN(when.getTime())) return null;
+  return (
+    <time className="docx-review__time" dateTime={raw}>
+      {REVIEW_DATE_FORMAT.format(when)}
+    </time>
+  );
+}
+
 /** Shown when nothing is pending. @public */
 function ReviewEmpty({ className, hidden, children }: ReviewPartProps) {
   const { t } = useTranslation();
@@ -1018,11 +1437,12 @@ function ReviewTime({ className, asChild, hidden, children }: ReviewPartProps) {
   if (!raw) return null;
   const when = new Date(raw);
   if (Number.isNaN(when.getTime())) return null;
+  // No `title`: the visible text already carries the date and time, and the native tooltip
+  // popped over the author's name in the balloon, reading as a mystery grey box.
   const shared = {
     className: `docx-review__time${className ? ` ${className}` : ''}`,
     'data-testid': 'review-time',
     dateTime: raw,
-    title: when.toLocaleString(),
   };
   if (asChild) return <Slot {...shared}>{children}</Slot>;
   // Month, day and time — what Word shows, and what a reviewer actually needs: two comments
@@ -1314,6 +1734,8 @@ export interface DocxEditorReviewNamespace {
   readonly AddComment: typeof ReviewAddComment;
   /** The compose box a new comment is written in. */
   readonly Draft: typeof ReviewDraft;
+  /** The decision balloon opened by clicking a format or structural change in the page. */
+  readonly Balloon: typeof ReviewBalloon;
 }
 
 export const DocxEditorReview: DocxEditorReviewNamespace = Object.assign(ReviewRoot, {
@@ -1331,4 +1753,5 @@ export const DocxEditorReview: DocxEditorReviewNamespace = Object.assign(ReviewR
   Markers: ReviewMarkers,
   AddComment: ReviewAddComment,
   Draft: ReviewDraft,
+  Balloon: ReviewBalloon,
 });
