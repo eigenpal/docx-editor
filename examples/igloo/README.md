@@ -174,5 +174,8 @@ Full reference: [`docs/CUSTOMIZING.md`](../../docs/CUSTOMIZING.md).
   unrecognized children. Visual grouping only: a bare `div` carrying a role inside
   `role="menu"` would break the ownership a screen reader derives its counts from.
 - The sea and the blizzard both honour `prefers-reduced-motion`.
-- The document is served straight from `e2e/fixtures/` by a vite plugin, so this demo and the
-  e2e suite read the same bytes. `?fixture=<name>.docx` picks a different one.
+- The default document is `public/sample-igloo.docx` — the shared sample with an iceberg and
+  an igloo already saved into it, so the custom nodes and their rail cards are on screen
+  before anyone touches a menu. `?fixture=<name>.docx` swaps in the Vite example's
+  `sample.docx` or any e2e fixture, mapped onto the real path by a vite plugin so a second
+  copy of somebody else's file cannot drift.
