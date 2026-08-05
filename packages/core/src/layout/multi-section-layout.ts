@@ -175,23 +175,15 @@ export function emptySectionNeedsBlankPage(
 }
 
 /**
- * Whether two sections could occupy one sheet: identical page box and margins.
+ * Whether two sections could occupy one sheet: identical page box (size / orientation).
  *
  * A sheet has ONE size. Word honours `continuous` by continuing the column on the current
- * page, which it cannot do when the new section restates the page — a continuous break that
- * also changes paper size or orientation starts a new page in Word too.
+ * page; a continuous break that also changes paper size or orientation starts a new page.
+ * Mid-page margin / header-distance changes stay on the sheet — Word applies the new
+ * content column below the resumed cursor, and the host sheet keeps its furniture.
  */
-function sameGeometry(a: PageGeometry, b: PageGeometry): boolean {
-  return (
-    a.width === b.width &&
-    a.height === b.height &&
-    a.margin.top === b.margin.top &&
-    a.margin.right === b.margin.right &&
-    a.margin.bottom === b.margin.bottom &&
-    a.margin.left === b.margin.left &&
-    (a.headerDistance ?? 36) === (b.headerDistance ?? 36) &&
-    (a.footerDistance ?? 36) === (b.footerDistance ?? 36)
-  );
+function samePageSize(a: PageGeometry, b: PageGeometry): boolean {
+  return a.width === b.width && a.height === b.height;
 }
 
 /**
@@ -309,19 +301,20 @@ export function layoutMultiSectionDocument(
       continue;
     }
 
-    // CONTINUOUS: Word keeps the new section on the page the last one ended, resuming the
-    // column immediately below its final paragraph. Only possible when the sheet does not
-    // change under it — same page box and margins, and the same furniture push-down, since
-    // both fix the content column this section would be flowing into.
+    // CONTINUOUS: `w:type` on THIS section's trailing `w:sectPr` says how the section starts
+    // relative to the previous one (ECMA-376 §17.6.22 / ST_SectionMark). Absent type is
+    // nextPage. When continuous, Word keeps the section on the page the last one ended,
+    // resuming the column immediately below its final paragraph — only when the sheet size
+    // and furniture push-down are unchanged (furniture belongs to the host sheet).
     const continues =
       sectionIndex > 0 &&
-      sections[sectionIndex - 1]!.properties.breakType === 'continuous' &&
+      section.properties.breakType === 'continuous' &&
       pages.length > 0 &&
       // A trailing page break already ended the previous sheet. Word puts the continued
       // section after that break, not on top of the page it closed.
       flowOpenPage &&
       previousGeometry !== null &&
-      sameGeometry(previousGeometry, geometry) &&
+      samePageSize(previousGeometry, geometry) &&
       previousFurnitureKey === furnitureKey;
 
     // Empty nextPage/even/odd: lay out zero blocks so the section still flushes one blank
