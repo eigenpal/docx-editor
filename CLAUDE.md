@@ -9,16 +9,26 @@ One engine. Thin chrome on top.
 
 | Package       | What                                                                                                                                                                                           | Status                                       |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `core`        | **The engine.** `store/` (canonical tree, ops, OPC read/write), `layout/` (DOM-free), `output/` (paint), `editor/` (facade, surface, chrome registry), `contracts/`, `binding/`, `automation/` | private, bundled into `react` (`noExternal`) |
+| `core`        | **The engine.** `store/` (canonical tree, ops, OPC read/write), `layout/` (DOM-free), `output/` (paint), `editor/` (facade, surface, chrome registry), `contracts/`, `binding/`, `automation/` | published, external to `react`               |
 | `react`       | The adapter: provider + hooks, holds no editing state                                                                                                                                          | published                                    |
 | `i18n`        | Shared strings                                                                                                                                                                                 | published                                    |
 | `editor-api`  | `DocxEditor` automation object model, headless/server                                                                                                                                          | published, Pro license                       |
-| `pro`         | Review module (comments, tracked changes) + custom nodes, as `EditorModule`s                                                                                                                   | private                                      |
-| `fonts`       | Metric-compatible substitutes for Word's defaults                                                                                                                                              | private                                      |
+| `pro`         | Review module (comments, tracked changes) + custom nodes, as `EditorModule`s                                                                                                                   | published, Pro license                       |
+| `fonts`       | Metric-compatible substitutes for Word's defaults                                                                                                                                              | published                                    |
 | `vue`, `nuxt` | WIP, not shipping                                                                                                                                                                              | private                                      |
 
 React is the only real adapter today. Parity rules below are the target, not the
 state.
+
+**The engine must resolve to ONE copy.** It holds module-level state — the
+HarfBuzz shaper and its cache budget, the grapheme boundary strategy, layout
+caches keyed by object identity. Two copies in a tree do not crash; they load the
+shaper twice and miss every identity-keyed cache, quietly. So `core` is external
+to `react` (not inlined) and a **peer** of both `react` and `pro`, which makes the
+package manager resolve one and say so at install when it cannot. Both adapters
+assert their own dependency shape:
+`packages/{react,pro}/src/__tests__/package-dependencies.test.ts`. Never move
+`core` back to a regular `dependency`.
 
 Inside `core`, each directory is a guarded lane with a declared dependency edge
 and environment (`store` and `layout` are DOM-free, `binding` is the only

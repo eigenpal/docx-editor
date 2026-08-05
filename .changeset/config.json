@@ -4,12 +4,14 @@
   "commit": false,
   "fixed": [
     [
+      "@docx-editor.dev/core",
       "@docx-editor.dev/react",
       "@docx-editor.dev/editor-api",
       "@docx-editor.dev/vue",
       "@docx-editor.dev/nuxt",
       "@docx-editor.dev/i18n",
-      "@docx-editor.dev/pro"
+      "@docx-editor.dev/pro",
+      "@docx-editor.dev/fonts"
     ]
   ],
   "linked": [],

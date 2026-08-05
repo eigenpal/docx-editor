@@ -30,6 +30,11 @@
 
 import type { ViewScope } from './editor';
 
+// Every arm of `SemanticTarget` carries one, so a consumer reaching this entry point directly
+// cannot describe a target without it. `EditorScope` comes along because `ViewScope` is defined
+// as an exclusion over it.
+export type { EditorScope, ViewScope } from './editor';
+
 /** Bidi/grapheme affinity for a text caret or hit target. */
 export type InteractionAffinity = 'upstream' | 'downstream';
 

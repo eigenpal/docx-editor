@@ -838,9 +838,6 @@ export const EMU_PER_POINT = 12700;
 export function emuToOverlayPoints(emu: number): number;
 
 // @public
-export const ENGINE_EDITOR_PACKAGE: "@docx-editor.dev/core/editor";
-
-// @public
 export function executeImageCommand(editor: DocxEditorInstance, command: Extract<EditorCommand, {
     type: 'insertImage' | 'replaceImage';
 }>): Promise<ExecResult>;
@@ -901,6 +898,13 @@ export type FontLoadFailureReason = 'networkError' | 'httpError' | 'hashMismatch
 | 'invalidRequest'
 /** The bytes are not a font at all — most often an HTML error page served with 200. */
 | 'malformed';
+
+// @public
+export interface FontMeasurementState {
+    readonly measurer: 'fixed' | 'shaped';
+    readonly producer?: string;
+    readonly resolving: boolean;
+}
 
 // @public
 export interface FontResolutionRequest {

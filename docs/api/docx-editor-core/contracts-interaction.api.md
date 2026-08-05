@@ -5,6 +5,34 @@
 ```ts
 
 // @public
+export type EditorScope = {
+    kind: 'body';
+} | {
+    kind: 'headerFooter';
+    rId: string;
+}
+/**
+* A footnote/endnote region.
+*
+* `id` encodes kind + signed note id as `footnote:<id>` or `endnote:<id>`
+* (e.g. `footnote:2`). Use `formatNoteScopeId` / `parseNoteScopeId` from the
+* store package. Do not invent a parallel `{ noteKind, noteId }` scope arm.
+*/
+| {
+    kind: 'note';
+    id: string;
+}
+/** A text box or floating frame with its own content, addressed by id. */
+| {
+    kind: 'frame';
+    id: string;
+}
+/** Read-only aggregate across every view. Valid for queries, not for writes. */
+| {
+    kind: 'all';
+};
+
+// @public
 export type InteractionAffinity = 'upstream' | 'downstream';
 
 // @public
@@ -40,6 +68,11 @@ export type SemanticTarget = {
     readonly scope: ViewScope;
     readonly objectId: string;
 };
+
+// @public
+export type ViewScope = Exclude<EditorScope, {
+    kind: 'all';
+}>;
 
 // (No @packageDocumentation comment for this package)
 

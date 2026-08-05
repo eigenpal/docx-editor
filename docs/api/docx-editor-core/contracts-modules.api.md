@@ -8,6 +8,21 @@
 export type CollectReviewItems = (input: ReviewModelInput) => readonly ReviewItem[];
 
 // @public
+export interface CommentRecord {
+    // (undocumented)
+    readonly author: string;
+    readonly blocks: readonly OoxmlElement[];
+    // (undocumented)
+    readonly date?: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly initials?: string;
+    readonly paraId?: string;
+    readonly parentCommentId?: string;
+}
+
+// @public
 export interface EditorModule {
     readonly customNodes?: readonly unknown[];
     readonly id: string;
@@ -23,7 +38,54 @@ export interface EditorModuleRegistry {
 }
 
 // @public
+export interface OoxmlPart {
+    // (undocumented)
+    readonly contentType: string;
+    // (undocumented)
+    readonly id: string;
+    readonly name: string;
+    // (undocumented)
+    readonly root: OoxmlElement;
+}
+
+// @public
 export function resolveEditorModules(modules: readonly EditorModule[] | undefined): EditorModuleRegistry;
+
+// @public
+export interface ReviewCommentItem {
+    // (undocumented)
+    readonly comment: CommentRecord;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly kind: 'comment';
+    readonly orphaned: boolean;
+    readonly parentId?: string;
+    readonly parentRevisionId?: string;
+    // (undocumented)
+    readonly range: ReviewRange | null;
+    readonly replyIds: readonly string[];
+    // (undocumented)
+    readonly resolved: boolean;
+}
+
+// @public
+export interface ReviewCustomItem {
+    readonly attrs: Readonly<Record<string, string>>;
+    readonly detail?: string;
+    readonly id: string;
+    // (undocumented)
+    readonly kind: 'custom';
+    readonly name: string;
+    // (undocumented)
+    readonly range: ReviewRange | null;
+    readonly tag: string;
+    readonly text: string;
+    readonly title: string;
+}
+
+// @public
+export type ReviewItem = ReviewRevisionItem | ReviewCommentItem | ReviewCustomItem;
 
 // @public
 export interface ReviewModelInput {
@@ -40,6 +102,75 @@ export interface ReviewModuleContribution {
     readonly displayModes: readonly RevisionDisplayMode[];
     readonly revisionItemsOfParagraph: (part: OoxmlPart, paragraphId: string) => readonly ReviewRevisionItem[];
 }
+
+// @public
+export interface ReviewPosition {
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
+// @public
+export interface ReviewRange {
+    // (undocumented)
+    readonly end: ReviewPosition;
+    // (undocumented)
+    readonly partName: string;
+    // (undocumented)
+    readonly start: ReviewPosition;
+}
+
+// @public
+export interface ReviewRevisionItem {
+    readonly address: RevisionAddress;
+    readonly addresses: readonly RevisionAddress[];
+    // (undocumented)
+    readonly author: string;
+    // (undocumented)
+    readonly date?: string;
+    readonly id: string;
+    // (undocumented)
+    readonly kind: 'revision';
+    readonly pairedWith?: string;
+    readonly ranges: readonly ReviewRange[];
+    readonly readOnly: boolean;
+    readonly replacedRangeCount?: number;
+    readonly replacedText: string;
+    readonly replyIds: readonly string[];
+    // (undocumented)
+    readonly revisionKind: ReviewRevisionKind;
+    readonly text: string;
+}
+
+// @public
+export type ReviewRevisionKind = 'insert' | 'delete'
+/**
+* A deletion and an insertion that are one edit: text typed over a selection.
+*
+* Word shows these as a single `Replaced "x" with "y"` card, and resolving one half
+* without the other is never what the reviewer meant — accepting the deletion alone
+* leaves the replacement text unproposed, rejecting it alone leaves both.
+*/
+| 'replace' | 'moveFrom' | 'moveTo'
+/** `w:rPrChange` / `w:pPrChange` — the words are unchanged, their formatting is not. */
+| 'format'
+/** `w:pPr/w:rPr/w:ins|w:del` — a paragraph split or merge. */
+| 'paragraphMark'
+/** A row, cell, section or grid revision. Supported row revisions are resolvable. */
+| 'structural';
+
+// @public
+export interface RevisionAddress {
+    // (undocumented)
+    readonly author: string;
+    readonly date?: string;
+    // (undocumented)
+    readonly id: string;
+}
+
+// @public
+export type RevisionDisplayMode = 'all-markup' | 'proposed' | 'original';
 
 // (No @packageDocumentation comment for this package)
 

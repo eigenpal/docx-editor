@@ -19,9 +19,6 @@
 // TreeDocumentStore, and TreeDocOp contracts. PM-free, DOM-free, Yjs-free,
 // transport-neutral, PDF-free.
 
-/** Stable package identity used by the import-graph / package-authority checks. */
-export const ENGINE_CORE_PACKAGE = '@docx-editor.dev/core/store' as const;
-
 // Capability/runtime registry and frozen cross-cutting ids (task 0.1).
 export * from './registry/index.ts';
 

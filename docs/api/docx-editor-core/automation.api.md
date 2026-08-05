@@ -1082,9 +1082,6 @@ export type AutomationValue = {
 export function createServerAutomationHost(bytes: Uint8Array, options?: ServerAutomationHostOptions): ServerAutomationHostResult;
 
 // @public
-export const ENGINE_AUTOMATION_PACKAGE: "@docx-editor.dev/core/automation";
-
-// @public
 export const HEADER_FOOTER_VARIANTS: readonly HeaderFooterVariant[];
 
 // @public

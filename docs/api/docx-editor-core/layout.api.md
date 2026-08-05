@@ -581,9 +581,6 @@ export function emptyTocPlaceholderParagraphIds(part: OoxmlPart): ReadonlySet<st
 export function emptyTocSuppressedResultParagraphIds(part: OoxmlPart): ReadonlySet<string>;
 
 // @public
-export const ENGINE_LAYOUT_PACKAGE: "@docx-editor.dev/core/layout";
-
-// @public
 export function enumerateDocumentSections(part: OoxmlPart, displayMode?: RevisionDisplayMode): DocumentSection[];
 
 // @public

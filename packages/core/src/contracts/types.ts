@@ -1,7 +1,8 @@
 /**
  * Shared types for the `@docx-editor.dev/core` contract. Type-only, zero runtime.
  *
- * `@docx-editor.dev/core/types` re-exports this module verbatim.
+ * `@docx-editor.dev/core/contracts/types` re-exports this module verbatim, through
+ * `types-barrel.ts`. There is no `@docx-editor.dev/core/types` subpath.
  */
 
 // ─── Addressing ──────────────────────────────────────────────────────────────

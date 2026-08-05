@@ -36,9 +36,15 @@ Reach for a subpath when you need the canonical tree, the layout pass, or the pa
 | `./contracts/interaction` | Semantic addressing (`SemanticTarget`) and the `InteractionOutcome` an attempt answers with.                                 |
 | `./store`                 | The canonical tree and its transactional store.                                                                              |
 | `./layout`                | The DOM-free layout pass.                                                                                                    |
-| `./output`                | Serialization.                                                                                                               |
+| `./output`                | Paint: turning a laid-out document into page DOM, and the selection overlay over it.                                          |
 | `./automation`            | The document object model behind [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api).                                      |
 | `./styles/editor.css`     | The one editor stylesheet. The packaged chrome and your own chrome both use it.                                              |
+
+**Root or `./editor`?** Import from the root. `./editor` is the same engine with its
+internals attached — the paginated surface, ruler geometry, module resolution — and you want
+those only when you are building an adapter rather than using one. The rule is which side of
+the contract you are on, not which is shorter to type: everything the root exports is a
+promise, and `./editor` is the drawer underneath it.
 
 ## The contract
 

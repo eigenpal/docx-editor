@@ -34,7 +34,6 @@ export type NameResult =
   | { readonly ok: true; readonly partName: string }
   | { readonly ok: false; readonly reason: NameRejection };
 
- 
 const CONTROL_RE = /[\x00-\x1f\x7f]/;
 const ENCODED_SEP_RE = /%(2f|5c)/i; // %2f "/", %5c "\"
 const ENCODED_DOT_RE = /%2e/i; // %2e "."

@@ -50,8 +50,20 @@ export interface Lane {
    * server; `browser` may touch the DOM; `node` may touch the filesystem and sockets.
    */
   readonly environment: LaneEnvironment;
-  /** The subpath consumers import it as, or null for lanes that stay internal. */
+  /**
+   * The subpath consumers import it as, or null for lanes that stay internal.
+   *
+   * `contracts` is the one lane with no subpath of its own: it publishes a FAMILY
+   * (`./contracts/editor`, `./contracts/types`, …) and never a bare `./contracts`,
+   * so declaring one would name an entry point that does not exist in `exports`.
+   * {@link Lane.subpathPrefix} is how it says so.
+   */
   readonly subpath: string | null;
+  /**
+   * Set instead of {@link Lane.subpath} when the lane publishes a family of subpaths
+   * under one prefix rather than a single entry point.
+   */
+  readonly subpathPrefix?: string;
 }
 
 /**
@@ -68,7 +80,9 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
     package: '@docx-editor.dev/core',
     mayImport: [],
     environment: 'neutral',
-    subpath: './contracts',
+    // No bare `./contracts` entry point exists; the lane ships one subpath per contract.
+    subpath: null,
+    subpathPrefix: './contracts/',
   },
   store: {
     directory: 'src/store',

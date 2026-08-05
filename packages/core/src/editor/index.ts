@@ -15,9 +15,6 @@
 // Browser composition root: composes the typed OOXML tree session, layout pagination,
 // and the paginated surface into the PM-free Editor contract.
 
-/** Stable package identity used by the import-graph / package-authority checks. */
-export const ENGINE_EDITOR_PACKAGE = '@docx-editor.dev/core/editor' as const;
-
 export {
   createLayoutShaping,
   disposeLayoutShaping,
@@ -139,6 +136,9 @@ export {
   type DocxEditorConfig,
   type HyperlinkChromeHandlers,
 } from './docx-editor.ts';
+// `DocxEditorInstance.fontMeasurement()` returns it, so the lane that exports the instance
+// has to export the answer too.
+export type { FontMeasurementState } from './docx-editor-types.ts';
 // Automation over an editor that is already open. The protocol itself lives in the neutral
 // automation subpath — only the adapter that needs a live editor ships from here, and only as
 // a factory: there is no composition hook a consumer could point at a second document model.

@@ -22,7 +22,28 @@ import type { OoxmlPart } from '@docx-editor.dev/core/store';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
 import type { ReviewItem, ReviewModelInput, ReviewRevisionItem } from '../layout/review-support.ts';
 
+// `ReviewModuleContribution` hands all four of these to an implementor, so this entry point —
+// the one a capability package is written against — has to let it name them. Re-exported here
+// rather than left in `layout/` and `store/` for the same reason the editor contract re-exports
+// its review vocabulary: a module author is not importing those lanes.
 export type { ReviewModelInput };
+export type {
+  CommentRecord,
+  ReviewCommentItem,
+  ReviewCustomItem,
+  ReviewItem,
+  ReviewRange,
+  ReviewPosition,
+  ReviewRevisionItem,
+  ReviewRevisionKind,
+} from '../layout/review-support.ts';
+// `OoxmlPart` is the argument `revisionItemsOfParagraph` takes, so it belongs here. The rest of
+// the canonical tree deliberately does NOT: re-exporting `OoxmlElement` pulls its ~85-member
+// node union onto this entry point, which would make the module seam the second published
+// definition of the document model. A module author reaches the tree at
+// `@docx-editor.dev/core/store`, which is a published subpath written for exactly that.
+export type { OoxmlPart, RevisionAddress } from '@docx-editor.dev/core/store';
+export type { RevisionDisplayMode } from '../layout/revision-projection.ts';
 
 /**
  * Derives the review queue — every pending revision decision and comment

@@ -14,9 +14,6 @@
 // The only ProseMirror-aware lane: projects a tree revision into a PM doc, and maps an
 // edited doc back into tree ops or refuses.
 
-/** Stable package identity used by the import-graph / package-authority checks. */
-export const ENGINE_BINDING_PACKAGE = '@docx-editor.dev/core/binding' as const;
-
 export { treeSchema, runPropsOf, type ParagraphAttrs } from './tree-schema.ts';
 export {
   bodyParagraphs,

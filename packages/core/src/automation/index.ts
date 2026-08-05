@@ -30,9 +30,6 @@
 // own tsconfig omits the DOM lib so a `document` reference here cannot compile, and
 // `__tests__/automation-lane-boundary.test.ts` walks the lane's real import graph.
 
-/** Stable package identity used by the import-graph / lane-boundary checks. */
-export const ENGINE_AUTOMATION_PACKAGE = '@docx-editor.dev/core/automation' as const;
-
 // The protocol: what a host is, what a batch is, and what can go wrong.
 export type {
   AutomationBatchRequest,

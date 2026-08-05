@@ -1013,9 +1013,6 @@ export function endOperation(ctx: OperationContext): void;
 export type EnforcementPhase = 'package-read' | 'xml-parse' | 'layout' | 'output';
 
 // @public
-export const ENGINE_CORE_PACKAGE: "@docx-editor.dev/core/store";
-
-// @public
 export interface EnsuredHyperlinkRelationship {
     // (undocumented)
     readonly pkg: OoxmlPackage;
