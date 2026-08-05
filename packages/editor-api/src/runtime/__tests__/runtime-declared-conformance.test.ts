@@ -25,20 +25,28 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { describe, expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { typecheckProject } from '../../../scripts/lib/typecheck-compat.mjs';
+import { TYPECHECK_TIMEOUT_MS, typecheckProject } from '../../../scripts/lib/typecheck-compat.mjs';
 
 const CONFORMANCE = join(import.meta.dir, '..', '__conformance__');
 
 describe('the runtime satisfies the authored declarations', () => {
-  test('the assertions compile against the declarations, with zero diagnostics', () => {
-    expect(existsSync(join(CONFORMANCE, 'tsconfig.json'))).toBe(true);
-    expect(typecheckProject(join(CONFORMANCE, 'tsconfig.json'))).toEqual([]);
-  });
+  test(
+    'the assertions compile against the declarations, with zero diagnostics',
+    () => {
+      expect(existsSync(join(CONFORMANCE, 'tsconfig.json'))).toBe(true);
+      expect(typecheckProject(join(CONFORMANCE, 'tsconfig.json'))).toEqual([]);
+    },
+    TYPECHECK_TIMEOUT_MS
+  );
 
-  test('and a wrong assertion does not compile, so the check above is doing work', () => {
-    const diagnostics = typecheckProject(join(CONFORMANCE, '__negative__', 'tsconfig.json'));
-    // Failing is not enough: it has to fail ON the false assertion. A missing file or a broken
-    // tsconfig also produces diagnostics, and either would make this control worthless.
-    expect(diagnostics.some((line) => line.includes('mismatch.ts'))).toBe(true);
-  });
+  test(
+    'and a wrong assertion does not compile, so the check above is doing work',
+    () => {
+      const diagnostics = typecheckProject(join(CONFORMANCE, '__negative__', 'tsconfig.json'));
+      // Failing is not enough: it has to fail ON the false assertion. A missing file or a broken
+      // tsconfig also produces diagnostics, and either would make this control worthless.
+      expect(diagnostics.some((line) => line.includes('mismatch.ts'))).toBe(true);
+    },
+    TYPECHECK_TIMEOUT_MS
+  );
 });

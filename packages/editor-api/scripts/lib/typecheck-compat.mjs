@@ -11,6 +11,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
 
+/**
+ * What a caller should allow a `typecheckProject` test.
+ *
+ * These projects necessarily contain core's sources, so each one is a real ten-to-fifteen-second
+ * compile. `bun test` allows five seconds by default, which made these fail for being slow rather
+ * than for finding anything — the worst kind of red, because it says nothing about the code. The
+ * budget is stated where the cost is, so every caller inherits the same one.
+ */
+export const TYPECHECK_TIMEOUT_MS = 120_000;
+
 export function typecheckProject(tsconfigPath) {
   const configFile = ts.readConfigFile(tsconfigPath, (file) => fs.readFileSync(file, 'utf8'));
   if (configFile.error) {

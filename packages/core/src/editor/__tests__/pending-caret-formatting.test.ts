@@ -58,13 +58,21 @@ function docx(body: string): Uint8Array {
   });
 }
 
-function withSurface(body: string, run: (surface: PaginatedSurface) => void): void {
+/**
+ * The container is handed to the callback on purpose. A `document.querySelector` for the
+ * painted layer finds whichever surface some OTHER test file left mounted, so the DOM lanes
+ * below (composition, paste) have to reach through the container they just mounted into.
+ */
+function withSurface(
+  body: string,
+  run: (surface: PaginatedSurface, container: HTMLElement) => void
+): void {
   const container = document.createElement('div');
   document.body.append(container);
   const opened = mountPaginatedSurface(container, docx(body));
   if (!opened.ok) throw new Error(opened.reason);
   try {
-    run(opened.surface);
+    run(opened.surface, container);
   } finally {
     opened.surface.destroy();
     container.remove();
@@ -268,13 +276,13 @@ describe('pending caret formatting', () => {
   });
 
   test('composed (IME) text takes the armed format like typed text', () => {
-    withSurface(paragraph(textRun('hello')), (surface) => {
+    withSurface(paragraph(textRun('hello')), (surface, container) => {
       caretAt(surface, 5);
       surface.toggleRunProperty('b');
 
       // The composition lane: the browser writes into the painted DOM and the surface
       // reads it back on compositionend — the one insertion that bypasses `type()`.
-      const pagesLayer = document.querySelector('.docx-pages') as HTMLElement;
+      const pagesLayer = container.querySelector('.docx-pages') as HTMLElement;
       pagesLayer.dispatchEvent(new Event('compositionstart', { bubbles: true }));
       const span = pagesLayer.querySelector('[data-paragraph-id][data-start]') as HTMLElement;
       span.textContent = 'hello漢';
@@ -304,10 +312,10 @@ describe('pending caret formatting', () => {
   });
 
   test('plain paste at an armed caret takes the typing format', () => {
-    withSurface(paragraph(textRun('hello')), (surface) => {
+    withSurface(paragraph(textRun('hello')), (surface, container) => {
       caretAt(surface, 5);
       surface.toggleRunProperty('b');
-      const layer = document.querySelector('.docx-pages') as HTMLElement;
+      const layer = container.querySelector('.docx-pages') as HTMLElement;
       const data = new DataTransfer();
       data.setData('text/plain', ' world');
       layer.dispatchEvent(

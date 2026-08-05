@@ -47,8 +47,7 @@
   },
   "scripts": {
     "build": "vite build && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/vue",
-    "typecheck": "echo 'skip typecheck: @docx-editor.dev/vue is WIP and unpublished, and its tsconfig paths still point at the pre-2.x core layout. Run typecheck:disabled once the adapter is rebuilt over the current engine.'",
-    "typecheck:disabled": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/vue --local",
     "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/vue"
   },

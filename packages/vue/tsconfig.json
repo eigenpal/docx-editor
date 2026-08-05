@@ -17,13 +17,24 @@
     "declaration": true,
     "declarationMap": true,
     "baseUrl": ".",
+    // Every published subpath, mapped to source and kept in step with `packages/core/tsconfig.json`.
+    // Bun resolves test imports through these, and the export map points at `dist`, so a stale or
+    // missing entry does not fall back — it fails to resolve on a tree that has never been built.
     "paths": {
       "@docx-editor.dev/core": ["../core/src/index.ts"],
-      "@docx-editor.dev/core/editor": ["../core/src/editor.ts"],
-      "@docx-editor.dev/core/geometry": ["../core/src/geometry.ts"],
-      "@docx-editor.dev/core/types": ["../core/src/types-barrel.ts"],
-      "@docx-editor.dev/core/plugin": ["../core/src/plugin.ts"],
-      "@docx-editor.dev/core/mcp": ["../core/src/mcp.ts"]
+      "@docx-editor.dev/core/automation": ["../core/src/automation/index.ts"],
+      "@docx-editor.dev/core/binding": ["../core/src/binding/index.ts"],
+      "@docx-editor.dev/core/contracts/editor": ["../core/src/contracts/editor.ts"],
+      "@docx-editor.dev/core/contracts/document": ["../core/src/contracts/document.ts"],
+      "@docx-editor.dev/core/contracts/interaction": ["../core/src/contracts/interaction.ts"],
+      "@docx-editor.dev/core/contracts/mcp": ["../core/src/contracts/mcp.ts"],
+      "@docx-editor.dev/core/contracts/modules": ["../core/src/contracts/modules.ts"],
+      "@docx-editor.dev/core/contracts/plugin": ["../core/src/contracts/plugin.ts"],
+      "@docx-editor.dev/core/contracts/types": ["../core/src/contracts/types-barrel.ts"],
+      "@docx-editor.dev/core/layout": ["../core/src/layout/index.ts"],
+      "@docx-editor.dev/core/output": ["../core/src/output/index.ts"],
+      "@docx-editor.dev/core/store": ["../core/src/store/index.ts"],
+      "@docx-editor.dev/core/editor": ["../core/src/editor/index.ts"]
     }
   },
   "include": ["src"],

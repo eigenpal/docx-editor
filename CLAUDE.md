@@ -136,16 +136,23 @@ zoom-without-remount, the Vue twin of provider/hooks.
 
 ```bash
 bun run typecheck
-bun test
+bun run test
 bun run check:parity
 bun run api:check
 bun run i18n:validate
 openspec validate typed-ooxml-paragraph-editor --strict
 ```
 
+- `bun run test` shards the suite one process per file across a worker pool
+  (`scripts/test/run-parallel.mjs`, `--jobs N` to pin the width). That is also
+  what CI runs. `bun test` still works and is the one to reach for when you want
+  a single file, `-t`, or `--watch`; `bun run test:serial` is the whole suite the
+  old way.
+- A file that leaves state on `document` can only be caught by the serial run —
+  per-file processes hide it. Scope DOM queries to the container you mounted.
 - `git commit --no-verify` is fine locally. Run the relevant scoped checks first,
   and report a bypassed failing gate instead of calling it passing.
-- Compare `bun test` against the non-clean baseline in the active change.
+- Compare the run against the non-clean baseline in the active change.
 - `bun run format` before pushing.
 
 ## Parity and styling

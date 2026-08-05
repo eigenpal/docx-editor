@@ -62,7 +62,7 @@ jobs:
         run: bun run i18n:validate
 
       - name: Run tests
-        run: bun test
+        run: bun run test
 
       # The React demo builds from LOCAL source, so this is the gate that a change to the
       # engine or the shipped stylesheet still produces a working app. `build:packages`
