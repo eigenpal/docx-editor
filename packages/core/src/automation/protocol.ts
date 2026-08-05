@@ -13,6 +13,7 @@
 
 import type { AutomationFontRead, AutomationParagraphFormatRead } from './formatting.ts';
 import type { AutomationOperation } from './operations.ts';
+import type { AutomationPageSetupRead } from './sections.ts';
 
 /**
  * What kind of document object a handle names.
@@ -166,6 +167,8 @@ export type AutomationValue =
    */
   | { readonly kind: 'font'; readonly font: AutomationFontRead }
   | { readonly kind: 'paragraphFormat'; readonly format: AutomationParagraphFormatRead }
+  /** One section's page geometry, in points. */
+  | { readonly kind: 'pageSetup'; readonly setup: AutomationPageSetupRead }
   /**
    * A paragraph style NAME, or null where nothing names one — the paragraphs disagree, or the
    * document declares no styles at all.

@@ -54,7 +54,7 @@ import type {
   AutomationSearchOptions,
   AutomationSelectionMode,
 } from './operations.ts';
-import { isAutomationCommand } from './operations.ts';
+import { isAutomationCommand, isSolitaryAutomationCommand } from './operations.ts';
 import type {
   AutomationCapabilities,
   AutomationError,
@@ -83,6 +83,9 @@ import {
   type ResolvedSpan,
 } from './spans.ts';
 import { BODY_STORY, storyKey, type AutomationStoryId } from './stories.ts';
+import { isStoryId } from './stories.ts';
+import { pageSetupProperties, type AutomationSectionRead } from './sections.ts';
+import type { NoteKind } from '../store/package/note-nodes.ts';
 import { paragraphStyleName, styleIdFor } from './styles.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 
@@ -112,6 +115,15 @@ export type PlannedOperation =
       readonly ops: readonly TreeDocOp[];
       /** Which story the ops address. A batch commits into one story; see `pinWrite`. */
       readonly story: AutomationStoryId;
+      /**
+       * The op commits as a PACKAGE transaction rather than inside a story's.
+       *
+       * A note's lifecycle rewrites the notes part, the references in every story that cited it,
+       * a relationship and a content-type override, and the store publishes that as its own undo
+       * unit. The host routes it through the port's lifecycle path, and the planner has already
+       * refused it any company — one commit per batch, or the batch is not one transaction.
+       */
+      readonly lifecycle?: boolean;
       /** Computed after the commit, so a created paragraph can be named. */
       readonly answer: (post: AutomationPackageReads) => AutomationValue;
     }
@@ -193,6 +205,31 @@ function delimiterOccurrences(
     cursor = best.start + best.length;
   }
   return found;
+}
+
+/**
+ * The paragraph `setSectionProperties` should resolve a section from.
+ *
+ * A section is ended by the paragraph whose mark carries its `w:sectPr`, so that paragraph names
+ * it exactly. The FINAL section is the exception: no mark closes it — the body-level `w:sectPr`
+ * governs whatever is left — so the story's last paragraph names it, provided that paragraph is
+ * not itself a section mark. When it is, the trailing blocks are not paragraphs and there is
+ * nothing to anchor to; the caller is told rather than having another section written.
+ */
+function anchorForSection(
+  body: AutomationStoryReads,
+  sections: readonly AutomationSectionRead[],
+  index: number
+): string | null {
+  const own = sections[index]?.markParagraphId ?? null;
+  if (own !== null) return own;
+  const ids = body.paragraphIds;
+  const last = ids[ids.length - 1];
+  if (last === undefined) return null;
+  const marks = new Set(
+    sections.map((section) => section.markParagraphId).filter((id): id is string => id !== null)
+  );
+  return marks.has(last) ? null : last;
 }
 
 /** Whether both ends of a range still name a paragraph and an offset inside it. */
@@ -281,6 +318,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
   const selections: { readonly range: ResolvedRange; readonly mode: AutomationSelectionMode }[] =
     [];
   let hasCommands = false;
+  /** Whether a package-level command has been planned; it may have no company. */
+  let solitaryPlanned = false;
   /** The one story this batch writes into, pinned by its first command. */
   let writeStory: StoryPlan | null = null;
 
@@ -980,6 +1019,64 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     };
   };
 
+  /**
+   * Author page geometry on one section.
+   *
+   * ANCHORED, never applied document-wide: the op's own default is every section, and a caller
+   * that asked about section two and got section one changed as well would have no way to notice.
+   * The anchor is the paragraph whose mark ends the section — which is what `setSectionProperties`
+   * resolves "the section governing this paragraph" from — or, for the final section that no mark
+   * closes, the story's last paragraph.
+   */
+  const planSetPageSetup = (
+    index: number,
+    request: unknown
+  ): PlannedOperation => {
+    const body = packageReads.body;
+    if (!body) return refuse('document-unavailable', 'this host holds no document right now');
+    const sections = packageReads.sections();
+    const section = sections[index];
+    if (!section) return refuse('invalid-handle', 'that section is not in this document');
+
+    const fields = pageSetupProperties(request);
+    if (!fields.ok) return refuse('unsupported-content', fields.reason, fields.detail);
+
+    const anchorParagraphId = anchorForSection(body, sections, index);
+    if (anchorParagraphId === null) {
+      return refuse(
+        'unsupported-content',
+        'that section holds no paragraph to address it by',
+        'no-anchor'
+      );
+    }
+
+    const plan = planFor(body);
+    const pin = pinWrite(plan);
+    if (pin) return pin;
+    // A SECTION IS NOT A PARAGRAPH, so nothing is claimed on the anchor: it is only how the op
+    // names which `w:sectPr` to write, and the paragraph itself is untouched.
+    return {
+      ok: true,
+      kind: 'command',
+      ops: [{ op: 'setSectionProperties', ...fields.value, anchorParagraphId }],
+      story: BODY_STORY,
+      answer: () => APPLIED,
+    };
+  };
+
+  /** Delete a note: package-level, so it travels alone. */
+  const planDeleteNote = (
+    noteKind: NoteKind,
+    noteId: number
+  ): PlannedOperation => ({
+    ok: true,
+    kind: 'command',
+    ops: [{ op: 'deleteNote', noteKind, noteId }],
+    story: BODY_STORY,
+    lifecycle: true,
+    answer: () => APPLIED,
+  });
+
   const planSelect = (
     plan: StoryPlan,
     range: ResolvedRange,
@@ -1252,6 +1349,101 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         return planDeleteParagraph(planFor(story), paragraph.value);
       }
 
+      case 'getSections': {
+        if (!handles.resolve(operation.document, 'document'))
+          return refuse('invalid-handle', 'that handle does not name a document', 'document');
+        return query({
+          kind: 'handles',
+          handles: packageReads
+            .sections()
+            .map((section) => handles.section(section.index)),
+        });
+      }
+
+      case 'getPageSetup': {
+        const target = handles.resolve(operation.section, 'section');
+        if (!target || target.kind !== 'section')
+          return refuse('invalid-handle', 'that handle does not name a section', 'section');
+        const section = packageReads.sections()[target.index];
+        if (!section) return refuse('invalid-handle', 'that section is not in this document');
+        return query({ kind: 'pageSetup', setup: section.pageSetup });
+      }
+
+      case 'setPageSetup': {
+        const target = handles.resolve(operation.section, 'section');
+        if (!target || target.kind !== 'section')
+          return refuse('invalid-handle', 'that handle does not name a section', 'section');
+        return planSetPageSetup(target.index, operation.setup);
+      }
+
+      case 'getFurniture': {
+        const target = handles.resolve(operation.section, 'section');
+        if (!target || target.kind !== 'section')
+          return refuse('invalid-handle', 'that handle does not name a section', 'section');
+        if (operation.kind !== 'header' && operation.kind !== 'footer')
+          return refuse('unknown-operation', 'that is not furniture', String(operation.kind));
+        const story: AutomationStoryId = {
+          kind: operation.kind,
+          sectionIndex: target.index,
+          variant: operation.variant,
+        };
+        // Validated as untrusted input BEFORE it is used to look a story up: `variant` arrives
+        // from a caller, and a story id this lane will not act on must not become a handle.
+        if (!isStoryId(story))
+          return refuse('unknown-operation', 'that is not a furniture variant', String(operation.variant));
+        if (!packageReads.story(story))
+          return refuse(
+            'invalid-handle',
+            'this document declares no such header or footer',
+            storyKey(story)
+          );
+        return query({ kind: 'handle', handle: handles.body(story) });
+      }
+
+      case 'getNotes': {
+        if (!handles.resolve(operation.document, 'document'))
+          return refuse('invalid-handle', 'that handle does not name a document', 'document');
+        if (operation.noteKind !== 'footnote' && operation.noteKind !== 'endnote')
+          return refuse('unknown-operation', 'that is not a kind of note', String(operation.noteKind));
+        const kind = operation.noteKind;
+        return query({
+          kind: 'handles',
+          handles: packageReads.noteIds(kind).map((noteId) => handles.note(kind, noteId)),
+        });
+      }
+
+      case 'getNoteBody': {
+        const target = handles.resolve(operation.note, 'note');
+        if (!target || target.kind !== 'note')
+          return refuse('invalid-handle', 'that handle does not name a note', 'note');
+        const story: AutomationStoryId = {
+          kind: 'note',
+          noteKind: target.noteKind,
+          noteId: target.noteId,
+        };
+        // A note DELETED since the handle was minted has no story, and saying so is the point:
+        // answering an empty body would let a script write into a note the document lost.
+        if (!packageReads.story(story))
+          return refuse('invalid-handle', 'that note is not in this document', storyKey(story));
+        return query({ kind: 'handle', handle: handles.body(story) });
+      }
+
+      case 'getNoteKind': {
+        const target = handles.resolve(operation.note, 'note');
+        if (!target || target.kind !== 'note')
+          return refuse('invalid-handle', 'that handle does not name a note', 'note');
+        return query({ kind: 'text', text: target.noteKind });
+      }
+
+      case 'deleteNote': {
+        const target = handles.resolve(operation.note, 'note');
+        if (!target || target.kind !== 'note')
+          return refuse('invalid-handle', 'that handle does not name a note', 'note');
+        if (!packageReads.noteIds(target.noteKind).includes(target.noteId))
+          return refuse('invalid-handle', 'that note is not in this document');
+        return planDeleteNote(target.noteKind, target.noteId);
+      }
+
       case 'selectSpan': {
         const resolved = resolveSpanRef(operation.span, handles, packageReads);
         if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
@@ -1275,8 +1467,22 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
 
   return {
     plan(operation) {
+      // ONE PACKAGE TRANSACTION PER BATCH, checked before the operation is even planned: a
+      // lifecycle command beside anything else is two commits, and half a batch published on its
+      // own is the partial application the batch rule exists to prevent.
+      const solitary = isSolitaryAutomationCommand(operation);
+      if ((solitary && hasCommands) || (solitaryPlanned && isAutomationCommand(operation))) {
+        return refuse(
+          'conflicting-operations',
+          'that command commits on its own and cannot share a batch',
+          operation.op
+        );
+      }
       const planned = plan(operation);
-      if (planned.ok && isAutomationCommand(operation)) hasCommands = true;
+      if (planned.ok && isAutomationCommand(operation)) {
+        hasCommands = true;
+        if (solitary) solitaryPlanned = true;
+      }
       return planned;
     },
     get hasCommands() {

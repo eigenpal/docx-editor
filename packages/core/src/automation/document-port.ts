@@ -44,6 +44,15 @@ export interface AutomationDocumentPort {
    * second story resolver disagreeing with the reads.
    */
   apply(ops: readonly TreeDocOp[], scope: StoryScope): AutomationPortApplyResult;
+  /**
+   * Commit ONE package-level op — a note or furniture lifecycle — as its own transaction.
+   *
+   * Separate from `apply` because it is a different transaction: the store rewrites several parts
+   * at once and publishes one package undo unit, which cannot be staged inside a story's
+   * transaction. The planner has already refused the op any company, so a batch reaching here
+   * holds exactly this one command and atomicity still means what it says.
+   */
+  applyLifecycle(op: TreeDocOp): AutomationPortApplyResult;
   /** DOCX bytes through the normalizing serializer, or null when there is no document. */
   save(): Uint8Array | null;
   /**

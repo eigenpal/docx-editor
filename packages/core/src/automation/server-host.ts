@@ -125,6 +125,20 @@ function packageStorePort(store: TreePackageStore): AutomationDocumentPort {
       }
       return { ok: true, changed: result.change !== null };
     },
+    applyLifecycle(op: TreeDocOp): AutomationPortApplyResult {
+      if (!live) return { ok: false, reason: 'disposed' };
+      // The store's own package transaction: parts, relationships, content types and settings
+      // restored together on undo. Routed here rather than through `transact` because a story
+      // transaction cannot carry a part it does not own.
+      const result = store.applyLifecycleOp(op);
+      if (!result.ok) {
+        return {
+          ok: false,
+          reason: result.detail ? `${result.reason}: ${result.detail}` : result.reason,
+        };
+      }
+      return { ok: true, changed: result.change !== null };
+    },
     save: () => (live ? writeOoxmlPackage(store.currentPackage()) : null),
     subscribe: (listener) => store.subscribe(() => listener()),
     dispose() {

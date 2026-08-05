@@ -9,7 +9,7 @@
 import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { readOoxmlPackage, type OoxmlPackage } from '../../store/package/ooxml-package.ts';
-import { AUTOMATION_COMMAND_OPERATIONS, isAutomationCommand } from '../operations.ts';
+import { AUTOMATION_COMMAND_OPERATIONS, AUTOMATION_SOLITARY_OPERATIONS, isAutomationCommand } from '../operations.ts';
 import { createAutomationHost } from '../host.ts';
 import type { AutomationDocumentPort } from '../document-port.ts';
 import type { AutomationCapabilities, AutomationHandle, AutomationHost } from '../protocol.ts';
@@ -64,6 +64,10 @@ function fixture(
     revision: () => state.applied,
     currentPackage: () => pkg,
     apply: () => {
+      state.applied += 1;
+      return { ok: true, changed: true };
+    },
+    applyLifecycle: () => {
       state.applied += 1;
       return { ok: true, changed: true };
     },
@@ -188,7 +192,11 @@ describe('the operation vocabulary declares which operations write', () => {
       'setFont',
       'setParagraphFormat',
       'setStyle',
+      'setPageSetup',
+      'deleteNote',
     ]);
+    // And the ones that commit as a PACKAGE transaction, which is why they travel alone.
+    expect([...AUTOMATION_SOLITARY_OPERATIONS]).toEqual(['deleteNote']);
     expect(
       isAutomationCommand({ op: 'insertText', at: { paragraph: FORGED, offset: 0 }, text: 'x' })
     ).toBe(true);

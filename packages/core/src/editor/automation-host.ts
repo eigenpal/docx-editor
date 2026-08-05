@@ -115,6 +115,17 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       if (result.rejected) return { ok: false, reason: String(result.reason ?? 'refused') };
       return { ok: true, changed: result.committed };
     },
+    applyLifecycle(op: TreeDocOp): AutomationPortApplyResult {
+      sync();
+      const surface = editor.surface;
+      if (!surface) return { ok: false, reason: 'no-document' };
+      // THE SAME SURFACE PATH. `applyTreeOps` routes a solitary lifecycle op to the package
+      // store's own transaction, so this goes through the mode gates and the repaint like every
+      // other write rather than reaching around them.
+      const result = surface.applyAutomationOps([op]);
+      if (result.rejected) return { ok: false, reason: String(result.reason ?? 'refused') };
+      return { ok: true, changed: result.committed };
+    },
     save: () => sync()?.save() ?? null,
     // The one genuinely browser-only operation, and the reason the port declares it optional:
     // a headless host has no caret. Positions arrive as canonical paragraph ids and model

@@ -28,7 +28,13 @@ import {
   type HeaderFooterSlotMeta,
   type HeaderFooterVariant,
 } from '../store/package/hf-references.ts';
-import { findNoteById, noteIdOf, notesOf, type NoteKind } from '../store/package/note-nodes.ts';
+import {
+  findNoteById,
+  isNormalNote,
+  noteIdOf,
+  notesOf,
+  type NoteKind,
+} from '../store/package/note-nodes.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import { paraIdOf } from '../store/package/para-id.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
@@ -276,7 +282,9 @@ export function documentReads(pkg: OoxmlPackage): AutomationPackageReads {
       const notesPart = resolveNotesPart(pkg, story.noteKind);
       if (!notesPart) return null;
       const note = findNoteById(notesPart.root, story.noteId);
-      if (!note) return null;
+      // Reachable only if it is a note a document HAS: a separator is markup Word needs and a
+      // caller has no business editing, so it is not addressable as a story either.
+      if (!note || !isNormalNote(note)) return null;
       return storyReadsOver(
         story,
         notesPart,
@@ -332,6 +340,10 @@ export function documentReads(pkg: OoxmlPackage): AutomationPackageReads {
     if (!part) return NONE_NUMBERS;
     const ids: number[] = [];
     for (const note of notesOf(part.root)) {
+      // THE SEPARATORS ARE NOT NOTES. Every notes part Word writes begins with a separator and
+      // a continuation separator (`w:id` -1 and 0); listing them would report a document with two
+      // more footnotes than it has, and hand a caller a story that paints no note anywhere.
+      if (!isNormalNote(note)) continue;
       const id = noteIdOf(note);
       if (id !== null) ids.push(id);
     }

@@ -95,6 +95,78 @@ export function twipsFromPoints(value: unknown, allowZero: boolean): number | nu
   return twips;
 }
 
+/** The `setSectionProperties` fields a page-setup write turns into. */
+export interface AutomationPageSetupFields {
+  pageWidthTwips?: number;
+  pageHeightTwips?: number;
+  orientation?: AutomationPageOrientation;
+  marginTopTwips?: number;
+  marginRightTwips?: number;
+  marginBottomTwips?: number;
+  marginLeftTwips?: number;
+}
+
+export type AutomationPageSetupPlan =
+  | { readonly ok: true; readonly value: AutomationPageSetupFields }
+  | { readonly ok: false; readonly reason: string; readonly detail: string };
+
+/** The page-setup fields, paired with the op field each becomes and whether zero is a value. */
+const PAGE_SETUP_FIELDS = [
+  ['pageWidth', 'pageWidthTwips', false],
+  ['pageHeight', 'pageHeightTwips', false],
+  ['topMargin', 'marginTopTwips', true],
+  ['rightMargin', 'marginRightTwips', true],
+  ['bottomMargin', 'marginBottomTwips', true],
+  ['leftMargin', 'marginLeftTwips', true],
+] as const satisfies readonly (readonly [
+  keyof AutomationPageSetupWrite,
+  keyof AutomationPageSetupFields,
+  boolean,
+])[];
+
+/**
+ * Turn a caller's page setup into op fields, refusing anything a page cannot be.
+ *
+ * EVERY NUMBER HERE IS UNTRUSTED, exactly as a file's is: a script behind this protocol is not
+ * more trustworthy than a `.docx`. A negative page, a non-finite one or one past `w:pgSz`'s
+ * ceiling is refused rather than clamped — a clamp reports a page set to a size it was not set to
+ * and the caller has no way to notice — and a setup naming nothing at all is refused too, because
+ * committing a transaction that writes nothing would move the revision for no change.
+ */
+export function pageSetupProperties(request: unknown): AutomationPageSetupPlan {
+  if (typeof request !== 'object' || request === null) {
+    return { ok: false, reason: 'that is not a page setup', detail: 'not-an-object' };
+  }
+  const source = request as Record<string, unknown>;
+  const value: AutomationPageSetupFields = {};
+  let named = 0;
+
+  for (const [field, op, allowZero] of PAGE_SETUP_FIELDS) {
+    const given = source[field];
+    if (given === undefined) continue;
+    const twips = twipsFromPoints(given, allowZero);
+    if (twips === null) {
+      return { ok: false, reason: `that is not a value for ${field}`, detail: String(given) };
+    }
+    value[op] = twips;
+    named += 1;
+  }
+
+  const orientation = source['orientation'];
+  if (orientation !== undefined) {
+    if (orientation !== 'portrait' && orientation !== 'landscape') {
+      return { ok: false, reason: 'that is not an orientation', detail: String(orientation) };
+    }
+    value.orientation = orientation;
+    named += 1;
+  }
+
+  if (named === 0) {
+    return { ok: false, reason: 'that page setup names nothing to write', detail: 'empty' };
+  }
+  return { ok: true, value };
+}
+
 /** How a section's `w:sectPr` reads as page setup. */
 export function pageSetupOf(sectPr: OoxmlNode | null): AutomationPageSetupRead {
   const metrics = metricsOfSection(sectPr);

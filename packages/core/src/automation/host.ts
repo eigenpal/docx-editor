@@ -146,6 +146,8 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     // a paragraph a command creates has no identity until the transaction lands.
     const planned: Extract<PlannedOperation, { readonly ok: true }>[] = [];
     const ops: TreeDocOp[] = [];
+    /** The one package-level op a batch may hold, which travels alone. See the planner. */
+    let lifecycle: TreeDocOp | null = null;
     let firstCommand = -1;
     for (let index = 0; index < operations.length; index += 1) {
       const step = planner.plan(operations[index]!);
@@ -153,11 +155,28 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       planned.push(step);
       if (step.kind === 'command') {
         if (firstCommand < 0) firstCommand = index;
-        ops.push(...step.ops);
+        if (step.lifecycle) lifecycle = step.ops[0] ?? null;
+        else ops.push(...step.ops);
       }
     }
 
     let changed = false;
+    if (lifecycle) {
+      const applied = port.applyLifecycle(lifecycle);
+      if (!applied.ok) {
+        return refuse(
+          operations,
+          firstCommand < 0 ? 0 : firstCommand,
+          automationError(
+            'transaction-refused',
+            'the document store refused the transaction',
+            applied.reason
+          ),
+          revision
+        );
+      }
+      changed = applied.changed;
+    }
     if (ops.length > 0) {
       // THE STORY THE BATCH PINNED. One transaction against one story, named by the planner
       // rather than assumed to be the body — a header edit committed against the body scope

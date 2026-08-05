@@ -19,6 +19,9 @@
 
 import type { AutomationFontWrite, AutomationParagraphFormatWrite } from './formatting.ts';
 import type { AutomationEndpoint, AutomationHandle } from './protocol.ts';
+import type { AutomationPageSetupWrite } from './sections.ts';
+import type { HeaderFooterVariant } from '../store/package/hf-references.ts';
+import type { NoteKind } from '../store/package/note-nodes.ts';
 
 /**
  * A position in a story.
@@ -214,6 +217,60 @@ export type AutomationOperation =
   /** Remove a paragraph and everything in it. */
   | { readonly op: 'deleteParagraph'; readonly paragraph: AutomationHandle }
   /**
+   * The document's sections, in document order.
+   *
+   * A document nobody sectioned still has one: the body-level `w:sectPr` Word writes even for a
+   * file that has never been sectioned. The index a section answers to is the one the furniture
+   * lifecycle ops take, so a read here and a header written afterwards agree about which section
+   * is which.
+   */
+  | { readonly op: 'getSections'; readonly document: AutomationHandle }
+  /** One section's page geometry, in points. */
+  | { readonly op: 'getPageSetup'; readonly section: AutomationHandle }
+  /**
+   * Author page geometry on ONE section — Word's "Apply to: This section".
+   *
+   * Only the fields present are written; the rest of that `w:sectPr` is left exactly as authored.
+   * `orientation` without dimensions swaps the section's own, so a document of mixed paper sizes
+   * survives a flip. A dimension outside what a page can be is refused rather than clamped.
+   */
+  | {
+      readonly op: 'setPageSetup';
+      readonly section: AutomationHandle;
+      readonly setup: AutomationPageSetupWrite;
+    }
+  /**
+   * The header or footer story a section declares or inherits, as a BODY.
+   *
+   * A variant the document has neither declared nor inherited is refused: minting the part would
+   * make a read write, and a header that exists only because it was asked about is a header the
+   * document did not have.
+   */
+  | {
+      readonly op: 'getFurniture';
+      readonly section: AutomationHandle;
+      readonly kind: 'header' | 'footer';
+      readonly variant: HeaderFooterVariant;
+    }
+  /**
+   * Every footnote or endnote the document holds, in the order its notes part writes them.
+   *
+   * The reserved separator and continuation-separator notes (`w:id` -1 and 0) are not notes a
+   * caller can reach: reporting them would say the document has two more footnotes than it has.
+   */
+  | { readonly op: 'getNotes'; readonly document: AutomationHandle; readonly noteKind: NoteKind }
+  /** One note's story, as a BODY. Two notes in one part are two stories. */
+  | { readonly op: 'getNoteBody'; readonly note: AutomationHandle }
+  /** Whether a note is a footnote or an endnote. */
+  | { readonly op: 'getNoteKind'; readonly note: AutomationHandle }
+  /**
+   * Delete a note: its body in the notes part and every reference that reached it.
+   *
+   * A PACKAGE-level transaction, so it shares its batch with nothing — see
+   * `AUTOMATION_SOLITARY_OPERATIONS`.
+   */
+  | { readonly op: 'deleteNote'; readonly note: AutomationHandle }
+  /**
    * Put the reader's selection on a span. Requires the `selection` capability, so a headless
    * host refuses it rather than pretending to have a caret.
    */
@@ -238,6 +295,12 @@ export const AUTOMATION_QUERY_OPERATIONS = [
   'getFont',
   'getParagraphFormat',
   'getStyle',
+  'getSections',
+  'getPageSetup',
+  'getFurniture',
+  'getNotes',
+  'getNoteBody',
+  'getNoteKind',
 ] as const satisfies readonly AutomationOperationKind[];
 
 /** Operations that write. Every one of these goes through the single transaction path. */
@@ -251,7 +314,29 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
   'setFont',
   'setParagraphFormat',
   'setStyle',
+  'setPageSetup',
+  'deleteNote',
 ] as const satisfies readonly AutomationOperationKind[];
+
+/**
+ * Commands that commit as a PACKAGE transaction and therefore share a batch with nothing.
+ *
+ * A note's lifecycle rewrites several parts at once — the notes part, the references in every
+ * story that cited it, the relationship and the content-type override — and the store publishes
+ * that as its own undo unit rather than as ops inside a story transaction. Two of them, or one
+ * beside a story command, would be two commits: two revisions, and a moment where half the
+ * caller's batch is published. Refused while planning instead.
+ */
+export const AUTOMATION_SOLITARY_OPERATIONS = [
+  'deleteNote',
+] as const satisfies readonly AutomationOperationKind[];
+
+const SOLITARY: ReadonlySet<string> = new Set(AUTOMATION_SOLITARY_OPERATIONS);
+
+/** Whether an operation must be the only one in its batch. */
+export function isSolitaryAutomationCommand(operation: AutomationOperation): boolean {
+  return SOLITARY.has(operation.op);
+}
 
 // Compile-time exhaustiveness: a new operation must be classified as a query or a command, or
 // this fails to typecheck. Without it a new operation would default to "not a command" and

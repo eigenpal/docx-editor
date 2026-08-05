@@ -39,6 +39,19 @@ export type {
   AutomationValue,
 } from './protocol.ts';
 
+// Sections: page geometry in points, and what a write may author on one section.
+export type {
+  AutomationPageOrientation,
+  AutomationPageSetupRead,
+  AutomationPageSetupWrite,
+} from './sections.ts';
+
+// Which story a handle names: the body, a header or footer variant, or one note.
+export {
+  HEADER_FOOTER_VARIANTS,
+  type AutomationStoryId,
+} from './stories.ts';
+
 // Formatting: what a span agrees about its characters, and what a write may author.
 export type {
   AutomationAlignment,
@@ -52,7 +65,9 @@ export type {
 export {
   AUTOMATION_COMMAND_OPERATIONS,
   AUTOMATION_QUERY_OPERATIONS,
+  AUTOMATION_SOLITARY_OPERATIONS,
   isAutomationCommand,
+  isSolitaryAutomationCommand,
   type AutomationOperation,
   type AutomationOperationKind,
   type AutomationParagraphRef,
