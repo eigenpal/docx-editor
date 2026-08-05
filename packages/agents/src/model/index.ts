@@ -8,6 +8,13 @@
 export { Body } from './body.ts';
 export { Bookmark, BookmarkCollection } from './bookmarks.ts';
 export { ParagraphCollection, RangeCollection } from './collections.ts';
+export {
+  ContentControl,
+  ContentControlCollection,
+  type ContentControlLockState,
+  type ContentControlSubtype,
+  type ContentControlValue,
+} from './content-controls.ts';
 export { Document } from './document.ts';
 export { Font } from './font.ts';
 export { List, ListCollection, ListItem } from './lists.ts';

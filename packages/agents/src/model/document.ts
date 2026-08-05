@@ -18,6 +18,7 @@ import {
 } from '../runtime/model-support.ts';
 import { Body } from './body.ts';
 import type { ParagraphCollection } from './collections.ts';
+import { ContentControlCollection } from './content-controls.ts';
 import { ModelObject } from './model-object.ts';
 import { NoteItemCollection } from './notes.ts';
 import { CommentCollection, RevisionCollection } from './review.ts';
@@ -29,6 +30,7 @@ export class Document extends ModelObject {
   #sections: SectionCollection | undefined;
   #comments: CommentCollection | undefined;
   #revisions: RevisionCollection | undefined;
+  #contentControls: ContentControlCollection | undefined;
   #footnotes: NoteItemCollection | undefined;
   #endnotes: NoteItemCollection | undefined;
 
@@ -67,6 +69,17 @@ export class Document extends ModelObject {
       document,
     }));
     return this.#sections;
+  }
+
+  /** The content controls of the main story, in document order — the outermost ones. */
+  get contentControls(): ContentControlCollection {
+    this.#contentControls ??= ContentControlCollection.of(
+      this.context,
+      'document.contentControls',
+      this.path,
+      { body: this.internals.roots().body }
+    );
+    return this.#contentControls;
   }
 
   /** The comments anchored in the main story, in document order. */

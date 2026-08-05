@@ -23,6 +23,7 @@ import {
   type ResolvedLoadOptions,
 } from '../runtime/model-support.ts';
 import { ParagraphCollection, RangeCollection } from './collections.ts';
+import { ContentControlCollection } from './content-controls.ts';
 import { ListCollection } from './lists.ts';
 import { CommentCollection, RevisionCollection } from './review.ts';
 import { requireStyleName, spanRefOf } from './addressing.ts';
@@ -37,6 +38,7 @@ export class Body extends ModelObject {
   #paragraphs: ParagraphCollection | undefined;
   #font: Font | undefined;
   #lists: ListCollection | undefined;
+  #contentControls: ContentControlCollection | undefined;
   #revisions: RevisionCollection | undefined;
 
   /** @internal The main story of the document this context is running against. */
@@ -125,6 +127,22 @@ export class Body extends ModelObject {
       this.#handle()
     );
     return this.#lists;
+  }
+
+  /**
+   * The content controls this story holds, in document order — the OUTERMOST ones.
+   *
+   * A control inside another is reached through the control that holds it, because a flat list of
+   * a story's controls makes a field and the group wrapping it look like siblings.
+   */
+  get contentControls(): ContentControlCollection {
+    this.#contentControls ??= ContentControlCollection.of(
+      this.context,
+      `${this.path.label}.contentControls`,
+      this.path,
+      { body: this.#handle() }
+    );
+    return this.#contentControls;
   }
 
   /** The comments anchored in this story, in document order. Replies hang off the comment. */
