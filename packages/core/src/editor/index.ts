@@ -14,10 +14,13 @@ export {
   toEditorFontError,
 } from './font-configuration.ts';
 export {
+  MAX_RESOLVER_FAMILIES,
   WORD_DEFAULT_FONT,
   composeFontConfiguration,
   type FontConfigurationBase,
   type FontConfigurationFragment,
+  type FontResolutionRequest,
+  type FontResolver,
 } from './font-composition.ts';
 export { blankDocumentBytes } from './blank-document.ts';
 export {

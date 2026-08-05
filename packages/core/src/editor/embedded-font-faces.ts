@@ -17,7 +17,7 @@
 // hash, and the painter emits `font-family: "<alias>", "<declared family>"`. Document text
 // gets the embedded glyphs; the declared name keeps whatever it means to the host page.
 
-import type { FontSource } from '../contracts/editor.ts';
+import type { FontSource, FontSourceSubstitution } from '../contracts/editor.ts';
 
 /** The slice of `FontFace` this module needs; injectable for tests. */
 export interface FontFaceLike {
@@ -89,16 +89,24 @@ function defaultEnvironment(): EmbeddedFontFaceEnvironment {
 }
 
 /**
- * Register admitted embedded faces under engine-minted aliases and return the lookup the
- * painter uses. Resolves after every face has either loaded into the set or failed;
- * per-face failure only lowers `installed`.
+ * Register admitted faces under engine-minted aliases and return the lookup the painter
+ * uses. Resolves after every face has either loaded into the set or failed; per-face
+ * failure only lowers `installed`.
  *
  * Callers MUST pass faces that survived validation — these bytes reach the browser's own
  * font loader.
+ *
+ * `substitutions` extends the lookup to the names runs actually write: a document says
+ * `Calibri` while the registered face is `Carlito`, so without the map the text measures
+ * shaped and then paints in a platform substitute. Aliasing the `from` name is what makes
+ * app-supplied stand-ins paintable WITHOUT registering a face called "Calibri" globally —
+ * the shadowing hole this module exists to avoid applies to Word's family names just as
+ * much as to a document's own.
  */
 export async function registerEmbeddedFontFaces(
   sources: readonly FontSource[],
-  environment: EmbeddedFontFaceEnvironment = defaultEnvironment()
+  environment: EmbeddedFontFaceEnvironment = defaultEnvironment(),
+  substitutions: readonly FontSourceSubstitution[] = []
 ): Promise<EmbeddedFontFaceRegistration> {
   const { fontSet, createFontFace } = environment;
   if (!fontSet || !createFontFace || sources.length === 0) return NO_REGISTRATION;
@@ -141,6 +149,15 @@ export async function registerEmbeddedFontFaces(
     })
   );
   if (added.length === 0) return NO_REGISTRATION;
+
+  // A substituted-from name only borrows an alias that its target actually earned, and
+  // never displaces a face registered under that name directly — a real Calibri beats a
+  // stand-in for Calibri, the same precedence composition already applies to bytes.
+  for (const substitution of substitutions) {
+    if (aliases.has(substitution.from.family)) continue;
+    const alias = aliases.get(substitution.to.family);
+    if (alias !== undefined) aliases.set(substitution.from.family, alias);
+  }
 
   let disposed = false;
   return {

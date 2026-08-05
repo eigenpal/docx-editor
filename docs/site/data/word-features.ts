@@ -94,7 +94,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Custom fonts registered via the fonts prop (loadFonts fetches and hash-verifies app-specified URLs); theme fonts resolved from the OOXML theme. Word-accurate wrap and pagination need font bytes for shaped measurement — the optional @docx-editor.dev/fonts package supplies metric-compatible substitutes for the Word defaults (Carlito, Caladea, Liberation).',
+      'Custom fonts registered via the fonts prop (loadFonts fetches and hash-verifies app-specified URLs); theme fonts resolved from the OOXML theme. Word-accurate wrap and pagination need font bytes for shaped measurement — the optional @docx-editor.dev/fonts package supplies metric-compatible substitutes for the Word defaults (Carlito, Caladea, Liberation). The fonts prop also accepts a resolver called once per load with the families a document declares, so an app can opt into loading only those; googleFonts() serves them from a pinned, hash-checked catalog.',
   },
   {
     id: 'text.embedded-fonts',

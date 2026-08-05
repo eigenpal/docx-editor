@@ -160,7 +160,11 @@ import {
   disposeLayoutShaping,
   toEditorFontError,
 } from './font-configuration.ts';
-import { composeFontConfiguration } from './font-composition.ts';
+import {
+  MAX_RESOLVER_FAMILIES,
+  composeFontConfiguration,
+  type FontConfigurationBase,
+} from './font-composition.ts';
 import { availableFontFamilies, configuredDefaultFontFamily } from './font-catalog.ts';
 import { embeddedFontSources } from './embedded-font-sources.ts';
 import { createLocalFontProbe, detectFontSubstitutions } from './font-availability.ts';
@@ -318,6 +322,18 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    */
   let loadSeq = 0;
   /**
+   * What the app's font configuration turned out to BE for the loaded document.
+   *
+   * Identical to `config.fonts` when that is a value; the resolver's answer when it is a
+   * function, which is only known once a document has been parsed. Reads that describe
+   * the editor's font capability — the picker catalog, the reported default face — go
+   * through {@link fontConfiguration} so the on-demand form does not report an empty
+   * catalog for the whole of a document's life.
+   */
+  let resolvedFontConfiguration: FontConfigurationBase | undefined;
+  const fontConfiguration = (): FontConfigurationBase | undefined =>
+    typeof config.fonts === 'function' ? resolvedFontConfiguration : config.fonts;
+  /**
    * The sequence font resolution has been KICKED for. Checked inside `mountBytes` so the
    * shaped remount (which goes back through `mountBytes` with the same document) and an
    * `attach` of the same document never restart resolution — restarting from the shaped
@@ -341,17 +357,37 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }
     return localFontProbe(family);
   };
-  /** Families the app's font configuration supplies or substitutes, case-folded. */
-  const configCoveredFamilies = new Set<string>(
-    [
-      ...(config.fonts?.sources ?? []).map((source) => source.request.family),
-      ...(config.fonts?.substitutions ?? []).map((substitution) => substitution.from.family),
-    ]
-      .filter((family) => typeof family === 'string' && family.trim().length > 0)
-      .map((family) => family.toLowerCase())
-  );
+  /**
+   * Families the app's font configuration supplies or substitutes, case-folded.
+   *
+   * Derived rather than captured at construction: an on-demand resolver's coverage is not
+   * known until a document has been loaded, and a set frozen at construction would report
+   * every family the resolver went on to supply as rendering in a substitute face.
+   * Memoized on the configuration's identity, which moves at most once per load.
+   */
+  let coveredFamiliesCache: {
+    readonly configuration: FontConfigurationBase | undefined;
+    readonly families: ReadonlySet<string>;
+  } | null = null;
+  const configCoveredFamilies = (): ReadonlySet<string> => {
+    const configuration = fontConfiguration();
+    if (coveredFamiliesCache === null || coveredFamiliesCache.configuration !== configuration) {
+      coveredFamiliesCache = {
+        configuration,
+        families: new Set<string>(
+          [
+            ...(configuration?.sources ?? []).map((source) => source.request.family),
+            ...(configuration?.substitutions ?? []).map((substitution) => substitution.from.family),
+          ]
+            .filter((family) => typeof family === 'string' && family.trim().length > 0)
+            .map((family) => family.toLowerCase())
+        ),
+      };
+    }
+    return coveredFamiliesCache.families;
+  };
   const fontFamilyCovered = (family: string): boolean =>
-    configCoveredFamilies.has(family.toLowerCase()) || embeddedFaces?.alias(family) !== undefined;
+    configCoveredFamilies().has(family.toLowerCase()) || embeddedFaces?.alias(family) !== undefined;
   /**
    * While font work is still in flight the answer would flicker: embedded faces register
    * at resolution, so a file whose own fonts are arriving must not flash a notice first.
@@ -431,7 +467,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // What a run with no authored font is REPORTED as, matching what it is measured
       // as (`resolveFont`'s fallback below) — so a blank document's font box reads
       // "Calibri", not an em-dash.
-      defaultFontFamily: configuredDefaultFontFamily(config.fonts),
+      defaultFontFamily: configuredDefaultFontFamily(fontConfiguration()),
       ...(config.translate
         ? { drawingStrings: drawingPaintStringsFromTranslate(config.translate) }
         : {}),
@@ -559,6 +595,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     loadSeq += 1;
     shapedMeasurer = undefined;
     shapedProducer = undefined;
+    // An on-demand answer describes the document that asked for it. Carrying it into the
+    // next one would offer the previous file's families in this file's font picker.
+    resolvedFontConfiguration = undefined;
     disposeEmbeddedFaces();
     // A superseded in-flight resolution belongs to the PREVIOUS sequence; its stale
     // guard will refuse to touch state, so the flag must reset here or a load that
@@ -609,14 +648,41 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // A bare fragment ({ sources, substitutions }) is a valid base: every other
     // configuration field takes the documented defaults, with the load sequence as the
     // epoch when the app pinned none.
-    const explicit = config.fonts;
+    const configured = config.fonts;
     const embedded = mounted.session.embeddedFonts();
     // The zero-config, nothing-embedded common case does NO font work at all: no
     // hashing, no HarfBuzz initialization, no remount.
-    if (!explicit && embedded.length === 0) return;
+    if (!configured && embedded.length === 0) return;
     fontsResolving = true;
     bump();
     try {
+      // On-demand configurations resolve HERE rather than at construction, which is the
+      // whole point of the function form: the document is parsed and mounted by now, so
+      // the resolver is told what the file actually asks for and can skip everything
+      // else. A resolver that throws lands in this function's catch and degrades to the
+      // fixed measurer, exactly like a failed byte source.
+      const explicit: FontConfigurationBase | undefined =
+        typeof configured === 'function'
+          ? await configured({
+              families: mounted.session.documentFonts().slice(0, MAX_RESOLVER_FAMILIES),
+              defaultFamily: configuredDefaultFontFamily(fontConfiguration()),
+            })
+          : configured;
+      // Awaiting handed control back: this load may have been superseded (or the editor
+      // destroyed) while the resolver ran, and installing its answer would overwrite a
+      // newer document's fonts.
+      if (destroyed || seq !== loadSeq) {
+        if (seq === loadSeq) fontsResolving = false;
+        return;
+      }
+      resolvedFontConfiguration = explicit;
+      // A resolver covering none of this document's families is a normal answer, not a
+      // failure — and with nothing embedded there is no font work left to do.
+      if (!explicit && embedded.length === 0) {
+        fontsResolving = false;
+        bump();
+        return;
+      }
       const maxFontBytes =
         (explicit && 'maxFontBytes' in explicit ? explicit.maxFontBytes : undefined) ??
         HARD_MAX_FONT_BYTES;
@@ -712,10 +778,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return;
       }
       // Paint-side twin, BEFORE the remount so the first shaped paint already carries the
-      // embedded glyphs. Only faces the validator ADMITTED are handed over, and each
-      // resolves through the shaping snapshot so the bytes registered are the validated,
-      // owned copies — never the raw file view.
-      const admitted = fromDocument.sources
+      // glyphs. Only faces the validator ADMITTED are handed over, and each resolves
+      // through the shaping snapshot so the bytes registered are the validated, owned
+      // copies — never the raw file view.
+      //
+      // App-supplied sources register alongside the embedded ones. They measure shaped
+      // either way, but unregistered they PAINT in whatever the platform picks for the
+      // name, so a document laid out on Carlito metrics would be drawn in something else
+      // — correct pagination, wrong glyphs. Aliasing (rather than registering the family
+      // name itself) is what keeps that safe; see `embedded-font-faces.ts`.
+      const admitted = [...(explicit?.sources ?? []), ...fromDocument.sources]
         .filter((source) => !refusedEmbedded.has(source.id))
         .map((source) => {
           const resolved = shaping.fonts.resolve(source.request);
@@ -730,7 +802,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
               };
         })
         .filter((source): source is NonNullable<typeof source> => source !== null);
-      const registration = await registerEmbeddedFontFaces(admitted);
+      const registration = await registerEmbeddedFontFaces(
+        admitted,
+        undefined,
+        fonts.substitutions ?? []
+      );
       if (destroyed || seq !== loadSeq) {
         registration.dispose();
         disposeLayoutShaping(shaping);
@@ -1626,7 +1702,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // The picker's list: the configured catalog is offerable with no document at all,
     // and the document's declared families join it once one is mounted.
     getAvailableFonts: () =>
-      availableFontFamilies(config.fonts, surface?.session.documentFonts() ?? []),
+      availableFontFamilies(fontConfiguration(), surface?.session.documentFonts() ?? []),
     getDocumentThemeColors: () => surface?.session.documentThemeColors() ?? [],
     getOutline: () => surface?.session.documentOutline() ?? [],
     getComments: () => [],

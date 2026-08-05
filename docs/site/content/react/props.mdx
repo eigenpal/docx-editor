@@ -11,14 +11,14 @@ order: 31
 
 Use `document` for the current document source and `fonts` for measurement fidelity.
 
-| Prop       | Type                                             | Description                                                               |
-| ---------- | ------------------------------------------------ | ------------------------------------------------------------------------- |
-| `document` | `DocumentSource`                                 | DOCX bytes or an existing `DocumentHandle`.                               |
-| `fonts`    | `FontConfiguration \| FontConfigurationFragment` | Font bytes used for Word-accurate shaping and pagination.                 |
-| `author`   | `string`                                         | Ambient author for authored commands such as comments and review actions. |
-| `locale`   | `string`                                         | Locale passed to the underlying editor instance.                          |
-| `mode`     | `'edit' \| 'view'`                               | Mount-time editing mode. Remount to change it.                            |
-| `zoom`     | `number`                                         | Mount-time zoom value.                                                    |
+| Prop       | Type                                                             | Description                                                                                                                    |
+| ---------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `document` | `DocumentSource`                                                 | DOCX bytes or an existing `DocumentHandle`.                                                                                    |
+| `fonts`    | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Font bytes used for Word-accurate shaping and pagination, or a resolver called per load with the document's declared families. |
+| `author`   | `string`                                                         | Ambient author for authored commands such as comments and review actions.                                                      |
+| `locale`   | `string`                                                         | Locale passed to the underlying editor instance.                                                                               |
+| `mode`     | `'edit' \| 'view'`                                               | Mount-time editing mode. Remount to change it.                                                                                 |
+| `zoom`     | `number`                                                         | Mount-time zoom value.                                                                                                         |
 
 ```tsx
 const bytes = new Uint8Array(await fetch('/template.docx').then((r) => r.arrayBuffer()));
@@ -64,10 +64,10 @@ match Word. Fonts embedded in the document wire in automatically. The font picke
 what the document declares merged with what you configure — read that list from
 `useFontFamily()` rather than a prop.
 
-| Prop          | Type                                             | Default | Description                                                                        |
-| ------------- | ------------------------------------------------ | ------- | ---------------------------------------------------------------------------------- |
-| `fonts`       | `FontConfiguration \| FontConfigurationFragment` | none    | Font bytes for Word-accurate measurement.                                          |
-| `onFontError` | `(error: EditorFontError) => void`               | none    | Per-face failures (corrupt embedded face, 404, hash mismatch).                     |
+| Prop          | Type                                                             | Default | Description                                                              |
+| ------------- | ---------------------------------------------------------------- | ------- | ------------------------------------------------------------------------ |
+| `fonts`       | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | none    | Font bytes for Word-accurate measurement, or a resolver called per load. |
+| `onFontError` | `(error: EditorFontError) => void`                               | none    | Per-face failures (corrupt embedded face, 404, hash mismatch).           |
 
 The usual value is what `loadDefaultFonts()` returns:
 
@@ -82,8 +82,25 @@ const fonts = await loadDefaultFonts();
 
 `fonts` is sampled at mount. Replace it by remounting the editor with a new configuration.
 
+Pass a function instead and the editor calls it once per load, with the families the
+document declares, so it loads only the faces that file uses. Wrap it in `useFonts` to
+keep the prop's identity stable, or the editor rebuilds on every render:
+
+```tsx
+import { DocxEditor, useFonts } from '@docx-editor.dev/react';
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+
+const fonts = useFonts(googleFonts());
+
+<DocxEditor document={bytes} fonts={fonts} />;
+```
+
+A resolver that fetches makes opening a document perform network requests, which the
+editor never does on its own. Read the guide before reaching for one.
+
 See the [Fonts and measurement](/docs/2.x/guides/fonts) guide for the three font
-sources, how they compose, and how to supply your own faces with `loadFonts`.
+sources, on-demand resolution, how they compose, and how to supply your own faces with
+`loadFonts`.
 
 ## Title bar customization
 
