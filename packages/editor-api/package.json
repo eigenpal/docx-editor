@@ -27,7 +27,6 @@
     }
   },
   "devDependencies": {
-    "@docx-editor.dev/core": "workspace:*",
     "@microsoft/api-extractor": "^7.50.0",
     "fflate": "^0.8.2",
     "license-check-and-add": "^4.0.5"
@@ -72,5 +71,8 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "@docx-editor.dev/core": "workspace:*"
   }
 }

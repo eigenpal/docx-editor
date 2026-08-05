@@ -5,79 +5,150 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts",
-      "default": "./src/index.ts"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./automation": {
-      "types": "./src/automation/index.ts",
-      "import": "./src/automation/index.ts",
-      "default": "./src/automation/index.ts"
+      "import": {
+        "types": "./dist/automation.d.ts",
+        "default": "./dist/automation.js"
+      },
+      "require": {
+        "types": "./dist/automation.d.cts",
+        "default": "./dist/automation.cjs"
+      }
     },
     "./binding": {
-      "types": "./src/binding/index.ts",
-      "import": "./src/binding/index.ts",
-      "default": "./src/binding/index.ts"
+      "import": {
+        "types": "./dist/binding.d.ts",
+        "default": "./dist/binding.js"
+      },
+      "require": {
+        "types": "./dist/binding.d.cts",
+        "default": "./dist/binding.cjs"
+      }
     },
     "./contracts/editor": {
-      "types": "./src/contracts/editor.ts",
-      "import": "./src/contracts/editor.ts",
-      "default": "./src/contracts/editor.ts"
+      "import": {
+        "types": "./dist/contracts/editor.d.ts",
+        "default": "./dist/contracts/editor.js"
+      },
+      "require": {
+        "types": "./dist/contracts/editor.d.cts",
+        "default": "./dist/contracts/editor.cjs"
+      }
     },
     "./contracts/document": {
-      "types": "./src/contracts/document.ts",
-      "import": "./src/contracts/document.ts",
-      "default": "./src/contracts/document.ts"
+      "import": {
+        "types": "./dist/contracts/document.d.ts",
+        "default": "./dist/contracts/document.js"
+      },
+      "require": {
+        "types": "./dist/contracts/document.d.cts",
+        "default": "./dist/contracts/document.cjs"
+      }
     },
     "./contracts/interaction": {
-      "types": "./src/contracts/interaction.ts",
-      "import": "./src/contracts/interaction.ts",
-      "default": "./src/contracts/interaction.ts"
+      "import": {
+        "types": "./dist/contracts/interaction.d.ts",
+        "default": "./dist/contracts/interaction.js"
+      },
+      "require": {
+        "types": "./dist/contracts/interaction.d.cts",
+        "default": "./dist/contracts/interaction.cjs"
+      }
     },
     "./contracts/mcp": {
-      "types": "./src/contracts/mcp.ts",
-      "import": "./src/contracts/mcp.ts",
-      "default": "./src/contracts/mcp.ts"
+      "import": {
+        "types": "./dist/contracts/mcp.d.ts",
+        "default": "./dist/contracts/mcp.js"
+      },
+      "require": {
+        "types": "./dist/contracts/mcp.d.cts",
+        "default": "./dist/contracts/mcp.cjs"
+      }
     },
     "./contracts/modules": {
-      "types": "./src/contracts/modules.ts",
-      "import": "./src/contracts/modules.ts",
-      "default": "./src/contracts/modules.ts"
+      "import": {
+        "types": "./dist/contracts/modules.d.ts",
+        "default": "./dist/contracts/modules.js"
+      },
+      "require": {
+        "types": "./dist/contracts/modules.d.cts",
+        "default": "./dist/contracts/modules.cjs"
+      }
     },
     "./contracts/plugin": {
-      "types": "./src/contracts/plugin.ts",
-      "import": "./src/contracts/plugin.ts",
-      "default": "./src/contracts/plugin.ts"
+      "import": {
+        "types": "./dist/contracts/plugin.d.ts",
+        "default": "./dist/contracts/plugin.js"
+      },
+      "require": {
+        "types": "./dist/contracts/plugin.d.cts",
+        "default": "./dist/contracts/plugin.cjs"
+      }
     },
     "./contracts/types": {
-      "types": "./src/contracts/types-barrel.ts",
-      "import": "./src/contracts/types-barrel.ts",
-      "default": "./src/contracts/types-barrel.ts"
+      "import": {
+        "types": "./dist/contracts/types.d.ts",
+        "default": "./dist/contracts/types.js"
+      },
+      "require": {
+        "types": "./dist/contracts/types.d.cts",
+        "default": "./dist/contracts/types.cjs"
+      }
     },
     "./layout": {
-      "types": "./src/layout/index.ts",
-      "import": "./src/layout/index.ts",
-      "default": "./src/layout/index.ts"
+      "import": {
+        "types": "./dist/layout.d.ts",
+        "default": "./dist/layout.js"
+      },
+      "require": {
+        "types": "./dist/layout.d.cts",
+        "default": "./dist/layout.cjs"
+      }
     },
     "./output": {
-      "types": "./src/output/index.ts",
-      "import": "./src/output/index.ts",
-      "default": "./src/output/index.ts"
+      "import": {
+        "types": "./dist/output.d.ts",
+        "default": "./dist/output.js"
+      },
+      "require": {
+        "types": "./dist/output.d.cts",
+        "default": "./dist/output.cjs"
+      }
     },
     "./store": {
-      "types": "./src/store/index.ts",
-      "import": "./src/store/index.ts",
-      "default": "./src/store/index.ts"
+      "import": {
+        "types": "./dist/store.d.ts",
+        "default": "./dist/store.js"
+      },
+      "require": {
+        "types": "./dist/store.d.cts",
+        "default": "./dist/store.cjs"
+      }
     },
     "./editor": {
-      "types": "./src/editor/index.ts",
-      "import": "./src/editor/index.ts",
-      "default": "./src/editor/index.ts"
+      "import": {
+        "types": "./dist/editor.d.ts",
+        "default": "./dist/editor.js"
+      },
+      "require": {
+        "types": "./dist/editor.d.cts",
+        "default": "./dist/editor.cjs"
+      }
     },
-    "./styles/editor.css": "./src/styles/editor.css",
+    "./styles/editor.css": "./dist/editor.css",
     "./package.json": "./package.json"
   },
   "scripts": {
+    "build": "tsup && node ../../scripts/copy-core-styles.mjs",
     "typecheck": "tsc --noEmit",
     "build:types": "tsc -p tsconfig.types.json"
   },
@@ -109,5 +180,9 @@
     "yjs": {
       "optional": true
     }
-  }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }

@@ -15,7 +15,24 @@
     "skipLibCheck": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "paths": {
+      "@docx-editor.dev/core": ["./src/index.ts"],
+      "@docx-editor.dev/core/automation": ["./src/automation/index.ts"],
+      "@docx-editor.dev/core/binding": ["./src/binding/index.ts"],
+      "@docx-editor.dev/core/contracts/editor": ["./src/contracts/editor.ts"],
+      "@docx-editor.dev/core/contracts/document": ["./src/contracts/document.ts"],
+      "@docx-editor.dev/core/contracts/interaction": ["./src/contracts/interaction.ts"],
+      "@docx-editor.dev/core/contracts/mcp": ["./src/contracts/mcp.ts"],
+      "@docx-editor.dev/core/contracts/modules": ["./src/contracts/modules.ts"],
+      "@docx-editor.dev/core/contracts/plugin": ["./src/contracts/plugin.ts"],
+      "@docx-editor.dev/core/contracts/types": ["./src/contracts/types-barrel.ts"],
+      "@docx-editor.dev/core/layout": ["./src/layout/index.ts"],
+      "@docx-editor.dev/core/output": ["./src/output/index.ts"],
+      "@docx-editor.dev/core/store": ["./src/store/index.ts"],
+      "@docx-editor.dev/core/editor": ["./src/editor/index.ts"]
+    }
   },
   "include": [
     "src"

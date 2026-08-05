@@ -1,28 +1,38 @@
 {
   "name": "@docx-editor.dev/pro",
   "version": "1.0.0",
-  "private": true,
   "description": "Commercial capabilities for @docx-editor.dev: the review module (comments, tracked changes, markup rendering) and custom inline nodes over content controls.",
   "sideEffects": false,
   "type": "module",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts",
-      "default": "./src/index.ts"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./react": {
-      "types": "./src/react/index.ts",
-      "import": "./src/react/index.ts",
-      "default": "./src/react/index.ts"
+      "import": {
+        "types": "./dist/react/index.d.ts",
+        "default": "./dist/react/index.js"
+      },
+      "require": {
+        "types": "./dist/react/index.d.cts",
+        "default": "./dist/react/index.cjs"
+      }
     },
     "./package.json": "./package.json"
   },
   "files": [
-    "src",
+    "dist",
     "LICENSE.md"
   ],
   "scripts": {
+    "build": "tsup",
     "typecheck": "tsc --noEmit",
     "build:types": "tsc -p tsconfig.types.json",
     "license:check": "license-check-and-add check -f license-check.json",
