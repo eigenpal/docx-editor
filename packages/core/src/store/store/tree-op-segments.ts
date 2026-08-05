@@ -14,6 +14,7 @@ import {
 } from '../package/field-nodes.ts';
 import { atomicNoteSpansOf, isNoteAtomNode } from '../package/note-nodes.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
+import { contentControlContentChildren } from '../package/content-control-nodes.ts';
 
 /** One addressable unit of paragraph text: text, tab, hard break, or atomic field. */
 export interface Segment {
@@ -222,6 +223,12 @@ function walkParagraph(
     if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
       for (const inner of child.children) visitInline(inner, depth + 1);
     }
+    // An inline content control is the same kind of container: the characters a reader types
+    // into a checkbox or a plain-text control are the paragraph's characters, and a walk that
+    // stopped at the wrapper left them with no offsets at all.
+    if (child.kind === 'contentControl') {
+      for (const inner of contentControlContentChildren(child)) visitInline(inner, depth + 1);
+    }
     record(child, start);
   };
   for (const child of paragraph.children) visitInline(child, 0);
@@ -239,6 +246,9 @@ const MAX_INLINE_CONTAINER_DEPTH = 32;
 export function runsUnder(child: OoxmlNode, depth = 0): OoxmlNode[] {
   if (child.kind === 'run') return [child];
   if (child.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) return [];
+  if (child.kind === 'contentControl') {
+    return contentControlContentChildren(child).flatMap((inner) => runsUnder(inner, depth + 1));
+  }
   if (child.kind !== 'hyperlink' && !isContentRevisionKind(child.kind)) return [];
   return child.children.flatMap((inner) => runsUnder(inner, depth + 1));
 }

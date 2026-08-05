@@ -17,6 +17,7 @@
 
 import {
   atomicFieldSpansOf,
+  contentControlContentChildren,
   hardBreakText,
   isFldSimple,
   WML_NAMESPACE_URI,
@@ -744,6 +745,13 @@ export function piecesOfParagraph(
       return;
     }
     if (depth > MAX_STORY_FIELD_SCAN_DEPTH || depth >= MAX_REVISION_DEPTH) return;
+    // An inline content control is a run container like the other two: its characters are the
+    // paragraph's, they carry the paragraph's offsets, and a walk that stopped here painted a
+    // sentence with the control's own text missing out of the middle of it.
+    if (child.kind === 'contentControl') {
+      for (const inner of contentControlContentChildren(child)) processInline(inner, depth + 1);
+      return;
+    }
     if (child.kind === 'hyperlink') {
       // The link is projected ONCE per element, not per run: sanitization is not free, and a
       // link's runs must all carry the same record so paint can group them by identity.

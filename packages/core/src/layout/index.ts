@@ -313,6 +313,11 @@ export {
 export { noteMarkKey, projectedNoteMarkText, type NoteMarkContext } from './note-projection.ts';
 export { storyBlocks, noteStoryBlocks } from './story-roots.ts';
 export {
+  contentControlBoundaries,
+  type ContentControlBoundaryRecord,
+  type ContentControlFragmentRecord,
+} from './content-control-boundaries.ts';
+export {
   commentAnchorsOfStory,
   commentsOfPart,
   threadStateOfPart,
