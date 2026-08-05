@@ -780,6 +780,60 @@ describe('surface-root pointer delegation for HF / notes', () => {
     surface.destroy();
   });
 
+  test('root listener: blank-band create works on a minimal document with no sectPr and no rels', () => {
+    // The shape a host's "new document" produces: one paragraph, no `w:sectPr`, no
+    // `document.xml.rels`, and no `xmlns:r` on the root. The minted `w:headerReference`
+    // carries `r:id`, and without a root binding the whole create refused `invalid-qname` —
+    // double-clicking the blank band on a fresh document did nothing at all.
+    const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+    const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+    const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t></w:t></w:r></w:p></w:body></w:document>`
+      ),
+    });
+    const container = document.createElement('div');
+    const result = mountPaginatedSurface(container, bytes, { scale: 1 });
+    if (!result.ok) throw new Error(String(result.reason));
+    const surface = result.surface;
+    const pages = container.querySelector<HTMLElement>('.docx-pages')!;
+    stubPagesRect(pages);
+    pages.focus();
+
+    const page = surface.layout().pages[0]!;
+    const clientX = page.contentBox.x + 8;
+    const clientY = page.box.y + 2;
+    pressAt(pages, pages, clientX, clientY);
+    pressAt(pages, pages, clientX, clientY);
+
+    const slot = surface.session.headerFooterResolutionBySection()[0]!.headers.get('default');
+    expect(slot).toBeDefined();
+    expect(surface.activeScope()).toEqual({ kind: 'headerFooter', rId: slot!.rId });
+    expect(surface.headerFooterState()?.editing).toBe('header');
+
+    // The minted root `xmlns:r` binding survives save: reopening the bytes still resolves
+    // the header reference.
+    const reopened = mountPaginatedSurface(document.createElement('div'), surface.session.save(), {
+      scale: 1,
+    });
+    if (!reopened.ok) throw new Error(String(reopened.reason));
+    expect(
+      reopened.surface.session.headerFooterResolutionBySection()[0]!.headers.get('default')
+    ).toBeDefined();
+    reopened.surface.destroy();
+    surface.destroy();
+  });
+
   test('root listener: viewing mode refuses to create a header from the blank band', () => {
     const { surface, container } = mount(docx({ body: p('Body') }));
     const pages = container.querySelector<HTMLElement>('.docx-pages')!;
