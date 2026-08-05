@@ -1082,6 +1082,8 @@ export function openTreeSession(
         // reply. `graftPackage` is the narrow lane for exactly this — a package write that is
         // not a user intent and publishes no revision.
         store.graftPackage(() => packageStore.currentPackage());
+        // The comment ITSELF is a user intent and does publish one — see the
+        // `publishStoryWrite` below.
         const result = addComment(store, {
           anchor: {
             paragraphId: anchor.paragraphId,
@@ -1106,6 +1108,10 @@ export function openTreeSession(
         // `currentPackage()` keeps answering with a package that has no comment part and the
         // reply reads back as never written.
         packageStore.replacePackageShell(store.package);
+        // Published LAST, so a subscriber that re-derives on the notification already sees the
+        // shell installed above. Publishing first handed the change to a rail whose next
+        // `reviewItems()` still read a package with no comment part in it.
+        packageStore.publishStoryWrite(result.change);
         return result.commentId;
       },
 
@@ -1118,6 +1124,8 @@ export function openTreeSession(
         const result = setCommentResolved(store, commentId, resolved);
         if (!result.ok) return false;
         packageStore.replacePackageShell(store.package);
+        // Resolving is a document change like any other — see `replyToComment`.
+        packageStore.publishStoryWrite(result.change);
         return true;
       },
 

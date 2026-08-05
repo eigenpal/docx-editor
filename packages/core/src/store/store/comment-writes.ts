@@ -28,7 +28,7 @@ import {
 } from '../package/ooxml-tree.ts';
 import { W14_NAMESPACE_URI, XML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import { isValidParaId, mintParaId, usedParaIds, w14RootPrefix } from '../package/para-id.ts';
-import type { TreeDocumentStore } from './tree-store.ts';
+import type { TreeDocumentStore, TreeModelChange } from './tree-store.ts';
 import type { TreeOpRejection } from './tree-op-validate.ts';
 
 const COMMENTS_PART = '/word/comments.xml';
@@ -63,7 +63,19 @@ export interface AddCommentRequest {
 }
 
 export type AddCommentResult =
-  | { readonly ok: true; readonly commentId: string }
+  | {
+      readonly ok: true;
+      readonly commentId: string;
+      /**
+       * The story transaction's own change, so the coordinator can publish it.
+       *
+       * A comment write commits straight on the story store rather than through
+       * `applyTreeOps`, and the change is what carries the dirty anchor paragraphs and the
+       * `text-local` impact. Dropping it here left the caller with nothing precise to
+       * publish and no way to tell a committed write from an identity no-op.
+       */
+      readonly change: TreeModelChange | null;
+    }
   | { readonly ok: false; readonly reason: TreeOpRejection | 'invalid-author' };
 
 function attribute(
@@ -582,11 +594,16 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
   });
 
   if (!result.ok) return { ok: false, reason: result.reason };
-  return { ok: true, commentId };
+  return { ok: true, commentId, change: result.change };
 }
 
 export type SetCommentResolvedResult =
-  | { readonly ok: true; readonly changed: boolean }
+  | {
+      readonly ok: true;
+      readonly changed: boolean;
+      /** The story transaction's change, for the coordinator to publish — see {@link AddCommentResult}. */
+      readonly change: TreeModelChange | null;
+    }
   | { readonly ok: false; readonly reason: TreeOpRejection | 'unknown-comment' };
 
 /** Every `w15:commentEx` in the part, by the `w15:paraId` it records state for. */
@@ -730,7 +747,7 @@ export function setCommentResolved(
   });
 
   if (!result.ok) return { ok: false, reason: result.reason };
-  return { ok: true, changed: true };
+  return { ok: true, changed: true, change: result.change };
 }
 
 /** A comment part exists and declares the comment content type. */
