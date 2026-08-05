@@ -50,7 +50,6 @@ import {
   ContextMenuRefreshToc,
   ContextMenuRefreshTocPageNumbers,
   useTableContextMenuVisible,
-  useTocContextMenuVisible,
 } from './parts';
 
 /** Distance kept between the panel and the window edge when it flips. @internal */
@@ -237,14 +236,15 @@ export function DocxEditorContextMenu({
 }: DocxEditorContextMenuProps) {
   const editor = useDocxEditor();
   const tableContextVisible = useTableContextMenuVisible();
-  const tocContextVisible = useTocContextMenuVisible();
-  const defaultSet = useMemo(
-    () => contextMenuDefaultSet(tableContextVisible, tocContextVisible),
-    [tableContextVisible, tocContextVisible]
-  );
   const hostRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [anchor, setAnchor] = useState<ContextMenuAnchor | null>(null);
+  // Captured with the anchor, not subscribed to — see `tocId` on the context value.
+  const [tocId, setTocId] = useState<string | null>(null);
+  const defaultSet = useMemo(
+    () => contextMenuDefaultSet(tableContextVisible, tocId !== null),
+    [tableContextVisible, tocId]
+  );
   // Placement is measured AFTER the panel renders — its size depends on the rows the host
   // composed — so the first paint is at the raw anchor and the flip lands in a layout
   // effect, before the browser paints.
@@ -262,6 +262,7 @@ export function DocxEditorContextMenu({
     (restoreFocus = false) => {
       setAnchor(null);
       setPlacement(null);
+      setTocId(null);
       if (restoreFocus) editor?.focus();
     },
     [editor]
@@ -281,6 +282,9 @@ export function DocxEditorContextMenu({
       // far off the top of the window).
       const keyboard = event.button === -1 || (event.clientX === 0 && event.clientY === 0);
       const box = scroller.getBoundingClientRect();
+      // The engine's own listener sits INSIDE this one and has already recorded which table
+      // of contents the press landed on, so reading it here is reading it current.
+      setTocId(editor?.snapshot().tocContext?.id ?? null);
       setAnchor(
         keyboard ? { x: box.left + 16, y: box.top + 16 } : { x: event.clientX, y: event.clientY }
       );
@@ -395,8 +399,8 @@ export function DocxEditorContextMenu({
   // Root-owned, so it survives the panel unmounting when a row is selected.
   const [clipboardRefusal, setClipboardRefusal] = useState<string | null>(null);
   const contextMenuContext = useMemo(
-    () => ({ close, anchor, clipboardRefusal, reportClipboardRefusal: setClipboardRefusal }),
-    [close, anchor, clipboardRefusal]
+    () => ({ close, anchor, tocId, clipboardRefusal, reportClipboardRefusal: setClipboardRefusal }),
+    [close, anchor, tocId, clipboardRefusal]
   );
 
   const style: CSSProperties = {

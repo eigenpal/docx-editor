@@ -375,22 +375,27 @@ ContextMenuCellVerticalAlignment.docxRow = 'table.cellVerticalAlignment' as cons
 /**
  * Define a row that only exists while the right-click landed on a table of contents.
  *
- * Contextual the same way the table rows are, but keyed on `tocContext` rather than
- * `table`: a right-click does not move the caret and a generated TOC refuses it outright,
- * so the pointed-at table of contents is the only thing that can say these rows apply.
+ * Contextual the same way the table rows are, but keyed on the TOC the OPEN captured
+ * rather than on the caret: a right-click does not move the caret and a generated TOC
+ * refuses it outright, so the pointed-at table of contents is the only thing that can say
+ * these rows apply. The row also carries that id into the command, so a document with two
+ * tables of contents refreshes the one the user pointed at.
  */
 function defineTocCommandRow(
   rowId: string,
-  command: EditorCommand,
+  mode: 'entire' | 'pageNumbers',
   defaults: { labelKey: string; paths: readonly string[] }
 ) {
   const Part = ({ icon, labelKey, className, hidden }: ContextMenuCommandProps) => {
     const editor = useDocxEditor();
-    const { close } = useContextMenuContext();
+    const { close, tocId } = useContextMenuContext();
     const label = useMenuLabel();
-    const tocVisible = useTocContextMenuVisible();
+    const command = useMemo(
+      (): EditorCommand => ({ type: 'refreshToc', mode, ...(tocId ? { tocId } : {}) }),
+      [tocId]
+    );
     const { isEnabled, disabledReason } = useEditorCommand(command);
-    if (hidden || !tocVisible) return null;
+    if (hidden || tocId === null) return null;
     return (
       <MenuRow
         slot={rowId}
@@ -411,26 +416,17 @@ function defineTocCommandRow(
 }
 
 /** Rebuild the pointed-at table of contents from the document's headings. @public */
-export const ContextMenuRefreshToc = defineTocCommandRow(
-  'toc.refresh',
-  { type: 'refreshToc', mode: 'entire' },
-  { labelKey: 'toc.refresh', paths: REFRESH_TOC_PATHS }
-);
+export const ContextMenuRefreshToc = defineTocCommandRow('toc.refresh', 'entire', {
+  labelKey: 'toc.refresh',
+  paths: REFRESH_TOC_PATHS,
+});
 
 /** Re-resolve only the page numbers of the pointed-at table of contents. @public */
 export const ContextMenuRefreshTocPageNumbers = defineTocCommandRow(
   'toc.refreshPageNumbers',
-  { type: 'refreshToc', mode: 'pageNumbers' },
+  'pageNumbers',
   { labelKey: 'toc.refreshPageNumbers', paths: REFRESH_TOC_PAGE_NUMBERS_PATHS }
 );
-
-/** Whether table-of-contents rows should render for the last right-click. @internal */
-export function useTocContextMenuVisible(): boolean {
-  return useEditorState(
-    useCallback((snapshot) => snapshot.tocContext != null, []),
-    (a, b) => a === b
-  );
-}
 
 /** Fixed table-of-contents context rows, in menu order. @internal */
 export const TOC_CONTEXT_ROWS = [ContextMenuRefreshToc, ContextMenuRefreshTocPageNumbers] as const;

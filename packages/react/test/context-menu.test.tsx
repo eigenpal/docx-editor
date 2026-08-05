@@ -808,6 +808,36 @@ describe('table context rows (Task 10)', () => {
     expect(rowNamed(view, 'toc.refreshPageNumbers').textContent).toContain('toc.refreshPageNumbers');
   });
 
+  test('the rows are there on the FIRST open, right after a menu over ordinary text', () => {
+    // The engine records the right-click target and this panel opens from the same event, so
+    // reading that target through a subscription is a render behind. Opening over ordinary
+    // text first is what makes the difference observable: the TOC open has to bring its own
+    // rows with it, not inherit them from a state the previous open already settled.
+    const { view } = mountDocument(TOC_DOCUMENT);
+    rightClick(view);
+    expect(rows(view).map((row) => row.dataset.slot)).not.toContain('toc.refresh');
+    act(() => {
+      fireEvent.keyDown(document, { key: 'Escape' });
+    });
+    rightClickOn(tocRow(view));
+    expect(rows(view).map((row) => row.dataset.slot).slice(-2)).toEqual([
+      'toc.refresh',
+      'toc.refreshPageNumbers',
+    ]);
+  });
+
+  test('the rows keep addressing the TOC the open captured, not the caret', () => {
+    const { view, editor } = mountDocument(TOC_DOCUMENT);
+    rightClickOn(tocRow(view));
+    // The caret is nowhere near a TOC — it cannot be — so an id read from the selection
+    // would be no id at all in a document with more than one.
+    expect(editor().snapshot().tocContext).not.toBeNull();
+    act(() => {
+      fireEvent.click(rowNamed(view, 'toc.refreshPageNumbers'));
+    });
+    expect(panel(view)).toBeNull();
+  });
+
   test('the update rows are absent from a menu opened over ordinary text', () => {
     const { view } = mountDocument(TOC_DOCUMENT);
     rightClick(view);
