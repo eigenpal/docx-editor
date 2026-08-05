@@ -7,7 +7,13 @@
 
 import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
-import { readOoxmlPackage, type OoxmlPackage } from '../index.ts';
+import {
+  contentControlsIn,
+  paragraphOffsetIndex,
+  readOoxmlPackage,
+  type OoxmlPackage,
+  type OoxmlParagraphNode,
+} from '../index.ts';
 import { TreeDocumentStore } from '../store/tree-store.ts';
 import type { TreeDocOp, TreeOpRejection } from '../store/tree-op-types.ts';
 
@@ -131,6 +137,135 @@ describe('forms protection inverts what is editable', () => {
     ).toBeNull();
   });
 });
+
+// AN INLINE CONTROL IS THE FORM FIELD Word protects, and the paragraph around it is not.
+//
+// Resolving the exemption from the node an op NAMES answers "not inside a control" for every
+// inline field in every protected document — the paragraph is outside the control, so the whole
+// paragraph reads as protected and the field cannot be filled in. That is the failure a forms
+// document exists to avoid. The exemption is resolved from the RANGE the op addresses, with the
+// same edge rule the lock uses: the leading edge is inside, the trailing edge is not.
+describe('forms protection over an inline field', () => {
+  /** `before` + an inline control holding `held` + `after`, in one protected paragraph. */
+  const inlineBody = (lock = '', before = 'abc', held = 'MID', after = 'xyz') =>
+    `<w:p><w:r><w:t>${before}</w:t></w:r>` +
+    `<w:sdt><w:sdtPr><w:tag w:val="field"/>${lock ? `<w:lock w:val="${lock}"/>` : ''}</w:sdtPr>` +
+    `<w:sdtContent><w:r><w:t>${held}</w:t></w:r></w:sdtContent></w:sdt>` +
+    `<w:r><w:t>${after}</w:t></w:r></w:p>` +
+    `<w:sectPr/>`;
+
+  /** Where the one inline control's characters are, in the paragraph's own offsets. */
+  function span(pkg: OoxmlPackage): { readonly start: number; readonly end: number } {
+    const main = pkg.parts.get(pkg.mainDocumentPart)!;
+    const control = contentControlsIn(main.root)[0];
+    if (!control) throw new Error('no control');
+    const paragraph = firstParagraph(main.root as never);
+    const found = paragraphOffsetIndex(paragraph).spanOf(control.node);
+    if (!found) throw new Error('the control has no span');
+    return found;
+  }
+
+  const typeAt = (pkg: OoxmlPackage, offset: number): TreeOpRejection | null =>
+    refusal(pkg, { op: 'insertText', paragraphId: paragraphIds(pkg)[0]!, offset, text: 'x' });
+
+  test('typing inside the field is allowed', () => {
+    const pkg = build(inlineBody(), FORMS);
+    expect(typeAt(pkg, span(pkg).start + 1)).toBeNull();
+  });
+
+  test('typing at the leading edge is allowed, because the text lands inside', () => {
+    const pkg = build(inlineBody(), FORMS);
+    expect(typeAt(pkg, span(pkg).start)).toBeNull();
+  });
+
+  test('typing at the trailing edge is refused, because the text lands outside', () => {
+    const pkg = build(inlineBody(), FORMS);
+    expect(typeAt(pkg, span(pkg).end)).toBe('locked');
+  });
+
+  test('typing in the text beside the field is refused', () => {
+    const pkg = build(inlineBody(), FORMS);
+    expect(typeAt(pkg, 1)).toBe('locked');
+  });
+
+  test('a deletion wholly inside the field is allowed', () => {
+    const pkg = build(inlineBody(), FORMS);
+    const extent = span(pkg);
+    expect(
+      refusal(pkg, {
+        op: 'deleteText',
+        paragraphId: paragraphIds(pkg)[0]!,
+        start: extent.start,
+        end: extent.end,
+      })
+    ).toBeNull();
+  });
+
+  test('a deletion crossing out of the field is refused', () => {
+    const pkg = build(inlineBody(), FORMS);
+    const extent = span(pkg);
+    expect(
+      refusal(pkg, {
+        op: 'deleteText',
+        paragraphId: paragraphIds(pkg)[0]!,
+        start: extent.start,
+        end: extent.end + 1,
+      })
+    ).toBe('locked');
+  });
+
+  test('formatting the field’s own characters is allowed', () => {
+    const pkg = build(inlineBody(), FORMS);
+    const extent = span(pkg);
+    expect(
+      refusal(pkg, {
+        op: 'setRunProperties',
+        paragraphId: paragraphIds(pkg)[0]!,
+        start: extent.start,
+        end: extent.end,
+        properties: [{ localName: 'b', namespaceUri: W, attributes: [] }],
+      })
+    ).toBeNull();
+  });
+
+  test('the field’s own lock still refuses, protection or not', () => {
+    const pkg = build(inlineBody('contentLocked'), FORMS);
+    expect(typeAt(pkg, span(pkg).start + 1)).toBe('locked');
+  });
+
+  test('a field nested inside a block control is reachable through both', () => {
+    const pkg = build(
+      `<w:sdt><w:sdtPr><w:tag w:val="outer"/></w:sdtPr><w:sdtContent>` +
+        `<w:p><w:r><w:t>abc</w:t></w:r>` +
+        `<w:sdt><w:sdtPr><w:tag w:val="inner"/></w:sdtPr>` +
+        `<w:sdtContent><w:r><w:t>MID</w:t></w:r></w:sdtContent></w:sdt>` +
+        `</w:p></w:sdtContent></w:sdt><w:sectPr/>`,
+      FORMS
+    );
+    expect(typeAt(pkg, 1)).toBeNull();
+    expect(typeAt(pkg, 4)).toBeNull();
+  });
+
+  test('a paragraph-wide property write is still refused: that is not filling in a field', () => {
+    const pkg = build(inlineBody(), FORMS);
+    expect(
+      refusal(pkg, {
+        op: 'setParagraphProperties',
+        paragraphId: paragraphIds(pkg)[0]!,
+        properties: [],
+      })
+    ).toBe('locked');
+  });
+});
+
+function firstParagraph(node: { kind: string; children: readonly never[] }): OoxmlParagraphNode {
+  if (node.kind === 'paragraph') return node as unknown as OoxmlParagraphNode;
+  for (const child of node.children) {
+    const found = firstParagraph(child);
+    if (found) return found;
+  }
+  return undefined as unknown as OoxmlParagraphNode;
+}
 
 function findControlId(node: { kind: string; id: string; children: readonly never[] }): string {
   if (node.kind === 'contentControl') return node.id;

@@ -11,6 +11,7 @@ import {
   contentControlPropertiesOf,
   contentControlTextOf,
   contentControlsIn,
+  paragraphOffsetIndex,
   readOoxmlPart,
   serializeOoxmlPart,
   storyParagraphs,
@@ -471,5 +472,92 @@ describe('metadata, insertion and removal', () => {
     });
     expect(serializeOoxmlPart(next)).not.toContain('gone');
     expect(serializeOoxmlPart(next)).toContain('stays');
+  });
+});
+
+// AN OFFSET CANNOT SAY "APPEND TO THIS FIELD". A boundary offset belongs to the run that starts
+// there, so the offset at an inline control's trailing edge is the text AFTER the control — the
+// same ambiguity `setRunProperties` answers with `targetRunIds`, answered the same way.
+describe('an insertion can name the control it belongs to', () => {
+  const inline = () =>
+    parseDoc(
+      `<w:p><w:r><w:t>abc</w:t></w:r>` +
+        `<w:sdt><w:sdtPr><w:tag w:val="f"/></w:sdtPr>` +
+        `<w:sdtContent><w:r><w:rPr><w:b/></w:rPr><w:t>MID</w:t></w:r></w:sdtContent></w:sdt>` +
+        `<w:r><w:t>xyz</w:t></w:r></w:p>`
+    );
+
+  const spanOf = (part: OoxmlPart): { readonly start: number; readonly end: number } => {
+    const control = contentControlsIn(part.root)[0]!;
+    const found = paragraphOffsetIndex(paragraphs(part)[0] as never).spanOf(control.node);
+    if (!found) throw new Error('the control has no span');
+    return found;
+  };
+
+  test('the trailing edge appends inside the control instead of after it', () => {
+    const part = inline();
+    const next = apply(part, {
+      op: 'insertText',
+      paragraphId: paragraphs(part)[0]!.id,
+      offset: spanOf(part).end,
+      text: '#',
+      inside: contentControlsIn(part.root)[0]!.node.id,
+    });
+    expect(contentControlTextOf(contentControlsIn(next.root)[0]!.node)).toBe('MID#');
+  });
+
+  test('and it keeps the formatting of the run it appended to', () => {
+    const part = inline();
+    const next = apply(part, {
+      op: 'insertText',
+      paragraphId: paragraphs(part)[0]!.id,
+      offset: spanOf(part).end,
+      text: '#',
+      inside: contentControlsIn(part.root)[0]!.node.id,
+    });
+    // One bold run holding both, rather than the content rebuilt as plain text.
+    expect(serializeOoxmlPart(next)).toContain('<w:b/>');
+    expect(serializeOoxmlPart(next)).toMatch(/<w:b\/><\/w:rPr><w:t>MID<\/w:t><w:t>#<\/w:t>/);
+  });
+
+  test('the leading edge lands where it already landed', () => {
+    const part = inline();
+    const next = apply(part, {
+      op: 'insertText',
+      paragraphId: paragraphs(part)[0]!.id,
+      offset: spanOf(part).start,
+      text: '#',
+      inside: contentControlsIn(part.root)[0]!.node.id,
+    });
+    expect(contentControlTextOf(contentControlsIn(next.root)[0]!.node)).toBe('#MID');
+  });
+
+  test('an empty control gets a run to hold the text', () => {
+    const part = parseDoc(
+      `<w:p><w:r><w:t>abc</w:t></w:r>` +
+        `<w:sdt><w:sdtPr><w:tag w:val="f"/></w:sdtPr><w:sdtContent/></w:sdt>` +
+        `<w:r><w:t>xyz</w:t></w:r></w:p>`
+    );
+    const next = apply(part, {
+      op: 'insertText',
+      paragraphId: paragraphs(part)[0]!.id,
+      offset: 3,
+      text: 'FILLED',
+      inside: contentControlsIn(part.root)[0]!.node.id,
+    });
+    expect(contentControlTextOf(contentControlsIn(next.root)[0]!.node)).toBe('FILLED');
+  });
+
+  test('a name no control carries is refused, not written somewhere else', () => {
+    const part = inline();
+    expect(
+      refusal(part, {
+        op: 'insertText',
+        paragraphId: paragraphs(part)[0]!.id,
+        offset: 3,
+        text: '#',
+        inside: 'no-such-node',
+      })
+    ).toBe('unknown-content-control');
   });
 });

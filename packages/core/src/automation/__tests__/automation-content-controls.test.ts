@@ -448,6 +448,63 @@ describe('a script writes through the same refusals the keyboard meets', () => {
     ).toBe(expected);
   });
 
+  // The same three locations on an INLINE control, where the two edges are offsets in a paragraph
+  // the control does not own. The trailing edge is the one that catches a host resolving the
+  // location as a bare offset: the store gives a boundary offset to the run that STARTS there, so
+  // an insertion at the control's end would land in the text after it and the command would
+  // report success for text it wrote outside the control it was asked to write into.
+  test.each([
+    ['replace', 'ACME'],
+    ['start', 'ACMEMID'],
+    ['end', 'MIDACME'],
+  ] as const)('text is inserted at %s of an inline control', (at, expected) => {
+    const host = open(
+      docx(
+        `<w:p><w:r><w:t>abc</w:t></w:r>` +
+          `<w:sdt><w:sdtPr><w:tag w:val="f"/><w:text/></w:sdtPr>` +
+          `<w:sdtContent><w:r><w:t>MID</w:t></w:r></w:sdtContent></w:sdt>` +
+          `<w:r><w:t>xyz</w:t></w:r></w:p>`
+      )
+    );
+    const control = controlsOf(host, roots(host).body)[0]!;
+    const answer = host.execute({
+      operations: [{ op: 'insertContentControlText', contentControl: control, text: 'ACME', at }],
+    });
+    expect(answer.results[0]?.status).toBe('ok');
+    expect(
+      textAt(
+        host.execute({ operations: [{ op: 'getContentControlText', contentControl: control }] }),
+        0
+      )
+    ).toBe(expected);
+    // And the text around it is untouched, so nothing leaked out of the control on the way.
+    expect(savedMainXml(host)).toContain('abc');
+    expect(savedMainXml(host)).toContain('xyz');
+  });
+
+  test('an insertion into a locked inline control is refused wherever it lands', () => {
+    const host = open(
+      docx(
+        `<w:p><w:r><w:t>abc</w:t></w:r>` +
+          `<w:sdt><w:sdtPr><w:tag w:val="f"/><w:text/><w:lock w:val="contentLocked"/></w:sdtPr>` +
+          `<w:sdtContent><w:r><w:t>MID</w:t></w:r></w:sdtContent></w:sdt>` +
+          `<w:r><w:t>xyz</w:t></w:r></w:p>`
+      )
+    );
+    const control = controlsOf(host, roots(host).body)[0]!;
+    for (const at of ['replace', 'start', 'end'] as const) {
+      expect(
+        refusedBecause(
+          host.execute({
+            operations: [
+              { op: 'insertContentControlText', contentControl: control, text: 'x', at },
+            ],
+          })
+        )
+      ).toBe('transaction-refused/locked');
+    }
+  });
+
   test('an insertion into a locked control is refused wherever it lands', () => {
     const host = open(
       docx(

@@ -11,6 +11,7 @@ import { fieldAtomText } from '../package/field-nodes.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlAttribute,
+  type OoxmlElement,
   type OoxmlNode,
   type OoxmlParagraphNode,
   type OoxmlPart,
@@ -258,7 +259,8 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
         paragraph,
         op.offset,
         [(mint) => textElement(mint, op.text)],
-        options
+        options,
+        op.inside
       );
     case 'insertTab':
       return applyInsertContent(
@@ -380,7 +382,9 @@ function applyInsertContent(
   paragraph: OoxmlParagraphNode,
   offset: number,
   builders: readonly ((mint: () => string) => OoxmlNode)[],
-  options?: EditOptions
+  options?: EditOptions,
+  /** The content control the caller says this content belongs to, if it named one. */
+  inside?: string
 ): TreeOpResult {
   const nextId = createNodeIdAllocator(part);
   const nodes = builders.map((build) => build(nextId));
@@ -391,7 +395,15 @@ function applyInsertContent(
     dependencyKeys: TEXT_DEPS,
     impact: 'text-local',
   };
-  const segments = segmentsOf(paragraph);
+  const all = segmentsOf(paragraph);
+  // A named owner narrows the offset to that control's OWN characters. Without it the trailing
+  // edge resolves to the run after the control, which is beside the field rather than in it.
+  const found = inside === undefined ? null : findNode(part, inside);
+  if (inside !== undefined && (found === null || found.kind === 'textValue')) {
+    return { ok: false, reason: 'unknown-content-control' };
+  }
+  const owner = found?.kind === 'textValue' ? null : found;
+  const segments = owner === null ? all : all.filter((segment) => contains(owner, segment.node.id));
 
   // Inside a text value: split it and place the new content between the halves.
   for (const segment of segments) {
@@ -421,22 +433,37 @@ function applyInsertContent(
     return fromEdit(insertChildren(part, run.id, Math.max(0, index), nodes, options), effect);
   }
 
-  const runs = paragraph.children.filter((child) => child.kind === 'run');
+  // Past every segment the caller's own scope holds: append to the last run of that scope. For a
+  // named owner that is the trailing edge — the whole reason the op carries the name.
+  // The offsets are this paragraph's, so the run to append to is this paragraph's — narrowed to
+  // the named owner's own runs when there is one.
+  const runs =
+    owner === null
+      ? paragraph.children.filter((child) => child.kind === 'run')
+      : paragraph.children
+          .flatMap((child) => runsUnder(child))
+          .filter((run) => contains(owner, run.id));
   const last = runs[runs.length - 1];
-  if (last) {
+  if (last && last.kind !== 'textValue') {
     return fromEdit(insertChildren(part, last.id, last.children.length, nodes, options), effect);
   }
-  // An empty paragraph: the content needs a run to live in.
+  // Nothing to append to: the content needs a run to live in. A control holding no run of its own
+  // in this paragraph gets one in its `w:sdtContent`; anything else puts it in the paragraph.
+  const holder = owner === null || contains(owner, paragraph.id) ? paragraph : contentHolder(owner);
   return fromEdit(
-    insertChildren(
-      part,
-      paragraph.id,
-      paragraph.children.length,
-      [runElement(nextId, nodes)],
-      options
-    ),
+    insertChildren(part, holder.id, holder.children.length, [runElement(nextId, nodes)], options),
     effect
   );
+}
+
+/** Where a run goes inside a control: its content element, or the control itself. */
+function contentHolder(control: OoxmlElement): OoxmlElement {
+  for (const child of control.children) {
+    if (child.kind === 'textValue') continue;
+    if (child.kind === 'contentControlContent') return child;
+    if (child.kind === 'generic' && child.localName === 'sdtContent') return child;
+  }
+  return control;
 }
 
 function contains(node: OoxmlNode, id: string): boolean {

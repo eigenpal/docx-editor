@@ -61,6 +61,15 @@ function paragraphs(part: OoxmlPart): readonly OoxmlNode[] {
 
 const QA = { id: '1', author: 'QA', date: '2026-03-26T11:00:00Z' };
 
+function protectedSettings(): OoxmlPart {
+  const result = readOoxmlPart(
+    `<w:settings xmlns:w="${W}"><w:documentProtection w:edit="forms" w:enforcement="1"/></w:settings>`,
+    { name: '/word/settings.xml', contentType: 'app/xml' }
+  );
+  if (!result.ok) throw new Error(result.reason);
+  return result.part;
+}
+
 /** A locked control holding a tracked insertion, so accept/reject has something to rewrite. */
 function lockedWithRevision(lock = 'sdtContentLocked'): OoxmlPart {
   return parseDoc(
@@ -178,14 +187,7 @@ describe('hyperlink writes meet the lock of the control that owns the link', () 
 });
 
 describe('forms protection reaches the same ops', () => {
-  const settings = (): OoxmlPart => {
-    const result = readOoxmlPart(
-      `<w:settings xmlns:w="${W}"><w:documentProtection w:edit="forms" w:enforcement="1"/></w:settings>`,
-      { name: '/word/settings.xml', contentType: 'app/xml' }
-    );
-    if (!result.ok) throw new Error(result.reason);
-    return result.part;
-  };
+  const settings = protectedSettings;
 
   test('accepting every revision is refused while forms protection holds', () => {
     const part = parseDoc(
@@ -234,13 +236,76 @@ describe('forms protection reaches the same ops', () => {
   });
 });
 
-describe('a document-wide op is refused by a lock anywhere it would reach', () => {
-  test('a section property write is refused while any control forbids edits', () => {
+// A LOCK PROTECTS CONTENT; IT IS NOT A LICENCE OVER THE DOCUMENT. `w:sdtPr/w:lock` says what may
+// happen to the control and to the characters it holds. Page setup, section furniture and note
+// numbering change none of those, so a control that forbids content edits must not be able to
+// freeze the document's own properties — Word does not work that way, and a template with one
+// locked field would otherwise have unchangeable margins.
+//
+// Forms protection is the opposite question and keeps its own answer: `w:edit="forms"` means the
+// document is read-only except for filling in fields, and page setup is not filling in a field.
+describe('a document-property write is not content, and a lock does not refuse it', () => {
+  const withLockedControl = (lock: string) =>
+    parseDoc(
+      `<w:sdt><w:sdtPr><w:tag w:val="t"/><w:lock w:val="${lock}"/></w:sdtPr>` +
+        `<w:sdtContent><w:p><w:r><w:t>locked</w:t></w:r></w:p></w:sdtContent></w:sdt>`
+    );
+
+  test('page setup is allowed beside a contentLocked control', () => {
+    expect(
+      refusal(withLockedControl('sdtContentLocked'), {
+        op: 'setSectionProperties',
+        marginTopTwips: 720,
+      })
+    ).toBeNull();
+  });
+
+  test('section furniture options are allowed too', () => {
+    expect(
+      refusal(withLockedControl('sdtContentLocked'), {
+        op: 'setSectionFurnitureOptions',
+        titlePage: true,
+      })
+    ).not.toBe('locked');
+  });
+
+  test('note numbering is a document property, not the content of a field', () => {
+    expect(
+      refusal(withLockedControl('contentLocked'), {
+        op: 'setNoteProperties',
+        scope: 'document',
+        footnote: { numFmt: 'lowerRoman' },
+      })
+    ).not.toBe('locked');
+  });
+
+  test('and none of it is allowed while forms protection holds', () => {
+    const settings = protectedSettings();
+    const part = parseDoc(`<w:p><w:r><w:t>text</w:t></w:r></w:p>`);
+    expect(
+      formsProtectionRefusal(part, settings, { op: 'setSectionProperties', marginTopTwips: 720 })
+    ).toBe('locked');
+    expect(
+      formsProtectionRefusal(part, settings, {
+        op: 'setNoteProperties',
+        scope: 'document',
+        footnote: { numFmt: 'lowerRoman' },
+      })
+    ).toBe('locked');
+  });
+});
+
+describe('an op that could rewrite content anywhere still fails closed', () => {
+  // Deleting or converting a note rewrites the RUN that referenced it, wherever that run is —
+  // possibly inside a locked control. The op names a note id, which is not a body address, so
+  // nothing narrows it and the conservative answer is the only available one.
+  test('deleting a note is refused while a control forbids content edits', () => {
     const part = parseDoc(
       `<w:sdt><w:sdtPr><w:tag w:val="t"/><w:lock w:val="sdtContentLocked"/></w:sdtPr>` +
         `<w:sdtContent><w:p><w:r><w:t>locked</w:t></w:r></w:p></w:sdtContent></w:sdt>`
     );
-    expect(refusal(part, { op: 'setSectionProperties', marginTopTwips: 720 })).toBe('locked');
+    expect(refusal(part, { op: 'deleteNote', noteKind: 'footnote', noteId: 2 })).toBe('locked');
+    expect(refusal(part, { op: 'convertAllNotes', fromKind: 'footnote' })).toBe('locked');
   });
 
   test('and allowed in a document whose controls are unlocked', () => {
@@ -248,15 +313,7 @@ describe('a document-wide op is refused by a lock anywhere it would reach', () =
       `<w:sdt><w:sdtPr><w:tag w:val="t"/></w:sdtPr>` +
         `<w:sdtContent><w:p><w:r><w:t>free</w:t></w:r></w:p></w:sdtContent></w:sdt>`
     );
-    expect(refusal(part, { op: 'setSectionProperties', marginTopTwips: 720 })).toBeNull();
-  });
-
-  test('a lock that only forbids removal does not refuse a page-margin write', () => {
-    const part = parseDoc(
-      `<w:sdt><w:sdtPr><w:tag w:val="t"/><w:lock w:val="sdtLocked"/></w:sdtPr>` +
-        `<w:sdtContent><w:p><w:r><w:t>text</w:t></w:r></w:p></w:sdtContent></w:sdt>`
-    );
-    expect(refusal(part, { op: 'setSectionProperties', marginTopTwips: 720 })).toBeNull();
+    expect(refusal(part, { op: 'deleteNote', noteKind: 'footnote', noteId: 2 })).not.toBe('locked');
   });
 });
 

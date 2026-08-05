@@ -111,6 +111,16 @@ export type TreeDocOp =
        * depend on state the op does not carry.
        */
       readonly revision?: RevisionAttributionInput;
+      /**
+       * When set, the text belongs INSIDE this content control, whatever sits at the offset.
+       *
+       * A boundary offset is owned by the run that starts there, which at a control's trailing
+       * edge is the run after the control — so an offset alone cannot say "append to this field",
+       * the way it cannot say which run of a field result to format (see `targetRunIds`). A
+       * caller that names the control gets the text in the control; one that does not gets the
+       * plain offset rule, which is what a keystroke beside a field means.
+       */
+      readonly inside?: string;
     }
   | {
       readonly op: 'deleteText';

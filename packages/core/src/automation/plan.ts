@@ -2683,6 +2683,11 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
                     paragraphId: at.paragraphId,
                     offset: at.offset,
                     text: operation.text,
+                    // THE TEXT GOES IN THE CONTROL, which the offset alone cannot say: a boundary
+                    // offset belongs to the run that starts there, so an inline control's
+                    // trailing edge is the text AFTER the control and the command would have
+                    // written beside the field it was handed.
+                    inside: found.node.id,
                   },
                 ],
           answer: written,

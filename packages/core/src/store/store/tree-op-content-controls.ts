@@ -153,6 +153,17 @@ export type TreeOpReach =
   | { readonly kind: 'none' }
   /** Could change anything in the part. */
   | { readonly kind: 'part' }
+  /**
+   * Changes the DOCUMENT's own properties and no content: page setup, section furniture options,
+   * note numbering.
+   *
+   * Its own kind because the two protections answer it differently, and answering both from
+   * `part` was wrong in one of them. A `w:lock` protects a control and the characters it holds;
+   * margins are neither, so one locked field must not freeze a template's page setup. Forms
+   * protection is the opposite question — the document is read-only except for filling in fields,
+   * and page setup is not filling in a field — so it still refuses.
+   */
+  | { readonly kind: 'documentProperties' }
   /** Addressed AT a control; the control ops resolve their own halves of `ST_Lock`. */
   | {
       readonly kind: 'control';
@@ -169,13 +180,29 @@ export interface TreeOpTarget {
   readonly nodeId: string;
   /** UTF-16 offsets inside the node this op addresses. Absent means the node itself. */
   readonly range?: OffsetSpan;
+  /**
+   * The range is a point at which content is WRITTEN, so the leading edge is inside.
+   *
+   * The applier gives a boundary offset to the run that starts there, which at a control's start
+   * is the control's own first run and at its end is the run after it. A point op that writes
+   * content therefore lands inside a control it is placed at the front of, and validation has to
+   * agree or a locked field can be typed into from the front.
+   */
+  readonly writes?: boolean;
   /** The node's children are restructured, so a control inside it is affected. */
   readonly structural?: boolean;
   /** The node and everything under it goes away, so removal locks apply. */
   readonly removes?: boolean;
 }
 
-const at = (nodeId: string, offset: number): TreeOpReach => ({
+/** A point at which content is written: the leading edge of a control belongs to the control. */
+const writingAt = (nodeId: string, offset: number): TreeOpReach => ({
+  kind: 'nodes',
+  targets: [{ nodeId, range: { start: offset, end: offset }, writes: true }],
+});
+
+/** A point that writes nothing into the run it names — a marker, or a split. */
+const beside = (nodeId: string, offset: number): TreeOpReach => ({
   kind: 'nodes',
   targets: [{ nodeId, range: { start: offset, end: offset } }],
 });
@@ -194,18 +221,27 @@ const whole = (nodeId: string): TreeOpReach => ({ kind: 'nodes', targets: [{ nod
 const TREE_OP_REACH: {
   readonly [K in TreeDocOpKind]: (op: Extract<TreeDocOp, { readonly op: K }>) => TreeOpReach;
 } = {
-  insertText: (op) => at(op.paragraphId, op.offset),
+  // A caller that NAMES the control it is writing into has said where the text goes, so that is
+  // the control the refusals are resolved against — the offset no longer decides.
+  insertText: (op) =>
+    op.inside === undefined
+      ? writingAt(op.paragraphId, op.offset)
+      : { kind: 'control', controlId: op.inside, intent: 'value' },
   deleteText: (op) => over(op.paragraphId, op.start, op.end),
-  insertTab: (op) => at(op.paragraphId, op.offset),
-  insertHardBreak: (op) => at(op.paragraphId, op.offset),
-  insertPageBreak: (op) => at(op.paragraphId, op.offset),
-  insertPageField: (op) => at(op.paragraphId, op.offset),
-  insertCommentMarker: (op) => at(op.paragraphId, op.offset),
-  insertNote: (op) => at(op.paragraphId, op.offset),
+  insertTab: (op) => writingAt(op.paragraphId, op.offset),
+  insertHardBreak: (op) => writingAt(op.paragraphId, op.offset),
+  insertPageBreak: (op) => writingAt(op.paragraphId, op.offset),
+  insertPageField: (op) => writingAt(op.paragraphId, op.offset),
+  // A comment marker and a note reference are anchors beside the text, not text: neither lands
+  // in a control's content when placed at its edge.
+  insertCommentMarker: (op) => beside(op.paragraphId, op.offset),
+  insertNote: (op) => writingAt(op.paragraphId, op.offset),
   setRunProperties: (op) => over(op.paragraphId, op.start, op.end),
   insertHyperlink: (op) => over(op.paragraphId, op.start, op.end),
   insertContentControl: (op) => over(op.paragraphId, op.start, op.end),
-  splitParagraph: (op) => at(op.paragraphId, op.offset),
+  // A split at a control's edge moves the whole control to one side of the break and changes
+  // nothing it holds, so neither edge is inside. A split WITHIN it is, and the range says so.
+  splitParagraph: (op) => beside(op.paragraphId, op.offset),
   splitParagraphMany: (op) => ({
     kind: 'nodes',
     targets: op.offsets.map((offset) => ({
@@ -244,10 +280,11 @@ const TREE_OP_REACH: {
     intent: 'metadata',
   }),
   removeContentControl: (op) => ({ kind: 'control', controlId: op.controlId, intent: 'removal' }),
-  // Page setup and note settings are document-scoped: nothing narrows where they land.
-  setSectionProperties: () => ({ kind: 'part' }),
-  setSectionFurnitureOptions: () => ({ kind: 'part' }),
-  setNoteProperties: () => ({ kind: 'part' }),
+  // Page setup, section furniture and note numbering are properties OF the document. They change
+  // no content, so no control's lock speaks to them; forms protection still does.
+  setSectionProperties: () => ({ kind: 'documentProperties' }),
+  setSectionFurnitureOptions: () => ({ kind: 'documentProperties' }),
+  setNoteProperties: () => ({ kind: 'documentProperties' }),
   // A note's own id is not a body address, and removing or converting one rewrites the run that
   // referenced it — wherever that run happens to be.
   deleteNote: () => ({ kind: 'part' }),
@@ -306,6 +343,9 @@ function locksOf(chain: readonly OoxmlNode[]): readonly ContentControlLock[] {
  */
 function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
   if (reach.kind === 'none') return NOTHING;
+  // No control is touched — no lock, no binding — and nothing here is inside a control, so a
+  // protected document refuses it.
+  if (reach.kind === 'documentProperties') return { touches: [], unprotected: [part.root.id] };
   if (reach.kind === 'part') {
     // Everything: each control, with its own chain, edited but not removed.
     const touches = contentControlsIn(part.root).map((entry) => ({
@@ -341,16 +381,16 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
         removed: false,
       });
     }
-    if (enclosing.length === 0) unprotected.push(target.nodeId);
-
     const node = findNode(part, target.nodeId);
-    if (!node || node.kind === 'textValue') continue;
+    if (!node || node.kind === 'textValue') {
+      if (enclosing.length === 0) unprotected.push(target.nodeId);
+      continue;
+    }
     const inherited = locksOf(enclosing);
 
     // Controls INSIDE the named node. A removal takes them with it; a restructuring moves them;
     // and a range addresses the ones whose own characters it overlaps.
     const inside = contentControlsIn(node);
-    if (inside.length === 0) continue;
     // Built only for a paragraph that actually holds a control, because this runs on the path a
     // keystroke takes and nearly every paragraph holds none.
     let offsets: ParagraphOffsetIndex | null = null;
@@ -359,11 +399,19 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
       offsets ??= paragraphOffsetIndex(node);
       return offsets.spanOf(control);
     };
+    let filling = false;
     for (const entry of inside) {
+      const span = spanOf(entry.node);
+      // WHAT FORMS PROTECTION LETS THROUGH is an edit that stays within one field. Asking whether
+      // the NAMED NODE is inside a control answers "no" for every inline field — the paragraph
+      // around it is not the field — so it is asked of the addressed range instead.
+      if (target.range !== undefined && encloses(span, target.range, target.writes === true)) {
+        filling = true;
+      }
       const affected =
         target.removes === true ||
         target.structural === true ||
-        (target.range !== undefined && intersects(spanOf(entry.node), target.range));
+        (target.range !== undefined && intersects(span, target.range, target.writes === true));
       if (!affected) continue;
       touches.push({
         control: entry.node,
@@ -371,6 +419,7 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
         removed: target.removes === true,
       });
     }
+    if (enclosing.length === 0 && !filling) unprotected.push(target.nodeId);
   }
   return { touches, unprotected };
 }
@@ -378,15 +427,29 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
 /**
  * Whether a control's own characters overlap the offsets an op addresses.
  *
- * An insertion is a POINT, and a point at either edge is beside the control rather than in it:
- * that is where a reader types to add text next to a field, and Word lets them. A non-empty range
- * that so much as touches the inside is refused WHOLE — a partial edit that clipped itself to the
- * unlocked side would silently do something other than what was asked.
+ * THE TWO EDGES ARE DIFFERENT PLACES. The applier gives a boundary offset to the run that starts
+ * there, so a point op that writes content at a control's leading edge lands in the control's
+ * first run, and the same op at its trailing edge lands in whatever follows. A point that writes
+ * nothing — a comment marker, a paragraph split — is beside the control at either edge.
+ *
+ * A non-empty range that so much as touches the inside is refused WHOLE: a partial edit that
+ * clipped itself to the unlocked side would silently do something other than what was asked.
  */
-function intersects(span: OffsetSpan | null, range: OffsetSpan): boolean {
+function intersects(span: OffsetSpan | null, range: OffsetSpan, writes: boolean): boolean {
   if (span === null) return false;
-  if (range.end <= range.start) return range.start > span.start && range.start < span.end;
+  if (range.end <= range.start) {
+    return writes
+      ? range.start >= span.start && range.start < span.end
+      : range.start > span.start && range.start < span.end;
+  }
   return range.start < span.end && range.end > span.start;
+}
+
+/** Whether an op addresses only characters this control holds — the "filling in a field" case. */
+function encloses(span: OffsetSpan | null, range: OffsetSpan, writes: boolean): boolean {
+  if (span === null) return false;
+  if (range.end <= range.start) return intersects(span, range, writes);
+  return range.start >= span.start && range.end <= span.end;
 }
 
 /** The nodes a revision decision would rewrite, and the controls holding them. */
@@ -473,9 +536,12 @@ function isRevisionNode(node: OoxmlNode, revision: RevisionAddress | undefined):
  */
 export function contentControlLockRefusal(part: OoxmlPart, op: TreeDocOp): TreeOpRejection | null {
   const reach = treeOpReach(op);
-  // The control ops resolve their own halves of `ST_Lock` in their appliers, because removal and
-  // editing are refused by different ones.
-  if (reach.kind === 'control') return null;
+  // Changing a control's METADATA and REMOVING it are refused by different halves of `ST_Lock`
+  // than an edit is — `contentLocked` protects the contents and lets the control go, `sdtLocked`
+  // the reverse — and each is resolved in the applier that already holds the control. A write
+  // addressed at a control's VALUE is an ordinary content edit and is resolved here, because the
+  // caller might have reached it through `insertText` naming the control it writes into.
+  if (reach.kind === 'control' && reach.intent !== 'value') return null;
   for (const touch of resolveReach(part, reach).touches) {
     const resolved = resolveContentControlLock(touch.locks);
     if (lockForbidsEdit(resolved)) return 'locked';
@@ -508,7 +574,7 @@ export function contentControlBindingRefusal(
   // A document-scoped op does not write the bound value either: page setup and note settings
   // cannot desync a custom XML part, and refusing them would make a bound field freeze the
   // document's own layout.
-  if (reach.kind === 'part') return null;
+  if (reach.kind === 'part' || reach.kind === 'documentProperties') return null;
   for (const touch of resolveReach(part, reach).touches) {
     if (touch.removed) continue;
     if (contentControlPropertiesOf(touch.control).dataBinding) return 'bound';
