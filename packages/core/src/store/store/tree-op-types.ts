@@ -482,6 +482,23 @@ export type TreeDocOp =
       readonly blockId: string;
     }
   | {
+      /**
+       * Insert a fresh empty table immediately before a block-level paragraph.
+       *
+       * Before, never after, so the anchor paragraph stays as the block that follows the
+       * table: a `w:tbl` is not a valid final child of a story container, and two tables
+       * that end up adjacent merge into one when the file is reopened. When the anchor's
+       * previous sibling is already a table, a separating empty paragraph is authored with
+       * it, which is what Word does for the same reason.
+       */
+      readonly op: 'insertTable';
+      readonly beforeParagraphId: string;
+      readonly rows: number;
+      readonly cols: number;
+      /** Width of every grid column, in twips. The caller divides the content width. */
+      readonly columnWidthTwips: number;
+    }
+  | {
       /** Insert a fresh row above or below a canonical table row. */
       readonly op: 'insertTableRow';
       readonly tableId: string;
@@ -870,6 +887,7 @@ export const TREE_DOC_OP_KINDS = [
   'addRepeatingSectionItem',
   'removeRepeatingSectionItem',
   'deleteBlock',
+  'insertTable',
   'insertTableRow',
   'deleteTableRow',
   'insertTableColumn',

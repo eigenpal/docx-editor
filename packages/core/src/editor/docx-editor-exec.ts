@@ -248,6 +248,15 @@ export function execEditorCommand(
     case 'redo':
       mounted.redo();
       break;
+    case 'insertTable':
+      if (!mounted.insertTable(command.rows, command.cols)) {
+        return {
+          ok: false,
+          code: 'unsupported',
+          reason: mounted.state().lastRejection ?? 'the table could not be inserted here',
+        };
+      }
+      break;
     case 'insertToc':
       if (!mounted.insertToc()) {
         return {

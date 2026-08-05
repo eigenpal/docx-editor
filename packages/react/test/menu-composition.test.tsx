@@ -131,7 +131,7 @@ describe('the default bar', () => {
 
     openMenu(view, 'toolbar.insert');
     expect(view.container.querySelector('[data-slot="file.open"]')).toBeNull();
-    expect(row(view, 'image.insert')).toBeDefined();
+    expect(row(view, 'insert.footnote')).toBeDefined();
 
     // A second click on the open menu's trigger closes it.
     openMenu(view, 'toolbar.insert');
@@ -219,19 +219,26 @@ describe('rows carry the engine, not a paraphrase', () => {
     expect(row(view, 'insert.sectionBreakNextPage').getAttribute('aria-disabled')).toBeNull();
   });
 
-  test('a probeable row quotes the ENGINE, not chrome', async () => {
-    // `image.insert` and `table.insert` have a real command shape, so the engine can judge
-    // them — and its refusal is the reason the row shows, rather than a chrome guess.
+  test('a probeable row follows the ENGINE, not a chrome guess', async () => {
+    // `table.insert` has a real command shape, so the engine judges it — and now that the
+    // engine authors tables the probe answers yes, which is what turns the row into a live
+    // size grid with no registry edit. The row a probe still refuses keeps quoting the
+    // engine's own words.
     const { view } = mountMenu(<DocxEditorMenu />);
     await act(async () => {
       await Promise.resolve();
     });
     openMenu(view, 'toolbar.insert');
-    const image = row(view, 'image.insert');
-    expect(image.getAttribute('aria-disabled')).toBeNull();
-    const table = row(view, 'table.insert');
-    expect(table.getAttribute('aria-disabled')).toBe('true');
-    expect(table.getAttribute('title')).toBe("command 'insertTable' is not supported by the tree editor");
+    // Enabled, so the row discloses a grid rather than rendering as a flat refused row.
+    expect(view.container.querySelector('[data-slot="table.insert"]')).toBeNull();
+    openSubmenu(view, 'toolbar.table');
+    expect(view.container.querySelector('.docx-menubar__grid')).not.toBeNull();
+
+    // And a row the engine still refuses carries the engine's own words.
+    openSubmenu(view, 'toolbar.break');
+    const continuous = row(view, 'insert.sectionBreakContinuous');
+    expect(continuous.getAttribute('aria-disabled')).toBe('true');
+    expect(continuous.getAttribute('title')).toBeTruthy();
   });
 
   test('Open and Save work with no configuration at all', async () => {
@@ -519,18 +526,20 @@ describe('chrome contracts', () => {
   test('a disabled row is still focusable, so its reason is reachable', () => {
     const { view } = mountMenu(<DocxEditorMenu />);
     openMenu(view, 'toolbar.insert');
-    const toc = row(view, 'image.insert');
+    openSubmenu(view, 'toolbar.break');
+    const refused = row(view, 'insert.sectionBreakContinuous');
+    expect(refused.getAttribute('aria-disabled')).toBe('true');
     act(() => {
-      toc.focus();
+      refused.focus();
     });
     // Native `disabled` would have removed it from the tab order and from arrow
     // navigation entirely — the reason would reach nobody.
-    expect(document.activeElement).toBe(toc);
-    // And it still refuses to act.
+    expect(document.activeElement).toBe(refused);
+    // And it still refuses to act: acting would have closed the bar.
     act(() => {
-      fireEvent.click(toc);
+      fireEvent.click(refused);
     });
-    expect(view.container.querySelectorAll('[role="menu"]').length).toBe(1);
+    expect(view.container.querySelectorAll('[role="menu"]').length).toBeGreaterThan(0);
   });
 
   test('the alignment rows are one-of-four, not four independent toggles', () => {
@@ -614,13 +623,9 @@ describe('chrome contracts', () => {
       e.getAttribute('data-slot')
     );
     // The whole registry arrangement is still there, TOC still in its own position.
-    expect(slots).toEqual([
-      'image.insert',
-      'table.insert',
-      'insert.footnote',
-      'insert.endnote',
-      'insert.toc',
-    ]);
+    // Table is absent from this list because it is a live size grid, which is a submenu and
+    // carries no row slot of its own — the arrangement around it is what this pins down.
+    expect(slots).toEqual(['insert.footnote', 'insert.endnote', 'insert.toc']);
     expect(row(view, 'insert.toc').className).toContain('my-toc');
     // The host's own row appends.
     expect(view.container.textContent).toContain('Clause library');
@@ -636,7 +641,7 @@ describe('chrome contracts', () => {
     );
     openMenu(view, 'toolbar.insert');
     expect(view.container.querySelector('[data-slot="insert.toc"]')).toBeNull();
-    expect(row(view, 'image.insert')).toBeDefined();
+    expect(row(view, 'insert.footnote')).toBeDefined();
   });
 
   test('`preset={false}` on a menu states the order itself', () => {

@@ -561,6 +561,13 @@ export interface PaginatedSurface {
    * Show-all and form-fill are surface chrome and never reflow layout.
    */
   readonly contentControls: ContentControlOps;
+  /** Whether a `rows`×`cols` table can be inserted at the caret. */
+  canInsertTable(rows: number, cols: number): boolean;
+  /**
+   * Insert an empty `rows`×`cols` table at the caret, columns evenly dividing the content
+   * width of the caret's section, and leave the caret in the first cell.
+   */
+  insertTable(rows: number, cols: number): boolean;
   /** Whether the addressed (or caret-local) body TOC can be refreshed. */
   canRefreshToc(tocId?: string): boolean;
   /** Whether a generated body TOC can be inserted before the caret paragraph. */
