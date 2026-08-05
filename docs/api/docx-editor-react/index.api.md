@@ -17,6 +17,8 @@ import { ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
 import { ColorValue } from '@docx-editor.dev/core-contract/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core-contract/editor';
 import { composeFontConfiguration } from '@docx-editor.dev/core-contract/editor';
+import { ContentControlSummary } from '@docx-editor.dev/core-contract';
+import { ContentControlType } from '@docx-editor.dev/core-contract';
 import { createFontSource } from '@docx-editor.dev/core-contract/editor';
 import { CSSProperties } from 'react';
 import { DocumentChange } from '@docx-editor.dev/core-contract/contracts/editor';
@@ -30,6 +32,7 @@ import { EditorEvents } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorFontErrorCode } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorModule } from '@docx-editor.dev/core-contract/editor';
 import { EditorQuery } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorScope } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
@@ -45,6 +48,7 @@ import { FontSourceSubstitution } from '@docx-editor.dev/core-contract/contracts
 import { FontUrlSource } from '@docx-editor.dev/core-contract/editor';
 import { ForwardRefExoticComponent } from 'react';
 import { generateRulerTicks } from '@docx-editor.dev/core-contract/editor';
+import { HTMLAttributes } from 'react';
 import { IndentFormatting } from '@docx-editor.dev/core-contract/contracts/editor';
 import { loadFonts } from '@docx-editor.dev/core-contract/editor';
 import { LoadFontsRequest } from '@docx-editor.dev/core-contract/editor';
@@ -60,7 +64,6 @@ import { ReactElement } from 'react';
 import { ReactNode } from 'react';
 import { Ref } from 'react';
 import { RefAttributes } from 'react';
-import { ReviewItemPlacement } from '@docx-editor.dev/core-contract/contracts/editor';
 import { RulerIndent } from '@docx-editor.dev/core-contract/editor';
 import { rulerPageBox } from '@docx-editor.dev/core-contract/editor';
 import { RulerTick } from '@docx-editor.dev/core-contract/editor';
@@ -72,6 +75,7 @@ import { SurfaceHyperlink } from '@docx-editor.dev/core-contract/editor';
 import { TableChromeSlotId } from '@docx-editor.dev/core-contract/editor';
 import { TextMatch } from '@docx-editor.dev/core-contract/contracts/editor';
 import { TextMeasurer } from '@docx-editor.dev/core-contract/editor';
+import { TFunction } from '@docx-editor.dev/i18n';
 import { Theme } from '@docx-editor.dev/core-contract/contracts/editor';
 import { ToolbarCommandState } from '@docx-editor.dev/core-contract/editor';
 import { toolbarCommandState } from '@docx-editor.dev/core-contract/editor';
@@ -104,11 +108,77 @@ export { commandForSlot }
 export { composeFontConfiguration }
 
 // @public
+export const CONTENT_CONTROL_SLOTS: {
+    readonly showAll: "contentControl.showAll";
+    readonly formFill: "contentControl.formFill";
+    readonly inspector: "contentControl.inspector";
+    readonly remove: "contentControl.remove";
+};
+
+// @public
+export interface ContentControlActionProps extends ContentControlPartProps {
+    // (undocumented)
+    icon?: ReactNode;
+}
+
+// @public
+export interface ContentControlInspectorState {
+    // (undocumented)
+    readonly alias: string | null;
+    // (undocumented)
+    readonly bound: boolean;
+    // (undocumented)
+    readonly controlType: ContentControlType;
+    // (undocumented)
+    readonly effectiveLock: ContentControlLock | null;
+    // (undocumented)
+    readonly id: string;
+    readonly locked: boolean;
+    // (undocumented)
+    readonly placeholder: boolean;
+    readonly removalLocked: boolean;
+    // (undocumented)
+    readonly tag: string | null;
+}
+
+// @public
+export type ContentControlLock = 'unlocked' | 'sdtLocked' | 'contentLocked' | 'sdtContentLocked';
+
+// @public
+export interface ContentControlPartProps {
+    // (undocumented)
+    asChild?: boolean;
+    // (undocumented)
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
+}
+
+// @public
+export interface ContentControlProps extends ContentControlPartProps {
+    preset?: boolean;
+}
+
+// @public (undocumented)
+export type ContentControlSlotId = (typeof CONTENT_CONTROL_SLOTS)[keyof typeof CONTENT_CONTROL_SLOTS];
+
+// @public
 export interface ContextMenuAnchor {
     // (undocumented)
     readonly x: number;
     // (undocumented)
     readonly y: number;
+}
+
+// @public
+export function ContextMenuCellVerticalAlignment(input: ContextMenuCommandProps): react.JSX.Element | null;
+
+// @public (undocumented)
+export namespace ContextMenuCellVerticalAlignment {
+    var // (undocumented)
+    docxRow: "table.cellVerticalAlignment";
 }
 
 // @public
@@ -222,6 +292,21 @@ export const DocxEditor: DocxEditorNamespace;
 // @public
 export function DocxEditorContent(input: DocxEditorContentProps): react.JSX.Element;
 
+// @public (undocumented)
+export const DocxEditorContentControl: DocxEditorContentControlNamespace;
+
+// @public
+export interface DocxEditorContentControlNamespace {
+    // (undocumented)
+    (props: ContentControlProps): ReturnType<typeof ContentControlRoot>;
+    // (undocumented)
+    readonly Fields: typeof ContentControlFields;
+    // (undocumented)
+    readonly Header: typeof ContentControlHeader;
+    // (undocumented)
+    readonly Remove: typeof ContentControlRemove;
+}
+
 // @public
 export interface DocxEditorContentProps {
     className?: string;
@@ -234,6 +319,8 @@ export function DocxEditorContextMenu(input: DocxEditorContextMenuProps): react.
 export interface DocxEditorContextMenuNamespace {
     // (undocumented)
     (props: DocxEditorContextMenuProps): ReactElement;
+    // (undocumented)
+    readonly CellVerticalAlignment: typeof ContextMenuCellVerticalAlignment;
     // (undocumented)
     readonly Copy: typeof ContextMenuCopy;
     // (undocumented)
@@ -402,6 +489,7 @@ export interface DocxEditorMenuProps {
 export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEditorProps & RefAttributes<DocxEditorRef>> {
     // (undocumented)
     readonly Content: typeof DocxEditorContent;
+    readonly ContentControl: typeof DocxEditorContentControl;
     readonly ContextMenu: typeof ContextMenu;
     readonly DocumentOutline: typeof DocxEditorDocumentOutline;
     readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
@@ -412,8 +500,8 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly Navigation: typeof Navigation;
     // (undocumented)
     readonly NotesChrome: typeof DocxEditorNotesChrome;
+    readonly PageNumber: typeof DocxEditorPageNumber;
     readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
-    readonly Review: typeof DocxEditorReview;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
     // (undocumented)
@@ -527,40 +615,6 @@ export interface DocxEditorRef {
     }): EditorSnapshot;
 }
 
-// @public (undocumented)
-export const DocxEditorReview: DocxEditorReviewNamespace;
-
-// @public
-export interface DocxEditorReviewNamespace {
-    // (undocumented)
-    (props: ReviewProps): ReturnType<typeof ReviewRoot>;
-    // (undocumented)
-    readonly Accept: typeof ReviewAccept;
-    readonly AddComment: typeof ReviewAddComment;
-    // (undocumented)
-    readonly Author: typeof ReviewAuthor;
-    // (undocumented)
-    readonly Avatar: typeof ReviewAvatar;
-    // (undocumented)
-    readonly Card: typeof ReviewCard;
-    readonly Draft: typeof ReviewDraft;
-    // (undocumented)
-    readonly Empty: typeof ReviewEmpty;
-    // (undocumented)
-    readonly List: typeof ReviewList;
-    readonly Markers: typeof ReviewMarkers;
-    // (undocumented)
-    readonly Reject: typeof ReviewReject;
-    // (undocumented)
-    readonly Replies: typeof ReviewReplies;
-    // (undocumented)
-    readonly Reply: typeof ReviewReply;
-    // (undocumented)
-    readonly Summary: typeof ReviewSummary;
-    // (undocumented)
-    readonly Time: typeof ReviewTime;
-}
-
 // @public
 export function DocxEditorRoot(props: DocxEditorRootProps): react.JSX.Element;
 
@@ -575,6 +629,7 @@ export interface DocxEditorRootProps {
     // (undocumented)
     locale?: string;
     mode?: 'edit' | 'view';
+    modules?: readonly EditorModule[];
     onChange?: (change: DocumentChange) => void;
     onFontError?: (error: EditorFontError) => void;
     onReady?: (editor: Editor) => void;
@@ -661,6 +716,14 @@ export interface DocxEditorToolbarNamespace {
     // (undocumented)
     readonly Comments: ToolbarPartComponent;
     // (undocumented)
+    readonly ContentControlFormFill: ToolbarPartComponent;
+    // (undocumented)
+    readonly ContentControlInspector: ToolbarPartComponent;
+    // (undocumented)
+    readonly ContentControlRemove: ToolbarPartComponent;
+    // (undocumented)
+    readonly ContentControlShowAll: ToolbarPartComponent;
+    // (undocumented)
     readonly EditingMode: ToolbarSlotPartComponent;
     // (undocumented)
     readonly FontColor: ToolbarColorSplitComponent;
@@ -721,6 +784,7 @@ export interface DocxEditorToolbarProps {
     children?: ReactNode;
     className?: string;
     onSave?: () => void;
+    overflow?: boolean;
     preset?: boolean;
     t?: ToolbarTranslate;
 }
@@ -932,6 +996,9 @@ export { LoadFontsRequest }
 export { LoadFontsResult }
 
 // @public (undocumented)
+export function LocaleProvider(input: LocaleProviderProps): react.JSX.Element;
+
+// @public (undocumented)
 export function Logo(input: LogoProps): react__default.JSX.Element;
 
 // @public
@@ -1067,6 +1134,7 @@ export function navigationShift(input: NavigationShiftInput): number;
 
 // @public (undocumented)
 export interface NavigationShiftInput {
+    readonly inlineEndReservation?: number;
     readonly pageWidthPx: number;
     readonly reservation: number;
     readonly viewportWidth: number;
@@ -1260,30 +1328,15 @@ export { PX_PER_CM }
 
 export { PX_PER_INCH }
 
-// @public
-export interface ReviewActionProps extends ReviewPartProps {
-    icon?: ReactNode;
-}
+// @public (undocumented)
+export const ReviewRailContext: react.Context<ReviewRailRegistry | null>;
 
 // @public
-export type ReviewItemView = ReviewItemPlacement;
-
-// @public
-export interface ReviewPartProps {
-    asChild?: boolean;
+export interface ReviewRailRegistry {
     // (undocumented)
-    children?: ReactNode;
+    readonly mounted: number;
     // (undocumented)
-    className?: string;
-    hidden?: boolean;
-}
-
-// @public
-export interface ReviewProps extends ReviewPartProps {
-    filter?: (item: ReviewItemView) => boolean;
-    gap?: number;
-    preset?: boolean;
-    stack?: boolean;
+    readonly register: () => () => void;
 }
 
 // @public (undocumented)
@@ -1302,6 +1355,16 @@ export const SEARCH_DEBOUNCE_MS = 150;
 
 // @public
 export const SEARCH_MATCH_LIMIT = 2000;
+
+// @public
+export function Slot(input: SlotProps): ReactElement<unknown, string | react.JSXElementConstructor<any>> | null;
+
+// @public (undocumented)
+export interface SlotProps extends HTMLAttributes<HTMLElement> {
+    // (undocumented)
+    children?: ReactNode;
+    ref?: Ref<unknown>;
+}
 
 // @public
 export interface TableBorderColorNamespace extends TableChromePartComponent {
@@ -1531,6 +1594,41 @@ export interface ToolbarSlotPartProps {
 export type ToolbarTranslate = (key: string) => string;
 
 // @public
+export function useContentControl(): UseContentControlResult;
+
+// @public
+export function useContentControlInstance(): UseContentControlResult;
+
+// @public
+export interface UseContentControlResult {
+    readonly canRemove: boolean;
+    readonly canSetValue: boolean;
+    // (undocumented)
+    readonly closeInspector: () => void;
+    readonly control: ContentControlInspectorState | null;
+    readonly controls: readonly ContentControlSummary[];
+    readonly formFill: boolean;
+    readonly inspectorOpen: boolean;
+    // (undocumented)
+    readonly openInspector: () => void;
+    readonly remove: () => ExecResult;
+    readonly removeDisabledReason: string | null;
+    // (undocumented)
+    readonly setFormFill: (on: boolean) => void;
+    // (undocumented)
+    readonly setShowAll: (show: boolean) => void;
+    readonly setValue: (value: string) => ExecResult;
+    readonly setValueDisabledReason: string | null;
+    readonly showAll: boolean;
+    // (undocumented)
+    readonly toggleFormFill: () => void;
+    // (undocumented)
+    readonly toggleInspector: () => void;
+    // (undocumented)
+    readonly toggleShowAll: () => void;
+}
+
+// @public
 export function useDocumentOutline(): UseDocumentOutlineResult;
 
 // @public
@@ -1718,37 +1816,12 @@ export interface UseParagraphStyleResult {
 }
 
 // @public
-export function useReview(): UseReviewReturn;
-
-// @public
-export function useReviewOf(editor: Editor | null): UseReviewReturn;
+export function useTableBorderTargetLabel(): string;
 
 // @public (undocumented)
-export interface UseReviewReturn {
-    readonly accept: (item: ReviewItemView) => void;
-    readonly activeKey: string | null;
-    readonly comment: (text: string, author?: string) => boolean;
-    readonly items: readonly ReviewItemView[];
-    readonly paneOpen: boolean;
-    readonly ready: boolean;
-    readonly reject: (item: ReviewItemView) => void;
-    readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
-    readonly selectionAnchorY: number | null;
-    readonly setActive: (key: string | null) => void;
-    readonly setPaneOpen: (open: boolean) => void;
-}
-
-// @public
-export function useStackedReviewPositions(items: readonly {
-    readonly key: string;
-    readonly anchorY: number | null;
-}[], heights: ReadonlyMap<string, number>, options?: {
-    readonly gap?: number;
-    readonly scale?: number;
-}): ReadonlyMap<string, number>;
-
-// @public
-export function useTableBorderTargetLabel(): string;
+export function useTranslation(): {
+    t: TFunction;
+};
 
 // @public
 export const VERSION = "0.0.2";

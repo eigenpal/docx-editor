@@ -438,9 +438,7 @@ describe('caret activation', () => {
 describe('against the tracked fixture', () => {
   test('every revision in a real document is listed, structural ones included', () => {
     const bytes = new Uint8Array(
-      readFileSync(
-        resolve(import.meta.dir, '../../../../e2e/fixtures/list-pagination-break.docx')
-      )
+      readFileSync(resolve(import.meta.dir, '../../../../e2e/fixtures/list-pagination-break.docx'))
     );
     const pkg = readOoxmlPackage(bytes);
     if (!pkg.ok) throw new Error(pkg.reason);

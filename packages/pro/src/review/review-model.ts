@@ -571,7 +571,5 @@ export function collectReviewItems(input: ReviewModelInput): ReviewItem[] {
 
   const order = paragraphOrderOfPart(input.storyPart);
   const items: ReviewItem[] = [...revisions, ...commentItemsOf(comments, anchors, threadState)];
-  return items.sort(
-    (a, b) => reviewItemPositionRank(a, order) - reviewItemPositionRank(b, order)
-  );
+  return items.sort((a, b) => reviewItemPositionRank(a, order) - reviewItemPositionRank(b, order));
 }

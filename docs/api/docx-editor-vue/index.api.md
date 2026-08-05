@@ -664,6 +664,7 @@ export interface EditorSnapshot {
     readonly editingMode?: DocumentEditingMode;
     // (undocumented)
     readonly formatting: RunFormatting | null;
+    readonly hasReviewContent?: boolean;
     // (undocumented)
     readonly image: ImageContext | null;
     readonly isLoading: boolean;
@@ -1080,8 +1081,8 @@ type: BooleanConstructor;
 default: boolean;
 };
 }>> & Readonly<{}>, {
-visible: boolean;
 editor: Editor | null;
+visible: boolean;
 }, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
