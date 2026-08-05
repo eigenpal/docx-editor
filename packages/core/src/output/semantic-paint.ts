@@ -827,17 +827,21 @@ function paintLine(document: Document, line: LineRecord, ctx: PaintContext): HTM
   return element;
 }
 
-/** The extra space layout put between spans, beyond their own advances. */
+/** The extra space layout put between word spans, beyond their own advances. */
 function interSpanGap(line: LineRecord): number {
   if (line.spans.length < 2) return 0;
-  let total = 0;
+  // Layout justifies only after expandable spaces, so many consecutive pairs (tab→word,
+  // run split without a space) have a zero gap. Averaging those zeros in diluted
+  // `word-spacing` below the real per-space step and every later glyph drifted left of
+  // its published box — caret mid-word included.
+  const gaps: number[] = [];
   for (let index = 1; index < line.spans.length; index += 1) {
     const previous = line.spans[index - 1]!;
-    total += line.spans[index]!.box.x - (previous.box.x + previous.box.width);
+    const gap = line.spans[index]!.box.x - (previous.box.x + previous.box.width);
+    if (gap > 0.25) gaps.push(gap);
   }
-  const average = total / (line.spans.length - 1);
-  // Sub-pixel noise from measurement is not justification; only a real gap counts.
-  return average > 0.25 ? average : 0;
+  if (gaps.length === 0) return 0;
+  return gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length;
 }
 
 function paintFragment(

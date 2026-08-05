@@ -120,6 +120,15 @@ export interface StyleSpanRecord {
   readonly style: ResolvedRunStyle;
   readonly box: LayoutBox;
   /**
+   * Cumulative advances from {@link box}.x to each UTF-16 caret boundary in {@link text}.
+   *
+   * Length is `text.length + 1` (both endpoints). Layout publishes these so hit-testing and
+   * the caret read the same per-cluster edges the span was measured with, rather than
+   * re-measuring a prefix at interaction time or interpolating across {@link box}.width —
+   * OpenSpec task 13.5. Absent on older records; consumers fall back to the measurer.
+   */
+  readonly caretEdges?: readonly number[];
+  /**
    * `w:tab/@w:leader` of the stop a `\t` span advanced to (ECMA-376 §17.3.1.38).
    *
    * Only ever set on a tab span, and only for a non-`none` leader. Paint repeats the glyph

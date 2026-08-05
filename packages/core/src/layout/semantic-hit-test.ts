@@ -687,6 +687,9 @@ function boundariesOf(span: StyleSpanRecord): readonly number[] {
  * as the geometry it describes.
  */
 function prefixWidth(span: StyleSpanRecord, utf16: number, measurer: TextMeasurer): number {
+  const edges = span.caretEdges;
+  if (edges && utf16 >= 0 && utf16 < edges.length) return edges[utf16]!;
+
   let perSpan = prefixCache.get(measurer);
   if (!perSpan) {
     perSpan = new WeakMap<StyleSpanRecord, Map<number, number>>();
@@ -733,6 +736,10 @@ export function spanOffsetX(
   const length = span.range.end - span.range.start;
   if (length <= 0) return span.box.x;
   const within = Math.max(0, Math.min(offset - span.range.start, length));
+  // Layout-published cluster edges win: they are the authority task 13.5 carries onto the
+  // span so caret and hit-test never re-derive a prefix that can disagree with the box.
+  const edges = span.caretEdges;
+  if (edges && within < edges.length) return span.box.x + edges[within]!;
   // Layout-owned advances (tabs, projected fields): always use the published box. Measuring
   // `\t` or multi-digit PAGE ink would disagree with breakParagraph's stop geometry.
   if (!measurer || usesPublishedAdvance(span)) {
@@ -790,6 +797,17 @@ export function caretBoxOnLine(
       if (next && next.range.start === offset && usesPublishedAdvance(span)) {
         chosen = next;
         break;
+      }
+      // After an expandable space, prefer the next span only when layout left a justify
+      // gap. That gap is what paint draws as `word-spacing`; sitting on the upstream end
+      // lands inside the stretched space. With no gap (unjustified, or a mere run split
+      // after a space), keep upstream affinity so typing continues the preceding run.
+      if (next && next.range.start === offset && span.text.endsWith(' ')) {
+        const gap = next.box.x - (span.box.x + span.box.width);
+        if (gap > 0.25) {
+          chosen = next;
+          break;
+        }
       }
       chosen = span;
     } else if (offset > span.range.end) {

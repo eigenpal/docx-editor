@@ -92,8 +92,8 @@ import {
   HARD_MAX_FONT_BYTES,
   HARFBUZZ_SHAPING_LIBRARY,
   fontRequestKey,
-  createFixedMeasurer,
   createShapedMeasurer,
+  resolveDefaultSurfaceMeasurer,
   type SemanticSelection as SurfaceSelection,
   type TextMeasurer,
 } from '@docx-editor.dev/core-contract/layout';
@@ -655,6 +655,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       }
       disposeEmbeddedFaces();
       embeddedFaces = registration;
+      // HarfBuzz can only shape faces whose bytes reached its resource snapshot. A run may
+      // still name a locally installed browser face (Helvetica is the common macOS case):
+      // paint resolves that face through CSS, so falling back to the deterministic monospace
+      // grid here makes every later caret drift farther from the glyphs. Resolve the fallback
+      // through the same browser canvas + alias stack the unshaped surface uses. Headless
+      // environments still receive the fixed measurer from this resolver.
+      const fallbackResolution = resolveDefaultSurfaceMeasurer(scaleOf(), {
+        context: container ? tryCreateBrowserCanvasContext(container.ownerDocument) : null,
+        ...(embeddedFaces ? { fontAlias: embeddedFaces.alias } : {}),
+      });
       shapedMeasurer = createShapedMeasurer({
         shaper: shaping.shaper,
         resolveFont: (style) => {
@@ -677,12 +687,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           }
           return resolved instanceof FontResolutionError ? null : resolved;
         },
-        fallback: createFixedMeasurer(),
+        fallback: fallbackResolution.measurer,
         shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
         unicodeDataVersion: '16.0.0',
         ...(fonts.language ? { language: fonts.language } : {}),
       });
-      shapedProducer = `shaped:${shaping.operation.extensionFingerprint}`;
+      // The fallback is part of the geometry producer: the same HarfBuzz faces over a
+      // different unresolved-family measurer must never share paragraph-cache entries.
+      shapedProducer = `shaped:${shaping.operation.extensionFingerprint}+fallback:${fallbackResolution.producer}@scale:${scaleOf()}`;
       fontsResolving = false;
       if (surface) {
         // The remount tears the surface down BEFORE building the replacement, so the
