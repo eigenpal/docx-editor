@@ -87,6 +87,75 @@ Layout SHALL emit, for each control, a record carrying its identity, tag, alias,
 - **WHEN** a delete spans from unlocked text into a `contentLocked` control
 - **THEN** the whole operation is refused rather than partially applied
 
+#### Scenario: An inline control's own characters are locked
+
+- **WHEN** an insertion, a deletion or a run-property write addresses offsets that fall inside an inline control declaring `sdtContentLocked`
+- **THEN** it is refused with `locked`, even though the paragraph named by the operation is outside the control
+- **AND** the same operation addressing offsets beside the control is allowed
+
+### Requirement: Every mutating operation meets the lock, and an unclassified one fails closed
+
+Lock and forms-protection enforcement SHALL be resolved from what an operation would CHANGE, not from a list of operation names. Each `TreeDocOp` kind SHALL declare its reach — the nodes, character ranges, tracked changes, or the whole part — exhaustively over the operation union, so an operation added without a declared reach does not compile. An operation whose reach cannot be resolved SHALL be treated as reaching the whole part and refused wherever protected or locked content would change. Read and part-lifecycle operations SHALL NOT be treated as content mutations.
+
+#### Scenario: A tracked-change decision inside a locked control
+
+- **WHEN** accepting or rejecting a revision whose markup sits inside a control forbidding content edits
+- **THEN** it is refused with `locked`
+
+#### Scenario: A hyperlink write resolves its owner
+
+- **WHEN** retargeting or unlinking a hyperlink that sits inside a control forbidding content edits
+- **THEN** it is refused with `locked`, because the link's owning control is resolved from the link node
+
+#### Scenario: A document-wide operation under protection
+
+- **WHEN** a document-scoped write (page setup, note settings, accept-all) would change content that a lock or forms protection protects
+- **THEN** it is refused with `locked`
+
+#### Scenario: Furniture lifecycle is not a content mutation
+
+- **WHEN** a header or footer is created, deleted or relinked in a document that holds a locked control
+- **THEN** the operation is not refused on account of that lock
+
+### Requirement: A bound control refuses every content mutation, and removal takes the binding with it
+
+A control declaring `w:dataBinding` names a custom XML part this engine preserves without evaluating. Every content mutation targeting or intersecting such a control SHALL be refused with `bound` — ordinary typing, deletion, formatting, structural splits and tracked-change decisions, not only a value write — so the document's two answers cannot diverge. Removing the control SHALL be allowed: it removes the claim that the content mirrors a part, leaving both sides as the file wrote them. A lock SHALL still refuse the removal on its own terms.
+
+#### Scenario: Typing inside a bound control
+
+- **WHEN** text is inserted, deleted or formatted inside a control declaring `w:dataBinding`
+- **THEN** it is refused with `bound` and the file is unchanged
+
+#### Scenario: Metadata is not the bound value
+
+- **WHEN** the tag or alias of a bound control is written
+- **THEN** it is allowed and `w:dataBinding` is preserved
+
+#### Scenario: Removing a bound control
+
+- **WHEN** a bound control is removed, with or without its content
+- **THEN** the removal is allowed and the binding leaves with the wrapper
+
+### Requirement: Row- and cell-level controls are flattened where a walk filters on rows and cells
+
+`CT_SdtRow` places a control between a table and its row; `CT_SdtCell` between a row and its cell. One bounded unwrap rule SHALL be applied wherever a walk selects rows or cells — table layout's grid and cell passes, list resolution, and story paragraph collection — so a controlled row or cell is measured, painted, addressable, and claims its grid column and `w:gridSpan` exactly as an unwrapped one does.
+
+#### Scenario: A controlled row is a row
+
+- **WHEN** a table holds a row wrapped in `w:sdt`
+- **THEN** the row is laid out in document order with the geometry it would have unwrapped
+- **AND** its `w:trPr` semantics — header repeat, `w:cantSplit` — are unchanged
+
+#### Scenario: A controlled cell claims its grid
+
+- **WHEN** a row holds a cell wrapped in `w:sdt`, with a `w:gridSpan`
+- **THEN** the cell and every cell after it claim the same grid columns they would unwrapped
+
+#### Scenario: A controlled row or cell stays addressable
+
+- **WHEN** paragraphs are collected for a story
+- **THEN** the paragraphs inside a controlled row or cell are collected in document order
+
 #### Scenario: The surface reflects the lock before the refusal
 
 - **WHEN** the caret sits inside a `contentLocked` control

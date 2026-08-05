@@ -21,6 +21,7 @@
 - [x] 2.3 Emit a boundary record per control: identity, tag, alias, type, lock, placeholder state, and content geometry
 - [x] 2.4 Boundary records report both fragments when a control's content splits across pages
 - [x] 2.5 Assert page geometry is identical with and without a control wrapper around the same content
+- [x] 2.6 Apply ONE bounded unwrap rule wherever a walk filters on rows or cells — table grid/cell passes, list resolution, story paragraph collection — so a `CT_SdtRow`/`CT_SdtCell` row or cell measures, paints, claims its grid, and stays addressable
 
 ## 3. Placeholder state
 
@@ -35,8 +36,10 @@
 
 - [x] 4.1 Resolve `ST_Lock` — `sdtLocked`, `contentLocked`, `sdtContentLocked`, `unlocked` — per control
 - [x] 4.2 Enforce in `tree-op-validate.ts`, refusing with `locked` and publishing no `ModelChange`
-- [x] 4.3 Refuse an operation whose range spans from unlocked content into a locked control, rather than applying it partially
+- [x] 4.3 Refuse an operation whose range spans from unlocked content into a locked control, rather than applying it partially — resolved against an INLINE control's own offset span, not only against a block control's ancestry
 - [x] 4.4 Refuse a value operation on a `w:dataBinding` control with `bound`
+- [x] 4.7 Classify every `TreeDocOp` kind's reach exhaustively and fail closed for an unclassified one, so revision decisions, hyperlink writes and document-scoped writes meet the lock and forms protection instead of bypassing an op-name allowlist
+- [x] 4.8 Refuse every content mutation targeting or intersecting a bound control with `bound`, not only the value write; allow wrapper removal, which takes the binding with it
 - [x] 4.5 Prove enforcement from a path that never touches the surface, so the claim is about the store and not the widget
 - [ ] 4.6 Surface the lock as a disabled control with the engine's own reason before the user types
 
