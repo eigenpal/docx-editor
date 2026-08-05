@@ -3,9 +3,10 @@ LICENSE SCOPE NOTICE
 Except where a file or directory expressly states different license terms, this
 repository is licensed under the Apache License, Version 2.0, reproduced below.
 
-The contents of packages/editor-api/ are not licensed under the Apache License.
-They are governed by the EigenPal Pro Evaluation License 1.0 in
-packages/editor-api/LICENSE.md.
+The contents of packages/editor-api/ and packages/pro/ are not licensed under
+the Apache License. They are governed by the EigenPal Pro Evaluation License
+1.0 in packages/editor-api/LICENSE.md and packages/pro/LICENSE.md,
+respectively.
 
                                  Apache License
                            Version 2.0, January 2004
