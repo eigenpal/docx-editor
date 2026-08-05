@@ -153,6 +153,56 @@ describe('the review sidebar', () => {
     expect(replies[0]!.textContent).toContain('Grace Hopper');
   });
 
+  test('a reply inside an open card can be deleted on its own', async () => {
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={TRACKED}
+        author="Grace Hopper"
+        modules={[reviewModule()]}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const editor = instance!;
+    await act(async () => {
+      editor.replyToReviewItem(editor.getReviewItems()[0]!.key, 'Why this wording?');
+    });
+    await act(async () => {
+      editor.setActiveReviewItem(editor.getReviewItems().find((i) => i.kind === 'revision')!.key);
+    });
+
+    // TWO controls in one open card: the change's own, and the reply's. A nested reply is
+    // never itself the active item, so its control follows the CARD — and without one the
+    // only way to take back a reply was to delete the whole thread it hangs off.
+    expect(view.getAllByTestId('review-reply')).toHaveLength(1);
+    const controls = view.getAllByTestId('review-delete');
+    expect(controls).toHaveLength(2);
+
+    // And CLICKING the reply keeps the change open rather than closing it: the reply covers
+    // exactly the change's characters, so it wins the innermost test at the caret, and
+    // resolving to it would open an item the rail draws no card for.
+    await act(async () => {
+      fireEvent.click(view.getAllByTestId('review-reply')[0]!);
+    });
+    expect(view.getAllByTestId('review-card')[0]!.hasAttribute('data-active')).toBe(true);
+    expect(view.getAllByTestId('review-delete')).toHaveLength(2);
+
+    await act(async () => {
+      fireEvent.click(controls[1]!);
+    });
+    // The reply is gone; the change it answered is not.
+    expect(view.queryAllByTestId('review-reply')).toHaveLength(0);
+    expect(view.getAllByTestId('review-card')).toHaveLength(1);
+    expect(editor.surface!.session.bodyText()).toBe('base added');
+  });
+
   test('a tracked change carries a delete control that discards the suggestion', async () => {
     let instance: DocxEditorInstance | null = null;
     const view = render(
@@ -171,6 +221,14 @@ describe('the review sidebar', () => {
       </DocxEditorRoot>
     );
     const editor = instance!;
+    // CLOSED, so no delete control: a rail of cards each carrying a standing invitation to
+    // throw somebody's remark away reads as an invitation to click one by mistake.
+    expect(view.queryAllByTestId('review-delete')).toHaveLength(0);
+    expect(view.getAllByTestId('review-card')).toHaveLength(1);
+
+    await act(async () => {
+      editor.setActiveReviewItem(editor.getReviewItems()[0]!.key);
+    });
     // The rail had accept and reject for a change and nothing at all for a comment, so a
     // remark could be resolved but never removed. One control now sits on both kinds.
     expect(view.getAllByTestId('review-delete')).toHaveLength(1);

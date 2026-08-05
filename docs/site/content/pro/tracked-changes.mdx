@@ -87,7 +87,7 @@ Each card is a compound you can take apart:
 
 Every part takes `className`, `asChild`, and `hidden`. The action parts (`Accept`, `Reject`, `Delete`, `Reply`) also take `icon`.
 
-`Delete` is the destructive one, and it is on both kinds of card: on a comment it deletes the thread, and on a tracked change it discards the suggestion. It is absent on a card with nothing to discard.
+`Delete` is the destructive one, and it is on both kinds of card: on a comment it deletes the thread, and on a tracked change it discards the suggestion. It shows only on the OPEN card — a rail where every card offers to throw a remark away invites clicking one by mistake — and it is absent on a card with nothing to discard. `Replies` draws one per reply as well, so a single answer can be taken back without deleting the conversation it belongs to.
 
 ## Choosing what the sidebar shows
 
