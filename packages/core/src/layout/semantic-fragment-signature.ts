@@ -49,7 +49,16 @@ export function fragmentSignature(fragment: BlockFragmentRecord): string {
           fragment.shading,
           fragment.shadingBox,
           fragment.marker,
-          fragment.lines.map((line) => [line.id, line.box, line.baseline, line.spans]),
+          // `contentX` as well as `box`: on a span-less line the alignment lives ONLY there,
+          // so an empty paragraph re-aligned from left to centre changes no other hashed
+          // field and would converge against the stale fragment.
+          fragment.lines.map((line) => [
+            line.id,
+            line.box,
+            line.contentX,
+            line.baseline,
+            line.spans,
+          ]),
         ]);
   signatures.set(fragment, signature);
   return signature;

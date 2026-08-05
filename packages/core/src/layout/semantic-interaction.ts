@@ -134,7 +134,7 @@ function xWithinLine(
     if (offset === drawing.start) return drawing.advanceStart;
     if (offset === drawing.start + 1) return drawing.advanceEnd;
   }
-  let x = line.box.x;
+  let x = line.contentX;
   for (const span of line.spans) {
     if (offset <= span.range.start) return span.box.x;
     if (offset >= span.range.end) {

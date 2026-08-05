@@ -88,6 +88,35 @@ describe('a click beside a line', () => {
     const layout = lay('<w:p/>');
     expect(hit(layout, 300, 5)!.position).toEqual({ paragraphId: P0, offset: 0 });
   });
+
+  test('an EMPTY centred paragraph puts its caret in the middle, not at the margin', () => {
+    // The line has no spans to carry the alignment offset, so the caret used to be drawn at
+    // the left edge of the column and only jumped to the centre once a character was typed.
+    const empty = lay('<w:p><w:pPr><w:jc w:val="center"/></w:pPr></w:p>');
+    const emptyLine = paragraphFragmentsOf(empty.pages[0]!)[0]!.lines[0]!;
+    const middle = emptyLine.box.x + emptyLine.box.width / 2;
+    expect(emptyLine.spans).toHaveLength(0);
+    expect(caretBoxOnLine(emptyLine, 0, measurer).x).toBeCloseTo(middle, 5);
+
+    // ...and the first keystroke barely moves it — half a glyph, not half a page.
+    const typed = lay(`<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>a</w:t></w:r></w:p>`);
+    const typedLine = paragraphFragmentsOf(typed.pages[0]!)[0]!.lines[0]!;
+    expect(Math.abs(caretBoxOnLine(typedLine, 0, measurer).x - middle)).toBeLessThan(6);
+  });
+
+  test('an EMPTY right-aligned paragraph puts its caret at the right edge', () => {
+    const layout = lay('<w:p><w:pPr><w:jc w:val="right"/></w:pPr></w:p>');
+    const line = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!;
+    expect(caretBoxOnLine(line, 0, measurer).x).toBeCloseTo(line.box.x + line.box.width, 5);
+  });
+
+  test('a click anywhere on an empty centred line lands on the aligned caret x', () => {
+    const layout = lay('<w:p><w:pPr><w:jc w:val="center"/></w:pPr></w:p>');
+    const line = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!;
+    const found = hit(layout, 20, 5)!;
+    expect(found.position).toEqual({ paragraphId: P0, offset: 0 });
+    expect(caretAt(layout, found.position, { measurer })!.x).toBeCloseTo(line.contentX, 5);
+  });
 });
 
 describe('a click above or below the lines', () => {
