@@ -35,6 +35,7 @@ import type { RelationshipRecord } from './relationships.ts';
 const CONTENT_TYPES_PART = '/[Content_Types].xml';
 const CONTENT_TYPES_NAMESPACE = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const RELATIONSHIPS_NAMESPACE = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const RELATIONSHIPS_TYPE = 'application/vnd.openxmlformats-package.relationships+xml';
 
 function contentTypesEntryOf(
   partBytes: ReadonlyMap<string, Uint8Array>
@@ -371,6 +372,32 @@ export function allocateOwnerRelationshipId(pkg: OoxmlPackage, ownerPart: string
 }
 
 /** Add or replace one relationship on a part, returning a new package. */
+/**
+ * Give a part an empty `.rels` of its own, so {@link withRelationship} has somewhere to write.
+ *
+ * A part created in this session has no relationships part, and neither primitive can produce
+ * one: `withNewPart` refuses `.rels` names outright (they are not ordinary content), and
+ * `withRelationship` refuses an owner that has none rather than guessing. That leaves a new
+ * part unable to point at anything — which a custom XML store has to do, since its properties
+ * are reachable only through its own relationship.
+ *
+ * Idempotent, and deliberately narrow: it mints the empty `<Relationships/>` tree and nothing
+ * else. `Default Extension="rels"` covers the content type in every real package; a package
+ * missing it gets an explicit override rather than an unopenable part.
+ */
+export function withRelationshipsPartFor(pkg: OoxmlPackage, ownerPart: string): OoxmlPackage {
+  const canonical = normalizePartName(ownerPart);
+  if (!canonical.ok) return pkg;
+  const relsName = relsPartNameFor(canonical.partName);
+  if (pkg.parts.has(relsName)) return pkg;
+  const root = element(`${relsName}#root`, RELATIONSHIPS_NAMESPACE, 'Relationships', {});
+  const part: OoxmlPart = { id: relsName, name: relsName, contentType: RELATIONSHIPS_TYPE, root };
+  const next = withPart(pkg, part);
+  return resolveContentTypeOf(next, relsName) === null
+    ? withContentTypeOverride(next, relsName, RELATIONSHIPS_TYPE)
+    : next;
+}
+
 export function withRelationship(
   pkg: OoxmlPackage,
   ownerPart: string,
