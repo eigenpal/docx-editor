@@ -16,7 +16,6 @@
 // nodes, under a heading that says so.
 
 import { DocxEditor, useDocxEditor } from '@docx-editor.dev/react';
-import type { ReactNode } from 'react';
 import { useFrost } from './useFrost';
 import { useSpecimens } from './useSpecimens';
 import { iglooT } from './labels';
@@ -33,22 +32,6 @@ import {
   IceLottery,
   IceThaw,
 } from './icons/menu';
-
-/**
- * A section heading inside a panel.
- *
- * The demo's OWN element — the menu parts are rows, separators and submenus, with no group
- * or heading among them, and an unrecognized child renders verbatim. `role="presentation"`
- * because a bare `div` inside `role="menu"` would break the ownership a screen reader
- * derives its "x of y" counts from; this is a visual grouping and says so.
- */
-function Heading({ children }: { children: ReactNode }) {
-  return (
-    <div className="igloo-menu__heading" role="presentation">
-      {children}
-    </div>
-  );
-}
 
 export function IglooMenu() {
   const editor = useDocxEditor();
@@ -92,41 +75,45 @@ export function IglooMenu() {
           here is something the library does not have, which is the reason it is a separate
           menu instead of rows sprinkled through the packaged ones. */}
       <DocxEditor.Menu.Menu id="igloo" label="Custom Actions" icon={IceIgloo} preset={false}>
-        <Heading>Custom elements</Heading>
-        {/* Each row authors a run-level content control whose `w:tag` carries the node's
-            identity — a real, saveable document node that Word and the free tier both open
-            as ordinary text. `defineCustomNode` in `specimens.ts` is what makes them typed
-            again on the way back in. */}
-        <DocxEditor.Menu.Row icon={IceBerg} {...nodeGate} onSelect={() => compose('iceberg')}>
-          Calve an iceberg…
-        </DocxEditor.Menu.Row>
-        <DocxEditor.Menu.Row icon={IceDome} {...nodeGate} onSelect={() => compose('igloo')}>
-          Build an igloo…
-        </DocxEditor.Menu.Row>
-        <DocxEditor.Menu.Row icon={IceLottery} {...nodeGate} onSelect={dropRandom}>
-          Take whatever the water gives
-        </DocxEditor.Menu.Row>
+        {/* `Menu.Group` is a real `role="group"` with the heading as its accessible name,
+            so the rows stay owned by the menu and a screen reader still counts them
+            correctly. Each row authors a run-level content control whose `w:tag` carries
+            the node's identity — a real, saveable document node that Word and the free tier
+            both open as ordinary text. */}
+        <DocxEditor.Menu.Group label="Custom elements">
+          <DocxEditor.Menu.Row icon={IceBerg} {...nodeGate} onSelect={() => compose('iceberg')}>
+            Calve an iceberg…
+          </DocxEditor.Menu.Row>
+          <DocxEditor.Menu.Row icon={IceDome} {...nodeGate} onSelect={() => compose('igloo')}>
+            Build an igloo…
+          </DocxEditor.Menu.Row>
+          <DocxEditor.Menu.Row icon={IceLottery} {...nodeGate} onSelect={dropRandom}>
+            Take whatever the water gives
+          </DocxEditor.Menu.Row>
+        </DocxEditor.Menu.Group>
 
         <DocxEditor.Menu.Separator />
-        <Heading>This passage</Heading>
-        {/* Not a custom node — a host action over a real engine command, gated on
-            `Editor.can`. Grouped apart so the distinction is visible. */}
-        <DocxEditor.Menu.Row
-          icon={IceFrost}
-          disabled={!enabled}
-          {...(disabledReason ? { title: disabledReason } : {})}
-          onSelect={freeze}
-        >
-          Freeze this passage
-        </DocxEditor.Menu.Row>
-        <DocxEditor.Menu.Row
-          icon={IceThaw}
-          disabled={!enabled}
-          {...(disabledReason ? { title: disabledReason } : {})}
-          onSelect={thaw}
-        >
-          Thaw it out
-        </DocxEditor.Menu.Row>
+
+        {/* Not custom nodes — host actions over real engine commands, gated on `Editor.can`.
+            Grouped apart so the distinction is visible. */}
+        <DocxEditor.Menu.Group label="This passage">
+          <DocxEditor.Menu.Row
+            icon={IceFrost}
+            disabled={!enabled}
+            {...(disabledReason ? { title: disabledReason } : {})}
+            onSelect={freeze}
+          >
+            Freeze this passage
+          </DocxEditor.Menu.Row>
+          <DocxEditor.Menu.Row
+            icon={IceThaw}
+            disabled={!enabled}
+            {...(disabledReason ? { title: disabledReason } : {})}
+            onSelect={thaw}
+          >
+            Thaw it out
+          </DocxEditor.Menu.Row>
+        </DocxEditor.Menu.Group>
       </DocxEditor.Menu.Menu>
 
       {/* Help, with its one packaged row REMOVED BY NAME rather than by `preset={false}`.

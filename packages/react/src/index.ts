@@ -174,6 +174,7 @@ export {
   type ContentControlProps,
 } from './editor/DocxEditorContentControl';
 export { useEditorState } from './editor/useEditorState';
+export { useEditorCaret, type EditorCaret } from './editor/useEditorCaret';
 export { useEditorCommand, type EditorCommandState } from './editor/useEditorCommand';
 export {
   useEditorValueCommand,
@@ -250,6 +251,7 @@ export {
   type DocxEditorMenuNamespace,
   type DocxEditorMenuProps,
   type MenuActionProps,
+  type MenuGroupProps,
   type MenuId,
   type MenuItemProps,
   type MenuPartComponent,

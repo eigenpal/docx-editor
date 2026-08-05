@@ -45,6 +45,14 @@ const ICE_LABELS = new Map<string, string>(Object.entries({
   'formattingBar.clearFormatting': 'Smooth over',
   'comments.addComment': 'Log an observation…',
 
+  // The review rail. It takes a `t` like every other compound, so the decisions get the
+  // theme's words while the buttons keep the library's accessible names.
+  'review.accept': 'Let it melt',
+  'review.reject': 'Refreeze it',
+  'review.empty': 'Nothing in the core yet.',
+  'review.reply': 'Log it',
+  'comments.replyPlaceholder': 'Add to the record…',
+
   // The demo's own keys, resolved the same way the packaged ones are.
   'igloo.carve': 'Carve…',
   'igloo.specimens': 'Custom elements…',

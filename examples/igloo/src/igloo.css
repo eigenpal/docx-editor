@@ -406,6 +406,18 @@
 
 /* ── The context menu, cut from a berg ────────────────────────────────────────────── */
 
+/* NO FILTER ON THIS BOX — the shadow lives on the berg behind it.
+ *
+ * The same trap as the chrome bar above, and worth stating twice because it cost the same
+ * hour twice: `filter` makes an element the containing block for `position: fixed`
+ * descendants. A submenu panel places itself in CLIENT coordinates precisely so it can
+ * escape the menu's own scroller, and with the shadow declared here those coordinates were
+ * resolved against this 240px panel instead of the window — the submenu landed several
+ * hundred pixels down and to the right, off the visible area.
+ *
+ * Moving it onto the SVG is not a workaround either; it is where it belonged. A
+ * `drop-shadow` follows its element's alpha silhouette, and the shape being cast here is the
+ * berg's jagged crown, not this rectangle. */
 .igloo-menu {
   position: fixed;
   /* The card's own background is replaced by the SVG behind the rows. */
@@ -413,8 +425,6 @@
   border: none;
   border-radius: 12px;
   padding: 8px 6px 6px;
-  overflow: visible;
-  filter: drop-shadow(0 16px 30px rgba(4, 32, 52, 0.55));
 }
 
 .igloo-menu__berg {
@@ -424,6 +434,8 @@
   width: 100%;
   height: calc(100% + 12px);
   z-index: 0;
+  /* The panel's shadow, cast by the shape that is actually visible. */
+  filter: drop-shadow(0 16px 30px rgba(4, 32, 52, 0.55));
   pointer-events: none;
 }
 
@@ -434,8 +446,14 @@
   z-index: 1;
 }
 
-/* Room for the crown: the first row must clear the jagged top edge. */
-.igloo-menu > *:not(.igloo-menu__berg):first-of-type {
+/* Room for the crown: the FIRST row must clear the jagged top edge.
+ *
+ * `:first-child`, not `:first-of-type`. With a universal selector `:first-of-type` matches
+ * the first sibling of EVERY tag name — so the custom-node info block (a div) took the gap,
+ * and so did the first button under it, and so would the first of anything else the panel
+ * grows. The result was a band of empty ice in the middle of the menu, right where a reader
+ * looks for the row they came for. Only one element can be the first child. */
+.igloo-menu > :first-child:not(.igloo-menu__berg) {
   margin-top: 26px;
 }
 
@@ -447,20 +465,13 @@
   --doc-border: rgba(120, 180, 210, 0.5);
 }
 
-/* Section headings inside the product's own menu.
+/* Section headings inside the product's own menu need NO rule here.
  *
- * The menu parts are rows, separators and submenus — there is no group or heading among
- * them — so this is the demo's own element, rendered verbatim as an unrecognized child. It
- * exists to answer one question at a glance: which of these rows did the product add, and
- * which is the editor's own capability under a themed name. */
-.igloo-menu__heading {
-  padding: 8px 12px 4px;
-  color: var(--doc-text-subtle);
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
+ * They started as this demo's own element with a hand-written class, because the menu parts
+ * were rows, separators and submenus with no grouping among them. `Menu.Group` is that part
+ * now — a real `role="group"` taking its heading as the accessible name — and it arrives
+ * already themed, because its heading paints in `--doc-text-subtle` like everything else
+ * here. Deleting a stylesheet block is what "the library grew a prop instead" looks like. */
 
 /* ── The link popover as an ice shard ─────────────────────────────────────────────── */
 
@@ -634,6 +645,19 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   opacity: 0.85;
+}
+
+/* The card box itself, through the rail's `card` prop — no `docx-*` selector needed for the
+   one element the ladder used to have no hook for. */
+.igloo-rail__card {
+  border-radius: 14px;
+}
+
+/* A specimen card knows WHICH specimen it is: `data-node-name` carries the definition's own
+   name, so a berg card can go deep-water below its waterline and an igloo card stay bright
+   without the host inspecting its own children to find out. */
+.igloo-rail__card[data-node-name='iceberg'] {
+  background: linear-gradient(180deg, rgba(246, 253, 255, 0.96) 62%, rgba(24, 92, 132, 0.16));
 }
 
 /* The avatar wears a rime ring: a white halo on the author colour the library still picks. */

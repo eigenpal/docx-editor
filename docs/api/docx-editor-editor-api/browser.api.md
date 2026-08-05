@@ -8,6 +8,7 @@ import { BookmarkIndex } from '@docx-editor.dev/core-contract/store';
 import { CellSelection } from '@docx-editor.dev/core-contract/layout';
 import { ContentControlBoundaryRecord } from '@docx-editor.dev/core-contract/layout';
 import * as _docx_editor_dev_core_contract_layout from '@docx-editor.dev/core-contract/layout';
+import * as _docx_editor_dev_core_contract_store from '@docx-editor.dev/core-contract/store';
 import { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import { NavigationCommand } from '@docx-editor.dev/core-contract/layout';
 import { SectionProperties } from '@docx-editor.dev/core-contract/layout';
@@ -15,7 +16,7 @@ import { SemanticLayout } from '@docx-editor.dev/core-contract/layout';
 import { SemanticSelection } from '@docx-editor.dev/core-contract/layout';
 import { StoryScope } from '@docx-editor.dev/core-contract/store';
 import { TreeApplyResult } from '@docx-editor.dev/core-contract/binding';
-import { TreeDocOp } from '@docx-editor.dev/core-contract/store';
+import { TreeDocOp as TreeDocOp_2 } from '@docx-editor.dev/core-contract/store';
 import { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
 import { Unsubscribe } from '@docx-editor.dev/core-contract/contracts/editor';
 

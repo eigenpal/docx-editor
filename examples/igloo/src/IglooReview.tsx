@@ -25,6 +25,7 @@ import { DocxEditorReview, useReview, useReviewItem } from '@docx-editor.dev/pro
 import type { ReviewRevisionKind } from '@docx-editor.dev/core-contract/contracts/editor';
 import { BergGlyph, DomeGlyph } from './art/Specimen';
 import { Stats } from './SpecimenPopover';
+import { iglooT } from './labels';
 import { IceMelt, IceRefreeze } from './icons/review';
 import { blocksOf, depthOf, insideTemperature, OUTSIDE, tipHeight } from './specimens';
 
@@ -49,7 +50,16 @@ const FLOE_WORDS: Record<ReviewRevisionKind, string> = {
 
 export function IglooReview() {
   return (
-    <DocxEditorReview className="igloo-rail" furniture={<CoreLog />}>
+    <DocxEditorReview
+      className="igloo-rail"
+      /* The rail's own label catalogue, the same `t` the toolbar and the menus take. Unlike
+         those, an unresolved key here falls back to the bundled English rather than to the
+         key, because every string in the rail ships a translation. */
+      t={iglooT}
+      /* Rung 1 on the card itself — the box, not the column around it. */
+      card={{ className: 'igloo-rail__card' }}
+      furniture={<CoreLog />}
+    >
       {/* Rung 3/1: the packaged parts, re-iconed and re-classed. Everything they do —
           asking the engine, resolving every site of one decision in a single undo step —
           is untouched; only the glyph and the box are the demo's. */}
@@ -119,13 +129,18 @@ function Stratum({ count, label }: { count: number; label: string }) {
  * card get the CURRENT item from context rather than from props, so this composes exactly
  * the way `Review.Summary`'s own default does.
  *
- * Custom nodes never reach here: their card is titled by the definition's `reviewCard` hook
- * and rendered by the packaged custom branch, which is why the specimen panel below is an
- * appended child rather than a summary override.
+ * ONE body for all three kinds. A custom node's card runs this too — its detail comes from
+ * the definition's own `reviewCard` hook, so the words were already the demo's, and routing
+ * them through here means a card cannot end up styled two different ways depending on what
+ * put it in the rail.
  */
 function FloeSummary() {
   const item = useReviewItem();
   if (!item) return null;
+  if (item.kind === 'custom') {
+    const detail = item.item.kind === 'custom' ? item.item.detail : undefined;
+    return detail ? <span className="igloo-rail__text">{detail}</span> : null;
+  }
   if (item.kind === 'comment') {
     // Untrusted: the words come out of the file, so they are rendered as TEXT and never as
     // markup — the same rule the packaged summary follows.

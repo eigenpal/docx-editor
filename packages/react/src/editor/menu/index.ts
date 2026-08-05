@@ -6,6 +6,7 @@ export {
 export {
   Menu,
   MenuEntry,
+  MenuGroup,
   MenuItem,
   MenuReportIssue,
   MenuRow,
@@ -13,6 +14,7 @@ export {
   MenuSubmenu,
   MenuTableGrid,
   type MenuActionProps,
+  type MenuGroupProps,
   type MenuItemProps,
   type MenuPartComponent,
   type MenuProps,

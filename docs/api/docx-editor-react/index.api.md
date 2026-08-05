@@ -336,6 +336,7 @@ export interface DocxEditorContextMenuNamespace {
     readonly DeleteTableColumn: typeof ContextMenuDeleteTableColumn;
     // (undocumented)
     readonly DeleteTableRow: typeof ContextMenuDeleteTableRow;
+    readonly Group: typeof MenuGroup;
     // (undocumented)
     readonly InsertColumnLeft: typeof ContextMenuInsertColumnLeft;
     // (undocumented)
@@ -481,6 +482,7 @@ export interface DocxEditorMenuNamespace {
     readonly File: MenuPartComponent;
     // (undocumented)
     readonly Format: MenuPartComponent;
+    readonly Group: typeof MenuGroup;
     // (undocumented)
     readonly Help: MenuPartComponent;
     // (undocumented)
@@ -854,6 +856,14 @@ export type DocxSource = string | URL | Uint8Array | ArrayBuffer;
 
 export { Editor }
 
+// @public
+export interface EditorCaret {
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
 export { EditorCommand }
 
 // @public
@@ -1107,6 +1117,18 @@ export interface MenuActionProps {
 export function MenuBar(): react__default.JSX.Element;
 
 // @public
+export interface MenuGroupProps {
+    // (undocumented)
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
+    label?: string;
+    labelKey?: string;
+}
+
+// @public
 export type MenuId = ChromeMenuId | (string & {});
 
 // @public
@@ -1172,7 +1194,7 @@ export interface MenuSeparatorProps {
     className?: string;
 }
 
-// @public
+// @public (undocumented)
 export interface MenuSubmenuProps {
     // (undocumented)
     children?: ReactNode;
@@ -1800,6 +1822,9 @@ export interface UseDocxSourceResult {
     readonly fonts: FontConfiguration | undefined;
     readonly isLoading: boolean;
 }
+
+// @public
+export function useEditorCaret(): EditorCaret | null;
 
 // @public
 export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCommandState;

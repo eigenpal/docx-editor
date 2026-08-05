@@ -11,7 +11,7 @@
 // state its `onNodeClick` drives.
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
-import { useDocxEditor, useEditorState } from '@docx-editor.dev/react';
+import { useDocxEditor, useEditorCaret, useEditorState } from '@docx-editor.dev/react';
 import { insertCustomNode, updateCustomNode, type ActivatedCustomNode } from '@docx-editor.dev/pro';
 import { CustomNodeChrome } from '@docx-editor.dev/pro/react';
 import {
@@ -95,12 +95,13 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
    *
    * A menu row that opens a dialog and then inserts "wherever the selection is by now" lands
    * the specimen wherever the user's last click left it, which is rarely where they were
-   * reading. `at` on the insert is exactly this problem's answer.
+   * reading. `at` on the insert is exactly this problem's answer, and `useEditorCaret` is
+   * how a host gets a value to put in it: `snapshot.selection` addresses paragraphs by id
+   * and carries no offsets, so this used to mean reaching into `editor.surface` — an escape
+   * hatch documented for chrome, which reading a caret is not. The value is
+   * reference-stable, so capturing it in a handler is safe.
    */
-  const caret = useCallback(
-    (): SpecimenAt => editor?.surface?.state().selection.head ?? null,
-    [editor]
-  );
+  const caret = useEditorCaret();
 
   const say = useCallback((text: string) => {
     setNotice((previous) => ({ id: (previous?.id ?? 0) + 1, text }));
@@ -131,14 +132,14 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
   const compose = useCallback(
     (kind: SpecimenKind) => {
       const attrs = defaultAttrs(kind);
-      setForm({ mode: 'insert', kind, attrs, label: labelFor(kind, attrs), at: caret() });
+      setForm({ mode: 'insert', kind, attrs, label: labelFor(kind, attrs), at: caret });
     },
     [caret]
   );
 
   const dropRandom = useCallback(() => {
     const picked = randomSpecimen();
-    place(picked.kind, picked.attrs, picked.label, caret());
+    place(picked.kind, picked.attrs, picked.label, caret);
   }, [caret, place]);
 
   const edit = useCallback(

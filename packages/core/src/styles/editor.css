@@ -5691,6 +5691,23 @@ a.docx-hyperlink:focus-visible {
   min-width: 240px;
 }
 
+/* A named section of rows. The heading is decoration — the group carries the accessible
+   name — so it is sized and spaced to read as a label, not as a row. */
+.ep-root .docx-menubar__group-label {
+  padding: 8px 12px 4px;
+  color: var(--doc-text-subtle, #8a8f98);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* No leading gap on the first group: the panel's own padding is already there, and a second
+   one reads as an empty row above the first heading. */
+.ep-root .docx-menubar__group:first-child > .docx-menubar__group-label {
+  padding-top: 2px;
+}
+
 /* ── The insert-table size grid ────────────────────────────────────────────────────── */
 .ep-root .docx-menubar__grid {
   padding: 8px;
