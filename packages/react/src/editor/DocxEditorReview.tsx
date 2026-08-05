@@ -165,6 +165,13 @@ export interface ReviewProps extends ReviewPartProps {
   gap?: number;
   /** Show only some of the queue — comments in one rail, revisions in another. */
   filter?: (item: ReviewItemView) => boolean;
+  /**
+   * Show the read-only "changed the document structure" cards. Default `false`: a heavily
+   * revised document carries one per structural site, they cannot be accepted or rejected
+   * from the rail, and together they crowd out the cards a reviewer can act on. The
+   * revisions themselves stay in the document either way — this hides only their cards.
+   */
+  structural?: boolean;
 }
 
 // Inline SVG, like the toolbar's icons: this package ships no icon font.
@@ -198,8 +205,9 @@ function ReviewRoot({
   children,
   preset = true,
   stack = true,
-  gap = 6,
+  gap = 8,
   filter,
+  structural = false,
 }: ReviewProps) {
   const editor = useDocxEditor();
   const review = useReview();
@@ -214,10 +222,12 @@ function ReviewRoot({
   // the viewport shifts the page for it, so a flag kept here would be a third opinion.
   const open = review.paneOpen;
 
-  const items = useMemo(
-    () => (filter ? review.items.filter((entry) => filter(entry)) : review.items),
-    [review.items, filter]
-  );
+  const items = useMemo(() => {
+    const shown = structural
+      ? review.items
+      : review.items.filter((entry) => entry.revisionKind !== 'structural');
+    return filter ? shown.filter((entry) => filter(entry)) : shown;
+  }, [review.items, filter, structural]);
 
   // Word's rule: a colour per author by ORDER OF FIRST APPEARANCE. A hash of the name is
   // stable but collides, and two reviewers drawn in one colour tells the reader the wrong
@@ -400,16 +410,31 @@ function ReviewRoot({
   // card's anchor, so nothing about its own position could have avoided the collision. The
   // BUTTON does not stack — it sits against the page instead, where nothing else is.
   const composeAnchorY = draftAnchorY ?? review.selectionAnchorY;
+  // Only what the list RENDERS competes for the column: a threaded reply lives inside its
+  // parent's card, and letting it into the run advanced the cursor once per reply, spacing
+  // every card below a commented conversation by gaps nothing on screen accounted for.
+  const roots = useMemo(
+    () => items.filter((entry) => !(entry.kind === 'comment' && entry.parentId !== undefined)),
+    [items]
+  );
   const stackInput = useMemo(() => {
-    if (draftAnchorY === null) return items;
+    if (draftAnchorY === null) return roots;
     // In document order, AFTER anything already at that height: the comments already there
     // were made before this selection, and later is below.
-    const at = items.findIndex((entry) => entry.anchorY !== null && entry.anchorY > draftAnchorY);
+    const at = roots.findIndex((entry) => entry.anchorY !== null && entry.anchorY > draftAnchorY);
     const compose = { key: COMPOSE_KEY, anchorY: draftAnchorY };
-    return at === -1 ? [...items, compose] : [...items.slice(0, at), compose, ...items.slice(at)];
-  }, [items, draftAnchorY]);
+    return at === -1 ? [...roots, compose] : [...roots.slice(0, at), compose, ...roots.slice(at)];
+  }, [roots, draftAnchorY]);
 
-  const stacked = useStackedReviewPositions(stackInput, heights, { gap, scale: metrics.scale });
+  const stacked = useStackedReviewPositions(stackInput, heights, {
+    gap,
+    scale: metrics.scale,
+    // An unmeasured card — below the virtualization window, or in its first frame — still
+    // reserves a plausible card's worth of room. Without this the run advanced by the gap
+    // alone and a dense redline opened as a column of cards painted over each other until
+    // every one had reported its height.
+    defaultHeight: 72,
+  });
   const composeTop =
     composeAnchorY === null
       ? null

@@ -1080,8 +1080,8 @@ type: BooleanConstructor;
 default: boolean;
 };
 }>> & Readonly<{}>, {
-visible: boolean;
 editor: Editor | null;
+visible: boolean;
 }, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)

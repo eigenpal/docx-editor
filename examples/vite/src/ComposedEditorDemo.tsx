@@ -367,6 +367,9 @@ function EditorChrome({
   const [showPageSetup, setShowPageSetup] = useState(false);
 
   const openFile = (file: File) => {
+    // The title follows the opened file, so the header names the document actually
+    // on screen — and the download the Save button writes names itself after it too.
+    onTitleChange(file.name.replace(/\.docx$/i, ''));
     void file.arrayBuffer().then((buffer) => {
       editor?.load(new Uint8Array(buffer));
     });
@@ -549,7 +552,10 @@ function RulerRow() {
 
 export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
   const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
-  const [title, setTitle] = useState('Sample Document');
+  // Named after the document it opens with, and after whichever file is opened later.
+  const [title, setTitle] = useState(
+    () => fixtureUrl.split('/').pop()?.replace(/\.docx$/i, '') ?? 'Document'
+  );
   const [showOutline, setShowOutline] = useState(false);
 
   // The whole boot in ONE call: fetch the fixture, load Word's default substitute faces

@@ -218,10 +218,15 @@ export function useReviewOf(editor: Editor | null): UseReviewReturn {
 export function useStackedReviewPositions(
   items: readonly { readonly key: string; readonly anchorY: number | null }[],
   heights: ReadonlyMap<string, number>,
-  options: { readonly gap?: number; readonly scale?: number } = {}
+  options: { readonly gap?: number; readonly scale?: number; readonly defaultHeight?: number } = {}
 ): ReadonlyMap<string, number> {
   const gap = options.gap ?? 8;
   const scale = options.scale ?? 1;
+  // What an entry with no measured height reserves, in CSS pixels. Zero keeps the historic
+  // behavior — unmeasured cards advance the run by the gap alone; the packaged rail passes
+  // an estimate so cards it has not measured yet (or has virtualized out of the DOM) still
+  // hold a card's worth of room instead of painting over each other.
+  const defaultHeight = options.defaultHeight ?? 0;
   return useMemo(() => {
     const positions = new Map<string, number>();
     let cursor = Number.NEGATIVE_INFINITY;
@@ -230,8 +235,8 @@ export function useStackedReviewPositions(
       const top = Math.max(entry.anchorY, cursor);
       positions.set(entry.key, top);
       // Pixels to points before they meet an anchor.
-      cursor = top + ((heights.get(entry.key) ?? 0) + gap) / scale;
+      cursor = top + ((heights.get(entry.key) ?? defaultHeight) + gap) / scale;
     }
     return positions;
-  }, [items, heights, gap, scale]);
+  }, [items, heights, gap, scale, defaultHeight]);
 }

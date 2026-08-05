@@ -240,6 +240,23 @@ describe('createDocxEditor', () => {
     expect(editor.surface!.session.bodyText()).toBe('second');
   });
 
+  test('load() with new bytes opens at the top, not at the previous scroll offset', () => {
+    // The scroller is the HOST's element and survives the remount, so without an explicit
+    // reset a reader ten pages into one file opened the next file ten pages in.
+    const scroller = document.createElement('div');
+    scroller.className = 'docx-editor__scroll-container';
+    const container = document.createElement('div');
+    scroller.appendChild(container);
+    const editor = createDocxEditor({ container, document: docx(p('first')) });
+    expect(editor.surface).not.toBeNull();
+    scroller.scrollTop = 4321;
+    scroller.scrollLeft = 17;
+    editor.load(docx(p('second')));
+    expect(scroller.scrollTop).toBe(0);
+    expect(scroller.scrollLeft).toBe(0);
+    editor.destroy();
+  });
+
   test('load() with a DocumentHandle emits a typed error and keeps the document', () => {
     const { editor } = mount(p('hello'));
     const errors: { code?: string }[] = [];

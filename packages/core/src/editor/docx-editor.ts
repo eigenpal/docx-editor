@@ -148,6 +148,7 @@ import {
   type PaginatedSurfaceOptions,
   type PaginatedSurfaceState,
 } from './paginated-surface.ts';
+import { surfaceScroller } from './surface-pages.ts';
 import type {
   DocxEditorConfig,
   DocxEditorInstance,
@@ -437,6 +438,19 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // guard will refuse to touch state, so the flag must reset here or a load that
     // starts no font work of its own reports `resolving: true` forever.
     fontsResolving = false;
+    // A NEW document opens at its first page. The scroller is the host's element and
+    // survives the remount, so the previous document's scroll offset would otherwise
+    // carry over — a reader ten pages into one file opened the next file ten pages in.
+    // BEFORE the mount, so the initial paint materializes the pages actually in view.
+    // Only here, never in `mountBytes`: the font remount and `attach` re-enter that
+    // function for the SAME document and must keep the reader's place.
+    if (container) {
+      const scroller = surfaceScroller(container);
+      if (scroller) {
+        scroller.scrollTop = 0;
+        scroller.scrollLeft = 0;
+      }
+    }
     mountBytes(bytes);
   }
 
