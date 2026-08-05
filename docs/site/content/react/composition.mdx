@@ -1,6 +1,6 @@
 ---
 title: 'Composition'
-description: 'Build your own editor UI on unstyled primitives: provider, viewport, content, compound parts, asChild, and slot overrides.'
+description: 'Build your own editor UI on the primitives: provider, viewport, content, compound parts, host actions, slot overrides, and theming.'
 category: 'React'
 order: 32
 ---
@@ -8,6 +8,12 @@ order: 32
 `<DocxEditor>` is one arrangement of parts that are all public. When the packaged chrome is not what you want, take the parts.
 
 The packaged toolbar is built from the hooks and primitives on this page, so a control you write has the same capabilities as one that ships in the box.
+
+<Callout>
+  The [Igloo example](https://github.com/eigenpal/docx-editor/tree/main/examples/igloo) is a fully
+  re-skinned editor built to answer one question: how much of this is yours? Every pattern below
+  appears in it, running. `bun run dev:igloo`.
+</Callout>
 
 ## The three primitives
 
@@ -27,7 +33,7 @@ export function Editor({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
-- **`Root`** owns the editor instance and publishes it on context. It renders no DOM of its own. It is where document-level props live: `document`, `mode`, `author`, `fonts`, `locale`, `modules`, `onReady`, `onChange`.
+- **`Root`** owns the editor instance and publishes it on context. It renders no DOM of its own. Document-level props live here: `document`, `mode`, `author`, `fonts`, `locale`, `modules`, `onReady`, `onChange`.
 - **`Viewport`** is the scroll container, and carries the layout classes the engine positions pages against.
 - **`Content`** is the mount point the engine paints pages into. The painted pages _are_ the editable surface.
 
@@ -37,15 +43,16 @@ Everything else — toolbar, menu, rulers, navigation pane, link popover, contex
 
 Start at the top and go down only as far as you need:
 
-1. **CSS.** Every packaged control takes `className` and exposes `data-active` / `data-disabled`.
+1. **CSS and tokens.** Restate the `--doc-*` palette under your own scope.
 2. **`icon` prop.** Swap a glyph without touching behavior.
-3. **`asChild`.** Merge the wiring onto your own element instead of the packaged one.
+3. **`asChild`.** Merge the wiring onto your own element.
 4. **Slot override.** Replace one part of a compound in place; keep the rest.
-5. **Hooks.** Write the markup yourself. See [Hooks](/docs/2.x/react/hooks).
+5. **`preset={false}`.** Opt out of the default arrangement and order it yourself.
+6. **Hooks.** Write the markup yourself. See [Hooks](/docs/2.x/react/hooks).
 
 ### asChild
 
-`asChild` hands the part's behavior (click handler, disabled state, ARIA, active state) to the child you supply and renders no wrapper:
+`asChild` hands the part's behavior — click handler, disabled state, ARIA, active state — to the child you supply and renders no wrapper:
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -58,80 +65,275 @@ import { Button } from '@/components/ui/button';
 
 ### Slot override
 
-A part child replaces the slot of the same name and leaves the rest of the default arrangement alone. `hidden` removes a slot; `preset={false}` opts out of the defaults entirely so only your children render:
+A part child replaces the slot of the same name and leaves the rest of the default arrangement alone. `hidden` removes a slot:
 
 ```tsx
-{
-  /* Default toolbar, but with our own bold button and no highlight control. */
-}
+// The default toolbar, but with our own bold button and no highlight control.
 <DocxEditor.Toolbar>
   <DocxEditor.Toolbar.Bold className="my-bold" />
   <DocxEditor.Toolbar.Highlight hidden />
-</DocxEditor.Toolbar>;
-
-{
-  /* Nothing packaged. Only these three. */
-}
-<DocxEditor.Toolbar preset={false}>
-  <DocxEditor.Toolbar.Bold />
-  <DocxEditor.Toolbar.Italic />
-  <DocxEditor.Toolbar.Underline />
-</DocxEditor.Toolbar>;
+</DocxEditor.Toolbar>
 ```
 
-## Compound parts
+## A hand-ordered toolbar
 
-Controls with internal state are compounds over a part-level context, so you own the markup and the library owns the behavior:
+`preset={false}` opts out of the registry's default arrangement, so the order in your JSX is the order on screen. Every packaged part still drives its chrome slot: enabled state, pressed state, and the command all still come from the engine. Only the glyph is yours.
 
 ```tsx
-import { DocxEditor, useFontFamily } from '@docx-editor.dev/react';
+<DocxEditor.Toolbar preset={false} className="my-toolbar" t={myLabels}>
+  <DocxEditor.Toolbar.Undo icon={MyUndo} />
+  <DocxEditor.Toolbar.Redo icon={MyRedo} />
+  <DocxEditor.Toolbar.Separator />
 
-// The option list comes from the hook, so your rows and the packaged rows
-// read the same source: configured fonts merged with the document's own.
-function FontItems() {
-  const { options } = useFontFamily();
-  return (
-    <>
-      {options.map((family) => (
-        <DocxEditor.Toolbar.FontFamily.Item key={family} value={family}>
-          <span style={{ fontFamily: family }}>{family}</span>
-        </DocxEditor.Toolbar.FontFamily.Item>
-      ))}
-    </>
-  );
-}
+  {/* Compound pickers kept whole. A host that wants a different look should not have to
+      rebuild the picker's behavior — these are the packaged components, restyled. */}
+  <DocxEditor.Toolbar.StylePicker className="my-picker" />
+  <DocxEditor.Toolbar.FontFamily className="my-picker" />
+  <DocxEditor.Toolbar.FontSize />
+  <DocxEditor.Toolbar.Separator />
 
-<DocxEditor.Toolbar.FontFamily>
-  <DocxEditor.Toolbar.FontFamily.Trigger className="my-trigger" />
-  <DocxEditor.Toolbar.FontFamily.Content>
-    <FontItems />
-  </DocxEditor.Toolbar.FontFamily.Content>
-</DocxEditor.Toolbar.FontFamily>;
+  <DocxEditor.Toolbar.Bold icon={MyBold} />
+  <DocxEditor.Toolbar.Italic icon={MyItalic} />
+  <DocxEditor.Toolbar.FontColor icon={MyFontColor} />
+  <DocxEditor.Toolbar.Separator />
+
+  <div className="my-toolbar__spacer" />
+  <DocxEditor.Toolbar.Zoom />
+</DocxEditor.Toolbar>
 ```
 
-`ParagraphStyle` follows the same `Trigger` / `Content` / `Item` shape.
+Every part name is a `ChromeSlotId`, so a slot the registry gains later shows up in the default arrangement without you editing anything. Ordering by hand trades that away deliberately.
+
+`icon` takes an **element**, not a component:
+
+```tsx
+// Right.
+export const MyBold = (
+  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M7 5h6a4 4 0 0 1 0 8H7z" />
+  </svg>
+);
+
+<DocxEditor.Toolbar.Bold icon={MyBold} />;
+
+// Wrong: `() => <svg />` is a component, and the prop is a ReactNode.
+```
+
+## A host action that asks the engine
+
+`Toolbar.Action` is for an action the registry has no slot for. The label, glyph, and effect are yours. What should not be yours is whether it may run: ask `useEditorCommand` about the command `onSelect` will exec, so the button cannot offer something the engine is about to refuse, and the tooltip carries the engine's reason rather than a guess.
+
+```tsx
+import { useDocxEditor, useEditorCommand, useEditorState } from '@docx-editor.dev/react';
+import type { EditorCommand } from '@docx-editor.dev/react';
+
+const highlight = (value: string): EditorCommand => ({
+  type: 'setMarkAttr',
+  mark: 'highlight',
+  attr: 'val',
+  value,
+});
+
+function useHighlightAction() {
+  const editor = useDocxEditor();
+  const { isEnabled, disabledReason } = useEditorCommand(highlight('cyan'));
+  // Two gates, two questions. The engine says yes at a collapsed caret, correctly: that
+  // arms the typing format the way Word's Bold does. It paints nothing, though, so a
+  // button that stays live there is one the user presses and sees nothing happen.
+  const collapsed = useEditorState((s) => s.selectionCollapsed);
+
+  return {
+    apply: () => editor?.exec(highlight('cyan')),
+    enabled: isEnabled && !collapsed,
+    disabledReason: collapsed && isEnabled ? 'nothing is selected' : disabledReason,
+  };
+}
+
+function HighlightAction() {
+  const { apply, enabled, disabledReason } = useHighlightAction();
+  return (
+    <DocxEditor.Toolbar.Action
+      label="Highlight"
+      icon={MyHighlight}
+      disabled={!enabled}
+      {...(disabledReason ? { disabledReason } : {})}
+      onSelect={apply}
+    />
+  );
+}
+```
+
+Put the hook in one file and share it across every surface that exposes the action. Two copies drift into disagreeing about when the action is available, which is the failure the chrome registry avoids for packaged controls by deriving the toolbar and the menu from one table.
+
+## Context menu
+
+Every composition mode in one panel: packaged rows kept, a packaged row re-iconed, a packaged row removed, a chrome slot pulled in as a row, host rows, and a submenu.
+
+```tsx
+<DocxEditor.ContextMenu className="my-menu" t={myLabels}>
+  {/* Packaged rows, re-iconed. They still run the engine's commands and still carry the
+      engine's reason when nothing is selected. */}
+  <DocxEditor.ContextMenu.Cut icon={MyCut} />
+  <DocxEditor.ContextMenu.Copy icon={MyCopy} />
+
+  {/* Drop a packaged row. */}
+  <DocxEditor.ContextMenu.Slot slot="review.comments" hidden />
+
+  {/* Your own row. No slot, no command: you supply the label, the enabled state, the action. */}
+  <DocxEditor.ContextMenu.Item
+    label="Highlight"
+    icon={MyHighlight}
+    disabled={!enabled}
+    onSelect={apply}
+  />
+
+  <DocxEditor.ContextMenu.Submenu labelKey="my.insert" paths={null}>
+    <DocxEditor.ContextMenu.Item
+      label="Page break"
+      onSelect={() => editor?.exec({ type: 'insertBreak', kind: 'page' })}
+    />
+    <DocxEditor.ContextMenu.Item
+      label="3×3 table"
+      onSelect={() => editor?.exec({ type: 'insertTable', rows: 3, cols: 3 })}
+    />
+  </DocxEditor.ContextMenu.Submenu>
+
+  {/* A chrome slot as a row: label, icon and enabled state all from the registry, so it
+      cannot disagree with its toolbar twin. */}
+  <DocxEditor.ContextMenu.Slot slot="format.clear" />
+</DocxEditor.ContextMenu>
+```
+
+A child the compound does not recognize is appended rather than wrapping the rows, so decorative markup lands after them in DOM order and the library keeps its own panel element, roles, keyboard handling, and placement.
+
+## Menu bar
+
+The default bar derives from `CHROME_MENUS`, so it is already correct without you writing anything. What a product adds on top is usually a menu of its own and a replacement for Help:
+
+```tsx
+<DocxEditor.Menu className="my-menubar" t={myLabels}>
+  {/* The registry's menus, re-iconed in place. Each still derives its rows from the
+      registry, so a row added upstream still appears here. */}
+  <DocxEditor.Menu.File icon={MyFile} />
+  <DocxEditor.Menu.Format icon={MyFormat} />
+  <DocxEditor.Menu.Insert icon={MyInsert} />
+
+  {/* A menu the library has never heard of. `MenuId` accepts any string. `label` rather
+      than `labelKey`, because its name will never be in our catalogue. */}
+  <DocxEditor.Menu.Menu id="review" label="Review" icon={MyReview} preset={false}>
+    <DocxEditor.Menu.Row disabled={!enabled} onSelect={apply}>
+      Highlight passage
+    </DocxEditor.Menu.Row>
+    <DocxEditor.Menu.Separator />
+    <DocxEditor.Menu.Row
+      onSelect={() => editor?.exec({ type: 'insertBreak', kind: 'page' })}
+      shortcut="Ctrl+Enter"
+    >
+      Page break
+    </DocxEditor.Menu.Row>
+  </DocxEditor.Menu.Menu>
+
+  {/* Help, replaced: the packaged Report-issue row opens this project's tracker, which is
+      the wrong destination for a product that merely embeds the editor. */}
+  <DocxEditor.Menu.Help icon={MyHelp} preset={false}>
+    <DocxEditor.Menu.Row onSelect={() => window.open('/docs', '_blank', 'noopener')}>
+      Documentation
+    </DocxEditor.Menu.Row>
+  </DocxEditor.Menu.Help>
+</DocxEditor.Menu>
+```
+
+## Navigation pane
+
+The pane's parts are statics, so you can hang your own class on each one instead of styling the library's internals. The parts still do the work: the headings list is still fed by the engine's outline.
+
+```tsx
+<DocxEditor.Navigation className="my-nav" toggle={{ className: 'my-nav__toggle' }}>
+  <DocxEditor.Navigation.Header className="my-nav__header">
+    <DocxEditor.Navigation.Close className="my-nav__close" />
+    <DocxEditor.Navigation.Title className="my-nav__title" />
+  </DocxEditor.Navigation.Header>
+  <DocxEditor.Navigation.Tabs className="my-nav__tabs" />
+  <DocxEditor.Navigation.Headings className="my-nav__headings" />
+  <DocxEditor.Navigation.Find className="my-nav__find" />
+</DocxEditor.Navigation>
+```
+
+## Replace the loading screen
+
+`DocxEditor.Loading` renders only while there is no document:
+
+```tsx
+<DocxEditor.Viewport>
+  <DocxEditor.Loading>
+    <div className="my-loading">
+      <MySpinner />
+      <span>Opening…</span>
+    </div>
+  </DocxEditor.Loading>
+  <DocxEditor.Content />
+</DocxEditor.Viewport>
+```
+
+## Labels
+
+Every packaged part takes a `t`. Delegate to the bundled English catalogue rather than replacing it, so renaming six things does not mean restating the other four hundred:
+
+```ts
+import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
+
+const english = createT(en);
+
+// A Map, not an object literal: the key is caller input, and an object answers
+// `constructor` and `toString` off the prototype chain.
+const OVERRIDES = new Map<string, string>([
+  ['contextMenu.cut', 'Cut text'],
+  ['toolbar.bold', 'Heavy'],
+]);
+
+export function myLabels(key: string): string {
+  return OVERRIDES.get(key) ?? english(key as TranslationKey) ?? key;
+}
+```
+
+A key that falls through to its own name is a visible bug rather than a blank control.
+
+## Theming
+
+The library's chrome is built on the `--doc-*` palette, so restating that palette under one scope re-themes the toolbar, menu bar, panels, pickers, rulers, and navigation pane at once. Custom properties inherit, so the scope _is_ the override.
+
+```css
+.my-nav {
+  --doc-surface: transparent;
+  --doc-text: #fff;
+  --doc-border: rgba(255, 255, 255, 0.25);
+}
+```
+
+Two rules worth keeping:
+
+- **Do not style `docx-*` classes and do not use `!important`.** Those names are implementation details. Every visual change should go through a prop, a `--doc-*` token, or an element you own. Where that was not possible the library grew a prop instead: trigger icons, colour-split icons, and the page's centring margin all came out of building the Igloo demo.
+- **The document canvas is not themed, on purpose.** Painter output stays Word-faithful. A page rendered in your brand colours would be a lie about what the file contains, so the theme lives in the chrome around it.
 
 ## A full composition
 
-The parts a composed tree usually wants, placed by hand. This is the shape the [Vite starter](https://github.com/eigenpal/docx-editor/tree/main/examples/vite) uses:
+The parts a composed tree usually wants, placed by hand:
 
 ```tsx
-import { DocxEditor } from '@docx-editor.dev/react';
-
 export function Workspace({ bytes }: { bytes: Uint8Array }) {
   return (
     <DocxEditor.Root document={bytes} author="Jess Lin">
-      <MyTitleBar />
-      <DocxEditor.Menu />
-      <DocxEditor.Toolbar />
+      <MyBrandHeader />
+      <MyMenu />
+      <MyToolbar />
       <DocxEditor.HorizontalRuler />
 
-      <div style={{ position: 'relative', display: 'flex', flex: 1, minHeight: 0 }}>
+      <div className="workspace">
         <DocxEditor.Navigation />
         <DocxEditor.Viewport>
           <DocxEditor.VerticalRuler />
-          {/* Overlay chrome the packaged host mounts for you. A composed tree
-              places it by name, or the feature has no UI. */}
+          {/* Overlay chrome the packaged host mounts for you. A composed tree places it by
+              name, or the feature has no UI. */}
           <DocxEditor.HeaderFooterChrome />
           <DocxEditor.NotesChrome />
           <DocxEditor.Content />
@@ -147,6 +349,12 @@ export function Workspace({ bytes }: { bytes: Uint8Array }) {
 
 Composing gets you every part by name. Parts you do not place have no UI, which is the work `<DocxEditor>` does for you.
 
+## Two layout traps
+
+**The navigation pane needs a positioning context.** It is a sibling of the viewport inside a positioned row, not a column beside it. The pane floats over the gutter and absolutely positions against that box, so without `position: relative` on the row it lays out in the flow and pushes the page down.
+
+**Do not set `z-index` on the workspace row or the viewport.** Either opens a stacking context around the context menu, and a `position: fixed` panel cannot escape the context it is declared in — it renders under the chrome bar however high its own `z-index` goes.
+
 ## Keep the caret
 
 Any mousedown that reaches the document moves the caret. Chrome that should not steal focus must prevent it:
@@ -159,7 +367,8 @@ Skip inputs, selects, and textareas — they need the focus. The packaged chrome
 
 ## Next steps
 
+- [Igloo example](https://github.com/eigenpal/docx-editor/tree/main/examples/igloo): every pattern above, running
+- [Custom nodes example](https://github.com/eigenpal/docx-editor/tree/main/examples/custom-nodes): your own inline node types
 - [Hooks](/docs/2.x/react/hooks): the API every part above is built on
 - [Toolbar](/docs/2.x/guides/toolbar): the slot registry and the full part list
 - [Props](/docs/2.x/react/props): `<DocxEditor>` and the imperative ref
-- [Igloo starter](https://github.com/eigenpal/docx-editor/tree/main/examples/igloo): a fully themed editor built this way
