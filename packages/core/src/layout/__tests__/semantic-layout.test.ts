@@ -444,6 +444,58 @@ describe('per-section pagination (the per-section lane)', () => {
     expect(lay(part).pages).toHaveLength(2);
   });
 
+  test('w:type on the CONTINUED section decides sharing (ECMA-376 §17.6.22)', () => {
+    // `w:type` describes how THIS section starts relative to the previous one. A nextPage
+    // section followed by an explicit continuous one must share; the reverse must not.
+    const nextThenContinuous = load(
+      paragraph('SECTION', sect(4000, 6000)) + paragraph('entry') + sect(4000, 6000, 'continuous')
+    );
+    const continuousLayout = lay(nextThenContinuous);
+    expect(continuousLayout.pages).toHaveLength(1);
+    const continuousText = continuousLayout.pages[0]!.fragments.flatMap((fragment) =>
+      fragment.kind === 'paragraph'
+        ? fragment.lines.flatMap((line) => line.spans.map((span) => span.text))
+        : []
+    ).join('');
+    expect(continuousText).toContain('SECTION');
+    expect(continuousText).toContain('entry');
+
+    const continuousThenNext = load(
+      paragraph('one', sect(4000, 6000, 'continuous')) + paragraph('two') + PORTRAIT
+    );
+    expect(lay(continuousThenNext).pages).toHaveLength(2);
+  });
+
+  test('continuous sharing tolerates mid-page margin changes on the same page size', () => {
+    // Word TOC galleries often restyle margins on a continuous section without starting a
+    // sheet. Only paper size / orientation must force a break.
+    const withMargins = (topTwips: number, type: string) =>
+      `<w:sectPr><w:type w:val="${type}"/>` +
+      '<w:pgSz w:w="4000" w:h="6000"/>' +
+      `<w:pgMar w:top="${topTwips}" w:right="200" w:bottom="200" w:left="200" ` +
+      'w:header="0" w:footer="0" w:gutter="0"/></w:sectPr>';
+    const part = load(
+      paragraph('CONTENTS', withMargins(200, 'nextPage')) +
+        '<w:sdt><w:sdtPr><w:docPartObj>' +
+        '<w:docPartGallery w:val="Table of Contents"/><w:docPartUnique/>' +
+        '</w:docPartObj></w:sdtPr><w:sdtContent>' +
+        paragraph('Definitions') +
+        paragraph('The Facility') +
+        '</w:sdtContent></w:sdt>' +
+        withMargins(900, 'continuous')
+    );
+    const layout = lay(part);
+    expect(layout.pages).toHaveLength(1);
+    const text = layout.pages[0]!.fragments.flatMap((fragment) =>
+      fragment.kind === 'paragraph'
+        ? fragment.lines.flatMap((line) => line.spans.map((span) => span.text))
+        : []
+    ).join(' ');
+    expect(text).toContain('CONTENTS');
+    expect(text).toContain('Definitions');
+    expect(text).toMatch(/The\s+Facility/);
+  });
+
   test('continuous chains: three sections flow down one sheet in order', () => {
     const part = load(
       paragraph('one', sect(4000, 6000, 'continuous')) +
@@ -457,16 +509,13 @@ describe('per-section pagination (the per-section lane)', () => {
   });
 
   test('a continuous section that does not fit overflows to a new sheet', () => {
-    // 80pt of content column at 14pt a line is 5 lines. Six paragraphs cannot share it.
+    // Short sheet: 80pt content column. Enough fixed-height lines must overflow whether the
+    // measurer reports 14pt or the slightly-shorter shaped fallback used in this package.
     const short = sect(4000, 2000);
-    const filled = 'a\n'.repeat(0) + 'a';
+    const filled = 'a';
     const part = load(
       paragraph(filled, short) +
-        paragraph(filled) +
-        paragraph(filled) +
-        paragraph(filled) +
-        paragraph(filled) +
-        paragraph(filled) +
+        Array.from({ length: 10 }, () => paragraph(filled)).join('') +
         sect(4000, 2000, 'continuous')
     );
     const layout = lay(part);

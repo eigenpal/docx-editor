@@ -476,7 +476,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'preserved',
     roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Revision wrappers preserved inertly; accept/reject and suggesting-mode delete owned by typed-revisions-and-comments.',
+    notes:
+      'Revision wrappers preserved inertly; accept/reject and suggesting-mode delete owned by typed-revisions-and-comments.',
   },
   {
     id: 'images.textboxes',
@@ -511,7 +512,8 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     docsLink: '/docs/1.x/guides/images',
-    notes: 'Crop renders and round-trips; React properties dialog edits crop in UI percent. Vue deferred.',
+    notes:
+      'Crop renders and round-trips; React properties dialog edits crop in UI percent. Vue deferred.',
   },
   {
     id: 'images.adjustments',
@@ -543,7 +545,8 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     docsLink: '/docs/1.x/guides/images',
-    notes: 'Extent reserved with labelled placeholder; chart payload preserved generically, not semantically edited.',
+    notes:
+      'Extent reserved with labelled placeholder; chart payload preserved generically, not semantically edited.',
   },
   {
     id: 'images.smartart',
@@ -792,7 +795,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Allowlisted complex PAGE, NUMPAGES, and SECTIONPAGES project in headers/footers at layout time (PAGE respects section pgNumType start/fmt). Insertable from React header/footer chrome (including Page X of Y). Other field instructions stay inert; body field evaluation is deferred.',
+      'Allowlisted complex PAGE, NUMPAGES, and SECTIONPAGES project in headers/footers at layout time (PAGE respects section pgNumType start/fmt). Insertable from React header/footer chrome (including Page X of Y). PAGE fields hosted inside drawing text boxes remain deferred with text-box story rendering. Other field instructions stay inert; body field evaluation is deferred.',
   },
   {
     id: 'fields.toc',
