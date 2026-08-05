@@ -189,6 +189,51 @@ export function contentControlContentChildren(wrapper: OoxmlNode): readonly Ooxm
   return children;
 }
 
+/**
+ * A container's children with every content-control wrapper flattened away, bounded in depth.
+ *
+ * ONE unwrap rule, for the places where a control sits between a container and the children that
+ * container is defined in terms of. `CT_SdtRow` puts it between `w:tbl` and `w:tr`, `CT_SdtCell`
+ * between `w:tr` and `w:tc`, and a walk that filtered on the child's kind dropped the row or cell
+ * entirely: not measured, not painted, not addressable. Flattening at the point of the filter
+ * means a controlled row is the same row to the grid pass, the pagination pass and the story walk.
+ *
+ * Returns the SAME array identity when there is nothing to unwrap, so the tables that carry no
+ * controls — nearly all of them — allocate nothing and the incremental layout cache still sees
+ * its own inputs.
+ */
+export function flattenContentControls(
+  children: readonly OoxmlNode[],
+  maxDepth = MAX_CONTENT_CONTROL_NESTING
+): readonly OoxmlNode[] {
+  let wrapped = false;
+  for (const child of children) {
+    if (isContentControlWrapper(child)) {
+      wrapped = true;
+      break;
+    }
+  }
+  if (!wrapped) return children;
+  const flat: OoxmlNode[] = [];
+  const collect = (nodes: readonly OoxmlNode[], depth: number): void => {
+    for (const node of nodes) {
+      if (!isContentControlWrapper(node)) {
+        flat.push(node);
+        continue;
+      }
+      // Past the bound the wrapper is kept as itself rather than dropped: the caller's own
+      // kind filter then skips it, which is the same answer every other bounded walk gives.
+      if (depth >= maxDepth) {
+        flat.push(node);
+        continue;
+      }
+      collect(contentControlContentChildren(node), depth + 1);
+    }
+  };
+  collect(children, 0);
+  return flat;
+}
+
 export function contentControlPropertiesNodeOf(
   control: OoxmlNode
 ): OoxmlContentControlPropertiesNode | undefined {

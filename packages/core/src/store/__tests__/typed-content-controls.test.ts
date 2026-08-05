@@ -317,6 +317,37 @@ describe('nesting is bounded and content survives past the bound', () => {
   });
 });
 
+// `CT_SdtRow` and `CT_SdtCell` are read positions, not written ones: the wrapper is unwrapped
+// where a walk filters on row or cell, and the serializer never learned about it. The fingerprint
+// is what says so.
+describe('a control around a row or a cell is preserved as the file wrote it', () => {
+  const grid = (columns: number) =>
+    `<w:tblGrid>${'<w:gridCol w:w="2000"/>'.repeat(columns)}</w:tblGrid>`;
+  const cell = (text: string) => `<w:tc><w:tcPr/><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+
+  test('a controlled row round-trips by fingerprint', () => {
+    const part = parseDoc(
+      `<w:tbl><w:tblPr/>${grid(1)}` +
+        `<w:sdt><w:sdtPr><w:tag w:val="row"/><w:lock w:val="sdtContentLocked"/></w:sdtPr>` +
+        `<w:sdtContent><w:tr>${cell('held')}</w:tr></w:sdtContent></w:sdt>` +
+        `</w:tbl>`
+    );
+    expect(contentControlsIn(part.root)).toHaveLength(1);
+    expect(canonicalOoxmlFingerprint(reparse(part))).toBe(canonicalOoxmlFingerprint(part));
+  });
+
+  test('a controlled cell round-trips by fingerprint', () => {
+    const part = parseDoc(
+      `<w:tbl><w:tblPr/>${grid(2)}<w:tr>${cell('plain')}` +
+        `<w:sdt><w:sdtPr><w:tag w:val="cell"/></w:sdtPr>` +
+        `<w:sdtContent>${cell('held')}</w:sdtContent></w:sdt>` +
+        `</w:tr></w:tbl>`
+    );
+    expect(contentControlsIn(part.root)).toHaveLength(1);
+    expect(canonicalOoxmlFingerprint(reparse(part))).toBe(canonicalOoxmlFingerprint(part));
+  });
+});
+
 describe('the comprehensive fixture survives the D9 fingerprint oracle', () => {
   function partOf(name: string): OoxmlPart {
     const bytes = readFileSync(join(import.meta.dir, '../../../../../e2e/fixtures', name));

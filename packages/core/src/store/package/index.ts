@@ -366,6 +366,7 @@ export {
   contentControlTextOf,
   contentControlsIn,
   findContentControl,
+  flattenContentControls,
   isContentControlContentNode,
   isContentControlNode,
   isContentControlWrapper,

@@ -16,7 +16,11 @@
 // would meet them reading the page. SDT nesting is bounded, because the nesting depth is
 // file-supplied and a document is untrusted input.
 
-import { contentControlContentChildren, isContentControlWrapper } from './content-control-nodes.ts';
+import {
+  contentControlContentChildren,
+  flattenContentControls,
+  isContentControlWrapper,
+} from './content-control-nodes.ts';
 import type { OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 
 /** How deep block-level content controls may nest before the walk stops descending. */
@@ -98,9 +102,11 @@ export function collectStoryParagraphs(
       continue;
     }
     if (child.kind === 'table') {
-      for (const row of child.children) {
+      // A controlled row or cell is still a row or a cell: `CT_SdtRow`/`CT_SdtCell` put the
+      // wrapper where the filter looks, so unwrap before filtering or the story loses it.
+      for (const row of flattenContentControls(child.children)) {
         if (row.kind !== 'tableRow') continue;
-        for (const cell of row.children) {
+        for (const cell of flattenContentControls(row.children)) {
           if (cell.kind !== 'tableCell') continue;
           collectStoryParagraphs(cell.children, out, sdtDepth);
         }

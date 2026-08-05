@@ -3,6 +3,7 @@
 
 import {
   contentControlContentChildren,
+  flattenContentControls,
   isContentControlWrapper,
 } from '@docx-editor.dev/core-contract/store';
 import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core-contract/store';
@@ -197,9 +198,9 @@ export function walkStoryParagraphs(
         continue;
       }
       if (block.kind !== 'table' || depth >= maxTableDepth) continue;
-      for (const row of block.children) {
+      for (const row of flattenContentControls(block.children)) {
         if (row.kind !== 'tableRow') continue;
-        for (const cell of row.children) {
+        for (const cell of flattenContentControls(row.children)) {
           if (cell.kind !== 'tableCell') continue;
           const inner: OoxmlElement[] = [];
           for (const child of cell.children) {
