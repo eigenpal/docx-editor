@@ -92,6 +92,13 @@ export function normalizePartName(raw: string): NameResult {
   return { ok: true, partName: '/' + segments.join('/') };
 }
 
+const MAIN_DOCUMENT_PART_RESULT = normalizePartName('word/document.xml');
+
+/** Canonical OPC part name for the main document story (`/word/document.xml`). */
+export const WML_MAIN_DOCUMENT_PART = MAIN_DOCUMENT_PART_RESULT.ok
+  ? MAIN_DOCUMENT_PART_RESULT.partName
+  : '/word/document.xml';
+
 /**
  * ASCII-only lowercase fold. OPC part-name/extension equivalence is US-ASCII
  * case-insensitive; a locale `toLowerCase()` mis-folds e.g. Turkish `I`/`İ` and

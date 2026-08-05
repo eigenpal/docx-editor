@@ -86,6 +86,9 @@ exemptions go when it lands.
   hand-copying its class name.
 - `DocxEditorLoadingSpinnerProps`
 - `DocxEditorLoadingComponent` — the part plus its `.Spinner` static.
+- `DocxEditorFontNotice` — context-fed warning for unavailable document fonts; Vue
+  exposes the substitution state through the shared snapshot but has no packaged notice yet.
+- `DocxEditorFontNoticeProps`
 - `DocxEditorHeaderFooterChrome` — React-only scoped HF chrome (region label, options,
   field inserts) over `useHeaderFooterState`; Vue twin deferred with notes/HF editing.
 - `DocxEditorHeaderFooterChromeProps`
@@ -359,6 +362,28 @@ the fragment through the SHARED `composeFontConfiguration`, and cancels both on 
 - `DocxFontsInput`
 - `UseDocxSourceOptions`
 - `UseDocxSourceResult`
+
+### Image authoring (React only)
+
+DrawingML picture authoring landed React-first on the composition layer. The ENGINE half
+is adapter-neutral — `SelectedImageState`, `executeImageCommand`, `setImageWrapType`, wrap
+value state, and the contextual `image.*` chrome slots all live in core and Vue's toolbar
+already reads `toolbarCommandState` for those slots (disabled until value chrome lands).
+Only the insert picker, wrap menu, alt-text panel, properties dialog, selection overlay,
+and their hooks/parts defer to `vue-drawing-authoring-parity`.
+
+- `useEditorValueCommand` — value-typed chrome hook for `image.wrap` and `image.altText`.
+- `EditorValueCommandState` — the hook's return type.
+- `ImageWrapTarget` — re-export of the nine wrap choices from core chrome state.
+- `DocxEditorImagePropertiesDialog` — properties dialog part (`DocxEditor.ImagePropertiesDialog`).
+- `DocxEditorImagePropertiesDialogProps`
+- `ImageInsertProvider` — shared hidden file input + paste/drop dispatch for insert-image.
+- `ImageInsertTrigger` — toolbar/menu insert control.
+- `ImageWrap` — nine-choice wrap dropdown (`DocxEditorToolbar.ImageWrap`).
+- `ImageAltText` — alt-text editor panel (`DocxEditorToolbar.ImageAltText`).
+- `ImagePropertiesTrigger` — opens the properties dialog from the toolbar.
+- `normalizeImageBytes` — client-side PNG/JPEG/GIF preflight before `executeImageCommand`.
+- `NormalizedImagePayload` — preflight result type for insert/replace.
 
 ## Vue-only
 

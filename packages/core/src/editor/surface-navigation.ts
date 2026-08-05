@@ -18,6 +18,7 @@
 // only ever with the sanitized projection, never with an authored target.
 
 import { caretAt, type SemanticLayout } from '@docx-editor.dev/core-contract/layout';
+import { sanitizeHref } from '../store/package/sinks.ts';
 import type { BookmarkIndex } from '@docx-editor.dev/core-contract/store';
 import type { SurfaceHyperlink } from './surface-hyperlinks.ts';
 
@@ -40,6 +41,8 @@ export interface NavigationDeps {
   readonly layout: () => SemanticLayout;
   readonly bookmarks: () => BookmarkIndex;
   readonly linkById: (linkId: string) => SurfaceHyperlink | null;
+  /** Sanitized `a:hlinkClick` on a painted drawing, keyed by drawing node id. */
+  readonly drawingLinkById?: (drawingNodeId: string) => SurfaceHyperlink | null;
   readonly setSelection: (position: { paragraphId: string; offset: number }) => void;
   readonly isCollapsedSelection: () => boolean;
   /** Reconcile virtualization immediately after a programmatic jump. */
@@ -81,15 +84,13 @@ export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation
   }
 
   const openExternal = (href: string | null): boolean => {
-    // `href` is layout's sanitized projection: `sanitizeHref` already refused
-    // `javascript:`/`data:`/`vbscript:`/`file:`, and an inert link carries null. Re-checked
-    // here because this is the sink, and a sink that trusts its caller is one refactor away
-    // from being the hole.
     if (!href || href.length === 0 || href.startsWith('#')) return false;
+    const projection = sanitizeHref(href);
+    if (!projection.ok || !projection.href) return false;
     if (!view) return false;
     // `noopener` is what stops the opened page reaching back through `window.opener` into
     // the editor; `noreferrer` keeps the document's own URL out of the request.
-    view.open(href, '_blank', 'noopener,noreferrer');
+    view.open(projection.href, '_blank', 'noopener,noreferrer');
     return true;
   };
 
@@ -133,56 +134,79 @@ export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation
    * under the pointer before any of that happens is the only reading that survives a
    * repaint, and it is the reading the user meant.
    */
-  let pressed: { readonly linkId: string; readonly rect: HyperlinkActivation['rect'] } | null =
-    null;
+  let pressed: {
+    readonly linkId: string;
+    readonly rect: HyperlinkActivation['rect'];
+    readonly drawing: boolean;
+  } | null = null;
+
+  function linkTargetFrom(element: HTMLElement | null): {
+    readonly linkId: string;
+    readonly drawing: boolean;
+  } | null {
+    if (!element || element.closest('[data-docx-hf]')) return null;
+    const anchor = element.closest('a.docx-hyperlink') as HTMLElement | null;
+    if (anchor) {
+      const linkId = anchor.dataset.docxLink;
+      return linkId ? { linkId, drawing: false } : null;
+    }
+    const drawingEl = element.closest('[data-docx-drawing-link]') as HTMLElement | null;
+    if (drawingEl) {
+      const linkId = drawingEl.dataset.docxDrawingLink;
+      return linkId ? { linkId, drawing: true } : null;
+    }
+    return null;
+  }
 
   const onPointerDown = (event: PointerEvent): void => {
     pressed = null;
     const target = event.target as Element | null;
-    const anchor = target?.closest('a.docx-hyperlink') as HTMLElement | null;
-    if (!anchor || anchor.closest('[data-docx-hf]')) return;
-    const linkId = anchor.dataset.docxLink;
-    if (!linkId) return;
-    const rect = anchor.getBoundingClientRect();
+    const resolved = linkTargetFrom(target as HTMLElement | null);
+    if (!resolved) return;
+    const rectHost = (target as Element).closest(
+      '[data-docx-drawing-link], a.docx-hyperlink'
+    ) as HTMLElement;
+    const rect = rectHost.getBoundingClientRect();
     pressed = {
-      linkId,
+      linkId: resolved.linkId,
+      drawing: resolved.drawing,
       rect: { left: rect.left, top: rect.top, bottom: rect.bottom, right: rect.right },
     };
   };
 
   const onClick = (event: MouseEvent): void => {
     const target = event.target as Element | null;
-    const anchor = target?.closest('a.docx-hyperlink') as HTMLElement | null;
-    if (!anchor) {
-      // No live anchor on the event — either the press was not on a link, or the repaint
-      // took it. The press record tells the two apart.
+    const live = linkTargetFrom(target as HTMLElement | null);
+    if (!live) {
       const remembered = pressed;
       pressed = null;
       if (!remembered) return;
       event.preventDefault();
-      classify(remembered.linkId, remembered.rect, event);
+      classify(remembered.linkId, remembered.rect, event, remembered.drawing);
       return;
     }
     pressed = null;
-    // PREVENTED FIRST, classified second — the same discipline `beforeinput` uses. Whatever
-    // this handler decides, the browser is not following the link.
     event.preventDefault();
-    // Header and footer links are read-only furniture in this slice. They paint without an
-    // `href` already; refusing here as well keeps that a property rather than an accident.
-    if (anchor.closest('[data-docx-hf]')) return;
-    const linkId = anchor.dataset.docxLink;
-    if (!linkId) return;
-    const rect = anchor.getBoundingClientRect();
+    const rectHost = (target as Element).closest(
+      '[data-docx-drawing-link], a.docx-hyperlink'
+    ) as HTMLElement;
+    const rect = rectHost.getBoundingClientRect();
     classify(
-      linkId,
+      live.linkId,
       { left: rect.left, top: rect.top, bottom: rect.bottom, right: rect.right },
-      event
+      event,
+      live.drawing
     );
   };
 
   /** What a click on `linkId` means, once the link and its position are known. */
-  function classify(linkId: string, rect: HyperlinkActivation['rect'], event: MouseEvent): void {
-    const link = deps.linkById(linkId);
+  function classify(
+    linkId: string,
+    rect: HyperlinkActivation['rect'],
+    event: MouseEvent,
+    drawing: boolean
+  ): void {
+    const link = drawing ? (deps.drawingLinkById?.(linkId) ?? null) : deps.linkById(linkId);
     if (!link) return;
 
     const accel = event.metaKey || event.ctrlKey;

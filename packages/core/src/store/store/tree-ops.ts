@@ -28,6 +28,7 @@ export {
   type Segment,
   type TreeDocOp,
   type TreeDocOpKind,
+  type DrawingTreeDocOp,
   type TreeOpEffect,
   type TreeOpRejection,
   type TreeOpResult,

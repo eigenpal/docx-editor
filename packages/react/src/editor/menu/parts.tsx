@@ -30,6 +30,7 @@ import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { useMenuContext, useMenuLabel, type MenuId } from './menu-context';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
+import { useImageInsert } from '../images/ImageInsert';
 
 /** Word's insert-table grid is 6 columns by 6 rows. */
 const TABLE_GRID_COLUMNS = 6;
@@ -286,6 +287,34 @@ function MenuPageSetupImpl({ className, hidden }: MenuActionProps) {
 
 export const MenuPageSetup = Object.assign(MenuPageSetupImpl, {
   docxSlot: 'file.pageSetup' as ChromeSlotId,
+});
+
+function MenuImageInsertImpl({ className, hidden }: MenuActionProps) {
+  const { openFilePicker, isEnabled, disabledReason } = useImageInsert();
+  const context = useMenuContext();
+  const label = useMenuLabel();
+  if (hidden) return null;
+  const control = chromeControlForSlot('image.insert');
+  const text = label(control?.labelKey ?? 'toolbar.image');
+  return (
+    <MenuRow
+      slot="image.insert"
+      icon={chromeIcon(control?.paths)}
+      disabled={!isEnabled}
+      {...(disabledReason ? { title: disabledReason } : {})}
+      onSelect={() => {
+        openFilePicker();
+        context.setOpenMenu(null);
+      }}
+      {...(className ? { className } : {})}
+    >
+      {text}
+    </MenuRow>
+  );
+}
+
+export const MenuImageInsert = Object.assign(MenuImageInsertImpl, {
+  docxSlot: 'image.insert' as ChromeSlotId,
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -609,6 +638,7 @@ export function MenuEntry({ entry }: { entry: ChromeMenuEntry }) {
   if (entry.slot === 'file.open') return <MenuOpen />;
   if (entry.slot === 'file.save') return <MenuSave />;
   if (entry.slot === 'file.pageSetup') return <MenuPageSetup />;
+  if (entry.slot === 'image.insert') return <MenuImageInsert />;
   if (entry.picker === 'tableGrid') return <MenuTablePicker entry={entry} />;
   return (
     <MenuItem

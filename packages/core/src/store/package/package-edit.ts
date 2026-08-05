@@ -16,12 +16,14 @@ import {
   resolveContentType,
   type ContentTypeIndex,
 } from './content-types.ts';
-import { insertChildren } from './ooxml-edit.ts';
+import { insertChildren, replaceChildren } from './ooxml-edit.ts';
 import { normalizePartName, partNameKey, resolveInternalTarget } from './opc-names.ts';
 import {
   readOoxmlPart,
   serializeOoxmlPart,
+  type OoxmlAttribute,
   type OoxmlElement,
+  type OoxmlGenericElementNode,
   type OoxmlNode,
   type OoxmlPart,
 } from './ooxml-tree.ts';
@@ -33,6 +35,25 @@ import type { RelationshipRecord } from './relationships.ts';
 const CONTENT_TYPES_PART = '/[Content_Types].xml';
 const CONTENT_TYPES_NAMESPACE = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const RELATIONSHIPS_NAMESPACE = 'http://schemas.openxmlformats.org/package/2006/relationships';
+
+function contentTypesEntryOf(
+  partBytes: ReadonlyMap<string, Uint8Array>
+): { readonly storageKey: string; readonly bytes: Uint8Array } | null {
+  for (const [name, bytes] of partBytes) {
+    const normalized = normalizePartName(name);
+    if (normalized.ok && partNameKey(normalized.partName) === partNameKey(CONTENT_TYPES_PART)) {
+      return { storageKey: name, bytes };
+    }
+  }
+  return null;
+}
+
+/** Locate `[Content_Types].xml` bytes regardless of zip key spelling. */
+export function contentTypesPartBytes(
+  pkg: OoxmlPackage
+): { readonly storageKey: string; readonly bytes: Uint8Array } | null {
+  return contentTypesEntryOf(pkg.partBytes);
+}
 
 export type PackageInvariantCode =
   | 'dangling-relationship'
@@ -158,49 +179,138 @@ function mintedId(part: OoxmlPart, hint: string): string {
   return `${part.name}#minted-${hint}`;
 }
 
+function readUnqualifiedGenericAttribute(node: OoxmlNode, localName: string): string | undefined {
+  if (node.kind === 'textValue') return undefined;
+  return node.attributes.find(
+    (attribute) => attribute.localName === localName && attribute.namespaceUri === ''
+  )?.value;
+}
+
+function isContentTypeOverrideNode(node: OoxmlNode, canonical: string): boolean {
+  if (node.kind !== 'generic') return false;
+  if (node.namespaceUri !== CONTENT_TYPES_NAMESPACE || node.localName !== 'Override') return false;
+  const partName = readUnqualifiedGenericAttribute(node, 'PartName');
+  const contentType = readUnqualifiedGenericAttribute(node, 'ContentType');
+  return (
+    partName !== undefined &&
+    contentType !== undefined &&
+    partNameKey(partName) === partNameKey(canonical)
+  );
+}
+
+function withGenericAttributeValue(
+  node: OoxmlGenericElementNode,
+  localName: string,
+  value: string
+): OoxmlGenericElementNode {
+  return {
+    ...node,
+    attributes: node.attributes.map((attribute) =>
+      attribute.localName === localName && attribute.namespaceUri === ''
+        ? ({ ...attribute, value } satisfies OoxmlAttribute)
+        : attribute
+    ),
+  };
+}
+
+function upsertContentTypeOverrideChildren(
+  part: OoxmlPart,
+  canonical: string,
+  contentType: string
+): { readonly part: OoxmlPart; readonly changed: boolean } {
+  const root = part.root;
+  if (root.kind !== 'generic') return { part, changed: false };
+
+  let matched = false;
+  let changed = false;
+  const nextChildren: OoxmlNode[] = [];
+
+  for (const child of root.children) {
+    if (!isContentTypeOverrideNode(child, canonical)) {
+      nextChildren.push(child);
+      continue;
+    }
+    if (matched) {
+      changed = true;
+      continue;
+    }
+    matched = true;
+    if (child.kind !== 'generic') continue;
+    const existingType = readUnqualifiedGenericAttribute(child, 'ContentType');
+    if (existingType === contentType) {
+      nextChildren.push(child);
+      continue;
+    }
+    changed = true;
+    nextChildren.push(withGenericAttributeValue(child, 'ContentType', contentType));
+  }
+
+  if (!matched) {
+    changed = true;
+    nextChildren.push(
+      element(mintedId(part, `override-${canonical}`), CONTENT_TYPES_NAMESPACE, 'Override', {
+        PartName: canonical,
+        ContentType: contentType,
+      })
+    );
+  }
+
+  if (!changed) return { part, changed: false };
+  const replaced = replaceChildren(part, root.id, nextChildren, { deferValidation: true });
+  if (!replaced.ok) return { part, changed: false };
+  return { part: replaced.part, changed: true };
+}
+
 /**
- * Declare a content type for a part, by appending an `<Override>` to the content-types tree.
+ * Declare a content type for a part, by upserting an `<Override>` in the content-types tree.
  *
  * A no-op when the part already resolves to the same type, so repeating a write does not append
- * a duplicate entry. Resolving to a DIFFERENT type is a caller error and overwrites, because a
- * part with two declared types does not open.
+ * a duplicate entry. Resolving to a DIFFERENT type replaces the existing Override in place.
+ * `forceOverride` writes an explicit Override even when a Default already matches.
  */
 export function withContentTypeOverride(
   pkg: OoxmlPackage,
   partName: string,
-  contentType: string
+  contentType: string,
+  options?: { readonly forceOverride?: boolean }
 ): OoxmlPackage {
   const canonical = writablePartName(partName);
   if (canonical === null) return pkg;
-  if (resolveContentTypeOf(pkg, canonical) === contentType) return pkg;
+  const overrideKey = partNameKey(canonical);
+  if (!options?.forceOverride) {
+    if (resolveContentTypeOf(pkg, canonical) === contentType) return pkg;
+  } else if (pkg.contentTypes.overrides.get(overrideKey) === contentType) {
+    const contentTypesEntry = contentTypesEntryOf(pkg.partBytes);
+    if (contentTypesEntry !== null) {
+      const parsed = readOoxmlPart(new TextDecoder().decode(contentTypesEntry.bytes), {
+        name: CONTENT_TYPES_PART,
+        contentType: 'application/xml',
+      });
+      if (parsed.ok) {
+        const upserted = upsertContentTypeOverrideChildren(parsed.part, canonical, contentType);
+        if (!upserted.changed) return pkg;
+      }
+    }
+  }
 
-  const bytes = pkg.partBytes.get(CONTENT_TYPES_PART);
-  if (bytes === undefined) return pkg;
-  const parsed = readOoxmlPart(new TextDecoder().decode(bytes), {
+  const contentTypesEntry = contentTypesEntryOf(pkg.partBytes);
+  if (contentTypesEntry === null) return pkg;
+  const parsed = readOoxmlPart(new TextDecoder().decode(contentTypesEntry.bytes), {
     name: CONTENT_TYPES_PART,
     contentType: 'application/xml',
   });
   if (!parsed.ok) return pkg;
 
-  const override = element(
-    mintedId(parsed.part, `override-${canonical}`),
-    CONTENT_TYPES_NAMESPACE,
-    'Override',
-    { PartName: canonical, ContentType: contentType }
-  );
-  const appended = insertChildren(
-    parsed.part,
-    parsed.part.root.id,
-    parsed.part.root.children.length,
-    [override],
-    { deferValidation: true }
-  );
-  if (!appended.ok) return pkg;
+  const upserted = upsertContentTypeOverrideChildren(parsed.part, canonical, contentType);
+  if (!upserted.changed) return pkg;
 
   const overrides = new Map(pkg.contentTypes.overrides);
-  overrides.set(partNameKey(canonical), contentType);
+  overrides.set(overrideKey, contentType);
   const partBytes = new Map(pkg.partBytes);
-  partBytes.set(CONTENT_TYPES_PART, new TextEncoder().encode(serializeOoxmlPart(appended.part)));
+  partBytes.set(
+    contentTypesEntry.storageKey,
+    new TextEncoder().encode(serializeOoxmlPart(upserted.part))
+  );
   return Object.freeze({
     ...pkg,
     partBytes,
@@ -214,6 +324,44 @@ export function withContentTypeOverride(
  * Returns the id as well as the package: the story that references a new part has to write that
  * id into its own markup, and inventing it separately would risk the two disagreeing.
  */
+function relationshipIdAttribute(node: OoxmlNode): string | undefined {
+  if (node.kind === 'textValue' || !('attributes' in node)) return undefined;
+  return node.attributes.find(
+    (attribute) => attribute.localName === 'Id' && attribute.namespaceUri === ''
+  )?.value;
+}
+
+/** Every `Id` on an owner's `.rels` tree, including external relationships. */
+export function relationshipIdsForOwner(pkg: OoxmlPackage, ownerPart: string): ReadonlySet<string> {
+  const used = new Set(relationshipsOf(pkg, ownerPart).map((record) => record.id));
+  const relsPart = pkg.parts.get(relsPartNameFor(ownerPart));
+  if (relsPart) {
+    const walk = (node: OoxmlNode): void => {
+      if (node.kind !== 'textValue' && node.localName === 'Relationship') {
+        const id = relationshipIdAttribute(node);
+        if (id !== undefined && id.length > 0) used.add(id);
+      }
+      if (node.kind === 'textValue') return;
+      for (const child of node.children) walk(child);
+    };
+    walk(relsPart.root);
+  }
+  return used;
+}
+
+/** First unused `rIdN` on one owner part — collision-safe against internal and external ids. */
+export function allocateOwnerRelationshipId(pkg: OoxmlPackage, ownerPart: string): string {
+  const used = relationshipIdsForOwner(pkg, ownerPart);
+  let max = 0;
+  for (const id of used) {
+    const match = /^rId(\d+)$/.exec(id);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  let next = max + 1;
+  while (used.has(`rId${next}`)) next += 1;
+  return `rId${next}`;
+}
+
 export function withRelationship(
   pkg: OoxmlPackage,
   ownerPart: string,
@@ -221,10 +369,7 @@ export function withRelationship(
   rawTarget: string
 ): { readonly pkg: OoxmlPackage; readonly relationshipId: string; readonly ok: boolean } {
   const existing = relationshipsOf(pkg, ownerPart);
-  const used = new Set(existing.map((record) => record.id));
-  let next = existing.length + 1;
-  while (used.has(`rId${next}`)) next += 1;
-  const relationshipId = `rId${next}`;
+  const relationshipId = allocateOwnerRelationshipId(pkg, ownerPart);
 
   const relsName = relsPartNameFor(ownerPart);
   const relsPart = pkg.parts.get(relsName);

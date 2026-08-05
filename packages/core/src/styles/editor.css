@@ -1075,6 +1075,64 @@ a.docx-hyperlink:focus-visible {
   box-shadow: inset 0 0 0 1px var(--doc-primary);
 }
 
+.docx-drawing {
+  pointer-events: auto;
+}
+
+.docx-drawing-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.docx-drawing-layer-behind {
+  z-index: 0;
+}
+
+.docx-drawing-layer-front {
+  z-index: 2;
+}
+
+.docx-drawing-placeholder-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border: 1px dashed var(--doc-border, #c8c8c8);
+  background: var(--doc-surface-muted, #f3f4f6);
+  color: var(--doc-text-muted, #6b7280);
+}
+
+.docx-drawing-placeholder-label {
+  font: 11px/1.3 var(--doc-font-ui, system-ui, sans-serif);
+  text-align: center;
+  padding: 4px;
+}
+
+.docx-drawing-image-frame {
+  width: 100%;
+  height: 100%;
+}
+
+.docx-drawing-crop-viewport {
+  position: relative;
+}
+
+.docx-drawing-image {
+  position: absolute;
+  max-width: none;
+  max-height: none;
+}
+
+.ep-root.dark .docx-drawing-placeholder-card,
+.dark .docx-drawing-placeholder-card {
+  background: var(--doc-surface-muted, #2a2a2a);
+  border-color: var(--doc-border, #404040);
+  color: var(--doc-text-muted, #a3a3a3);
+}
+
 /* ============================================================================
   * TEMPLATE VARIABLES
   * ============================================================================ */
@@ -5736,6 +5794,78 @@ a.docx-hyperlink:focus-visible {
 .docx-contextmenu__table-align-button:focus-visible {
   outline: 2px solid var(--doc-primary);
   outline-offset: 1px;
+}
+
+/* ── Image chrome (Task 15) ─────────────────────────────────────────────────────────── */
+
+.docx-image-insert__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ep-root .docx-toolbar__image-wrap,
+.docx-toolbar__image-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.ep-root .docx-toolbar__image-wrap-menu,
+.docx-toolbar__image-wrap-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  min-width: 220px;
+  padding: 4px 0;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px var(--doc-shadow);
+}
+
+.ep-root .docx-toolbar__image-wrap-item,
+.docx-toolbar__image-wrap-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--doc-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ep-root .docx-toolbar__image-wrap-item[data-active],
+.docx-toolbar__image-wrap-item[data-active] {
+  background: var(--doc-surface-hover, rgb(0 0 0 / 6%));
+}
+
+.ep-root .docx-toolbar__alt-text,
+.docx-toolbar__alt-text {
+  position: relative;
+  display: inline-flex;
+}
+
+.ep-root .docx-toolbar__alt-text-panel,
+.docx-toolbar__alt-text-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 40;
+  width: 280px;
+  padding: 12px;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px var(--doc-shadow);
 }
 
 /* Font compatibility notice (DocxEditor.FontNotice): Word's "substituted fonts" bar,

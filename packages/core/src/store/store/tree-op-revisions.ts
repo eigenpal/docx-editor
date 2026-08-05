@@ -560,13 +560,17 @@ export function resolveRevisions(
   part: OoxmlPart,
   action: RevisionOpAction,
   address: RevisionAddress | undefined,
-  options?: EditOptions
+  options?: EditOptions & { readonly localName?: string }
 ): RevisionResolveResult {
   const sites = collectRevisionSites(part);
   const matched = address
     ? sites.filter((site) => {
         const own = addressOf(site.node);
-        return own !== null && sameRevision(own, address);
+        if (own === null || !sameRevision(own, address)) return false;
+        if (options?.localName !== undefined && site.node.localName !== options.localName) {
+          return false;
+        }
+        return true;
       })
     : sites;
   if (matched.length === 0) return { ok: false, reason: 'unknown-revision' };

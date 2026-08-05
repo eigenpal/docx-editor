@@ -12,7 +12,7 @@
 // the first dies unused, the second is the one the tree sees. Identity of the published
 // instance flows through `useState`, so consumers re-render when it lands.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type {
   DocumentChange,
@@ -26,10 +26,13 @@ import type { EditorModule } from '@docx-editor.dev/core-contract/editor';
 import type {
   DocxEditorInstance,
   FontConfigurationFragment,
+  ImageDecodePort,
 } from '@docx-editor.dev/core-contract/editor';
+import { useTranslation, type TranslationKey } from '../i18n';
 import { DocxEditorContext, ReviewRailContext, type ReviewRailRegistry } from './context';
 import { HyperlinkPopupContext, useHyperlinkPopupInstance } from './useHyperlinkPopup';
 import { ContentControlContext, useContentControlInstance } from './useContentControl';
+import { ImageInsertProvider } from './images/ImageInsert';
 import {
   NavigationLayoutContext,
   createNavigationLayoutStore,
@@ -57,6 +60,8 @@ export interface DocxEditorRootProps {
   fonts?: FontConfiguration | FontConfigurationFragment;
   author?: string;
   locale?: string;
+  /** Drawing refusal labels for painted placeholders; defaults to the active locale catalogue. */
+  translate?: (key: string, params?: Record<string, string | number>) => string;
   /**
    * Capability modules to register (`@docx-editor.dev/pro`'s review module,
    * custom nodes). Sampled at mount only, like `mode`: module registration is
@@ -78,6 +83,8 @@ export interface DocxEditorRootProps {
    * bundled English through {@link defaultTableLabel}.
    */
   tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
+  /** Optional decode port for embedded image insertion and paint in tests or custom hosts. */
+  imageDecodePort?: ImageDecodePort;
   children?: ReactNode;
 }
 
@@ -89,7 +96,13 @@ export interface DocxEditorRootProps {
  * @public
  */
 export function DocxEditorRoot(props: DocxEditorRootProps) {
-  const { document: doc, fonts, zoom, tableInteractionLabel, children } = props;
+  const { document: doc, fonts, zoom, tableInteractionLabel, imageDecodePort, children } = props;
+  const { t: catalogT } = useTranslation();
+  const defaultTranslate = useCallback(
+    (key: string, params?: Record<string, string | number>) =>
+      catalogT(key as TranslationKey, params),
+    [catalogT]
+  );
 
   // Latest props, read inside effects without retriggering them.
   const propsRef = useRef(props);
@@ -101,15 +114,18 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   // terminal, so a StrictMode re-run must build anew rather than resurrect.
   useEffect(() => {
     const p = propsRef.current;
+    const translate = p.translate ?? defaultTranslate;
     const instance = createDocxEditor({
       ...(p.document !== undefined ? { document: p.document } : {}),
       ...(p.fonts ? { fonts: p.fonts } : {}),
       ...(p.author !== undefined ? { author: p.author } : {}),
       ...(p.locale !== undefined ? { locale: p.locale } : {}),
+      translate,
       ...(p.mode !== undefined ? { mode: p.mode } : {}),
       ...(p.modules !== undefined ? { modules: p.modules } : {}),
       ...(p.zoom !== undefined ? { zoom: p.zoom } : {}),
       ...(p.tableInteractionLabel ? { tableInteractionLabel: p.tableInteractionLabel } : {}),
+      ...(p.imageDecodePort ? { imageDecodePort: p.imageDecodePort } : {}),
       onFontError: (error) => propsRef.current.onFontError?.(error),
     });
     const offChange = instance.on('change', (change) => propsRef.current.onChange?.(change));
@@ -120,7 +136,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       // Functional update: a StrictMode re-run's second instance must not be clobbered.
       setEditor((current) => (current === instance ? null : current));
     };
-  }, [doc, fonts]);
+  }, [doc, fonts, defaultTranslate, imageDecodePort]);
 
   // Fired AFTER the instance is published: this effect runs in the commit that rendered
   // the new editor, after child layout effects — so a `DocxEditor.Content` in the tree
@@ -169,7 +185,9 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
               popover panel — which are siblings, not ancestor and descendant — see the same
               open/closed state and only one of them registers with the engine's gestures. */}
           <HyperlinkPopupProvider>
-            <ContentControlProvider>{children}</ContentControlProvider>
+            <ContentControlProvider>
+              <ImageInsertProvider>{children}</ImageInsertProvider>
+            </ContentControlProvider>
           </HyperlinkPopupProvider>
         </NavigationLayoutContext.Provider>
       </DocxEditorContext.Provider>

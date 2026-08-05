@@ -58,6 +58,11 @@ import {
   paintSemanticLayout,
   type OverlayRect,
 } from '@docx-editor.dev/core-contract/output';
+import {
+  DEFAULT_DRAWING_PAINT_STRINGS,
+  detachDrawingUrlRegistry,
+  type DrawingPaintStrings,
+} from '../output/semantic-paint-drawings.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import type {
   ContentControlOps,
@@ -96,6 +101,12 @@ import {
   viewportPage,
   type SurfaceExtent,
 } from './surface-pages.ts';
+import {
+  tryCreateBrowserImageDecodePort,
+  createHeadlessImageDecodePort,
+} from './browser-image-decode-port.ts';
+import { createBrowserPaintImageUrlPort } from './browser-paint-image-url-port.ts';
+import { createInlineDrawingLayoutBundle } from '../layout/inline-drawing-source.ts';
 import { createSurfaceCaret } from './surface-caret.ts';
 import { defaultTableLabel, type TableInteractionLabelKey } from './table-chrome.ts';
 import { createSurfaceTableInteraction } from './surface-table-interaction.ts';
@@ -110,6 +121,7 @@ import { createSurfaceSelectionSync } from './surface-selection-sync.ts';
 import { createSurfaceStructure } from './surface-structure.ts';
 import { createHyperlinkOps } from './surface-hyperlinks.ts';
 import { createSurfaceNavigation } from './surface-navigation.ts';
+import { drawingLinkByIdFromLayout } from './drawing-link-index.ts';
 import {
   furnitureCaretHost,
   navigateInActiveScope,
@@ -120,6 +132,7 @@ import {
   storyScopeOf,
 } from './surface-scope.ts';
 import { createHeaderFooterOps } from './surface-hf-ops.ts';
+import { createImageOps } from './surface-image-ops.ts';
 import { createHeaderFooterScopeController } from './surface-hf-editing.ts';
 import { createNoteOps } from './surface-note-ops.ts';
 import { notePropertiesStateOf, notePreviewTextOf } from './surface-note-state.ts';
@@ -488,6 +501,22 @@ export function mountPaginatedSurface(
   // Styles/numbering are immutable in-session; cascade + index are built once and shared
   // by body layout and header/footer stories.
   const { styleCascade, numberingIndex, defaultTabStopPt } = createSurfaceStyleDeps(session);
+  let onDrawingResourcesChanged: (() => void) | null = null;
+  const decodePort =
+    options.imageDecodePort ??
+    tryCreateBrowserImageDecodePort(document) ??
+    createHeadlessImageDecodePort();
+  const drawingBundle = createInlineDrawingLayoutBundle({
+    session,
+    decodePort,
+    onResourcesChanged: () => onDrawingResourcesChanged?.(),
+  });
+  const drawingStrings: DrawingPaintStrings =
+    options.drawingStrings ?? DEFAULT_DRAWING_PAINT_STRINGS;
+  const paintImageUrlPort = createBrowserPaintImageUrlPort({
+    mintValidatedBytes: (handle, expectedContentId) =>
+      drawingBundle.mintValidatedBytes(handle, expectedContentId),
+  });
   let furnitureSource = createFurnitureSource({
     session,
     measurer,
@@ -495,6 +524,10 @@ export function mountPaginatedSurface(
     cache: layoutCache,
     styleCascade,
     defaultTabStopPt,
+    inlineDrawingLayoutForPart: (partName) => drawingBundle.contextForPart(partName),
+    drawingLayoutTokenForPart: (partName) => drawingBundle.cacheTokenForPart(partName),
+    drawingTokenForParagraphForPart: (partName, paragraph) =>
+      drawingBundle.drawingTokenForParagraph(paragraph, partName),
   });
 
   /**
@@ -626,6 +659,7 @@ export function mountPaginatedSurface(
     layout: () => currentLayout,
     bookmarks: () => session.bookmarks(),
     linkById: (linkId) => hyperlinks.linkById(linkId),
+    drawingLinkById: (drawingNodeId) => drawingLinkByIdFromLayout(currentLayout, drawingNodeId),
     setSelection: (position) => setSelection(collapsedAt(position)),
     isCollapsedSelection: () =>
       selection.anchor.paragraphId === selection.head.paragraphId &&
@@ -640,6 +674,7 @@ export function mountPaginatedSurface(
   let desiredX: number | null = null;
 
   function layoutDocument(revision: number): SemanticLayout {
+    drawingBundle.sync(session);
     const notes = createNotesLayoutInput({
       session,
       measurer,
@@ -659,6 +694,9 @@ export function mountPaginatedSurface(
       sectionFurniture: furnitureSource.sectionFurniture(),
       furniture: furnitureSource.furniture(),
       projectLink,
+      inlineDrawingLayout: drawingBundle.bodyContext,
+      drawingTokenForParagraph: (paragraph) =>
+        drawingBundle.drawingTokenForParagraph(paragraph, session.part().name),
       ...(notes ? { notes } : {}),
       // The layout context key already folds the mode in (`|rev:<mode>`), so a surface
       // constructed `proposed` never shares cached pages with an `all-markup` one.
@@ -673,15 +711,6 @@ export function mountPaginatedSurface(
     return layout;
   }
 
-  /**
-   * Relayout goes through the SCHEDULER, not straight to `layoutSemanticDocument`.
-   *
-   * That is what carries the store's own account of a commit — dirty ids, split/join,
-   * dependency keys, impact class — into layout, and what refuses to publish a layout whose
-   * revision the model has already left behind. Running synchronously here keeps a keystroke
-   * painted in the same turn; an async host swaps in its own `schedule` without changing
-   * either property.
-   */
   const scheduler = createLayoutScheduler({
     // The DOCUMENT's geometry, exactly as the first paint uses. Omitting it meant the first
     // paint honoured A4 and the first committed edit silently repaginated onto Letter — every
@@ -701,6 +730,21 @@ export function mountPaginatedSurface(
       render();
     },
   });
+
+  // A settled image resource must reach the screen on its own — nothing else may ever
+  // touch the document (a letterhead the user only reads). The flush is queued, not
+  // immediate, so a burst of settles (every image of a page decoding) lays out once; after
+  // destroy the scheduler is cancelled and the queued flush finds nothing pending.
+  let resourceFlushQueued = false;
+  onDrawingResourcesChanged = () => {
+    scheduler.invalidateAll(session.packageRevision(), 'drawing-resources');
+    if (resourceFlushQueued) return;
+    resourceFlushQueued = true;
+    setTimeout(() => {
+      resourceFlushQueued = false;
+      flushLayout();
+    }, 0);
+  };
 
   // Every committed transaction, whatever produced it — this surface, undo, or another
   // editor sharing the store — reaches layout the same way.
@@ -1673,6 +1717,8 @@ export function mountPaginatedSurface(
       ...(options.defaultFontFamily ? { defaultFontFamily: options.defaultFontFamily } : {}),
       materialize: materializedSet,
       ariaHidden: false,
+      drawingStrings,
+      ...(paintImageUrlPort ? { imageUrlPort: paintImageUrlPort } : {}),
       ...(activeHf
         ? {
             activeHeaderFooterRId: activeHf.scope.rId,
@@ -2579,6 +2625,8 @@ export function mountPaginatedSurface(
 
   const surface: ScaleMutableSurface = {
     session,
+    storyScope,
+    imageDecodePort: () => decodePort,
     // Flushes first: a commit made straight on the session — undo, or another editor
     // sharing the store — must not leave a caller reading geometry for a revision the model
     // has left behind. Nothing pending makes this a plain read.
@@ -3034,6 +3082,12 @@ export function mountPaginatedSurface(
 
     publishedLayout: () => currentLayout,
 
+    overlayCoordinates: () =>
+      Object.freeze({
+        paintScale: scale,
+        pageOffsetX: materializedExtent?.pageOffsetX ?? new Map<number, number>(),
+      }),
+
     commitReviewOps: (run) =>
       commit(
         // Reported as a RESULT, not a boolean: `commit` reads the refusal reason off it, and
@@ -3173,7 +3227,9 @@ export function mountPaginatedSurface(
         readonly end: number;
       } | null = null;
       const unsub = session.subscribe((change) => {
-        committedCaret = change.caret ?? null;
+        if (change.caret) {
+          committedCaret = change.caret;
+        }
       });
       try {
         const selectionBefore = selectionMark();
@@ -3182,10 +3238,11 @@ export function mountPaginatedSurface(
           () => applyOps(plan.ops, selectionBefore),
           adoptCaret
             ? () => {
-                if (!committedCaret) return null;
+                const caret = committedCaret;
+                if (!caret) return null;
                 return collapsedAt({
-                  paragraphId: committedCaret.paragraphId,
-                  offset: committedCaret.start,
+                  paragraphId: caret.paragraphId,
+                  offset: caret.start,
                 });
               }
             : undefined,
@@ -3211,6 +3268,17 @@ export function mountPaginatedSurface(
       collapsedAt,
       isHeaderFooterOpen: () => hfScope?.getActive() !== null,
       lastRejection: () => lastRejection,
+    }),
+    ...createImageOps({
+      session,
+      applyOps,
+      commit,
+      storyScope,
+      selectionMark,
+      editingMode: () => editingMode,
+      author: () => options.author,
+      trackedDate,
+      decodePort: () => decodePort,
     }),
 
     // `preventScroll`: the pages layer is the WHOLE document tall, and focusing it scrolls
@@ -3247,6 +3315,8 @@ export function mountPaginatedSurface(
       // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
       // another editor sharing this store would paint into a detached container.
       scheduler.cancel();
+      drawingBundle.dispose();
+      detachDrawingUrlRegistry(pagesLayer);
       caret.destroy();
       unsubscribe();
       container.replaceChildren();

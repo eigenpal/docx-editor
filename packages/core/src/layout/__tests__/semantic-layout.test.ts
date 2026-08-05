@@ -422,7 +422,9 @@ describe('per-section pagination (the per-section lane)', () => {
 
   test('a continuous boundary with identical geometry shares the page', () => {
     const part = load(
-      paragraph('one', PORTRAIT) + paragraph('two') + sect(4000, 6000, 'continuous')
+      paragraph('one', sect(4000, 6000, 'continuous')) +
+        paragraph('two') +
+        sect(4000, 6000, 'continuous')
     );
     const layout = lay(part);
     expect(layout.pages).toHaveLength(1);
@@ -444,7 +446,7 @@ describe('per-section pagination (the per-section lane)', () => {
 
   test('continuous chains: three sections flow down one sheet in order', () => {
     const part = load(
-      paragraph('one', PORTRAIT) +
+      paragraph('one', sect(4000, 6000, 'continuous')) +
         paragraph('two', sect(4000, 6000, 'continuous')) +
         paragraph('three') +
         sect(4000, 6000, 'continuous')
@@ -475,7 +477,7 @@ describe('per-section pagination (the per-section lane)', () => {
 
   test('an EMPTY continuous section between two others does not break the chain', () => {
     const part = load(
-      paragraph('one', PORTRAIT) +
+      paragraph('one', sect(4000, 6000, 'continuous')) +
         // An empty continuous section: a sectPr-carrying paragraph is the section's last,
         // so this contributes no blocks of its own beyond that paragraph.
         paragraph('two', sect(4000, 6000, 'continuous')) +

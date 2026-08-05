@@ -261,6 +261,7 @@
       "dependencies": {
         "@docx-editor.dev/i18n": "workspace:*",
         "bidi-js": "1.0.3",
+        "emf-converter": "2.0.2",
         "fast-xml-parser": "^4.5.0",
         "fflate": "^0.8.2",
         "harfbuzzjs": "1.4.0",
@@ -363,6 +364,7 @@
         "@radix-ui/react-select": "^2.3.3",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
+        "emf-converter": "2.0.2",
         "harfbuzzjs": "1.4.0",
       },
       "devDependencies": {
@@ -383,6 +385,7 @@
       "version": "0.0.1",
       "dependencies": {
         "@docx-editor.dev/core-contract": "workspace:*",
+        "emf-converter": "2.0.2",
         "harfbuzzjs": "1.4.0",
       },
       "devDependencies": {
@@ -1751,6 +1754,8 @@
     "ee-first": ["ee-first@1.1.1", "", {}, "sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow=="],
 
     "electron-to-chromium": ["electron-to-chromium@1.5.349", "", {}, "sha512-QsWVGyRuY07Aqb234QytTfwd5d9AJlfNIQ5wIOl1L+PZDzI9d9+Fn0FRale/QYlFxt/bUnB0/nLd1jFPGxGK1A=="],
+
+    "emf-converter": ["emf-converter@2.0.2", "", {}, "sha512-QLUufb45P3LlOudCoizBtJpO8cBw8LayH0mkvkRvIjvMlb6junwP0EXgUkdDyZUEF2QSEZUPV8rO8DS5rsJmkA=="],
 
     "emoji-regex": ["emoji-regex@7.0.3", "", {}, "sha512-CwBLREIQ7LvYFB0WyRvwhq5N5qPhc6PMjD6bYggFlI5YyDgl+0vxq5VHbMOFqLg7hfWzmu8T5Z1QofhmTIhItA=="],
 

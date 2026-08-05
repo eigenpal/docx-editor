@@ -47,6 +47,7 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'list.indent': 'format_indent_increase',
   'image.insert': 'image',
   'image.properties': 'tune',
+  'image.wrap': 'wrap_text',
   'table.insert': 'table',
   'table.borderTarget': 'border_all',
   'table.borderColor': 'border_color',

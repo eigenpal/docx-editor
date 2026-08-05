@@ -418,6 +418,7 @@ export {
   DEFAULT_RUN_STYLE,
   baselineShiftPtOf,
   displayText,
+  measureDisplayText,
   resolveRunStyle,
   runStylesEqual,
   type ResolvedRunStyle,
@@ -454,6 +455,7 @@ export {
 export {
   DEFAULT_VERTICAL_WEIGHT,
   contentControlAtPoint,
+  findDrawingOverlayFrameInLayout,
   hitTestPage,
   hitTestSheet,
   isFurniturePoint,
@@ -461,9 +463,11 @@ export {
   caretBoxOnLine,
   pageAtY,
   spanOffsetX,
+  type DrawingOverlayFrame,
   type HitPoint,
   type HitTestOptions,
   type SemanticHit,
+  type SemanticHitDrawing,
   type TableCellAddress,
 } from './semantic-hit-test.ts';
 export {

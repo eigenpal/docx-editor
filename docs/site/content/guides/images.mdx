@@ -1,0 +1,98 @@
+---
+title: 'Images & drawings'
+description: 'Inline and floating DrawingML pictures: supported formats, wrap modes, React authoring, accessibility, and security boundaries.'
+category: 'Guides'
+seoTitle: 'Images and floating pictures'
+---
+
+DrawingML pictures (`w:drawing` with `pic:pic`) now layout, paint, and round-trip through the shared engine. **React** ships insert, wrap, properties, alt text, and selection-overlay authoring; **Vue** reads the same engine commands through `toolbarCommandState` but value/overlay chrome is deferred to `vue-drawing-authoring-parity`.
+
+## Supported raster formats
+
+| Format | Insert (React) | Layout & paint | Round-trip |
+| --- | --- | --- | --- |
+| PNG, JPEG, GIF | Yes — `normalizeImageBytes` preflight | Full decode at authored `wp:extent` | Byte-identical media unless replaced |
+| SVG, TIFF, EMF, WMF | No insert | Extent reserved; labelled placeholder | Preserved; no zero-click fetch |
+| External `r:link` / `TargetMode="External"` | No auto-load | Placeholder + preserved rel | Preserved; explicit user gesture to embed |
+
+Insert accepts PNG/JPEG/GIF only. Other payloads stay in the package and participate in pagination through their authored extent.
+
+## Reading selection state
+
+Use the canonical read model shared by snapshot and imperative API:
+
+```tsx
+import { useEditorState } from '@docx-editor.dev/react';
+
+const image = useEditorState((s) => s.image);
+// SelectedImageState | null — widthEmu/heightEmu, crop, wrap, position, locks, resourceStatus
+```
+
+```ts
+editor.getSelectedImage(); // same SelectedImageState shape
+editor.snapshot().image;   // reference-stable until selection or image fields move
+```
+
+`SelectedImageState.wrap` reports all nine Word menu targets (`inline`, `square`, `squareLeft`, `squareRight`, `tight`, `through`, `topAndBottom`, `behind`, `inFront`). `behind` and `inFront` are both `wrapNone` with different `@behindDoc`.
+
+## React authoring surface
+
+Default toolbar slots (contextual `image` group when a picture is selected):
+
+| Slot | Component / hook | Engine command |
+| --- | --- | --- |
+| `image.insert` | `ImageInsertProvider`, `ImageInsertTrigger` | `executeImageCommand({ type: 'insertImage', … })` |
+| `image.wrap` | `ImageWrap`, `useEditorValueCommand('image.wrap')` | `setImageWrapType` via `runToolbarCommand` |
+| `image.altText` | `ImageAltText` | `setImageAltText` |
+| `image.properties` | `ImagePropertiesTrigger`, `DocxEditorImagePropertiesDialog` | `setImageProperties` |
+
+Insert preflight:
+
+```ts
+import { normalizeImageBytes } from '@docx-editor.dev/react';
+
+const result = normalizeImageBytes(bytes);
+if (result.ok) {
+  await editor.executeImageCommand({
+    type: 'insertImage',
+    data: result.bytes,
+    mime: result.mime,
+    widthPoints: result.widthPoints,
+    heightPoints: result.heightPoints,
+  });
+}
+```
+
+Floating pictures: select in the canvas, drag to move (`setImagePosition`), eight handles or Alt+Arrow to resize (`setImageProperties`), wrap menu for all nine choices. One undo step per completed gesture.
+
+## Wrap modes and text reflow
+
+Wrap changes are **layout-structural**: exclusion zones feed line breaking before paint. Square/tight/through use authored polygons (with distances and `effectExtent`); top-and-bottom and square variants reflow body text accordingly. Header/footer rule: page-relative anchored letterheads do **not** inflate the header box — body flow height still sizes the furniture band.
+
+## Accessibility
+
+Alt text uses `@descr`, then `@title`; `@name` is never announced. A picture with neither description nor title is exposed as decorative. Hidden drawings (`@hidden`) suppress paint, hit-testing, and handles while remaining preserved on save.
+
+## Security and external images
+
+- No network fetch on open, layout, paint, or save for external relationships.
+- Embedded bytes are signature-checked and dimension-capped before decode.
+- Hyperlinks on drawings (`a:hlinkClick`) require an explicit gesture and pass through `sanitizeHref`.
+- Optional explicit download-and-embed path for external targets is user-initiated only (bounded size/content-type).
+
+## Explicitly unsupported (preserved inertly)
+
+Not edited or raster-rendered in this release:
+
+- VML (`w:pict`) — follow-up `typed-vml-watermarks`
+- Charts, SmartArt, groups, canvases, text-box stories — extent + labelled placeholder
+- `w:object` / `w:altChunk` — generic preservation with diagnostics
+- Artistic effects (`a:effectLst`), TIFF/EMF/WMF converters
+- Tracked-change accept/reject on drawings — `typed-revisions-and-comments`
+- Vue authoring parity — `vue-drawing-authoring-parity`
+
+## Next steps
+
+- [Toolbar customization](/docs/1.x/guides/toolbar) — override `DocxEditor.Toolbar.ImageWrap` and siblings
+- [Word fidelity matrix](/docs/1.x/word-fidelity) — live support claims
+- [Headers & footers](/docs/1.x/guides/headers-footers) — letterhead anchors in furniture bands

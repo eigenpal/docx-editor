@@ -2,7 +2,7 @@
  * @docx-editor.dev/react
  *
  * React adapter for the DOCX editor. A thin renderer over the `Editor`
- * contract from `@docx-editor.dev/core-contract`: it supplies DOM and paints
+ * contract from `@docx-editor.dev/core`: it supplies DOM and paints
  * the engine's positioned display list, and holds no editing-engine state.
  *
  * @packageDocumentation
@@ -174,6 +174,22 @@ export {
 } from './editor/DocxEditorContentControl';
 export { useEditorState } from './editor/useEditorState';
 export { useEditorCommand, type EditorCommandState } from './editor/useEditorCommand';
+export {
+  useEditorValueCommand,
+  type EditorValueCommandState,
+  type ImageWrapTarget,
+} from './editor/useEditorValueCommand';
+export {
+  DocxEditorImagePropertiesDialog,
+  ImageInsertProvider,
+  ImageInsertTrigger,
+  ImageWrap,
+  ImageAltText,
+  ImagePropertiesTrigger,
+  normalizeImageBytes,
+  type DocxEditorImagePropertiesDialogProps,
+  type NormalizedImagePayload,
+} from './editor/images';
 export { useEditorEvent } from './editor/useEditorEvent';
 export { usePageSetup, type PageSetupUpdate, type UsePageSetupReturn } from './editor/usePageSetup';
 export {

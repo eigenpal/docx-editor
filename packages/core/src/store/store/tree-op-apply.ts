@@ -107,6 +107,7 @@ import {
   applyTableCellPropertyOp,
 } from './tree-op-tables.ts';
 import { contentControlAtCaret, validateTreeOp } from './tree-op-validate.ts';
+import { applyDrawingOp, isDrawingTreeDocOp } from './tree-op-drawings.ts';
 
 /**
  * A `w:t`, or a `w:delText` when the text being rebuilt was already struck.
@@ -199,6 +200,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   ) {
     return applyTableCellPropertyOp(part, op, options);
   }
+  if (isDrawingTreeDocOp(op)) return applyDrawingOp(part, op, options);
 
   if (op.op === 'deleteBlock') return applyDeleteBlock(part, op.blockId, options);
   if (op.op === 'insertToc') return applyInsertToc(part, op, options);
@@ -222,7 +224,12 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     const accept = op.op === 'acceptRevision' || op.op === 'acceptAllRevisions';
     const address =
       op.op === 'acceptRevision' || op.op === 'rejectRevision' ? op.revision : undefined;
-    const resolved = resolveRevisions(part, accept ? 'accept' : 'reject', address, options);
+    const localName =
+      op.op === 'acceptRevision' || op.op === 'rejectRevision' ? op.localName : undefined;
+    const resolved = resolveRevisions(part, accept ? 'accept' : 'reject', address, {
+      ...options,
+      ...(localName === undefined ? {} : { localName }),
+    });
     if (!resolved.ok || !resolved.part || !resolved.effect) {
       return { ok: false, reason: resolved.reason ?? 'tree-invariant' };
     }

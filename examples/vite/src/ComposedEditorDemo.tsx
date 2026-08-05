@@ -39,6 +39,7 @@ import { BrandLogo } from '../../shared/BrandLogo';
 import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
 import { ExampleSwitcher } from '../../shared/ExampleSwitcher';
 import { ThemeToggle } from './ThemeToggle';
+import { DrawingsE2eBridge } from './DrawingsE2eBridge';
 import { DEMO_BUTTON, DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON } from './demoButtons';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -726,6 +727,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
               <DocxEditor.NotesChrome />
               <DocxEditor.Content />
               <DocxEditor.ContextMenu t={translate} />
+              <DrawingsE2eBridge />
               {/* The link popover. Inside the viewport so it stays with the page while
                   scrolling. `<DocxEditor>` mounts it for you; a composition like this one
                   places it by name, exactly like the rulers above. */}

@@ -50,6 +50,8 @@ export type ChromeSlotId =
 | 'contentControl.remove'
 | 'image.insert'
 | 'image.properties'
+| 'image.wrap'
+| 'image.altText'
 | 'table.insert'
 | 'table.borderTarget'
 | 'table.borderColor'
@@ -269,15 +271,15 @@ type: PropType<FontConfiguration | FontConfigurationFragment>;
 default: undefined;
 };
 }>> & Readonly<{
-onChange?: ((_change: DocumentChange) => any) | undefined;
 onReady?: ((_editor: Editor) => any) | undefined;
+onChange?: ((_change: DocumentChange) => any) | undefined;
 onFontError?: ((_error: EditorFontError) => any) | undefined;
 }>, {
 fonts: FontConfiguration | FontConfigurationFragment;
 document: DocumentSource;
 author: string;
-zoom: number;
 mode: EditorMode;
+zoom: number;
 locale: string;
 modules: readonly EditorModule[];
 }, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
@@ -459,10 +461,17 @@ export interface Editor {
     acceptReviewItem(key: string): ExecResult;
     addComment(text: string, author?: string): ExecResult;
     can(command: EditorCommand, options?: { scope?: EditorScope }): CanResult;
+    canExecuteImageCommand(
+    command: Extract<EditorCommand, { type: 'insertImage' | 'replaceImage' }>,
+    options?: { scope?: EditorScope }
+    ): CanResult;
     // (undocumented)
     destroy(): void;
     // (undocumented)
     exec(command: EditorCommand, options?: { scope?: EditorScope }): ExecResult;
+    executeImageCommand(
+    command: Extract<EditorCommand, { type: 'insertImage' | 'replaceImage' }>
+    ): Promise<ExecResult>;
     findMatches(
     query: string,
     options?: { readonly matchCase?: boolean; readonly wholeWord?: boolean }
@@ -507,11 +516,7 @@ export interface Editor {
     getRenderScale(): number;
     getReviewItems(): readonly ReviewItemPlacement[];
     getReviewRevision(): number;
-    getSelectedImage(): {
-        readonly id: string;
-        readonly widthEmu: number;
-        readonly heightEmu: number;
-    } | null;
+    getSelectedImage(): SelectedImageState | null;
     getSelectedTable(): {
         readonly blockId: string;
         readonly rowCount: number;
@@ -1095,8 +1100,8 @@ type: BooleanConstructor;
 default: boolean;
 };
 }>> & Readonly<{}>, {
-editor: Editor | null;
 visible: boolean;
+editor: Editor | null;
 }, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
@@ -1314,6 +1319,9 @@ value?: unknown
     ? commandForSlot(id)
     : (commandForSlotValue(id, value) ?? commandForSlot(id));
     if (!command) {
+        if (value !== undefined) {
+            return { ok: false, code: 'unsupported', reason: 'invalid value for toolbar command' };
+        }
         if (id === 'file.save') {
             return {
                 ok: false,
@@ -1425,22 +1433,72 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
         probe = VALUE_SLOT_PROBES[id];
         if (probe !== undefined) {
             const // (undocumented)
-            canApply: CanResult = editor.can(commandForSlotValue(id, probe)!);
+            valueCommand = commandForSlotValue(id, probe);
+            if (!valueCommand) {
+                return {
+                    id,
+                    enabled: false,
+                    disabledReason: 'not wired to an editor command',
+                    active: false,
+                };
+            }
+            const // (undocumented)
+            canApply: CanResult = editor.can(valueCommand);
+            const // (undocumented)
+            selected = editor.getSelectedImage?.() ?? null;
+            const // (undocumented)
+            currentValue =
+            id === 'image.wrap'
+            ? selected?.wrap
+            : id === 'image.altText'
+            ? selected?.description
+            : undefined;
             return canApply.ok
-            ? { id, enabled: true, disabledReason: null, active: false }
-            : { id, enabled: false, disabledReason: canApply.reason, active: false };
+            ? {
+                id,
+                enabled: true,
+                disabledReason: null,
+                active: false,
+                ...(currentValue !== undefined ? { value: currentValue } : {}),
+            }
+            : {
+                id,
+                enabled: false,
+                disabledReason: canApply.reason,
+                active: false,
+                ...(currentValue !== undefined ? { value: currentValue } : {}),
+            };
         }
         // A slot with a PROBE has a command shape the engine can judge, even though no fixed
         // command can be dispatched from a bare click. When the engine REFUSES the probe, that
         // refusal is the honest reason and it is the engine's own words — quote it rather than
-        // inventing one. When the engine ALLOWS it, the gap is this chrome's, not the engine's,
-        // so the answer falls through below: the capability exists, this control cannot reach
-        // it. That asymmetry is deliberate — reporting "enabled" here would light up
-        // `text.link` in an adapter that has grown no link UI, which is the enabled-dead-button
-        // this table exists to avoid.
+        // inventing one. When the engine ALLOWS it, payload-aware image chrome is wired through
+        // the probe rather than a fixed `SLOT_COMMANDS` row; link chrome is the opposite case
+        // and keeps falling through below so an adapter without a popover stays honestly unwired.
         const // (undocumented)
         shapeProbe = CHROME_PROBES[id];
         if (shapeProbe) {
+            if (id === 'image.insert' && shapeProbe.type === 'insertImage') {
+                const // (undocumented)
+                judged: CanResult =
+                editor.canExecuteImageCommand?.({
+                    type: 'insertImage',
+                    data: IMAGE_INSERT_PROBE_BYTES,
+                    mime: 'image/png',
+                    widthPoints: 72,
+                    heightPoints: 72,
+                }) ?? editor.can(shapeProbe);
+                return judged.ok
+                ? { id, enabled: true, disabledReason: null, active: false }
+                : { id, enabled: false, disabledReason: judged.reason, active: false };
+            }
+            if (id === 'image.properties' && shapeProbe.type === 'setImageProperties') {
+                const // (undocumented)
+                judged: CanResult = editor.can(shapeProbe);
+                return judged.ok
+                ? { id, enabled: true, disabledReason: null, active: false }
+                : { id, enabled: false, disabledReason: judged.reason, active: false };
+            }
             const // (undocumented)
             judged: CanResult = editor.can(shapeProbe);
             if (!judged.ok) {

@@ -89,7 +89,9 @@
     "commentsAndChanges": null,
     "moreItems": null,
     "unavailableInPreview": null,
-    "more": null
+    "more": null,
+    "altText": null,
+    "imageWrap": null
   },
   "alignment": {
     "alignLeft": "Alinhar à esquerda",
@@ -814,7 +816,21 @@
       "inLineWithText": "A imagem flui na linha como um glifo",
       "squareLeft": "Imagem à esquerda, texto envolve à direita",
       "squareRight": "Imagem à direita, texto envolve à esquerda"
-    }
+    },
+    "square": null,
+    "targets": {
+      "behind": null,
+      "inFront": null,
+      "inline": null,
+      "square": null,
+      "squareLeft": null,
+      "squareRight": null,
+      "through": null,
+      "tight": null,
+      "topAndBottom": null
+    },
+    "through": null,
+    "tight": null
   },
   "responsePreview": {
     "loading": "{action}...",
@@ -858,7 +874,8 @@
     "inertTarget": null,
     "insertTitle": null,
     "openLink": null,
-    "refused": null
+    "refused": null,
+    "urlLabel": null
   },
   "headerFooter": {
     "header": "Cabeçalho",
@@ -894,7 +911,16 @@
   "image": {
     "placeholder": "Espaço reservado para imagem",
     "placeholderText": "[Imagem]",
-    "editableAriaLabel": "Imagem editável"
+    "editableAriaLabel": "Imagem editável",
+    "contentMismatch": null,
+    "decodeFailed": null,
+    "externalResource": null,
+    "invalidResource": null,
+    "missingResource": null,
+    "nonPictureGraphic": null,
+    "pendingResource": null,
+    "resourceLimit": null,
+    "unsupportedFormat": null
   },
   "ruler": {
     "horizontal": "Régua horizontal",
@@ -944,7 +970,18 @@
     "deleteImage": "Excluir imagem",
     "imageProperties": "Propriedades da imagem",
     "rotate": "Girar",
-    "replaceImage": null
+    "replaceImage": null,
+    "handle": {
+      "e": null,
+      "n": null,
+      "ne": null,
+      "nw": null,
+      "s": null,
+      "se": null,
+      "sw": null,
+      "w": null
+    },
+    "selection": null
   },
   "revisions": {
     "cellDeleted": null,
@@ -1087,5 +1124,45 @@
     "replyRefused": null,
     "showPane": null,
     "structural": null
+  },
+  "imageAltText": {
+    "description": null,
+    "panelTitle": null,
+    "title": null
+  },
+  "imageInsert": {
+    "errors": {
+      "emptyFile": null,
+      "invalidSignature": null,
+      "oversize": null,
+      "refused": null,
+      "unsupportedFormat": null
+    }
+  },
+  "imageProperties": {
+    "crop": null,
+    "cropBottom": null,
+    "cropLeft": null,
+    "cropRight": null,
+    "cropTop": null,
+    "errors": {
+      "invalidCrop": null,
+      "invalidDimensions": null,
+      "refused": null,
+      "invalidPosition": null
+    },
+    "hyperlink": null,
+    "nonPictureHint": null,
+    "resetNaturalSize": null,
+    "units": {
+      "points": null
+    },
+    "horizontalOffset": null,
+    "position": null,
+    "positionLocked": null,
+    "positionUnavailable": null,
+    "relativeToHorizontal": null,
+    "relativeToVertical": null,
+    "verticalOffset": null
   }
 }

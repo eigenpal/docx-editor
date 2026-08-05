@@ -1,6 +1,6 @@
 ## Why
 
-`deferred-features.md` records drawings as: parse `generic preserved with bounded relationships`; model `untyped drawing/media references`; layout `deferred`; edit `deferred`. Its named future gate is "typed drawing model, embedded-resource validation, inline/floating positioning and wrap, image operations, and paired acceptance".
+`deferred-features.md` now records the partial boundary: engine typed layout/paint/round-trip for DrawingML pictures, React authoring chrome, Vue authoring deferred to `vue-drawing-authoring-parity`, VML to `typed-vml-watermarks`.
 
 Layout being deferred means a `w:drawing` occupies no space and paints nothing. `comprehensive-word-element-test.docx` has eleven of them — ten inline, one floating — and the four PNGs behind them are in the package, related, and never seen. A user opening a document with a logo, a chart image, or a signature block sees the text reflowed around holes where the pictures were, with no indication that anything is missing.
 
@@ -17,7 +17,7 @@ This lane also carries the most security surface of the five. An image is a rela
 - Type the wrap vocabulary: `CT_WrapNone`, `CT_WrapSquare`, `CT_WrapTight`, `CT_WrapThrough`, `CT_WrapTopBottom`, with `ST_WrapText` (`bothSides` | `left` | `right` | `largest`) and the polygon on tight and through.
 - Type positioning: `CT_PosH` / `CT_PosV` with `ST_RelFromH` and `ST_RelFromV`, and the `wp:align` / `wp:posOffset` choice.
 - Type the picture payload: `CT_Picture` with `pic:nvPicPr`, `a:blip` (`r:embed` or `r:link`), `a:srcRect` (`CT_RelativeRect`, the crop), `a:stretch` / `a:tile`, `a:xfrm` (extent, rotation, `@flipH` / `@flipV`), and `a:prstGeom`.
-- Alt text comes from `wp:docPr/@descr` and `@name`, and is preserved as authored.
+- Non-visual metadata comes from `wp:docPr/@descr`, `@title`, and `@name`, all preserved as authored. Accessibility uses `@descr`, then `@title`; `@name` is an object name, never fabricated alt text.
 - A `w:drawing` whose graphic is not a picture — a chart, a diagram, a group, a text box — stays typed as a drawing with a `generic` graphic payload. It reserves its declared extent and paints a placeholder rather than being silently absent.
 
 **Layout**
@@ -41,7 +41,7 @@ This lane also carries the most security surface of the five. An image is a rela
 
 **React adapter**
 
-- Wire `image.insert` and `image.properties` in `SLOT_COMMANDS`, and add `image.wrap` (value-typed) and `image.altText` to `ChromeSlotId`. Wiring a value-typed wrap menu needs two engine extensions that do not exist: a value command that is not a `setMarkAttr`, and a current value on `ToolbarCommandState` — a boolean `active` cannot say which of nine choices applies. The second is shared with `review.displayMode`.
+- Wire `image.wrap` (value-typed) and `image.altText` in `SLOT_COMMANDS`. `image.insert` and `image.properties` are payload-bearing controls: they retain probe/custom-control routing rather than fixed `SLOT_COMMANDS` rows that cannot carry bytes or dialog state. Wiring a value-typed wrap menu needs two engine extensions: a value command that is not a `setMarkAttr`, and a current value on `ToolbarCommandState` — shared with `review.displayMode`.
 - Selection handles for resize, a drag affordance for an anchored image, and a properties dialog with size, crop, alt text, and position.
 - A wrap menu keyed on Word's user-facing choices — In Line with Text, Square, Square Left, Square Right, Tight, Through, Top and Bottom, Behind Text, In Front of Text — each mapping to exactly one representation. Behind Text and In Front of Text are both `wrapNone` and differ only by `@behindDoc`, so the menu's model is the choice, not the wrap element.
 
@@ -55,7 +55,7 @@ This lane also carries the most security surface of the five. An image is a rela
 
 ### Modified Capabilities
 
-None.
+- `core-image-commit`: framework-neutral resize/move/insert/replace/delete commits target canonical drawing identity and store/package transactions rather than ProseMirror positions or adapter-owned inline delete-and-insert. One user image action changes drawing XML, media bytes, owner relationships, content types, and cleanup in one validated undo unit. New `wp:docPr/@id` values are non-zero, package-wide, above the highest valid existing id, with `invalidArgs` on exhaustion. See `specs/core-image-commit/spec.md` `## MODIFIED Requirements`.
 
 ## Fixture evidence
 
@@ -100,5 +100,6 @@ The fixture proves inline layout and a single anchored square wrap. It proves no
 - `packages/core/src/store/store/tree-ops.ts` and siblings — image operations and media-part lifecycle.
 - `packages/core/src/editor/chrome-controls.ts`, `toolbar-commands.ts` — wire two declared slots.
 - `packages/react/src` — handles, wrap menu, properties dialog, i18n.
-- **Vue**: out of scope by request; no production support claim follows from this change alone.
+- **Vue**: deferred to the named follow-up `vue-drawing-authoring-parity`; no production support claim follows from this change alone.
+- **VML watermarks** (`w:pict`): deferred to the named follow-up `typed-vml-watermarks`; DrawingML image watermarks are in scope here.
 - **Not included**: a TIFF/EMF/WMF converter, charts and SmartArt, text boxes and groups, and `a:effectLst` rendering. Each reserves its extent and paints a placeholder, which is honest and is not support.

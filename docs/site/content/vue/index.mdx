@@ -1,6 +1,6 @@
 ---
 title: "@docx-editor.dev/vue"
-description: "The Vue 3 adapter for docx-editor. It exposes DocxEditor, Vue composables, and UI components under /ui."
+description: "The Vue 3 adapter for docx-editor. It exposes DocxEditor, composables, and shared chrome from the root barrel."
 category: "Packages"
 order: 40
 ---
@@ -9,7 +9,7 @@ order: 40
 
 ## Status
 
-`@docx-editor.dev/vue` targets Vue 3 and is released in the same fixed version group as the React package. It keeps the same component name, subpath layout, and plugin contract where Vue supports the same surface. Remaining gaps are tracked in the parity contract below.
+`@docx-editor.dev/vue` targets Vue 3 and ships in the same fixed version group as the React package. It shares the greenfield `DocxEditorProps` / seven-member `DocxEditorRef` contract where parity is enforced. React-first provider/hooks chrome (navigation pane, menu bar, context menu, hyperlink popover) is deferred; the engine commands those surfaces would drive are already shared.
 
 ## Install
 
@@ -17,7 +17,7 @@ order: 40
 npm install @docx-editor.dev/vue
 ```
 
-Pulls in `@docx-editor.dev/core` and `@docx-editor.dev/i18n`.
+Pulls in `@docx-editor.dev/core-contract` and `@docx-editor.dev/i18n`.
 
 ## Quickstart
 
@@ -25,13 +25,12 @@ Pulls in `@docx-editor.dev/core` and `@docx-editor.dev/i18n`.
 <script setup lang="ts">
 import { ref } from 'vue';
 import { DocxEditor } from '@docx-editor.dev/vue';
-import '@docx-editor.dev/vue/styles.css';
 
-const buf = ref<ArrayBuffer | null>(null);
+const doc = ref<ArrayBuffer | undefined>(undefined);
 </script>
 
 <template>
-  <DocxEditor :document-buffer="buf" />
+  <DocxEditor :document="doc" />
 </template>
 ```
 
@@ -50,18 +49,13 @@ See [Nuxt](/docs/1.x/vue/nuxt) for the module options and what to import from th
 
 ## Subpaths
 
-- `@docx-editor.dev/vue`: `<DocxEditor>`, `DocxEditorProps`, `DocxEditorRef`, `EditorMode`, `renderAsync`, `i18nPlugin`, `provideLocale`
-- `@docx-editor.dev/vue/ui`: `Toolbar`, `EditorToolbar`, `ResponsiveToolbar`, `TableToolbar`, `MenuBar`, `TitleBar`, `ColorPicker`, `FontPicker`, `StylePicker`, and the dialog components (find/replace, hyperlink, page setup, table properties, and more)
-- `@docx-editor.dev/vue/composables`: Vue equivalents of the React hooks (`useDocxEditor`, `useHistory`, `useAutoSave`, `useTrackedChanges`, `useFindReplace`, etc.)
-- `@docx-editor.dev/vue/dialogs`: hyperlink, find/replace, paste special, page setup
-- `@docx-editor.dev/vue/plugin-api`: plugin host
-- `@docx-editor.dev/vue/styles`: CSS
+- `@docx-editor.dev/vue`: `<DocxEditor>`, `DocxEditorProps`, `DocxEditorRef`, `EditorMode`, `DocxEditorToolbar`, rulers, title bar, and shared engine helpers (`toolbarCommandState`, `commandForSlot`, …)
 
 Every export is in the [Vue API reference](/docs/1.x/api/vue).
 
 ## Parity with React
 
-`scripts/parity/parity.contract.json` lists every public prop and ref member shipped under either adapter, grouped as paired, deferred-in-Vue, or adapter-specific. CI parses both packages' API snapshots and fails when the contract changes without an update. Deferred-in-Vue items today include the `agentPanel` prop, the controlled `comments` prop, `onSave`/`onFontsLoaded`/clipboard callbacks, and the plugin overlay surface. Items in the paired bucket are expected to behave the same in both adapters.
+`scripts/parity/parity.contract.json` lists every public prop and ref member shipped under either adapter, grouped as paired, deferred-in-Vue, or adapter-specific. CI parses both packages' API snapshots and fails when the contract changes without an update.
 
 ## Agent integration
 
@@ -76,9 +70,9 @@ const { executeToolCall, toolSchemas } = useAgentBridge({
 });
 ```
 
-Use the composable instead of the React hook. The server route can still use `@docx-editor.dev/agents/ai-sdk/server`. The React-only `agentPanel` prop has no Vue equivalent yet; render the chat UI components next to the editor (see [Vue examples](/docs/1.x/vue/examples)).
+The live bridge is pending rebuild over the greenfield engine. Render agent UI components next to the editor (see [Vue examples](/docs/1.x/vue/examples)).
 
 ## Next steps
 
 - [Vue API reference](/docs/1.x/api/vue)
-- [Plugins](/docs/1.x/plugins)
+- [Agents](/docs/1.x/agents)

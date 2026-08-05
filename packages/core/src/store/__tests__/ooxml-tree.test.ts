@@ -726,3 +726,1554 @@ describe('normalized OOXML serialization and canonical oracle', () => {
     expect(ooxmlTreesEqual(part, parse(saved))).toBe(true);
   });
 });
+
+const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+const PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const PIC_URI = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+
+function inlinePictureDrawing(
+  options: {
+    readonly extent?: string;
+    readonly extraInlineChild?: string;
+    readonly extraDrawingChild?: string;
+    readonly graphicDataUri?: string;
+    readonly embed?: string;
+  } = {}
+): string {
+  const extent = options.extent ?? 'cx="152400" cy="152400"';
+  const embed = options.embed ?? 'rId14';
+  const graphicDataUri = options.graphicDataUri ?? PIC_URI;
+  const extra = options.extraInlineChild ?? '';
+  const extraDrawing = options.extraDrawingChild ?? '';
+  return (
+    `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
+    '<w:body><w:p><w:r><w:drawing>' +
+    `<wp:inline distT="0" distB="0" distL="0" distR="0">` +
+    `<wp:extent ${extent}/>` +
+    '<wp:effectExtent l="0" t="0" r="0" b="0"/>' +
+    '<wp:docPr id="1" name="green" descr="Green square" title="Green"/>' +
+    '<wp:cNvGraphicFramePr/>' +
+    `<a:graphic><a:graphicData uri="${graphicDataUri}">` +
+    '<pic:pic>' +
+    '<pic:nvPicPr><pic:cNvPr id="0" name="" descr=""/><pic:cNvPicPr/></pic:nvPicPr>' +
+    `<pic:blipFill><a:blip r:embed="${embed}"/><a:srcRect/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+    '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="152400" cy="152400"/></a:xfrm>' +
+    '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>' +
+    '</pic:pic></a:graphicData></a:graphic>' +
+    extra +
+    '</wp:inline>' +
+    extraDrawing +
+    '</w:drawing></w:r></w:p></w:body></w:document>'
+  );
+}
+
+function findFirst(node: OoxmlElement, kind: string): OoxmlElement {
+  const stack: OoxmlElement[] = [node];
+  while (stack.length > 0) {
+    const current = stack.shift()!;
+    if (current.kind === kind) return current;
+    for (const child of current.children) {
+      if (child.kind !== 'textValue') stack.push(child);
+    }
+  }
+  throw new Error(`missing ${kind}`);
+}
+
+function findByLocalName(node: OoxmlElement, localName: string): OoxmlElement {
+  const stack: OoxmlElement[] = [node];
+  while (stack.length > 0) {
+    const current = stack.shift()!;
+    if (current.localName === localName) return current;
+    for (const child of current.children) {
+      if (child.kind !== 'textValue') stack.push(child);
+    }
+  }
+  throw new Error(`missing ${localName}`);
+}
+
+describe('types legal drawing vocabulary', () => {
+  test('types drawing → inlineDrawing → picture, preserves unknowns, and round-trips', () => {
+    const xml = inlinePictureDrawing({
+      extraInlineChild: '<x:ext xmlns:x="urn:task2:extension" x:flag="1">keep</x:ext>',
+    });
+    const part = parse(xml);
+    const drawing = findFirst(part.root, 'drawing');
+    expect(drawing.kind).toBe('drawing');
+    expect(drawing.children).toHaveLength(1);
+    const inline = drawing.children[0] as OoxmlElement;
+    expect(inline.kind).toBe('inlineDrawing');
+    expect(inline.localName).toBe('inline');
+    expect(inline.namespaceUri).toBe(WP);
+    expect(findFirst(inline, 'drawingExtent').kind).toBe('drawingExtent');
+    expect(findFirst(inline, 'drawingDocPr').kind).toBe('drawingDocPr');
+    expect(findFirst(inline, 'drawingGraphic').kind).toBe('drawingGraphic');
+    const picture = findFirst(part.root, 'picture');
+    expect(picture.localName).toBe('pic');
+    expect(picture.namespaceUri).toBe(PIC);
+    expect(findFirst(picture, 'pictureBlip').kind).toBe('pictureBlip');
+    expect(findFirst(picture, 'pictureSrcRect').kind).toBe('pictureSrcRect');
+    expect(findFirst(picture, 'pictureTransform').kind).toBe('pictureTransform');
+    expect(findFirst(picture, 'pictureTransformOffset').kind).toBe('pictureTransformOffset');
+    expect(findFirst(picture, 'pictureTransformExtent').kind).toBe('pictureTransformExtent');
+    expect(findFirst(picture, 'picturePresetGeometry').kind).toBe('picturePresetGeometry');
+    const extension = inline.children.find(
+      (child) => child.kind === 'generic' && child.localName === 'ext'
+    ) as OoxmlElement;
+    expect(extension.attributes[0]).toMatchObject({
+      localName: 'flag',
+      value: '1',
+    });
+    const saved = serializeOoxmlPart(part);
+    const reopened = parse(saved);
+    expect(canonicalOoxmlFingerprint(reopened)).toBe(canonicalOoxmlFingerprint(part));
+    expect(saved).toContain('<a:srcRect/>');
+  });
+
+  test('demotes malformed known drawing structures to generic without rejecting the part', () => {
+    const topLevel = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}"><w:body>` +
+        `<w:drawing><wp:inline><wp:extent cx="1" cy="1"/></wp:inline></w:drawing>` +
+        '</w:body></w:document>'
+    );
+    expect(findByLocalName(topLevel.root, 'drawing').kind).toBe('generic');
+
+    const inlineOutside = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}"><w:body><w:p>` +
+        `<wp:inline><wp:extent cx="1" cy="1"/></wp:inline>` +
+        '</w:p></w:body></w:document>'
+    );
+    const inlineParagraph = (inlineOutside.root.children[0] as OoxmlElement)
+      .children[0] as OoxmlElement;
+    expect(inlineParagraph.kind).toBe('paragraph');
+    expect(inlineParagraph.children[0]?.kind).toBe('generic');
+    expect(inlineParagraph.children[0]?.localName).toBe('inline');
+
+    const picOutside = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:a="${A}" xmlns:pic="${PIC}"><w:body><w:p><w:r>` +
+        `<pic:pic><pic:nvPicPr/></pic:pic>` +
+        '</w:r></w:p></w:body></w:document>'
+    );
+    expect(findByLocalName(picOutside.root, 'pic').kind).toBe('generic');
+
+    const badExtent = parse(inlinePictureDrawing({ extent: 'cx="wide" cy="152400"' }));
+    expect(findByLocalName(badExtent.root, 'drawing').kind).toBe('generic');
+
+    const missingCNvPr = parse(
+      inlinePictureDrawing().replace(
+        '<pic:nvPicPr><pic:cNvPr id="0" name="" descr=""/><pic:cNvPicPr/></pic:nvPicPr>',
+        '<pic:nvPicPr><pic:cNvPicPr/></pic:nvPicPr>'
+      )
+    );
+    expect(findByLocalName(missingCNvPr.root, 'pic').kind).toBe('generic');
+
+    const twoInline = parse(
+      inlinePictureDrawing({
+        extraDrawingChild: `<wp:inline><wp:extent cx="1" cy="1"/></wp:inline>`,
+      })
+    );
+    expect(findByLocalName(twoInline.root, 'drawing').kind).toBe('generic');
+
+    const chartPayload = parse(
+      inlinePictureDrawing({
+        graphicDataUri: 'http://schemas.openxmlformats.org/drawingml/2006/chart',
+      })
+    );
+    const inline = findFirst(chartPayload.root, 'inlineDrawing');
+    expect(inline.kind).toBe('inlineDrawing');
+    expect(() => findFirst(chartPayload.root, 'picture')).toThrow();
+    const graphicData = findByLocalName(inline, 'graphicData');
+    expect(findByLocalName(graphicData, 'pic').kind).toBe('generic');
+  });
+
+  test('keeps w:object and w:altChunk generic, inert, and fingerprinted', () => {
+    const objectXml =
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="${R}">` +
+      '<w:body><w:p><w:r>' +
+      '<w:object o:progId="Word.Document.8" r:id="rId5"><o:OLEObject Type="Embed" ProgID="Word.Document.8"/></w:object>' +
+      '</w:r></w:p></w:body></w:document>';
+    const altChunkXml =
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:r="${R}"><w:body>` +
+      '<w:altChunk r:id="rId9"/>' +
+      '</w:body></w:document>';
+    const objectPart = parse(objectXml);
+    const altChunkPart = parse(altChunkXml);
+    expect(findByLocalName(objectPart.root, 'object').kind).toBe('generic');
+    const altChunkBody = altChunkPart.root.children[0] as OoxmlElement;
+    expect(altChunkBody.kind).toBe('body');
+    expect(findByLocalName(altChunkBody, 'altChunk').kind).toBe('generic');
+    expect(canonicalOoxmlFingerprint(objectPart.root)).toContain('object');
+    expect(canonicalOoxmlFingerprint(altChunkPart.root)).toContain('altChunk');
+    expect(JSON.stringify(objectPart)).toContain('rId5');
+    expect(JSON.stringify(altChunkPart)).toContain('rId9');
+  });
+});
+
+describe('drawing semantic digest', () => {
+  test('reports drawing-path differences when embed, docPr, or graphic payload children are lost', () => {
+    const { diffSemanticDigests, semanticDigest } = engineCore as typeof engineCore & {
+      readonly diffSemanticDigests: typeof import('../package/ooxml-digest.ts').diffSemanticDigests;
+      readonly semanticDigest: typeof import('../package/ooxml-digest.ts').semanticDigest;
+    };
+    const before = parse(inlinePictureDrawing());
+    const saved = serializeOoxmlPart(before);
+    const withoutEmbed = parse(saved.replace(/ r:embed="rId14"/, ''));
+    const withoutDocPr = parse(saved.replace(/<wp:docPr[^>]*\/>/, ''));
+    const withoutPicture = parse(saved.replace(/<pic:pic>[\s\S]*?<\/pic:pic>/, ''));
+
+    const embedDiff = diffSemanticDigests(semanticDigest([before]), semanticDigest([withoutEmbed]));
+    expect(embedDiff.some((entry) => entry.path.includes('genericStructure'))).toBe(true);
+
+    const docPrDiff = diffSemanticDigests(semanticDigest([before]), semanticDigest([withoutDocPr]));
+    expect(docPrDiff.some((entry) => entry.path.includes('genericStructure'))).toBe(true);
+
+    const payloadDiff = diffSemanticDigests(
+      semanticDigest([before]),
+      semanticDigest([withoutPicture])
+    );
+    expect(payloadDiff.some((entry) => entry.path.includes('genericStructure'))).toBe(true);
+  });
+});
+
+function countKind(root: OoxmlElement, kind: string): number {
+  let count = 0;
+  const stack: OoxmlElement[] = [root];
+  while (stack.length > 0) {
+    const node = stack.shift()!;
+    if (node.kind === kind) count += 1;
+    for (const child of node.children) {
+      if (child.kind !== 'textValue') stack.push(child);
+    }
+  }
+  return count;
+}
+
+describe('typed drawing fix round 1', () => {
+  test('demotes w:drawing when immediate parent is not w:r', () => {
+    const wrapped = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}"><w:body><w:p><w:r>` +
+        '<w:ins><w:drawing><wp:inline><wp:extent cx="1" cy="1"/>' +
+        `<a:graphic xmlns:a="${A}"><a:graphicData uri="${PIC_URI}"><pic:pic xmlns:pic="${PIC}"/></a:graphicData></a:graphic>` +
+        '</wp:inline></w:drawing></w:ins></w:r></w:p></w:body></w:document>'
+    );
+    expect(findByLocalName(wrapped.root, 'drawing').kind).toBe('generic');
+
+    const genericWrapper = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:x="urn:wrap"><w:body><w:p><w:r>` +
+        '<x:holder><w:drawing><wp:inline><wp:extent cx="1" cy="1"/></wp:inline></w:drawing></x:holder>' +
+        '</w:r></w:p></w:body></w:document>'
+    );
+    expect(findByLocalName(genericWrapper.root, 'drawing').kind).toBe('generic');
+  });
+
+  test('rejects foreign-namespace lookalike uri and extent attributes', () => {
+    const foreignUri = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:evil="urn:evil"><w:body><w:p><w:r><w:drawing>` +
+        `<wp:inline><wp:extent cx="1" cy="1"/>` +
+        `<a:graphic><a:graphicData evil:uri="${PIC_URI}"><pic:pic/></a:graphicData></a:graphic>` +
+        '</wp:inline></w:drawing></w:r></w:p></w:body></w:document>'
+    );
+    expect(findByLocalName(foreignUri.root, 'drawing').kind).toBe('drawing');
+    expect(findByLocalName(foreignUri.root, 'graphicData').kind).toBe('generic');
+    expect(findByLocalName(foreignUri.root, 'pic').kind).toBe('generic');
+
+    const foreignExtent = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:evil="urn:evil"><w:body><w:p><w:r><w:drawing>` +
+        `<wp:inline><wp:extent evil:cx="1" cy="1"/><a:graphic xmlns:a="${A}"/></wp:inline>` +
+        '</w:drawing></w:r></w:p></w:body></w:document>'
+    );
+    expect(findByLocalName(foreignExtent.root, 'drawing').kind).toBe('generic');
+  });
+
+  test('types anchored wrap and position descendants', () => {
+    const anchored = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}"><w:body><w:p><w:r><w:drawing>` +
+        `<wp:anchor distT="0" distB="0" distL="114300" distR="0" simplePos="0" allowOverlap="1" behindDoc="0" locked="0" layoutInCell="1" relativeHeight="952500">` +
+        `<wp:simplePos x="0" y="0"/>` +
+        `<wp:positionH relativeFrom="margin"><wp:align>right</wp:align></wp:positionH>` +
+        `<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>` +
+        `<wp:extent cx="952500" cy="952500"/>` +
+        `<wp:wrapSquare wrapText="bothSides" distL="114300"/>` +
+        `<wp:docPr id="7" name="float" descr="Floating image"/>` +
+        `<a:graphic><a:graphicData uri="${PIC_URI}"><pic:pic>` +
+        `<pic:blipFill><a:blip r:embed="rId15"/><a:srcRect/></pic:blipFill>` +
+        `<pic:spPr><a:xfrm rot="0" flipH="0" flipV="0"><a:ext cx="952500" cy="952500"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>` +
+        `</pic:pic></a:graphicData></a:graphic>` +
+        '</wp:anchor></w:drawing></w:r></w:p></w:body></w:document>'
+    );
+    const anchor = findFirst(anchored.root, 'anchoredDrawing');
+    expect(findFirst(anchor, 'drawingPositionH').kind).toBe('drawingPositionH');
+    expect(findFirst(anchor, 'drawingPositionAlign').kind).toBe('drawingPositionAlign');
+    expect(findFirst(anchor, 'drawingPositionV').kind).toBe('drawingPositionV');
+    expect(findFirst(anchor, 'drawingPositionOffset').kind).toBe('drawingPositionOffset');
+    expect(findFirst(anchor, 'drawingWrapSquare').kind).toBe('drawingWrapSquare');
+    expect(
+      findFirst(anchor, 'drawingWrapSquare').attributes.some((a) => a.localName === 'wrapText')
+    ).toBe(true);
+    expect(invariantApi.validateOoxmlPart(anchored).ok).toBe(true);
+  });
+
+  test('validateOoxmlPart rejects malformed typed drawing cardinality', () => {
+    const part = parse(inlinePictureDrawing());
+    const inline = findFirst(part.root, 'inlineDrawing');
+    const broken = {
+      ...part,
+      root: {
+        ...part.root,
+        children: part.root.children.map((body) =>
+          body.kind !== 'body'
+            ? body
+            : {
+                ...body,
+                children: body.children.map((paragraph) =>
+                  paragraph.kind !== 'paragraph'
+                    ? paragraph
+                    : {
+                        ...paragraph,
+                        children: paragraph.children.map((run) =>
+                          run.kind !== 'run'
+                            ? run
+                            : {
+                                ...run,
+                                children: run.children.map((drawing) =>
+                                  drawing.kind !== 'drawing'
+                                    ? drawing
+                                    : {
+                                        ...drawing,
+                                        children: [
+                                          {
+                                            ...inline,
+                                            children: inline.children.filter(
+                                              (child) => child.kind !== 'drawingExtent'
+                                            ),
+                                          },
+                                        ],
+                                      }
+                                ),
+                              }
+                        ),
+                      }
+                ),
+              }
+        ),
+      },
+    } as OoxmlPart;
+    expect(invariantApi.validateOoxmlPart(broken).ok).toBe(false);
+  });
+
+  test('drawing semantic digest traversal stays bounded at MAX_XML_DEPTH', async () => {
+    const { MAX_XML_DEPTH } = await import('../package/xml-reader.ts');
+    const { semanticDigest } = await import('../package/ooxml-digest.ts');
+
+    const shallow = semanticDigest([parse(inlinePictureDrawing())]);
+    expect(shallow.stories[0]?.paragraphs[0]?.genericStructure.length).toBeGreaterThan(0);
+
+    function deepDrawingGraphic(depth: number): OoxmlElement {
+      if (depth >= MAX_XML_DEPTH + 2) {
+        return {
+          id: `leaf-${depth}`,
+          kind: 'drawingGraphicData',
+          namespaceUri: A,
+          localName: 'graphicData',
+          namespaceBindings: [],
+          attributes: [{ kind: 'generic', namespaceUri: '', localName: 'uri', value: PIC_URI }],
+          children: [],
+        };
+      }
+      return {
+        id: `graphic-${depth}`,
+        kind: 'drawingGraphic',
+        namespaceUri: A,
+        localName: 'graphic',
+        namespaceBindings: [],
+        attributes: [],
+        children: [deepDrawingGraphic(depth + 1)],
+      };
+    }
+
+    const part = parse(inlinePictureDrawing());
+    const drawing = findFirst(part.root, 'drawing');
+    const inline = findFirst(part.root, 'inlineDrawing');
+    const deepInline = {
+      ...inline,
+      children: inline.children.map((child) =>
+        child.kind === 'drawingGraphic' ? deepDrawingGraphic(0) : child
+      ),
+    };
+    const deepDrawing = { ...drawing, children: [deepInline] };
+    const body = part.root.children[0] as OoxmlElement;
+    const paragraph = body.children[0] as OoxmlElement;
+    const run = paragraph.children[0] as OoxmlElement;
+    const deepPart = {
+      ...part,
+      root: {
+        ...part.root,
+        children: [
+          {
+            ...body,
+            children: [
+              {
+                ...paragraph,
+                children: [{ ...run, children: [deepDrawing] }],
+              },
+            ],
+          },
+        ],
+      },
+    } as OoxmlPart;
+
+    const deepDigest = semanticDigest([deepPart]);
+    const token = deepDigest.stories[0]?.paragraphs[0]?.genericStructure[0] ?? '';
+    expect(token.length).toBeGreaterThan(0);
+    expect(token.length).toBeLessThan(20_000);
+    expect(token).toContain('{http://schemas.openxmlformats.org/drawingml/2006/main}graphic');
+  });
+});
+
+function anchoredWrapDrawing(wrapXml: string): string {
+  return (
+    `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}"><w:body><w:p><w:r><w:drawing>` +
+    `<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" allowOverlap="1" behindDoc="0" locked="0" layoutInCell="1" relativeHeight="0">` +
+    `<wp:simplePos x="0" y="0"/>` +
+    `<wp:positionH relativeFrom="margin"><wp:align>left</wp:align></wp:positionH>` +
+    `<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>` +
+    `<wp:extent cx="952500" cy="952500"/>` +
+    wrapXml +
+    `<wp:docPr id="1" name="n" descr="d"/>` +
+    `<a:graphic><a:graphicData uri="${PIC_URI}"><pic:pic>` +
+    `<pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr>` +
+    `<pic:blipFill><a:blip r:embed="rId1"/><a:srcRect/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+    `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1" cy="1"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>` +
+    `</pic:pic></a:graphicData></a:graphic>` +
+    '</wp:anchor></w:drawing></w:r></w:p></w:body></w:document>'
+  );
+}
+
+function polygonXml(): string {
+  return (
+    '<wp:wrapPolygon edited="0">' +
+    '<wp:start x="0" y="0"/><wp:lineTo x="100" y="0"/><wp:lineTo x="100" y="100"/>' +
+    '</wp:wrapPolygon>'
+  );
+}
+
+describe('typed drawing fix round 2', () => {
+  test('types wrap polygon points and transform off/ext descendants', () => {
+    const part = parse(
+      anchoredWrapDrawing(`<wp:wrapTight wrapText="bothSides">${polygonXml()}</wp:wrapTight>`)
+    );
+    const polygon = findFirst(part.root, 'drawingWrapPolygon');
+    expect(findFirst(polygon, 'drawingWrapPolygonStart').kind).toBe('drawingWrapPolygonStart');
+    expect(findFirst(polygon, 'drawingWrapPolygonLineTo').kind).toBe('drawingWrapPolygonLineTo');
+    const xfrm = findFirst(part.root, 'pictureTransform');
+    expect(findFirst(xfrm, 'pictureTransformOffset').localName).toBe('off');
+    expect(findFirst(xfrm, 'pictureTransformExtent').localName).toBe('ext');
+  });
+
+  test('demotes typed descendants when malformed parent becomes generic', () => {
+    const badInline = parse(inlinePictureDrawing({ extent: 'cx="not-a-number" cy="1"' }));
+    expect(findByLocalName(badInline.root, 'drawing').kind).toBe('generic');
+    expect(countKind(badInline.root, 'drawingExtent')).toBe(0);
+    expect(countKind(badInline.root, 'inlineDrawing')).toBe(0);
+    expect(countKind(badInline.root, 'picture')).toBe(0);
+    const inlineEl = findByLocalName(badInline.root, 'inline');
+    expect(inlineEl.kind).toBe('generic');
+    expect(findByLocalName(inlineEl, 'extent').kind).toBe('generic');
+  });
+
+  test('rejects owner-namespace and unqualified relationship lookalikes', () => {
+    const evilCx = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:evil="urn:evil"><w:body><w:p><w:r><w:drawing>` +
+        `<wp:inline><wp:extent evil:cx="1" cy="1"/><a:graphic xmlns:a="${A}"/></wp:inline>` +
+        '</w:drawing></w:r></w:p></w:body></w:document>'
+    );
+    expect(findByLocalName(evilCx.root, 'drawing').kind).toBe('generic');
+
+    const unqualifiedEmbed = parse(
+      inlinePictureDrawing().replace('r:embed="rId14"', 'embed="rId14"')
+    );
+    expect(findByLocalName(unqualifiedEmbed.root, 'blip').kind).toBe('generic');
+
+    const ownerEmbed = parse(
+      inlinePictureDrawing().replace('r:embed="rId14"', `a:embed="rId14" xmlns:a="${A}"`)
+    );
+    expect(findByLocalName(ownerEmbed.root, 'blip').kind).toBe('generic');
+  });
+
+  test('exercises wrap vocabulary, wrapText values, and polygon requirements', () => {
+    for (const wrapText of ['bothSides', 'left', 'right', 'largest'] as const) {
+      const part = parse(
+        anchoredWrapDrawing(
+          `<wp:wrapSquare wrapText="${wrapText}" distT="0" distB="0" distL="0" distR="0"/>`
+        )
+      );
+      expect(findFirst(part.root, 'drawingWrapSquare').kind).toBe('drawingWrapSquare');
+      expect(invariantApi.validateOoxmlPart(part).ok).toBe(true);
+    }
+    expect(
+      findFirst(parse(anchoredWrapDrawing('<wp:wrapNone/>')).root, 'drawingWrapNone').kind
+    ).toBe('drawingWrapNone');
+    expect(
+      findFirst(parse(anchoredWrapDrawing('<wp:wrapTopAndBottom/>')).root, 'drawingWrapTopBottom')
+        .kind
+    ).toBe('drawingWrapTopBottom');
+    expect(
+      findFirst(
+        parse(
+          anchoredWrapDrawing(`<wp:wrapTight wrapText="bothSides">${polygonXml()}</wp:wrapTight>`)
+        ).root,
+        'drawingWrapTight'
+      ).kind
+    ).toBe('drawingWrapTight');
+    expect(
+      findFirst(
+        parse(
+          anchoredWrapDrawing(
+            `<wp:wrapThrough wrapText="bothSides">${polygonXml()}</wp:wrapThrough>`
+          )
+        ).root,
+        'drawingWrapThrough'
+      ).kind
+    ).toBe('drawingWrapThrough');
+
+    const badWrapText = parse(
+      anchoredWrapDrawing(
+        '<wp:wrapSquare wrapText="diagonal" distT="0" distB="0" distL="0" distR="0"/>'
+      )
+    );
+    expect(findByLocalName(badWrapText.root, 'wrapSquare').kind).toBe('generic');
+
+    const tightWithoutPolygon = parse(anchoredWrapDrawing('<wp:wrapTight wrapText="bothSides"/>'));
+    expect(findByLocalName(tightWithoutPolygon.root, 'wrapTight').kind).toBe('generic');
+
+    const polygonMissingStart = parse(
+      anchoredWrapDrawing(
+        '<wp:wrapTight wrapText="bothSides"><wp:wrapPolygon><wp:lineTo x="1" y="1"/></wp:wrapPolygon></wp:wrapTight>'
+      )
+    );
+    expect(findByLocalName(polygonMissingStart.root, 'wrapTight').kind).toBe('generic');
+
+    const overLimitPoints = '<wp:start x="0" y="0"/>' + '<wp:lineTo x="1" y="1"/>'.repeat(600);
+    const overLimitPolygon = parse(
+      anchoredWrapDrawing(
+        `<wp:wrapTight wrapText="bothSides"><wp:wrapPolygon edited="0">${overLimitPoints}</wp:wrapPolygon></wp:wrapTight>`
+      )
+    );
+    expect(findByLocalName(overLimitPolygon.root, 'wrapTight').kind).toBe('generic');
+  });
+
+  test('exercises position relativeFrom, align, and posOffset validation', () => {
+    for (const relativeFrom of ['margin', 'page', 'column', 'character'] as const) {
+      const part = parse(
+        anchoredWrapDrawing('<wp:wrapNone/>')
+          .replace(
+            '<wp:positionH relativeFrom="margin"><wp:align>left</wp:align></wp:positionH>',
+            `<wp:positionH relativeFrom="${relativeFrom}"><wp:align>center</wp:align></wp:positionH>`
+          )
+          .replace(
+            '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>',
+            '<wp:positionV relativeFrom="paragraph"><wp:posOffset>114300</wp:posOffset></wp:positionV>'
+          )
+      );
+      expect(findFirst(part.root, 'drawingPositionH').kind).toBe('drawingPositionH');
+      expect(invariantApi.validateOoxmlPart(part).ok).toBe(true);
+    }
+
+    const misordered = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}"><w:body><w:p><w:r><w:drawing>` +
+        `<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" allowOverlap="1" behindDoc="0" locked="0" layoutInCell="1" relativeHeight="0">` +
+        `<wp:extent cx="1" cy="1"/>` +
+        `<wp:positionH relativeFrom="margin"><wp:align>center</wp:align></wp:positionH>` +
+        `<wp:positionV relativeFrom="paragraph"><wp:posOffset>114300</wp:posOffset></wp:positionV>` +
+        `<wp:wrapNone/>` +
+        `<wp:docPr id="1" name="n"/>` +
+        `<a:graphic><a:graphicData uri="${PIC_URI}"><pic:pic/></a:graphicData></a:graphic>` +
+        '</wp:anchor></w:drawing></w:r></w:p></w:body></w:document>'
+    );
+    expect(findByLocalName(misordered.root, 'anchor').kind).toBe('generic');
+
+    const badRelative = parse(
+      anchoredWrapDrawing('<wp:wrapNone/>').replace(
+        'relativeFrom="margin"',
+        'relativeFrom="galaxy"'
+      )
+    );
+    expect(findByLocalName(badRelative.root, 'positionH').kind).toBe('generic');
+
+    const badAlign = parse(
+      anchoredWrapDrawing('<wp:wrapNone/>').replace(
+        '<wp:align>left</wp:align>',
+        '<wp:align>galaxy</wp:align>'
+      )
+    );
+    expect(findByLocalName(badAlign.root, 'positionH').kind).toBe('generic');
+
+    const badOffset = parse(
+      anchoredWrapDrawing('<wp:wrapNone/>').replace(
+        '<wp:posOffset>0</wp:posOffset>',
+        '<wp:posOffset>wide</wp:posOffset>'
+      )
+    );
+    expect(findByLocalName(badOffset.root, 'positionV').kind).toBe('generic');
+  });
+
+  test('validateOoxmlPart rejects synthetic typed drawing with bad blip or graphicData uri', () => {
+    const part = parse(inlinePictureDrawing());
+    const inline = findFirst(part.root, 'inlineDrawing');
+    const blip = findFirst(part.root, 'pictureBlip');
+    const brokenBlip = {
+      ...part,
+      root: {
+        ...part.root,
+        children: part.root.children.map((body) =>
+          body.kind !== 'body'
+            ? body
+            : {
+                ...body,
+                children: body.children.map((paragraph) =>
+                  paragraph.kind !== 'paragraph'
+                    ? paragraph
+                    : {
+                        ...paragraph,
+                        children: paragraph.children.map((run) =>
+                          run.kind !== 'run'
+                            ? run
+                            : {
+                                ...run,
+                                children: run.children.map((drawing) =>
+                                  drawing.kind !== 'drawing'
+                                    ? drawing
+                                    : {
+                                        ...drawing,
+                                        children: [
+                                          {
+                                            ...inline,
+                                            children: inline.children.map((child) =>
+                                              child.kind !== 'drawingGraphic'
+                                                ? child
+                                                : {
+                                                    ...child,
+                                                    children: child.children.map((graphicData) =>
+                                                      graphicData.kind !== 'drawingGraphicData'
+                                                        ? graphicData
+                                                        : {
+                                                            ...graphicData,
+                                                            children: graphicData.children.map(
+                                                              (picture) =>
+                                                                picture.kind !== 'picture'
+                                                                  ? picture
+                                                                  : {
+                                                                      ...picture,
+                                                                      children:
+                                                                        picture.children.map(
+                                                                          (fill) =>
+                                                                            fill.kind !==
+                                                                            'pictureBlipFill'
+                                                                              ? fill
+                                                                              : {
+                                                                                  ...fill,
+                                                                                  children: [
+                                                                                    {
+                                                                                      ...blip,
+                                                                                      attributes:
+                                                                                        [],
+                                                                                    },
+                                                                                  ],
+                                                                                }
+                                                                        ),
+                                                                    }
+                                                            ),
+                                                          }
+                                                    ),
+                                                  }
+                                            ),
+                                          },
+                                        ],
+                                      }
+                                ),
+                              }
+                        ),
+                      }
+                ),
+              }
+        ),
+      },
+    } as OoxmlPart;
+    expect(invariantApi.validateOoxmlPart(brokenBlip).ok).toBe(false);
+  });
+});
+
+describe('typed drawing fix round 3', () => {
+  test('requires schema-valid wrapText on wrapSquare, wrapTight, and wrapThrough', () => {
+    const missingSquare = parse(
+      anchoredWrapDrawing('<wp:wrapSquare distT="0" distB="0" distL="0" distR="0"/>')
+    );
+    expect(findByLocalName(missingSquare.root, 'wrapSquare').kind).toBe('generic');
+
+    const missingTight = parse(anchoredWrapDrawing(`<wp:wrapTight>${polygonXml()}</wp:wrapTight>`));
+    expect(findByLocalName(missingTight.root, 'wrapTight').kind).toBe('generic');
+
+    const missingThrough = parse(
+      anchoredWrapDrawing(`<wp:wrapThrough>${polygonXml()}</wp:wrapThrough>`)
+    );
+    expect(findByLocalName(missingThrough.root, 'wrapThrough').kind).toBe('generic');
+
+    for (const wrapText of ['bothSides', 'left', 'right', 'largest'] as const) {
+      const tight = parse(
+        anchoredWrapDrawing(`<wp:wrapTight wrapText="${wrapText}">${polygonXml()}</wp:wrapTight>`)
+      );
+      expect(findFirst(tight.root, 'drawingWrapTight').kind).toBe('drawingWrapTight');
+      const through = parse(
+        anchoredWrapDrawing(
+          `<wp:wrapThrough wrapText="${wrapText}">${polygonXml()}</wp:wrapThrough>`
+        )
+      );
+      expect(findFirst(through.root, 'drawingWrapThrough').kind).toBe('drawingWrapThrough');
+    }
+  });
+
+  test('rejects malformed polygon order and missing start', () => {
+    const lineBeforeStart = parse(
+      anchoredWrapDrawing(
+        '<wp:wrapTight wrapText="bothSides"><wp:wrapPolygon><wp:lineTo x="1" y="1"/><wp:start x="0" y="0"/></wp:wrapPolygon></wp:wrapTight>'
+      )
+    );
+    expect(findByLocalName(lineBeforeStart.root, 'wrapTight').kind).toBe('generic');
+
+    const startAfterLineTo = parse(
+      anchoredWrapDrawing(
+        '<wp:wrapTight wrapText="bothSides"><wp:wrapPolygon><wp:start x="0" y="0"/><wp:lineTo x="1" y="1"/><wp:start x="2" y="2"/></wp:wrapPolygon></wp:wrapTight>'
+      )
+    );
+    expect(findByLocalName(startAfterLineTo.root, 'wrapTight').kind).toBe('generic');
+  });
+
+  test('separates signed coordinates from non-negative dimensions', () => {
+    const negativeExtent = parse(inlinePictureDrawing({ extent: 'cx="-1" cy="1"' }));
+    expect(findByLocalName(negativeExtent.root, 'drawing').kind).toBe('generic');
+    expect(invariantApi.validateOoxmlPart(negativeExtent).ok).toBe(true);
+
+    const negativeTransformExt = parse(
+      inlinePictureDrawing().replace('<a:ext cx="152400" cy="152400"/>', '<a:ext cx="-1" cy="1"/>')
+    );
+    expect(findByLocalName(negativeTransformExt.root, 'ext').kind).toBe('generic');
+
+    const signedOffset = parse(
+      anchoredWrapDrawing('<wp:wrapNone/>').replace(
+        '<wp:posOffset>0</wp:posOffset>',
+        '<wp:posOffset>-114300</wp:posOffset>'
+      )
+    );
+    expect(findFirst(signedOffset.root, 'drawingPositionOffset').kind).toBe(
+      'drawingPositionOffset'
+    );
+
+    const signedSimplePos = parse(
+      anchoredWrapDrawing('<wp:wrapNone/>').replace(
+        '<wp:simplePos x="0" y="0"/>',
+        '<wp:simplePos x="-1" y="-2"/>'
+      )
+    );
+    expect(findFirst(signedSimplePos.root, 'drawingSimplePos').kind).toBe('drawingSimplePos');
+
+    const signedPolygon = parse(
+      anchoredWrapDrawing(
+        `<wp:wrapTight wrapText="bothSides"><wp:wrapPolygon><wp:start x="-1" y="-2"/><wp:lineTo x="100" y="100"/><wp:lineTo x="50" y="50"/></wp:wrapPolygon></wp:wrapTight>`
+      )
+    );
+    expect(findFirst(signedPolygon.root, 'drawingWrapPolygonStart').kind).toBe(
+      'drawingWrapPolygonStart'
+    );
+  });
+
+  test('exercises all schema relativeFrom, align, and signed posOffset values', () => {
+    for (const relativeFrom of [
+      'character',
+      'column',
+      'insideMargin',
+      'leftMargin',
+      'margin',
+      'outsideMargin',
+      'page',
+      'rightMargin',
+    ] as const) {
+      const part = parse(
+        anchoredWrapDrawing('<wp:wrapNone/>').replace(
+          '<wp:positionH relativeFrom="margin"><wp:align>left</wp:align></wp:positionH>',
+          `<wp:positionH relativeFrom="${relativeFrom}"><wp:align>center</wp:align></wp:positionH>`
+        )
+      );
+      expect(findFirst(part.root, 'drawingPositionH').kind).toBe('drawingPositionH');
+      expect(invariantApi.validateOoxmlPart(part).ok).toBe(true);
+    }
+    for (const relativeFrom of [
+      'bottomMargin',
+      'insideMargin',
+      'line',
+      'margin',
+      'outsideMargin',
+      'page',
+      'paragraph',
+      'topMargin',
+    ] as const) {
+      const part = parse(
+        anchoredWrapDrawing('<wp:wrapNone/>').replace(
+          '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>',
+          `<wp:positionV relativeFrom="${relativeFrom}"><wp:posOffset>-10</wp:posOffset></wp:positionV>`
+        )
+      );
+      expect(findFirst(part.root, 'drawingPositionV').kind).toBe('drawingPositionV');
+      expect(invariantApi.validateOoxmlPart(part).ok).toBe(true);
+    }
+    for (const align of ['center', 'inside', 'left', 'outside', 'right'] as const) {
+      const part = parse(
+        anchoredWrapDrawing('<wp:wrapNone/>').replace(
+          '<wp:align>left</wp:align>',
+          `<wp:align>${align}</wp:align>`
+        )
+      );
+      expect(findFirst(part.root, 'drawingPositionAlign').kind).toBe('drawingPositionAlign');
+    }
+    for (const align of ['bottom', 'center', 'inside', 'outside', 'top'] as const) {
+      const part = parse(
+        anchoredWrapDrawing('<wp:wrapNone/>').replace(
+          '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>',
+          `<wp:positionV relativeFrom="paragraph"><wp:align>${align}</wp:align></wp:positionV>`
+        )
+      );
+      expect(findFirst(part.root, 'drawingPositionAlign').kind).toBe('drawingPositionAlign');
+    }
+  });
+
+  test('validateOoxmlPart rejects illegal drawing parent contexts', () => {
+    const part = parse(inlinePictureDrawing());
+    const body = part.root.children[0] as OoxmlElement;
+    const inline = findFirst(part.root, 'inlineDrawing');
+    const extent = findFirst(part.root, 'drawingExtent');
+    const picture = findFirst(part.root, 'picture');
+
+    const inlineOutsideDrawing = {
+      ...part,
+      root: {
+        ...part.root,
+        children: [{ ...body, children: [inline] }],
+      },
+    } as OoxmlPart;
+    expect(invariantApi.validateOoxmlPart(inlineOutsideDrawing).ok).toBe(false);
+
+    const paragraph = body.children[0] as OoxmlElement;
+    const run = paragraph.children[0] as OoxmlElement;
+    const drawing = run.children[0] as OoxmlElement;
+    const drawingUnderGeneric = {
+      ...part,
+      root: {
+        ...part.root,
+        children: [
+          {
+            ...body,
+            children: [
+              {
+                ...paragraph,
+                children: [
+                  {
+                    ...run,
+                    children: [
+                      {
+                        id: 'generic-wrap',
+                        kind: 'generic',
+                        namespaceUri: 'urn:wrap',
+                        localName: 'holder',
+                        namespaceBindings: [],
+                        attributes: [],
+                        children: [drawing],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    } as OoxmlPart;
+    expect(invariantApi.validateOoxmlPart(drawingUnderGeneric).ok).toBe(false);
+
+    const pictureOutsideGraphicData = {
+      ...part,
+      root: {
+        ...part.root,
+        children: [
+          {
+            ...body,
+            children: [
+              {
+                ...paragraph,
+                children: [
+                  {
+                    ...run,
+                    children: [{ ...drawing, children: [{ ...inline, children: [picture] }] }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    } as OoxmlPart;
+    expect(invariantApi.validateOoxmlPart(pictureOutsideGraphicData).ok).toBe(false);
+
+    const typedChildUnderGenericInline = {
+      ...part,
+      root: {
+        ...part.root,
+        children: [
+          {
+            ...body,
+            children: [
+              {
+                ...paragraph,
+                children: [
+                  {
+                    ...run,
+                    children: [
+                      {
+                        ...drawing,
+                        children: [{ ...inline, kind: 'generic', children: [extent] }],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    } as OoxmlPart;
+    expect(invariantApi.validateOoxmlPart(typedChildUnderGenericInline).ok).toBe(false);
+  });
+});
+
+describe('typed drawing fix round 4', () => {
+  test('rejects wrapPolygon with only one lineTo and accepts two lineTo points', () => {
+    const oneLineTo = parse(
+      anchoredWrapDrawing(
+        '<wp:wrapTight wrapText="bothSides"><wp:wrapPolygon><wp:start x="0" y="0"/><wp:lineTo x="100" y="100"/></wp:wrapPolygon></wp:wrapTight>'
+      )
+    );
+    expect(findByLocalName(oneLineTo.root, 'wrapTight').kind).toBe('generic');
+
+    const twoLineTo = parse(
+      anchoredWrapDrawing(
+        '<wp:wrapTight wrapText="bothSides"><wp:wrapPolygon><wp:start x="0" y="0"/><wp:lineTo x="100" y="0"/><wp:lineTo x="100" y="100"/></wp:wrapPolygon></wp:wrapTight>'
+      )
+    );
+    expect(findFirst(twoLineTo.root, 'drawingWrapTight').kind).toBe('drawingWrapTight');
+    const polygon = findFirst(twoLineTo.root, 'drawingWrapPolygon');
+    expect(findFirst(polygon, 'drawingWrapPolygonStart').kind).toBe('drawingWrapPolygonStart');
+    expect(countKind(polygon, 'drawingWrapPolygonLineTo')).toBe(2);
+    expect(invariantApi.validateOoxmlPart(twoLineTo).ok).toBe(true);
+  });
+
+  test('types optional effectExtent under wrapSquare and wrapTopAndBottom at most once', () => {
+    const squareWithEffect = parse(
+      anchoredWrapDrawing(
+        '<wp:wrapSquare wrapText="bothSides" distT="0" distB="0" distL="0" distR="0"><wp:effectExtent l="0" t="0" r="0" b="0"/></wp:wrapSquare>'
+      )
+    );
+    const wrapSquare = findFirst(squareWithEffect.root, 'drawingWrapSquare');
+    expect(wrapSquare.kind).toBe('drawingWrapSquare');
+    expect(findFirst(wrapSquare, 'drawingEffectExtent').kind).toBe('drawingEffectExtent');
+    expect(invariantApi.validateOoxmlPart(squareWithEffect).ok).toBe(true);
+
+    const topBottomWithEffect = parse(
+      anchoredWrapDrawing(
+        '<wp:wrapTopAndBottom><wp:effectExtent l="1" t="2" r="3" b="4"/></wp:wrapTopAndBottom>'
+      )
+    );
+    const wrapTopBottom = findFirst(topBottomWithEffect.root, 'drawingWrapTopBottom');
+    expect(wrapTopBottom.kind).toBe('drawingWrapTopBottom');
+    expect(findFirst(wrapTopBottom, 'drawingEffectExtent').kind).toBe('drawingEffectExtent');
+    expect(invariantApi.validateOoxmlPart(topBottomWithEffect).ok).toBe(true);
+
+    const duplicateEffect = parse(
+      anchoredWrapDrawing(
+        '<wp:wrapSquare wrapText="bothSides" distT="0" distB="0" distL="0" distR="0">' +
+          '<wp:effectExtent l="0" t="0" r="0" b="0"/><wp:effectExtent l="1" t="1" r="1" b="1"/>' +
+          '</wp:wrapSquare>'
+      )
+    );
+    expect(findByLocalName(duplicateEffect.root, 'wrapSquare').kind).toBe('generic');
+
+    const misplacedEffect = parse(
+      anchoredWrapDrawing(
+        `<wp:wrapTight wrapText="bothSides">${polygonXml()}<wp:effectExtent l="0" t="0" r="0" b="0"/></wp:wrapTight>`
+      )
+    );
+    expect(findByLocalName(misplacedEffect.root, 'wrapTight').kind).toBe('generic');
+  });
+
+  test('validateOoxmlPart rejects duplicate effectExtent under typed wrapSquare', () => {
+    const part = parse(
+      anchoredWrapDrawing(
+        '<wp:wrapSquare wrapText="bothSides" distT="0" distB="0" distL="0" distR="0"><wp:effectExtent l="0" t="0" r="0" b="0"/></wp:wrapSquare>'
+      )
+    );
+    const wrapSquare = findFirst(part.root, 'drawingWrapSquare');
+    const effectExtent = findFirst(wrapSquare, 'drawingEffectExtent');
+    const broken = {
+      ...part,
+      root: {
+        ...part.root,
+        children: part.root.children.map((body) =>
+          body.kind !== 'body'
+            ? body
+            : {
+                ...body,
+                children: body.children.map((paragraph) =>
+                  paragraph.kind !== 'paragraph'
+                    ? paragraph
+                    : {
+                        ...paragraph,
+                        children: paragraph.children.map((run) =>
+                          run.kind !== 'run'
+                            ? run
+                            : {
+                                ...run,
+                                children: run.children.map((drawing) =>
+                                  drawing.kind !== 'drawing'
+                                    ? drawing
+                                    : {
+                                        ...drawing,
+                                        children: drawing.children.map((anchor) =>
+                                          anchor.kind !== 'anchoredDrawing'
+                                            ? anchor
+                                            : {
+                                                ...anchor,
+                                                children: anchor.children.map((child) =>
+                                                  child.kind !== 'drawingWrapSquare'
+                                                    ? child
+                                                    : {
+                                                        ...child,
+                                                        children: [
+                                                          effectExtent,
+                                                          { ...effectExtent, id: 'dup' },
+                                                        ],
+                                                      }
+                                                ),
+                                              }
+                                        ),
+                                      }
+                                ),
+                              }
+                        ),
+                      }
+                ),
+              }
+        ),
+      },
+    } as OoxmlPart;
+    expect(invariantApi.validateOoxmlPart(broken).ok).toBe(false);
+  });
+});
+
+describe('typed drawing fix round 5', () => {
+  test('rejects effectExtent under wrapNone, wrapTight, and wrapThrough', () => {
+    const wrapNoneWithEffect = parse(
+      anchoredWrapDrawing('<wp:wrapNone><wp:effectExtent l="0" t="0" r="0" b="0"/></wp:wrapNone>')
+    );
+    expect(findByLocalName(wrapNoneWithEffect.root, 'wrapNone').kind).toBe('generic');
+
+    const wrapTightGenericEffect = parse(
+      anchoredWrapDrawing(
+        `<wp:wrapTight wrapText="bothSides">${polygonXml()}<wp:effectExtent l="0" t="0" r="0" b="0"/></wp:wrapTight>`
+      )
+    );
+    expect(findByLocalName(wrapTightGenericEffect.root, 'wrapTight').kind).toBe('generic');
+
+    const wrapThroughWithEffect = parse(
+      anchoredWrapDrawing(
+        `<wp:wrapThrough wrapText="left">${polygonXml()}<wp:effectExtent l="1" t="2" r="3" b="4"/></wp:wrapThrough>`
+      )
+    );
+    expect(findByLocalName(wrapThroughWithEffect.root, 'wrapThrough').kind).toBe('generic');
+  });
+
+  test('requires schema-valid signed l/t/r/b on typed effectExtent', () => {
+    const missingL = parse(inlinePictureDrawing().replace('l="0"', ''));
+    expect(findByLocalName(missingL.root, 'inline').kind).toBe('generic');
+
+    const foreignLookalike = parse(
+      inlinePictureDrawing().replace(
+        'l="0" t="0" r="0" b="0"',
+        'evil:l="0" t="0" r="0" b="0" xmlns:evil="urn:evil"'
+      )
+    );
+    expect(findByLocalName(foreignLookalike.root, 'inline').kind).toBe('generic');
+
+    const nonNumeric = parse(
+      inlinePictureDrawing().replace('l="0" t="0" r="0" b="0"', 'l="nope" t="0" r="0" b="0"')
+    );
+    expect(findByLocalName(nonNumeric.root, 'inline').kind).toBe('generic');
+
+    const signedNegative = parse(
+      inlinePictureDrawing().replace('l="0" t="0" r="0" b="0"', 'l="-1" t="-2" r="-3" b="-4"')
+    );
+    const inline = findFirst(signedNegative.root, 'inlineDrawing');
+    expect(inline.kind).toBe('inlineDrawing');
+    expect(findFirst(inline, 'drawingEffectExtent').kind).toBe('drawingEffectExtent');
+    expect(invariantApi.validateOoxmlPart(signedNegative).ok).toBe(true);
+
+    const badWrapParent = parse(
+      anchoredWrapDrawing(
+        '<wp:wrapSquare wrapText="bothSides" distT="0" distB="0" distL="0" distR="0">' +
+          '<wp:effectExtent l="bad" t="0" r="0" b="0"/>' +
+          '</wp:wrapSquare>'
+      )
+    );
+    expect(findByLocalName(badWrapParent.root, 'wrapSquare').kind).toBe('generic');
+
+    const goodWrapParent = parse(
+      anchoredWrapDrawing(
+        '<wp:wrapTopAndBottom><wp:effectExtent l="-1" t="0" r="0" b="0"/></wp:wrapTopAndBottom>'
+      )
+    );
+    expect(findFirst(goodWrapParent.root, 'drawingWrapTopBottom').kind).toBe(
+      'drawingWrapTopBottom'
+    );
+    expect(findFirst(goodWrapParent.root, 'drawingEffectExtent').kind).toBe('drawingEffectExtent');
+    expect(invariantApi.validateOoxmlPart(goodWrapParent).ok).toBe(true);
+  });
+
+  test('validateOoxmlPart rejects malformed effectExtent on inline and wrapSquare', () => {
+    const inlinePart = parse(inlinePictureDrawing());
+    const inline = findFirst(inlinePart.root, 'inlineDrawing');
+    const effectExtent = findFirst(inline, 'drawingEffectExtent');
+    const inlineMissingCoord = {
+      ...inlinePart,
+      root: {
+        ...inlinePart.root,
+        children: inlinePart.root.children.map((body) =>
+          body.kind !== 'body'
+            ? body
+            : {
+                ...body,
+                children: body.children.map((paragraph) =>
+                  paragraph.kind !== 'paragraph'
+                    ? paragraph
+                    : {
+                        ...paragraph,
+                        children: paragraph.children.map((run) =>
+                          run.kind !== 'run'
+                            ? run
+                            : {
+                                ...run,
+                                children: run.children.map((drawing) =>
+                                  drawing.kind !== 'drawing'
+                                    ? drawing
+                                    : {
+                                        ...drawing,
+                                        children: drawing.children.map((child) =>
+                                          child.kind !== 'inlineDrawing'
+                                            ? child
+                                            : {
+                                                ...child,
+                                                children: child.children.map((inlineChild) =>
+                                                  inlineChild.id === effectExtent.id
+                                                    ? {
+                                                        ...effectExtent,
+                                                        attributes: effectExtent.attributes.filter(
+                                                          (attribute) => attribute.localName !== 'b'
+                                                        ),
+                                                      }
+                                                    : inlineChild
+                                                ),
+                                              }
+                                        ),
+                                      }
+                                ),
+                              }
+                        ),
+                      }
+                ),
+              }
+        ),
+      },
+    } as OoxmlPart;
+    expect(invariantApi.validateOoxmlPart(inlineMissingCoord).ok).toBe(false);
+
+    const wrapPart = parse(
+      anchoredWrapDrawing(
+        '<wp:wrapSquare wrapText="bothSides" distT="0" distB="0" distL="0" distR="0"><wp:effectExtent l="0" t="0" r="0" b="0"/></wp:wrapSquare>'
+      )
+    );
+    const wrapSquare = findFirst(wrapPart.root, 'drawingWrapSquare');
+    const wrapEffectExtent = findFirst(wrapSquare, 'drawingEffectExtent');
+    const wrapNonNumeric = {
+      ...wrapPart,
+      root: {
+        ...wrapPart.root,
+        children: wrapPart.root.children.map((body) =>
+          body.kind !== 'body'
+            ? body
+            : {
+                ...body,
+                children: body.children.map((paragraph) =>
+                  paragraph.kind !== 'paragraph'
+                    ? paragraph
+                    : {
+                        ...paragraph,
+                        children: paragraph.children.map((run) =>
+                          run.kind !== 'run'
+                            ? run
+                            : {
+                                ...run,
+                                children: run.children.map((drawing) =>
+                                  drawing.kind !== 'drawing'
+                                    ? drawing
+                                    : {
+                                        ...drawing,
+                                        children: drawing.children.map((anchor) =>
+                                          anchor.kind !== 'anchoredDrawing'
+                                            ? anchor
+                                            : {
+                                                ...anchor,
+                                                children: anchor.children.map((child) =>
+                                                  child.kind !== 'drawingWrapSquare'
+                                                    ? child
+                                                    : {
+                                                        ...child,
+                                                        children: child.children.map((wrapChild) =>
+                                                          wrapChild.id === wrapEffectExtent.id
+                                                            ? {
+                                                                ...wrapEffectExtent,
+                                                                attributes:
+                                                                  wrapEffectExtent.attributes.map(
+                                                                    (attribute) =>
+                                                                      attribute.localName === 'l'
+                                                                        ? {
+                                                                            ...attribute,
+                                                                            value: 'not-a-number',
+                                                                          }
+                                                                        : attribute
+                                                                  ),
+                                                              }
+                                                            : wrapChild
+                                                        ),
+                                                      }
+                                                ),
+                                              }
+                                        ),
+                                      }
+                                ),
+                              }
+                        ),
+                      }
+                ),
+              }
+        ),
+      },
+    } as OoxmlPart;
+    expect(invariantApi.validateOoxmlPart(wrapNonNumeric).ok).toBe(false);
+  });
+});
+
+describe('comprehensive fixture drawing round trip', () => {
+  test('preserves all eleven drawings, empty a:srcRect, and canonical fingerprint', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { readOoxmlPackage, writeOoxmlPackage } = await import('../package/ooxml-package.ts');
+    const bytes = readFileSync(
+      `${import.meta.dir}/../../../../../e2e/fixtures/comprehensive-word-element-test.docx`
+    );
+    const loaded = readOoxmlPackage(bytes);
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const beforeFingerprint = canonicalOoxmlFingerprint(
+      loaded.package.parts.get('/word/document.xml')!.root
+    );
+    const saved = writeOoxmlPackage(loaded.package);
+    const reopened = readOoxmlPackage(saved);
+    if (!reopened.ok) throw new Error(reopened.reason);
+    const document = reopened.package.parts.get('/word/document.xml')!;
+    const serialized = serializeOoxmlPart(document);
+    expect((serialized.match(/<a:srcRect\/>/g) ?? []).length).toBe(11);
+    expect(canonicalOoxmlFingerprint(document.root)).toBe(beforeFingerprint);
+    expect(countKind(document.root, 'drawing')).toBe(11);
+    expect(countKind(document.root, 'inlineDrawing')).toBe(10);
+    expect(countKind(document.root, 'anchoredDrawing')).toBe(1);
+    expect(countKind(document.root, 'picture')).toBe(11);
+    expect(countKind(document.root, 'pictureSrcRect')).toBe(11);
+    expect(invariantApi.validateOoxmlPart(document).ok).toBe(true);
+  });
+});
+
+describe('drawing is one atomic segment', () => {
+  test('A + drawing + B uses offsets 0, 1, 2, 3 and deletes exactly at [1, 2)', async () => {
+    const { segmentsOf } = await import('../store/tree-op-segments.ts');
+    const { applyTreeOp, paragraphTextOf } = await import('../store/tree-ops.ts');
+    const { validateTreeOp } = await import('../store/tree-op-validate.ts');
+    const { FIELD_ATOM_CHAR } = await import('../package/field-nodes.ts');
+
+    const part = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}"><w:body><w:p>` +
+        '<w:r><w:t>A</w:t></w:r>' +
+        '<w:r>' +
+        inlinePictureDrawing().match(/<w:drawing>[\s\S]*<\/w:drawing>/)![0] +
+        '</w:r>' +
+        '<w:r><w:t>B</w:t></w:r>' +
+        '</w:p></w:body></w:document>'
+    );
+    const body = part.root.children[0] as OoxmlElement;
+    const paragraph = body.children[0] as OoxmlElement;
+    const segments = segmentsOf(paragraph as never);
+    expect(segments.map((segment) => [segment.start, segment.end])).toEqual([
+      [0, 1],
+      [1, 2],
+      [2, 3],
+    ]);
+    expect(paragraphTextOf(part, paragraph.id)).toBe(`A${FIELD_ATOM_CHAR}B`);
+    expect(
+      validateTreeOp(part, {
+        op: 'setRunProperties',
+        paragraphId: paragraph.id,
+        start: 1,
+        end: 2,
+        properties: [{ localName: 'b', attributes: {} }],
+      })
+    ).toBeNull();
+    expect(
+      validateTreeOp(part, {
+        op: 'setRunProperties',
+        paragraphId: paragraph.id,
+        start: 0,
+        end: 1,
+        properties: [{ localName: 'b', attributes: {} }],
+      })
+    ).toBeNull();
+    const deleted = applyTreeOp(part, {
+      op: 'deleteText',
+      paragraphId: paragraph.id,
+      start: 1,
+      end: 2,
+    });
+    expect(deleted.ok).toBe(true);
+    if (!deleted.ok) return;
+    expect(paragraphTextOf(deleted.part, paragraph.id)).toBe('AB');
+    expect(serializeOoxmlPart(deleted.part).includes('<w:drawing')).toBe(false);
+  });
+
+  test('drawing stays atomic inside hyperlink and revision wrappers', async () => {
+    const { segmentsOf } = await import('../store/tree-op-segments.ts');
+    const part = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}"><w:body><w:p>` +
+        '<w:hyperlink r:id="rId99"><w:r><w:t>A</w:t></w:r></w:hyperlink>' +
+        '<w:ins w:author="x"><w:r>' +
+        inlinePictureDrawing().match(/<w:drawing>[\s\S]*<\/w:drawing>/)![0] +
+        '</w:r></w:ins>' +
+        '<w:r><w:t>B</w:t></w:r>' +
+        '</w:p></w:body></w:document>'
+    );
+    const paragraph = (part.root.children[0] as OoxmlElement).children[0] as OoxmlElement;
+    const segments = segmentsOf(paragraph as never);
+    expect(segments.map((segment) => [segment.start, segment.end])).toEqual([
+      [0, 1],
+      [1, 2],
+      [2, 3],
+    ]);
+    expect(segments[1]!.removeNodeIds).toEqual([segments[1]!.node.id]);
+  });
+
+  test('run-level MC wrapper is one atomic segment', async () => {
+    const { segmentsOf } = await import('../store/tree-op-segments.ts');
+    const { validateTreeOp } = await import('../store/tree-op-validate.ts');
+    const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
+    const drawingInner = inlinePictureDrawing().match(/<w:drawing>[\s\S]*<\/w:drawing>/)![0];
+    const part = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:mc="${MC}" xmlns:w14="urn:word14" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}"><w:body><w:p>` +
+        '<w:r><w:t>A</w:t></w:r>' +
+        '<w:r>' +
+        `<mc:AlternateContent xmlns:mc="${MC}">` +
+        `<mc:Choice Requires="w14">${drawingInner}</mc:Choice>` +
+        `<mc:Fallback>${drawingInner}</mc:Fallback>` +
+        '</mc:AlternateContent>' +
+        '</w:r>' +
+        '<w:r><w:t>B</w:t></w:r>' +
+        '</w:p></w:body></w:document>'
+    );
+    const paragraph = (part.root.children[0] as OoxmlElement).children[0] as OoxmlElement;
+    const segments = segmentsOf(paragraph as never);
+    expect(segments.map((segment) => [segment.start, segment.end])).toEqual([
+      [0, 1],
+      [1, 2],
+      [2, 3],
+    ]);
+    expect(segments[1]!.node.kind).toBe('generic');
+    expect(segments[1]!.removeNodeIds).toHaveLength(1);
+    expect(
+      validateTreeOp(part, { op: 'splitParagraph', paragraphId: paragraph.id, offset: 1 })
+    ).toBeNull();
+    expect(
+      validateTreeOp(part, { op: 'splitParagraph', paragraphId: paragraph.id, offset: 2 })
+    ).toBeNull();
+    expect(
+      validateTreeOp(part, { op: 'splitParagraphMany', paragraphId: paragraph.id, offsets: [2] })
+    ).toBeNull();
+  });
+
+  test('splitParagraph at drawing boundaries for direct drawing atom', async () => {
+    const { validateTreeOp } = await import('../store/tree-op-validate.ts');
+    const part = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}"><w:body><w:p>` +
+        '<w:r><w:t>A</w:t></w:r>' +
+        '<w:r>' +
+        inlinePictureDrawing().match(/<w:drawing>[\s\S]*<\/w:drawing>/)![0] +
+        '</w:r>' +
+        '<w:r><w:t>B</w:t></w:r>' +
+        '</w:p></w:body></w:document>'
+    );
+    const paragraph = (part.root.children[0] as OoxmlElement).children[0] as OoxmlElement;
+    expect(
+      validateTreeOp(part, { op: 'splitParagraph', paragraphId: paragraph.id, offset: 1 })
+    ).toBeNull();
+    expect(
+      validateTreeOp(part, { op: 'splitParagraph', paragraphId: paragraph.id, offset: 2 })
+    ).toBeNull();
+    expect(
+      validateTreeOp(part, { op: 'splitParagraphMany', paragraphId: paragraph.id, offsets: [0, 2] })
+    ).toBeNull();
+  });
+
+  test('run-level MC branch-limit refusal still emits one inert atomic segment', async () => {
+    const { segmentsOf } = await import('../store/tree-op-segments.ts');
+    const { applyTreeOp, paragraphTextOf } = await import('../store/tree-ops.ts');
+    const { validateTreeOp } = await import('../store/tree-op-validate.ts');
+    const { resolveRunLevelMcAtom } = await import('../package/drawing-projection.ts');
+    const { FIELD_ATOM_CHAR } = await import('../package/field-nodes.ts');
+    const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
+    const choices = Array.from(
+      { length: 70 },
+      () =>
+        `<mc:Choice Requires="w14"><w:drawing><wp:inline><wp:extent cx="1" cy="1"/></wp:inline></w:drawing></mc:Choice>`
+    ).join('');
+    const part = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:mc="${MC}" xmlns:w14="urn:word14" xmlns:wp="${WP}"><w:body><w:p>` +
+        '<w:r><w:t>A</w:t></w:r>' +
+        '<w:r>' +
+        `<mc:AlternateContent xmlns:mc="${MC}">${choices}<mc:Fallback><w:drawing><wp:inline><wp:extent cx="1" cy="1"/></wp:inline></w:drawing></mc:Fallback></mc:AlternateContent>` +
+        '</w:r>' +
+        '<w:r><w:t>B</w:t></w:r>' +
+        '</w:p></w:body></w:document>'
+    );
+    const paragraph = (part.root.children[0] as OoxmlElement).children[0] as OoxmlElement;
+    const segments = segmentsOf(paragraph as never);
+    expect(segments.map((segment) => [segment.start, segment.end])).toEqual([
+      [0, 1],
+      [1, 2],
+      [2, 3],
+    ]);
+    expect(segments[1]!.node.kind).toBe('generic');
+    expect(segments[1]!.removeNodeIds).toEqual([segments[1]!.node.id]);
+    const atom = resolveRunLevelMcAtom(
+      segments[1]!.node as never,
+      new Map(),
+      new Set(['urn:word14']),
+      {
+        maxCompatibilityBranches: 2,
+        maxVisitedElements: 4096,
+        maxDrawingDepth: 64,
+      }
+    );
+    expect(atom.drawing).toBeNull();
+    expect(atom.removeNodeIds).toEqual([segments[1]!.node.id]);
+    expect(paragraphTextOf(part, paragraph.id)).toBe(`A${FIELD_ATOM_CHAR}B`);
+    expect(
+      validateTreeOp(part, { op: 'splitParagraph', paragraphId: paragraph.id, offset: 1 })
+    ).toBeNull();
+    expect(
+      validateTreeOp(part, { op: 'splitParagraph', paragraphId: paragraph.id, offset: 2 })
+    ).toBeNull();
+    const deleted = applyTreeOp(part, {
+      op: 'deleteText',
+      paragraphId: paragraph.id,
+      start: 1,
+      end: 2,
+    });
+    expect(deleted.ok).toBe(true);
+    if (deleted.ok) {
+      expect(paragraphTextOf(deleted.part, paragraph.id)).toBe('AB');
+      expect(serializeOoxmlPart(deleted.part).includes('mc:AlternateContent')).toBe(false);
+    }
+  });
+
+  test('run-level MC with no supported branch emits inert atomic segment', async () => {
+    const { segmentsOf } = await import('../store/tree-op-segments.ts');
+    const { validateTreeOp } = await import('../store/tree-op-validate.ts');
+    const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
+    const part = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:mc="${MC}" xmlns:w14="urn:not-supported" xmlns:wp="${WP}"><w:body><w:p>` +
+        '<w:r>' +
+        `<mc:AlternateContent xmlns:mc="${MC}">` +
+        `<mc:Choice Requires="w14"><w:drawing><wp:inline><wp:extent cx="1" cy="1"/></wp:inline></w:drawing></mc:Choice>` +
+        '</mc:AlternateContent>' +
+        '</w:r></w:p></w:body></w:document>'
+    );
+    const paragraph = (part.root.children[0] as OoxmlElement).children[0] as OoxmlElement;
+    const segments = segmentsOf(paragraph as never);
+    expect(segments).toHaveLength(1);
+    expect(segments[0]!.start).toBe(0);
+    expect(segments[0]!.end).toBe(1);
+    expect(segments[0]!.removeNodeIds).toEqual([segments[0]!.node.id]);
+    expect(
+      validateTreeOp(part, { op: 'splitParagraph', paragraphId: paragraph.id, offset: 1 })
+    ).toBeNull();
+  });
+
+  test('run-level MC visit-limit refusal still emits one inert atomic segment', async () => {
+    const { segmentsOf } = await import('../store/tree-op-segments.ts');
+    const { validateTreeOp } = await import('../store/tree-op-validate.ts');
+    const { applyTreeOp, paragraphTextOf } = await import('../store/tree-ops.ts');
+    const { FIELD_ATOM_CHAR } = await import('../package/field-nodes.ts');
+    const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
+    let picInner = '<pic:blipFill><a:blip r:embed="rId14"/></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>';
+    for (let index = 0; index < 80; index += 1) {
+      picInner = `<a:extra xmlns:a="${A}">${picInner}</a:extra>`;
+    }
+    const drawingInner =
+      `<w:drawing><wp:inline><wp:extent cx="152400" cy="152400"/>` +
+      '<wp:effectExtent l="0" t="0" r="0" b="0"/>' +
+      '<wp:docPr id="1" name="x"/>' +
+      '<wp:cNvGraphicFramePr/>' +
+      `<a:graphic><a:graphicData uri="${PIC_URI}"><pic:pic>${picInner}</pic:pic></a:graphicData></a:graphic>` +
+      '</wp:inline></w:drawing>';
+    const part = parse(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:mc="${MC}" xmlns:w14="urn:word14" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}"><w:body><w:p>` +
+        '<w:r><w:t>A</w:t></w:r>' +
+        '<w:r>' +
+        `<mc:AlternateContent xmlns:mc="${MC}">` +
+        `<mc:Choice Requires="w14">${drawingInner}</mc:Choice>` +
+        `<mc:Fallback>${drawingInner}</mc:Fallback>` +
+        '</mc:AlternateContent>' +
+        '</w:r>' +
+        '<w:r><w:t>B</w:t></w:r>' +
+        '</w:p></w:body></w:document>'
+    );
+    const paragraph = (part.root.children[0] as OoxmlElement).children[0] as OoxmlElement;
+    const segments = segmentsOf(paragraph as never);
+    expect(segments.map((segment) => [segment.start, segment.end])).toEqual([
+      [0, 1],
+      [1, 2],
+      [2, 3],
+    ]);
+    expect(segments[1]!.removeNodeIds).toEqual([segments[1]!.node.id]);
+    expect(paragraphTextOf(part, paragraph.id)).toBe(`A${FIELD_ATOM_CHAR}B`);
+    expect(
+      validateTreeOp(part, { op: 'splitParagraph', paragraphId: paragraph.id, offset: 1 })
+    ).toBeNull();
+    const deleted = applyTreeOp(part, {
+      op: 'deleteText',
+      paragraphId: paragraph.id,
+      start: 1,
+      end: 2,
+    });
+    expect(deleted.ok).toBe(true);
+  });
+});

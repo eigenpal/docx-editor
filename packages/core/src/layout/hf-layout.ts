@@ -29,6 +29,15 @@ import {
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import type { PendingLine } from './paragraph-flow.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';
+import type { AnchoredDrawingRecord } from './drawing-layout.ts';
+import { pageClipRegion, type DrawingAnchorFrameContext } from './drawing-layout.ts';
+import {
+  DrawingExclusionConvergenceError,
+  MAX_DRAWING_EXCLUSION_REFLOW_PASSES,
+  collectExclusionZonesFromDrawings,
+  exclusionLayoutToken,
+  type ExclusionZone,
+} from './drawing-exclusion.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
 import type {
   BlockFragmentRecord,
@@ -48,6 +57,17 @@ import { storyBlocks } from './story-roots.ts';
  * `(pageNumber, pageCount)` pair across edits.
  */
 export const DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES = 128;
+
+/** Page geometry for header/footer anchored frame resolution (story-relative layout space). */
+export interface HeaderFooterPageContext {
+  readonly pageNumber: number;
+  readonly pageWidth: number;
+  readonly pageHeight: number;
+  readonly marginLeft: number;
+  readonly marginRight: number;
+  readonly marginTop: number;
+  readonly marginBottom: number;
+}
 
 export interface HeaderFooterStoryLayout {
   readonly partName: string;
@@ -72,6 +92,8 @@ export interface HeaderFooterStoryLayout {
    * Callers use this to skip attaching a page-field projector when the baseline is enough.
    */
   readonly pageFieldNeeds: StoryPageFieldNeeds;
+  /** Anchored drawings owned by this story, in story-relative coordinates. */
+  readonly anchoredDrawings?: readonly AnchoredDrawingRecord[];
   /**
    * Re-layout this story under a page-field context.
    *
@@ -142,7 +164,13 @@ export function layoutHeaderFooterStory(
   pageContext?: FieldPageContext,
   maxPageContextEntries: number = DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES,
   defaultTabStopPt?: number,
-  displayMode?: RevisionDisplayMode
+  displayMode?: RevisionDisplayMode,
+  inlineDrawingLayout?: import('./drawing-layout.ts').InlineDrawingLayoutContext,
+  drawingTokenForParagraph?: (
+    paragraph: import('@docx-editor.dev/core-contract/store').OoxmlNode
+  ) => string,
+  drawingLayoutToken?: string,
+  hfPageContext?: HeaderFooterPageContext
 ): HeaderFooterStoryLayout {
   const needs = detectStoryPageFields(part.root);
   const contextCache = createBoundedContextCache(maxPageContextEntries);
@@ -152,8 +180,10 @@ export function layoutHeaderFooterStory(
   let baseline: HeaderFooterStoryLayout | undefined;
 
   const layoutOnce = (ctx: FieldPageContext | undefined): HeaderFooterStoryLayout => {
-    const effectiveCtx = storyNeedsPageFields(needs) ? ctx : undefined;
-    const token = fieldPageContextToken(effectiveCtx, needs);
+    const effectiveCtx = storyNeedsPageFields(needs) || inlineDrawingLayout ? ctx : undefined;
+    const pageNumber = effectiveCtx?.pageNumber ?? hfPageContext?.pageNumber ?? 1;
+    const token =
+      fieldPageContextToken(effectiveCtx, needs) + (inlineDrawingLayout ? `|pn:${pageNumber}` : '');
 
     if (token === '') {
       if (baseline) return baseline;
@@ -163,18 +193,112 @@ export function layoutHeaderFooterStory(
     }
 
     let lineCounter = 0;
-    const flow = flowBlocksInBox(blocks, 0, Math.max(1, contentWidth), 0, 0, {
-      measurer,
-      cache,
-      // The mode is part of the producer for the same reason it is in the body: it changes
-      // every break, and a header carrying revisions must resolve the same mode as the body.
-      producer: producer + token + (displayMode ? `|rev:${displayMode}` : ''),
-      nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
-      styleCascade,
-      pageContext: effectiveCtx,
-      ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
-      ...(displayMode ? { displayMode } : {}),
-    });
+    const pendingAnchoredDrawings: AnchoredDrawingRecord[] = [];
+    const anchorFrameBase = (): Omit<
+      DrawingAnchorFrameContext,
+      | 'paragraphBox'
+      | 'anchorLineBox'
+      | 'anchorCharacterX'
+      | 'columnBox'
+      | 'cellBox'
+      | 'layoutInCell'
+    > => {
+      const pageNumber = effectiveCtx?.pageNumber ?? hfPageContext?.pageNumber ?? 1;
+      const pageWidth = hfPageContext?.pageWidth ?? contentWidth;
+      const pageHeight = hfPageContext?.pageHeight ?? Math.max(1, contentWidth);
+      const marginLeft = hfPageContext?.marginLeft ?? 0;
+      const marginRight = hfPageContext?.marginRight ?? 0;
+      const marginTop = hfPageContext?.marginTop ?? 0;
+      const marginBottom = hfPageContext?.marginBottom ?? 0;
+      const hfContentHeight = Math.max(1, pageHeight - marginTop - marginBottom);
+      return Object.freeze({
+        pageNumber,
+        pageWidth,
+        pageHeight,
+        marginLeft,
+        marginRight,
+        marginTop,
+        marginBottom,
+        contentWidth,
+        contentHeight: hfContentHeight,
+        physicalContentHeight: hfContentHeight,
+        ownerPartName: part.name,
+        storyKind: part.name.includes('ftr') ? 'footer' : 'header',
+      });
+    };
+
+    let exclusionZones: readonly ExclusionZone[] = Object.freeze([]);
+    let flow!: { readonly blocks: BlockFragmentRecord[]; readonly bottom: number };
+
+    if (inlineDrawingLayout) {
+      let converged = false;
+      for (let pass = 0; pass < MAX_DRAWING_EXCLUSION_REFLOW_PASSES; pass += 1) {
+        pendingAnchoredDrawings.splice(0, pendingAnchoredDrawings.length);
+        lineCounter = 0;
+        flow = flowBlocksInBox(blocks, 0, Math.max(1, contentWidth), 0, 0, {
+          measurer,
+          cache,
+          producer: producer + token + (displayMode ? `|rev:${displayMode}` : ''),
+          nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
+          styleCascade,
+          pageContext: effectiveCtx,
+          ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+          ...(displayMode ? { displayMode } : {}),
+          inlineDrawingLayout,
+          anchorFrameBase,
+          pageContentClip: () => pageClipRegion(anchorFrameBase()),
+          collectAnchoredDrawings: (drawings) => {
+            pendingAnchoredDrawings.push(...drawings);
+          },
+          columnBoxForParagraph: (paragraphBox) =>
+            Object.freeze({
+              x: 0,
+              y: paragraphBox.y,
+              width: contentWidth,
+              height: paragraphBox.height,
+            }),
+          pageExclusionZones: () => exclusionZones,
+          ...(drawingTokenForParagraph
+            ? { drawingTokenForParagraph }
+            : drawingLayoutToken
+              ? { drawingLayoutToken }
+              : {}),
+        });
+        const nextZones = collectExclusionZonesFromDrawings(
+          pendingAnchoredDrawings,
+          inlineDrawingLayout,
+          0,
+          contentWidth
+        );
+        if (nextZones.length === 0) {
+          converged = true;
+          exclusionZones = nextZones;
+          break;
+        }
+        if (pass > 0 && exclusionLayoutToken(exclusionZones) === exclusionLayoutToken(nextZones)) {
+          converged = true;
+          exclusionZones = nextZones;
+          break;
+        }
+        exclusionZones = nextZones;
+      }
+      if (!converged) {
+        throw new DrawingExclusionConvergenceError(
+          `header/footer exclusion reflow did not converge within ${MAX_DRAWING_EXCLUSION_REFLOW_PASSES} passes`
+        );
+      }
+    } else {
+      flow = flowBlocksInBox(blocks, 0, Math.max(1, contentWidth), 0, 0, {
+        measurer,
+        cache,
+        producer: producer + token + (displayMode ? `|rev:${displayMode}` : ''),
+        nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
+        styleCascade,
+        pageContext: effectiveCtx,
+        ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+        ...(displayMode ? { displayMode } : {}),
+      });
+    }
 
     const story: HeaderFooterStoryLayout = {
       partName: part.name,
@@ -182,8 +306,13 @@ export function layoutHeaderFooterStory(
       fragments: flow.blocks,
       flowHeight: flow.bottom,
       pageFieldNeeds: needs,
+      ...(pendingAnchoredDrawings.length > 0
+        ? { anchoredDrawings: Object.freeze([...pendingAnchoredDrawings]) }
+        : {}),
       withPageContext: (next) => {
-        if (!storyNeedsPageFields(needs)) return baseline ?? story;
+        if (!storyNeedsPageFields(needs) && !story.anchoredDrawings?.length) {
+          return baseline ?? story;
+        }
         return layoutOnce(next);
       },
     };
@@ -218,7 +347,11 @@ export function remapPage(page: PageRecord, globalIndex: number, sheetY: number)
     story: HeaderFooterStoryRecord | undefined
   ): HeaderFooterStoryRecord | undefined => {
     if (!story) return undefined;
-    const shifted: HeaderFooterStoryRecord = { ...story, box: shiftBox(story.box) };
+    const shifted: HeaderFooterStoryRecord = {
+      ...story,
+      box: shiftBox(story.box),
+      ...(story.anchoredDrawings ? { anchoredDrawings: story.anchoredDrawings } : {}),
+    };
     if (!story.pageFieldProjector) return shifted;
     const project = story.pageFieldProjector;
     return {
