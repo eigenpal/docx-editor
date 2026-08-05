@@ -44,6 +44,12 @@ const furniture = (kind: 'hdr' | 'ftr', text: string): SidePart => ({
   xml: `<w:${kind} xmlns:w="${W}"><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:${kind}>`,
 });
 
+/** A note whose second word is a tracked insertion, attributed to the note's own author. */
+const proposedIn = (word: string): string =>
+  `<w:p><w:r><w:t xml:space="preserve">${word} </w:t></w:r>` +
+  `<w:ins w:id="${word === 'one' ? '31' : '32'}" w:author="${word === 'one' ? 'Ada' : 'Grace'}"` +
+  ` w:date="2026-05-01T09:00:00Z"><w:r><w:t>proposed</w:t></w:r></w:ins></w:p>`;
+
 /**
  * One document holding every group at once.
  *
@@ -69,7 +75,8 @@ const EVERYTHING: Uint8Array = richDocx({
     '<w:p><w:pPr><w:sectPr><w:headerReference w:type="default" r:id="rId7"/>' +
     '<w:footerReference w:type="default" r:id="rId8"/>' +
     '<w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:pPr></w:p>' +
-    `<w:p w14:paraId="55555555"><w:r><w:t>after the break</w:t></w:r>${noteReference('footnote', 2)}</w:p>` +
+    `<w:p w14:paraId="55555555"><w:r><w:t>after the break</w:t></w:r>${noteReference('footnote', 2)}` +
+    `${noteReference('endnote', 1)}${noteReference('endnote', 2)}</w:p>` +
     '<w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/></w:sectPr>',
   rels: [
     { id: 'rId7', type: REL_TYPES.header, target: 'header1.xml' },
@@ -77,11 +84,18 @@ const EVERYTHING: Uint8Array = richDocx({
     { id: 'rId9', type: REL_TYPES.footnotes, target: 'footnotes.xml' },
     { id: 'rId10', type: REL_TYPES.comments, target: 'comments.xml' },
     { id: 'rId11', type: EXTENDED_REL, target: 'commentsExtended.xml' },
+    { id: 'rId12', type: REL_TYPES.endnotes, target: 'endnotes.xml' },
   ],
   parts: [
     furniture('hdr', 'in the header'),
     furniture('ftr', 'in the footer'),
     notesPart('footnote', [{ id: 2, text: 'in the footnote' }]),
+    // TWO endnotes in ONE part, each with a tracked insertion of its own: the shape where a
+    // part-scoped derivation reports one story's changes as another's.
+    notesPart('endnote', [
+      { id: 1, xml: proposedIn('one') },
+      { id: 2, xml: proposedIn('two') },
+    ]),
     {
       name: 'word/comments.xml',
       contentType: CONTENT_TYPES.comments,
@@ -366,6 +380,63 @@ describe('the two hosts agree about comments and tracked changes', () => {
       };
     });
     expect(outcome.server).toEqual(outcome.browser);
+  });
+
+  test('two notes in one part: each reviews itself, on both hosts', () => {
+    const outcome = onBoth((host) => {
+      const document_ = handleAt(host.execute({ operations: [{ op: 'getDocument' }] }), 0);
+      const notes = handlesAt(
+        host.execute({
+          operations: [{ op: 'getNotes', document: document_, noteKind: 'endnote' }],
+        }),
+        0
+      );
+      const bodies = host.execute({
+        operations: notes.map((note) => ({ op: 'getNoteBody' as const, note })),
+      });
+      const first = handleAt(bodies, 0);
+      const second = handleAt(bodies, 1);
+      const listed = host.execute({
+        operations: [
+          { op: 'getRevisions', body: first },
+          { op: 'getRevisions', body: second },
+        ],
+      });
+      const [own] = handlesAt(listed, 0) as [AutomationHandle];
+      const accepted = host.execute({ operations: [{ op: 'acceptRevision', revision: own }] });
+      const after = host.execute({
+        operations: [
+          { op: 'getRevisions', body: first },
+          { op: 'getRevisions', body: second },
+          { op: 'getText', target: first },
+          { op: 'getText', target: second },
+        ],
+      });
+      return { listed: answers(listed), accepted: answers(accepted), after: answers(after) };
+    });
+    expect(outcome.server).toEqual(outcome.browser);
+    // Paired AND correct: a pair of hosts that both leak the neighbour's change agree perfectly.
+    expect(outcome.server).toEqual({
+      listed: {
+        ok: true,
+        changed: false,
+        values: [
+          { kind: 'handles', handles: [{ kind: 'revision', ref: 'revision:<host>:1' }] },
+          { kind: 'handles', handles: [{ kind: 'revision', ref: 'revision:<host>:2' }] },
+        ],
+      },
+      accepted: { ok: true, changed: true, values: [{ kind: 'applied' }] },
+      after: {
+        ok: true,
+        changed: false,
+        values: [
+          { kind: 'handles', handles: [] },
+          { kind: 'handles', handles: [{ kind: 'revision', ref: 'revision:<host>:2' }] },
+          { kind: 'text', text: 'one proposed' },
+          { kind: 'text', text: 'two proposed' },
+        ],
+      },
+    });
   });
 
   test('a tracked insertion: what it is, and accepting it', () => {

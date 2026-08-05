@@ -128,10 +128,16 @@ export const CONTENT_TYPES = {
   styles: `${WML}.styles+xml`,
 } as const;
 
-/** A footnotes part holding the two reserved separators plus the notes given. */
+/**
+ * A footnotes part holding the two reserved separators plus the notes given.
+ *
+ * A note is given either as `text` (one plain paragraph) or as `xml` — the note's own blocks,
+ * verbatim — because a story that shares its part with three others is exactly where markup a
+ * fixture has to spell out belongs: a tracked change, a comment anchor, a second paragraph.
+ */
 export const notesPart = (
   kind: 'footnote' | 'endnote',
-  notes: readonly { readonly id: number; readonly text: string }[]
+  notes: readonly { readonly id: number; readonly text?: string; readonly xml?: string }[]
 ): SidePart => ({
   name: `word/${kind}s.xml`,
   contentType: kind === 'footnote' ? CONTENT_TYPES.footnotes : CONTENT_TYPES.endnotes,
@@ -146,7 +152,10 @@ export const notesPart = (
       notes
         .map(
           (note) =>
-            `<w:${kind} w:id="${String(note.id)}"><w:p><w:r><w:t xml:space="preserve">${note.text}</w:t></w:r></w:p></w:${kind}>`
+            `<w:${kind} w:id="${String(note.id)}">` +
+            (note.xml ??
+              `<w:p><w:r><w:t xml:space="preserve">${note.text ?? ''}</w:t></w:r></w:p>`) +
+            `</w:${kind}>`
         )
         .join('')
   ),

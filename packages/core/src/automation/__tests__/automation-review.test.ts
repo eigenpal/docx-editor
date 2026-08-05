@@ -11,7 +11,14 @@
 // a decision that can only answer refusals is not handed back as an object at all.
 
 import { describe, expect, test } from 'bun:test';
-import { CONTENT_TYPES, REL_TYPES, richDocx, type SidePart } from './support/furniture.ts';
+import {
+  CONTENT_TYPES,
+  REL_TYPES,
+  noteReference,
+  notesPart,
+  richDocx,
+  type SidePart,
+} from './support/furniture.ts';
 import {
   handleAt,
   handlesAt,
@@ -19,7 +26,9 @@ import {
   refusal,
   reopen,
   roots,
+  savedPartBytes,
   spanAt,
+  storyText,
   textAt,
 } from './support/protocol.ts';
 import type { AutomationHandle, AutomationHost } from '../protocol.ts';
@@ -95,6 +104,78 @@ function flagOf(host: AutomationHost, comment: AutomationHandle): boolean {
 
 function revisionsOf(host: AutomationHost, body: AutomationHandle): readonly AutomationHandle[] {
   return handlesAt(host.execute({ operations: [{ op: 'getRevisions', body }] }), 0);
+}
+
+/**
+ * Two footnotes in ONE `footnotes.xml`, each with a tracked insertion and a comment of its own,
+ * and a third of each in the body.
+ *
+ * The shape that matters: three stories, two of them sharing a part. Everything a part-scoped
+ * derivation gets wrong shows up as one story answering another's review items.
+ */
+function twoReviewedNotes(): AutomationHost {
+  const noteXml = (word: string, id: string, author: string, commentId: string): string =>
+    `<w:p><w:commentRangeStart w:id="${commentId}"/>` +
+    `<w:ins w:id="${id}" w:author="${author}" w:date="2026-04-0${commentId}T09:00:00Z">` +
+    `<w:r><w:t xml:space="preserve">${word}</w:t></w:r></w:ins>` +
+    `<w:commentRangeEnd w:id="${commentId}"/>` +
+    `<w:r><w:commentReference w:id="${commentId}"/></w:r></w:p>`;
+  return open(
+    richDocx({
+      body:
+        `<w:p><w:commentRangeStart w:id="3"/>` +
+        `<w:ins w:id="30" w:author="Linus" w:date="2026-04-03T09:00:00Z">` +
+        `<w:r><w:t>body words</w:t></w:r></w:ins>` +
+        `<w:commentRangeEnd w:id="3"/><w:r><w:commentReference w:id="3"/></w:r>` +
+        noteReference('footnote', 1) +
+        noteReference('footnote', 2) +
+        `</w:p>`,
+      rels: [
+        { id: 'rId4', type: REL_TYPES.footnotes, target: 'footnotes.xml' },
+        { id: 'rId5', type: REL_TYPES.comments, target: 'comments.xml' },
+      ],
+      parts: [
+        notesPart('footnote', [
+          { id: 1, xml: noteXml('one', '10', 'Ada', '1') },
+          { id: 2, xml: noteXml('two', '20', 'Grace', '2') },
+        ]),
+        commentsPart(
+          comment('1', 'Ada', '11111111', 'about one') +
+            comment('2', 'Grace', '22222222', 'about two') +
+            comment('3', 'Linus', '33333333', 'about the body')
+        ),
+      ],
+    })
+  );
+}
+
+/** The body of every footnote, in the order the part writes them. */
+function noteBodies(host: AutomationHost): readonly AutomationHandle[] {
+  const document = handleAt(host.execute({ operations: [{ op: 'getDocument' }] }), 0);
+  const notes = handlesAt(
+    host.execute({ operations: [{ op: 'getNotes', document, noteKind: 'footnote' }] }),
+    0
+  );
+  const bodies = host.execute({
+    operations: notes.map((note) => ({ op: 'getNoteBody' as const, note })),
+  });
+  return notes.map((_, index) => handleAt(bodies, index));
+}
+
+function authorsOfRevisions(host: AutomationHost, body: AutomationHandle): readonly string[] {
+  const found = revisionsOf(host, body);
+  const response = host.execute({
+    operations: found.map((revision) => ({ op: 'getRevisionAuthor' as const, revision })),
+  });
+  return found.map((_, index) => textAt(response, index));
+}
+
+function textsOfComments(host: AutomationHost, body: AutomationHandle): readonly string[] {
+  const found = commentsOf(host, body);
+  const response = host.execute({
+    operations: found.map((comment) => ({ op: 'getCommentText' as const, comment })),
+  });
+  return found.map((_, index) => textAt(response, index));
 }
 
 describe('a document holds its comments, and a script reads the same ones the rail shows', () => {
@@ -272,6 +353,35 @@ describe('a document holds its comments, and a script reads the same ones the ra
     ).toEqual(['agreed']);
   });
 
+  test('resolving lands even where the file wrote a paraId Word would not have written', () => {
+    // The resolve path stamps the same identity the reply path does, and for the same reason: a
+    // `w15:commentEx` entry is keyed by `w14:paraId`, so a comment without a usable one has to be
+    // given one. It must REPLACE the id the reader refused — appending a second `w14:paraId`
+    // failed the part's invariants and took the whole resolve down with it.
+    const host = open(
+      richDocx({
+        body:
+          `<w:p><w:commentRangeStart w:id="1"/><w:r><w:t>reviewed</w:t></w:r>` +
+          `<w:commentRangeEnd w:id="1"/><w:r><w:commentReference w:id="1"/></w:r></w:p>`,
+        rels: [{ id: 'rId5', type: REL_TYPES.comments, target: 'comments.xml' }],
+        parts: [commentsPart(comment('1', 'Ada', 'BBBBBBBB', 'the remark'))],
+      })
+    );
+    const { body } = roots(host);
+    const [first] = commentsOf(host, body) as [AutomationHandle];
+    const response = host.execute({
+      operations: [{ op: 'setCommentResolved', comment: first, resolved: true }],
+    });
+    expect(response.ok).toBe(true);
+
+    const next = reopen(host);
+    expect(flagOf(next.host, commentsOf(next.host, next.body)[0]!)).toBe(true);
+    // One id, not two: the repaired file is one Word can open.
+    expect((savedPartBytes(next.host, 'word/comments.xml').match(/w14:paraId/g) ?? []).length).toBe(
+      1
+    );
+  });
+
   test('a reply with no author is refused, because a comment without one is invalid XML', () => {
     const host = reviewed();
     const { body } = roots(host);
@@ -425,5 +535,52 @@ describe('a tracked change is a decision, and the ones offered are the ones the 
     expect(response.ok).toBe(true);
     const next = reopen(host);
     expect(revisionsOf(next.host, next.body)).toEqual([]);
+  });
+});
+
+describe('two notes share one part, and neither reviews the other', () => {
+  test('a note answers its own changes and comments, not its neighbour’s', () => {
+    const host = twoReviewedNotes();
+    const [first, second] = noteBodies(host);
+    // `footnotes.xml` holds every note in the document. Reading the part and calling the answer a
+    // STORY's put note two's tracked insertion and note two's comment in note one's lists — and a
+    // handle minted from that list would accept a change in a story the caller never addressed.
+    expect(authorsOfRevisions(host, first)).toEqual(['Ada']);
+    expect(authorsOfRevisions(host, second)).toEqual(['Grace']);
+    expect(textsOfComments(host, first)).toEqual(['about one']);
+    expect(textsOfComments(host, second)).toEqual(['about two']);
+  });
+
+  test('accepting a note’s change leaves the other note’s alone', () => {
+    const host = twoReviewedNotes();
+    const [first, second] = noteBodies(host);
+    const [own] = revisionsOf(host, first) as [AutomationHandle];
+    expect(host.execute({ operations: [{ op: 'acceptRevision', revision: own }] }).ok).toBe(true);
+
+    const next = reopen(host);
+    const [afterFirst, afterSecond] = noteBodies(next.host);
+    expect(authorsOfRevisions(next.host, afterFirst)).toEqual([]);
+    expect(authorsOfRevisions(next.host, afterSecond)).toEqual(['Grace']);
+    expect(storyText(next.host, afterFirst)).toContain('one');
+    // The neighbour's proposed words are still proposed, which is what "not accepted" means.
+    expect(storyText(next.host, afterSecond)).toContain('two');
+    void second;
+  });
+
+  test('the body’s changes are not the note’s, and the note’s are not the body’s', () => {
+    const host = twoReviewedNotes();
+    const { body } = roots(host);
+    expect(authorsOfRevisions(host, body)).toEqual(['Linus']);
+    expect(textsOfComments(host, body)).toEqual(['about the body']);
+  });
+
+  test('resolving a comment a note holds does not resolve the neighbour’s', () => {
+    const host = twoReviewedNotes();
+    const [first, second] = noteBodies(host);
+    const [own] = commentsOf(host, first) as [AutomationHandle];
+    expect(
+      host.execute({ operations: [{ op: 'setCommentResolved', comment: own, resolved: true }] }).ok
+    ).toBe(true);
+    expect(flagOf(host, commentsOf(host, second)[0]!)).toBe(false);
   });
 });

@@ -257,6 +257,53 @@ function withW14Binding(part: OoxmlPart): { part: OoxmlPart; prefix: string } {
   return { part: { ...part, root: bound }, prefix: 'w14' };
 }
 
+/**
+ * Give a comment's paragraph the `w14:paraId` a `w15:commentEx` entry can be keyed by.
+ *
+ * REPLACES rather than adds. A paragraph reaching here has no id the READER accepted, which is not
+ * the same as having no `w14:paraId` attribute: a file can carry one that is legal hex and outside
+ * the range MS-DOCX reserves (below 0x80000000), and the reader refuses exactly those. Appending
+ * beside it makes the element carry one expanded name twice — a duplicate the part's invariants
+ * reject, which took the whole write down with it. So the id another editor wrote is repaired here
+ * instead, and a comment stays repliable and resolvable.
+ *
+ * Both write paths — a reply keying its parent, a resolve keying a thread — go through this, so
+ * neither can be repaired while the other is not.
+ */
+function withStampedParaId(pkg: OoxmlPackage, partName: string, nodeId: string, paraId: string) {
+  const part = pkg.parts.get(partName);
+  if (!part) return pkg;
+  const bound = withW14Binding(part);
+  const target = findNode(bound.part, nodeId);
+  if (!target || target.kind !== 'paragraph') return withPart(pkg, bound.part);
+  const stamped = replaceNode(
+    bound.part,
+    target.id,
+    element(
+      target.id,
+      'paragraph',
+      target.namespaceUri,
+      target.prefix ?? 'w',
+      target.localName,
+      [
+        ...target.attributes.filter(
+          (entry) => !(entry.namespaceUri === W14_NAMESPACE_URI && entry.localName === 'paraId')
+        ),
+        {
+          kind: 'genericExtension' as const,
+          namespaceUri: W14_NAMESPACE_URI,
+          localName: 'paraId',
+          prefix: bound.prefix,
+          value: paraId,
+        },
+      ],
+      target.children
+    ),
+    { deferValidation: true }
+  );
+  return withPart(pkg, stamped.ok ? stamped.part : bound.part);
+}
+
 /** `<w:comment>` with one paragraph of plain text, carrying a minted `w14:paraId`. */
 function commentElement(
   commentId: string,
@@ -432,44 +479,9 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
     });
 
     if (parentTarget && mintedParentParaId) {
-      ctx.applyPackage((current) => {
-        const part = current.parts.get(commentsName);
-        if (!part) return current;
-        const bound = withW14Binding(part);
-        const target = findNode(bound.part, parentTarget.id);
-        if (!target || target.kind !== 'paragraph') return withPart(current, bound.part);
-        const stamped = replaceNode(
-          bound.part,
-          target.id,
-          element(
-            target.id,
-            'paragraph',
-            target.namespaceUri,
-            target.prefix ?? 'w',
-            target.localName,
-            [
-              // Any `w14:paraId` already on the paragraph goes: it is here only because the reader
-              // refused it (out of MS-DOCX's range, or not 8 hex digits), and ADDING beside it would
-              // make the element carry the same expanded name twice — which fails the part's
-              // invariants and takes the whole reply with it. Replacing repairs the file instead.
-              ...target.attributes.filter(
-                (entry) =>
-                  !(entry.namespaceUri === W14_NAMESPACE_URI && entry.localName === 'paraId')
-              ),
-              {
-                kind: 'genericExtension' as const,
-                namespaceUri: W14_NAMESPACE_URI,
-                localName: 'paraId',
-                prefix: bound.prefix,
-                value: mintedParentParaId,
-              },
-            ],
-            target.children
-          ),
-          { deferValidation: true }
-        );
-        return withPart(current, stamped.ok ? stamped.part : bound.part);
-      });
+      ctx.applyPackage((current) =>
+        withStampedParaId(current, commentsName, parentTarget.id, mintedParentParaId)
+      );
     }
 
     ctx.applyPackage((current) => {
@@ -676,37 +688,7 @@ export function setCommentResolved(
 
   const result = store.transact((ctx) => {
     if (ownParaId === null) {
-      ctx.applyPackage((current) => {
-        const part = current.parts.get(commentsName);
-        if (!part) return current;
-        const bound = withW14Binding(part);
-        const paragraph = findNode(bound.part, target.id);
-        if (!paragraph || paragraph.kind !== 'paragraph') return withPart(current, bound.part);
-        const stamped = replaceNode(
-          bound.part,
-          paragraph.id,
-          element(
-            paragraph.id,
-            'paragraph',
-            paragraph.namespaceUri,
-            paragraph.prefix ?? 'w',
-            paragraph.localName,
-            [
-              ...paragraph.attributes,
-              {
-                kind: 'genericExtension' as const,
-                namespaceUri: W14_NAMESPACE_URI,
-                localName: 'paraId',
-                prefix: bound.prefix,
-                value: mintedOwn,
-              },
-            ],
-            paragraph.children
-          ),
-          { deferValidation: true }
-        );
-        return withPart(current, stamped.ok ? stamped.part : bound.part);
-      });
+      ctx.applyPackage((current) => withStampedParaId(current, commentsName, target.id, mintedOwn));
     }
 
     ctx.applyPackage((current) => {

@@ -25,10 +25,12 @@ import {
   commentItemsOf,
   revisionItemsOf,
   type ReviewCommentItem,
+  type ReviewRange,
   type ReviewRevisionItem,
 } from '../store/store/review-reads.ts';
 import { commentPartNameOf, commentsExtendedPartNameOf } from '../store/store/comment-writes.ts';
 import type { AutomationStoryReads } from './reads.ts';
+import type { AutomationStoryId } from './stories.ts';
 
 /**
  * Word's own name for a kind of change.
@@ -51,6 +53,35 @@ const REVISION_TYPES = {
 
 export type AutomationRevisionType = (typeof REVISION_TYPES)[keyof typeof REVISION_TYPES];
 
+/**
+ * Whether other stories live in this story's part.
+ *
+ * `footnotes.xml` holds every footnote in the document, so four notes are four stories in one part;
+ * a header, a footer and the main document each own theirs outright. The distinction matters for
+ * exactly one question — what to do with a review item the part holds but nothing in it locates —
+ * and getting it wrong is how a note ends up reviewing its neighbour.
+ */
+function sharesItsPart(story: AutomationStoryId): boolean {
+  return story.kind === 'note';
+}
+
+/**
+ * Whether an item anchored at these ranges is the addressed story's.
+ *
+ * MEMBERSHIP, not the part: the store lane reads a PART, which is the right unit for it — the review
+ * rail draws one pane per story it is given. This lane is asked about one story, and answering with
+ * the part's items put note two's tracked insertion in note one's list, from which a handle was
+ * minted that accepted a change in a story the caller never addressed.
+ *
+ * An item nothing locates (a revision on markup that is not inside a paragraph) belongs to the story
+ * that owns the part, and to no note: with nothing to place it by, claiming it for one of four notes
+ * would be a guess, and claiming it for all four would report one change as four.
+ */
+function inStory(reads: AutomationStoryReads, ranges: readonly ReviewRange[]): boolean {
+  if (ranges.length === 0) return !sharesItsPart(reads.story);
+  return ranges.every((range) => reads.has(range.start.paragraphId));
+}
+
 /** One pending decision, as the protocol answers it. */
 export interface AutomationRevisionRead {
   readonly id: string;
@@ -71,6 +102,7 @@ export function revisionReads(reads: AutomationStoryReads): readonly AutomationR
   const found: AutomationRevisionRead[] = [];
   for (const item of revisionItemsOf(reads.part)) {
     if (item.readOnly || item.revisionKind === 'structural') continue;
+    if (!inStory(reads, item.ranges)) continue;
     const type = REVISION_TYPES[item.revisionKind as keyof typeof REVISION_TYPES];
     if (type === undefined) continue;
     found.push(
@@ -94,6 +126,26 @@ export interface AutomationCommentReads {
   byId(commentId: string): ReviewCommentItem | null;
   /** Plain text of a comment's body — the run walk, done once, in the store lane. */
   textOf(commentId: string): string;
+}
+
+/**
+ * Whether the comment at the top of this one's thread is anchored in the story being read.
+ *
+ * A REPLY has no markers: `addComment` writes the entry and the `w15:paraIdParent` link and leaves
+ * the range to the comment it answers, which is also how Word writes one. So a reply's story is its
+ * thread's story, and a thread whose head is anchored somewhere else — another note, the body — is
+ * not this story's however many replies it has.
+ */
+function rootIsAnchored(item: ReviewCommentItem, all: readonly ReviewCommentItem[]): boolean {
+  const byId = new Map(all.map((each) => [each.id, each]));
+  let walk: ReviewCommentItem | undefined = item;
+  // Bounded: `commentItemsOf` has already broken any cycle the file described, and the cap is here
+  // so a future reader of that guarantee cannot turn a file into a hang.
+  for (let depth = 0; walk !== undefined && depth <= 64; depth += 1) {
+    if (walk.parentId === undefined) return walk.range !== null;
+    walk = byId.get(walk.parentId);
+  }
+  return false;
 }
 
 const NO_COMMENTS: AutomationCommentReads = Object.freeze({
@@ -123,7 +175,14 @@ export function commentReads(
   const threadState: ReadonlyMap<string, CommentThreadState> = extended
     ? threadStateOfPart(extended)
     : new Map<string, CommentThreadState>();
-  const items = commentItemsOf(records, commentAnchorsOfStory(reads.part), threadState);
+  // THE ANCHORS OF THIS STORY, not of its part. Threading is still computed over every comment the
+  // part declares, because a reply carries no markers of its own — it is reached through the comment
+  // it answers, and that comment is the one whose anchor decides which story the thread is in.
+  const anchors = commentAnchorsOfStory(reads.part).filter((anchor) =>
+    reads.has(anchor.start.paragraphId)
+  );
+  const threaded = commentItemsOf(records, anchors, threadState);
+  const items = threaded.filter((item) => rootIsAnchored(item, threaded));
   const byId = new Map(items.map((item) => [item.id, item]));
   return Object.freeze({
     items: Object.freeze(items),
