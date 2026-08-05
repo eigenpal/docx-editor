@@ -1,8 +1,7 @@
-// What a chip click opens: the funny half of both definitions, drawn over the chip.
+// What a chip click opens, drawn over the chip.
 //
-// `ActivatedCustomNode.rect` is the painted boundary's VIEWPORT rect, which is why this is
-// `position: fixed`. Anchoring host UI to a chip is the reason that rect is on the activation
-// at all; re-measuring the DOM to find it again would be a repaint behind the document.
+// `ActivatedCustomNode.rect` is the painted boundary's viewport rect — hence `position:
+// fixed`. Re-measuring the DOM to find it again would be a repaint behind the document.
 
 import { useEffect } from 'react';
 import { BergGlyph, DomeGlyph } from './art/Specimen';
@@ -17,13 +16,13 @@ interface SpecimenPopoverProps {
   readonly onClose: () => void;
 }
 
-/** Roughly the card's own height, so "would it fall off the bottom" is not a guess. */
+/** Roughly the card's own height, so the fits-below test is not a guess. */
 const PROBE_HEIGHT = 210;
 const PROBE_WIDTH = 260;
 
 export function SpecimenPopover({ probe, onClose }: SpecimenPopoverProps) {
-  // Escape, or the next press anywhere outside. CAPTURE phase: the painted surface cancels
-  // its own pointer handling, and a bubbling listener never hears a press on the page.
+  // Capture phase: the painted surface cancels its own pointer handling, so a bubbling
+  // listener never hears a press on the page.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') onClose();

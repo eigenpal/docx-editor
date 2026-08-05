@@ -147,15 +147,10 @@ export interface MenuGroupProps {
 /**
  * A named section inside a panel: a visible heading and the rows under it.
  *
- * A separator says "these are apart"; a group says WHAT they are, which is the thing a panel
- * needs once a product adds rows of its own beside the packaged ones. Without it a host
- * either shipped an unlabelled separator or hand-rolled a heading — and a bare element
- * carrying no role inside `role="menu"` breaks the ownership assistive tech derives its item
- * counts from, so the hand-rolled version was always slightly wrong.
- *
- * `role="group"` is the ARIA answer: it nests legally inside a menu, keeps its rows owned,
- * and takes the heading as its accessible name. The visible heading is then decoration and
- * is hidden from the tree, so the name is announced once rather than read twice.
+ * A separator says rows are apart; a group says what they are, which is what a panel needs
+ * once a product adds rows beside the packaged ones. `role="group"` nests legally inside a
+ * menu, keeps its rows owned by it, and takes the heading as its accessible name — so the
+ * visible heading is decoration and is hidden from the tree.
  *
  * @public
  */
@@ -408,15 +403,11 @@ export function MenuSubmenu({ labelKey, paths, className, children }: MenuSubmen
   const panelId = useId();
   const text = label(labelKey);
 
-  // PLACED IN CLIENT SPACE, not with `left: 100%`.
-  //
-  // The panel opens sideways, out of its parent's box, and the context menu is a SCROLLER:
-  // `.docx-contextmenu` carries `max-height` plus `overflow-y: auto` so a menu taller than
-  // the window stays reachable, and CSS forces the other axis to `auto` with it. An
-  // absolutely positioned panel was therefore clipped at the parent's right edge — the row
-  // highlighted, the panel mounted, and nothing appeared. Fixed positioning leaves the
-  // scroller entirely; the same measurement also lets a panel near the right edge open
-  // leftward instead of off-screen, which `left: 100%` could never do.
+  // Placed in client space, not with `left: 100%`. The context menu is a scroller
+  // (`max-height` plus `overflow-y: auto`, which forces the other axis to `auto` with it), so
+  // a panel opening sideways was clipped at the parent's edge — the row highlighted, the panel
+  // mounted, and nothing appeared. Measuring also lets a panel near the right edge open
+  // leftward, which `left: 100%` could never do.
   const [box, setBox] = useState<{ left: number; top: number } | null>(null);
   useLayoutEffect(() => {
     if (!open) {
@@ -436,8 +427,8 @@ export function MenuSubmenu({ labelKey, paths, className, children }: MenuSubmen
       left: flip
         ? Math.max(EDGE_INSET, rect.left - width)
         : Math.min(rect.right, view.innerWidth - width - EDGE_INSET),
-      // Top-aligned with the row, pulled back by the panel's own padding, then clamped so a
-      // submenu on the last row of a tall menu does not hang below the fold.
+      // Top-aligned with the row, then clamped so a submenu on the last row of a tall menu
+      // does not hang below the fold.
       top: Math.max(EDGE_INSET, Math.min(rect.top - 4, view.innerHeight - height - EDGE_INSET)),
     });
   }, [open]);
@@ -505,8 +496,7 @@ export function MenuSubmenu({ labelKey, paths, className, children }: MenuSubmen
           className="docx-toolbar__menu docx-menubar__menu docx-menubar__submenu-panel"
           role="menu"
           aria-label={text}
-          // Hidden for the measuring pass only — it has to be in the DOM to have a size,
-          // and one frame of a panel at the wrong place reads as a flicker.
+          // Hidden for the measuring pass: it must be in the DOM to have a size.
           style={
             box
               ? { position: 'fixed', left: box.left, top: box.top }

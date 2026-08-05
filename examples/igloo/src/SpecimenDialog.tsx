@@ -1,13 +1,9 @@
-// The authoring form: what goes into the document before it goes in.
+// The authoring form: collect the attrs, then one `insertCustomNode` (or `updateCustomNode`)
+// call authors the locked, tagged control at the captured caret. The form itself is entirely
+// the demo's; nothing here is a library component.
 //
-// The shape is the whole demonstration — collect the attrs, then ONE `insertCustomNode` (or
-// `updateCustomNode`) call authors the locked, tagged control at the caret the menu row
-// captured. Everything below the commit is this demo's own form; nothing about it is a
-// library component, and it does not need to be.
-//
-// Attrs ride in the `w:tag`, which Word caps at 64 characters — so the fields collect one
-// number and a label, not a payload. The engine refuses an oversized tag with its own
-// reason rather than truncating an identity, and the caller shows that reason.
+// Attrs ride in the `w:tag`, which Word caps at 64 characters, so the fields collect one
+// number and a label rather than a payload.
 
 import { useState } from 'react';
 import {
@@ -104,9 +100,8 @@ export function SpecimenDialog({ form, onCommit, onClose }: SpecimenDialogProps)
           in the control&rsquo;s tag and comes back typed on the chip, the card and the menu.
         </p>
 
-        {/* Kind is fixed while editing: a tag's identity is what the node IS, and swapping it
-            would be deleting one specimen and authoring another, which the Remove row already
-            does more honestly. */}
+        {/* Fixed while editing: swapping the tag would be deleting one node and authoring
+            another, which the Remove row already does more honestly. */}
         <fieldset className="igloo-dialog__kinds" disabled={editing}>
           <legend className="igloo-dialog__legend">Specimen</legend>
           {(['iceberg', 'igloo'] as const).map((option) => (
@@ -140,8 +135,7 @@ export function SpecimenDialog({ form, onCommit, onClose }: SpecimenDialogProps)
         </label>
 
         <div className="igloo-dialog__actions">
-          {/* The random half of "a custom one or a random one": same form, filled from the
-              water instead of by hand. */}
+          {/* The same form, filled from the water instead of by hand. */}
           <button type="button" className="igloo-dialog__ghost" onClick={surprise}>
             Surprise me
           </button>

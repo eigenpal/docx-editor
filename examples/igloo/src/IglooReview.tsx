@@ -1,25 +1,9 @@
 // The review rail, re-cut as an ice core.
 //
-// The rail is the pro package's `DocxEditorReview`, and every card in it is still the
-// packaged card: the anchoring, the stacking, the virtualization, the collapse-when-displaced
-// rule, the accept/reject wiring and the reply box are all the library's. What this file
-// changes is everything a reader actually sees, through the same five-rung ladder the toolbar
-// and the context menu use:
-//
-// - `furniture`  — host content above the cards. Here: the core log, which counts what is in
-//                  the document by reading the very same `useReview()` the rail reads.
-// - part CHILDREN — `<Review.Summary>` with children replaces the card's body while keeping
-//                  the packaged wrapper (and its test id, and its selectable marking).
-// - part `className` / `icon` — the avatar's rime ring, and thaw/refreeze in place of the
-//                  packaged tick and cross.
-// - an UNRECOGNIZED child — appended inside every card, which is how the specimen panel gets
-//                  into a card whose body the library owns.
-// - `--doc-*` tokens — the author colour ramp restated in cold hues, so the per-author
-//                  identity survives the theme instead of being overridden away.
-//
-// A CUSTOM node's card takes a different path on purpose: its title and detail come from the
-// definition's own `reviewCard` hook (see `specimens.ts`), so the words are already the
-// demo's, and the panel below them is the appended child reading the node's typed attrs.
+// Every card is still the packaged `DocxEditorReview` card — anchoring, stacking,
+// virtualization, accept/reject and the reply box are the library's. This file changes only
+// what a reader sees, through five customization rungs at once: `furniture`, part `children`,
+// part `className`/`icon`, an unrecognized child appended to every card, and `--doc-*` tokens.
 
 import { DocxEditorReview, useReview, useReviewItem } from '@docx-editor.dev/pro/react';
 import type { ReviewRevisionKind } from '@docx-editor.dev/core/contracts/editor';
@@ -30,13 +14,10 @@ import { IceMelt, IceRefreeze } from './icons/review';
 import { blocksOf, depthOf, insideTemperature, OUTSIDE, tipHeight } from './specimens';
 
 /**
- * What each kind of tracked change is called here.
+ * The theme's word for each kind of tracked change.
  *
- * The packaged card says "Added" and "Deleted", from the bundled catalogue. `labels.ts` could
- * rename those keys — the rail takes a `t` like every other compound — but these go through
- * the SUMMARY override instead, which is the honest way round: a theme's word for a decision
- * is not a translation of it, and `Recut` has to sit beside the quoted before-and-after that
- * only a replaced revision has.
+ * Through the summary override rather than `labels.ts`, because `Recut` has to sit beside the
+ * quoted before-and-after that only a replaced revision has.
  */
 const FLOE_WORDS: Record<ReviewRevisionKind, string> = {
   insert: 'Frozen in',
@@ -53,49 +34,36 @@ export function IglooReview() {
   return (
     <DocxEditorReview
       className="igloo-rail"
-      /* The rail's own label catalogue, the same `t` the toolbar and the menus take. Unlike
-         those, an unresolved key here falls back to the bundled English rather than to the
-         key, because every string in the rail ships a translation. */
+      /* The same `t` the toolbar and the menus take; unresolved keys fall back to the bundled
+         English rather than to the key. */
       t={iglooT}
-      /* Rung 1 on the card itself — the box, not the column around it. */
+      /* The card box, not the column around it. */
       card={{ className: 'igloo-rail__card' }}
       furniture={<CoreLog />}
     >
-      {/* Rung 3/1: the packaged parts, re-iconed and re-classed. Everything they do —
-          asking the engine, resolving every site of one decision in a single undo step —
-          is untouched; only the glyph and the box are the demo's. */}
+      {/* Packaged parts, re-iconed and re-classed. Their wiring is untouched. */}
       <DocxEditorReview.Avatar className="igloo-rail__avatar" />
       <DocxEditorReview.Accept className="igloo-rail__action" icon={IceMelt} />
       <DocxEditorReview.Reject className="igloo-rail__action" icon={IceRefreeze} />
 
-      {/* Rung 4: the card's BODY, replaced, inside the packaged wrapper. */}
+      {/* The card body, replaced inside the packaged wrapper. */}
       <DocxEditorReview.Summary className="igloo-rail__summary">
         <FloeSummary />
       </DocxEditorReview.Summary>
 
-      {/* Unrecognized: appended inside every card, after the packaged parts. */}
+      {/* Unrecognized children append inside every card, after the packaged parts. */}
       <CardFrost />
     </DocxEditorReview>
   );
 }
 
-/**
- * The core log: what has been drilled out of this document.
- *
- * `furniture` is plain flow content at the top of the rail, so this is ordinary React reading
- * the ordinary hook. Nothing here is privileged — a host could render the same three numbers
- * anywhere else in its own chrome.
- */
+/** What has been drilled out of this document. Ordinary React over the rail's own hook. */
 function CoreLog() {
   const { items, paneOpen } = useReview();
-  // GONE when the rail is shut, not merely hidden. A closed rail gives up its width and
-  // becomes a 32px strip of markers, and `furniture` is rendered either way — a summary
-  // built for a 300px column wrapped one letter per line inside that strip and spilled its
-  // counters over the page. The pane's open state is the ENGINE's (the toolbar's rail button
-  // toggles it), so reading it here cannot disagree with what the reader sees.
+  // Unmounted when the rail is shut, not hidden: `furniture` renders either way, and a 300px
+  // summary inside the closed rail's 32px strip wraps one letter per line.
   if (!paneOpen) return null;
-  // Threaded replies are not separate entries in the log for the same reason they are not
-  // separate cards: one conversation is one thing to read.
+  // Replies are not separate entries, for the same reason they are not separate cards.
   const observations = items.filter(
     (entry) => entry.kind === 'comment' && entry.parentId === undefined
   ).length;
@@ -124,16 +92,10 @@ function Stratum({ count, label }: { count: number; label: string }) {
 }
 
 /**
- * The card body.
+ * The card body, for all three kinds.
  *
- * `useReviewItem()` is the hook the packaged parts themselves read — children passed into a
- * card get the CURRENT item from context rather than from props, so this composes exactly
- * the way `Review.Summary`'s own default does.
- *
- * ONE body for all three kinds. A custom node's card runs this too — its detail comes from
- * the definition's own `reviewCard` hook, so the words were already the demo's, and routing
- * them through here means a card cannot end up styled two different ways depending on what
- * put it in the rail.
+ * `useReviewItem()` is the same hook the packaged parts read: children of a card take the
+ * current item from context, not from props.
  */
 function FloeSummary() {
   const item = useReviewItem();
@@ -143,8 +105,7 @@ function FloeSummary() {
     return detail ? <span className="igloo-rail__text">{detail}</span> : null;
   }
   if (item.kind === 'comment') {
-    // Untrusted: the words come out of the file, so they are rendered as TEXT and never as
-    // markup — the same rule the packaged summary follows.
+    // File-derived, so rendered as text and never as markup.
     return <span className="igloo-rail__text">{item.text}</span>;
   }
   if (item.kind !== 'revision') return null;
@@ -168,14 +129,7 @@ function FloeSummary() {
   );
 }
 
-/**
- * What this demo appends inside EVERY card: a specimen panel where there is a specimen, and
- * an icicle fringe on all of them.
- *
- * A child the rail does not recognize as one of its parts is appended rather than dropped,
- * which is the extension point that makes a custom card body possible at all — the packaged
- * custom branch owns its title and detail, so this is where anything more goes.
- */
+/** Appended inside every card: an icicle fringe, plus a specimen panel where there is one. */
 function CardFrost() {
   const item = useReviewItem();
   if (!item) return null;
@@ -188,16 +142,9 @@ function CardFrost() {
 }
 
 /**
- * The specimen panel: the demo's OWN element, inside the library's card.
- *
- * This is the whole point of the exercise. The node was authored by this demo
- * (`insertCustomNode`), recognized by this demo's definition, given a card by that
- * definition's `reviewCard` hook — and here it reads its own typed attrs back off the item
- * and draws itself. The card around it is still the packaged card, still anchored at the
- * node's text, still stacking with the comments and the tracked changes beside it.
- *
- * Attrs are file-derived and therefore untrusted; `depthOf`/`blocksOf` clamped them at the
- * recognition boundary, so what arrives here is already a number in range.
+ * The demo's own element inside the library's card: a node authored here, recognized by this
+ * demo's definition, drawing itself from its own typed attrs. Attrs were clamped at the
+ * recognition boundary, so what arrives is already in range.
  */
 function SpecimenPanel({ node }: { node: { name: string; attrs: Readonly<Record<string, string>> } }) {
   if (node.name === 'iceberg') {

@@ -5025,22 +5025,17 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text, #1f2328);
 }
 
-/* Host furniture: flow content at the top of the rail.
- *
- * It needs its pointer events back — the rail itself is transparent to the pointer so a
- * click on the grey canvas beside the page still reaches the document — and it must not
- * become the cards' positioning origin, which is why the list below is absolute. Furniture
- * that pushed the list down moved every card by the furniture's own height, and a rail with
- * a legend on top annotated the wrong lines by exactly that much. */
+/* Host furniture: flow content at the top of the rail. It needs its pointer events back (the
+ * rail is transparent to the pointer), and it must not become the cards' positioning origin —
+ * furniture that pushed the list down moved every card by its own height. */
 .docx-review__furniture {
   position: relative;
   z-index: 1;
   pointer-events: auto;
 }
 
-/* ABSOLUTE, not relative-plus-full-height. A slot's inline `top` is its anchor in the rail's
-   own coordinates, so the box those tops resolve against has to be the rail — not wherever
-   the preceding flow content happened to end. */
+/* Absolute, not relative-plus-full-height: a slot's inline `top` is its anchor in the rail's
+   own coordinates, so the box it resolves against has to be the rail. */
 .docx-review__list {
   position: absolute;
   inset: 0;
@@ -5401,11 +5396,8 @@ a.docx-hyperlink:focus-visible {
   display: inline-flex;
 }
 
-/* RIGHT-aligned to the pill, not left.
-   The mode control belongs at the end of a toolbar — that is where the registry's `review`
-   group puts it and where both Word and Docs put theirs — so a 260px menu hung off its left
-   edge runs past the window and clips its own options. Aligned to the trigger's right edge
-   it opens inward from wherever the pill sits. */
+/* Right-aligned to the pill. The mode control belongs at the end of a toolbar, so a 260px
+   menu hung off its left edge runs past the window and clips its own options. */
 .docx-toolbar__mode-menu {
   position: absolute;
   top: calc(100% + 4px);
@@ -5691,8 +5683,8 @@ a.docx-hyperlink:focus-visible {
   min-width: 240px;
 }
 
-/* A named section of rows. The heading is decoration — the group carries the accessible
-   name — so it is sized and spaced to read as a label, not as a row. */
+/* A named section of rows. The heading is decoration (the group carries the accessible name),
+   so it is sized to read as a label rather than as a row. */
 .ep-root .docx-menubar__group-label {
   padding: 8px 12px 4px;
   color: var(--doc-text-subtle, #8a8f98);
@@ -5702,8 +5694,7 @@ a.docx-hyperlink:focus-visible {
   text-transform: uppercase;
 }
 
-/* No leading gap on the first group: the panel's own padding is already there, and a second
-   one reads as an empty row above the first heading. */
+/* No leading gap on the first group: the panel's own padding is already there. */
 .ep-root .docx-menubar__group:first-child > .docx-menubar__group-label {
   padding-top: 2px;
 }
@@ -5846,9 +5837,8 @@ a.docx-hyperlink:focus-visible {
 
 /* Custom-node section (pro CustomNodeContextMenu): the pointed-at node's card data,
    rendered above the packaged rows. Strings inside are file-derived — text only. */
-/* BOUNDED, and wrapping. `title` and `detail` come from a definition's `reviewCard` hook and
-   are commonly a sentence; with no width to push back, that sentence set the width of the
-   whole menu and every packaged row stretched with it. A menu sizes to its rows. */
+/* Bounded and wrapping: `title` and `detail` come from a `reviewCard` hook and are commonly a
+   sentence, which with no width to push back set the width of the whole menu. */
 .docx-contextmenu__custom-info {
   display: flex;
   flex-direction: column;

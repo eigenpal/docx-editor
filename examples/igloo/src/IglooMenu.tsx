@@ -9,11 +9,9 @@
 // - Help replaced outright, because the packaged Help row points at THIS project's issue
 //   tracker and a product embedding the editor should point at its own.
 //
-// WHERE A ROW BELONGS is the rule this file follows, and it is worth stating because it is
-// easy to get wrong: a command the editor already has goes where a Word user expects to find
-// it — a page break lives under Insert, not under the product's own menu. The product's menu
-// is for what the product ADDED, and here that is exactly one thing: the custom document
-// nodes, under a heading that says so.
+// Placement follows origin: a command the editor already has goes where a Word user expects
+// it (a page break belongs under Insert), and the product's own menu is for what the product
+// added.
 
 import { DocxEditor, useDocxEditor } from '@docx-editor.dev/react';
 import { useFrost } from './useFrost';
@@ -36,10 +34,9 @@ import {
 export function IglooMenu() {
   const editor = useDocxEditor();
   const { freeze, thaw, enabled, disabledReason } = useFrost();
-  // The demo's own document nodes. `editable` is the ENGINE's answer, not a guess: a
-  // view-only document greys these rows out for the same reason it greys out Bold.
+  // `editable` is the engine's answer: a view-only document greys these out like it does Bold.
   const { compose, dropRandom, editable, disabledReason: nodeReason } = useSpecimens();
-  // Spread once: three rows share the same gate and the same explanation for it.
+  // Three rows share one gate and one explanation for it.
   const nodeGate = {
     disabled: !editable,
     ...(nodeReason ? { title: nodeReason } : {}),
@@ -54,10 +51,8 @@ export function IglooMenu() {
       <DocxEditor.Menu.File icon={IceFile} />
       <DocxEditor.Menu.Format icon={IceFormat} />
 
-      {/* Insert, with the preset KEPT and one row appended. A page break is an ordinary
-          insert command, so it belongs here beside the packaged ones rather than in the
-          product's own menu — the theme renames it, it does not relocate it. `preset`
-          defaults to true, which is what appends rather than replaces. */}
+      {/* Preset kept, one row appended: `preset` defaults to true. The theme renames a page
+          break, it does not relocate it. */}
       <DocxEditor.Menu.Insert icon={IceInsert}>
         <DocxEditor.Menu.Row
           icon={IceCarve}
@@ -68,18 +63,13 @@ export function IglooMenu() {
         </DocxEditor.Menu.Row>
       </DocxEditor.Menu.Insert>
 
-      {/* THE PRODUCT'S OWN MENU, appended after the registry's, and named for what it is.
-          `label` rather than `labelKey`: its name is the product's and will never be in our
-          catalogue. It reads as the odd one out in a bar of File / Format / Insert / Help
-          BECAUSE those four keep their conventional names — see `labels.ts`. Everything in
-          here is something the library does not have, which is the reason it is a separate
-          menu instead of rows sprinkled through the packaged ones. */}
+      {/* The product's own menu, named for what it is. `label` rather than `labelKey`: its
+          name will never be in our catalogue. It reads as the odd one out precisely because
+          the other four keep their conventional names — see `labels.ts`. */}
       <DocxEditor.Menu.Menu id="igloo" label="Custom Actions" icon={IceIgloo} preset={false}>
-        {/* `Menu.Group` is a real `role="group"` with the heading as its accessible name,
-            so the rows stay owned by the menu and a screen reader still counts them
-            correctly. Each row authors a run-level content control whose `w:tag` carries
-            the node's identity — a real, saveable document node that Word and the free tier
-            both open as ordinary text. */}
+        {/* `Menu.Group` is a real `role="group"` taking its heading as the accessible name.
+            Each row authors a run-level content control whose `w:tag` carries the node's
+            identity — a saveable document node Word opens as ordinary text. */}
         <DocxEditor.Menu.Group label="Custom elements">
           <DocxEditor.Menu.Row icon={IceBerg} {...nodeGate} onSelect={() => compose('iceberg')}>
             Calve an iceberg…
@@ -94,8 +84,7 @@ export function IglooMenu() {
 
         <DocxEditor.Menu.Separator />
 
-        {/* Not custom nodes — host actions over real engine commands, gated on `Editor.can`.
-            Grouped apart so the distinction is visible. */}
+        {/* Not custom nodes: host actions over engine commands, gated on `Editor.can`. */}
         <DocxEditor.Menu.Group label="This passage">
           <DocxEditor.Menu.Row
             icon={IceFrost}
@@ -116,12 +105,9 @@ export function IglooMenu() {
         </DocxEditor.Menu.Group>
       </DocxEditor.Menu.Menu>
 
-      {/* Help, with its one packaged row REMOVED BY NAME rather than by `preset={false}`.
-          Help injects `Menu.ReportIssue` as a child of its own so the ordinary merge rules
-          can reach it, which means `preset={false}` renders it too — the row survived and
-          sat above these two. `hidden` is the documented way to drop it, and it is the right
-          one anyway: the packaged row opens THIS project's issue tracker, which is the wrong
-          destination for a product that merely embeds the editor. */}
+      {/* Help's packaged row removed BY NAME, not by `preset={false}` — Help passes it as a
+          child of its own, so `preset={false}` renders it anyway. It points at this project's
+          tracker, which is the wrong destination for a product that embeds the editor. */}
       <DocxEditor.Menu.Help icon={IceGuide}>
         <DocxEditor.Menu.ReportIssue hidden />
         <DocxEditor.Menu.Row

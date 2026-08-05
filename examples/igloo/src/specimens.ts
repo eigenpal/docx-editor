@@ -1,20 +1,14 @@
 // Two document nodes the library has never heard of: an iceberg and an igloo.
 //
-// `defineCustomNode` from `@docx-editor.dev/pro` is the whole mechanism. A definition claims
-// a `w:tag` prefix, says how to read attrs back off a file, and contributes a card to the
-// review rail — and from there the packaged chrome does the rest: the chip is tinted and
-// clickable, the right-click menu grows Edit/Remove rows, and each node gets a rail card
-// anchored at its own text. None of that is written here.
+// A `defineCustomNode` definition claims a `w:tag` prefix, says how to read attrs back off a
+// file, and contributes a rail card. From there the packaged chrome does the rest — chip tint,
+// click dispatch, the context menu's Edit/Remove rows, the card anchored at the node's text.
 //
-// What lives ON DISK is a run-level `w:sdt` whose tag is `igloo:iceberg?depth=412`, with the
-// label as its literal content. Word opens the file and shows the label; this editor
-// recognizes the tag and shows a specimen. Nothing is lost either way, which is the point of
-// hanging the identity on a content control rather than on markup only we understand.
+// On disk each is a run-level `w:sdt` tagged `igloo:iceberg?depth=412` with the label as its
+// content, so Word opens it as ordinary text and nothing is lost either way.
 //
-// SECURITY. Every attr arrives from a `.docx` an attacker controls end to end, so the two
-// numbers this demo cares about are parsed and CLAMPED at the recognition boundary rather
-// than at the point of use — `fromDocx` returns the normalized attrs, so the rail card, the
-// chip popover and the context menu all read a value that is already known to be sane.
+// SECURITY: attrs come from a file an attacker controls, so the two numbers are parsed and
+// clamped in `fromDocx` — every later surface reads a value already known to be sane.
 
 import { defineCustomNode } from '@docx-editor.dev/pro';
 import { makeRandom } from './art/random';
@@ -22,22 +16,10 @@ import { makeRandom } from './art/random';
 /** Which specimen: the discriminator the demo's own UI switches on. */
 export type SpecimenKind = 'iceberg' | 'igloo';
 
-/**
- * Where a specimen goes.
- *
- * The caret a menu row captured when it was chosen, or null for "wherever the selection is
- * when the write runs" — which is what `insertCustomNode` does with no `at`.
- */
+/** Where a specimen goes: a captured caret, or null for wherever the selection is. */
 export type SpecimenAt = { readonly paragraphId: string; readonly offset: number } | null;
 
-/**
- * One small integer out of untrusted attrs.
- *
- * `Number.parseInt` on file data can return anything, including `NaN` and values large
- * enough to be silly in a `.repeat()` or a loop bound. This demo only draws with them, but
- * clamping at the boundary is the habit worth showing: the value every later surface reads
- * is already inside its range.
- */
+/** One small integer out of untrusted attrs, clamped at the boundary rather than at use. */
 function boundedInt(
   attrs: Readonly<Record<string, string>>,
   key: string,
@@ -73,17 +55,14 @@ export function insideTemperature(blocks: number): number {
 export const OUTSIDE = -31;
 
 /**
- * The iceberg: nine tenths of it never made it into the paragraph.
- *
- * The document shows the tip. `depth` rides in the tag, comes back typed on the chip click,
- * the hover, the rail card and the context menu — one attrs vocabulary across all four,
- * because `fromDocx` normalized it once.
+ * The iceberg: nine tenths of it never made it into the paragraph. The document shows the tip;
+ * `depth` rides in the tag and comes back typed on the chip, the card and the context menu.
  */
 export const ICEBERG = defineCustomNode({
   name: 'iceberg',
   tagPrefix: 'igloo',
   label: 'Iceberg',
-  // HOST-authored, never file data: `CustomNodeChrome` tints the painted chip with it.
+  // Host-authored, never file data: `CustomNodeChrome` tints the painted chip with it.
   chrome: { color: '#0f6f95' },
   fromDocx: ({ attrs }) => ({ depth: String(depthOf(attrs)) }),
   reviewCard: ({ attrs, text }) => {
@@ -96,11 +75,8 @@ export const ICEBERG = defineCustomNode({
 });
 
 /**
- * The igloo: a shelter built one block at a time.
- *
- * Clicking the chip lays another block — a real `updateCustomNode` write, so it undoes,
- * redoes and saves back to the file like any other edit. The card tracks how warm that has
- * made it in there.
+ * The igloo: a shelter built one block at a time. Clicking the chip lays another — a real
+ * `updateCustomNode` write, so it undoes, redoes and saves like any other edit.
  */
 export const IGLOO = defineCustomNode({
   name: 'igloo',
@@ -156,11 +132,8 @@ export interface RandomSpecimen {
 }
 
 /**
- * A specimen picked out of the water.
- *
- * Seeded from the clock rather than from the fixed seed the sea and the blizzard share —
- * those are deterministic so screenshots do not rearrange themselves between runs, but this
- * one only ever fires because somebody asked for a surprise.
+ * A specimen picked out of the water. Clock-seeded, unlike the sea and the blizzard, which
+ * are deterministic so screenshots do not rearrange themselves between runs.
  */
 export function randomSpecimen(seed = Date.now()): RandomSpecimen {
   const random = makeRandom(seed);

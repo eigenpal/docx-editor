@@ -1,24 +1,19 @@
 // Where the caret is, as a paragraph and an offset.
 //
-// This exists because hosts were reaching for `editor.surface` to get it. Anything a host
-// inserts AT A PLACE needs this — a citation at the caret, a footnote, a content control —
-// and `snapshot.selection` cannot answer: `DocRange` addresses paragraphs by id and carries
-// no offsets, so a caret and a range inside one paragraph are the same value there. The
-// surface is documented as an escape hatch for chrome, and reading a caret is not chrome.
+// Anything a host inserts AT A PLACE needs this, and `snapshot.selection` cannot answer it:
+// `DocRange` addresses paragraphs by id and carries no offsets, so a caret and a range inside
+// one paragraph are the same value there. Without this hook, hosts reached for the
+// instance-only `surface` escape hatch instead.
 //
-// REFERENCE-STABLE, because the whole point is to use it as a dependency and as a captured
-// value. A new object per selection tick would re-run every effect that watches it, and
-// hosts that capture it in a menu handler would see a different identity than the one they
-// rendered with.
+// Reference-stable, so it can be used as a dependency and captured in a handler.
 
 import { useCallback, useRef, useSyncExternalStore } from 'react';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
 
 /**
- * A caret position: a paragraph and a UTF-16 offset inside it.
- *
- * The same shape the write APIs take as an `at`, so it can be handed straight to one.
+ * A caret position: a paragraph and a UTF-16 offset inside it — the shape the write APIs take
+ * as their `at`.
  *
  * @public
  */
@@ -40,9 +35,7 @@ function caretOf(editor: Editor | null): EditorCaret | null {
 /**
  * The caret's paragraph and offset, or null when nothing is placed.
  *
- * Re-renders only when the caret actually MOVES: the position is compared by value and the
- * previous object is handed back when it has not changed, so a component reading this is not
- * woken by every unrelated selection event.
+ * Compared by value, so a consumer re-renders only when the caret actually moves.
  *
  * ```tsx
  * const caret = useEditorCaret();
@@ -59,8 +52,7 @@ export function useEditorCaret(): EditorCaret | null {
   const subscribe = useCallback(
     (onChange: () => void) => {
       if (!editor) return () => undefined;
-      // Both events: the caret moves on selection, and a commit can move it without one
-      // (typing, an undo that restores an earlier position).
+      // Both: a commit can move the caret without a selection event (typing, undo).
       const offSelection = editor.on('selectionChange', onChange);
       const offChange = editor.on('change', onChange);
       return () => {
@@ -81,8 +73,7 @@ export function useEditorCaret(): EditorCaret | null {
     return next;
   }, [editor]);
 
-  // The server snapshot is `null` rather than `read`: there is no surface to measure while
-  // rendering on a server, and calling through would be a different answer per pass.
+  // Null on the server: there is no surface to measure there.
   return useSyncExternalStore(subscribe, read, () => null);
 }
 

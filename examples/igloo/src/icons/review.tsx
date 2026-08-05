@@ -1,9 +1,5 @@
-// The review rail's two decisions, in the theme's own drawing language.
-//
-// Accept and reject are the same commands they always were — these replace the packaged tick
-// and cross through the parts' `icon` prop, and nothing else about either button changes.
-// The accessible name stays the library's ("Accept" / "Reject"), which is right: a screen
-// reader should hear what the button does, not what the theme calls it.
+// The rail's two decisions, in the theme's drawing language. These replace the packaged tick
+// and cross through the parts' `icon` prop; nothing else about either button changes.
 
 import { Frost } from './Frost';
 

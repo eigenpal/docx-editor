@@ -1,8 +1,5 @@
-// The two specimens, drawn once.
-//
-// Shared by the chip popover and the rail card so a berg cannot be nine tenths under water in
-// one place and half under it in the other. Pure decoration — the numbers beside them come
-// from the node's attrs, which is where the truth lives.
+// The two specimens, drawn once and shared by the chip popover and the rail card. Pure
+// decoration; the numbers beside them come from the node's attrs.
 
 /** A berg at its real proportions: a tenth above the dashed waterline, the rest below. */
 export function BergGlyph({ className }: { className?: string }) {

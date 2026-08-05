@@ -46,12 +46,9 @@ export function IglooContextMenu() {
           which is what keeps the library's own panel element, roles and keyboard intact. */}
       <BergPanel />
 
-      {/* The PRO custom-node section. It renders ONLY when the right-click landed on a
-          recognized chip, and then puts that node's card data, an Edit row and a Remove row
-          above everything else — `docxRowPlacement: 'start'` is how it gets to the top
-          without this file ordering it. The dialog behind Edit is the host's, which is the
-          whole contract: the library resolves which node was pressed, the product decides
-          what editing one looks like. */}
+      {/* Renders only when the right-click landed on a recognized chip; `docxRowPlacement:
+          'start'` puts it at the top without this file ordering it. The library resolves which
+          node was pressed, the product decides what editing one looks like. */}
       <CustomNodeContextMenu onEditNode={edit} />
 
       {/* Packaged rows, re-iconed in place. Everything else about them is untouched:
@@ -87,12 +84,8 @@ export function IglooContextMenu() {
         }
       />
 
-      {/* TWO submenus, kept apart on purpose. The first is real ENGINE commands the theme
-          has only renamed; the second is this demo's own document nodes, which the library
-          knows nothing about. Mixing them in one list made a page break and a custom node
-          look like the same kind of thing, and on a demo about that exact distinction the
-          grouping is the message. Same row type and the same enabled-state discipline in
-          both — only the origin differs. */}
+      {/* Two submenus, kept apart: engine commands the theme renamed, then the demo's own
+          document nodes. Same row type and gating in both; only the origin differs. */}
       <DocxEditor.ContextMenu.Submenu labelKey="igloo.carve" paths={null}>
         <DocxEditor.ContextMenu.Item
           label="Carve a page break"

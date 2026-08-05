@@ -21,12 +21,9 @@
 @tailwind utilities;
 
 .igloo-shell {
-  /* How far below the scroll container's top the first page starts.
-   *
-   * ONE constant, because three things have to agree with it or they describe a page they
-   * are not level with: the stage's own top padding (which creates the gap), the vertical
-   * ruler's zero, and the review rail's core log. It was written out twice before the rail
-   * had furniture, and the third copy is what turned a shared value into a variable. */
+  /* How far below the scroll container the first page starts. Three things must agree with
+   * it or they describe a page they are not level with: the stage's top padding, the vertical
+   * ruler's zero, and the rail's core log. */
   --igloo-stage-top: 120px;
 
   /* Surfaces: pale ice, and OPAQUE.
@@ -230,13 +227,9 @@
   flex: 1;
 }
 
-/* WHAT THE PRODUCT ADDED, on its own plate.
- *
- * A hand-ordered bar loses the one signal the packaged arrangement gives for free: which
- * controls came from the engine's chrome registry and which this app bolted on. Everything
- * else in this toolbar is a chrome slot; these two are not, and on a demo about that
- * distinction it should not be something a reader has to work out. Dashed rather than solid,
- * so it reads as an annotation rather than as another kind of control. */
+/* What the product added, on its own plate. A hand-ordered bar loses the signal the packaged
+ * arrangement gives for free — everything else here is a chrome slot, these two are not.
+ * Dashed, so it reads as an annotation rather than another kind of control. */
 .igloo-own {
   display: flex;
   align-items: center;
@@ -248,8 +241,7 @@
   background: rgba(190, 234, 250, 0.35);
 }
 
-/* The editing-mode pill. Restyled, not reimplemented: the modes, the radio semantics, the
-   keyboard menu and the engine's refusal on a read-only document are all the library's. */
+/* The editing-mode pill: restyled, not reimplemented. */
 .igloo-mode {
   margin-right: 4px;
 }
@@ -345,15 +337,10 @@
   z-index: 1;
 }
 
-/* Tracked changes ARE themed here, and they are the ONE thing on the canvas that is.
- *
- * The rule everywhere else in this file is that painter output stays Word-faithful — a page
- * that looked like ice would be a lie about what the file contains. Revision marks are the
- * exception because they are not the document: they are the reviewer's chrome drawn over it,
- * the same layer Word lets a reader recolour per author. Every mark reads its colour from
- * `--doc-revision-*`, so restating those on the page wrapper reaches the painted insertions,
- * deletions, format washes and change bars — and nothing else, because nothing else on the
- * canvas reads them. Insertions go glacier; deletions go meltwater grey, not red. */
+/* Tracked changes are the one thing on the canvas this theme touches. Painter output stays
+ * Word-faithful everywhere else, but revision marks are the reviewer's chrome drawn over the
+ * document, not the document — the same layer Word lets a reader recolour. Restating
+ * `--doc-revision-*` on the page wrapper reaches every mark and nothing else. */
 .igloo-page {
   --doc-revision-insertion: #0f6f95;
   --doc-revision-deletion: #7d93a6;
@@ -406,18 +393,11 @@
 
 /* ── The context menu, cut from a berg ────────────────────────────────────────────── */
 
-/* NO FILTER ON THIS BOX — the shadow lives on the berg behind it.
- *
- * The same trap as the chrome bar above, and worth stating twice because it cost the same
- * hour twice: `filter` makes an element the containing block for `position: fixed`
- * descendants. A submenu panel places itself in CLIENT coordinates precisely so it can
- * escape the menu's own scroller, and with the shadow declared here those coordinates were
- * resolved against this 240px panel instead of the window — the submenu landed several
- * hundred pixels down and to the right, off the visible area.
- *
- * Moving it onto the SVG is not a workaround either; it is where it belonged. A
- * `drop-shadow` follows its element's alpha silhouette, and the shape being cast here is the
- * berg's jagged crown, not this rectangle. */
+/* No filter on this box — the shadow lives on the berg behind it. Same trap as the chrome bar
+ * above: `filter` makes an element the containing block for `position: fixed` descendants,
+ * and a submenu panel places itself in client coordinates to escape the menu's scroller. It
+ * belongs on the SVG anyway, since `drop-shadow` follows its element's silhouette and the
+ * shape being cast is the berg's crown, not this rectangle. */
 .igloo-menu {
   position: fixed;
   /* The card's own background is replaced by the SVG behind the rows. */
@@ -446,13 +426,11 @@
   z-index: 1;
 }
 
-/* Room for the crown: the FIRST row must clear the jagged top edge.
+/* Room for the crown: the first row must clear the jagged top edge.
  *
- * `:first-child`, not `:first-of-type`. With a universal selector `:first-of-type` matches
- * the first sibling of EVERY tag name — so the custom-node info block (a div) took the gap,
- * and so did the first button under it, and so would the first of anything else the panel
- * grows. The result was a band of empty ice in the middle of the menu, right where a reader
- * looks for the row they came for. Only one element can be the first child. */
+ * `:first-child`, not `:first-of-type` — with a universal selector the latter matches the
+ * first sibling of every tag name, so the info block took the gap and so did the first button
+ * under it, leaving a band of empty ice mid-panel. */
 .igloo-menu > :first-child:not(.igloo-menu__berg) {
   margin-top: 26px;
 }
@@ -465,13 +443,9 @@
   --doc-border: rgba(120, 180, 210, 0.5);
 }
 
-/* Section headings inside the product's own menu need NO rule here.
- *
- * They started as this demo's own element with a hand-written class, because the menu parts
- * were rows, separators and submenus with no grouping among them. `Menu.Group` is that part
- * now — a real `role="group"` taking its heading as the accessible name — and it arrives
- * already themed, because its heading paints in `--doc-text-subtle` like everything else
- * here. Deleting a stylesheet block is what "the library grew a prop instead" looks like. */
+/* Section headings need no rule here. They started as this demo's own element; `Menu.Group`
+ * is that part now, and it arrives themed because its heading paints in `--doc-text-subtle`
+ * like everything else. Deleting a block is what "the library grew a prop" looks like. */
 
 /* ── The link popover as an ice shard ─────────────────────────────────────────────── */
 
@@ -547,20 +521,13 @@
 
 /* ── The review rail: the ice core ────────────────────────────────────────────────────
  *
- * Same argument as the navigation pane, one layer deeper. The pro rail's cards are built on
- * the `--doc-*` palette, so restating that palette ON THE RAIL re-skins every card — comment,
- * tracked change and specimen alike — plus the avatars, the accept/reject buttons, the reply
- * box and the hairline between a comment and its thread. Custom properties inherit, so the
- * scope IS the override.
- *
- * Everything past the tokens is a class this demo owns: the parts that take a `className`
- * (avatar, actions, summary) and the elements it appends itself (the core log, the specimen
- * panel, the fringe). No `docx-*` selector, no `!important`, exactly as elsewhere here. */
+ * Same argument as the navigation pane, one layer deeper: the rail's cards are built on the
+ * `--doc-*` palette, so restating it here re-skins every card, avatar, action and reply box
+ * at once. Everything past the tokens is a class this demo owns — the parts that take a
+ * `className` and the elements it appends itself. No `docx-*` selector, no `!important`. */
 .igloo-rail {
-  /* Near-opaque, not glassy. The cards float over open water that runs from pale ice at the
-     horizon to near black at the bottom, and a translucent card read as grey against the
-     dark half — the only place in this theme where the frosted look costs more than it
-     gives, exactly as for the menu panels above. */
+  /* Near-opaque: the cards float over water that runs from pale ice to near black, and a
+     translucent card read as grey against the dark half. */
   --doc-surface: rgba(246, 253, 255, 0.96);
   --doc-card: rgba(246, 253, 255, 0.96);
   --doc-text: #0d3149;
@@ -571,11 +538,8 @@
   --doc-surface-hover: rgba(150, 214, 240, 0.4);
   --doc-bg-input: rgba(255, 255, 255, 0.72);
 
-  /* The author ramp, restated in cold hues.
-   *
-   * Restated rather than dropped: the slot per author is Word's own rule (order of first
-   * appearance) and the library keeps it as a variable precisely so a theme can recolour it
-   * without re-deriving who is who. Eight, because the ramp has eight and then repeats. */
+  /* The author ramp in cold hues. Restated rather than dropped: the slot per author is Word's
+   * own rule, kept as a variable so a theme can recolour it without re-deriving who is who. */
   --doc-review-author-0: #0f6f95;
   --doc-review-author-1: #3f9fd0;
   --doc-review-author-2: #5b6fb8;
@@ -586,8 +550,7 @@
   --doc-review-author-7: #6b7f9c;
 }
 
-/* The core log, above the cards. `furniture` is plain flow content, so this is the demo's
-   own box with nothing library about it but its position. */
+/* The core log. `furniture` is plain flow content, so nothing here is library but its place. */
 .igloo-core {
   /* LEVEL WITH THE PAGE. The rail is pinned to the scroll container's top, but the first
      page starts one `--igloo-stage-top` below it, so furniture at the rail's own top floated
@@ -647,15 +610,13 @@
   opacity: 0.85;
 }
 
-/* The card box itself, through the rail's `card` prop — no `docx-*` selector needed for the
-   one element the ladder used to have no hook for. */
+/* The card box, through the rail's `card` prop. */
 .igloo-rail__card {
   border-radius: 14px;
 }
 
-/* A specimen card knows WHICH specimen it is: `data-node-name` carries the definition's own
-   name, so a berg card can go deep-water below its waterline and an igloo card stay bright
-   without the host inspecting its own children to find out. */
+/* `data-node-name` carries the definition's name, so a berg card can go deep-water below its
+   waterline without the host inspecting its own children to find out which card this is. */
 .igloo-rail__card[data-node-name='iceberg'] {
   background: linear-gradient(180deg, rgba(246, 253, 255, 0.96) 62%, rgba(24, 92, 132, 0.16));
 }
@@ -684,9 +645,7 @@
   border-top: 1px solid rgba(150, 214, 240, 0.45);
 }
 
-/* A body with nothing in it draws no rule. The hairline belongs to the summary, so a card
-   whose body resolved to nothing would otherwise show a head, a line, and a gap — which
-   reads as broken rather than as empty. */
+/* A body with nothing in it draws no rule: a head, a line and a gap reads as broken. */
 .igloo-rail__summary:empty {
   padding-top: 0;
   border-top: 0;
@@ -730,12 +689,9 @@
   color: #8fb4c7;
 }
 
-/* The fringe: icicles along the bottom of every card.
- *
- * In FLOW, as the card's last child, rather than absolutely positioned against it — the card
- * is a flex column this demo does not own, and hanging decoration off a box whose positioning
- * belongs to somebody else is how a theme breaks on their next release. A negative bottom
- * margin pulls it into the card's own padding, which is the only trick involved. */
+/* Icicles along the bottom of every card. In flow as the card's last child rather than
+ * absolutely positioned against it: the card is a flex column this demo does not own, and a
+ * negative bottom margin pulls the fringe into its padding. */
 .igloo-rail__fringe {
   height: 9px;
   margin-bottom: -11px;
@@ -749,9 +705,8 @@
 
 /* ── Specimens: the demo's own nodes, in the demo's own card content ──────────────────
  *
- * A custom node's card is titled by its definition's `reviewCard` hook, so its WORDS are
- * already the demo's. This panel is the element appended inside that card — read off the
- * node's typed attrs, drawn by the demo, stacked and anchored by the library. */
+ * A custom node's card is titled by its `reviewCard` hook, so its words are already the
+ * demo's. This panel is appended inside that card, read off the node's typed attrs. */
 .igloo-specimen {
   display: flex;
   align-items: center;
@@ -794,9 +749,7 @@
   font-weight: 650;
 }
 
-/* ── The chip popover ─────────────────────────────────────────────────────────────────
- *
- * Anchored on `ActivatedCustomNode.rect`, which is a VIEWPORT rect — hence `fixed`. */
+/* ── The chip popover: anchored on `ActivatedCustomNode.rect`, a viewport rect ────────── */
 .igloo-probe {
   position: fixed;
   z-index: 60;
@@ -956,11 +909,10 @@
   background: var(--doc-primary-hover);
 }
 
-/* ── The notice ───────────────────────────────────────────────────────────────────────
+/* ── The notice: where the engine's own refusal shows up ──────────────────────────────
  *
- * Where the ENGINE's own refusal shows up. `insertCustomNode` and `updateCustomNode` return
- * a typed result — a tag over Word's 64-character cap, a locked control, an offset out of
- * range — and repeating that reason verbatim beats a host inventing one. */
+ * `insertCustomNode` and `updateCustomNode` return a typed result, and repeating that reason
+ * verbatim beats a host inventing one. */
 .igloo-notice {
   position: fixed;
   bottom: 24px;

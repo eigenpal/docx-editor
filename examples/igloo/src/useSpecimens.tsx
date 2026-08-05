@@ -1,14 +1,11 @@
 // Every specimen action, in one place, behind a context.
 //
-// Four surfaces reach these: the Igloo menu, the right-click menu, the chip itself, and the
-// context menu's Edit row. `useFrost` makes the same argument for one shared definition of a
-// host action — a toolbar and a menu that each decide independently when an action is
-// available will eventually disagree — and this is that rule with UI state attached, so the
-// dialog, the popover and the notice have exactly one owner.
+// Four surfaces reach these: the Igloo menu, the right-click menu, the chip itself and the
+// context menu's Edit row. One owner for the dialog, the popover and the notice, for the same
+// reason `useFrost` has one definition — surfaces that decide independently drift apart.
 //
-// It also holds the mount point the pro chrome needs: `CustomNodeChrome` (chip tint and
-// click delegation) belongs inside `DocxEditor.Root`, and it is rendered here beside the
-// state its `onNodeClick` drives.
+// It also mounts `CustomNodeChrome`, which belongs inside `DocxEditor.Root` and drives its
+// `onNodeClick` from the state held here.
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useDocxEditor, useEditorCaret, useEditorState } from '@docx-editor.dev/react';
@@ -27,22 +24,15 @@ import {
 import { SpecimenDialog, type SpecimenForm } from './SpecimenDialog';
 import { SpecimenPopover, type SpecimenProbe } from './SpecimenPopover';
 
-/**
- * What the node APIs return. Structurally the engine's `ExecResult` — a refusal carries the
- * ENGINE's own reason (tag overflow, offset out of range, a locked control), and showing
- * that beats inventing one.
- */
+/** Structurally the engine's `ExecResult`: a refusal carries the engine's own reason. */
 type Refusable = { readonly ok: true } | { readonly ok: false; readonly reason: string };
 
 export interface SpecimenActions {
   /** Whether the ENGINE would take a write right now. A view-only document reports false. */
   readonly editable: boolean;
   /**
-   * Why not, when `editable` is false.
-   *
-   * A greyed row with no explanation is the thing this codebase does not ship. There is no
-   * `Editor.can` for a node write — `insertCustomNode` reports its refusal only after the
-   * fact — so this says which of the two causes it is rather than inventing a third.
+   * Why not, when `editable` is false. There is no `Editor.can` for a node write, so this is
+   * the host's own sentence; the engine's verbatim refusal arrives in the notice on attempt.
    */
   readonly disabledReason: string | null;
   /** Open the authoring form, on the caret it was opened from. */
@@ -55,7 +45,7 @@ export interface SpecimenActions {
 
 const SpecimenContext = createContext<SpecimenActions | null>(null);
 
-/** Inert outside the provider, so a part rendered by mistake shows nothing rather than throws. */
+/** Inert outside the provider: a part rendered by mistake shows nothing rather than throwing. */
 const INERT: SpecimenActions = {
   editable: false,
   disabledReason: null,
@@ -83,24 +73,16 @@ interface Notice {
 export function SpecimenProvider({ children }: { children: ReactNode }) {
   const editor = useDocxEditor();
   const editable = useEditorState((snapshot) => snapshot.editable);
-  // Read separately so a refusal can name its cause. `editable` folds "read-only document"
-  // and "Viewing mode" into one boolean, and those are two different things to tell somebody.
+  // Separate, because `editable` folds "read-only" and "Viewing mode" into one boolean and
+  // those are two different things to tell somebody.
   const mode = useEditorState((snapshot) => snapshot.editingMode);
   const [form, setForm] = useState<SpecimenForm | null>(null);
   const [probe, setProbe] = useState<SpecimenProbe | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
 
-  /**
-   * The caret AT THE MOMENT THE ROW IS CHOSEN.
-   *
-   * A menu row that opens a dialog and then inserts "wherever the selection is by now" lands
-   * the specimen wherever the user's last click left it, which is rarely where they were
-   * reading. `at` on the insert is exactly this problem's answer, and `useEditorCaret` is
-   * how a host gets a value to put in it: `snapshot.selection` addresses paragraphs by id
-   * and carries no offsets, so this used to mean reaching into `editor.surface` — an escape
-   * hatch documented for chrome, which reading a caret is not. The value is
-   * reference-stable, so capturing it in a handler is safe.
-   */
+  // The caret at the moment a row is chosen. A dialog takes focus, so inserting at "wherever
+  // the selection is by then" lands the specimen wherever the last click left it. The value is
+  // reference-stable, so capturing it in a handler is safe.
   const caret = useEditorCaret();
 
   const say = useCallback((text: string) => {
@@ -144,9 +126,8 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
 
   const edit = useCallback(
     (node: ActivatedCustomNode) => {
-      // `nodeId` is present when the activation could be resolved against the review
-      // module's queue. Without it there is no address to re-author, and saying so beats a
-      // dialog whose Save can only fail.
+      // `nodeId` resolves only against a registered review module. Without it there is no
+      // address to re-author, and saying so beats a dialog whose Save can only fail.
       if (node.nodeId === undefined) {
         say('That specimen has no id to re-author yet.');
         return;
@@ -164,12 +145,9 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
   );
 
   /**
-   * The chip click, and the funny half of both definitions.
-   *
-   * An ICEBERG surfaces what is under it — read-only, a popover over the chip. An IGLOO lays
-   * another block, which is a REAL document write (`updateCustomNode` removes and reinserts
-   * at the node's own span in one transaction, one undo step), so the label in the paragraph,
-   * the rail card and the saved file all move together.
+   * The chip click. An iceberg surfaces what is under it; an igloo lays another block, which
+   * is a real `updateCustomNode` write — one transaction, one undo step, so the paragraph
+   * label, the rail card and the saved file move together.
    */
   const activate = useCallback(
     (node: ActivatedCustomNode) => {
@@ -236,8 +214,7 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
 
   return (
     <SpecimenContext.Provider value={value}>
-      {/* Definition-driven chip tint and click delegation, from the pro package. It defaults
-          to the definitions registered on the Root, so nothing is listed twice. */}
+      {/* Chip tint and click delegation. Defaults to the definitions registered on the Root. */}
       <CustomNodeChrome onNodeClick={activate} />
       {children}
       {form ? <SpecimenDialog form={form} onCommit={commit} onClose={() => setForm(null)} /> : null}

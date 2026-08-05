@@ -75,11 +75,7 @@ export function useReviewItem(): ReviewItemView | null {
 }
 
 interface ReviewRailValue {
-  /**
-   * The host's label resolver, when it passed one. Every part reads its strings through
-   * {@link useReviewLabel} rather than through `useTranslation` directly, so a product can
-   * rename `Accept` the same way it renames a toolbar control.
-   */
+  /** The host's label resolver, when it passed one. Parts read through {@link useReviewLabel}. */
   readonly t: ToolbarTranslate | undefined;
   /** A card's className, from the rail's `card` prop. */
   readonly cardClassName: string | undefined;
@@ -163,11 +159,10 @@ function useRail(): ReviewRailValue {
 }
 
 /**
- * A part's strings: the host's `t` when the rail was given one, else the bundled catalogue.
+ * A part's strings: the host's `t`, else the bundled catalogue.
  *
- * The fallback is the packaged English, NOT the raw key — unlike the toolbar and the menu
- * bar, whose labels are registry keys a host is expected to resolve, every string here has a
- * shipped translation and a rail with no `t` must still read as English.
+ * The fallback is the packaged English, not the raw key — unlike the toolbar and menu bar,
+ * whose labels are registry keys a host is expected to resolve, every string here ships one.
  */
 function useReviewLabel(): (key: TranslationKey) => string {
   const { t: hostT } = useContext(ReviewContext) ?? {};
@@ -218,26 +213,20 @@ export interface ReviewActionProps extends ReviewPartProps {
 /** Props for `DocxEditor.Review`. @public */
 export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
   /**
-   * Label resolver for every string in the rail, exactly as `DocxEditor.Toolbar`,
-   * `DocxEditor.Menu` and `DocxEditor.ContextMenu` take one. Unresolved keys fall back to
-   * the bundled catalogue rather than to the key, because these strings all ship
-   * translations — a rail without a `t` still reads as English.
+   * Label resolver, as `DocxEditor.Toolbar`, `.Menu` and `.ContextMenu` take one. Unresolved
+   * keys fall back to the bundled catalogue rather than to the key.
    */
   t?: ToolbarTranslate;
-  /**
-   * Class for each CARD, the rung-1 hook the card itself never had. The rail's own
-   * `className` styles the column; this styles the boxes in it.
-   */
+  /** Class for each card. The rail's own `className` styles the column; this the boxes in it. */
   card?: { className?: string };
   /**
-   * The cards, or a RENDER PROP that replaces the packaged card entirely while keeping the
-   * rail's subscription, anchoring, stacking and virtualization.
+   * The cards, or a render prop that replaces the packaged card entirely while keeping the
+   * rail's subscription, anchoring, stacking and virtualization. Nodes are treated as part
+   * overrides for the packaged card instead.
    *
    * ```tsx
    * <DocxEditor.Review>{(item) => <MyCard item={item} />}</DocxEditor.Review>
    * ```
-   *
-   * Nodes are treated as part overrides for the packaged card instead.
    */
   children?: ReactNode | ((item: ReviewItemView) => ReactNode);
   /**
@@ -331,8 +320,7 @@ function ReviewRoot({
   const allReview = useReview(NO_PLACEMENT_REVIEW_QUERY);
   const review = useReview(railQuery);
   const setReviewPaneOpen = review.setPaneOpen;
-  // The ROOT cannot use `useReviewLabel` — it is what provides the context that hook reads,
-  // so its own strings resolve from the prop directly.
+  // The root provides the context `useReviewLabel` reads, so it resolves from the prop.
   const { t: bundled } = useTranslation();
   const t = useCallback((key: TranslationKey) => hostT?.(key) ?? bundled(key), [hostT, bundled]);
   const railRef = useRef<HTMLElement | null>(null);
@@ -416,14 +404,10 @@ function ReviewRoot({
   // gutter to the right of the sheet, and it moves with the sheet when the window resizes or
   // the zoom changes.
   //
-  // MEASURED THROUGH CLIENT RECTS, not through `offsetLeft`/`offsetTop`. Those are relative
-  // to each element's OWN `offsetParent`, and the surface's is whichever ancestor the host
-  // happened to position — a themed page wrapper with `position: relative` is enough to make
-  // the surface report `offsetLeft: 0` while the rail measures from the scroll container, and
-  // the rail then lands a page-width to the left, on top of the document it annotates. Rects
-  // are in one coordinate space no matter what the host nested; `scrollTop`/`scrollLeft` puts
-  // them back into the scrolled content's space, and `clientTop`/`clientLeft` discounts the
-  // container's own border, which is exactly what the offset properties used to do.
+  // Client rects, not `offsetLeft`/`offsetTop`: those are relative to each element's own
+  // `offsetParent`, and a host that positions its page wrapper makes the surface report
+  // `offsetLeft: 0` — landing the rail a page-width left, on top of the document. `scrollTop`
+  // and `clientTop` put the rects back into the same space the offsets used to describe.
   const [metrics, setMetrics] = useState<RailMetrics>(INITIAL_METRICS);
   useEffect(() => {
     const rail = railRef.current;
@@ -670,9 +654,8 @@ function ReviewRoot({
     style: metrics.left === null ? undefined : { left: metrics.left, right: 'auto' },
   };
 
-  // Root-level slots a child can replace in place. Collected but never consumed, six of the
-  // fourteen parts advertised the override rung and silently did nothing. A RENDER PROP is
-  // not an override — it is the card itself, and it travels down to `ReviewList` untouched.
+  // Root-level slots a child can replace in place. A render prop is not an override — it is
+  // the card itself, and travels down to `ReviewList` untouched.
   const rootParts = typeof children === 'function' ? {} : partOverrides(children);
   const takeRoot = (key: string, fallback: ReactNode): ReactNode =>
     key in rootParts ? rootParts[key] : fallback;
@@ -692,8 +675,7 @@ function ReviewRoot({
     </>
   ) : null;
 
-  // `preset={false}` hands the panel to the host verbatim — but a RENDER PROP is a card
-  // factory with no list to run it, so there is nothing to render without the preset.
+  // `preset={false}` hands the panel over verbatim, but a render prop needs the list to run it.
   const body = !preset
     ? typeof children === 'function'
       ? null
@@ -1392,10 +1374,8 @@ function ReviewCard({ className, asChild, hidden, children }: ReviewPartProps) {
     'data-testid': 'review-card',
     'aria-labelledby': `${cardId}-author ${cardId}-summary`,
     'data-kind': entry.kind === 'revision' ? (entry.revisionKind ?? 'revision') : entry.kind,
-    // WHICH custom node, not just that it is one. Every custom card is `data-kind="custom"`,
-    // so without this a theme could style them as a group but never tell a citation card
-    // from a clause card — the definition names are the host's own vocabulary and belong in
-    // its selectors.
+    // Which custom node, not just that it is one: every custom card is `data-kind="custom"`,
+    // so a theme could otherwise never tell a citation card from a clause card.
     ...(entry.kind === 'custom' && entry.item.kind === 'custom'
       ? { 'data-node-name': entry.item.name }
       : {}),
@@ -1457,11 +1437,8 @@ function ReviewCardPreset({ children }: { children?: ReactNode }) {
   // attrs and label originate in the file.
   if (entry.kind === 'custom' && entry.item.kind === 'custom') {
     const item = entry.item;
-    // OVERRIDABLE, like every other kind. This branch used to hardcode its title and detail,
-    // so a host that replaced `Summary` for comments and revisions found custom cards
-    // silently exempt — the one kind whose content is entirely the host's own to begin with.
-    // `Author` carries the title because that is the slot it occupies in the packaged card,
-    // and a host overriding either sees the same item through `useReviewItem()`.
+    // Overridable like every other kind. `Author` carries the title because that is the slot
+    // it occupies in the packaged card.
     return (
       <>
         <div className="docx-review__head">
@@ -1551,10 +1528,8 @@ function partOverrides(children: ReactNode): Record<string, ReactNode> {
 function ReviewAvatar({ className, asChild, hidden, children }: ReviewPartProps) {
   const entry = useContext(ReviewItemContext);
   if (hidden || !entry) return null;
-  // NOTHING to show is not the same as an empty disc. A custom node's card has no author, so
-  // an avatar there was a blank circle with a ring around it — and once a host overrides this
-  // part globally, that circle appears on every one of them. Children win, because a host
-  // passing its own glyph means it whatever the item says.
+  // Nothing to show is not an empty disc: a custom node's card has no author. Children win,
+  // because a host passing its own glyph means it whatever the item says.
   if (children === undefined && !entry.initials) return null;
   const shared = {
     className: `docx-review__avatar${className ? ` ${className}` : ''}`,
