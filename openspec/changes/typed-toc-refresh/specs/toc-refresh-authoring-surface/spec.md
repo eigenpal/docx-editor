@@ -49,14 +49,24 @@ The engine SHALL open an engine-owned contextual menu when the user right-clicks
 
 ### Requirement: TOC row navigation
 
-Detected TOC field and result paragraphs SHALL paint as a generated, read-only navigation surface. They SHALL refuse caret placement, text selection, typing, deletion, and formatting while preserving right-click update actions. Clicking a cached TOC result row SHALL snap the editor viewport to the corresponding outline heading and place the caret there.
+Detected TOC field and result paragraphs SHALL paint as a generated, read-only navigation surface. They SHALL refuse caret placement, text selection, typing, deletion, and formatting while preserving right-click update actions. Clicking a cached TOC result row SHALL resolve that row's own heading and snap the editor viewport to it, placing the caret there.
 
 #### Scenario: Generated result refuses editing
 
 - **WHEN** pointer, keyboard, IME, or command input targets a detected TOC paragraph
 - **THEN** no caret or range is placed inside it and no document edit is committed
 
+#### Scenario: Caret navigation crosses the region
+
+- **WHEN** a caret movement lands inside a detected TOC and the selection is not being extended
+- **THEN** the caret continues past the whole region in the direction of travel and comes to rest on the first paragraph outside it, so no content is unreachable from the keyboard
+
 #### Scenario: Row has no authored hyperlink
 
 - **WHEN** the user clicks a TOC result row whose instruction omits the hyperlink switch
-- **THEN** the surface resolves the row through the detected TOC entry order and immediately reveals its heading without smooth scrolling
+- **THEN** the surface resolves the row through its own title text and immediately reveals that heading without smooth scrolling
+
+#### Scenario: Row names no current heading
+
+- **WHEN** the user clicks a cached TOC result row whose anchor and title match no heading the document still has
+- **THEN** the click is inert and the selection does not move

@@ -12,7 +12,9 @@ import {
   isContentControl,
   parseTocInstruction,
   planTocEntries,
+  resolveTocRowHeadings,
   validateTreeOp,
+  type DetectedToc,
   type OoxmlElement,
   type OoxmlNode,
   type TreeDocOp,
@@ -1285,14 +1287,19 @@ export function mountPaginatedSurface(
       candidate.resultParagraphIds.includes(paragraphId)
     );
     if (!toc) return;
-    const index = toc.resultParagraphIds.indexOf(paragraphId);
-    const outline = session.documentOutline();
-    const excluded = new Set([toc.beginParagraphId, toc.endParagraphId, ...toc.resultParagraphIds]);
-    const entry = planTocEntries(session.part(), outline, toc.instruction, new Map(), excluded)
-      .entries[index];
-    if (!entry) return;
+    // The row names its own target through its anchor or its title. Reading the outline entry
+    // that sits at the row's INDEX sends a click to the wrong heading the moment the cached
+    // rows and the outline disagree, which is the normal state of a TOC that needs refreshing.
+    const headings = resolveTocRowHeadings(
+      session.part(),
+      toc,
+      session.documentOutline(),
+      tocRegionOf(toc)
+    );
+    const headingParagraphId = headings[toc.resultParagraphIds.indexOf(paragraphId)];
+    if (!headingParagraphId) return;
     event.preventDefault();
-    navigation.goToPosition({ paragraphId: entry.headingParagraphId, offset: 0 });
+    navigation.goToPosition({ paragraphId: headingParagraphId, offset: 0 });
   }
 
   function openContentControlWidget(controlId: string, kind: string): void {
@@ -2452,6 +2459,22 @@ export function mountPaginatedSurface(
     );
   }
 
+  /** Every paragraph one TOC owns. Re-read per pass: a replace mints new result ids. */
+  function tocRegionOf(toc: DetectedToc): ReadonlySet<string> {
+    return new Set([toc.beginParagraphId, toc.endParagraphId, ...toc.resultParagraphIds]);
+  }
+
+  /** Painted lines the TOC regions occupy, which bounds the caret's escape from one. */
+  function tocRegionLineCount(paragraphIds: ReadonlySet<string>): number {
+    let lines = 0;
+    for (const page of currentLayout.pages) {
+      for (const fragment of paragraphFragmentsOf(page)) {
+        if (paragraphIds.has(fragment.paragraphId)) lines += fragment.lines.length;
+      }
+    }
+    return lines;
+  }
+
   function pageNumbersFor(
     layout: SemanticLayout,
     paragraphIds: readonly string[]
@@ -2536,19 +2559,16 @@ export function mountPaginatedSurface(
 
     let layout = surface.layout();
     const outline = session.documentOutline();
-    const excluded = new Set([toc.beginParagraphId, toc.endParagraphId, ...toc.resultParagraphIds]);
-    let plan = planTocEntries(
-      session.part(),
-      outline,
-      toc.instruction,
-      pageNumbersFor(
-        layout,
-        outline.map((entry) => entry.blockId)
-      ),
-      excluded
-    );
+    const outlineBlockIds = outline.map((entry) => entry.blockId);
 
     if (mode === 'entire') {
+      const plan = planTocEntries(
+        session.part(),
+        outline,
+        toc.instruction,
+        pageNumbersFor(layout, outlineBlockIds),
+        tocRegionOf(toc)
+      );
       const replaced = session.applyTreeOps([
         {
           op: 'replaceTocResult',
@@ -2568,19 +2588,22 @@ export function mountPaginatedSurface(
 
     let previousSignature = '';
     for (let pass = 0; pass < TOC_MAX_PAGE_PASSES; pass += 1) {
-      const numbers = pageNumbersFor(
-        layout,
-        plan.entries.map((entry) => entry.headingParagraphId)
-      );
-      const updates = toc.resultParagraphIds
-        .slice(0, plan.entries.length)
-        .map((paragraphId, index) => ({
-          paragraphId,
-          pageNumberText:
-            numbers.get(plan.entries[index]!.headingParagraphId) ??
-            plan.entries[index]!.pageNumberText,
-        }));
-      const signature = updates.map((update) => update.pageNumberText).join('\u0000');
+      const numbers = pageNumbersFor(layout, outlineBlockIds);
+      // Each row is rewritten from the heading IT names, read from the row's own anchor or
+      // title. Pairing rows with plan entries by POSITION looks equivalent right after a full
+      // replace and is wrong everywhere else: one heading added or removed since the cache was
+      // written shifts every page number by one, silently, which is the exact state that
+      // "update page numbers only" exists to repair.
+      const headings = resolveTocRowHeadings(session.part(), toc, outline, tocRegionOf(toc));
+      const updates = toc.resultParagraphIds.flatMap((paragraphId, index) => {
+        const headingId = headings[index];
+        const pageNumberText = headingId ? numbers.get(headingId) : undefined;
+        return pageNumberText === undefined ? [] : [{ paragraphId, pageNumberText }];
+      });
+      if (updates.length === 0) break;
+      const signature = updates
+        .map((update) => `${update.paragraphId}\u0000${update.pageNumberText}`)
+        .join('\u0001');
       if (signature === previousSignature) break;
       previousSignature = signature;
       const rewritten = session.applyTreeOps([
@@ -2595,17 +2618,8 @@ export function mountPaginatedSurface(
       }
       layout = surface.layout();
       toc = targetToc(toc.id) ?? toc;
-      plan = planTocEntries(
-        session.part(),
-        outline,
-        toc.instruction,
-        pageNumbersFor(
-          layout,
-          outline.map((entry) => entry.blockId)
-        ),
-        excluded
-      );
     }
+
     return true;
   }
 
@@ -2861,7 +2875,8 @@ export function mountPaginatedSurface(
         measurer
       );
       if (!moved) return;
-      if (tocIdAtParagraph(moved.position.paragraphId) !== null) {
+      const tocIds = tocParagraphIds();
+      if (tocIds.has(moved.position.paragraphId)) {
         if (extend) return;
         const backwards = new Set<NavigationCommand>([
           'left',
@@ -2870,8 +2885,15 @@ export function mountPaginatedSurface(
           'up',
           'pageUp',
         ]);
-        const escape: NavigationCommand = backwards.has(command) ? 'left' : 'right';
-        const limit = tocParagraphIds().size + 1;
+        // The escape steps by LINE, never by character. A character step inside a row that
+        // has any text at all lands in the same paragraph, and the loop's own "we did not
+        // change paragraph" bail then fired on the first iteration: the caret could neither
+        // enter the region nor cross it, so everything past a table of contents was
+        // unreachable from the keyboard. A line step always leaves the row it starts on.
+        const escape: NavigationCommand = backwards.has(command) ? 'up' : 'down';
+        // One iteration per line the region occupies, plus slack for the landing line. The
+        // loop breaks the moment it is outside, so an over-generous bound costs nothing.
+        const limit = tocRegionLineCount(tocIds) + 4;
         for (let step = 0; step < limit; step += 1) {
           const next = navigateInActiveScope(
             currentLayout,
@@ -2882,11 +2904,19 @@ export function mountPaginatedSurface(
             noteScopeId(),
             measurer
           );
-          if (!next || next.position.paragraphId === moved.position.paragraphId) return;
+          // Only a position that does not move at all is a dead end. Comparing paragraph ids
+          // alone treats ordinary movement within a row as one.
+          if (
+            !next ||
+            (next.position.paragraphId === moved.position.paragraphId &&
+              next.position.offset === moved.position.offset)
+          ) {
+            return;
+          }
           moved = next;
-          if (tocIdAtParagraph(moved.position.paragraphId) === null) break;
+          if (!tocIds.has(moved.position.paragraphId)) break;
         }
-        if (tocIdAtParagraph(moved.position.paragraphId) !== null) return;
+        if (tocIds.has(moved.position.paragraphId)) return;
       }
       desiredX = moved.desiredX;
       // Note continuations share one EditorScope across pages: retarget the visual

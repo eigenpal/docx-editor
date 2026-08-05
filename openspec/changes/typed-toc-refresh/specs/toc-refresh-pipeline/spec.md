@@ -14,6 +14,11 @@
 - **WHEN** `refreshToc` runs with mode `pageNumbers`
 - **THEN** the engine does not replace entry paragraphs and only rewrites page-number runs after a layout flush
 
+#### Scenario: Rows are matched by identity, not by position
+
+- **WHEN** the cached result rows and the current outline no longer correspond one to one
+- **THEN** each row's page number is derived from the heading that row's own anchor or title names, and a row naming no current heading is left unchanged
+
 #### Scenario: Convergence is bounded
 
 - **WHEN** rewriting page numbers shifts pagination

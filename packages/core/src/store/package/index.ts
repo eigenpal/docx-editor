@@ -241,10 +241,12 @@ export {
   buildTocEntryParagraph,
   planTocEntries,
   TOC_LEVEL_INDENT_TWIPS,
+  tocEntryText,
   tocLeftIndentTwips,
   type TocEntryPlan,
   type TocOutlineHeading,
 } from './toc-build.ts';
+export { resolveTocRowHeadings } from './toc-rows.ts';
 export {
   deriveOoxmlIndexes,
   type OoxmlIndexes,

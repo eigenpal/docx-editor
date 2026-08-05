@@ -45,6 +45,13 @@ const TOC_CONTENT =
   '<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
 const HEADING =
   '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Introduction</w:t></w:r></w:p>';
+/** A cached result whose row NAMES the heading, which is how a click resolves its target. */
+const CURRENT_TOC_CONTENT = TOC_CONTENT.replace(
+  '<w:p><w:r><w:t>Old cached entry</w:t></w:r></w:p>',
+  '<w:p><w:pPr><w:pStyle w:val="TOC1"/></w:pPr><w:r><w:t>Introduction</w:t></w:r>' +
+    '<w:r><w:ptab w:alignment="right" w:relativeTo="margin" w:leader="dot"/></w:r>' +
+    '<w:r><w:t>1</w:t></w:r></w:p>'
+);
 const BODY =
   '<w:sdt><w:sdtPr><w:alias w:val="Contents"/></w:sdtPr><w:sdtContent>' +
   TOC_CONTENT +
@@ -393,11 +400,18 @@ describe('TOC refresh editor lane', () => {
     const container = document.createElement('div');
     document.body.append(container);
     const editor = createDocxEditor({ container });
-    editor.load(docx(BODY));
+    editor.load(
+      docx(
+        '<w:sdt><w:sdtPr><w:alias w:val="Contents"/></w:sdtPr><w:sdtContent>' +
+          CURRENT_TOC_CONTENT +
+          '</w:sdtContent></w:sdt>' +
+          HEADING
+      )
+    );
 
     const rowOf = (): HTMLElement =>
       [...container.querySelectorAll<HTMLElement>('.docx-paragraph-fragment')].find((element) =>
-        element.textContent?.includes('Old cached entry')
+        element.hasAttribute('data-docx-read-only')
       )!;
     const row = rowOf();
     const page = container.querySelector<HTMLElement>('[data-page-index="0"]')!;
@@ -455,9 +469,9 @@ describe('TOC refresh editor lane', () => {
     const container = document.createElement('div');
     document.body.append(container);
     const editor = createDocxEditor({ container });
-    editor.load(docx(TOC_CONTENT.replace(' \\h ', ' ') + HEADING));
+    editor.load(docx(CURRENT_TOC_CONTENT.replace(' \\h ', ' ') + HEADING));
     const row = [...container.querySelectorAll<HTMLElement>('[data-paragraph-id]')].find(
-      (element) => element.textContent?.includes('Old cached entry')
+      (element) => element.hasAttribute('data-docx-read-only')
     );
     expect(row?.querySelector('a.docx-hyperlink')).toBeNull();
 
@@ -465,6 +479,104 @@ describe('TOC refresh editor lane', () => {
     row!.dispatchEvent(jump);
     expect(jump.defaultPrevented).toBe(true);
     expect(editor.query({ type: 'isInsideToc', pos: 0 })).toBe(false);
+    editor.destroy();
+  });
+
+  test('page numbers follow each row to its own heading, not to its position', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({ container });
+
+    const row = (title: string, page: string): string =>
+      '<w:p><w:pPr><w:pStyle w:val="TOC1"/></w:pPr>' +
+      `<w:r><w:t>${title}</w:t></w:r>` +
+      '<w:r><w:ptab w:alignment="right" w:relativeTo="margin" w:leader="dot"/></w:r>' +
+      `<w:r><w:t>${page}</w:t></w:r></w:p>`;
+    const heading = (text: string): string =>
+      `<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+    const pageBreak = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+
+    // The cached rows name Alpha and Beta. The document has since grown a heading, Gamma,
+    // AHEAD of both, so rows and outline entries no longer share an index. Alpha is on page 2
+    // and Beta on page 3; matching by position wrote Gamma's page into Alpha's row and
+    // Alpha's into Beta's, one off, with nothing to say it had happened.
+    editor.load(
+      docx(
+        '<w:sdt><w:sdtPr><w:alias w:val="Contents"/></w:sdtPr><w:sdtContent>' +
+          '<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> TOC \\o "1-1" \\h </w:instrText><w:fldChar w:fldCharType="separate"/></w:r></w:p>' +
+          row('Alpha', '9') +
+          row('Beta', '9') +
+          '<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>' +
+          '</w:sdtContent></w:sdt>' +
+          heading('Gamma') +
+          pageBreak +
+          heading('Alpha') +
+          pageBreak +
+          heading('Beta')
+      )
+    );
+
+    expect(editor.exec({ type: 'refreshToc', mode: 'pageNumbers' })).toMatchObject({ ok: true });
+    const xml = await documentXml(editor);
+    const pairs = [...xml.matchAll(/<w:t>(Alpha|Beta)<\/w:t>[\s\S]*?<w:t>(\d+)<\/w:t>/g)].map(
+      (match) => [match[1], match[2]]
+    );
+    expect(pairs).toEqual([
+      ['Alpha', '2'],
+      ['Beta', '3'],
+    ]);
+    editor.destroy();
+  });
+
+  test('the caret crosses a TOC in both directions instead of stalling at its edge', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({ container });
+    const lead = '<w:p><w:r><w:t>Above the contents</w:t></w:r></w:p>';
+    editor.load(docx(lead + CURRENT_TOC_CONTENT + HEADING));
+    const surface = editor.surface!;
+    const ids = surface.session.paragraphIds();
+    const above = ids[0]!;
+    const below = ids[ids.length - 1]!;
+
+    // Forwards. A read-only region the caret can neither enter nor cross makes everything
+    // past it unreachable from the keyboard, which is what stepping by CHARACTER produced:
+    // the first step stayed inside the row it started in and the escape gave up there.
+    surface.setSelection({
+      anchor: { paragraphId: above, offset: 0 },
+      head: { paragraphId: above, offset: 0 },
+    });
+    surface.navigate('down');
+    expect(surface.state().selection.head.paragraphId).toBe(below);
+    expect(surface.isInsideToc(surface.state().selection.head.paragraphId)).toBe(false);
+
+    // Backwards.
+    surface.setSelection({
+      anchor: { paragraphId: below, offset: 0 },
+      head: { paragraphId: below, offset: 0 },
+    });
+    surface.navigate('up');
+    expect(surface.state().selection.head.paragraphId).toBe(above);
+    editor.destroy();
+  });
+
+  test('a row that names no heading this document still has does not jump anywhere', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({ container });
+    // `Old cached entry` matches nothing in the outline. Reading the outline entry that sits
+    // at the row's index instead sent the click to `Introduction`, a heading the row never
+    // named.
+    editor.load(docx(TOC_CONTENT.replace(' \\h ', ' ') + HEADING));
+    const before = editor.snapshot().selection;
+    const row = [...container.querySelectorAll<HTMLElement>('[data-paragraph-id]')].find(
+      (element) => element.textContent?.includes('Old cached entry')
+    );
+
+    const jump = new MouseEvent('click', { button: 0, bubbles: true, cancelable: true });
+    row!.dispatchEvent(jump);
+    expect(jump.defaultPrevented).toBe(false);
+    expect(editor.snapshot().selection).toEqual(before);
     editor.destroy();
   });
 });

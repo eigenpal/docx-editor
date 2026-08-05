@@ -387,6 +387,18 @@ function bookmarkNameOk(name: string): boolean {
 }
 
 /**
+ * Word flattens manual line/tab breaks from a heading into spaces in its TOC cache.
+ * Carrying them verbatim makes a short title wrap even when the row has ample room, and the
+ * same normalization is what lets a cached row be matched back to the heading it came from.
+ */
+export function tocEntryText(text: string): string {
+  return text
+    .replace(/[\t\n\r]+/g, ' ')
+    .replace(/ {2,}/g, ' ')
+    .trim();
+}
+
+/**
  * Plan TOC entries from the outline and existing bookmarks.
  */
 export function planTocEntries(
@@ -434,12 +446,7 @@ export function planTocEntries(
 
     entries.push({
       level: heading.level,
-      // Word flattens manual line/tab breaks from a heading into spaces in its TOC cache.
-      // Carrying them verbatim makes a short title wrap even when the TOC row has ample room.
-      text: heading.text
-        .replace(/[\t\n\r]+/g, ' ')
-        .replace(/ {2,}/g, ' ')
-        .trim(),
+      text: tocEntryText(heading.text),
       headingParagraphId: heading.blockId,
       bookmarkName,
       pageNumberText: pageNumberByParagraphId.get(heading.blockId) ?? '1',
