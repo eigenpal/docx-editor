@@ -49,9 +49,9 @@ export function fragmentSignature(fragment: BlockFragmentRecord): string {
           fragment.shading,
           fragment.shadingBox,
           fragment.marker,
-          // `contentX` as well as `box`: on a span-less line the alignment lives ONLY there,
-          // so an empty paragraph re-aligned from left to centre changes no other hashed
-          // field and would converge against the stale fragment.
+          // `contentX` as well as `box`, because it is published geometry and everything
+          // published participates. It is the ONLY field carrying alignment on a span-less
+          // line, and nothing here guarantees a mover of it also moves `box` or `spans`.
           fragment.lines.map((line) => [
             line.id,
             line.box,

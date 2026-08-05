@@ -500,9 +500,12 @@ function withCaretEdges(
  * Shift a line's spans to satisfy the paragraph alignment.
  *
  * Layout is the only geometry authority: hit testing and the caret read published span boxes
- * (and {@link StyleSpanRecord.caretEdges}). Paint starts the line at the first span's x and
- * flows inline — justification slack must therefore land on the same inter-word spaces
- * `word-spacing` expands, not on every style-span boundary.
+ * (and {@link StyleSpanRecord.caretEdges}). Paint starts the line at `LineRecord.contentX` —
+ * the first span's x whenever there is one — and flows inline, so justification slack must
+ * land on the same inter-word spaces `word-spacing` expands, not on every style-span boundary.
+ *
+ * A line with NO spans returns unchanged; its alignment is published as `contentX` by the
+ * callers, which is the only place an empty paragraph's caret x can come from.
  */
 export function alignSpans(
   spans: readonly StyleSpanRecord[],

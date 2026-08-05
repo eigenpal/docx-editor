@@ -1196,7 +1196,9 @@ function paintFragment(
       // At the end of the last line's text, which is where the mark itself sits.
       const end = last.spans[last.spans.length - 1];
       glyph.style.top = `${(last.box.y - fragment.box.y) * scale}px`;
-      glyph.style.left = `${((end ? end.box.x + end.box.width : last.box.x) - fragment.box.x) * scale}px`;
+      // No spans means an empty paragraph, whose mark sits at the ALIGNED origin — the same
+      // place the caret goes. Reading the line box drew a centred one against the margin.
+      glyph.style.left = `${((end ? end.box.x + end.box.width : last.contentX) - fragment.box.x) * scale}px`;
       element.append(glyph);
     }
   }
