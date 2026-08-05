@@ -39,7 +39,12 @@ import {
 } from '../package/package-shell-persistence.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import type { ImpactClass, TreeDocOp, TreeOpRejection } from './tree-ops.ts';
-import { deleteBlockMayStrandNote, deleteMayStrandNote } from './tree-package-gates.ts';
+import {
+  deleteBlockMayStrandNote,
+  deleteMayEmptyCommentRange,
+  deleteMayStrandNote,
+} from './tree-package-gates.ts';
+import { cascadeEmptiedComments } from '../package/comment-lifecycle.ts';
 import {
   TreeDocumentStore,
   type SelectionMark,
@@ -306,6 +311,11 @@ export class TreePackageStore {
     // block subtree) so ordinary structural deletion never scans the whole package.
     let mayDeleteNoteAtoms = false;
     const deleteTargets = new Set<string>();
+    // Same shape, different question: whether the transaction can leave a comment covering no
+    // characters. Word deletes a comment whose words are deleted, and the reap that does it is
+    // a before/after diff, so it needs the same "was it even possible" gate.
+    let mayEmptyComments = false;
+    const commentTargets = new Set<string>();
     const result = store.transact(
       (ctx) => {
         build({
@@ -333,6 +343,20 @@ export class TreePackageStore {
                 // revision's sites are wherever the file put them; the cascade itself is a
                 // before/after diff and does nothing when no reference actually went.
                 mayDeleteNoteAtoms = true;
+              }
+            }
+            if (!mayEmptyComments) {
+              if (op.op === 'deleteText' || op.op === 'deleteBlock') {
+                mayEmptyComments = deleteMayEmptyCommentRange(
+                  this.pkg,
+                  store.part,
+                  op,
+                  commentTargets
+                );
+              } else if (RESOLUTION_OPS.has(op.op)) {
+                // Rejecting an insertion removes the words it inserted, and a comment can be
+                // anchored over exactly those — the same reason resolution opens the note gate.
+                mayEmptyComments = true;
               }
             }
             return ctx.apply(op);
@@ -380,6 +404,29 @@ export class TreePackageStore {
         } else if (this.compositionSession) {
           // Defer package history until endComposition — mark so the whole IME
           // composition promotes to one package pointer (citation + note body).
+          this.compositionSession.packageWideEffects = true;
+        }
+        cascaded = true;
+      }
+    }
+
+    // Then reap the comments the same edit emptied. AFTER the note cascade and against its
+    // output, so a comment anchored inside a note body that has just been deleted is measured
+    // against the package the user will actually get. Both promote through the same pointer:
+    // one undo puts the words, the note and the remark back together.
+    if (result.change && mayEmptyComments) {
+      const afterNotes = this.currentPackage();
+      const reaped = cascadeEmptiedComments(beforePackage, afterNotes);
+      if (reaped === null) {
+        store.restoreCheckpoint(checkpoint);
+        this.installPackageSnapshotInternal(beforePackage);
+        return { ok: false, reason: 'invalidArgs', detail: 'comment-cascade-failed' };
+      }
+      if (reaped !== afterNotes) {
+        this.installPackageSnapshotInternal(reaped);
+        if (!compositionWasOpen) {
+          store.restoreHistoryStacks(checkpoint);
+        } else if (this.compositionSession) {
           this.compositionSession.packageWideEffects = true;
         }
         cascaded = true;
@@ -759,6 +806,23 @@ export class TreePackageStore {
     this.packageRev += 1;
     this.publish(change);
     return change;
+  }
+
+  /**
+   * Record a write that spanned SEVERAL parts as one package undo unit.
+   *
+   * A comment is not in one part — the body in `comments.xml`, the thread record in
+   * `commentsExtended.xml`, the markers in the story — and those writes reach the store
+   * through the story store directly rather than through `transact`. The story store's own
+   * history entry cannot undo them: `undo()` on a story pointer syncs the STORY PART back and
+   * nothing else, so undoing a comment restored the markers and left the body behind, or the
+   * other way round. The caller discards the story entry and hands the package it started
+   * from to this instead, which is the same promotion the note cascade does.
+   */
+  adoptPackageUnit(before: OoxmlPackage): void {
+    const after = this.currentPackage();
+    if (before === after) return;
+    this.pushUndoPointer({ kind: 'package', before, after });
   }
 
   /** Install a full package snapshot (public seam for post-fetch cleanup). */

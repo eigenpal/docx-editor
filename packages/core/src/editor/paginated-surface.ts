@@ -34,6 +34,7 @@ import {
   paragraphFragmentsOf,
   reviewItemKey,
   reviewItemsAt,
+  reviewThreadRootOf,
   selectionRects,
   caretAt,
   cellSelectionText,
@@ -2409,7 +2410,17 @@ export function mountPaginatedSurface(
       (item) =>
         !(item.kind === 'comment' && item.resolved) && reviewItemKey(item) !== dismissedReviewKey
     );
-    return covering[0] ?? null;
+    const found = covering[0];
+    if (!found) return null;
+    // A REPLY resolves to the card it renders inside — the comment it answers, or the tracked
+    // change it answers. It has no card of its own, so returning it opened an item nothing on
+    // screen was drawing: the reply box vanished from the very thing that had just been
+    // replied to. Comment threads survived that by accident (the parent comes first in
+    // `comments.xml` order and won the tie); a revision does not, because a comment outranks
+    // one outright at equal width.
+    if (found.kind !== 'comment') return found;
+    const root = reviewThreadRootOf(session.reviewItems(), found);
+    return reviewItemKey(root) === dismissedReviewKey ? found : root;
   }
 
   /** The class a band draws in, or null when this range should not be drawn at all. */

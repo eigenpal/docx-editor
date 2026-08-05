@@ -47,6 +47,14 @@ export interface UseReviewReturn {
   /** Reject a revision. A no-op on an item whose `readOnly` is true. */
   readonly reject: (item: ReviewItemView) => void;
   /**
+   * Discard the item: delete a comment thread, or reject a tracked change.
+   *
+   * One verb for both, so a card can carry one "remove this" control whatever it holds.
+   * Reports whether it landed — a comment the engine refused to delete must not vanish from
+   * the caller's own state while the document still holds it.
+   */
+  readonly remove: (item: ReviewItemView) => boolean;
+  /**
    * Reply to a comment, or to a revision — which OOXML records as a comment on its range.
    *
    * The author is AMBIENT (`EditorConfig.author`); pass one to override it for a single
@@ -136,6 +144,18 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     [editor]
   );
 
+  const remove = useCallback(
+    (item: ReviewItemView): boolean => {
+      if (!editor) return false;
+      // A custom node's card is informational and the engine refuses it; asking anyway would
+      // put a refusal in the console for a button a surface should not have drawn.
+      if (item.kind === 'custom') return false;
+      if (item.kind === 'revision' && item.readOnly) return false;
+      return editor.deleteReviewItem(item.key).ok;
+    },
+    [editor]
+  );
+
   const reply = useCallback(
     (item: ReviewItemView, text: string, author?: string): boolean => {
       if (text.trim().length === 0 || !editor) return false;
@@ -184,6 +204,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       setActive,
       accept,
       reject,
+      remove,
       reply,
       selectionAnchorY,
       comment,
@@ -197,6 +218,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       setActive,
       accept,
       reject,
+      remove,
       reply,
       selectionAnchorY,
       comment,

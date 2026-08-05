@@ -115,6 +115,16 @@ export interface ReviewRevisionItem {
   readonly readOnly: boolean;
   /** The other half of a move, or the other side of a delete/insert replacement. */
   readonly pairedWith?: string;
+  /**
+   * Comments answering this change, in document order.
+   *
+   * A reply to a tracked change IS a comment: `w:ins` and `w:del` carry `(@w:id, @w:author,
+   * @w:date)` and no body, so `replyToReviewItem` writes the text as a comment over the
+   * revision's own range. Nothing recorded the link, so the reply came back as a separate
+   * card — the reader saw their answer detach from the change it answered. The range is the
+   * link, and it is the same evidence `commentItemsOf` threads coincident comments on.
+   */
+  readonly replyIds: readonly string[];
 }
 
 export interface ReviewCommentItem {
@@ -125,6 +135,13 @@ export interface ReviewCommentItem {
   readonly resolved: boolean;
   /** The comment this replies to, absent for a top-level comment. */
   readonly parentId?: string;
+  /**
+   * The REVISION this comment answers, when it covers exactly that change's characters.
+   *
+   * Separate from {@link parentId} rather than folded into it: the two name different item
+   * kinds, and a surface resolving one id against the comment index would find nothing.
+   */
+  readonly parentRevisionId?: string;
   /** Replies to this comment, in document order. Empty for a reply or a childless comment. */
   readonly replyIds: readonly string[];
   /** True when the file gave this comment no usable range. */
@@ -449,6 +466,8 @@ export function revisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
       replacedText: entry.revisionKind === 'replace' ? entry.deletedText : '',
       ranges: entry.ranges,
       readOnly: entry.readOnly,
+      // Filled by `collectReviewItems`, which is the only place that sees the comments too.
+      replyIds: [],
     })
   );
   return pairReplacements(items, paragraphOrderOfPart(part));
@@ -737,8 +756,96 @@ export function collectReviewItems(input: ReviewModelInput): ReviewItem[] {
     }
   }
 
-  const items: ReviewItem[] = [...revisions, ...commentItemsOf(comments, anchors, threadState)];
+  const items: ReviewItem[] = linkRevisionReplies([
+    ...revisions,
+    ...commentItemsOf(comments, anchors, threadState),
+  ]);
   return items.sort((a, b) => positionRank(a, order) - positionRank(b, order));
+}
+
+/**
+ * The shape {@link linkRevisionReplies} needs, stated STRUCTURALLY.
+ *
+ * The store's queue is revisions and comments; the layout lane's adds a third kind for custom
+ * nodes, and neither union is assignable to the other. Both lanes have to run this pass — the
+ * store on the full derivation, the session on the locally patched list — so the pass is
+ * written against the fields it actually reads rather than against either union, and hands
+ * back the caller's own item type.
+ */
+export interface LinkableReviewItem {
+  readonly kind: string;
+  readonly id: string;
+  readonly ranges?: readonly ReviewRange[];
+  readonly range?: ReviewRange | null;
+  readonly parentId?: string;
+  readonly orphaned?: boolean;
+}
+
+/** A range as a comparable key, so "exactly these characters" is one lookup. */
+function rangeKey(range: ReviewRange): string {
+  return (
+    `${range.partName} ${range.start.paragraphId}:${range.start.offset}` +
+    `|${range.end.paragraphId}:${range.end.offset}`
+  );
+}
+
+/**
+ * Attach each comment that answers a tracked change to the change it answers.
+ *
+ * The evidence is the RANGE, exactly as it is for a coincident comment thread: replying to a
+ * revision writes a comment over that revision's own characters, because OOXML gives `w:ins`
+ * and `w:del` nowhere else to put the text. Without this the reply came back as an independent
+ * card in the rail, sitting beside the change rather than inside it, and the reader had no way
+ * to see which change their answer belonged to.
+ *
+ * Three things keep it from over-claiming. A ZERO-WIDTH range is evidence of nothing — the same
+ * rule the comment threading uses, and a format or paragraph-mark revision decorates no
+ * characters at all. A comment already stated to be a REPLY to another comment keeps that
+ * parent, because a stated link always beats an inferred one. And the FIRST revision on a span
+ * wins, so a card cannot claim a reply another card already holds.
+ */
+export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonly T[]): T[] {
+  const revisionBySpan = new Map<string, string>();
+  for (const item of items) {
+    if (item.kind !== 'revision') continue;
+    for (const range of item.ranges ?? []) {
+      if (
+        range.start.paragraphId === range.end.paragraphId &&
+        range.start.offset === range.end.offset
+      ) {
+        continue;
+      }
+      const key = rangeKey(range);
+      if (!revisionBySpan.has(key)) revisionBySpan.set(key, item.id);
+    }
+  }
+  if (revisionBySpan.size === 0) return [...items];
+
+  const repliesOf = new Map<string, string[]>();
+  const parentOf = new Map<string, string>();
+  for (const item of items) {
+    if (item.kind !== 'comment' || item.parentId !== undefined) continue;
+    if (item.orphaned || !item.range) continue;
+    const revisionId = revisionBySpan.get(rangeKey(item.range));
+    if (revisionId === undefined) continue;
+    parentOf.set(item.id, revisionId);
+    const bucket = repliesOf.get(revisionId);
+    if (bucket) bucket.push(item.id);
+    else repliesOf.set(revisionId, [item.id]);
+  }
+  if (parentOf.size === 0) return [...items];
+
+  return items.map((item) => {
+    if (item.kind === 'revision') {
+      const replies = repliesOf.get(item.id);
+      return replies ? { ...item, replyIds: replies } : item;
+    }
+    if (item.kind === 'comment') {
+      const parent = parentOf.get(item.id);
+      return parent === undefined ? item : { ...item, parentRevisionId: parent };
+    }
+    return item;
+  });
 }
 
 /** Paragraph node id → document position, from the TREE rather than from a layout. */

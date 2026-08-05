@@ -13,6 +13,7 @@
 
 import type { Node as PMNode } from 'prosemirror-model';
 import {
+  linkRevisionReplies,
   paragraphOrderOfPart,
   reviewItemKey,
   reviewItemPositionRank,
@@ -27,6 +28,7 @@ import {
   commentPartNameOf,
   commentsExtendedPartNameOf,
 } from '../store/store/comment-writes.ts';
+import { deleteCommentThread } from '../store/package/comment-lifecycle.ts';
 import {
   ORIGIN_IDS,
   TreePackageStore,
@@ -314,6 +316,13 @@ export interface TreeDocxSession {
    * part that records it commit together.
    */
   setCommentResolved(commentId: string, resolved: boolean): boolean;
+  /**
+   * Delete a comment thread outright — body, thread state and story markers.
+   *
+   * A THREAD, like resolving one: a reply whose parent is gone has nothing left to answer.
+   * False when the document holds no such comment, or when the removal was refused.
+   */
+  deleteComment(commentId: string): boolean;
   /**
    * Every occurrence of `query` in the BODY story, in document order, addressed in the
    * same offset vocabulary the tree ops and the surface selection use — so a match can be
@@ -1074,6 +1083,9 @@ export function openTreeSession(
 
       replyToComment(parentCommentId, anchor, text, author, date) {
         const store = bodyStore();
+        // Captured BEFORE the graft, so the undo unit spans exactly what this write changed.
+        const beforePackage = packageStore.currentPackage();
+        const checkpoint = store.checkpoint();
         // The story store keeps a package of its OWN, and package-level writes that are not
         // story intents — a `numbering.xml` graft, a minted hyperlink relationship — land on
         // the coordinator's copy through `replacePackageShell`. Without this graft the comment
@@ -1107,7 +1119,12 @@ export function openTreeSession(
         // wrote them into the story store's copy of it, so the coordinator has to be told or
         // `currentPackage()` keeps answering with a package that has no comment part and the
         // reply reads back as never written.
+        // The story entry the transaction just recorded is DISCARDED in favour of a package
+        // pointer. Undoing a story entry syncs the story part alone, so a comment undone that
+        // way put the markers back and left the body in `comments.xml`.
+        store.restoreHistoryStacks(checkpoint);
         packageStore.replacePackageShell(store.package);
+        packageStore.adoptPackageUnit(beforePackage);
         // Published LAST, so a subscriber that re-derives on the notification already sees the
         // shell installed above. Publishing first handed the change to a rail whose next
         // `reviewItems()` still read a package with no comment part in it.
@@ -1117,14 +1134,54 @@ export function openTreeSession(
 
       setCommentResolved(commentId, resolved) {
         const store = bodyStore();
+        const beforePackage = packageStore.currentPackage();
+        const checkpoint = store.checkpoint();
         // Grafted and republished for the same reason a reply is: the story store's package does
         // not carry the coordinator's package-level writes, and publishing back over them would
         // drop a minted relationship or a numbering graft an unrelated edit had made.
         store.graftPackage(() => packageStore.currentPackage());
         const result = setCommentResolved(store, commentId, resolved);
         if (!result.ok) return false;
+        // Promoted to a package unit, like a reply: `@w15:done` lives in a sibling part.
+        store.restoreHistoryStacks(checkpoint);
         packageStore.replacePackageShell(store.package);
+        packageStore.adoptPackageUnit(beforePackage);
         // Resolving is a document change like any other — see `replyToComment`.
+        packageStore.publishStoryWrite(result.change);
+        return true;
+      },
+
+      deleteComment(commentId) {
+        const store = bodyStore();
+        const beforePackage = packageStore.currentPackage();
+        const checkpoint = store.checkpoint();
+        // Grafted and republished exactly as a reply and a resolve are, and for the same
+        // reason: the story store's package does not carry the coordinator's package-level
+        // writes, and publishing back over them would drop a minted relationship.
+        store.graftPackage(() => packageStore.currentPackage());
+        let refused = false;
+        let removed = false;
+        const result = store.transact((ctx) => {
+          // ONE `applyPackage`, because a comment is not in one part. The body, the thread
+          // record and the story markers are three places describing one remark, and a
+          // transaction that took them separately could commit a body with no markers.
+          ctx.applyPackage((current) => {
+            const next = deleteCommentThread(current, commentId);
+            if (next === null) {
+              refused = true;
+              return current;
+            }
+            removed = next !== current;
+            return next;
+          });
+        });
+        // An unchanged package means the id named no comment. That is not a failure the
+        // caller can act on differently from a refusal, but it is not a write either, so it
+        // must not publish a change nothing changed.
+        if (refused || !result.ok || !removed) return false;
+        store.restoreHistoryStacks(checkpoint);
+        packageStore.replacePackageShell(store.package);
+        packageStore.adoptPackageUnit(beforePackage);
         packageStore.publishStoryWrite(result.change);
         return true;
       },
@@ -1256,7 +1313,12 @@ function patchLocalReviewItems(
           );
     patched.splice(insertAt, 0, ...orderedLocalRevisions);
   }
-  return patched;
+  // RE-LINKED, because the local revisions were derived from one paragraph and carry no
+  // replies. Splicing them in as-is dropped the link between a tracked change and the comment
+  // answering it, so a keystroke in that paragraph tore the reply out into a card of its own —
+  // and the next full re-derive put it back. The pass is over the patched list and costs
+  // nothing when no comment answers a change.
+  return linkRevisionReplies(patched);
 }
 
 function isRevisionWhollyInParagraph(item: ReviewRevisionItem, paragraphId: string): boolean {

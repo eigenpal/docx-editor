@@ -112,6 +112,77 @@ describe('the review sidebar', () => {
     expect(view.queryByTestId('review-draft')).toBeNull();
   });
 
+  const TRACKED = docx(
+    '<w:p><w:r><w:t xml:space="preserve">base </w:t></w:r>' +
+      '<w:ins w:id="1" w:author="Ada Lovelace" w:date="2026-01-01T00:00:00Z">' +
+      '<w:r><w:t>added</w:t></w:r></w:ins></w:p>'
+  );
+
+  test('a reply to a tracked change renders inside that change, with no second card', async () => {
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={TRACKED}
+        author="Grace Hopper"
+        modules={[reviewModule()]}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const editor = instance!;
+    expect(view.getAllByTestId('review-card')).toHaveLength(1);
+
+    await act(async () => {
+      editor.replyToReviewItem(editor.getReviewItems()[0]!.key, 'Why this wording?');
+    });
+
+    // STILL one card. OOXML gives `w:ins` no body, so the answer is written as a comment over
+    // the change's own range — and before the two were linked it came back as a card of its
+    // own, floating beside the change the reader was answering.
+    expect(view.getAllByTestId('review-card')).toHaveLength(1);
+    expect(view.getAllByTestId('review-card')[0]!.dataset.kind).toBe('insert');
+    const replies = view.getAllByTestId('review-reply');
+    expect(replies).toHaveLength(1);
+    expect(replies[0]!.textContent).toContain('Why this wording?');
+    expect(replies[0]!.textContent).toContain('Grace Hopper');
+  });
+
+  test('a tracked change carries a delete control that discards the suggestion', async () => {
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={TRACKED}
+        author="Grace Hopper"
+        modules={[reviewModule()]}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const editor = instance!;
+    // The rail had accept and reject for a change and nothing at all for a comment, so a
+    // remark could be resolved but never removed. One control now sits on both kinds.
+    expect(view.getAllByTestId('review-delete')).toHaveLength(1);
+
+    await act(async () => {
+      fireEvent.click(view.getByTestId('review-delete'));
+    });
+    // Discarding a suggestion is rejecting it: the proposal goes, the base text stays.
+    expect(view.queryAllByTestId('review-card')).toHaveLength(0);
+    expect(editor.surface!.session.bodyText()).toBe('base ');
+  });
+
   test('hides the read-only structural cards by default, and shows them on request', () => {
     // One resolvable insertion plus one structural site (a tracked row insertion,
     // `w:trPr/w:ins`) — the kind of markup a heavily revised contract carries by the dozen.

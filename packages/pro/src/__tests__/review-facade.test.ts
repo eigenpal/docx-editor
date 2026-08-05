@@ -312,6 +312,99 @@ describe('comments in the queue', () => {
     expect(reply?.author).toBe('Grace Hopper');
   });
 
+  test('deleting a comment takes its record, its markers and its card away', () => {
+    const editor = mount({ body: COMMENTED_BODY, comments: COMMENTS });
+    const [card] = editor.getReviewItems();
+    expect(editor.deleteReviewItem(card!.key)).toEqual({ ok: true, changed: true });
+    expect(editor.getReviewItems()).toHaveLength(0);
+    // The WORDS stay. Deleting a remark is not deleting the text it was about — that is the
+    // whole difference between this and selecting the range and pressing Delete.
+    expect(bodyTextOf(editor)).toContain('commented words');
+  });
+
+  test('deleting a comment takes its replies with it, and one undo brings the thread back', () => {
+    const editor = mount({ body: COMMENTED_BODY, comments: COMMENTS });
+    const [card] = editor.getReviewItems();
+    expect(editor.replyToReviewItem(card!.key, 'Checked.').ok).toBe(true);
+    expect(editor.getReviewItems()).toHaveLength(2);
+
+    const root = editor.getReviewItems().find((item) => item.parentId === undefined)!;
+    expect(editor.deleteReviewItem(root.key).ok).toBe(true);
+    // A reply whose parent is gone has nothing left to answer, so the CONVERSATION goes —
+    // the same rule resolving a thread follows.
+    expect(editor.getReviewItems()).toHaveLength(0);
+
+    editor.surface!.undo();
+    expect(editor.getReviewItems()).toHaveLength(2);
+  });
+
+  test('deleting a comment emits a change, so a subscribed rail re-derives', () => {
+    const editor = mount({ body: COMMENTED_BODY, comments: COMMENTS });
+    const [card] = editor.getReviewItems();
+    const seen: number[] = [];
+    editor.on('change', () => seen.push(editor.getReviewItems().length));
+    expect(editor.deleteReviewItem(card!.key).ok).toBe(true);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toBe(0);
+  });
+
+  test('deleting a tracked change discards the suggestion, like rejecting it', () => {
+    const editor = mount({ body: INSERTION });
+    const [card] = editor.getReviewItems();
+    expect(editor.deleteReviewItem(card!.key)).toEqual({ ok: true, changed: true });
+    expect(editor.getReviewItems()).toHaveLength(0);
+    expect(bodyTextOf(editor)).not.toContain('added text');
+  });
+
+  test('deleting an item the queue does not hold is refused rather than silently ignored', () => {
+    const editor = mount({ body: COMMENTED_BODY, comments: COMMENTS });
+    const result = editor.deleteReviewItem('comment-nope');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('notFound');
+  });
+
+  test('a reply to a tracked change nests in that change, not beside it', () => {
+    const editor = mount({ body: INSERTION });
+    const [change] = editor.getReviewItems();
+    expect(change!.kind).toBe('revision');
+    expect(editor.replyToReviewItem(change!.key, 'Why this wording?').ok).toBe(true);
+
+    const items = editor.getReviewItems();
+    const revision = items.find((item) => item.kind === 'revision')!;
+    const reply = items.find((item) => item.kind === 'comment')!;
+    // OOXML gives `w:ins` no body, so the answer is a comment over the change's own range.
+    // The RANGE is the only record of the link, and without reading it the reply came back
+    // as an independent card floating beside the change it answered.
+    expect(revision.replyIds).toEqual([reply.id]);
+    expect(reply.kind === 'comment' && reply.parentRevisionId).toBe(revision.id);
+    expect(reply.text).toBe('Why this wording?');
+  });
+
+  test('the caret in a change that has been answered opens the change, not the reply', () => {
+    const editor = mount({ body: INSERTION });
+    const [change] = editor.getReviewItems();
+    expect(editor.replyToReviewItem(change!.key, 'Noted.').ok).toBe(true);
+    editor.setActiveReviewItem(editor.getReviewItems().find((i) => i.kind === 'revision')!.key);
+
+    const items = editor.getReviewItems();
+    // The reply covers exactly the change's characters, so it wins the innermost test. It has
+    // no card of its own, so resolving to it would open an item nothing on screen draws.
+    expect(items.find((item) => item.kind === 'revision')!.isActive).toBe(true);
+    expect(items.find((item) => item.kind === 'comment')!.isActive).toBe(false);
+  });
+
+  test('an ordinary comment on other words is not read as answering a change', () => {
+    const editor = mount({
+      body: `${INSERTION}${COMMENTED_BODY}`,
+      comments: COMMENTS,
+    });
+    const comment = editor.getReviewItems().find((item) => item.kind === 'comment')!;
+    const revision = editor.getReviewItems().find((item) => item.kind === 'revision')!;
+    // Different characters, so there is no evidence of a link and none is invented.
+    expect(revision.replyIds).toEqual([]);
+    expect(comment.kind === 'comment' && comment.parentRevisionId).toBeUndefined();
+  });
+
   test('a reply keeps its spaces through a save and reopen', async () => {
     const editor = mount({ body: COMMENTED_BODY, comments: COMMENTS });
     const [card] = editor.getReviewItems();

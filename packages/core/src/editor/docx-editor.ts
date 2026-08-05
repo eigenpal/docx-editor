@@ -1284,6 +1284,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           text: commentBodyText(item.comment),
           resolved: item.resolved,
           ...(item.parentId !== undefined ? { parentId: item.parentId } : {}),
+          ...(item.parentRevisionId !== undefined
+            ? { parentRevisionId: item.parentRevisionId }
+            : {}),
           replyIds: item.replyIds,
           readOnly: false,
           item,
@@ -1298,7 +1301,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           initials: initialsOfAuthor(item.author),
           text: item.text,
           ...(item.replacedText ? { replacedText: item.replacedText } : {}),
-          replyIds: [],
+          replyIds: item.replyIds,
           readOnly: item.readOnly,
           item,
         };
@@ -1896,6 +1899,37 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     acceptReviewItem: (key: string) => resolveReviewItem(key, 'accept'),
     rejectReviewItem: (key: string) => resolveReviewItem(key, 'reject'),
+
+    deleteReviewItem(key: string): ExecResult {
+      if (!reviewEnabled) {
+        return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
+      }
+      const placement = reviewPlacements().find((entry) => entry.key === key);
+      const item = placement?.item as ReviewItem | undefined;
+      if (!item || !surface) {
+        return { ok: false, code: 'notFound', reason: 'no review item with that key' };
+      }
+      // Discarding a suggestion IS rejecting it — same transaction, same undo step, and the
+      // refusal rules for an unresolvable kind already live there.
+      if (item.kind === 'revision') return resolveReviewItem(key, 'reject');
+      if (item.kind !== 'comment') {
+        return { ok: false, code: 'unsupported', reason: 'a custom node card cannot be deleted' };
+      }
+      // The card being deleted is very likely the OPEN one, and an active key naming an item
+      // the queue no longer holds leaves the rail with nothing to draw and a band painted over
+      // text that has no card. Dismissed first, so the write publishes into a clean state.
+      surface.dismissActiveReview();
+      let deleted = false;
+      surface.commitReviewOps(() => {
+        deleted = surface!.session.deleteComment(item.id);
+        return { committed: deleted };
+      });
+      if (!deleted) {
+        return { ok: false, code: 'unsupported', reason: 'the comment could not be deleted' };
+      }
+      bump();
+      return { ok: true, changed: true };
+    },
 
     replyToReviewItem(key: string, text: string, author?: string): ExecResult {
       if (!reviewEnabled) {

@@ -16,6 +16,16 @@ import type {
   RevisionAddress,
 } from '@docx-editor.dev/core/store';
 
+/**
+ * Re-exported rather than reimplemented, unlike the rest of this file's helpers.
+ *
+ * The duplication here is deliberate for helpers that are one screen of obvious code, but
+ * "which comment answers which tracked change" is a RULE, and two copies of it drift into a
+ * reply that the queue nests and the session's local patch does not. It is written against
+ * the fields it reads rather than against either lane's item union, so both can run it.
+ */
+export { linkRevisionReplies, type LinkableReviewItem } from '@docx-editor.dev/core/store';
+
 // ── Comment vocabulary (authored in `word/comments.xml` and its siblings) ──────
 
 /** The `w15` namespace: `commentsExtended.xml` — thread parent and resolved state. */
@@ -151,6 +161,13 @@ export interface ReviewRevisionItem {
   readonly readOnly: boolean;
   /** The other half of a move, or the other side of a delete/insert replacement. */
   readonly pairedWith?: string;
+  /**
+   * Comments answering this change, in document order.
+   *
+   * A reply to a tracked change IS a comment: `w:ins` and `w:del` carry no body, so the text
+   * is written as a comment over the revision's own range and the range is what links them.
+   */
+  readonly replyIds: readonly string[];
 }
 
 export interface ReviewCommentItem {
@@ -161,6 +178,8 @@ export interface ReviewCommentItem {
   readonly resolved: boolean;
   /** The comment this replies to, absent for a top-level comment. */
   readonly parentId?: string;
+  /** The REVISION this comment answers, when it covers exactly that change's characters. */
+  readonly parentRevisionId?: string;
   /** Replies to this comment, in document order. Empty for a reply or a childless comment. */
   readonly replyIds: readonly string[];
   /** True when the file gave this comment no usable range. */
@@ -410,10 +429,33 @@ export function activeReviewItem(
   return found.kind === 'comment' ? threadRootOf(items, found) : found;
 }
 
-/** Walk a reply up to the comment that heads its thread. Guarded against a cyclic file. */
+/**
+ * Walk a reply up to the card that heads its thread. Guarded against a cyclic file.
+ *
+ * The head is not always a comment. A reply to a tracked change renders inside the REVISION's
+ * card, so resolving it to itself opened an item nothing on screen was drawing — the reply box
+ * vanished the moment somebody answered a change.
+ *
+ * EXPORTED because the paginated surface answers "which card is open" itself, against its own
+ * dismissed-key state, rather than through {@link activeReviewItem}. Two copies of the
+ * innermost-wins rule was survivable while a reply could only be a comment — the parent came
+ * first in `comments.xml` order and won the tie by accident. It stopped being survivable the
+ * moment a reply could answer a revision, which outranks it outright.
+ */
+export function reviewThreadRootOf(
+  items: readonly ReviewItem[],
+  comment: ReviewCommentItem
+): ReviewItem {
+  return threadRootOf(items, comment);
+}
+
 function threadRootOf(items: readonly ReviewItem[], comment: ReviewCommentItem): ReviewItem {
   const byId = new Map<string, ReviewCommentItem>();
-  for (const item of items) if (item.kind === 'comment') byId.set(item.id, item);
+  const revisionById = new Map<string, ReviewRevisionItem>();
+  for (const item of items) {
+    if (item.kind === 'comment') byId.set(item.id, item);
+    else if (item.kind === 'revision') revisionById.set(item.id, item);
+  }
   const seen = new Set<string>([comment.id]);
   let current = comment;
   while (current.parentId !== undefined) {
@@ -421,6 +463,10 @@ function threadRootOf(items: readonly ReviewItem[], comment: ReviewCommentItem):
     if (!parent || seen.has(parent.id)) break;
     seen.add(parent.id);
     current = parent;
+  }
+  if (current.parentRevisionId !== undefined) {
+    const revision = revisionById.get(current.parentRevisionId);
+    if (revision) return revision;
   }
   return current;
 }

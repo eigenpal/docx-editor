@@ -354,6 +354,7 @@ export {
 // is the vocabulary and its pure helpers.
 export {
   activeReviewItem,
+  reviewThreadRootOf,
   commentBodyText,
   commentInitials,
   firstReviewRange,

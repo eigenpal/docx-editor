@@ -5174,6 +5174,14 @@ a.docx-hyperlink:focus-visible {
   opacity: 0.4;
 }
 
+/* The destructive one reads as destructive on hover. It sits beside accept and reject in the
+   same row, and three identical grey glyphs give no warning that one of them is the only
+   button in the rail that throws a reviewer's words away. */
+.docx-review__action[data-testid='review-delete']:hover:not(:disabled) {
+  background: var(--doc-destructive-hover-bg);
+  color: var(--doc-destructive);
+}
+
 .docx-review__summary {
   display: flex;
   flex-direction: column;
