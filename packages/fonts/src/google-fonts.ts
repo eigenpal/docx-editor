@@ -164,7 +164,23 @@ export function googleFonts(
   readonly defaultFamily: string;
 }) => Promise<GoogleFontsFragment> {
   const fetcher = options.fetcher ?? fetch;
-  const substitutes = { ...GOOGLE_METRIC_SUBSTITUTES, ...options.substitute };
+  /**
+   * Document family (case-folded) -> catalog family.
+   *
+   * A `Map` built from OWN entries, not an object literal indexed by a file-derived name:
+   * `substitutes['constructor']` on a plain object answers with `Object`, and the lookup
+   * would go on to call `.toLowerCase()` on a function — one `w:rFonts w:ascii="toString"`
+   * away from throwing out of the resolver and dropping every other family with it.
+   *
+   * Case-folded because Word matches font names case-insensitively and the catalog lookup
+   * below already does; an exact-case map left `w:ascii="calibri"` resolving to nothing at
+   * all while `Calibri` resolved to four faces.
+   */
+  const substitutes = new Map<string, string>(
+    Object.entries({ ...GOOGLE_METRIC_SUBSTITUTES, ...options.substitute }).map(
+      ([from, to]) => [from.toLowerCase(), to] as const
+    )
+  );
   const allowed = options.allow
     ? new Set(options.allow.map((family) => family.toLowerCase()))
     : null;
@@ -178,14 +194,20 @@ export function googleFonts(
     const failures: GoogleFontLoadFailure[] = [];
 
     for (const declared of [request.defaultFamily, ...request.families]) {
-      const target = substitutes[declared] ?? declared;
+      const target = substitutes.get(declared.toLowerCase()) ?? declared;
       const faces = catalogByFamily.get(target.toLowerCase());
       if (!faces) continue;
       if (allowed && !allowed.has(target.toLowerCase())) continue;
       wanted.set(faces[0]!.family, faces);
       // Only when the document's own name differs from the face being loaded: a run
       // saying "Carlito" needs the bytes, not a Carlito -> Carlito redirect.
-      if (target !== declared) {
+      //
+      // Compared against the CATALOG family rather than the substitution target, so a
+      // run spelled "carlito" is still mapped onto the "Carlito" face. Face keys are
+      // case-sensitive (`fontRequestKey` stringifies the family verbatim), so without
+      // this the bytes would be fetched and measured but painted in a platform
+      // substitute — the alias is only ever found under the name the run actually wrote.
+      if (faces[0]!.family !== declared) {
         for (const face of faces) {
           substitutions.push({
             from: { family: declared, weight: face.weight, style: face.style },
