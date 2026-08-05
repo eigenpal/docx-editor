@@ -73,7 +73,7 @@ jobs:
         run: bun run i18n:validate
 
       - name: Run tests
-        run: bun test
+        run: bun run test
 
       - name: Build packages
         run: bun run build:packages

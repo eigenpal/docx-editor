@@ -24,7 +24,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { describe, expect, test } from 'bun:test';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
-import { typecheckProject } from '../../../scripts/lib/typecheck-compat.mjs';
+import { TYPECHECK_TIMEOUT_MS, typecheckProject } from '../../../scripts/lib/typecheck-compat.mjs';
 
 const RUNTIME = join(import.meta.dir, '..');
 const PACKAGE_SRC = join(RUNTIME, '..');
@@ -251,13 +251,21 @@ describe('the claims that are compiled rather than scanned', () => {
   const neutralProject = join(RUNTIME, 'tsconfig.neutral.json');
   const fullProject = join(RUNTIME, 'tsconfig.json');
 
-  test('the neutral project compiles with zero diagnostics, without the DOM lib', () => {
-    expect(typecheckProject(neutralProject)).toEqual([]);
-  });
+  test(
+    'the neutral project compiles with zero diagnostics, without the DOM lib',
+    () => {
+      expect(typecheckProject(neutralProject)).toEqual([]);
+    },
+    TYPECHECK_TIMEOUT_MS
+  );
 
-  test('the whole runtime, browser entry included, compiles with zero diagnostics', () => {
-    expect(typecheckProject(fullProject)).toEqual([]);
-  });
+  test(
+    'the whole runtime, browser entry included, compiles with zero diagnostics',
+    () => {
+      expect(typecheckProject(fullProject)).toEqual([]);
+    },
+    TYPECHECK_TIMEOUT_MS
+  );
 
   test('the conformance assertions are compiled but never shipped', () => {
     // They import `compat/` — fine for a compiler, wrong for a bundle. Neither shipped entry may

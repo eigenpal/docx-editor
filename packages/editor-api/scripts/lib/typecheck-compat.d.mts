@@ -11,3 +11,9 @@
  * An empty array means the project compiled clean.
  */
 export function typecheckProject(tsconfigPath: string): string[];
+
+/**
+ * The per-test timeout a `typecheckProject` call needs. A compile of these projects is seconds,
+ * not milliseconds, and `bun test`'s default budget is five seconds.
+ */
+export const TYPECHECK_TIMEOUT_MS: number;
