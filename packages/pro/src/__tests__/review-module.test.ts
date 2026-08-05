@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // pro-licensing, v1 honor system: a module without a key is fully functional
 // and silent, and NOTHING about licensing touches the network — pinned by
 // spying on fetch for the whole construction + registration + use cycle.

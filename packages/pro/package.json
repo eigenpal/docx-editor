@@ -24,7 +24,9 @@
     "README.md"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "license:check": "license-check-and-add check -f license-check.json",
+    "license:add": "license-check-and-add add -f license-check.json"
   },
   "dependencies": {
     "@docx-editor.dev/core-contract": "workspace:*",
@@ -52,6 +54,7 @@
     "@testing-library/react": "^16.0.0",
     "@types/react": "^19.0.0",
     "fflate": "^0.8.2",
+    "license-check-and-add": "^4.0.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "typescript": "^5.3.3"
@@ -63,11 +66,11 @@
     "content-controls"
   ],
   "author": {
-    "name": "Jedr Blaszyk",
-    "email": "jedr@eigenpal.com",
-    "url": "https://github.com/jedrazb"
+    "name": "EigenPal, Inc.",
+    "email": "licensing@eigenpal.com",
+    "url": "https://eigenpal.com"
   },
-  "license": "SEE LICENSE IN LICENSE.md",
+  "license": "LicenseRef-EigenPal-Pro-Evaluation-1.0",
   "homepage": "https://docx-editor.dev/",
   "repository": {
     "type": "git",

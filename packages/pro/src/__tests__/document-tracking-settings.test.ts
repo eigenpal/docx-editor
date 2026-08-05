@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // `settings.xml` states the tracking the DOCUMENT asks for, and the editor honours it.
 //
 // The failure this exists to prevent: a package carrying `w:trackRevisions` opening as an

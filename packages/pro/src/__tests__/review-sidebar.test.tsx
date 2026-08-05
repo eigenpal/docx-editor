@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // The review sidebar, composed from `@docx-editor.dev/pro/react` inside the free
 // adapter's Root/Viewport/Content — moved here from the react package with the
 // review lift (the pane is pro chrome now). Same pins as before the move.

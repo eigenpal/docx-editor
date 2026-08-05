@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // Custom nodes: the tag codec and the recognition pass, pinned against the REAL
 // Word round-trip evidence (e2e/fixtures/sdt-custom-tag-*.docx — the same file
 // before and after Word for the web edited and re-saved it, 2026-08-05).

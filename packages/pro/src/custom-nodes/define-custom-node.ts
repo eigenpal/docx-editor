@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // `defineCustomNode` — integrator-defined inline nodes anchored on run-level
 // SDTs with `w:tag` identity (pro-review-and-custom-nodes, D5–D7).
 //

@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // The review queue as the FACADE publishes it — the six members a sidebar is built on.
 //
 // What these pin down: the queue is presentation-ready without the host deriving anything
