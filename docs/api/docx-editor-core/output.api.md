@@ -5,9 +5,6 @@
 ```ts
 
 // @public
-export const ENGINE_OUTPUT_PACKAGE: "@docx-editor.dev/core/output";
-
-// @public
 export interface OverlayRect {
     readonly className?: string;
     // (undocumented)

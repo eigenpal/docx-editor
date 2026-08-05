@@ -5,28 +5,48 @@
 ```ts
 
 // @public
-export type InteractionAffinity = 'upstream' | 'downstream';
+export type EditorScope = {
+    kind: 'body';
+} | {
+    kind: 'headerFooter';
+    rId: string;
+}
+/**
+* A footnote/endnote region.
+*
+* `id` encodes kind + signed note id as `footnote:<id>` or `endnote:<id>`
+* (e.g. `footnote:2`). Use `formatNoteScopeId` / `parseNoteScopeId` from the
+* store package. Do not invent a parallel `{ noteKind, noteId }` scope arm.
+*/
+| {
+    kind: 'note';
+    id: string;
+}
+/** A text box or floating frame with its own content, addressed by id. */
+| {
+    kind: 'frame';
+    id: string;
+}
+/** Read-only aggregate across every view. Valid for queries, not for writes. */
+| {
+    kind: 'all';
+};
 
 // @public
-export interface InteractionFrameId {
-    // (undocumented)
-    readonly value: number;
-}
+export type InteractionAffinity = 'upstream' | 'downstream';
 
 // @public
 export type InteractionOutcome<T> = {
     readonly ok: true;
     readonly value: T;
-    readonly frameId: InteractionFrameId;
 } | {
     readonly ok: false;
     readonly code: InteractionOutcomeCode;
     readonly reason: string;
-    readonly frameId?: InteractionFrameId;
 };
 
 // @public
-export type InteractionOutcomeCode = 'staleFrame' | 'pendingLayout' | 'pendingSelection' | 'readOnly' | 'invalidTarget' | 'unsupported';
+export type InteractionOutcomeCode = 'pendingLayout' | 'pendingSelection' | 'readOnly' | 'invalidTarget' | 'unsupported';
 
 // @public
 export interface SemanticIdentity {
@@ -34,18 +54,6 @@ export interface SemanticIdentity {
     readonly blockId: string;
     // (undocumented)
     readonly storyId: string;
-}
-
-// @public
-export interface SemanticSelection {
-    // (undocumented)
-    readonly anchor: SemanticTarget;
-    // (undocumented)
-    readonly frameId: InteractionFrameId;
-    // (undocumented)
-    readonly head: SemanticTarget;
-    // (undocumented)
-    readonly scope: ViewScope;
 }
 
 // @public
@@ -60,6 +68,11 @@ export type SemanticTarget = {
     readonly scope: ViewScope;
     readonly objectId: string;
 };
+
+// @public
+export type ViewScope = Exclude<EditorScope, {
+    kind: 'all';
+}>;
 
 // (No @packageDocumentation comment for this package)
 

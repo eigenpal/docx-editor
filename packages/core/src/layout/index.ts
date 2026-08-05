@@ -17,9 +17,6 @@
 // Resolved caches, dependency closure, shaping, convergent pagination, and the anchored
 // DisplayItem[] IR. DOM-free — emits positioned geometry, never paints.
 
-/** Stable package identity used by the import-graph / package-authority checks. */
-export const ENGINE_LAYOUT_PACKAGE = '@docx-editor.dev/core/layout' as const;
-
 export {
   FontResolutionError,
   HARD_MAX_AGGREGATE_FONT_BYTES,

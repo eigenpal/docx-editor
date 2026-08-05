@@ -17,9 +17,7 @@ import {
   type TableRightEdgeResizeTarget,
   type TableRowOccurrenceTarget,
 } from '../contracts/editor';
-import { type InteractionFrameId, type SemanticTarget } from '../contracts/interaction';
-import { type McpContext, type McpToolDefinition } from '../contracts/mcp';
-import { type Extension, type PluginContext, type RenderedPage } from '../contracts/plugin';
+import { type SemanticTarget } from '../contracts/interaction';
 import type { DocAnchor, DocxDocument } from '../contracts/types';
 
 // A no-arg command must be constructible. `Record<string, never>` made this
@@ -128,18 +126,15 @@ const rightEdgeTargetMissingRepeat: TableRightEdgeResizeTarget = {
 
 // Declaration-only public entries must resolve for a consumer without exposing
 // any ProseMirror-facing types.
+//
+// The plugin and MCP contracts that used to be exercised here were deleted rather than
+// implemented. Every function in them threw, `coreTools` was an `export declare const`
+// with nothing behind it — so a consumer importing it got a binding that does not exist
+// at runtime — and the active change defers extensions and MCP to a separately specified
+// contract. `EditorModule` is the seam a capability actually arrives through, and it says
+// so: the shape is closed on purpose.
 declare const target: SemanticTarget;
-declare const frameId: InteractionFrameId;
 void target;
-void frameId;
-declare const extension: Extension;
-declare const tool: McpToolDefinition;
-declare const pluginContext: PluginContext;
-const rendered: RenderedPage | null = pluginContext.getRenderedPage(1);
-const handlerResult: Promise<unknown> = tool.handler({}, {} as McpContext);
-void extension;
-void rendered;
-void handlerResult;
 
 export function exercise(editor: Editor, doc: DocxDocument): void {
   // Writes return a result that narrows.

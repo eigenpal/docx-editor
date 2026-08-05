@@ -12,6 +12,61 @@ export interface ApplyResult {
 }
 
 // @public
+export type Block = Paragraph | Table | ContentControl;
+
+// @public
+export type ColorValue = {
+    readonly kind: 'hex';
+    readonly value: string;
+} | {
+    readonly kind: 'theme';
+    readonly slot: string;
+    readonly tint?: number;
+    readonly shade?: number;
+} | {
+    readonly kind: 'auto';
+};
+
+// @public
+export type ContainerRef = {
+    part: 'body';
+} | {
+    part: 'header' | 'footer';
+    rId: string;
+} | {
+    part: 'footnote' | 'endnote';
+    noteId: number;
+};
+
+// @public
+export interface ContentControl {
+    // (undocumented)
+    readonly alias?: string;
+    // (undocumented)
+    readonly content: readonly Block[];
+    // (undocumented)
+    readonly controlType: ContentControlType;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly kind: 'contentControl';
+    // (undocumented)
+    readonly locked?: boolean;
+    // (undocumented)
+    readonly tag?: string;
+}
+
+// @public
+export interface ContentControlFilter {
+    // (undocumented)
+    readonly alias?: string;
+    // (undocumented)
+    readonly controlType?: ContentControlType;
+    // (undocumented)
+    readonly tag?: string;
+}
+
+// @public
 export interface ContentControlSummary {
     // (undocumented)
     readonly alias?: string;
@@ -23,6 +78,47 @@ export interface ContentControlSummary {
     readonly locked?: boolean;
     // (undocumented)
     readonly tag?: string;
+}
+
+// @public
+export type ContentControlType = 'richText' | 'plainText' | 'checkbox' | 'dropdown' | 'comboBox' | 'date' | 'picture' | 'repeatingSection';
+
+// @public
+export interface DocAnchor {
+    occurrence?: number;
+    // (undocumented)
+    paraId: string;
+    // (undocumented)
+    search?: string;
+}
+
+// @public
+export interface DocAnchorRange {
+    // (undocumented)
+    readonly endOffset: number;
+    readonly endParagraphId: string;
+    readonly part: string;
+    // (undocumented)
+    readonly startOffset: number;
+    // (undocumented)
+    readonly startParagraphId: string;
+}
+
+// @public
+export interface DocComment {
+    readonly anchor?: DocAnchorRange;
+    // (undocumented)
+    readonly author: string;
+    readonly date?: string;
+    // (undocumented)
+    readonly id: string;
+    readonly orphaned?: boolean;
+    // (undocumented)
+    readonly parentId?: string;
+    // (undocumented)
+    readonly resolved?: boolean;
+    // (undocumented)
+    readonly text: string;
 }
 
 // @public
@@ -180,6 +276,15 @@ export interface DocEdits {
 }
 
 // @public
+export interface DocLocation {
+    // (undocumented)
+    container: ContainerRef;
+    // (undocumented)
+    offset?: number;
+    path: number[];
+}
+
+// @public
 export interface DocQueries {
     // (undocumented)
     comments: {
@@ -234,6 +339,95 @@ export interface DocQueryResults {
 }
 
 // @public
+export interface DocRange {
+    // (undocumented)
+    from: DocAnchor | DocLocation;
+    // (undocumented)
+    to: DocAnchor | DocLocation;
+}
+
+// @public
+export type DocTarget = DocAnchor | DocLocation | DocRange;
+
+// @public
+export interface DocumentBody {
+    // (undocumented)
+    readonly content: readonly Block[];
+    readonly sections: readonly Section[];
+}
+
+// @public
+export interface DocxDocument {
+    // (undocumented)
+    readonly body: DocumentBody;
+    // (undocumented)
+    readonly comments: readonly DocComment[];
+    // (undocumented)
+    readonly revisions: readonly Revision[];
+    // (undocumented)
+    readonly styles: StyleDefinitions;
+    // (undocumented)
+    readonly theme?: Theme;
+}
+
+// @public
+export type ExecErrorCode = 'notFound' | 'ambiguous' | 'locked' | 'bound' | 'typeMismatch' | 'kindMismatch' | 'outOfBounds' | 'unsupported' | 'invalidArgs';
+
+// @public
+export type ExecResult = {
+    ok: true;
+    changed: boolean;
+} | {
+    ok: false;
+    code: ExecErrorCode;
+    reason: string;
+    target?: DocTarget;
+};
+
+// @public
+export interface Extent {
+    // (undocumented)
+    readonly heightEmu: number;
+    // (undocumented)
+    readonly widthEmu: number;
+}
+
+// @public
+export interface HeaderFooterSet {
+    // (undocumented)
+    readonly default?: string;
+    // (undocumented)
+    readonly even?: string;
+    // (undocumented)
+    readonly first?: string;
+}
+
+// @public
+export interface IndentFormatting {
+    readonly firstLine: number;
+    readonly left: number;
+    readonly mixed: {
+        readonly left: boolean;
+        readonly right: boolean;
+        readonly firstLine: boolean;
+    };
+    readonly right: number;
+}
+
+// @public
+export interface Paragraph {
+    // (undocumented)
+    readonly kind: 'paragraph';
+    // (undocumented)
+    readonly numbering?: NumberingRef;
+    readonly paraId?: string;
+    // (undocumented)
+    readonly runs: readonly Run[];
+    // (undocumented)
+    readonly styleId?: string;
+}
+
+// @public
 export interface ParagraphSummary {
     // (undocumented)
     readonly paraId?: string;
@@ -242,6 +436,129 @@ export interface ParagraphSummary {
     // (undocumented)
     readonly text: string;
 }
+
+// @public
+export interface Revision {
+    // (undocumented)
+    readonly author: string;
+    readonly date?: string;
+    readonly id: number;
+    readonly part: string;
+    // (undocumented)
+    readonly type: RevisionType;
+}
+
+// @public
+export type RevisionType = 'insert' | 'delete'
+/** A deletion and an insertion that are one edit: text typed over a selection. */
+| 'replace' | 'moveFrom' | 'moveTo'
+/** `w:rPrChange` / `w:pPrChange` — the words are unchanged, their formatting is not. */
+| 'format'
+/** `w:pPr/w:rPr/w:ins|w:del` — a paragraph split or merge. */
+| 'paragraphMark'
+/** A row, cell, section or grid revision. */
+| 'structural';
+
+// @public
+export interface RunFormatting {
+    readonly alignment?: 'left' | 'center' | 'right' | 'both';
+    // (undocumented)
+    readonly bold?: boolean;
+    // (undocumented)
+    readonly color?: ColorValue;
+    // (undocumented)
+    readonly fontFamily?: string;
+    // (undocumented)
+    readonly fontSizePt?: number;
+    // (undocumented)
+    readonly highlight?: string;
+    readonly indent?: IndentFormatting;
+    // (undocumented)
+    readonly italic?: boolean;
+    readonly lineSpacing?: {
+        readonly rule: 'multiple' | 'exact' | 'atLeast';
+        readonly value: number;
+    };
+    // (undocumented)
+    readonly spaceAfterPt?: number;
+    readonly spaceBeforePt?: number;
+    // (undocumented)
+    readonly strike?: boolean;
+    readonly styleId?: string;
+    // (undocumented)
+    readonly subscript?: boolean;
+    // (undocumented)
+    readonly superscript?: boolean;
+    // (undocumented)
+    readonly underline?: boolean;
+}
+
+// @public
+export interface Section {
+    // (undocumented)
+    readonly footers: HeaderFooterSet;
+    // (undocumented)
+    readonly headers: HeaderFooterSet;
+    // (undocumented)
+    readonly properties: SectionProperties;
+}
+
+// @public
+export interface SectionProperties {
+    // (undocumented)
+    readonly columns?: {
+        count: number;
+        gapTwips: number;
+    };
+    // (undocumented)
+    readonly margins: PageMargins;
+    // (undocumented)
+    readonly pageSize: {
+        widthTwips: number;
+        heightTwips: number;
+    };
+    readonly titlePage?: boolean;
+}
+
+// @public
+export interface StyleDefinition {
+    readonly basedOn?: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public
+export interface StyleDefinitions {
+    // (undocumented)
+    readonly character: ReadonlyMap<string, StyleDefinition>;
+    // (undocumented)
+    readonly paragraph: ReadonlyMap<string, StyleDefinition>;
+    // (undocumented)
+    readonly table: ReadonlyMap<string, StyleDefinition>;
+}
+
+// @public
+export interface Table {
+    // (undocumented)
+    readonly kind: 'table';
+    // (undocumented)
+    readonly rows: readonly TableRow[];
+    // (undocumented)
+    readonly styleId?: string;
+}
+
+// @public
+export interface Theme {
+    // (undocumented)
+    readonly colorScheme: ThemeColorScheme;
+    // (undocumented)
+    readonly fontScheme?: Record<string, string>;
+}
+
+// @public
+export type ThemeColorScheme = Readonly<Record<string, string>>;
 
 // (No @packageDocumentation comment for this package)
 

@@ -1,13 +1,10 @@
 /**
- * `@docx-editor.dev/core/contracts/interaction` — pointer and keyboard intents, DOM-free.
+ * `@docx-editor.dev/core/contracts/interaction` — semantic addressing and interaction outcomes.
  *
- * Intents carry normalized serializable coordinates and resolve against a laid-out FRAME, so an
- * intent arriving after that frame was superseded is refused rather than applied to coordinates
- * that have stopped describing the document.
+ * Semantic identities and targets: the vocabulary a caller uses to say WHICH text it means,
+ * independent of layout, DOM or any editing engine's positions. Plus the outcome type an
+ * interaction attempt answers with. That is the whole module.
  *
- * Semantic identities, targets and selections: the vocabulary a caller uses to say WHICH
- * text it means, independent of layout, DOM or any editing engine's positions. That is the
- * whole module now.
  * It used to be 599 lines. An "interaction frame" lived here — a revision-tagged projection
  * of display, page geometry, caret and selection overlays, focus, composition and
  * accessibility, plus a typed pointer-intent dispatch protocol and a render IR of glyph
@@ -19,6 +16,11 @@
  * with the REAL, differently-shaped types in `layout/`, so the published contract carried a
  * second definition of a live concept and `import { ShapedCluster }` meant different things
  * depending on which module you reached for.
+ * `InteractionFrameId` and a frame-tagged `SemanticSelection` outlived that cut. Both were
+ * the same mistake: the id was a placeholder nothing ever minted (`focus` returned a literal
+ * `{ value: 0 }`), and the selection could not be CONSTRUCTED without one, which made it a
+ * fourth name-collision with the real `SemanticSelection` in `layout/` that a caller could
+ * never actually satisfy.
  *
  * CONTRACT ONLY — declarations, not an implementation.
  *
@@ -28,10 +30,10 @@
 
 import type { ViewScope } from './editor';
 
-/** Opaque identity for one atomic interaction-frame publication. */
-export interface InteractionFrameId {
-  readonly value: number;
-}
+// Every arm of `SemanticTarget` carries one, so a consumer reaching this entry point directly
+// cannot describe a target without it. `EditorScope` comes along because `ViewScope` is defined
+// as an exclusion over it.
+export type { EditorScope, ViewScope } from './editor';
 
 /** Bidi/grapheme affinity for a text caret or hit target. */
 export type InteractionAffinity = 'upstream' | 'downstream';
@@ -60,17 +62,8 @@ export type SemanticTarget =
       readonly objectId: string;
     };
 
-/** Semantic selection expressed with stable targets, not engine positions. */
-export interface SemanticSelection {
-  readonly frameId: InteractionFrameId;
-  readonly scope: ViewScope;
-  readonly anchor: SemanticTarget;
-  readonly head: SemanticTarget;
-}
-
-/** Typed rejection for stale, pending, read-only, invalid, or unsupported interaction. */
+/** Typed rejection for pending, read-only, invalid, or unsupported interaction. */
 export type InteractionOutcomeCode =
-  | 'staleFrame'
   | 'pendingLayout'
   | 'pendingSelection'
   | 'readOnly'
@@ -78,21 +71,15 @@ export type InteractionOutcomeCode =
   | 'unsupported';
 
 /**
- * The result of one interaction attempt, carrying the frame it was resolved against.
+ * The result of one interaction attempt.
  *
- * The `frameId` is the point: pointer work is planned against a laid-out frame, and an intent
- * arriving after that frame has been superseded is refused with `staleFrame` rather than applied
- * to coordinates that have stopped describing the document.
+ * A rejection carries the ENGINE's own `reason`, which is what lets a caller surface why an
+ * interaction was refused instead of guessing.
  */
 export type InteractionOutcome<T> =
-  | { readonly ok: true; readonly value: T; readonly frameId: InteractionFrameId }
+  | { readonly ok: true; readonly value: T }
   | {
       readonly ok: false;
       readonly code: InteractionOutcomeCode;
       readonly reason: string;
-      readonly frameId?: InteractionFrameId;
     };
-
-// ─── Interaction controller (task 5.1) ───────────────────────────────────────
-// PM-free native intents and planned effects. Intents carry normalized serializable
-// data only; effects route through EditorBinding, EditSurface, or host passthrough.

@@ -29,6 +29,43 @@ import type {
   RunFormatting,
 } from './types';
 
+// Re-exported because the signatures below hand every one of them to a caller. This entry
+// point is meant to be usable on its own — an automation host or a tool layer names it
+// without touching the editor contract — so a name it returns and does not export is a
+// result the caller cannot type.
+export type {
+  Block,
+  ColorValue,
+  ContainerRef,
+  ContentControl,
+  ContentControlFilter,
+  ContentControlType,
+  DocAnchor,
+  DocAnchorRange,
+  DocComment,
+  DocLocation,
+  DocRange,
+  DocTarget,
+  DocumentBody,
+  DocxDocument,
+  ExecErrorCode,
+  ExecResult,
+  Extent,
+  HeaderFooterSet,
+  IndentFormatting,
+  Paragraph,
+  Revision,
+  RevisionType,
+  RunFormatting,
+  Section,
+  SectionProperties,
+  StyleDefinition,
+  StyleDefinitions,
+  Table,
+  Theme,
+  ThemeColorScheme,
+} from './types';
+
 // ─── Edits ───────────────────────────────────────────────────────────────────
 
 /**

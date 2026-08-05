@@ -24,6 +24,10 @@ const PACKAGES = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 
 const laneNames = Object.keys(CORE_LANES) as LaneName[];
 
+const coreManifest = JSON.parse(readFileSync(join(PACKAGES, 'core', 'package.json'), 'utf8')) as {
+  exports: Record<string, unknown>;
+};
+
 /** The package.json of the workspace package a lane occupies today. */
 function manifestOf(lane: LaneName): Record<string, unknown> | null {
   const name = CORE_LANES[lane].package;
@@ -210,8 +214,32 @@ describe('every lane has somewhere to be imported from (task 10.1)', () => {
     // The store lane was the package root while it lived in `engine-core`. Now that it sits
     // inside the core package alongside `contracts`, the root belongs to the package itself
     // and every lane — store included — is reached by subpath.
+    //
+    // `contracts` is the exception, and declares itself one: it publishes a family under a
+    // prefix, not a bare `./contracts`. It used to claim `subpath: './contracts'`, which no
+    // `exports` entry ever answered — a lane graph that named an import path a consumer
+    // could not use.
     for (const lane of laneNames) {
-      expect({ lane, subpath: CORE_LANES[lane].subpath }).toEqual({ lane, subpath: `./${lane}` });
+      const { subpath, subpathPrefix } = CORE_LANES[lane];
+      expect({ lane, importableAs: subpath ?? subpathPrefix }).toEqual({
+        lane,
+        importableAs: subpathPrefix ? `./${lane}/` : `./${lane}`,
+      });
+    }
+  });
+
+  test('every declared subpath is actually in the package export map', () => {
+    // The claim above is only worth anything if the name resolves. Without this, the graph can
+    // say a lane is importable at `./x` while `exports` has no `./x` at all.
+    const exports = Object.keys(coreManifest.exports);
+    for (const lane of laneNames) {
+      const { subpath, subpathPrefix } = CORE_LANES[lane];
+      if (subpath) {
+        expect({ lane, exported: exports.includes(subpath) }).toEqual({ lane, exported: true });
+        continue;
+      }
+      const family = exports.filter((entry) => entry.startsWith(subpathPrefix!));
+      expect({ lane, familySize: family.length > 0 }).toEqual({ lane, familySize: true });
     }
   });
 

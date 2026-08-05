@@ -2168,7 +2168,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return { ok: false, code: 'invalidTarget', reason: 'no document is loaded' };
       }
       surface.focus();
-      return { ok: true, value: undefined, frameId: { value: 0 } };
+      return { ok: true, value: undefined };
     },
 
     destroy() {

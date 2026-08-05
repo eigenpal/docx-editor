@@ -33,20 +33,42 @@ export {
   type DocxEditorConfig,
 } from './editor/index.ts';
 
-// ─── The contract it implements ──────────────────────────────────────────────
+// What `DocxEditorConfig` accepts and `DocxEditorInstance` answers with, beyond the contract.
+//
+// Three names this entry point hands out are deliberately NOT re-exported, because each would
+// drag a whole type graph onto the 80% path to make one escape hatch nameable:
+//   - `PaginatedSurface` (`instance.surface`) reaches TreeDocOp, SemanticLayout and the session
+//   - `ImageDecodePort` (`config.imageDecodePort`) reaches the image-resource limit vocabulary
+//   - `OoxmlElement`/`OoxmlPart` reach the ~85-member canonical node union
+// All are named at the subpath that owns them — `./editor` and `./store` — which is where a
+// caller reaching for an internal already is. Using the members needs no import; only writing
+// their types down does.
 export type {
-  Editor,
-  EditorCommand,
-  EditorQuery,
-  EditorSnapshot,
-  EditorScope,
-  ViewScope,
-  DocumentSource,
-  DocumentHandle,
-  DocumentChange,
-  DocumentEditingMode,
-  PageSetup,
-} from './contracts/editor.ts';
+  ChromeMenu,
+  ChromeMenuEntry,
+  ChromeMenuId,
+  ChromeMenuItemEntry,
+  ChromeMenuSeparatorEntry,
+  ChromeMenuSubmenuEntry,
+  FontLoadFailureReason,
+  FontResolutionRequest,
+  FontMeasurementState,
+  FontResolver,
+  FontUrlSource,
+  HyperlinkActivation,
+  HyperlinkChromeHandlers,
+  SurfaceHyperlink,
+} from './editor/index.ts';
+
+// ─── The contract it implements ──────────────────────────────────────────────
+//
+// The WHOLE contract, not a chosen subset. Hand-listing it is how the entry point ended up
+// handing out `CanResult` from `can()`, `TextMatch` from `findText()` and `TableContext` from
+// `query()` while exporting none of the three: every addition to the contract had to be
+// remembered here a second time, and none of them were. `contracts/editor` is type-only and
+// already re-exports `./types`, `./interaction` and `./editor-hf-notes`, so this is the
+// contract's transitive closure in one line and it cannot drift again.
+export type * from './contracts/editor.ts';
 
 // ─── Fonts: the reason pagination matches Word ───────────────────────────────
 export {
@@ -76,7 +98,13 @@ export {
 } from './editor/index.ts';
 
 // ─── Capability modules (what `@docx-editor.dev/pro` implements) ─────────────
-export type { EditorModule } from './contracts/modules.ts';
+export type {
+  CollectReviewItems,
+  EditorModule,
+  ReviewModelInput,
+  ReviewModuleContribution,
+  RevisionDisplayMode,
+} from './contracts/modules.ts';
 
 // ─── The document model and the edit/query vocabulary ────────────────────────
 export type * from './contracts/types';

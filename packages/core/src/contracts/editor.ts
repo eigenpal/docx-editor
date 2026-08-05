@@ -21,7 +21,7 @@ import type {
   ReviewRevisionItem,
   ReviewRevisionKind,
 } from '../layout/review-support.ts';
-import type { InteractionOutcome, SemanticSelection, SemanticTarget } from './interaction';
+import type { InteractionOutcome, SemanticTarget } from './interaction';
 import type {
   ColorValue,
   ContentControlFilter,
@@ -55,6 +55,44 @@ export type * from './types';
 export type * from './interaction';
 export type * from './editor-hf-notes.ts';
 export type { ImageCropPercent } from '../store/package/image-crop-units.ts';
+
+// Everything below is named by a signature IN this file, so it has to be nameable FROM this
+// file. An adapter is not allowed to import the layout or store lanes — that is the whole
+// reason the review and drawing vocabulary is re-exported here rather than left where it is
+// declared — so a type that leaks out through a return value but not through the export list
+// is a member the adapter can call and cannot write down.
+export type {
+  CommentRecord,
+  ReviewCommentItem,
+  ReviewCustomItem,
+  ReviewPosition,
+  ReviewRange,
+  ReviewRevisionItem,
+} from '../layout/review-support.ts';
+export type { RevisionAddress } from '@docx-editor.dev/core/store';
+export type {
+  DrawingHorizontalReferenceFrame,
+  DrawingKind,
+  DrawingLocks,
+  DrawingPositionInput,
+  DrawingVerticalReferenceFrame,
+  ImageWrapTarget,
+} from '../store/package/drawing-projection.ts';
+export type {
+  ImageResourceState,
+  PreservedImageMime,
+  RenderableImageMime,
+  SupportedImageMime,
+  ValidatedImageBytesHandle,
+  VectorImageMime,
+} from '../store/package/image-resources.ts';
+export type {
+  ContentControlSummary,
+  DocEdits,
+  DocQueries,
+  DocQueryResults,
+  ParagraphSummary,
+} from './document.ts';
 
 /**
  * An opaque handle to a loaded document — its stable identity and current
@@ -215,7 +253,6 @@ export type EditorPosition = DocAnchor | DocLocation | SemanticTarget;
 /** A selection expressed with any accepted position form. */
 export type EditorSelection =
   | DocRange
-  | SemanticSelection
   | { from: EditorPosition; to: EditorPosition }
   | SemanticTarget;
 
@@ -625,7 +662,7 @@ export interface Editor {
  * the way the Office JS API sources it from context — so the document layer's
  * required `target` and `author` both become optional here.
  */
-type EditorCommandShape<T> = {
+export type EditorCommandShape<T> = {
   [K in keyof T]: Omit<T[K], 'target' | 'author'> &
     (T[K] extends { target: infer G } ? { target?: G } : unknown) &
     (T[K] extends { author: infer A } ? { author?: A } : unknown);

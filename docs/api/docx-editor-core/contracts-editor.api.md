@@ -42,6 +42,21 @@ export type ColorValue = {
 };
 
 // @public
+export interface CommentRecord {
+    // (undocumented)
+    readonly author: string;
+    readonly blocks: readonly OoxmlElement[];
+    // (undocumented)
+    readonly date?: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly initials?: string;
+    readonly paraId?: string;
+    readonly parentCommentId?: string;
+}
+
+// @public
 export type ContainerRef = {
     part: 'body';
 } | {
@@ -76,6 +91,20 @@ export interface ContentControlFilter {
     readonly alias?: string;
     // (undocumented)
     readonly controlType?: ContentControlType;
+    // (undocumented)
+    readonly tag?: string;
+}
+
+// @public
+export interface ContentControlSummary {
+    // (undocumented)
+    readonly alias?: string;
+    // (undocumented)
+    readonly controlType: ContentControlType;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly locked?: boolean;
     // (undocumented)
     readonly tag?: string;
 }
@@ -122,12 +151,206 @@ export interface DocComment {
 }
 
 // @public
+export interface DocEdits {
+    // (undocumented)
+    acceptAllRevisions: Record<never, never>;
+    // (undocumented)
+    acceptRevision: {
+        id: number;
+        part?: 'body' | 'footnote' | 'endnote';
+        noteId?: number;
+    };
+    // (undocumented)
+    addComment: {
+        target: DocTarget;
+        text: string;
+        author: string;
+    };
+    // (undocumented)
+    addRepeatingSectionItem: {
+        target: DocTarget;
+        index?: number;
+    };
+    adjustIndent: {
+        target: DocTarget;
+        direction: 'increase' | 'decrease';
+    };
+    // (undocumented)
+    applyFormatting: {
+        target: DocTarget;
+        marks: RunFormatting;
+    };
+    // (undocumented)
+    applyVariables: {
+        values: Record<string, string>;
+    };
+    // (undocumented)
+    deleteText: {
+        target: DocTarget;
+    };
+    // (undocumented)
+    insertBreak: {
+        target: DocTarget;
+        kind: 'page' | 'column' | 'line' | 'section';
+    };
+    // (undocumented)
+    insertHyperlink: {
+        target: DocTarget;
+        href: string;
+        text?: string;
+    };
+    // (undocumented)
+    insertImage: {
+        target: DocTarget;
+        data: Uint8Array;
+        extent?: Extent;
+    };
+    // (undocumented)
+    insertTable: {
+        target: DocTarget;
+        rows: number;
+        cols: number;
+    };
+    // (undocumented)
+    insertText: {
+        target: DocTarget;
+        text: string;
+    };
+    // (undocumented)
+    mergeParagraphs: {
+        target: DocTarget;
+    };
+    // (undocumented)
+    proposeDeletion: {
+        target: DocTarget;
+        author: string;
+    };
+    // (undocumented)
+    proposeInsertion: {
+        target: DocTarget;
+        text: string;
+        author: string;
+    };
+    proposeReplacement: {
+        target: DocTarget;
+        replaceWith: string;
+        author: string;
+    };
+    // (undocumented)
+    rejectAllRevisions: Record<never, never>;
+    // (undocumented)
+    rejectRevision: {
+        id: number;
+        part?: 'body' | 'footnote' | 'endnote';
+        noteId?: number;
+    };
+    // (undocumented)
+    removeContentControl: {
+        target: DocTarget;
+    };
+    // (undocumented)
+    removeHyperlink: {
+        target: DocTarget;
+    };
+    // (undocumented)
+    removeRepeatingSectionItem: {
+        target: DocTarget;
+        index: number;
+    };
+    // (undocumented)
+    replaceText: {
+        target: DocTarget;
+        text: string;
+    };
+    // (undocumented)
+    replyComment: {
+        commentId: string;
+        text: string;
+        author: string;
+    };
+    // (undocumented)
+    resolveComment: {
+        commentId: string;
+    };
+    // (undocumented)
+    setContentControlValue: {
+        target: DocTarget;
+        value: string;
+    };
+    // (undocumented)
+    setParagraphStyle: {
+        target: DocTarget;
+        styleId: string;
+    };
+    // (undocumented)
+    setVariable: {
+        name: string;
+        value: string;
+    };
+    // (undocumented)
+    splitParagraph: {
+        target: DocTarget;
+    };
+    toggleList: {
+        target: DocTarget;
+        kind: 'bullet' | 'ordered';
+    };
+}
+
+// @public
 export interface DocLocation {
     // (undocumented)
     container: ContainerRef;
     // (undocumented)
     offset?: number;
     path: number[];
+}
+
+// @public
+export interface DocQueries {
+    // (undocumented)
+    comments: {
+        resolved?: boolean;
+    };
+    // (undocumented)
+    contentControls: {
+        filter?: ContentControlFilter;
+    };
+    // (undocumented)
+    findText: {
+        text: string;
+        container?: ContainerRef;
+    };
+    // (undocumented)
+    paragraphs: {
+        container?: ContainerRef;
+    };
+    // (undocumented)
+    revisions: {
+        part?: 'body' | 'footnote' | 'endnote';
+    };
+    // (undocumented)
+    styles: Record<never, never>;
+    // (undocumented)
+    variables: Record<never, never>;
+}
+
+// @public
+export interface DocQueryResults {
+    // (undocumented)
+    comments: readonly DocComment[];
+    // (undocumented)
+    contentControls: readonly ContentControlSummary[];
+    // (undocumented)
+    findText: readonly DocRange[];
+    // (undocumented)
+    paragraphs: readonly ParagraphSummary[];
+    // (undocumented)
+    revisions: readonly Revision[];
+    // (undocumented)
+    styles: StyleDefinitions;
+    // (undocumented)
+    variables: Readonly<Record<string, string>>;
 }
 
 // @public
@@ -188,6 +411,40 @@ export interface DocxDocumentJSON {
     // (undocumented)
     readonly [key: string]: unknown;
 }
+
+// @public (undocumented)
+export type DrawingHorizontalReferenceFrame = 'character' | 'column' | 'insideMargin' | 'leftMargin' | 'margin' | 'outsideMargin' | 'page' | 'rightMargin';
+
+// @public
+export type DrawingKind = 'inline' | 'anchored';
+
+// @public
+export interface DrawingLocks {
+    // (undocumented)
+    readonly changeAspect: boolean;
+    // (undocumented)
+    readonly move: boolean;
+    // (undocumented)
+    readonly resize: boolean;
+    // (undocumented)
+    readonly select: boolean;
+}
+
+// @public
+export interface DrawingPositionInput {
+    // (undocumented)
+    readonly horizontalEmu?: number;
+    readonly mode?: 'frame' | 'simple';
+    // (undocumented)
+    readonly relativeToH?: DrawingHorizontalReferenceFrame;
+    // (undocumented)
+    readonly relativeToV?: DrawingVerticalReferenceFrame;
+    // (undocumented)
+    readonly verticalEmu?: number;
+}
+
+// @public (undocumented)
+export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'line' | 'margin' | 'outsideMargin' | 'page' | 'paragraph' | 'topMargin';
 
 // @public
 export interface Editor {
@@ -569,6 +826,19 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
 }
 
 // @public
+export type EditorCommandShape<T> = {
+    [K in keyof T]: Omit<T[K], 'target' | 'author'> & (T[K] extends {
+        target: infer G;
+    } ? {
+        target?: G;
+    } : unknown) & (T[K] extends {
+        author: infer A;
+    } ? {
+        author?: A;
+    } : unknown);
+};
+
+// @public
 export interface EditorError extends Error {
     // (undocumented)
     readonly code?: string;
@@ -758,7 +1028,7 @@ export type EditorScope = {
 };
 
 // @public
-export type EditorSelection = DocRange | SemanticSelection | {
+export type EditorSelection = DocRange | {
     from: EditorPosition;
     to: EditorPosition;
 } | SemanticTarget;
@@ -814,12 +1084,6 @@ export type ExecResult = {
     reason: string;
     target?: DocTarget;
 };
-
-// @public
-export interface Extension {
-    // (undocumented)
-    readonly name: string;
-}
 
 // @public
 export interface Extent {
@@ -957,6 +1221,38 @@ export interface ImageCropPercent {
 }
 
 // @public
+export type ImageResourceState = {
+    readonly kind: 'ready';
+    readonly partName: string;
+    readonly contentId: string;
+    readonly resourceKey: string;
+    readonly validatedHandle: ValidatedImageBytesHandle;
+    readonly mime: RenderableImageMime;
+    readonly pixelWidth: number;
+    readonly pixelHeight: number;
+    readonly dpiX: number;
+    readonly dpiY: number;
+} | {
+    readonly kind: 'unrenderable';
+    readonly partName: string | null;
+    readonly mime: RenderableImageMime | PreservedImageMime | 'unknown';
+    readonly reason: 'unsupported-format' | 'non-picture-graphic' | 'signature-mismatch' | 'decode-failed' | 'resource-limit';
+} | {
+    readonly kind: 'external';
+    readonly relationshipId: string;
+    readonly sinkSafe: boolean;
+} | {
+    readonly kind: 'missing';
+    readonly relationshipId: string;
+} | {
+    readonly kind: 'pending';
+    readonly resourceKey: string;
+};
+
+// @public
+export type ImageWrapTarget = 'inline' | 'square' | 'squareLeft' | 'squareRight' | 'tight' | 'through' | 'topAndBottom' | 'behind' | 'inFront';
+
+// @public
 export interface IndentFormatting {
     readonly firstLine: number;
     readonly left: number;
@@ -972,28 +1268,17 @@ export interface IndentFormatting {
 export type InteractionAffinity = 'upstream' | 'downstream';
 
 // @public
-export interface InteractionFrameId {
-    // (undocumented)
-    readonly value: number;
-}
-
-// @public
 export type InteractionOutcome<T> = {
     readonly ok: true;
     readonly value: T;
-    readonly frameId: InteractionFrameId;
 } | {
     readonly ok: false;
     readonly code: InteractionOutcomeCode;
     readonly reason: string;
-    readonly frameId?: InteractionFrameId;
 };
 
 // @public
-export type InteractionOutcomeCode = 'staleFrame' | 'pendingLayout' | 'pendingSelection' | 'readOnly' | 'invalidTarget' | 'unsupported';
-
-// @public
-export type JSONSchema = Readonly<Record<string, unknown>>;
+export type InteractionOutcomeCode = 'pendingLayout' | 'pendingSelection' | 'readOnly' | 'invalidTarget' | 'unsupported';
 
 // @public
 export type NoteKind = 'footnote' | 'endnote';
@@ -1069,12 +1354,25 @@ export interface Paragraph {
 }
 
 // @public
+export interface ParagraphSummary {
+    // (undocumented)
+    readonly paraId?: string;
+    // (undocumented)
+    readonly styleId?: string;
+    // (undocumented)
+    readonly text: string;
+}
+
+// @public
 export interface Point {
     // (undocumented)
     readonly x: number;
     // (undocumented)
     readonly y: number;
 }
+
+// @public
+export type PreservedImageMime = 'image/tiff' | 'image/x-emf' | 'image/x-wmf';
 
 // @public
 export interface Rect {
@@ -1089,6 +1387,9 @@ export interface Rect {
 }
 
 // @public
+export type RenderableImageMime = SupportedImageMime | VectorImageMime;
+
+// @public
 export interface ResolvedNoteNumbering {
     // (undocumented)
     readonly numFmt: string;
@@ -1101,6 +1402,24 @@ export interface ResolvedNoteNumbering {
 }
 
 // @public
+export interface ReviewCommentItem {
+    // (undocumented)
+    readonly comment: CommentRecord;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly kind: 'comment';
+    readonly orphaned: boolean;
+    readonly parentId?: string;
+    readonly parentRevisionId?: string;
+    // (undocumented)
+    readonly range: ReviewRange | null;
+    readonly replyIds: readonly string[];
+    // (undocumented)
+    readonly resolved: boolean;
+}
+
+// @public
 export interface ReviewCommentPlacement extends ReviewItemPlacementBase {
     // (undocumented)
     readonly item: ReviewCommentItem;
@@ -1109,6 +1428,21 @@ export interface ReviewCommentPlacement extends ReviewItemPlacementBase {
     readonly parentId?: string;
     readonly parentRevisionId?: string;
     readonly resolved: boolean;
+}
+
+// @public
+export interface ReviewCustomItem {
+    readonly attrs: Readonly<Record<string, string>>;
+    readonly detail?: string;
+    readonly id: string;
+    // (undocumented)
+    readonly kind: 'custom';
+    readonly name: string;
+    // (undocumented)
+    readonly range: ReviewRange | null;
+    readonly tag: string;
+    readonly text: string;
+    readonly title: string;
 }
 
 // @public
@@ -1151,6 +1485,46 @@ export interface ReviewItemQuery {
 }
 
 // @public
+export interface ReviewPosition {
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
+// @public
+export interface ReviewRange {
+    // (undocumented)
+    readonly end: ReviewPosition;
+    // (undocumented)
+    readonly partName: string;
+    // (undocumented)
+    readonly start: ReviewPosition;
+}
+
+// @public
+export interface ReviewRevisionItem {
+    readonly address: RevisionAddress;
+    readonly addresses: readonly RevisionAddress[];
+    // (undocumented)
+    readonly author: string;
+    // (undocumented)
+    readonly date?: string;
+    readonly id: string;
+    // (undocumented)
+    readonly kind: 'revision';
+    readonly pairedWith?: string;
+    readonly ranges: readonly ReviewRange[];
+    readonly readOnly: boolean;
+    readonly replacedRangeCount?: number;
+    readonly replacedText: string;
+    readonly replyIds: readonly string[];
+    // (undocumented)
+    readonly revisionKind: ReviewRevisionKind;
+    readonly text: string;
+}
+
+// @public
 export type ReviewRevisionKind = 'insert' | 'delete'
 /**
 * A deletion and an insertion that are one edit: text typed over a selection.
@@ -1186,6 +1560,15 @@ export interface Revision {
     readonly part: string;
     // (undocumented)
     readonly type: RevisionType;
+}
+
+// @public
+export interface RevisionAddress {
+    // (undocumented)
+    readonly author: string;
+    readonly date?: string;
+    // (undocumented)
+    readonly id: string;
 }
 
 // @public
@@ -1326,18 +1709,6 @@ export interface SemanticIdentity {
 }
 
 // @public
-export interface SemanticSelection {
-    // (undocumented)
-    readonly anchor: SemanticTarget;
-    // (undocumented)
-    readonly frameId: InteractionFrameId;
-    // (undocumented)
-    readonly head: SemanticTarget;
-    // (undocumented)
-    readonly scope: ViewScope;
-}
-
-// @public
 export type SemanticTarget = {
     readonly kind: 'text';
     readonly scope: ViewScope;
@@ -1368,6 +1739,9 @@ export interface StyleDefinitions {
     // (undocumented)
     readonly table: ReadonlyMap<string, StyleDefinition>;
 }
+
+// @public
+export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif';
 
 // @public
 export interface Table {
@@ -1505,6 +1879,21 @@ export type ThemeColorScheme = Readonly<Record<string, string>>;
 
 // @public
 export type Unsubscribe = () => void;
+
+// @public
+export interface ValidatedImageBytesHandle {
+    // (undocumented)
+    readonly contentId: string;
+    // (undocumented)
+    readonly generation: number;
+    // (undocumented)
+    readonly registryId: number;
+    // (undocumented)
+    readonly resourceKey: string;
+}
+
+// @public
+export type VectorImageMime = 'image/svg+xml';
 
 // @public
 export type ViewScope = Exclude<EditorScope, {

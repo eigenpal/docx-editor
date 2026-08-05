@@ -27,9 +27,6 @@ export interface DocumentStyleEntry {
 }
 
 // @public
-export const ENGINE_BINDING_PACKAGE: "@docx-editor.dev/core/binding";
-
-// @public
 export type MapResult = {
     readonly ok: true;
     readonly ops: readonly TreeDocOp[];
