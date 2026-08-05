@@ -6,15 +6,14 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // What each published entry actually pulls in, followed the way a bundler follows it.
 //
 // `runtime/__tests__/runtime-boundaries.test.ts` scans this package's OWN lane. That is not the
-// same question. The build inlines the private contract package, so what ships in
-// `dist/index.mjs` is this package's source PLUS whatever of `packages/core` it reaches — and a
-// single `export *` inside core is enough to put the painted engine, its font shaper and a
-// ProseMirror binding into a bundle a server imports, while every file in `packages/editor-api/src`
-// still looks neutral.
+// same question. A single `export *` inside core is enough to pull the painted engine, its font
+// shaper and a ProseMirror binding into what a server imports, while every file in
+// `packages/editor-api/src` still looks neutral.
 //
-// So this walk crosses the workspace boundary. It resolves `@docx-editor.dev/core/*`
-// through core's own `exports` map rather than by guessing directory names, so a lane that moves
-// is still followed instead of silently ending the walk.
+// So this walk crosses the workspace boundary. It resolves `@docx-editor.dev/core/*` through
+// core's `paths` table rather than by guessing directory names, so a lane that moves is still
+// followed instead of silently ending the walk. That table, not the `exports` map, is what
+// answers "which SOURCE file is this subpath": the export map points at built output.
 
 import { describe, expect, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
@@ -23,25 +22,19 @@ import { dirname, join, relative, resolve } from 'node:path';
 const PACKAGE_SRC = join(import.meta.dir, '..');
 const CORE = join(PACKAGE_SRC, '..', '..', 'core');
 
-const CORE_EXPORTS = JSON.parse(readFileSync(join(CORE, 'package.json'), 'utf8')).exports as Record<
-  string,
-  { import: string } | string
->;
+const CORE_PATHS = JSON.parse(readFileSync(join(CORE, 'tsconfig.json'), 'utf8')).compilerOptions
+  .paths as Record<string, string[]>;
 
 /**
  * Every importable core specifier, mapped to the source file it resolves to.
  *
- * Conditional exports only. A subpath declared as a bare string is an asset rather than a
- * module entry — the stylesheet and `./package.json` — and there is no import graph to walk
- * from one, so it is not a specifier this test has anything to say about.
+ * Read from core's `paths` rather than its `exports`, because the walk needs source. The export
+ * map answers "what does a consumer load" and points at built output; `paths` answers "which
+ * file is this subpath authored in", which is the question a graph walk asks. The two are kept
+ * in step by `packages/core/tsup.config.ts`, which carries the same table as an esbuild alias.
  */
 const WORKSPACE = new Map<string, string>(
-  Object.entries(CORE_EXPORTS)
-    .filter((entry): entry is [string, { import: string }] => typeof entry[1] === 'object')
-    .map(([subpath, target]) => [
-      subpath === '.' ? '@docx-editor.dev/core' : `@docx-editor.dev/core${subpath.slice(1)}`,
-      resolve(CORE, target.import),
-    ])
+  Object.entries(CORE_PATHS).map(([specifier, [target]]) => [specifier, resolve(CORE, target)])
 );
 
 const IMPORT = /(?:^|\n)\s*(?:import|export)[\s\S]{0,400}?from\s*['"]([^'"]+)['"]/g;
