@@ -136,9 +136,11 @@
   --doc-revision-insertion-wash: rgba(46, 125, 50, 0.05);
   --doc-revision-deletion-wash: rgba(198, 40, 40, 0.05);
   /* A tracked FORMAT change: the words are unchanged, so it takes neither the insertion nor
-     the deletion colour, and it carries no fill — a document can be almost entirely
-     reformatted, and tinting all of it says nothing. The rule alone marks it. */
+     the deletion colour — grey says "the appearance is the decision". The wash plus a faint
+     dotted rule make the range findable (it is the hover balloon's target); both are quiet
+     enough that a heavily restyled page reads as text, not as marking. */
   --doc-revision-format: #6b7f8c;
+  --doc-revision-format-wash: rgba(107, 127, 140, 0.1);
   /* Word's tracked-change palette. Deletions read as removal, insertions as addition, and the
      margin rules take the same two colours so the margin says WHAT happened, not only that
      something did. */
@@ -1897,6 +1899,31 @@ a.docx-hyperlink:focus-visible {
 .docx-table-row--revision.layout-revision-del .layout-run-text {
   color: var(--doc-revision-deletion);
   text-decoration: line-through;
+}
+
+/* The row is a BOX, so it gets the box treatment text changes get from their wash: a tracked
+   row reads as one pending decision at a glance, and gives the hover balloon a visibly
+   bounded target. Directional, not grey — a row is added or removed, and the wash should say
+   which the way the struck/underlined text inside it already does. */
+.docx-table-row--revision.layout-revision-ins {
+  background-color: var(--doc-revision-insertion-wash);
+}
+
+.docx-table-row--revision.layout-revision-del {
+  background-color: var(--doc-revision-deletion-wash);
+}
+
+/* A tracked FORMAT change: grey, because nothing was added or removed — the appearance
+   itself is the pending decision. A stylesheet rule rather than painter inline style on
+   purpose: an authored underline or strike arrives as inline style and therefore WINS over
+   the dotted rule here, and a host that finds even this too loud for its documents can
+   silence it with one override. */
+.docx-revision-format {
+  background-color: var(--doc-revision-format-wash);
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--doc-revision-format);
 }
 
 .layout-revision-pmark {

@@ -473,14 +473,13 @@ function applyRevisionPresentation(
     return;
   }
 
-  // A tracked FORMAT change gets its provenance and NO inline decoration.
-  //
-  // Marking it inline reads as noise rather than signal at the density real documents carry:
-  // this fixture has 18,284 of them, so a rule under each one drew a dotted line beneath
-  // nearly every line on the page, competing with the insertions and deletions that are the
-  // decisions a reviewer actually has to make. The attributes stay, so the review surface can
-  // still list the change and highlight its range on demand — which is where Word puts it too,
-  // as a "Formatted:" note rather than a mark on the words.
+  // A tracked FORMAT change gets its provenance and NO inline decoration — its marking
+  // (a grey wash and a faint dotted rule) comes from the STYLESHEET's
+  // `.docx-revision-format`, not from style written here. The split is deliberate: an
+  // authored underline or strike is painted as inline style and so outranks the stylesheet,
+  // keeping the author's own decoration intact, and a host that finds even the quiet grey
+  // too loud at its documents' density (a real fixture carries 18,284 of these) can silence
+  // it with one CSS override instead of forking the painter.
   element.classList.add('docx-revision', 'docx-revision-format');
   element.dataset.revisionKind = 'format';
   element.dataset.revisionId = format!.id;
