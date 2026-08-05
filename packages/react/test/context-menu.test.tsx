@@ -56,6 +56,48 @@ const TABLE_2X2 = docx(
     '<w:tc><w:p><w:r><w:t>B2</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
 );
 
+const STYLE_REL =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+
+/** A package with a styles part, so a heading style resolves to an outline level. */
+function docxWithStyles(body: string): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId9" Type="${STYLE_REL}" Target="styles.xml"/></Relationships>`
+    ),
+    'word/styles.xml': strToU8(
+      `<w:styles xmlns:w="${W}">` +
+        '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>' +
+        '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/></w:style>' +
+        '<w:style w:type="paragraph" w:styleId="TOC1"><w:name w:val="toc 1"/></w:style>' +
+        '</w:styles>'
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
+    ),
+  });
+}
+
+const TOC_DOCUMENT = docxWithStyles(
+  '<w:sdt><w:sdtPr><w:alias w:val="Contents"/></w:sdtPr><w:sdtContent>' +
+    '<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> TOC \\o "1-1" \\h </w:instrText>' +
+    '<w:fldChar w:fldCharType="separate"/></w:r></w:p>' +
+    '<w:p><w:r><w:t>Old cached entry</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>' +
+    '</w:sdtContent></w:sdt>' +
+    '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Introduction</w:t></w:r></w:p>'
+);
+
 const MERGED_TABLE = docx(
   '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="3600"/></w:tblGrid>' +
     '<w:tr><w:tc><w:p><w:r><w:t>A1</w:t></w:r></w:p></w:tc>' +
@@ -733,5 +775,59 @@ describe('table context rows (Task 10)', () => {
     });
     expect(event.defaultPrevented).toBe(true);
     expect(editor().query({ type: 'selectedText' })).toBe(before);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Table of contents
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /** Right-click a painted element rather than the surface at large. */
+  function rightClickOn(element: HTMLElement, x = 120, y = 140): void {
+    act(() => {
+      fireEvent.contextMenu(element, { clientX: x, clientY: y, button: 2 });
+    });
+  }
+
+  function tocRow(view: ReturnType<typeof render>): HTMLElement {
+    const element = view.container.querySelector<HTMLElement>('[data-docx-read-only]');
+    if (!element) throw new Error('no painted TOC row');
+    return element;
+  }
+
+  test('right-clicking a TOC appends its update rows, with icons, to the packaged set', () => {
+    const { view } = mountDocument(TOC_DOCUMENT);
+    rightClickOn(tocRow(view));
+    const slots = rows(view).map((row) => row.dataset.slot);
+    // Appended, not substituted: the ordinary rows are still the same rows.
+    expect(slots).toContain('edit.copy');
+    expect(slots.slice(-2)).toEqual(['toc.updateEntireTable', 'toc.updatePageNumbers']);
+    for (const slot of ['toc.updateEntireTable', 'toc.updatePageNumbers']) {
+      expect(rowNamed(view, slot).querySelector('svg')).not.toBeNull();
+    }
+    expect(rowNamed(view, 'toc.updateEntireTable').textContent).toContain('toc.entireTable');
+    expect(rowNamed(view, 'toc.updatePageNumbers').textContent).toContain('toc.pageNumbersOnly');
+  });
+
+  test('the update rows are absent from a menu opened over ordinary text', () => {
+    const { view } = mountDocument(TOC_DOCUMENT);
+    rightClick(view);
+    const slots = rows(view).map((row) => row.dataset.slot);
+    expect(slots).not.toContain('toc.updateEntireTable');
+    expect(slots).not.toContain('toc.updatePageNumbers');
+  });
+
+  test('selecting the update row refreshes the pointed-at TOC and closes the panel', () => {
+    const { view, editor } = mountDocument(TOC_DOCUMENT);
+    rightClickOn(tocRow(view));
+    act(() => {
+      fireEvent.click(rowNamed(view, 'toc.updateEntireTable'));
+    });
+    expect(panel(view)).toBeNull();
+    expect(
+      [...view.container.querySelectorAll('[data-docx-read-only]')].some((row) =>
+        row.textContent?.includes('Introduction')
+      )
+    ).toBe(true);
+    expect(editor().query({ type: 'isInsideToc', pos: 0 })).toBe(false);
   });
 });

@@ -39,6 +39,7 @@ const PRE_MOUNT_SNAPSHOT: EditorSnapshot = {
   selectionCollapsed: true,
   formatting: null,
   table: null,
+  tocContext: null,
   image: null,
   page: { current: 0, total: 0 },
 };

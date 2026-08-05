@@ -51,7 +51,6 @@
   },
   "toc": {
     "updatePrompt": "This document contains a table of contents that's out of date. Regenerate it now?",
-    "update": "Update table of contents",
     "entireTable": "Update entire table",
     "pageNumbersOnly": "Update page numbers only"
   },

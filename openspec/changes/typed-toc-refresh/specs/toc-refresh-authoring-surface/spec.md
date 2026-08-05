@@ -33,19 +33,24 @@ The shared Insert chrome SHALL expose an enabled Table of contents action when t
 - **WHEN** page-number convergence finds every digit already correct
 - **THEN** it writes nothing, reports no change, and the insertion or refresh remains a single undo step
 
-### Requirement: Contextual update menu
+### Requirement: Contextual update actions
 
-The engine SHALL open an engine-owned contextual menu when the user right-clicks a detected TOC row, with Update entire table and Update page numbers actions. It SHALL NOT paint a duplicate TOC-specific trigger over SDT boundary chrome.
+A right-click on a detected TOC SHALL publish which table of contents it addressed, so the host's own context menu can offer Update entire table and Update page numbers rows for it. The engine SHALL NOT paint a menu of its own, and SHALL NOT paint a duplicate TOC-specific trigger over SDT boundary chrome.
 
-#### Scenario: Context menu does not steal focus
+#### Scenario: The right-click target is published, not consumed
 
-- **WHEN** the user right-clicks a TOC row or presses an action in its menu
-- **THEN** the native context menu is suppressed, the contenteditable caret is not moved, and no refresh action runs until selected
+- **WHEN** the user right-clicks a TOC row or an empty-TOC placeholder
+- **THEN** the addressed TOC is reported as the editor's TOC context, the event is not suppressed, and the contenteditable caret is not moved
 
-#### Scenario: Actions are localized
+#### Scenario: Context is cleared by a right-click elsewhere
 
-- **WHEN** the TOC update menu is shown
-- **THEN** action labels come from i18n keys and are present in every shipped locale without null fallbacks
+- **WHEN** the next right-click lands outside every detected TOC
+- **THEN** the TOC context reports null, so the update rows do not appear in a menu opened over ordinary text
+
+#### Scenario: Update rows are the host's context-menu rows
+
+- **WHEN** the host's context menu opens with a TOC context
+- **THEN** the update actions render as ordinary rows of that one menu primitive, with its icon, keyboard and disabled treatment, and their labels come from i18n keys present in every shipped locale without null fallbacks
 
 ### Requirement: TOC row navigation
 

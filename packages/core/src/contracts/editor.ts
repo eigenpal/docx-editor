@@ -1147,6 +1147,15 @@ export interface EditorSnapshot {
   readonly selectionCollapsed: boolean;
   readonly formatting: RunFormatting | null;
   readonly table: TableContext | null;
+  /**
+   * The table of contents the last right-click landed on, or null.
+   *
+   * NOT caret context, unlike `table`: a right-click leaves the selection where it was, and
+   * a generated TOC refuses the caret outright, so a host's context menu could otherwise
+   * never tell which table of contents it was opened over. Cleared by a right-click
+   * anywhere else.
+   */
+  readonly tocContext: { readonly id: string } | null;
   readonly image: ImageContext | null;
   readonly page: { readonly current: number; readonly total: number };
   /**

@@ -121,12 +121,14 @@ export interface PaginatedSurfaceOptions {
   readonly tableInteractionLabel?: (
     key: 'table.insertRowBelow' | 'table.insertColumnRight'
   ) => string;
-  /** Localized labels for contextual TOC refresh furniture. */
+  /**
+   * Localized name for a generated TOC, written as the control's `w:alias` on insert.
+   *
+   * The update ACTIONS are not here: they are rows in the host's context menu, which owns
+   * its own labels. The engine paints no menu of its own.
+   */
   readonly tocLabels?: {
     readonly title: string;
-    readonly update: string;
-    readonly entireTable: string;
-    readonly pageNumbersOnly: string;
   };
 }
 
@@ -247,6 +249,14 @@ export interface PaginatedSurfaceState {
    * selection moves — hosts must not maintain a parallel channel.
    */
   readonly contentControls: ContentControlSurfaceState;
+  /**
+   * The TOC the last right-click landed on, or null.
+   *
+   * A right-click deliberately does not move the caret, and a TOC refuses the caret
+   * entirely, so `selection` can never say which table of contents the user is pointing at.
+   * This is how a host's context menu learns it. Surface chrome, not document state.
+   */
+  readonly contextTocId: string | null;
   /** Timing and reuse counters for the last pass. Diagnostics, not document state. */
   readonly perf: PaginatedSurfacePerf;
 }

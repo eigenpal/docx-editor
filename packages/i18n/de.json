@@ -963,7 +963,6 @@
   },
   "toc": {
     "updatePrompt": null,
-    "update": "Inhaltsverzeichnis aktualisieren",
     "entireTable": "Gesamtes Verzeichnis aktualisieren",
     "pageNumbersOnly": "Nur Seitenzahlen aktualisieren"
   },

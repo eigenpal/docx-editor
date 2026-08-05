@@ -963,7 +963,6 @@
   },
   "toc": {
     "updatePrompt": null,
-    "update": "更新目录",
     "entireTable": "更新整个目录",
     "pageNumbersOnly": "仅更新页码"
   },

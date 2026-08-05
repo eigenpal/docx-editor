@@ -776,6 +776,7 @@ export function snapshotsEqual(a: EditorSnapshot, b: EditorSnapshot): boolean {
     a.selectionCollapsed === b.selectionCollapsed &&
     a.formatting === b.formatting &&
     a.table === b.table &&
+    a.tocContext === b.tocContext &&
     a.image === b.image &&
     a.page === b.page &&
     a.canUndo === b.canUndo &&

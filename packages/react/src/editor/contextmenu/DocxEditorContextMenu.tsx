@@ -47,7 +47,10 @@ import {
   ContextMenuItem,
   ContextMenuPaste,
   ContextMenuSelectAll,
+  ContextMenuUpdateToc,
+  ContextMenuUpdateTocPageNumbers,
   useTableContextMenuVisible,
+  useTocContextMenuVisible,
 } from './parts';
 
 /** Distance kept between the panel and the window edge when it flips. @internal */
@@ -153,10 +156,28 @@ function tableContextEntries(): readonly DefaultEntry[] {
   ];
 }
 
-/** Build the default set, optionally including table rows. @internal */
-export function contextMenuDefaultSet(tableContextVisible: boolean): readonly DefaultEntry[] {
-  if (!tableContextVisible) return BASE_DEFAULT_SET;
-  return [...BASE_DEFAULT_SET, ...tableContextEntries()];
+function tocContextEntries(): readonly DefaultEntry[] {
+  return [
+    { kind: 'separator', id: 'sep.toc' },
+    { kind: 'row', id: ContextMenuUpdateToc.docxRow, render: () => <ContextMenuUpdateToc /> },
+    {
+      kind: 'row',
+      id: ContextMenuUpdateTocPageNumbers.docxRow,
+      render: () => <ContextMenuUpdateTocPageNumbers />,
+    },
+  ];
+}
+
+/** Build the default set, with the contextual groups the current target earns. @internal */
+export function contextMenuDefaultSet(
+  tableContextVisible: boolean,
+  tocContextVisible = false
+): readonly DefaultEntry[] {
+  return [
+    ...BASE_DEFAULT_SET,
+    ...(tableContextVisible ? tableContextEntries() : []),
+    ...(tocContextVisible ? tocContextEntries() : []),
+  ];
 }
 
 /**
@@ -216,9 +237,10 @@ export function DocxEditorContextMenu({
 }: DocxEditorContextMenuProps) {
   const editor = useDocxEditor();
   const tableContextVisible = useTableContextMenuVisible();
+  const tocContextVisible = useTocContextMenuVisible();
   const defaultSet = useMemo(
-    () => contextMenuDefaultSet(tableContextVisible),
-    [tableContextVisible]
+    () => contextMenuDefaultSet(tableContextVisible, tocContextVisible),
+    [tableContextVisible, tocContextVisible]
   );
   const hostRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -457,6 +479,8 @@ export interface DocxEditorContextMenuNamespace {
   readonly DeleteTableColumn: typeof ContextMenuDeleteTableColumn;
   readonly DeleteTable: typeof ContextMenuDeleteTable;
   readonly CellVerticalAlignment: typeof ContextMenuCellVerticalAlignment;
+  readonly UpdateToc: typeof ContextMenuUpdateToc;
+  readonly UpdateTocPageNumbers: typeof ContextMenuUpdateTocPageNumbers;
   /** A host-owned row: no slot, no command, the host's own label and action. */
   readonly Item: typeof ContextMenuItem;
   /** Any chrome slot as a live row (`<ContextMenu.Slot slot="text.bold" />`). */
@@ -481,6 +505,8 @@ export const ContextMenu: DocxEditorContextMenuNamespace = Object.assign(DocxEdi
   DeleteTableColumn: ContextMenuDeleteTableColumn,
   DeleteTable: ContextMenuDeleteTable,
   CellVerticalAlignment: ContextMenuCellVerticalAlignment,
+  UpdateToc: ContextMenuUpdateToc,
+  UpdateTocPageNumbers: ContextMenuUpdateTocPageNumbers,
   Item: ContextMenuItem,
   Slot: MenuItem,
   Row: MenuRow,

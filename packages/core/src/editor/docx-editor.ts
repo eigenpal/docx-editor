@@ -200,12 +200,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     deepMerge(en, localeCode === 'en' ? undefined : locales[localeCode]) as LocaleStrings,
     localeCode
   );
-  const tocLabels = {
-    title: t('toolbar.tableOfContents'),
-    update: t('toc.update'),
-    entireTable: t('toc.entireTable'),
-    pageNumbersOnly: t('toc.pageNumbersOnly'),
-  };
+  const tocLabels = { title: t('toolbar.tableOfContents') };
   let container: HTMLElement | null = config.container ?? null;
   /** Document bytes waiting for a container — set when constructed or loaded detached. */
   let pendingBytes: Uint8Array | null = null;
@@ -684,6 +679,20 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }
   }
 
+  /**
+   * The right-click TOC context, reference-stable while the id holds.
+   *
+   * A fresh object per derivation would make `snapshotsEqual` report every tick as a change
+   * and hand every subscriber a new snapshot, which is the opposite of what the cache is
+   * for. The id is the only value, so one object per id is enough.
+   */
+  let cachedTocContext: { readonly id: string } | null = null;
+  function tocContextOf(id: string | null): { readonly id: string } | null {
+    if (id === null) cachedTocContext = null;
+    else if (cachedTocContext?.id !== id) cachedTocContext = Object.freeze({ id });
+    return cachedTocContext;
+  }
+
   function deriveSnapshot(): EditorSnapshot {
     const state = surface?.state() ?? null;
     const scope = surface?.activeScope?.() ?? SCOPE_BODY;
@@ -724,6 +733,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           state.selection.anchor.offset === state.selection.head.offset),
       formatting: runFormattingOf(surface),
       table: tableContextOf(surface),
+      tocContext: tocContextOf(state?.contextTocId ?? null),
       image: null,
       page: { current: currentPageOf(surface), total: totalPagesOf(surface) },
       canUndo: state?.canUndo ?? false,

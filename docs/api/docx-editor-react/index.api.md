@@ -17,6 +17,8 @@ import { ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
 import { ColorValue } from '@docx-editor.dev/core-contract/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core-contract/editor';
 import { composeFontConfiguration } from '@docx-editor.dev/core-contract/editor';
+import { ContentControlSummary } from '@docx-editor.dev/core-contract';
+import { ContentControlType } from '@docx-editor.dev/core-contract';
 import { createFontSource } from '@docx-editor.dev/core-contract/editor';
 import { CSSProperties } from 'react';
 import { DocumentChange } from '@docx-editor.dev/core-contract/contracts/editor';
@@ -104,11 +106,77 @@ export { commandForSlot }
 export { composeFontConfiguration }
 
 // @public
+export const CONTENT_CONTROL_SLOTS: {
+    readonly showAll: "contentControl.showAll";
+    readonly formFill: "contentControl.formFill";
+    readonly inspector: "contentControl.inspector";
+    readonly remove: "contentControl.remove";
+};
+
+// @public
+export interface ContentControlActionProps extends ContentControlPartProps {
+    // (undocumented)
+    icon?: ReactNode;
+}
+
+// @public
+export interface ContentControlInspectorState {
+    // (undocumented)
+    readonly alias: string | null;
+    // (undocumented)
+    readonly bound: boolean;
+    // (undocumented)
+    readonly controlType: ContentControlType;
+    // (undocumented)
+    readonly effectiveLock: ContentControlLock | null;
+    // (undocumented)
+    readonly id: string;
+    readonly locked: boolean;
+    // (undocumented)
+    readonly placeholder: boolean;
+    readonly removalLocked: boolean;
+    // (undocumented)
+    readonly tag: string | null;
+}
+
+// @public
+export type ContentControlLock = 'unlocked' | 'sdtLocked' | 'contentLocked' | 'sdtContentLocked';
+
+// @public
+export interface ContentControlPartProps {
+    // (undocumented)
+    asChild?: boolean;
+    // (undocumented)
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
+}
+
+// @public
+export interface ContentControlProps extends ContentControlPartProps {
+    preset?: boolean;
+}
+
+// @public (undocumented)
+export type ContentControlSlotId = (typeof CONTENT_CONTROL_SLOTS)[keyof typeof CONTENT_CONTROL_SLOTS];
+
+// @public
 export interface ContextMenuAnchor {
     // (undocumented)
     readonly x: number;
     // (undocumented)
     readonly y: number;
+}
+
+// @public
+export function ContextMenuCellVerticalAlignment(input: ContextMenuCommandProps): react.JSX.Element | null;
+
+// @public (undocumented)
+export namespace ContextMenuCellVerticalAlignment {
+    var // (undocumented)
+    docxRow: "table.cellVerticalAlignment";
 }
 
 // @public
@@ -222,6 +290,21 @@ export const DocxEditor: DocxEditorNamespace;
 // @public
 export function DocxEditorContent(input: DocxEditorContentProps): react.JSX.Element;
 
+// @public (undocumented)
+export const DocxEditorContentControl: DocxEditorContentControlNamespace;
+
+// @public
+export interface DocxEditorContentControlNamespace {
+    // (undocumented)
+    (props: ContentControlProps): ReturnType<typeof ContentControlRoot>;
+    // (undocumented)
+    readonly Fields: typeof ContentControlFields;
+    // (undocumented)
+    readonly Header: typeof ContentControlHeader;
+    // (undocumented)
+    readonly Remove: typeof ContentControlRemove;
+}
+
 // @public
 export interface DocxEditorContentProps {
     className?: string;
@@ -234,6 +317,8 @@ export function DocxEditorContextMenu(input: DocxEditorContextMenuProps): react.
 export interface DocxEditorContextMenuNamespace {
     // (undocumented)
     (props: DocxEditorContextMenuProps): ReactElement;
+    // (undocumented)
+    readonly CellVerticalAlignment: typeof ContextMenuCellVerticalAlignment;
     // (undocumented)
     readonly Copy: typeof ContextMenuCopy;
     // (undocumented)
@@ -265,6 +350,10 @@ export interface DocxEditorContextMenuNamespace {
     readonly Slot: typeof MenuItem;
     // (undocumented)
     readonly Submenu: typeof MenuSubmenu;
+    // (undocumented)
+    readonly UpdateToc: typeof ContextMenuUpdateToc;
+    // (undocumented)
+    readonly UpdateTocPageNumbers: typeof ContextMenuUpdateTocPageNumbers;
 }
 
 // @public
@@ -402,6 +491,7 @@ export interface DocxEditorMenuProps {
 export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEditorProps & RefAttributes<DocxEditorRef>> {
     // (undocumented)
     readonly Content: typeof DocxEditorContent;
+    readonly ContentControl: typeof DocxEditorContentControl;
     readonly ContextMenu: typeof ContextMenu;
     readonly DocumentOutline: typeof DocxEditorDocumentOutline;
     readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
@@ -412,6 +502,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly Navigation: typeof Navigation;
     // (undocumented)
     readonly NotesChrome: typeof DocxEditorNotesChrome;
+    readonly PageNumber: typeof DocxEditorPageNumber;
     readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
     readonly Review: typeof DocxEditorReview;
     // (undocumented)
@@ -661,6 +752,14 @@ export interface DocxEditorToolbarNamespace {
     // (undocumented)
     readonly Comments: ToolbarPartComponent;
     // (undocumented)
+    readonly ContentControlFormFill: ToolbarPartComponent;
+    // (undocumented)
+    readonly ContentControlInspector: ToolbarPartComponent;
+    // (undocumented)
+    readonly ContentControlRemove: ToolbarPartComponent;
+    // (undocumented)
+    readonly ContentControlShowAll: ToolbarPartComponent;
+    // (undocumented)
     readonly EditingMode: ToolbarSlotPartComponent;
     // (undocumented)
     readonly FontColor: ToolbarColorSplitComponent;
@@ -721,6 +820,7 @@ export interface DocxEditorToolbarProps {
     children?: ReactNode;
     className?: string;
     onSave?: () => void;
+    overflow?: boolean;
     preset?: boolean;
     t?: ToolbarTranslate;
 }
@@ -1067,6 +1167,7 @@ export function navigationShift(input: NavigationShiftInput): number;
 
 // @public (undocumented)
 export interface NavigationShiftInput {
+    readonly inlineEndReservation?: number;
     readonly pageWidthPx: number;
     readonly reservation: number;
     readonly viewportWidth: number;
@@ -1529,6 +1630,41 @@ export interface ToolbarSlotPartProps {
 
 // @public
 export type ToolbarTranslate = (key: string) => string;
+
+// @public
+export function useContentControl(): UseContentControlResult;
+
+// @public
+export function useContentControlInstance(): UseContentControlResult;
+
+// @public
+export interface UseContentControlResult {
+    readonly canRemove: boolean;
+    readonly canSetValue: boolean;
+    // (undocumented)
+    readonly closeInspector: () => void;
+    readonly control: ContentControlInspectorState | null;
+    readonly controls: readonly ContentControlSummary[];
+    readonly formFill: boolean;
+    readonly inspectorOpen: boolean;
+    // (undocumented)
+    readonly openInspector: () => void;
+    readonly remove: () => ExecResult;
+    readonly removeDisabledReason: string | null;
+    // (undocumented)
+    readonly setFormFill: (on: boolean) => void;
+    // (undocumented)
+    readonly setShowAll: (show: boolean) => void;
+    readonly setValue: (value: string) => ExecResult;
+    readonly setValueDisabledReason: string | null;
+    readonly showAll: boolean;
+    // (undocumented)
+    readonly toggleFormFill: () => void;
+    // (undocumented)
+    readonly toggleInspector: () => void;
+    // (undocumented)
+    readonly toggleShowAll: () => void;
+}
 
 // @public
 export function useDocumentOutline(): UseDocumentOutlineResult;

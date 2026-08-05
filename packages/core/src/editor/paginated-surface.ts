@@ -1175,13 +1175,8 @@ export function mountPaginatedSurface(
     }
   }
 
-  /** Teardown for the open menu's document-level dismiss listeners, if it registered any. */
-  let detachMenuDismiss: (() => void) | null = null;
-
   function closeContentControlMenu(menu: HTMLElement): void {
     const controlId = menu.dataset.docxCcId;
-    detachMenuDismiss?.();
-    detachMenuDismiss = null;
     menu.remove();
     if (controlId) setContentControlWidgetOpen(controlId, false);
   }
@@ -1191,86 +1186,29 @@ export function mountPaginatedSurface(
     if (existing) closeContentControlMenu(existing);
   }
 
-  function openTocContextMenu(tocId: string, left: number, top: number): void {
-    if (!options.tocLabels) return;
-    removeExistingContentControlMenu();
-    const menu = document.createElement('div');
-    menu.className = 'docx-content-control-menu';
-    menu.dataset.docxMarker = '';
-    menu.dataset.docxTocMenu = tocId;
-    menu.setAttribute('contenteditable', 'false');
-    menu.setAttribute('role', 'menu');
-    menu.style.position = 'absolute';
-    menu.style.left = `${left}px`;
-    menu.style.top = `${top}px`;
-    menu.style.zIndex = '20';
-    menu.style.pointerEvents = 'auto';
-    menu.addEventListener('pointerdown', (event) => event.stopPropagation());
-
-    for (const [mode, label] of [
-      ['entire', options.tocLabels.entireTable],
-      ['pageNumbers', options.tocLabels.pageNumbersOnly],
-    ] as const) {
-      const action = document.createElement('button');
-      action.type = 'button';
-      action.className = 'docx-content-control-menu-item';
-      action.dataset.docxMarker = '';
-      action.setAttribute('contenteditable', 'false');
-      action.setAttribute('role', 'menuitem');
-      action.textContent = label;
-      action.addEventListener('mousedown', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        closeContentControlMenu(menu);
-        surface.refreshToc(tocId, mode);
-      });
-      menu.append(action);
-    }
-    pagesLayer.append(menu);
-    // A menu the user cannot dismiss is a trap. Capture phase, so a press that some other
-    // lane would consume — a caret move, a right-click that opens the menu somewhere else —
-    // still closes this one first.
-    const dismiss = (event: Event): void => {
-      const target = event.target;
-      if (target instanceof Node && menu.contains(target)) return;
-      closeContentControlMenu(menu);
-    };
-    const dismissOnEscape = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      closeContentControlMenu(menu);
-    };
-    const owner = pagesLayer.ownerDocument;
-    // `pointerdown` is the load-bearing one: the pointer lane calls `preventDefault` on
-    // several presses — a read-only paragraph, which every TOC row is — and a prevented
-    // press is not guaranteed to produce the compatibility `mousedown` behind it. Listening
-    // to both means no press can leave the menu stranded.
-    const dismissOn = ['pointerdown', 'mousedown', 'contextmenu', 'wheel'] as const;
-    for (const type of dismissOn) owner.addEventListener(type, dismiss, true);
-    owner.addEventListener('keydown', dismissOnEscape, true);
-    owner.defaultView?.addEventListener('blur', dismiss);
-    detachMenuDismiss = () => {
-      for (const type of dismissOn) owner.removeEventListener(type, dismiss, true);
-      owner.removeEventListener('keydown', dismissOnEscape, true);
-      owner.defaultView?.removeEventListener('blur', dismiss);
-    };
+  /**
+   * Record which TOC a right-click landed on, and otherwise LET IT THROUGH.
+   *
+   * The engine paints no menu of its own. A host's context menu is one primitive with one
+   * set of rows, icons, shortcut column and keyboard model; a second panel painted here
+   * would be a second place for all of that to drift, and it looked like one too. What the
+   * engine owns is the part a host cannot work out for itself: a right-click does not move
+   * the caret, and a TOC refuses the caret entirely, so nothing in `selection` says which
+   * table of contents is under the pointer. That is what this publishes.
+   */
+  function onTocContextMenu(event: MouseEvent): void {
+    const paragraphId = gestureParagraphId(event);
+    const toc = paragraphId ? tocContainingParagraph(paragraphId) : undefined;
+    setContextTocId(toc && canRefreshToc(toc.id) ? toc.id : null);
   }
 
-  function onTocContextMenu(event: MouseEvent): void {
-    if (!options.tocLabels || editingMode === 'view') return;
-    const paragraphId = gestureParagraphId(event);
-    if (!paragraphId) return;
-    const toc = detectBodyTocs(session.part()).find(
-      (candidate) =>
-        candidate.beginParagraphId === paragraphId ||
-        candidate.endParagraphId === paragraphId ||
-        candidate.resultParagraphIds.includes(paragraphId)
-    );
-    if (!toc || !canRefreshToc(toc.id)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const layerRect = pagesLayer.getBoundingClientRect();
-    openTocContextMenu(toc.id, event.clientX - layerRect.left, event.clientY - layerRect.top);
+  /** The TOC the last right-click addressed. Cleared by a right-click anywhere else. */
+  let contextTocId: string | null = null;
+
+  function setContextTocId(next: string | null): void {
+    if (contextTocId === next) return;
+    contextTocId = next;
+    options.onChange?.(currentState());
   }
 
   function onTocRowClick(event: MouseEvent): void {
@@ -1669,6 +1607,7 @@ export function mountPaginatedSurface(
         formFill: formFillMode,
         activeControlId: contentControlAtCaret()?.id ?? null,
       },
+      contextTocId,
       perf: {
         layoutMs: lastLayoutMs,
         paintMs: lastPaintMs,
@@ -2408,6 +2347,10 @@ export function mountPaginatedSurface(
   function targetToc(tocId?: string) {
     const tocs = detectBodyTocs(session.part());
     if (tocId) return tocs.find((toc) => toc.id === tocId) ?? null;
+    // The right-click target first: a menu row carries no id, and in a document with two
+    // tables of contents the caret cannot disambiguate them — it is never inside either.
+    const pointed = contextTocId ? tocs.find((toc) => toc.id === contextTocId) : undefined;
+    if (pointed) return pointed;
     const paragraphId = selection.head.paragraphId;
     return (
       tocs.find(
@@ -3287,8 +3230,6 @@ export function mountPaginatedSurface(
       tableInteraction.destroy();
       navigation.destroy();
       pagesLayer.removeEventListener('contextmenu', onTocContextMenu);
-      detachMenuDismiss?.();
-      detachMenuDismiss = null;
       pagesLayer.removeEventListener('click', onTocRowClick);
       pagesLayer.removeEventListener('pointermove', onTocPointerMove);
       pagesLayer.removeEventListener('pointerleave', onTocPointerLeave);

@@ -160,6 +160,8 @@ describe('TOC refresh editor lane', () => {
     });
     editor.surface!.type('tamper');
     expect(await documentXml(editor)).not.toContain('tamper');
+    // The engine paints no menu of its own: a right-click over a TOC publishes which one it
+    // landed on and lets the event through to the host's context menu.
     const open = new MouseEvent('contextmenu', {
       bubbles: true,
       cancelable: true,
@@ -167,15 +169,9 @@ describe('TOC refresh editor lane', () => {
       clientY: 240,
     });
     row!.dispatchEvent(open);
-    expect(open.defaultPrevented).toBe(true);
-    const menu = container.querySelector<HTMLElement>('[data-docx-toc-menu]');
-    expect(menu?.style.left).toBe('320px');
-    expect(menu?.style.top).toBe('240px');
-    expect(
-      [...container.querySelectorAll<HTMLButtonElement>('.docx-content-control-menu-item')].map(
-        (button) => button.textContent
-      )
-    ).toEqual(['Update entire table', 'Update page numbers only']);
+    expect(open.defaultPrevented).toBe(false);
+    expect(container.querySelector('.docx-content-control-menu')).toBeNull();
+    expect(editor.snapshot().tocContext).not.toBeNull();
 
     expect(editor.exec({ type: 'refreshToc', mode: 'entire' })).toEqual({
       ok: true,
@@ -252,45 +248,35 @@ describe('TOC refresh editor lane', () => {
     editor.destroy();
   });
 
-  test('the TOC update menu dismisses on an outside press and on Escape', () => {
+  test('a right-click publishes the TOC it landed on, and only that one', () => {
     const container = document.createElement('div');
     document.body.append(container);
     const editor = createDocxEditor({ container });
     editor.load(docx(TOC_CONTENT + HEADING));
 
+    const rightClickOn = (element: HTMLElement): void => {
+      element.dispatchEvent(
+        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 })
+      );
+    };
     const row = [...container.querySelectorAll<HTMLElement>('[data-paragraph-id]')].find(
       (element) => element.textContent?.includes('Old cached entry')
     )!;
-    const openMenu = (): HTMLElement => {
-      row.dispatchEvent(
-        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 })
-      );
-      return container.querySelector<HTMLElement>('[data-docx-toc-menu]')!;
-    };
+    const outside = [...container.querySelectorAll<HTMLElement>('[data-paragraph-id]')].find(
+      (element) => element.textContent?.includes('Introduction')
+    )!;
 
-    expect(openMenu()).not.toBeNull();
-    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    expect(container.querySelector('[data-docx-toc-menu]')).toBeNull();
+    expect(editor.snapshot().tocContext).toBeNull();
+    rightClickOn(row);
+    const context = editor.snapshot().tocContext;
+    expect(context).not.toBeNull();
+    // The id the menu's rows will act on, so it has to name the TOC and not the row.
+    expect(editor.surface!.canRefreshToc(context!.id)).toBe(true);
 
-    // A press the pointer lane prevents — every TOC row is read-only — may never produce the
-    // `mousedown` behind it, so `pointerdown` alone has to be enough to dismiss.
-    expect(openMenu()).not.toBeNull();
-    row.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-    expect(container.querySelector('[data-docx-toc-menu]')).toBeNull();
-
-    const menu = openMenu();
-    // A press INSIDE the menu is not a dismissal — the item's own handler owns that click.
-    menu.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-    menu.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    expect(container.querySelector('[data-docx-toc-menu]')).not.toBeNull();
-
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    expect(container.querySelector('[data-docx-toc-menu]')).toBeNull();
-
-    // Re-opening elsewhere replaces rather than stacks.
-    openMenu();
-    openMenu();
-    expect(container.querySelectorAll('[data-docx-toc-menu]')).toHaveLength(1);
+    // A right-click anywhere else takes it back: a stale context would leave the update rows
+    // in a menu opened over ordinary text.
+    rightClickOn(outside);
+    expect(editor.snapshot().tocContext).toBeNull();
     editor.destroy();
   });
 
@@ -330,13 +316,10 @@ describe('TOC refresh editor lane', () => {
       clientY: 180,
     });
     placeholder.dispatchEvent(open);
-    expect(open.defaultPrevented).toBe(true);
-    expect(container.querySelector('[data-docx-toc-menu]')).not.toBeNull();
-    expect(
-      [...container.querySelectorAll<HTMLButtonElement>('.docx-content-control-menu-item')].map(
-        (button) => button.textContent
-      )
-    ).toEqual(['Update entire table', 'Update page numbers only']);
+    // Inert here, and addressable by the host's menu: the placeholder is the ONE thing an
+    // empty region offers, so the right-click on it has to name the TOC behind it.
+    expect(open.defaultPrevented).toBe(false);
+    expect(editor.snapshot().tocContext).not.toBeNull();
 
     expect(editor.exec({ type: 'refreshToc', mode: 'entire' })).toEqual({
       ok: true,
@@ -418,7 +401,8 @@ describe('TOC refresh editor lane', () => {
     const chrome = container.querySelector<HTMLElement>('[data-docx-toc]')!;
 
     // The pointer ARRIVING on the TOC is the gesture's own first event. Repainting here
-    // detached the node the following `contextmenu` was aimed at, and the menu never opened.
+    // detached the node the following `contextmenu` was aimed at, and the right-click
+    // resolved to nothing.
     row.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 40, clientY: 40 }));
     expect(rowOf()).toBe(row);
     expect(row.isConnected).toBe(true);
@@ -434,8 +418,7 @@ describe('TOC refresh editor lane', () => {
       clientY: 40,
     });
     row.dispatchEvent(open);
-    expect(open.defaultPrevented).toBe(true);
-    expect(container.querySelector('[data-docx-toc-menu]')).not.toBeNull();
+    expect(editor.snapshot().tocContext).not.toBeNull();
 
     // Same for the left-click that navigates: it arrives with the pointer entering too.
     const jump = new MouseEvent('click', { button: 0, bubbles: true, cancelable: true });
