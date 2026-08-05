@@ -84,6 +84,48 @@ Each card is a compound you can take apart:
 
 `Markers` is the collapsed sidebar shown when the pane is closed; `Balloon` is the decision popover you get by clicking a format or structural change in the page; `AddComment` and `Draft` are the comment affordances.
 
+Every part takes `className`, `asChild`, and `hidden`. The action parts (`Accept`, `Reject`, `Reply`) also take `icon`.
+
+## Choosing what the sidebar shows
+
+The props on `DocxEditorReview` decide which decisions appear and how they stack:
+
+| Prop         | Default | What it does                                                                                           |
+| ------------ | ------- | ------------------------------------------------------------------------------------------------------ |
+| `filter`     | none    | Show a subset. `(item) => item.kind === 'comment'` puts comments in one rail and revisions in another. |
+| `structural` | `false` | Show "changed the document structure" cards.                                                           |
+| `formatting` | `false` | Show "changed text formatting" cards.                                                                  |
+| `stack`      | `true`  | Push overlapping cards down instead of letting them collide.                                           |
+| `gap`        | —       | Pixels between stacked cards. The only source of vertical spacing.                                     |
+| `furniture`  | none    | Host content above the cards: filters, a legend, a summary.                                            |
+| `preset`     | `true`  | `false` mounts the rail and its context only, so you lay the cards out yourself.                       |
+
+`structural` and `formatting` default to off because a heavily revised document mints one card per site, and together they crowd out the decisions a reviewer reads in order. Those revisions stay marked in the page, and clicking one opens its balloon.
+
+```tsx
+<DocxEditorReview filter={(item) => item.kind === 'comment'} gap={12} furniture={<MyFilters />} />
+```
+
+With `preset={false}` you keep the subscription and the anchoring and render the cards yourself. `useStackedReviewPositions(items, heights, { gap })` is the packaged stacking maths if you want the same behavior.
+
+## Host content inside a card
+
+`useReviewItem()` reads the card a child is rendered inside, so you can add a row to some cards and not others:
+
+```tsx
+import { DocxEditorReview, useReviewItem } from '@docx-editor.dev/pro/react';
+
+function AuditLink() {
+  const item = useReviewItem();
+  if (item?.kind !== 'revision') return null;
+  return <a href={`/audit/${item.id}`}>History</a>;
+}
+
+<DocxEditorReview>
+  <AuditLink />
+</DocxEditorReview>;
+```
+
 ## useReview
 
 The sidebar is one rendering of this hook. Take the hook for your own list, your own card layout, or avatars from your own directory:
@@ -115,18 +157,18 @@ function ChangeList() {
 }
 ```
 
-| Member | What it does |
-|---|---|
-| `items` | Every pending decision, in reading order. |
-| `activeKey` / `setActive` | Which item the caret is in; setting selects its range and scrolls to it. |
-| `accept(item)` / `reject(item)` | Resolve a revision. No-ops on an item whose `readOnly` is true. |
-| `reply(item, text, author?)` | Reply to a change. Returns whether it landed. |
-| `comment(text, author?)` | Comment on the current selection. Returns whether it landed. |
-| `selectionAnchorY` | Where a comment on the selection would sit, or `null`. |
-| `paneOpen` / `setPaneOpen` | The same toggle the toolbar's comments button runs. |
-| `ready` | False while no document is loaded. |
+| Member                          | What it does                                                             |
+| ------------------------------- | ------------------------------------------------------------------------ |
+| `items`                         | Every pending decision, in reading order.                                |
+| `activeKey` / `setActive`       | Which item the caret is in; setting selects its range and scrolls to it. |
+| `accept(item)` / `reject(item)` | Resolve a revision. No-ops on an item whose `readOnly` is true.          |
+| `reply(item, text, author?)`    | Reply to a change. Returns whether it landed.                            |
+| `comment(text, author?)`        | Comment on the current selection. Returns whether it landed.             |
+| `selectionAnchorY`              | Where a comment on the selection would sit, or `null`.                   |
+| `paneOpen` / `setPaneOpen`      | The same toggle the toolbar's comments button runs.                      |
+| `ready`                         | False while no document is loaded.                                       |
 
-Each item carries `key`, `id`, `author`, `initials`, `date`, `text`, `replyIds`, `readOnly`, `anchorY`, `pageIndex`, and `isActive`. Revision items add `kind: 'revision'`, a `revisionKind`, and `replacedText` for replacements, so a card can say *Replaced "x" with "y"*.
+Each item carries `key`, `id`, `author`, `initials`, `date`, `text`, `replyIds`, `readOnly`, `anchorY`, `pageIndex`, and `isActive`. Revision items add `kind: 'revision'`, a `revisionKind`, and `replacedText` for replacements, so a card can say _Replaced "x" with "y"_.
 
 Two things the hook gives you that you should not recompute. Items come from the document tree rather than from what is currently painted — a queue derived from the page would empty by half when the reader scrolls. And each item's `anchorY` comes from layout records rather than measured DOM, which would leave the sidebar a repaint behind the document and break outright during pagination.
 

@@ -55,7 +55,9 @@ function CommentBox() {
       }}
     >
       <textarea value={text} onChange={(e) => setText(e.target.value)} />
-      <button type="submit" disabled={!text.trim()}>Comment</button>
+      <button type="submit" disabled={!text.trim()}>
+        Comment
+      </button>
     </form>
   );
 }
@@ -67,7 +69,7 @@ The packaged `<DocxEditorReview.AddComment />` and `<DocxEditorReview.Draft />` 
 
 ## Replying
 
-`reply(item, text, author?)` threads onto a comment. Replying to a *revision* also works and produces a comment anchored over that revision's range, because OOXML gives `w:ins` and `w:del` no body of their own:
+`reply(item, text, author?)` threads onto a comment. Replying to a _revision_ also works and produces a comment anchored over that revision's range, because OOXML gives `w:ins` and `w:del` no body of their own:
 
 ```tsx
 function Thread() {
@@ -78,7 +80,10 @@ function Thread() {
       {items.map((item) => (
         <li key={item.key}>
           <p>{item.text}</p>
-          <span>{item.author}{item.date ? ` · ${item.date}` : ''}</span>
+          <span>
+            {item.author}
+            {item.date ? ` · ${item.date}` : ''}
+          </span>
           <span>{item.replyIds.length} replies</span>
           <button onClick={() => reply(item, 'Agreed, rephrased.')}>Reply</button>
         </li>
@@ -136,6 +141,7 @@ Comments parse from and serialize to the document's comments part, including aut
 
 ## Next steps
 
-- [Tracked changes](/docs/2.x/pro/tracked-changes): the full `useReview` surface and the sidebar parts
+- [Tracked changes](/docs/2.x/pro/tracked-changes): the full `useReview` surface, the sidebar parts, and how to filter what it shows
+- [Composition](/docs/2.x/react/composition): the sidebar and custom-node chrome alongside the rest of the editor
 - [Custom nodes](/docs/2.x/pro/custom-nodes)
 - [Hooks](/docs/2.x/react/hooks)

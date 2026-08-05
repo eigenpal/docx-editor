@@ -315,6 +315,97 @@ Two rules worth keeping:
 - **Do not style `docx-*` classes and do not use `!important`.** Those names are implementation details. Every visual change should go through a prop, a `--doc-*` token, or an element you own. Where that was not possible the library grew a prop instead: trigger icons, colour-split icons, and the page's centring margin all came out of building the Igloo demo.
 - **The document canvas is not themed, on purpose.** Painter output stays Word-faithful. A page rendered in your brand colours would be a lie about what the file contains, so the theme lives in the chrome around it.
 
+## Pro surfaces
+
+[`@docx-editor.dev/pro`](/docs/2.x/pro) adds two more compounds, and they compose the same way as everything above.
+
+### The review sidebar
+
+`DocxEditorReview` is the cards for tracked changes and comments. Its props decide _which_ decisions appear and how they stack; its parts decide what a card looks like.
+
+```tsx
+import { DocxEditorReview } from '@docx-editor.dev/pro/react';
+
+<DocxEditorReview
+  className="my-review"
+  // Comments in this rail, revisions somewhere else.
+  filter={(item) => item.kind === 'comment'}
+  // Structural and formatting cards are off by default: a heavily revised document mints
+  // one per site and they crowd out the decisions a reviewer reads in order. They stay
+  // marked in the page, where clicking one opens its balloon.
+  structural={false}
+  formatting={false}
+  stack
+  gap={12}
+  furniture={<MyReviewFilters />}
+>
+  <DocxEditorReview.Card className="my-card">
+    <DocxEditorReview.Avatar className="my-avatar" />
+    <DocxEditorReview.Author />
+    <DocxEditorReview.Time hidden />
+    <DocxEditorReview.Summary />
+    <DocxEditorReview.Accept icon={MyCheck} />
+    <DocxEditorReview.Reject icon={MyCross} />
+    <DocxEditorReview.Replies />
+    <DocxEditorReview.Reply />
+  </DocxEditorReview.Card>
+  <DocxEditorReview.Empty>Nothing to review</DocxEditorReview.Empty>
+</DocxEditorReview>;
+```
+
+Every part takes `className`, `asChild`, and `hidden`; the action parts also take `icon`. `furniture` is host content above the cards, for filters or a legend.
+
+`preset={false}` mounts the rail and its context without the packaged arrangement, so you can lay the cards out yourself and keep the subscription and the anchoring. `useStackedReviewPositions(items, heights, { gap })` is the packaged stacking maths if you want it.
+
+Below that, `useReview()` gives you the queue with no chrome at all — see [Tracked changes](/docs/2.x/pro/tracked-changes).
+
+### Host content inside a card
+
+`useReviewItem()` reads the card a child is rendered inside, so you can add your own row to some cards and not others:
+
+```tsx
+import { DocxEditorReview, useReviewItem } from '@docx-editor.dev/pro/react';
+
+function OpenSource() {
+  const item = useReviewItem();
+  // Cards contributed by a custom node's `reviewCard` hook.
+  if (item?.kind !== 'custom') return null;
+  return <button onClick={() => openSource(item)}>Open source</button>;
+}
+
+<DocxEditorReview>
+  <OpenSource />
+</DocxEditorReview>;
+```
+
+### Custom node chrome
+
+`CustomNodeChrome` paints the chips for your [custom nodes](/docs/2.x/pro/custom-nodes) and dispatches interaction. The chip's tint comes from the definition's `chrome.color`; the click and hover handlers are where host UI state belongs.
+
+```tsx
+import { CustomNodeChrome, CustomNodeContextMenu } from '@docx-editor.dev/pro/react';
+
+<DocxEditor.Viewport>
+  <DocxEditor.Content />
+  <CustomNodeChrome
+    // Defaults to the definitions registered on the editor. Pass a subset to
+    // paint only some of them.
+    nodes={[Citation]}
+    onNodeClick={(node) => setPopover({ at: node.rect, attrs: node.attrs })}
+    onNodeHover={(node) => prefetch(node.attrs['sourceId'])}
+  />
+  <DocxEditor.ContextMenu>
+    {/* Adds an "Edit {label}" row above the packaged rows when the right-click lands on a
+        chip. Chips are content-locked by default, so this is the editing entry point. */}
+    <CustomNodeContextMenu onEditNode={(node) => openEditForm(node)} />
+  </DocxEditor.ContextMenu>
+</DocxEditor.Viewport>;
+```
+
+An activated node carries `name`, `attrs`, `tag`, and `rect` (viewport-relative, for anchoring your own popover), plus `nodeId` and `text` when they resolve. `useCustomNodeDefinitions()` reads the definitions registered on the editor if you are building chrome of your own.
+
+Both compounds need their module registered on `Root`. See [Pro](/docs/2.x/pro).
+
 ## A full composition
 
 The parts a composed tree usually wants, placed by hand:
