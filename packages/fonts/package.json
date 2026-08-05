@@ -49,7 +49,7 @@
     "email": "jedr@eigenpal.com",
     "url": "https://github.com/jedrazb"
   },
-  "license": "Apache-2.0",
+  "license": "Apache-2.0 AND OFL-1.1",
   "homepage": "https://docx-editor.dev/",
   "repository": {
     "type": "git",

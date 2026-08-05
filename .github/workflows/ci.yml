@@ -110,6 +110,13 @@ jobs:
       - name: API report check
         run: bun run api:check
 
+      # Same generator the release runs, here as a gate rather than for its
+      # output: it fails when a newly bundled dependency ships no license text,
+      # or when a tsup config stops emitting the metafile it reads. Catching
+      # that on the PR beats discovering it mid-publish.
+      - name: Third-party notices generate (gate)
+        run: bun run notices:generate
+
       - name: Published-package artifact check
         run: bun run check:package-artifacts
 

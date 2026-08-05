@@ -27,6 +27,11 @@ export default defineConfig({
     preset: 'smallest',
   },
   minify: true,
+  // Read by `scripts/generate-third-party-notices.mjs` — see the note in
+  // `packages/react/tsup.config.ts`. It matters most here: this package
+  // declares no runtime dependencies, so the ONLY record of what third-party
+  // code it redistributes is what esbuild inlined.
+  metafile: true,
   // `@docx-editor.dev/core` is private and never published, so both entries have to
   // carry it: left external, the shipped bundles would import a package that does not exist on
   // npm. Same treatment `packages/react` gives it.
