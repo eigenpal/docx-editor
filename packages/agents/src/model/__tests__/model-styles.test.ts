@@ -17,7 +17,7 @@ import { strToU8, zipSync } from 'fflate';
 import { isDocxEditorError } from '../../runtime/errors.ts';
 import { createServer } from '../../runtime/server.ts';
 import type { DocxEditorServerRuntime } from '../../runtime/runtime.ts';
-import { mainXmlOf, reopen } from './support/documents.ts';
+import { mainXmlOf, orNull, reopen } from './support/documents.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -98,7 +98,7 @@ describe('reading a paragraph style', () => {
       const body = context.document.body;
       body.load('style');
       await context.sync();
-      return body.style;
+      return orNull(body.style);
     });
     expect(read).toBe(null);
     runtime.dispose();

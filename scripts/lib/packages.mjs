@@ -35,17 +35,10 @@ export const PACKAGES = [
     name: '@docx-editor.dev/agents',
     root: 'packages/agents',
     pkgSlug: 'docx-editor-agents',
-    // Excludes Vue source files because the Vue adapter for agents
-    // builds with a separate Vite pass.
-    tsconfigPath: 'packages/agents/tsconfig.tsup.json',
-    // Cannot build against the current engine: `src/bridge.ts` imports
-    // `@docx-editor.dev/core/headless`, which the greenfield migration removed. The
-    // package's own `typecheck` script already skips for exactly this reason. Without
-    // this flag `api:check` failed on the missing `dist` for every other package too, so
-    // one legacy package took the whole API gate down and no snapshot drift anywhere
-    // could be detected. Clear it when the agent bridge is rebuilt over engine-core.
-    disconnected:
-      'legacy package pending rebuild over engine-core; @docx-editor.dev/core/headless imports were removed in the greenfield migration',
+    // Strips dev-time `paths` for the same reason the React entry does: Extractor should
+    // read the built `dist/*.d.ts` as a consumer would, not follow `@docx-editor.dev/...`
+    // back into workspace source.
+    tsconfigPath: 'packages/agents/tsconfig.api.json',
   },
 ];
 

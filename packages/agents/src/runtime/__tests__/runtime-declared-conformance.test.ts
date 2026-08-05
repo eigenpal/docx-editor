@@ -90,15 +90,17 @@ describe('the conformance generator', () => {
   test('the runtime does not import generated conformance output', () => {
     // The dependency runs one way: declarations describe the runtime, generated assertions compare
     // declarations to the reference. Nothing shipped may depend on generated files.
-    const runtimeSources = [
-      'index.ts',
-      'browser-entry.ts',
-      'public.ts',
-      'request-context.ts',
-      'client-object.ts',
+    const SRC = join(import.meta.dir, '..', '..');
+    const shipped = [
+      // The two published entry points, which live at the root of `src`.
+      join(SRC, 'index.ts'),
+      join(SRC, 'browser.ts'),
+      join(SRC, 'runtime', 'public.ts'),
+      join(SRC, 'runtime', 'request-context.ts'),
+      join(SRC, 'runtime', 'client-object.ts'),
     ];
-    for (const name of runtimeSources) {
-      const text = readFileSync(join(import.meta.dir, '..', name), 'utf8');
+    for (const file of shipped) {
+      const text = readFileSync(file, 'utf8');
       expect(text).not.toContain('compat/');
       expect(text).not.toContain('generated');
     }

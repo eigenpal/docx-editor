@@ -1,58 +1,73 @@
 /**
- * @docx-editor.dev/agents
+ * Document automation for DOCX: a batching object model over the DocxEditor engine.
  *
- * Word-like API for AI document review.
+ * Work is described against proxy objects and nothing reaches the document until
+ * `context.sync()`, which sends one ordered batch and either applies all of it or none of it.
+ * Reading a property nobody asked for is an error rather than a silent `undefined`.
  *
- * @example
+ * This entry needs no browser. It opens DOCX bytes, drives them, and saves them back, so a
+ * server, a worker or a build script can import the package name and get the whole API.
+ *
+ * @example Read and edit a document on a server
  * ```ts
- * const reviewer = await DocxReviewer.fromBuffer(buffer, 'AI Reviewer');
+ * import { DocxEditor } from '@docx-editor.dev/agents';
  *
- * // Read
- * const text = reviewer.getContentAsText();
+ * const runtime = await DocxEditor.createServer(bytes, { author: 'Payroll bot' });
+ * try {
+ *   await runtime.run(async (context) => {
+ *     const paragraphs = context.document.body.paragraphs;
+ *     paragraphs.load('text');
+ *     await context.sync();
  *
- * // Comment on a paragraph
- * reviewer.addComment(5, 'Liability cap seems too low.');
- *
- * // Replace text (creates tracked change)
- * reviewer.replace(5, '$50k', '$500k');
- *
- * // Or batch from LLM JSON response
- * reviewer.applyReview({
- *   comments: [{ paragraphIndex: 5, text: 'Too low.' }],
- *   proposals: [{ paragraphIndex: 5, search: '$50k', replaceWith: '$500k' }],
- * });
- *
- * const output = await reviewer.toBuffer();
+ *     for (const paragraph of paragraphs.items) {
+ *       if (paragraph.text.includes('{{name}}')) paragraph.insertText('Ada', 'Replace');
+ *     }
+ *     await context.sync();
+ *   });
+ *   const edited = await runtime.save();
+ * } finally {
+ *   runtime.dispose();
+ * }
  * ```
+ *
+ * @example Drive an editor a reader already has open
+ * ```ts
+ * // `createBrowser` lives one subpath along, because reaching a live editor means
+ * // reaching the painted engine. A consumer holding bytes should not pay for that.
+ * import { DocxEditor } from '@docx-editor.dev/agents/browser';
+ *
+ * const runtime = DocxEditor.createBrowser(editor);
+ * await runtime.run(async (context) => {
+ *   const [heading] = context.document.body.paragraphs.items;
+ *   heading?.font.set({ bold: true });
+ *   await context.sync();
+ * });
+ * ```
+ *
+ * This is a DocxEditor-owned API whose shape is compatible with a documented subset of Word's
+ * JavaScript object model. It is not Office.js, it does not run in an Office add-in host, and it
+ * depends on no Microsoft package: every type in this surface is independently authored here.
  *
  * @packageDocumentation
  * @public
  */
 
-export { DocxReviewer } from './DocxReviewer';
+import { createServer } from './runtime/server.ts';
 
-export type {
-  // Content
-  ContentBlock,
-  GetContentOptions,
-  // Discovery
-  ReviewChange,
-  ReviewComment,
-  // Batch (main LLM interface)
-  BatchReviewOptions,
-  BatchResult,
-  BatchError,
-} from './types';
+export * from './runtime/public.ts';
 
-export { TextNotFoundError, ChangeNotFoundError, CommentNotFoundError } from './errors';
-
-// Tools — reusable tool definitions for AI agents (OpenAI function calling format)
-export { agentTools, executeToolCall, getToolSchemas } from './tools';
-export type { AgentToolDefinition, AgentToolResult } from './tools';
-
-// Reviewer bridge — wraps DocxReviewer in the EditorBridge interface so the
-// same agent tools / MCP server can operate on a static DOCX file.
-export { createReviewerBridge } from './reviewerBridge';
-
-// Word JS API parity contract (compile-time only — no runtime cost).
-export type { WordCompatBridge } from './wordCompat';
+/**
+ * The entry point, as much of it as works without an editor.
+ *
+ * An object rather than a TypeScript `namespace`: a namespace with runtime members is a
+ * declaration-merging construct that does not survive being re-exported through a bundler as
+ * predictably, and `DocxEditor.createServer` reads the same either way.
+ *
+ * Import from `@docx-editor.dev/agents/browser` for the same namespace plus `createBrowser`.
+ *
+ * @public
+ */
+export const DocxEditor = Object.freeze({
+  /** A runtime over DOCX bytes. Additionally offers `save()`. */
+  createServer,
+});

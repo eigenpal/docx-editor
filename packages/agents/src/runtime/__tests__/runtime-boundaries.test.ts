@@ -25,15 +25,17 @@ const RUNTIME = join(import.meta.dir, '..');
 const PACKAGE_SRC = join(RUNTIME, '..');
 /** The object model: a sibling directory, the same shipped lane, the same rules. */
 const MODEL = join(PACKAGE_SRC, 'model');
+/** The package's two published entry points, which live at the root of `src`. */
+const ENTRIES = [join(PACKAGE_SRC, 'index.ts'), join(PACKAGE_SRC, 'browser.ts')];
 const LANE = [RUNTIME, MODEL];
 
 /**
- * Every SHIPPED source file of the lane — examples included, tests and the conformance
- * assertions excluded. `__conformance__` reads `compat/` on purpose; it is compiled, never bundled,
- * and the test at the bottom of this file holds that line.
+ * Every SHIPPED source file of the lane — the two entries and the examples included, tests and
+ * the conformance assertions excluded. `__conformance__` reads `compat/` on purpose; it is
+ * compiled, never bundled, and the test at the bottom of this file holds that line.
  */
 function runtimeFiles(directories: readonly string[] = LANE): string[] {
-  const out: string[] = [];
+  const out: string[] = directories === LANE ? [...ENTRIES] : [];
   for (const directory of directories) {
     for (const entry of readdirSync(directory)) {
       if (entry === '__tests__' || entry === '__conformance__' || entry === '__typings__') continue;
@@ -47,12 +49,12 @@ function runtimeFiles(directories: readonly string[] = LANE): string[] {
 
 /**
  * The modules that must stay neutral: everything except the browser adapter and the entry that
- * publishes it. `index.ts` — the entry a server imports — is deliberately NOT on this list.
+ * publishes it. `src/index.ts` — the entry a server imports — is deliberately NOT on this list.
  */
-const BROWSER_MODULES = new Set(['browser.ts', 'browser-entry.ts']);
+const BROWSER_MODULES = new Set([join('runtime', 'browser.ts'), 'browser.ts']);
 
 function isNeutral(file: string): boolean {
-  return !BROWSER_MODULES.has(relative(RUNTIME, file));
+  return !BROWSER_MODULES.has(relative(PACKAGE_SRC, file));
 }
 
 const IMPORT = /(?:^|\n)\s*(?:import|export)[\s\S]{0,400}?from\s*['"]([^'"]+)['"]/g;
@@ -114,7 +116,8 @@ describe('what the runtime imports', () => {
   test('the scan found the lane, so the assertions below are about something', () => {
     expect(files.length).toBeGreaterThanOrEqual(12);
     const names = files.map((file) => relative(PACKAGE_SRC, file));
-    expect(names).toContain(join('runtime', 'index.ts'));
+    expect(names).toContain('index.ts');
+    expect(names).toContain('browser.ts');
     expect(names).toContain(join('runtime', 'request-context.ts'));
     expect(names).toContain(join('runtime', 'browser.ts'));
     expect(names).toContain(join('model', 'document.ts'));
@@ -129,13 +132,13 @@ describe('what the runtime imports', () => {
   test('exactly one module names the editor lane', () => {
     const reaching = files
       .filter((file) => specifiersOf(file).includes('@docx-editor.dev/core-contract/editor'))
-      .map((file) => relative(RUNTIME, file));
-    expect(reaching).toEqual(['browser.ts']);
+      .map((file) => relative(PACKAGE_SRC, file));
+    expect(reaching).toEqual([join('runtime', 'browser.ts')]);
   });
 
   test('the entry a server imports does not reach the editor lane, at any depth', () => {
-    // Followed the way a bundler follows it: `index.ts` must not have `browser.ts` anywhere
-    // beneath it, or the neutral subpath ships the painted engine.
+    // Followed the way a bundler follows it: the root entry must not have `runtime/browser.ts`
+    // anywhere beneath it, or the package root ships the painted engine.
     const seen = new Set<string>();
     const walk = (file: string): void => {
       if (seen.has(file)) return;
@@ -146,15 +149,15 @@ describe('what the runtime imports', () => {
         if (existsSync(target)) walk(target);
       }
     };
-    walk(join(RUNTIME, 'index.ts'));
-    const reached = [...seen].map((file) => relative(RUNTIME, file));
-    expect(reached).toContain('server.ts');
+    walk(join(PACKAGE_SRC, 'index.ts'));
+    const reached = [...seen].map((file) => relative(PACKAGE_SRC, file));
+    expect(reached).toContain(join('runtime', 'server.ts'));
+    expect(reached).not.toContain(join('runtime', 'browser.ts'));
     expect(reached).not.toContain('browser.ts');
-    expect(reached).not.toContain('browser-entry.ts');
   });
 
   test('the browser entry reaches the browser adapter, so that check is not vacuous', () => {
-    expect(specifiersOf(join(RUNTIME, 'browser-entry.ts'))).toContain('./browser.ts');
+    expect(specifiersOf(join(PACKAGE_SRC, 'browser.ts'))).toContain('./runtime/browser.ts');
   });
 
   test('no store, tree, layout or binding module is reachable, by any spelling', () => {
@@ -166,9 +169,9 @@ describe('what the runtime imports', () => {
   });
 
   test('no relative import escapes the lane', () => {
-    // The lane is the runtime plus the object model built on it. The legacy package around them is
-    // mid-rebuild, and reaching into it would tie a brand new public surface to code the cutover
-    // slice is going to delete.
+    // The lane is the two entries, the runtime and the object model built on it. Nothing else is
+    // left in this package, and an import that reached outside it would be reaching for something
+    // the cutover deleted.
     const escapes: string[] = [];
     for (const file of files) {
       for (const specifier of specifiersOf(file)) {
@@ -312,9 +315,13 @@ describe('the claims that are compiled rather than scanned', () => {
   test('the conformance assertions are compiled but never shipped', () => {
     // They import `compat/` — fine for a compiler, wrong for a bundle. Neither shipped entry may
     // reach them, and neither lane project may include them.
-    const shipped = ['index.ts', 'browser-entry.ts', 'public.ts'];
-    for (const name of shipped) {
-      expect(readFileSync(join(RUNTIME, name), 'utf8')).not.toContain('__conformance__');
+    const shipped = [
+      join(PACKAGE_SRC, 'index.ts'),
+      join(PACKAGE_SRC, 'browser.ts'),
+      join(RUNTIME, 'public.ts'),
+    ];
+    for (const file of shipped) {
+      expect(readFileSync(file, 'utf8')).not.toContain('__conformance__');
     }
     for (const project of [neutralProject, fullProject]) {
       const include = readProject(project).include ?? [];
@@ -324,19 +331,20 @@ describe('the claims that are compiled rather than scanned', () => {
   });
 
   test('both projects include the whole lane, and neither drags in the rest of the package', () => {
+    /** The object model and the entry points sit above the runtime, so they are reached with `..`. */
+    const ABOVE = new Set(['../model/*.ts', '../index.ts', '../browser.ts']);
     for (const project of [neutralProject, fullProject]) {
       const include = readProject(project).include ?? [];
       expect(include.length).toBeGreaterThan(0);
-      // The object model is a sibling directory, so it is reached with `..` — and that is the
-      // ONLY thing above the runtime either project may name. The package around this slice is
-      // mid-rebuild, so a project that reached the rest of it would fail for reasons that have
-      // nothing to do with the lane. That file exists, and is not included.
       expect(include).toContain('../model/*.ts');
-      const escaping = include.filter(
-        (pattern) => pattern.includes('..') && pattern !== '../model/*.ts'
+      // The root entry is in BOTH: the entry a server imports is the one most worth proving
+      // neutral, and it is the browser entry alone that the neutral project excludes.
+      expect(include).toContain('../index.ts');
+      expect(include.filter((pattern) => pattern.includes('..') && !ABOVE.has(pattern))).toEqual(
+        []
       );
-      expect(escaping).toEqual([]);
     }
-    expect(existsSync(join(PACKAGE_SRC, 'DocxReviewer.ts'))).toBe(true);
+    expect(readProject(neutralProject).include).not.toContain('../browser.ts');
+    expect(readProject(fullProject).include).toContain('../browser.ts');
   });
 });

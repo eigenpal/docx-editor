@@ -1,45 +1,48 @@
 import { defineConfig } from 'tsup';
 
-// Tsup builds the framework-agnostic + React entries. Vue SFCs are built by
-// `vite.config.ts` because tsup/esbuild can't compile `.vue` files. The
-// dedicated `tsconfig.tsup.json` excludes vue/* so the d.ts pass doesn't
-// trip on the SFC shim.
+// Two entries, one build. `index` is the server-safe one; `browser` is the one that reaches the
+// editor lane. See `src/index.ts` for why that split exists.
 export default defineConfig({
   entry: {
     index: 'src/index.ts',
-    server: 'src/server.ts',
-    // Two entries on purpose: `runtime` is neutral and `runtime/browser` is the one that reaches
-    // the editor lane. See `src/runtime/index.ts`.
-    runtime: 'src/runtime/index.ts',
-    'runtime/browser': 'src/runtime/browser-entry.ts',
-    react: 'src/react.ts',
-    mcp: 'src/mcp/index.ts',
-    'ai-sdk/server': 'src/ai-sdk/server.ts',
-    'ai-sdk/react': 'src/ai-sdk/react.ts',
+    browser: 'src/browser.ts',
   },
+  // The same reason `packages/react` sets it: tsup's default platform is `node`, which resolves
+  // bundled dependencies through their `node` export condition, and fflate's node build runs
+  // `createRequire("/")` at module top level — which throws on a page. fflate's browser build is
+  // plain JavaScript and runs on a server, in a worker and in a page, so choosing it here is what
+  // makes the ROOT entry importable from all three rather than only from Node.
+  platform: 'browser',
   format: ['cjs', 'esm'],
   dts: { resolve: true },
-  tsconfig: 'tsconfig.tsup.json',
-  splitting: true,
+  tsconfig: 'tsconfig.json',
+  // Off on purpose. With splitting, "what is in the server bundle" becomes a question about a
+  // graph of shared chunks; off, `dist/index.mjs` is one self-contained file and
+  // `scripts/pack-smoke.mjs` can answer it by reading that file. The editor lane is duplicated
+  // into `dist/browser.mjs` as a result, and a consumer only ever loads one of the two.
+  splitting: false,
   sourcemap: false,
   clean: true,
   treeshake: {
     preset: 'smallest',
   },
   minify: true,
-  // `@docx-editor.dev/core-contract` is private and never published, so the runtime entry has to
-  // carry it: left external, the shipped `dist/runtime.mjs` would import a package that does not
-  // exist on npm. Same treatment `packages/react` gives it.
-  noExternal: ['@docx-editor.dev/core', /^@docx-editor\.dev\/core-contract(?:\/|$)/],
-  // `harfbuzzjs` stays external for the reason `packages/react` keeps it external: it initializes
-  // its wasm with a top-level `await`, which cannot be bundled into a CJS output at all. It reaches
-  // this build through the editor lane, so only the `runtime/browser` entry depends on it.
-  external: [
-    'prosemirror-model',
-    'prosemirror-state',
-    'prosemirror-view',
-    'react',
-    'ai',
-    'harfbuzzjs',
-  ],
+  // `@docx-editor.dev/core-contract` is private and never published, so both entries have to
+  // carry it: left external, the shipped bundles would import a package that does not exist on
+  // npm. Same treatment `packages/react` gives it.
+  noExternal: [/^@docx-editor\.dev\/core-contract(?:\/|$)/],
+  // `harfbuzzjs` is external to get the build to RESOLVE, not because the output needs it.
+  //
+  // The browser entry reaches the editor lane, whose layout pass loads the font shaper through
+  // `await import('harfbuzzjs')`. esbuild resolves every specifier while building the graph, before
+  // it drops anything — and the shaper's wasm wrapper needs Node's `module` and a top-level
+  // `await`, so resolving it fails the CJS build outright. Externalizing skips the resolve.
+  //
+  // Nothing then survives into the emitted bundles: neither output mentions `harfbuzzjs`, because
+  // the code path that would load it is unreachable from these entries — `createBrowserAutomationHost`
+  // takes an editor the host already created, so this package needs the host adapter and not the
+  // pass that measures text. That is why the package declares no runtime dependency, and why
+  // `scripts/pack-smoke.mjs` asserts ZERO bare imports in the tarball's bundles rather than
+  // trusting this list: an external import that did survive would be one a consumer cannot resolve.
+  external: ['harfbuzzjs'],
 });

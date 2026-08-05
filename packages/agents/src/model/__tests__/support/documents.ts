@@ -176,3 +176,17 @@ export async function mainXmlOf(runtime: DocxEditorServerRuntime): Promise<strin
   const parts = unzipSync(await runtime.save());
   return strFromU8(parts['word/document.xml'] as Uint8Array);
 }
+
+/**
+ * A formatting read, widened to admit the `null` it can answer.
+ *
+ * `Font#bold`, `Paragraph#leftIndent` and `Body#style` are declared with upstream's own
+ * non-nullable types on purpose — see the "A NULL A DECLARATION CANNOT SAY" note in
+ * `compat/docxeditor/declarations.ts`: widening them would stop them matching the reference they
+ * are measured against, and upstream declares and behaves the same way. The runtime still answers
+ * `null` where the characters or paragraphs read disagree, or where nothing authors the value, and
+ * the tests below are ABOUT that `null`. Saying so once here beats a cast at every call site.
+ */
+export function orNull<T>(read: T): T | null {
+  return read;
+}

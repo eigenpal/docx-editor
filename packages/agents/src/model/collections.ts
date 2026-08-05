@@ -15,7 +15,7 @@ import {
   type ObjectAddress,
   type RequestContext,
 } from '../runtime/model-support.ts';
-import { HandleCollection, ItemCollection, type PromisedItem } from './item-collection.ts';
+import { ItemCollection, type PromisedItem } from './item-collection.ts';
 import { Paragraph } from './paragraph.ts';
 import { Range } from './range.ts';
 

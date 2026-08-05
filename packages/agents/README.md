@@ -14,28 +14,106 @@
 
 # @docx-editor.dev/agents
 
-Word-like API for AI agents to review DOCX documents. Read, comment, suggest tracked changes, accept/reject. Headless, server-friendly, browser-friendly. The library you build your AI document features on top of.
-
-## Quick Start
+Document automation for DOCX. Describe work against an object model, and one `sync()` sends it as
+a single ordered batch that either applies whole or not at all. The same code drives bytes on a
+server and a document a reader already has open in a page.
 
 ```bash
 npm install @docx-editor.dev/agents
 ```
 
+## On a server, from bytes
+
+No browser, no framework, nothing to mount. This half of the package opens DOCX bytes, edits
+them, and hands them back.
+
 ```ts
 import { readFile, writeFile } from 'node:fs/promises';
-import { DocxReviewer } from '@docx-editor.dev/agents';
+import { DocxEditor } from '@docx-editor.dev/agents';
 
-const buffer = await readFile('contract.docx');
-const reviewer = await DocxReviewer.fromBuffer(buffer, 'AI Reviewer');
+const runtime = await DocxEditor.createServer(await readFile('contract.docx'), {
+  author: 'Review bot',
+});
+try {
+  const filled = await runtime.run(async (context) => {
+    const matches = context.document.body.search('{{cap}}', { matchCase: true });
+    matches.load();
+    await context.sync(); //  one round trip: now you know what was found
 
-reviewer.addComment(5, 'This cap seems too low.');
-reviewer.replace(5, '$50k', '$500k');
-
-await writeFile('contract.reviewed.docx', new Uint8Array(await reviewer.toBuffer()));
+    for (const match of matches.items) match.insertText('$500k', 'Replace');
+    await context.sync(); //  one atomic batch: all of the writes, or none
+    return matches.items.length;
+  });
+  console.log(`replaced ${filled}`);
+  await writeFile('contract.filled.docx', await runtime.save());
+} finally {
+  runtime.dispose();
+}
 ```
 
-That's the static-review path: drop into a CI bot, queue worker, or Lambda. No editor needed. ~50 KB.
+## In a page, on a document already open
+
+The browser entry takes an editor the host already created — from `@docx-editor.dev/react`,
+`@docx-editor.dev/vue`, or a plain page — and drives it in place, so edits land in the open
+document with the reader's undo stack intact. There is no `save()`: the host saves as it already
+did.
+
+```ts
+import { DocxEditor } from '@docx-editor.dev/agents/browser';
+
+const runtime = DocxEditor.createBrowser(editor);
+await runtime.run(async (context) => {
+  const heading = context.document.body.paragraphs.getFirstOrNullObject();
+  heading.load('text');
+  await context.sync();
+
+  if (!heading.isNullObject) heading.font.set({ bold: true });
+  await context.sync();
+});
+```
+
+Import it from `/browser` deliberately: reaching a live editor means reaching the painted engine,
+and a server holding bytes should not pay for that.
+
+## The four rules
+
+- **Read what you asked for.** A property you did not `load()` throws instead of answering
+  `undefined`, so a typo fails at the read rather than producing a wrong document later.
+- **`sync()` is the only round trip.** Everything queued between two syncs is one ordered batch,
+  applied atomically.
+- **Objects live inside `run`.** They are proxies into a document the runtime owns. Keeping one
+  past the callback, or past `dispose()`, is an error rather than a stale read — to keep one
+  across syncs deliberately, hand it to `context.trackedObjects`.
+- **Ask before you assume.** `getItemOrNullObject` / `getFirstOrNullObject` answer an object whose
+  `isNullObject` is `true`, which is the difference between "no such heading" and a crash.
+
+`runtime.capabilities` says what the host behind a runtime can do — `save` is false in the
+browser; `selection`, `scrolling` and `layout` are false on a server — and it is frozen for the
+life of the runtime, so one read stays true.
+
+## Entries
+
+| Entry                                   | Use when                                                     |
+| --------------------------------------- | ------------------------------------------------------------ |
+| `@docx-editor.dev/agents`               | Servers, workers, build scripts: bytes in, bytes out         |
+| `@docx-editor.dev/agents/browser`       | A page, driving an editor the host already created           |
+
+Both entries export the same vocabulary — the lifecycle types, the object model and the error
+type — so consumer code compiles against either. They differ by one member: `createBrowser`.
+
+## What this is, and is not
+
+This is a DocxEditor-owned API whose shape is compatible with a documented subset of Word's
+JavaScript object model, so a call site written against that vocabulary compiles here. It is not
+Office.js, it does not run in an Office add-in host, and it depends on no Microsoft package:
+every type in the surface is authored in this repository.
+
+The supported subset and its documented omissions — tables, images, repeating sections, custom
+XML mapping — are listed in
+[the Word API compatibility page](https://www.docx-editor.dev/docs/agents/word-js-api).
+
+Upgrading from the reviewer/bridge/MCP/chat surfaces this package used to ship? See
+[MIGRATION.md](https://github.com/eigenpal/docx-editor/blob/main/packages/agents/MIGRATION.md).
 
 ## Packages
 
@@ -45,76 +123,7 @@ That's the static-review path: drop into a CI bot, queue worker, or Lambda. No e
 | [`@docx-editor.dev/vue`](https://www.npmjs.com/package/@docx-editor.dev/vue)       | <img src="https://cdn.simpleicons.org/vuedotjs/4FC08D" width="20" align="middle" /> &nbsp; Vue 3 adapter. Toolbar, paged editor, plugins.  |
 | [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)     | Framework-agnostic core: OOXML parser, serializer, layout engine, ProseMirror schema. Depend on this if you fork the React or Vue adapter. |
 | [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)     | Shared locale strings and types consumed by both adapters.                                                                                 |
-| [`@docx-editor.dev/agents`](https://www.npmjs.com/package/@docx-editor.dev/agents) | Agent SDK and chat UI: framework-agnostic bridge, MCP server, AI SDK adapters, plus React UI.                                              |
-
-> **Forking the adapter?** Keep your fork thin. Depend on `@docx-editor.dev/core` directly so parser, serializer, and rendering fixes land in your build automatically, without backporting each upstream change by hand.
-
-## Live editor bridge
-
-Wire AI tools into a running `<DocxEditor>` so `add_comment`, `suggest_change`, `find_text` etc. show up live in the user's editor.
-
-```ts
-// React
-import { useAgentChat } from '@docx-editor.dev/agents/react';
-const { executeToolCall, toolSchemas } = useAgentChat({ editorRef, author: 'Assistant' });
-
-// Vue
-import { useAgentBridge } from '@docx-editor.dev/agents/vue';
-const { executeToolCall, toolSchemas } = useAgentBridge({ editorRef, author: 'Assistant' });
-```
-
-Both share the same `EditorRefLike` contract from `/bridge`, the same tool catalog, and the same `AgentMessage[]` chat shape. For other frameworks, build the bridge directly via `createEditorBridge` from `@docx-editor.dev/agents/bridge`.
-
-## MCP server
-
-Transport-agnostic core. Wrap it with your own auth, storage, and transport (HTTP-SSE, WebSocket, queue worker, anything).
-
-```ts
-import { McpServer, createReviewerBridge, DocxReviewer } from '@docx-editor.dev/agents';
-
-app.post('/api/mcp', requireAuth, async (req, res) => {
-  const buffer = await loadDocxForUser(req.user, req.params.docId);
-  const reviewer = await DocxReviewer.fromBuffer(buffer, req.user.name);
-  const server = new McpServer(createReviewerBridge(reviewer), {
-    name: 'acme-review',
-    version: '1.0.0',
-  });
-
-  res.json(server.handle(JSON.parse(req.body))); // sync, transport-free, never throws
-
-  await saveDocxForUser(req.user, req.params.docId, await reviewer.toBuffer());
-});
-```
-
-The built-in agent tools (`read_document`, `read_selection`, `read_page`, `read_pages`, `find_text`, `read_comments`, `read_changes`, `add_comment`, `suggest_change`, `apply_formatting`, `set_paragraph_style`, `insert_break`, `reply_comment`, `resolve_comment`, `scroll`) are exposed automatically via MCP `tools/list` and `tools/call`. MCP spec version: `2025-06-18`.
-
-> A local stdio MCP bin is one-document-per-config (Claude Desktop loads its list at startup), which doesn't fit a multi-doc product. Host the server yourself with your own auth and storage.
-
-## Subpaths
-
-| Subpath                                 | Use when                                                       |
-| --------------------------------------- | -------------------------------------------------------------- |
-| `@docx-editor.dev/agents`               | Server-side review, library glue                               |
-| `@docx-editor.dev/agents/bridge`        | Wiring AI tools into a running editor adapter                  |
-| `@docx-editor.dev/agents/server`        | Backend routes needing agent tooling without the MCP transport |
-| `@docx-editor.dev/agents/mcp`           | Building an MCP server (any transport)                         |
-| `@docx-editor.dev/agents/ai-sdk/server` | Server-side streaming chat with the Vercel `ai` package        |
-| `@docx-editor.dev/agents/react`         | React apps wiring `<DocxEditor>` to an agent                   |
-| `@docx-editor.dev/agents/ai-sdk/react`  | React chat UI over the bridge                                  |
-| `@docx-editor.dev/agents/vue`           | Vue apps wiring `<DocxEditor>` to an agent                     |
-| `@docx-editor.dev/agents/ai-sdk/vue`    | Vue chat UI over the bridge                                    |
-
-Each subpath tree-shakes independently. Vue and AI SDK peers are optional via `peerDependenciesMeta`.
-
-## Word API parity
-
-The bridge mirrors the Office.js Word API pattern: locate a stable handle (`paraId`) first, then mutate. The contract is type-enforced at compile time:
-
-```ts
-import type { WordCompatBridge } from '@docx-editor.dev/agents';
-```
-
-`EditorBridge` is statically required to satisfy `WordCompatBridge`. Drop a method that maps to a Word API call and typecheck breaks.
+| [`@docx-editor.dev/agents`](https://www.npmjs.com/package/@docx-editor.dev/agents) | Document automation: this package.                                                                                                         |
 
 ## Contributing
 

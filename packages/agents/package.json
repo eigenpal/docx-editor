@@ -1,10 +1,8 @@
 {
   "name": "@docx-editor.dev/agents",
   "version": "0.0.1",
-  "description": "Agent SDK and chat UI for the DOCX editor — framework-agnostic bridge, MCP server, AI SDK adapters, plus React UI (and Vue UI in 1.x)",
-  "sideEffects": [
-    "*.css"
-  ],
+  "description": "Document automation for DOCX: a batching object model that drives a document from a server or from an editor already open in a page",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -14,144 +12,46 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     },
-    "./server": {
-      "types": "./dist/server.d.ts",
-      "import": "./dist/server.mjs",
-      "require": "./dist/server.js"
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.mjs",
+      "require": "./dist/browser.js"
     },
-    "./runtime": {
-      "types": "./dist/runtime.d.ts",
-      "import": "./dist/runtime.mjs",
-      "require": "./dist/runtime.js"
-    },
-    "./runtime/browser": {
-      "types": "./dist/runtime/browser.d.ts",
-      "import": "./dist/runtime/browser.mjs",
-      "require": "./dist/runtime/browser.js"
-    },
-    "./react": {
-      "types": "./dist/react.d.ts",
-      "import": "./dist/react.mjs",
-      "require": "./dist/react.js"
-    },
-    "./vue": {
-      "types": "./dist/vue.d.ts",
-      "import": "./dist/vue.mjs",
-      "require": "./dist/vue.js"
-    },
-    "./mcp": {
-      "types": "./dist/mcp.d.ts",
-      "import": "./dist/mcp.mjs",
-      "require": "./dist/mcp.js"
-    },
-    "./ai-sdk/server": {
-      "types": "./dist/ai-sdk/server.d.ts",
-      "import": "./dist/ai-sdk/server.mjs",
-      "require": "./dist/ai-sdk/server.js"
-    },
-    "./ai-sdk/react": {
-      "types": "./dist/ai-sdk/react.d.ts",
-      "import": "./dist/ai-sdk/react.mjs",
-      "require": "./dist/ai-sdk/react.js"
-    },
-    "./ai-sdk/vue": {
-      "types": "./dist/ai-sdk/vue.d.ts",
-      "import": "./dist/ai-sdk/vue.mjs",
-      "require": "./dist/ai-sdk/vue.js"
-    }
+    "./package.json": "./package.json"
   },
   "typesVersions": {
     "*": {
-      "server": [
-        "./dist/server.d.ts"
-      ],
-      "runtime": [
-        "./dist/runtime.d.ts"
-      ],
-      "runtime/browser": [
-        "./dist/runtime/browser.d.ts"
-      ],
-      "react": [
-        "./dist/react.d.ts"
-      ],
-      "vue": [
-        "./dist/vue.d.ts"
-      ],
-      "mcp": [
-        "./dist/mcp.d.ts"
-      ],
-      "ai-sdk/server": [
-        "./dist/ai-sdk/server.d.ts"
-      ],
-      "ai-sdk/react": [
-        "./dist/ai-sdk/react.d.ts"
-      ],
-      "ai-sdk/vue": [
-        "./dist/ai-sdk/vue.d.ts"
+      "browser": [
+        "./dist/browser.d.ts"
       ]
-    }
-  },
-  "peerDependencies": {
-    "@ai-sdk/vue": "^2.0.0",
-    "ai": "^5.0.0 || ^6.0.0",
-    "react": "^17.0.0 || ^18.0.0 || ^19.0.0",
-    "vue": "^3.0.0"
-  },
-  "peerDependenciesMeta": {
-    "@ai-sdk/vue": {
-      "optional": true
-    },
-    "ai": {
-      "optional": true
-    },
-    "react": {
-      "optional": true
-    },
-    "vue": {
-      "optional": true
     }
   },
   "devDependencies": {
     "@docx-editor.dev/core-contract": "workspace:*",
     "@microsoft/api-extractor": "^7.50.0",
-    "@vitejs/plugin-vue": "^6.0.4",
-    "ai": "^6.0.169",
-    "vite": "^8.0.10",
-    "vite-plugin-dts": "^5.0.0",
-    "vue": "^3.4.0",
-    "vue-tsc": "^3.3.0"
+    "fflate": "^0.8.2"
   },
   "files": [
     "dist",
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup && vite build && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/agents",
-    "typecheck": "echo 'skip typecheck: @docx-editor.dev/agents is a legacy package pending rebuild over the new engine-core; its @docx-editor.dev/core/headless imports were removed in the greenfield migration. Restore vue-tsc --noEmit when reconnected.'",
-    "typecheck:disabled": "vue-tsc --noEmit",
+    "build": "tsup && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/agents",
+    "typecheck": "tsc --noEmit",
     "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/agents --local",
     "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/agents",
+    "pack:smoke": "node scripts/pack-smoke.mjs",
     "compat:generate": "node scripts/generate-conformance.mjs",
     "compat:fetch-reference": "node scripts/fetch-office-reference.mjs",
     "compat:check-drift": "node scripts/fetch-office-reference.mjs --check"
   },
-  "dependencies": {
-    "@docx-editor.dev/core": "^0.0.1",
-    "docxtemplater": "^3.50.0",
-    "harfbuzzjs": "1.4.0",
-    "jszip": "^3.10.1",
-    "pizzip": "^3.1.7",
-    "xml-js": "^1.6.11"
-  },
   "keywords": [
     "docx",
-    "ai",
-    "agent",
-    "review",
-    "track-changes",
-    "comments",
-    "legal",
-    "contract"
+    "word",
+    "ooxml",
+    "document",
+    "automation",
+    "headless"
   ],
   "author": {
     "name": "Jedr Blaszyk",

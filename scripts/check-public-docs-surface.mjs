@@ -8,8 +8,8 @@ const entries = {
   vue: collectNamedExports(resolve(root, 'packages/vue/src/index.ts')),
   reactUi: collectNamedExports(resolve(root, 'packages/react/src/ui.ts')),
   reactPluginApi: collectNamedExports(resolve(root, 'packages/react/src/plugin-api/index.ts')),
-  agentsReact: collectNamedExports(resolve(root, 'packages/agents/src/react.ts')),
-  agentsVue: collectNamedExports(resolve(root, 'packages/agents/src/vue.ts')),
+  automation: collectNamedExports(resolve(root, 'packages/agents/src/index.ts')),
+  automationBrowser: collectNamedExports(resolve(root, 'packages/agents/src/browser.ts')),
 };
 
 const required = {
@@ -54,19 +54,24 @@ const required = {
       'createTemplatePlugin',
     ],
   },
-  'agent UI kit canonical entries': {
-    entries: ['agentsReact', 'agentsVue'],
+  // Both automation entries carry the whole documented vocabulary — the lifecycle types, the
+  // object model and the error type — because a consumer's own code is written against those
+  // names whichever entry constructed the runtime. The entries differ by ONE member,
+  // `createBrowser`, and that difference is asserted in the package's own export tests rather
+  // than here, where only presence can be stated.
+  'document automation object model': {
+    entries: ['automation', 'automationBrowser'],
     names: [
-      'AgentPanel',
-      'AgentPanelProps',
-      'AgentChatLog',
-      'AgentComposer',
-      'AgentSuggestionChip',
-      'AgentTimeline',
-      'AgentMessage',
-      'AgentToolCall',
-      'EditorRefLike',
-      'getToolDisplayName',
+      'DocxEditor',
+      'DocxEditorRuntime',
+      'DocxEditorServerRuntime',
+      'RequestContext',
+      'RunCallback',
+      'ClientObject',
+      'ClientResult',
+      'TrackedObjects',
+      'LoadOption',
+      'CreateServerOptions',
     ],
   },
 };

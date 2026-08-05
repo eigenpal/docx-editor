@@ -17,7 +17,7 @@
 import { describe, expect, test } from 'bun:test';
 import { isDocxEditorError } from '../../runtime/errors.ts';
 import { internalsOf } from '../../runtime/internals.ts';
-import { docx, mainXmlOf, p, reopen, serverRuntime } from './support/documents.ts';
+import { docx, mainXmlOf, orNull, p, reopen, serverRuntime } from './support/documents.ts';
 
 /** Two runs that disagree, then one that does not. */
 const MIXED = docx(
@@ -75,7 +75,7 @@ describe('reading a font', () => {
       const font = paragraphs.items[0]!.font;
       font.load('bold');
       await context.sync();
-      return font.bold;
+      return orNull(font.bold);
     });
     expect(read).toBe(null);
     runtime.dispose();
@@ -102,7 +102,7 @@ describe('reading a font', () => {
       const font = context.document.body.font;
       font.load('bold');
       await context.sync();
-      return font.bold;
+      return orNull(font.bold);
     });
     expect(read).toBe(null);
     runtime.dispose();
@@ -117,7 +117,7 @@ describe('reading a font', () => {
       const font = paragraphs.items[0]!.font;
       font.load();
       await context.sync();
-      return { bold: font.bold, size: font.size };
+      return { bold: orNull(font.bold), size: orNull(font.size) };
     });
     expect(read).toEqual({ bold: null, size: null });
     runtime.dispose();
@@ -274,7 +274,7 @@ describe("a paragraph's own paragraph formatting", () => {
       const paragraph = paragraphs.items[1]!;
       paragraph.load(['alignment', 'leftIndent']);
       await context.sync();
-      return { alignment: paragraph.alignment, leftIndent: paragraph.leftIndent };
+      return { alignment: paragraph.alignment, leftIndent: orNull(paragraph.leftIndent) };
     });
     expect(read).toEqual({ alignment: 'Unknown', leftIndent: null });
     runtime.dispose();

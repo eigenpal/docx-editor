@@ -10,8 +10,8 @@
   // ES2022 rather than ES2020 because core's sources use `Array.prototype.at`. That is a statement
   // about the language level this code needs, which is a different axis from the platform.
   //
-  // The two modules that legitimately name the browser host (`browser.ts` and the entry point that
-  // re-exports it) are excluded here and checked by `tsconfig.json` next to it.
+  // The two modules that legitimately name the browser host (`browser.ts` and the package entry
+  // point that re-exports it) are excluded here and checked by `tsconfig.json` next to it.
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022"],
@@ -37,8 +37,15 @@
       "@docx-editor.dev/core-contract/automation": ["../../../core/src/automation/index.ts"]
     }
   },
-  "include": ["*.ts", "examples/*.ts", "../model/*.ts", "__typings__/platform-neutral.d.ts"],
-  // `index.ts` is INCLUDED: the neutral subpath's own entry point is the thing most worth proving
-  // neutral. Only the editor adapter and the entry that publishes it are excluded.
-  "exclude": ["node_modules", "__tests__", "browser.ts", "browser-entry.ts"]
+  "include": [
+    "*.ts",
+    "examples/*.ts",
+    "../model/*.ts",
+    "../index.ts",
+    "__typings__/platform-neutral.d.ts"
+  ],
+  // `../index.ts` is INCLUDED: the package's own root entry, the one a server imports, is the
+  // thing most worth proving neutral. Only the editor adapter and the browser entry that
+  // publishes it are excluded.
+  "exclude": ["node_modules", "__tests__", "browser.ts", "../browser.ts"]
 }

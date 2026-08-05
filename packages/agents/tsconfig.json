@@ -1,32 +1,48 @@
 {
+  // The package's real typecheck. It used to be an `echo`: the legacy sources could not compile
+  // against the current engine, so the script printed a paragraph explaining that and exited
+  // zero — which made every aggregate `bun run typecheck` report success for a package nobody
+  // was checking. Those sources are gone, so this compiles again.
+  //
+  // ES2022 rather than ES2020 because core's sources, which this program contains through the
+  // `paths` below, use `Array.prototype.at`.
   "compilerOptions": {
-    "target": "ES2020",
-    "lib": ["ES2020", "DOM"],
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
-    "skipLibCheck": true,
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "react-jsx",
     "noEmit": true,
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "declaration": true,
-    "declarationMap": true,
+    "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
       "@docx-editor.dev/core-contract/automation": ["../core/src/automation/index.ts"],
-      "@docx-editor.dev/core-contract/editor": ["../core/src/editor/index.ts"],
-      "@docx-editor.dev/core": ["../core/src/core.ts"],
-      "@docx-editor.dev/core/headless": ["../core/src/headless.ts"],
-      "@docx-editor.dev/core/utils/paragraphFlashTypes": [
-        "../core/src/utils/paragraphFlashTypes.ts"
-      ]
+      "@docx-editor.dev/core-contract/editor": ["../core/src/editor/index.ts"]
     }
   },
-  "include": ["src", "vite.config.ts"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src"],
+  // `__negative__` holds code that is SUPPOSED not to compile: it carries a deliberate type error
+  // and a test asserts that compiling it reports exactly that error. In this program it would be
+  // an ordinary failure, which would make the package's own typecheck permanently red for the one
+  // reason that means the check is working.
+  //
+  // `src/office-compat/__tests__` is excluded for a different and less satisfying reason: those
+  // tests import the compat corpus's build steps, which are plain `.mjs` run by plain Node before
+  // any TypeScript exists. TypeScript can only see them as `any` (`noImplicitAny` then rejects the
+  // import) or, with `allowJs`, as weakly inferred shapes that fail on every property read. Giving
+  // them hand-written `.d.mts` declarations is the fix, and it is a change to that harness rather
+  // than to this package's surface. They are exercised by `bun test` today.
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/runtime/__conformance__/__negative__",
+    "src/office-compat/__tests__"
+  ]
 }

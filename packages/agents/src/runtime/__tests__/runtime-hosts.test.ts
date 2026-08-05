@@ -8,25 +8,28 @@
 // The browser half needs a DOM before the editor module is evaluated, hence the registration
 // above the imports.
 //
-// Two namespaces, from the two subpaths a consumer imports: the neutral one and the browser one.
+// Two namespaces, from the two entries a consumer imports: the package root and its browser
+// subpath.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { createDocxEditor } from '@docx-editor.dev/core-contract/editor';
-import { DocxEditor } from '../index.ts';
-import { DocxEditor as DocxEditorBrowser } from '../browser-entry.ts';
+import { DocxEditor } from '../../index.ts';
+import { DocxEditor as DocxEditorBrowser } from '../../browser.ts';
+import type { DocxEditorRuntime } from '../runtime.ts';
 import { docx, p, TWO_PARAGRAPHS } from './support/docx.ts';
 
-function bodyText(runtime: Parameters<typeof read>[0]): Promise<string> {
-  return read(runtime);
-}
-
-function read(runtime: {
-  run: <T>(callback: (context: never) => Promise<T>) => Promise<T>;
-}): Promise<string> {
-  return (runtime as ReturnType<typeof DocxEditorBrowser.createBrowser>).run(async (context) => {
+/**
+ * The story's text, over either runtime.
+ *
+ * Typed as the base `DocxEditorRuntime` on purpose: the server runtime is that plus `save()`, so
+ * one function taking the base is the claim these tests exist to make — the same script drives
+ * bytes and an open editor, and nothing in it knows which.
+ */
+function bodyText(runtime: DocxEditorRuntime): Promise<string> {
+  return runtime.run(async (context) => {
     const body = context.document.body;
     body.load('text');
     await context.sync();
