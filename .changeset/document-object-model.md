@@ -8,4 +8,4 @@ Writes go through the same one-batch-or-nothing path: insert text at the start o
 
 The same script does the same thing whether it is driving bytes on a server or an editor a reader is looking at; selection is the one difference, and it is reported by `capabilities.selection`. Anything the document cannot honour — a write that would join paragraphs across a table cell, two changes claiming one paragraph, a paragraph a previous batch deleted, a decision made from a document that has since moved — is refused with a stable error code and leaves the document exactly as it was.
 
-Headers, footers and notes are not reachable from this surface yet, and the paragraph collection is deliberately the main story's only: nothing flattens the other stories into it. Formatting (`font`, alignment, styles) and content controls arrive in a later release.
+A paragraph collection is deliberately one story's only: nothing flattens the other stories into it. Formatting (`font`, alignment, styles), the other stories, and content controls arrive in later releases.

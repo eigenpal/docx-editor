@@ -8,4 +8,4 @@ Read and write character formatting and paragraph formatting through the documen
 
 Setting several properties in one batch is one write. A write only ever changes what it names — the properties a paragraph or a run already carried, including its numbering and its style, are preserved — and a refused write leaves the document exactly as it was.
 
-Lists, bookmarks, hyperlinks, sections and page setup, header/footer and note bodies, comments and tracked changes are not part of this surface. They are recorded as deliberate omissions with a reason each rather than shipped as members that would answer values the engine cannot supply.
+A property this engine cannot supply is recorded as a deliberate omission with a reason rather than shipped as a member that would answer a value it has not read: underline, highlight colour, and the styles gallery itself are not part of this surface.
