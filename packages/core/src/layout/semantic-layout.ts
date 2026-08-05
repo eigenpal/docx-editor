@@ -1290,7 +1290,13 @@ function layoutBlocksPass(
               width: available,
               producer,
               ...(drawingKeyed ? { drawingToken: drawingKeyed } : {}),
-              ...(exclusionToken ? { exclusionToken: `${flowColumnIndex}|${exclusionToken}` } : {}),
+              // `cursorY` belongs in the key: the zones are page-content bands, so the same
+              // text at the same width breaks differently depending on where down the page
+              // it starts. Keying on zone geometry alone lets a paragraph clear of the float
+              // reuse the wrapped break of an identical one that crosses it.
+              ...(exclusionToken
+                ? { exclusionToken: `${flowColumnIndex}|${cursorY.toFixed(3)}|${exclusionToken}` }
+                : {}),
               ...(startOffset > 0 ? { startOffset } : {}),
             })
           : startOffset === 0

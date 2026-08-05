@@ -21,7 +21,14 @@ import { createLayoutSession } from '../layout-session.ts';
 import { breakParagraph } from '../paragraph-flow.ts';
 import type { PendingLine } from '../paragraph-flow.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
-import { linesOf, paragraphFragmentsOf, type PageGeometry } from '../semantic-records.ts';
+import {
+  linesOf,
+  paragraphFragmentsOf,
+  paragraphFragmentsOfBlocks,
+  type LayoutBox,
+  type LineRecord,
+  type PageGeometry,
+} from '../semantic-records.ts';
 
 const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
@@ -394,5 +401,114 @@ describe('paint order on page record (OpenSpec 4.5)', () => {
     expect(anchors).toHaveLength(2);
     expect(anchors[0]!.behindDocument).toBe(true);
     expect(anchors[1]!.behindDocument).toBe(false);
+  });
+});
+
+describe('a table clear of a float does not inherit its wrap band', () => {
+  const CELL_TEXT = 'alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima';
+  /** Column-relative left edge of the square anchor these fixtures place. */
+  const FLOAT_LEFT = emuToPoints(3000000);
+  const FLOAT_RIGHT = FLOAT_LEFT + emuToPoints(1828800);
+
+  /**
+   * A square-wrapped picture at the top of the page and a table pushed well past its band.
+   * `withFloat: false` keeps the same paragraph and only drops the drawing, so the table
+   * lands in the same flow with nothing to wrap around.
+   */
+  function floatAboveTable(withFloat: boolean): string {
+    const anchor =
+      '<w:r><w:drawing>' +
+      '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" behindDoc="0" locked="0" allowOverlap="1" layoutInCell="1" relativeHeight="1">' +
+      '<wp:simplePos x="0" y="0"/>' +
+      '<wp:positionH relativeFrom="column"><wp:posOffset>3000000</wp:posOffset></wp:positionH>' +
+      '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
+      '<wp:extent cx="1828800" cy="914400"/>' +
+      '<wp:wrapSquare wrapText="bothSides" distT="0" distB="0" distL="0" distR="0"/>' +
+      '<wp:docPr id="1" name="pic"/>' +
+      `<a:graphic><a:graphicData uri="${PIC_URI}"><pic:pic><pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId1"/><a:srcRect/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+      '<pic:spPr><a:xfrm><a:ext cx="1828800" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr></pic:pic></a:graphicData></a:graphic>' +
+      '</wp:anchor></w:drawing></w:r>';
+    const cell = (width: string, text: string): string =>
+      `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/></w:tcPr>` +
+      '<w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr>' +
+      `<w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+    return (
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
+      '<w:body>' +
+      `<w:p>${withFloat ? anchor : ''}<w:r><w:t>lead</w:t></w:r></w:p>` +
+      fillerParagraphs(6) +
+      '<w:tbl>' +
+      '<w:tblPr><w:tblW w:w="9000" w:type="dxa"/></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="7000"/></w:tblGrid>' +
+      `<w:tr>${cell('2000', 'label')}${cell('7000', CELL_TEXT)}</w:tr>` +
+      '</w:tbl>' +
+      '</w:body></w:document>'
+    );
+  }
+
+  interface WideCell {
+    readonly lines: readonly LineRecord[];
+    readonly box: LayoutBox;
+    readonly tableTop: number;
+    readonly bandBottom: number;
+  }
+
+  /**
+   * A paragraph cache is what makes this observable: the row is laid out twice, once by the
+   * natural-height probe and once where it lands, and the cache is what carries a break
+   * between them.
+   */
+  function wideCell(withFloat: boolean): WideCell {
+    const part = load(floatAboveTable(withFloat));
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer,
+      cache: createParagraphLayoutCache(),
+      inlineDrawingLayout: layoutContext(part),
+    });
+    const page = layout.pages[0]!;
+    const anchor = (page.anchoredDrawings ?? [])[0];
+    const table = page.fragments.find((fragment) => fragment.kind === 'table');
+    if (table?.kind !== 'table') throw new Error('missing table fragment');
+    const cell = table.rows[0]!.cells[1]!;
+    return {
+      lines: paragraphFragmentsOfBlocks(cell.blocks).flatMap((paragraph) => paragraph.lines),
+      box: cell.box,
+      tableTop: table.box.y,
+      bandBottom: anchor ? anchor.y + anchor.height : 0,
+    };
+  }
+
+  test('no cell line steps over the float to resume at its far edge', () => {
+    const floated = wideCell(true);
+    // The premise: the table sits entirely below the picture, so nothing in it may wrap.
+    expect(floated.tableTop).toBeGreaterThan(floated.bandBottom);
+    expect(floated.lines.length).toBeGreaterThan(1);
+
+    for (const line of floated.lines) {
+      for (const span of line.spans) {
+        // Resuming exactly at the picture's right edge is the signature of a line that
+        // thought it had to step over it.
+        expect(Math.abs(span.box.x - FLOAT_RIGHT)).toBeGreaterThan(0.5);
+      }
+      const last = line.spans[line.spans.length - 1]!;
+      expect(last.box.x + last.box.width).toBeLessThanOrEqual(
+        floated.box.x + floated.box.width + 1
+      );
+    }
+  });
+
+  test('the cell breaks exactly as it does with no float in the document at all', () => {
+    const floated = wideCell(true);
+    const plain = wideCell(false);
+    const shape = (cell: WideCell): readonly string[][] =>
+      cell.lines.map((line) =>
+        line.spans.map((span) => `${span.text}@${(span.box.x - cell.box.x).toFixed(2)}`)
+      );
+    // The natural-height probe places the row at y=0 to keep its height free of any page
+    // position. Wrap zones ARE page positions, so consulting them there breaks the cell
+    // around a picture hundreds of points above it, and the placed row used to inherit that
+    // break through a cache keyed on zone geometry alone.
+    expect(shape(floated)).toEqual(shape(plain));
+    expect(floated.box.height).toBeCloseTo(plain.box.height, 3);
   });
 });
