@@ -736,6 +736,31 @@ export class TreePackageStore {
     );
   }
 
+  /**
+   * Publish a story transaction the coordinator did not run.
+   *
+   * Comment writes commit straight on the story store and hand the new shell back through
+   * {@link replacePackageShell}, so they never pass through `applyTreeOps` — the one place
+   * every other edit bumps the revision and publishes. The subscriber channel therefore
+   * stayed silent for a comment: `Editor.on('change')` never fired, and a review rail keyed
+   * on it only caught up on the next unrelated caret move, so a reply someone had just
+   * written was invisible until they clicked elsewhere.
+   *
+   * The STORY's own change is published rather than a synthetic one, because it carries the
+   * dirty anchor paragraphs and the `text-local` impact the marker ops computed; a synthetic
+   * `global` would make every comment cost a full relayout. History is deliberately
+   * untouched — the story transaction already recorded its undo entry, exactly as
+   * `applyTreeOps` leaves a non-cascading story edit.
+   *
+   * A `null` change is an identity no-op (nothing was written), and publishes nothing.
+   */
+  publishStoryWrite(change: TreeModelChange | null): TreeModelChange | null {
+    if (!change) return null;
+    this.packageRev += 1;
+    this.publish(change);
+    return change;
+  }
+
   /** Install a full package snapshot (public seam for post-fetch cleanup). */
   installPackageSnapshot(snapshot: OoxmlPackage): void {
     this.installPackageSnapshotInternal(snapshot);

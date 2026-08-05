@@ -354,6 +354,41 @@ describe('comments in the queue', () => {
     if (!result.ok) expect(result.code).toBe('invalidArgs');
   });
 
+  // PUSH, not pull. `getReviewRevision()` moving proves only that a re-derivation WOULD see
+  // the reply; it cannot see that nobody was told to re-derive. A rail subscribes through
+  // `useSyncExternalStore` on this event, so with no emit the reply stayed invisible until an
+  // unrelated click moved the caret and fired `selectionChange` by accident.
+  test('replying emits a change, so a subscribed rail re-derives without another gesture', () => {
+    const editor = mount({ body: COMMENTED_BODY, comments: COMMENTS });
+    const [card] = editor.getReviewItems();
+    const seen: number[] = [];
+    editor.on('change', () => seen.push(editor.getReviewItems().length));
+
+    expect(editor.replyToReviewItem(card!.key, 'Yes, checked.').ok).toBe(true);
+
+    expect(seen).toHaveLength(1);
+    // The handler must already see the reply: an emit that fires before the write lands is
+    // the same freeze one notification later.
+    expect(seen[0]).toBe(2);
+  });
+
+  test('a refused reply emits nothing — there is no change to report', () => {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: docx({ body: COMMENTED_BODY, comments: COMMENTS }),
+      modules: [testReviewModule()],
+    });
+    const [card] = editor.getReviewItems();
+    let emits = 0;
+    editor.on('change', () => {
+      emits += 1;
+    });
+    // No author anywhere, so `CT_Comment` cannot be satisfied and nothing is written.
+    expect(editor.replyToReviewItem(card!.key, 'anonymous').ok).toBe(false);
+    expect(emits).toBe(0);
+  });
+
   test('replying to a REVISION comments on its range — `w:ins` has no thread of its own', () => {
     const editor = mount({ body: INSERTION });
     const [card] = editor.getReviewItems();
@@ -398,6 +433,20 @@ describe('commenting on a selection', () => {
     const range = (card!.item as { range: { start: { offset: number }; end: { offset: number } } })
       .range;
     expect([range.start.offset, range.end.offset]).toEqual([6, 10]);
+  });
+
+  // The same emit `replyToReviewItem` owes, on the same lane. It only LOOKED right in the
+  // packaged compose box, which returns focus to the document afterwards and so moved the
+  // caret — a host that composes its own box got nothing.
+  test('adding a comment emits a change', () => {
+    const editor = mount({ body: PARAGRAPH });
+    select(editor, 6, 10);
+    let emits = 0;
+    editor.on('change', () => {
+      emits += 1;
+    });
+    expect(editor.addComment('why this word?').ok).toBe(true);
+    expect(emits).toBe(1);
   });
 
   test('a backwards drag anchors the same range as a forwards one', () => {
