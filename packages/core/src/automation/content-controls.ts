@@ -1,0 +1,155 @@
+// The content controls of one story, as the protocol answers them.
+//
+// A CONTROL IS ADDRESSED BY ITS CANONICAL NODE, and `w:id` is answered as metadata beside it.
+// The attribute is optional in the schema and unique nowhere, so a file may write none, or write
+// 5 twice; a lane that used it as identity would leave the first control unreachable and make the
+// second pair one object. Nesting is answered as nesting rather than flattened, because the
+// controls of a control are not the controls of the story that holds it.
+//
+// Everything here is derived per operation from the current package. A control's text, its lock
+// and the paragraphs it holds are all facts about the document NOW, and a read remembered from
+// when the handle was minted would describe the document as it was.
+
+import {
+  contentControlContentNodeOf,
+  contentControlPropertiesOf,
+  contentControlTextOf,
+  contentControlsIn,
+  type ContentControlLock,
+  type ContentControlProperties,
+} from '../store/package/content-control-nodes.ts';
+import { collectStoryParagraphs } from '../store/package/story-blocks.ts';
+import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
+import { contentControlLockAt } from '../store/store/tree-op-content-controls.ts';
+import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
+import type { AutomationStoryReads } from './reads.ts';
+
+/**
+ * Ceiling on how many controls one scope answers.
+ *
+ * A hostile document may declare a million; a caller iterating them would allocate a handle for
+ * each. Past the bound the extra controls are still preserved on save — they are simply not
+ * addressable, which is the fail-closed half of "unknown content never locks editing".
+ */
+const MAX_CONTROLS_PER_SCOPE = 10_000;
+
+/** One content control of a story: what it is, and where its content sits. */
+export interface AutomationContentControlRead {
+  /** The canonical node id — the private half of the handle, never answered to a caller. */
+  readonly nodeId: string;
+  readonly properties: ContentControlProperties;
+  /** The lock in force, including what an enclosing control imposes. */
+  readonly lock: ContentControlLock;
+  /** Paragraphs the control HOLDS. Empty for an inline control, which holds none. */
+  readonly paragraphIds: readonly string[];
+}
+
+/**
+ * The controls directly inside a scope, in document order.
+ *
+ * `scope` is a story root or one control's node; either way only its OWN controls are answered,
+ * and a nested one is reached by asking the control that holds it.
+ */
+export function contentControlReads(
+  reads: AutomationStoryReads,
+  scope: OoxmlNode
+): readonly AutomationContentControlRead[] {
+  const out: AutomationContentControlRead[] = [];
+  const root = scope.kind === 'contentControl' ? contentControlContentNodeOf(scope) : scope;
+  if (!root) return out;
+  for (const entry of contentControlsIn(root)) {
+    // DIRECT children only: `contentControlsIn` walks the whole subtree, and a control with an
+    // ancestor inside this scope belongs to that ancestor.
+    if (entry.ancestors.length > 0) continue;
+    if (out.length >= MAX_CONTROLS_PER_SCOPE) break;
+    out.push(readOf(reads, entry.node));
+  }
+  return out;
+}
+
+/** One control's read, by the node a handle names. Null once the document no longer holds it. */
+export function contentControlReadOf(
+  reads: AutomationStoryReads,
+  nodeId: string
+): AutomationContentControlRead | null {
+  for (const entry of contentControlsIn(reads.root)) {
+    if (entry.node.id === nodeId) return readOf(reads, entry.node);
+  }
+  return null;
+}
+
+/** The node a handle names, for the operations that need the markup rather than the read. */
+export function contentControlNodeOf(
+  reads: AutomationStoryReads,
+  nodeId: string
+): OoxmlNode | null {
+  for (const entry of contentControlsIn(reads.root)) {
+    if (entry.node.id === nodeId) return entry.node;
+  }
+  return null;
+}
+
+/**
+ * The span a control's content covers, in the story's own addressing.
+ *
+ * A BLOCK control spans its first paragraph's start to its last paragraph's end. An INLINE one
+ * spans the offsets its content occupies inside the paragraph that holds it — which is exactly
+ * the contribution the offset walk already gives it, so a range read here and a caret placed
+ * there agree by construction rather than by two derivations that happen to match.
+ */
+export function contentControlSpan(
+  reads: AutomationStoryReads,
+  node: OoxmlNode
+): {
+  readonly start: { readonly paragraphId: string; readonly offset: number };
+  readonly end: { readonly paragraphId: string; readonly offset: number };
+} | null {
+  const held = paragraphsHeldBy(node);
+  if (held.length > 0) {
+    const first = held[0]!;
+    const last = held[held.length - 1]!;
+    const lastText = reads.paragraphText(last);
+    if (lastText === null || !reads.has(first)) return null;
+    return {
+      start: { paragraphId: first, offset: 0 },
+      end: { paragraphId: last, offset: lastText.length },
+    };
+  }
+  // Inline: find the paragraph whose children include this control, and ask that paragraph's
+  // own offset index where the control sits.
+  for (const paragraphId of reads.paragraphIds) {
+    const paragraph = reads.node(paragraphId);
+    if (!paragraph || paragraph.kind !== 'paragraph') continue;
+    if (!paragraph.children.some((child) => child.id === node.id)) continue;
+    const span = paragraphOffsetIndex(paragraph).spanOf(node);
+    if (!span) return null;
+    return {
+      start: { paragraphId, offset: span.start },
+      end: { paragraphId, offset: span.end },
+    };
+  }
+  return null;
+}
+
+/** The text the control encloses, as the document reads it. */
+export function contentControlText(node: OoxmlNode): string {
+  return contentControlTextOf(node);
+}
+
+function readOf(reads: AutomationStoryReads, node: OoxmlNode): AutomationContentControlRead {
+  return {
+    nodeId: node.id,
+    properties: contentControlPropertiesOf(node),
+    lock: contentControlLockAt(reads.part, node.id),
+    paragraphIds: paragraphsHeldBy(node),
+  };
+}
+
+/** The paragraphs inside a control's content, flattening nested controls and tables. */
+function paragraphsHeldBy(node: OoxmlNode): readonly string[] {
+  const content = contentControlContentNodeOf(node);
+  if (!content) return [];
+  const found: OoxmlNode[] = [];
+  collectStoryParagraphs(content.children, found, 0);
+  return found.map((paragraph) => paragraph.id);
+}

@@ -30,7 +30,8 @@ export type AutomationObjectKind =
   | 'comment'
   | 'revision'
   | 'bookmark'
-  | 'list';
+  | 'list'
+  | 'contentControl';
 
 declare const AUTOMATION_HANDLE_BRAND: unique symbol;
 

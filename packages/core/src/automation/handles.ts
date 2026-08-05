@@ -96,7 +96,20 @@ export type AutomationHandleTarget =
    * `w:numId` 3 and they are two lists, so one handle for both would answer a header's items to a
    * caller asking about the body's.
    */
-  | { readonly kind: 'list'; readonly numId: string; readonly story: AutomationStoryId };
+  | { readonly kind: 'list'; readonly numId: string; readonly story: AutomationStoryId }
+  /**
+   * One content control, by the CANONICAL NODE ID and the story it lives in.
+   *
+   * Not by `w:id`: the attribute is optional and not unique, so a table keyed on it would make
+   * an unnumbered control unreachable and two identically numbered controls one object. The
+   * node id never leaves the host — it is the private half of a minted ref, exactly like a
+   * paragraph's.
+   */
+  | {
+      readonly kind: 'contentControl';
+      readonly nodeId: string;
+      readonly story: AutomationStoryId;
+    };
 
 export interface AutomationHandleTable {
   /** The document handle. One per host, minted on first ask. */
@@ -111,6 +124,8 @@ export interface AutomationHandleTable {
   revision(revisionId: string, story: AutomationStoryId): AutomationHandle<'revision'>;
   bookmark(name: string, story: AutomationStoryId): AutomationHandle<'bookmark'>;
   list(numId: string, story: AutomationStoryId): AutomationHandle<'list'>;
+  /** The handle for one content control's canonical node, minted once and reused. */
+  contentControl(nodeId: string, story: AutomationStoryId): AutomationHandle<'contentControl'>;
   /**
    * Point an already-issued paragraph handle at a different canonical id.
    *
@@ -213,6 +228,13 @@ export function createHandleTable(): AutomationHandleTable {
     },
     list(numId, story) {
       return named('list', `${storyKey(story)}\u0000${numId}`, { kind: 'list', numId, story });
+    },
+    contentControl(nodeId, story) {
+      return named('contentControl', `${storyKey(story)}\u0000${nodeId}`, {
+        kind: 'contentControl',
+        nodeId,
+        story,
+      });
     },
     retarget(fromParagraphId, toParagraphId) {
       const ref = refByParagraph.get(fromParagraphId);

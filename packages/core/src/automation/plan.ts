@@ -59,6 +59,7 @@ import type {
   AutomationCapabilities,
   AutomationError,
   AutomationErrorCode,
+  AutomationHandle,
   AutomationSpan,
   AutomationValue,
 } from './protocol.ts';
@@ -97,6 +98,21 @@ import type { StoryScope } from '../store/store/tree-package-store.ts';
 import type { AutomationCommentWrite } from './document-port.ts';
 import { commentReads, revisionReads, type AutomationRevisionRead } from './review.ts';
 import type { ReviewCommentItem } from '../store/store/review-reads.ts';
+import {
+  contentControlNodeOf,
+  contentControlReadOf,
+  contentControlReads,
+  contentControlSpan,
+  contentControlText,
+  type AutomationContentControlRead,
+} from './content-controls.ts';
+import {
+  contentControlContentNodeOf,
+  contentControlPropertiesOf,
+  contentControlsIn,
+} from '../store/package/content-control-nodes.ts';
+import type { ContentControlValueInput } from '../store/store/tree-op-content-controls.ts';
+import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
 
 /**
  * Characters that mean "a new paragraph" in a document but are merely characters in a run.
@@ -229,6 +245,86 @@ const APPLIED: AutomationValue = Object.freeze({ kind: 'applied' as const });
 
 function query(value: AutomationValue): PlannedOperation {
   return { ok: true, kind: 'query', value };
+}
+
+/**
+ * Every control under a scope, nested ones included, in document order.
+ *
+ * For the lookups that search what the FILE wrote — an id, a tag, a title. Word's own numbering
+ * is not scoped to a nesting level, so a lookup restricted to a scope's direct children would
+ * report a control that plainly exists as absent.
+ */
+function allControlsUnder(scope: OoxmlNode): readonly OoxmlNode[] {
+  const root = scope.kind === 'contentControl' ? contentControlContentNodeOf(scope) : scope;
+  if (!root) return [];
+  return contentControlsIn(root).map((entry) => entry.node);
+}
+
+const CONTENT_CONTROL_LOCKS: ReadonlySet<string> = new Set([
+  'unlocked',
+  'sdtLocked',
+  'contentLocked',
+  'sdtContentLocked',
+]);
+
+const CONTENT_CONTROL_SUBTYPES: ReadonlySet<string> = new Set([
+  'richText',
+  'plainText',
+  'dropDownList',
+  'comboBox',
+  'date',
+]);
+
+/** Longest tag/title/value a caller may author, so a script cannot ask for an unbounded write. */
+const MAX_CONTROL_STRING = 4_096;
+
+/**
+ * The typed value a caller offered, or why it is not one.
+ *
+ * Validated HERE and not only in the store, because a caller-supplied object is untrusted input
+ * arriving over a transport: a `value` that is a number, or a `kind` nobody declares, must be a
+ * named refusal rather than something the tree lane has to defend against.
+ */
+function contentControlValueOf(value: unknown):
+  | { readonly ok: true; readonly value: ContentControlValueInput }
+  | {
+      readonly ok: false;
+      readonly code: AutomationErrorCode;
+      readonly message: string;
+      readonly detail?: string;
+    } {
+  const bad = (message: string, detail?: string) => ({
+    ok: false as const,
+    code: 'unsupported-content' as AutomationErrorCode,
+    message,
+    detail,
+  });
+  if (typeof value !== 'object' || value === null || !('kind' in value)) {
+    return bad('a control value states its kind', 'value');
+  }
+  const offered = value as Record<string, unknown>;
+  const kind = offered.kind;
+  if (kind === 'text' || kind === 'listItem') {
+    const raw = kind === 'text' ? offered.text : offered.value;
+    if (typeof raw !== 'string') return bad('that value is not a string', String(kind));
+    if (raw.length > MAX_CONTROL_STRING) return bad('that value is too long', String(raw.length));
+    return {
+      ok: true,
+      value: kind === 'text' ? { kind: 'text', text: raw } : { kind: 'listItem', value: raw },
+    };
+  }
+  if (kind === 'checkbox') {
+    const checked = offered.checked;
+    if (typeof checked !== 'boolean') return bad('a checkbox is checked or not', 'checked');
+    return { ok: true, value: { kind: 'checkbox', checked } };
+  }
+  if (kind === 'date') {
+    const iso = offered.iso;
+    if (typeof iso !== 'string') return bad('a date is an ISO-8601 string', 'iso');
+    if (iso.length > 64) return bad('that is not a date', String(iso.length));
+    return { ok: true, value: { kind: 'date', iso } };
+  }
+  return bad('that is not a value any control accepts', String(kind));
 }
 
 /** Every occurrence of any delimiter in `text`, non-overlapping, in order. */
@@ -1243,6 +1339,62 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     return { ok: true, plan: planFor(reads), list: found };
   };
 
+  /**
+   * The scope a control query looks in: a story root, or one control's own content.
+   *
+   * Both answer the story their controls live in, because a nested control is in the same story
+   * as the control holding it — a handle carries its story so the walk never has to guess.
+   */
+  const controlScope = (
+    scope: unknown
+  ): { reads: AutomationStoryReads; node: OoxmlNode } | PlannedOperation => {
+    if (typeof scope !== 'object' || scope === null) {
+      return refuse('invalid-handle', 'that is not a scope a control lives in', 'scope');
+    }
+    const named = scope as Record<string, AutomationHandle>;
+    if ('body' in scope) {
+      const story = storyOfHandle(named.body as AutomationHandle, 'body', handles, packageReads);
+      if (!story.ok) return refuse(story.code, 'that handle does not name a body', story.detail);
+      return { reads: story.value, node: story.value.root };
+    }
+    if ('contentControl' in scope) {
+      const found = controlOf(named.contentControl);
+      if (!('control' in found)) return found;
+      return { reads: found.reads, node: found.node };
+    }
+    return refuse('invalid-handle', 'that is not a scope a control lives in', 'scope');
+  };
+
+  /**
+   * The control a handle names, re-derived from the current package.
+   *
+   * A handle to a control the document no longer holds is `invalid-handle` rather than a read of
+   * whatever moved into its place: a script that deleted a control and then asked its old
+   * reference for text must not be answered with a neighbour's.
+   */
+  const controlOf = (
+    handle: unknown
+  ):
+    | { reads: AutomationStoryReads; control: AutomationContentControlRead; node: OoxmlNode }
+    | PlannedOperation => {
+    const target = handles.resolve(handle, 'contentControl');
+    if (!target || target.kind !== 'contentControl') {
+      return refuse(
+        'invalid-handle',
+        'that handle does not name a content control',
+        'contentControl'
+      );
+    }
+    const reads = packageReads.story(target.story);
+    if (!reads) return refuse('invalid-handle', 'that story is not in this document');
+    const control = contentControlReadOf(reads, target.nodeId);
+    const node = contentControlNodeOf(reads, target.nodeId);
+    if (!control || !node) {
+      return refuse('invalid-handle', 'this document no longer holds that content control');
+    }
+    return { reads, control, node };
+  };
+
   const planSetListLevel = (
     plan: StoryPlan,
     paragraphId: string,
@@ -2240,6 +2392,281 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const story = storyReadsOf(resolved.value);
         if (!story) return refuse('invalid-handle', 'that story is not in this document');
         return planSelect(planFor(story), resolved.value, operation.mode);
+      }
+
+      case 'getContentControls': {
+        const scope = controlScope(operation.scope);
+        if (!('reads' in scope)) return scope;
+        return query({
+          kind: 'handles',
+          handles: contentControlReads(scope.reads, scope.node).map((control) =>
+            handles.contentControl(control.nodeId, scope.reads.story)
+          ),
+        });
+      }
+
+      case 'getContentControlById': {
+        const scope = controlScope(operation.scope);
+        if (!('reads' in scope)) return scope;
+        if (!Number.isInteger(operation.id)) {
+          return refuse(
+            'unsupported-content',
+            'a control id is a whole number',
+            String(operation.id)
+          );
+        }
+        // Document order over the WHOLE scope subtree, nested controls included: an id lookup is
+        // a search of what the file wrote, and Word's own numbering is not scoped to a nesting
+        // level. The first match wins because `w:id` is not unique.
+        const found = allControlsUnder(scope.node).find(
+          (control) => contentControlPropertiesOf(control).id === operation.id
+        );
+        if (!found) {
+          // `invalid-handle`, the same code a bookmark the document stopped declaring answers: the
+          // caller named an object this document does not have. A second code for "looked up by a
+          // file attribute rather than by a handle" would be a distinction without a caller.
+          return refuse(
+            'invalid-handle',
+            'no control in that scope carries that id',
+            String(operation.id)
+          );
+        }
+        return query({
+          kind: 'handle',
+          handle: handles.contentControl(found.id, scope.reads.story),
+        });
+      }
+
+      case 'getContentControlsByTag':
+      case 'getContentControlsByTitle': {
+        const scope = controlScope(operation.scope);
+        if (!('reads' in scope)) return scope;
+        const wanted = operation.op === 'getContentControlsByTag' ? operation.tag : operation.title;
+        if (typeof wanted !== 'string' || wanted.length === 0) {
+          return refuse('unsupported-content', 'a tag or title to match is required', operation.op);
+        }
+        const matches = allControlsUnder(scope.node).filter((control) => {
+          const properties = contentControlPropertiesOf(control);
+          return operation.op === 'getContentControlsByTag'
+            ? properties.tag === wanted
+            : properties.alias === wanted;
+        });
+        return query({
+          kind: 'handles',
+          handles: matches.map((control) => handles.contentControl(control.id, scope.reads.story)),
+        });
+      }
+
+      case 'getContentControlTag':
+      case 'getContentControlTitle':
+      case 'getContentControlFileId':
+      case 'getContentControlSubtype':
+      case 'getContentControlLock': {
+        const found = controlOf(operation.contentControl);
+        if (!('control' in found)) return found;
+        const properties = found.control.properties;
+        if (operation.op === 'getContentControlLock') {
+          return query({ kind: 'text', text: found.control.lock });
+        }
+        if (operation.op === 'getContentControlSubtype') {
+          return query({ kind: 'text', text: properties.type });
+        }
+        if (operation.op === 'getContentControlFileId') {
+          // A STRING, and empty for a control the file never numbered — the identity a caller
+          // holds is the handle, so an absent `w:id` is a missing label rather than an error.
+          return query({
+            kind: 'text',
+            text: properties.id === undefined ? '' : String(properties.id),
+          });
+        }
+        const text = operation.op === 'getContentControlTag' ? properties.tag : properties.alias;
+        return query({ kind: 'text', text: text ?? '' });
+      }
+
+      case 'getContentControlPlaceholderShown':
+      case 'getContentControlTemporary': {
+        const found = controlOf(operation.contentControl);
+        if (!('control' in found)) return found;
+        return query({
+          kind: 'flag',
+          value:
+            operation.op === 'getContentControlPlaceholderShown'
+              ? found.control.properties.showingPlaceholder
+              : found.control.properties.temporary,
+        });
+      }
+
+      case 'getContentControlText': {
+        const found = controlOf(operation.contentControl);
+        if (!('control' in found)) return found;
+        return query({ kind: 'text', text: contentControlText(found.node) });
+      }
+
+      case 'getContentControlParagraphs': {
+        const found = controlOf(operation.contentControl);
+        if (!('control' in found)) return found;
+        return query({
+          kind: 'handles',
+          handles: found.control.paragraphIds.map((id) => handles.paragraph(id, found.reads.story)),
+        });
+      }
+
+      case 'getContentControlRange': {
+        const found = controlOf(operation.contentControl);
+        if (!('control' in found)) return found;
+        const span = contentControlSpan(found.reads, found.node);
+        if (!span) {
+          return refuse('unsupported-content', 'that control holds nothing addressable', 'empty');
+        }
+        return query({
+          kind: 'span',
+          span: spanValue(
+            {
+              start: {
+                story: found.reads.story,
+                paragraphId: span.start.paragraphId,
+                index: found.reads.indexOf(span.start.paragraphId),
+                offset: span.start.offset,
+              },
+              end: {
+                story: found.reads.story,
+                paragraphId: span.end.paragraphId,
+                index: found.reads.indexOf(span.end.paragraphId),
+                offset: span.end.offset,
+              },
+            },
+            handles
+          ),
+        });
+      }
+
+      case 'setContentControlValue': {
+        const found = controlOf(operation.contentControl);
+        if (!('control' in found)) return found;
+        const value = contentControlValueOf(operation.value);
+        if (!value.ok) return refuse(value.code, value.message, value.detail);
+        const plan = planFor(found.reads);
+        const pin = pinWrite(plan);
+        if (pin) return pin;
+        return {
+          ok: true,
+          kind: 'command',
+          story: found.reads.story,
+          ops: [
+            { op: 'setContentControlValue', controlId: found.control.nodeId, value: value.value },
+          ],
+          answer: () => APPLIED,
+        };
+      }
+
+      case 'setContentControlProperties': {
+        const found = controlOf(operation.contentControl);
+        if (!('control' in found)) return found;
+        if (
+          operation.tag === undefined &&
+          operation.title === undefined &&
+          operation.lock === undefined
+        ) {
+          return refuse('unsupported-content', 'nothing to write', 'no-properties');
+        }
+        if (operation.lock !== undefined && !CONTENT_CONTROL_LOCKS.has(operation.lock)) {
+          return refuse(
+            'unsupported-content',
+            'that is not a lock this schema declares',
+            operation.lock
+          );
+        }
+        const plan = planFor(found.reads);
+        const pin = pinWrite(plan);
+        if (pin) return pin;
+        return {
+          ok: true,
+          kind: 'command',
+          story: found.reads.story,
+          ops: [
+            {
+              op: 'setContentControlProperties',
+              controlId: found.control.nodeId,
+              ...(operation.tag === undefined ? {} : { tag: operation.tag }),
+              // `title` in the object model is `w:alias` in the file. One name each side, and the
+              // translation happens here rather than leaking Word's UI wording into the tree.
+              ...(operation.title === undefined ? {} : { alias: operation.title }),
+              ...(operation.lock === undefined ? {} : { lock: operation.lock }),
+            },
+          ],
+          answer: () => APPLIED,
+        };
+      }
+
+      case 'deleteContentControl': {
+        const found = controlOf(operation.contentControl);
+        if (!('control' in found)) return found;
+        if (typeof operation.keepContent !== 'boolean') {
+          return refuse('unsupported-content', 'keepContent is required', 'keepContent');
+        }
+        const plan = planFor(found.reads);
+        const pin = pinWrite(plan);
+        if (pin) return pin;
+        return {
+          ok: true,
+          kind: 'command',
+          story: found.reads.story,
+          ops: [
+            {
+              op: 'removeContentControl',
+              controlId: found.control.nodeId,
+              keepContent: operation.keepContent,
+            },
+          ],
+          answer: () => APPLIED,
+        };
+      }
+
+      case 'insertContentControl': {
+        const resolved = resolveSpanRef(operation.span, handles, packageReads);
+        if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
+        if (!resolved.value)
+          return refuse('invalid-offset', 'that story holds nothing to wrap', 'empty-story');
+        const story = storyReadsOf(resolved.value);
+        if (!story) return refuse('invalid-handle', 'that story is not in this document');
+        const range = resolved.value;
+        // ONE PARAGRAPH: a control that starts in one paragraph and ends in another is a BLOCK
+        // control over both, which is a different wrapper than the inline one this operation
+        // authors. Refused rather than guessed, so a caller learns which they asked for.
+        if (range.start.paragraphId !== range.end.paragraphId) {
+          return refuse(
+            'unsupported-content',
+            'wrapping several paragraphs in one control is not supported here',
+            'multi-paragraph'
+          );
+        }
+        if (!CONTENT_CONTROL_SUBTYPES.has(operation.subtype)) {
+          return refuse(
+            'unsupported-content',
+            'that control type cannot be inserted',
+            operation.subtype
+          );
+        }
+        const plan = planFor(story);
+        const pin = pinWrite(plan);
+        if (pin) return pin;
+        return {
+          ok: true,
+          kind: 'command',
+          story: story.story,
+          ops: [
+            {
+              op: 'insertContentControl',
+              paragraphId: range.start.paragraphId,
+              start: range.start.offset,
+              end: range.end.offset,
+              type: operation.subtype,
+              ...(operation.tag === undefined ? {} : { tag: operation.tag }),
+              ...(operation.title === undefined ? {} : { alias: operation.title }),
+            },
+          ],
+          answer: () => APPLIED,
+        };
       }
 
       default: {

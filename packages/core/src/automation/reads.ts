@@ -87,6 +87,14 @@ export interface AutomationStoryReads {
   /** The part the story's blocks live in, for callers that plan tree ops against it. */
   readonly part: OoxmlPart;
   /**
+   * The story's own root — `w:body`, a `w:hdr`/`w:ftr`, or one note.
+   *
+   * For the reads that are about markup spanning several blocks rather than one paragraph: the
+   * notes part holds every note, so "the controls of this story" cannot be derived from the part
+   * without walking into the other four hundred notes.
+   */
+  readonly root: OoxmlNode;
+  /**
    * The transaction scope this story's writes commit through.
    *
    * Carried WITH the reads rather than derived by the caller: a header's scope is its `r:id`, and a
@@ -230,6 +238,7 @@ function storyReadsOver(
   return {
     story,
     part,
+    root,
     scope,
     paragraphIds,
     blocks: storyBlockReads(root),
