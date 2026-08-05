@@ -2,12 +2,12 @@
 
 ## 1. Core seam
 
-- [ ] 1.1 Define `EditorModule` interface in `packages/core/src/contracts/` (reviewModel, commands, displayModes, customNodes contribution points) with null-object defaults
-- [ ] 1.2 Add `modules` option to `createDocxEditor`; build the module registry and thread it to exec/chrome dispatch points
-- [ ] 1.3 Gate display modes: editor stays in final-state projection unless a module grants additional `RevisionDisplayMode`s; remove/redirect any free-core API that switches modes
-- [ ] 1.4 Add `hasReviewContent` derived read to the snapshot (lazy, version-cached, reference-stable)
-- [ ] 1.5 Add the `pro` unavailable reason for unwired review slots (`review.comments`, `review.editingMode`) in `toolbarCommandState`; i18n string for the reason
-- [ ] 1.6 Tests: no-module editor renders final state for a tracked-changes fixture, round-trips losslessly, `hasReviewContent` true, review slots disabled with `pro` reason
+- [x] 1.1 Define `EditorModule` interface in `packages/core/src/contracts/` (reviewModel, commands, displayModes, customNodes contribution points) with null-object defaults
+- [x] 1.2 Add `modules` option to `createDocxEditor`; build the module registry and thread it to exec/chrome dispatch points
+- [x] 1.3 Gate display modes: editor stays in final-state projection unless a module grants additional `RevisionDisplayMode`s; remove/redirect any free-core API that switches modes
+- [x] 1.4 Add `hasReviewContent` derived read to the snapshot (lazy, version-cached, reference-stable)
+- [x] 1.5 Add the `pro` unavailable reason for unwired review slots (`review.comments`, `review.editingMode`) in `toolbarCommandState`; i18n string for the reason
+- [x] 1.6 Tests: no-module editor renders final state for a tracked-changes fixture, round-trips losslessly, `hasReviewContent` true, review slots disabled with `pro` reason
 
 ## 2. Pro package scaffolding
 
@@ -36,6 +36,7 @@
 - [ ] 4.6 Atomic offset semantics: node occupies its SDT text offsets; caret skip, whole-SDT backspace/delete, copy/paste carries OOXML
 - [ ] 4.7 Interaction: hover/click dispatch through the interaction layer to `onHover`/`onClick` handlers
 - [ ] 4.8 React portal sugar: mount JSX renders into host elements at measured extent
+- [ ] 4.10 `reviewCard` hook: `kind: 'custom'` review items derived from recognized nodes, anchored at the node's range; card-renderer slot on the pro pane (owner request 2026-08-05)
 - [ ] 4.9 Tests: Word-round-trip fixtures `e2e/fixtures/sdt-custom-tag-original.docx` / `sdt-custom-tag-word-roundtrip.docx` (SDT + tag survive; recognition identical on both), oversized-attrs data part, malicious-URL fixture dropped by `sanitizeHref`, pagination with fixed-extent chip, atomic deletion, unrecognized SDT renders literally
 
 ## 5. Surface bookkeeping

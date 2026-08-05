@@ -57,3 +57,17 @@ A custom node SHALL occupy the UTF-16 offsets of its underlying SDT run text und
 
 - **WHEN** the pointer hovers a painted custom node with an `onHover` handler
 - **THEN** the handler receives the node with its attrs
+
+### Requirement: Custom nodes can contribute review sidebar cards
+
+`defineCustomNode` SHALL accept an optional `reviewCard` hook. When the review module's pane is mounted, each recognized node whose definition supplies the hook SHALL appear in the review queue as a `kind: 'custom'` item anchored at the node's range, sharing the pane's geometry, ordering, and active-card machinery. The pro React pane SHALL expose a card-renderer slot so hosts render custom cards with their own component. Without the review module registered, custom nodes SHALL function normally with no sidebar presence.
+
+#### Scenario: Citation card in the sidebar
+
+- **WHEN** a document contains a recognized custom node whose definition supplies `reviewCard` and the review pane is mounted
+- **THEN** the pane shows a card anchored beside the node's page position, rendered by the host-supplied card renderer
+
+#### Scenario: No review module, no sidebar
+
+- **WHEN** the same document opens with only the custom-nodes module registered
+- **THEN** the nodes render and interact normally and no review queue is derived

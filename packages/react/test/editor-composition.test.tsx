@@ -25,6 +25,7 @@ import type {
 } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
 import { DocxEditor } from '../src/components/DocxEditor.tsx';
+import { testReviewModule } from './review-test-module.ts';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
@@ -232,6 +233,7 @@ describe('the review sidebar', () => {
     const view = render(
       <DocxEditorRoot
         document={SOURCE}
+        modules={[testReviewModule()]}
         onReady={(editor) => {
           instance = editor as DocxEditorInstance;
         }}
@@ -262,6 +264,7 @@ describe('the review sidebar', () => {
     const view = render(
       <DocxEditorRoot
         document={SOURCE}
+        modules={[testReviewModule()]}
         onReady={(editor) => {
           instance = editor as DocxEditorInstance;
         }}

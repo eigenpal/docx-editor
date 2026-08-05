@@ -16,6 +16,7 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { readOoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { testReviewModule } from './review-test-module.ts';
 import { readTrackingSettings } from '../../store/package/tracking-settings.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -63,6 +64,7 @@ function mount(settings: string | null, author: string | null = 'Grace Hopper') 
   const editor: DocxEditorInstance = createDocxEditor({
     container,
     document: docx(settings),
+    modules: [testReviewModule()],
     ...(author === null ? {} : { author }),
   });
   if (!editor.surface) throw new Error('surface failed to mount');
@@ -161,6 +163,7 @@ describe('honouring what the document asks for', () => {
       document: docx('<w:trackRevisions/>'),
       author: 'Grace Hopper',
       mode: 'view',
+      modules: [testReviewModule()],
     });
     expect(editor.getEditingMode()).toBe('viewing');
   });

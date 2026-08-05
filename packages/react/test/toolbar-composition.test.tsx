@@ -27,6 +27,7 @@ import {
 } from '@docx-editor.dev/core-contract/editor';
 import { DocxEditor } from '../src/components/DocxEditor.tsx';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
+import { testReviewModule } from './review-test-module.ts';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorToolbar } from '../src/editor/toolbar/index.ts';
@@ -85,6 +86,7 @@ function mountToolbar(
   const view = render(
     <DocxEditorRoot
       document={source}
+      modules={[testReviewModule()]}
       onReady={(editor) => {
         instance = editor as DocxEditorInstance;
       }}

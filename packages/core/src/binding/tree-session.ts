@@ -37,12 +37,14 @@ import {
   isNoteLifecycleOp,
   normalizeParagraphIdentity,
   paragraphTextOf,
+  collectRevisionSites,
   type BookmarkIndex,
   type EmbeddedFont,
   type ListKind,
   type HeaderFooterParts,
   type HeaderFooterSectionResolution,
   type OoxmlElement,
+  type OoxmlNode,
   type OoxmlPackage,
   type OoxmlPackageRejection,
   type OoxmlPart,
@@ -268,6 +270,14 @@ export interface TreeDocxSession {
    */
   reviewItems(): readonly ReviewItem[];
 
+  /**
+   * Whether the document carries review content — tracked changes or comment
+   * anchors — regardless of any review module. Derived from store vocabulary
+   * only (never the review model), memoized per revision: it is the free
+   * tier's honest "this document has more than you are seeing" signal.
+   */
+  hasReviewContent(): boolean;
+
   /** Reply to a comment, or add one over a revision's range. Returns the new comment's id. */
   replyToComment(
     parentCommentId: string | null,
@@ -409,6 +419,8 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
   } | null = null;
   /** Memoized per package revision: the queue only changes when the document does. */
   let reviewCache: { revision: number; items: readonly ReviewItem[] } | null = null;
+  /** Memoized per package revision, like `reviewCache` — see `hasReviewContent`. */
+  let reviewContentCache: { revision: number; present: boolean } | null = null;
   let lastChange: TreeModelChange | null = null;
   packageStore.subscribe((change) => {
     lastChange = change;
@@ -899,6 +911,19 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
         return reviewCache.items;
       },
 
+      hasReviewContent() {
+        const store = bodyStore();
+        if (!reviewContentCache || reviewContentCache.revision !== store.revision) {
+          reviewContentCache = {
+            revision: store.revision,
+            present:
+              collectRevisionSites(store.part).length > 0 ||
+              storyCarriesCommentAnchor(store.part.root),
+          };
+        }
+        return reviewContentCache.present;
+      },
+
       replyToComment(parentCommentId, anchor, text, author, date) {
         const store = bodyStore();
         // The story store keeps a package of its OWN, and package-level writes that are not
@@ -980,6 +1005,23 @@ function projectedText(part: OoxmlPart): string {
   return bodyParagraphs(part)
     .map((paragraph) => paragraphTextOf(part, paragraph.id) ?? '')
     .join('\n');
+}
+
+/**
+ * Whether the story contains a comment anchor (`w:commentRangeStart` /
+ * `w:commentReference`), from STORE vocabulary alone.
+ *
+ * Deliberately not `commentAnchorsOfStory`: that is review-model derivation and
+ * lives with the review module. This answers presence only, for
+ * `hasReviewContent`, and must keep answering with no module registered.
+ */
+function storyCarriesCommentAnchor(node: OoxmlElement): boolean {
+  for (const child of node.children as readonly OoxmlNode[]) {
+    if (child.kind === 'textValue') continue;
+    if (child.kind === 'commentRangeStart' || child.kind === 'commentReference') return true;
+    if (storyCarriesCommentAnchor(child)) return true;
+  }
+  return false;
 }
 
 /** The origin a host should use when committing a reconciliation rather than a user edit. */

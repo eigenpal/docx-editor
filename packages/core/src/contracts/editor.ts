@@ -1170,6 +1170,17 @@ export interface EditorSnapshot {
    */
   readonly reviewPaneOpen?: boolean;
   /**
+   * Whether the document carries review content — tracked changes or comment
+   * anchors — independent of any registered review module.
+   *
+   * The free tier's honest signal: revisions render in their final-state
+   * projection there, so without this a host cannot tell its user "this
+   * document has tracked changes" — the one fact the upsell hint needs.
+   * Optional and additive like `canUndo`; derived cheaply from store
+   * vocabulary and memoized per revision.
+   */
+  readonly hasReviewContent?: boolean;
+  /**
    * How edits are written right now.
    *
    * In the snapshot for the same reason `reviewPaneOpen` is: the editing-mode control shows

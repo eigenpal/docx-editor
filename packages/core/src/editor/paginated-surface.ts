@@ -626,6 +626,9 @@ export function mountPaginatedSurface(
       furniture: furnitureSource.furniture(),
       projectLink,
       ...(notes ? { notes } : {}),
+      // The layout context key already folds the mode in (`|rev:<mode>`), so a surface
+      // constructed `proposed` never shares cached pages with an `all-markup` one.
+      ...(options.revisionDisplayMode ? { displayMode: options.revisionDisplayMode } : {}),
     });
   }
 

@@ -8,6 +8,7 @@ import type { IndentFormatting } from '../contracts/types.ts';
 import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
 import type { BookmarkIndex } from '@docx-editor.dev/core-contract/store';
 import type { ViewScope } from '../contracts/editor.ts';
+import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
 import type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
 import type {
@@ -91,6 +92,13 @@ export interface PaginatedSurfaceOptions {
   readonly fontAlias?: (family: string) => string | undefined;
   /** Points to CSS pixels. */
   readonly scale?: number;
+  /**
+   * How revisions project into layout and paint. Omitted keeps the layout default
+   * (`all-markup`). The editor facade passes `proposed` when no review module is
+   * registered — the free tier's final-state rendering; the machinery below this
+   * option is shared either way.
+   */
+  readonly revisionDisplayMode?: RevisionDisplayMode;
   /**
    * Who resolves a pointer to a caret.
    *
