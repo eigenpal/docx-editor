@@ -9,20 +9,20 @@ import type { Plugin } from 'vite';
 const monorepoRoot = path.resolve(__dirname, '../..');
 
 /**
- * Serve the SHARED documents from one byte source, the way the Vite example does.
+ * Serve the SHARED document from one byte source, the way the Vite example does.
  *
  * This demo's own default lives in `public/` (it has an iceberg and an igloo in it, and
- * nothing else reads it). Everything reachable through `?fixture=` is somebody else's file —
- * the Vite example's `sample.docx`, or an e2e fixture — so it is mapped onto the real path
- * rather than copied here, where a second copy would silently drift.
+ * nothing else reads it). The one thing reachable through `?fixture=` is somebody else's
+ * file, the Vite example's `sample.docx`, so it is mapped onto the real path rather than
+ * copied here, where a second copy would silently drift.
+ *
+ * Nothing under `e2e/fixtures/` belongs here. Those files exist to make assertions fail,
+ * they change whenever a test needs them to, and this demo is deployed: a fixture edit made
+ * for a test run would ship as a demo document nobody meant to publish.
  */
 function canonicalFixturePlugin(): Plugin {
   const fixtures = new Map([
     ['/sample.docx', path.join(monorepoRoot, 'examples/vite/public/sample.docx')],
-    [
-      '/comprehensive-word-element-test.docx',
-      path.join(monorepoRoot, 'e2e/fixtures/comprehensive-word-element-test.docx'),
-    ],
   ]);
   return {
     name: 'igloo-canonical-fixture',
