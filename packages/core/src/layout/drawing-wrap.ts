@@ -24,6 +24,14 @@ export interface ScanlineInterval {
 
 export type WrapTextSide = 'bothSides' | 'left' | 'right' | 'largest';
 
+/**
+ * Edge length of the square `wp:wrapPolygon` coordinates address (ECMA-376 §20.4.2.16).
+ *
+ * The polygon is authored against the drawing's own extent in this fixed unit space, so the
+ * same point list describes the same outline at any picture size.
+ */
+const WRAP_POLYGON_UNITS = 21600;
+
 export interface WrapExclusionInput {
   readonly mode: 'square' | 'tight' | 'through' | 'topAndBottom';
   readonly contentBounds: LayoutBox;
@@ -391,13 +399,19 @@ export function normalizeWrapPolygonToPage(options: {
     });
   }
 
+  // `wp:wrapPolygon` points are NOT EMU despite their schema type: they address a fixed
+  // 21600-unit square spanning the drawing's own extent, so (21600, 21600) is its far
+  // corner whatever size it is. Reading them as EMU collapses a full-rectangle polygon to a
+  // 1.7pt sliver at the origin, and text walks straight over the picture.
+  const scaleX = frame.width / WRAP_POLYGON_UNITS;
+  const scaleY = frame.height / WRAP_POLYGON_UNITS;
   const local: DrawingPoint[] = [];
   for (let index = 0; index < limit; index += 1) {
     const point = options.polygonEmu[index]!;
     local.push(
       Object.freeze({
-        x: finite(point.x) / EMU_PER_POINT,
-        y: finite(point.y) / EMU_PER_POINT,
+        x: finite(point.x) * scaleX,
+        y: finite(point.y) * scaleY,
       })
     );
   }

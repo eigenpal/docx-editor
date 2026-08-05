@@ -808,7 +808,11 @@ export function breakParagraph(
     }
   };
 
-  const exclusionProbeY = (): number => currentLineTopY() + 0.001;
+  // Where the line will actually sit. A band that pushed this line down has already been
+  // recorded on it, so probing must ask about the shifted position — probing the unshifted
+  // top reports the line as still inside the band it just cleared, which leaves it with no
+  // room and strands its first character on a line of its own.
+  const exclusionProbeY = (): number => currentLineTopY() + (line.exclusionSkipBefore ?? 0) + 0.001;
 
   const snapLineToAvailableInterval = (): boolean => {
     const zones = activeExclusionZones();
@@ -829,6 +833,14 @@ export function breakParagraph(
     return true;
   };
 
+  /**
+   * Total capacity of the line being built, in the same units as `line.width` — how far the
+   * pen may travel from `lineOrigin()`, not how much room is left from where it stands.
+   *
+   * Callers compare `line.width + width` against this, so it MUST stay a capacity. Returning
+   * the room remaining ahead of the pen makes the test `line.width + width > remaining`, which
+   * halves the usable width of every line on a page that carries any exclusion zone.
+   */
   const lineAvailable = (): number => {
     const base = baseLineAvailable();
     const zones = activeExclusionZones();
@@ -844,16 +856,23 @@ export function breakParagraph(
     const origin = lineOrigin() + line.width;
     const remaining = remainingWidthAtX(origin, intervals);
     if (remaining <= 0.001) return 0;
-    return Math.min(base, remaining);
+    return Math.min(base, line.width + remaining);
   };
+
+  /** Room left ahead of the pen on the current line. */
+  const remainingLineWidth = (): number => Math.max(0, lineAvailable() - line.width);
 
   const tryAdvanceToNextPassage = (): boolean => {
     const zones = activeExclusionZones();
     if (zones.length === 0) return false;
-    const pastAnchorOnLine = zones.some(
-      (zone) => zone.anchorParagraphId === paragraphId && line.end > zone.anchorModelStart
+    // A float anchored in an EARLIER paragraph has no offset in this one to be "past" — its
+    // zone applies to every line here. Requiring a same-paragraph anchor left those lines
+    // stranded in the first passage: they stopped at the picture's near edge and broke,
+    // never resuming in the column beside it.
+    const zoneIsOpen = zones.some(
+      (zone) => zone.anchorParagraphId !== paragraphId || line.end > zone.anchorModelStart
     );
-    if (!pastAnchorOnLine) return false;
+    if (!zoneIsOpen) return false;
     const intervals = mergeAvailableIntervalsAtY(
       exclusionProbeY(),
       zones,
@@ -904,11 +923,10 @@ export function breakParagraph(
         break;
       }
     }
-    if (containingIndex >= 0 && containingIndex + 1 < intervals.length) {
-      const next = intervals[containingIndex + 1]!;
-      line.width = next.start - lineOrigin();
-      return;
-    }
+    // Only move a pen standing INSIDE the picture. Skipping to the next passage whenever one
+    // existed emptied the near column of a centred float: every word after the anchor hopped
+    // the picture, so the space beside it took one word per line and the rest piled up on the
+    // far side. Filling the near passage first, then advancing on overflow, is what Word does.
     if (containingIndex >= 0) return;
     const snap = snapXToAvailableInterval(currentX, intervals);
     if (snap && snap.x > currentX + 0.001) {
@@ -929,7 +947,7 @@ export function breakParagraph(
   };
 
   const ensurePlacementWidth = (width: number, depth = 0): boolean => {
-    if (depth > 64) return lineAvailable() >= width;
+    if (depth > 64) return remainingLineWidth() >= width;
     applyTopAndBottomSkipIfNeeded();
     if (!snapLineToAvailableInterval()) {
       if (line.spans.length > 0 || line.drawings.length > 0) {
@@ -938,13 +956,18 @@ export function breakParagraph(
       }
       return true;
     }
-    if (width <= lineAvailable() + 0.001) return true;
+    if (width <= remainingLineWidth() + 0.001) return true;
     if (line.spans.length > 0 || line.drawings.length > 0) {
-      if (tryAdvanceToNextPassage() && width <= lineAvailable() + 0.001) return true;
+      if (tryAdvanceToNextPassage() && width <= remainingLineWidth() + 0.001) return true;
       closeLine();
       return ensurePlacementWidth(width, depth + 1);
     }
-    // Empty line still too narrow — place anyway (overflow) rather than stacking blank lines.
+    // An EMPTY line that cannot hold the word may still have room beside the float. A picture
+    // offset a few points from the margin leaves a sliver of a passage in front of it; without
+    // this the word was chopped at the character to fill that sliver, one letter per line,
+    // while the usable column to its right stayed empty.
+    if (tryAdvanceToNextPassage()) return ensurePlacementWidth(width, depth + 1);
+    // Nowhere wider left on this line — place anyway (overflow) rather than stacking blanks.
     return true;
   };
 
@@ -1028,6 +1051,29 @@ export function breakParagraph(
     growLineHeightForDrawingExtent();
   };
 
+  /**
+   * Record the jumps a float's wrap zone forced between this line's spans.
+   *
+   * Spans are laid contiguously as the pen advances, so at close time the ONLY horizontal
+   * gaps between them are advances the pen skipped: an inline drawing's own reserved slot,
+   * which paint already fills, and a wrap exclusion the line stepped over to resume in the
+   * next passage. Justification has not run yet, so nothing here can be confused with slack.
+   */
+  const markWrapAdvances = (): void => {
+    if (line.spans.length < 2) return;
+    for (let index = 1; index < line.spans.length; index += 1) {
+      const previous = line.spans[index - 1]!;
+      const current = line.spans[index]!;
+      const gap = current.box.x - (previous.box.x + previous.box.width);
+      if (gap <= 0.001) continue;
+      const drawingFillsGap = line.drawings.some(
+        (drawing) => drawing.start >= previous.range.end && drawing.start < current.range.start
+      );
+      if (drawingFillsGap) continue;
+      line.spans[index] = { ...current, wrapAdvanceBefore: gap };
+    }
+  };
+
   const closeLine = (): void => {
     const metrics = measurer.lineMetrics(emptyStyle);
     if (line.height === 0) {
@@ -1058,6 +1104,7 @@ export function breakParagraph(
       else delete (line as { exclusionSkipBefore?: number }).exclusionSkipBefore;
     };
     finalizeTopAndBottomClearance();
+    markWrapAdvances();
     const deleted = deletedWithin(line.start, line.end);
     if (deleted.length > 0) line.deletedRanges = deleted;
     lines.push(line);

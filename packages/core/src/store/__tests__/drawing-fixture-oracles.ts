@@ -50,7 +50,7 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
   },
   'float-wrap-comprehensive-test.docx': {
     drawingCount: 26,
-    pageCount: 7,
+    pageCount: 5,
     readyCount: 26,
     placeholderCount: 0,
     assertProjections: (projections) => {
@@ -60,6 +60,57 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
       expect(projections.some((p) => p.wrap === 'squareLeft')).toBe(true);
       expect(projections.some((p) => p.wrap === 'squareRight')).toBe(true);
       expect(projections.some((p) => p.wrap === 'behind')).toBe(true);
+    },
+    // The page count alone is a weak gate: it moved from 7 to 5 only because every wrapped
+    // line used to break at roughly half the column. These pin the geometry that decides it.
+    assertLayout: (layout) => {
+      const columnRight = layout.pages[0]!.contentBox.width;
+      let widest = 0;
+
+      for (const page of layout.pages) {
+        // Anchors and lines are page-local coordinates — never compare across pages.
+        const lines = page.fragments.flatMap((fragment) =>
+          fragment.kind === 'paragraph' ? fragment.lines : []
+        );
+        const anchors = page.anchoredDrawings ?? [];
+        for (const line of lines) {
+          for (const span of line.spans) {
+            widest = Math.max(widest, span.box.x + span.box.width);
+          }
+        }
+
+        for (const anchor of anchors) {
+          const top = anchor.y;
+          const bottom = anchor.y + anchor.height;
+          const overlappingLines = lines.filter(
+            (line) => line.box.y < bottom - 0.001 && line.box.y + line.box.height > top + 0.001
+          );
+
+          // A tight/through polygon excludes the whole picture, not a sliver of its left
+          // edge: no glyph may sit inside one.
+          if (anchor.wrap === 'tight' || anchor.wrap === 'through') {
+            for (const line of overlappingLines) {
+              for (const span of line.spans) {
+                const overlaps =
+                  span.box.x < anchor.x + anchor.width - 0.001 &&
+                  span.box.x + span.box.width > anchor.x + 0.001;
+                expect(overlaps).toBe(false);
+              }
+            }
+          }
+
+          // A topAndBottom band sits ABOVE the text it displaced — the anchor's own paragraph
+          // clears it rather than being painted over by it.
+          if (anchor.wrap === 'topAndBottom') {
+            for (const line of overlappingLines) expect(line.spans).toHaveLength(0);
+          }
+        }
+      }
+
+      // A line clear of every wrap zone reaches the full column, not a halved one, and
+      // nothing overhangs the column either.
+      expect(widest).toBeGreaterThan(columnRight * 0.9);
+      expect(widest).toBeLessThanOrEqual(columnRight + 1);
     },
   },
   'image-layout-modes-demo.docx': {
