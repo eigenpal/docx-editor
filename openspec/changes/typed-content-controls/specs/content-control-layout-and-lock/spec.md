@@ -115,7 +115,7 @@ An offset at a boundary is owned by the run that STARTS there, which is what an 
 
 ### Requirement: A named owner is validated before anything is resolved against it
 
-Naming a control on an insertion decides where the text is written AND what the refusals are resolved against, so the name SHALL be validated before either. The name SHALL resolve to a typed content control in the addressed part; a node of any other kind — including a `w:sdt` the read demoted — SHALL be refused with `not-a-content-control`. The control SHALL lie on the same ancestor line as the addressed paragraph, holding it or held by it, and a control elsewhere in the document SHALL be refused with `unknown-content-control`. The addressed offset SHALL fall within the control's own span, and one outside it SHALL be refused with `offset-out-of-range`. A reach addressed at a control that cannot be resolved to one SHALL be treated as reaching the whole part, so a forged name is refused by forms protection even where it is resolved before validation runs.
+Naming a control on an insertion decides where the text is written AND what the refusals are resolved against, so the name SHALL be validated before either. The name SHALL resolve to a typed content control in the addressed part; a node of any other kind — including a `w:sdt` the read demoted — SHALL be refused with `not-a-content-control`. The control SHALL lie on the same ancestor line as the addressed paragraph, holding it or held by it, and a control elsewhere in the document SHALL be refused with `unknown-content-control`. The addressed offset SHALL fall within the span the control covers in the addressed paragraph — its own offsets for an inline control, the whole paragraph for a block control that holds it — and an offset outside that span SHALL be refused with `offset-out-of-range`, by one rule for both kinds. A reach addressed at a control that cannot be resolved to one SHALL be treated as reaching the whole part, so a forged name is refused by forms protection even where it is resolved before validation runs.
 
 #### Scenario: A name that is not a control
 
@@ -126,6 +126,27 @@ Naming a control on an insertion decides where the text is written AND what the 
 
 - **WHEN** an insertion in one paragraph names a control held by another
 - **THEN** it is refused with `unknown-content-control` and neither paragraph is changed
+
+### Requirement: A value write is resolved against the controls it lands in, not only the one it names
+
+A write addressed AT a control at a POSITION SHALL be resolved against every control between the part root and the place the content would actually go: the named control, the controls enclosing it, and any control nested inside it that the write would land in. The landing place SHALL be resolved by the same rule the applier writes by — the text value the offset falls inside, otherwise the run the offset starts, otherwise the last run the named control owns in that paragraph — so a refusal and a write never reason about two different places. Where the write would mint a run of its own inside the named control, no nested control is reached and only the named control's own line applies.
+
+This SHALL hold for a block control and an inline control alike, at any nesting depth the shared bound admits, and both halves of the resolution SHALL stop at that same bound: a run one bounded walk can reach and another cannot is a run a write can land in at an offset nobody can address.
+
+#### Scenario: A locked control nested in the one an insertion names
+
+- **WHEN** a script inserts text at the start or the end of an unlocked, unbound control whose content begins or ends with a `sdtContentLocked` control
+- **THEN** it is refused with `locked`, and the nested control holds exactly what the file wrote
+
+#### Scenario: A bound control nested in the one an insertion names
+
+- **WHEN** the same insertion would land in a nested control declaring `w:dataBinding`
+- **THEN** it is refused with `bound`, for block and inline nesting alike
+
+#### Scenario: A write into the named control's own content
+
+- **WHEN** the insertion lands in the named control's own characters rather than in anything nested there
+- **THEN** it is allowed, and a nested locked or bound control elsewhere in that control does not refuse it
 
 ### Requirement: Every mutating operation meets the lock, and an unclassified one fails closed
 

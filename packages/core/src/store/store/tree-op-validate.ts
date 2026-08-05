@@ -119,7 +119,12 @@ function validateHyperlinkTarget(op: {
  * this engine can address as a field. The control and the addressed paragraph must be on one
  * ancestor line: a block control holds the paragraph, an inline control sits in it, and a control
  * somewhere else in the document is not the owner of this write however sincerely it is named.
- * And the offset must fall in the control's own span, so the write lands where the name claims.
+ * And the offset must fall in the span the control covers IN THAT PARAGRAPH, so the write lands
+ * where the name claims.
+ *
+ * The two kinds of control are constrained by the same rule rather than by two: a block control
+ * covers the whole of a paragraph it holds, an inline one covers its own offsets, and "any offset
+ * in an enclosed paragraph is fine" was a rule only one of them was ever checked against.
  */
 function namedOwnerRefusal(
   part: OoxmlPart,
@@ -133,13 +138,15 @@ function namedOwnerRefusal(
   if (owner.kind !== 'contentControl') return 'not-a-content-control';
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || !isParagraph(paragraph)) return null;
-  // A block control holds the paragraph; an inline control is held by it. Anything else is a
-  // control in some other part of the document.
-  if (holds(owner, paragraphId)) return null;
-  if (!holds(paragraph, inside)) return 'unknown-content-control';
-  const span = paragraphOffsetIndex(paragraph).spanOf(owner);
+  const span = holds(owner, paragraphId)
+    ? { start: 0, end: paragraphLength(paragraph) }
+    : holds(paragraph, inside)
+      ? paragraphOffsetIndex(paragraph).spanOf(owner)
+      : null;
   if (!span) return 'unknown-content-control';
-  if (offset < span.start || offset > span.end) return 'offset-out-of-range';
+  if (!Number.isInteger(offset) || offset < span.start || offset > span.end) {
+    return 'offset-out-of-range';
+  }
   return null;
 }
 

@@ -4,7 +4,7 @@
 // note reference — including content nested under `w:hyperlink`. Appliers and validation
 // share this model so offsets agree across insert/delete/format/link.
 
-import type { OoxmlNode, OoxmlParagraphNode } from '../package/ooxml-tree.ts';
+import type { OoxmlElement, OoxmlNode, OoxmlParagraphNode } from '../package/ooxml-tree.ts';
 import {
   atomicFieldSpansOf,
   isFieldChrome,
@@ -251,6 +251,78 @@ export function runsUnder(child: OoxmlNode, depth = 0): OoxmlNode[] {
   }
   if (child.kind !== 'hyperlink' && !isContentRevisionKind(child.kind)) return [];
   return child.children.flatMap((inner) => runsUnder(inner, depth + 1));
+}
+
+/**
+ * Where an insertion at a UTF-16 offset actually puts its content.
+ *
+ * THE OFFSET IS NOT THE ANSWER ON ITS OWN. A boundary belongs to the run that starts there, an
+ * offset past everything in scope appends to the last run in scope, and a scope holding no run
+ * at all needs one minted. Validation has to resolve the same site the applier writes at, or a
+ * refusal is reasoning about a different place than the write — which is how a named insertion
+ * into an unlocked outer control ended up landing inside a locked nested one.
+ */
+export type InsertionSite =
+  /** Inside a text value: it splits and the content goes between the halves. */
+  | { readonly kind: 'withinValue'; readonly segment: Segment }
+  /** At a run boundary: the content goes into that run, before the segment's own node. */
+  | { readonly kind: 'atBoundary'; readonly segment: Segment }
+  /** Past every segment in scope: the content is appended to this run. */
+  | { readonly kind: 'appendToRun'; readonly run: OoxmlElement }
+  /** No run in scope holds the offset: the content needs a run of its own. */
+  | { readonly kind: 'newRun' };
+
+/**
+ * Resolve {@link InsertionSite} for an offset, optionally narrowed to one owner's own content.
+ *
+ * `owner` is the content control a caller NAMED as the destination. Narrowing to it is what
+ * makes a control's trailing edge mean "the end of the field" rather than "the run after it";
+ * without one the paragraph is the scope and only its direct runs can be appended to.
+ */
+export function insertionSite(
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  owner: OoxmlNode | null
+): InsertionSite {
+  const all = segmentsOf(paragraph);
+  const segments =
+    owner === null ? all : all.filter((segment) => containsNode(owner, segment.node.id));
+
+  for (const segment of segments) {
+    if (segment.node.kind !== 'textValue') continue;
+    if (offset <= segment.start || offset >= segment.end) continue;
+    return { kind: 'withinValue', segment };
+  }
+  const boundary = segments.find((segment) => segment.start === offset);
+  if (boundary) return { kind: 'atBoundary', segment: boundary };
+
+  const runs =
+    owner === null
+      ? paragraph.children.filter((child) => child.kind === 'run')
+      : paragraph.children
+          .flatMap((child) => runsUnder(child))
+          .filter((run) => containsNode(owner, run.id));
+  const last = runs[runs.length - 1];
+  if (last && last.kind !== 'textValue') return { kind: 'appendToRun', run: last };
+  return { kind: 'newRun' };
+}
+
+/** The run an insertion joins, or null when it would have to mint one. */
+export function insertionRunId(
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  owner: OoxmlNode | null
+): string | null {
+  const site = insertionSite(paragraph, offset, owner);
+  if (site.kind === 'withinValue' || site.kind === 'atBoundary') return site.segment.runId;
+  if (site.kind === 'appendToRun') return site.run.id;
+  return null;
+}
+
+function containsNode(node: OoxmlNode, id: string): boolean {
+  if (node.id === id) return true;
+  if (node.kind === 'textValue') return false;
+  return node.children.some((child) => containsNode(child, id));
 }
 
 /** UTF-16 length of a paragraph under the shared segment model. */

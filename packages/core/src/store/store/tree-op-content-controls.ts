@@ -41,6 +41,7 @@ import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.t
 import { TEXT_DEPS, fromEdit, parentOf, runPropertiesNodeOf } from './tree-op-nodes.ts';
 import { splitRunsAt } from './tree-op-apply.ts';
 import {
+  insertionRunId,
   paragraphLength,
   paragraphOffsetIndex,
   splitsSurrogate,
@@ -170,6 +171,15 @@ export type TreeOpReach =
       readonly controlId: string;
       /** `value` is what forms protection exists to allow; the others dismantle the form. */
       readonly intent: 'value' | 'metadata' | 'removal';
+      /**
+       * Where in the story the write actually lands, when the caller addressed a position.
+       *
+       * NAMING A CONTROL SAYS WHOSE VALUE THIS IS. It does not say what the characters end up
+       * inside: an offset at a control's own edge can be the edge of a control NESTED in it, and
+       * resolving the refusal from the named control and its ancestors alone asked everything
+       * except the control the text would land in.
+       */
+      readonly at?: { readonly paragraphId: string; readonly offset: number };
     }
   /** Addressed at named nodes, optionally at a range of characters inside one. */
   | { readonly kind: 'nodes'; readonly targets: readonly TreeOpTarget[] }
@@ -226,7 +236,12 @@ const TREE_OP_REACH: {
   insertText: (op) =>
     op.inside === undefined
       ? writingAt(op.paragraphId, op.offset)
-      : { kind: 'control', controlId: op.inside, intent: 'value' },
+      : {
+          kind: 'control',
+          controlId: op.inside,
+          intent: 'value',
+          at: { paragraphId: op.paragraphId, offset: op.offset },
+        },
   deleteText: (op) => over(op.paragraphId, op.start, op.end),
   insertTab: (op) => writingAt(op.paragraphId, op.offset),
   insertHardBreak: (op) => writingAt(op.paragraphId, op.offset),
@@ -366,8 +381,22 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
     if (!own || own.id !== reach.controlId || own.kind !== 'contentControl') {
       return { touches: [], unprotected: [part.root.id] };
     }
+    // EVERY CONTROL BETWEEN THE PART ROOT AND WHERE THE WRITE LANDS. For a positioned value
+    // write that is the named control's ancestors, the control itself, AND any control nested
+    // inside it that the content would go into. The ancestors matter for the same reason: a
+    // binding on an enclosing control is desynced by a write to what it encloses.
+    const line =
+      reach.intent === 'value' && reach.at !== undefined
+        ? mergedLine(chain, landingControls(part, reach.at, own))
+        : chain;
     return {
-      touches: [{ control: own, locks: locksOf(chain), removed: reach.intent === 'removal' }],
+      touches: line.map((control, index) => ({
+        control,
+        locks: locksOf(line.slice(0, index + 1)),
+        // Only the NAMED control goes away; the ones enclosing it and the ones it encloses are
+        // edited, not removed.
+        removed: reach.intent === 'removal' && control.id === own.id,
+      })),
       // A write ADDRESSED to a control is what forms protection exists to allow; changing or
       // removing the control ITSELF is not, unless the control is inside another one.
       unprotected: reach.intent === 'value' || chain.length > 1 ? [] : [reach.controlId],
@@ -429,6 +458,42 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
     if (enclosing.length === 0 && !filling) unprotected.push(target.nodeId);
   }
   return { touches, unprotected };
+}
+
+/**
+ * The controls enclosing the run a NAMED insertion would actually join, outermost first.
+ *
+ * Resolved through {@link insertionRunId}, the same rule the applier writes by, so validation
+ * and application are asking about one place. When the write would mint its own run there is no
+ * landing run to ask about: the content goes into the named control's own container, and the
+ * named control's chain is the whole answer.
+ */
+function landingControls(
+  part: OoxmlPart,
+  at: { readonly paragraphId: string; readonly offset: number },
+  own: OoxmlNode
+): readonly OoxmlNode[] {
+  const paragraph = findNode(part, at.paragraphId);
+  if (!paragraph || paragraph.kind !== 'paragraph') return [];
+  const runId = insertionRunId(paragraph, at.offset, own);
+  if (runId === null) return [];
+  return enclosingContentControls(part, runId);
+}
+
+/** Both chains, outermost first, each control once. Fails wide when the two disagree. */
+function mergedLine(
+  chain: readonly OoxmlNode[],
+  landing: readonly OoxmlNode[]
+): readonly OoxmlNode[] {
+  if (landing.length === 0) return chain;
+  const merged: OoxmlNode[] = [...landing];
+  const seen = new Set(landing.map((control) => control.id));
+  for (const control of chain) {
+    if (seen.has(control.id)) continue;
+    seen.add(control.id);
+    merged.push(control);
+  }
+  return merged;
 }
 
 /**

@@ -611,6 +611,106 @@ describe('a script writes through the same refusals the keyboard meets', () => {
   });
 });
 
+// NAMING THE OUTER CONTROL DOES NOT MAKE THE INNER ONE EDITABLE.
+//
+// `insertContentControlText` resolves `start` and `end` from the named control's own span and
+// hands the store the control as the owner of the write. When the control's content begins or
+// ends with a NESTED control, those two offsets land inside the nested one — so an honest script
+// naming an unlocked, unbound outer control wrote into a `sdtContentLocked` or `w:dataBinding`
+// inner one and was told `ok`.
+describe('a nested control is refused at the locations this command writes at', () => {
+  const inner = (properties: string): string =>
+    `<w:sdt><w:sdtPr><w:tag w:val="inner"/>${properties}</w:sdtPr>` +
+    `<w:sdtContent><w:r><w:t>MID</w:t></w:r></w:sdtContent></w:sdt>`;
+
+  const inlineOverInline = (properties: string): Uint8Array =>
+    docx(
+      `<w:p><w:r><w:t>abc</w:t></w:r>` +
+        `<w:sdt><w:sdtPr><w:tag w:val="outer"/></w:sdtPr>` +
+        `<w:sdtContent>${inner(properties)}</w:sdtContent></w:sdt>` +
+        `<w:r><w:t>xyz</w:t></w:r></w:p>`
+    );
+
+  const blockOverInline = (properties: string): Uint8Array =>
+    docx(
+      `<w:sdt><w:sdtPr><w:tag w:val="outer"/></w:sdtPr><w:sdtContent>` +
+        `<w:p><w:r><w:t>abc</w:t></w:r>${inner(properties)}</w:p>` +
+        `</w:sdtContent></w:sdt>`
+    );
+
+  const blockOverBlock = (properties: string): Uint8Array =>
+    docx(
+      `<w:sdt><w:sdtPr><w:tag w:val="outer"/></w:sdtPr><w:sdtContent>` +
+        `<w:sdt><w:sdtPr><w:tag w:val="inner"/>${properties}</w:sdtPr><w:sdtContent>` +
+        `<w:p><w:r><w:t>MID</w:t></w:r></w:p></w:sdtContent></w:sdt>` +
+        `</w:sdtContent></w:sdt>`
+    );
+
+  const LOCKED = `<w:lock w:val="sdtContentLocked"/>`;
+  const BOUND = `<w:dataBinding w:xpath="/root/a" w:storeItemID="{FEED}"/>`;
+
+  /** Name the outer control and write at `at`; answer the refusal and the saved markup. */
+  function writeNaming(
+    bytes: Uint8Array,
+    at: 'start' | 'end'
+  ): { readonly answer: string; readonly saved: string } {
+    const host = open(bytes);
+    const control = controlsOf(host, roots(host).body)[0]!;
+    const response = host.execute({
+      operations: [{ op: 'insertContentControlText', contentControl: control, text: 'PWNED', at }],
+    });
+    const failed = response.results.some((result) => result.status === 'error');
+    return {
+      answer: failed ? refusedBecause(response) : 'ok',
+      saved: savedMainXml(host),
+    };
+  }
+
+  test('an inline control nested in the named one refuses both edges', () => {
+    for (const at of ['start', 'end'] as const) {
+      const written = writeNaming(inlineOverInline(LOCKED), at);
+      expect(written.answer).toBe('transaction-refused/locked');
+      expect(written.saved).not.toContain('PWNED');
+      expect(written.saved).toContain('MID');
+    }
+  });
+
+  test('and a bound one refuses them with bound', () => {
+    for (const at of ['start', 'end'] as const) {
+      const written = writeNaming(inlineOverInline(BOUND), at);
+      expect(written.answer).toBe('transaction-refused/bound');
+      expect(written.saved).not.toContain('PWNED');
+    }
+  });
+
+  test('a block control ending in a locked field refuses the end location', () => {
+    const written = writeNaming(blockOverInline(LOCKED), 'end');
+    expect(written.answer).toBe('transaction-refused/locked');
+    expect(written.saved).not.toContain('PWNED');
+  });
+
+  test('its start location is still a write, because that is its own text', () => {
+    const written = writeNaming(blockOverInline(LOCKED), 'start');
+    expect(written.answer).toBe('ok');
+    expect(written.saved).toContain('<w:t>PWNED</w:t><w:t>abc</w:t>');
+    // And the locked field beside it holds exactly what the file wrote.
+    expect(written.saved).toContain('<w:sdtContent><w:r><w:t>MID</w:t></w:r></w:sdtContent>');
+  });
+
+  test('a nested block control refuses both locations, locked or bound', () => {
+    for (const at of ['start', 'end'] as const) {
+      expect(writeNaming(blockOverBlock(LOCKED), at).answer).toBe('transaction-refused/locked');
+      expect(writeNaming(blockOverBlock(BOUND), at).answer).toBe('transaction-refused/bound');
+    }
+  });
+
+  test('an unlocked, unbound nested control still takes the text', () => {
+    const written = writeNaming(inlineOverInline(''), 'end');
+    expect(written.answer).toBe('ok');
+    expect(written.saved).toContain('PWNED');
+  });
+});
+
 function spanOf(response: ReturnType<AutomationHost['execute']>) {
   const result = response.results[1];
   if (result?.status !== 'ok' || result.value.kind !== 'span') throw new Error('no span');

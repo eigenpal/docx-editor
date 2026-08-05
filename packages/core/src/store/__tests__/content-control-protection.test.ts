@@ -315,6 +315,57 @@ describe('forms protection over an inline field', () => {
         })
       ).toBe('locked');
     });
+
+    // NOR WHEN THE FIELD NAMED IS NOT THE FIELD WRITTEN INTO. An unlocked outer control is a
+    // legitimate name for the exemption; the characters still land wherever the offset puts
+    // them, and a nested lock is not lifted by the protection question being asked of an
+    // enclosing control.
+    const nestedBody = (innerProperties: string) =>
+      `<w:sdt><w:sdtPr><w:tag w:val="outer"/></w:sdtPr><w:sdtContent>` +
+      `<w:sdt><w:sdtPr><w:tag w:val="inner"/>${innerProperties}</w:sdtPr>` +
+      `<w:sdtContent><w:r><w:t>MID</w:t></w:r></w:sdtContent></w:sdt>` +
+      `</w:sdtContent></w:sdt>`;
+
+    const typeNaming = (pkg: OoxmlPackage, offset: number): TreeOpRejection | null => {
+      const main = pkg.parts.get(pkg.mainDocumentPart)!;
+      const outer = contentControlsIn(main.root)[0]!.node;
+      return refusal(pkg, {
+        op: 'insertText',
+        paragraphId: paragraphIds(pkg)[0]!,
+        offset,
+        text: 'X',
+        inside: outer.id,
+      });
+    };
+
+    test('a locked control nested in the named one refuses the write it would receive', () => {
+      const pkg = build(
+        `<w:p><w:r><w:t>abc</w:t></w:r>${nestedBody('<w:lock w:val="sdtContentLocked"/>')}` +
+          `<w:r><w:t>xyz</w:t></w:r></w:p><w:sectPr/>`,
+        FORMS
+      );
+      expect(typeNaming(pkg, span(pkg).start)).toBe('locked');
+      expect(typeNaming(pkg, span(pkg).end)).toBe('locked');
+    });
+
+    test('a bound one refuses it as bound', () => {
+      const pkg = build(
+        `<w:p><w:r><w:t>abc</w:t></w:r>` +
+          nestedBody('<w:dataBinding w:xpath="/a/b" w:storeItemID="{FEED}"/>') +
+          `<w:r><w:t>xyz</w:t></w:r></w:p><w:sectPr/>`,
+        FORMS
+      );
+      expect(typeNaming(pkg, span(pkg).end)).toBe('bound');
+    });
+
+    test('and an unlocked nested control is still fillable under protection', () => {
+      const pkg = build(
+        `<w:p><w:r><w:t>abc</w:t></w:r>${nestedBody('')}<w:r><w:t>xyz</w:t></w:r></w:p>` +
+          `<w:sectPr/>`,
+        FORMS
+      );
+      expect(typeNaming(pkg, span(pkg).end)).toBeNull();
+    });
   });
 
   test('a paragraph-wide property write is still refused: that is not filling in a field', () => {

@@ -78,6 +78,7 @@ import {
   placeholderControlForInsertion,
 } from './tree-op-content-controls.ts';
 import {
+  insertionSite,
   isParagraph,
   paragraphLength,
   runsUnder,
@@ -395,7 +396,6 @@ function applyInsertContent(
     dependencyKeys: TEXT_DEPS,
     impact: 'text-local',
   };
-  const all = segmentsOf(paragraph);
   // A named owner narrows the offset to that control's OWN characters. Without it the trailing
   // edge resolves to the run after the control, which is beside the field rather than in it.
   const found = inside === undefined ? null : findNode(part, inside);
@@ -403,12 +403,14 @@ function applyInsertContent(
     return { ok: false, reason: 'unknown-content-control' };
   }
   const owner = found?.kind === 'textValue' ? null : found;
-  const segments = owner === null ? all : all.filter((segment) => contains(owner, segment.node.id));
+  // ONE resolution of where this lands, shared with the validation that refuses it. Two copies
+  // of this rule is how a lock came to be resolved against a different place than the write.
+  const site = insertionSite(paragraph, offset, owner);
 
   // Inside a text value: split it and place the new content between the halves.
-  for (const segment of segments) {
-    if (segment.node.kind !== 'textValue') continue;
-    if (offset <= segment.start || offset >= segment.end) continue;
+  if (site.kind === 'withinValue') {
+    const segment = site.segment;
+    if (segment.node.kind !== 'textValue') return { ok: false, reason: 'tree-invariant' };
     const local = offset - segment.start;
     const value = segment.node.value;
     const textNode = findTextParent(paragraph, segment.node.id);
@@ -424,27 +426,18 @@ function applyInsertContent(
     return fromEdit(replaceChildren(part, run.id, rebuilt, options), effect);
   }
 
-  // At a boundary: append to the run holding the offset, or to the last run.
-  const boundary = segments.find((segment) => segment.start === offset);
-  if (boundary) {
-    const run = findNode(part, boundary.runId);
+  // At a boundary: the content goes into the run that starts there, before its own node.
+  if (site.kind === 'atBoundary') {
+    const run = findNode(part, site.segment.runId);
     if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
-    const index = run.children.findIndex((child) => contains(child, boundary.node.id));
+    const index = run.children.findIndex((child) => contains(child, site.segment.node.id));
     return fromEdit(insertChildren(part, run.id, Math.max(0, index), nodes, options), effect);
   }
 
   // Past every segment the caller's own scope holds: append to the last run of that scope. For a
   // named owner that is the trailing edge — the whole reason the op carries the name.
-  // The offsets are this paragraph's, so the run to append to is this paragraph's — narrowed to
-  // the named owner's own runs when there is one.
-  const runs =
-    owner === null
-      ? paragraph.children.filter((child) => child.kind === 'run')
-      : paragraph.children
-          .flatMap((child) => runsUnder(child))
-          .filter((run) => contains(owner, run.id));
-  const last = runs[runs.length - 1];
-  if (last && last.kind !== 'textValue') {
+  if (site.kind === 'appendToRun') {
+    const last = site.run;
     return fromEdit(insertChildren(part, last.id, last.children.length, nodes, options), effect);
   }
   // Nothing to append to: the content needs a run to live in. A control holding no run of its own
