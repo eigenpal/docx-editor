@@ -142,11 +142,20 @@ const NO_PLACEMENT_REVIEW_QUERY = Object.freeze({ placement: false }) satisfies 
  * lists roots asks this, because a filter that checked only `parentId` drew a reply to a
  * revision twice: once inside the change and once beside it.
  */
-function isThreadedReply(entry: ReviewItemView): boolean {
-  return (
-    entry.kind === 'comment' &&
-    (entry.parentId !== undefined || entry.parentRevisionId !== undefined)
-  );
+function isThreadedReply(entry: ReviewItemView, present: ReadonlySet<string>): boolean {
+  if (entry.kind !== 'comment') return false;
+  // A parent this list does not hold is not a parent HERE. The engine already drops a link
+  // its own `excludeRevisionKinds` filter broke, but a consumer's `filter` prop can break one
+  // too, and a comment excluded as a reply to a card nobody draws is a comment that vanishes.
+  // Falling back to root is the only answer that always renders it somewhere.
+  if (entry.parentId !== undefined) return present.has(entry.parentId);
+  if (entry.parentRevisionId !== undefined) return present.has(entry.parentRevisionId);
+  return false;
+}
+
+/** Ids of everything the rail is working from, for the reply/root test above. */
+function idsOf(items: readonly ReviewItemView[]): ReadonlySet<string> {
+  return new Set(items.map((entry) => entry.id));
 }
 
 /** Keeps the caret: a mousedown that bubbles to the editor moves it. Inputs are exempt. */
@@ -516,7 +525,10 @@ function ReviewRoot({
   // Only what the list RENDERS competes for the column: a threaded reply lives inside its
   // parent's card, and letting it into the run advanced the cursor once per reply, spacing
   // every card below a commented conversation by gaps nothing on screen accounted for.
-  const roots = useMemo(() => items.filter((entry) => !isThreadedReply(entry)), [items]);
+  const roots = useMemo(() => {
+    const present = idsOf(items);
+    return items.filter((entry) => !isThreadedReply(entry, present));
+  }, [items]);
   const stackInput = useMemo(() => {
     if (draftAnchorY === null) return roots;
     // In document order, AFTER anything already at that height: the comments already there
@@ -733,7 +745,8 @@ function ReviewList({
   const { review, measure } = useRail();
   if (hidden) return null;
 
-  const roots = review.items.filter((entry) => !isThreadedReply(entry));
+  const present = idsOf(review.items);
+  const roots = review.items.filter((entry) => !isThreadedReply(entry, present));
 
   if (roots.length === 0) {
     return typeof children === 'function' ? null : <ReviewEmpty />;
@@ -797,7 +810,8 @@ function ReviewMarkers({
   const { review } = useRail();
   const { t } = useTranslation();
   if (hidden) return null;
-  const roots = review.items.filter((entry) => !isThreadedReply(entry));
+  const present = idsOf(review.items);
+  const roots = review.items.filter((entry) => !isThreadedReply(entry, present));
   return (
     <div className={`docx-review__markers${className ? ` ${className}` : ''}`}>
       {roots.map((entry) => {

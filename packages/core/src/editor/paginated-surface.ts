@@ -2420,7 +2420,11 @@ export function mountPaginatedSurface(
     // one outright at equal width.
     if (found.kind !== 'comment') return found;
     const root = reviewThreadRootOf(session.reviewItems(), found);
-    return reviewItemKey(root) === dismissedReviewKey ? found : root;
+    // A root the reader DISMISSED takes its whole thread with it. Falling back to the reply
+    // here painted the band active over a card that is not drawn — a reply renders inside its
+    // root, so dismissing the root leaves nothing on screen to be active — and the reader who
+    // closed the card watched the text stay highlighted as though it were still open.
+    return reviewItemKey(root) === dismissedReviewKey ? null : root;
   }
 
   /** The class a band draws in, or null when this range should not be drawn at all. */

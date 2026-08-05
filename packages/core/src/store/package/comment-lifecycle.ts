@@ -13,10 +13,14 @@
 // The REAPING half exists because deleting text is how a comment usually dies. Word deletes a
 // comment when the words it covered are deleted, and this engine used to keep the record: the
 // rail went on drawing a card with an author, a date and nothing under it, and saving produced a
-// file whose comment pointed at characters that no longer existed. The test is deliberately
-// narrow — a comment that COVERED characters before the edit and covers none after it — so a
-// comment the file itself shipped orphaned is left exactly as it was found, and an edit that
-// merely shortens a range does not take the remark with it.
+// file whose comment pointed at characters that no longer existed.
+//
+// The test is deliberately narrow. A comment is reaped only when it COVERED characters before
+// the edit and, after it, either nothing in any story names it or its markers still pair with
+// nothing between them. So a comment the file itself shipped orphaned is left exactly as found,
+// shortening a range does not take the remark with it, and — the case that is easy to get
+// wrong — losing only the `w:commentRangeStart` does not either: the `w:commentReference` is
+// what places a comment, and Word keeps one whose reference and words are still there.
 
 import { findNode, removeNode } from './ooxml-edit.ts';
 import { withPart, type OoxmlPackage } from './ooxml-package.ts';
@@ -38,8 +42,8 @@ const W16CID_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2016/word
  * Parts scanned for anchors in one reap.
  *
  * A cap rather than a walk of everything: the package is attacker-controlled, and the reap runs
- * inside a transaction the user is waiting on. Overflow fails CLOSED — the cascade reports
- * failure rather than deleting comments it only half looked for.
+ * inside a transaction the user is waiting on. Overflow SKIPS the reap — see
+ * {@link cascadeEmptiedComments} for why refusing the edit instead was the wrong answer.
  */
 const MAX_SCANNED_PARTS = 512;
 
@@ -65,30 +69,56 @@ function scannableParts(pkg: OoxmlPackage): readonly OoxmlPart[] | null {
   return parts;
 }
 
-/**
- * Comment ids whose range COVERS characters, across every story in the package.
- *
- * Zero-width counts as covering nothing. That is the whole test: `addComment` refuses a
- * collapsed caret, so a range this engine wrote always had characters in it, and one that has
- * none now is one an edit emptied.
- */
-function coveredCommentIds(pkg: OoxmlPackage): Set<string> | null {
+/** What a story still says about one comment's anchor. */
+interface AnchorState {
+  /** A paired, non-orphaned range with characters between its markers. */
+  readonly covering: boolean;
+  /** A start matched by an end — the range is usable, whatever its width. */
+  readonly paired: boolean;
+  /** Any `commentRangeStart` / `commentRangeEnd` / `commentReference` naming it, anywhere. */
+  readonly anyMarker: boolean;
+}
+
+/** What every story in the package says about every comment's anchor. */
+function anchorStates(pkg: OoxmlPackage): Map<string, AnchorState> | null {
   const parts = scannableParts(pkg);
   if (parts === null) return null;
-  const covered = new Set<string>();
+  const states = new Map<string, AnchorState>();
+  const note = (id: string, covering: boolean, paired: boolean, anyMarker: boolean): void => {
+    const previous = states.get(id);
+    states.set(id, {
+      covering: covering || (previous?.covering ?? false),
+      paired: paired || (previous?.paired ?? false),
+      anyMarker: anyMarker || (previous?.anyMarker ?? false),
+    });
+  };
   for (const part of parts) {
     for (const anchor of commentAnchorsOfStory(part)) {
-      if (anchor.orphaned) continue;
-      if (
-        anchor.start.paragraphId === anchor.end.paragraphId &&
-        anchor.start.offset === anchor.end.offset
-      ) {
-        continue;
-      }
-      covered.add(anchor.commentId);
+      const covering =
+        !anchor.orphaned &&
+        !(
+          anchor.start.paragraphId === anchor.end.paragraphId &&
+          anchor.start.offset === anchor.end.offset
+        );
+      note(anchor.commentId, covering, !anchor.orphaned, true);
     }
+    // The REFERENCE is a marker `commentAnchorsOfStory` does not report — it pairs starts
+    // with ends and nothing else — and it is the element that actually places the comment.
+    // A range whose start went with a deleted block still has a reference and an end, and
+    // Word keeps that comment; without counting the reference the reap read "no usable
+    // range" as "this edit emptied it" and deleted a remark whose words were still on screen.
+    const visit = (node: OoxmlNode, depth: number): void => {
+      if (node.kind === 'textValue' || depth > 64) return;
+      if (node.kind === 'commentReference') {
+        const id = attribute(node, WML_NAMESPACE_URI, 'id');
+        if (id !== undefined) note(id, false, false, true);
+        return;
+      }
+      for (const child of node.children) visit(child, depth + 1);
+    };
+    visit(part.root, 0);
   }
-  return covered;
+  return states;
 }
 
 /** Every `w:comment` in the package, by `@w:id`, with the part it lives in. */
@@ -336,20 +366,40 @@ export function deleteCommentThread(pkg: OoxmlPackage, commentId: string): Ooxml
  *
  * The shape `cascadeDeletedNoteReferences` established: a before/after diff rather than a rule
  * inside each op, because the ops that can empty a range are several (`deleteText`,
- * `deleteBlock`, accepting a deletion) and a rule written into each one drifts. Null on failure,
- * so the caller rolls the whole transaction back.
+ * `deleteBlock`, a row deletion, accepting a tracked deletion) and a rule written into each one
+ * drifts.
+ *
+ * THE TEST, exactly. A comment dies when the words it covered are gone and nothing still
+ * places it: either every marker naming it went with them, or its markers are all still there
+ * with no characters left between them. What it deliberately does NOT do is read "no usable
+ * range" as "emptied" — a comment whose `w:commentRangeStart` was carried off by a deleted
+ * block still has its reference and its end, and Word keeps it, because the reference is the
+ * element that anchors a comment. Reaping there deleted a remark whose text was still on
+ * screen, which is the one mistake worse than leaving a stale card.
+ *
+ * SKIPS rather than refuses when the package is too large to scan. Returning null there made
+ * `transact` roll the edit back, so on a package past the part cap every keystroke in a
+ * commented paragraph was silently refused and the document read as frozen. A skipped reap
+ * leaves a stale card — recoverable, visible, and the behaviour before any of this existed.
+ * Null is reserved for a removal that actually failed, which the caller must roll back.
  */
 export function cascadeEmptiedComments(
   before: OoxmlPackage,
   after: OoxmlPackage
 ): OoxmlPackage | null {
-  const coveredBefore = coveredCommentIds(before);
-  const coveredAfter = coveredCommentIds(after);
-  if (coveredBefore === null || coveredAfter === null) return null;
+  const statesBefore = anchorStates(before);
+  const statesAfter = anchorStates(after);
+  if (statesBefore === null || statesAfter === null) return after;
 
   let next = after;
-  for (const commentId of coveredBefore) {
-    if (coveredAfter.has(commentId)) continue;
+  for (const [commentId, was] of statesBefore) {
+    if (!was.covering) continue;
+    const now = statesAfter.get(commentId);
+    // Nothing names it any more, or its markers still pair and cover nothing. Anything else —
+    // a surviving reference, a start carried off leaving an unpaired end — is a comment the
+    // edit did not empty, whatever else it did to the range.
+    const gone = now === undefined || !now.anyMarker;
+    if (!gone && !(now.paired && !now.covering)) continue;
     const reaped = deleteCommentThread(next, commentId);
     if (reaped === null) return null;
     next = reaped;

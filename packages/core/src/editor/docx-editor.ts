@@ -1233,6 +1233,22 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       items = items.filter(
         (item) => item.kind !== 'revision' || !excludedKinds.has(item.revisionKind)
       );
+      // A comment that answers a change this QUERY dropped is a top-level card again. The
+      // link is only a reason to render the comment inside the change's card, so publishing
+      // it beside a change the caller cannot see makes the comment unrenderable: the rail
+      // skips it as a reply and no card claims it. The rail hides `format` and `structural`
+      // by default, and a tracked formatting change anchors on exactly the run it decorates
+      // — the same span a reviewer's comment on that word covers — so this is the ordinary
+      // case, not a corner one.
+      const present = new Set(
+        items.filter((item) => item.kind === 'revision').map((item) => item.id)
+      );
+      items = items.map((item) => {
+        if (item.kind !== 'comment' || item.parentRevisionId === undefined) return item;
+        if (present.has(item.parentRevisionId)) return item;
+        const { parentRevisionId: _dropped, ...rest } = item;
+        return rest;
+      });
     }
     const withPlacement = query?.placement !== false;
     let anchors: Map<string, ReviewParagraphAnchor> | null = null;
@@ -1915,10 +1931,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (item.kind !== 'comment') {
         return { ok: false, code: 'unsupported', reason: 'a custom node card cannot be deleted' };
       }
-      // The card being deleted is very likely the OPEN one, and an active key naming an item
-      // the queue no longer holds leaves the rail with nothing to draw and a band painted over
-      // text that has no card. Dismissed first, so the write publishes into a clean state.
-      surface.dismissActiveReview();
+      // An active key naming an item the queue no longer holds leaves the rail with nothing to
+      // draw and a band painted over text that has no card, so the open card is dismissed
+      // first — but ONLY when it is this one. `dismissActiveReview` acts on whatever the caret
+      // is in, and the delete button keeps the caret exactly where it was, so deleting a
+      // comment further down the page closed the card the reader was replying in and threw
+      // the draft away with it.
+      if (activeReviewKeyNow() === key) surface.dismissActiveReview();
       let deleted = false;
       surface.commitReviewOps(() => {
         deleted = surface!.session.deleteComment(item.id);

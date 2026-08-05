@@ -16,7 +16,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
-import { paragraphTextOf } from '@docx-editor.dev/core/store';
+import { paragraphTextOf, serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import { reviewModule as testReviewModule } from '../review/review-module.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -328,7 +328,9 @@ describe('comments in the queue', () => {
     expect(editor.replyToReviewItem(card!.key, 'Checked.').ok).toBe(true);
     expect(editor.getReviewItems()).toHaveLength(2);
 
-    const root = editor.getReviewItems().find((item) => item.parentId === undefined)!;
+    const root = editor
+      .getReviewItems()
+      .find((item) => item.kind === 'comment' && item.parentId === undefined)!;
     expect(editor.deleteReviewItem(root.key).ok).toBe(true);
     // A reply whose parent is gone has nothing left to answer, so the CONVERSATION goes —
     // the same rule resolving a thread follows.
@@ -378,6 +380,98 @@ describe('comments in the queue', () => {
     expect(revision.replyIds).toEqual([reply.id]);
     expect(reply.kind === 'comment' && reply.parentRevisionId).toBe(revision.id);
     expect(reply.text).toBe('Why this wording?');
+  });
+
+  test('a SECOND reply to a change is listed too, not swallowed by the first', () => {
+    const editor = mount({ body: INSERTION });
+    const [change] = editor.getReviewItems();
+    expect(editor.replyToReviewItem(change!.key, 'first').ok).toBe(true);
+    const revision = editor.getReviewItems().find((item) => item.kind === 'revision')!;
+    expect(editor.replyToReviewItem(revision.key, 'second').ok).toBe(true);
+
+    const items = editor.getReviewItems();
+    const after = items.find((item) => item.kind === 'revision')!;
+    // BOTH. The second reply is written over the same span as the first, so the coincident
+    // rule threads it under the first comment — and a card that renders `replyIds` flat
+    // showed only the head. The reader's second answer existed in `comments.xml` and appeared
+    // nowhere on screen.
+    expect(after.replyIds).toHaveLength(2);
+    const texts = after.replyIds.map((id) => items.find((item) => item.id === id)?.text);
+    expect(texts).toEqual(['first', 'second']);
+    // Neither is a root, so the rail cannot draw a second card beside the change either.
+    for (const id of after.replyIds) {
+      const reply = items.find((item) => item.id === id)!;
+      expect(reply.kind === 'comment' && reply.parentRevisionId).toBe(after.id);
+    }
+  });
+
+  test('a keystroke never leaves a comment pointing at a change the queue no longer lists', () => {
+    const editor = mount({ body: INSERTION });
+    const [change] = editor.getReviewItems();
+    expect(editor.replyToReviewItem(change!.key, 'Noted.').ok).toBe(true);
+
+    // A keystroke in the same paragraph takes the session's LOCAL review patch, which
+    // re-derives that paragraph's revisions at their new offsets. The comment keeps its
+    // cached range, so the spans stop matching — and a link that was only ever added, never
+    // cleared, left the comment naming a change that no longer claims it. The rail hides such
+    // a comment as a reply and no card renders it, so it disappeared until the next full
+    // re-derivation.
+    editor.surface!.setSelection({
+      anchor: { paragraphId: paragraphIdOf(editor), offset: 0 },
+      head: { paragraphId: paragraphIdOf(editor), offset: 0 },
+    });
+    editor.surface!.insertPlainText('x');
+
+    const items = editor.getReviewItems();
+    const revisionIds = new Set(items.filter((i) => i.kind === 'revision').map((i) => i.id));
+    for (const item of items) {
+      if (item.kind !== 'comment' || item.parentRevisionId === undefined) continue;
+      expect(revisionIds.has(item.parentRevisionId)).toBe(true);
+    }
+    // And the comment is still reachable: either nested in a change, or a card of its own.
+    const comment = items.find((item) => item.kind === 'comment')!;
+    const nested = items.some((i) => i.kind === 'revision' && i.replyIds.includes(comment.id));
+    const isRoot = comment.kind === 'comment' && comment.parentRevisionId === undefined;
+    expect(nested || isRoot).toBe(true);
+  });
+
+  test('deleting one comment leaves a different open card open', () => {
+    const editor = mount({ body: COMMENTED_BODY, comments: COMMENTS });
+    const [first] = editor.getReviewItems();
+    // Open the card the reader is working in. `deleteReviewItem` used to dismiss whatever the
+    // caret was in rather than the card it was deleting, and the delete button keeps the
+    // caret — so removing a comment further down closed this one and lost its reply draft.
+    editor.setActiveReviewItem(first!.key);
+    expect(editor.getReviewItems()[0]!.isActive).toBe(true);
+
+    expect(editor.deleteReviewItem('comment-does-not-exist').ok).toBe(false);
+    expect(editor.getReviewItems()[0]!.isActive).toBe(true);
+  });
+
+  test('a comment answering a change the query excludes goes back to being a root card', () => {
+    // A tracked FORMATTING change anchors on exactly the run it decorates, which is the same
+    // span a comment on that word covers — and the rail hides `format` cards by default.
+    const FORMATTED =
+      `<w:p><w:commentRangeStart w:id="7"/>` +
+      `<w:r><w:rPr><w:b/><w:rPrChange w:id="9" w:author="Ada Lovelace" ` +
+      `w:date="2026-03-04T05:06:07Z"><w:rPr/></w:rPrChange></w:rPr><w:t>commented words</w:t></w:r>` +
+      `<w:commentRangeEnd w:id="7"/><w:r><w:commentReference w:id="7"/></w:r></w:p>`;
+    const editor = mount({
+      body: FORMATTED,
+      comments:
+        `<w:comment w:id="7" w:author="Ada Lovelace" w:initials="AL" ` +
+        `w:date="2026-03-04T05:06:07Z"><w:p><w:r><w:t>Is this the right clause?</w:t></w:r>` +
+        `</w:p></w:comment>`,
+    });
+
+    const linked = editor.getReviewItems().find((item) => item.kind === 'comment')!;
+    expect(linked.kind === 'comment' && linked.parentRevisionId).toBeDefined();
+
+    // With the format card filtered out, publishing the link would leave the comment as a
+    // reply to a card nobody draws — the rail skips replies, so it would vanish outright.
+    const filtered = editor.getReviewItems({ excludeRevisionKinds: ['format', 'structural'] });
+    const comment = filtered.find((item) => item.kind === 'comment')!;
+    expect(comment.kind === 'comment' && comment.parentRevisionId).toBeUndefined();
   });
 
   test('the caret in a change that has been answered opens the change, not the reply', () => {
@@ -1194,5 +1288,38 @@ describe('tracked changes in headers', () => {
     editor.setActiveReviewItem(header.key);
     expect(editor.surface!.activeScope()).toEqual({ kind: 'headerFooter', rId: 'rIdH' });
     expect(editor.getHeaderFooterState()?.editing).toBe('header');
+  });
+
+  test('deleting a header comment strips its markers even after the header was opened', () => {
+    const HEADER_COMMENT =
+      `<w:p><w:commentRangeStart w:id="7"/><w:r><w:t>letterhead</w:t></w:r>` +
+      `<w:commentRangeEnd w:id="7"/><w:r><w:commentReference w:id="7"/></w:r></w:p>`;
+    const editor = mount({
+      body: INSERTION,
+      header: HEADER_COMMENT,
+      comments:
+        `<w:comment w:id="7" w:author="Margaret Hamilton" w:date="2026-03-04T05:06:07Z">` +
+        `<w:p><w:r><w:t>Wrong wordmark.</w:t></w:r></w:p></w:comment>`,
+    });
+    const card = editor.getReviewItems().find((item) => item.kind === 'comment')!;
+    expect(card).toBeDefined();
+
+    // Opening the header OPENS its story store, which is the whole point of this case: the
+    // package shell re-overlays every opened store's own part, so a delete that stripped the
+    // markers inside the body store's working package had them put straight back — a header
+    // with a `commentRangeStart` naming a comment the package no longer defines.
+    editor.setActiveReviewItem(card.key);
+    expect(editor.surface!.activeScope()).toEqual({ kind: 'headerFooter', rId: 'rIdH' });
+    editor.setActiveScope({ kind: 'body' });
+
+    expect(editor.deleteReviewItem(card.key).ok).toBe(true);
+    expect(editor.getReviewItems().some((item) => item.kind === 'comment')).toBe(false);
+
+    const headerXml = serializeOoxmlPart(
+      editor.surface!.session.currentPackage().parts.get('/word/header1.xml')!
+    );
+    expect(headerXml).not.toContain('commentRangeStart');
+    expect(headerXml).not.toContain('commentReference');
+    expect(headerXml).toContain('letterhead');
   });
 });

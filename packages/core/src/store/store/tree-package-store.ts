@@ -78,6 +78,20 @@ const RESOLUTION_OPS: ReadonlySet<string> = new Set([
   'rejectAllRevisions',
 ]);
 
+/**
+ * Ops that remove whole blocks without naming one, so no cheap subtree probe exists.
+ *
+ * Row and column deletion take a table id and carry away every cell paragraph under it —
+ * comment range markers included. Gated by kind rather than by content: the reap they open is
+ * a before/after diff and finds nothing when the table held no comment.
+ */
+const CONTENT_REMOVING_OPS: ReadonlySet<string> = new Set([
+  'deleteTableRow',
+  'deleteTableColumn',
+  'removeContentControl',
+  'removeRepeatingSectionItem',
+]);
+
 const HEADER_REL_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
 const FOOTER_REL_TYPE =
@@ -353,9 +367,13 @@ export class TreePackageStore {
                   op,
                   commentTargets
                 );
-              } else if (RESOLUTION_OPS.has(op.op)) {
+              } else if (RESOLUTION_OPS.has(op.op) || CONTENT_REMOVING_OPS.has(op.op)) {
                 // Rejecting an insertion removes the words it inserted, and a comment can be
                 // anchored over exactly those — the same reason resolution opens the note gate.
+                // A row or column deletion removes whole cell PARAGRAPHS, markers and all,
+                // and it names a table rather than a paragraph, so there is no cheap subtree
+                // to probe the way `deleteText` has one. It opens the gate outright; the reap
+                // is a diff and costs nothing when the table held no comment.
                 mayEmptyComments = true;
               }
             }

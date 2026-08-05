@@ -87,6 +87,44 @@ function withOneComment(): Probe {
   };
 }
 
+/** The first table in a story, with its rows — for the row-deletion case. */
+function findFirstTable(
+  story: OoxmlPart
+): { id: string; rows: readonly { id: string; node: OoxmlNode }[] } | null {
+  let found: { id: string; rows: { id: string; node: OoxmlNode }[] } | null = null;
+  const visit = (node: OoxmlNode): void => {
+    if (found || node.kind === 'textValue') return;
+    if (node.kind === 'table') {
+      const rows = node.children
+        .filter((child) => child.kind === 'tableRow')
+        .map((child) => ({ id: child.id, node: child }));
+      if (rows.length > 1) {
+        found = { id: node.id, rows };
+        return;
+      }
+    }
+    for (const child of node.children) visit(child);
+  };
+  visit(story.root);
+  return found;
+}
+
+/** The first paragraph inside a node, with how many characters it holds. */
+function firstParagraphIn(row: { node: OoxmlNode }): { id: string; length: number } | null {
+  let found: { id: string; length: number } | null = null;
+  const visit = (node: OoxmlNode): void => {
+    if (found || node.kind === 'textValue') return;
+    if (node.kind === 'paragraph') {
+      const text = textOf(node);
+      if (text.length > 0) found = { id: node.id, length: text.length };
+      return;
+    }
+    for (const child of node.children) visit(child);
+  };
+  visit(row.node);
+  return found;
+}
+
 function commentIds(pkg: OoxmlPackage, storyPartName: string): string[] {
   const part = pkg.parts.get(commentPartNameOf(pkg, storyPartName));
   return part ? commentsOfPart(part).map((comment) => comment.id) : [];
@@ -170,6 +208,61 @@ describe('a comment dies with the words it covered', () => {
     // Three characters of the five still carry the remark, so there is still something to
     // remark on. Reaping here would delete a comment on text the reader can still see.
     expect(commentIds(store.currentPackage(), mainName)).toContain(commentId);
+  });
+
+  test('losing only the start marker keeps the comment — the reference still places it', () => {
+    const { pkg, paragraphId, commentId } = withOneComment();
+    const mainName = pkg.mainDocumentPart;
+    const store = new TreePackageStore(pkg, pkg.parts.get(mainName)!);
+
+    // Remove just the `w:commentRangeStart`, the way deleting a block that held it does. The
+    // end marker, the reference and the commented words all survive, and Word keeps the
+    // comment: the REFERENCE is what anchors it. Reading "no usable range" as "this edit
+    // emptied it" deleted a remark whose text was still on screen.
+    const start = markersFor(store.currentPackage().parts.get(mainName)!, commentId)[0];
+    if (start === undefined) throw new Error('no start marker');
+    const result = store.transact({ kind: 'body', partName: mainName }, (ctx) => {
+      ctx.applyPackage((current) => {
+        const part = current.parts.get(mainName)!;
+        const removed = removeNode(part, start, { deferValidation: true });
+        return removed.ok ? withPart(current, removed.part) : current;
+      });
+      // Paired with a real text edit, so the gate opens and the reap actually runs.
+      ctx.apply({ op: 'deleteText', paragraphId, start: 0, end: 1 });
+    });
+
+    expect(result.ok).toBe(true);
+    expect(commentIds(store.currentPackage(), mainName)).toContain(commentId);
+  });
+
+  test('deleting the row a comment lives in reaps it', () => {
+    // `deleteTableRow` names a TABLE, not a paragraph, and carries away every cell paragraph
+    // under the row — markers included. It has no cheap subtree to probe, so it opens the reap
+    // gate outright; without that the exact orphan this module exists to prevent survived.
+    const loaded = fixture();
+    const store = new TreeDocumentStore(loaded, loaded.mainDocumentPart);
+    const table = findFirstTable(store.part);
+    if (!table) throw new Error('the fixture has no table');
+    const cellParagraph = firstParagraphIn(table.rows[0]!);
+    if (!cellParagraph) throw new Error('no paragraph in the first row');
+    const added = addComment(store, {
+      anchor: { paragraphId: cellParagraph.id, start: 0, end: cellParagraph.length },
+      author: 'Reap Probe',
+      date: '2026-08-05T10:00:00Z',
+      text: 'Row remark.',
+    });
+    if (!added.ok) throw new Error(`addComment refused: ${added.reason}`);
+
+    const mainName = loaded.mainDocumentPart;
+    const packaged = new TreePackageStore(store.package, store.package.parts.get(mainName)!);
+    expect(commentIds(packaged.currentPackage(), mainName)).toContain(added.commentId);
+
+    const result = packaged.transact({ kind: 'body', partName: mainName }, (ctx) => {
+      ctx.apply({ op: 'deleteTableRow', tableId: table.id, rowId: table.rows[0]!.id });
+    });
+
+    expect(result.ok).toBe(true);
+    expect(commentIds(packaged.currentPackage(), mainName)).not.toContain(added.commentId);
   });
 
   test('an edit elsewhere leaves a comment the file shipped orphaned exactly as found', () => {

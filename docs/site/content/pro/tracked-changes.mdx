@@ -74,6 +74,7 @@ Each card is a compound you can take apart:
       <DocxEditorReview.Summary />
       <DocxEditorReview.Accept />
       <DocxEditorReview.Reject />
+      <DocxEditorReview.Delete />
       <DocxEditorReview.Replies />
       <DocxEditorReview.Reply />
     </DocxEditorReview.Card>
@@ -84,7 +85,9 @@ Each card is a compound you can take apart:
 
 `Markers` is the collapsed sidebar shown when the pane is closed; `Balloon` is the decision popover you get by clicking a format or structural change in the page; `AddComment` and `Draft` are the comment affordances.
 
-Every part takes `className`, `asChild`, and `hidden`. The action parts (`Accept`, `Reject`, `Reply`) also take `icon`.
+Every part takes `className`, `asChild`, and `hidden`. The action parts (`Accept`, `Reject`, `Delete`, `Reply`) also take `icon`.
+
+`Delete` is the destructive one, and it is on both kinds of card: on a comment it deletes the thread, and on a tracked change it discards the suggestion. It is absent on a card with nothing to discard.
 
 ## Choosing what the sidebar shows
 
@@ -163,12 +166,15 @@ function ChangeList() {
 | `activeKey` / `setActive`       | Which item the caret is in; setting selects its range and scrolls to it. |
 | `accept(item)` / `reject(item)` | Resolve a revision. No-ops on an item whose `readOnly` is true.          |
 | `reply(item, text, author?)`    | Reply to a change. Returns whether it landed.                            |
+| `remove(item)`                  | Delete a comment thread, or discard a suggestion. Returns whether it landed. |
 | `comment(text, author?)`        | Comment on the current selection. Returns whether it landed.             |
 | `selectionAnchorY`              | Where a comment on the selection would sit, or `null`.                   |
 | `paneOpen` / `setPaneOpen`      | The same toggle the toolbar's comments button runs.                      |
 | `ready`                         | False while no document is loaded.                                       |
 
 Each item carries `key`, `id`, `author`, `initials`, `date`, `text`, `replyIds`, `readOnly`, `anchorY`, `pageIndex`, and `isActive`. Revision items add `kind: 'revision'`, a `revisionKind`, and `replacedText` for replacements, so a card can say _Replaced "x" with "y"_.
+
+`replyIds` is on revisions too, not only comments. OOXML gives `w:ins` and `w:del` no body, so replying to a tracked change writes a comment over that change's range — the reply belongs inside the change's card, and the comment carries `parentRevisionId` naming it. A surface listing top-level cards must skip a comment with either `parentId` or `parentRevisionId`, or it will draw the reply twice.
 
 Two things the hook gives you that you should not recompute. Items come from the document tree rather than from what is currently painted — a queue derived from the page would empty by half when the reader scrolls. And each item's `anchorY` comes from layout records rather than measured DOM, which would leave the sidebar a repaint behind the document and break outright during pagination.
 

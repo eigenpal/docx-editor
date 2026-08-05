@@ -1180,7 +1180,14 @@ export function openTreeSession(
         // must not publish a change nothing changed.
         if (refused || !result.ok || !removed) return false;
         store.restoreHistoryStacks(checkpoint);
-        packageStore.replacePackageShell(store.package);
+        // INSTALLED, not shell-replaced — the one comment write that differs from a reply.
+        // `replacePackageShell` re-overlays every OPENED story store's own part on top of
+        // the package, and this write strips markers from every story, so a header the
+        // reader had once entered came back with its `commentRangeStart` restored and the
+        // body already gone: the half-deleted state this module exists to prevent. Installing
+        // the snapshot pushes the result INTO those stores instead, which is what the reap
+        // path has always done.
+        packageStore.installPackageSnapshot(store.package);
         packageStore.adoptPackageUnit(beforePackage);
         packageStore.publishStoryWrite(result.change);
         return true;

@@ -778,6 +778,8 @@ export interface LinkableReviewItem {
   readonly ranges?: readonly ReviewRange[];
   readonly range?: ReviewRange | null;
   readonly parentId?: string;
+  readonly parentRevisionId?: string;
+  readonly replyIds?: readonly string[];
   readonly orphaned?: boolean;
 }
 
@@ -800,9 +802,20 @@ function rangeKey(range: ReviewRange): string {
  *
  * Three things keep it from over-claiming. A ZERO-WIDTH range is evidence of nothing — the same
  * rule the comment threading uses, and a format or paragraph-mark revision decorates no
- * characters at all. A comment already stated to be a REPLY to another comment keeps that
- * parent, because a stated link always beats an inferred one. And the FIRST revision on a span
+ * characters at all. A comment already stated to be a REPLY to another comment is not claimed
+ * directly, because a stated link always beats an inferred one. And the FIRST revision on a span
  * wins, so a card cannot claim a reply another card already holds.
+ *
+ * The WHOLE conversation moves, not its head. A change's card renders `replyIds` as a flat list,
+ * so linking only the top comment of a thread left every answer to that answer rendered by
+ * nobody: reply twice to one change and the second reply existed in `comments.xml` and appeared
+ * nowhere on screen. Descendants ride along, in the order they were authored.
+ *
+ * IDEMPOTENT, and that is load-bearing. The session re-runs this over a list whose comments are
+ * ALREADY linked, so a pass that only ever added links left a stale `parentRevisionId` behind
+ * when a keystroke shifted the revision's offsets out from under it — the rail filters such a
+ * comment out of its roots, and with no revision claiming it any more the card vanished until
+ * the next full re-derivation. Every link is rebuilt from the ranges on every pass.
  */
 export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonly T[]): T[] {
   const revisionBySpan = new Map<string, string>();
@@ -819,7 +832,27 @@ export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonl
       if (!revisionBySpan.has(key)) revisionBySpan.set(key, item.id);
     }
   }
-  if (revisionBySpan.size === 0) return [...items];
+
+  // Comment threads as the derivation stated them, so a claimed head brings its answers.
+  const commentRepliesOf = new Map<string, readonly string[]>();
+  for (const item of items) {
+    if (item.kind === 'comment' && item.replyIds && item.replyIds.length > 0) {
+      commentRepliesOf.set(item.id, item.replyIds);
+    }
+  }
+  const descendantsOf = (rootId: string): string[] => {
+    const out: string[] = [];
+    const seen = new Set<string>([rootId]);
+    const queue = [...(commentRepliesOf.get(rootId) ?? [])];
+    while (queue.length > 0) {
+      const next = queue.shift()!;
+      if (seen.has(next)) continue;
+      seen.add(next);
+      out.push(next);
+      queue.push(...(commentRepliesOf.get(next) ?? []));
+    }
+    return out;
+  };
 
   const repliesOf = new Map<string, string[]>();
   const parentOf = new Map<string, string>();
@@ -828,21 +861,28 @@ export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonl
     if (item.orphaned || !item.range) continue;
     const revisionId = revisionBySpan.get(rangeKey(item.range));
     if (revisionId === undefined) continue;
-    parentOf.set(item.id, revisionId);
+    const thread = [item.id, ...descendantsOf(item.id)];
+    for (const id of thread) parentOf.set(id, revisionId);
     const bucket = repliesOf.get(revisionId);
-    if (bucket) bucket.push(item.id);
-    else repliesOf.set(revisionId, [item.id]);
+    if (bucket) bucket.push(...thread);
+    else repliesOf.set(revisionId, thread);
   }
-  if (parentOf.size === 0) return [...items];
 
   return items.map((item) => {
     if (item.kind === 'revision') {
-      const replies = repliesOf.get(item.id);
-      return replies ? { ...item, replyIds: replies } : item;
+      const replies = repliesOf.get(item.id) ?? [];
+      if (replies.length === 0 && (item.replyIds ?? []).length === 0) return item;
+      return { ...item, replyIds: replies };
     }
     if (item.kind === 'comment') {
       const parent = parentOf.get(item.id);
-      return parent === undefined ? item : { ...item, parentRevisionId: parent };
+      if (parent === undefined) {
+        if (item.parentRevisionId === undefined) return item;
+        // Rebuilt, not patched: the key has to GO, and spreading cannot remove one.
+        const { parentRevisionId: _dropped, ...rest } = item;
+        return rest as T;
+      }
+      return item.parentRevisionId === parent ? item : { ...item, parentRevisionId: parent };
     }
     return item;
   });
