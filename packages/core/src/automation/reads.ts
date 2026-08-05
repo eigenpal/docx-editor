@@ -105,6 +105,14 @@ export interface AutomationStoryReads {
   indexOf(paragraphId: string): number;
   /** A paragraph's read, or null when it is not in the story. */
   paragraph(paragraphId: string): AutomationParagraphRead | null;
+  /**
+   * The canonical NODE of one of the story's paragraphs, for reads that are about markup rather
+   * than text — what a paragraph declares about its numbering, for one.
+   *
+   * Deliberately not a general tree escape hatch: the map already exists here, and the
+   * alternative is every such read walking the part again to find a node this file already holds.
+   */
+  node(paragraphId: string): OoxmlNode | null;
   /** A paragraph's text in model-offset vocabulary, or null when it is not in the story. */
   paragraphText(paragraphId: string): string | null;
   /** The story's paragraphs joined by a paragraph mark. */
@@ -234,6 +242,7 @@ function storyReadsOver(
       if (!node) return null;
       return { nodeId: paragraphId, paraId: paraIdOf(node), text: textOf(paragraphId) ?? '' };
     },
+    node: (paragraphId) => byId.get(paragraphId) ?? null,
     paragraphText: textOf,
     text: () => paragraphIds.map((id) => textOf(id) ?? '').join(PARAGRAPH_MARK),
     styles,

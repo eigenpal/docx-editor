@@ -271,6 +271,53 @@ export type AutomationOperation =
    */
   | { readonly op: 'deleteNote'; readonly note: AutomationHandle }
   /**
+   * Every list one story holds, in the order its numbers first appear.
+   *
+   * A list is the paragraphs that share a `w:numId`, so this is derived rather than walked: there
+   * is no list element in a `.docx` to enumerate. Two stories that number with the same value are
+   * still two lists, because the paragraphs are not in the same story.
+   */
+  | { readonly op: 'getLists'; readonly body: AutomationHandle }
+  /** A list's `w:numId`, as the number the file states. */
+  | { readonly op: 'getListId'; readonly list: AutomationHandle }
+  /**
+   * A list's paragraphs in reading order, or only the ones at one level.
+   *
+   * `level` is `w:ilvl` — 0-8. A level the list has no paragraphs at answers none, which is not an
+   * error: a list is free to skip a level.
+   */
+  | { readonly op: 'getListParagraphs'; readonly list: AutomationHandle; readonly level?: number }
+  /**
+   * The list a paragraph is in.
+   *
+   * A paragraph in none is REFUSED rather than answered an empty list of its own: "this paragraph
+   * is not a list item" is a different fact from "this list has one paragraph", and a caller that
+   * cannot tell them apart will indent prose.
+   */
+  | { readonly op: 'getParagraphList'; readonly paragraph: AutomationHandle }
+  /** A list item's `w:ilvl`. Refused for a paragraph that is in no list. */
+  | { readonly op: 'getListLevel'; readonly paragraph: AutomationHandle }
+  /**
+   * Move a list item to another level — Increase/Decrease Indent on a list.
+   *
+   * The level selects the format out of `numbering.xml`, so the marker changes with it. A level
+   * outside 0-8 is refused rather than clamped: nothing defines a format there.
+   */
+  | { readonly op: 'setListLevel'; readonly paragraph: AutomationHandle; readonly level: number }
+  /**
+   * Add a paragraph to a list, at one of its edges. Answers the NEW paragraph.
+   *
+   * The new paragraph is numbered with the list it joins, at the level of the item it is inserted
+   * beside — which is what continuing a list means, and what Word does when the caret is at the
+   * end of one and Enter is pressed.
+   */
+  | {
+      readonly op: 'insertListParagraph';
+      readonly list: AutomationHandle;
+      readonly where: 'start' | 'end';
+      readonly text: string;
+    }
+  /**
    * Put the reader's selection on a span. Requires the `selection` capability, so a headless
    * host refuses it rather than pretending to have a caret.
    */
@@ -301,6 +348,11 @@ export const AUTOMATION_QUERY_OPERATIONS = [
   'getNotes',
   'getNoteBody',
   'getNoteKind',
+  'getLists',
+  'getListId',
+  'getListParagraphs',
+  'getParagraphList',
+  'getListLevel',
 ] as const satisfies readonly AutomationOperationKind[];
 
 /** Operations that write. Every one of these goes through the single transaction path. */
@@ -316,6 +368,8 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
   'setStyle',
   'setPageSetup',
   'deleteNote',
+  'setListLevel',
+  'insertListParagraph',
 ] as const satisfies readonly AutomationOperationKind[];
 
 /**

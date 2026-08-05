@@ -84,6 +84,12 @@ import {
 } from './spans.ts';
 import { BODY_STORY, storyKey, type AutomationStoryId } from './stories.ts';
 import { isStoryId } from './stories.ts';
+import {
+  listReads,
+  membershipIn,
+  MAX_LIST_LEVEL,
+  type AutomationListRead,
+} from './lists.ts';
 import { pageSetupProperties, type AutomationSectionRead } from './sections.ts';
 import type { NoteKind } from '../store/package/note-nodes.ts';
 import { paragraphStyleName, styleIdFor } from './styles.ts';
@@ -1077,6 +1083,96 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     answer: () => APPLIED,
   });
 
+  /**
+   * The list a `list` handle names, in the story it names.
+   *
+   * Re-derived per operation rather than remembered from when the handle was minted: paragraphs
+   * join and leave lists, so a list's membership is a fact about the document NOW. A number the
+   * story no longer uses is a refusal — the list is gone, and answering an empty one would let a
+   * caller believe a list survived the paragraph that was in it.
+   */
+  const listOf = (
+    handle: unknown
+  ): { ok: true; plan: StoryPlan; list: AutomationListRead } | PlannedOperation => {
+    const target = handles.resolve(handle, 'list');
+    if (!target || target.kind !== 'list')
+      return refuse('invalid-handle', 'that handle does not name a list', 'list');
+    const reads = packageReads.story(target.story);
+    if (!reads) return refuse('invalid-handle', 'that story is not in this document');
+    const found = listReads(reads).find((list) => list.numId === target.numId);
+    if (!found)
+      return refuse('invalid-handle', 'this story numbers nothing with that list', target.numId);
+    return { ok: true, plan: planFor(reads), list: found };
+  };
+
+  const planSetListLevel = (
+    plan: StoryPlan,
+    paragraphId: string,
+    level: number
+  ): PlannedOperation => {
+    if (!Number.isInteger(level) || level < 0 || level > MAX_LIST_LEVEL) {
+      return refuse(
+        'invalid-offset',
+        `a list level is 0 to ${String(MAX_LIST_LEVEL)}`,
+        String(level)
+      );
+    }
+    // REFUSED FOR PROSE, not silently numbered: `setListLevel` writes `w:ilvl` inside an existing
+    // `w:numPr`, and a paragraph with none is not a list item. Numbering it here would need a
+    // `w:numId` this operation was never given.
+    if (!membershipIn(plan.reads, paragraphId))
+      return refuse('unsupported-content', 'that paragraph is not in a list', paragraphId);
+    const pin = pinWrite(plan);
+    if (pin) return pin;
+    // The paragraph's PROPERTIES container, the same one a paragraph-format write claims: both
+    // rewrite `w:pPr`, so two of them in one batch would carry each other's children away.
+    const conflict = claimFormatting(plan, paragraphId, 'paragraph');
+    if (conflict) return conflict;
+    return {
+      ok: true,
+      kind: 'command',
+      ops: [{ op: 'setListLevel', paragraphId, level }],
+      story: plan.reads.story,
+      answer: () => APPLIED,
+    };
+  };
+
+  /**
+   * Add an item at one edge of a list.
+   *
+   * ONE transaction and no numbering op of its own: a paragraph created beside a list item is
+   * created BY SPLITTING it, and a split copies the paragraph's `w:pPr` — its `w:numPr` with it —
+   * to both halves. So the new paragraph is in the list at the same level because it is the same
+   * paragraph properties, which is also why Enter at the end of a list item continues the list in
+   * Word. Stating the numbering again would mean naming a node the transaction has not made yet,
+   * and that is a second commit.
+   */
+  const planInsertListParagraph = (
+    plan: StoryPlan,
+    list: AutomationListRead,
+    where: 'start' | 'end',
+    text: string
+  ): PlannedOperation => {
+    if (where !== 'start' && where !== 'end') {
+      return refuse(
+        'unknown-operation',
+        'a list takes an item at its start or its end',
+        String(where)
+      );
+    }
+    const reads = plan.reads;
+    const edgeId =
+      where === 'start' ? list.paragraphIds[0] : list.paragraphIds[list.paragraphIds.length - 1];
+    if (edgeId === undefined) return refuse('invalid-handle', 'that list holds no paragraph');
+    const anchor: ResolvedPoint = {
+      story: reads.story,
+      paragraphId: edgeId,
+      index: reads.indexOf(edgeId),
+      offset: 0,
+    };
+    return planInsertParagraph(plan, anchor, where === 'start' ? 'before' : 'after', text);
+  };
+
   const planSelect = (
     plan: StoryPlan,
     range: ResolvedRange,
@@ -1442,6 +1538,100 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         if (!packageReads.noteIds(target.noteKind).includes(target.noteId))
           return refuse('invalid-handle', 'that note is not in this document');
         return planDeleteNote(target.noteKind, target.noteId);
+      }
+
+      case 'getLists': {
+        const story = storyOfHandle(operation.body, 'body', handles, packageReads);
+        if (!story.ok) return refuse(story.code, 'that handle does not name a body', story.detail);
+        return query({
+          kind: 'handles',
+          handles: listReads(story.value).map((list) =>
+            handles.list(list.numId, story.value.story)
+          ),
+        });
+      }
+
+      case 'getListId': {
+        const found = listOf(operation.list);
+        if (!('list' in found)) return found;
+        // Decimal by schema (`ST_DecimalNumber`), and validated as one before it is parsed: the
+        // string came out of a file, and `Number('1e3')` is not the id anything wrote.
+        return query({ kind: 'number', value: Number(found.list.numId) });
+      }
+
+      case 'getListParagraphs': {
+        const found = listOf(operation.list);
+        if (!('list' in found)) return found;
+        const level = operation.level;
+        if (
+          level !== undefined &&
+          (!Number.isInteger(level) || level < 0 || level > MAX_LIST_LEVEL)
+        ) {
+          return refuse(
+            'invalid-offset',
+            `a list level is 0 to ${String(MAX_LIST_LEVEL)}`,
+            String(level)
+          );
+        }
+        const reads = found.plan.reads;
+        const ids =
+          level === undefined
+            ? found.list.paragraphIds
+            : found.list.paragraphIds.filter((id) => membershipIn(reads, id)?.level === level);
+        return query({
+          kind: 'handles',
+          handles: ids.map((id) => handles.paragraph(id, reads.story)),
+        });
+      }
+
+      case 'getParagraphList': {
+        const paragraph = resolveParagraphHandle(operation.paragraph, handles, packageReads);
+        if (!paragraph.ok)
+          return refuse(paragraph.code, 'that handle does not name a paragraph', paragraph.detail);
+        const reads = packageReads.story(paragraph.value.story);
+        if (!reads) return refuse('invalid-handle', 'that story is not in this document');
+        const membership = membershipIn(reads, paragraph.value.paragraphId);
+        if (!membership)
+          return refuse(
+            'unsupported-content',
+            'that paragraph is not in a list',
+            paragraph.value.paragraphId
+          );
+        return query({
+          kind: 'handle',
+          handle: handles.list(membership.numId, reads.story),
+        });
+      }
+
+      case 'getListLevel': {
+        const paragraph = resolveParagraphHandle(operation.paragraph, handles, packageReads);
+        if (!paragraph.ok)
+          return refuse(paragraph.code, 'that handle does not name a paragraph', paragraph.detail);
+        const reads = packageReads.story(paragraph.value.story);
+        if (!reads) return refuse('invalid-handle', 'that story is not in this document');
+        const membership = membershipIn(reads, paragraph.value.paragraphId);
+        if (!membership)
+          return refuse(
+            'unsupported-content',
+            'that paragraph is not in a list',
+            paragraph.value.paragraphId
+          );
+        return query({ kind: 'number', value: membership.level });
+      }
+
+      case 'setListLevel': {
+        const paragraph = resolveParagraphHandle(operation.paragraph, handles, packageReads);
+        if (!paragraph.ok)
+          return refuse(paragraph.code, 'that handle does not name a paragraph', paragraph.detail);
+        const reads = packageReads.story(paragraph.value.story);
+        if (!reads) return refuse('invalid-handle', 'that story is not in this document');
+        return planSetListLevel(planFor(reads), paragraph.value.paragraphId, operation.level);
+      }
+
+      case 'insertListParagraph': {
+        const found = listOf(operation.list);
+        if (!('list' in found)) return found;
+        return planInsertListParagraph(found.plan, found.list, operation.where, operation.text);
       }
 
       case 'selectSpan': {

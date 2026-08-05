@@ -77,10 +77,21 @@ export type AutomationHandleTarget =
   | { readonly kind: 'comment'; readonly commentId: string }
   /** One tracked-change decision, by the review queue's own item id. */
   | { readonly kind: 'revision'; readonly revisionId: string }
-  /** One bookmark, by name — the only identity a bookmark has in a document. */
-  | { readonly kind: 'bookmark'; readonly name: string }
-  /** One list definition, by `w:numId`. */
-  | { readonly kind: 'list'; readonly numId: string };
+  /**
+   * One bookmark, by the name it is declared with and the story its markers sit in.
+   *
+   * A name is a bookmark's only identity in a document; the story is what makes two markers of
+   * the same name in a header and in the body two objects rather than one.
+   */
+  | { readonly kind: 'bookmark'; readonly name: string; readonly story: AutomationStoryId }
+  /**
+   * One list, by the `w:numId` its paragraphs share AND the story they are in.
+   *
+   * Story-qualified because a list is its paragraphs: a header and the body may both number with
+   * `w:numId` 3 and they are two lists, so one handle for both would answer a header's items to a
+   * caller asking about the body's.
+   */
+  | { readonly kind: 'list'; readonly numId: string; readonly story: AutomationStoryId };
 
 export interface AutomationHandleTable {
   /** The document handle. One per host, minted on first ask. */
@@ -93,8 +104,8 @@ export interface AutomationHandleTable {
   note(noteKind: NoteKind, noteId: number): AutomationHandle<'note'>;
   comment(commentId: string): AutomationHandle<'comment'>;
   revision(revisionId: string): AutomationHandle<'revision'>;
-  bookmark(name: string): AutomationHandle<'bookmark'>;
-  list(numId: string): AutomationHandle<'list'>;
+  bookmark(name: string, story: AutomationStoryId): AutomationHandle<'bookmark'>;
+  list(numId: string, story: AutomationStoryId): AutomationHandle<'list'>;
   /**
    * Point an already-issued paragraph handle at a different canonical id.
    *
@@ -180,11 +191,15 @@ export function createHandleTable(): AutomationHandleTable {
     revision(revisionId) {
       return named('revision', revisionId, { kind: 'revision', revisionId });
     },
-    bookmark(name) {
-      return named('bookmark', name, { kind: 'bookmark', name });
+    bookmark(name, story) {
+      return named('bookmark', `${storyKey(story)}\u0000${name}`, {
+        kind: 'bookmark',
+        name,
+        story,
+      });
     },
-    list(numId) {
-      return named('list', numId, { kind: 'list', numId });
+    list(numId, story) {
+      return named('list', `${storyKey(story)}\u0000${numId}`, { kind: 'list', numId, story });
     },
     retarget(fromParagraphId, toParagraphId) {
       const ref = refByParagraph.get(fromParagraphId);

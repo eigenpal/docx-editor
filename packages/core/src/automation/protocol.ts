@@ -170,6 +170,13 @@ export type AutomationValue =
   /** One section's page geometry, in points. */
   | { readonly kind: 'pageSetup'; readonly setup: AutomationPageSetupRead }
   /**
+   * A number the document states: a list's `w:numId`, a list item's level.
+   *
+   * Its own kind rather than a stringified `text`, because a caller that has to parse an answer
+   * back into a number is a caller that can parse it wrongly.
+   */
+  | { readonly kind: 'number'; readonly value: number }
+  /**
    * A paragraph style NAME, or null where nothing names one — the paragraphs disagree, or the
    * document declares no styles at all.
    */
