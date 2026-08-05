@@ -414,6 +414,28 @@ export type TreeDocOp =
       readonly controlId: string;
     }
   | {
+      /**
+       * Insert a NEW run-level content control at a text offset: `w:sdt` with a
+       * `w:sdtPr` carrying the given tag (and alias/lock) and a `w:sdtContent`
+       * holding one run of `text`.
+       *
+       * The write half of the custom-node contract (pro-review-and-custom-nodes):
+       * a node's identity lives in `w:tag`, `sdtLocked` keeps Word users from
+       * unwrapping the anchor, and the literal run text is what Word (and the
+       * free tier) render. The TAG IS ATTACKER-ADJACENT ON READ but authored
+       * here; it is written as an ordinary attribute value, so the serializer's
+       * escaping covers it like every other attribute.
+       */
+      readonly op: 'insertInlineContentControl';
+      readonly paragraphId: string;
+      readonly offset: number;
+      readonly tag: string;
+      readonly text: string;
+      readonly alias?: string;
+      /** `w:lock` value; omitted writes no lock. */
+      readonly lock?: 'sdtLocked' | 'sdtContentLocked' | 'contentLocked';
+    }
+  | {
       /** Repeating-section item insert — unsupported at this layer (out of scope). */
       readonly op: 'addRepeatingSectionItem';
       readonly controlId: string;
@@ -666,6 +688,7 @@ export const TREE_DOC_OP_KINDS = [
   'removeHyperlink',
   'setContentControlValue',
   'removeContentControl',
+  'insertInlineContentControl',
   'addRepeatingSectionItem',
   'removeRepeatingSectionItem',
   'deleteBlock',

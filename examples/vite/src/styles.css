@@ -334,3 +334,38 @@
     display: none;
   }
 }
+
+/* ── PRO custom nodes: the citation chip ─────────────────────────────────────
+   The engine paints a chrome layer per content control carrying the control's
+   `w:tag` as `data-tag`, with boundary rects positioned exactly over the
+   painted text. Styling by tag PREFIX is all a chip takes — no engine hooks.
+   The balloon rides :hover: the rect opts back into pointer events (the layer
+   is furniture, so the swallowed click doubles as chip-like atomicity). */
+.docx-content-control-chrome[data-tag^='docx:citation'] .docx-content-control-boundary {
+  pointer-events: auto !important;
+  background: rgba(37, 99, 235, 0.1);
+  border: 1px solid rgba(37, 99, 235, 0.4);
+  border-radius: 6px;
+  cursor: default;
+}
+.docx-content-control-chrome[data-tag^='docx:citation'] .docx-content-control-boundary::after {
+  content: '📖 Citation — locked content control';
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  white-space: nowrap;
+  font: 11px/1.6 system-ui, sans-serif;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #1e3a8a;
+  color: #fff;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  pointer-events: none;
+}
+.docx-content-control-chrome[data-tag^='docx:citation']
+  .docx-content-control-boundary:hover::after {
+  opacity: 1;
+  transform: translateY(0);
+}

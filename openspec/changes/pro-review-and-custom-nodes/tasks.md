@@ -31,10 +31,10 @@
 - [x] 4.1 Verified already-landed: inline SDTs are typed `contentControl` nodes with UTF-16 affinity (`contentControlAtOf`), value/remove commands, and painted literal content; no new modeling needed for recognition
 - [x] 4.2 `defineCustomNode` definition shape + tag codec (encode refuses the 64-char cap; decode guards prototype pollution). REMAINING: customXml data-part escape hatch + `sdtLocked` default land with the write side (4.4)
 - [x] 4.3 `recognizeCustomNodes` tag-prefix pass (tolerant of Word-demoted generic `sdtPr`); `fromDocx` sees attrs + literal text, null vetoes to literal rendering
-- [ ] 4.4 Implement `toDocx` ctx builders (hyperlink/text/SDT content) with `sanitizeHref` and XML escaping on every attacker-derived string
+- [x] 4.4 Write side v1: `insertInlineContentControl` TreeDocOp (paragraph-level split mirroring insertHyperlink; validation incl. the 64-char tag cap; serializer escaping covers the tag) + pro `insertCustomNode(editor, def, attrs, text, {alias, lock, at})` — sdtLocked default, one undo unit, save/reopen recognized. REMAINING: rich-content `toDocx` ctx builders (hyperlink content needs `sanitizeHref`), customXml data-part hatch
 - [ ] 4.5 Core render contract: host furniture element (`createElement`, `contenteditable=false`, data attrs) + extent (fixed or text-equivalent) fed to layout/`TextMeasurer`; explicit invalidation API, no observed reflow
 - [ ] 4.6 Atomic offset semantics: node occupies its SDT text offsets; caret skip, whole-SDT backspace/delete, copy/paste carries OOXML
-- [ ] 4.7 Interaction: hover/click dispatch through the interaction layer to `onHover`/`onClick` handlers
+- [ ] 4.7 Interaction: hover/click dispatch through the interaction layer to `onHover`/`onClick` handlers. (The vite demo shows a CSS-only chip + hover balloon over the engine's per-control `data-tag` chrome layer — demo-level, not the engine contract)
 - [ ] 4.8 React portal sugar: mount JSX renders into host elements at measured extent
 - [ ] 4.10 `reviewCard` hook: `kind: 'custom'` review items derived from recognized nodes, anchored at the node's range; card-renderer slot on the pro pane (owner request 2026-08-05)
 - [x] 4.9 Tests: Word-round-trip fixtures `e2e/fixtures/sdt-custom-tag-original.docx` / `sdt-custom-tag-word-roundtrip.docx` (recognition identical on both — GREEN), codec overflow + proto-pollution guards, unregistered-prefix literalness, fromDocx veto. REMAINING with 4.4-4.8: sanitizeHref fixture, pagination chip, atomic deletion

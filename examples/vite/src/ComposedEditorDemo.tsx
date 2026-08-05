@@ -26,7 +26,12 @@ import {
 // review module on the Root and mount the pane; without the module the same
 // document still opens (final-state view) and the review toolbar controls
 // disable with the engine's own "requires the pro review module" reason.
-import { customNodesModule, defineCustomNode, reviewModule } from '@docx-editor.dev/pro';
+import {
+  customNodesModule,
+  defineCustomNode,
+  insertCustomNode,
+  reviewModule,
+} from '@docx-editor.dev/pro';
 import { DocxEditorReview } from '@docx-editor.dev/pro/react';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
@@ -49,20 +54,15 @@ import { DEMO_BUTTON, DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON } from './demoB
  * typed node (open e2e/fixtures/sdt-custom-tag-original.docx to see one).
  * Both accept `{ licenseKey }` — optional while licensing is honor-system.
  */
-const PRO_MODULES = [
-  reviewModule(),
-  customNodesModule({
-    nodes: [
-      defineCustomNode({
-        name: 'citation',
-        tagPrefix: 'docx',
-        // Recognition hook: attrs decoded from the tag, text is the literal
-        // SDT content (which a Word user may have edited — label drift).
-        fromDocx: ({ attrs, text }) => ({ ...attrs, label: text }),
-      }),
-    ],
-  }),
-];
+const DEMO_CITATION = defineCustomNode({
+  name: 'citation',
+  tagPrefix: 'docx',
+  // Recognition hook: attrs decoded from the tag, text is the literal
+  // SDT content (which a Word user may have edited — label drift).
+  fromDocx: ({ attrs, text }) => ({ ...attrs, label: text }),
+});
+
+const PRO_MODULES = [reviewModule(), customNodesModule({ nodes: [DEMO_CITATION] })];
 
 /** English labels for the library toolbar's i18n keys. Demos are apps: English is fine. */
 const tEnglish = createT(en);
@@ -520,6 +520,31 @@ function EditorChrome({
             onClick={saveDocument}
           >
             Save
+          </button>
+          {/* PRO custom nodes, programmatically: one call inserts a tagged,
+              sdtLocked content control at the caret. In this editor it is a
+              recognized custom node; in Word it is a locked control showing
+              the literal label — save and open the file there to see it. */}
+          <button
+            type="button"
+            style={DEMO_BUTTON}
+            disabled={!editor}
+            onMouseDown={keepCaret}
+            onClick={() => {
+              if (!editor) return;
+              const result = insertCustomNode(
+                editor,
+                DEMO_CITATION,
+                { sourceId: `src_${Date.now().toString(36)}`, locator: 'p.42' },
+                '(Smith 2024, p. 42)',
+                // The alias is what Word titles the control with, and what the
+                // demo's chip styling shows in its hover balloon.
+                { alias: 'Citation' }
+              );
+              if (!result.ok) console.warn(`[custom-nodes] ${result.reason}`);
+            }}
+          >
+            Insert citation
           </button>
         </div>
       </header>

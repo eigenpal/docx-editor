@@ -27,3 +27,7 @@ export {
   type DecodedCustomNodeTag,
   type EncodeTagResult,
 } from './custom-nodes/tag-codec.ts';
+export {
+  insertCustomNode,
+  type InsertCustomNodeOptions,
+} from './custom-nodes/insert-custom-node.ts';
