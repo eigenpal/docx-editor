@@ -22,6 +22,7 @@ import {
   type OoxmlProperty,
   type TreeDocOp,
 } from '@docx-editor.dev/core-contract/store';
+import { walkParagraphInline } from '../store/package/content-control-walk.ts';
 import { runPropsOf, treeSchema } from './tree-schema.ts';
 
 export type TreeBindingRejection =
@@ -103,16 +104,11 @@ function unknownLabel(node: OoxmlNode): string {
 function tokensOfParagraph(paragraph: OoxmlNode): Token[] {
   if (paragraph.kind === 'textValue') return [];
   const tokens: Token[] = [];
-  for (const child of paragraph.children) {
-    if (child.kind === 'paragraphProperties') continue;
-    if (child.kind !== 'run') {
-      // Paragraph-level unknown content keeps a position in the inline sequence.
-      tokens.push({ kind: 'unknown', nodeId: child.id, label: unknownLabel(child) });
-      continue;
-    }
-    const rPr = child.children.find((grand) => grand.kind === 'runProperties');
+  const emitRun = (run: OoxmlNode): void => {
+    if (run.kind !== 'run') return;
+    const rPr = run.children.find((grand) => grand.kind === 'runProperties');
     const props = propertiesOf(rPr);
-    for (const grand of child.children) {
+    for (const grand of run.children) {
       if (grand.kind === 'runProperties') continue;
       if (grand.kind === 'tab') {
         tokens.push({ kind: 'tab' });
@@ -132,7 +128,15 @@ function tokensOfParagraph(paragraph: OoxmlNode): Token[] {
       }
       tokens.push({ kind: 'unknown', nodeId: grand.id, label: unknownLabel(grand) });
     }
-  }
+  };
+  walkParagraphInline(paragraph.children, 0, (child) => {
+    if (child.kind === 'run') {
+      emitRun(child);
+      return;
+    }
+    // Paragraph-level unknown content keeps a position in the inline sequence.
+    tokens.push({ kind: 'unknown', nodeId: child.id, label: unknownLabel(child) });
+  });
   return tokens;
 }
 

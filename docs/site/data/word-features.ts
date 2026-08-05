@@ -245,7 +245,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Existing tab stops render, including right/decimal tabs and dot, hyphen and underscore leaders. Positional tabs (w:ptab) render too, so a table-of-contents line reads as one: entry left, leader dots between, page number flush right. The document\'s own w:defaultTabStop is honoured, so a metric-locale grid lands where Word puts it, in headers and footers as well as the body. A tab-stop editing UI is not built yet.',
+      "Existing tab stops render, including right/decimal tabs and dot, hyphen and underscore leaders. Positional tabs (w:ptab) render too, so a table-of-contents line reads as one: entry left, leader dots between, page number flush right. The document's own w:defaultTabStop is honoured, so a metric-locale grid lands where Word puts it, in headers and footers as well as the body. A tab-stop editing UI is not built yet.",
   },
   {
     id: 'paragraphs.frames',
@@ -339,25 +339,29 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Resize commits Word-compatible twip widths. Tables are not addressable from the automation object model yet.',
+      'Core store and React paginated editor: hover row/column insertion, adjacent divider and outer-right resize, and seven table context-menu structural actions. Vue toolbar and context-menu value UI remain deferred; Vue inherits shared command types only. Tables remain read-only in the automation object model.',
   },
   {
     id: 'tables.borders-shading',
     name: 'Cell borders & shading',
     category: 'tables',
-    editing: 'full',
+    editing: 'partial',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Selected-cell borders and fill through React contextual toolbar controls (allowlisted styles, nullable clear fill). Vue value chrome deferred. Existing table/cell borders and table-style shading still render and round-trip.',
   },
   {
     id: 'tables.merge',
     name: 'Merged cells (horizontal & vertical)',
     category: 'tables',
-    editing: 'full',
+    editing: 'none',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Authored merges render and round-trip. Merge and split commands are declared but refused; column insert/delete/resize on merged tables shows the engine reason.',
   },
   {
     id: 'tables.page-break',
@@ -374,10 +378,12 @@ export const wordFeatures: WordFeature[] = [
     id: 'tables.nested',
     name: 'Nested tables',
     category: 'tables',
-    editing: 'full',
+    editing: 'partial',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Innermost nested table owns resize furniture, structural edits, and selected-cell borders/fill in the React editor; outer tables stay isolated through save/reopen. Vue table chrome deferred.',
   },
   {
     id: 'tables.conditional-formatting',
@@ -389,6 +395,17 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes:
       'Table styles resolve through their basedOn chain: borders, cell margins, shading and the paragraph/run formatting a conditional format carries (so a header row comes out bold and centred) all come from styles.xml, gated by w:tblLook, with an explicit w:cnfStyle taking precedence. Conditional cell margins and switching table styles from the UI are not built yet.',
+  },
+  {
+    id: 'tables.floating',
+    name: 'Floating tables (tblpPr anchored position)',
+    category: 'tables',
+    editing: 'none',
+    rendering: 'partial',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'An anchored table lands where Word puts it across the page: tblpXSpec/tblpX against the text, margin or page box, plus a tblpY offset from the text anchor. Text does not yet wrap beside it, and page- or margin-anchored vertical positions keep their place in the flow.',
   },
   {
     id: 'tables.text-direction',
@@ -624,7 +641,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'First, even, and default variants are selected by the page\'s number in the document (so the alternation carries across section breaks) and editable in an open furniture scope. Programmatic `editHeaderFooter({ variant: \'even\' })` (or `evenPage: true`) creates/opens the even story and enables `w:evenAndOddHeaders` in one undo unit. React header/footer chrome can toggle different even and odd pages; Vue chrome deferred.',
+      "First, even, and default variants are selected by the page's number in the document (so the alternation carries across section breaks) and editable in an open furniture scope. Programmatic `editHeaderFooter({ variant: 'even' })` (or `evenPage: true`) creates/opens the even story and enables `w:evenAndOddHeaders` in one undo unit. React header/footer chrome can toggle different even and odd pages; Vue chrome deferred.",
   },
   {
     id: 'layout.vertical-align',
@@ -762,7 +779,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'TOCs can be inserted and stale or empty TOCs regenerated from document headings, with tab leaders, page numbers, and working links.',
+      'Body TOCs can be inserted from the shared Insert menu and refreshed from document headings, including page-numbers-only updates, tab leaders, section-formatted page numbers, and bookmark links. Generated rows are read-only navigation links.',
   },
   {
     id: 'fields.other-codes',
@@ -831,7 +848,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Each control takes the value its own type accepts: a dropdown must name an item it declares, a combo box also takes free text, a date validates an ISO instant and writes both `w:fullDate` and the formatted text, and a checkbox writes its declared glyph and state together. A prompt is replaced whole on the first write and comes back when the value is cleared; a `w:temporary` control removes its own wrapper on the first edit and leaves the content.',
+      'Each control takes the value its own type accepts: a dropdown must name an item it declares, a combo box also takes free text, a date validates an ISO instant and writes both `w:fullDate` and the formatted text, and a checkbox writes its declared glyph and state together. A literal prompt is replaced whole on the first write; without a durable prompt source, clearing the value later leaves the control empty. A `w:temporary` control removes its own wrapper on the first edit and leaves the content.',
     docsLink: '/docs/1.x/guides/content-controls',
   },
   {
@@ -869,12 +886,12 @@ export const wordFeatures: WordFeature[] = [
     id: 'structure.protection',
     name: 'Document protection & editing restrictions',
     category: 'structure',
-    editing: 'none',
+    editing: 'partial',
     rendering: 'none',
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'Protection settings round-trip but are not enforced; inline permission ranges may be dropped.',
+      'Protection settings round-trip. Forms protection is enforced: only addressed content-control content remains editable, while the surrounding document stays read-only. Other protection modes are not enforced, and inline permission ranges may be dropped.',
   },
 
   // --- Collaboration, i18n & editing UX ---------------------------------------

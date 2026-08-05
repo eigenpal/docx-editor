@@ -8,15 +8,22 @@
 // take, so a click, a caret and an edit all speak one coordinate system: a hit test can be
 // handed straight to `insertText` without a translation step that could disagree.
 
-import { caretBoxOnLine, hitTestPage, spanOffsetX } from './semantic-hit-test.ts';
+import {
+  caretBoxOnLine,
+  contentControlAtPoint,
+  hitTestPage,
+  spanOffsetX,
+} from './semantic-hit-test.ts';
 import type {
   BlockFragmentRecord,
+  ContentControlBoundaryRecord,
   LineRecord,
   SemanticLayout,
   StyleSpanRecord,
   TextMeasurer,
 } from './semantic-records.ts';
-import { paragraphFragmentsOf } from './semantic-records.ts';
+import { contentControlsOfLayout, paragraphFragmentsOf } from './semantic-records.ts';
+import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
 
 /** A caret position in the model. */
 export interface SemanticPosition {
@@ -192,16 +199,24 @@ function isNonNavigableInterior(line: LineRecord, offset: number): boolean {
 }
 
 /**
- * Whether a hard line break is what ended this line.
+ * Whether an authored break is what ended this line.
  *
  * The break OCCUPIES a model offset and is published as a zero-width span, so a line that a
  * Shift+Enter terminated carries it as its last span. That is the one case where a position
  * shared by two lines is not ambiguous — see `caretAt`.
+ *
+ * A PAGE break counts for exactly the same reason, and leaving it out was worse than the
+ * hard-break case rather than milder: the line it opens is on the NEXT PAGE, so reporting
+ * the end of the line the break closed put the caret on a different page from the text that
+ * would be typed at it. Click below the last line, type, and the letters appear a page
+ * later. A column break already arrives here as `\n` — only `w:type="page"` projects its
+ * own character.
  */
 function endsWithLineBreak(line: {
   readonly spans: readonly { readonly text: string }[];
 }): boolean {
-  return line.spans[line.spans.length - 1]?.text === '\n';
+  const last = line.spans[line.spans.length - 1]?.text;
+  return last === '\n' || last === PAGE_BREAK_CHAR;
 }
 
 function pushLineCaretStops(
@@ -407,6 +422,27 @@ export function hitTestSemantic(
   const pageIndex =
     point.pageIndex !== undefined && layout.pages[point.pageIndex] ? point.pageIndex : 0;
   return hitTestPage(layout, pageIndex, point)?.caret ?? null;
+}
+
+/**
+ * Innermost content-control boundary at a page-content point, or null outside every control.
+ *
+ * Prefers the deepest nesting depth when nested boundaries share geometry.
+ */
+export function contentControlAtSemantic(
+  layout: SemanticLayout,
+  point: { readonly x: number; readonly y: number; readonly pageIndex?: number }
+): ContentControlBoundaryRecord | null {
+  const pageIndex =
+    point.pageIndex !== undefined && layout.pages[point.pageIndex] ? point.pageIndex : 0;
+  return contentControlAtPoint(layout, pageIndex, point);
+}
+
+/** Layout-published content-control boundaries in document order. */
+export function contentControlsInLayout(
+  layout: SemanticLayout
+): readonly ContentControlBoundaryRecord[] {
+  return contentControlsOfLayout(layout);
 }
 
 /** The rectangles covering a selection, one per line it spans. */

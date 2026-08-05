@@ -8,9 +8,11 @@
 
 import { hardBreakAttributes, hardBreakText } from '../package/hard-break.ts';
 import { fieldAtomText } from '../package/field-nodes.ts';
+import { W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlAttribute,
+  type OoxmlElement,
   type OoxmlNode,
   type OoxmlParagraphNode,
   type OoxmlPart,
@@ -24,7 +26,7 @@ import {
   replaceNode,
   type EditOptions,
 } from '../package/ooxml-edit.ts';
-import { W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
+import { wmlFreshNamespaceContextAt } from '../package/wml-namespace.ts';
 import { resolveRevisions } from './tree-op-revisions.ts';
 import { applyInsertCommentMarker } from './tree-op-comments.ts';
 import {
@@ -40,20 +42,37 @@ import {
   mintedParagraphIdentityAttributes,
   paraIdOf,
   usedParaIds,
+  w14PrefixInScopeAt,
 } from '../package/para-id.ts';
 import {
   TEXT_DEPS,
+  attributeValueOf,
+  checkboxPayloadOf,
   cloneWithNewIds,
+  contentControlContentOf,
+  contentControlPropertiesOf,
+  contentControlUnwrapPayload,
+  contentControlValueTypeOf,
+  findContentControl,
+  formatSdtDateDisplay,
   fromEdit,
+  innermostContentControlAround,
+  isContentControlNode,
   isParagraphPropertiesNode,
   isRunPropertiesNode,
+  isShowingPlaceholder,
+  isTemporaryControl,
+  listItemsOf,
   namedChild,
+  normalizeSdtFullDate,
   ok,
   paragraphPropertiesNodeOf,
   parentOf,
+  parseCheckboxValue,
   runPropertiesNodeOf,
+  sdtPrChild,
 } from './tree-op-nodes.ts';
-import { paragraphIdsWithin } from './tree-op-blocks.ts';
+import { paragraphIdsWithin, survivingCaretAfterBlockRemoval } from './tree-op-blocks.ts';
 import {
   PARAGRAPH_VOCABULARY,
   RUN_VOCABULARY,
@@ -69,10 +88,10 @@ import {
 } from './tree-op-section.ts';
 import { pageFieldContentBuilders } from './tree-op-fields.ts';
 import {
-  applyInsertContentControl,
-  applyRemoveContentControl,
-  applySetContentControlProperties,
-  applySetContentControlValue,
+  applyInsertContentControl as applyAutomationInsertContentControl,
+  applyRemoveContentControl as applyAutomationRemoveContentControl,
+  applySetContentControlProperties as applyAutomationSetContentControlProperties,
+  applySetContentControlValue as applyAutomationSetContentControlValue,
   clearPlaceholder,
   placeholderControlForInsertion,
 } from './tree-op-content-controls.ts';
@@ -84,6 +103,11 @@ import {
   segmentsOf,
   type Segment,
 } from './tree-op-segments.ts';
+import {
+  applyInsertToc,
+  applyReplaceTocResult,
+  applyRewriteTocPageNumbers,
+} from './tree-op-toc.ts';
 import type {
   OoxmlProperty,
   TreeDocOp,
@@ -91,7 +115,13 @@ import type {
   TreeOpRejection,
   TreeOpResult,
 } from './tree-op-types.ts';
-import { validateTreeOp } from './tree-op-validate.ts';
+import {
+  applyTableRowOp,
+  applyTableColumnOp,
+  applyTableResizeOp,
+  applyTableCellPropertyOp,
+} from './tree-op-tables.ts';
+import { contentControlAtCaret, validateTreeOp } from './tree-op-validate.ts';
 
 /**
  * A `w:t`, or a `w:delText` when the text being rebuilt was already struck.
@@ -179,12 +209,18 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   const rejection = validateTreeOp(part, op);
   if (rejection) return { ok: false, reason: rejection };
 
-  if (op.op === 'setContentControlValue') return applySetContentControlValue(part, op, options);
-  if (op.op === 'setContentControlProperties') {
-    return applySetContentControlProperties(part, op, options);
+  if (op.op === 'setContentControlValue' && typeof op.value !== 'string') {
+    return applyAutomationSetContentControlValue(part, op, options);
   }
-  if (op.op === 'removeContentControl') return applyRemoveContentControl(part, op, options);
-  if (op.op === 'insertContentControl') return applyInsertContentControl(part, op, options);
+  if (op.op === 'setContentControlProperties') {
+    return applyAutomationSetContentControlProperties(part, op, options);
+  }
+  if (op.op === 'removeContentControl' && op.keepContent !== undefined) {
+    return applyAutomationRemoveContentControl(part, op, options);
+  }
+  if (op.op === 'insertContentControl') {
+    return applyAutomationInsertContentControl(part, op, options);
+  }
   // Typing into a prompt REPLACES it. The transition belongs here rather than beside the
   // caret: an automation call and a paste insert text too, and a prompt that survived them
   // would leave the typed characters appended to "Click here to enter text.".
@@ -202,7 +238,29 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     }
   }
 
+  if (op.op === 'insertTableRow' || op.op === 'deleteTableRow')
+    return applyTableRowOp(part, op, options);
+  if (op.op === 'insertTableColumn' || op.op === 'deleteTableColumn')
+    return applyTableColumnOp(part, op, options);
+  if (
+    op.op === 'setTableColumnWidths' ||
+    op.op === 'setTableRightEdgeWidth' ||
+    op.op === 'setTableRowHeight'
+  ) {
+    return applyTableResizeOp(part, op, options);
+  }
+  if (
+    op.op === 'setTableCellBorders' ||
+    op.op === 'setTableCellFill' ||
+    op.op === 'setTableCellVerticalAlignment'
+  ) {
+    return applyTableCellPropertyOp(part, op, options);
+  }
+
   if (op.op === 'deleteBlock') return applyDeleteBlock(part, op.blockId, options);
+  if (op.op === 'insertToc') return applyInsertToc(part, op, options);
+  if (op.op === 'replaceTocResult') return applyReplaceTocResult(part, op, options);
+  if (op.op === 'rewriteTocPageNumbers') return applyRewriteTocPageNumbers(part, op, options);
   if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);
   if (op.op === 'setHyperlinkTarget') return applySetHyperlinkTarget(part, op, options);
   if (op.op === 'removeHyperlink') return applyRemoveHyperlink(part, op.linkId, options);
@@ -227,6 +285,12 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     }
     return { ok: true, part: resolved.part, effect: resolved.effect };
   }
+  if (op.op === 'removeContentControl')
+    return applyRemoveContentControl(part, op.controlId, options);
+  if (op.op === 'setContentControlValue') {
+    if (typeof op.value !== 'string') return { ok: false, reason: 'typeMismatch' };
+    return applySetContentControlValue(part, op.controlId, op.value, options);
+  }
   if (op.op === 'setSectionProperties') return applySetSectionProperties(part, op, options);
   if (op.op === 'setSectionMark') return applySetSectionMark(part, op.paragraphId, options);
   // Package-lifecycle / note-part ops are refused by validateTreeOp; this arm narrows the
@@ -245,6 +309,9 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   ) {
     return { ok: false, reason: 'invalidArgs', detail: 'package-lifecycle-op' };
   }
+  if (op.op === 'addRepeatingSectionItem' || op.op === 'removeRepeatingSectionItem') {
+    return { ok: false, reason: 'unsupported' };
+  }
 
   const paragraph = findNode(part, op.paragraphId) as OoxmlParagraphNode;
   const nextId = createNodeIdAllocator(part);
@@ -260,7 +327,8 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
         op.offset,
         [(mint) => textElement(mint, op.text)],
         options,
-        op.inside
+        op.inside,
+        op.bias
       );
     case 'insertTab':
       return applyInsertContent(
@@ -384,10 +452,17 @@ function applyInsertContent(
   builders: readonly ((mint: () => string) => OoxmlNode)[],
   options?: EditOptions,
   /** The content control the caller says this content belongs to, if it named one. */
-  inside?: string
+  inside?: string,
+  bias: 'left' | 'right' = 'left'
 ): TreeOpResult {
+  const control = contentControlAtCaret(part, paragraph, offset, offset);
+  if (control && isShowingPlaceholder(control)) {
+    return applyPlaceholderReplace(part, control, builders, options);
+  }
+
   const nextId = createNodeIdAllocator(part);
   const nodes = builders.map((build) => build(nextId));
+  const segments = segmentsOf(paragraph);
   const effect: TreeOpEffect = {
     dirty: [paragraph.id],
     created: [],
@@ -406,6 +481,7 @@ function applyInsertContent(
   // of this rule is how a lock came to be resolved against a different place than the write.
   const site = insertionSite(paragraph, offset, owner);
 
+  let inserted: TreeOpResult;
   // Inside a text value: split it and place the new content between the halves.
   if (site.kind === 'withinValue') {
     const segment = site.segment;
@@ -422,30 +498,263 @@ function applyInsertContent(
     const rebuilt = run.children.flatMap((child) =>
       child.id === textNode.id ? [head, ...nodes, tail] : [child]
     );
-    return fromEdit(replaceChildren(part, run.id, rebuilt, options), effect);
+    inserted = fromEdit(
+      replaceChildren(part, run.id, rebuilt, deferOptions(options, control)),
+      effect
+    );
+    return finishContentEdit(inserted, control, options);
   }
 
-  // At a boundary: the content goes into the run that starts there, before its own node.
-  if (site.kind === 'atBoundary') {
-    const run = findNode(part, site.segment.runId);
+  if (inside !== undefined) {
+    if (site.kind === 'atBoundary') {
+      const run = findNode(part, site.segment.runId);
+      if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
+      const index = run.children.findIndex((child) => contains(child, site.segment.node.id));
+      inserted = fromEdit(
+        insertChildren(part, run.id, Math.max(0, index), nodes, deferOptions(options, control)),
+        effect
+      );
+      return finishContentEdit(inserted, control, options);
+    }
+    if (site.kind === 'appendToRun') {
+      inserted = fromEdit(
+        insertChildren(
+          part,
+          site.run.id,
+          site.run.children.length,
+          nodes,
+          deferOptions(options, control)
+        ),
+        effect
+      );
+      return finishContentEdit(inserted, control, options);
+    }
+    inserted = fromEdit(
+      insertChildren(
+        part,
+        site.holder.id,
+        site.holder.children.length,
+        [runElement(nextId, nodes)],
+        deferOptions(options, control)
+      ),
+      effect
+    );
+    return finishContentEdit(inserted, control, options);
+  }
+
+  // AT A BOUNDARY, THE RUN TO THE LEFT WINS.
+  //
+  // Word types into the run holding the character BEFORE the caret; `authoredRunPropertiesAt`
+  // states the same rule for what the toolbar reports, and the two have to agree or the
+  // toolbar describes formatting the next keystroke will not use. Joining the run that
+  // STARTS at the offset gave typed text the FOLLOWING run's properties — which on a
+  // PDF-converted document, where every inter-word space is its own run carrying
+  // `w:spacing`, meant typing after a word came out letter-spaced ("x x x x x x").
+  //
+  // The left run is refused in the two cases where inheriting from it would move the text
+  // somewhere it does not belong rather than merely format it: an ATOM (a field or a note
+  // reference, whose nodes must stay together), and a run inside a hyperlink or field when
+  // the run on the right is not — typing at the end of a link extends the link's text
+  // otherwise. Both fall back to the previous rule.
+  const before = findLast(segments, (segment) => segment.end === offset);
+  const after = segments.find((segment) => segment.start === offset);
+  if (
+    bias === 'left' &&
+    before &&
+    before.removeNodeIds === undefined &&
+    !crossesContentControlBoundary(part, before, after) &&
+    !leavesContainer(paragraph, before, after)
+  ) {
+    const run = findNode(part, before.runId);
     if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
-    const index = run.children.findIndex((child) => contains(child, site.segment.node.id));
-    return fromEdit(insertChildren(part, run.id, Math.max(0, index), nodes, options), effect);
+    const index = run.children.findIndex((child) => contains(child, before.node.id));
+    inserted = fromEdit(
+      insertChildren(
+        part,
+        run.id,
+        index < 0 ? run.children.length : index + 1,
+        nodes,
+        deferOptions(options, control)
+      ),
+      effect
+    );
+    return finishContentEdit(inserted, control, options);
+  }
+  if (after) {
+    const run = findNode(part, after.runId);
+    if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
+    const index = run.children.findIndex((child) => contains(child, after.node.id));
+    inserted = fromEdit(
+      insertChildren(part, run.id, Math.max(0, index), nodes, deferOptions(options, control)),
+      effect
+    );
+    return finishContentEdit(inserted, control, options);
   }
 
-  // Past every segment the caller's own scope holds: append to the last run of that scope. For a
-  // named owner that is the trailing edge — the whole reason the op carries the name.
-  if (site.kind === 'appendToRun') {
-    const last = site.run;
-    return fromEdit(insertChildren(part, last.id, last.children.length, nodes, options), effect);
+  const runs = paragraph.children.filter((child) => child.kind === 'run');
+  const last = runs[runs.length - 1];
+  if (last) {
+    inserted = fromEdit(
+      insertChildren(part, last.id, last.children.length, nodes, deferOptions(options, control)),
+      effect
+    );
+    return finishContentEdit(inserted, control, options);
   }
-  // Nothing to append to: the content needs a run to live in, and the site says which node holds
-  // it — the addressed paragraph, or a named inline control's own `w:sdtContent`.
-  const { holder } = site;
-  return fromEdit(
-    insertChildren(part, holder.id, holder.children.length, [runElement(nextId, nodes)], options),
+  // An empty paragraph: the content needs a run to live in.
+  inserted = fromEdit(
+    insertChildren(
+      part,
+      paragraph.id,
+      paragraph.children.length,
+      [runElement(nextId, nodes)],
+      deferOptions(options, control)
+    ),
     effect
   );
+  return finishContentEdit(inserted, control, options);
+}
+
+/** Defer validation when a temporary unwrap still has to run in this op. */
+function deferOptions(
+  options: EditOptions | undefined,
+  control: OoxmlNode | null
+): EditOptions | undefined {
+  if (control && isTemporaryControl(control)) {
+    return { ...options, deferValidation: true };
+  }
+  return options;
+}
+
+/**
+ * After a successful content edit, unwrap a `w:temporary` control in the same effect.
+ * Validation already refused when the effective wrapper lock forbids removal.
+ */
+function finishContentEdit(
+  result: TreeOpResult,
+  control: OoxmlNode | null,
+  options?: EditOptions
+): TreeOpResult {
+  if (!result.ok || !control || !isTemporaryControl(control)) return result;
+  // Re-find: the control id is stable across the preceding content edit.
+  const stillThere = findContentControl(result.part, control.id);
+  if (!stillThere) return result;
+  const unwrapped = applyRemoveContentControl(result.part, control.id, options);
+  if (!unwrapped.ok) return unwrapped;
+  return ok(unwrapped.part, {
+    dirty: [...new Set([...result.effect.dirty, ...unwrapped.effect.dirty])],
+    created: result.effect.created,
+    deleted: result.effect.deleted,
+    dependencyKeys: TEXT_DEPS,
+    impact: 'flow-structural',
+  });
+}
+
+/**
+ * First input into a `w:showingPlcHdr` control: replace the whole literal prompt and clear
+ * the flag. When the control is also `w:temporary`, unwrap in the same write.
+ */
+function applyPlaceholderReplace(
+  part: OoxmlPart,
+  control: OoxmlNode,
+  builders: readonly ((mint: () => string) => OoxmlNode)[],
+  options?: EditOptions
+): TreeOpResult {
+  const nextId = createNodeIdAllocator(part);
+  const nodes = builders.map((build) => build(nextId));
+  const owner = parentOf(part, control.id);
+  const inline = owner?.kind === 'paragraph';
+  const run = runElement(nextId, nodes);
+  const contentChildren = inline
+    ? [run]
+    : [
+        {
+          id: nextId(),
+          kind: 'paragraph',
+          namespaceUri: WML_NAMESPACE_URI,
+          localName: 'p',
+          prefix: 'w',
+          namespaceBindings: [],
+          attributes: [],
+          children: [run],
+        } as unknown as OoxmlNode,
+      ];
+  let nextControl = replaceControlContent(control, contentChildren, nextId);
+  nextControl = withUpdatedProperties(nextControl, clearShowingPlaceholder);
+
+  const effect: TreeOpEffect = {
+    dirty: owner ? [owner.id] : [control.id],
+    created: [],
+    deleted: [],
+    dependencyKeys: TEXT_DEPS,
+    impact: isTemporaryControl(control) ? 'flow-structural' : 'text-local',
+  };
+
+  if (isTemporaryControl(control)) {
+    // Build the unwrapped parent children from the replaced content — one tree write.
+    if (!owner) return { ok: false, reason: 'tree-invariant' };
+    const kept = contentControlUnwrapPayload(nextControl);
+    if (!kept) return { ok: false, reason: 'tree-invariant' };
+    const children = owner.children.flatMap((child) => (child.id === control.id ? kept : [child]));
+    return fromEdit(replaceChildren(part, owner.id, children, options), {
+      ...effect,
+      impact: 'flow-structural',
+    });
+  }
+
+  return fromEdit(replaceNode(part, control.id, nextControl, options), effect);
+}
+
+function findLast<T>(items: readonly T[], predicate: (item: T) => boolean): T | undefined {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]!;
+    if (predicate(item)) return item;
+  }
+  return undefined;
+}
+
+/** Inline-control edges stay right-biased even though ordinary run boundaries inherit left. */
+function crossesContentControlBoundary(
+  part: OoxmlPart,
+  before: { readonly runId: string },
+  after: { readonly runId: string } | undefined
+): boolean {
+  const beforeControl = innermostContentControlAround(part, before.runId)?.id;
+  const afterControl = after ? innermostContentControlAround(part, after.runId)?.id : undefined;
+  return beforeControl !== afterControl;
+}
+
+/**
+ * Whether typing into `before`'s run would carry the text INTO a container the caret is
+ * leaving — a hyperlink or a field whose last character this is, with ordinary paragraph
+ * content on the other side of the boundary.
+ */
+function leavesContainer(
+  paragraph: OoxmlParagraphNode,
+  before: { readonly runId: string },
+  after: { readonly runId: string } | undefined
+): boolean {
+  const container = (runId: string): OoxmlNode | null => {
+    let held: OoxmlNode | null = null;
+    const visit = (node: OoxmlNode, inside: OoxmlNode | null): void => {
+      if (node.kind === 'textValue' || held) return;
+      if (node.id === runId) {
+        held = inside;
+        return;
+      }
+      const nested =
+        node.kind === 'hyperlink' ||
+        node.kind === 'fldSimple' ||
+        (node.kind === 'generic' && node.localName === 'fldSimple')
+          ? node
+          : inside;
+      for (const child of node.children) visit(child, nested);
+    };
+    for (const child of paragraph.children) visit(child, null);
+    return held;
+  };
+  const held = container(before.runId);
+  if (held === null) return false;
+  return after === undefined || container(after.runId) !== held;
 }
 
 function contains(node: OoxmlNode, id: string): boolean {
@@ -454,7 +763,6 @@ function contains(node: OoxmlNode, id: string): boolean {
   return node.children.some((child) => contains(child, id));
 }
 
-/** The `w:t` element that owns a text value. */
 /** Whether the element holding a text value is a `w:t` or a `w:delText`. */
 function textKindOfValue(root: OoxmlNode, valueId: string): 'text' | 'deletedText' {
   const walk = (node: OoxmlNode): 'text' | 'deletedText' | null => {
@@ -477,7 +785,12 @@ function textKindOfValue(root: OoxmlNode, valueId: string): 'text' | 'deletedTex
 function findTextParent(paragraph: OoxmlParagraphNode, valueId: string): OoxmlNode | null {
   const walk = (node: OoxmlNode): OoxmlNode | null => {
     if (node.kind === 'textValue') return null;
-    if (node.kind === 'text' && node.children.some((child) => child.id === valueId)) return node;
+    if (
+      (node.kind === 'text' || node.kind === 'deletedText') &&
+      node.children.some((child) => child.id === valueId)
+    ) {
+      return node;
+    }
     for (const child of node.children) {
       const found = walk(child);
       if (found) return found;
@@ -494,6 +807,8 @@ function applyDeleteText(
   end: number,
   options?: EditOptions
 ): TreeOpResult {
+  const control = contentControlAtCaret(part, paragraph, start, end);
+  const editOptions = deferOptions(options, control);
   const segments = segmentsOf(paragraph);
   const effect: TreeOpEffect = {
     dirty: [paragraph.id],
@@ -520,7 +835,7 @@ function applyDeleteText(
       continue;
     }
     if (segment.node.kind !== 'textValue') {
-      const removed = removeNode(current, segment.node.id, options);
+      const removed = removeNode(current, segment.node.id, editOptions);
       if (!removed.ok) return fromEdit(removed, effect);
       current = removed.part;
       continue;
@@ -532,12 +847,12 @@ function applyDeleteText(
     if (!owner) return { ok: false, reason: 'tree-invariant', detail: 'orphan text value' };
     const edited =
       value.length === 0
-        ? removeNode(current, owner.id, options)
+        ? removeNode(current, owner.id, editOptions)
         : replaceNode(
             current,
             owner.id,
             textElement(nextId, value, owner.kind === 'deletedText' ? 'deletedText' : 'text'),
-            options
+            editOptions
           );
     if (!edited.ok) return fromEdit(edited, effect);
     current = edited.part;
@@ -571,10 +886,20 @@ function applyDeleteText(
               parent.children.flatMap((sibling) =>
                 sibling.id === child.id ? [...link.children] : [sibling]
               ),
-              options
+              editOptions
             );
             if (!spliced.ok) return fromEdit(spliced, effect);
             current = spliced.part;
+          }
+          continue;
+        }
+        if (isContentControlNode(child)) {
+          // Empty content controls KEEP their wrapper — locks and identity matter — and
+          // only empty runs inside them are swept.
+          const content = contentControlContentOf(child);
+          if (content) {
+            const nested = sweep(content.children);
+            if (nested) return nested;
           }
           continue;
         }
@@ -583,7 +908,7 @@ function applyDeleteText(
         // the run's own property container.
         const hasContent = child.children.some((grand) => !isRunPropertiesNode(grand));
         if (hasContent) continue;
-        const removed = removeNode(current, child.id, options);
+        const removed = removeNode(current, child.id, editOptions);
         if (!removed.ok) return fromEdit(removed, effect);
         current = removed.part;
       }
@@ -592,7 +917,7 @@ function applyDeleteText(
     const failure = sweep(after.children);
     if (failure) return failure;
   }
-  return ok(current, effect);
+  return finishContentEdit(ok(current, effect), control, options);
 }
 
 /** The `r:id` namespace — the one attribute on a `w:hyperlink` that is not in `w:`. */
@@ -953,6 +1278,392 @@ function applyRemoveHyperlink(
 }
 
 /**
+ * Unwrap a content control: splice `w:sdtContent` children (and any other non-property
+ * children) into the parent, keeping run/paragraph identity. `w:sdtPr` / `w:sdtEndPr` go.
+ * Ambiguous controls (duplicate `w:sdtContent`) refuse rather than silently drop markup.
+ */
+function applyRemoveContentControl(
+  part: OoxmlPart,
+  controlId: string,
+  options?: EditOptions
+): TreeOpResult {
+  const control = findContentControl(part, controlId);
+  if (!control) return { ok: false, reason: 'tree-invariant' };
+  const owner = parentOf(part, control.id);
+  if (!owner) return { ok: false, reason: 'tree-invariant' };
+  const kept = contentControlUnwrapPayload(control);
+  if (!kept) return { ok: false, reason: 'tree-invariant' };
+  const children = owner.children.flatMap((child) => (child.id === control.id ? kept : [child]));
+  const effect: TreeOpEffect = {
+    dirty: [owner.id],
+    created: [],
+    deleted: [],
+    dependencyKeys: TEXT_DEPS,
+    // Wrapper removal changes block/inline structure for layout; never narrower than
+    // flow-structural (content-control-model: Temporary unwrap and remove-control).
+    impact: 'flow-structural',
+  };
+  return fromEdit(replaceChildren(part, owner.id, children, options), effect);
+}
+
+function mintTextRun(nextId: () => string, text: string, font?: string): OoxmlNode {
+  const content: OoxmlNode[] = [];
+  if (font) {
+    content.push({
+      id: nextId(),
+      kind: 'runProperties',
+      namespaceUri: WML_NAMESPACE_URI,
+      localName: 'rPr',
+      prefix: 'w',
+      namespaceBindings: [],
+      attributes: [],
+      children: [
+        {
+          id: nextId(),
+          kind: 'generic',
+          namespaceUri: WML_NAMESPACE_URI,
+          localName: 'rFonts',
+          prefix: 'w',
+          namespaceBindings: [],
+          attributes: [
+            {
+              namespaceUri: WML_NAMESPACE_URI,
+              prefix: 'w',
+              localName: 'ascii',
+              value: font,
+            },
+            {
+              namespaceUri: WML_NAMESPACE_URI,
+              prefix: 'w',
+              localName: 'hAnsi',
+              value: font,
+            },
+            {
+              namespaceUri: WML_NAMESPACE_URI,
+              prefix: 'w',
+              localName: 'eastAsia',
+              value: font,
+            },
+          ],
+          children: [],
+        } as unknown as OoxmlNode,
+      ],
+    } as unknown as OoxmlNode);
+  }
+  // Checkbox glyphs are `w:sym`; plain values use `w:t`.
+  if (/^[0-9A-Fa-f]{4}$/.test(text) && font) {
+    content.push({
+      id: nextId(),
+      kind: 'generic',
+      namespaceUri: WML_NAMESPACE_URI,
+      localName: 'sym',
+      prefix: 'w',
+      namespaceBindings: [],
+      attributes: [
+        { namespaceUri: WML_NAMESPACE_URI, prefix: 'w', localName: 'font', value: font },
+        { namespaceUri: WML_NAMESPACE_URI, prefix: 'w', localName: 'char', value: text },
+      ],
+      children: [],
+    } as unknown as OoxmlNode);
+  } else {
+    content.push(textElement(nextId, text));
+  }
+  return runElement(nextId, content);
+}
+
+function replaceControlContent(
+  control: OoxmlNode,
+  contentChildren: readonly OoxmlNode[],
+  nextId: () => string
+): OoxmlNode {
+  if (control.kind === 'textValue') return control;
+  const existing = contentControlContentOf(control);
+  const contentNode = existing
+    ? withChildren(existing, contentChildren, null)
+    : ({
+        id: nextId(),
+        kind: 'generic',
+        namespaceUri: WML_NAMESPACE_URI,
+        localName: 'sdtContent',
+        prefix: 'w',
+        namespaceBindings: [],
+        attributes: [],
+        children: contentChildren,
+      } as unknown as OoxmlNode);
+  const nextChildren: OoxmlNode[] = [];
+  let contentPlaced = false;
+  for (const child of control.children) {
+    if (child.kind !== 'textValue' && child.localName === 'sdtContent') {
+      nextChildren.push(contentNode);
+      contentPlaced = true;
+      continue;
+    }
+    nextChildren.push(child);
+  }
+  if (!contentPlaced) nextChildren.push(contentNode);
+  return withChildren(control, nextChildren, null);
+}
+
+function clearShowingPlaceholder(properties: OoxmlElement): OoxmlNode {
+  const children: readonly OoxmlNode[] = properties.children;
+  return withChildren(
+    properties,
+    children.filter((child) => child.kind === 'textValue' || child.localName !== 'showingPlcHdr'),
+    null
+  );
+}
+
+function withUpdatedProperties(
+  control: OoxmlNode,
+  update: (properties: OoxmlElement) => OoxmlNode
+): OoxmlNode {
+  if (control.kind === 'textValue') return control;
+  const properties = contentControlPropertiesOf(control);
+  if (!properties) return control;
+  const next = update(properties);
+  return withChildren(
+    control,
+    control.children.map((child) => (child.id === properties.id ? next : child)),
+    null
+  );
+}
+
+function setLastValueOnList(list: OoxmlElement, value: string): OoxmlNode {
+  const without = list.attributes.filter((attribute) => attribute.localName !== 'lastValue');
+  return {
+    ...list,
+    attributes: [
+      ...without,
+      {
+        namespaceUri: WML_NAMESPACE_URI,
+        prefix: 'w',
+        localName: 'lastValue',
+        value,
+      },
+    ],
+  } as OoxmlNode;
+}
+
+function applySetContentControlValue(
+  part: OoxmlPart,
+  controlId: string,
+  value: string,
+  options?: EditOptions
+): TreeOpResult {
+  const control = findContentControl(part, controlId);
+  if (!control) return { ok: false, reason: 'tree-invariant' };
+  const nextId = createNodeIdAllocator(part);
+  const owner = parentOf(part, control.id);
+  const inline = owner?.kind === 'paragraph';
+  const type = contentControlValueTypeOf(control);
+  let nextControl: OoxmlNode = control;
+
+  const setTextContent = (display: string, font?: string): void => {
+    const run = mintTextRun(nextId, display, font);
+    const existingContent = contentControlContentOf(nextControl);
+    const existingParagraph =
+      !inline && existingContent?.children.length === 1 ? existingContent.children[0] : undefined;
+    const preservedParagraph =
+      existingParagraph?.kind === 'paragraph'
+        ? ({
+            ...existingParagraph,
+            children: [...existingParagraph.children.filter(isParagraphPropertiesNode), run],
+          } as OoxmlNode)
+        : undefined;
+    const contentChildren = inline
+      ? [run]
+      : [
+          preservedParagraph ??
+            ({
+              id: nextId(),
+              kind: 'paragraph',
+              namespaceUri: WML_NAMESPACE_URI,
+              localName: 'p',
+              prefix: 'w',
+              namespaceBindings: [],
+              attributes: [],
+              children: [run],
+            } as unknown as OoxmlNode),
+        ];
+    nextControl = replaceControlContent(nextControl, contentChildren, nextId);
+    nextControl = withUpdatedProperties(nextControl, clearShowingPlaceholder);
+  };
+
+  switch (type) {
+    case 'dropdown': {
+      const items = listItemsOf(control);
+      const item = items.find((candidate) => candidate.value === value);
+      if (!item) return { ok: false, reason: 'invalidArgs' };
+      nextControl = withUpdatedProperties(nextControl, (properties) => {
+        const list = sdtPrChild(properties, 'dropDownList');
+        if (!list) return clearShowingPlaceholder(properties);
+        const children: readonly OoxmlNode[] = properties.children;
+        return withChildren(
+          clearShowingPlaceholder(properties),
+          children.map((child) => (child.id === list.id ? setLastValueOnList(list, value) : child)),
+          null
+        );
+      });
+      setTextContent(item.displayText);
+      break;
+    }
+    case 'combo': {
+      const items = listItemsOf(control);
+      const item = items.find((candidate) => candidate.value === value);
+      const display = item?.displayText ?? value;
+      nextControl = withUpdatedProperties(nextControl, (properties) => {
+        const list = sdtPrChild(properties, 'comboBox');
+        if (!list) return clearShowingPlaceholder(properties);
+        const children: readonly OoxmlNode[] = properties.children;
+        return withChildren(
+          clearShowingPlaceholder(properties),
+          children.map((child) => (child.id === list.id ? setLastValueOnList(list, value) : child)),
+          null
+        );
+      });
+      setTextContent(display);
+      break;
+    }
+    case 'checkbox': {
+      const checked = parseCheckboxValue(value);
+      if (checked === null) return { ok: false, reason: 'typeMismatch' };
+      const payload = checkboxPayloadOf(control);
+      if (!payload) return { ok: false, reason: 'typeMismatch' };
+      nextControl = withUpdatedProperties(nextControl, (properties) => {
+        const checkbox = sdtPrChild(properties, 'checkbox');
+        if (!checkbox) return clearShowingPlaceholder(properties);
+        const checkboxChildren: readonly OoxmlNode[] = checkbox.children;
+        const nextCheckbox = withChildren(
+          checkbox,
+          checkboxChildren.map((child) => {
+            if (child.kind === 'textValue' || child.localName !== 'checked') return child;
+            const without = child.attributes.filter((attribute) => attribute.localName !== 'val');
+            return {
+              ...child,
+              attributes: [
+                ...without,
+                {
+                  namespaceUri: child.attributes[0]?.namespaceUri ?? W14_NAMESPACE_URI,
+                  prefix: child.attributes[0]?.prefix ?? 'w14',
+                  localName: 'val',
+                  value: checked ? '1' : '0',
+                },
+              ],
+            } as OoxmlNode;
+          }),
+          null
+        );
+        // Ensure a checked child exists.
+        const nextCheckboxChildren: readonly OoxmlNode[] =
+          nextCheckbox.kind === 'textValue' ? [] : nextCheckbox.children;
+        const hasChecked = nextCheckboxChildren.some(
+          (child) => child.kind !== 'textValue' && child.localName === 'checked'
+        );
+        const withChecked = hasChecked
+          ? nextCheckbox
+          : withChildren(
+              checkbox,
+              [
+                {
+                  id: nextId(),
+                  kind: 'generic',
+                  namespaceUri: W14_NAMESPACE_URI,
+                  localName: 'checked',
+                  prefix: 'w14',
+                  namespaceBindings: [],
+                  attributes: [
+                    {
+                      namespaceUri: W14_NAMESPACE_URI,
+                      prefix: 'w14',
+                      localName: 'val',
+                      value: checked ? '1' : '0',
+                    },
+                  ],
+                  children: [],
+                } as unknown as OoxmlNode,
+                ...checkboxChildren,
+              ],
+              null
+            );
+        const propertiesChildren: readonly OoxmlNode[] = properties.children;
+        return withChildren(
+          clearShowingPlaceholder(properties),
+          propertiesChildren.map((child) =>
+            child.id === checkbox.id ? (hasChecked ? nextCheckbox : withChecked) : child
+          ),
+          null
+        );
+      });
+      const glyph = checked ? payload.checkedGlyph : payload.uncheckedGlyph;
+      const font = checked ? payload.checkedFont : payload.uncheckedFont;
+      setTextContent(glyph, font);
+      break;
+    }
+    case 'date': {
+      const properties = contentControlPropertiesOf(control);
+      const date = sdtPrChild(properties, 'date');
+      const format = attributeValueOf(sdtPrChild(date, 'dateFormat'), 'val');
+      const iso = normalizeSdtFullDate(value);
+      const display = iso ? formatSdtDateDisplay(iso, format) : null;
+      if (iso === null || display === null) return { ok: false, reason: 'invalidArgs' };
+      nextControl = withUpdatedProperties(nextControl, (props) => {
+        const dateNode = sdtPrChild(props, 'date');
+        if (!dateNode) return clearShowingPlaceholder(props);
+        const without = dateNode.attributes.filter(
+          (attribute) => attribute.localName !== 'fullDate'
+        );
+        const nextDate = {
+          ...dateNode,
+          attributes: [
+            ...without,
+            {
+              namespaceUri: WML_NAMESPACE_URI,
+              prefix: 'w',
+              localName: 'fullDate',
+              value: iso,
+            },
+          ],
+        } as OoxmlNode;
+        const propsChildren: readonly OoxmlNode[] = props.children;
+        return withChildren(
+          clearShowingPlaceholder(props),
+          propsChildren.map((child) => (child.id === dateNode.id ? nextDate : child)),
+          null
+        );
+      });
+      setTextContent(display);
+      break;
+    }
+    case 'text':
+    case 'richText':
+    case 'other':
+      setTextContent(value);
+      break;
+    default:
+      return { ok: false, reason: 'unsupported' };
+  }
+
+  const effect: TreeOpEffect = {
+    dirty: owner ? [owner.id] : [control.id],
+    created: [],
+    deleted: [],
+    dependencyKeys: TEXT_DEPS,
+    impact: 'flow-structural',
+  };
+
+  if (isTemporaryControl(control)) {
+    // Value write + temporary unwrap in one parent rewrite.
+    if (!owner) return { ok: false, reason: 'tree-invariant' };
+    const kept = contentControlUnwrapPayload(nextControl);
+    if (!kept) return { ok: false, reason: 'tree-invariant' };
+    const children = owner.children.flatMap((child) => (child.id === control.id ? kept : [child]));
+    return fromEdit(replaceChildren(part, owner.id, children, options), effect);
+  }
+
+  return fromEdit(replaceNode(part, control.id, nextControl, options), effect);
+}
+
+/**
  * The range markers that CLOSE a span of content (17.13.6, 17.13.5.2, 17.13.4.x).
  *
  * A marker sitting exactly on the split has no character to sit before or after, so the
@@ -995,7 +1706,7 @@ function closesARange(node: OoxmlNode): boolean {
 function rangeKey(localName: string, node: OoxmlNode): string | null {
   if (node.kind === 'textValue') return null;
   const id = node.attributes.find((attribute) => attribute.localName === 'id');
-  return id ? `${localName} ${id.value}` : null;
+  return id ? `${localName}\0${id.value}` : null;
 }
 
 function opensARange(node: OoxmlNode): string | null {
@@ -1040,53 +1751,6 @@ function zeroLengthGoesToHead(
   return closesAnOpenRange(child, openedHere);
 }
 
-/**
- * A root-declared w14 prefix that still resolves to the w14 URI AT THE PARAGRAPH.
- *
- * The root binding alone is not enough: a hostile descendant can rebind the same
- * prefix (`<w:sdt xmlns:w14="urn:evil">`), and an attribute minted under it would
- * resolve to the wrong URI at that depth — the commit-boundary delta validation
- * would then refuse the WHOLE transaction, turning Enter into a silent no-op inside
- * that subtree. Editing must never lock on hostile input, so each root alias for the
- * URI is checked against the paragraph's ancestor chain and the first unshadowed one
- * wins; none → no minting (the tail is simply id-less, as before minting existed).
- */
-function w14PrefixInScopeAt(part: OoxmlPart, paragraph: OoxmlParagraphNode): string | null {
-  const rootBindings = part.root.namespaceBindings.filter(
-    (binding) => binding.namespaceUri === W14_NAMESPACE_URI && binding.prefix !== ''
-  );
-  if (rootBindings.length === 0) return null;
-  // The paragraph and its ancestors up to (excluding) the root — the nodes whose own
-  // declarations can shadow a root binding at the paragraph's depth.
-  const chain: OoxmlNode[] = [];
-  let node: OoxmlNode | null = paragraph;
-  while (node && node.id !== part.root.id) {
-    chain.push(node);
-    node = parentOf(part, node.id);
-  }
-  for (const binding of rootBindings) {
-    const shadowed = chain.some(
-      (ancestor) =>
-        ancestor.kind !== 'textValue' &&
-        ancestor.namespaceBindings.some(
-          (candidate) =>
-            candidate.prefix === binding.prefix && candidate.namespaceUri !== W14_NAMESPACE_URI
-        )
-    );
-    if (!shadowed) return binding.prefix;
-  }
-  return null;
-}
-
-/**
- * Whether a split of `paragraph` can mint `w14:paraId`s for its tails: the head must
- * carry a valid id (its uppercase form seeds the tail mints) and a w14 prefix must be
- * in scope at the paragraph (a prefixed attribute without a correct in-scope binding
- * fails the commit-boundary delta validation). In a real session both always hold —
- * the load-time normalization established them. In low-level harnesses that skip it,
- * and in hostile prefix-shadowed subtrees, tails stay attribute-less exactly as
- * before minting existed — never a refused transaction.
- */
 function splitIdentityOf(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode
@@ -1124,16 +1788,22 @@ function divideInline(
   segments: readonly Segment[],
   nextId: () => string
 ): { readonly head: OoxmlNode | null; readonly tail: OoxmlNode | null } {
-  if (child.kind === 'hyperlink') {
+  if (child.kind === 'hyperlink' || isContentControlNode(child)) {
+    // Exclude textValue so both the wrapper and its content owner expose `.children`.
+    if (child.kind === 'textValue') return { head: child, tail: null };
+    const contentOwner = isContentControlNode(child) ? contentControlContentOf(child) : child;
+    if (!contentOwner) return { head: child, tail: null };
     const headChildren: OoxmlNode[] = [];
     const tailChildren: OoxmlNode[] = [];
-    // Where the walk has reached inside this link, so zero-length content between two runs
-    // takes the side its POSITION puts it on — the same rule the paragraph walk applies.
+    // Where the walk has reached inside this wrapper, so zero-length content between two
+    // runs takes the side its POSITION puts it on — the same rule the paragraph walk
+    // applies.
     //
-    // Seeded from the LINK'S OWN START, not 0. These are absolute paragraph offsets, and
+    // Seeded from the WRAPPER'S OWN START, not 0. These are absolute paragraph offsets, and
     // starting at zero said "before every boundary" for content that sits well past one.
     let cursor = segmentsForChild(child, segments)[0]?.start ?? 0;
-    for (const inner of child.children) {
+    const ownerChildren: readonly OoxmlNode[] = contentOwner.children;
+    for (const inner of ownerChildren) {
       const innerSegments = segmentsForChild(inner, segments);
       if (innerSegments.length === 0) {
         (cursor < offset ? headChildren : tailChildren).push(inner);
@@ -1150,9 +1820,35 @@ function divideInline(
         if (divided.tail) tailChildren.push(divided.tail);
       }
     }
+    if (child.kind === 'hyperlink') {
+      return {
+        head: headChildren.length > 0 ? withChildren(child, headChildren, null) : null,
+        tail: tailChildren.length > 0 ? withChildren(child, tailChildren, nextId) : null,
+      };
+    }
+    // Content control: keep sdtPr / sdtEndPr on both halves; only sdtContent splits.
+    const controlChildren: readonly OoxmlNode[] = child.children;
+    const rebuild = (contentChildren: readonly OoxmlNode[], mintId: boolean): OoxmlNode => {
+      const nextContent = withChildren(contentOwner, contentChildren, mintId ? nextId : null);
+      if (!mintId) {
+        return withChildren(
+          child,
+          controlChildren.map((grand) => (grand.id === contentOwner.id ? nextContent : grand)),
+          null
+        );
+      }
+      return withChildren(
+        child,
+        controlChildren.map((grand) => {
+          if (grand.id === contentOwner.id) return nextContent;
+          return cloneWithNewIds(grand, nextId);
+        }),
+        nextId
+      );
+    };
     return {
-      head: headChildren.length > 0 ? withChildren(child, headChildren, null) : null,
-      tail: tailChildren.length > 0 ? withChildren(child, tailChildren, nextId) : null,
+      head: headChildren.length > 0 ? rebuild(headChildren, false) : null,
+      tail: tailChildren.length > 0 ? rebuild(tailChildren, true) : null,
     };
   }
 
@@ -1378,6 +2074,70 @@ function distributeInline(
     return byPiece;
   }
 
+  if (isContentControlNode(child)) {
+    if (child.kind === 'textValue') {
+      byPiece[0]!.push(child);
+      return byPiece;
+    }
+    const content = contentControlContentOf(child);
+    if (!content) {
+      byPiece[0]!.push(child);
+      return byPiece;
+    }
+    const controlChildren: readonly OoxmlNode[] = child.children;
+    const contentChildren: readonly OoxmlNode[] = content.children;
+    const innerByPiece: OoxmlNode[][] = Array.from({ length: pieceCount }, () => []);
+    let cursor = segmentsForChild(child, segments)[0]?.start ?? 0;
+    for (const inner of contentChildren) {
+      const innerSegments = segmentsForChild(inner, segments);
+      if (innerSegments.length === 0) {
+        innerByPiece[pieceIndexOf(offsets, cursor)]!.push(inner);
+        continue;
+      }
+      const start = innerSegments[0]!.start;
+      const end = innerSegments[innerSegments.length - 1]!.end;
+      cursor = end;
+      const startPiece = pieceIndexOf(offsets, start);
+      const endPiece = end > start ? pieceIndexOf(offsets, end - 1) : startPiece;
+      if (startPiece === endPiece) {
+        innerByPiece[startPiece]!.push(inner);
+        continue;
+      }
+      const nested = distributeInline(inner, offsets, pieceCount, segments, nextId);
+      for (let piece = 0; piece < pieceCount; piece += 1) {
+        for (const node of nested[piece]!) innerByPiece[piece]!.push(node);
+      }
+    }
+    let keptOriginal = false;
+    for (let piece = 0; piece < pieceCount; piece += 1) {
+      const children = innerByPiece[piece]!;
+      if (children.length === 0) continue;
+      const nextContent = withChildren(content, children, keptOriginal ? nextId : null);
+      if (!keptOriginal) {
+        byPiece[piece]!.push(
+          withChildren(
+            child,
+            controlChildren.map((grand) => (grand.id === content.id ? nextContent : grand)),
+            null
+          )
+        );
+      } else {
+        byPiece[piece]!.push(
+          withChildren(
+            child,
+            controlChildren.map((grand) => {
+              if (grand.id === content.id) return nextContent;
+              return cloneWithNewIds(grand, nextId);
+            }),
+            nextId
+          )
+        );
+      }
+      keptOriginal = true;
+    }
+    return byPiece;
+  }
+
   if (child.kind !== 'run') {
     byPiece[pieceIndexOf(offsets, 0)]!.push(child);
     return byPiece;
@@ -1570,20 +2330,82 @@ function applySplitMany(
  * consumer scoping work by node id has to invalidate the paragraphs, and the block id alone
  * would leave a layout cache holding entries for paragraphs that no longer exist.
  */
+function tableAncestorOf(part: OoxmlPart, nodeId: string): OoxmlElement | null {
+  let current: string | null = nodeId;
+  while (current) {
+    const node = findNode(part, current);
+    if (!node || node.kind === 'textValue') return null;
+    if (node.kind === 'table') return node;
+    const parent = parentOf(part, current);
+    current = parent?.id ?? null;
+  }
+  return null;
+}
+
+function emptyCellParagraph(
+  part: OoxmlPart,
+  anchorTable: OoxmlElement,
+  nextId: () => string,
+  seed: string
+): OoxmlParagraphNode {
+  const wml = wmlFreshNamespaceContextAt(part, anchorTable);
+  const used = usedParaIds(part.root);
+  const identity: OoxmlAttribute[] = [];
+  const w14Prefix = w14PrefixInScopeAt(part, anchorTable);
+  if (w14Prefix !== null) {
+    const paraIdValue = mintParaId(seed, used);
+    identity.push(...mintedParagraphIdentityAttributes(w14Prefix, paraIdValue));
+  }
+  return {
+    id: nextId(),
+    kind: 'paragraph',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName: 'p',
+    ...(wml.elementPrefix === undefined ? {} : { prefix: wml.elementPrefix }),
+    namespaceBindings: [],
+    attributes: identity,
+    children: [],
+  } as OoxmlParagraphNode;
+}
+
 function applyDeleteBlock(part: OoxmlPart, blockId: string, options?: EditOptions): TreeOpResult {
   const block = findNode(part, blockId);
   if (!block) return { ok: false, reason: 'unknown-block' };
+  const caretParagraphId = survivingCaretAfterBlockRemoval(part, blockId);
+  if (!caretParagraphId) return { ok: false, reason: 'block-required' };
+  const parent = parentOf(part, blockId);
+  const cellNeedsParagraph =
+    block.kind === 'table' &&
+    parent?.kind === 'tableCell' &&
+    parent.children.every((child) => child.kind !== 'paragraph');
   const paragraphs = paragraphIdsWithin(block);
+  const created: string[] = [];
   const effect: TreeOpEffect = {
     dirty: [],
-    created: [],
+    created,
     deleted: [blockId, ...paragraphs.filter((id) => id !== blockId)],
     dependencyKeys: TEXT_DEPS,
-    // The block SEQUENCE changed, so everything after it can move even though no surviving
-    // paragraph is dirty.
     impact: 'flow-structural',
+    caret: { paragraphId: caretParagraphId },
   };
-  return fromEdit(removeNode(part, blockId, options), effect);
+  const removed = removeNode(part, blockId, options);
+  if (!removed.ok) return { ok: false, reason: 'unknown-block' };
+  if (!cellNeedsParagraph || !parent) return fromEdit(removed, effect);
+  const anchorTable = tableAncestorOf(removed.part, parent.id);
+  if (!anchorTable) return fromEdit(removed, effect);
+  const nextId = createNodeIdAllocator(removed.part);
+  const paragraph = emptyCellParagraph(removed.part, anchorTable, nextId, `${blockId}:cell-p`);
+  const cell = findNode(removed.part, parent.id);
+  if (!cell || cell.kind === 'textValue') return fromEdit(removed, effect);
+  const inserted = insertChildren(
+    removed.part,
+    parent.id,
+    cell.children.length,
+    [paragraph],
+    options
+  );
+  if (!inserted.ok) return { ok: false, reason: 'tree-invariant' };
+  return fromEdit(inserted, { ...effect, created: [...created, paragraph.id] });
 }
 
 function applyJoin(
@@ -1601,6 +2423,18 @@ function applyJoin(
   const firstIndex = parent.children.findIndex((child) => child.id === firstId);
   const secondIndex = parent.children.findIndex((child) => child.id === secondId);
   if (secondIndex !== firstIndex + 1) return { ok: false, reason: 'not-adjacent-siblings' };
+
+  // Capture before the join: a temporary enclosing either paragraph must unwrap in the
+  // same write (join is a successful content edit). Validation already refused wrapper locks.
+  const temporaryControls: OoxmlNode[] = [];
+  const seenTemporary = new Set<string>();
+  for (const paragraphId of [firstId, secondId]) {
+    const control = innermostContentControlAround(part, paragraphId);
+    if (control && isTemporaryControl(control) && !seenTemporary.has(control.id)) {
+      seenTemporary.add(control.id);
+      temporaryControls.push(control);
+    }
+  }
 
   const effect: TreeOpEffect = {
     dirty: [firstId],
@@ -1630,7 +2464,12 @@ function applyJoin(
   const siblings = parent.children.flatMap((child) =>
     child.id === firstId ? [merged] : child.id === secondId ? [] : [child]
   );
-  return fromEdit(replaceChildren(part, parent.id, siblings, options), effect);
+  const defer = temporaryControls.length > 0 ? { ...options, deferValidation: true } : options;
+  let result = fromEdit(replaceChildren(part, parent.id, siblings, defer), effect);
+  for (const control of temporaryControls) {
+    result = finishContentEdit(result, control, options);
+  }
+  return result;
 }
 
 /**

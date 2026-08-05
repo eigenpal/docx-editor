@@ -61,7 +61,8 @@
       "listFormatting": "Formatowanie listy",
       "image": "Obraz",
       "table": "Tabela",
-      "insert": "Wstaw"
+      "insert": "Wstaw",
+      "contentControl": "Kontrolki zawartości"
     },
     "undo": "Cofnij",
     "undoShortcut": "Cofnij (Ctrl+Z)",
@@ -87,7 +88,8 @@
     "clearFormatting": "Wyczyść formatowanie",
     "commentsAndChanges": null,
     "moreItems": null,
-    "unavailableInPreview": null
+    "unavailableInPreview": null,
+    "more": null
   },
   "alignment": {
     "alignLeft": "Wyrównaj do lewej",
@@ -732,7 +734,23 @@
       "gridTable4Accent5": "Tabela z siatką 4 — akcent 5",
       "gridTable4Accent6": "Tabela z siatką 4 — akcent 6"
     },
-    "selectTable": null
+    "selectTable": null,
+    "borderStyles": {
+      "dashed": null,
+      "dotted": null,
+      "double": null,
+      "single": null,
+      "thick": null,
+      "triple": null
+    },
+    "borderWidths": {
+      "halfPt": null,
+      "oneHalfPt": null,
+      "onePt": null,
+      "threePt": null,
+      "twoPt": null
+    },
+    "clearCellFill": null
   },
   "tableAdvanced": {
     "verticalAlignment": "Wyrównanie pionowe",
@@ -824,7 +842,8 @@
     "failedToParse": "Nie udało się przetworzyć dokumentu",
     "linkRemoved": "Usunięto link",
     "linkCopied": "Skopiowano link do schowka",
-    "failedToSave": "Nie udało się zapisać dokumentu"
+    "failedToSave": "Nie udało się zapisać dokumentu",
+    "fontSubstitutionNotice": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Tekst wyświetlany",
@@ -930,7 +949,9 @@
     "runPropertiesChanged": null
   },
   "toc": {
-    "updatePrompt": null
+    "updatePrompt": null,
+    "refresh": "Aktualizuj cały spis",
+    "refreshPageNumbers": "Aktualizuj tylko numery stron"
   },
   "app": {
     "name": null,
@@ -979,6 +1000,44 @@
       "headings": null
     },
     "title": null
+  },
+  "contentControl": {
+    "formFill": "Tryb wypełniania formularza",
+    "group": "Kontrolki zawartości",
+    "inspector": "Właściwości kontrolki zawartości",
+    "inspectorPanel": {
+      "alias": "Tytuł",
+      "bound": "Powiązanie z danymi",
+      "boundNote": "Ta kontrolka jest powiązana z danymi zewnętrznymi. Edycja została odrzucona.",
+      "empty": "—",
+      "lock": "Blokada",
+      "lockedNote": "Edycja zawartości jest zablokowana w tej kontrolce.",
+      "no": "Nie",
+      "placeholder": "Symbol zastępczy",
+      "tag": "Znacznik",
+      "title": "Kontrolka zawartości",
+      "type": "Typ",
+      "yes": "Tak"
+    },
+    "lock": {
+      "contentLocked": "Zawartość zablokowana",
+      "sdtContentLocked": "Kontrolka zawartości i zawartość zablokowane",
+      "sdtLocked": "Kontrolka zawartości zablokowana",
+      "unlocked": "Odblokowane"
+    },
+    "noControl": "Umieść kursor wewnątrz kontrolki zawartości",
+    "remove": "Usuń kontrolkę zawartości",
+    "showAll": "Pokaż obramowania kontrolek zawartości",
+    "types": {
+      "checkbox": "Pole wyboru",
+      "comboBox": "Pole kombi",
+      "date": "Data",
+      "dropdown": "Lista rozwijana",
+      "picture": "Obraz",
+      "plainText": "Tekst zwykły",
+      "repeatingSection": "Sekcja powtarzalna",
+      "richText": "Tekst sformatowany"
+    }
   },
   "notes": {
     "editingBanner": "Edycja przypisu",

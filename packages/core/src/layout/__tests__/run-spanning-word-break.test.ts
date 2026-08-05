@@ -83,4 +83,77 @@ describe('a word split across runs stays whole', () => {
     const lines = linesOf(`<w:p>${run('bbbbbbbbbb')}${run('cccccccccc')}</w:p>`);
     expect(lines.join('')).toBe('bbbbbbbbbbcccccccccc');
   });
+
+  test('a tab in its own run is a break opportunity for the text after it', () => {
+    // A tab's advance is measured to reach its stop FROM WHERE THE TAB SITS, so a tab must
+    // never be carried onto another line as part of a word: the carried copy keeps the
+    // advance it was given and stops reaching anything. Text after a tab therefore has to be
+    // allowed to open a line — and when the tab has a run to itself, as a generated
+    // table-of-contents row does, it is the tab that decides that, not the word before it.
+    const body = `<w:p>${run('aa bb')}${run('\t')}${run('ccccc')}</w:p>`;
+    expect(linesOf(body)).toEqual(['aa bb\t', 'ccccc']);
+
+    const spans = breakParagraph(paragraph(body), 'p', 0, 60, measurer, undefined, null)[0]!.spans;
+    const tabIndex = spans.findIndex((span) => span.text === '\t');
+    const before = spans[tabIndex - 1]!;
+    const tab = spans[tabIndex]!;
+    // The tab begins where the text before it ends and advances to the first stop on the
+    // default 36pt grid. Both are read from the run rather than written as point values: the
+    // text's width is whatever the measurer and the inherited size make it, while the claim
+    // under test — that the advance is measured FROM WHERE THE TAB SITS — is not.
+    expect(tab.box.x).toBeCloseTo(before.box.x + before.box.width, 5);
+    expect(tab.box.x + tab.box.width).toBe(36);
+  });
+});
+
+describe('a dash is a break opportunity', () => {
+  test('a hyphenated word wraps after the hyphen, the way Word does', () => {
+    expect(linesOf(`<w:p>${run('aaaa-bbbb')}</w:p>`, 36)).toEqual(['aaaa-', 'bbbb']);
+  });
+
+  test('a deletion-insertion pair still wraps at the insertion’s hyphen', () => {
+    // The reviewed-document shape: "alpha" struck through, "ALPHA-PRIME" inserted beside it.
+    const body =
+      `<w:p>${run('NESTED ')}` +
+      `<w:del w:id="1" w:author="A" w:date="D"><w:r><w:delText>alpha</w:delText></w:r></w:del>` +
+      `<w:ins w:id="2" w:author="A" w:date="D">${run('ALPHA-PRIME')}</w:ins></w:p>`;
+    expect(linesOf(body, 72)).toEqual(['NESTED ', 'alphaALPHA-', 'PRIME']);
+  });
+
+  test('a dash ending one run lets the next run open a line', () => {
+    expect(linesOf(`<w:p>${run('aaaa-')}${run('bbbb')}</w:p>`, 36)).toEqual(['aaaa-', 'bbbb']);
+  });
+
+  test('U+2011 NON-BREAKING HYPHEN is not a break opportunity', () => {
+    const lines = linesOf(`<w:p>${run('aaaa‑bbbb')}</w:p>`, 36);
+    expect(lines[0]).not.toBe('aaaa‑');
+  });
+});
+
+describe('a word wider than the measure breaks at the margin', () => {
+  test('an unbroken run chops into full lines instead of overflowing', () => {
+    expect(linesOf(`<w:p>${run('aaaaaaaaaaaaaaaaaaaa')}</w:p>`)).toEqual([
+      'aaaaaaaaaaa',
+      'aaaaaaaaa',
+    ]);
+  });
+
+  test('the chopped spans keep their model offsets', () => {
+    const lines = breakParagraph(
+      paragraph(`<w:p>${run('aaaaaaaaaaaabb')}</w:p>`),
+      'p',
+      0,
+      60,
+      measurer,
+      undefined,
+      null
+    );
+    expect(
+      lines.map((line) => line.spans.map((span) => [span.range.start, span.range.end]))
+    ).toEqual([[[0, 11]], [[11, 14]]]);
+  });
+
+  test('a word that follows text on the line wraps first, then chops', () => {
+    expect(linesOf(`<w:p>${run('aaa cccccccccccc')}</w:p>`)).toEqual(['aaa ', 'ccccccccccc', 'c']);
+  });
 });

@@ -42,6 +42,22 @@ export interface SectionMargins {
   readonly gutterTwips: number;
 }
 
+export interface SectionColumnDefinition {
+  readonly widthTwips: number;
+  /** Space after this column; zero on the final column. */
+  readonly gapTwips: number;
+}
+
+export interface SectionColumns {
+  readonly count: number;
+  /** Shared gap for equal-width columns and fallback gap for incomplete explicit definitions. */
+  readonly gapTwips: number;
+  readonly equalWidth?: boolean;
+  readonly separator?: boolean;
+  /** Authored `w:col` geometry when `equalWidth` is false. */
+  readonly definitions?: readonly SectionColumnDefinition[];
+}
+
 /**
  * How this section is placed relative to the previous one (ECMA-376 17.6.22,
  * `ST_SectionMark`).
@@ -78,7 +94,7 @@ export interface SectionPageNumbering {
 export interface SectionProperties {
   readonly pageSize: { readonly widthTwips: number; readonly heightTwips: number };
   readonly margins: SectionMargins;
-  readonly columns: { readonly count: number; readonly gapTwips: number };
+  readonly columns: SectionColumns;
   readonly landscape: boolean;
   readonly titlePage: boolean;
   /** Absent `w:type` defaults to `nextPage`. */
@@ -116,7 +132,13 @@ export const DEFAULT_SECTION_PROPERTIES: SectionProperties = Object.freeze({
     footerTwips: 720,
     gutterTwips: 0,
   }),
-  columns: Object.freeze({ count: 1, gapTwips: 720 }),
+  columns: Object.freeze({
+    count: 1,
+    gapTwips: 720,
+    equalWidth: true,
+    separator: false,
+    definitions: Object.freeze([]),
+  }),
   landscape: false,
   titlePage: false,
   breakType: 'nextPage',
@@ -144,6 +166,14 @@ function marginTwips(raw: string | undefined, fallback: number): number {
   return value;
 }
 
+/** Column gaps may be zero; unlike page dimensions they are not required to be positive. */
+function nonNegativeTwips(raw: string | undefined, fallback: number, max = 31680): number {
+  if (raw === undefined || !/^\d{1,7}$/.test(raw)) return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0 || value > max) return fallback;
+  return value;
+}
+
 const attribute = (node: OoxmlNode, name: string): string | undefined => {
   if (node.kind === 'textValue' || !('attributes' in node)) return undefined;
   for (const entry of node.attributes ?? []) {
@@ -161,6 +191,47 @@ const childNamed = (node: OoxmlNode, localName: string): OoxmlNode | undefined =
   }
   return undefined;
 };
+
+function onOffAttribute(node: OoxmlNode, name: string, fallback: boolean): boolean {
+  const value = attribute(node, name);
+  if (value === undefined) return fallback;
+  if (value === '0' || value === 'false' || value === 'off' || value === 'no') return false;
+  if (value === '1' || value === 'true' || value === 'on' || value === 'yes') return true;
+  return fallback;
+}
+
+function columnCount(cols: OoxmlNode | undefined): number {
+  if (!cols) return 1;
+  const raw = attribute(cols, 'num');
+  if (!raw || !/^\d{1,7}$/.test(raw)) return 1;
+  return Math.max(1, Math.min(12, Number(raw)));
+}
+
+function columnDefinitions(
+  cols: OoxmlNode | undefined,
+  count: number,
+  fallbackGapTwips: number
+): readonly SectionColumnDefinition[] {
+  if (!cols || cols.kind === 'textValue') return [];
+  const definitions: SectionColumnDefinition[] = [];
+  for (const child of cols.children ?? []) {
+    if (
+      definitions.length >= count ||
+      child.kind === 'textValue' ||
+      !('localName' in child) ||
+      child.localName !== 'col'
+    ) {
+      continue;
+    }
+    const index = definitions.length;
+    definitions.push({
+      widthTwips: twips(attribute(child, 'w'), 1, 31680),
+      gapTwips:
+        index === count - 1 ? 0 : nonNegativeTwips(attribute(child, 'space'), fallbackGapTwips),
+    });
+  }
+  return definitions;
+}
 
 function breakTypeOf(sectPr: OoxmlNode | undefined): SectionBreakType {
   const type = sectPr ? childNamed(sectPr, 'type') : undefined;
@@ -242,6 +313,11 @@ export function parseSectionProperties(sectPr: OoxmlNode | null | undefined): Se
     : defaults.pageSize.heightTwips;
 
   const pageNumbering = parsePageNumbering(sectPr);
+  const count = columnCount(cols);
+  const gapTwips = cols
+    ? nonNegativeTwips(attribute(cols, 'space'), defaults.columns.gapTwips)
+    : defaults.columns.gapTwips;
+  const equalWidth = cols ? onOffAttribute(cols, 'equalWidth', true) : true;
 
   return {
     pageSize: { widthTwips: width, heightTwips: height },
@@ -266,8 +342,11 @@ export function parseSectionProperties(sectPr: OoxmlNode | null | undefined): Se
     },
     columns: {
       // A column count of zero or a hostile number would divide the content width to nothing.
-      count: cols ? Math.max(1, Math.min(12, Number(attribute(cols, 'num') ?? '1') || 1)) : 1,
-      gapTwips: cols ? twips(attribute(cols, 'space'), 720, 31680) : defaults.columns.gapTwips,
+      count,
+      gapTwips,
+      equalWidth,
+      separator: cols ? onOffAttribute(cols, 'sep', false) : false,
+      definitions: equalWidth ? [] : columnDefinitions(cols, count, gapTwips),
     },
     // Render-truthful: Word writes swapped dimensions AND the attribute, but a file may
     // carry only one. Width exceeding height IS a landscape page whatever the attribute

@@ -23,11 +23,15 @@ import {
   authoredProperties,
   directParagraphMarkProperties,
   findNode,
+  formatOwnedRunIds,
+  mergedProperties,
   propertyContainer,
   runAddressRanges,
   type OoxmlNode,
   type OoxmlPart,
+  type RunPropertyEdit,
 } from '@docx-editor.dev/core-contract/store';
+import { walkParagraphInline } from '../store/package/content-control-walk.ts';
 import type { SurfaceFormatting } from './paginated-surface-contract.ts';
 
 /** One property as the ops and the layout records carry it: an element name plus attributes. */
@@ -133,9 +137,48 @@ export {
   mergedProperties,
   propertyContainer,
   runAddressRanges,
-  runPropertyEdits,
   type RunPropertyEdit,
 } from '@docx-editor.dev/core-contract/store';
+
+/**
+ * Surface range formatting uses the shared authored-property model while retaining v2's
+ * content-control-aware inline walk. The automation lane consumes the same store primitives;
+ * this wrapper is only the layout-backed surface traversal.
+ */
+export function runPropertyEdits(
+  part: OoxmlPart,
+  paragraphId: string,
+  start: number,
+  end: number,
+  incoming: SurfaceProperty
+): readonly RunPropertyEdit[] {
+  const paragraph = findNode(part, paragraphId);
+  if (!paragraph || paragraph.kind !== 'paragraph') return [];
+  const edits: RunPropertyEdit[] = [];
+  const runRanges = runAddressRanges(paragraph);
+  const formatOwned = formatOwnedRunIds(paragraph);
+  walkParagraphInline(paragraph.children, 0, (child) => {
+    if (child.kind !== 'run') return;
+    const range = runRanges.get(child.id);
+    if (!range || range.end <= range.start) return;
+    const from = Math.max(range.start, start);
+    const to = Math.min(range.end, end);
+    if (from >= to) return;
+    edits.push({
+      start: from,
+      end: to,
+      properties: mergedProperties(
+        authoredProperties(
+          propertyContainer(child, 'runProperties', 'rPr'),
+          AUTHORABLE_RUN_PROPERTIES
+        ),
+        incoming
+      ),
+      ...(formatOwned.has(child.id) ? { targetRunIds: [child.id] } : {}),
+    });
+  });
+  return edits;
+}
 
 /**
  * Whether any run the range covers authors a property an op could clear.
@@ -158,19 +201,8 @@ export function hasAuthoredRunProperties(
   if (!paragraph || paragraph.kind !== 'paragraph') return false;
   const runRanges = runAddressRanges(paragraph);
   let found = false;
-  const visit = (child: OoxmlNode): void => {
+  const visitRun = (child: OoxmlNode): void => {
     if (found) return;
-    if (child.kind === 'hyperlink') {
-      for (const inner of child.children) visit(inner);
-      return;
-    }
-    if (
-      child.kind === 'fldSimple' ||
-      (child.kind === 'generic' && child.localName === 'fldSimple')
-    ) {
-      for (const inner of child.children) visit(inner);
-      return;
-    }
     if (child.kind !== 'run') return;
     const range = runRanges.get(child.id);
     if (!range || range.end <= range.start) return;
@@ -184,7 +216,7 @@ export function hasAuthoredRunProperties(
       found = true;
     }
   };
-  for (const child of paragraph.children) visit(child);
+  walkParagraphInline(paragraph.children, 0, visitRun);
   return found;
 }
 
@@ -207,25 +239,14 @@ export function authoredRunPropertiesAt(
   const runRanges = runAddressRanges(paragraph);
   let left: OoxmlNode | null = null;
   let right: OoxmlNode | null = null;
-  const visit = (child: OoxmlNode): void => {
-    if (child.kind === 'hyperlink') {
-      for (const inner of child.children) visit(inner);
-      return;
-    }
-    if (
-      child.kind === 'fldSimple' ||
-      (child.kind === 'generic' && child.localName === 'fldSimple')
-    ) {
-      for (const inner of child.children) visit(inner);
-      return;
-    }
+  const visitRun = (child: OoxmlNode): void => {
     if (child.kind !== 'run') return;
     const range = runRanges.get(child.id);
     if (!range || range.end <= range.start) return;
     if (range.start < offset && offset <= range.end) left = child;
     if (right === null && range.start <= offset && offset < range.end) right = child;
   };
-  for (const child of paragraph.children) visit(child);
+  walkParagraphInline(paragraph.children, 0, visitRun);
   const owner = left ?? right;
   if (owner) {
     return authoredProperties(

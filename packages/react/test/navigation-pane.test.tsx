@@ -88,13 +88,28 @@ describe('navigationShift', () => {
     );
   });
 
+  test('accounts for an open review rail and overflows instead of covering the page', () => {
+    // The review rail reserves 316px on the right. Ignoring that padding returns 272px,
+    // leaving the page 40px underneath the navigation pane. With both panes included the
+    // page pins immediately after navigation and the combined layout overflows horizontally.
+    const viewportWidth = 1200;
+    const reviewReservation = 316;
+    const shift = navigationShift({
+      viewportWidth,
+      pageWidthPx: PAGE,
+      reservation: RESERVATION,
+      inlineEndReservation: reviewReservation,
+    });
+    expect(shift).toBe(RESERVATION);
+    expect(shift + PAGE + reviewReservation).toBeGreaterThan(viewportWidth);
+  });
+
   test('never moves the page further than it must, at any width', () => {
     for (let viewportWidth = 500; viewportWidth <= 2400; viewportWidth += 17) {
       const shift = navigationShift({ viewportWidth, pageWidthPx: PAGE, reservation: RESERVATION });
       const gutter = (viewportWidth - PAGE) / 2;
       // Where the page ends up, in the two regimes the painted surface actually has.
-      const pageLeft =
-        viewportWidth - shift >= PAGE ? gutter + shift / 2 : shift;
+      const pageLeft = viewportWidth - shift >= PAGE ? gutter + shift / 2 : shift;
       // Always clears the pane...
       expect(pageLeft).toBeGreaterThanOrEqual(RESERVATION - 1);
       // ...and never overshoots it by more than the rounding to a whole pixel.

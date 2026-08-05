@@ -10,9 +10,10 @@
 // setup and zoom, NOT a DOM query for a painted page: a pane opened before the first paint
 // would otherwise measure nothing and settle a frame later, which reads as a flinch.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core-contract/contracts/editor';
 import { twipsToPixels } from '../../lib/units';
+import { ReviewRailContext } from '../context';
 import { useEditorState } from '../useEditorState';
 import {
   NAVIGATION_PANE_WIDTH,
@@ -26,15 +27,19 @@ export type NavigationTab = 'headings' | 'find';
 
 const selectPageGeometry = (
   snapshot: EditorSnapshot
-): { pageSetup: PageSetup | null; zoom: number } => ({
+): { pageSetup: PageSetup | null; zoom: number; reviewPaneOpen: boolean } => ({
   pageSetup: snapshot.pageSetup ?? null,
   zoom: snapshot.zoom,
+  reviewPaneOpen: snapshot.reviewPaneOpen ?? true,
 });
 
 const samePageGeometry = (
-  a: { pageSetup: PageSetup | null; zoom: number },
-  b: { pageSetup: PageSetup | null; zoom: number }
-) => a.zoom === b.zoom && a.pageSetup?.pageWidthTwips === b.pageSetup?.pageWidthTwips;
+  a: { pageSetup: PageSetup | null; zoom: number; reviewPaneOpen: boolean },
+  b: { pageSetup: PageSetup | null; zoom: number; reviewPaneOpen: boolean }
+) =>
+  a.zoom === b.zoom &&
+  a.reviewPaneOpen === b.reviewPaneOpen &&
+  a.pageSetup?.pageWidthTwips === b.pageSetup?.pageWidthTwips;
 
 /** How `useNavigationPane` is configured. @public */
 export interface UseNavigationPaneOptions {
@@ -111,8 +116,10 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
   // ── Displacement ────────────────────────────────────────────────────────────────────
   const store = useNavigationLayoutStore();
   const viewport = useNavigationViewportElement();
-  const { pageSetup, zoom } = useEditorState(selectPageGeometry, samePageGeometry);
+  const rail = useContext(ReviewRailContext);
+  const { pageSetup, zoom, reviewPaneOpen } = useEditorState(selectPageGeometry, samePageGeometry);
   const [viewportWidth, setViewportWidth] = useState(0);
+  const [inlineEndReservation, setInlineEndReservation] = useState(0);
 
   // `open` is a dependency as well as `viewport`: a window resized while the pane was
   // closed leaves no observation to react to (a hidden or throttled tab delivers no
@@ -121,14 +128,20 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
   useEffect(() => {
     if (!viewport) {
       setViewportWidth(0);
+      setInlineEndReservation(0);
       return undefined;
     }
-    setViewportWidth(viewport.clientWidth);
+    const measure = () => {
+      setViewportWidth(viewport.clientWidth);
+      const padding = Number.parseFloat(getComputedStyle(viewport).paddingInlineEnd);
+      setInlineEndReservation(Number.isFinite(padding) ? padding : 0);
+    };
+    measure();
     if (typeof ResizeObserver === 'undefined') return undefined;
-    const observer = new ResizeObserver(() => setViewportWidth(viewport.clientWidth));
+    const observer = new ResizeObserver(measure);
     observer.observe(viewport);
     return () => observer.disconnect();
-  }, [viewport, open]);
+  }, [viewport, open, reviewPaneOpen, rail?.mounted]);
 
   // The snapshot reports `pageSetup` as null on some ticks even with a document loaded,
   // and a shift derived from one of those would collapse to zero and snap the page
@@ -145,8 +158,9 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
       viewportWidth,
       pageWidthPx: twipsToPixels(pageWidthTwips) * zoom,
       reservation: navigationPaneReservation(paneWidth),
+      inlineEndReservation,
     });
-  }, [open, pageWidthTwips, zoom, viewportWidth, paneWidth]);
+  }, [open, pageWidthTwips, zoom, viewportWidth, paneWidth, inlineEndReservation]);
 
   useEffect(() => {
     if (!store) return undefined;

@@ -608,6 +608,29 @@ describe('turning a list off and on again', () => {
 });
 
 describe('Enter at the end of a list', () => {
+  test('leaves an empty list item inside a table cell on the second Enter', () => {
+    const surface = mount(
+      `<w:tbl><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid><w:tr><w:tc>${listItem(
+        'alpha'
+      )}</w:tc></w:tr></w:tbl>`,
+      true
+    );
+    const handler = createKeyDownHandler(surface);
+    const id = surface.session.paragraphIds()[0]!;
+    surface.setSelection({
+      anchor: { paragraphId: id, offset: 5 },
+      head: { paragraphId: id, offset: 5 },
+    });
+
+    handler(key({ key: 'Enter' }));
+    expect(surface.session.paragraphIds()).toHaveLength(2);
+    expect(surface.isListParagraph()).toBe(true);
+
+    handler(key({ key: 'Enter' }));
+    expect(surface.session.paragraphIds()).toHaveLength(2);
+    expect(surface.isListParagraph()).toBe(false);
+  });
+
   test('makes another item, then leaves the list on the empty one', () => {
     const surface = mount(listItem('alpha'), true);
     const handler = createKeyDownHandler(surface);

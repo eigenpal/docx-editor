@@ -61,7 +61,8 @@
       "listFormatting": "Formatação de lista",
       "image": "Imagem",
       "table": "Tabela",
-      "insert": "Inserir"
+      "insert": "Inserir",
+      "contentControl": "Controles de conteúdo"
     },
     "undo": "Desfazer",
     "undoShortcut": "Desfazer (Ctrl+Z)",
@@ -87,7 +88,8 @@
     "clearFormatting": "Limpar formatação",
     "commentsAndChanges": null,
     "moreItems": null,
-    "unavailableInPreview": null
+    "unavailableInPreview": null,
+    "more": null
   },
   "alignment": {
     "alignLeft": "Alinhar à esquerda",
@@ -732,7 +734,23 @@
       "gridTable4Accent5": "Grade de tabela 4 destaque 5",
       "gridTable4Accent6": "Grade de tabela 4 destaque 6"
     },
-    "selectTable": null
+    "selectTable": null,
+    "borderStyles": {
+      "dashed": null,
+      "dotted": null,
+      "double": null,
+      "single": null,
+      "thick": null,
+      "triple": null
+    },
+    "borderWidths": {
+      "halfPt": null,
+      "oneHalfPt": null,
+      "onePt": null,
+      "threePt": null,
+      "twoPt": null
+    },
+    "clearCellFill": null
   },
   "tableAdvanced": {
     "verticalAlignment": "Alinhamento vertical",
@@ -824,7 +842,8 @@
     "failedToParse": "Falha ao analisar documento",
     "linkRemoved": "Link removido",
     "linkCopied": "Link copiado para a área de transferência",
-    "failedToSave": "Falha ao salvar documento"
+    "failedToSave": "Falha ao salvar documento",
+    "fontSubstitutionNotice": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Texto de exibição",
@@ -930,7 +949,9 @@
     "runPropertiesChanged": null
   },
   "toc": {
-    "updatePrompt": null
+    "updatePrompt": null,
+    "refresh": "Atualizar tabela inteira",
+    "refreshPageNumbers": "Atualizar apenas números de página"
   },
   "app": {
     "name": null,
@@ -979,6 +1000,44 @@
       "headings": null
     },
     "title": null
+  },
+  "contentControl": {
+    "formFill": "Modo de preenchimento de formulário",
+    "group": "Controles de conteúdo",
+    "inspector": "Propriedades do controle de conteúdo",
+    "inspectorPanel": {
+      "alias": "Título",
+      "bound": "Vinculado a dados",
+      "boundNote": "Este controle está vinculado a dados externos. A edição foi recusada.",
+      "empty": "—",
+      "lock": "Bloqueio",
+      "lockedNote": "A edição de conteúdo está bloqueada neste controle.",
+      "no": "Não",
+      "placeholder": "Marcador de posição",
+      "tag": "Marca",
+      "title": "Controle de conteúdo",
+      "type": "Tipo",
+      "yes": "Sim"
+    },
+    "lock": {
+      "contentLocked": "Conteúdo bloqueado",
+      "sdtContentLocked": "Controle de conteúdo e conteúdo bloqueados",
+      "sdtLocked": "Controle de conteúdo bloqueado",
+      "unlocked": "Desbloqueado"
+    },
+    "noControl": "Posicione o cursor dentro de um controle de conteúdo",
+    "remove": "Remover controle de conteúdo",
+    "showAll": "Mostrar limites dos controles de conteúdo",
+    "types": {
+      "checkbox": "Caixa de seleção",
+      "comboBox": "Caixa de combinação",
+      "date": "Data",
+      "dropdown": "Lista suspensa",
+      "picture": "Imagem",
+      "plainText": "Texto sem formatação",
+      "repeatingSection": "Seção repetitiva",
+      "richText": "Rich Text"
+    }
   },
   "notes": {
     "editingBanner": "Editando nota",

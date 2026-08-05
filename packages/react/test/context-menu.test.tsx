@@ -48,6 +48,62 @@ function docx(body: string): Uint8Array {
 
 const SOURCE = docx('<w:p><w:r><w:t>hello world</w:t></w:r></w:p>');
 
+const TABLE_2X2 = docx(
+  '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="3600"/></w:tblGrid>' +
+    '<w:tr><w:tc><w:p><w:r><w:t>A1</w:t></w:r></w:p></w:tc>' +
+    '<w:tc><w:p><w:r><w:t>B1</w:t></w:r></w:p></w:tc></w:tr>' +
+    '<w:tr><w:tc><w:p><w:r><w:t>A2</w:t></w:r></w:p></w:tc>' +
+    '<w:tc><w:p><w:r><w:t>B2</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+);
+
+const STYLE_REL =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
+
+/** A package with a styles part, so a heading style resolves to an outline level. */
+function docxWithStyles(body: string): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId9" Type="${STYLE_REL}" Target="styles.xml"/></Relationships>`
+    ),
+    'word/styles.xml': strToU8(
+      `<w:styles xmlns:w="${W}">` +
+        '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>' +
+        '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/></w:style>' +
+        '<w:style w:type="paragraph" w:styleId="TOC1"><w:name w:val="toc 1"/></w:style>' +
+        '</w:styles>'
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
+    ),
+  });
+}
+
+const TOC_DOCUMENT = docxWithStyles(
+  '<w:sdt><w:sdtPr><w:alias w:val="Contents"/></w:sdtPr><w:sdtContent>' +
+    '<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText> TOC \\o "1-1" \\h </w:instrText>' +
+    '<w:fldChar w:fldCharType="separate"/></w:r></w:p>' +
+    '<w:p><w:r><w:t>Old cached entry</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>' +
+    '</w:sdtContent></w:sdt>' +
+    '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Introduction</w:t></w:r></w:p>'
+);
+
+const MERGED_TABLE = docx(
+  '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="3600"/></w:tblGrid>' +
+    '<w:tr><w:tc><w:p><w:r><w:t>A1</w:t></w:r></w:p></w:tc>' +
+    '<w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr><w:p><w:r><w:t>span</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+);
+
 /** Resolve the packaged keys to themselves, so a row's label is its key in assertions. */
 const t = (key: string): string => key;
 
@@ -59,6 +115,30 @@ function mount(menu?: ReactNode): {
   const view = render(
     <DocxEditorRoot
       document={SOURCE}
+      onReady={(editor) => {
+        instance = editor as DocxEditorInstance;
+      }}
+    >
+      <DocxEditorViewport>
+        <DocxEditorContent />
+        {menu ?? <ContextMenu t={t} />}
+      </DocxEditorViewport>
+    </DocxEditorRoot>
+  );
+  return { view, editor: () => instance! };
+}
+
+function mountDocument(
+  source: Uint8Array,
+  menu?: ReactNode
+): {
+  view: ReturnType<typeof render>;
+  editor: () => DocxEditorInstance;
+} {
+  let instance: DocxEditorInstance | null = null;
+  const view = render(
+    <DocxEditorRoot
+      document={source}
       onReady={(editor) => {
         instance = editor as DocxEditorInstance;
       }}
@@ -536,5 +616,248 @@ describe('keyboard', () => {
     rightClick(view);
 
     for (const row of rows(view)) expect(row.tabIndex).toBe(-1);
+  });
+});
+
+describe('table context rows (Task 10)', () => {
+  const TABLE_ROW_IDS = [
+    'table.insertRowAbove',
+    'table.insertRowBelow',
+    'table.insertColumnLeft',
+    'table.insertColumnRight',
+    'table.deleteRow',
+    'table.deleteColumn',
+    'table.deleteTable',
+  ] as const;
+
+  test('table rows are absent outside a table', () => {
+    const { view } = mount();
+    rightClick(view);
+    expect(rows(view).map((row) => row.dataset.slot)).not.toEqual(
+      expect.arrayContaining([...TABLE_ROW_IDS])
+    );
+  });
+
+  test('table rows appear in fixed order when the caret is in a table', () => {
+    const { view, editor } = mountDocument(TABLE_2X2);
+    act(() => {
+      const paragraphId = editor().surface!.session.paragraphIds()[0]!;
+      editor().surface!.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 1 },
+      });
+    });
+    rightClick(view);
+    const slots = rows(view).map((row) => row.dataset.slot);
+    const tableStart = slots.indexOf('table.insertRowAbove');
+    expect(tableStart).toBeGreaterThan(-1);
+    expect(slots.slice(tableStart, tableStart + TABLE_ROW_IDS.length)).toEqual([...TABLE_ROW_IDS]);
+    expect(slots).not.toContain('table.mergeCells');
+    expect(slots).not.toContain('table.splitCell');
+  });
+
+  test('destructive table rows carry the destructive treatment before cell alignment', () => {
+    const { view, editor } = mountDocument(TABLE_2X2);
+    act(() => {
+      const paragraphId = editor().surface!.session.paragraphIds()[0]!;
+      editor().surface!.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 1 },
+      });
+    });
+    rightClick(view);
+    const destructive = rows(view).filter((row) =>
+      row.className.includes('docx-table-chrome__destructive-row')
+    );
+    expect(destructive.map((row) => row.dataset.slot)).toEqual([
+      'table.deleteRow',
+      'table.deleteColumn',
+      'table.deleteTable',
+    ]);
+    expect(
+      view.container.querySelectorAll('.docx-contextmenu__table-align-button[role="menuitemradio"]')
+        .length
+    ).toBe(3);
+  });
+
+  test('cell vertical alignment appears as a compact three-button group and executes', () => {
+    const { view, editor } = mountDocument(TABLE_2X2);
+    act(() => {
+      const paragraphId = editor().surface!.session.paragraphIds()[0]!;
+      editor().surface!.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 1 },
+      });
+    });
+    rightClick(view);
+    const buttons = view.container.querySelectorAll<HTMLButtonElement>(
+      '.docx-contextmenu__table-align-button'
+    );
+    expect(buttons.length).toBe(3);
+    expect([...buttons].map((button) => button.getAttribute('aria-label'))).toEqual([
+      'tableAdvanced.top',
+      'tableAdvanced.middle',
+      'tableAdvanced.bottom',
+    ]);
+    act(() => {
+      fireEvent.click(buttons[1]!);
+    });
+    expect(panel(view)).toBeNull();
+  });
+
+  test('insert row below executes through the engine and closes the panel', () => {
+    const { view, editor } = mountDocument(TABLE_2X2);
+    act(() => {
+      const paragraphId = editor().surface!.session.paragraphIds()[0]!;
+      editor().surface!.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 1 },
+      });
+    });
+    const before = editor().surface!.session.paragraphIds().length;
+    rightClick(view);
+    act(() => {
+      fireEvent.click(rowNamed(view, 'table.insertRowBelow'));
+    });
+    expect(editor().surface!.session.paragraphIds().length).toBeGreaterThan(before);
+    expect(panel(view)).toBeNull();
+  });
+
+  test('merged-table column insertion is disabled with the engine reason', () => {
+    const { view, editor } = mountDocument(MERGED_TABLE);
+    act(() => {
+      const paragraphId = editor().surface!.session.paragraphIds()[0]!;
+      editor().surface!.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 1 },
+      });
+    });
+    rightClick(view);
+    const row = rowNamed(view, 'table.insertColumnRight');
+    expect(row.getAttribute('aria-disabled')).toBe('true');
+    expect(row.getAttribute('title')).toBe('this table has merged cells');
+  });
+
+  test('a Fragment-wrapped table row override still replaces its row in place', () => {
+    const { view, editor } = mountDocument(
+      TABLE_2X2,
+      <ContextMenu t={t}>
+        <>
+          <ContextMenu.InsertRowAbove hidden />
+        </>
+      </ContextMenu>
+    );
+    act(() => {
+      const paragraphId = editor().surface!.session.paragraphIds()[0]!;
+      editor().surface!.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 1 },
+      });
+    });
+    rightClick(view);
+    expect(rows(view).map((row) => row.dataset.slot)).not.toContain('table.insertRowAbove');
+  });
+
+  test('mousedown on a table row is prevented so selection stays intact', () => {
+    const { view, editor } = mountDocument(TABLE_2X2);
+    act(() => {
+      const paragraphId = editor().surface!.session.paragraphIds()[0]!;
+      editor().surface!.setSelection({
+        anchor: { paragraphId, offset: 0 },
+        head: { paragraphId, offset: 2 },
+      });
+    });
+    const before = editor().query({ type: 'selectedText' });
+    rightClick(view);
+    const event = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    act(() => {
+      rowNamed(view, 'table.insertRowAbove').dispatchEvent(event);
+    });
+    expect(event.defaultPrevented).toBe(true);
+    expect(editor().query({ type: 'selectedText' })).toBe(before);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Table of contents
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /** Right-click a painted element rather than the surface at large. */
+  function rightClickOn(element: HTMLElement, x = 120, y = 140): void {
+    act(() => {
+      fireEvent.contextMenu(element, { clientX: x, clientY: y, button: 2 });
+    });
+  }
+
+  function tocRow(view: ReturnType<typeof render>): HTMLElement {
+    const element = view.container.querySelector<HTMLElement>('[data-docx-read-only]');
+    if (!element) throw new Error('no painted TOC row');
+    return element;
+  }
+
+  test('right-clicking a TOC appends its update rows, with icons, to the packaged set', () => {
+    const { view } = mountDocument(TOC_DOCUMENT);
+    rightClickOn(tocRow(view));
+    const slots = rows(view).map((row) => row.dataset.slot);
+    // Appended, not substituted: the ordinary rows are still the same rows.
+    expect(slots).toContain('edit.copy');
+    expect(slots.slice(-2)).toEqual(['toc.refresh', 'toc.refreshPageNumbers']);
+    for (const slot of ['toc.refresh', 'toc.refreshPageNumbers']) {
+      expect(rowNamed(view, slot).querySelector('svg')).not.toBeNull();
+    }
+    expect(rowNamed(view, 'toc.refresh').textContent).toContain('toc.refresh');
+    expect(rowNamed(view, 'toc.refreshPageNumbers').textContent).toContain('toc.refreshPageNumbers');
+  });
+
+  test('the rows are there on the FIRST open, right after a menu over ordinary text', () => {
+    // The engine records the right-click target and this panel opens from the same event, so
+    // reading that target through a subscription is a render behind. Opening over ordinary
+    // text first is what makes the difference observable: the TOC open has to bring its own
+    // rows with it, not inherit them from a state the previous open already settled.
+    const { view } = mountDocument(TOC_DOCUMENT);
+    rightClick(view);
+    expect(rows(view).map((row) => row.dataset.slot)).not.toContain('toc.refresh');
+    act(() => {
+      fireEvent.keyDown(document, { key: 'Escape' });
+    });
+    rightClickOn(tocRow(view));
+    expect(rows(view).map((row) => row.dataset.slot).slice(-2)).toEqual([
+      'toc.refresh',
+      'toc.refreshPageNumbers',
+    ]);
+  });
+
+  test('the rows keep addressing the TOC the open captured, not the caret', () => {
+    const { view, editor } = mountDocument(TOC_DOCUMENT);
+    rightClickOn(tocRow(view));
+    // The caret is nowhere near a TOC — it cannot be — so an id read from the selection
+    // would be no id at all in a document with more than one.
+    expect(editor().snapshot().tocContext).not.toBeNull();
+    act(() => {
+      fireEvent.click(rowNamed(view, 'toc.refreshPageNumbers'));
+    });
+    expect(panel(view)).toBeNull();
+  });
+
+  test('the update rows are absent from a menu opened over ordinary text', () => {
+    const { view } = mountDocument(TOC_DOCUMENT);
+    rightClick(view);
+    const slots = rows(view).map((row) => row.dataset.slot);
+    expect(slots).not.toContain('toc.refresh');
+    expect(slots).not.toContain('toc.refreshPageNumbers');
+  });
+
+  test('selecting the update row refreshes the pointed-at TOC and closes the panel', () => {
+    const { view, editor } = mountDocument(TOC_DOCUMENT);
+    rightClickOn(tocRow(view));
+    act(() => {
+      fireEvent.click(rowNamed(view, 'toc.refresh'));
+    });
+    expect(panel(view)).toBeNull();
+    expect(
+      [...view.container.querySelectorAll('[data-docx-read-only]')].some((row) =>
+        row.textContent?.includes('Introduction')
+      )
+    ).toBe(true);
+    expect(editor().query({ type: 'isInsideToc', pos: 0 })).toBe(false);
   });
 });

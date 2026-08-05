@@ -47,6 +47,8 @@ export interface DocxEditorConfig {
   mode?: 'edit' | 'view';
   zoom?: number;
   onFontError?: (error: EditorFontError) => void;
+  /** Localized labels for table insertion furniture on the painted surface. */
+  tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
 }
 
 /**

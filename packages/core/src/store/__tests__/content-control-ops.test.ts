@@ -20,7 +20,15 @@ import {
 } from '../index.ts';
 import { diffSemanticDigests, semanticDigest } from '../package/ooxml-digest.ts';
 import { applyTreeOp } from '../store/tree-op-apply.ts';
-import type { TreeDocOp, TreeOpRejection } from '../store/tree-op-types.ts';
+import { applySetContentControlValue } from '../store/tree-op-content-controls.ts';
+import type { TreeDocOp, TreeOpRejection, TreeOpResult } from '../store/tree-op-types.ts';
+import { paragraphTextOf } from '../store/tree-ops.ts';
+import { segmentsOf } from '../store/tree-op-validate.ts';
+import {
+  findContentControl,
+  hasGlossaryPlaceholderRef,
+  isShowingPlaceholder,
+} from '../store/tree-op-nodes.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
@@ -212,6 +220,60 @@ describe('setContentControlValue writes the value each type accepts', () => {
         value: { kind: 'text', text: 'x' },
       })
     ).toBe('unknown-content-control');
+  });
+});
+
+// The op carries `string | ContentControlValueInput`. The editor-facing form is a bare string,
+// whose characters mean whatever the control's own type says they mean, and the structured form
+// states the kind instead of implying it. They must be ONE definition of what a value is: a
+// string read as text for a dropdown would write a caption the list never declared.
+describe('a bare string is read in the vocabulary the control type declares', () => {
+  function write(part: OoxmlPart, value: string): TreeOpResult {
+    return applySetContentControlValue(part, {
+      op: 'setContentControlValue',
+      controlId: controlIds(part)[0]!,
+      value,
+    });
+  }
+
+  function written(part: OoxmlPart, value: string): OoxmlPart {
+    const result = write(part, value);
+    if (!result.ok) throw new Error(`refused: ${result.reason}`);
+    return result.part;
+  }
+
+  function rejected(part: OoxmlPart, value: string): TreeOpRejection | null {
+    const result = write(part, value);
+    return result.ok ? null : result.reason;
+  }
+
+  test('a dropdown reads it as one of its own item values', () => {
+    const next = written(DROPDOWN, 'yes');
+    expect(contentControlTextOf(controlOf(next))).toBe('Yes, please');
+    expect(contentControlPropertiesOf(controlOf(next)).lastValue).toBe('yes');
+  });
+
+  test('a dropdown still refuses an item it does not declare', () => {
+    expect(rejected(DROPDOWN, 'maybe')).toBe('invalidArgs');
+  });
+
+  test('a checkbox reads it as a state and writes the declared glyph', () => {
+    const next = written(CHECKBOX, 'true');
+    expect(contentControlPropertiesOf(controlOf(next)).checkbox?.checked).toBe(true);
+    expect(contentControlTextOf(controlOf(next))).toBe('\u2612');
+  });
+
+  test('a string that is neither state is a type mismatch, not an unchecked box', () => {
+    expect(rejected(CHECKBOX, 'perhaps')).toBe('typeMismatch');
+  });
+
+  test('a date reads it as ISO input', () => {
+    const next = written(DATE, '2024-03-09');
+    expect(contentControlPropertiesOf(controlOf(next)).date?.fullDate).toBe('2024-03-09T00:00:00Z');
+  });
+
+  test('every other type reads it as the text it is', () => {
+    expect(contentControlTextOf(controlOf(written(PLAIN_TEXT, 'Ada')))).toBe('Ada');
   });
 });
 
@@ -708,3 +770,598 @@ function findDemotedSdt(part: OoxmlPart): string {
   if (!found) throw new Error('the read did not demote the sdt');
   return found;
 }
+
+// v2 editor-facing string operations retain their independent regression coverage.
+const V2_W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const V2_W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
+const V2_W15 = 'http://schemas.microsoft.com/office/word/2012/wordml';
+
+function loadV2(body: string, extra = ''): OoxmlPart {
+  const result = readOoxmlPart(
+    `<w:document xmlns:w="${V2_W}" xmlns:w14="${V2_W14}" xmlns:w15="${V2_W15}"${extra}><w:body>${body}</w:body></w:document>`,
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!result.ok) throw new Error(result.reason);
+  return result.part;
+}
+
+function applyV2(part: OoxmlPart, op: TreeDocOp): OoxmlPart {
+  const result = applyTreeOp(part, op);
+  if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
+  return result.part;
+}
+
+function rejectV2(part: OoxmlPart, op: TreeDocOp): string {
+  const result = applyTreeOp(part, op);
+  if (result.ok) throw new Error('expected a rejection');
+  return result.reason;
+}
+
+function findByIdV2(node: OoxmlNode, id: string): OoxmlNode | null {
+  if (node.kind === 'textValue') return node.id === id ? node : null;
+  if (node.id === id) return node;
+  for (const child of node.children) {
+    const found = findByIdV2(child, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+function firstSdtV2(part: OoxmlPart): OoxmlNode {
+  const walk = (node: OoxmlNode): OoxmlNode | null => {
+    if (node.kind === 'textValue') return null;
+    if (node.localName === 'sdt') return node;
+    for (const child of node.children) {
+      const found = walk(child);
+      if (found) return found;
+    }
+    return null;
+  };
+  const found = walk(part.root);
+  if (!found) throw new Error('no sdt');
+  return found;
+}
+
+function attributeOfV2(node: OoxmlNode, localName: string): string | undefined {
+  if (node.kind === 'textValue') return undefined;
+  return node.attributes.find((attribute) => attribute.localName === localName)?.value;
+}
+
+function childNamedV2(parent: OoxmlNode, localName: string): OoxmlNode | undefined {
+  if (parent.kind === 'textValue') return undefined;
+  return parent.children.find(
+    (child) => child.kind !== 'textValue' && child.localName === localName
+  );
+}
+
+const V2_PARAGRAPH = '/word/document.xml#0.0.0';
+
+describe('inline content controls contribute UTF-16 offsets', () => {
+  test('segmentsOf includes runs inside an inline sdt', () => {
+    const part = loadV2(
+      '<w:p><w:r><w:t>before </w:t></w:r>' +
+        '<w:sdt><w:sdtPr/><w:sdtContent><w:r><w:t>mid</w:t></w:r></w:sdtContent></w:sdt>' +
+        '<w:r><w:t> after</w:t></w:r></w:p>'
+    );
+    const paragraph = findByIdV2(part.root, V2_PARAGRAPH);
+    expect(paragraph?.kind).toBe('paragraph');
+    if (!paragraph || paragraph.kind !== 'paragraph') throw new Error('no paragraph');
+    expect(paragraphTextOf(part, V2_PARAGRAPH)).toBe('before mid after');
+    expect(segmentsOf(paragraph).at(-1)?.end).toBe(16);
+  });
+
+  test('deleteText can erase text inside an inline control', () => {
+    const part = loadV2(
+      '<w:p><w:r><w:t>ab</w:t></w:r>' +
+        '<w:sdt><w:sdtPr/><w:sdtContent><w:r><w:t>CD</w:t></w:r></w:sdtContent></w:sdt>' +
+        '<w:r><w:t>ef</w:t></w:r></w:p>'
+    );
+    const next = applyV2(part, { op: 'deleteText', paragraphId: V2_PARAGRAPH, start: 2, end: 4 });
+    expect(paragraphTextOf(next, V2_PARAGRAPH)).toBe('abef');
+    expect(firstSdtV2(next)).toBeTruthy();
+  });
+});
+
+describe('setContentControlValue', () => {
+  test('text control replaces content and clears showingPlcHdr', () => {
+    const part = loadV2(
+      '<w:sdt><w:sdtPr><w:showingPlcHdr/><w:text/></w:sdtPr>' +
+        '<w:sdtContent><w:p><w:r><w:t>Enter name</w:t></w:r></w:p></w:sdtContent></w:sdt>'
+    );
+    const control = firstSdtV2(part);
+    const next = applyV2(part, {
+      op: 'setContentControlValue',
+      controlId: control.id,
+      value: 'Ada',
+    });
+    const updated = findContentControl(next, control.id)!;
+    expect(childNamedV2(childNamedV2(updated, 'sdtPr')!, 'showingPlcHdr')).toBeUndefined();
+    const content = childNamedV2(updated, 'sdtContent')!;
+    const text = [
+      ...(function* walk(node: OoxmlNode): Generator<string> {
+        if (node.kind === 'textValue') {
+          yield node.value;
+          return;
+        }
+        for (const child of node.children) yield* walk(child);
+      })(content),
+    ].join('');
+    expect(text).toBe('Ada');
+    expect(updated.id).toBe(control.id);
+  });
+
+  test('dropdown accepts a listed value and updates lastValue', () => {
+    const part = loadV2(
+      '<w:sdt><w:sdtPr><w:dropDownList>' +
+        '<w:listItem w:displayText="One" w:value="1"/>' +
+        '<w:listItem w:displayText="Two" w:value="2"/>' +
+        '</w:dropDownList></w:sdtPr>' +
+        '<w:sdtContent><w:p><w:pPr><w:spacing w:after="120"/></w:pPr>' +
+        '<w:r><w:t>One</w:t></w:r></w:p></w:sdtContent></w:sdt>'
+    );
+    const control = firstSdtV2(part);
+    const originalParagraph = childNamedV2(childNamedV2(control, 'sdtContent')!, 'p')!;
+    expect(
+      rejectV2(part, { op: 'setContentControlValue', controlId: control.id, value: '9' })
+    ).toBe('invalidArgs');
+    const next = applyV2(part, {
+      op: 'setContentControlValue',
+      controlId: control.id,
+      value: '2',
+    });
+    const list = childNamedV2(
+      childNamedV2(findContentControl(next, control.id)!, 'sdtPr')!,
+      'dropDownList'
+    )!;
+    expect(attributeOfV2(list, 'lastValue')).toBe('2');
+    const updatedParagraph = childNamedV2(
+      childNamedV2(findContentControl(next, control.id)!, 'sdtContent')!,
+      'p'
+    )!;
+    expect(updatedParagraph.id).toBe(originalParagraph.id);
+    expect(
+      attributeOfV2(childNamedV2(childNamedV2(updatedParagraph, 'pPr')!, 'spacing')!, 'after')
+    ).toBe('120');
+  });
+
+  test('combo accepts a free value', () => {
+    const part = loadV2(
+      '<w:sdt><w:sdtPr><w:comboBox>' +
+        '<w:listItem w:displayText="Red" w:value="r"/>' +
+        '</w:comboBox></w:sdtPr>' +
+        '<w:sdtContent><w:p><w:r><w:t>Red</w:t></w:r></w:p></w:sdtContent></w:sdt>'
+    );
+    const control = firstSdtV2(part);
+    const next = applyV2(part, {
+      op: 'setContentControlValue',
+      controlId: control.id,
+      value: 'custom',
+    });
+    const list = childNamedV2(
+      childNamedV2(findContentControl(next, control.id)!, 'sdtPr')!,
+      'comboBox'
+    )!;
+    expect(attributeOfV2(list, 'lastValue')).toBe('custom');
+  });
+
+  test('checkbox toggles w14:checked and rewrites the glyph', () => {
+    const part = loadV2(
+      '<w:p><w:sdt><w:sdtPr><w14:checkbox>' +
+        '<w14:checked w14:val="0"/>' +
+        '<w14:checkedState w14:val="2612" w14:font="MS Gothic"/>' +
+        '<w14:uncheckedState w14:val="2610" w14:font="MS Gothic"/>' +
+        '</w14:checkbox></w:sdtPr>' +
+        '<w:sdtContent><w:r><w:sym w:font="MS Gothic" w:char="2610"/></w:r></w:sdtContent>' +
+        '</w:sdt></w:p>'
+    );
+    const control = firstSdtV2(part);
+    const next = applyV2(part, {
+      op: 'setContentControlValue',
+      controlId: control.id,
+      value: 'true',
+    });
+    const checkbox = childNamedV2(
+      childNamedV2(findContentControl(next, control.id)!, 'sdtPr')!,
+      'checkbox'
+    )!;
+    const checked = childNamedV2(checkbox, 'checked')!;
+    expect(attributeOfV2(checked, 'val')).toBe('1');
+    const walk = (node: OoxmlNode): OoxmlNode | null => {
+      if (node.kind !== 'textValue' && node.localName === 'sym') return node;
+      if (node.kind === 'textValue') return null;
+      for (const child of node.children) {
+        const found = walk(child);
+        if (found) return found;
+      }
+      return null;
+    };
+    expect(attributeOfV2(walk(findContentControl(next, control.id)!)!, 'char')).toBe('2612');
+  });
+
+  test('date writes fullDate and formatted display text', () => {
+    const part = loadV2(
+      '<w:sdt><w:sdtPr><w:date w:fullDate="2020-01-01T00:00:00Z">' +
+        '<w:dateFormat w:val="yyyy-MM-dd"/>' +
+        '</w:date></w:sdtPr>' +
+        '<w:sdtContent><w:p><w:r><w:t>2020-01-01</w:t></w:r></w:p></w:sdtContent></w:sdt>'
+    );
+    const control = firstSdtV2(part);
+    const next = applyV2(part, {
+      op: 'setContentControlValue',
+      controlId: control.id,
+      value: '2024-07-04',
+    });
+    const date = childNamedV2(
+      childNamedV2(findContentControl(next, control.id)!, 'sdtPr')!,
+      'date'
+    )!;
+    expect(attributeOfV2(date, 'fullDate')).toBe('2024-07-04T00:00:00Z');
+    expect(collectTextV2(childNamedV2(findContentControl(next, control.id)!, 'sdtContent')!)).toBe(
+      '2024-07-04'
+    );
+  });
+
+  test('date accepts leap-day and normalizes date-time zones', () => {
+    const part = loadV2(
+      '<w:sdt><w:sdtPr><w:date w:fullDate="2020-01-01T00:00:00Z">' +
+        '<w:dateFormat w:val="yyyy-MM-dd"/>' +
+        '</w:date></w:sdtPr>' +
+        '<w:sdtContent><w:p><w:r><w:t>2020-01-01</w:t></w:r></w:p></w:sdtContent></w:sdt>'
+    );
+    const id = firstSdtV2(part).id;
+    const leap = applyV2(part, {
+      op: 'setContentControlValue',
+      controlId: id,
+      value: '2024-02-29T15:30:00+02:00',
+    });
+    expect(
+      attributeOfV2(
+        childNamedV2(childNamedV2(findContentControl(leap, id)!, 'sdtPr')!, 'date')!,
+        'fullDate'
+      )
+    ).toBe('2024-02-29T15:30:00+02:00');
+  });
+
+  test('date refuses impossible calendar dates and malformed suffixes', () => {
+    const part = loadV2(
+      '<w:sdt><w:sdtPr><w:date w:fullDate="2020-01-01T00:00:00Z">' +
+        '<w:dateFormat w:val="yyyy-MM-dd"/>' +
+        '</w:date></w:sdtPr>' +
+        '<w:sdtContent><w:p><w:r><w:t>2020-01-01</w:t></w:r></w:p></w:sdtContent></w:sdt>'
+    );
+    const id = firstSdtV2(part).id;
+    expect(
+      rejectV2(part, { op: 'setContentControlValue', controlId: id, value: '2024-02-31' })
+    ).toBe('invalidArgs');
+    expect(
+      rejectV2(part, { op: 'setContentControlValue', controlId: id, value: '2023-02-29' })
+    ).toBe('invalidArgs');
+    expect(
+      rejectV2(part, { op: 'setContentControlValue', controlId: id, value: '2024-04-31' })
+    ).toBe('invalidArgs');
+    expect(
+      rejectV2(part, { op: 'setContentControlValue', controlId: id, value: '2024-01-01Tgarbage' })
+    ).toBe('invalidArgs');
+    expect(
+      rejectV2(part, { op: 'setContentControlValue', controlId: id, value: '2024-01-01 00:00:00Z' })
+    ).toBe('invalidArgs');
+  });
+
+  test('bound controls refuse value edits', () => {
+    const part = loadV2(
+      '<w:sdt><w:sdtPr>' +
+        '<w:dataBinding w:xpath="/a" w:storeItemID="{GUID}"/>' +
+        '<w:text/>' +
+        '</w:sdtPr><w:sdtContent><w:p><w:r><w:t>x</w:t></w:r></w:p></w:sdtContent></w:sdt>'
+    );
+    expect(
+      rejectV2(part, {
+        op: 'setContentControlValue',
+        controlId: firstSdtV2(part).id,
+        value: 'y',
+      })
+    ).toBe('bound');
+  });
+
+  test('repeating section ops are unsupported', () => {
+    const part = loadV2(
+      '<w:sdt><w:sdtPr><w15:repeatingSection/></w:sdtPr>' +
+        '<w:sdtContent><w:p><w:r><w:t>item</w:t></w:r></w:p></w:sdtContent></w:sdt>'
+    );
+    const id = firstSdtV2(part).id;
+    expect(rejectV2(part, { op: 'addRepeatingSectionItem', controlId: id })).toBe('unsupported');
+    expect(rejectV2(part, { op: 'removeRepeatingSectionItem', controlId: id, index: 0 })).toBe(
+      'unsupported'
+    );
+    expect(rejectV2(part, { op: 'setContentControlValue', controlId: id, value: 'x' })).toBe(
+      'unsupported'
+    );
+  });
+});
+
+describe('removeContentControl', () => {
+  test('unwraps keeping content and identity of runs', () => {
+    const part = loadV2(
+      '<w:p><w:r><w:t>a</w:t></w:r>' +
+        '<w:sdt><w:sdtPr/><w:sdtContent><w:r><w:t>b</w:t></w:r></w:sdtContent></w:sdt>' +
+        '<w:r><w:t>c</w:t></w:r></w:p>'
+    );
+    const control = firstSdtV2(part);
+    const contentRun = childNamedV2(childNamedV2(control, 'sdtContent')!, 'r')!;
+    const next = applyV2(part, { op: 'removeContentControl', controlId: control.id });
+    expect(paragraphTextOf(next, V2_PARAGRAPH)).toBe('abc');
+    expect(findContentControl(next, control.id)).toBeNull();
+    expect(findByIdV2(next.root, contentRun.id)?.kind).toBe('run');
+  });
+
+  test('explicit remove publishes flow-structural impact', () => {
+    const part = loadV2(
+      '<w:p><w:sdt><w:sdtPr/><w:sdtContent><w:r><w:t>body</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+    );
+    const result = applyTreeOp(part, {
+      op: 'removeContentControl',
+      controlId: firstSdtV2(part).id,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('unreachable');
+    expect(result.effect.impact).toBe('flow-structural');
+    expect(paragraphTextOf(result.part, V2_PARAGRAPH)).toBe('body');
+  });
+
+  test('preserves non-property extension children beside sdtContent', () => {
+    const part = loadV2(
+      '<w:p><w:sdt><w:sdtPr/><w:sdtContent><w:r><w:t>body</w:t></w:r></w:sdtContent>' +
+        '<w:extLst><w:ext w:uri="{test}"/></w:extLst></w:sdt></w:p>'
+    );
+    const control = firstSdtV2(part);
+    const extension = childNamedV2(control, 'extLst')!;
+    const next = applyV2(part, { op: 'removeContentControl', controlId: control.id });
+    expect(findContentControl(next, control.id)).toBeNull();
+    expect(findByIdV2(next.root, extension.id)?.localName).toBe('extLst');
+    expect(paragraphTextOf(next, V2_PARAGRAPH)).toBe('body');
+  });
+
+  test('refuses unwrap when duplicate sdtContent would drop authored markup', () => {
+    const part = loadV2(
+      '<w:p><w:sdt><w:sdtPr/>' +
+        '<w:sdtContent><w:r><w:t>first</w:t></w:r></w:sdtContent>' +
+        '<w:sdtContent><w:r><w:t>second</w:t></w:r></w:sdtContent>' +
+        '</w:sdt></w:p>'
+    );
+    const control = firstSdtV2(part);
+    expect(rejectV2(part, { op: 'removeContentControl', controlId: control.id })).toBe(
+      'tree-invariant'
+    );
+    expect(findContentControl(part, control.id)).not.toBeNull();
+  });
+
+  test('preserves foreign-namespace sdtPr/sdtEndPr siblings during unwrap', () => {
+    const X = 'urn:hostile';
+    const part = loadV2(
+      '<w:p><w:sdt><w:sdtPr/>' +
+        `<x:sdtPr xmlns:x="${X}" x:keep="pr"/>` +
+        '<w:sdtContent><w:r><w:t>body</w:t></w:r></w:sdtContent>' +
+        `<x:sdtEndPr xmlns:x="${X}" x:keep="end"/>` +
+        '</w:sdt></w:p>',
+      ` xmlns:x="${X}"`
+    );
+    const control = firstSdtV2(part);
+    const foreignPr = control.children.find(
+      (child) =>
+        child.kind !== 'textValue' && child.localName === 'sdtPr' && child.namespaceUri === X
+    )!;
+    const foreignEnd = control.children.find(
+      (child) =>
+        child.kind !== 'textValue' && child.localName === 'sdtEndPr' && child.namespaceUri === X
+    )!;
+    const next = applyV2(part, { op: 'removeContentControl', controlId: control.id });
+    expect(findContentControl(next, control.id)).toBeNull();
+    expect(paragraphTextOf(next, V2_PARAGRAPH)).toBe('body');
+    expect(findByIdV2(next.root, foreignPr.id)?.namespaceUri).toBe(X);
+    expect(findByIdV2(next.root, foreignEnd.id)?.namespaceUri).toBe(X);
+    expect(serializeOoxmlPart(next)).toContain('x:keep="pr"');
+    expect(serializeOoxmlPart(next)).toContain('x:keep="end"');
+  });
+});
+
+function reopenV2(part: OoxmlPart): OoxmlPart {
+  const saved = serializeOoxmlPart(part);
+  const result = readOoxmlPart(saved, { name: part.name, contentType: part.contentType });
+  if (!result.ok) throw new Error(`reopenV2 failed: ${result.reason}`);
+  return result.part;
+}
+
+function collectTextV2(node: OoxmlNode): string {
+  if (node.kind === 'textValue') return node.value;
+  return node.children.map(collectTextV2).join('');
+}
+
+describe('showingPlcHdr first-input replacement', () => {
+  test('insertText replaces the entire literal prompt and clears showingPlcHdr', () => {
+    const part = loadV2(
+      '<w:p><w:r><w:t>x</w:t></w:r>' +
+        '<w:sdt><w:sdtPr><w:showingPlcHdr/><w:text/></w:sdtPr>' +
+        '<w:sdtContent><w:r><w:t>Enter name</w:t></w:r></w:sdtContent></w:sdt>' +
+        '<w:r><w:t>y</w:t></w:r></w:p>'
+    );
+    const control = firstSdtV2(part);
+    // Caret inside the prompt (offset 1 is past the leading "x").
+    const next = applyV2(part, {
+      op: 'insertText',
+      paragraphId: V2_PARAGRAPH,
+      offset: 3,
+      text: 'Ada',
+    });
+    expect(paragraphTextOf(next, V2_PARAGRAPH)).toBe('xAday');
+    const updated = findContentControl(next, control.id)!;
+    expect(isShowingPlaceholder(updated)).toBe(false);
+    expect(collectTextV2(childNamedV2(updated, 'sdtContent')!)).toBe('Ada');
+  });
+
+  test('foreign-namespace showingPlcHdr does not trigger destructive replacement', () => {
+    const X = 'urn:ext';
+    const part = loadV2(
+      '<w:p><w:sdt><w:sdtPr>' +
+        `<x:showingPlcHdr xmlns:x="${X}" x:keep="1"/>` +
+        '<w:text/>' +
+        '</w:sdtPr><w:sdtContent><w:r><w:t>REAL</w:t></w:r></w:sdtContent></w:sdt></w:p>',
+      ` xmlns:x="${X}"`
+    );
+    const control = firstSdtV2(part);
+    expect(isShowingPlaceholder(control)).toBe(false);
+    const next = applyV2(part, {
+      op: 'insertText',
+      paragraphId: V2_PARAGRAPH,
+      offset: 2,
+      text: 'X',
+    });
+    const updated = findContentControl(next, control.id)!;
+    expect(paragraphTextOf(next, V2_PARAGRAPH)).toBe('REXAL');
+    expect(collectTextV2(childNamedV2(updated, 'sdtContent')!)).toBe('REXAL');
+    const foreign = childNamedV2(childNamedV2(updated, 'sdtPr')!, 'showingPlcHdr');
+    expect(foreign?.namespaceUri).toBe(X);
+    expect(serializeOoxmlPart(next)).toContain('x:keep="1"');
+  });
+
+  test('save/reopenV2 does not leave showingPlcHdr over user content', () => {
+    const part = loadV2(
+      '<w:sdt><w:sdtPr><w:showingPlcHdr/><w:text/></w:sdtPr>' +
+        '<w:sdtContent><w:p><w:r><w:t>Enter project name</w:t></w:r></w:p></w:sdtContent></w:sdt>'
+    );
+    const control = firstSdtV2(part);
+    // Block control: the paragraph inside is the editable target.
+    const innerPara = childNamedV2(childNamedV2(control, 'sdtContent')!, 'p')!;
+    const next = applyV2(part, {
+      op: 'insertText',
+      paragraphId: innerPara.id,
+      offset: 0,
+      text: 'Apollo',
+    });
+    const reopened = reopenV2(next);
+    const after = findContentControl(reopened, control.id)!;
+    expect(isShowingPlaceholder(after)).toBe(false);
+    expect(serializeOoxmlPart(reopened)).not.toContain('showingPlcHdr');
+    expect(collectTextV2(childNamedV2(after, 'sdtContent')!)).toBe('Apollo');
+  });
+
+  test('emptying after a placeholder replace does not restore showingPlcHdr (no glossary)', () => {
+    // Honest limitation: without a durable glossary source this lane cannot restore a prompt.
+    const part = loadV2(
+      '<w:p><w:sdt><w:sdtPr><w:showingPlcHdr/><w:text/></w:sdtPr>' +
+        '<w:sdtContent><w:r><w:t>Prompt</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+    );
+    const control = firstSdtV2(part);
+    const filled = applyV2(part, {
+      op: 'insertText',
+      paragraphId: V2_PARAGRAPH,
+      offset: 0,
+      text: 'Hi',
+    });
+    expect(isShowingPlaceholder(findContentControl(filled, control.id)!)).toBe(false);
+    const emptied = applyV2(filled, {
+      op: 'deleteText',
+      paragraphId: V2_PARAGRAPH,
+      start: 0,
+      end: 2,
+    });
+    const after = findContentControl(emptied, control.id)!;
+    expect(isShowingPlaceholder(after)).toBe(false);
+    expect(paragraphTextOf(emptied, V2_PARAGRAPH)).toBe('');
+  });
+
+  test('glossary docPart is preserved and still cannot invent a restore', () => {
+    const part = loadV2(
+      '<w:p><w:sdt><w:sdtPr>' +
+        '<w:placeholder><w:docPart w:val="DefaultPlaceholder"/></w:placeholder>' +
+        '<w:showingPlcHdr/><w:text/>' +
+        '</w:sdtPr><w:sdtContent><w:r><w:t>Click here</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+    );
+    const control = firstSdtV2(part);
+    expect(hasGlossaryPlaceholderRef(control)).toBe(true);
+    const filled = applyV2(part, {
+      op: 'insertText',
+      paragraphId: V2_PARAGRAPH,
+      offset: 0,
+      text: 'Data',
+    });
+    const after = findContentControl(filled, control.id)!;
+    expect(isShowingPlaceholder(after)).toBe(false);
+    expect(hasGlossaryPlaceholderRef(after)).toBe(true);
+    const emptied = applyV2(filled, {
+      op: 'deleteText',
+      paragraphId: V2_PARAGRAPH,
+      start: 0,
+      end: 4,
+    });
+    // Still no restore: glossary is not resolved in this lane.
+    expect(isShowingPlaceholder(findContentControl(emptied, control.id)!)).toBe(false);
+  });
+
+  test('bound refuses before a placeholder transition', () => {
+    const part = loadV2(
+      '<w:p><w:sdt><w:sdtPr>' +
+        '<w:showingPlcHdr/>' +
+        '<w:dataBinding w:xpath="/a" w:storeItemID="{G}"/>' +
+        '<w:text/>' +
+        '</w:sdtPr><w:sdtContent><w:r><w:t>Prompt</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+    );
+    expect(
+      rejectV2(part, { op: 'insertText', paragraphId: V2_PARAGRAPH, offset: 0, text: 'x' })
+    ).toBe('bound');
+    expect(isShowingPlaceholder(firstSdtV2(part))).toBe(true);
+  });
+});
+
+describe('w:temporary unwrap on first content edit', () => {
+  test('insertText unwraps a temporary control keeping the edited content', () => {
+    const part = loadV2(
+      '<w:p><w:r><w:t>a</w:t></w:r>' +
+        '<w:sdt><w:sdtPr><w:temporary/></w:sdtPr>' +
+        '<w:sdtContent><w:r><w:t>b</w:t></w:r></w:sdtContent></w:sdt>' +
+        '<w:r><w:t>c</w:t></w:r></w:p>'
+    );
+    const controlId = firstSdtV2(part).id;
+    const next = applyV2(part, {
+      op: 'insertText',
+      paragraphId: V2_PARAGRAPH,
+      offset: 1,
+      text: 'X',
+    });
+    expect(findContentControl(next, controlId)).toBeNull();
+    expect(paragraphTextOf(next, V2_PARAGRAPH)).toBe('aXbc');
+  });
+
+  test('placeholder replace and temporary unwrap share one write', () => {
+    const part = loadV2(
+      '<w:p><w:sdt><w:sdtPr><w:temporary/><w:showingPlcHdr/><w:text/></w:sdtPr>' +
+        '<w:sdtContent><w:r><w:t>Prompt</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+    );
+    const controlId = firstSdtV2(part).id;
+    const result = applyTreeOp(part, {
+      op: 'insertText',
+      paragraphId: V2_PARAGRAPH,
+      offset: 0,
+      text: 'Ok',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('unreachable');
+    expect(result.effect.impact).toBe('flow-structural');
+    expect(findContentControl(result.part, controlId)).toBeNull();
+    expect(paragraphTextOf(result.part, V2_PARAGRAPH)).toBe('Ok');
+  });
+
+  test('setContentControlValue unwraps a temporary control', () => {
+    const part = loadV2(
+      '<w:sdt><w:sdtPr><w:temporary/><w:text/></w:sdtPr>' +
+        '<w:sdtContent><w:p><w:r><w:t>old</w:t></w:r></w:p></w:sdtContent></w:sdt>'
+    );
+    const controlId = firstSdtV2(part).id;
+    const next = applyV2(part, {
+      op: 'setContentControlValue',
+      controlId,
+      value: 'new',
+    });
+    expect(findContentControl(next, controlId)).toBeNull();
+    expect(collectTextV2(next.root)).toContain('new');
+  });
+});

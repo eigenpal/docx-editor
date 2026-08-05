@@ -19,7 +19,7 @@ Before production parity, the system SHALL prove paragraph load, edit, formattin
 - **THEN** semantic assertions, rendered output, canonical tree fingerprint, and reopened semantic digest agree at the committed revision
 
 ### Requirement: Fixed paragraph property boundary
-The paragraph acceptance fixture SHALL cover run font family, half-point size, color, bold, italic, underline variant/color, strike/double-strike, highlight, vertical alignment/baseline, caps/small-caps, character spacing, horizontal scaling, and kerning. It SHALL cover paragraph style, alignment, spacing (including `w:spacing` before/after), `w:contextualSpacing`, line spacing/rule, left/right/first-line/hanging indents, tabs, numbering identity/level, keep-next, keep-lines, widow control, page-break-before, shading, and all six `w:pBdr` edges. Inline text, authored whitespace, tab, line hard break, and typed `w:br w:type="page"` page-break content SHALL be editable with normalized save/reopen. Section-aware pagination fixtures SHALL exercise per-section geometry/margins, default/`nextPage` and `continuous` breaks, `titlePage`, and per-section read-only header/footer inheritance. `evenPage`/`oddPage`/`nextColumn` section semantics, multi-column flow, break-type selection, and paragraph-border authoring remain deferred. Engine implementation SHALL NOT by itself upgrade a public support claim: the non-bottom `w:pBdr` edges and `continuous` section semantics are implemented and covered by engine tests but have no paired React/Vue acceptance, so they SHALL NOT be advertised as supported until that acceptance and the gates below pass.
+The paragraph acceptance fixture SHALL cover run font family, half-point size, color, bold, italic, underline variant/color, strike/double-strike, highlight, vertical alignment/baseline, caps/small-caps, character spacing, horizontal scaling, and kerning. It SHALL cover paragraph style, alignment, spacing (including `w:spacing` before/after), `w:contextualSpacing`, line spacing/rule, left/right/first-line/hanging indents, tabs, numbering identity/level, keep-next, keep-lines, widow control, page-break-before, shading, and all six `w:pBdr` edges. Inline text, authored whitespace, tab, line hard break, and typed `w:br w:type="page"` page-break content SHALL be editable with normalized save/reopen. Section-aware pagination fixtures SHALL exercise per-section geometry/margins, default/`nextPage` and `continuous` breaks, `titlePage`, and per-section read-only header/footer inheritance. `evenPage`/`oddPage`/`nextColumn` section semantics, break-type selection, and paragraph-border authoring remain deferred. Engine implementation SHALL NOT by itself upgrade a public support claim: the non-bottom `w:pBdr` edges, `continuous` section semantics, and multi-column flow are implemented and covered by engine tests but have no paired React/Vue acceptance, so they SHALL NOT be advertised as supported until that acceptance and the gates below pass.
 
 #### Scenario: Complete accepted property fixture
 - **WHEN** the private React and paired adapter fixtures exercise the paragraph slice
@@ -54,12 +54,31 @@ Verification SHALL compare with the current run recorded in `baseline.md`, disti
 The change SHALL inventory non-paragraph features with separate parse/model/layout/edit/save status and SHALL NOT infer semantic support from generic-tree preservation.
 
 #### Scenario: Unsupported table is loaded
-- **WHEN** a document contains a table outside the accepted paragraph boundary
-- **THEN** the inventory identifies its limited parse, layout, and edit status without claiming complete structural editing or Word-fidelity layout
+- **WHEN** a document contains a table exercised only under the paragraph acceptance boundary
+- **THEN** the inventory identifies its limited parse, layout, and edit status without claiming the bounded Word-like table-editing slice is complete until D14 gates pass
 
 ### Requirement: Deferred lanes remain gated
-Hyperlinks, tables, drawings/images, headers/footers, footnotes/endnotes, fields, content controls, tracked changes, comments, collaboration/replicated undo, deterministic PDF/print/export, and server rendering/language bindings MUST remain deferred until separately specified and accepted. Each lane SHALL have separate parse, model, layout, edit, and save statuses plus a named future gate.
+Hyperlinks, drawings/images, headers/footers, footnotes/endnotes, fields, content controls, tracked changes, comments, collaboration/replicated undo, deterministic PDF/print/export, and server rendering/language bindings MUST remain deferred until separately specified and accepted. Bounded Word-like table editing is specified in D14 and follows its own acceptance gates; merge/split and row-height resize within tables remain deferred. Each lane SHALL have separate parse, model, layout, edit, and save statuses plus a named future gate.
 
 #### Scenario: Deferred feature appears in fixture
 - **WHEN** an acceptance fixture contains a deferred feature
 - **THEN** the test asserts its declared preservation or rejection behavior and excludes it from paragraph-slice support claims
+
+### Requirement: Table editing acceptance slice
+Before public table-editing support claims upgrade, the system SHALL prove row and column insertion and deletion, adjacent divider and outer-right column resize, selected-cell borders and fill with allowlisted styles and nullable fill, nested-table targeting, merge refusals with exact disabled reasons, semantic resize and insertion furniture, undo, normalized save, and reopen through focused store, layout, editor, React, Vue, and browser fixtures.
+
+#### Scenario: Merged table disables column chrome
+- **WHEN** the selection is in a table with horizontal or vertical merges
+- **THEN** column insertion, deletion, and resize controls report the same specific refusal reason from core command state
+
+#### Scenario: Rectangular selection receives border and fill
+- **WHEN** a rectangular cell selection spans multiple cells
+- **THEN** border commands require a complete `TableBorderSpec` for every concrete edge scope, `{ scope: 'none', target }` clears only that active edge target without a spec, and `setCellFill` with `null` clears direct fill attributes while preserving unrelated shading payload
+
+#### Scenario: Paired adapters share table chrome
+- **WHEN** table context is active in React and Vue
+- **THEN** both adapters render the same five contextual toolbar slots and seven fixed context-menu rows with equivalent enabled state, refusal text, and focus preservation
+
+#### Scenario: Table fixture passes D9 after browser edit
+- **WHEN** a nested-table browser scenario resizes a divider and outer edge, inserts and deletes rows and columns, applies borders and fill, saves, and reopens
+- **THEN** the reopened semantic digest matches the expected result and both D9 oracles pass

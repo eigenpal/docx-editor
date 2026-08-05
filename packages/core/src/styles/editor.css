@@ -112,6 +112,9 @@
   /* Status */
   --doc-error: #c5221f; /* error states */
   --doc-error-bg: #fce8e6; /* error backgrounds */
+  --doc-danger: var(--doc-error); /* invalid and refused controls */
+  --doc-destructive: var(--doc-error); /* destructive menu/context rows */
+  --doc-destructive-hover-bg: var(--doc-error-bg);
   --doc-success: #34a853; /* success states */
   --doc-success-bg: #e8f5e9; /* success backgrounds */
   --doc-warning: #f9a825; /* warning states (icon/accent/border) */
@@ -763,15 +766,311 @@ a.docx-hyperlink:focus-visible {
   cursor: text;
 }
 
+.docx-generated-region {
+  cursor: pointer;
+  user-select: none;
+}
+
+/*
+ * Empty TOC furniture — the ONE box an empty region gets; paint-only, never model text.
+ *
+ * The control-boundary rectangle is suppressed for these regions (see the surface's
+ * `suppressedIds`), so this is the whole affordance: subtle enough to read as a slot,
+ * always on so the region stays identifiable and right-clickable. No minimum height —
+ * the box is exactly the line layout reserved, so it cannot double up against the flow.
+ */
+.docx-toc-empty-placeholder {
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--doc-primary) 28%, var(--doc-page-bg-rendered));
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--doc-primary) 6%, var(--doc-page-bg-rendered));
+}
+
 /* Non-editable elements within editor */
 .docx-list-marker,
 .docx-bookmark-start,
 .docx-bookmark-end,
 .docx-field,
 .docx-drawing-placeholder,
-.docx-shape-placeholder {
+.docx-shape-placeholder,
+.docx-content-control-chrome,
+.docx-content-control-boundary,
+.docx-content-control-label,
+.docx-content-control-widget {
   cursor: default;
   user-select: none;
+}
+
+/* Content-control boundary furniture — overlay only; never contributes layout. */
+.docx-content-control-boundary {
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--doc-primary) 24%, var(--doc-page-bg-rendered));
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--doc-primary) 3%, var(--doc-page-bg-rendered));
+  opacity: 0;
+  pointer-events: auto;
+}
+
+.docx-content-control-chrome[data-boundary-visible] .docx-content-control-boundary {
+  opacity: 1;
+}
+
+.docx-content-control-chrome[data-active] .docx-content-control-boundary,
+.docx-content-control-chrome[data-open] .docx-content-control-boundary,
+.docx-content-control-chrome[data-hover] .docx-content-control-boundary,
+.docx-content-control-chrome:hover .docx-content-control-boundary {
+  border-color: var(--doc-primary);
+  background: color-mix(in srgb, var(--doc-primary) 10%, transparent);
+  opacity: 1;
+}
+
+/*
+ * Populated TOC: nothing at rest — no border, no background — and never sticky from the
+ * caret or a click. The surface sets `data-hover` on the painted chrome while the pointer
+ * is over the region and takes it off again on the way out.
+ */
+.docx-content-control-chrome[data-docx-toc]:not([data-hover]):not([data-boundary-visible])
+  .docx-content-control-boundary {
+  opacity: 0;
+}
+
+.docx-content-control-label {
+  box-sizing: border-box;
+  max-width: 12rem;
+  overflow: hidden;
+  padding: 1px 6px;
+  border-radius: 3px 3px 0 0;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+  font:
+    500 10px/14px system-ui,
+    sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: none;
+  pointer-events: none;
+}
+
+.docx-content-control-chrome[data-active] .docx-content-control-label,
+.docx-content-control-chrome[data-open] .docx-content-control-label,
+.docx-content-control-chrome[data-hover] .docx-content-control-label,
+.docx-content-control-chrome:hover .docx-content-control-label {
+  display: block;
+}
+
+.docx-content-control-widget {
+  box-sizing: border-box;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--doc-primary) 4%, var(--doc-page-bg-rendered));
+  border: 1px solid color-mix(in srgb, var(--doc-primary) 28%, var(--doc-page-bg-rendered)) !important;
+  cursor: pointer !important;
+}
+
+.docx-content-control-chrome[data-active] .docx-content-control-widget,
+.docx-content-control-chrome[data-open] .docx-content-control-widget,
+.docx-content-control-chrome:hover .docx-content-control-widget {
+  background: color-mix(in srgb, var(--doc-primary) 15%, transparent);
+  border-color: color-mix(in srgb, var(--doc-primary) 55%, transparent) !important;
+}
+
+.docx-content-control-widget::after {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--doc-primary);
+  font:
+    600 10px/1 system-ui,
+    sans-serif;
+}
+
+.docx-content-control-widget[data-docx-cc-widget='dropdown']::after,
+.docx-content-control-widget[data-docx-cc-widget='comboBox']::after {
+  content: '▾';
+}
+
+.docx-content-control-widget[data-docx-cc-widget='date']::after {
+  content: '';
+  inset: 3px;
+  display: block;
+  border: 1.5px solid currentcolor;
+  border-radius: 2px;
+  background: linear-gradient(currentcolor, currentcolor) 0 3px / 100% 1px no-repeat;
+}
+
+.docx-content-control-widget[data-docx-cc-widget='date']::before {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  top: 2px;
+  left: 5px;
+  width: 1px;
+  height: 3px;
+  background: currentcolor;
+  box-shadow: 4px 0 currentcolor;
+}
+
+.docx-content-control-widget[data-docx-cc-widget='checkbox']::after {
+  content: '';
+  inset: 2px 5px 4px;
+  display: block;
+  border-right: 2px solid currentcolor;
+  border-bottom: 2px solid currentcolor;
+  opacity: 0;
+  transform: rotate(45deg);
+}
+
+.docx-content-control-widget[data-docx-cc-widget='checkbox'][data-checked='true']::after {
+  opacity: 1;
+}
+
+.docx-content-control-widget:disabled,
+.docx-content-control-widget[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed !important;
+}
+
+.docx-content-control-menu {
+  min-width: 13rem;
+  max-width: 18rem;
+  max-height: 16rem;
+  overflow: auto;
+  background: var(--doc-popover-bg, #fff);
+  border: 1px solid var(--doc-border, rgba(0, 0, 0, 0.15));
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+  padding: 0.3rem;
+  user-select: none;
+}
+
+.docx-content-control-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.docx-content-control-menu-item:hover {
+  background: color-mix(in srgb, var(--doc-primary) 12%, transparent);
+}
+
+.docx-content-control-menu-input,
+.docx-content-control-date {
+  display: block;
+  width: 100%;
+  margin: 0 0 0.3rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.docx-content-control-calendar {
+  width: 17rem;
+  max-width: calc(100vw - 1.5rem);
+  padding: 0.65rem;
+  border-radius: 12px;
+}
+
+.docx-content-control-calendar-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 0.6rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--doc-border);
+  border-radius: 7px;
+  background: var(--doc-surface);
+  color: var(--doc-text);
+  font: inherit;
+}
+
+.docx-content-control-calendar-input:focus {
+  border-color: var(--doc-primary);
+  outline: 2px solid var(--doc-primary-light);
+  outline-offset: 1px;
+}
+
+.docx-content-control-calendar-input[aria-invalid='true'] {
+  border-color: var(--doc-danger);
+}
+
+.docx-content-control-calendar-input::-webkit-calendar-picker-indicator {
+  display: none;
+}
+
+.docx-content-control-calendar-header {
+  display: grid;
+  grid-template-columns: 2rem 1fr 2rem;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.45rem;
+}
+
+.docx-content-control-calendar-title {
+  text-align: center;
+  font-weight: 600;
+}
+
+.docx-content-control-calendar-nav,
+.docx-content-control-calendar-day {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.docx-content-control-calendar-nav {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 6px;
+  font-size: 1.35rem;
+}
+
+.docx-content-control-calendar-weekdays,
+.docx-content-control-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.2rem;
+}
+
+.docx-content-control-calendar-weekdays {
+  margin-bottom: 0.2rem;
+  color: var(--doc-text-muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.docx-content-control-calendar-day {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 7px;
+}
+
+.docx-content-control-calendar-nav:hover,
+.docx-content-control-calendar-day:hover {
+  background: var(--doc-primary-light);
+}
+
+.docx-content-control-calendar-day[data-other-month] {
+  color: var(--doc-text-muted);
+  opacity: 0.6;
+}
+
+.docx-content-control-calendar-day[data-selected] {
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+}
+
+.docx-content-control-calendar-day[data-today]:not([data-selected]) {
+  box-shadow: inset 0 0 0 1px var(--doc-primary);
 }
 
 /* ============================================================================
@@ -784,6 +1083,220 @@ a.docx-hyperlink:focus-visible {
   user-select: all;
 }
 
+/* Table interaction furniture (core-owned, semantic geometry). */
+.docx-table-furniture {
+  z-index: 3;
+  pointer-events: none;
+}
+
+.docx-table-divider-handle,
+.docx-table-edge-handle-right {
+  pointer-events: auto;
+}
+
+.docx-table-resize-preview {
+  background-color: var(--doc-primary);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.docx-table-insert-row,
+.docx-table-insert-column {
+  pointer-events: auto;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--doc-border-dark);
+  border-radius: 2px;
+  background: var(--doc-surface);
+  color: var(--doc-text-muted);
+  font-size: 12px;
+  line-height: 14px;
+  cursor: pointer;
+}
+
+.paged-editor--readonly .docx-table-furniture {
+  display: none !important;
+}
+
+/* Table chrome — contextual border/fill controls (Task 9). */
+.docx-table-chrome {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+
+.docx-table-chrome__panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 150px;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px var(--doc-shadow);
+  padding: 6px;
+}
+
+.docx-table-chrome__target-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+}
+
+.docx-table-chrome__option,
+.docx-table-chrome__target-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--doc-text);
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.docx-table-chrome__option:hover:not(:disabled),
+.docx-table-chrome__target-btn:hover:not(:disabled) {
+  background: var(--doc-bg-hover);
+}
+
+.docx-table-chrome__option:focus-visible,
+.docx-table-chrome__target-btn:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 1px;
+}
+
+.docx-table-chrome__option:disabled,
+.docx-table-chrome__target-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.docx-table-chrome__option[data-active='true'],
+.docx-table-chrome__target-btn[data-active='true'] {
+  background: var(--doc-toggle-active-bg);
+  color: var(--doc-toggle-active-fg);
+}
+
+.docx-table-chrome__width-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--doc-text);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.docx-table-chrome__width-row:hover:not(:disabled) {
+  background: var(--doc-bg-hover);
+}
+
+.docx-table-chrome__width-row:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: -2px;
+}
+
+.docx-table-chrome__width-row:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.docx-table-chrome__swatch {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--doc-border-dark);
+  border-radius: 2px;
+  background: var(--doc-surface);
+}
+
+.docx-table-line {
+  display: block;
+  width: 50px;
+  height: 1px;
+  background: var(--doc-text);
+  border-radius: 0;
+}
+
+.docx-table-line--single {
+  display: block;
+  width: 50px;
+  height: 1px;
+  background: var(--doc-text);
+}
+
+.docx-table-line--dashed {
+  background: none;
+  border-top: 1px dashed var(--doc-text);
+  height: 0;
+}
+
+.docx-table-line--dotted {
+  background: none;
+  border-top: 1px dotted var(--doc-text);
+  height: 0;
+}
+
+.docx-table-line--double {
+  height: 3px;
+  background: none;
+  border-top: 1px solid var(--doc-text);
+  border-bottom: 1px solid var(--doc-text);
+}
+
+.docx-table-line--triple {
+  height: 5px;
+  background: none;
+  border-top: 1px solid var(--doc-text);
+  border-bottom: 1px solid var(--doc-text);
+  box-shadow: inset 0 1px 0 var(--doc-text);
+}
+
+.docx-table-line--thick {
+  height: 3px;
+  background: var(--doc-text);
+}
+
+.docx-table-chrome__destructive-row {
+  color: var(--doc-destructive);
+}
+
+.docx-table-chrome__destructive-row:hover:not(:disabled) {
+  background: var(--doc-destructive-hover-bg);
+}
+
+@media (max-width: 640px) {
+  .docx-table-chrome {
+    max-width: 100%;
+  }
+
+  .docx-table-chrome__target-grid {
+    grid-template-columns: repeat(4, minmax(28px, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docx-table-chrome__option,
+  .docx-table-chrome__target-btn,
+  .docx-table-chrome__width-row {
+    transition: none;
+  }
+}
+
 /* ============================================================================
   * LAYOUT TABLE COLUMN RESIZE
   * ============================================================================ */
@@ -794,7 +1307,7 @@ a.docx-hyperlink:focus-visible {
 
 .layout-table-cell-selected {
   position: relative;
-  outline: 2px solid rgba(66, 133, 244, 0.6);
+  outline: 2px solid var(--doc-selection);
   outline-offset: -2px;
 }
 
@@ -806,18 +1319,37 @@ a.docx-hyperlink:focus-visible {
   pointer-events: none;
 }
 
-/* ============================================================================
-  * LAYOUT TABLE COLUMN RESIZE
-  * ============================================================================ */
-
 .layout-table-resize-handle {
   background-color: transparent;
   transition: background-color 0.15s;
 }
 
+.layout-table-resize-handle[data-active='true'] {
+  background-color: transparent;
+}
+
+.layout-table-resize-handle[data-active='true']::after,
+.layout-table-edge-handle-right[data-active='true']::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  background-color: var(--doc-primary);
+  opacity: 0.75;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
 .layout-table-resize-handle:hover,
 .layout-table-resize-handle.dragging {
-  background-color: rgba(66, 133, 244, 0.6);
+  background-color: transparent;
+}
+
+.layout-table-resize-handle:hover::after,
+.layout-table-resize-handle.dragging::after {
+  opacity: 1;
 }
 
 /* Row resize handles */
@@ -827,11 +1359,29 @@ a.docx-hyperlink:focus-visible {
   transition: background-color 0.15s;
 }
 
+.layout-table-row-resize-handle[data-active='true']::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background-color: var(--doc-primary);
+  opacity: 0.75;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
 .layout-table-row-resize-handle:hover,
 .layout-table-row-resize-handle.dragging,
 .layout-table-edge-handle-bottom:hover,
 .layout-table-edge-handle-bottom.dragging {
-  background-color: rgba(66, 133, 244, 0.6);
+  background-color: transparent;
+}
+
+.layout-table-row-resize-handle:hover::after,
+.layout-table-row-resize-handle.dragging::after {
+  opacity: 1;
 }
 
 /* Right edge handle */
@@ -840,9 +1390,18 @@ a.docx-hyperlink:focus-visible {
   transition: background-color 0.15s;
 }
 
+.layout-table-edge-handle-right[data-active='true'] {
+  background-color: transparent;
+}
+
 .layout-table-edge-handle-right:hover,
 .layout-table-edge-handle-right.dragging {
-  background-color: rgba(66, 133, 244, 0.6);
+  background-color: transparent;
+}
+
+.layout-table-edge-handle-right:hover::after,
+.layout-table-edge-handle-right.dragging::after {
+  opacity: 1;
 }
 
 /* ============================================================================
@@ -974,120 +1533,6 @@ a.docx-hyperlink:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-}
-
-/* The refresh button hangs in the page margin, `--toc-refresh-gap` to the left
-    of its boundary box. Both it and the hover bridge below derive their geometry
-    from these two values, so the bridge can never drift out of step with the
-    button it has to reach. */
-.layout-block-sdt-box--has-toc-refresh {
-  --toc-refresh-size: 32px;
-  --toc-refresh-gap: 8px;
-  --toc-refresh-reach: calc(var(--toc-refresh-size) + var(--toc-refresh-gap));
-}
-
-/* Hover bridge — load-bearing, not decoration. The button hangs outside the
-    boundary box, so without this the pointer would cross gutter owned by
-    neither, firing `mouseleave` on the content element: that clears
-    `.is-active`, which drops the button to `pointer-events: none` just as the
-    pointer arrives, and the click falls through to the page. The strip covers
-    the button plus the gap at full box height, so hits resolve to the box (it is
-    the box's own pseudo-element) and `isPointInsideSdtBoundary`'s
-    `box.contains(target)` check keeps the reveal alive across the whole path.
-    Live only while `.is-active`, and under the button (z-index 2), so it swallows
-    neither margin clicks nor the button's own. */
-.layout-block-sdt-box--has-toc-refresh::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: calc(-1 * var(--toc-refresh-reach));
-  width: var(--toc-refresh-reach);
-  pointer-events: none;
-}
-.layout-block-sdt-box--has-toc-refresh.is-active::before {
-  pointer-events: auto;
-}
-
-/* Inline TOC refresh affordance — floating action button appended to the SDT boundary. */
-.layout-block-sdt-box--has-toc-refresh .layout-toc-refresh {
-  position: absolute;
-  top: 0;
-  left: calc(-1 * var(--toc-refresh-gap));
-  transform: translateX(-100%);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--toc-refresh-size);
-  height: var(--toc-refresh-size);
-  padding: 0;
-  margin: 0;
-  border: 1px solid var(--doc-border-light);
-  border-radius: 6px;
-  background: var(--doc-surface);
-  color: var(--doc-text-muted);
-  cursor: pointer;
-  pointer-events: none;
-  box-shadow: 0 1px 3px var(--doc-shadow);
-  opacity: 0;
-  visibility: hidden;
-  transition:
-    opacity 0.15s ease,
-    visibility 0.15s ease,
-    background-color 0.15s ease,
-    box-shadow 0.15s ease;
-  z-index: 2;
-}
-.layout-block-sdt-box--has-toc-refresh.is-active .layout-toc-refresh,
-.layout-block-sdt-box--has-toc-refresh.is-focused .layout-toc-refresh,
-.layout-block-sdt-box--has-toc-refresh:focus-within .layout-toc-refresh,
-.layout-block-sdt-box--has-toc-refresh .layout-toc-refresh.layout-toc-refresh--proxy-focused {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-}
-.layout-toc-refresh:hover {
-  background: var(--doc-primary-light);
-  color: var(--doc-primary);
-  box-shadow: 0 2px 6px var(--doc-shadow);
-}
-.layout-toc-refresh:focus-visible,
-.layout-toc-refresh.layout-toc-refresh--proxy-focused {
-  outline: 2px solid var(--doc-primary);
-  outline-offset: 1px;
-}
-.layout-toc-refresh svg {
-  display: block;
-  width: 16px;
-  height: 16px;
-}
-
-/* Accessible proxy buttons live outside aria-hidden painted pages. */
-.layout-toc-refresh-proxies {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-.layout-toc-refresh-proxy {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-.layout-toc-refresh-proxy:focus-visible {
-  outline: 2px solid var(--doc-primary);
-  outline-offset: 1px;
 }
 
 /* Header/footer CONTENT is non-interactive in normal mode: a single click on a
@@ -1427,6 +1872,33 @@ a.docx-hyperlink:focus-visible {
   background-color: var(--doc-revision-deletion);
 }
 
+.docx-table-row--revision::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -8px;
+  width: 2px;
+  pointer-events: none;
+}
+
+.docx-table-row--revision.layout-revision-ins::before {
+  background-color: var(--doc-revision-insertion);
+}
+
+.docx-table-row--revision.layout-revision-del::before {
+  background-color: var(--doc-revision-deletion);
+}
+
+.docx-table-row--revision.layout-revision-ins .layout-run-text {
+  color: var(--doc-revision-insertion);
+}
+
+.docx-table-row--revision.layout-revision-del .layout-run-text {
+  color: var(--doc-revision-deletion);
+  text-decoration: line-through;
+}
+
 .layout-revision-pmark {
   position: relative;
 }
@@ -1513,9 +1985,10 @@ a.docx-hyperlink:focus-visible {
  * Every box that carries document geometry is positioned by the engine in
  * content pixels through inline styles. Nothing here invents or overrides a
  * width, height, x, or y for a page or a display item — the rules below only
- * supply painting, stacking, and pointer policy. Zoom is applied by the host
- * as a transform on `.ep-one-surface__pages`; the engine is told about it
- * through InteractionHostMetrics, so geometry and paint agree.
+ * supply painting, stacking, and pointer policy. Zoom is NOT a CSS transform:
+ * the engine holds the scale itself and repaints (re-laying out where the scale
+ * changes measurement), so every box above is already sized in zoomed pixels
+ * and geometry and paint agree by construction.
  * ======================================================================== */
 
 .ep-one-surface {
@@ -1550,8 +2023,10 @@ a.docx-hyperlink:focus-visible {
   width: max-content;
   margin-inline: auto;
   gap: var(--doc-page-gap);
-  /* Zoom origin must match the engine's assumption: scale about the top-left
-   * of the stack, so client→content conversion is a plain divide by zoom. */
+  /* Zoom repaints rather than transforms, so nothing here is scaled. The origin
+   * is pinned anyway so a host that adds a transform of its own (a print
+   * preview, a fit-to-width gesture) scales about the stack's top-left, keeping
+   * client→content conversion a plain divide. */
   transform-origin: 0 0;
 }
 
@@ -2451,6 +2926,109 @@ a.docx-hyperlink:focus-visible {
   cursor: text;
 }
 
+/* Blank furniture: a page with no header/footer paints an empty band over that margin.
+ * Invisible until hovered; the hover invites the double-click that creates the story.
+ * The hint text stays in CSS (like the band itself it is screen-only chrome), and the
+ * document canvas stays Word-faithful because nothing shows until the pointer asks. */
+.docx-pages .docx-hf--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.docx-pages .docx-hf--placeholder:hover {
+  background: var(--doc-primary-light);
+  border-radius: 4px;
+}
+
+.docx-pages .docx-hf--placeholder:hover::after {
+  content: 'Double-click to add header';
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  font-size: 12px;
+  color: var(--doc-primary);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.docx-pages .docx-hf--placeholder[data-docx-hf='footer']:hover::after {
+  content: 'Double-click to add footer';
+}
+
+/* Hovering an EXISTING inactive band tints it and floats an edit invitation beside it —
+ * without this the enterable header answered a hover with nothing at all. The pill is a
+ * sibling because the band clips its own overflow. */
+.docx-pages .docx-hf:not([data-docx-hf-active]):not(.docx-hf--placeholder):hover {
+  background: var(--doc-primary-light);
+  border-radius: 4px;
+}
+
+.docx-pages .docx-hf-edit-hint {
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.docx-pages .docx-hf:not([data-docx-hf-active]):hover + .docx-hf-edit-hint {
+  opacity: 1;
+}
+
+.docx-pages .docx-hf-edit-hint::after {
+  content: 'Double-click to edit header';
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--doc-primary);
+  background: var(--doc-primary-light);
+  border-radius: 10px;
+  padding: 0 10px;
+  margin-top: 4px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.docx-pages .docx-hf-edit-hint[data-docx-hf-hint='footer'] {
+  align-items: flex-end;
+}
+
+.docx-pages .docx-hf-edit-hint[data-docx-hf-hint='footer']::after {
+  content: 'Double-click to edit footer';
+  margin-top: 0;
+  margin-bottom: 4px;
+}
+
+/* No affordance while another furniture scope is open, in view mode, or in print. */
+.docx-pages--hf-editing .docx-hf--placeholder:hover,
+.docx-paginated-surface--viewing .docx-hf--placeholder:hover,
+.docx-pages--hf-editing .docx-hf:not([data-docx-hf-active]):hover,
+.docx-paginated-surface--viewing .docx-hf:not([data-docx-hf-active]):hover {
+  background: none;
+}
+
+.docx-pages--hf-editing .docx-hf--placeholder:hover::after,
+.docx-paginated-surface--viewing .docx-hf--placeholder:hover::after {
+  content: none;
+}
+
+.docx-pages--hf-editing .docx-hf-edit-hint,
+.docx-paginated-surface--viewing .docx-hf-edit-hint {
+  display: none;
+}
+
+@media print {
+  .docx-hf--placeholder,
+  .docx-hf-edit-hint {
+    display: none !important;
+  }
+}
+
 .docx-pages--hf-editing .docx-page-content {
   opacity: var(--doc-hf-dim-opacity);
   pointer-events: none;
@@ -2539,8 +3117,9 @@ a.docx-hyperlink:focus-visible {
   align-items: center;
   /* NOT overflow-scroll like the chrome spec's pill: this toolbar hosts LIVE popups
    * (font menu, swatch grids) positioned absolutely inside their parts, and any
-   * overflow clipping on the bar would cut them off. Narrow viewports wrap to a
-   * second row instead. */
+   * overflow clipping on the bar would cut them off. A bar that does not measure
+   * itself wraps to a second row instead; one that does collapses groups into the
+   * "⋯" menu and stays on one row (`[data-overflow]` below). */
   flex-wrap: wrap;
   flex-shrink: 0;
   gap: 2px;
@@ -2595,6 +3174,148 @@ a.docx-hyperlink:focus-visible {
 .docx-toolbar__button:disabled {
   opacity: 0.3;
   cursor: default;
+}
+
+/* ── Overflow ("⋯") ────────────────────────────────────────────────────────────────
+ *
+ * The bar that measures itself is ONE ROW: groups that do not fit move into the menu
+ * rather than wrapping. The adapter sets `data-overflow` only while it is actually
+ * measuring, so a hand-composed bar (or `overflow={false}`) keeps the wrapping above
+ * and nothing about it changes. */
+.docx-toolbar[data-overflow] {
+  flex-wrap: nowrap;
+}
+
+/* The collapse unit: one registry group. Rendered even when nothing overflows, so the
+ * measured width of a group is the width it will have when it comes back. */
+.docx-toolbar__group {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 2px;
+}
+
+/* The trigger sits at the row's end, whatever is in front of it. */
+.docx-toolbar__more {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  margin-inline-start: auto;
+}
+
+/* The panel SCROLLS when it is taller than the room under the bar. That does clip a
+ * popup opened from a control inside it (a font list, a swatch grid) — the same
+ * trade every scrolling menu makes — and the alternative, a panel that runs off the
+ * bottom of a short window, loses the rows entirely. */
+.docx-toolbar__more-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  inset-inline-end: 0;
+  z-index: 60;
+  box-sizing: border-box;
+  inline-size: min(340px, calc(100vw - 16px));
+  min-inline-size: min(260px, calc(100vw - 16px));
+  max-inline-size: min(340px, calc(100vw - 16px));
+  max-height: min(72vh, 560px);
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+  box-shadow: var(--doc-shadow-lg);
+}
+
+.docx-toolbar__more-section + .docx-toolbar__more-section {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--doc-border-light);
+}
+
+.docx-toolbar__more-heading {
+  display: block;
+  padding: 6px 10px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--doc-text-muted);
+  user-select: none;
+}
+
+/* A control row: the registry's name on the left, the real control on the right. */
+.docx-toolbar__more-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 2px 6px 2px 10px;
+}
+
+.docx-toolbar__more-control-label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--doc-text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.docx-toolbar__more-control-body {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 2px;
+}
+
+/* One command row in the overflow dialog: ordinary button, shared chrome vocabulary. */
+.docx-toolbar__more-command {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--doc-text);
+  cursor: pointer;
+  font: inherit;
+  text-align: start;
+}
+
+.docx-toolbar__more-command:hover:not(:disabled) {
+  background: var(--doc-border);
+}
+
+.docx-toolbar__more-command[data-active],
+.docx-toolbar__more-command[data-active]:hover {
+  background: var(--doc-toggle-active-bg);
+  color: var(--doc-toggle-active-fg);
+}
+
+.docx-toolbar__more-command:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.docx-toolbar__more-command-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--doc-text-muted);
+}
+
+.docx-toolbar__more-command-label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* Separator: `w-px h-6 bg-border mx-1.5`. */
@@ -3830,7 +4551,7 @@ a.docx-hyperlink:focus-visible {
   border-radius: 8px;
   background: var(--doc-surface, #fff);
   box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
-  color: var(--doc-accent, #1a73e8);
+  color: var(--doc-primary, #1a73e8);
   cursor: pointer;
   pointer-events: auto;
 }
@@ -3841,14 +4562,14 @@ a.docx-hyperlink:focus-visible {
    through its right, split down the middle. Mixed into the surface colour it stays one
    solid shape wherever it sits. */
 .docx-review__add:hover {
-  background: color-mix(in srgb, var(--doc-accent, #1a73e8) 8%, var(--doc-surface, #fff));
-  border-color: color-mix(in srgb, var(--doc-accent, #1a73e8) 35%, var(--doc-border, #e3e5e8));
+  background: color-mix(in srgb, var(--doc-primary, #1a73e8) 8%, var(--doc-surface, #fff));
+  border-color: color-mix(in srgb, var(--doc-primary, #1a73e8) 35%, var(--doc-border, #e3e5e8));
   box-shadow: 0 2px 6px rgb(0 0 0 / 14%);
 }
 
 /* A card being composed reads as unfinished until it is committed. */
 .docx-review__card[data-draft] {
-  border-color: var(--doc-accent, #1a73e8);
+  border-color: var(--doc-primary, #1a73e8);
 }
 
 .docx-review__markers {
@@ -4413,7 +5134,7 @@ a.docx-hyperlink:focus-visible {
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: var(--doc-accent, #1a73e8);
+  color: var(--doc-primary, #1a73e8);
   font: inherit;
   font-weight: 500;
   cursor: pointer;
@@ -4427,7 +5148,7 @@ a.docx-hyperlink:focus-visible {
   padding: 6px 14px;
   border: 0;
   border-radius: 999px;
-  background: var(--doc-accent, #1a73e8);
+  background: var(--doc-primary, #1a73e8);
   color: #fff;
   font: inherit;
   font-weight: 500;
@@ -4902,4 +5623,91 @@ a.docx-hyperlink:focus-visible {
 .docx-contextmenu .docx-menubar__item {
   gap: 12px;
   width: 100%;
+}
+
+.docx-contextmenu__table-align {
+  padding: 6px 12px 8px;
+}
+
+.docx-contextmenu__table-align-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--doc-text-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.docx-contextmenu__table-align-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.docx-contextmenu__table-align-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--doc-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--doc-text);
+  cursor: pointer;
+}
+
+.docx-contextmenu__table-align-button:hover:not([aria-disabled='true']) {
+  background: var(--doc-bg-hover);
+}
+
+.docx-contextmenu__table-align-button[aria-disabled='true'] {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.docx-contextmenu__table-align-button:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 1px;
+}
+
+/* Font compatibility notice (DocxEditor.FontNotice): Word's "substituted fonts" bar,
+   shown between the toolbar and the workspace when declared faces render in fallbacks. */
+.docx-font-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 16px;
+  background: var(--doc-warning-bg);
+  color: var(--doc-warning-text);
+  border-bottom: 1px solid var(--doc-border);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.docx-font-notice__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.docx-font-notice__dismiss {
+  flex: none;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--doc-warning);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.docx-font-notice__dismiss:hover {
+  background: var(--doc-bg-hover);
+}
+
+.docx-font-notice__dismiss:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 1px;
 }

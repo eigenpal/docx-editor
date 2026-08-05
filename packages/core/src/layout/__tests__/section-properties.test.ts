@@ -83,7 +83,13 @@ describe('a section is read from the document (task 11.1)', () => {
 
   test('columns are read, with a sane count', () => {
     const section = readSectionProperties(withSection('<w:cols w:num="3" w:space="540"/>'));
-    expect(section.columns).toEqual({ count: 3, gapTwips: 540 });
+    expect(section.columns).toEqual({
+      count: 3,
+      gapTwips: 540,
+      equalWidth: true,
+      separator: false,
+      definitions: [],
+    });
   });
 
   test('a NEGATIVE margin is honoured, because content may bleed into it', () => {

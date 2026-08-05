@@ -15,10 +15,8 @@
 //   - A MOVE is one decision. Accepting a `moveTo` without its `moveFrom` duplicates the
 //     content, so the pair resolves together, joined by `@w:name` on the range markers.
 //
-// Kinds whose structural semantics are not implemented are REFUSED rather than approximated.
-// Accepting a tracked row deletion by removing the `w:del` inside `w:trPr` would leave the row
-// in the table while reporting the deletion applied, so the document would say the opposite of
-// what was accepted. A refusal is visible and recoverable; that is not.
+// Structural revisions are refused unless their complete semantics are implemented. Tracked
+// rows are the supported exception: their row and cell markers resolve as one decision.
 
 import { replaceChildren, type EditOptions } from '../package/ooxml-edit.ts';
 import {
@@ -90,6 +88,25 @@ export interface RevisionSite {
   readonly propertyChange: boolean;
 }
 
+function isTrackedRowSite(
+  node: OoxmlElement,
+  parentName: string | undefined,
+  grandparentName: string | undefined
+): boolean {
+  if (
+    (node.localName === 'ins' || node.localName === 'del') &&
+    parentName === 'trPr' &&
+    grandparentName === 'tr'
+  ) {
+    return true;
+  }
+  return (
+    (node.localName === 'cellIns' || node.localName === 'cellDel') &&
+    parentName === 'tcPr' &&
+    grandparentName === 'tc'
+  );
+}
+
 function wmlAttribute(node: OoxmlElement, localName: string): string | undefined {
   for (const attribute of node.attributes) {
     if (attribute.localName !== localName) continue;
@@ -123,11 +140,15 @@ export function revisionGroupKey(address: RevisionAddress, localName: string): s
   return `${localName}\u0000${address.id}\u0000${address.author}\u0000${address.date ?? ''}`;
 }
 
+/** Revision sites of one paragraph subtree, memoized on the immutable paragraph node. */
+const paragraphSitesCache = new WeakMap<OoxmlNode, readonly RevisionSite[]>();
+
 /**
  * Every revision-bearing element in the part, with the classification that decides whether it
  * can be resolved.
  *
- * One walk, so accept-all does not pay a traversal per revision.
+ * One walk, so accept-all does not pay a traversal per revision — and paragraphs the last
+ * commit did not touch are answered from {@link paragraphSitesCache} rather than re-walked.
  */
 export function collectRevisionSites(part: OoxmlPart): RevisionSite[] {
   const sites: RevisionSite[] = [];
@@ -137,6 +158,25 @@ export function collectRevisionSites(part: OoxmlPart): RevisionSite[] {
     grandparent: OoxmlElement | null
   ): void => {
     if (node.kind === 'textValue') return;
+    // A PARAGRAPH's sites depend on nothing outside it. Classification reads the parent and
+    // grandparent, and every case that consults them (`w:rPr` under `w:pPr`, a structural
+    // parent) is at least two levels inside the paragraph — so the answer for a paragraph
+    // subtree is a pure function of that subtree, and an unchanged paragraph can hand back
+    // what it said last time. Without this, a document with no tracked changes at all still
+    // paid a full-tree walk per keystroke, on this path and on the review queue's.
+    if (node.kind === 'paragraph') {
+      const cached = paragraphSitesCache.get(node);
+      if (cached) {
+        sites.push(...cached);
+        return;
+      }
+      const own: RevisionSite[] = [];
+      const before = sites.length;
+      for (const child of node.children) visit(child, node, parent);
+      for (let index = before; index < sites.length; index += 1) own.push(sites[index]!);
+      paragraphSitesCache.set(node, own);
+      return;
+    }
     const parentName = parent?.namespaceUri === WML_NAMESPACE_URI ? parent.localName : undefined;
     const grandparentName =
       grandparent?.namespaceUri === WML_NAMESPACE_URI ? grandparent.localName : undefined;
@@ -158,6 +198,7 @@ export function collectRevisionSites(part: OoxmlPart): RevisionSite[] {
           parentName === 'rPr' &&
           grandparentName !== 'pPr' &&
           (node.localName === 'ins' || node.localName === 'del');
+        const trackedRow = isTrackedRowSite(node, parentName, grandparentName);
         const structural =
           misplacedMark ||
           REFUSED_REVISION_NAMES.has(node.localName) ||
@@ -173,7 +214,7 @@ export function collectRevisionSites(part: OoxmlPart): RevisionSite[] {
         sites.push({
           node,
           parent,
-          refused: structural,
+          refused: structural && !trackedRow,
           paragraphMark,
           propertyChange: PROPERTY_CHANGE_NAMES.has(node.localName),
         });
@@ -259,6 +300,35 @@ function paragraphOwning(part: OoxmlPart, nodeId: string): string | null {
   return found;
 }
 
+function tableRowOwning(part: OoxmlPart, nodeId: string): string | null {
+  let found: string | null = null;
+  const visit = (node: OoxmlNode, rowId: string | null): void => {
+    if (found !== null || node.kind === 'textValue') return;
+    const owner = node.kind === 'tableRow' ? node.id : rowId;
+    if (node.id === nodeId) {
+      found = owner;
+      return;
+    }
+    for (const child of node.children) visit(child, owner);
+  };
+  visit(part.root, null);
+  return found;
+}
+
+function elementById(part: OoxmlPart, nodeId: string): OoxmlElement | null {
+  let found: OoxmlElement | null = null;
+  const visit = (node: OoxmlNode): void => {
+    if (found !== null || node.kind === 'textValue') return;
+    if (node.id === nodeId) {
+      found = node;
+      return;
+    }
+    for (const child of node.children) visit(child);
+  };
+  visit(part.root);
+  return found;
+}
+
 /** How one wrapper resolves, given the action. */
 function resolutionOf(node: OoxmlElement, action: 'accept' | 'reject'): Resolution {
   switch (node.kind) {
@@ -340,6 +410,8 @@ interface RebuildPlan {
    * class of error as removing a `w:trPr/w:del` and leaving the row.
    */
   readonly mergeForward: ReadonlySet<string>;
+  /** Tracked inserted rows rejected, or tracked deleted rows accepted. */
+  readonly removeRows: ReadonlySet<string>;
 }
 
 function isWmlNamed(node: OoxmlNode, localName: string): boolean {
@@ -364,6 +436,7 @@ function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): Oox
   let carried: OoxmlNode[] = [];
 
   for (const [index, child] of children.entries()) {
+    if (child.kind !== 'textValue' && plan.removeRows.has(child.id)) continue;
     if (child.kind !== 'textValue' && plan.dropMarks.has(child.id)) continue;
     if (child.kind !== 'textValue' && plan.restoreProperties.has(child.id)) continue;
     const action = child.kind === 'textValue' ? undefined : plan.actions.get(child.id);
@@ -503,12 +576,78 @@ export function resolveRevisions(
   const dropMarks = new Set<string>();
   const restoreProperties = new Set<string>();
   const mergeForward = new Set<string>();
+  const removeRows = new Set<string>();
+
+  const rowRevisions = new Map<
+    string,
+    {
+      kind: 'ins' | 'del';
+      rowMarkerCount: number;
+      cellMarkerCount: number;
+      markerIds: string[];
+    }
+  >();
+  for (const site of matched) {
+    const markerKind =
+      site.node.localName === 'ins' || site.node.localName === 'cellIns'
+        ? 'ins'
+        : site.node.localName === 'del' || site.node.localName === 'cellDel'
+          ? 'del'
+          : null;
+    const rowSite =
+      markerKind !== null &&
+      ((site.parent?.localName === 'trPr' &&
+        (site.node.localName === 'ins' || site.node.localName === 'del')) ||
+        (site.parent?.localName === 'tcPr' &&
+          (site.node.localName === 'cellIns' || site.node.localName === 'cellDel')));
+    if (!rowSite || markerKind === null) continue;
+    const rowId = tableRowOwning(part, site.node.id);
+    if (rowId === null) return { ok: false, reason: 'unsupported-revision' };
+    const existing = rowRevisions.get(rowId);
+    if (existing && existing.kind !== markerKind) {
+      return { ok: false, reason: 'unsupported-revision' };
+    }
+    const entry = existing ?? {
+      kind: markerKind,
+      rowMarkerCount: 0,
+      cellMarkerCount: 0,
+      markerIds: [],
+    };
+    entry.markerIds.push(site.node.id);
+    if (site.parent?.localName === 'trPr') entry.rowMarkerCount += 1;
+    else entry.cellMarkerCount += 1;
+    rowRevisions.set(rowId, entry);
+  }
+  for (const [rowId, revision] of rowRevisions) {
+    const row = elementById(part, rowId);
+    const cellCount = row?.children.filter((child) => child.kind === 'tableCell').length ?? 0;
+    if (
+      revision.rowMarkerCount !== 1 ||
+      cellCount === 0 ||
+      revision.cellMarkerCount !== cellCount
+    ) {
+      return { ok: false, reason: 'unsupported-revision' };
+    }
+    const removesRow =
+      (revision.kind === 'ins' && action === 'reject') ||
+      (revision.kind === 'del' && action === 'accept');
+    if (removesRow) removeRows.add(rowId);
+    else for (const markerId of revision.markerIds) dropMarks.add(markerId);
+  }
 
   const addWrapper = (node: OoxmlElement): void => {
     actions.set(node.id, resolutionOf(node, action));
   };
 
   for (const site of matched) {
+    if (
+      site.node.localName === 'cellIns' ||
+      site.node.localName === 'cellDel' ||
+      ((site.node.localName === 'ins' || site.node.localName === 'del') &&
+        site.parent?.localName === 'trPr')
+    ) {
+      continue;
+    }
     if (site.propertyChange) {
       // Accepting keeps the current properties and drops the record; rejecting puts the
       // recorded properties back.
@@ -551,7 +690,13 @@ export function resolveRevisions(
     }
   }
 
-  const plan: RebuildPlan = { actions, dropMarks, restoreProperties, mergeForward };
+  const plan: RebuildPlan = {
+    actions,
+    dropMarks,
+    restoreProperties,
+    mergeForward,
+    removeRows,
+  };
   const rebuilt = rebuild(part.root, plan);
   const root = rebuilt[0];
   if (rebuilt.length !== 1 || root === undefined || root.kind === 'textValue') {

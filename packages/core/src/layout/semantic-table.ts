@@ -23,6 +23,7 @@ import {
 import { shadingFillFromElement } from './ooxml-shading.ts';
 import { revisionRemovesParagraph } from './revision-visibility.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';
+import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 import {
   EMPTY_TABLE_CELL_STYLE_FORMATTING,
   EMPTY_TABLE_FORMATTING,
@@ -123,6 +124,59 @@ function readTableAlignment(container: OoxmlElement | undefined): TableAlignment
   return undefined;
 }
 
+/**
+ * `w:tblpPr/@w:horzAnchor` (17.4.58) and `@w:vertAnchor` (17.4.66): the box a floated
+ * table's offsets are measured from. Absent means `text` for both.
+ */
+export type TableFloatAnchor = 'text' | 'margin' | 'page';
+
+/** `w:tblpPr/@w:tblpXSpec` (17.4.63, ST_XAlign). */
+export type TableFloatXSpec = 'left' | 'center' | 'right' | 'inside' | 'outside';
+
+/** `w:tblpPr/@w:tblpYSpec` (17.4.65, ST_YAlign). */
+export type TableFloatYSpec = 'inline' | 'top' | 'center' | 'bottom' | 'inside' | 'outside';
+
+/**
+ * `w:tblPr/w:tblpPr` (17.4.57) — a table positioned against an anchor box rather than at
+ * the point in the text where it was authored.
+ *
+ * A spec (`tblpXSpec`/`tblpYSpec`) supersedes the matching offset when both are present:
+ * 17.4.57 states the alignment outright, and the offset only answers "how far from the
+ * anchor" for the case where no alignment was stated.
+ */
+export interface TableFloatPosition {
+  readonly horzAnchor: TableFloatAnchor;
+  readonly vertAnchor: TableFloatAnchor;
+  readonly xSpec?: TableFloatXSpec;
+  /** `w:tblpX` in points; signed, so a table can be pulled into the margin. */
+  readonly xPt: number;
+  readonly ySpec?: TableFloatYSpec;
+  /** `w:tblpY` in points; signed. */
+  readonly yPt: number;
+}
+
+/** One anchor box, in the same coordinates layout reports fragment boxes in. */
+export interface TableAnchorFrame {
+  readonly left: number;
+  readonly width: number;
+}
+
+/** The three boxes `w:horzAnchor` can name, resolved for the region being laid out. */
+export interface TableAnchorFrames {
+  /** The text column the table was authored in. */
+  readonly text: TableAnchorFrame;
+  /** The page's text area between the left and right margins. */
+  readonly margin: TableAnchorFrame;
+  /** The whole sheet, margins included. */
+  readonly page: TableAnchorFrame;
+}
+
+/**
+ * Ceiling on a `w:tblpX`/`w:tblpY` offset (~22"), matching the other bounded geometry
+ * reads here. Both are signed, so the clamp is two-sided.
+ */
+const MAX_TABLE_FLOAT_OFFSET_PT = 31_680 / 20;
+
 export interface CellMarginsPt {
   readonly top: number;
   readonly right: number;
@@ -148,6 +202,8 @@ export interface SemanticTableCell {
    * the vertical bands for every cell after it.
    */
   readonly gridColumn: number;
+  /** Canonical `w:gridCol` node id for this cell's start column, when the grid is authored. */
+  readonly gridColumnId?: string;
   /** A vMerge cell that is not the restart continues the cell above: box, no content. */
   readonly vMergeContinue: boolean;
   /** `w:vAlign` — defaults to top when omitted/unrecognised. */
@@ -173,12 +229,14 @@ export interface SemanticTableCell {
    * row's bold and centring live here, not in the cell's own properties.
    */
   readonly styleFormatting: TableCellStyleFormatting;
-  /** Block children in reading order: `paragraph` and `table` typed nodes only. */
+  /** Block children in reading order, with content-control wrappers flattened. */
   readonly blocks: readonly OoxmlElement[];
 }
 
 export interface SemanticTableRow {
   readonly id: string;
+  /** Pending Word row insertion/deletion authored in `w:trPr`. */
+  readonly revisionKind?: 'insert' | 'delete';
   /** `w:trPr/w:tblHeader` — the row repeats atop each page the table continues onto. */
   readonly isHeader: boolean;
   /**
@@ -204,6 +262,11 @@ export interface SemanticTableStructure {
   readonly indentPt: number;
   /** `w:tblPr/w:jc` (17.4.29) — where the table sits in the text column. */
   readonly alignment: TableAlignment;
+  /**
+   * `w:tblPr/w:tblpPr` (17.4.57) — present when the table is positioned against an anchor
+   * box. Placement then comes from {@link tableFloatOriginX} rather than `w:jc`/`w:tblInd`.
+   */
+  readonly float?: TableFloatPosition;
   /**
    * `w:tblCellSpacing` (17.4.45) in points: the gap between adjacent cell edges. Applied as
    * a half-gap inset on each side of every cell, so cells separate visually without the grid
@@ -360,6 +423,87 @@ export function tableOriginX(structure: SemanticTableStructure, containerWidthPt
   if (structure.alignment === 'center') return slack / 2;
   if (structure.alignment === 'right') return slack;
   return Math.min(structure.indentPt, slack);
+}
+
+function readFloatAnchor(raw: string | undefined): TableFloatAnchor | undefined {
+  if (raw === 'page') return 'page';
+  if (raw === 'margin') return 'margin';
+  if (raw === 'text') return 'text';
+  return undefined;
+}
+
+function readSignedTwipsPt(raw: string | undefined): number | undefined {
+  if (raw === undefined || !/^-?\d{1,9}$/.test(raw)) return undefined;
+  const twips = Number(raw);
+  if (!Number.isFinite(twips)) return undefined;
+  const pt = twips / 20;
+  return Math.max(-MAX_TABLE_FLOAT_OFFSET_PT, Math.min(MAX_TABLE_FLOAT_OFFSET_PT, pt));
+}
+
+/**
+ * Read `w:tblpPr`. Absent anchors default to `text` (17.4.58/17.4.66); an unrecognised
+ * spec is dropped rather than guessed at, which leaves the offset to place the table.
+ */
+function readTableFloatPosition(
+  container: OoxmlElement | undefined
+): TableFloatPosition | undefined {
+  const tblpPr = container && childNamed(container, 'tblpPr');
+  if (!tblpPr) return undefined;
+  const rawXSpec = attributeValue(tblpPr, 'tblpXSpec');
+  const xSpec: TableFloatXSpec | undefined =
+    rawXSpec === 'left' ||
+    rawXSpec === 'center' ||
+    rawXSpec === 'right' ||
+    rawXSpec === 'inside' ||
+    rawXSpec === 'outside'
+      ? rawXSpec
+      : undefined;
+  const rawYSpec = attributeValue(tblpPr, 'tblpYSpec');
+  const ySpec: TableFloatYSpec | undefined =
+    rawYSpec === 'inline' ||
+    rawYSpec === 'top' ||
+    rawYSpec === 'center' ||
+    rawYSpec === 'bottom' ||
+    rawYSpec === 'inside' ||
+    rawYSpec === 'outside'
+      ? rawYSpec
+      : undefined;
+  return {
+    horzAnchor: readFloatAnchor(attributeValue(tblpPr, 'horzAnchor')) ?? 'text',
+    vertAnchor: readFloatAnchor(attributeValue(tblpPr, 'vertAnchor')) ?? 'text',
+    ...(xSpec ? { xSpec } : {}),
+    xPt: readSignedTwipsPt(attributeValue(tblpPr, 'tblpX')) ?? 0,
+    ...(ySpec ? { ySpec } : {}),
+    yPt: readSignedTwipsPt(attributeValue(tblpPr, 'tblpY')) ?? 0,
+  };
+}
+
+/**
+ * Where a floated table's left edge sits, in the coordinates layout reports boxes in.
+ *
+ * `w:tblpXSpec` aligns the table inside its anchor box; `w:tblpX` offsets it from that
+ * box's leading edge instead. `inside`/`outside` are the mirrored-margin spellings of
+ * `left`/`right` and render as those — the odd/even page flip they ask for only exists in
+ * a document with mirrored margins, which this layout does not model.
+ *
+ * The result keeps the table's leading edge on the sheet whatever the file states, so a
+ * hostile offset moves the table rather than painting it off the page entirely.
+ */
+export function tableFloatOriginX(
+  float: TableFloatPosition,
+  tableWidthPt: number,
+  frames: TableAnchorFrames
+): number {
+  const frame = frames[float.horzAnchor];
+  const slack = frame.width - tableWidthPt;
+  let x: number;
+  if (float.xSpec === 'center') x = frame.left + slack / 2;
+  else if (float.xSpec === 'right' || float.xSpec === 'outside') x = frame.left + slack;
+  else if (float.xSpec) x = frame.left;
+  else x = frame.left + float.xPt;
+  if (!Number.isFinite(x)) return frame.left;
+  const pageRight = frames.page.left + frames.page.width;
+  return Math.max(frames.page.left, Math.min(x, pageRight));
 }
 
 /**
@@ -737,18 +881,22 @@ export function readTableStructure(
         defaultMargins,
         readMarginSides(cellProperties && childNamed(cellProperties, 'tcMar'))
       );
-      const blocks: OoxmlElement[] = [];
-      for (const child of cellNode.children) {
+      // Content controls inside a cell flatten transparently — same rule as body
+      // `storyBlocks`. Without this a `w:sdt` wrapping the cell's paragraphs leaves the
+      // cell empty in layout while the tree still holds the text.
+      const blocks = collectFlowBlocks(cellNode.children, 0, (block) => {
         // A paragraph a tracked revision has removed claims a full line box while rendering
         // nothing; a cell of them is a stack of blank lines that pushes the rest of the table
         // down the page.
-        if (child.kind === 'paragraph' && revisionRemovesParagraph(child, displayMode)) continue;
-        if (child.kind === 'paragraph' || child.kind === 'table') blocks.push(child);
-      }
+        if (block.kind === 'paragraph' && revisionRemovesParagraph(block, displayMode))
+          return false;
+        return true;
+      });
       cells.push({
         id: cellNode.id,
         gridSpan,
         gridColumn,
+        ...(gridCols[gridColumn]?.id ? { gridColumnId: gridCols[gridColumn]!.id } : {}),
         vMergeContinue: readVMergeContinue(cellProperties),
         vAlign: readVAlign(cellProperties),
         margins: cellMargins,
@@ -764,6 +912,11 @@ export function readTableStructure(
     }
     rows.push({
       id: rowNode.id,
+      ...(rowProperties && childNamed(rowProperties, 'ins')
+        ? { revisionKind: 'insert' as const }
+        : rowProperties && childNamed(rowProperties, 'del')
+          ? { revisionKind: 'delete' as const }
+          : {}),
       isHeader: readFlag(rowProperties, 'tblHeader'),
       cantSplit: readFlag(rowProperties, 'cantSplit'),
       height: readRowHeight(rowProperties),
@@ -780,6 +933,7 @@ export function readTableStructure(
   let styleIndentPt: number | undefined;
   let styleAlignment: TableAlignment | undefined;
   let styleCellSpacingPt: number | undefined;
+  let styleFloat: TableFloatPosition | undefined;
   for (const node of tableStyle.tablePropertyNodes) {
     const styleW = childNamed(node, 'tblW');
     if (styleW) styleTableWidth = readPreferredWidth(styleW);
@@ -791,6 +945,7 @@ export function readTableStructure(
     styleCellSpacingPt =
       preferredLengthPt(childNamed(node, 'tblCellSpacing'), MAX_CELL_MARGIN_PT) ??
       styleCellSpacingPt;
+    styleFloat = readTableFloatPosition(node) ?? styleFloat;
   }
   const ownTblW = tblPr && childNamed(tblPr, 'tblW');
   const tableWidth = ownTblW ? readPreferredWidth(ownTblW) : styleTableWidth;
@@ -803,6 +958,9 @@ export function readTableStructure(
     styleIndentPt ??
     0;
   const alignment = readTableAlignment(tblPr) ?? styleAlignment ?? 'left';
+  // A nested table's position is stated against its cell, not the page — `w:tblpPr` inside
+  // one is honoured by Word only for the top-level table, so deeper tables stay in flow.
+  const float = depth === 0 ? (readTableFloatPosition(tblPr) ?? styleFloat) : undefined;
   const cellSpacingPt =
     preferredLengthPt(tblPr && childNamed(tblPr, 'tblCellSpacing'), MAX_CELL_MARGIN_PT) ??
     styleCellSpacingPt ??
@@ -822,6 +980,7 @@ export function readTableStructure(
     layoutFixed,
     indentPt,
     alignment,
+    ...(float ? { float } : {}),
     cellSpacingPt,
     tableBorders,
     defaultMargins,

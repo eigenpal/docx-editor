@@ -21,11 +21,13 @@
 // Refusing to answer is never right: a click has to put the caret somewhere, and returning
 // null makes it do nothing at all.
 
+import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
 import { graphemeBoundaryEpoch, segmentGraphemes } from './grapheme.ts';
 import { baselineShiftPtOf } from './run-style.ts';
 import type { CaretGeometry, SemanticPosition } from './semantic-interaction.ts';
 import type {
   BlockFragmentRecord,
+  ContentControlBoundaryRecord,
   LayoutBox,
   LineRecord,
   ParagraphFragmentRecord,
@@ -71,6 +73,13 @@ export interface SemanticHit {
    * claim the gesture at all — needs this, and cannot recover it from the position.
    */
   readonly onGlyphs: boolean;
+  /**
+   * Innermost content-control boundary covering the hit point, or null outside every control.
+   *
+   * Resolved from layout-published boundary geometry (not DOM). Nested controls prefer the
+   * deepest {@link ContentControlBoundaryRecord.nestingDepth}.
+   */
+  readonly contentControlId: string | null;
 }
 
 export interface HitTestOptions {
@@ -264,7 +273,12 @@ export function hitTestPage(
     measurer: options.measurer,
   };
   const hit = resolveBlocks(page.fragments, point, context, null);
-  if (hit) return hit;
+  if (hit) {
+    return {
+      ...hit,
+      contentControlId: contentControlIdAtPoint(layout, page.index, point),
+    };
+  }
 
   // This page paints no reachable text — a run of vertical-merge continuations whose origin
   // is pages back, or a table fragment carrying nothing at all. A press still has to land
@@ -280,7 +294,12 @@ export function hitTestPage(
         { ...context, pageIndex: neighbour.index },
         null
       );
-      if (found) return found;
+      if (found) {
+        return {
+          ...found,
+          contentControlId: contentControlIdAtPoint(layout, neighbour.index, point),
+        };
+      }
     }
   }
   return null;
@@ -340,6 +359,36 @@ function contains(box: LayoutBox, point: HitPoint): boolean {
     point.y >= box.y &&
     point.y < box.y + box.height
   );
+}
+
+/**
+ * Innermost content control whose published boundary geometry contains `point` on `pageIndex`.
+ *
+ * Nested controls that share the same content box resolve to the deepest nesting depth.
+ */
+export function contentControlAtPoint(
+  layout: SemanticLayout,
+  pageIndex: number,
+  point: HitPoint
+): ContentControlBoundaryRecord | null {
+  const controls = layout.contentControls ?? [];
+  let best: ContentControlBoundaryRecord | null = null;
+  for (const control of controls) {
+    for (const fragment of control.fragments) {
+      if (fragment.pageIndex !== pageIndex) continue;
+      if (!contains(fragment.box, point)) continue;
+      if (!best || control.nestingDepth > best.nestingDepth) best = control;
+    }
+  }
+  return best;
+}
+
+function contentControlIdAtPoint(
+  layout: SemanticLayout,
+  pageIndex: number,
+  point: HitPoint
+): string | null {
+  return contentControlAtPoint(layout, pageIndex, point)?.id ?? null;
 }
 
 /** Distance from a point to a box, with the vertical axis weighted. Zero means inside. */
@@ -463,6 +512,8 @@ function resolveParagraph(
       resolved.withinSpan &&
       point.y >= line.box.y &&
       point.y < line.box.y + line.box.height,
+    // Filled by {@link hitTestPage} once the point is known; keep null on the inner path.
+    contentControlId: null,
   };
 }
 
@@ -574,12 +625,23 @@ function endOfLine(line: LineRecord, rightEdge: number, context: HitContext): Li
  * it belongs to the line the break opened (`caretAt` places it there), so a click in the
  * right margin of the line the break ENDED has to stop in front of it or the caret appears
  * a row below the click.
+ *
+ * A PAGE break is discounted even on the paragraph's LAST line, which is the one case the
+ * last-line shortcut got wrong. The position after such a break is on the next page — and
+ * when the remainder is empty it has no line anywhere, because Word Online starts the
+ * following block flush at the top of that page. So the caret for it stays behind on the
+ * line the break ended, and a click in the wide blank space beside the mark resolved to a
+ * position a page away from where it landed: the caret appeared under the pointer and the
+ * typing came out on the next page. `<w:p><w:r><w:br w:type="page"/></w:r></w:p>` is the
+ * commonest way to end a page, so that blank space is most of a page wide.
  */
 export function lineEndOffset(layout: SemanticLayout, line: LineRecord): number {
+  const end = line.range.end;
+  if (end > line.range.start && characterAt(line, end - 1) === PAGE_BREAK_CHAR) return end - 1;
   if (hitIndex(layout).lastLineIdOfParagraph.get(line.range.paragraphId) === line.id) {
-    return line.range.end;
+    return end;
   }
-  let offset = line.range.end;
+  let offset = end;
   if (offset > line.range.start && characterAt(line, offset - 1) === '\n') offset -= 1;
   while (offset > line.range.start && characterAt(line, offset - 1) === ' ') offset -= 1;
   return offset;
@@ -637,6 +699,9 @@ function boundariesOf(span: StyleSpanRecord): readonly number[] {
  * as the geometry it describes.
  */
 function prefixWidth(span: StyleSpanRecord, utf16: number, measurer: TextMeasurer): number {
+  const edges = span.caretEdges;
+  if (edges && utf16 >= 0 && utf16 < edges.length) return edges[utf16]!;
+
   let perSpan = prefixCache.get(measurer);
   if (!perSpan) {
     perSpan = new WeakMap<StyleSpanRecord, Map<number, number>>();
@@ -683,6 +748,10 @@ export function spanOffsetX(
   const length = span.range.end - span.range.start;
   if (length <= 0) return span.box.x;
   const within = Math.max(0, Math.min(offset - span.range.start, length));
+  // Layout-published cluster edges win: they are the authority task 13.5 carries onto the
+  // span so caret and hit-test never re-derive a prefix that can disagree with the box.
+  const edges = span.caretEdges;
+  if (edges && within < edges.length) return span.box.x + edges[within]!;
   // Layout-owned advances (tabs, projected fields): always use the published box. Measuring
   // `\t` or multi-digit PAGE ink would disagree with breakParagraph's stop geometry.
   if (!measurer || usesPublishedAdvance(span)) {
@@ -740,6 +809,17 @@ export function caretBoxOnLine(
       if (next && next.range.start === offset && usesPublishedAdvance(span)) {
         chosen = next;
         break;
+      }
+      // After an expandable space, prefer the next span only when layout left a justify
+      // gap. That gap is what paint draws as `word-spacing`; sitting on the upstream end
+      // lands inside the stretched space. With no gap (unjustified, or a mere run split
+      // after a space), keep upstream affinity so typing continues the preceding run.
+      if (next && next.range.start === offset && span.text.endsWith(' ')) {
+        const gap = next.box.x - (span.box.x + span.box.width);
+        if (gap > 0.25) {
+          chosen = next;
+          break;
+        }
       }
       chosen = span;
     } else if (offset > span.range.end) {

@@ -340,8 +340,8 @@ describe('semantic table layout', () => {
       1,
       5
     );
-    // Pre-fix floor was 20pt; content-sized row is 2+14+1 = 17.
-    expect(tight.box.height).toBeCloseTo(17, 5);
+    // No fixed row floor: the box is exactly top margin + resolved line + bottom margin.
+    expect(tight.box.height).toBeCloseTo(2 + tightLine.box.height + 1, 5);
     expect(tight.box.height).toBeLessThan(19);
   });
 
@@ -617,16 +617,10 @@ describe('table row pagination (tiny page)', () => {
     const part = loadPart(`<w:tbl>${filler}${body}</w:tbl>`);
     const result = layoutTiny(part);
     assertNoContentOverflow(result);
+    // The narrow cell wraps "keep-together" at its own hyphen, so the word spans lines;
+    // match the row's joined text rather than any single span.
     const keep = allTableFragments(result).flatMap((fragment) =>
-      fragment.rows.filter((row) =>
-        row.cells.some((cell) =>
-          cell.blocks.some(
-            (block) =>
-              block.kind === 'paragraph' &&
-              block.lines.some((line) => line.spans.some((span) => span.text === 'keep-together'))
-          )
-        )
-      )
+      fragment.rows.filter((row) => rowCellText(row).includes('keep-together'))
     );
     expect(keep).toHaveLength(1);
     expect(keep[0]!.isContinuation).toBeUndefined();

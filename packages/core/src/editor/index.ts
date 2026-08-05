@@ -19,6 +19,7 @@ export {
   type FontConfigurationBase,
   type FontConfigurationFragment,
 } from './font-composition.ts';
+export { blankDocumentBytes } from './blank-document.ts';
 export {
   createFontSource,
   loadFonts,
@@ -53,12 +54,41 @@ export {
   chromeProbeForSlot,
   commandForSlot,
   commandForSlotValue,
+  commandForTableChromeSlotValue,
   runSave,
+  runTableChromeCommand,
+  runTableCommand,
   runToolbarCommand,
+  tableChromeToolbarState,
+  tableCommandToolbarState,
   toolbarCommandState,
   toolbarCommandStates,
+  type RunTableChromeCommandResult,
   type ToolbarCommandState,
 } from './toolbar-commands.ts';
+export { tableCommandState } from './docx-editor-derive.ts';
+export {
+  applyTableChromePick,
+  DEFAULT_TABLE_CHROME_DRAFT,
+  defaultTableLabel,
+  isTableChromeSlot,
+  probeTableChromeCommand,
+  TABLE_BORDER_STYLE_OPTIONS,
+  TABLE_BORDER_TARGET_OPTIONS,
+  TABLE_BORDER_WIDTH_OPTIONS,
+  TABLE_CHROME_SLOT_IDS,
+  tableChromeLabelKeyForTarget,
+  tableChromeIconPaths,
+  tableChromeVisible,
+  type TableBorderTargetValue,
+  type TableBorderStyleOption,
+  type TableBorderTargetOption,
+  type TableBorderWidthOption,
+  type TableChromeDraft,
+  type TableChromePick,
+  type TableChromeSlotId,
+  type TableInteractionLabelKey,
+} from './table-chrome.ts';
 
 export {
   CHROME_GROUPS,
@@ -99,6 +129,16 @@ export {
 // automation subpath — only the adapter that needs a live editor ships from here, and only as
 // a factory: there is no composition hook a consumer could point at a second document model.
 export { BROWSER_AUTOMATION_CAPABILITIES, createBrowserAutomationHost } from './automation-host.ts';
+export {
+  applyThemeShade,
+  applyThemeTint,
+  lowerColorValueForBorder,
+  lowerColorValueForFill,
+  resolveColorValueToCss,
+  resolveThemeColorHex,
+  validateThemeModifier,
+} from './color-value-lower.ts';
+export type { ColorLowerResult } from './color-value-lower.ts';
 export type { HyperlinkOps, SurfaceHyperlink } from './surface-hyperlinks.ts';
 export type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
 // The types an adapter needs to CALL the surface, re-exported from the composition root.

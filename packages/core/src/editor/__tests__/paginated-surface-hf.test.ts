@@ -12,7 +12,11 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
 import { positionFromDomPoint } from '../dom-selection.ts';
-import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
+import {
+  mountPaginatedSurface,
+  setPaginatedSurfaceScale,
+  type PaginatedSurface,
+} from '../paginated-surface.ts';
 
 const COMPREHENSIVE_FIXTURE = resolve(
   import.meta.dir,
@@ -102,6 +106,39 @@ describe('headers and footers, read-only', () => {
     expect(header.closest('.docx-page-content')).toBeNull();
   });
 
+  test('the furniture rescales with the sheet it is painted on', () => {
+    // Header and footer stories are laid out once per variant and attached per page, so a zoom
+    // that scaled only body content would leave the furniture at the old size on every sheet.
+    const { surface, container } = mount(docx({ header: p('HEADER'), footer: p('FOOTER') }));
+    const geometry = (kind: 'header' | 'footer') => {
+      const box = container.querySelector<HTMLElement>(`[data-docx-hf="${kind}"]`)!;
+      return [
+        parseFloat(box.style.left),
+        parseFloat(box.style.top),
+        parseFloat(box.style.width),
+        parseFloat(box.style.height),
+      ];
+    };
+    const before = { header: geometry('header'), footer: geometry('footer') };
+
+    expect(setPaginatedSurfaceScale(surface, 2)).toBe(true);
+
+    for (const kind of ['header', 'footer'] as const) {
+      geometry(kind).forEach((value, axis) => {
+        expect(value).toBeCloseTo(before[kind][axis]! * 2, 5);
+      });
+      expect(
+        container.querySelector<HTMLElement>(`[data-docx-hf="${kind}"]`)!.textContent
+      ).toContain(kind.toUpperCase());
+    }
+    // Still furniture, not editable content, after the repaint.
+    expect(
+      container
+        .querySelector<HTMLElement>('[data-docx-hf="header"]')!
+        .getAttribute('contenteditable')
+    ).toBe('false');
+  });
+
   test('the header box is sized to flow height, not to an anchored extent (#856)', () => {
     // One line of text plus a generic drawing whose extent claims to be enormous. The tree
     // lane lays out no anchored shapes, so the box must size to the TEXT flow alone.
@@ -171,9 +208,20 @@ describe('headers and footers, read-only', () => {
     expect(surface.session.paragraphIds()).toHaveLength(3);
   });
 
-  test('a document without furniture renders none', () => {
+  test('a document without furniture renders no story, only the blank-band affordance', () => {
     const { container } = mount(docx({}));
-    expect(container.querySelector('[data-docx-hf]')).toBeNull();
+    // No STORY furniture — nothing carries a relationship id and nothing has content.
+    expect(container.querySelector('[data-docx-hf][data-docx-r-id]')).toBeNull();
+    // The empty margin bands are painted so hover can invite and double-click can create.
+    const placeholders = [...container.querySelectorAll('.docx-hf--placeholder')];
+    expect(placeholders.map((band) => band.getAttribute('data-docx-hf')).sort()).toEqual([
+      'footer',
+      'header',
+    ]);
+    for (const band of placeholders) {
+      expect(band.getAttribute('contenteditable')).toBe('false');
+      expect(band.textContent).toBe('');
+    }
   });
 
   test('comprehensive fixture: HF right tabs reach the authored stop on the surface', () => {
@@ -236,7 +284,7 @@ describe('headers and footers, read-only', () => {
     // Page index 1 is the first body sheet with header1/footer1 (cover is index 0).
     const cover = pages[0]!;
     const sheet = pages[1]!;
-    expect(cover.querySelector('[data-docx-hf]')).toBeNull();
+    expect(cover.querySelector('[data-docx-hf][data-docx-r-id]')).toBeNull();
     expect(sheet.querySelector('[data-docx-hf="header"]')).not.toBeNull();
     expect(sheet.querySelector('[data-docx-hf="footer"]')).not.toBeNull();
     // Cover must not visually host body furniture: relative story Y is authored distance,

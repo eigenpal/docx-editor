@@ -266,8 +266,10 @@
    no pane-aware padding of its own. */
 .demo-ruler-row {
   display: flex;
-  justify-content: center;
-  padding: 6px 20px 2px;
+  /* Match the page stack: centre while it fits, then pin to the inline start when the
+     navigation + review reservations force horizontal overflow. */
+  justify-content: safe center;
+  padding: 6px 0 2px;
   overflow: hidden;
   flex: none;
 }

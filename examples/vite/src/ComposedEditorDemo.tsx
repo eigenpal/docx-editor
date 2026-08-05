@@ -14,7 +14,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import { zipSync, strToU8 } from 'fflate';
 import {
   DocxEditor,
   useDocxEditor,
@@ -22,6 +21,7 @@ import {
   useEditorEvent,
   useFontFamily,
 } from '@docx-editor.dev/react';
+import { blankDocumentBytes } from '@docx-editor.dev/core-contract/editor';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
 import { BrandLogo } from '../../shared/BrandLogo';
@@ -43,29 +43,6 @@ function keepCaret(event: ReactMouseEvent): void {
   event.preventDefault();
 }
 
-const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
-const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
-const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
-
-/** A minimal empty document, built the same way the adapter test suite builds one. */
-function emptyDocx(): Uint8Array {
-  return zipSync({
-    '[Content_Types].xml': strToU8(
-      `<Types xmlns="${CT}">` +
-        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-        '</Types>'
-    ),
-    '_rels/.rels': strToU8(
-      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
-    ),
-    'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t></w:t></w:r></w:p></w:body></w:document>`
-    ),
-  });
-}
-
 /** Hand DOCX bytes to the browser as a download. */
 function downloadDocx(buffer: ArrayBuffer, name: string): void {
   const blob = new Blob([buffer], {
@@ -84,10 +61,11 @@ function downloadDocx(buffer: ArrayBuffer, name: string): void {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Custom items for the FontFamily popup: each document font as a single-line row
+ * Custom items for the FontFamily popup: each offerable font as a single-line row
  * rendered in its own typeface, reference-picker style (the selected row gets the
- * library's right-aligned check). Options come from `useFontFamily()`, i.e. from
- * the DOCUMENT's font catalog — the list follows edits.
+ * library's right-aligned check). Options come from `useFontFamily()` — the editor's
+ * configured catalog merged with the document's declared fonts, so a brand-new
+ * document still lists real choices; the list follows edits.
  */
 function FontPreviewItems() {
   const { options } = useFontFamily();
@@ -180,11 +158,7 @@ function PerfHud() {
     const frameMs = frameMsRef.current;
     const input = inputRef.current;
     const fontState = editor?.fontMeasurement();
-    const fontValue = fontState
-      ? fontState.resolving
-        ? 'resolving…'
-        : fontState.measurer
-      : '';
+    const fontValue = fontState ? (fontState.resolving ? 'resolving…' : fontState.measurer) : '';
     const key = [
       perf.layoutMs,
       perf.paintMs,
@@ -371,11 +345,14 @@ function EditorChrome({
   const [showPageSetup, setShowPageSetup] = useState(false);
 
   const openFile = (file: File) => {
+    // The title follows the opened file, so the header names the document actually
+    // on screen — and the download the Save button writes names itself after it too.
+    onTitleChange(file.name.replace(/\.docx$/i, ''));
     void file.arrayBuffer().then((buffer) => {
       editor?.load(new Uint8Array(buffer));
     });
   };
-  const newDocument = () => editor?.load(emptyDocx());
+  const newDocument = () => editor?.load(blankDocumentBytes());
   const saveDocument = () => {
     void editor?.save().then((buffer) => {
       const base = title.trim() || 'document';
@@ -525,6 +502,9 @@ function EditorChrome({
         </DocxEditor.Toolbar.FontFamily>
       </DocxEditor.Toolbar>
 
+      {/* Word-style compatibility bar when document fonts render in substitutes. */}
+      <DocxEditor.FontNotice t={translate} />
+
       {/* File > Page setup: the library dialog, applied as one undo step. */}
       <DocxEditor.PageSetupDialog open={showPageSetup} onClose={() => setShowPageSetup(false)} />
     </div>
@@ -553,7 +533,10 @@ function RulerRow() {
 
 export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
   const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
-  const [title, setTitle] = useState('Sample Document');
+  // Named after the document it opens with, and after whichever file is opened later.
+  const [title, setTitle] = useState(
+    () => fixtureUrl.split('/').pop()?.replace(/\.docx$/i, '') ?? 'Document'
+  );
   const [showOutline, setShowOutline] = useState(false);
 
   // The whole boot in ONE call: fetch the fixture, load Word's default substitute faces
@@ -617,6 +600,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
               <DocxEditor.HeaderFooterChrome />
               <DocxEditor.NotesChrome />
               <DocxEditor.Content />
+              <DocxEditor.ContextMenu t={translate} />
               {/* The link popover. Inside the viewport so it stays with the page while
                   scrolling. `<DocxEditor>` mounts it for you; a composition like this one
                   places it by name, exactly like the rulers above. */}

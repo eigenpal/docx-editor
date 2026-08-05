@@ -21,6 +21,7 @@ import {
   DEFAULT_SECTION_PROPERTIES,
   geometryOfSection,
   type DocumentSection,
+  type SectionColumns,
 } from './section-properties.ts';
 import type { PageGeometry, PageRecord, SemanticLayout } from './semantic-records.ts';
 import type { PageFurniture, SemanticLayoutOptions } from './semantic-layout.ts';
@@ -42,10 +43,12 @@ export type LayoutSectionFn = (
   revision: number,
   options: SemanticLayoutOptions & {
     readonly geometry: PageGeometry;
+    readonly sectionColumns?: SectionColumns;
     readonly lineCounterStart?: number;
     readonly flowStartY?: number;
     readonly spaceBeforeCarry?: number;
     readonly pageIndexStart?: number;
+    readonly balanceColumns?: boolean;
   }
 ) => SectionLayoutResult;
 
@@ -110,6 +113,8 @@ export function multiSectionStructureKey(
       const pnKey = pn
         ? `pn:${pn.start ?? ''},${pn.fmt ?? ''},${pn.chapStyle ?? ''},${pn.chapSep ?? ''}`
         : 'pn:';
+      const columns = section.properties.columns;
+      const columnsKey = `cols:${columns.count},${columns.gapTwips},${columns.equalWidth === false ? 0 : 1},${columns.separator ? 1 : 0};${(columns.definitions ?? []).map((column) => `${column.widthTwips}/${column.gapTwips}`).join(',')}`;
       return [
         section.blockStart,
         section.blockEndExclusive,
@@ -124,6 +129,7 @@ export function multiSectionStructureKey(
         geometry.footerDistance ?? 36,
         furnitureGeometryFingerprint(furniture),
         pnKey,
+        columnsKey,
       ].join(':');
     })
     .join('|');
@@ -197,8 +203,14 @@ function sameGeometry(a: PageGeometry, b: PageGeometry): boolean {
  * continued section contributes content to it, not chrome.
  */
 function withAppendedFragments(page: PageRecord, continued: PageRecord): PageRecord {
-  if (continued.fragments.length === 0) return page;
-  return { ...page, fragments: [...page.fragments, ...continued.fragments] };
+  if (continued.fragments.length === 0 && !continued.columnSeparators?.length) return page;
+  return {
+    ...page,
+    fragments: [...page.fragments, ...continued.fragments],
+    ...((page.columnSeparators?.length || continued.columnSeparators?.length) && {
+      columnSeparators: [...(page.columnSeparators ?? []), ...(continued.columnSeparators ?? [])],
+    }),
+  };
 }
 
 /**
@@ -303,10 +315,19 @@ export function layoutMultiSectionDocument(
     // page under its own geometry and furniture (Word-compatible trailing section break).
     const sectionSession = multi?.sections[sectionIndex];
 
+    // A multi-column section that ends in a continuous section break balances its columns
+    // (ECMA-376 §17.6.4). The break that ENDS this section is the next section's `w:type`;
+    // the document's last section has no such break, so it keeps the fill-first shape.
+    const balanceColumns =
+      section.properties.columns.count > 1 &&
+      sections[sectionIndex + 1]?.properties.breakType === 'continuous';
+
     const laid = layoutSection(slice, revision, {
       ...rest,
       geometry,
       furniture,
+      sectionColumns: section.properties.columns,
+      ...(balanceColumns ? { balanceColumns } : {}),
       lineCounterStart: lineCounter,
       // A continued section's local page 0 IS the host sheet, so its document page index
       // is one behind the stack; every other section starts a fresh sheet at `startIndex`.
@@ -413,7 +434,11 @@ export function layoutMultiSectionDocument(
 
   if (pages.length === 0) {
     const geometry = geometryOfSection(sections[0]?.properties ?? DEFAULT_SECTION_PROPERTIES);
-    const laid = layoutSection([], revision, { ...rest, geometry });
+    const laid = layoutSection([], revision, {
+      ...rest,
+      geometry,
+      sectionColumns: sections[0]?.properties.columns ?? DEFAULT_SECTION_PROPERTIES.columns,
+    });
     const finalized = finalizePageFieldProjection({ revision, pages: laid.pages });
     if (multi) {
       multi.spans = [];

@@ -458,3 +458,57 @@ export function tableContextAt(
   }
   return best;
 }
+
+/** Canonical table/row/cell ids for a caret or rectangular cell selection. */
+export function tableAnchorAt(
+  layout: SemanticLayout,
+  paragraphId: string,
+  cellSelection?: CellSelection | null
+): {
+  readonly tableId: string;
+  readonly rowId: string;
+  readonly cellId: string;
+  readonly cellIds: readonly string[];
+  readonly gridColumnIndex: number;
+  readonly isHeaderRepeat: boolean;
+} | null {
+  if (cellSelection) {
+    const ctx = tableContextAt(layout, paragraphId);
+    if (!ctx || ctx.tableId !== cellSelection.tableId) return null;
+    const firstCellId = cellSelection.cellIds[0];
+    if (!firstCellId) return null;
+    const table = tableIndex(layout).get(cellSelection.tableId);
+    if (!table) return null;
+    for (const entry of table.placed) {
+      if (entry.cell.id !== firstCellId) continue;
+      return {
+        tableId: cellSelection.tableId,
+        rowId: entry.row.id,
+        cellId: firstCellId,
+        cellIds: cellSelection.cellIds,
+        gridColumnIndex: entry.cell.gridColumn,
+        isHeaderRepeat: entry.isHeaderRepeat,
+      };
+    }
+    return null;
+  }
+  const ctx = tableContextAt(layout, paragraphId);
+  if (!ctx) return null;
+  const table = tableIndex(layout).get(ctx.tableId);
+  if (!table) return null;
+  for (const entry of table.placed) {
+    if (entry.isHeaderRepeat) continue;
+    const found: string[] = [];
+    for (const block of entry.cell.blocks) collectParagraphs(block, found, new Set());
+    if (!found.includes(paragraphId)) continue;
+    return {
+      tableId: ctx.tableId,
+      rowId: entry.row.id,
+      cellId: entry.cell.id,
+      cellIds: [entry.cell.id],
+      gridColumnIndex: entry.cell.gridColumn,
+      isHeaderRepeat: entry.row.isHeaderRepeat,
+    };
+  }
+  return null;
+}

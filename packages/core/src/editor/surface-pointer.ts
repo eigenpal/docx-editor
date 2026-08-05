@@ -17,6 +17,7 @@
 
 import { cellSelectionBetween, type CellSelection } from '../layout/semantic-cell-selection.ts';
 import {
+  contentControlAtPoint,
   hitTestFragments,
   hitTestPage,
   pageAtY,
@@ -30,8 +31,17 @@ import {
   type SemanticPosition,
   type SemanticSelection,
 } from '../layout/semantic-interaction.ts';
-import type { SemanticLayout, TextMeasurer } from '../layout/semantic-records.ts';
+import type {
+  BlockFragmentRecord,
+  ContentControlBoundaryRecord,
+  LayoutBox,
+  ParagraphFragmentRecord,
+  SemanticLayout,
+  TextMeasurer,
+} from '../layout/semantic-records.ts';
+import { MAX_TABLE_NESTING } from '../layout/semantic-table.ts';
 import {
+  findEmptyFurnitureBandAtSheetPoint,
   findNoteAtSheetPoint,
   findStoryAtSheetPoint,
   hitTestStoryAtLocalPoint,
@@ -88,6 +98,13 @@ export interface PointerHost {
   activeNote?(): { readonly scopeId: string; readonly pageIndex: number | null } | null;
   /** Double-click enter on painted furniture. */
   enterHeaderFooter?(info: EnterHeaderFooterPointerRequest): void;
+  /**
+   * Double-click in the blank header/footer margin band of a page with no story there.
+   *
+   * The host decides what that means — typically create the part and open it for editing,
+   * refusing in view mode. The pointer only reports the gesture.
+   */
+  enterEmptyHeaderFooter?(kind: 'header' | 'footer', pageIndex: number): void;
   /** Enter a painted note story for scoped editing. */
   enterNote?(
     scopeId: string,
@@ -98,6 +115,22 @@ export interface PointerHost {
   exitNote?(restoreBody?: boolean): void;
   /** Leave furniture scope; when true the host restores the saved body selection. */
   exitHeaderFooter?(restoreBody?: boolean): void;
+  /**
+   * Activate an engine-level content-control widget (dropdown / combo / date / checkbox).
+   *
+   * Called after mousedown is prevented so the caret is not stolen.
+   */
+  onContentControlWidget?(controlId: string, kind: string): void;
+  /** Generated navigation paragraphs refuse caret placement and text selection. */
+  isReadOnlyParagraph?(paragraphId: string): boolean;
+  /**
+   * Select a content control's full addressable content atomically.
+   *
+   * Preferred for `w:showingPlcHdr` presses when the host already owns
+   * `selectControlContent` (form-fill). When absent, the pointer expands from layout
+   * boundary geometry alone.
+   */
+  selectContentControl?(controlId: string): boolean;
 }
 
 export interface PointerControllerOptions {
@@ -151,6 +184,196 @@ interface Gesture {
   /** Last client point, so autoscroll can keep extending while the pointer is still. */
   clientX: number;
   clientY: number;
+}
+
+function overlapArea(a: LayoutBox, b: LayoutBox): number {
+  const x0 = Math.max(a.x, b.x);
+  const y0 = Math.max(a.y, b.y);
+  const x1 = Math.min(a.x + a.width, b.x + b.width);
+  const y1 = Math.min(a.y + a.height, b.y + b.height);
+  if (x1 <= x0 || y1 <= y0) return 0;
+  return (x1 - x0) * (y1 - y0);
+}
+
+/** True when boxes share area, or a zero-width control box sits on `inner`. */
+function boxesTouch(outer: LayoutBox, inner: LayoutBox): boolean {
+  if (overlapArea(outer, inner) > 0) return true;
+  if (outer.width === 0) {
+    return (
+      inner.x <= outer.x &&
+      outer.x <= inner.x + inner.width &&
+      !(outer.y + outer.height < inner.y || inner.y + inner.height < outer.y)
+    );
+  }
+  return false;
+}
+
+function comparePositions(
+  layout: SemanticLayout,
+  a: SemanticPosition,
+  b: SemanticPosition
+): number {
+  const order = documentOrder(layout);
+  const rankA = order.indexOf(a.paragraphId);
+  const rankB = order.indexOf(b.paragraphId);
+  if (rankA !== rankB) return rankA - rankB;
+  return a.offset - b.offset;
+}
+
+/**
+ * Document-order paragraph walk that descends table rows/cells within {@link MAX_TABLE_NESTING}.
+ *
+ * Header-repeat rows are skipped so each caret stop is considered once. Nested tables inside
+ * cells share the same bound layout already uses when refusing deeper nesting.
+ */
+function visitParagraphBlocks(
+  blocks: readonly BlockFragmentRecord[],
+  depth: number,
+  visit: (paragraph: ParagraphFragmentRecord) => void
+): void {
+  if (depth > MAX_TABLE_NESTING) return;
+  for (const block of blocks) {
+    if (block.kind === 'paragraph') {
+      visit(block);
+      continue;
+    }
+    if (depth >= MAX_TABLE_NESTING) continue;
+    for (const row of block.rows) {
+      if (row.isHeaderRepeat) continue;
+      for (const cell of row.cells) visitParagraphBlocks(cell.blocks, depth + 1, visit);
+    }
+  }
+}
+
+/**
+ * Full addressable range of a placeholder control from layout-published boundary geometry.
+ *
+ * Block / row / cell controls cover whole paragraphs whose boxes touch a fragment (including
+ * paragraphs nested under tables and nested block-control content that flattened into the
+ * flow). Inline controls take the UTF-16 span of every painted span that touches a fragment.
+ */
+export function placeholderSelectionRange(
+  layout: SemanticLayout,
+  control: ContentControlBoundaryRecord
+): PositionRange | null {
+  if (!control.placeholder || control.fragments.length === 0) return null;
+
+  let from: SemanticPosition | null = null;
+  let to: SemanticPosition | null = null;
+
+  const consider = (start: SemanticPosition, end: SemanticPosition): void => {
+    if (!from || comparePositions(layout, start, from) < 0) from = start;
+    if (!to || comparePositions(layout, end, to) > 0) to = end;
+  };
+
+  // Non-inline placeholders select whole paragraphs — row/cell wrappers are structural units
+  // the same way block wrappers are, so a mid-cell partial range must still absorb.
+  const wholeParagraphs = control.level !== 'inline';
+
+  for (const fragment of control.fragments) {
+    const page = layout.pages[fragment.pageIndex];
+    if (!page) continue;
+    visitParagraphBlocks(page.fragments, 0, (block) => {
+      if (!boxesTouch(fragment.box, block.box)) return;
+
+      if (wholeParagraphs) {
+        const length = paragraphTextFromLayout(layout, block.paragraphId).length;
+        consider(
+          { paragraphId: block.paragraphId, offset: 0 },
+          { paragraphId: block.paragraphId, offset: length }
+        );
+        return;
+      }
+
+      for (const line of block.lines) {
+        for (const span of line.spans) {
+          if (!boxesTouch(fragment.box, span.box)) continue;
+          consider(
+            { paragraphId: span.range.paragraphId, offset: span.range.start },
+            { paragraphId: span.range.paragraphId, offset: span.range.end }
+          );
+        }
+      }
+    });
+  }
+
+  if (!from || !to) return null;
+  return { from, to };
+}
+
+function controlById(
+  layout: SemanticLayout,
+  controlId: string
+): ContentControlBoundaryRecord | null {
+  return (layout.contentControls ?? []).find((control) => control.id === controlId) ?? null;
+}
+
+function placeholderAtHit(
+  layout: SemanticLayout,
+  hit: SemanticHit
+): ContentControlBoundaryRecord | null {
+  const id = hit.contentControlId;
+  if (!id) {
+    // Hit records may omit the id when resolved through a scoped story path — fall back to
+    // geometry so placeholder expansion still works inside headers/notes.
+    const point = { x: hit.caret.x, y: hit.caret.y + hit.caret.height / 2 };
+    const control = contentControlAtPoint(layout, hit.pageIndex, point);
+    return control?.placeholder ? control : null;
+  }
+  const control = controlById(layout, id);
+  return control?.placeholder ? control : null;
+}
+
+/**
+ * Expand a selection so every `w:showingPlcHdr` control it touches is selected as a unit.
+ *
+ * Used by pointer drag / shift-click, and exported so keyboard extend paths can share the
+ * same atomic rule without duplicating geometry walks.
+ */
+export function absorbPlaceholderControls(
+  layout: SemanticLayout,
+  selection: SemanticSelection
+): SemanticSelection {
+  const controls = layout.contentControls ?? [];
+  if (controls.length === 0) return selection;
+
+  let from =
+    comparePositions(layout, selection.anchor, selection.head) <= 0
+      ? selection.anchor
+      : selection.head;
+  let to =
+    comparePositions(layout, selection.anchor, selection.head) <= 0
+      ? selection.head
+      : selection.anchor;
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const control of controls) {
+      if (!control.placeholder) continue;
+      const range = placeholderSelectionRange(layout, control);
+      if (!range) continue;
+      const collapsed = comparePositions(layout, from, to) === 0;
+      const intersects = collapsed
+        ? comparePositions(layout, from, range.from) >= 0 &&
+          comparePositions(layout, from, range.to) < 0
+        : comparePositions(layout, from, range.to) < 0 &&
+          comparePositions(layout, to, range.from) > 0;
+      if (!intersects) continue;
+      if (comparePositions(layout, range.from, from) < 0) {
+        from = range.from;
+        changed = true;
+      }
+      if (comparePositions(layout, range.to, to) > 0) {
+        to = range.to;
+        changed = true;
+      }
+    }
+  }
+
+  // Preserve which end the user is dragging (head) relative to the original orientation.
+  const headIsEnd = comparePositions(layout, selection.anchor, selection.head) <= 0;
+  return headIsEnd ? { anchor: from, head: to } : { anchor: to, head: from };
 }
 
 export function createPointerController(
@@ -365,12 +588,17 @@ export function createPointerController(
     layout: SemanticLayout,
     anchorRange: PositionRange,
     head: SemanticPosition,
-    granularity: Granularity
+    granularity: Granularity,
+    hit?: SemanticHit
   ): SemanticSelection {
-    const headRange = rangeAt(layout, head, granularity);
-    return isBefore(layout, headRange.from, anchorRange.from)
+    const placeholder = hit ? placeholderAtHit(layout, hit) : null;
+    const headRange = placeholder
+      ? (placeholderSelectionRange(layout, placeholder) ?? rangeAt(layout, head, granularity))
+      : rangeAt(layout, head, granularity);
+    const raw = isBefore(layout, headRange.from, anchorRange.from)
       ? { anchor: anchorRange.to, head: headRange.from }
       : { anchor: anchorRange.from, head: headRange.to };
+    return absorbPlaceholderControls(layout, raw);
   }
 
   // ---------------------------------------------------------------------------------
@@ -461,8 +689,11 @@ export function createPointerController(
     // An unresolvable move is a no-op, never a collapse: a pointer that has left the document
     // should leave the selection where it last was rather than throwing it away.
     if (!hit) return;
+    if (host.isReadOnlyParagraph?.(hit.position.paragraphId)) return;
     if (extendCells(active, hit)) return;
-    host.setSelection(extend(host.layout(), active.anchorRange, hit.position, active.granularity));
+    host.setSelection(
+      extend(host.layout(), active.anchorRange, hit.position, active.granularity, hit)
+    );
   }
 
   /**
@@ -517,6 +748,21 @@ export function createPointerController(
     // Anything but the primary button keeps its native behaviour: a right-click must reach the
     // context menu with the existing selection intact, not move the caret out from under it.
     if (event.button !== 0) return;
+    // Content-control widgets: prevent mousedown so chrome does not steal the caret, then
+    // dispatch the engine-level interaction (checkbox toggle, dropdown menu, date picker).
+    // (Furniture clicks continue below into the scoped header/footer / note enter paths.)
+    const widget = (event.target as Element | null)?.closest?.(
+      '[data-docx-cc-widget]'
+    ) as HTMLElement | null;
+    if (widget) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (widget.hasAttribute('disabled') || widget.dataset.disabledReason) return;
+      const controlId = widget.dataset.docxCcId;
+      const kind = widget.dataset.docxCcWidget;
+      if (controlId && kind) host.onContentControlWidget?.(controlId, kind);
+      return;
+    }
     // Touch keeps the browser's own panning: claiming the gesture would stop the page
     // scrolling under a finger, which is a much worse trade than a less exact caret.
     if (event.pointerType === 'touch') return;
@@ -610,6 +856,17 @@ export function createPointerController(
         host.focus();
         return;
       } else {
+        // While a header is open, double-clicking the blank footer band (or vice versa)
+        // creates and opens that story — Word's behaviour — instead of swallowing the press.
+        const empty =
+          clicks() >= 2
+            ? findEmptyFurnitureBandAtSheetPoint(layout, sheet, host.pageOffsetX)
+            : null;
+        if (empty) {
+          event.preventDefault();
+          host.focus();
+          host.enterEmptyHeaderFooter?.(empty.kind, empty.pageIndex);
+        }
         return;
       }
     } else if (onFurniture && clicks() >= 2) {
@@ -628,29 +885,49 @@ export function createPointerController(
         const kindAttr = furnitureDom.dataset.docxHf;
         const pageAttr = furnitureDom.closest('[data-page-index]')?.getAttribute('data-page-index');
         const pageIndex = pageAttr != null ? Number(pageAttr) : NaN;
-        if (
-          rId &&
-          (kindAttr === 'header' || kindAttr === 'footer') &&
-          Number.isInteger(pageIndex)
-        ) {
-          const page = layout.pages[pageIndex];
-          const story = page?.[kindAttr];
-          event.preventDefault();
-          host.focus();
-          host.enterHeaderFooter?.({
-            rId,
-            pageIndex,
-            kind: kindAttr,
-            partName: story?.partName ?? '',
-            variant: story?.variant ?? 'default',
-          });
+        if ((kindAttr === 'header' || kindAttr === 'footer') && Number.isInteger(pageIndex)) {
+          if (rId) {
+            const page = layout.pages[pageIndex];
+            const story = page?.[kindAttr];
+            event.preventDefault();
+            host.focus();
+            host.enterHeaderFooter?.({
+              rId,
+              pageIndex,
+              kind: kindAttr,
+              partName: story?.partName ?? '',
+              variant: story?.variant ?? 'default',
+            });
+          } else if (!layout.pages[pageIndex]?.[kindAttr]) {
+            // The painted PLACEHOLDER band: `data-docx-hf` with no relationship id marks a
+            // page with no story of that kind — create and open it.
+            event.preventDefault();
+            host.focus();
+            host.enterEmptyHeaderFooter?.(kindAttr, pageIndex);
+          }
         }
       }
       return;
+    } else if (clicks() >= 2) {
+      // No painted furniture under the press: a double click in the blank header/footer
+      // margin band creates that story and opens it, matching Word. Single presses keep
+      // falling through to body hit-testing — a click in the top margin still just places
+      // the caret in the nearest body line.
+      const empty = findEmptyFurnitureBandAtSheetPoint(layout, sheet, host.pageOffsetX);
+      if (empty) {
+        event.preventDefault();
+        host.focus();
+        host.enterEmptyHeaderFooter?.(empty.kind, empty.pageIndex);
+        return;
+      }
     }
 
     const hit = resolve(event.clientX, event.clientY);
     if (!hit) return;
+    if (host.isReadOnlyParagraph?.(hit.position.paragraphId)) {
+      event.preventDefault();
+      return;
+    }
 
     event.preventDefault();
     // Preventing the default cancels the browser's own focus transfer, and the surface only
@@ -676,6 +953,45 @@ export function createPointerController(
       ? 'character'
       : GRANULARITIES[(count - 1) % GRANULARITIES.length]!;
 
+    const placeholder = placeholderAtHit(layout, hit);
+    if (placeholder && !event.shiftKey) {
+      // Prefer the host's atomic select when wired (form-fill / selectControlContent); otherwise
+      // expand from layout boundary geometry so placeholder presses never land mid-prompt.
+      if (host.selectContentControl?.(placeholder.id)) {
+        const selected = host.selection();
+        const ordered =
+          isBefore(layout, selected.anchor, selected.head) ||
+          (selected.anchor.paragraphId === selected.head.paragraphId &&
+            selected.anchor.offset === selected.head.offset)
+            ? { from: selected.anchor, to: selected.head }
+            : { from: selected.head, to: selected.anchor };
+        gesture = {
+          pointerId: event.pointerId,
+          granularity: 'character',
+          anchorRange: ordered,
+          anchorCell: hit.cell,
+          cellDragging: false,
+          clientX: event.clientX,
+          clientY: event.clientY,
+        };
+        return;
+      }
+      const unit = placeholderSelectionRange(layout, placeholder);
+      if (unit) {
+        gesture = {
+          pointerId: event.pointerId,
+          granularity: 'character',
+          anchorRange: unit,
+          anchorCell: hit.cell,
+          cellDragging: false,
+          clientX: event.clientX,
+          clientY: event.clientY,
+        };
+        publish(() => host.setSelection({ anchor: unit.from, head: unit.to }));
+        return;
+      }
+    }
+
     if (event.shiftKey) {
       // Extend from the anchor the existing selection already has, so shift-clicking on the
       // far side of a range pivots around the end the user did not place.
@@ -689,7 +1005,17 @@ export function createPointerController(
         clientX: event.clientX,
         clientY: event.clientY,
       };
-      publish(() => host.setSelection({ anchor: current.anchor, head: hit.position }));
+      publish(() =>
+        host.setSelection(
+          extend(
+            layout,
+            { from: current.anchor, to: current.anchor },
+            hit.position,
+            granularity,
+            hit
+          )
+        )
+      );
     } else {
       const anchorRange = rangeAt(layout, hit.position, granularity);
       gesture = {
@@ -701,7 +1027,11 @@ export function createPointerController(
         clientX: event.clientX,
         clientY: event.clientY,
       };
-      publish(() => host.setSelection({ anchor: anchorRange.from, head: anchorRange.to }));
+      publish(() =>
+        host.setSelection(
+          absorbPlaceholderControls(layout, { anchor: anchorRange.from, head: anchorRange.to })
+        )
+      );
     }
   };
 

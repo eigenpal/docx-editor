@@ -9,7 +9,11 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
+import {
+  mountPaginatedSurface,
+  setPaginatedSurfaceScale,
+  type PaginatedSurface,
+} from '../paginated-surface.ts';
 import { surfaceExtent } from '../surface-pages.ts';
 import {
   createFixedMeasurer,
@@ -389,6 +393,214 @@ describe('mixed-width page centering', () => {
   });
 });
 
+const LONG_BODY = `<w:p><w:r><w:t>${'word '.repeat(4000)}</w:t></w:r></w:p>`;
+const MANY_PARAGRAPHS = Array.from({ length: 30 }, (_, index) =>
+  paragraph(`paragraph ${index} ${'word '.repeat(12)}`)
+).join('');
+
+/**
+ * A surface inside a scroll container with a supplied viewport — happy-dom reports zero
+ * layout, so height, scroll extent and the container's own offset are all defined here.
+ */
+function mountInScroller(
+  body: string,
+  options: { readonly offsetTop?: number } = {}
+): {
+  readonly surface: PaginatedSurface;
+  readonly scroller: HTMLElement;
+  readonly host: HTMLElement;
+} {
+  const scroller = document.createElement('div');
+  scroller.className = 'docx-editor__scroll-container';
+  document.body.append(scroller);
+  const host = document.createElement('div');
+  scroller.append(host);
+  Object.defineProperty(host, 'offsetTop', { value: options.offsetTop ?? 0, configurable: true });
+  Object.defineProperty(scroller, 'clientWidth', { value: 400, configurable: true });
+  Object.defineProperty(scroller, 'clientHeight', { value: 600, configurable: true });
+  Object.defineProperty(scroller, 'scrollWidth', { value: 10_000_000, configurable: true });
+  Object.defineProperty(scroller, 'scrollHeight', { value: 10_000_000, configurable: true });
+  let scrollLeft = 0;
+  let scrollTop = 0;
+  Object.defineProperty(scroller, 'scrollLeft', {
+    get: () => scrollLeft,
+    set: (next: number) => {
+      scrollLeft = next;
+    },
+    configurable: true,
+  });
+  Object.defineProperty(scroller, 'scrollTop', {
+    get: () => scrollTop,
+    set: (next: number) => {
+      scrollTop = next;
+    },
+    configurable: true,
+  });
+  const result = mountPaginatedSurface(host, docx(body), { scale: 1 });
+  if (!result.ok) throw new Error(result.reason);
+  return { surface: result.surface, scroller, host };
+}
+
+describe('in-place scaling', () => {
+  test('rescales the mounted pages without replacing the editing session', () => {
+    const { surface, container } = mount(paragraph('hello world'));
+    putCaret(surface, 5);
+    surface.type('!');
+    const session = surface.session;
+    const selection = surface.state().selection;
+    const widthBefore = parseFloat(container.querySelector<HTMLElement>('.docx-page')!.style.width);
+
+    expect(setPaginatedSurfaceScale(surface, 2)).toBe(true);
+
+    const widthAfter = parseFloat(container.querySelector<HTMLElement>('.docx-page')!.style.width);
+    expect(widthAfter).toBeCloseTo(widthBefore * 2);
+    expect(surface.session).toBe(session);
+    expect(surface.state().selection).toEqual(selection);
+    expect(container.textContent).toContain('hello! world');
+    expect(surface.state().canUndo).toBe(true);
+    surface.destroy();
+  });
+
+  test('a surface with no rescale path is refused, not thrown at', () => {
+    // The helper reaches an internal member, so a foreign or stubbed surface must come back
+    // as "cannot do that" — a host asking for zoom is not asking to be crashed.
+    expect(setPaginatedSurfaceScale({} as PaginatedSurface, 2)).toBe(false);
+  });
+
+  test('the pages, overlay and comment layers all take the new scale', () => {
+    const { surface, container } = mount(paragraph('hello world'));
+    const layers = () => ({
+      pages: container.querySelector<HTMLElement>('.docx-pages')!.style,
+      overlay: container.querySelector<HTMLElement>('.docx-selection-overlay')!.style,
+      comments: container.querySelector<HTMLElement>('.docx-comment-overlay')!.style,
+      container: container.style,
+    });
+    const before = Object.fromEntries(
+      Object.entries(layers()).map(([name, style]) => [
+        name,
+        [parseFloat(style.width), parseFloat(style.height)],
+      ])
+    );
+
+    expect(setPaginatedSurfaceScale(surface, 2)).toBe(true);
+
+    for (const [name, style] of Object.entries(layers())) {
+      const [width, height] = before[name]!;
+      expect(parseFloat(style.width)).toBeCloseTo(width! * 2);
+      expect(parseFloat(style.height)).toBeCloseTo(height! * 2);
+    }
+    surface.destroy();
+  });
+
+  test('the same viewport page is under the centre before and after, container offset included', () => {
+    // The scroll container is not the pages' offset parent in a real host: chrome above the
+    // document (toolbar, ruler) puts the surface at an `offsetTop`, and the page-visibility
+    // code already subtracts it. An anchor that did not would rescale to a different page.
+    const OFFSET_TOP = 400;
+    const { surface, scroller } = mountInScroller(LONG_BODY, { offsetTop: OFFSET_TOP });
+    // A centre just inside the END of page 2, so an anchor that ignores `offsetTop` lands on
+    // the following sheet rather than merely a few points off.
+    const page = surface.layout().pages[1]!;
+    const centre = page.box.y + page.box.height - 20;
+    scroller.scrollTop = OFFSET_TOP + centre - scroller.clientHeight / 2;
+    const pageBefore = surface.currentPage('viewport');
+    expect(pageBefore).toBe(2);
+    const scrollBefore = scroller.scrollTop;
+
+    expect(setPaginatedSurfaceScale(surface, 2)).toBe(true);
+
+    expect(surface.currentPage('viewport')).toBe(pageBefore);
+    // The scroll offset really did move: the assertion above is about the page under the
+    // centre, not about a no-op.
+    expect(scroller.scrollTop).toBeGreaterThan(scrollBefore);
+    surface.destroy();
+    scroller.remove();
+  });
+
+  test('the band the restored scroll lands on is built in the same turn', () => {
+    // The paint happens before the scroll is restored, so the pages worth building were
+    // decided for the OLD offset. Without a rematerialize the user saw shells until the next
+    // scroll event fired a frame later.
+    const { surface, scroller, host } = mountInScroller(LONG_BODY);
+    const away = surface.layout().pages[4]!;
+    scroller.scrollTop = away.box.y;
+
+    expect(setPaginatedSurfaceScale(surface, 2)).toBe(true);
+
+    const destination = surface.currentPage('viewport') - 1;
+    const sheet = host.querySelector<HTMLElement>(`.docx-page[data-page-index="${destination}"]`)!;
+    expect(sheet.dataset.materialized).toBe('true');
+    surface.destroy();
+    scroller.remove();
+  });
+
+  test('a rescale whose layout AND rollback both fail is refused, not thrown out of', () => {
+    const { surface, container } = mount(paragraph('hello world'));
+    const widthBefore = parseFloat(container.querySelector<HTMLElement>('.docx-page')!.style.width);
+    // Both the rescale and its rollback invalidate against the session's revision, so a
+    // session that cannot answer fails the forward pass and the recovery alike.
+    const session = surface.session as { packageRevision: () => number };
+    const revision = session.packageRevision;
+    session.packageRevision = () => {
+      throw new Error('revision unavailable');
+    };
+
+    let refused: boolean;
+    try {
+      refused = setPaginatedSurfaceScale(surface, 2);
+    } finally {
+      session.packageRevision = revision;
+    }
+
+    expect(refused).toBe(false);
+    // Still painted at the scale it was: a refused rescale must not leave half a zoom on
+    // screen.
+    expect(parseFloat(container.querySelector<HTMLElement>('.docx-page')!.style.width)).toBe(
+      widthBefore
+    );
+    // And the surface is not poisoned — the next rescale works.
+    expect(setPaginatedSurfaceScale(surface, 2)).toBe(true);
+    expect(parseFloat(container.querySelector<HTMLElement>('.docx-page')!.style.width)).toBeCloseTo(
+      widthBefore * 2
+    );
+    surface.destroy();
+  });
+
+  test('a host measurer keeps its layout identity across a rescale', () => {
+    // A host measurer answers in POINTS, so zoom cannot change one of its advances. Folding
+    // the scale into its cache identity re-measured the whole document on every zoom click
+    // and told the cache the two answers were different when they are the same.
+    const fixed = createFixedMeasurer();
+    let measured = 0;
+    const measurer = {
+      measure(text: string, style: Parameters<typeof fixed.measure>[1]) {
+        measured += 1;
+        return fixed.measure(text, style);
+      },
+      lineMetrics(style: Parameters<typeof fixed.lineMetrics>[0]) {
+        return fixed.lineMetrics(style);
+      },
+    };
+    const container = document.createElement('div');
+    const result = mountPaginatedSurface(container, docx(MANY_PARAGRAPHS), { scale: 1, measurer });
+    if (!result.ok) throw new Error(result.reason);
+    const { surface } = result;
+    surface.layout();
+    expect(measured).toBeGreaterThan(0);
+    const widthBefore = parseFloat(container.querySelector<HTMLElement>('.docx-page')!.style.width);
+    measured = 0;
+
+    expect(setPaginatedSurfaceScale(surface, 2)).toBe(true);
+
+    expect(measured).toBe(0);
+    // Repainted at the new scale even so: identity is about the cache, not about the paint.
+    expect(parseFloat(container.querySelector<HTMLElement>('.docx-page')!.style.width)).toBeCloseTo(
+      widthBefore * 2
+    );
+    surface.destroy();
+  });
+});
+
 describe('default browser measurer for cover-title centering', () => {
   /**
    * Controllable advances from the px size in `font` — avoids host-font pixel brittleness
@@ -449,6 +661,37 @@ describe('default browser measurer for cover-title centering', () => {
       // Geometry is authoritative — the painter must not be asked to centre via CSS.
       const painted = container.querySelector<HTMLElement>('.docx-line')!;
       expect(painted.style.textAlign).toBe('');
+      surface.destroy();
+    } finally {
+      HTMLCanvasElement.prototype.getContext = previous;
+    }
+  });
+
+  test('a rescale re-resolves the default measurer rather than reusing the one mount got', () => {
+    // The default measurer is resolved AT a scale, so a rescale resolves again — and what it
+    // resolves to can differ: a host that has torn its measurement canvas down falls back to
+    // the fixed grid, and the layout after the zoom has to be the one the NEW resolution
+    // measures, with a cache identity that says so.
+    const previous = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = (() => mockContext()) as typeof previous;
+    try {
+      const container = document.createElement('div');
+      const result = mountPaginatedSurface(container, docx(coverTitle), { scale: 1 });
+      if (!result.ok) throw new Error(result.reason);
+      const { surface } = result;
+      const canvasWidth = usedWidth(linesOf(surface.layout())[0]!);
+
+      HTMLCanvasElement.prototype.getContext = (() => null) as typeof previous;
+      expect(setPaginatedSurfaceScale(surface, 2)).toBe(true);
+
+      const line = linesOf(surface.layout())[0]!;
+      const style = line.spans[0]!.style;
+      expect(usedWidth(line)).toBeCloseTo(
+        createFixedMeasurer().measure('Cover ', style) +
+          createFixedMeasurer().measure('Title', style),
+        5
+      );
+      expect(usedWidth(line)).toBeLessThan(canvasWidth);
       surface.destroy();
     } finally {
       HTMLCanvasElement.prototype.getContext = previous;

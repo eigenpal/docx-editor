@@ -14,7 +14,11 @@ import {
 } from '../package/field-nodes.ts';
 import { atomicNoteSpansOf, isNoteAtomNode } from '../package/note-nodes.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
-import { contentControlContentChildren } from '../package/content-control-nodes.ts';
+import {
+  MAX_CONTENT_CONTROL_NESTING,
+  contentControlContentOf,
+  isContentControlNode,
+} from './tree-op-nodes.ts';
 
 /** One addressable unit of paragraph text: text, tab, hard break, or atomic field. */
 export interface Segment {
@@ -47,6 +51,11 @@ export function isParagraph(node: OoxmlNode | null): node is OoxmlParagraphNode 
  * iterating only direct `w:r` children did — left every link's text with no offsets at all,
  * so `paragraphTextOf` read "Visit  or ." for a sentence that says "Visit Example.com or
  * Anthropic's website." and layout, selection and the ops all agreed on the wrong string.
+ *
+ * Inline CONTENT CONTROLS are the same class of wrapper: their `w:sdtContent` runs join the
+ * paragraph's offset stream with no break opportunity at the boundary. Nesting is bounded
+ * (`MAX_CONTENT_CONTROL_NESTING`); beyond the bound the wrapper is opaque so recursion
+ * cannot exhaust the stack.
  *
  * `runId` stays the id of the run the content actually lives in, at whatever depth: the
  * appliers resolve it with `findNode` and rebuild that run's children, so nesting costs them
@@ -89,7 +98,27 @@ export interface ParagraphOffsetIndex {
   lengthOf(node: OoxmlNode | string): number;
 }
 
+/**
+ * MEMOIZED ON NODE IDENTITY. A paragraph node is immutable — a transaction rebuilds the path
+ * to what it edited and leaves every other paragraph object-identical — so the index derived
+ * from one can be reused until that paragraph itself changes.
+ *
+ * This is not a micro-optimization. Three whole-document readers call this per paragraph on
+ * every commit (the review queue, the comment anchors, the tracked-change writer), so on a
+ * long document one keystroke re-walked every paragraph in the file several times over, and
+ * the cost showed up as typing latency that grew with document length.
+ */
+const offsetIndexCache = new WeakMap<OoxmlParagraphNode, ParagraphOffsetIndex>();
+
 export function paragraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOffsetIndex {
+  const cached = offsetIndexCache.get(paragraph);
+  if (cached) return cached;
+  const index = buildParagraphOffsetIndex(paragraph);
+  offsetIndexCache.set(paragraph, index);
+  return index;
+}
+
+function buildParagraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOffsetIndex {
   const spans = new Map<string, OffsetSpan>();
   const segments = walkParagraph(paragraph, spans);
   const length = segments.length === 0 ? 0 : segments[segments.length - 1]!.end;
@@ -196,6 +225,17 @@ function walkParagraph(
       record(node, start);
       return;
     }
+    // Misplaced typed control inside a run (should demote on read) — stay opaque so a
+    // husk cannot invent atoms the way a paragraph-level inline control legitimately does.
+    if (isContentControlNode(node)) {
+      record(node, start);
+      return;
+    }
+    if (node.kind === 'text' || node.kind === 'deletedText') {
+      for (const child of node.children) visitRunChild(child, runId);
+      record(node, start);
+      return;
+    }
     for (const child of node.children) visitRunChild(child, runId);
     record(node, start);
   };
@@ -222,12 +262,19 @@ function walkParagraph(
     // op offset space, so every op past it was refused as out of range.
     if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
       for (const inner of child.children) visitInline(inner, depth + 1);
+      // The container owns the full span its descendants contributed. Tracked typing uses
+      // this span to descend back into the author's existing `w:ins`; without it, the first
+      // character was addressable but the second saw the wrapper as length zero and was
+      // refused as past the paragraph.
+      record(child, start);
+      return;
     }
-    // An inline content control is the same kind of container: the characters a reader types
-    // into a checkbox or a plain-text control are the paragraph's characters, and a walk that
-    // stopped at the wrapper left them with no offsets at all.
-    if (child.kind === 'contentControl') {
-      for (const inner of contentControlContentChildren(child)) visitInline(inner, depth + 1);
+    // Inline content controls: descend into `w:sdtContent` with a nesting bound.
+    if (isContentControlNode(child) && depth < MAX_CONTENT_CONTROL_NESTING) {
+      const content = contentControlContentOf(child);
+      if (content) {
+        for (const inner of content.children) visitInline(inner, depth + 1);
+      }
     }
     record(child, start);
   };
@@ -241,16 +288,20 @@ const MAX_INLINE_CONTAINER_DEPTH = 32;
 /**
  * The runs a paragraph child owns, at any depth — a `w:r`, or every run inside a container.
  *
- * Links and revision wrappers are both run containers, and either can hold the other.
+ * Links, revision wrappers, and inline content controls are all run containers.
  */
 export function runsUnder(child: OoxmlNode, depth = 0): OoxmlNode[] {
   if (child.kind === 'run') return [child];
   if (child.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) return [];
-  if (child.kind === 'contentControl') {
-    return contentControlContentChildren(child).flatMap((inner) => runsUnder(inner, depth + 1));
+  if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
+    return child.children.flatMap((inner) => runsUnder(inner, depth + 1));
   }
-  if (child.kind !== 'hyperlink' && !isContentRevisionKind(child.kind)) return [];
-  return child.children.flatMap((inner) => runsUnder(inner, depth + 1));
+  if (isContentControlNode(child) && depth < MAX_CONTENT_CONTROL_NESTING) {
+    const content = contentControlContentOf(child);
+    if (!content) return [];
+    return content.children.flatMap((inner) => runsUnder(inner, depth + 1));
+  }
+  return [];
 }
 
 /**

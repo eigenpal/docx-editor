@@ -749,6 +749,109 @@ describe('surface-root pointer delegation for HF / notes', () => {
     surface.destroy();
   });
 
+  test('root listener: double press in the BLANK header margin creates the header and opens it', () => {
+    const { surface, container } = mount(docx({ body: `${p('One')}${p('Two')}` }));
+    const pages = container.querySelector<HTMLElement>('.docx-pages')!;
+    stubPagesRect(pages);
+    pages.focus();
+
+    // No story, but the blank-band affordance is painted so hover can invite the press.
+    expect(container.querySelector('[data-docx-hf][data-docx-r-id]')).toBeNull();
+    expect(container.querySelector('.docx-hf--placeholder[data-docx-hf="header"]')).not.toBeNull();
+
+    const page = surface.layout().pages[0]!;
+    const clientX = page.contentBox.x + 8;
+    const clientY = page.box.y + 2;
+
+    // A single press stays a body gesture: margin clicks place the nearest body caret.
+    const first = pressAt(pages, pages, clientX, clientY);
+    expect(first.defaultPrevented).toBe(true);
+    expect(surface.activeScope()).toEqual({ kind: 'body' });
+    expect(surface.session.headerFooterResolutionBySection()[0]?.headers.size ?? 0).toBe(0);
+
+    const second = pressAt(pages, pages, clientX, clientY);
+    expect(second.defaultPrevented).toBe(true);
+    // The part was created — one committed package op — and its scope opened for editing.
+    const slot = surface.session.headerFooterResolutionBySection()[0]!.headers.get('default');
+    expect(slot).toBeDefined();
+    expect(surface.activeScope()).toEqual({ kind: 'headerFooter', rId: slot!.rId });
+    expect(surface.headerFooterState()?.editing).toBe('header');
+    expect(surface.session.canUndo()).toBe(true);
+    surface.destroy();
+  });
+
+  test('root listener: blank-band create works on a minimal document with no sectPr and no rels', () => {
+    // The shape a host's "new document" produces: one paragraph, no `w:sectPr`, no
+    // `document.xml.rels`, and no `xmlns:r` on the root. The minted `w:headerReference`
+    // carries `r:id`, and without a root binding the whole create refused `invalid-qname` —
+    // double-clicking the blank band on a fresh document did nothing at all.
+    const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+    const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+    const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t></w:t></w:r></w:p></w:body></w:document>`
+      ),
+    });
+    const container = document.createElement('div');
+    const result = mountPaginatedSurface(container, bytes, { scale: 1 });
+    if (!result.ok) throw new Error(String(result.reason));
+    const surface = result.surface;
+    const pages = container.querySelector<HTMLElement>('.docx-pages')!;
+    stubPagesRect(pages);
+    pages.focus();
+
+    const page = surface.layout().pages[0]!;
+    const clientX = page.contentBox.x + 8;
+    const clientY = page.box.y + 2;
+    pressAt(pages, pages, clientX, clientY);
+    pressAt(pages, pages, clientX, clientY);
+
+    const slot = surface.session.headerFooterResolutionBySection()[0]!.headers.get('default');
+    expect(slot).toBeDefined();
+    expect(surface.activeScope()).toEqual({ kind: 'headerFooter', rId: slot!.rId });
+    expect(surface.headerFooterState()?.editing).toBe('header');
+
+    // The minted root `xmlns:r` binding survives save: reopening the bytes still resolves
+    // the header reference.
+    const reopened = mountPaginatedSurface(document.createElement('div'), surface.session.save(), {
+      scale: 1,
+    });
+    if (!reopened.ok) throw new Error(String(reopened.reason));
+    expect(
+      reopened.surface.session.headerFooterResolutionBySection()[0]!.headers.get('default')
+    ).toBeDefined();
+    reopened.surface.destroy();
+    surface.destroy();
+  });
+
+  test('root listener: viewing mode refuses to create a header from the blank band', () => {
+    const { surface, container } = mount(docx({ body: p('Body') }));
+    const pages = container.querySelector<HTMLElement>('.docx-pages')!;
+    stubPagesRect(pages);
+    pages.focus();
+    surface.setEditingMode('view');
+
+    const page = surface.layout().pages[0]!;
+    const clientX = page.contentBox.x + 8;
+    const clientY = page.box.y + 2;
+    pressAt(pages, pages, clientX, clientY);
+    pressAt(pages, pages, clientX, clientY);
+
+    expect(surface.activeScope()).toEqual({ kind: 'body' });
+    expect(surface.session.headerFooterResolutionBySection()[0]?.headers.size ?? 0).toBe(0);
+    surface.destroy();
+  });
+
   test('root listener: DOM furniture hit without layout miss still enters via data-docx-r-id', () => {
     const { surface, container } = mount(docx({ header: p('HDR'), body: p('Body') }));
     const pages = container.querySelector<HTMLElement>('.docx-pages')!;

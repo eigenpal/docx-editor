@@ -98,13 +98,25 @@ describe('comprehensive fixture table fidelity', () => {
     expect(bl!.borders?.right).toBeUndefined();
     expect(br!.borders?.left).toBeUndefined();
 
-    // BL bottom none → table single outer.
-    expect(bl!.borders?.bottom?.style).toBe('single');
+    // BL bottom none → explicit none suppresses table outer edge.
+    expect(bl!.borders?.bottom).toBeUndefined();
     expect(bl!.shading).toBe('FFF3CD');
 
     expect(br!.borders?.bottom).toEqual({ style: 'triple', color: '9933CC', widthPt: 0.375 });
     expect(br!.shading).toBe('E8F5E9');
     expect(tr!.borders?.bottom).toEqual({ style: 'dotted', color: '339933', widthPt: 0.125 });
+  });
+
+  test('§18.5 explicit cell none suppresses the table frame', () => {
+    const table = findTable(layoutFixture(), 'Column A');
+    for (const row of table.rows) {
+      for (const cell of row.cells) {
+        expect(cell.borders?.top).toBeUndefined();
+        expect(cell.borders?.right).toBeUndefined();
+        expect(cell.borders?.bottom).toBeUndefined();
+        expect(cell.borders?.left).toBeUndefined();
+      }
+    }
   });
 
   test('§6.1 nested-table host bottom pad matches authored tcMar; §6.2 follows tightly', () => {

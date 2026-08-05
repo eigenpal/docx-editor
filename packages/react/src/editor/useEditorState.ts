@@ -25,6 +25,13 @@ import { LOADING_SNAPSHOT } from './loading-snapshot';
 
 const NOOP_UNSUBSCRIBE = () => {};
 
+let activeEditorStateSubscriptions = 0;
+
+/** @internal Test seam — count of mounted {@link useEditorState} multiplexed subscriptions. */
+export function editorStateActiveSubscriptionCount(): number {
+  return activeEditorStateSubscriptions;
+}
+
 /**
  * Notifications are COALESCED AND DEFERRED to a microtask, for two reasons:
  *
@@ -50,6 +57,12 @@ function deferredNotifier(onStoreChange: () => void): () => void {
   };
 }
 
+/** Optional lifecycle hooks for test instrumentation. @internal */
+export interface UseEditorStateOptions {
+  readonly onSubscribe?: () => void;
+  readonly onUnsubscribe?: () => void;
+}
+
 /**
  * Subscribe to a slice of the editor's read model. Re-renders the component ONLY when
  * `selector`'s result changes (by `isEqual`, default `Object.is`).
@@ -62,14 +75,19 @@ function deferredNotifier(onStoreChange: () => void): () => void {
  */
 export function useEditorState<T>(
   selector: (snapshot: EditorSnapshot) => T,
-  isEqual: (a: T, b: T) => boolean = Object.is
+  isEqual: (a: T, b: T) => boolean = Object.is,
+  options?: UseEditorStateOptions
 ): T {
   const editor = useDocxEditor();
+  const onSubscribe = options?.onSubscribe;
+  const onUnsubscribe = options?.onUnsubscribe;
 
   const subscribe = useCallback(
     (onStoreChange: () => void) => {
       if (!editor) return NOOP_UNSUBSCRIBE;
       let disposed = false;
+      activeEditorStateSubscriptions++;
+      onSubscribe?.();
       const notify = deferredNotifier(() => {
         if (!disposed) onStoreChange();
       });
@@ -80,10 +98,12 @@ export function useEditorState<T>(
       ];
       return () => {
         disposed = true;
+        activeEditorStateSubscriptions--;
+        onUnsubscribe?.();
         for (const off of unsubscribes) off();
       };
     },
-    [editor]
+    [editor, onSubscribe, onUnsubscribe]
   );
 
   // The memoized selection function: keyed on the inputs that change its meaning, it

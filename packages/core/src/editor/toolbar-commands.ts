@@ -23,6 +23,22 @@ import type {
   ExecResult,
 } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { ChromeSlotId } from './chrome-controls.ts';
+import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import { tableCommandState } from './docx-editor-derive.ts';
+import {
+  applyTableChromePick,
+  DEFAULT_TABLE_CHROME_DRAFT,
+  isTableChromeSlot,
+  probeTableChromeCommand,
+  type TableChromeDraft,
+  type TableChromeSlotId,
+} from './table-chrome.ts';
+
+/** Instance-only surface on the concrete facade — not part of the public `Editor` contract. */
+function surfaceOf(editor: Editor): PaginatedSurface | null {
+  const candidate = editor as Editor & { readonly surface?: PaginatedSurface | null };
+  return candidate.surface ?? null;
+}
 
 /**
  * The one slot → engine-command table.
@@ -62,10 +78,13 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'insert.pageXofY': { type: 'insertPageField', field: 'PAGE_X_OF_Y' },
   'insert.pageBreak': { type: 'insertBreak', kind: 'page' },
   'insert.sectionBreakNextPage': { type: 'insertBreak', kind: 'section' },
-  // `insert.sectionBreakContinuous` and `insert.toc` are deliberately absent: a continuous
-  // section break is not in the `insertBreak` vocabulary, and a table of contents is not an
-  // edit the tree editor executes. Neither has a command SHAPE to probe with either, so
-  // their disabled reason is this table's, not the engine's — see `toolbarCommandState`.
+  'insert.toc': { type: 'insertToc' },
+  // Content-control remove maps to the public edit shape; the Editor facade resolves the
+  // caret control. Show-all / form-fill / inspector are surface chrome, not commands — see
+  // the special cases in `toolbarCommandState` / `runToolbarCommand`.
+  'contentControl.remove': { type: 'removeContentControl' },
+  // `insert.sectionBreakContinuous` is deliberately absent: a continuous section break is
+  // not in the `insertBreak` vocabulary and has no command shape to probe.
 };
 
 /**
@@ -144,6 +163,22 @@ const VALUE_SLOT_PROBES: Partial<Record<ChromeSlotId, unknown>> = {
   'list.lineSpacing': 1,
 };
 
+/** Default draft for table chrome probes when the host has not supplied one yet. */
+export { DEFAULT_TABLE_CHROME_DRAFT } from './table-chrome.ts';
+
+/**
+ * Build an engine command for one table chrome slot using the caller's draft state.
+ *
+ * @public
+ */
+export function commandForTableChromeSlotValue(
+  slotId: TableChromeSlotId,
+  value: unknown,
+  draft: TableChromeDraft
+): EditorCommand | null {
+  return applyTableChromePick(draft, slotId, value)?.command ?? null;
+}
+
 /**
  * The engine command for a VALUE-TYPED slot carrying the picked value, or `null` for a
  * slot that does not take a value.
@@ -175,6 +210,9 @@ export function commandForSlotValue(slotId: ChromeSlotId, value: unknown): Edito
   if (slotId === 'list.lineSpacing') {
     return { type: 'setLineSpacing', rule: 'multiple', value: value as number };
   }
+  if (isTableChromeSlot(slotId)) {
+    return commandForTableChromeSlotValue(slotId, value, DEFAULT_TABLE_CHROME_DRAFT);
+  }
   const entry = VALUE_SLOT_MARKS[slotId];
   if (!entry) return null;
   return { type: 'setMarkAttr', mark: entry.mark, attr: entry.attr, value };
@@ -205,12 +243,43 @@ export interface ToolbarCommandState {
 }
 
 /**
+ * Enabled state for one table chrome slot using explicit draft state.
+ *
+ * @public
+ */
+export function tableChromeToolbarState(
+  editor: Editor | null,
+  slot: TableChromeSlotId,
+  draft: TableChromeDraft = DEFAULT_TABLE_CHROME_DRAFT
+): ToolbarCommandState {
+  if (!editor) {
+    return { id: slot, enabled: false, disabledReason: 'editor is not ready', active: false };
+  }
+  const probe = probeTableChromeCommand(slot, draft);
+  if (!probe) {
+    return {
+      id: slot,
+      enabled: false,
+      disabledReason: 'not wired to an editor command',
+      active: false,
+    };
+  }
+  const result = editor.can(probe);
+  return result.ok
+    ? { id: slot, enabled: true, disabledReason: null, active: false }
+    : { id: slot, enabled: false, disabledReason: result.reason, active: false };
+}
+
+/**
  * Ask the engine whether one control should be enabled.
  *
  * @public
  */
 export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): ToolbarCommandState {
   if (!editor) return { id, enabled: false, disabledReason: 'editor is not ready', active: false };
+  if (isTableChromeSlot(id)) {
+    return tableChromeToolbarState(editor, id);
+  }
   if (id === 'review.editingMode') {
     const mode = editor.getEditingMode?.() ?? 'editing';
     // Enabled state comes from the ENGINE, like every other control: a document opened
@@ -225,6 +294,35 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
       active: false,
       value: mode,
     };
+  }
+  // Surface-owned content-control chrome toggles. Enabled whenever the editor is mounted;
+  // `active` reflects snapshot surface state when the facade publishes it, else false.
+  // Adapters that drive the surface directly also read `surface.state().contentControls`.
+  if (id === 'contentControl.showAll' || id === 'contentControl.formFill') {
+    const surface = surfaceOf(editor);
+    const cc = surface?.state().contentControls;
+    const active =
+      id === 'contentControl.showAll' ? (cc?.showAll ?? false) : (cc?.formFill ?? false);
+    return {
+      id,
+      enabled: surface !== null,
+      disabledReason: surface ? null : 'editor is not ready',
+      active,
+    };
+  }
+  if (id === 'contentControl.inspector') {
+    const surface = surfaceOf(editor);
+    if (!surface)
+      return { id, enabled: false, disabledReason: 'editor is not ready', active: false };
+    const activeId = surface.state().contentControls.activeControlId;
+    return activeId
+      ? { id, enabled: true, disabledReason: null, active: false }
+      : {
+          id,
+          enabled: false,
+          disabledReason: 'no content control at the selection',
+          active: false,
+        };
   }
   const command = commandForSlot(id);
   if (!command) {
@@ -302,6 +400,48 @@ export function toolbarCommandStates(
 }
 
 /**
+ * Result of {@link runTableChromeCommand}: engine outcome plus post-pick draft on success.
+ *
+ * @public
+ */
+export interface RunTableChromeCommandResult {
+  readonly result: ExecResult;
+  readonly nextDraft: TableChromeDraft | null;
+}
+
+/**
+ * Run one table chrome pick with explicit draft state; returns the post-pick draft on success.
+ *
+ * @public
+ */
+export function runTableChromeCommand(
+  editor: Editor | null,
+  slot: TableChromeSlotId,
+  value: unknown,
+  draft: TableChromeDraft
+): RunTableChromeCommandResult {
+  if (!editor) {
+    return {
+      result: { ok: false, code: 'unsupported', reason: 'editor is not ready' },
+      nextDraft: null,
+    };
+  }
+  const pick = applyTableChromePick(draft, slot, value);
+  if (!pick) {
+    return {
+      result: { ok: false, code: 'unsupported', reason: 'invalid table chrome value' },
+      nextDraft: null,
+    };
+  }
+  const allowed = editor.can(pick.command);
+  if (!allowed.ok) {
+    return { result: { ok: false, code: allowed.code, reason: allowed.reason }, nextDraft: null };
+  }
+  const result = editor.exec(pick.command);
+  return result.ok ? { result, nextDraft: pick.nextDraft } : { result, nextDraft: null };
+}
+
+/**
  * Run a toolbar control: `can` first, then `exec` only if it said yes. Returns
  * the engine's refusal untouched when it said no, so a caller cannot mistake a
  * declined command for a no-op.
@@ -315,6 +455,48 @@ export function runToolbarCommand(
   value?: unknown
 ): ExecResult {
   if (!editor) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+  if (id === 'contentControl.showAll') {
+    const surface = surfaceOf(editor);
+    if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+    surface.contentControls.setShowAll(!surface.contentControls.showAll());
+    return { ok: true, changed: false };
+  }
+  if (id === 'contentControl.formFill') {
+    const surface = surfaceOf(editor);
+    if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+    surface.contentControls.setFormFill(!surface.contentControls.formFill());
+    return { ok: true, changed: false };
+  }
+  if (id === 'contentControl.inspector') {
+    // Inspector is a host chrome surface: the slot enables when a control is at the caret.
+    // Opening the panel is the adapter's job — there is nothing for the engine to execute.
+    const surface = surfaceOf(editor);
+    if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+    if (!surface.state().contentControls.activeControlId) {
+      return { ok: false, code: 'notFound', reason: 'no content control at the selection' };
+    }
+    return { ok: true, changed: false };
+  }
+  if (id === 'contentControl.remove') {
+    const surface = surfaceOf(editor);
+    if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+    const activeId = surface.state().contentControls.activeControlId;
+    if (!activeId) {
+      return { ok: false, code: 'notFound', reason: 'no content control at the selection' };
+    }
+    const reason = surface.contentControls.disabledReason(activeId, 'remove');
+    if (reason) return { ok: false, code: reason === 'bound' ? 'bound' : 'locked', reason };
+    const removed = surface.contentControls.remove(activeId);
+    return removed
+      ? { ok: true, changed: true }
+      : {
+          ok: false,
+          code:
+            (surface.state().lastRejection as 'locked' | 'bound' | 'notFound' | undefined) ??
+            'unsupported',
+          reason: surface.state().lastRejection ?? 'removeContentControl was refused',
+        };
+  }
   const command =
     value === undefined
       ? commandForSlot(id)
@@ -349,4 +531,36 @@ export function runToolbarCommand(
 export function runSave(editor: Editor | null): Promise<ArrayBuffer> {
   if (!editor) return Promise.reject(new Error('editor is not ready'));
   return editor.save();
+}
+
+/**
+ * Enabled state for a table command when the caller holds the paginated surface.
+ *
+ * Uses the same planner-backed `tableCommandState` as `Editor.can`/`gateTableCommand`.
+ * Chrome slot mapping for table controls is Task 9 — this helper is the shared
+ * can-before-exec seam for arbitrary table commands.
+ *
+ * @public
+ */
+export function tableCommandToolbarState(
+  surface: PaginatedSurface | null,
+  command: EditorCommand
+): Pick<ToolbarCommandState, 'enabled' | 'disabledReason'> {
+  if (!surface) return { enabled: false, disabledReason: 'editor is not ready' };
+  const state = tableCommandState(command, surface);
+  return state.can.ok
+    ? { enabled: true, disabledReason: null }
+    : { enabled: false, disabledReason: state.can.reason };
+}
+
+/**
+ * Run a table command: planner-backed `can` first, then `exec` only when allowed.
+ *
+ * @public
+ */
+export function runTableCommand(editor: Editor | null, command: EditorCommand): ExecResult {
+  if (!editor) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+  const allowed = editor.can(command);
+  if (!allowed.ok) return { ok: false, code: allowed.code, reason: allowed.reason };
+  return editor.exec(command);
 }

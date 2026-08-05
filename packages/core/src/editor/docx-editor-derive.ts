@@ -9,6 +9,7 @@ import type {
   DocRange,
   EditorCommand,
   EditorScope,
+  CanResult,
   ExecResult,
   HyperlinkInfo,
   PageSetup,
@@ -19,8 +20,16 @@ import type { ContainerRef, ParagraphSummary } from '../index.ts';
 import { classifyCommand } from './docx-editor-support.ts';
 
 /** Whether a command may run, and the engine's own refusal when it may not. */
-export type CommandGate = { ok: true } | { ok: false; refusal: Exclude<ExecResult, { ok: true }> };
+export type CommandGate =
+  | { ok: true; tablePlan?: import('./table-command-plan.ts').TableCommandPlan }
+  | { ok: false; refusal: Exclude<ExecResult, { ok: true }> };
 import { tableContextAt } from '@docx-editor.dev/core-contract/layout';
+import {
+  isTableEditorCommand,
+  planTableCommand,
+  type TableCommandPlan,
+  type TableCommandPlannerInput,
+} from './table-command-plan.ts';
 import { paragraphTextOf } from '@docx-editor.dev/core-contract/store';
 import { allParagraphs } from '../binding/tree-binding.ts';
 import { paragraphStyleId } from '../binding/document-outline.ts';
@@ -172,6 +181,51 @@ export function currentPage(
   return surface ? surface.currentPage(mode) : 1;
 }
 
+export function gateTableCommand(command: EditorCommand, surface: PaginatedSurface): CommandGate {
+  if (!isTableEditorCommand(command)) {
+    return {
+      ok: false,
+      refusal: { ok: false, code: 'unsupported', reason: 'not a table command' },
+    };
+  }
+  const state = tableCommandState(command, surface);
+  if (!state.can.ok) {
+    return {
+      ok: false,
+      refusal: { ok: false, code: state.can.code, reason: state.can.reason },
+    };
+  }
+  return { ok: true, tablePlan: state.plan };
+}
+
+export function buildTableCommandPlannerInput(
+  command: EditorCommand,
+  surface: PaginatedSurface
+): TableCommandPlannerInput {
+  return {
+    command,
+    part: surface.session.part(),
+    layout: surface.layout(),
+    storeRevision: surface.session.revision(),
+    selection: surface.state().selection,
+    cellSelection: surface.state().cellSelection,
+    themeColors: surface.session.documentThemeColors(),
+    editable: surface.session.editable,
+    viewing: surface.editingMode() === 'view',
+  };
+}
+
+/** Planner-backed can/plan pair — production gate for table commands. Task 9 maps chrome slots. */
+export function tableCommandState(
+  command: EditorCommand,
+  surface: PaginatedSurface
+): { readonly can: CanResult; readonly plan: TableCommandPlan } {
+  const plan = planTableCommand(buildTableCommandPlannerInput(command, surface));
+  return plan.ok
+    ? { can: { ok: true }, plan }
+    : { can: { ok: false, code: plan.code, reason: plan.reason }, plan };
+}
+
 export function gateCommand(
   command: EditorCommand,
   surface: PaginatedSurface | null,
@@ -297,6 +351,26 @@ export function gateCommand(
       refusal: { ok: false, code: 'unsupported', reason: 'nothing to redo' },
     };
   }
+  if (command.type === 'insertToc' && !surface.canInsertToc()) {
+    return {
+      ok: false,
+      refusal: {
+        ok: false,
+        code: 'unsupported',
+        reason: 'a table of contents can only be inserted in the editable document body',
+      },
+    };
+  }
+  if (command.type === 'refreshToc' && !surface.canRefreshToc(command.tocId)) {
+    return {
+      ok: false,
+      refusal: {
+        ok: false,
+        code: 'notFound',
+        reason: 'there is no refreshable table of contents at the selection',
+      },
+    };
+  }
   if (command.type === 'insertPageField') {
     const active = surface.activeScope?.() ?? { kind: 'body' as const };
     if (active.kind !== 'headerFooter') {
@@ -337,7 +411,34 @@ export function gateCommand(
       };
     }
   }
+  if (isTableEditorCommand(command)) {
+    const tableGate = gateTableCommand(command, surface);
+    if (!tableGate.ok) return tableGate;
+    return { ok: true, tablePlan: tableGate.tablePlan };
+  }
   return { ok: true };
+}
+
+export function selectedTableOf(surface: PaginatedSurface | null): {
+  readonly blockId: string;
+  readonly rowCount: number;
+  readonly columnCount: number;
+  readonly cell: { readonly row: number; readonly column: number } | null;
+} | null {
+  if (!surface) return null;
+  const state = surface.state();
+  const cells = state.cellSelection;
+  const context = tableContextAt(surface.layout(), state.selection.head.paragraphId);
+  if (!context) return null;
+  return {
+    blockId: context.tableId,
+    rowCount: context.rows,
+    columnCount: context.columns,
+    cell: {
+      row: cells ? cells.rows.from : context.rowIndex,
+      column: cells ? cells.columns.from : context.columnIndex,
+    },
+  };
 }
 
 /**

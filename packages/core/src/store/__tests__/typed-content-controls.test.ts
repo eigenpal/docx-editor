@@ -349,7 +349,7 @@ describe('a control around a row or a cell is preserved as the file wrote it', (
 describe('the comprehensive fixture survives the D9 fingerprint oracle', () => {
   function partOf(name: string): OoxmlPart {
     const bytes = readFileSync(join(import.meta.dir, '../../../../../e2e/fixtures', name));
-     
+
     const { unzipSync } = require('fflate') as typeof import('fflate');
     const entries = unzipSync(new Uint8Array(bytes));
     const xml = new TextDecoder().decode(entries['word/document.xml']!);

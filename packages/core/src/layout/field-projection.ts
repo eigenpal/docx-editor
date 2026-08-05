@@ -17,13 +17,14 @@
 
 import {
   atomicFieldSpansOf,
-  contentControlContentChildren,
+  hardBreakKind,
   hardBreakText,
   isFldSimple,
   WML_NAMESPACE_URI,
   type OoxmlNode,
   type OoxmlParagraphNode,
   type OoxmlProperty,
+  type HardBreakKind,
 } from '@docx-editor.dev/core-contract/store';
 import {
   allowlistedPageField,
@@ -73,6 +74,11 @@ import type {
   SemanticLayout,
   SpanLinkRecord,
 } from './semantic-records.ts';
+import {
+  contentControlContentChildren,
+  isContentControl,
+  MAX_CONTENT_CONTROL_NESTING,
+} from '../store/package/content-control-walk.ts';
 
 // Re-export instruction recognition + detection so existing layout-local imports stay stable.
 export {
@@ -159,6 +165,8 @@ export interface FieldAwarePiece {
    * would disagree with the store.
    */
   readonly positionalTab?: PositionalTab;
+  /** Typed hard-break intent; model text remains one newline-compatible UTF-16 unit. */
+  readonly breakKind?: HardBreakKind;
   /** The hyperlink this piece came from, already sanitized, or absent for ordinary text. */
   readonly link?: SpanLinkRecord;
   /**
@@ -410,6 +418,7 @@ export function piecesOfParagraph(
     end: number,
     extras?: {
       readonly positionalTab?: PositionalTab;
+      readonly breakKind?: HardBreakKind;
       readonly measureText?: string;
       readonly noteNav?: FieldAwarePiece['noteNav'];
     }
@@ -440,6 +449,7 @@ export function piecesOfParagraph(
       start,
       end,
       ...(extras?.positionalTab ? { positionalTab: extras.positionalTab } : {}),
+      ...(extras?.breakKind ? { breakKind: extras.breakKind } : {}),
       ...link,
       ...attribution,
     });
@@ -557,7 +567,11 @@ export function piecesOfParagraph(
       style.hidden ||
       !revisionsVisible(revisions, displayMode) ||
       (grand.kind === 'deletedText' && !deleted);
-    if (!suppressed) push(text, props, style, false, offset, offset + text.length);
+    if (!suppressed) {
+      push(text, props, style, false, offset, offset + text.length, {
+        ...(grand.kind === 'hardBreak' ? { breakKind: hardBreakKind(grand) } : {}),
+      });
+    }
     // Deleted characters are recorded whether or not they were laid out. They occupy model
     // offsets in every mode, and the caret must step over them in every mode — including the
     // proposed result, where they produce no span at all and an offset-by-offset walk would
@@ -719,23 +733,26 @@ export function piecesOfParagraph(
    *
    * Typed runs contribute measurable / selectable text. Generic siblings stay structurally
    * preserved but layout-inert for page-field evaluation; typed/generic `w:fldSimple` advances
-   * one model unit (atomic) without emitting a piece. The exceptions are the two containers
+   * one model unit (atomic) without emitting a piece. The exceptions are the containers
    * that are not content themselves but hold runs that are:
    *
    *   - `w:hyperlink`. Skipping it is what made every link's words vanish from the painted
    *     page while still occupying model offsets.
    *   - the revision wrappers. Skipping them dropped tracked content entirely, so the reader
    *     saw a third text belonging to neither the original nor the proposal.
+   *   - inline content controls (`w:sdt`). Skipping them made their words vanish while still
+   *     occupying model offsets (or, for generic SDTs, occupy none at all).
    *
-   * Either can hold the other, and a link inside a tracked insertion is ordinary, so the walk
-   * is one recursion rather than two passes.
+   * Any can hold the others, and a link inside a tracked insertion is ordinary, so the walk
+   * is one recursion rather than separate passes.
    *
    * The complex-field machine spans runs in document order within the paragraph, so descending
    * must not restart it — the walk visits runs in the same order a reader sees them, whatever
-   * their nesting.
+   * their nesting. Content-control nesting shares {@link MAX_CONTENT_CONTROL_NESTING} with
+   * block flattening; field-scan depth stays separate.
    */
   if (!consumeScanNode(budget)) return pieces;
-  const processInline = (child: OoxmlNode, depth: number): void => {
+  const processInline = (child: OoxmlNode, depth: number, sdtDepth: number): void => {
     if (isFldSimple(child)) {
       offset += 1;
       return;
@@ -744,20 +761,23 @@ export function piecesOfParagraph(
       processRun(child, depth);
       return;
     }
-    if (depth > MAX_STORY_FIELD_SCAN_DEPTH || depth >= MAX_REVISION_DEPTH) return;
-    // An inline content control is a run container like the other two: its characters are the
-    // paragraph's, they carry the paragraph's offsets, and a walk that stopped here painted a
-    // sentence with the control's own text missing out of the middle of it.
-    if (child.kind === 'contentControl') {
-      for (const inner of contentControlContentChildren(child)) processInline(inner, depth + 1);
+    // Inline content controls flatten transparently: their runs contribute the same UTF-16
+    // offsets as bare sibling runs, and the wrapper creates no break opportunity of its own.
+    if (isContentControl(child)) {
+      if (sdtDepth >= MAX_CONTENT_CONTROL_NESTING) return;
+      if (depth > MAX_STORY_FIELD_SCAN_DEPTH) return;
+      for (const inner of contentControlContentChildren(child)) {
+        processInline(inner, depth + 1, sdtDepth + 1);
+      }
       return;
     }
+    if (depth > MAX_STORY_FIELD_SCAN_DEPTH || depth >= MAX_REVISION_DEPTH) return;
     if (child.kind === 'hyperlink') {
       // The link is projected ONCE per element, not per run: sanitization is not free, and a
       // link's runs must all carry the same record so paint can group them by identity.
       const previous = currentLink;
       currentLink = projectLink?.(child) ?? undefined;
-      for (const inner of child.children) processInline(inner, depth + 1);
+      for (const inner of child.children) processInline(inner, depth + 1, sdtDepth);
       currentLink = previous;
       return;
     }
@@ -767,11 +787,11 @@ export function piecesOfParagraph(
     if (!consumeScanNode(budget)) return;
     const enclosing = revisions;
     revisions = withRevision(enclosing, attribution);
-    for (const inner of child.children) processInline(inner, depth + 1);
+    for (const inner of child.children) processInline(inner, depth + 1, sdtDepth);
     revisions = enclosing;
   };
   // Paragraph root counts as depth 0; run children sit at depth 1.
-  for (const child of paragraph.children) processInline(child, 1);
+  for (const child of paragraph.children) processInline(child, 1, 0);
   // Malformed field missing end: demote — surface cached/buffered text, no live projection.
   abandonPending();
 
@@ -890,5 +910,16 @@ export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLay
     };
   });
 
-  return changed ? { revision: layout.revision, pages } : layout;
+  return changed
+    ? {
+        revision: layout.revision,
+        pages,
+        ...(layout.contentControls !== undefined
+          ? { contentControls: layout.contentControls }
+          : {}),
+        ...(layout.controlContextToken !== undefined
+          ? { controlContextToken: layout.controlContextToken }
+          : {}),
+      }
+    : layout;
 }

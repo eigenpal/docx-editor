@@ -11,6 +11,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import { paragraphTextOf } from '../../store/store/tree-ops.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const W15 = 'http://schemas.microsoft.com/office/word/2012/wordml';
@@ -23,29 +24,46 @@ const COMMENTS_CT = 'application/vnd.openxmlformats-officedocument.wordprocessin
 interface DocxParts {
   readonly body: string;
   readonly comments?: string;
+  /** Default-header content; wires the part, its relationship and the section reference. */
+  readonly header?: string;
 }
 
-function docx({ body, comments }: DocxParts): Uint8Array {
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+function docx({ body, comments, header }: DocxParts): Uint8Array {
   const files: Record<string, Uint8Array> = {
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
         `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>` +
         (comments ? `<Override PartName="/word/comments.xml" ContentType="${COMMENTS_CT}"/>` : '') +
+        (header
+          ? `<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>`
+          : '') +
         `</Types>`
     ),
     '_rels/.rels': strToU8(
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
     ),
     'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}" xmlns:w15="${W15}"><w:body>${body}</w:body></w:document>`
+      `<w:document xmlns:w="${W}" xmlns:w15="${W15}" xmlns:r="${R}"><w:body>${body}` +
+        (header ? `<w:sectPr><w:headerReference w:type="default" r:id="rIdH"/></w:sectPr>` : '') +
+        `</w:body></w:document>`
     ),
   };
+  const documentRels: string[] = [];
   if (comments) {
-    files['word/_rels/document.xml.rels'] = strToU8(
-      `<Relationships xmlns="${REL}"><Relationship Id="rIdC" Type="${COMMENTS_REL}" Target="comments.xml"/></Relationships>`
-    );
+    documentRels.push(`<Relationship Id="rIdC" Type="${COMMENTS_REL}" Target="comments.xml"/>`);
     files['word/comments.xml'] = strToU8(
       `<w:comments xmlns:w="${W}" xmlns:w15="${W15}">${comments}</w:comments>`
+    );
+  }
+  if (header) {
+    documentRels.push(`<Relationship Id="rIdH" Type="${R}/header" Target="header1.xml"/>`);
+    files['word/header1.xml'] = strToU8(`<w:hdr xmlns:w="${W}">${header}</w:hdr>`);
+  }
+  if (documentRels.length > 0) {
+    files['word/_rels/document.xml.rels'] = strToU8(
+      `<Relationships xmlns="${REL}">${documentRels.join('')}</Relationships>`
     );
   }
   return zipSync(files);
@@ -78,6 +96,24 @@ const INSERTION =
 const DELETION =
   `<w:p><w:del w:id="2" w:author="Alan Turing" w:date="2026-02-03T04:05:06Z">` +
   `<w:r><w:delText>struck out</w:delText></w:r></w:del></w:p>`;
+
+const TWO_ROW_TABLE =
+  `<w:tbl><w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid>` +
+  `<w:tr><w:tc><w:p><w:r><w:t>first</w:t></w:r></w:p></w:tc></w:tr>` +
+  `<w:tr><w:tc><w:p><w:r><w:t>second</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
+
+function tableRows(editor: DocxEditorInstance) {
+  const table = editor
+    .surface!.layout()
+    .pages.flatMap((page) => page.fragments)
+    .find((fragment) => fragment.kind === 'table');
+  if (!table || table.kind !== 'table') throw new Error('expected a table fragment');
+  return table.rows;
+}
+
+function tableRowCount(editor: DocxEditorInstance): number {
+  return tableRows(editor).length;
+}
 
 describe('the review queue the facade publishes', () => {
   test('a card arrives presentation-ready, so no host derives it from the tree', () => {
@@ -133,6 +169,89 @@ describe('the review queue the facade publishes', () => {
     const before = editor.getReviewRevision();
     editor.acceptReviewItem(editor.getReviewItems()[0]!.key);
     expect(editor.getReviewRevision()).not.toBe(before);
+  });
+});
+
+describe('tracked table rows', () => {
+  test('sequential suggesting keystrokes replace table-cell text beyond one character', () => {
+    const editor = mount({ body: TWO_ROW_TABLE });
+    editor.setEditingMode('suggesting');
+    const firstParagraph = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: firstParagraph, offset: 0 },
+      head: { paragraphId: firstParagraph, offset: 5 },
+    });
+
+    editor.surface!.type('s');
+    expect(editor.surface!.state().selection.head).toEqual({
+      paragraphId: firstParagraph,
+      offset: 6,
+    });
+    editor.surface!.type('e');
+
+    expect(editor.surface!.state().lastRejection).toBeNull();
+    expect(editor.surface!.state().selection.head).toEqual({
+      paragraphId: firstParagraph,
+      offset: 7,
+    });
+    const replacement = editor
+      .getReviewItems()
+      .find((item) => item.kind === 'revision' && item.revisionKind === 'replace');
+    expect(replacement?.replacedText).toBe('first');
+    expect(replacement?.text).toBe('se');
+  });
+
+  test('inserting a row paints immediately, opens one review card, and keeps typing', () => {
+    const editor = mount({ body: TWO_ROW_TABLE });
+    editor.setEditingMode('suggesting');
+    const firstParagraph = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: firstParagraph, offset: 0 },
+      head: { paragraphId: firstParagraph, offset: 0 },
+    });
+
+    expect(editor.exec({ type: 'insertRow', where: 'below' }).ok).toBe(true);
+    expect(tableRowCount(editor)).toBe(3);
+    expect(tableRows(editor).filter((row) => row.revisionKind === 'insert')).toHaveLength(1);
+    expect(editor.isReviewPaneOpen()).toBe(true);
+    const rowCard = editor
+      .getReviewItems()
+      .find((item) => item.kind === 'revision' && item.revisionKind === 'structural');
+    expect(rowCard).toBeDefined();
+    expect(rowCard?.readOnly).toBe(false);
+
+    const insertedParagraph = editor.surface!.state().selection.head.paragraphId;
+    editor.surface!.type('A');
+    expect(editor.surface!.state().selection.head).toEqual({
+      paragraphId: insertedParagraph,
+      offset: 1,
+    });
+    expect(paragraphTextOf(editor.surface!.session.part(), insertedParagraph)).toBe('A');
+    editor.surface!.type('B');
+    expect(editor.surface!.state().lastRejection).toBeNull();
+    expect(paragraphTextOf(editor.surface!.session.part(), insertedParagraph)).toBe('AB');
+    expect(tableRowCount(editor)).toBe(3);
+  });
+
+  test('deleting a row stays visible as a proposal until accepted', () => {
+    const editor = mount({ body: TWO_ROW_TABLE });
+    editor.setEditingMode('suggesting');
+    const firstParagraph = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: firstParagraph, offset: 0 },
+      head: { paragraphId: firstParagraph, offset: 0 },
+    });
+
+    expect(editor.exec({ type: 'deleteRow' }).ok).toBe(true);
+    expect(tableRowCount(editor)).toBe(2);
+    expect(tableRows(editor).filter((row) => row.revisionKind === 'delete')).toHaveLength(1);
+    const rowCard = editor
+      .getReviewItems()
+      .find((item) => item.kind === 'revision' && item.revisionKind === 'structural');
+    expect(rowCard).toBeDefined();
+    expect(rowCard?.readOnly).toBe(false);
+    expect(editor.acceptReviewItem(rowCard!.key).ok).toBe(true);
+    expect(tableRowCount(editor)).toBe(1);
   });
 });
 
@@ -669,6 +788,17 @@ describe('the review pane', () => {
     expect(editor.snapshot().reviewPaneOpen).toBe(false);
   });
 
+  test('reopens when suggesting commits another tracked change', () => {
+    const editor = mount({ body: '<w:p><w:r><w:t>plain text</w:t></w:r></w:p>' });
+    editor.setEditingMode('suggesting');
+    editor.exec({ type: 'toggleReviewPane' });
+    expect(editor.isReviewPaneOpen()).toBe(false);
+
+    editor.surface!.type('X');
+
+    expect(editor.isReviewPaneOpen()).toBe(true);
+  });
+
   test('the queue counter moves on a toggle, so a subscriber re-renders', () => {
     const editor = mount({ body: INSERTION });
     const before = editor.getReviewRevision();
@@ -748,5 +878,88 @@ describe('activating a card', () => {
     expect(bodyTextOf(editor)).toContain('added text');
     editor.setActiveReviewItem(null);
     expect(editor.getReviewItems()[0]!.isActive).toBe(false);
+  });
+});
+
+// A tracked change in a header is a pending decision like any other: it must reach the
+// queue, carry real geometry, resolve against ITS story, and tell a programmatic consumer
+// which story holds it. A queue that only walked the body hid all of that.
+const HEADER_INSERTION =
+  `<w:p><w:r><w:t xml:space="preserve">Confidential </w:t></w:r>` +
+  `<w:ins w:id="7" w:author="Margaret Hamilton" w:date="2026-03-04T05:06:07Z">` +
+  `<w:r><w:t>draft</w:t></w:r></w:ins></w:p>`;
+
+describe('tracked changes in headers', () => {
+  test('a header revision gets a card, with geometry from the furniture layout', () => {
+    const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
+    const cards = editor.getReviewItems();
+    expect(cards).toHaveLength(2);
+    const header = cards.find((card) => card.author === 'Margaret Hamilton');
+    expect(header).toBeDefined();
+    expect(header!.text).toBe('draft');
+    expect(header!.readOnly).toBe(false);
+    expect(header!.pageIndex).toBe(0);
+    expect(header!.anchorY).not.toBeNull();
+    // The header sits ABOVE the body content on the sheet, and its card rides before the
+    // body's in the rail: the rail stacks top-down and never lifts a card past its anchor.
+    const body = cards.find((card) => card.author === 'Ada Lovelace')!;
+    expect(cards.indexOf(header!)).toBeLessThan(cards.indexOf(body));
+    expect(header!.anchorY!).toBeLessThan(body.anchorY!);
+  });
+
+  test('getTrackedChanges names the story each change lives in', () => {
+    const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
+    const stories = editor
+      .getTrackedChanges()
+      .map((change) => change.story)
+      .sort();
+    expect(stories).toEqual(['body', 'header']);
+  });
+
+  test('accepting a header revision resolves it inside the header story', () => {
+    const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
+    const header = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
+    expect(editor.acceptReviewItem(header.key)).toEqual({ ok: true, changed: true });
+    // The card is gone, the body's card is untouched, and the header kept the words.
+    const remaining = editor.getReviewItems();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.author).toBe('Ada Lovelace');
+    const storyText =
+      editor.surface!.session.storyText({ kind: 'headerFooter', rId: 'rIdH' }) ?? '';
+    expect(storyText).toContain('draft');
+  });
+
+  test('rejecting a header insertion removes its words from the header story', () => {
+    const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
+    const header = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
+    expect(editor.rejectReviewItem(header.key)).toEqual({ ok: true, changed: true });
+    const storyText =
+      editor.surface!.session.storyText({ kind: 'headerFooter', rId: 'rIdH' }) ?? '';
+    expect(storyText).not.toContain('draft');
+    expect(bodyTextOf(editor)).toContain('added text');
+  });
+
+  test('undoing a header accept brings the card back, with the tick moving each time', () => {
+    const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
+    const header = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
+    const before = editor.getReviewRevision();
+    expect(editor.acceptReviewItem(header.key)).toEqual({ ok: true, changed: true });
+    const afterAccept = editor.getReviewRevision();
+    // An accept inside a header moves only the PACKAGE revision; a tick watching the body
+    // alone froze the rail, so undoing the accept restored the change with no card beside it.
+    expect(afterAccept).not.toBe(before);
+    editor.surface!.undo();
+    expect(editor.getReviewRevision()).not.toBe(afterAccept);
+    expect(
+      editor.getReviewItems().filter((card) => card.author === 'Margaret Hamilton')
+    ).toHaveLength(1);
+  });
+
+  test('opening a header card enters the header scope, like Word', () => {
+    const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
+    const header = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
+    editor.setActiveReviewItem(header.key);
+    expect(editor.surface!.activeScope()).toEqual({ kind: 'headerFooter', rId: 'rIdH' });
+    expect(editor.getHeaderFooterState()?.editing).toBe('header');
   });
 });

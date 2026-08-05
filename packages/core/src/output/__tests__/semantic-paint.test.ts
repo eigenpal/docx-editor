@@ -54,6 +54,18 @@ describe('the painter is a non-authoritative consumer', () => {
     expect(paint('<w:p><w:r><w:t>x</w:t></w:r></w:p>').dataset.revision).toBe('7');
   });
 
+  test('it paints layout-owned column separators behind the section content', () => {
+    const container = paint(
+      '<w:p><w:r><w:t>left</w:t></w:r></w:p>' +
+        '<w:sectPr><w:cols w:num="2" w:space="720" w:sep="true"/></w:sectPr>'
+    );
+    const separator = container.querySelector<HTMLElement>('.docx-column-separator');
+    expect(separator).not.toBeNull();
+    expect(separator!.style.position).toBe('absolute');
+    expect(separator!.style.pointerEvents).toBe('none');
+    expect(separator!.getAttribute('contenteditable')).toBe('false');
+  });
+
   test('LINE positions come from the records, not from the browser', () => {
     // Where the boundary sits: layout decides what is on a line and where the line goes;
     // the browser places glyphs within it. So a line carries published coordinates and its
@@ -69,6 +81,53 @@ describe('the painter is a non-authoritative consumer', () => {
     const spans = [...container.querySelectorAll<HTMLElement>('.layout-run-text')];
     expect(spans).toHaveLength(2);
     for (const span of spans) expect(span.style.left).toBe('');
+  });
+
+  test('justified word-spacing matches real layout gaps, ignoring zero tab/run gaps', () => {
+    // Layout leaves slack only after expandable spaces; pairs like tab→word stay flush.
+    // Averaging those zero gaps into word-spacing under-stretched every space and drifted
+    // later carets left of their published boxes.
+    // Enough words that the paragraph wraps: the first line is justified, the last is not.
+    const words = Array.from({ length: 20 }, (_, index) => `w${index}`).join(' ');
+    const body =
+      `<w:p><w:pPr><w:jc w:val="both"/></w:pPr>` +
+      `<w:r><w:t xml:space="preserve">qu</w:t></w:r>` +
+      `<w:r><w:tab/></w:r>` +
+      `<w:r><w:t xml:space="preserve">${words}</w:t></w:r>` +
+      `</w:p>`;
+    const read = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
+      name: '/word/document.xml',
+      contentType: 'app/xml',
+    });
+    if (!read.ok) throw new Error(read.reason);
+    // Narrow column so line 1 wraps with measurable justify slack.
+    const layout = layoutSemanticDocument(read.part, 7, {
+      measurer: createFixedMeasurer(6, 14),
+      geometry: {
+        width: 220,
+        height: 400,
+        margin: { top: 10, right: 10, bottom: 10, left: 10 },
+      },
+    });
+    const fragment = layout.pages[0]!.fragments[0]!;
+    if (fragment.kind !== 'paragraph') throw new Error('expected paragraph');
+    expect(fragment.lines.length).toBeGreaterThan(1);
+    const line = fragment.lines[0]!;
+    const positiveGaps: number[] = [];
+    for (let index = 1; index < line.spans.length; index += 1) {
+      const previous = line.spans[index - 1]!;
+      const gap = line.spans[index]!.box.x - (previous.box.x + previous.box.width);
+      if (gap > 0.25) positiveGaps.push(gap);
+    }
+    expect(positiveGaps.length).toBeGreaterThan(0);
+    // At least one flush pair (tab) so a naive average of every boundary would under-shoot.
+    expect(positiveGaps.length).toBeLessThan(line.spans.length - 1);
+    const expected = positiveGaps.reduce((sum, gap) => sum + gap, 0) / positiveGaps.length;
+
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, { scale: 1 });
+    const painted = container.querySelector<HTMLElement>('.docx-line')!;
+    expect(Number.parseFloat(painted.style.wordSpacing)).toBeCloseTo(expected, 5);
   });
 
   test('a line is as tall as the record says, so lines cannot drift apart', () => {

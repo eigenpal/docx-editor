@@ -59,7 +59,13 @@ import {
   type StyleCascadeTable,
 } from './style-cascade.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
-import { readTableStructure, tableOriginX, type SemanticTableRow } from './semantic-table.ts';
+import {
+  readTableStructure,
+  tableFloatOriginX,
+  tableOriginX,
+  type SemanticTableRow,
+  type TableAnchorFrames,
+} from './semantic-table.ts';
 import {
   createTableBorderOwnershipBudget,
   createTableVMergeResolveBudget,
@@ -74,24 +80,48 @@ import {
   type CellPlaceCursor,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
+import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { storyBlocks } from './story-roots.ts';
+import {
+  emptyTocPlaceholderParagraphIds,
+  emptyTocSuppressedResultParagraphIds,
+  tocFieldChromeParagraphIds,
+} from './toc-layout.ts';
 import { type HeaderFooterStoryLayout } from './hf-layout.ts';
-import { enumerateDocumentSections, geometryOfSection } from './section-properties.ts';
+import {
+  DEFAULT_SECTION_PROPERTIES,
+  enumerateDocumentSections,
+  geometryOfSection,
+  type SectionColumns,
+} from './section-properties.ts';
+import { resolveSectionColumns, type ResolvedSectionColumns } from './section-columns.ts';
 import { layoutSemanticDocumentWithNotes } from './note-pagination.ts';
-import type {
-  BlockFragmentRecord,
-  HeaderFooterStoryRecord,
-  LayoutBox,
-  LineRecord,
-  PageGeometry,
-  PageRecord,
-  ParagraphBorderStrokeRecord,
-  ParagraphBottomBorderRecord,
-  SemanticLayout,
-  TableRowFragmentRecord,
-  TextMeasurer,
+import {
+  DEFAULT_PAGE_GEOMETRY,
+  effectiveContentControlLock,
+  unionLayoutBoxes,
+  type BlockFragmentRecord,
+  type ContentControlBoundaryRecord,
+  type ContentControlGeometryFragment,
+  type ContentControlLevel,
+  type ContentControlLock,
+  type ContentControlMappedType,
+  type HeaderFooterStoryRecord,
+  type LayoutBox,
+  type LineRecord,
+  type PageGeometry,
+  type PageRecord,
+  type ParagraphBorderStrokeRecord,
+  type ParagraphBottomBorderRecord,
+  type SemanticLayout,
+  type TableRowFragmentRecord,
+  type TextMeasurer,
 } from './semantic-records.ts';
-import { DEFAULT_PAGE_GEOMETRY } from './semantic-records.ts';
+import {
+  MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING,
+  contentControlContentChildren,
+  isContentControl,
+} from '../store/package/content-control-walk.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import { firstLineShift, withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
 import { publishListMarker } from './list-marker.ts';
@@ -219,6 +249,21 @@ export interface SemanticLayoutOptions {
   readonly pageBottomReserves?: ReadonlyMap<number, number>;
   /** Derived note marks for body/note projection (provisional or final). */
   readonly noteMarks?: import('./note-projection.ts').NoteMarkContext;
+  /**
+   * Cross-paragraph TOC field begin/end paragraph ids. Empty chrome on these ids suppresses
+   * the caret placeholder line in layout while the tree nodes stay intact for refresh/save.
+   */
+  readonly tocFieldChromeParagraphIds?: ReadonlySet<string>;
+  /**
+   * Begin-paragraph ids of empty TOCs. These keep one layout line so paint can host an
+   * identifiable empty-TOC furniture placeholder (overrides chrome suppression).
+   */
+  readonly emptyTocPlaceholderParagraphIds?: ReadonlySet<string>;
+  /**
+   * Empty result-paragraph ids inside empty TOCs. Suppressed like field chrome so blank
+   * cached rows do not stack under the empty placeholder.
+   */
+  readonly emptyTocSuppressedResultParagraphIds?: ReadonlySet<string>;
 }
 
 /** Prepass results by block node, valid while the width and producer both hold. */
@@ -272,8 +317,21 @@ export function layoutSemanticDocument(
   const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
   const sections = enumerateDocumentSections(part, displayMode);
   const blocks = storyBlocks(part, displayMode);
+  // Wrapper-only metadata (alias/tag/lock/…) lives outside flattened paragraph nodes. Fold a
+  // fingerprint into the producer so incremental identity reuse cannot keep stale boundaries.
+  const controlToken = contentControlContextToken(part);
+  const optionsWithControlContext: SemanticLayoutOptions = {
+    ...options,
+    producer: `${options.producer ?? 'unversioned-measurer'}|cc:${controlToken}`,
+    tocFieldChromeParagraphIds:
+      options.tocFieldChromeParagraphIds ?? tocFieldChromeParagraphIds(part),
+    emptyTocPlaceholderParagraphIds:
+      options.emptyTocPlaceholderParagraphIds ?? emptyTocPlaceholderParagraphIds(part),
+    emptyTocSuppressedResultParagraphIds:
+      options.emptyTocSuppressedResultParagraphIds ?? emptyTocSuppressedResultParagraphIds(part),
+  };
   // Full-body list resolve so counters continue across sections and table cells.
-  const optionsWithLists = withResolvedListItems(options, blocks);
+  const optionsWithLists = withResolvedListItems(optionsWithControlContext, blocks);
 
   const runBody = (opts: SemanticLayoutOptions): SemanticLayout => {
     if (sections.length > 1) {
@@ -288,17 +346,23 @@ export function layoutSemanticDocument(
       ...opts,
       geometry,
       furniture,
+      sectionColumns: section?.properties.columns ?? DEFAULT_SECTION_PROPERTIES.columns,
     });
     const numbering = section?.properties.pageNumbering;
-    const annotated: SemanticLayout = {
-      revision: laid.layout.revision,
-      pages: withPageFieldSources(
-        laid.pages,
-        numbering?.start ?? 1,
-        laid.pages.length,
-        numbering?.fmt
-      ),
-    };
+    // Carry boundary metadata through field annotation so a no-change resume still early-exits
+    // in `attachContentControlBoundaries` instead of allocating a fresh `pages` array.
+    const annotated: SemanticLayout = withContentControlMetadata(
+      {
+        revision: laid.layout.revision,
+        pages: withPageFieldSources(
+          laid.pages,
+          numbering?.start ?? 1,
+          laid.pages.length,
+          numbering?.fmt
+        ),
+      },
+      laid.layout
+    );
     const finalized = finalizePageFieldProjection(annotated);
     if (opts.session) {
       opts.session.multi = null;
@@ -307,11 +371,21 @@ export function layoutSemanticDocument(
     return finalized;
   };
 
+  const finish = (layout: SemanticLayout): SemanticLayout => {
+    const withBoundaries = attachContentControlBoundaries(layout, part, controlToken);
+    if (options.session) {
+      options.session.previous = withBoundaries;
+    }
+    return withBoundaries;
+  };
+
   if (!options.notes) {
-    return runBody(optionsWithLists);
+    return finish(runBody(optionsWithLists));
   }
 
-  return layoutSemanticDocumentWithNotes(part, sections, optionsWithLists, options.notes, runBody);
+  return finish(
+    layoutSemanticDocumentWithNotes(part, sections, optionsWithLists, options.notes, runBody)
+  );
 }
 
 interface BlockLayoutResult {
@@ -333,16 +407,31 @@ interface BlockLayoutResult {
   readonly endsOpenPage: boolean;
 }
 
-function layoutBlocksWithGeometry(
+type BlockLayoutOptions = SemanticLayoutOptions & {
+  readonly geometry: PageGeometry;
+  readonly sectionColumns?: SectionColumns;
+  readonly lineCounterStart?: number;
+  readonly flowStartY?: number;
+  readonly spaceBeforeCarry?: number;
+  readonly pageIndexStart?: number;
+  /**
+   * Balance this section's columns (ECMA-376 §17.6.4): Word divides the content of a
+   * multi-column section that ends in a continuous section break evenly across its
+   * columns instead of filling each to the page bottom first.
+   */
+  readonly balanceColumns?: boolean;
+  /**
+   * Column-height limit (content-box-relative bottom, points) applied to the FIRST page
+   * only. Internal to the balance search: overflow pages keep the full content height so
+   * an over-tall block always makes progress exactly as it does today.
+   */
+  readonly columnRegionBottom?: number;
+};
+
+function layoutBlocksPass(
   bodies: readonly OoxmlElement[],
   revision: number,
-  options: SemanticLayoutOptions & {
-    readonly geometry: PageGeometry;
-    readonly lineCounterStart?: number;
-    readonly flowStartY?: number;
-    readonly spaceBeforeCarry?: number;
-    readonly pageIndexStart?: number;
-  }
+  options: BlockLayoutOptions
 ): BlockLayoutResult {
   const geometry = options.geometry;
   const measurer = options.measurer;
@@ -360,6 +449,9 @@ function layoutBlocksWithGeometry(
   // it into `producer` is what makes a mode switch invalidate the break cache AND the session
   // checkpoints without a `ModelChange`: the document did not change, the projection of it did.
   const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
+  const tocChromeParagraphIds = options.tocFieldChromeParagraphIds;
+  const emptyTocPlaceholderIds = options.emptyTocPlaceholderParagraphIds;
+  const emptyTocSuppressedResultIds = options.emptyTocSuppressedResultParagraphIds;
   const producer =
     (options.producer ?? 'unversioned-measurer') +
     (styleCascade ? `|sc:${styleCascade.cacheToken}` : '') +
@@ -367,7 +459,14 @@ function layoutBlocksWithGeometry(
     (defaultTabStopPt !== undefined ? `|dts:${defaultTabStopPt}` : '') +
     (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`);
 
-  const contentWidth = geometry.width - geometry.margin.left - geometry.margin.right;
+  const pageContentWidth = geometry.width - geometry.margin.left - geometry.margin.right;
+  const columns = resolveSectionColumns(
+    options.sectionColumns ?? DEFAULT_SECTION_PROPERTIES.columns,
+    pageContentWidth
+  );
+  // Prepass and incremental keys use the first region. Placement re-prepares a block when it
+  // enters an unequal-width later column; multi-column passes conservatively skip resume.
+  const contentWidth = columns.widths[0]!;
 
   // PAGE FURNITURE. A header taller than the top-margin remainder pushes the content area
   // down (Word's behaviour), computed as the worst case over the variants in use so the
@@ -420,12 +519,24 @@ function layoutBlocksWithGeometry(
   const noteMarksKey = options.noteMarks
     ? `|nm:${options.noteMarks.reservedMarkText ?? ''}:${options.noteMarks.marks.size}`
     : '';
-  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|lc:${lineCounterStart}|fs:${flowStartY},${spaceBeforeCarry}|pi:${pageIndexStart}${furnitureContext}${notesReserveKey}${noteMarksKey}`;
+  const columnRegionBottom = options.columnRegionBottom;
+  const columnsContext = `|cols:${columns.widths.join(',')};${columns.gaps.join(',')};${columns.separator ? 1 : 0}${columnRegionBottom !== undefined ? `;bal:${columnRegionBottom}` : ''}`;
+  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|lc:${lineCounterStart}|fs:${flowStartY},${spaceBeforeCarry}|pi:${pageIndexStart}${furnitureContext}${notesReserveKey}${noteMarksKey}${columnsContext}`;
 
   const pages: PageRecord[] = [];
-  /** Available body height on the page currently being filled (`pages.length`). */
-  const contentHeight = (): number =>
-    Math.max(1, baseContentHeight - (pageBottomReserves?.get(pages.length) ?? 0));
+  /**
+   * Available body height on the page currently being filled (`pages.length`).
+   *
+   * A balance-search limit binds the FIRST page only: content pushed past it lands on a
+   * full-height overflow page, so a block taller than the limit still terminates, and the
+   * search reads "produced a second page" as "does not fit".
+   */
+  const contentHeight = (): number => {
+    const base = Math.max(1, baseContentHeight - (pageBottomReserves?.get(pages.length) ?? 0));
+    return columnRegionBottom !== undefined && pages.length === 0
+      ? Math.max(1, Math.min(base, columnRegionBottom))
+      : base;
+  };
 
   // Prepass: everything needed to KEY a paragraph, before any of them is placed. Resuming
   // means knowing where the first change is, and that cannot be discovered while walking.
@@ -435,9 +546,9 @@ function layoutBlocksWithGeometry(
   // and the producer. Recomputing the key — a serialization of the paragraph's subtree —
   // for every paragraph on every pass made the prepass, not placement, the cost of an
   // incremental layout: a one-character edit re-keyed the entire document.
-  const prepared = bodies.map((block): PreparedBlock => {
+  const prepareBlock = (block: OoxmlElement, availableWidth: number): PreparedBlock => {
     const memo = preparedBlocks.get(block);
-    if (memo && memo.contentWidth === contentWidth && memo.producer === producer) {
+    if (memo && memo.contentWidth === availableWidth && memo.producer === producer) {
       return memo.entry;
     }
     let entry: PreparedBlock;
@@ -449,7 +560,7 @@ function layoutBlocksWithGeometry(
         key: paragraphLayoutKey({
           paragraph: block,
           properties: [],
-          width: contentWidth,
+          width: availableWidth,
           producer,
         }),
       };
@@ -457,7 +568,7 @@ function layoutBlocksWithGeometry(
       const listItem = listItems?.get(block.id);
       const preparedParagraph = resolveParagraphLayoutInputs(
         block,
-        contentWidth,
+        availableWidth,
         styleCascade,
         listItem
       );
@@ -518,9 +629,10 @@ function layoutBlocksWithGeometry(
         }),
       };
     }
-    preparedBlocks.set(block, { contentWidth, producer, entry });
+    preparedBlocks.set(block, { contentWidth: availableWidth, producer, entry });
     return entry;
-  });
+  };
+  const prepared = bodies.map((block) => prepareBlock(block, contentWidth));
 
   const keys = prepared.map((entry) => entry.key);
   const keepsNext = prepared.map((entry) => entry.kind === 'paragraph' && entry.keeps.keepNext);
@@ -530,11 +642,12 @@ function layoutBlocksWithGeometry(
   const previous = session?.previous ?? null;
   // A geometry or producer change invalidates every checkpoint, because it moves every
   // break; resuming from one would place new content against a stale flow.
-  const resumable = previous !== null && session !== undefined && session.context === context;
+  const comparable = previous !== null && session !== undefined && session.context === context;
+  const resumable = columns.count === 1 && comparable;
 
   /** The first paragraph whose layout inputs differ from the previous pass. */
   let firstChanged = 0;
-  if (resumable) {
+  if (comparable) {
     const limit = Math.min(flowKeys.length, session.keys.length);
     while (firstChanged < limit && flowKeys[firstChanged] === session.keys[firstChanged]) {
       firstChanged += 1;
@@ -563,8 +676,13 @@ function layoutBlocksWithGeometry(
   // NOTHING CHANGED. Every key matches and the document is the same length, so the previous
   // layout still describes it exactly — re-placing it would allocate a second set of
   // identical records and destroy the identity a consumer uses to skip repainting.
-  if (resumable && firstChanged === prepared.length && prepared.length === session.keys.length) {
-    const unchanged: SemanticLayout = { revision, pages: previous!.pages };
+  if (comparable && firstChanged === prepared.length && prepared.length === session.keys.length) {
+    // Keep prior content-control boundaries: `finish` re-attaches them and must see the same
+    // token/list to return `pages` by identity rather than mapping a twin array.
+    const unchanged: SemanticLayout = withContentControlMetadata(
+      { revision, pages: previous!.pages },
+      previous!
+    );
     session.previous = unchanged;
     session.stats = {
       placed: 0,
@@ -584,11 +702,27 @@ function layoutBlocksWithGeometry(
   }
 
   let pageFragments: BlockFragmentRecord[] = [];
+  let columnIndex = 0;
+  let regionFragmentStart = 0;
+  const columnLeft = (): number => columns.lefts[columnIndex]!;
+  const columnWidth = (): number => columns.widths[columnIndex]!;
+  /**
+   * The boxes `w:horzAnchor` can name, in the content-box coordinates every fragment box is
+   * reported in: x=0 is the left margin, so the sheet starts one left margin before it.
+   */
+  const anchorFrames = (): TableAnchorFrames => ({
+    text: { left: columnLeft(), width: columnWidth() },
+    margin: { left: 0, width: pageContentWidth },
+    page: { left: -geometry.margin.left, width: geometry.width },
+  });
+  const regionHasFragments = (): boolean => pageFragments.length > regionFragmentStart;
   // A continuous section resumes the previous section's column rather than opening a
   // sheet, so its first block starts at that column's used height and its first paragraph
   // is NOT at a page top — page-top space-before suppression must not apply to it, and the
   // preceding paragraph's space-after still collapses against its space-before.
   let cursorY = flowStartY;
+  // A continuous section can open its column region below content already on the sheet.
+  let columnRegionTop = flowStartY;
   let lineCounter = lineCounterStart;
   let previousSpaceAfter = spaceBeforeCarry;
   const checkpoints: FlowCheckpoint[] = [];
@@ -660,7 +794,7 @@ function layoutBlocksWithGeometry(
         box: {
           x: box.x + geometry.margin.left,
           y,
-          width: contentWidth,
+          width: pageContentWidth,
           height: laid.flowHeight,
         },
         fragments: laid.fragments,
@@ -682,6 +816,10 @@ function layoutBlocksWithGeometry(
     const box = pageBox(index);
     const header = furnitureFor('header', index, box);
     const footer = furnitureFor('footer', index, box);
+    const usedBottom = pageFragments.reduce(
+      (bottom, fragment) => Math.max(bottom, fragment.box.y + fragment.box.height),
+      columnRegionTop
+    );
     pages.push({
       id: `page-${index}`,
       index,
@@ -689,15 +827,40 @@ function layoutBlocksWithGeometry(
       contentBox: {
         x: box.x + geometry.margin.left,
         y: box.y + effectiveTop,
-        width: contentWidth,
+        width: pageContentWidth,
         height: baseContentHeight,
       },
       fragments: pageFragments,
+      ...(columns.separator
+        ? {
+            columnSeparators: columns.gaps.map((gap, separatorIndex) => ({
+              x: columns.lefts[separatorIndex]! + columns.widths[separatorIndex]! + gap / 2 - 0.375,
+              y: columnRegionTop,
+              width: 0.75,
+              height: Math.max(0, usedBottom - columnRegionTop),
+            })),
+          }
+        : {}),
       ...(header ? { header } : {}),
       ...(footer ? { footer } : {}),
     });
     pageFragments = [];
     cursorY = 0;
+    columnIndex = 0;
+    columnRegionTop = 0;
+    regionFragmentStart = 0;
+  };
+
+  /** Advance through authored columns before opening another physical sheet. */
+  const advanceColumn = (): void => {
+    if (columnIndex + 1 < columns.count) {
+      columnIndex += 1;
+      cursorY = columnRegionTop;
+      previousSpaceAfter = 0;
+      regionFragmentStart = pageFragments.length;
+      return;
+    }
+    flushPage();
   };
 
   // Table layout shares the flow's line counter, paragraph cache, and precomputed list
@@ -733,15 +896,27 @@ function layoutBlocksWithGeometry(
 
   // Shared by placement and by the `w:keepNext` lookahead, which needs the height of the
   // blocks it keeps WITH. Both read the same cache entry, so the lookahead re-measures nothing.
-  const breakBlock = (entry: PreparedParagraph) =>
-    breakParagraph(
+  const breakBlock = (entry: PreparedParagraph, startOffset = 0) => {
+    const paragraphId = entry.paragraph.id;
+    const keepEmptyTocPlaceholder = emptyTocPlaceholderIds?.has(paragraphId) ?? false;
+    const suppressChrome =
+      !keepEmptyTocPlaceholder &&
+      ((tocChromeParagraphIds?.has(paragraphId) ?? false) ||
+        (emptyTocSuppressedResultIds?.has(paragraphId) ?? false));
+    return breakParagraph(
       entry.paragraph,
-      entry.paragraph.id,
+      paragraphId,
       entry.indent.left,
       entry.available,
       measurer,
       cache,
-      cache ? entry.key : null,
+      // A suppressed chrome paragraph publishes no line, so it takes no cache entry: a cached
+      // hit would hand back the placeholder line the suppression exists to remove.
+      cache && !suppressChrome
+        ? startOffset === 0
+          ? entry.key
+          : `${entry.key}|from:${startOffset}`
+        : null,
       entry.inheritedRunProperties,
       entry.tabStops,
       undefined,
@@ -750,15 +925,18 @@ function layoutBlocksWithGeometry(
         : undefined,
       {
         lineSpacing: entry.lineSpacing,
-        firstLineOffset: firstLineOffsetOf(entry),
+        firstLineOffset: startOffset === 0 ? firstLineOffsetOf(entry) : 0,
+        startOffset,
         // The page's text column, so a `w:ptab` measuring against the margin ignores the
         // paragraph's own indents the way Word does.
         marginExtent: { left: 0, right: entry.indent.left + entry.available + entry.indent.right },
         ...(options.projectLink ? { projectLink: options.projectLink } : {}),
         displayMode,
         ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
+        ...(suppressChrome ? { suppressEmptyPlaceholderLine: true } : {}),
       }
     );
+  };
 
   /**
    * Lay out one top-level table with OOXML-aligned row pagination.
@@ -772,11 +950,24 @@ function layoutBlocksWithGeometry(
    * each continuation page, and rejected when the group itself exceeds a fresh content page.
    */
   const layoutTableInFlow = (table: OoxmlElement): void => {
-    const structure = readTableStructure(table, contentWidth, 0, styleCascade, displayMode);
+    const regionWidth = columnWidth();
+    const structure = readTableStructure(table, regionWidth, 0, styleCascade, displayMode);
     if (!structure || structure.rows.length === 0) return;
-    // `w:tblInd` / `w:jc` place the table inside the text column; every row and the fragment
-    // box share the one origin so cell geometry and the reported box cannot drift apart.
-    const tableLeft = tableOriginX(structure, contentWidth);
+    // `w:tblInd` / `w:jc` place the table inside the text column, `w:tblpPr` against a wider
+    // anchor box; every row and the fragment box share the one origin so cell geometry and
+    // the reported box cannot drift apart.
+    const tableWidthPt = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
+    const originX = (): number =>
+      structure.float
+        ? tableFloatOriginX(structure.float, tableWidthPt, anchorFrames())
+        : columnLeft() + tableOriginX(structure, columnWidth());
+    let tableLeft = originX();
+    // `w:tblpY` against the text anchor is an offset from where the table would otherwise
+    // sit, so it moves the table within the flow. The page and margin anchors state an
+    // absolute position on the sheet, which this layout does not model — those stay in flow.
+    if (structure.float && structure.float.vertAnchor === 'text' && !structure.float.ySpec) {
+      cursorY = Math.max(0, Math.min(cursorY + structure.float.yPt, contentHeight()));
+    }
     const headerRows: SemanticTableRow[] = [];
     for (const row of structure.rows) {
       if (row.isHeader) headerRows.push(row);
@@ -785,6 +976,7 @@ function layoutBlocksWithGeometry(
     let fragmentIndex = 0;
     let fragmentTop = cursorY;
     let rows: TableRowFragmentRecord[] = [];
+    const rowOrdinals = new Map<string, number>();
     // Authored rows backing the open fragment (includes header repeats) for finalize.
     let sourceRows: (typeof structure.rows)[number][] = [];
     const closeTableFragment = (): void => {
@@ -797,23 +989,26 @@ function layoutBlocksWithGeometry(
         tableDeps.vMergeResolveBudget
       );
       const last = finalized[finalized.length - 1]!;
-      pageFragments.push({
-        kind: 'table',
-        id: `${table.id}#f${fragmentIndex}`,
-        tableId: table.id,
-        fragmentIndex,
-        rows: finalized,
-        box: {
-          x: tableLeft,
-          y: fragmentTop,
-          // The table's own width, not the page's. Reporting `contentWidth` here described
-          // every table as exactly page-wide while its cells spanned whatever the resolved
-          // grid said — narrower for most tables, wider for a fixed-layout one that
-          // genuinely overflows the margin.
-          width: structure.columnWidthsPt.reduce((sum, columnWidth) => sum + columnWidth, 0),
-          height: last.box.y + last.box.height - fragmentTop,
-        },
-      });
+      pageFragments.push(
+        annotateTableFragmentGeometry(
+          {
+            kind: 'table',
+            id: `${table.id}#f${fragmentIndex}`,
+            tableId: table.id,
+            fragmentIndex,
+            rows: finalized,
+            box: {
+              x: tableLeft,
+              y: fragmentTop,
+              width: structure.columnWidthsPt.reduce((sum, columnWidth) => sum + columnWidth, 0),
+              height: last.box.y + last.box.height - fragmentTop,
+            },
+          },
+          structure.columnWidthsPt,
+          0,
+          rowOrdinals
+        )
+      );
       fragmentIndex += 1;
       rows = [];
       sourceRows = [];
@@ -845,8 +1040,12 @@ function layoutBlocksWithGeometry(
       }
       if (cursorY + groupHeight > contentHeight() + 0.001 && cursorY > 0) {
         closeTableFragment();
-        flushPage();
-        fragmentTop = 0;
+        advanceColumn();
+        tableLeft = originX();
+        // The cursor, not 0: a same-sheet column advance opens at the column REGION top
+        // (a continuous section shares its sheet), and a fragment box anchored at 0 would
+        // stretch over whatever the earlier section already painted above the region.
+        fragmentTop = cursorY;
       }
 
       for (const headerRow of headerRows) {
@@ -874,8 +1073,11 @@ function layoutBlocksWithGeometry(
 
     const breakForContinuation = (emitHeaders: boolean): void => {
       closeTableFragment();
-      flushPage();
-      fragmentTop = 0;
+      advanceColumn();
+      tableLeft = originX();
+      // See placeHeaderGroup: the new fragment opens at the advanced cursor, which is the
+      // column region top on a shared sheet and 0 only when a fresh page was opened.
+      fragmentTop = cursorY;
       if (emitHeaders) placeHeaderGroup(true);
     };
 
@@ -1026,7 +1228,7 @@ function layoutBlocksWithGeometry(
   let converged = false;
   let convergedAt = prepared.length;
   for (let index = startIndex; index < prepared.length; index += 1) {
-    const entry = prepared[index]!;
+    const entry = prepareBlock(bodies[index]!, columnWidth());
 
     // The flow as it stands BEFORE this block: what a later pass resumes from.
     checkpoints[index] = {
@@ -1081,20 +1283,18 @@ function layoutBlocksWithGeometry(
       continue;
     }
 
-    const {
-      paragraph,
-      props,
-      indent,
-      alignment,
-      available,
-      spacing: authoredSpacing,
-      contextualSpacing,
-      styleId,
-      borders,
-      shading,
-      inheritedRunProperties,
-      keeps,
-    } = entry;
+    const paragraph = entry.paragraph;
+    const props = entry.props;
+    let indent = entry.indent;
+    let alignment = entry.alignment;
+    let available = entry.available;
+    const authoredSpacing = entry.spacing;
+    const contextualSpacing = entry.contextualSpacing;
+    const styleId = entry.styleId;
+    const borders = entry.borders;
+    const shading = entry.shading;
+    let inheritedRunProperties = entry.inheritedRunProperties;
+    const keeps = entry.keeps;
     // `w:contextualSpacing` (17.3.1.9) drops the gap between paragraphs of the SAME style.
     // Word's own ListParagraph sets it, so without this every Word-authored list carries a
     // paragraph gap between its items.
@@ -1115,7 +1315,7 @@ function layoutBlocksWithGeometry(
     // A NUMBERED/BULLETED paragraph's first-line slot belongs to the MARKER: `listMarkerBox`
     // places it at `left - hanging`, and Word's `w:suff` puts the text back at `left` — or
     // after the marker, or at the next tab stop past an overflowing one (§17.9.30).
-    const firstLineOffset = firstLineOffsetOf(entry);
+    let firstLineOffset = firstLineOffsetOf(entry);
     const paragraphId = paragraph.id;
     // `w:between` (§17.3.1.24): consecutive paragraphs with IDENTICAL border settings are ONE
     // bordered block in Word — the box opens above the first and closes below the last, and
@@ -1139,7 +1339,21 @@ function layoutBlocksWithGeometry(
       previousSpaceAfter = 0;
     }
 
-    const lines = breakBlock(entry);
+    let lines = breakBlock(entry);
+    if (lines.length === 0) {
+      // Cross-paragraph TOC field chrome: tree preserved, no painted row or flow height.
+      continue;
+    }
+    const rebreakInCurrentColumn = (startOffset: number): void => {
+      const next = prepareBlock(paragraph, columnWidth());
+      if (next.kind !== 'paragraph') return;
+      indent = next.indent;
+      alignment = next.alignment;
+      available = next.available;
+      inheritedRunProperties = next.inheritedRunProperties;
+      firstLineOffset = startOffset === 0 ? firstLineOffsetOf(next) : 0;
+      lines = [...breakBlock(next, startOffset)];
+    };
 
     // Fit uses unsuppressed lead; top-of-page suppression applies after any flush below.
     {
@@ -1164,12 +1378,13 @@ function layoutBlocksWithGeometry(
         }
       }
       if (cursorY + needed > contentHeight() && cursorY > 0) {
-        flushPage();
+        advanceColumn();
         previousSpaceAfter = 0;
+        rebreakInCurrentColumn(0);
       }
     }
 
-    const atTopOfPage = cursorY === 0 && pageFragments.length === 0;
+    const atTopOfPage = cursorY === 0 && !regionHasFragments();
     const appliedBefore = appliedSpaceBefore(
       spacing.before,
       previousSpaceAfter,
@@ -1197,6 +1412,7 @@ function layoutBlocksWithGeometry(
     const markRevision = paragraphMarkRevisionOf(entry.paragraph);
     const flushFragment = (isLast: boolean): void => {
       if (pending.length === 0) return;
+      const regionX = columnLeft();
       const linesTop = pending[0]!.box.y;
       const top = linesTop - fragmentBefore - fragmentTopExtent;
       const linesBottom =
@@ -1212,11 +1428,11 @@ function layoutBlocksWithGeometry(
       // which is what a callout looked like. Word closes the rectangle, so the horizontal
       // rules span from the left rule's outer edge to the right rule's.
       const boxLeft = borders.left
-        ? indent.left - borders.left.spacePt - borders.left.widthPt
-        : indent.left;
+        ? regionX + indent.left - borders.left.spacePt - borders.left.widthPt
+        : regionX + indent.left;
       const boxRight = borders.right
-        ? indent.left + available + borders.right.spacePt + borders.right.widthPt
-        : indent.left + available;
+        ? regionX + indent.left + available + borders.right.spacePt + borders.right.widthPt
+        : regionX + indent.left + available;
       const boxWidth = Math.max(boxRight - boxLeft, 0);
       if (fragmentTopExtent > 0 && topEdge) {
         const ruleY = linesTop - topEdge.spacePt - topEdge.widthPt;
@@ -1254,7 +1470,7 @@ function layoutBlocksWithGeometry(
           side: 'left',
           edge: borders.left,
           box: {
-            x: indent.left - borders.left.spacePt - borders.left.widthPt,
+            x: regionX + indent.left - borders.left.spacePt - borders.left.widthPt,
             y: sideTop,
             width: borders.left.widthPt,
             height: sideHeight,
@@ -1266,7 +1482,7 @@ function layoutBlocksWithGeometry(
           side: 'right',
           edge: borders.right,
           box: {
-            x: indent.left + available + borders.right.spacePt,
+            x: regionX + indent.left + available + borders.right.spacePt,
             y: sideTop,
             width: borders.right.widthPt,
             height: sideHeight,
@@ -1280,14 +1496,14 @@ function layoutBlocksWithGeometry(
           side: 'bar',
           edge: borders.bar,
           box: {
-            x: indent.left - borders.bar.spacePt - borders.bar.widthPt,
+            x: regionX + indent.left - borders.bar.spacePt - borders.bar.widthPt,
             y: linesTop,
             width: borders.bar.widthPt,
             height: Math.max(linesBottom - linesTop, 0),
           },
         });
       }
-      const marker =
+      const rawMarker =
         fragmentIndex === 0
           ? publishListMarker(
               listItem,
@@ -1295,6 +1511,9 @@ function layoutBlocksWithGeometry(
               pending[0] ? { y: pending[0].box.y, height: pending[0].box.height } : undefined
             )
           : undefined;
+      const marker = rawMarker
+        ? { ...rawMarker, box: { ...rawMarker.box, x: rawMarker.box.x + regionX } }
+        : undefined;
       pageFragments.push({
         kind: 'paragraph',
         id: `${paragraphId}#f${fragmentIndex}`,
@@ -1330,14 +1549,14 @@ function layoutBlocksWithGeometry(
                       width: boxWidth,
                       height: Math.max(contentBottom - contentTop, 0),
                     }
-                  : paragraphShadingBox(pending, indent.left, available)!,
+                  : paragraphShadingBox(pending, regionX + indent.left, available)!,
             }),
         ...(marker ? { marker } : {}),
         // The paragraph MARK lives at the end of the paragraph, so only the final fragment
         // carries its revision — a paragraph split across pages must not draw two pilcrows.
         ...(isLast && markRevision ? { markRevision } : {}),
         lines: pending,
-        box: { x: indent.left, y: top, width: available, height },
+        box: { x: regionX + indent.left, y: top, width: available, height },
       });
       fragmentIndex += 1;
       fragmentStart = pending[pending.length - 1]!.range.end;
@@ -1352,7 +1571,7 @@ function layoutBlocksWithGeometry(
     // future rule that could cycle, and fails OPEN at the natural break rather than throwing.
     let fragmentFirstLine = 0;
     let retreats = 0;
-    const maxRetreats = lines.length + MAX_KEEP_NEXT_CHAIN;
+    let maxRetreats = lines.length + MAX_KEEP_NEXT_CHAIN;
 
     for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
       const pendingLine = lines[lineIndex]!;
@@ -1364,7 +1583,7 @@ function layoutBlocksWithGeometry(
       ) {
         // `w:widowControl` (§17.3.1.44) / `w:keepLines` (§17.3.1.16) change where a paragraph
         // may be CUT, not where it fits: retreat off a stranded line, or off keepLines whole.
-        const alone = pageFragments.length === 0;
+        const alone = !regionHasFragments();
         const breakAt =
           retreats < maxRetreats
             ? adjustedBreakIndex(lineIndex, fragmentFirstLine, lines.length, keeps, alone)
@@ -1379,11 +1598,21 @@ function layoutBlocksWithGeometry(
         }
         // Moving WHOLE means it now OPENS a page: space-before drops, the top rule travels.
         const movesWhole = retreated && pending.length === 0 && fragmentIndex === 0;
+        const nextOffset = lines[breakAt]!.start;
+        const priorColumnWidth = columnWidth();
         flushFragment(false);
-        flushPage();
+        advanceColumn();
         fragmentBefore = 0;
         if (movesWhole) cursorY = fragmentTopExtent;
         else fragmentTopExtent = 0;
+        if (columnWidth() !== priorColumnWidth) {
+          rebreakInCurrentColumn(nextOffset);
+          maxRetreats = Math.max(maxRetreats, lines.length + MAX_KEEP_NEXT_CHAIN);
+          fragmentFirstLine = 0;
+          if (retreated) retreats += 1;
+          lineIndex = -1;
+          continue;
+        }
         fragmentFirstLine = breakAt;
         if (retreated) {
           retreats += 1;
@@ -1403,18 +1632,23 @@ function layoutBlocksWithGeometry(
           pendingLine.spans.map((span) => ({
             ...span,
             range: { ...span.range, paragraphId },
-            box: { ...span.box, y: cursorY },
+            box: { ...span.box, x: span.box.x + columnLeft(), y: cursorY },
           })),
           measurer,
           // Alignment measures against the box the LINE actually got: a first line carrying
           // `w:firstLine`/`w:hanging` starts elsewhere and has a different width, so centring
           // or justifying it against the paragraph box would push it off its own margins.
-          indent.left + (lineIndex === 0 ? firstLineOffset : 0),
+          columnLeft() + indent.left + (lineIndex === 0 ? firstLineOffset : 0),
           Math.max(1, available - (lineIndex === 0 ? firstLineOffset : 0)),
           alignment,
           isLastLine
         ),
-        box: { x: indent.left, y: cursorY, width: available, height: pendingLine.height },
+        box: {
+          x: columnLeft() + indent.left,
+          y: cursorY,
+          width: available,
+          height: pendingLine.height,
+        },
         baseline: pendingLine.baseline,
         leading: pendingLine.leading,
         ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
@@ -1422,7 +1656,22 @@ function layoutBlocksWithGeometry(
       lineCounter += 1;
       pending.push(record);
       cursorY += pendingLine.height;
-      if (pendingLine.pageBreakAfter) {
+      if (pendingLine.columnBreakAfter) {
+        const priorColumnWidth = columnWidth();
+        flushFragment(isLastLine);
+        advanceColumn();
+        fragmentBefore = 0;
+        fragmentTopExtent = 0;
+        endedWithPageBreak = true;
+        if (!isLastLine && columnWidth() !== priorColumnWidth) {
+          rebreakInCurrentColumn(pendingLine.end);
+          maxRetreats = Math.max(maxRetreats, lines.length + MAX_KEEP_NEXT_CHAIN);
+          fragmentFirstLine = 0;
+          lineIndex = -1;
+          continue;
+        }
+        fragmentFirstLine = lineIndex + 1;
+      } else if (pendingLine.pageBreakAfter) {
         flushFragment(isLastLine);
         flushPage();
         fragmentBefore = 0;
@@ -1493,6 +1742,729 @@ function layoutBlocksWithGeometry(
     };
   }
   return { layout, pages, lineCounter, endCursorY, endSpaceAfter, endsOpenPage };
+}
+
+/** Content-relative bottom of each column's content on one page, floored at the region top. */
+function columnBottomsOf(
+  page: PageRecord,
+  columns: ResolvedSectionColumns,
+  regionTop: number
+): number[] {
+  const bottoms = columns.lefts.map(() => regionTop);
+  for (const fragment of page.fragments) {
+    let column = 0;
+    // A fragment starts at its column's left edge plus indents; assign it to the LAST
+    // column whose origin it does not precede (half-point slack for table indents).
+    for (let index = columns.count - 1; index >= 0; index -= 1) {
+      if (fragment.box.x + 0.5 >= columns.lefts[index]!) {
+        column = index;
+        break;
+      }
+    }
+    bottoms[column] = Math.max(bottoms[column]!, fragment.box.y + fragment.box.height);
+  }
+  return bottoms;
+}
+
+/** The balance search stops once the fitting bound is known this tightly (points). */
+const BALANCE_TOLERANCE_PT = 0.25;
+const MAX_BALANCE_STEPS = 20;
+
+/**
+ * Lay a block run out under its section geometry, balancing columns when asked.
+ *
+ * Word balances the columns of a multi-column section that ends in a continuous section
+ * break (ECMA-376 §17.6.4): the content divides across the columns instead of filling the
+ * first one to the page bottom. The flow itself already knows how to advance columns —
+ * balancing is finding the SHORTEST first-page column height that still keeps the section
+ * on its single sheet, which is monotone in the height, so a binary search over trial
+ * passes finds it. Trials run session-less; only the final pass publishes.
+ *
+ * Conservative bounds: only a section whose natural layout is one open sheet balances.
+ * A section that already fills pages keeps Word's fill-then-flow shape for those pages,
+ * and balancing just its tail sheet is deferred.
+ */
+function layoutBlocksWithGeometry(
+  bodies: readonly OoxmlElement[],
+  revision: number,
+  options: BlockLayoutOptions
+): BlockLayoutResult {
+  const columns = resolveSectionColumns(
+    options.sectionColumns ?? DEFAULT_SECTION_PROPERTIES.columns,
+    options.geometry.width - options.geometry.margin.left - options.geometry.margin.right
+  );
+  if (!options.balanceColumns || columns.count < 2 || options.columnRegionBottom !== undefined) {
+    if (options.session) options.session.balanceLimit = null;
+    return layoutBlocksPass(bodies, revision, options);
+  }
+
+  const session = options.session;
+  const regionTop = options.flowStartY ?? 0;
+  const { session: _trialSession, ...trialOptions } = options;
+  const balancedResult = (final: BlockLayoutResult): BlockLayoutResult => {
+    const page = final.pages[0];
+    // The next continuous section resumes BELOW the whole balanced region, not below the
+    // last column's own cursor.
+    const endCursorY = page
+      ? Math.max(...columnBottomsOf(page, columns, regionTop))
+      : final.endCursorY;
+    if (session) session.endCursorY = endCursorY;
+    return { ...final, endCursorY };
+  };
+
+  // Unchanged content early-exits on ONE attempt at the remembered limit, skipping the
+  // natural pass and the search. A stale limit just means this attempt is wasted work:
+  // the section changed, so the search below reruns and overwrites everything it stored.
+  if (session && session.balanceLimit !== null) {
+    const remembered = session.balanceLimit;
+    const attempt = layoutBlocksPass(bodies, revision, {
+      ...options,
+      columnRegionBottom: remembered,
+    });
+    if (session.stats.placed === 0 && session.stats.reusedPages === attempt.pages.length) {
+      session.balanceLimit = remembered;
+      return balancedResult(attempt);
+    }
+  }
+
+  const natural = layoutBlocksPass(bodies, revision, trialOptions);
+  if (natural.pages.length !== 1 || !natural.endsOpenPage) {
+    if (session) session.balanceLimit = null;
+    return layoutBlocksPass(bodies, revision, options);
+  }
+
+  const naturalBottoms = columnBottomsOf(natural.pages[0]!, columns, regionTop);
+  const total = naturalBottoms.reduce((sum, bottom) => sum + Math.max(0, bottom - regionTop), 0);
+  if (total <= 0) {
+    if (session) session.balanceLimit = null;
+    return layoutBlocksPass(bodies, revision, options);
+  }
+
+  // The natural single-sheet layout fits its own bottom by construction; the ideal split
+  // cannot be shorter than an even division of the flowed content.
+  let low = regionTop + total / columns.count;
+  let high = Math.max(...naturalBottoms) + 0.01;
+  const fits = (limit: number): boolean => {
+    try {
+      const trial = layoutBlocksPass(bodies, revision, {
+        ...trialOptions,
+        columnRegionBottom: limit,
+      });
+      return trial.pages.length === 1 && trial.endsOpenPage;
+    } catch {
+      // Keep rules or atomic rows can refuse a band this short; that is "does not fit".
+      return false;
+    }
+  };
+  for (let step = 0; step < MAX_BALANCE_STEPS && high - low > BALANCE_TOLERANCE_PT; step += 1) {
+    const mid = (low + high) / 2;
+    if (fits(mid)) high = mid;
+    else low = mid;
+  }
+
+  const final = layoutBlocksPass(bodies, revision, { ...options, columnRegionBottom: high });
+  if (session) session.balanceLimit = high;
+  return balancedResult(final);
+}
+
+// ---------------------------------------------------------------------------------------
+// Content-control boundary records
+// ---------------------------------------------------------------------------------------
+
+const WML_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const W14_NS = 'http://schemas.microsoft.com/office/word/2010/wordml';
+const W15_NS = 'http://schemas.microsoft.com/office/word/2012/wordml';
+
+function wmlValOf(node: OoxmlNode): string | undefined {
+  if (node.kind === 'textValue') return undefined;
+  for (const attribute of node.attributes) {
+    if (attribute.localName === 'val' && attribute.namespaceUri === WML_NS) return attribute.value;
+  }
+  return undefined;
+}
+
+function contentControlPropertiesOf(control: OoxmlElement): OoxmlElement | undefined {
+  for (const child of control.children) {
+    if (child.kind === 'textValue') continue;
+    if (child.kind === 'contentControlProperties' || child.localName === 'sdtPr') return child;
+  }
+  return undefined;
+}
+
+function propertyChild(
+  properties: OoxmlElement | undefined,
+  localName: string
+): OoxmlElement | undefined {
+  if (!properties) return undefined;
+  for (const child of properties.children) {
+    if (child.kind === 'textValue') continue;
+    if (child.localName === localName) return child;
+  }
+  return undefined;
+}
+
+function propertyVal(properties: OoxmlElement | undefined, localName: string): string | undefined {
+  const child = propertyChild(properties, localName);
+  return child ? wmlValOf(child) : undefined;
+}
+
+function parseContentControlLock(value: string | undefined): ContentControlLock {
+  if (value === 'sdtLocked' || value === 'contentLocked' || value === 'sdtContentLocked') {
+    return value;
+  }
+  return 'unlocked';
+}
+
+function mapContentControlType(properties: OoxmlElement | undefined): ContentControlMappedType {
+  if (!properties) return 'richText';
+  for (const child of properties.children) {
+    if (child.kind === 'textValue') continue;
+    const kind = child.kind;
+    const localName = child.localName;
+    const namespaceUri = child.namespaceUri;
+    // Typed markers after the SDT merge; `localName` covers demoted/generic fallbacks.
+    // Do not match `kind === 'text'` — that is `w:t`, not `CT_SdtText` (`contentControlText`).
+    if (kind === 'contentControlDropDownList' || localName === 'dropDownList') return 'dropdown';
+    if (kind === 'contentControlComboBox' || localName === 'comboBox') return 'comboBox';
+    if (kind === 'contentControlDate' || localName === 'date') return 'date';
+    if (localName === 'picture') return 'picture';
+    if (kind === 'contentControlText' || localName === 'text') return 'plainText';
+    if (localName === 'richText') return 'richText';
+    if (
+      kind === 'contentControlCheckbox' ||
+      (localName === 'checkbox' && namespaceUri === W14_NS)
+    ) {
+      return 'checkbox';
+    }
+    if (localName === 'repeatingSection' && namespaceUri === W15_NS) {
+      return 'repeatingSection';
+    }
+  }
+  return 'richText';
+}
+
+function controlLevelOf(control: OoxmlElement): ContentControlLevel {
+  const classify = (nodes: readonly OoxmlNode[], depth: number): ContentControlLevel | null => {
+    for (const child of nodes) {
+      if (child.kind === 'textValue') continue;
+      if (child.kind === 'tableRow') return 'row';
+      if (child.kind === 'tableCell') return 'cell';
+      if (child.kind === 'paragraph' || child.kind === 'table') return 'block';
+      if (isContentControl(child) && depth < MAX_SDT_NESTING) {
+        const nested = classify(contentControlContentChildren(child), depth + 1);
+        if (nested) return nested;
+      }
+    }
+    return null;
+  };
+  return classify(contentControlContentChildren(control), 0) ?? 'inline';
+}
+
+/**
+ * Fingerprint of every control wrapper's chrome metadata — not its content.
+ *
+ * Changing alias/tag/lock/type/placeholder/binding without touching nested paragraphs still
+ * changes this token, which is folded into the layout producer.
+ */
+export function contentControlContextToken(part: OoxmlPart): string {
+  const parts: string[] = [];
+  const walk = (node: OoxmlNode, depth: number): void => {
+    if (node.kind === 'textValue') return;
+    if (isContentControl(node)) {
+      if (depth >= MAX_SDT_NESTING) return;
+      const properties = contentControlPropertiesOf(node);
+      parts.push(
+        [
+          node.id,
+          propertyVal(properties, 'alias') ?? '',
+          propertyVal(properties, 'tag') ?? '',
+          parseContentControlLock(propertyVal(properties, 'lock')),
+          mapContentControlType(properties),
+          propertyChild(properties, 'showingPlcHdr') ? '1' : '0',
+          propertyChild(properties, 'dataBinding') ? '1' : '0',
+        ].join(':')
+      );
+      for (const inner of contentControlContentChildren(node)) walk(inner, depth + 1);
+      return;
+    }
+    for (const child of node.children) walk(child, depth);
+  };
+  walk(part.root, 0);
+  return parts.join('|');
+}
+
+/** Addressable UTF-16 length of an inline node — mirrors the store / layout offset model. */
+function addressableInlineLength(node: OoxmlNode): number {
+  if (node.kind === 'textValue') return node.value.length;
+  if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
+  if (node.kind === 'runProperties' || node.kind === 'paragraphProperties') return 0;
+  if (node.kind === 'generic') return 0;
+  if (isContentControl(node)) {
+    let total = 0;
+    for (const inner of contentControlContentChildren(node))
+      total += addressableInlineLength(inner);
+    return total;
+  }
+  let total = 0;
+  for (const child of node.children) total += addressableInlineLength(child);
+  return total;
+}
+
+interface CollectedControl {
+  readonly control: OoxmlElement;
+  readonly nestingDepth: number;
+  readonly lockStack: readonly ContentControlLock[];
+  readonly level: ContentControlLevel;
+  readonly paragraphId?: string;
+  readonly range?: { readonly start: number; readonly end: number };
+  readonly blockIds: readonly string[];
+}
+
+function collectControls(part: OoxmlPart): CollectedControl[] {
+  const out: CollectedControl[] = [];
+
+  const collectBlocks = (nodes: readonly OoxmlNode[], into: string[]): void => {
+    for (const child of nodes) {
+      if (child.kind === 'paragraph' || child.kind === 'table') {
+        into.push(child.id);
+        continue;
+      }
+      if (isContentControl(child)) {
+        collectBlocks(contentControlContentChildren(child), into);
+        continue;
+      }
+      if (child.kind === 'tableRow' || child.kind === 'tableCell') {
+        collectBlocks(child.children, into);
+      }
+    }
+  };
+
+  const walkInline = (
+    nodes: readonly OoxmlNode[],
+    paragraphId: string,
+    offset: number,
+    depth: number,
+    lockStack: readonly ContentControlLock[]
+  ): number => {
+    let cursor = offset;
+    for (const child of nodes) {
+      if (child.kind === 'textValue' || child.kind === 'paragraphProperties') continue;
+      if (isContentControl(child)) {
+        if (depth >= MAX_SDT_NESTING) {
+          cursor += addressableInlineLength(child);
+          continue;
+        }
+        const properties = contentControlPropertiesOf(child);
+        const lock = parseContentControlLock(propertyVal(properties, 'lock'));
+        const nextStack = [...lockStack, lock];
+        const start = cursor;
+        const end = walkInline(
+          contentControlContentChildren(child),
+          paragraphId,
+          cursor,
+          depth + 1,
+          nextStack
+        );
+        out.push({
+          control: child,
+          nestingDepth: depth,
+          lockStack: nextStack,
+          level: 'inline',
+          paragraphId,
+          range: { start, end },
+          blockIds: [],
+        });
+        cursor = end;
+        continue;
+      }
+      if (child.kind === 'hyperlink') {
+        cursor = walkInline(child.children, paragraphId, cursor, depth, lockStack);
+        continue;
+      }
+      cursor += addressableInlineLength(child);
+    }
+    return cursor;
+  };
+
+  const walkBlocks = (
+    nodes: readonly OoxmlNode[],
+    depth: number,
+    lockStack: readonly ContentControlLock[]
+  ): void => {
+    for (const child of nodes) {
+      if (child.kind === 'textValue') continue;
+      if (child.kind === 'paragraph') {
+        walkInline(child.children, child.id, 0, depth, lockStack);
+        continue;
+      }
+      if (child.kind === 'table') {
+        for (const row of child.children) {
+          if (row.kind !== 'tableRow') continue;
+          walkBlocks([row], depth, lockStack);
+        }
+        continue;
+      }
+      if (child.kind === 'tableRow') {
+        for (const cell of child.children) {
+          if (cell.kind === 'tableCell') walkBlocks(cell.children, depth, lockStack);
+          else if (isContentControl(cell)) walkBlocks([cell], depth, lockStack);
+        }
+        continue;
+      }
+      if (!isContentControl(child)) continue;
+      if (depth >= MAX_SDT_NESTING) continue;
+      const properties = contentControlPropertiesOf(child);
+      const lock = parseContentControlLock(propertyVal(properties, 'lock'));
+      const nextStack = [...lockStack, lock];
+      const level = controlLevelOf(child);
+      const content = contentControlContentChildren(child);
+      if (level === 'inline') {
+        // Inline at body level is malformed; still walk content for nested discovery.
+        walkBlocks(content, depth + 1, nextStack);
+        continue;
+      }
+      const blockIds: string[] = [];
+      collectBlocks(content, blockIds);
+      out.push({
+        control: child,
+        nestingDepth: depth,
+        lockStack: nextStack,
+        level,
+        blockIds,
+      });
+      walkBlocks(content, depth + 1, nextStack);
+    }
+  };
+
+  const body = part.root.children.find((child) => child.kind === 'body');
+  if (body && body.kind !== 'textValue') walkBlocks(body.children, 0, []);
+  return out;
+}
+
+interface PlacedBlockBox {
+  readonly pageIndex: number;
+  readonly blockId: string;
+  readonly box: LayoutBox;
+}
+
+interface PlacedSpanBox {
+  readonly pageIndex: number;
+  readonly paragraphId: string;
+  readonly start: number;
+  readonly end: number;
+  readonly box: LayoutBox;
+}
+
+/**
+ * Deterministic work accounting for boundary generation.
+ *
+ * This is intentionally local to the layout implementation (it is not re-exported by the
+ * package entry point). Tests use it to pin resource growth without depending on wall time.
+ */
+export interface ContentControlBoundaryWork {
+  geometryEntries: number;
+  blockLookups: number;
+  blockCandidates: number;
+  paragraphLookups: number;
+  spanCandidates: number;
+  pageFragments: number;
+}
+
+interface PlacedGeometryIndex {
+  readonly blocksById: ReadonlyMap<string, readonly PlacedBlockBox[]>;
+  readonly spansByParagraph: ReadonlyMap<string, readonly PlacedSpanBox[]>;
+}
+
+function placedGeometryOf(
+  layout: SemanticLayout,
+  work?: ContentControlBoundaryWork
+): PlacedGeometryIndex {
+  const blocksById = new Map<string, PlacedBlockBox[]>();
+  const spansByParagraph = new Map<string, PlacedSpanBox[]>();
+  const addBlock = (entry: PlacedBlockBox): void => {
+    work && (work.geometryEntries += 1);
+    const entries = blocksById.get(entry.blockId);
+    if (entries) entries.push(entry);
+    else blocksById.set(entry.blockId, [entry]);
+  };
+  const addSpan = (entry: PlacedSpanBox): void => {
+    work && (work.geometryEntries += 1);
+    const entries = spansByParagraph.get(entry.paragraphId);
+    if (entries) entries.push(entry);
+    else spansByParagraph.set(entry.paragraphId, [entry]);
+  };
+  const visit = (pageIndex: number, fragment: BlockFragmentRecord): void => {
+    if (fragment.kind === 'paragraph') {
+      addBlock({ pageIndex, blockId: fragment.paragraphId, box: fragment.box });
+      for (const line of fragment.lines) {
+        for (const span of line.spans) {
+          addSpan({
+            pageIndex,
+            paragraphId: span.range.paragraphId,
+            start: span.range.start,
+            end: span.range.end,
+            box: span.box,
+          });
+        }
+      }
+      return;
+    }
+    addBlock({ pageIndex, blockId: fragment.tableId, box: fragment.box });
+    for (const row of fragment.rows) {
+      if (row.isHeaderRepeat) continue;
+      for (const cell of row.cells) {
+        for (const inner of cell.blocks) visit(pageIndex, inner);
+      }
+    }
+  };
+  for (const page of layout.pages) {
+    for (const fragment of page.fragments) visit(page.index, fragment);
+  }
+  return { blocksById, spansByParagraph };
+}
+
+function fragmentsForBlockControl(
+  blockIds: readonly string[],
+  geometry: PlacedGeometryIndex,
+  work?: ContentControlBoundaryWork
+): ContentControlGeometryFragment[] {
+  const byPage = new Map<number, LayoutBox[]>();
+  const seen = new Set<string>();
+  for (const blockId of blockIds) {
+    if (seen.has(blockId)) continue;
+    seen.add(blockId);
+    work && (work.blockLookups += 1);
+    for (const entry of geometry.blocksById.get(blockId) ?? []) {
+      work && (work.blockCandidates += 1);
+      const list = byPage.get(entry.pageIndex);
+      if (list) list.push(entry.box);
+      else byPage.set(entry.pageIndex, [entry.box]);
+    }
+  }
+  return [...byPage.entries()]
+    .sort(([a], [b]) => a - b)
+    .flatMap(([pageIndex, boxes]) => {
+      const box = unionLayoutBoxes(boxes);
+      return box ? [{ pageIndex, box }] : [];
+    });
+}
+
+function fragmentsForInlineControl(
+  paragraphId: string,
+  range: { readonly start: number; readonly end: number },
+  geometry: PlacedGeometryIndex,
+  work?: ContentControlBoundaryWork
+): ContentControlGeometryFragment[] {
+  work && (work.paragraphLookups += 1);
+  const placed = geometry.spansByParagraph.get(paragraphId) ?? [];
+  const byPage = new Map<number, LayoutBox[]>();
+  // Paragraph spans are emitted in source-range order. Binary search skips all spans ending
+  // before this control, so sibling controls do not repeatedly scan the paragraph prefix.
+  let low = 0;
+  let high = placed.length;
+  while (low < high) {
+    work && (work.spanCandidates += 1);
+    const middle = low + ((high - low) >> 1);
+    const beforeStart =
+      range.start === range.end
+        ? placed[middle]!.end < range.start
+        : placed[middle]!.end <= range.start;
+    if (beforeStart) low = middle + 1;
+    else high = middle;
+  }
+  for (let index = low; index < placed.length; index += 1) {
+    const span = placed[index]!;
+    work && (work.spanCandidates += 1);
+    if (span.end <= range.start) continue;
+    if (span.start >= range.end) break;
+    const list = byPage.get(span.pageIndex);
+    if (list) list.push(span.box);
+    else byPage.set(span.pageIndex, [span.box]);
+  }
+  // Empty range (empty control): fall back to a zero-width box at the caret when a span
+  // touches the insertion point, otherwise leave fragments empty.
+  if (byPage.size === 0 && range.start === range.end) {
+    for (let index = low; index < placed.length; index += 1) {
+      const span = placed[index]!;
+      work && (work.spanCandidates += 1);
+      if (span.start > range.start) break;
+      if (range.start > span.end) continue;
+      const x =
+        span.start === span.end
+          ? span.box.x
+          : span.box.x +
+            (span.box.width * (range.start - span.start)) / Math.max(1, span.end - span.start);
+      return [
+        { pageIndex: span.pageIndex, box: { x, y: span.box.y, width: 0, height: span.box.height } },
+      ];
+    }
+  }
+  return [...byPage.entries()]
+    .sort(([a], [b]) => a - b)
+    .flatMap(([pageIndex, boxes]) => {
+      const box = unionLayoutBoxes(boxes);
+      return box ? [{ pageIndex, box }] : [];
+    });
+}
+
+function boundaryRecordOf(
+  collected: CollectedControl,
+  geometry: PlacedGeometryIndex,
+  work?: ContentControlBoundaryWork
+): ContentControlBoundaryRecord {
+  const properties = contentControlPropertiesOf(collected.control);
+  const alias = propertyVal(properties, 'alias');
+  const tag = propertyVal(properties, 'tag');
+  const lock = collected.lockStack[collected.lockStack.length - 1] ?? 'unlocked';
+  const fragments =
+    collected.level === 'inline' && collected.paragraphId && collected.range
+      ? fragmentsForInlineControl(collected.paragraphId, collected.range, geometry, work)
+      : fragmentsForBlockControl(collected.blockIds, geometry, work);
+  return {
+    id: collected.control.id,
+    ...(alias !== undefined ? { alias } : {}),
+    ...(tag !== undefined ? { tag } : {}),
+    controlType: mapContentControlType(properties),
+    lock,
+    effectiveLock: effectiveContentControlLock(collected.lockStack),
+    placeholder: propertyChild(properties, 'showingPlcHdr') !== undefined,
+    bound: propertyChild(properties, 'dataBinding') !== undefined,
+    nestingDepth: collected.nestingDepth,
+    level: collected.level,
+    fragments,
+  };
+}
+
+function sameGeometryFragments(
+  left: readonly ContentControlGeometryFragment[],
+  right: readonly ContentControlGeometryFragment[]
+): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    const a = left[index]!;
+    const b = right[index]!;
+    if (a === b) continue;
+    if (a.pageIndex !== b.pageIndex) return false;
+    if (
+      a.box.x !== b.box.x ||
+      a.box.y !== b.box.y ||
+      a.box.width !== b.box.width ||
+      a.box.height !== b.box.height
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function sameBoundaryRecord(
+  left: ContentControlBoundaryRecord,
+  right: ContentControlBoundaryRecord
+): boolean {
+  return (
+    left.id === right.id &&
+    left.alias === right.alias &&
+    left.tag === right.tag &&
+    left.controlType === right.controlType &&
+    left.lock === right.lock &&
+    left.effectiveLock === right.effectiveLock &&
+    left.placeholder === right.placeholder &&
+    left.bound === right.bound &&
+    left.nestingDepth === right.nestingDepth &&
+    left.level === right.level &&
+    sameGeometryFragments(left.fragments, right.fragments)
+  );
+}
+
+function sameBoundaryList(
+  left: readonly ContentControlBoundaryRecord[] | undefined,
+  right: readonly ContentControlBoundaryRecord[]
+): boolean {
+  if (!left) return right.length === 0;
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (!sameBoundaryRecord(left[index]!, right[index]!)) return false;
+  }
+  return true;
+}
+
+/** Copy layout-level content-control metadata onto a pages/revision shell. */
+function withContentControlMetadata(
+  layout: Pick<SemanticLayout, 'revision' | 'pages'>,
+  source: SemanticLayout
+): SemanticLayout {
+  return {
+    revision: layout.revision,
+    pages: layout.pages,
+    ...(source.contentControls !== undefined ? { contentControls: source.contentControls } : {}),
+    ...(source.controlContextToken !== undefined
+      ? { controlContextToken: source.controlContextToken }
+      : {}),
+  };
+}
+
+/**
+ * Publish content-control boundary records onto a laid-out document.
+ *
+ * Page fragment identity is preserved when a page's control list is unchanged; metadata-only
+ * edits replace the page wrapper so consumers never read a stale `contentControls` array from
+ * an identity-reused page. When no page wrapper needs rewriting, the prior `pages` array is
+ * kept by reference so a no-change resume still satisfies `layout.pages` identity.
+ */
+export function attachContentControlBoundaries(
+  layout: SemanticLayout,
+  part: OoxmlPart,
+  token = contentControlContextToken(part),
+  work?: ContentControlBoundaryWork
+): SemanticLayout {
+  const collected = collectControls(part);
+  const geometry = placedGeometryOf(layout, work);
+  const contentControls = collected.map((entry) => boundaryRecordOf(entry, geometry, work));
+  const byPage = new Map<number, ContentControlBoundaryRecord[]>();
+  for (const record of contentControls) {
+    for (const fragment of record.fragments) {
+      work && (work.pageFragments += 1);
+      const list = byPage.get(fragment.pageIndex);
+      const pageRecord = { ...record, fragments: [fragment] };
+      if (list) list.push(pageRecord);
+      else byPage.set(fragment.pageIndex, [pageRecord]);
+    }
+  }
+
+  if (
+    layout.controlContextToken === token &&
+    sameBoundaryList(layout.contentControls, contentControls) &&
+    layout.pages.every((page) =>
+      sameBoundaryList(page.contentControls, byPage.get(page.index) ?? [])
+    )
+  ) {
+    return layout;
+  }
+
+  let pagesChanged = false;
+  const mapped = layout.pages.map((page) => {
+    const pageControls = byPage.get(page.index) ?? [];
+    if (sameBoundaryList(page.contentControls, pageControls)) return page;
+    if (pageControls.length === 0 && !page.contentControls) return page;
+    pagesChanged = true;
+    return { ...page, contentControls: pageControls };
+  });
+  const pages = pagesChanged ? mapped : layout.pages;
+
+  if (
+    pages === layout.pages &&
+    layout.controlContextToken === token &&
+    sameBoundaryList(layout.contentControls, contentControls)
+  ) {
+    return layout;
+  }
+
+  return {
+    revision: layout.revision,
+    pages,
+    contentControls,
+    controlContextToken: token,
+  };
 }
 
 export { createFixedMeasurer } from './fixed-measurer.ts';

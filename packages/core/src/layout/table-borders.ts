@@ -8,6 +8,7 @@
 // corner-adjusted endpoints in points; paint only scales and draws those records.
 
 import type { OoxmlElement } from '@docx-editor.dev/core-contract/store';
+import type { TableBorderStyle } from '@docx-editor.dev/core-contract/store';
 import { MAX_BORDER_WIDTH_PT } from './paragraph-style.ts';
 import { resolveStrictHexFill } from './ooxml-shading.ts';
 import { effectiveBorderSide } from './table-border-cascade.ts';
@@ -18,15 +19,13 @@ import {
   type TableBorderOwnershipBudget,
 } from './table-border-ownership.ts';
 
+export type { TableBorderStyle } from '@docx-editor.dev/core-contract/store';
 export type { TableBorderGridResolveWork, TableBorderOwnershipBudget };
 export { effectiveBorderSide } from './table-border-cascade.ts';
 export {
   createTableBorderOwnershipBudget,
   MAX_BORDER_OWNERSHIP_INTERVALS,
 } from './table-border-ownership.ts';
-
-/** Supported paint styles; unknown authored vals fall back to `single` at resolve time. */
-export type TableBorderStyle = 'single' | 'dashed' | 'dotted' | 'double' | 'triple' | 'thick';
 
 export type TableBorderSideName = 'top' | 'right' | 'bottom' | 'left';
 

@@ -5,7 +5,18 @@
 
 import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
 import {
+  TOC_MAX_PAGE_PASSES,
+  detectBodyTocs,
+  findNode,
   hyperlinkTargetOf,
+  isContentControl,
+  parseTocInstruction,
+  planTocEntries,
+  resolveTocRowHeadings,
+  validateTreeOp,
+  type DetectedToc,
+  type OoxmlElement,
+  type OoxmlNode,
   type StoryScope,
   type TreeDocOp,
 } from '@docx-editor.dev/core-contract/store';
@@ -16,12 +27,16 @@ import {
   resolveDefaultSurfaceMeasurer,
   cellSelectionRects,
   keyedRangeRects,
+  formatPageNumber,
+  emptyTocPlaceholderParagraphIds,
   paragraphFragmentsOf,
   reviewItemKey,
   reviewItemsAt,
   selectionRects,
   caretAt,
   cellSelectionText,
+  contentControlAtSemantic,
+  contentControlsInLayout,
   layoutSemanticDocument,
   paragraphsInCells,
   resolveNumberingLevel,
@@ -29,8 +44,10 @@ import {
   withNumberingStyleLinks,
   wordBoundary,
   type CellSelection,
+  type ContentControlBoundaryRecord,
   type KeyedRange,
   type LayoutScope,
+  type NavigationCommand,
   type ReviewItem,
   type ReviewRevisionKind,
   type SemanticLayout,
@@ -44,12 +61,15 @@ import {
 } from '@docx-editor.dev/core-contract/output';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import type {
+  ContentControlOps,
   OpenPaginatedResult,
   PaginatedSurface,
   PaginatedSurfaceOptions,
   PaginatedSurfaceState,
   SurfaceEditingMode,
 } from './paginated-surface-contract.ts';
+import type { ExecResult } from '../contracts/editor.ts';
+import type { TableCommandPlan } from './table-command-plan.ts';
 import {
   clampedToDocument,
   collapsedAt,
@@ -78,6 +98,8 @@ import {
   type SurfaceExtent,
 } from './surface-pages.ts';
 import { createSurfaceCaret } from './surface-caret.ts';
+import { defaultTableLabel, type TableInteractionLabelKey } from './table-chrome.ts';
+import { createSurfaceTableInteraction } from './surface-table-interaction.ts';
 import { createSurfaceFormat } from './surface-format.ts';
 import {
   authoredRunPropertiesAt,
@@ -105,6 +127,8 @@ import { notePropertiesStateOf, notePreviewTextOf } from './surface-note-state.t
 import type { ViewScope } from '../contracts/editor.ts';
 
 export type {
+  ContentControlOps,
+  ContentControlSurfaceState,
   OpenPaginatedResult,
   PaginatedSurface,
   PaginatedSurfaceOptions,
@@ -112,6 +136,23 @@ export type {
   PaginatedSurfaceState,
   SurfaceFormatting,
 } from './paginated-surface-contract.ts';
+
+type ScaleMutableSurface = PaginatedSurface & {
+  setScale(nextScale: number): boolean;
+};
+
+/**
+ * Rescale a mounted surface in place, or report that this one cannot be.
+ *
+ * Reaches an internal member rather than widening the surface contract, so it has to answer
+ * for a surface that does not carry one — a stub or a foreign implementation. `false`, not a
+ * TypeError: the caller is a host asking for zoom, and "cannot" is an answer it can render.
+ */
+export function setPaginatedSurfaceScale(surface: PaginatedSurface, scale: number): boolean {
+  const rescale = (surface as Partial<ScaleMutableSurface>).setScale;
+  if (typeof rescale !== 'function') return false;
+  return rescale.call(surface, scale);
+}
 
 /**
  * Mount a paginated surface over DOCX bytes.
@@ -125,6 +166,9 @@ export function mountPaginatedSurface(
   bytes: Uint8Array,
   options: PaginatedSurfaceOptions = {}
 ): OpenPaginatedResult {
+  const runtimeOptions = options as PaginatedSurfaceOptions & {
+    readonly onTrackedChange?: () => void;
+  };
   const opened = openTreeSession(bytes);
   if (!opened.ok) {
     return {
@@ -134,8 +178,13 @@ export function mountPaginatedSurface(
     };
   }
   const session = opened.session;
-  const scale = options.scale ?? 96 / 72;
+  let scale = options.scale ?? 96 / 72;
+  const tableLabelState = {
+    resolve:
+      options.tableInteractionLabel ?? ((key: TableInteractionLabelKey) => defaultTableLabel(key)),
+  };
   const VIEWING_REFUSAL = 'the document is open for viewing';
+  const TOC_READ_ONLY_REFUSAL = 'the table of contents is generated and read-only';
   /** Separates a decision's key from its per-range index. A NUL cannot occur in either. */
   const RANGE_SUFFIX = '\u0000range\u0000';
   /** One timestamp per edit. The clock is the host's; the store never reads one. */
@@ -143,21 +192,33 @@ export function mountPaginatedSurface(
   // writes them, and two revisions differing only in milliseconds never group.
   const trackedDate = (): string => `${new Date().toISOString().slice(0, 19)}Z`;
   // Editor seam creates the canvas; layout only consumes the injected context.
-  const defaults = options.measurer
+  let defaults = options.measurer
     ? null
     : resolveDefaultSurfaceMeasurer(scale, {
         context: tryCreateBrowserCanvasContext(container.ownerDocument),
         // Measure with the same face paint draws with.
         ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
       });
-  const measurer = options.measurer ?? defaults!.measurer;
+  let measurer = options.measurer ?? defaults!.measurer;
   // Incremental layout machinery — without these every keystroke re-lays out the document.
   const layoutCache = createParagraphLayoutCache<never>();
   const layoutSession = createLayoutSession();
-  // Measurer identity folds into the cache key so a later font resolution cannot serve stale layout.
-  const producer =
-    options.producer ??
-    (options.measurer ? 'host-measurer' : (defaults?.producer ?? 'fixed-measurer'));
+  /**
+   * Measurer identity, folded into every layout cache key so a later font resolution cannot
+   * serve stale layout.
+   *
+   * A HOST measurer answers in POINTS, so it means the same thing at every zoom: its identity
+   * is stable, and suffixing it with the scale re-measured the whole document on every zoom
+   * click while telling the cache two identical answers differed. The DEFAULT measurer is
+   * resolved AT a scale — the canvas one rounds against device pixels — so its identity
+   * carries that scale, and it is read from the resolution currently in force rather than from
+   * whichever one mount happened to get.
+   */
+  function producerIdentity(): string {
+    if (options.measurer) return options.producer ?? 'host-measurer';
+    return `${options.producer ?? defaults?.producer ?? 'fixed-measurer'}@scale:${scale}`;
+  }
+  let producer = producerIdentity();
   const document = container.ownerDocument;
 
   const pagesLayer = document.createElement('div');
@@ -206,37 +267,60 @@ export function mountPaginatedSurface(
   commentLayer.style.top = '0';
   commentLayer.style.pointerEvents = 'none';
 
+  const tableFurnitureLayer = document.createElement('div');
+  tableFurnitureLayer.className = 'docx-table-furniture';
+  tableFurnitureLayer.contentEditable = 'false';
+  tableFurnitureLayer.style.position = 'absolute';
+  tableFurnitureLayer.style.left = '0';
+  tableFurnitureLayer.style.top = '0';
+  tableFurnitureLayer.style.pointerEvents = 'none';
+
   container.style.position = 'relative';
-  container.replaceChildren(pagesLayer, commentLayer, overlayLayer);
+  container.replaceChildren(pagesLayer, tableFurnitureLayer, commentLayer, overlayLayer);
 
-  const caret = createSurfaceCaret(pagesLayer, scale, () => {
-    const active = hfScope?.getActive() ?? null;
-    const activeNote = noteOps?.activeNoteScope() ?? null;
-    const notePageIndex = noteOps?.activeNotePageIndex() ?? null;
-    const scopedHost = active
-      ? furnitureCaretHost(pagesLayer, active.pageIndex)
-      : activeNote
-        ? noteCaretHost(pagesLayer, activeNote.id, notePageIndex)
-        : null;
-    return {
-      layout: currentLayout,
-      selection,
-      measurer,
-      ...(active
-        ? { preferredPageIndex: active.pageIndex }
-        : notePageIndex !== null
-          ? { preferredPageIndex: notePageIndex }
-          : {}),
-      scopedHost,
-      ...(active
-        ? { scopedHostKind: 'headerFooter' as const }
+  const caret = createSurfaceCaret(
+    pagesLayer,
+    () => scale,
+    () => {
+      const active = hfScope?.getActive() ?? null;
+      const activeNote = noteOps?.activeNoteScope() ?? null;
+      const notePageIndex = noteOps?.activeNotePageIndex() ?? null;
+      const scopedHost = active
+        ? furnitureCaretHost(pagesLayer, active.pageIndex)
         : activeNote
-          ? { scopedHostKind: 'note' as const }
-          : {}),
-    };
-  });
+          ? noteCaretHost(pagesLayer, activeNote.id, notePageIndex)
+          : null;
+      return {
+        layout: currentLayout,
+        selection,
+        measurer,
+        ...(active
+          ? { preferredPageIndex: active.pageIndex }
+          : notePageIndex !== null
+            ? { preferredPageIndex: notePageIndex }
+            : {}),
+        scopedHost,
+        ...(active
+          ? { scopedHostKind: 'headerFooter' as const }
+          : activeNote
+            ? { scopedHostKind: 'note' as const }
+            : {}),
+      };
+    }
+  );
 
-  const firstParagraph = session.paragraphIds()[0] ?? '';
+  const initialTocParagraphs = new Set(
+    detectBodyTocs(session.part()).flatMap((toc) => [
+      toc.beginParagraphId,
+      ...toc.resultParagraphIds,
+      toc.endParagraphId,
+    ])
+  );
+  const paragraphIds = session.paragraphIds();
+  const firstParagraph =
+    paragraphIds.find((paragraphId) => !initialTocParagraphs.has(paragraphId)) ??
+    paragraphIds[0] ??
+    '';
   let selection: SemanticSelection = {
     anchor: { paragraphId: firstParagraph, offset: 0 },
     head: { paragraphId: firstParagraph, offset: 0 },
@@ -244,6 +328,10 @@ export function mountPaginatedSurface(
   /** Sibling of `selection`: rectangle of table cells, or null for ordinary text. */
   let cellSelection: CellSelection | null = null;
   let lastRejection: string | null = null;
+  /** Show-all content-control boundary chrome — surface furniture, never a layout input. */
+  let showAllContentControls = false;
+  /** Form-fill Tab navigation between editable controls. */
+  let formFillMode = false;
 
   /**
    * A range pinned to stay VISIBLY selected while the focus is somewhere else.
@@ -398,7 +486,7 @@ export function mountPaginatedSurface(
   // Styles/numbering are immutable in-session; cascade + index are built once and shared
   // by body layout and header/footer stories.
   const { styleCascade, numberingIndex, defaultTabStopPt } = createSurfaceStyleDeps(session);
-  const furnitureSource = createFurnitureSource({
+  let furnitureSource = createFurnitureSource({
     session,
     measurer,
     producer,
@@ -444,6 +532,9 @@ export function mountPaginatedSurface(
       if (editingMode === 'view') {
         return { committed: false, rejected: true, opCount: 0, reason: VIEWING_REFUSAL };
       }
+      if (selectionTouchesToc()) {
+        return { committed: false, rejected: true, opCount: 0, reason: TOC_READ_ONLY_REFUSAL };
+      }
       return session.applyPmDoc(doc);
     },
   };
@@ -463,6 +554,7 @@ export function mountPaginatedSurface(
     textOf: (paragraphId) => textOf(paragraphId),
     selectedCells: () => cellSelection?.cellIds,
     defaultParagraphStyleId: () => styleCascade?.defaultParagraphStyleId ?? null,
+    defaultFontFamily: () => options.defaultFontFamily ?? null,
     pendingFormats: () => pendingAtCaret(),
     setPendingFormats: (next) => {
       if (next === null || next.length === 0) {
@@ -532,7 +624,7 @@ export function mountPaginatedSurface(
   const navigation = createSurfaceNavigation({
     pagesLayer,
     container,
-    scale,
+    scale: () => scale,
     layout: () => currentLayout,
     bookmarks: () => session.bookmarks(),
     linkById: (linkId) => hyperlinks.linkById(linkId),
@@ -540,8 +632,13 @@ export function mountPaginatedSurface(
     isCollapsedSelection: () =>
       selection.anchor.paragraphId === selection.head.paragraphId &&
       selection.anchor.offset === selection.head.offset,
+    onScrolled: () => rematerialize(),
     ...(options.onHyperlinkPopover ? { onPopover: options.onHyperlinkPopover } : {}),
   });
+  pagesLayer.addEventListener('contextmenu', onTocContextMenu);
+  pagesLayer.addEventListener('click', onTocRowClick);
+  pagesLayer.addEventListener('pointermove', onTocPointerMove);
+  pagesLayer.addEventListener('pointerleave', onTocPointerLeave);
   let desiredX: number | null = null;
 
   function layoutDocument(revision: number): SemanticLayout {
@@ -630,6 +727,875 @@ export function mountPaginatedSurface(
     return scheduler.pending() ? scheduler.flush() : false;
   }
 
+  /** TOC chrome is hover-projected; never sticky from caret/click. */
+  let hoveredTocControlId: string | null = null;
+
+  function tocControlIdOf(toc: ReturnType<typeof detectBodyTocs>[number]): string {
+    return toc.contentControlId ?? `toc:${toc.id}`;
+  }
+
+  function tocContainingParagraph(paragraphId: string) {
+    return detectBodyTocs(session.part()).find(
+      (toc) =>
+        toc.beginParagraphId === paragraphId ||
+        toc.endParagraphId === paragraphId ||
+        toc.resultParagraphIds.includes(paragraphId)
+    );
+  }
+
+  /**
+   * Hover retints the chrome ALREADY PAINTED — it must never repaint the document.
+   *
+   * Chrome sends `mousedown` and then `contextmenu` for one right-click. Repainting on the
+   * pointermove that enters a TOC replaced the node the gesture started on, and the
+   * `contextmenu` that followed fired on a detached element, so it never bubbled to this
+   * layer and the first right-click on a TOC did nothing at all. Painted DOM identity is
+   * therefore stable across a hover change, and the attributes move instead.
+   */
+  function applyTocHoverChrome(): void {
+    for (const chrome of pagesLayer.querySelectorAll<HTMLElement>(
+      '.docx-content-control-chrome[data-docx-toc]'
+    )) {
+      if (chrome.getAttribute('data-docx-content-control') === hoveredTocControlId) {
+        chrome.dataset.hover = '';
+        chrome.dataset.boundaryVisible = '';
+        continue;
+      }
+      delete chrome.dataset.hover;
+      // Show-all keeps every boundary visible on its own account; only the hover-owned
+      // visibility goes back off here.
+      if (!showAllContentControls) delete chrome.dataset.boundaryVisible;
+    }
+  }
+
+  function setHoveredTocControlId(next: string | null): void {
+    if (hoveredTocControlId === next) return;
+    hoveredTocControlId = next;
+    applyTocHoverChrome();
+  }
+
+  function onTocPointerMove(event: PointerEvent): void {
+    const paragraph = (event.target as Element | null)?.closest<HTMLElement>('[data-paragraph-id]');
+    const paragraphId = paragraph?.dataset.paragraphId;
+    const toc = paragraphId ? tocContainingParagraph(paragraphId) : null;
+    setHoveredTocControlId(toc ? tocControlIdOf(toc) : null);
+  }
+
+  /**
+   * The paragraph a click or right-click landed on, resolved without trusting the target.
+   *
+   * A gesture that begins on a node some other pass then replaces arrives with a target
+   * that is no longer in the tree, so `closest` finds nothing worth acting on. Hit-testing
+   * the live tree at the same point keeps the gesture rather than dropping it.
+   */
+  function gestureParagraphId(event: MouseEvent): string | undefined {
+    const target = event.target as Element | null;
+    const direct = target?.isConnected
+      ? target.closest<HTMLElement>('[data-paragraph-id]')
+      : undefined;
+    if (direct) return direct.dataset.paragraphId;
+    const view = pagesLayer.ownerDocument;
+    if (typeof view.elementFromPoint !== 'function') return undefined;
+    const hit = view.elementFromPoint(event.clientX, event.clientY);
+    return hit?.closest<HTMLElement>('[data-paragraph-id]')?.dataset.paragraphId;
+  }
+
+  function onTocPointerLeave(): void {
+    setHoveredTocControlId(null);
+  }
+
+  function contentControlChromeOptions():
+    | {
+        readonly showAll?: boolean;
+        readonly activeIds?: ReadonlySet<string>;
+        readonly hoverIds?: ReadonlySet<string>;
+        readonly checkedIds?: ReadonlySet<string>;
+        readonly additionalBoundaries?: readonly ContentControlBoundaryRecord[];
+        readonly tocControlIds?: ReadonlySet<string>;
+        readonly suppressedIds?: ReadonlySet<string>;
+      }
+    | undefined {
+    const active = contentControlAtCaret();
+    const emptyTocBeginIds = emptyTocPlaceholderParagraphIds(session.part());
+    const tocs = detectBodyTocs(session.part());
+    const tocBoundaries = tocs
+      .map((toc) => {
+        const entry = tocBoundary(toc);
+        return entry ? { ...entry, empty: emptyTocBeginIds.has(toc.beginParagraphId) } : null;
+      })
+      .filter((entry) => entry !== null);
+    const tocControlIds = new Set(tocBoundaries.map((entry) => entry.boundary.id));
+    // An empty TOC is identified by its own placeholder box, which is the ONE box the
+    // region gets: a second boundary rectangle and a label chip over an empty region read
+    // as a rendering fault rather than as chrome.
+    const suppressedIds = new Set(
+      tocBoundaries.filter((entry) => entry.empty).map((entry) => entry.boundary.id)
+    );
+    // TOC regions never project caret-active chrome — hoverIds own their visibility.
+    const activeIds = active && !tocControlIds.has(active.id) ? new Set([active.id]) : undefined;
+    const hoverIds = hoveredTocControlId ? new Set([hoveredTocControlId]) : undefined;
+    const checkedIds = new Set(
+      contentControlsInLayout(currentLayout)
+        .filter((control) => control.controlType === 'checkbox' && checkboxChecked(control.id))
+        .map((control) => control.id)
+    );
+    const additionalBoundaries = tocBoundaries
+      .filter((entry) => entry.additional && !entry.empty)
+      .map((entry) => entry.boundary);
+    if (
+      !showAllContentControls &&
+      !activeIds &&
+      !hoverIds &&
+      checkedIds.size === 0 &&
+      additionalBoundaries.length === 0 &&
+      tocControlIds.size === 0
+    ) {
+      return undefined;
+    }
+    return {
+      ...(showAllContentControls ? { showAll: true } : {}),
+      ...(activeIds ? { activeIds } : {}),
+      ...(hoverIds ? { hoverIds } : {}),
+      ...(checkedIds.size > 0 ? { checkedIds } : {}),
+      ...(additionalBoundaries.length > 0 ? { additionalBoundaries } : {}),
+      ...(tocControlIds.size > 0 ? { tocControlIds } : {}),
+      ...(suppressedIds.size > 0 ? { suppressedIds } : {}),
+    };
+  }
+
+  function tocBoundary(toc: ReturnType<typeof detectBodyTocs>[number]): {
+    readonly tocId: string;
+    readonly boundary: ContentControlBoundaryRecord;
+    readonly additional: boolean;
+  } | null {
+    const existing = toc.contentControlId
+      ? contentControlsInLayout(currentLayout).find(
+          (control) => control.id === toc.contentControlId
+        )
+      : undefined;
+    if (existing) return { tocId: toc.id, boundary: existing, additional: false };
+
+    const paragraphIds = new Set([
+      toc.beginParagraphId,
+      ...toc.resultParagraphIds,
+      toc.endParagraphId,
+    ]);
+    const fragments = currentLayout.pages.flatMap((page) => {
+      const boxes = paragraphFragmentsOf(page)
+        .filter((fragment) => paragraphIds.has(fragment.paragraphId))
+        .map((fragment) => fragment.box);
+      if (boxes.length === 0) return [];
+      const left = Math.min(...boxes.map((box) => box.x));
+      const top = Math.min(...boxes.map((box) => box.y));
+      const right = Math.max(...boxes.map((box) => box.x + box.width));
+      const bottom = Math.max(...boxes.map((box) => box.y + box.height));
+      return [
+        {
+          pageIndex: page.index,
+          box: { x: left, y: top, width: right - left, height: bottom - top },
+        },
+      ];
+    });
+    if (fragments.length === 0) return null;
+    return {
+      tocId: toc.id,
+      additional: true,
+      boundary: {
+        id: `toc:${toc.id}`,
+        controlType: 'richText',
+        lock: 'unlocked',
+        effectiveLock: 'unlocked',
+        placeholder: false,
+        bound: false,
+        nestingDepth: 0,
+        level: 'block',
+        fragments,
+      },
+    };
+  }
+
+  /** Innermost layout boundary under the caret, or null outside every control. */
+  function contentControlAtCaret(): ContentControlBoundaryRecord | null {
+    const caret = caretAt(currentLayout, selection.head, measurer);
+    if (!caret) return null;
+    return contentControlAtSemantic(currentLayout, {
+      x: caret.x,
+      y: caret.y + caret.height / 2,
+      pageIndex: caret.pageIndex,
+    });
+  }
+
+  function contentLockedOrBound(control: ContentControlBoundaryRecord): string | null {
+    if (control.bound) return 'bound';
+    if (control.effectiveLock === 'contentLocked' || control.effectiveLock === 'sdtContentLocked') {
+      return 'locked';
+    }
+    return null;
+  }
+
+  function removalLocked(control: ContentControlBoundaryRecord): string | null {
+    if (control.effectiveLock === 'sdtLocked' || control.effectiveLock === 'sdtContentLocked') {
+      return 'locked';
+    }
+    return null;
+  }
+
+  function isContentControlElement(node: OoxmlNode): node is OoxmlElement {
+    // Shared walk predicate: typed `contentControl`, or generic WML `sdt` only.
+    // Foreign-namespace `<x:sdt>` stays opaque and is never treated as a Word control.
+    return isContentControl(node);
+  }
+
+  function findControl(controlId: string): OoxmlElement | null {
+    const node = findNode(session.part(), controlId);
+    if (!node || !isContentControlElement(node)) return null;
+    return node;
+  }
+
+  function tabIndexOfControl(controlId: string): number | null {
+    const control = findControl(controlId);
+    if (!control) return null;
+    for (const child of control.children) {
+      if (child.kind === 'textValue') continue;
+      if (
+        (child as { kind?: string }).kind === 'contentControlProperties' ||
+        child.localName === 'sdtPr'
+      ) {
+        for (const prop of child.children) {
+          if (prop.kind === 'textValue' || prop.localName !== 'tabIndex') continue;
+          const raw = prop.attributes.find((a) => a.localName === 'val')?.value;
+          if (raw === undefined) return null;
+          const n = Number(raw);
+          return Number.isFinite(n) ? n : null;
+        }
+      }
+    }
+    return null;
+  }
+
+  function editableControlsInOrder(): ContentControlBoundaryRecord[] {
+    const controls = [...contentControlsInLayout(currentLayout)];
+    return controls
+      .filter((control) => contentLockedOrBound(control) === null)
+      .sort((a, b) => {
+        const ta = tabIndexOfControl(a.id);
+        const tb = tabIndexOfControl(b.id);
+        if (ta !== null && tb !== null && ta !== tb) return ta - tb;
+        if (ta !== null && tb === null) return -1;
+        if (ta === null && tb !== null) return 1;
+        return 0; // document order already from layout
+      });
+  }
+
+  function addressableLength(node: OoxmlNode): number {
+    if (node.kind === 'textValue') return node.value.length;
+    if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
+    if (node.kind === 'runProperties' || node.kind === 'generic') return 0;
+    const kind = (node as { kind: string }).kind;
+    if (kind === 'contentControl') {
+      let total = 0;
+      for (const child of node.children) {
+        if (child.kind === 'textValue') continue;
+        if (
+          (child as { kind: string }).kind === 'contentControlContent' ||
+          child.localName === 'sdtContent'
+        ) {
+          for (const inner of child.children) total += addressableLength(inner);
+        }
+      }
+      return total;
+    }
+    let total = 0;
+    for (const child of node.children) total += addressableLength(child);
+    return total;
+  }
+
+  function contentChildrenOf(control: OoxmlElement): readonly OoxmlNode[] {
+    for (const child of control.children) {
+      if (child.kind === 'textValue') continue;
+      if (
+        (child as { kind: string }).kind === 'contentControlContent' ||
+        child.localName === 'sdtContent'
+      ) {
+        return child.children;
+      }
+    }
+    return [];
+  }
+
+  /** Select the control's addressable content for form-fill replacement. */
+  function selectControlContent(controlId: string): boolean {
+    const control = findControl(controlId);
+    if (!control) return false;
+    const content = contentChildrenOf(control);
+    const paragraphs: { id: string; length: number }[] = [];
+    const collectParagraphs = (nodes: readonly OoxmlNode[]): void => {
+      for (const node of nodes) {
+        if (node.kind === 'paragraph') {
+          paragraphs.push({ id: node.id, length: addressableLength(node) });
+          continue;
+        }
+        if (node.kind === 'textValue') continue;
+        const kind = (node as { kind: string }).kind;
+        if (kind === 'contentControl') {
+          collectParagraphs(contentChildrenOf(node as OoxmlElement));
+          continue;
+        }
+        collectParagraphs(node.children);
+      }
+    };
+    collectParagraphs(content);
+
+    if (paragraphs.length > 0) {
+      const first = paragraphs[0]!;
+      const last = paragraphs[paragraphs.length - 1]!;
+      setSelection({
+        anchor: { paragraphId: first.id, offset: 0 },
+        head: { paragraphId: last.id, offset: last.length },
+      });
+      return true;
+    }
+
+    // Inline control: locate the parent paragraph and UTF-16 range.
+    let hostParagraphId: string | null = null;
+    let start = 0;
+    let end = 0;
+    const scanInline = (nodes: readonly OoxmlNode[], offset: number, paraId: string): boolean => {
+      let cursor = offset;
+      for (const node of nodes) {
+        if (node.id === controlId) {
+          hostParagraphId = paraId;
+          start = cursor;
+          end = cursor + addressableLength(node);
+          return true;
+        }
+        if (node.kind === 'textValue') {
+          cursor += node.value.length;
+          continue;
+        }
+        const kind = (node as { kind: string }).kind;
+        if (kind === 'contentControl') {
+          const length = addressableLength(node);
+          if (scanInline(contentChildrenOf(node as OoxmlElement), cursor, paraId)) return true;
+          cursor += length;
+          continue;
+        }
+        if (node.kind === 'run' || node.kind === 'hyperlink') {
+          if (scanInline(node.children, cursor, paraId)) return true;
+          cursor += addressableLength(node);
+          continue;
+        }
+        if (node.kind === 'paragraph') {
+          if (scanInline(node.children, 0, node.id)) return true;
+          continue;
+        }
+        if (node.kind === 'tab' || node.kind === 'hardBreak') {
+          cursor += 1;
+          continue;
+        }
+        if (scanInline(node.children, cursor, paraId)) return true;
+        cursor += addressableLength(node);
+      }
+      return false;
+    };
+    scanInline(session.part().root.children, 0, '');
+    if (!hostParagraphId) return false;
+    setSelection({
+      anchor: { paragraphId: hostParagraphId, offset: start },
+      head: { paragraphId: hostParagraphId, offset: end },
+    });
+    return true;
+  }
+
+  function listItemsOfControl(
+    controlId: string
+  ): readonly { displayText: string; value: string }[] {
+    const control = findControl(controlId);
+    if (!control) return [];
+    for (const child of control.children) {
+      if (child.kind === 'textValue') continue;
+      if (
+        (child as { kind?: string }).kind !== 'contentControlProperties' &&
+        child.localName !== 'sdtPr'
+      ) {
+        continue;
+      }
+      for (const prop of child.children) {
+        if (prop.kind === 'textValue') continue;
+        if (prop.localName !== 'dropDownList' && prop.localName !== 'comboBox') continue;
+        const items: { displayText: string; value: string }[] = [];
+        for (const item of prop.children) {
+          if (item.kind === 'textValue' || item.localName !== 'listItem') continue;
+          const value = item.attributes.find((a) => a.localName === 'value')?.value ?? '';
+          const displayText =
+            item.attributes.find((a) => a.localName === 'displayText')?.value ?? value;
+          items.push({ displayText, value });
+        }
+        return items;
+      }
+    }
+    return [];
+  }
+
+  function checkboxChecked(controlId: string): boolean {
+    const control = findControl(controlId);
+    if (!control) return false;
+    for (const child of control.children) {
+      if (child.kind === 'textValue') continue;
+      if (
+        (child as { kind?: string }).kind !== 'contentControlProperties' &&
+        child.localName !== 'sdtPr'
+      ) {
+        continue;
+      }
+      for (const prop of child.children) {
+        if (prop.kind !== 'contentControlCheckbox') continue;
+        for (const state of prop.children) {
+          if (state.kind !== 'contentControlChecked') continue;
+          const val = state.attributes.find((a) => a.localName === 'val')?.value;
+          return !(val === '0' || val === 'false' || val === 'off');
+        }
+      }
+    }
+    return false;
+  }
+
+  function dateValueOfControl(controlId: string): string | undefined {
+    const control = findControl(controlId);
+    if (!control) return undefined;
+    for (const child of control.children) {
+      if (child.kind !== 'contentControlProperties') continue;
+      for (const property of child.children) {
+        if (property.kind !== 'contentControlDate') continue;
+        return property.attributes.find((attribute) => attribute.localName === 'fullDate')?.value;
+      }
+    }
+    return undefined;
+  }
+
+  function setContentControlWidgetOpen(controlId: string, open: boolean): void {
+    for (const chrome of pagesLayer.querySelectorAll<HTMLElement>('[data-docx-content-control]')) {
+      if (chrome.getAttribute('data-docx-content-control') !== controlId) continue;
+      if (open) chrome.dataset.open = '';
+      else delete chrome.dataset.open;
+    }
+  }
+
+  function closeContentControlMenu(menu: HTMLElement): void {
+    const controlId = menu.dataset.docxCcId;
+    menu.remove();
+    if (controlId) setContentControlWidgetOpen(controlId, false);
+  }
+
+  function removeExistingContentControlMenu(): void {
+    const existing = pagesLayer.querySelector<HTMLElement>('.docx-content-control-menu');
+    if (existing) closeContentControlMenu(existing);
+  }
+
+  /**
+   * Record which TOC a right-click landed on, and otherwise LET IT THROUGH.
+   *
+   * The engine paints no menu of its own. A host's context menu is one primitive with one
+   * set of rows, icons, shortcut column and keyboard model; a second panel painted here
+   * would be a second place for all of that to drift, and it looked like one too. What the
+   * engine owns is the part a host cannot work out for itself: a right-click does not move
+   * the caret, and a TOC refuses the caret entirely, so nothing in `selection` says which
+   * table of contents is under the pointer. That is what this publishes.
+   */
+  function onTocContextMenu(event: MouseEvent): void {
+    const paragraphId = gestureParagraphId(event);
+    const toc = paragraphId ? tocContainingParagraph(paragraphId) : undefined;
+    setContextTocId(toc && canRefreshToc(toc.id) ? toc.id : null);
+  }
+
+  /** The TOC the last right-click addressed. Cleared by a right-click anywhere else. */
+  let contextTocId: string | null = null;
+
+  function setContextTocId(next: string | null): void {
+    if (contextTocId === next) return;
+    contextTocId = next;
+    options.onChange?.(currentState());
+  }
+
+  function onTocRowClick(event: MouseEvent): void {
+    if (event.button !== 0 || (event.target as Element | null)?.closest('a.docx-hyperlink')) return;
+    if (
+      selection.anchor.paragraphId !== selection.head.paragraphId ||
+      selection.anchor.offset !== selection.head.offset
+    ) {
+      return;
+    }
+    const paragraphId = gestureParagraphId(event);
+    if (!paragraphId) return;
+    const toc = detectBodyTocs(session.part()).find((candidate) =>
+      candidate.resultParagraphIds.includes(paragraphId)
+    );
+    if (!toc) return;
+    // The row names its own target through its anchor or its title. Reading the outline entry
+    // that sits at the row's INDEX sends a click to the wrong heading the moment the cached
+    // rows and the outline disagree, which is the normal state of a TOC that needs refreshing.
+    const headings = resolveTocRowHeadings(
+      session.part(),
+      toc,
+      session.documentOutline(),
+      tocRegionOf(toc)
+    );
+    const headingParagraphId = headings[toc.resultParagraphIds.indexOf(paragraphId)];
+    if (!headingParagraphId) return;
+    event.preventDefault();
+    navigation.goToPosition({ paragraphId: headingParagraphId, offset: 0 });
+  }
+
+  function openContentControlWidget(controlId: string, kind: string): void {
+    const reason = contentControlsOps.disabledReason(controlId, 'edit');
+    if (reason) {
+      lastRejection = reason;
+      options.onChange?.(currentState());
+      return;
+    }
+    if (kind === 'checkbox') {
+      contentControlsOps.setValue(controlId, checkboxChecked(controlId) ? 'false' : 'true');
+      return;
+    }
+    if (kind === 'dropdown' || kind === 'comboBox') {
+      const items = listItemsOfControl(controlId);
+      if (items.length === 0 && kind === 'dropdown') return;
+      // Engine-level menu: no hardcoded English — displayText comes from the file.
+      removeExistingContentControlMenu();
+      const menu = document.createElement('div');
+      menu.className = 'docx-content-control-menu';
+      menu.dataset.docxMarker = '';
+      menu.dataset.docxCcId = controlId;
+      menu.setAttribute('contenteditable', 'false');
+      menu.setAttribute('role', 'listbox');
+      menu.style.position = 'absolute';
+      menu.style.zIndex = '20';
+      menu.style.pointerEvents = 'auto';
+      menu.addEventListener('pointerdown', (event) => event.stopPropagation());
+      const record = contentControlsInLayout(currentLayout).find((c) => c.id === controlId);
+      const frag = record?.fragments[0];
+      if (frag) {
+        const page = currentLayout.pages[frag.pageIndex];
+        const offsetX = materializedExtent?.pageOffsetX.get(frag.pageIndex) ?? 0;
+        if (page) {
+          const contentLeft = page.contentBox.x - page.box.x;
+          const contentTop = page.contentBox.y - page.box.y;
+          menu.style.left = `${(page.box.x + offsetX + contentLeft + frag.box.x + frag.box.width) * scale}px`;
+          menu.style.top = `${(page.box.y + contentTop + frag.box.y + frag.box.height) * scale}px`;
+          menu.style.transform = 'translateX(-100%)';
+        }
+      }
+      for (const item of items) {
+        const option = document.createElement('button');
+        option.type = 'button';
+        option.className = 'docx-content-control-menu-item';
+        option.dataset.docxMarker = '';
+        option.setAttribute('contenteditable', 'false');
+        option.setAttribute('role', 'option');
+        option.textContent = item.displayText;
+        option.addEventListener('mousedown', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          closeContentControlMenu(menu);
+          contentControlsOps.setValue(controlId, item.value);
+        });
+        menu.append(option);
+      }
+      if (kind === 'comboBox') {
+        const free = document.createElement('input');
+        free.type = 'text';
+        free.className = 'docx-content-control-menu-input';
+        free.dataset.docxMarker = '';
+        free.setAttribute('contenteditable', 'false');
+        free.addEventListener('mousedown', (event) => event.stopPropagation());
+        free.addEventListener('keydown', (event) => {
+          if (event.key !== 'Enter') return;
+          event.preventDefault();
+          closeContentControlMenu(menu);
+          contentControlsOps.setValue(controlId, free.value);
+        });
+        menu.append(free);
+      }
+      pagesLayer.append(menu);
+      setContentControlWidgetOpen(controlId, true);
+      const dismiss = (event: Event): void => {
+        if (menu.contains(event.target as Node)) return;
+        closeContentControlMenu(menu);
+        document.removeEventListener('mousedown', dismiss, true);
+      };
+      document.addEventListener('mousedown', dismiss, true);
+      return;
+    }
+    if (kind === 'date') {
+      removeExistingContentControlMenu();
+      const menu = document.createElement('div');
+      menu.className = 'docx-content-control-menu';
+      menu.dataset.docxMarker = '';
+      menu.dataset.docxCcId = controlId;
+      menu.setAttribute('contenteditable', 'false');
+      menu.style.position = 'absolute';
+      menu.style.zIndex = '20';
+      menu.style.pointerEvents = 'auto';
+      menu.addEventListener('pointerdown', (event) => event.stopPropagation());
+      const record = contentControlsInLayout(currentLayout).find((c) => c.id === controlId);
+      const frag = record?.fragments[0];
+      if (frag) {
+        const page = currentLayout.pages[frag.pageIndex];
+        const offsetX = materializedExtent?.pageOffsetX.get(frag.pageIndex) ?? 0;
+        if (page) {
+          const contentLeft = page.contentBox.x - page.box.x;
+          const contentTop = page.contentBox.y - page.box.y;
+          menu.style.left = `${(page.box.x + offsetX + contentLeft + frag.box.x + frag.box.width) * scale}px`;
+          menu.style.top = `${(page.box.y + contentTop + frag.box.y + frag.box.height) * scale}px`;
+          menu.style.transform = 'translateX(-100%)';
+        }
+      }
+      menu.classList.add('docx-content-control-calendar');
+      const authoredDate = dateValueOfControl(controlId);
+      const parsedDate = authoredDate ? new Date(authoredDate) : new Date();
+      const selectedDate = Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+      const initialDate = selectedDate ?? new Date();
+      let viewYear = initialDate.getFullYear();
+      let viewMonth = initialDate.getMonth();
+      const monthFormatter = new Intl.DateTimeFormat(undefined, {
+        month: 'long',
+        year: 'numeric',
+      });
+      const dayFormatter = new Intl.DateTimeFormat(undefined, {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+      const weekdayFormatter = new Intl.DateTimeFormat(undefined, { weekday: 'narrow' });
+      const isoDate = (date: Date): string =>
+        `${date.getFullYear().toString().padStart(4, '0')}-${(date.getMonth() + 1)
+          .toString()
+          .padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+      const sameDay = (left: Date, right: Date): boolean =>
+        left.getFullYear() === right.getFullYear() &&
+        left.getMonth() === right.getMonth() &&
+        left.getDate() === right.getDate();
+      let commitPendingManualDate: (() => boolean) | null = null;
+      const renderCalendar = (): void => {
+        const manual = document.createElement('input');
+        manual.type = 'date';
+        manual.className = 'docx-content-control-calendar-input';
+        manual.value = selectedDate ? isoDate(selectedDate) : '';
+        const initialManualValue = manual.value;
+        if (record?.alias) manual.setAttribute('aria-label', record.alias);
+        const commitManualDate = (): boolean => {
+          if (!manual.value || manual.value === initialManualValue) return false;
+          const value = manual.value;
+          closeContentControlMenu(menu);
+          contentControlsOps.setValue(controlId, value);
+          return true;
+        };
+        commitPendingManualDate = commitManualDate;
+        manual.addEventListener('keydown', (event) => {
+          if (event.key !== 'Enter') return;
+          event.preventDefault();
+          if (!commitManualDate()) closeContentControlMenu(menu);
+        });
+        manual.addEventListener('blur', () => {
+          queueMicrotask(() => {
+            if (!menu.isConnected || menu.contains(document.activeElement)) return;
+            if (!commitManualDate()) closeContentControlMenu(menu);
+          });
+        });
+        const header = document.createElement('div');
+        header.className = 'docx-content-control-calendar-header';
+        const previous = document.createElement('button');
+        previous.type = 'button';
+        previous.className = 'docx-content-control-calendar-nav';
+        previous.textContent = '‹';
+        const previousMonth = new Date(viewYear, viewMonth - 1, 1);
+        previous.setAttribute('aria-label', monthFormatter.format(previousMonth));
+        const title = document.createElement('div');
+        title.className = 'docx-content-control-calendar-title';
+        title.textContent = monthFormatter.format(new Date(viewYear, viewMonth, 1));
+        const next = document.createElement('button');
+        next.type = 'button';
+        next.className = 'docx-content-control-calendar-nav';
+        next.textContent = '›';
+        const nextMonth = new Date(viewYear, viewMonth + 1, 1);
+        next.setAttribute('aria-label', monthFormatter.format(nextMonth));
+        previous.addEventListener('mousedown', (event) => event.stopPropagation());
+        next.addEventListener('mousedown', (event) => event.stopPropagation());
+        previous.addEventListener('click', () => {
+          viewMonth -= 1;
+          if (viewMonth < 0) {
+            viewMonth = 11;
+            viewYear -= 1;
+          }
+          renderCalendar();
+        });
+        next.addEventListener('click', () => {
+          viewMonth += 1;
+          if (viewMonth > 11) {
+            viewMonth = 0;
+            viewYear += 1;
+          }
+          renderCalendar();
+        });
+        header.append(previous, title, next);
+
+        const weekdays = document.createElement('div');
+        weekdays.className = 'docx-content-control-calendar-weekdays';
+        for (let index = 0; index < 7; index += 1) {
+          const weekday = document.createElement('span');
+          weekday.textContent = weekdayFormatter.format(new Date(2024, 0, 1 + index));
+          weekdays.append(weekday);
+        }
+
+        const grid = document.createElement('div');
+        grid.className = 'docx-content-control-calendar-grid';
+        grid.setAttribute('role', 'grid');
+        const firstWeekday = (new Date(viewYear, viewMonth, 1).getDay() + 6) % 7;
+        const today = new Date();
+        for (let index = 0; index < 42; index += 1) {
+          const date = new Date(viewYear, viewMonth, index - firstWeekday + 1);
+          const day = document.createElement('button');
+          day.type = 'button';
+          day.className = 'docx-content-control-calendar-day';
+          day.textContent = String(date.getDate());
+          day.setAttribute('role', 'gridcell');
+          day.setAttribute('aria-label', dayFormatter.format(date));
+          if (date.getMonth() !== viewMonth) day.dataset.otherMonth = '';
+          if (selectedDate && sameDay(date, selectedDate)) {
+            day.dataset.selected = '';
+            day.setAttribute('aria-selected', 'true');
+          }
+          if (sameDay(date, today)) day.dataset.today = '';
+          day.addEventListener('mousedown', (event) => event.stopPropagation());
+          day.addEventListener('click', () => {
+            closeContentControlMenu(menu);
+            contentControlsOps.setValue(controlId, isoDate(date));
+          });
+          grid.append(day);
+        }
+        menu.replaceChildren(manual, header, weekdays, grid);
+      };
+      renderCalendar();
+      pagesLayer.append(menu);
+      setContentControlWidgetOpen(controlId, true);
+      const dismiss = (event: Event): void => {
+        if (menu.contains(event.target as Node)) return;
+        if (!commitPendingManualDate?.()) closeContentControlMenu(menu);
+        document.removeEventListener('mousedown', dismiss, true);
+      };
+      document.addEventListener('mousedown', dismiss, true);
+      menu
+        .querySelector<HTMLElement>(
+          '[data-selected], [data-today], .docx-content-control-calendar-day'
+        )
+        ?.focus({ preventScroll: true });
+    }
+  }
+
+  const contentControlsOps: ContentControlOps = {
+    setShowAll(show) {
+      if (showAllContentControls === show) return;
+      showAllContentControls = show;
+      // Furniture-only: rebuild paint without a layout pass.
+      render();
+    },
+    setFormFill(active) {
+      if (formFillMode === active) return;
+      formFillMode = active;
+      options.onChange?.(currentState());
+    },
+    showAll: () => showAllContentControls,
+    formFill: () => formFillMode,
+    atCaret: () => contentControlAtCaret(),
+    navigate(direction) {
+      const editable = editableControlsInOrder();
+      if (editable.length === 0) return false;
+      const current = contentControlAtCaret();
+      let index = current ? editable.findIndex((c) => c.id === current.id) : -1;
+      if (direction === 'next') {
+        index = index < 0 ? 0 : (index + 1) % editable.length;
+      } else {
+        index = index < 0 ? editable.length - 1 : (index - 1 + editable.length) % editable.length;
+      }
+      const target = editable[index]!;
+      return selectControlContent(target.id);
+    },
+    setValue(controlId, value) {
+      const reason = contentControlsOps.disabledReason(controlId, 'edit');
+      if (reason) {
+        lastRejection = reason;
+        options.onChange?.(currentState());
+        return false;
+      }
+      let committed = false;
+      commit(() => {
+        const result = session.applyTreeOps(
+          [{ op: 'setContentControlValue', controlId, value }],
+          selectionMark()
+        );
+        committed = result.committed;
+        return result;
+      });
+      return committed;
+    },
+    remove(controlId) {
+      const id = controlId ?? contentControlAtCaret()?.id;
+      if (!id) {
+        lastRejection = 'notFound';
+        options.onChange?.(currentState());
+        return false;
+      }
+      const reason = contentControlsOps.disabledReason(id, 'remove');
+      if (reason) {
+        lastRejection = reason;
+        options.onChange?.(currentState());
+        return false;
+      }
+      let committed = false;
+      commit(() => {
+        const result = session.applyTreeOps(
+          [{ op: 'removeContentControl', controlId: id }],
+          selectionMark()
+        );
+        committed = result.committed;
+        return result;
+      });
+      return committed;
+    },
+    disabledReason(controlId, action) {
+      const record = contentControlsInLayout(currentLayout).find((c) => c.id === controlId);
+      if (record) {
+        return action === 'remove' ? removalLocked(record) : contentLockedOrBound(record);
+      }
+      const control = findControl(controlId);
+      if (!control) return 'notFound';
+      // Layout has not published a boundary yet — refuse conservatively from tree props.
+      for (const child of control.children) {
+        if (child.kind === 'textValue') continue;
+        if (
+          (child as { kind?: string }).kind !== 'contentControlProperties' &&
+          child.localName !== 'sdtPr'
+        ) {
+          continue;
+        }
+        if (child.children.some((c) => c.kind !== 'textValue' && c.localName === 'dataBinding')) {
+          if (action === 'edit') return 'bound';
+        }
+        for (const prop of child.children) {
+          if (prop.kind === 'textValue' || prop.localName !== 'lock') continue;
+          const val = prop.attributes.find((a) => a.localName === 'val')?.value;
+          if (action === 'remove') {
+            if (val === 'sdtLocked' || val === 'sdtContentLocked') return 'locked';
+          } else if (val === 'contentLocked' || val === 'sdtContentLocked') {
+            return 'locked';
+          }
+        }
+      }
+      return null;
+    },
+  };
+
   function currentState(): PaginatedSurfaceState {
     return {
       revision: session.packageRevision(),
@@ -642,6 +1608,12 @@ export function mountPaginatedSurface(
       // Reference-stable while unchanged: `pendingAtCaret` hands back the stored array,
       // so a host can compare states to see whether the armed format moved.
       pendingFormat: pendingAtCaret(),
+      contentControls: {
+        showAll: showAllContentControls,
+        formFill: formFillMode,
+        activeControlId: contentControlAtCaret()?.id ?? null,
+      },
+      contextTocId,
       perf: {
         layoutMs: lastLayoutMs,
         paintMs: lastPaintMs,
@@ -690,9 +1662,14 @@ export function mountPaginatedSurface(
     // `data-docx-hf-active`, so scroll cannot leave the caret host on a dematerialized sheet.
     hfScope?.reconcileOccurrence();
     const activeHf = hfScope?.getActive() ?? null;
+    const contentControlChrome = contentControlChromeOptions();
+    const emptyTocIds = emptyTocPlaceholderParagraphIds(session.part());
     paintSemanticLayout(pagesLayer, currentLayout, {
       scale,
+      readOnlyParagraphIds: tocParagraphIds(),
+      ...(emptyTocIds.size > 0 ? { emptyTocPlaceholderIds: emptyTocIds } : {}),
       ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+      ...(options.defaultFontFamily ? { defaultFontFamily: options.defaultFontFamily } : {}),
       materialize: materializedSet,
       ariaHidden: false,
       ...(activeHf
@@ -701,8 +1678,12 @@ export function mountPaginatedSurface(
             activeHeaderFooterPageIndex: activeHf.pageIndex,
           }
         : {}),
+      ...(contentControlChrome ? { contentControlChrome } : {}),
     });
     setHeaderFooterEditingChrome(container, pagesLayer, activeHf != null);
+    // Viewing mode hides write affordances the painter cannot know about — today the
+    // blank header/footer "double-click to add" band.
+    container.classList.toggle('docx-paginated-surface--viewing', editingMode === 'view');
     // The pages are absolutely positioned, so the layer has no intrinsic size and the
     // surface would collapse to zero — pages then escape whatever centres or scrolls it.
     // Size it from the records, which is the only place the extent is known.
@@ -716,6 +1697,9 @@ export function mountPaginatedSurface(
     overlayLayer.style.height = `${materializedExtent.height * scale}px`;
     commentLayer.style.width = overlayLayer.style.width;
     commentLayer.style.height = overlayLayer.style.height;
+    tableFurnitureLayer.style.width = overlayLayer.style.width;
+    tableFurnitureLayer.style.height = overlayLayer.style.height;
+    tableInteraction.update();
     // Sizing included: the style writes above invalidate layout, and the selection sync
     // right after is what forces the browser to resolve it. Splitting the timer here would
     // book the paint's own cost to the selection phase.
@@ -772,14 +1756,20 @@ export function mountPaginatedSurface(
     // Defaulted, and therefore evaluated per call: every input path wants the story the
     // reader is in. Only a caller that ALREADY knows which story its ops address — an
     // automation handle names one — passes this, and then the reader's position is irrelevant.
-    scope: StoryScope = storyScope()
+    scope: StoryScope = storyScope(),
+    checkSelection = true
   ): ReturnType<TreeDocxSession['applyTreeOps']> {
-    const refusal = writeRefusal(ops.some(isDocumentEdit));
+    const refusal = writeRefusal(ops.some(isDocumentEdit), ops, checkSelection);
     if (refusal !== null) return { committed: false, rejected: true, opCount: 0, reason: refusal };
 
     // The scope resolves to `storyScope()` unless the caller named one, so an edit inside a
     // header, a footer or a note is applied to that story rather than to the body.
-    return session.applyTreeOps(trackedOps(ops), selectionBefore, selectionAfter, scope);
+    const attributed = trackedOps(ops);
+    const result = session.applyTreeOps(attributed, selectionBefore, selectionAfter, scope);
+    if (result.committed && editingMode === 'suggest' && attributed.some(isTrackedEdit)) {
+      runtimeOptions.onTrackedChange?.();
+    }
+    return result;
   }
 
   /**
@@ -790,11 +1780,21 @@ export function mountPaginatedSurface(
    * can mint a hyperlink relationship, and a relationship survives a refusal. `edits` says whether
    * the write changes the document, which is the only thing the second rule needs from the ops.
    */
-  function writeRefusal(edits: boolean): string | null {
+  function writeRefusal(
+    edits: boolean,
+    ops: readonly TreeDocOp[] = [],
+    checkSelection = true
+  ): string | null {
     // VIEWING refuses every write here rather than only at the facade. The keymap and
     // `beforeinput` are wired to this surface, not to `Editor.exec`, so a facade-only gate
     // left the document fully typeable while the toolbar reported it read-only.
     if (editingMode === 'view') return VIEWING_REFUSAL;
+    if (
+      edits &&
+      ((checkSelection && selectionTouchesToc()) || ops.some((op) => opTouchesToc(op)))
+    ) {
+      return TOC_READ_ONLY_REFUSAL;
+    }
     // SUGGESTING with no author cannot write `CT_TrackChange`, and the fallback of writing
     // an untracked edit is only tolerable when nothing is destroyed. A deletion in that
     // state removes text the reviewer was promised they could get back.
@@ -817,7 +1817,23 @@ export function mountPaginatedSurface(
     );
   }
 
-  /** Text ops become tracked ones while suggesting; everything else is untouched. */
+  /** Ops that create or extend a reviewable proposal. */
+  function isTrackedEdit(op: TreeDocOp): boolean {
+    switch (op.op) {
+      case 'insertText':
+      case 'deleteText':
+      case 'insertTableRow':
+      case 'deleteTableRow':
+        return op.revision !== undefined;
+      case 'setParagraphMarkRevision':
+      case 'proposeParagraphMerge':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /** Suggesting attributes text and structural row edits as Word tracked changes. */
   function trackedOps(ops: readonly TreeDocOp[]): TreeDocOp[] {
     const author = options.author?.trim();
     // `CT_TrackChange` makes `@w:author` required, so with no author there is nothing valid
@@ -826,7 +1842,14 @@ export function mountPaginatedSurface(
     if (editingMode !== 'suggest' || !author) return [...ops];
     const revision = { author, date: trackedDate() };
     return ops.flatMap((op): TreeDocOp[] => {
-      if (op.op === 'insertText' || op.op === 'deleteText') return [{ ...op, revision }];
+      if (
+        op.op === 'insertText' ||
+        op.op === 'deleteText' ||
+        op.op === 'insertTableRow' ||
+        op.op === 'deleteTableRow'
+      ) {
+        return [{ ...op, revision }];
+      }
       // A SPLIT becomes a real split plus a proposed mark on the first paragraph: the text
       // is already in two paragraphs, and what is being proposed is the break between them.
       // §17.13.5 puts the new mark on the FIRST paragraph, and rejecting it runs the two
@@ -948,6 +1971,8 @@ export function mountPaginatedSurface(
     // exact armed position (the mirror re-adopting the same caret) keeps it.
     reconcilePendingWith(next);
     releaseRetainedIfEscaped(next);
+    const previousActive = contentControlAtCaret()?.id ?? null;
+    const previousToc = tocIdAtParagraph(selection.head.paragraphId);
     selection = next;
     // Any plain selection cancels a rectangle. A caret placed by a click, a keystroke or an
     // edit is a text selection by definition, and leaving the rectangle behind would keep
@@ -981,9 +2006,16 @@ export function mountPaginatedSurface(
     // A dismissal is dismissed for where the caret WAS; any move re-asks the question, which
     // is how the reader reopens an item — by clicking back into its text.
     dismissedReviewKey = null;
-    // The caret decides which item is OPEN, so a move re-classes the bands. The rectangles
+    // The caret decides which item is OPEN, so a move re-classifies the bands. The rectangles
     // themselves are cached against the layout and are not recomputed here.
     renderCommentHighlights();
+    // Content-control caret chrome is furniture keyed on the active control id. A caret move
+    // into / out of a control must rebuild paint without a layout pass.
+    const nextActive = contentControlAtCaret()?.id ?? null;
+    const nextToc = tocIdAtParagraph(selection.head.paragraphId);
+    if (previousActive !== nextActive || previousToc !== nextToc) {
+      render(false);
+    }
     options.onChange?.(currentState());
   }
 
@@ -1334,7 +2366,229 @@ export function mountPaginatedSurface(
     );
   }
 
-  const surface: PaginatedSurface = {
+  function targetToc(tocId?: string) {
+    const tocs = detectBodyTocs(session.part());
+    if (tocId) return tocs.find((toc) => toc.id === tocId) ?? null;
+    // The right-click target first: a menu row carries no id, and in a document with two
+    // tables of contents the caret cannot disambiguate them — it is never inside either.
+    const pointed = contextTocId ? tocs.find((toc) => toc.id === contextTocId) : undefined;
+    if (pointed) return pointed;
+    const paragraphId = selection.head.paragraphId;
+    return (
+      tocs.find(
+        (toc) =>
+          toc.beginParagraphId === paragraphId ||
+          toc.endParagraphId === paragraphId ||
+          toc.resultParagraphIds.includes(paragraphId)
+      ) ?? (tocs.length === 1 ? tocs[0]! : null)
+    );
+  }
+
+  function tocIdAtParagraph(paragraphId: string): string | null {
+    const toc = detectBodyTocs(session.part()).find(
+      (candidate) =>
+        candidate.beginParagraphId === paragraphId ||
+        candidate.endParagraphId === paragraphId ||
+        candidate.resultParagraphIds.includes(paragraphId)
+    );
+    return toc?.id ?? null;
+  }
+
+  function selectionTouchesToc(): boolean {
+    return (
+      tocIdAtParagraph(selection.anchor.paragraphId) !== null ||
+      tocIdAtParagraph(selection.head.paragraphId) !== null
+    );
+  }
+
+  function opTouchesToc(op: TreeDocOp): boolean {
+    const ids = tocParagraphIds();
+    const inspect = (value: unknown, key = ''): boolean => {
+      if (typeof value === 'string') {
+        return /(?:Id|Ids)$/.test(key) && ids.has(value);
+      }
+      if (Array.isArray(value)) return value.some((entry) => inspect(entry, key));
+      if (!value || typeof value !== 'object') return false;
+      return Object.entries(value).some(([nestedKey, nested]) => inspect(nested, nestedKey));
+    };
+    return inspect(op);
+  }
+
+  function tocParagraphIds(): ReadonlySet<string> {
+    return new Set(
+      detectBodyTocs(session.part()).flatMap((toc) => [
+        toc.beginParagraphId,
+        ...toc.resultParagraphIds,
+        toc.endParagraphId,
+      ])
+    );
+  }
+
+  /** Every paragraph one TOC owns. Re-read per pass: a replace mints new result ids. */
+  function tocRegionOf(toc: DetectedToc): ReadonlySet<string> {
+    return new Set([toc.beginParagraphId, toc.endParagraphId, ...toc.resultParagraphIds]);
+  }
+
+  /** Painted lines the TOC regions occupy, which bounds the caret's escape from one. */
+  function tocRegionLineCount(paragraphIds: ReadonlySet<string>): number {
+    let lines = 0;
+    for (const page of currentLayout.pages) {
+      for (const fragment of paragraphFragmentsOf(page)) {
+        if (paragraphIds.has(fragment.paragraphId)) lines += fragment.lines.length;
+      }
+    }
+    return lines;
+  }
+
+  function pageNumbersFor(
+    layout: SemanticLayout,
+    paragraphIds: readonly string[]
+  ): ReadonlyMap<string, string> {
+    const wanted = new Set(paragraphIds);
+    const result = new Map<string, string>();
+    for (const page of layout.pages) {
+      for (const fragment of paragraphFragmentsOf(page)) {
+        if (!wanted.has(fragment.paragraphId) || result.has(fragment.paragraphId)) continue;
+        const source = page.pageFieldSource;
+        result.set(
+          fragment.paragraphId,
+          formatPageNumber(source?.pageNumber ?? page.index + 1, source?.format)
+        );
+      }
+    }
+    return result;
+  }
+
+  function canRefreshToc(tocId?: string): boolean {
+    if (editingMode === 'view' || !session.editable) return false;
+    const toc = targetToc(tocId);
+    if (!toc) return false;
+    return (
+      validateTreeOp(session.part(), {
+        op: 'rewriteTocPageNumbers',
+        tocId: toc.id,
+        updates: [],
+      }) === null
+    );
+  }
+
+  const INSERT_TOC_INSTRUCTION = 'TOC \\o "1-3" \\h';
+
+  function insertTocOp() {
+    const instruction = parseTocInstruction(INSERT_TOC_INSTRUCTION);
+    if (!instruction) return null;
+    const outline = session.documentOutline();
+    const plan = planTocEntries(
+      session.part(),
+      outline,
+      instruction,
+      pageNumbersFor(
+        surface.layout(),
+        outline.map((entry) => entry.blockId)
+      ),
+      tocParagraphIds()
+    );
+    return {
+      op: 'insertToc' as const,
+      beforeParagraphId: selection.head.paragraphId,
+      instruction: INSERT_TOC_INSTRUCTION,
+      alias: options.tocLabels?.title ?? 'TOC',
+      entries: plan.entries,
+      bookmarksToCreate: plan.bookmarksToCreate,
+    };
+  }
+
+  function canInsertToc(): boolean {
+    if (editingMode === 'view' || !session.editable || selectionTouchesToc()) return false;
+    const op = insertTocOp();
+    return op !== null && validateTreeOp(session.part(), op) === null;
+  }
+
+  function insertToc(): boolean {
+    if (!canInsertToc()) return false;
+    const op = insertTocOp();
+    if (!op) return false;
+    const existing = new Set(detectBodyTocs(session.part()).map((toc) => toc.id));
+    const inserted = session.applyTreeOps([op]);
+    if (!inserted.committed) {
+      lastRejection = inserted.reason ?? 'the table of contents could not be inserted';
+      return false;
+    }
+    const created = detectBodyTocs(session.part()).find((toc) => !existing.has(toc.id));
+    return created ? refreshToc(created.id, 'pageNumbers') : true;
+  }
+
+  function refreshToc(tocId?: string, mode: 'entire' | 'pageNumbers' = 'entire'): boolean {
+    let toc = targetToc(tocId);
+    if (!toc || !canRefreshToc(toc.id)) return false;
+
+    let layout = surface.layout();
+    const outline = session.documentOutline();
+    const outlineBlockIds = outline.map((entry) => entry.blockId);
+
+    if (mode === 'entire') {
+      const plan = planTocEntries(
+        session.part(),
+        outline,
+        toc.instruction,
+        pageNumbersFor(layout, outlineBlockIds),
+        tocRegionOf(toc)
+      );
+      const replaced = session.applyTreeOps([
+        {
+          op: 'replaceTocResult',
+          tocId: toc.id,
+          entries: plan.entries,
+          bookmarksToCreate: plan.bookmarksToCreate,
+        },
+      ]);
+      if (!replaced.committed) {
+        lastRejection = replaced.reason ?? 'the table of contents could not be refreshed';
+        return false;
+      }
+      layout = surface.layout();
+      toc = targetToc(toc.id);
+      if (!toc) return true;
+    }
+
+    let previousSignature = '';
+    for (let pass = 0; pass < TOC_MAX_PAGE_PASSES; pass += 1) {
+      const numbers = pageNumbersFor(layout, outlineBlockIds);
+      // Each row is rewritten from the heading IT names, read from the row's own anchor or
+      // title. Pairing rows with plan entries by POSITION looks equivalent right after a full
+      // replace and is wrong everywhere else: one heading added or removed since the cache was
+      // written shifts every page number by one, silently, which is the exact state that
+      // "update page numbers only" exists to repair.
+      const headings = resolveTocRowHeadings(session.part(), toc, outline, tocRegionOf(toc));
+      const updates = toc.resultParagraphIds.flatMap((paragraphId, index) => {
+        const headingId = headings[index];
+        const pageNumberText = headingId ? numbers.get(headingId) : undefined;
+        return pageNumberText === undefined ? [] : [{ paragraphId, pageNumberText }];
+      });
+      if (updates.length === 0) break;
+      const signature = updates
+        .map((update) => `${update.paragraphId}\u0000${update.pageNumberText}`)
+        .join('\u0001');
+      if (signature === previousSignature) break;
+      previousSignature = signature;
+      const rewritten = session.applyTreeOps([
+        { op: 'rewriteTocPageNumbers', tocId: toc.id, updates },
+      ]);
+      if (!rewritten.committed) {
+        if (rewritten.rejected) {
+          lastRejection = rewritten.reason ?? 'the table of contents page numbers were refused';
+          return false;
+        }
+        break;
+      }
+      layout = surface.layout();
+      toc = targetToc(toc.id) ?? toc;
+    }
+
+    return true;
+  }
+
+  const surface: ScaleMutableSurface = {
     session,
     // Flushes first: a commit made straight on the session — undo, or another editor
     // sharing the store — must not leave a caller reading geometry for a revision the model
@@ -1352,6 +2606,97 @@ export function mountPaginatedSurface(
       }
       const caret = caretAt(currentLayout, selection.head);
       return caret ? caret.pageIndex + 1 : 1;
+    },
+
+    setScale(nextScale) {
+      if (!(nextScale > 0) || !Number.isFinite(nextScale)) return false;
+      if (nextScale === scale) return true;
+
+      const previous = { scale, defaults, measurer, producer, furnitureSource };
+
+      // TOTAL by construction: a zoom click gets an answer, never an exception. Everything a
+      // rescale touches — the anchor read, the measurer resolution, layout, paint — is inside
+      // the guard, and the rollback carries its own.
+      try {
+        const scroller = surfaceScroller(container);
+        // The anchor is kept in LAYOUT coordinates, the frame `visiblePageSet` and
+        // `viewportPage` read. The scroller is not the surface's offset parent in a real host —
+        // toolbar and ruler chrome sit above it — so the container's own offset comes out
+        // before the divide and goes back in on the way out, or the page under the viewport
+        // centre changes as the scale does.
+        const anchor = scroller
+          ? {
+              x: (scroller.scrollLeft - container.offsetLeft + scroller.clientWidth / 2) / scale,
+              y: (scroller.scrollTop - container.offsetTop + scroller.clientHeight / 2) / scale,
+            }
+          : null;
+        scale = nextScale;
+        if (!options.measurer) {
+          defaults = resolveDefaultSurfaceMeasurer(scale, {
+            context: tryCreateBrowserCanvasContext(container.ownerDocument),
+            ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+          });
+          measurer = defaults.measurer;
+        }
+        // Read from the resolution just made, not from mount's: a canvas that is available at
+        // mount and gone by the next zoom resolves to the fixed grid, and the identity has to
+        // say so.
+        producer = producerIdentity();
+        furnitureSource = createFurnitureSource({
+          session,
+          measurer,
+          producer,
+          cache: layoutCache,
+          styleCascade,
+          defaultTabStopPt,
+        });
+        // Dropped rather than trusted: both describe a paint made at the OLD scale, and a
+        // flush that publishes nothing (a revision already superseded) would otherwise leave
+        // the overlay painting against them.
+        materializedSet = undefined;
+        materializedExtent = undefined;
+        commentRectCache = null;
+        scheduler.invalidateAll(session.packageRevision(), 'zoom');
+        scheduler.flush();
+        if (scroller && anchor) {
+          const targetLeft = Math.max(
+            0,
+            anchor.x * scale + container.offsetLeft - scroller.clientWidth / 2
+          );
+          const targetTop = Math.max(
+            0,
+            anchor.y * scale + container.offsetTop - scroller.clientHeight / 2
+          );
+          const maxLeft = Number.isFinite(scroller.scrollWidth)
+            ? Math.max(0, scroller.scrollWidth - scroller.clientWidth)
+            : null;
+          const maxTop = Number.isFinite(scroller.scrollHeight)
+            ? Math.max(0, scroller.scrollHeight - scroller.clientHeight)
+            : null;
+          scroller.scrollLeft = maxLeft === null ? targetLeft : Math.min(targetLeft, maxLeft);
+          scroller.scrollTop = maxTop === null ? targetTop : Math.min(targetTop, maxTop);
+          // The paint above chose its pages for the scroll offset the viewport had BEFORE the
+          // restore. Building the destination band here keeps the zoom to one turn; leaving it
+          // to the scroll listener showed the user shells for a frame.
+          rematerialize();
+        }
+        return true;
+      } catch {
+        ({ scale, defaults, measurer, producer, furnitureSource } = previous);
+        materializedSet = undefined;
+        materializedExtent = undefined;
+        commentRectCache = null;
+        // NESTED, because the rollback lays out too: whatever failed the rescale can fail the
+        // recovery, and the caller still has to be told "no". The previous paint stands, and
+        // the next commit or scroll repaints it.
+        try {
+          scheduler.invalidateAll(session.packageRevision(), 'zoom-rollback');
+          scheduler.flush();
+        } catch {
+          /* nothing left to try; the answer below is the whole contract */
+        }
+        return false;
+      }
     },
 
     type(text) {
@@ -1485,7 +2830,7 @@ export function mountPaginatedSurface(
     },
 
     navigate(command, extend = false) {
-      const moved = navigateInActiveScope(
+      let moved = navigateInActiveScope(
         currentLayout,
         selection.head,
         command,
@@ -1495,6 +2840,49 @@ export function mountPaginatedSurface(
         measurer
       );
       if (!moved) return;
+      const tocIds = tocParagraphIds();
+      if (tocIds.has(moved.position.paragraphId)) {
+        if (extend) return;
+        const backwards = new Set<NavigationCommand>([
+          'left',
+          'wordLeft',
+          'lineStart',
+          'up',
+          'pageUp',
+        ]);
+        // The escape steps by LINE, never by character. A character step inside a row that
+        // has any text at all lands in the same paragraph, and the loop's own "we did not
+        // change paragraph" bail then fired on the first iteration: the caret could neither
+        // enter the region nor cross it, so everything past a table of contents was
+        // unreachable from the keyboard. A line step always leaves the row it starts on.
+        const escape: NavigationCommand = backwards.has(command) ? 'up' : 'down';
+        // One iteration per line the region occupies, plus slack for the landing line. The
+        // loop breaks the moment it is outside, so an over-generous bound costs nothing.
+        const limit = tocRegionLineCount(tocIds) + 4;
+        for (let step = 0; step < limit; step += 1) {
+          const next = navigateInActiveScope(
+            currentLayout,
+            moved.position,
+            escape,
+            moved.desiredX,
+            hfScope?.getActive() ?? null,
+            noteScopeId(),
+            measurer
+          );
+          // Only a position that does not move at all is a dead end. Comparing paragraph ids
+          // alone treats ordinary movement within a row as one.
+          if (
+            !next ||
+            (next.position.paragraphId === moved.position.paragraphId &&
+              next.position.offset === moved.position.offset)
+          ) {
+            return;
+          }
+          moved = next;
+          if (!tocIds.has(moved.position.paragraphId)) break;
+        }
+        if (tocIds.has(moved.position.paragraphId)) return;
+      }
       desiredX = moved.desiredX;
       // Note continuations share one EditorScope across pages: retarget the visual
       // occurrence before selection/caret paint so the DOM host follows geometry.
@@ -1632,6 +3020,18 @@ export function mountPaginatedSurface(
     },
 
     hyperlinks,
+    contentControls: contentControlsOps,
+    canInsertToc,
+    insertToc,
+    canRefreshToc,
+    refreshToc,
+    isInsideToc: (paragraphId) =>
+      detectBodyTocs(session.part()).some(
+        (toc) =>
+          toc.beginParagraphId === paragraphId ||
+          toc.endParagraphId === paragraphId ||
+          toc.resultParagraphIds.includes(paragraphId)
+      ),
     retainSelection: () => {
       retainedSelection = selection;
       renderOverlay();
@@ -1711,7 +3111,7 @@ export function mountPaginatedSurface(
           // must refuse it, and refusing here means the relationship is never written.
           let refused: string | null = null;
           const ops = staged((url) => {
-            const refusal = writeRefusal(true);
+            const refusal = writeRefusal(true, [], false);
             if (refusal === null) return session.ensureHyperlinkRelationship(url, story);
             refused = refusal;
             return null;
@@ -1724,7 +3124,7 @@ export function mountPaginatedSurface(
               reason: refused ?? 'this engine will not author that hyperlink target',
             });
           }
-          return (result = applyOps(ops, undefined, undefined, story));
+          return (result = applyOps(ops, undefined, undefined, story, false));
         },
         () => {
           // Flushed before the clamp for the same reason `commitReviewOps` does it: the clamp
@@ -1842,6 +3242,42 @@ export function mountPaginatedSurface(
       return fresh;
     },
     notePreviewText: (scopeId) => notePreviewTextOf(session, scopeId),
+    applyTableCommandPlan(plan: TableCommandPlan): ExecResult {
+      if (!plan.ok) {
+        return { ok: false, code: plan.code, reason: plan.reason };
+      }
+      let committedCaret: {
+        readonly paragraphId: string;
+        readonly start: number;
+        readonly end: number;
+      } | null = null;
+      const unsub = session.subscribe((change) => {
+        committedCaret = change.caret ?? null;
+      });
+      try {
+        const selectionBefore = selectionMark();
+        const adoptCaret = plan.selection.kind === 'adoptCommittedCaret';
+        commit(
+          () => applyOps(plan.ops, selectionBefore),
+          adoptCaret
+            ? () => {
+                if (!committedCaret) return null;
+                return collapsedAt({
+                  paragraphId: committedCaret.paragraphId,
+                  offset: committedCaret.start,
+                });
+              }
+            : undefined,
+          plan.selection.kind === 'preserveSelection' ? { keepCellSelection: true } : undefined
+        );
+      } finally {
+        unsub();
+      }
+      if (lastRejection) {
+        return { ok: false, code: 'invalidArgs', reason: lastRejection };
+      }
+      return { ok: true, changed: true };
+    },
     enterHeaderFooter: (args) => hfScope!.enterHeaderFooter(args),
     exitHeaderFooter: () => hfScope!.exitHeaderFooter(),
     headerFooterState: () => hfScope!.headerFooterStateStable(session.packageRevision()),
@@ -1861,6 +3297,12 @@ export function mountPaginatedSurface(
     // threw the reader back to page 1 before the caret it had just placed could be seen.
     // The caret is positioned from layout regardless, so nothing needs the browser's scroll.
     focus: () => pagesLayer.focus({ preventScroll: true }),
+    setTableInteractionLabel(resolver) {
+      tableLabelState.resolve = resolver;
+    },
+    refreshTableInteractionLabels() {
+      tableInteraction.refreshLabels();
+    },
     destroy() {
       document.removeEventListener('selectionchange', onSelectionChange);
       pagesLayer.removeEventListener('keydown', onKeyDown);
@@ -1875,7 +3317,12 @@ export function mountPaginatedSurface(
       viewportObserver?.disconnect();
       observedScroller = null;
       pointer?.destroy();
+      tableInteraction.destroy();
       navigation.destroy();
+      pagesLayer.removeEventListener('contextmenu', onTocContextMenu);
+      pagesLayer.removeEventListener('click', onTocRowClick);
+      pagesLayer.removeEventListener('pointermove', onTocPointerMove);
+      pagesLayer.removeEventListener('pointerleave', onTocPointerLeave);
       // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
       // another editor sharing this store would paint into a detached container.
       scheduler.cancel();
@@ -2224,10 +3671,91 @@ export function mountPaginatedSurface(
         noteOps?.exitNote(restoreBody);
       },
       exitHeaderFooter: () => hfScope?.exitHeaderFooter(),
+      enterEmptyHeaderFooter: (kind, pageIndex) => {
+        // Creating the part is a WRITE — viewing mode refuses it like every other lane.
+        if (editingMode === 'view') return;
+        // Which section owns the page, from the multi-section spans; a single-section
+        // document has no spans and every page belongs to section 0.
+        const spans = layoutSession.multi?.spans;
+        let sectionIndex = 0;
+        let sectionStart = 0;
+        if (spans && spans.length > 0) {
+          for (let index = 0; index < spans.length; index += 1) {
+            const span = spans[index]!;
+            sectionIndex = index;
+            sectionStart = span.startIndex;
+            if (pageIndex < span.startIndex + span.pageCount) break;
+          }
+        }
+        const bySection = session.headerFooterResolutionBySection();
+        const section = bySection[Math.min(sectionIndex, Math.max(0, bySection.length - 1))];
+        // The variant this page would DISPLAY, which is the one Word creates on a blank
+        // double-click: `even` on an even page only when the document separates them,
+        // `first` on a section's first page only when it declares a title page.
+        const pageNumber =
+          currentLayout.pages[pageIndex]?.pageFieldSource?.pageNumber ?? pageIndex + 1;
+        const variant: 'default' | 'first' | 'even' =
+          section?.evenAndOddHeaders && pageNumber % 2 === 0
+            ? 'even'
+            : section?.titlePage && pageIndex === sectionStart
+              ? 'first'
+              : 'default';
+        const slotsOf = (resolution: typeof bySection) => {
+          const target = resolution[Math.min(sectionIndex, Math.max(0, resolution.length - 1))];
+          return kind === 'header' ? target?.headers : target?.footers;
+        };
+        let rId = slotsOf(bySection)?.get(variant)?.rId;
+        if (!rId) {
+          const created = surface.applyHeaderFooterLifecycle?.({
+            op: 'createHeaderFooter',
+            sectionIndex,
+            kind,
+            variant,
+            ...(variant === 'first' ? { titlePage: true } : {}),
+            ...(variant === 'even' ? { evenAndOddHeaders: true } : {}),
+          });
+          if (!created?.ok) return;
+          rId = slotsOf(session.headerFooterResolutionBySection())?.get(variant)?.rId;
+        }
+        if (!rId) return;
+        hfScope?.enterHeaderFooter({ rId, pageIndex, sectionIndex, kind, variant });
+      },
+      onContentControlWidget: (controlId, kind) => openContentControlWidget(controlId, kind),
+      isReadOnlyParagraph: (paragraphId) => tocIdAtParagraph(paragraphId) !== null,
     },
     options.pointer ? { mode: options.pointer } : {}
   );
 
+  const tableInteraction = createSurfaceTableInteraction({
+    pagesLayer,
+    furnitureLayer: tableFurnitureLayer,
+    scale: () => scale,
+    pageOffsetX: (pageIndex) => materializedExtent?.pageOffsetX.get(pageIndex) ?? 0,
+    read: () => ({
+      layout: currentLayout,
+      storeRevision: session.packageRevision(),
+      selection,
+      cellSelection,
+      editingMode,
+      themeColors: session.documentThemeColors(),
+    }),
+    session: () => session,
+    applyTableCommandPlan: (plan) => surface.applyTableCommandPlan(plan),
+    label: (key) => tableLabelState.resolve(key),
+  });
+
   render();
+  const originalSetEditingMode = surface.setEditingMode.bind(surface);
+  surface.setEditingMode = (mode) => {
+    originalSetEditingMode(mode);
+    tableInteraction.update();
+  };
+  surface.setTableInteractionLabel = (resolver) => {
+    tableLabelState.resolve = resolver;
+    tableInteraction.refreshLabels();
+  };
+  surface.refreshTableInteractionLabels = () => {
+    tableInteraction.refreshLabels();
+  };
   return { ok: true, surface };
 }

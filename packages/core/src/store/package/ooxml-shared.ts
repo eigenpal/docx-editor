@@ -7,7 +7,19 @@
 // imports below are erased, so the module graph stays acyclic at runtime.
 
 import { isValidNCName } from './qname.ts';
+import {
+  validContentControlCheckboxChildren,
+  validContentControlChildren,
+  validContentControlContentChildren,
+  validContentControlDateChildren,
+  validContentControlDropDownOrComboChildren,
+  validContentControlEndPropertiesChildren,
+  validContentControlPropertiesChildren,
+  validEmptySdtPayload,
+} from './ooxml-sdt.ts';
 import type { OoxmlAttribute, OoxmlElement, OoxmlNode, OoxmlReadRejection } from './ooxml-tree.ts';
+
+export { knownKindAllowsWmlVal } from './ooxml-sdt.ts';
 
 // No `as const` on the three below: a `const` bound to a string literal is already
 // literal-typed, and `typeof WML_NAMESPACE_URI` / `typeof XML_NAMESPACE_URI` are read by
@@ -198,12 +210,11 @@ function isPreservedChild(child: OoxmlNode): boolean {
     child.kind === 'bookmarkStart' ||
     child.kind === 'bookmarkEnd' ||
     child.kind === 'hyperlink' ||
-    // A `w:sdt` sits in EVERY content position WML has — between paragraphs, between runs,
-    // around a row, around a cell — so it joins this class for the same reason a bookmark
-    // does: a container that stopped recognising its own children because one of them is a
-    // content control would demote, and a demoted body reports no paragraphs at all.
-    child.kind === 'contentControl' ||
-    isRangeMarkerKind(child.kind)
+    isRangeMarkerKind(child.kind) ||
+    // Block/inline/row/cell `w:sdt` appears wherever `EG_*Content` admits it — same additive
+    // typing rationale as bookmarks. Demoting a parent body/cell because a control typed
+    // would blank the story.
+    child.kind === 'contentControl'
   );
 }
 
@@ -384,41 +395,32 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
     case 'tableGrid':
     case 'tableProperties':
       return children.every((child) => child.kind === 'generic');
-    /**
-     * `CT_Sdt*` is `w:sdtPr?`, `w:sdtEndPr?`, `w:sdtContent?` — at most one of each, in that
-     * order. Anything else demotes the wrapper, which is the safe fallback: a generic `w:sdt`
-     * still round-trips and still flattens, it just carries no control semantics.
-     */
-    case 'contentControl': {
-      let seen = 0;
-      for (const child of children) {
-        const rank =
-          child.kind === 'contentControlProperties'
-            ? 1
-            : child.kind === 'contentControlEndProperties'
-              ? 2
-              : child.kind === 'contentControlContent'
-                ? 3
-                : 0;
-        if (rank === 0) {
-          if (child.kind !== 'generic') return false;
-          continue;
-        }
-        if (rank <= seen) return false;
-        seen = rank;
-      }
-      return true;
-    }
-    // `w:sdtPr/w:rPr` is where a placeholder's grey italic comes from, so the run-property
-    // container is admitted typed; every other property child stays generic, as in `w:tblPr`.
+    case 'contentControl':
+      return validContentControlChildren(children);
     case 'contentControlProperties':
+      return validContentControlPropertiesChildren(children);
     case 'contentControlEndProperties':
-      return children.every((child) => child.kind === 'runProperties' || child.kind === 'generic');
-    // Deliberately unconstrained: block, inline, row and cell content all appear here
-    // depending on the wrapper's level, and a strict union would demote the control itself
-    // for a shape this reader had not anticipated.
+      return validContentControlEndPropertiesChildren(children);
     case 'contentControlContent':
-      return true;
+      return validContentControlContentChildren(children);
+    case 'contentControlDropDownList':
+    case 'contentControlComboBox':
+      return validContentControlDropDownOrComboChildren(children);
+    case 'contentControlDate':
+      return validContentControlDateChildren(children);
+    case 'contentControlCheckbox':
+      return validContentControlCheckboxChildren(children);
+    case 'contentControlListItem':
+    case 'contentControlDateFormat':
+    case 'contentControlLid':
+    case 'contentControlStoreMappedDataAs':
+    case 'contentControlCalendar':
+    case 'contentControlText':
+    case 'contentControlDataBinding':
+    case 'contentControlChecked':
+    case 'contentControlCheckedState':
+    case 'contentControlUncheckedState':
+      return validEmptySdtPayload(children);
   }
 }
 
@@ -468,22 +470,46 @@ export function normalizedWmlTextAttributes(
   ];
 }
 
-function ooxmlChildNamed(node: OoxmlNode, localName: string): OoxmlElement | undefined {
+function ooxmlChildNamed(
+  node: OoxmlNode,
+  localName: string,
+  namespaceUri: string = WML_NAMESPACE_URI
+): OoxmlElement | undefined {
   if (node.kind === 'textValue') return undefined;
   for (const child of node.children) {
-    if (child.kind !== 'textValue' && child.localName === localName) return child;
+    if (
+      child.kind !== 'textValue' &&
+      child.localName === localName &&
+      child.namespaceUri === namespaceUri
+    ) {
+      return child;
+    }
   }
   return undefined;
 }
 
-function ooxmlAttributeValue(node: OoxmlElement, localName: string): string | undefined {
-  return node.attributes.find((attribute) => attribute.localName === localName)?.value;
+function ooxmlAttributeValue(
+  node: OoxmlElement,
+  localName: string,
+  namespaceUri: string = WML_NAMESPACE_URI
+): string | undefined {
+  return node.attributes.find(
+    (attribute) => attribute.localName === localName && attribute.namespaceUri === namespaceUri
+  )?.value;
 }
 
-/** OOXML on/off toggle: on only when present and `w:val` does not explicitly disable. */
-export function readOnOffChild(parent: OoxmlNode, localName: string): boolean {
-  const child = ooxmlChildNamed(parent, localName);
+/**
+ * OOXML on/off toggle: on only when a same-namespace child is present and its `w:val`
+ * (same namespace as the child) does not explicitly disable. Foreign-namespace siblings
+ * with the same local name cannot turn the flag on.
+ */
+export function readOnOffChild(
+  parent: OoxmlNode,
+  localName: string,
+  namespaceUri: string = WML_NAMESPACE_URI
+): boolean {
+  const child = ooxmlChildNamed(parent, localName, namespaceUri);
   if (!child) return false;
-  const value = ooxmlAttributeValue(child, 'val');
+  const value = ooxmlAttributeValue(child, 'val', namespaceUri);
   return value === undefined || !(value === '0' || value === 'false' || value === 'off');
 }

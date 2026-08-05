@@ -38,6 +38,8 @@ export interface NavigationShiftInput {
   readonly pageWidthPx: number;
   /** Space the open pane needs, from {@link navigationPaneReservation}. */
   readonly reservation: number;
+  /** Padding already reserved at the inline end, for example by the review rail. */
+  readonly inlineEndReservation?: number;
 }
 
 /**
@@ -52,12 +54,17 @@ export function navigationShift({
   viewportWidth,
   pageWidthPx,
   reservation,
+  inlineEndReservation = 0,
 }: NavigationShiftInput): number {
   if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) return 0;
   if (!Number.isFinite(pageWidthPx) || pageWidthPx <= 0) return 0;
   if (!Number.isFinite(reservation) || reservation <= 0) return 0;
+  if (!Number.isFinite(inlineEndReservation) || inlineEndReservation < 0) return 0;
 
-  const gutter = (viewportWidth - pageWidthPx) / 2;
+  // A review rail (or other inline-end chrome) reduces the box in which the page centres.
+  // Ignoring it makes the left gutter look wider than it is, so navigation can cover the
+  // page instead of pushing the combined layout into horizontal overflow.
+  const gutter = (viewportWidth - inlineEndReservation - pageWidthPx) / 2;
   // Already room to the left of the page: the pane overlays empty space, the page holds
   // still. This is the common case on any reasonably wide window, and it is the whole
   // point of computing a shift instead of hard-coding one.

@@ -29,6 +29,11 @@ import {
   isSearchableQuery,
   paragraphTextOf,
 } from '@docx-editor.dev/core-contract/store';
+import {
+  contentControlContentOf,
+  isContentControl,
+  walkParagraphInline,
+} from '../store/package/content-control-walk.ts';
 import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { bodyParagraphs } from './tree-binding.ts';
 
@@ -96,6 +101,13 @@ function inlineLength(node: OoxmlNode): number {
   if (node.kind === 'textValue') return node.value.length;
   if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
   if (node.kind === 'runProperties' || node.kind === 'generic') return 0;
+  if (node.kind === 'hyperlink' || isContentControl(node)) {
+    let total = 0;
+    const children =
+      node.kind === 'hyperlink' ? node.children : (contentControlContentOf(node) ?? []);
+    for (const child of children) total += inlineLength(child);
+    return total;
+  }
   let total = 0;
   for (const child of node.children) total += inlineLength(child);
   return total;
@@ -109,24 +121,17 @@ function inlineLength(node: OoxmlNode): number {
 function runStarts(paragraph: OoxmlNode): number[] {
   const starts: number[] = [];
   let offset = 0;
-  const walk = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') return;
+  if (!isElement(paragraph)) return starts;
+  walkParagraphInline(paragraph.children, 0, (node) => {
     if (node.kind === 'run') {
       starts.push(offset);
       offset += inlineLength(node);
       return;
     }
-    if (node.kind === 'hyperlink') {
-      for (const child of node.children) walk(child);
-      return;
-    }
     // Everything else at paragraph level (properties, bookmarks, unmodelled content)
     // contributes its own measurable length without being addressable as a run.
     offset += inlineLength(node);
-  };
-  if (isElement(paragraph)) {
-    for (const child of paragraph.children as readonly OoxmlNode[]) walk(child);
-  }
+  });
   return starts;
 }
 

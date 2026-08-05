@@ -317,6 +317,14 @@ export interface Editor {
   getDocumentFonts(): readonly string[];
 
   /**
+   * Every font family the editor can offer: the configured catalog (the default face,
+   * the Word-name families the substitution map stands in for, and host-registered
+   * source families) merged with {@link getDocumentFonts}. Never empty — a brand-new
+   * document offers the configured catalog rather than a dead picker.
+   */
+  getAvailableFonts(): readonly string[];
+
+  /**
    * The document theme's ten picker colours (`a:clrScheme`) in Word's column order
    * (Background 1, Text 1, Background 2, Text 2, Accent 1-6), each a six-digit hex
    * without '#'. Empty when the document has no complete scheme — the picker then
@@ -379,6 +387,19 @@ export interface Editor {
     readonly cell: { readonly row: number; readonly column: number } | null;
   } | null;
 
+  /** Live rectangular cell selection, if any. `null` when the caret is not in a cell rectangle. */
+  getTableCellSelection(): {
+    readonly tableId: string;
+    readonly rows: { readonly from: number; readonly to: number };
+    readonly columns: { readonly from: number; readonly to: number };
+    readonly cellIds: readonly string[];
+  } | null;
+
+  /** Update table furniture aria labels without remounting the editor. */
+  setTableInteractionLabel(
+    resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string
+  ): void;
+
   /** Section page setup — size, orientation and margins — for the page-setup dialog. */
   getPageSetup(): PageSetup | null;
 
@@ -394,11 +415,13 @@ export interface Editor {
   /** Plain-text note preview for hover chrome. */
   getNotePreviewText(scopeId: string): string | null;
 
-  /** Tracked changes in the document, for the review sidebar. */
+  /** Tracked changes in the document — body AND header/footer stories. */
   getTrackedChanges(): readonly {
     readonly id: string;
     readonly kind: string;
     readonly author?: string;
+    /** Which story holds the change, so a consumer can group or filter by region. */
+    readonly story?: 'body' | 'header' | 'footer';
   }[];
 
   /**
@@ -649,6 +672,83 @@ export interface ReviewItemPlacement {
  */
 export type DocumentEditingMode = 'editing' | 'suggesting' | 'viewing';
 
+/** Which cell edges a table border command targets. */
+export type TableBorderTarget =
+  | 'all'
+  | 'outside'
+  | 'inside'
+  | 'none'
+  | 'top'
+  | 'bottom'
+  | 'left'
+  | 'right';
+
+/** Concrete scopes that apply a complete border spec. */
+export type TableBorderEdgeTarget = Exclude<TableBorderTarget, 'none'>;
+
+/**
+ * Allowlisted OOXML table border line styles.
+ *
+ * Kept identical to `store/table-border-style.ts`; `table-border-style-parity.test-d.ts`
+ * fails if the contract and store vocabularies drift.
+ */
+export type TableBorderStyle = 'single' | 'dashed' | 'dotted' | 'double' | 'triple' | 'thick';
+
+/** Complete border spec for {@link EditorCommands.setTableBorders}. Size is in eighths of a point. */
+export interface TableBorderSpec {
+  readonly style: TableBorderStyle;
+  readonly size: number;
+  readonly color: ColorValue;
+}
+
+/** Vertical placement of content inside selected table cells. @public */
+export type TableCellVerticalAlignment = 'top' | 'center' | 'bottom';
+
+/**
+ * Adjacent grid columns addressed by an internal divider resize gesture.
+ *
+ * `sourceRevision` is captured from the store revision when the target is built.
+ * Commit MUST refuse when it does not equal the current store revision, even if an older layout
+ * remains published for geometry.
+ */
+export interface TableColumnDividerResizeTarget {
+  readonly sourceRevision: number;
+  readonly tableId: string;
+  readonly leftGridColumnId: string;
+  readonly rightGridColumnId: string;
+  readonly isHeaderRepeat: boolean;
+}
+
+/**
+ * Last grid column and table width addressed by an outer-right-edge resize gesture.
+ *
+ * `sourceRevision` is captured from the store revision when the target is built.
+ * Commit MUST refuse when it does not equal the current store revision, even if an older layout
+ * remains published for geometry.
+ */
+export interface TableRightEdgeResizeTarget {
+  readonly sourceRevision: number;
+  readonly tableId: string;
+  readonly gridColumnId: string;
+  readonly isHeaderRepeat: boolean;
+}
+
+/** Explicit row occurrence for furniture/context commands. */
+export interface TableRowOccurrenceTarget {
+  readonly sourceRevision: number;
+  readonly tableId: string;
+  readonly rowId: string;
+  readonly isHeaderRepeat: boolean;
+}
+
+/** Explicit column occurrence for furniture/context commands. */
+export interface TableColumnOccurrenceTarget {
+  readonly sourceRevision: number;
+  readonly tableId: string;
+  readonly gridColumnId: string;
+  readonly isHeaderRepeat: boolean;
+}
+
 export interface EditorCommands
   extends EditorCommandShape<DocEdits>, EditorHeaderFooterCommands, EditorNoteCommands {
   /** Switch how edits are written. A view command: it changes no document state. */
@@ -717,24 +817,44 @@ export interface EditorCommands
   };
   toggleList: { kind: 'bullet' | 'ordered' };
 
-  insertRow: { where: 'above' | 'below' };
-  insertColumn: { where: 'left' | 'right' };
-  deleteRow: Record<never, never>;
-  deleteColumn: Record<never, never>;
+  insertRow: { where: 'above' | 'below'; target?: TableRowOccurrenceTarget };
+  insertColumn: { where: 'left' | 'right'; target?: TableColumnOccurrenceTarget };
+  deleteRow: { target?: TableRowOccurrenceTarget };
+  deleteColumn: { target?: TableColumnOccurrenceTarget };
   deleteTable: Record<never, never>;
   mergeCells: Record<never, never>;
   splitCell: { rows: number; cols: number };
-  setCellFill: { color: ColorValue };
+  /** Selected-cell fill. `null` clears direct fill so the table-style cascade applies again. */
+  setCellFill: { color: ColorValue | null };
+  /** Vertically align content inside the selected table cells. */
+  setTableCellVerticalAlignment: { alignment: TableCellVerticalAlignment };
   toggleHeaderRow: Record<never, never>;
   /**
-   * Table and cell borders, in the vocabulary legacy's table toolbar uses: a scope
-   * (every edge, the outside ring, the inside grid, one named edge, or none) plus the
-   * border spec the toolbar carries — style, size in eighths of a point, and colour.
-   * `scope: 'none'` removes borders and ignores `spec`.
+   * Selected-cell borders. Concrete edge scopes require a complete spec;
+   * `{ scope: 'none', target }` clears only that active edge target and MUST NOT carry `spec`.
    */
-  setTableBorders: {
-    scope: 'all' | 'outside' | 'inside' | 'none' | 'top' | 'bottom' | 'left' | 'right';
-    spec?: { style: string; size: number; color: ColorValue };
+  setTableBorders:
+    | { scope: 'none'; target: TableBorderEdgeTarget }
+    | { scope: TableBorderEdgeTarget; spec: TableBorderSpec };
+
+  /**
+   * Commit an internal column-divider resize from an explicit pointer target.
+   * Widths are twips for the adjacent pair; their sum must match the pre-drag total.
+   */
+  commitTableColumnDividerResize: {
+    target: TableColumnDividerResizeTarget;
+    leftWidthTwips: number;
+    rightWidthTwips: number;
+  };
+
+  /**
+   * Commit an outer-right table-edge resize from an explicit pointer target.
+   * Updates the last grid column and overall table width together.
+   */
+  commitTableRightEdgeResize: {
+    target: TableRightEdgeResizeTarget;
+    columnWidthTwips: number;
+    tableWidthTwips: number;
   };
 
   /**
@@ -844,7 +964,9 @@ export interface EditorCommands
   };
 
   setWatermark: { watermark: Watermark | null };
-  refreshToc: { tocId?: string };
+  /** Insert a generated, hyperlink-enabled TOC for heading levels 1–3 at the selection. */
+  insertToc: Record<never, never>;
+  refreshToc: { tocId?: string; mode?: 'entire' | 'pageNumbers' };
 
   undo: Record<never, never>;
   redo: Record<never, never>;
@@ -1035,6 +1157,15 @@ export interface EditorSnapshot {
   readonly selectionCollapsed: boolean;
   readonly formatting: RunFormatting | null;
   readonly table: TableContext | null;
+  /**
+   * The table of contents the last right-click landed on, or null.
+   *
+   * NOT caret context, unlike `table`: a right-click leaves the selection where it was, and
+   * a generated TOC refuses the caret outright, so a host's context menu could otherwise
+   * never tell which table of contents it was opened over. Cleared by a right-click
+   * anywhere else.
+   */
+  readonly tocContext: { readonly id: string } | null;
   readonly image: ImageContext | null;
   readonly page: { readonly current: number; readonly total: number };
   /**
@@ -1075,6 +1206,14 @@ export interface EditorSnapshot {
    * the editor had simply stopped responding.
    */
   readonly lastRejection?: string | null;
+  /**
+   * Document font families rendering in a substitute face: declared by the document but
+   * not resolvable on this platform, not embedded in the file, and not supplied by the
+   * app's font configuration. Chrome shows a compatibility notice from this the way Word
+   * does. Optional and additive like `canUndo`: absent means the implementation has not
+   * derived it; empty means every family resolved (or no document is loaded).
+   */
+  readonly fontSubstitutions?: readonly string[];
 }
 
 export interface ImageContext {

@@ -11,6 +11,7 @@ import type { TreeDocOp, StoryScope } from '@docx-editor.dev/core-contract/store
 import {
   documentOrder,
   enumerateDocumentSections,
+  paragraphFragmentsOf,
   readSectionProperties,
   storyBlocks,
   type SemanticLayout,
@@ -183,8 +184,11 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
   /** The marker layout resolved for a paragraph, or null when it is not a list item. */
   function markerOf(paragraphId: string): ListMarkerRecord | null {
     for (const page of currentLayout.value.pages) {
-      for (const fragment of page.fragments) {
-        if (fragment.kind !== 'paragraph' || fragment.paragraphId !== paragraphId) continue;
+      // Paragraphs inside table cells are nested under table/row/cell records rather than
+      // published as top-level page fragments. Use the layout's canonical recursive walk so
+      // list Enter/Tab/toggle behaviour is identical in body text and arbitrarily nested cells.
+      for (const fragment of paragraphFragmentsOf(page)) {
+        if (fragment.paragraphId !== paragraphId) continue;
         return fragment.marker ?? null;
       }
     }

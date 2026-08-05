@@ -27,6 +27,16 @@ export interface ContextMenuContextValue {
   /** Non-null exactly while the panel is open. */
   readonly anchor: ContextMenuAnchor | null;
   /**
+   * The table of contents this open was over, captured AT OPEN TIME.
+   *
+   * Read imperatively from the editor in the same event that opens the panel, not
+   * subscribed to. The engine records the right-click target and the panel opens from the
+   * same event, so a subscription is a render behind: the first right-click on a TOC drew
+   * the menu without its rows and only a second one had them. It is also the more honest
+   * shape — an open menu describes the gesture that opened it, whatever happens next.
+   */
+  readonly tocId: string | null;
+  /**
    * The browser's reason for refusing a clipboard READ, once one has actually been refused.
    *
    * Lives on the ROOT rather than in the Paste row because selecting that row closes the
@@ -42,6 +52,7 @@ export interface ContextMenuContextValue {
 export const ContextMenuContext = createContext<ContextMenuContextValue>({
   close: () => {},
   anchor: null,
+  tocId: null,
   clipboardRefusal: null,
   reportClipboardRefusal: () => {},
 });

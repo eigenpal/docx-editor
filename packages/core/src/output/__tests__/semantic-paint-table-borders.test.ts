@@ -433,6 +433,34 @@ describe('table cell border paint', () => {
     }
   });
 
+  test('§18.5 explicit cell none suppresses painted table frame', () => {
+    const bytes = readFileSync(
+      `${import.meta.dir}/../../../../../e2e/fixtures/comprehensive-word-element-test.docx`
+    );
+    const result = readOoxmlPackage(bytes);
+    if (!result.ok) throw new Error(result.reason);
+    const part = result.package.parts.get(result.package.mainDocumentPart)!;
+    const layout = layoutSemanticDocument(part, 0, { measurer: createFixedMeasurer() });
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, { scale: 1 });
+    const cells = [...container.querySelectorAll<HTMLElement>('.docx-table-cell')];
+    const columnA = cells.find((cell) => cell.textContent?.includes('Column A'));
+    expect(columnA).toBeDefined();
+    const table = columnA!.closest('.docx-table-fragment') as HTMLElement;
+    expect(table).not.toBeNull();
+    const tableCells = [...table.querySelectorAll<HTMLElement>('.docx-table-cell')];
+    for (const cell of tableCells) {
+      expect(cell.querySelector('.docx-table-border-double')).toBeNull();
+      expect(cell.querySelector('.docx-table-border-triple')).toBeNull();
+      expect(cell.querySelector('.docx-table-border-edge-stroke')).toBeNull();
+      for (const side of ['Top', 'Right', 'Bottom', 'Left'] as const) {
+        const styleKey = `border${side}Style` as keyof CSSStyleDeclaration;
+        const style = cell.style[styleKey];
+        expect(style === '' || style === 'none').toBe(true);
+      }
+    }
+  });
+
   test('§5.3 comprehensive fixture double blue corners are concentric Ls', () => {
     const bytes = readFileSync(
       `${import.meta.dir}/../../../../../e2e/fixtures/comprehensive-word-element-test.docx`

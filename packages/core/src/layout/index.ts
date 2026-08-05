@@ -129,11 +129,20 @@ export {
 } from './resolved-cache.ts';
 export {
   DEFAULT_PAGE_GEOMETRY,
+  contentControlsOfLayout,
+  effectiveContentControlLock,
   fragmentsOfParagraph,
   lineAtPosition,
   linesOf,
   paragraphFragmentsOf,
+  paragraphFragmentsOfBlocks,
+  unionLayoutBoxes,
   type BlockFragmentRecord,
+  type ContentControlBoundaryRecord,
+  type ContentControlGeometryFragment,
+  type ContentControlLevel,
+  type ContentControlLock,
+  type ContentControlMappedType,
   type HeaderFooterStoryRecord,
   type LayoutBox,
   type LineRecord,
@@ -214,7 +223,7 @@ export {
   type PageFurniture,
   type SemanticLayoutOptions,
 } from './semantic-layout.ts';
-export type { HyperlinkProjector } from './field-projection.ts';
+export { formatPageNumber, type HyperlinkProjector } from './field-projection.ts';
 export {
   EMPTY_NUMBERING_INDEX,
   MAX_LVL_OVERRIDES,
@@ -311,10 +320,24 @@ export {
   type PageRefIndex,
 } from './note-pagination.ts';
 export { noteMarkKey, projectedNoteMarkText, type NoteMarkContext } from './note-projection.ts';
-export { storyBlocks, noteStoryBlocks } from './story-roots.ts';
+export { storyBlocks, noteStoryBlocks, MAX_SDT_NESTING } from './story-roots.ts';
+export {
+  emptyTocPlaceholderParagraphIds,
+  emptyTocSuppressedResultParagraphIds,
+  tocFieldChromeParagraphIds,
+} from './toc-layout.ts';
+export {
+  collectFlowBlocks,
+  contentControlContentChildren,
+  isContentControl,
+  isContentControlContent,
+} from '../store/package/content-control-walk.ts';
+// The boundary RECORD this barrel publishes is the one layout itself paints and hit-tests
+// (`semantic-records.ts`). This module derives the same question for a part that is not the
+// laid-out story, and its own record type stays module-local so `ContentControlBoundaryRecord`
+// names one shape everywhere — `paginated-surface-contract.ts` imports it from here.
 export {
   contentControlBoundaries,
-  type ContentControlBoundaryRecord,
   type ContentControlFragmentRecord,
 } from './content-control-boundaries.ts';
 export {
@@ -376,6 +399,8 @@ export {
   type DocumentSection,
   type DocumentSectionsEnumeration,
   type SectionBreakType,
+  type SectionColumnDefinition,
+  type SectionColumns,
   type SectionMargins,
   type SectionPageNumbering,
   type SectionProperties,
@@ -434,6 +459,7 @@ export {
 } from './semantic-cell-selection.ts';
 export {
   DEFAULT_VERTICAL_WEIGHT,
+  contentControlAtPoint,
   hitTestPage,
   hitTestSheet,
   isFurniturePoint,
@@ -451,6 +477,8 @@ export {
   caretStops,
   caretStopsForBlocks,
   compositionAnchor,
+  contentControlAtSemantic,
+  contentControlsInLayout,
   documentOrder,
   // `hitTest` is already taken by the legacy painted-geometry lane; this one answers in
   // MODEL coordinates, so it is named for what it returns rather than shadowing that.

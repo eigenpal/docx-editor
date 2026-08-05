@@ -61,7 +61,8 @@
       "listFormatting": "Listenformatierung",
       "image": "Grafik",
       "table": "Tabelle",
-      "insert": "Einfügen"
+      "insert": "Einfügen",
+      "contentControl": "Inhaltssteuerelemente"
     },
     "undo": "Rückgängig",
     "undoShortcut": "Rückgängig (Strg+Z)",
@@ -87,7 +88,8 @@
     "clearFormatting": "Formatierung löschen",
     "commentsAndChanges": "Kommentare & Änderungen",
     "moreItems": "{count, plural, one {# weiteres Element} other {# weitere Elemente}}",
-    "unavailableInPreview": null
+    "unavailableInPreview": null,
+    "more": null
   },
   "alignment": {
     "alignLeft": "Linksbündig",
@@ -732,7 +734,23 @@
       "gridTable4Accent5": "Rastertabelle 4 Akzent 5",
       "gridTable4Accent6": "Rastertabelle 4 Akzent 6"
     },
-    "selectTable": null
+    "selectTable": null,
+    "borderStyles": {
+      "dashed": null,
+      "dotted": null,
+      "double": null,
+      "single": null,
+      "thick": null,
+      "triple": null
+    },
+    "borderWidths": {
+      "halfPt": null,
+      "oneHalfPt": null,
+      "onePt": null,
+      "threePt": null,
+      "twoPt": null
+    },
+    "clearCellFill": null
   },
   "tableAdvanced": {
     "verticalAlignment": "Vertikale Ausrichtung",
@@ -824,7 +842,8 @@
     "failedToParse": "Dokument konnte nicht verarbeitet werden",
     "linkRemoved": "Link entfernt",
     "linkCopied": "Link in Zwischenablage kopiert",
-    "failedToSave": "Dokument konnte nicht gespeichert werden"
+    "failedToSave": "Dokument konnte nicht gespeichert werden",
+    "fontSubstitutionNotice": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Anzuzeigender Text",
@@ -930,7 +949,9 @@
     "runPropertiesChanged": null
   },
   "toc": {
-    "updatePrompt": null
+    "updatePrompt": null,
+    "refresh": "Gesamtes Verzeichnis aktualisieren",
+    "refreshPageNumbers": "Nur Seitenzahlen aktualisieren"
   },
   "app": {
     "name": null,
@@ -979,6 +1000,44 @@
       "headings": null
     },
     "title": null
+  },
+  "contentControl": {
+    "formFill": "Formularfüllmodus",
+    "group": "Inhaltssteuerelemente",
+    "inspector": "Eigenschaften des Inhaltssteuerelements",
+    "inspectorPanel": {
+      "alias": "Titel",
+      "bound": "Datenbindung",
+      "boundNote": "Dieses Steuerelement ist an externe Daten gebunden. Bearbeiten ist nicht möglich.",
+      "empty": "—",
+      "lock": "Sperre",
+      "lockedNote": "Die Inhaltsbearbeitung ist für dieses Steuerelement gesperrt.",
+      "no": "Nein",
+      "placeholder": "Platzhaltertext",
+      "tag": "Tag",
+      "title": "Inhaltssteuerelement",
+      "type": "Typ",
+      "yes": "Ja"
+    },
+    "lock": {
+      "contentLocked": "Inhalt gesperrt",
+      "sdtContentLocked": "Inhaltssteuerelement und Inhalt gesperrt",
+      "sdtLocked": "Inhaltssteuerelement gesperrt",
+      "unlocked": "Nicht gesperrt"
+    },
+    "noControl": "Setzen Sie den Cursor in ein Inhaltssteuerelement",
+    "remove": "Inhaltssteuerelement entfernen",
+    "showAll": "Grenzen der Inhaltssteuerelemente anzeigen",
+    "types": {
+      "checkbox": "Kontrollkästchen",
+      "comboBox": "Kombinationsfeld",
+      "date": "Datum",
+      "dropdown": "Dropdown-Liste",
+      "picture": "Bild",
+      "plainText": "Nur Text",
+      "repeatingSection": "Wiederholungsabschnitt",
+      "richText": "Rich Text"
+    }
   },
   "notes": {
     "editingBanner": "Fußnote bearbeiten",

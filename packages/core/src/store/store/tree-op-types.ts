@@ -10,6 +10,40 @@ import type {
   ContentControlValueInput,
   InsertableContentControlType,
 } from './tree-op-content-controls.ts';
+import type { TableBorderStyle } from '../table-border-style.ts';
+
+/** JSON-safe color input carried on table cell property ops. Theme/auto require a validated literal. */
+export type TreeDocColorValue =
+  | { readonly kind: 'hex'; readonly value: string }
+  | {
+      readonly kind: 'theme';
+      readonly slot: string;
+      readonly resolvedHex: string;
+      readonly tint?: number;
+      readonly shade?: number;
+    }
+  | { readonly kind: 'auto'; readonly resolvedHex: string };
+
+/** Which cell edges a selected-cell border op targets. */
+export type TableBorderTarget =
+  | 'all'
+  | 'outside'
+  | 'inside'
+  | 'none'
+  | 'top'
+  | 'bottom'
+  | 'left'
+  | 'right';
+
+/** Concrete edge scopes that apply or clear a complete border spec. */
+export type TableBorderEdgeTarget = Exclude<TableBorderTarget, 'none'>;
+
+/** Complete border spec for non-`none` selected-cell border scopes. Size is in eighths of a point. */
+export interface TableBorderSpecInput {
+  readonly style: TableBorderStyle;
+  readonly size: number;
+  readonly color: TreeDocColorValue;
+}
 
 /**
  * The accepted RUN property boundary (design D8), as the OOXML element names that carry it.
@@ -98,6 +132,27 @@ export interface RevisionAttributionInput {
 
 export type TreeDocOp =
   | {
+      /**
+       * Insert an SDT-wrapped TOC immediately before a body paragraph.
+       * The initial cached result and any heading bookmarks land in one undo unit.
+       */
+      readonly op: 'insertToc';
+      readonly beforeParagraphId: string;
+      readonly instruction: string;
+      readonly alias: string;
+      readonly entries: readonly {
+        readonly level: number;
+        readonly text: string;
+        readonly headingParagraphId: string;
+        readonly bookmarkName: string;
+        readonly pageNumberText: string;
+      }[];
+      readonly bookmarksToCreate: readonly {
+        readonly paragraphId: string;
+        readonly name: string;
+      }[];
+    }
+  | {
       readonly op: 'insertText';
       readonly paragraphId: string;
       readonly offset: number;
@@ -121,6 +176,16 @@ export type TreeDocOp =
        * plain offset rule, which is what a keystroke beside a field means.
        */
       readonly inside?: string;
+      /**
+       * Which side of a run BOUNDARY the text joins. Default `'left'` — Word's typing rule:
+       * the next character takes the formatting of the character before the caret.
+       *
+       * `'right'` is for a caller that is not typing but placing text inside the run that
+       * STARTS at the offset — the hyperlink editor rewriting a link's display text, where
+       * landing left of the boundary would put the new text outside the link. Ignored when
+       * the offset falls strictly inside a run, which has no boundary to choose.
+       */
+      readonly bias?: 'left' | 'right';
     }
   | {
       readonly op: 'deleteText';
@@ -362,6 +427,18 @@ export type TreeDocOp =
       readonly linkId: string;
     }
   | {
+      /** Repeating-section item insert — unsupported at this layer (out of scope). */
+      readonly op: 'addRepeatingSectionItem';
+      readonly controlId: string;
+      readonly index?: number;
+    }
+  | {
+      /** Repeating-section item remove — unsupported at this layer (out of scope). */
+      readonly op: 'removeRepeatingSectionItem';
+      readonly controlId: string;
+      readonly index: number;
+    }
+  | {
       /**
        * Remove a typed block and everything under it.
        *
@@ -370,6 +447,107 @@ export type TreeDocOp =
        */
       readonly op: 'deleteBlock';
       readonly blockId: string;
+    }
+  | {
+      /** Insert a fresh row above or below a canonical table row. */
+      readonly op: 'insertTableRow';
+      readonly tableId: string;
+      readonly rowId: string;
+      readonly where: 'above' | 'below';
+      /** When present, author the row as a Word tracked insertion. */
+      readonly revision?: RevisionAttributionInput;
+    }
+  | {
+      /** Delete one canonical table row; refuses the final row. */
+      readonly op: 'deleteTableRow';
+      readonly tableId: string;
+      readonly rowId: string;
+      /** Optional anchor cell for column-aware caret recovery after deletion. */
+      readonly referenceCellId?: string;
+      /** When present, retain the row and author a Word tracked deletion. */
+      readonly revision?: RevisionAttributionInput;
+    }
+  | {
+      /** Insert one grid column left or right of a canonical `w:gridCol`. */
+      readonly op: 'insertTableColumn';
+      readonly tableId: string;
+      readonly where: 'left' | 'right';
+      readonly gridColumnId: string;
+    }
+  | {
+      /**
+       * Insert one grid column beside a first-row reference cell when `w:tblGrid` is absent.
+       * Synthesizes a canonical grid before mutation.
+       */
+      readonly op: 'insertTableColumn';
+      readonly tableId: string;
+      readonly where: 'left' | 'right';
+      readonly referenceCellId: string;
+    }
+  | {
+      /** Delete one canonical grid column; refuses the final column. */
+      readonly op: 'deleteTableColumn';
+      readonly tableId: string;
+      readonly gridColumnId: string;
+    }
+  | {
+      /**
+       * Resize one internal divider between two adjacent canonical grid columns.
+       * Preserves the pair total and sets fixed table layout.
+       */
+      readonly op: 'setTableColumnWidths';
+      readonly tableId: string;
+      readonly leftGridColumnId: string;
+      readonly rightGridColumnId: string;
+      readonly leftWidthTwips: number;
+      readonly rightWidthTwips: number;
+    }
+  | {
+      /**
+       * Resize the outer-right edge: last grid column, matching cells, and `w:tblW` total.
+       */
+      readonly op: 'setTableRightEdgeWidth';
+      readonly tableId: string;
+      readonly gridColumnId: string;
+      readonly columnWidthTwips: number;
+      readonly tableWidthTwips: number;
+    }
+  | {
+      /** Set one authored table row to an exact height in twips. */
+      readonly op: 'setTableRowHeight';
+      readonly tableId: string;
+      readonly rowId: string;
+      readonly heightTwips: number;
+    }
+  | {
+      /** Clear the active edge target on a bounded rectangular cell selection. */
+      readonly op: 'setTableCellBorders';
+      readonly tableId: string;
+      readonly cellIds: readonly string[];
+      readonly scope: 'none';
+      readonly target: TableBorderEdgeTarget;
+    }
+  | {
+      /** Apply a complete border spec to the requested edge target. */
+      readonly op: 'setTableCellBorders';
+      readonly tableId: string;
+      readonly cellIds: readonly string[];
+      readonly scope: TableBorderEdgeTarget;
+      readonly spec: TableBorderSpecInput;
+    }
+  | {
+      /** Write or remove direct selected-cell shading (`w:tcPr/w:shd`). */
+      readonly op: 'setTableCellFill';
+      readonly tableId: string;
+      readonly cellIds: readonly string[];
+      readonly color: TreeDocColorValue | null;
+    }
+  | {
+      /** Set direct selected-cell vertical alignment (`w:tcPr/w:vAlign`). */
+      readonly op: 'setTableCellVerticalAlignment';
+      readonly tableId: string;
+      readonly cellIds: readonly string[];
+      readonly alignment: 'top' | 'center' | 'bottom';
     }
   | {
       /** Allocate an empty header/footer part and declare it on a section. Package-level. */
@@ -459,7 +637,8 @@ export type TreeDocOp =
        */
       readonly op: 'setContentControlValue';
       readonly controlId: string;
-      readonly value: ContentControlValueInput;
+      /** String is the editor-facing v2 form; structured input is the automation form. */
+      readonly value: string | ContentControlValueInput;
     }
   | {
       /**
@@ -481,7 +660,8 @@ export type TreeDocOp =
        */
       readonly op: 'removeContentControl';
       readonly controlId: string;
-      readonly keepContent: boolean;
+      /** Defaults to true for the editor-facing v2 operation. */
+      readonly keepContent?: boolean;
     }
   | {
       /**
@@ -520,6 +700,37 @@ export type TreeDocOp =
         readonly position?: string;
         readonly numStart?: number;
       };
+    }
+  | {
+      /**
+       * Replace a detected TOC field's cached result paragraphs and ensure heading bookmarks.
+       * Preserves field chrome / instruction. One undo unit (phase A of TOC refresh).
+       */
+      readonly op: 'replaceTocResult';
+      readonly tocId: string;
+      readonly entries: readonly {
+        readonly level: number;
+        readonly text: string;
+        readonly headingParagraphId: string;
+        readonly bookmarkName: string;
+        readonly pageNumberText: string;
+      }[];
+      readonly bookmarksToCreate: readonly {
+        readonly paragraphId: string;
+        readonly name: string;
+      }[];
+    }
+  | {
+      /**
+       * Rewrite page-number text runs inside existing TOC result paragraphs.
+       * One undo unit (phase B of TOC refresh).
+       */
+      readonly op: 'rewriteTocPageNumbers';
+      readonly tocId: string;
+      readonly updates: readonly {
+        readonly paragraphId: string;
+        readonly pageNumberText: string;
+      }[];
     };
 
 export type TreeDocOpKind = TreeDocOp['op'];
@@ -551,7 +762,21 @@ export const TREE_DOC_OP_KINDS = [
   'insertHyperlink',
   'setHyperlinkTarget',
   'removeHyperlink',
+  'setContentControlValue',
+  'removeContentControl',
+  'addRepeatingSectionItem',
+  'removeRepeatingSectionItem',
   'deleteBlock',
+  'insertTableRow',
+  'deleteTableRow',
+  'insertTableColumn',
+  'deleteTableColumn',
+  'setTableColumnWidths',
+  'setTableRightEdgeWidth',
+  'setTableRowHeight',
+  'setTableCellBorders',
+  'setTableCellFill',
+  'setTableCellVerticalAlignment',
   'createHeaderFooter',
   'deleteHeaderFooter',
   'linkToPrevious',
@@ -562,10 +787,11 @@ export const TREE_DOC_OP_KINDS = [
   'convertNote',
   'convertAllNotes',
   'setNoteProperties',
-  'setContentControlValue',
   'setContentControlProperties',
-  'removeContentControl',
   'insertContentControl',
+  'insertToc',
+  'replaceTocResult',
+  'rewriteTocPageNumbers',
 ] as const satisfies readonly TreeDocOpKind[];
 
 // Compile-time exhaustiveness, matching the legacy `DOC_OP_KINDS` guard: a new op must be
@@ -594,6 +820,13 @@ export interface TreeOpEffect {
   readonly join?: { readonly kept: string; readonly removed: string };
   readonly dependencyKeys: readonly string[];
   readonly impact: ImpactClass;
+  /** First post-edit caret paragraph for table column structural ops. */
+  readonly caret?: { readonly paragraphId: string };
+}
+
+/** Post-edit caret target published by a committed store transaction. */
+export interface TreeOpCaret {
+  readonly paragraphId: string;
 }
 
 export type TreeOpRejection =
@@ -644,8 +877,24 @@ export type TreeOpRejection =
   | 'bound'
   /** The value offered is not one this control's type accepts. */
   | 'typeMismatch'
+  | 'unknown-control'
+  | 'unsupported'
   /** Malformed lifecycle args / first-section link — mirrors Editor `invalidArgs`. */
-  | 'invalidArgs';
+  | 'invalidArgs'
+  /** The addressed table id is missing, duplicated, or not a typed table. */
+  | 'unknown-table'
+  /** The addressed row id is missing or not a direct child of the table. */
+  | 'unknown-row'
+  /** A table property container appears more than once on a typed node. */
+  | 'duplicate-property-container'
+  /** Row insertion would split an active vertical-merge chain. */
+  | 'vertical-merge-crossing'
+  /** Column edit refused because the table carries horizontal or vertical merges. */
+  | 'table-has-merge'
+  /** The addressed grid column id is missing or ambiguous without `w:tblGrid`. */
+  | 'unknown-grid-column'
+  /** The operation would exceed bounded table topology limits. */
+  | 'resource-limit';
 
 export type TreeOpResult =
   | { readonly ok: true; readonly part: OoxmlPart; readonly effect: TreeOpEffect }

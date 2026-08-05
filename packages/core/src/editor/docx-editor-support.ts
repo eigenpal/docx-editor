@@ -20,6 +20,7 @@ import type { SemanticSelection as SurfaceSelection } from '@docx-editor.dev/cor
 // the reader, not something the layout package publishes.
 import { MAX_PARAGRAPH_INDENT_TWIPS } from '../layout/paragraph-flow.ts';
 import { isDocAnchor, isDocAnchorRange } from './anchor-resolution.ts';
+import { tableCommandCanSupport } from './table-command-plan.ts';
 
 /** Recursively freeze plain objects and arrays (idempotent). */
 export function deepFreezeValue<T>(value: T): T {
@@ -452,6 +453,31 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
     case 'undo':
     case 'redo':
       return { supported: true, mutating: true };
+    case 'insertToc':
+      return { supported: true, mutating: true };
+    case 'refreshToc':
+      if (
+        command.mode !== undefined &&
+        command.mode !== 'entire' &&
+        command.mode !== 'pageNumbers'
+      ) {
+        return {
+          supported: false,
+          code: 'invalidArgs',
+          reason: "refreshToc mode must be 'entire' or 'pageNumbers'",
+        };
+      }
+      if (
+        command.tocId !== undefined &&
+        (typeof command.tocId !== 'string' || command.tocId.length === 0)
+      ) {
+        return {
+          supported: false,
+          code: 'invalidArgs',
+          reason: 'refreshToc tocId must be a non-empty string',
+        };
+      }
+      return { supported: true, mutating: true };
     case 'editHeaderFooter': {
       if (command.position !== 'header' && command.position !== 'footer') {
         return {
@@ -558,6 +584,26 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       return command.text === ''
         ? { supported: false, code: 'invalidArgs', reason: 'there is nothing to paste' }
         : { supported: true, mutating: true };
+    case 'insertRow':
+    case 'deleteRow':
+    case 'insertColumn':
+    case 'deleteColumn':
+    case 'deleteTable':
+    case 'setCellFill':
+    case 'setTableCellVerticalAlignment':
+    case 'setTableBorders':
+    case 'commitTableColumnDividerResize':
+    case 'commitTableRightEdgeResize':
+    case 'mergeCells':
+    case 'splitCell':
+    case 'toggleHeaderRow':
+    case 'selectTableRegion':
+    case 'setTableProperties': {
+      const tableSupport = tableCommandCanSupport(command);
+      return tableSupport.supported
+        ? { supported: true, mutating: true }
+        : { supported: false, reason: tableSupport.reason ?? 'unsupported table command' };
+    }
     case 'setSelection':
       // Shape gate only: whether an anchor's paraId exists (and its `search` phrase is
       // unique) is a property of the DOCUMENT, checked at exec — the same split as
@@ -730,6 +776,7 @@ export function snapshotsEqual(a: EditorSnapshot, b: EditorSnapshot): boolean {
     a.selectionCollapsed === b.selectionCollapsed &&
     a.formatting === b.formatting &&
     a.table === b.table &&
+    a.tocContext === b.tocContext &&
     a.image === b.image &&
     a.page === b.page &&
     a.canUndo === b.canUndo &&

@@ -70,7 +70,7 @@ export type ReviewRevisionKind =
   | 'format'
   /** `w:pPr/w:rPr/w:ins|w:del` — a paragraph split or merge. */
   | 'paragraphMark'
-  /** A row, cell, section or grid revision: structural, and not resolvable yet. */
+  /** A row, cell, section or grid revision. Supported row revisions are resolvable. */
   | 'structural';
 
 export interface ReviewRevisionItem {
@@ -201,57 +201,114 @@ interface SiteLocation {
 function locateSites(part: OoxmlPart): Map<string, SiteLocation> {
   const located = new Map<string, SiteLocation>();
   const walkParagraph = (paragraph: OoxmlParagraphNode): void => {
-    const offsets = paragraphOffsetIndex(paragraph);
-    const place = (node: OoxmlNode, start: number, end: number, depth: number): void => {
-      if (node.kind === 'textValue' || depth > 64) return;
-      located.set(node.id, { paragraphId: paragraph.id, start, end });
-      for (const child of node.children) place(child, start, end, depth + 1);
-    };
-    const visit = (node: OoxmlNode, depth: number): void => {
-      if (node.kind === 'textValue' || depth > 64) return;
-      const span = offsets.spanOf(node);
-      if (node.kind === 'run') {
-        if (!span) return;
-        located.set(node.id, { paragraphId: paragraph.id, start: span.start, end: span.end });
-        // A run's OWN properties anchor over the run. `w:rPrChange` is a revision that
-        // decorates no characters and lives in `w:rPr`, so stopping at the run left it with
-        // no geometry at all: its card sorted to the end of the rail, painted no band, and
-        // the caret in tracked-formatted text activated nothing while accept and reject
-        // stayed on offer.
-        for (const child of node.children) {
-          if (child.kind === 'runProperties') place(child, span.start, span.end, depth + 1);
-        }
-        return;
-      }
-      if (span)
-        located.set(node.id, { paragraphId: paragraph.id, start: span.start, end: span.end });
-      for (const child of node.children) visit(child, depth + 1);
-    };
-    for (const child of paragraph.children) {
-      if (child.kind === 'paragraphProperties') continue;
-      visit(child, 0);
+    // Paragraph-local by construction: every offset here is measured inside this paragraph,
+    // so an unchanged paragraph's answer is still true and is reused rather than re-walked.
+    // A keystroke otherwise re-derived the location of every node in the document.
+    const memo = paragraphLocationsCache.get(paragraph);
+    if (memo) {
+      for (const [id, location] of memo) located.set(id, location);
+      return;
     }
-    // The paragraph MARK is the pilcrow — it sits at the END of the paragraph, not at
-    // offset 0 where its `w:pPr` happens to be written. Anchored at 0, a tracked Enter's
-    // card never opened when the caret was at the break that made it, `setActiveReviewItem`
-    // threw the caret to the paragraph start, and the zero-width range painted no band.
-    const properties = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-    if (properties) place(properties, offsets.length, offsets.length, 0);
+    const own = new Map<string, SiteLocation>();
+    locateInParagraph(paragraph, own);
+    paragraphLocationsCache.set(paragraph, own);
+    for (const [id, location] of own) located.set(id, location);
   };
   const walk = (node: OoxmlNode, depth: number): void => {
     if (node.kind === 'textValue' || depth > 64) return;
     if (node.kind === 'paragraph') {
-      // `walkParagraph` already places everything, the `w:pPr` subtree included: a property
-      // revision anchors at the paragraph's END, where its pilcrow is. A second pass used to
-      // collapse the whole subtree to offset 0 afterwards, which is what left every tracked
-      // Enter's card pointing at the start of the paragraph instead of at the break.
       walkParagraph(node);
       return;
     }
     for (const child of node.children) walk(child, depth + 1);
   };
   walk(part.root, 0);
+
+  const anchorTrackedRows = (node: OoxmlNode, depth: number): void => {
+    if (node.kind === 'textValue' || depth > 64) return;
+    if (node.kind === 'tableRow') {
+      let paragraph: OoxmlParagraphNode | null = null;
+      const firstParagraph = (candidate: OoxmlNode, nestedDepth: number): void => {
+        if (paragraph || candidate.kind === 'textValue' || nestedDepth > 64) return;
+        if (candidate.kind === 'paragraph') {
+          paragraph = candidate;
+          return;
+        }
+        for (const child of candidate.children) firstParagraph(child, nestedDepth + 1);
+      };
+      firstParagraph(node, 0);
+      if (paragraph) {
+        const placeMarkers = (
+          candidate: OoxmlNode,
+          parentName: string | undefined,
+          nestedDepth: number
+        ): void => {
+          if (candidate.kind === 'textValue' || nestedDepth > 64) return;
+          if (candidate.kind === 'paragraph') return;
+          const rowMarker =
+            parentName === 'trPr' &&
+            (candidate.localName === 'ins' || candidate.localName === 'del');
+          const cellMarker =
+            parentName === 'tcPr' &&
+            (candidate.localName === 'cellIns' || candidate.localName === 'cellDel');
+          if (rowMarker || cellMarker) {
+            located.set(candidate.id, { paragraphId: paragraph!.id, start: 0, end: 0 });
+          }
+          for (const child of candidate.children) {
+            placeMarkers(child, candidate.localName, nestedDepth + 1);
+          }
+        };
+        placeMarkers(node, undefined, 0);
+      }
+    }
+    for (const child of node.children) anchorTrackedRows(child, depth + 1);
+  };
+  anchorTrackedRows(part.root, 0);
   return located;
+}
+
+/** Node id → paragraph-local offsets, memoized on the immutable paragraph node. */
+const paragraphLocationsCache = new WeakMap<OoxmlNode, ReadonlyMap<string, SiteLocation>>();
+
+function locateInParagraph(
+  paragraph: OoxmlParagraphNode,
+  located: Map<string, SiteLocation>
+): void {
+  const offsets = paragraphOffsetIndex(paragraph);
+  const place = (node: OoxmlNode, start: number, end: number, depth: number): void => {
+    if (node.kind === 'textValue' || depth > 64) return;
+    located.set(node.id, { paragraphId: paragraph.id, start, end });
+    for (const child of node.children) place(child, start, end, depth + 1);
+  };
+  const visit = (node: OoxmlNode, depth: number): void => {
+    if (node.kind === 'textValue' || depth > 64) return;
+    const span = offsets.spanOf(node);
+    if (node.kind === 'run') {
+      if (!span) return;
+      located.set(node.id, { paragraphId: paragraph.id, start: span.start, end: span.end });
+      // A run's OWN properties anchor over the run. `w:rPrChange` is a revision that
+      // decorates no characters and lives in `w:rPr`, so stopping at the run left it with
+      // no geometry at all: its card sorted to the end of the rail, painted no band, and
+      // the caret in tracked-formatted text activated nothing while accept and reject
+      // stayed on offer.
+      for (const child of node.children) {
+        if (child.kind === 'runProperties') place(child, span.start, span.end, depth + 1);
+      }
+      return;
+    }
+    if (span) located.set(node.id, { paragraphId: paragraph.id, start: span.start, end: span.end });
+    for (const child of node.children) visit(child, depth + 1);
+  };
+  for (const child of paragraph.children) {
+    if (child.kind === 'paragraphProperties') continue;
+    visit(child, 0);
+  }
+  // The paragraph MARK is the pilcrow — it sits at the END of the paragraph, not at
+  // offset 0 where its `w:pPr` happens to be written. Anchored at 0, a tracked Enter's
+  // card never opened when the caret was at the break that made it, `setActiveReviewItem`
+  // threw the caret to the paragraph start, and the zero-width range painted no band.
+  const properties = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  if (properties) place(properties, offsets.length, offsets.length, 0);
 }
 
 function addressKey(address: RevisionAddress): string {
@@ -321,10 +378,25 @@ export function revisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
     // date per editing burst, so an insertion and a deletion can legally share the triple —
     // and grouping on it alone showed them as one `insert` card with both texts run together,
     // whose Accept deleted the half the card claimed to be inserting.
-    const key = `${site.node.localName}\u0000${addressKey(address)}`;
+    const key =
+      kind === 'structural'
+        ? `structural\u0000${addressKey(address)}`
+        : `${site.node.localName}\u0000${addressKey(address)}`;
     const existing = byAddress.get(key);
     if (existing) {
-      if (range) existing.ranges.push(range);
+      if (
+        range &&
+        !existing.ranges.some(
+          (candidate) =>
+            candidate.partName === range.partName &&
+            candidate.start.paragraphId === range.start.paragraphId &&
+            candidate.start.offset === range.start.offset &&
+            candidate.end.paragraphId === range.end.paragraphId &&
+            candidate.end.offset === range.end.offset
+        )
+      ) {
+        existing.ranges.push(range);
+      }
       if (kind !== 'structural' && existing.revisionKind === 'structural') {
         existing.revisionKind = kind;
       }
@@ -614,6 +686,12 @@ export function commentItemsOf(
 export interface ReviewModelInput {
   /** The story the ranges live in — the main document, a header, a note. */
   readonly storyPart: OoxmlPart;
+  /**
+   * Header/footer story parts, in section order. Their revisions and comment anchors join
+   * the queue: a tracked change in a header is a pending decision like any other, and a
+   * queue that only walked the body silently hid it from the rail AND from Accept All.
+   */
+  readonly furnitureParts?: readonly OoxmlPart[] | undefined;
   /** `word/comments.xml`, absent when the package has none. */
   readonly commentsPart?: OoxmlPart | undefined;
   /** `word/commentsExtended.xml`, absent when the package has none. */
@@ -624,17 +702,41 @@ export interface ReviewModelInput {
  * Everything the review surface lists, in document order.
  *
  * Order is by paragraph position within the story, then by offset. A comment and the revision
- * it covers therefore arrive together, which is what lets a surface group them.
+ * it covers therefore arrive together, which is what lets a surface group them. Furniture
+ * stories rank after the body in one merged order — their geometry (the page they first paint
+ * on) is a layout question the queue deliberately does not answer.
  */
 export function collectReviewItems(input: ReviewModelInput): ReviewItem[] {
-  const revisions = revisionItemsOf(input.storyPart);
+  // The body part deduped against the furniture list, so a caller passing a part twice —
+  // or the same shared header under two sections — cannot double every card in it.
+  const parts: OoxmlPart[] = [input.storyPart];
+  const seen = new Set<string>([input.storyPart.name]);
+  for (const part of input.furnitureParts ?? []) {
+    if (seen.has(part.name)) continue;
+    seen.add(part.name);
+    parts.push(part);
+  }
+
   const comments = input.commentsPart ? commentsOfPart(input.commentsPart) : [];
-  const anchors = commentAnchorsOfStory(input.storyPart);
   const threadState = input.commentsExtendedPart
     ? threadStateOfPart(input.commentsExtendedPart)
     : new Map<string, CommentThreadState>();
 
-  const order = paragraphOrderOfPart(input.storyPart);
+  // ONE anchor set across every story, then ONE pass over `comments.xml`. Collecting
+  // per-story and concatenating listed each comment once per story — anchored in one,
+  // orphaned in all the others.
+  const revisions: ReviewRevisionItem[] = [];
+  const anchors: ReturnType<typeof commentAnchorsOfStory> = [];
+  const order = new Map<string, number>();
+  for (const part of parts) {
+    revisions.push(...revisionItemsOf(part));
+    anchors.push(...commentAnchorsOfStory(part));
+    const base = order.size;
+    for (const [id, position] of paragraphOrderOfPart(part)) {
+      if (!order.has(id)) order.set(id, base + position);
+    }
+  }
+
   const items: ReviewItem[] = [...revisions, ...commentItemsOf(comments, anchors, threadState)];
   return items.sort((a, b) => positionRank(a, order) - positionRank(b, order));
 }

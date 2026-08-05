@@ -26,6 +26,7 @@ import {
   execInsertNote,
   execSetNoteProperties,
 } from './docx-editor-notes.ts';
+import { isTableEditorCommand, planTableCommand } from './table-command-plan.ts';
 
 /**
  * Run one admitted command against the surface.
@@ -36,7 +37,8 @@ import {
  */
 export function execEditorCommand(
   mounted: PaginatedSurface,
-  command: EditorCommand
+  command: EditorCommand,
+  options?: { readonly admittedTablePlan?: import('./table-command-plan.ts').TableCommandPlan }
 ): ExecResult | null {
   switch (command.type) {
     case 'toggleMark': {
@@ -239,6 +241,24 @@ export function execEditorCommand(
     case 'redo':
       mounted.redo();
       break;
+    case 'insertToc':
+      if (!mounted.insertToc()) {
+        return {
+          ok: false,
+          code: 'unsupported',
+          reason: mounted.state().lastRejection ?? 'the table of contents could not be inserted',
+        };
+      }
+      break;
+    case 'refreshToc':
+      if (!mounted.refreshToc(command.tocId, command.mode)) {
+        return {
+          ok: false,
+          code: 'unsupported',
+          reason: mounted.state().lastRejection ?? 'the table of contents could not be refreshed',
+        };
+      }
+      break;
     case 'editHeaderFooter':
       return execEditHeaderFooter(mounted, command);
     case 'exitHeaderFooter': {
@@ -265,6 +285,39 @@ export function execEditorCommand(
       return execConvertAllNotes(mounted, command);
     case 'setNoteProperties':
       return execSetNoteProperties(mounted, command);
+    case 'insertRow':
+    case 'deleteRow':
+    case 'insertColumn':
+    case 'deleteColumn':
+    case 'deleteTable':
+    case 'setCellFill':
+    case 'setTableCellVerticalAlignment':
+    case 'setTableBorders':
+    case 'commitTableColumnDividerResize':
+    case 'commitTableRightEdgeResize':
+    case 'mergeCells':
+    case 'splitCell':
+    case 'toggleHeaderRow':
+    case 'selectTableRegion':
+    case 'setTableProperties': {
+      if (!isTableEditorCommand(command)) {
+        return { ok: false, code: 'unsupported', reason: 'unsupported command' };
+      }
+      const plan =
+        options?.admittedTablePlan ??
+        planTableCommand({
+          command,
+          part: mounted.session.part(),
+          layout: mounted.layout(),
+          storeRevision: mounted.session.revision(),
+          selection: mounted.state().selection,
+          cellSelection: mounted.state().cellSelection,
+          themeColors: mounted.session.documentThemeColors(),
+          editable: mounted.session.editable,
+          viewing: mounted.editingMode() === 'view',
+        });
+      return mounted.applyTableCommandPlan(plan);
+    }
     case 'selectAll':
       mounted.selectAll();
       // Selection is not document state: nothing to save changed.

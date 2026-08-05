@@ -33,3 +33,10 @@ export {
   type TreeOpResult,
 } from './tree-op-validate.ts';
 export { applyTreeOp, paragraphTextOf } from './tree-op-apply.ts';
+export {
+  MAX_CONTENT_CONTROL_NESTING,
+  contentControlValueTypeOf,
+  effectiveLockOf,
+  findContentControl,
+  isContentControlNode,
+} from './tree-op-nodes.ts';

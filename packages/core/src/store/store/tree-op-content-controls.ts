@@ -38,7 +38,13 @@ import {
 import { W14_NAMESPACE_URI, WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import { isValidXmlText } from '../package/sinks.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
-import { TEXT_DEPS, fromEdit, parentOf, runPropertiesNodeOf } from './tree-op-nodes.ts';
+import {
+  TEXT_DEPS,
+  fromEdit,
+  parentOf,
+  parseCheckboxValue,
+  runPropertiesNodeOf,
+} from './tree-op-nodes.ts';
 import { splitRunsAt } from './tree-op-apply.ts';
 import {
   insertionLandingNodeId,
@@ -231,6 +237,33 @@ const over = (nodeId: string, start: number, end: number): TreeOpReach => ({
   targets: [{ nodeId, range: { start, end } }],
 });
 const whole = (nodeId: string): TreeOpReach => ({ kind: 'nodes', targets: [{ nodeId }] });
+/** The node's children are rearranged, so everything it holds is affected. */
+const restructuring = (nodeId: string): TreeOpReach => ({
+  kind: 'nodes',
+  targets: [{ nodeId, structural: true }],
+});
+/** Each named node on its own, for an op addressed at a set of cells. */
+const each = (nodeIds: readonly string[]): TreeOpReach => ({
+  kind: 'nodes',
+  targets: asArray(nodeIds).map((nodeId) => ({ nodeId })),
+});
+
+/**
+ * Reach is resolved BEFORE validation, so a list on an op is still whatever the caller sent.
+ *
+ * The list-shaped ops check `Array.isArray` in their own validators for exactly this reason; a
+ * classification that walked the value first would turn a malformed op into a thrown exception
+ * instead of the refusal the caller is owed.
+ */
+function asArray<T>(value: readonly T[]): readonly T[] {
+  return Array.isArray(value) ? value : [];
+}
+
+/** Paragraphs an op names in a list, each having its runs rewritten. */
+const inParagraphs = (
+  entries: readonly { readonly paragraphId: string }[]
+): readonly TreeOpTarget[] =>
+  asArray(entries).map((entry) => ({ nodeId: entry.paragraphId, structural: true }));
 
 /**
  * How each op reaches, one entry per op kind.
@@ -318,6 +351,71 @@ const TREE_OP_REACH: {
     intent: 'removal',
     replacesContent: op.keepContent !== true,
   }),
+  // An item is what a repeating section exists to hold, so adding one is addressed AT the
+  // control the same way a value write is — and it is the gesture forms protection allows.
+  // Removing one destroys whatever that item held, including controls the caller never named,
+  // and the item's own id is not in the op: `replacesContent` asks all of them.
+  addRepeatingSectionItem: (op) => ({
+    kind: 'control',
+    controlId: op.controlId,
+    intent: 'value',
+  }),
+  removeRepeatingSectionItem: (op) => ({
+    kind: 'control',
+    controlId: op.controlId,
+    intent: 'value',
+    replacesContent: true,
+  }),
+  // TABLE TOPOLOGY restructures the table itself: a row or a column arrives or leaves and every
+  // cell after it shifts. The TABLE is therefore the node they rearrange — naming only the row
+  // or the grid column would ask permission of one cell while rewriting the rest around it.
+  insertTableRow: (op) => restructuring(op.tableId),
+  deleteTableRow: (op) => ({
+    kind: 'nodes',
+    targets: [
+      { nodeId: op.tableId, structural: true },
+      // The row goes and takes its cells' controls with it, so removal locks apply to them.
+      // A tracked deletion retains the row, but the reach is the same question either way.
+      { nodeId: op.rowId, removes: true },
+    ],
+  }),
+  insertTableColumn: (op) => restructuring(op.tableId),
+  // A column delete removes one cell FROM EVERY ROW, and which cells those are is a topology
+  // question resolved in the applier, not re-derived here. Both targets name the whole table
+  // on purpose: the first says its content is rearranged, which is what a `w:dataBinding`
+  // answers, and the second says content is destroyed, which is what a removal lock answers.
+  // Collapsing them into one target answered whichever question that target's flags reached
+  // and left the other side of the table's protection unasked.
+  deleteTableColumn: (op) => ({
+    kind: 'nodes',
+    targets: [
+      { nodeId: op.tableId, structural: true },
+      { nodeId: op.tableId, removes: true },
+    ],
+  }),
+  // Geometry and cell decoration change PROPERTIES. Every control inside keeps every character
+  // it held, so only the controls ENCLOSING the addressed node are asked — the same answer
+  // `setParagraphProperties` gives for a paragraph.
+  setTableColumnWidths: (op) => whole(op.tableId),
+  setTableRightEdgeWidth: (op) => whole(op.tableId),
+  setTableRowHeight: (op) => whole(op.rowId),
+  setTableCellBorders: (op) => each(op.cellIds),
+  setTableCellFill: (op) => each(op.cellIds),
+  setTableCellVerticalAlignment: (op) => each(op.cellIds),
+  // A TOC is inserted BESIDE the named paragraph, in the body: the controls that matter are the
+  // ones enclosing that paragraph, plus the headings the op writes bookmarks into.
+  insertToc: (op) => ({
+    kind: 'nodes',
+    targets: [{ nodeId: op.beforeParagraphId }, ...inParagraphs(op.bookmarksToCreate)],
+  }),
+  // A refresh REBUILDS the cached result. `tocId` is the enclosing control when the file wrote
+  // one and the field's own begin node otherwise; either way everything under it is replaced.
+  replaceTocResult: (op) => ({
+    kind: 'nodes',
+    targets: [{ nodeId: op.tocId, structural: true }, ...inParagraphs(op.bookmarksToCreate)],
+  }),
+  // Page numbers rewrite runs in the result paragraphs the op names, and nothing else.
+  rewriteTocPageNumbers: (op) => ({ kind: 'nodes', targets: inParagraphs(op.updates) }),
   // Page setup, section furniture and note numbering are properties OF the document. They change
   // no content, so no control's lock speaks to them; forms protection still does.
   setSectionProperties: () => ({ kind: 'documentProperties' }),
@@ -1050,6 +1148,37 @@ interface PlannedValue {
   readonly checked?: boolean;
 }
 
+/**
+ * The value in the vocabulary {@link planValue} reads, whichever form the caller offered.
+ *
+ * The op carries `string | ContentControlValueInput`. A bare string is the editor-facing form,
+ * where the characters mean whatever the control's own type says they mean: an item's value for
+ * a dropdown, an ISO date for a date picker, a checkbox state for a checkbox, text for the rest.
+ * The structured form states the kind instead of implying it. Normalizing here keeps the two
+ * forms from becoming two answers to "what is this control's value" — a string routed to one
+ * applier and an object to another is already two code paths, and it must not be two meanings.
+ */
+function valueInputOf(
+  properties: ContentControlProperties,
+  value: string | ContentControlValueInput
+): ContentControlValueInput | TreeOpRejection {
+  if (typeof value !== 'string') return value;
+  switch (properties.type) {
+    case 'dropDownList':
+      return { kind: 'listItem', value };
+    case 'checkbox': {
+      const checked = parseCheckboxValue(value);
+      // Neither checked nor unchecked. Writing a glyph either way would be this engine deciding
+      // what the caller meant about a box whose two states the file itself declares.
+      return checked === null ? 'typeMismatch' : { kind: 'checkbox', checked };
+    }
+    case 'date':
+      return { kind: 'date', iso: value };
+    default:
+      return { kind: 'text', text: value };
+  }
+}
+
 function planValue(
   properties: ContentControlProperties,
   value: ContentControlValueInput
@@ -1300,7 +1429,9 @@ export function applySetContentControlValue(
   if (properties.dataBinding) return { ok: false, reason: 'bound' };
   if (lockForbidsEdit(lock)) return { ok: false, reason: 'locked' };
 
-  const planned = planValue(properties, op.value);
+  const offered = valueInputOf(properties, op.value);
+  if (typeof offered === 'string') return { ok: false, reason: offered };
+  const planned = planValue(properties, offered);
   if (typeof planned === 'string') return { ok: false, reason: planned };
 
   const nextId = createNodeIdAllocator(part);

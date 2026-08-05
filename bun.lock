@@ -188,6 +188,7 @@
       "name": "@docx-editor.dev/core-contract",
       "version": "0.0.1",
       "dependencies": {
+        "@docx-editor.dev/i18n": "workspace:*",
         "bidi-js": "1.0.3",
         "fast-xml-parser": "^4.5.0",
         "fflate": "^0.8.2",

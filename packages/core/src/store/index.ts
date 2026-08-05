@@ -29,3 +29,5 @@ export * from './package/index.ts';
 
 // Semantic document store: TreeDocumentStore + TreeDocOps over the canonical tree.
 export * from './store/index.ts';
+
+export { TABLE_BORDER_STYLES, type TableBorderStyle } from './table-border-style.ts';

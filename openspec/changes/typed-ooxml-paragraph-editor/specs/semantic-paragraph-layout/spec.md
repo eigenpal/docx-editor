@@ -15,7 +15,7 @@ Every line and style span SHALL retain stable story/paragraph identity and canon
 - **THEN** its style spans cover the line's source text in order without gaps or overlaps
 
 ### Requirement: Accepted paragraph layout boundary
-Semantic layout SHALL resolve and represent the D8 run and paragraph property boundary, including authored whitespace, tabs, line hard breaks, and typed `w:br w:type="page"` page breaks; `w:spacing` before/after with collapsed adjacent spacing; `w:contextualSpacing` in body flow; line spacing under all three `w:lineRule` values; and all six `w:pBdr` edges. Border resolution SHALL place `top` and `bottom` as flow height, publish `between` in place of `bottom` where a paragraph continues into an identically bordered neighbour, and publish `left`, `right`, and `bar` outside the text column without reflowing it. Section-aware pagination SHALL honour per-section page size and margins, default/`nextPage` and `continuous` section breaks, `titlePage`, and per-section read-only header/footer furniture inheritance, including bounded allowlisted complex `PAGE`/`NUMPAGES` projection for page-furniture numbering. A `continuous` boundary SHALL share the preceding sheet only when the section's geometry and furniture are identical and the sheet is still open, and SHALL otherwise start a new sheet rather than publish a mixed one. Hyperlinks, body fields (including inert generic `w:fldSimple`), comments, tracked changes, images, content controls, header/footer editing, notes, paragraph-border authoring, `w:between` in table-cell and header/footer flow, border `w:shadow` and `themeColor`, `evenPage`/`oddPage`/`nextColumn` section semantics, and multi-column flow SHALL remain outside this layout acceptance.
+Semantic layout SHALL resolve and represent the D8 run and paragraph property boundary, including authored whitespace, tabs, line hard breaks, and typed `w:br w:type="page"` and `w:br w:type="column"` breaks; `w:spacing` before/after with collapsed adjacent spacing; `w:contextualSpacing` in body flow; line spacing under all three `w:lineRule` values; and all six `w:pBdr` edges. Border resolution SHALL place `top` and `bottom` as flow height, publish `between` in place of `bottom` where a paragraph continues into an identically bordered neighbour, and publish `left`, `right`, and `bar` outside the text column without reflowing it. Section-aware pagination SHALL honour per-section page size and margins, equal- and unequal-width `w:cols` geometry with bounded gaps and separator rules, default/`nextPage` and `continuous` section breaks, `titlePage`, and per-section read-only header/footer furniture inheritance, including bounded allowlisted complex `PAGE`/`NUMPAGES` projection for page-furniture numbering. Content SHALL fill each section column before opening another physical sheet, and an explicit column break SHALL advance to the next column (or the next sheet after the final column). A multi-column section that ends in a continuous section break and whose content occupies a single open sheet SHALL balance that content across its columns; balancing the trailing sheet of a multi-sheet section remains outside this acceptance. A `continuous` boundary SHALL share the preceding sheet only when the section's geometry and furniture are identical and the sheet is still open, and SHALL otherwise start a new sheet rather than publish a mixed one. Hyperlinks, body fields (including inert generic `w:fldSimple`), comments, tracked changes, images, content controls, header/footer editing, notes, paragraph-border authoring, `w:between` in table-cell and header/footer flow, border `w:shadow` and `themeColor`, and `evenPage`/`oddPage`/`nextColumn` section semantics SHALL remain outside this layout acceptance.
 
 #### Scenario: Accepted properties affect layout and spans
 - **WHEN** accepted run properties, paragraph spacing/indents/tabs/numbering, pagination controls, `w:spacing` before/after, `w:contextualSpacing`, any `w:pBdr` edge, inline page breaks, or per-section geometry occur in the paragraph fixture
@@ -24,6 +24,14 @@ Semantic layout SHALL resolve and represent the D8 run and paragraph property bo
 #### Scenario: Inline page break splits a paragraph across pages
 - **WHEN** a paragraph contains `w:br w:type="page"` between inline content
 - **THEN** layout places content before the break on the current page and content after the break on the next page while preserving one paragraph identity
+
+#### Scenario: Multi-column section flows across regions
+- **WHEN** a section declares equal or explicit unequal `w:cols` geometry and contains natural overflow or `w:br w:type="column"`
+- **THEN** layout uses each authored column width and gap, advances through columns before sheets, preserves paragraph identity across column fragments, and publishes separator geometry when `w:sep` is enabled
+
+#### Scenario: A continuous break balances the columns before it
+- **WHEN** a multi-column section whose natural layout is one open sheet is followed by a `continuous` section break
+- **THEN** layout divides the section's content across its columns at the shortest fitting column height, splitting tables at row boundaries where needed, and the following section resumes below the whole balanced region
 
 #### Scenario: Paragraph spacing and borders affect fragment boxes
 - **WHEN** adjacent paragraphs declare `w:spacing` before/after and/or a paragraph declares a `w:pBdr` box
@@ -145,3 +153,25 @@ Every supported incremental-layout class SHALL be tested against a clean full la
 #### Scenario: Incremental fixture completes
 - **WHEN** text-local, paragraph-local, split/join, or flow-structural fixture edits run incrementally
 - **THEN** semantic layout and display output equal clean full output while recorded work remains limited to the proven invalidation and convergence window
+
+### Requirement: Table interaction geometry
+Semantic layout SHALL publish canonical table, row, and cell identities with resolved column boundaries, outer-right table edges, authored versus repeated fragments, and nesting order sufficient for divider handles, hover insertion controls, and explicit resize targets. Each interaction record SHALL carry the canonical store revision it was derived from as `sourceRevision`. Repeated header copies SHALL appear in geometry but SHALL be marked non-editable.
+
+#### Scenario: Column divider geometry is published
+- **WHEN** a table with explicit grid columns is laid out
+- **THEN** each authored internal divider and the outer-right edge expose stable page coordinates for interaction furniture
+
+#### Scenario: Nested pointer targets the innermost table
+- **WHEN** pointer hit testing resolves a coordinate over nested tables
+- **THEN** the deepest nested table owns the interaction target
+
+#### Scenario: Stale source revision is refused
+- **WHEN** an explicit table target's `sourceRevision` does not equal the current canonical store revision at commit time, including while an older layout remains published for geometry
+- **THEN** the editor refuses the gesture with a typed stale-target reason
+
+### Requirement: Table structural edits invalidate flow
+Row and column insertion, deletion, and column resize commits SHALL publish `flow-structural` impact and SHALL be covered by incremental/full differential layout tests with stable unaffected page identity outside the edited table interval.
+
+#### Scenario: Unaffected pages keep identity after table resize
+- **WHEN** a middle-table column resize converges without repagination before the following page
+- **THEN** preceding and following unchanged pages retain stable identities

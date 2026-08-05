@@ -317,6 +317,179 @@ describe('an op that could rewrite content anywhere still fails closed', () => {
   });
 });
 
+// TABLE AND TOC OPS ARE CONTENT OPS. They arrived with their own validators, which ask about
+// grids and rows; none of them asks whether the cell being rewritten belongs to a locked field.
+// The classification is where that question is answered, and the shape of the answer differs by
+// what the op does to the table: topology REARRANGES what the table holds, a column delete also
+// DESTROYS some of it, and geometry or shading changes neither.
+describe('table and TOC ops meet the controls their tables hold', () => {
+  function nodesOfKind(part: OoxmlPart, kind: string): OoxmlNode[] {
+    const found: OoxmlNode[] = [];
+    const walk = (node: OoxmlNode): void => {
+      if (node.kind === 'textValue') return;
+      if (node.kind === kind) found.push(node);
+      for (const child of node.children) walk(child);
+    };
+    walk(part.root);
+    return found;
+  }
+
+  /** A two-by-two table whose second cell holds one control, described by `properties`. */
+  function tableHolding(properties: string): OoxmlPart {
+    return parseDoc(
+      `<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="2400"/></w:tblGrid>` +
+        `<w:tr><w:tc><w:p><w:r><w:t>free</w:t></w:r></w:p></w:tc>` +
+        `<w:tc><w:sdt><w:sdtPr><w:tag w:val="t"/>${properties}</w:sdtPr>` +
+        `<w:sdtContent><w:p><w:r><w:t>held</w:t></w:r></w:p></w:sdtContent></w:sdt></w:tc></w:tr>` +
+        `<w:tr><w:tc><w:p><w:r><w:t>a</w:t></w:r></w:p></w:tc>` +
+        `<w:tc><w:p><w:r><w:t>b</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`
+    );
+  }
+
+  const contentLocked = '<w:lock w:val="sdtContentLocked"/>';
+  const wrapperLocked = '<w:lock w:val="sdtLocked"/>';
+  const bound = '<w:dataBinding w:xpath="/a" w:storeItemID="{GUID}"/>';
+
+  const tableId = (part: OoxmlPart): string => nodesOfKind(part, 'table')[0]!.id;
+
+  test('adding a row is refused while the table holds a control that forbids content edits', () => {
+    const part = tableHolding(contentLocked);
+    const rows = nodesOfKind(part, 'tableRow');
+    expect(
+      refusal(part, {
+        op: 'insertTableRow',
+        tableId: tableId(part),
+        rowId: rows[0]!.id,
+        where: 'below',
+      })
+    ).toBe('locked');
+  });
+
+  // `sdtLocked` guards the wrapper and expressly allows editing what it holds, so rearranging
+  // the table around it is not the thing it forbids.
+  test('a wrapper-only lock does not refuse a row insertion', () => {
+    const part = tableHolding(wrapperLocked);
+    const rows = nodesOfKind(part, 'tableRow');
+    expect(
+      refusal(part, {
+        op: 'insertTableRow',
+        tableId: tableId(part),
+        rowId: rows[0]!.id,
+        where: 'below',
+      })
+    ).not.toBe('locked');
+  });
+
+  // Deleting a column takes one cell out of every row, and which cells those are is not in the
+  // op. The wrapper lock is the one that speaks to a control being deleted.
+  test('deleting a column is refused by a wrapper lock the op never named', () => {
+    const part = tableHolding(wrapperLocked);
+    const columns = nodesOfKind(part, 'tableGridColumn');
+    expect(
+      refusal(part, {
+        op: 'deleteTableColumn',
+        tableId: tableId(part),
+        gridColumnId: columns[0]?.id ?? 'grid',
+      })
+    ).toBe('locked');
+  });
+
+  // The same op still has to answer the binding question, which is asked of controls the op
+  // does NOT remove. One target cannot be both, so the classification names two.
+  test('deleting a column is refused as bound while the table mirrors a custom XML part', () => {
+    const part = tableHolding(bound);
+    const columns = nodesOfKind(part, 'tableGridColumn');
+    expect(
+      refusal(part, {
+        op: 'deleteTableColumn',
+        tableId: tableId(part),
+        gridColumnId: columns[0]?.id ?? 'grid',
+      })
+    ).toBe('bound');
+  });
+
+  // Shading is a property OF THE CELL, the same way `w:pPr` is a property of a paragraph: the
+  // characters a control holds inside it are untouched, so its lock has nothing to say. The
+  // op is also addressed cell by cell, so a locked cell elsewhere in the table is not reached
+  // either — classifying it at the TABLE would have frozen every cell in it.
+  test('shading a cell does not reach the content a control inside it holds', () => {
+    const part = tableHolding(contentLocked);
+    const cells = nodesOfKind(part, 'tableCell');
+    for (const cell of [cells[0]!, cells[1]!]) {
+      expect(
+        refusal(part, {
+          op: 'setTableCellFill',
+          tableId: tableId(part),
+          cellIds: [cell.id],
+          color: null,
+        })
+      ).not.toBe('locked');
+    }
+  });
+
+  // A control ENCLOSING the cell is a different question, and it is refused: the shading lands
+  // inside content that control declares off limits.
+  test('shading a cell inside a locked control is refused', () => {
+    const part = parseDoc(
+      `<w:sdt><w:sdtPr><w:tag w:val="t"/><w:lock w:val="sdtContentLocked"/></w:sdtPr>` +
+        `<w:sdtContent><w:tbl><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>` +
+        `<w:tr><w:tc><w:p><w:r><w:t>held</w:t></w:r></w:p></w:tc></w:tr>` +
+        `</w:tbl></w:sdtContent></w:sdt>`
+    );
+    const cell = nodesOfKind(part, 'tableCell')[0]!;
+    expect(
+      refusal(part, {
+        op: 'setTableCellFill',
+        tableId: tableId(part),
+        cellIds: [cell.id],
+        color: null,
+      })
+    ).toBe('locked');
+  });
+
+  // A page-number refresh rewrites the runs of the paragraphs it names, wherever they are.
+  test('refreshing TOC page numbers into a locked paragraph is refused', () => {
+    const part = parseDoc(
+      `<w:sdt><w:sdtPr><w:tag w:val="t"/><w:lock w:val="contentLocked"/></w:sdtPr>` +
+        `<w:sdtContent><w:p><w:r><w:t>Heading\t1</w:t></w:r></w:p></w:sdtContent></w:sdt>`
+    );
+    const paragraph = nodesOfKind(part, 'paragraph')[0]!;
+    expect(
+      refusal(part, {
+        op: 'rewriteTocPageNumbers',
+        tocId: 'toc',
+        updates: [{ paragraphId: paragraph.id, pageNumberText: '2' }],
+      })
+    ).toBe('locked');
+  });
+
+  // Both repeating-section ops are refused as unsupported today. Their reach is asserted
+  // directly so the refusal they get the day they are implemented is the control's, not a
+  // classification nobody revisited.
+  test('repeating-section items are addressed at the control that declares them', () => {
+    expect(treeOpReach({ op: 'addRepeatingSectionItem', controlId: 'c1' })).toEqual({
+      kind: 'control',
+      controlId: 'c1',
+      intent: 'value',
+    });
+    expect(treeOpReach({ op: 'removeRepeatingSectionItem', controlId: 'c1', index: 0 })).toEqual({
+      kind: 'control',
+      controlId: 'c1',
+      intent: 'value',
+      replacesContent: true,
+    });
+  });
+
+  // Reach is resolved before validation, so a malformed list must produce a refusal rather
+  // than a thrown exception from the classification itself.
+  test('a list-shaped op that is not a list is classified without throwing', () => {
+    const part = parseDoc(`<w:p><w:r><w:t>text</w:t></w:r></w:p>`);
+    const op = { op: 'rewriteTocPageNumbers', tocId: 'toc', updates: null } as unknown as TreeDocOp;
+    expect(treeOpReach(op)).toEqual({ kind: 'nodes', targets: [] });
+    expect(refusal(part, op)).not.toBeNull();
+  });
+});
+
 describe('reads and lifecycle are not writes', () => {
   // The failure mode on the other side of failing closed: classifying everything as a mutation
   // would refuse a header's creation in any document that happens to hold a locked field, which

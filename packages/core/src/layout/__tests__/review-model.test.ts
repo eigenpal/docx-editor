@@ -117,16 +117,18 @@ describe('changes that decorate no characters still get a card', () => {
     );
   });
 
-  test('a structural revision is listed AND marked read-only', () => {
+  test('a complete tracked row revision is listed and resolvable', () => {
     // It has to be visible: `acceptAllRevisions` refuses if any revision is unresolvable, so
     // an invisible one makes Accept All fail for a reason nothing on screen explains.
     const part = story(
       `<w:tbl><w:tr><w:trPr><w:del w:id="7" w:author="QA" w:date="D"/></w:trPr>` +
-        `<w:tc><w:p>${run('cell')}</w:p></w:tc></w:tr></w:tbl>`
+        `<w:tc><w:tcPr><w:cellDel w:id="7" w:author="QA" w:date="D"/></w:tcPr>` +
+        `<w:p>${run('cell')}</w:p></w:tc></w:tr></w:tbl>`
     );
     const item = revisionsOf(collectReviewItems({ storyPart: part }))[0]!;
     expect(item.revisionKind).toBe('structural');
-    expect(item.readOnly).toBe(true);
+    expect(item.readOnly).toBe(false);
+    expect(item.ranges).toHaveLength(1);
   });
 });
 
@@ -450,9 +452,9 @@ describe('against the tracked fixture', () => {
     expect(kinds.has('delete')).toBe(true);
     expect(kinds.has('format')).toBe(true);
     expect(kinds.has('structural')).toBe(true);
-    // Every structural one is read-only, so no card offers a button the engine refuses.
+    // Complete row revisions are actionable; unsupported structural kinds remain in the queue.
     expect(
-      items.filter((item) => item.revisionKind === 'structural').every((item) => item.readOnly)
+      items.filter((item) => item.revisionKind === 'structural').some((item) => !item.readOnly)
     ).toBe(true);
   });
 });
@@ -620,5 +622,50 @@ describe('the offset model has ONE authority', () => {
     // put the card's range — and the highlight band — one character early.
     expect(item.ranges[0]!.start.offset).toBe(3);
     expect(item.ranges[0]!.end.offset).toBe(5);
+  });
+});
+
+describe('furniture stories join the queue', () => {
+  function headerStory(body: string): OoxmlPart {
+    const result = readOoxmlPart(`<w:hdr xmlns:w="${W}" xmlns:w14="${W14}">${body}</w:hdr>`, {
+      name: '/word/header1.xml',
+      contentType: 'app/xml',
+    });
+    if (!result.ok) throw new Error(result.reason);
+    return result.part;
+  }
+
+  test('a header revision is listed beside body items, its ranges naming the header part', () => {
+    const body = story(`<w:p>${run('keep ')}${ins('1', run('body add'))}</w:p>`);
+    const header = headerStory(`<w:p>${run('title ')}${ins('9', run('hdr add'), 'HF')}</w:p>`);
+    const items = revisionsOf(collectReviewItems({ storyPart: body, furnitureParts: [header] }));
+    expect(items).toHaveLength(2);
+    const fromHeader = items.find((item) => item.author === 'HF')!;
+    expect(fromHeader.ranges[0]!.partName).toBe('/word/header1.xml');
+    // Body items rank first: furniture paragraphs join the merged order AFTER the body's.
+    expect(items[0]!.author).toBe('QA');
+  });
+
+  test('the same part passed twice contributes its cards once', () => {
+    const body = story(`<w:p>${run('keep')}</w:p>`);
+    const header = headerStory(`<w:p>${ins('9', run('shared'), 'HF')}</w:p>`);
+    const items = collectReviewItems({ storyPart: body, furnitureParts: [header, header] });
+    expect(items).toHaveLength(1);
+  });
+
+  test('a comment anchored in a header stops being an orphan', () => {
+    const body = story(`<w:p>${run('body')}</w:p>`);
+    const header = headerStory(`<w:p>${cStart('1')}${run('marked')}${cEnd('1')}</w:p>`);
+    const comments = commentsPart(comment('1', 'about the header'));
+    const without = collectReviewItems({ storyPart: body, commentsPart: comments });
+    expect(without.some((item) => item.kind === 'comment' && item.orphaned)).toBe(true);
+    const withHeader = collectReviewItems({
+      storyPart: body,
+      furnitureParts: [header],
+      commentsPart: comments,
+    });
+    const card = withHeader.find((item) => item.kind === 'comment');
+    expect(card && card.kind === 'comment' && card.orphaned).toBe(false);
+    expect(card && card.kind === 'comment' && card.range?.partName).toBe('/word/header1.xml');
   });
 });

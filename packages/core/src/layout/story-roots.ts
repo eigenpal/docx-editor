@@ -3,27 +3,22 @@
 // A STORY is a flowable sequence of blocks: the body of the main document, the whole
 // content of a header/footer part (`w:hdr`/`w:ftr` roots hold block content directly),
 // or a single footnote/endnote node. This is the single place that knows which roots
-// flow and how block-level `w:sdt` wrappers flatten — the tree lane's one `flattenSdt`,
-// replacing the four copies the legacy lane carried.
+// flow and how block-level content controls flatten — via shared `collectFlowBlocks`.
 //
 // SDT content flattens TRANSPARENTLY: the paragraphs and tables inside `w:sdtContent`
 // join the flow in reading order (Word renders them in place), while the `w:sdt` wrapper
-// itself stays a generic node the serializer round-trips. SDT chrome — placeholder text,
-// locks, dropdown behaviour — is not modelled.
+// itself stays structurally preserved for serialization. SDT chrome — placeholder text,
+// locks, dropdown behaviour — is not modelled here.
 //
 // Note parts (`w:footnotes` / `w:endnotes`) are NOT story roots: each typed `w:footnote` /
 // `w:endnote` child is its own story via {@link noteStoryBlocks}.
 
-import {
-  contentControlContentChildren,
-  isContentControlWrapper,
-} from '@docx-editor.dev/core-contract/store';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core-contract/store';
-import { revisionRemovesParagraph } from './revision-visibility.ts';
+import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';
+import { revisionRemovesParagraph } from './revision-visibility.ts';
 
-/** Nested `w:sdt` wrappers deeper than this stop flattening; content stays preserved. */
-const MAX_SDT_NESTING = 32;
+export { MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING } from '../store/package/content-control-walk.ts';
 
 /** Roots whose children are block content: the body, and header/footer part roots. */
 function storyRootOf(part: OoxmlPart): OoxmlElement | undefined {
@@ -41,30 +36,17 @@ function storyRootOf(part: OoxmlPart): OoxmlElement | undefined {
   return findBody(root);
 }
 
-function collectStoryBlocks(root: OoxmlElement, displayMode: RevisionDisplayMode): OoxmlElement[] {
-  const blocks: OoxmlElement[] = [];
-  const collect = (children: readonly OoxmlNode[], depth: number): void => {
-    for (const child of children) {
-      if (child.kind === 'paragraph' || child.kind === 'table') {
-        // A paragraph whose mark AND content a tracked revision deleted is not part of the
-        // rendered document; without this it reaches pagination with no spans and still
-        // claims a full line box.
-        if (child.kind === 'paragraph' && revisionRemovesParagraph(child, displayMode)) continue;
-        blocks.push(child);
-        continue;
-      }
-      if (isContentControlWrapper(child) && depth < MAX_SDT_NESTING) {
-        collect(contentControlContentChildren(child), depth + 1);
-      }
-    }
-  };
-  collect(root.children, 0);
-  return blocks;
+function acceptStoryBlock(block: OoxmlElement, displayMode: RevisionDisplayMode): boolean {
+  // A paragraph whose mark AND content a tracked revision deleted is not part of the
+  // rendered document; without this it reaches pagination with no spans and still
+  // claims a full line box.
+  if (block.kind === 'paragraph' && revisionRemovesParagraph(block, displayMode)) return false;
+  return true;
 }
 
 /**
  * The story's blocks — paragraphs and tables — in document order, flattening through
- * block-level SDT wrappers.
+ * block-level content-control wrappers under the shared nesting budget.
  */
 export function storyBlocks(
   part: OoxmlPart,
@@ -72,7 +54,7 @@ export function storyBlocks(
 ): OoxmlElement[] {
   const root = storyRootOf(part);
   if (!root) return [];
-  return collectStoryBlocks(root, displayMode);
+  return collectFlowBlocks(root.children, 0, (block) => acceptStoryBlock(block, displayMode));
 }
 
 /**
@@ -86,5 +68,5 @@ export function noteStoryBlocks(
   displayMode: RevisionDisplayMode = 'all-markup'
 ): OoxmlElement[] {
   if (note.kind !== 'note') return [];
-  return collectStoryBlocks(note, displayMode);
+  return collectFlowBlocks(note.children, 0, (block) => acceptStoryBlock(block, displayMode));
 }

@@ -30,6 +30,12 @@ export interface SelectionMark {
   readonly end: number;
 }
 
+/** Returns the mark when collapsed; otherwise undefined. */
+function collapsedSelection(mark: SelectionMark | null): SelectionMark | undefined {
+  if (mark === null || mark.start !== mark.end) return undefined;
+  return mark;
+}
+
 /**
  * Which editable story a ModelChange came from.
  *
@@ -68,6 +74,12 @@ export interface TreeModelChange {
    * package-aware targeting; `TreePackageStore` always sets it.
    */
   readonly story?: TreeStoryRef;
+  /**
+   * Committed collapsed caret for this transaction, when one exists.
+   * Matches history `selectionAfter` when that mark is collapsed; absent for explicit
+   * null, non-collapsed explicit selection, or when no caret was committed.
+   */
+  readonly caret?: SelectionMark;
 }
 
 export type TransactResult =
@@ -362,7 +374,9 @@ export class TreeDocumentStore {
     const splitJoin: TreeModelChange['splitJoin'][number][] = [];
     let impact: ImpactClass = options.minimumImpact ?? 'text-local';
     let selectionBefore: SelectionMark | null = null;
-    let selectionAfter: SelectionMark | null = null;
+    let selectionAfterExplicit = false;
+    let explicitSelectionAfter: SelectionMark | null = null;
+    let opCaret: SelectionMark | null = null;
 
     const applyToPart = (partName: string, op: TreeDocOp): boolean => {
       if (failure) return false;
@@ -389,6 +403,16 @@ export class TreeDocumentStore {
         return false;
       }
       working = withPart(working, result.part);
+      const identityNoOp =
+        result.part === target &&
+        result.effect.dirty.length === 0 &&
+        result.effect.created.length === 0 &&
+        result.effect.deleted.length === 0 &&
+        result.effect.split === undefined &&
+        (result.effect.splits === undefined || result.effect.splits.length === 0) &&
+        result.effect.join === undefined &&
+        result.effect.caret === undefined;
+      if (identityNoOp) return true;
       touched.add(partName);
       applied += 1;
       for (const id of result.effect.dirty) dirty.add(id);
@@ -399,6 +423,9 @@ export class TreeDocumentStore {
       for (const split of result.effect.splits ?? []) splitJoin.push({ split });
       if (result.effect.join) splitJoin.push({ join: result.effect.join });
       if (IMPACT_RANK[result.effect.impact] > IMPACT_RANK[impact]) impact = result.effect.impact;
+      if (result.effect.caret) {
+        opCaret = { paragraphId: result.effect.caret.paragraphId, start: 0, end: 0 };
+      }
       return true;
     };
 
@@ -423,7 +450,8 @@ export class TreeDocumentStore {
         selectionBefore = selection;
       },
       selectionAfter: (selection) => {
-        selectionAfter = selection;
+        selectionAfterExplicit = true;
+        explicitSelectionAfter = selection;
       },
     });
 
@@ -436,6 +464,12 @@ export class TreeDocumentStore {
       };
     }
     if (applied === 0) return { ok: true, change: null };
+
+    const selectionAfter = selectionAfterExplicit ? explicitSelectionAfter : opCaret;
+
+    const committedCaret = selectionAfterExplicit
+      ? collapsedSelection(explicitSelectionAfter)
+      : (opCaret ?? undefined);
 
     // The commit boundary is where fail-closed lives now: the SAME invariant rules the
     // primitives used to run each, applied once to the final tree. Validated as a DELTA
@@ -519,6 +553,7 @@ export class TreeDocumentStore {
           dependencyKeys,
           splitJoin,
           impact,
+          caret: committedCaret,
         },
         options.story ?? this.storyRef ?? undefined
       ),
@@ -616,6 +651,7 @@ export class TreeDocumentStore {
       dependencyKeys: Set<string>;
       splitJoin: TreeModelChange['splitJoin'][number][];
       impact: ImpactClass;
+      caret?: SelectionMark;
     } | null,
     story?: TreeStoryRef
   ): TreeModelChange {
@@ -639,6 +675,7 @@ export class TreeDocumentStore {
         : story?.kind === 'headerFooter'
           ? 'global'
           : 'flow-structural',
+      ...(effects?.caret ? { caret: effects.caret } : {}),
       ...(story ? { story } : {}),
     };
     for (const listener of this.subscribers) listener(change);

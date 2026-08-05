@@ -243,6 +243,30 @@ export function contentControlPropertiesNodeOf(
   );
 }
 
+/**
+ * The control's `w:sdtPr`, typed OR demoted.
+ *
+ * `CT_SdtPr` is a sequence, so properties written out of schema order demote the container
+ * to `generic` (`validContentControlPropertiesChildren`) and the misplaced order round-trips
+ * as authored. Demotion says the ORDER is not modelled; it does not say the properties are
+ * absent. A read that saw only the typed kind would answer `unlocked` and unbound for a
+ * control whose file declares `w:lock`/`w:dataBinding` a position too late — an authored
+ * protection dropped over placement, which is the fail-OPEN direction. The op lane already
+ * accepts either shape (`isContentControlPropertiesNode`); this keeps the projection saying
+ * the same thing about the same document.
+ */
+function contentControlPropertiesContainerOf(control: OoxmlNode): OoxmlElement | undefined {
+  if (control.kind !== 'contentControl') return undefined;
+  const children: readonly OoxmlNode[] = control.children;
+  return children.find(
+    (child): child is OoxmlElement =>
+      child.kind === 'contentControlProperties' ||
+      (child.kind === 'generic' &&
+        child.localName === 'sdtPr' &&
+        child.namespaceUri === WML_NAMESPACE_URI)
+  );
+}
+
 export function contentControlEndPropertiesNodeOf(
   control: OoxmlNode
 ): OoxmlContentControlEndPropertiesNode | undefined {
@@ -378,7 +402,7 @@ function dateOf(typeElement: OoxmlElement): ContentControlDateFormat {
  * absent property means, so no caller has to branch on the container's existence.
  */
 export function contentControlPropertiesOf(control: OoxmlNode): ContentControlProperties {
-  const sdtPr = contentControlPropertiesNodeOf(control);
+  const sdtPr = contentControlPropertiesContainerOf(control);
   const alias = wmlAttribute(namedChild(sdtPr, WML_NAMESPACE_URI, 'alias') ?? EMPTY, 'val');
   const tag = wmlAttribute(namedChild(sdtPr, WML_NAMESPACE_URI, 'tag') ?? EMPTY, 'val');
   const id = parseContentControlId(

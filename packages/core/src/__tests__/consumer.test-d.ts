@@ -14,6 +14,10 @@ import {
   type EditorCommand,
   type EditorHost,
   type EditorSnapshot,
+  type TableColumnDividerResizeTarget,
+  type TableColumnOccurrenceTarget,
+  type TableRightEdgeResizeTarget,
+  type TableRowOccurrenceTarget,
 } from '../contracts/editor';
 import { type InteractionFrameId, type SemanticTarget } from '../contracts/interaction';
 import { type McpContext, type McpToolDefinition } from '../contracts/mcp';
@@ -25,10 +29,104 @@ import type { DocAnchor, DocxDocument } from '../contracts/types';
 const undoCmd: EditorCommand = { type: 'undo' };
 const redoCmd: EditorCommand = { type: 'redo' };
 const deleteRowCmd: EditorCommand = { type: 'deleteRow' };
+const clearFill: EditorCommand = { type: 'setCellFill', color: null };
+const dottedBorders: EditorCommand = {
+  type: 'setTableBorders',
+  scope: 'inside',
+  spec: { style: 'dotted', size: 8, color: { kind: 'hex', value: '336699' } },
+};
+const clearBorders: EditorCommand = { type: 'setTableBorders', scope: 'none', target: 'top' };
+// @ts-expect-error none scope requires the active edge target
+const clearBordersWithoutTarget: EditorCommand = { type: 'setTableBorders', scope: 'none' };
+
+// @ts-expect-error concrete border scopes require a complete spec
+const bordersWithoutSpec: EditorCommand = { type: 'setTableBorders', scope: 'inside' };
+
+const noneWithSpec: EditorCommand = {
+  type: 'setTableBorders',
+  scope: 'none',
+  target: 'top',
+  // @ts-expect-error none scope must not carry a spec
+  spec: { style: 'dotted', size: 8, color: { kind: 'hex', value: '336699' } },
+};
+
+const invalidStyleBorders: EditorCommand = {
+  type: 'setTableBorders',
+  scope: 'top',
+  spec: {
+    // @ts-expect-error border style must be allowlisted
+    style: 'groove',
+    size: 8,
+    color: { kind: 'hex', value: '336699' },
+  },
+};
 
 // Commands with arguments.
 const boldCmd: EditorCommand = { type: 'toggleMark', mark: 'bold' };
 const tableCmd: EditorCommand = { type: 'insertTable', rows: 3, cols: 4 };
+
+const rowTarget: TableRowOccurrenceTarget = {
+  sourceRevision: 1,
+  tableId: 'tbl-1',
+  rowId: 'row-1',
+  isHeaderRepeat: false,
+};
+const columnTarget: TableColumnOccurrenceTarget = {
+  sourceRevision: 1,
+  tableId: 'tbl-1',
+  gridColumnId: 'col-1',
+  isHeaderRepeat: true,
+};
+const dividerTarget: TableColumnDividerResizeTarget = {
+  sourceRevision: 2,
+  tableId: 'tbl-1',
+  leftGridColumnId: 'col-a',
+  rightGridColumnId: 'col-b',
+  isHeaderRepeat: false,
+};
+const rightEdgeTarget: TableRightEdgeResizeTarget = {
+  sourceRevision: 2,
+  tableId: 'tbl-1',
+  gridColumnId: 'col-last',
+  isHeaderRepeat: true,
+};
+
+const insertRowWithTarget: EditorCommand = { type: 'insertRow', where: 'below', target: rowTarget };
+const deleteColumnWithTarget: EditorCommand = { type: 'deleteColumn', target: columnTarget };
+const dividerResize: EditorCommand = {
+  type: 'commitTableColumnDividerResize',
+  target: dividerTarget,
+  leftWidthTwips: 2400,
+  rightWidthTwips: 3600,
+};
+const rightEdgeResize: EditorCommand = {
+  type: 'commitTableRightEdgeResize',
+  target: rightEdgeTarget,
+  columnWidthTwips: 3600,
+  tableWidthTwips: 6000,
+};
+
+// @ts-expect-error occurrence targets require isHeaderRepeat
+const rowTargetMissingRepeat: TableRowOccurrenceTarget = {
+  sourceRevision: 1,
+  tableId: 'tbl-1',
+  rowId: 'row-1',
+};
+
+// @ts-expect-error divider resize targets require isHeaderRepeat
+const dividerTargetMissingRepeat: TableColumnDividerResizeTarget = {
+  sourceRevision: 2,
+  tableId: 'tbl-1',
+  leftGridColumnId: 'col-a',
+  rightGridColumnId: 'col-b',
+};
+
+// @ts-expect-error right-edge resize targets require isHeaderRepeat
+const rightEdgeTargetMissingRepeat: TableRightEdgeResizeTarget = {
+  sourceRevision: 2,
+  tableId: 'tbl-1',
+  gridColumnId: 'col-last',
+};
 
 // Declaration-only public entries must resolve for a consumer without exposing
 // any ProseMirror-facing types.
@@ -125,6 +223,20 @@ export function exercise(editor: Editor, doc: DocxDocument): void {
   void undoCmd;
   void redoCmd;
   void deleteRowCmd;
+  void clearFill;
+  void dottedBorders;
+  void clearBorders;
+  void clearBordersWithoutTarget;
+  void bordersWithoutSpec;
+  void noneWithSpec;
+  void invalidStyleBorders;
+  void insertRowWithTarget;
+  void deleteColumnWithTarget;
+  void dividerResize;
+  void rightEdgeResize;
+  void rowTargetMissingRepeat;
+  void dividerTargetMissingRepeat;
+  void rightEdgeTargetMissingRepeat;
 }
 
 // Async-declared functions must return a rejected promise, not throw

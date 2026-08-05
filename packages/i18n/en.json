@@ -50,7 +50,9 @@
     "reportIssue": "Report issue"
   },
   "toc": {
-    "updatePrompt": "This document contains a table of contents that's out of date. Regenerate it now?"
+    "updatePrompt": "This document contains a table of contents that's out of date. Regenerate it now?",
+    "refresh": "Refresh table of contents",
+    "refreshPageNumbers": "Refresh page numbers"
   },
   "formattingBar": {
     "groups": {
@@ -64,7 +66,8 @@
       "listFormatting": "List formatting",
       "image": "Image",
       "table": "Table",
-      "insert": "Insert"
+      "insert": "Insert",
+      "contentControl": "Content controls"
     },
     "undo": "Undo",
     "undoShortcut": "Undo (Ctrl+Z)",
@@ -89,6 +92,7 @@
     "imagePropertiesShortcut": "Image properties (alt text, border)...",
     "clearFormatting": "Clear formatting",
     "commentsAndChanges": "Comments & Changes",
+    "more": "More",
     "moreItems": "{count, plural, one {# more item} other {# more items}}",
     "unavailableInPreview": "Not available in this preview build"
   },
@@ -754,6 +758,22 @@
     "cellFillColor": "Cell Fill Color",
     "borderColor": "Border Color",
     "borderWidth": "Border width",
+    "clearCellFill": "Clear cell fill",
+    "borderStyles": {
+      "single": "Solid",
+      "dashed": "Dashed",
+      "dotted": "Dotted",
+      "double": "Double",
+      "triple": "Triple",
+      "thick": "Thick"
+    },
+    "borderWidths": {
+      "halfPt": "0.5 pt",
+      "onePt": "1 pt",
+      "oneHalfPt": "1.5 pt",
+      "twoPt": "2 pt",
+      "threePt": "3 pt"
+    },
     "unknownAction": "Unknown Action",
     "borders": {
       "all": "All borders",
@@ -878,7 +898,8 @@
     "failedToParse": "Failed to parse document",
     "linkRemoved": "Link removed",
     "linkCopied": "Link copied to clipboard",
-    "failedToSave": "Failed to save document"
+    "failedToSave": "Failed to save document",
+    "fontSubstitutionNotice": "Some fonts in this document aren't available, so substitutes are shown: {fonts}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Display text",
@@ -894,6 +915,44 @@
     "inertTarget": "This link points somewhere the editor will not open",
     "bookmarkTarget": "Goes to a place in this document",
     "refused": "That link could not be applied. Check the address and try again."
+  },
+  "contentControl": {
+    "group": "Content controls",
+    "showAll": "Show content control boundaries",
+    "formFill": "Form-fill mode",
+    "inspector": "Content control properties",
+    "remove": "Remove content control",
+    "noControl": "Place the caret inside a content control",
+    "inspectorPanel": {
+      "title": "Content control",
+      "alias": "Title",
+      "tag": "Tag",
+      "type": "Type",
+      "lock": "Lock",
+      "placeholder": "Placeholder",
+      "bound": "Data bound",
+      "empty": "—",
+      "yes": "Yes",
+      "no": "No",
+      "boundNote": "This control is bound to external data. Editing is refused.",
+      "lockedNote": "Content editing is locked on this control."
+    },
+    "types": {
+      "richText": "Rich text",
+      "plainText": "Plain text",
+      "checkbox": "Checkbox",
+      "dropdown": "Dropdown list",
+      "comboBox": "Combo box",
+      "date": "Date",
+      "picture": "Picture",
+      "repeatingSection": "Repeating section"
+    },
+    "lock": {
+      "unlocked": "Unlocked",
+      "sdtLocked": "Content control locked",
+      "contentLocked": "Contents locked",
+      "sdtContentLocked": "Content control and contents locked"
+    }
   },
   "headerFooter": {
     "chromeAriaLabel": "Header and footer editing",

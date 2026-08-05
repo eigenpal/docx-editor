@@ -20,6 +20,17 @@ import {
 } from '@docx-editor.dev/core-contract/store';
 import type { SemanticPosition, SemanticSelection } from '@docx-editor.dev/core-contract/layout';
 
+/** Inline `w:sdt` nesting bound — matches `segmentsOf` and formatting walks. */
+const MAX_SDT_NESTING = 32;
+
+function isContentControl(node: OoxmlNode): boolean {
+  return node.kind !== 'textValue' && (node as { kind: string }).kind === 'contentControl';
+}
+
+function isContentControlContent(node: OoxmlNode): boolean {
+  return node.kind !== 'textValue' && (node as { kind: string }).kind === 'contentControlContent';
+}
+
 /**
  * A hyperlink as the surface reports it: its identity, where it sits, and the SANITIZED
  * target. `href: null` is an inert link — a refused scheme or a dangling relationship — which
@@ -42,21 +53,65 @@ export interface SurfaceHyperlink {
   readonly tooltip?: string;
 }
 
-/** Every run under a node, at any depth — a `w:r`, or the runs inside a link. */
-function runsUnder(node: OoxmlNode): OoxmlNode[] {
-  if (node.kind === 'run') return [node];
-  if (node.kind !== 'hyperlink') return [];
-  return node.children.flatMap((child) => runsUnder(child));
+function elementChildren(node: OoxmlNode): readonly OoxmlNode[] {
+  return node.kind === 'textValue' ? [] : node.children;
 }
 
-/** The measurable length of one inline node, in `paragraphTextOf`'s vocabulary. */
+/** Every run under a node, at any depth — a `w:r`, or runs inside a link or inline control. */
+function runsUnder(node: OoxmlNode, depth = 0): OoxmlNode[] {
+  if (node.kind === 'run') return [node];
+  if (node.kind === 'hyperlink') {
+    return node.children.flatMap((child) => runsUnder(child, depth));
+  }
+  if (isContentControl(node)) {
+    if (depth >= MAX_SDT_NESTING) return [];
+    return elementChildren(node)
+      .filter((child) => isContentControlContent(child))
+      .flatMap((content) =>
+        elementChildren(content).flatMap((child) => runsUnder(child, depth + 1))
+      );
+  }
+  return [];
+}
+
 function inlineLength(node: OoxmlNode): number {
   if (node.kind === 'textValue') return node.value.length;
   if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
   if (node.kind === 'runProperties' || node.kind === 'generic') return 0;
+  if (isContentControl(node)) {
+    let total = 0;
+    for (const child of elementChildren(node)) {
+      if (!isContentControlContent(child)) continue;
+      for (const inner of elementChildren(child)) total += inlineLength(inner);
+    }
+    return total;
+  }
   let total = 0;
-  for (const child of node.children) total += inlineLength(child);
+  for (const child of elementChildren(node)) total += inlineLength(child);
   return total;
+}
+
+/** Walk inline children in order, recursing through links and typed inline controls. */
+function walkInlineChildren(
+  children: readonly OoxmlNode[],
+  depth: number,
+  visit: (child: OoxmlNode) => void
+): void {
+  for (const child of children) {
+    if (child.kind === 'hyperlink') {
+      visit(child);
+      continue;
+    }
+    if (isContentControl(child)) {
+      if (depth >= MAX_SDT_NESTING) continue;
+      for (const inner of elementChildren(child)) {
+        if (!isContentControlContent(inner)) continue;
+        walkInlineChildren(elementChildren(inner), depth + 1, visit);
+      }
+      continue;
+    }
+    visit(child);
+  }
 }
 
 /**
@@ -76,12 +131,12 @@ export function hyperlinksInParagraph(
   const text = textOf(paragraphId);
   const found: SurfaceHyperlink[] = [];
   let offset = 0;
-  for (const child of paragraph.children) {
+  walkInlineChildren(paragraph.children, 0, (child) => {
     if (child.kind === 'run') {
       offset += inlineLength(child);
-      continue;
+      return;
     }
-    if (child.kind !== 'hyperlink') continue;
+    if (child.kind !== 'hyperlink') return;
     const start = offset;
     for (const run of runsUnder(child)) offset += inlineLength(run);
     const target = hyperlinkTargetOf(child, resolve);
@@ -97,7 +152,7 @@ export function hyperlinksInParagraph(
       ...(target.anchor !== undefined ? { anchor: target.anchor } : {}),
       ...(target.tooltip !== undefined ? { tooltip: target.tooltip } : {}),
     });
-  }
+  });
   return found;
 }
 
@@ -399,9 +454,14 @@ function withinLink(
  * display text of an existing link silently unlinked it while reporting success. That is
  * the ordinary Ctrl+K-then-change-the-text flow.
  *
- * Inserting at `start` first puts the new text inside the link (the offset is a boundary of
- * the link's first run), and the old text — now shifted right by the inserted length — is
- * deleted after. The link is never empty at any point, so nothing sweeps it away.
+ * Inserting at `start` first puts the new text inside the link, and the old text — now
+ * shifted right by the inserted length — is deleted after. The link is never empty at any
+ * point, so nothing sweeps it away.
+ *
+ * `bias: 'right'` is what keeps the insert INSIDE the link. A boundary insert otherwise joins
+ * the run to its LEFT (Word's typing rule, see `applyInsertContent`), which at a link's start
+ * is whatever plain text precedes it. This caller is not typing — it is rewriting the link's
+ * own display text, so it names the run it means.
  */
 function replaceTextOps(
   paragraphId: string,
@@ -410,7 +470,7 @@ function replaceTextOps(
   text: string
 ): TreeDocOp[] | null {
   if (text.length === 0) return null;
-  const ops: TreeDocOp[] = [{ op: 'insertText', paragraphId, offset: start, text }];
+  const ops: TreeDocOp[] = [{ op: 'insertText', paragraphId, offset: start, text, bias: 'right' }];
   if (end > start) {
     ops.push({
       op: 'deleteText',

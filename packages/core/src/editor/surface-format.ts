@@ -67,6 +67,11 @@ export interface SurfaceFormatDeps {
    * style it is actually written in rather than nothing.
    */
   defaultParagraphStyleId?(): string | null;
+  /**
+   * The face a run with no authored font is measured in, so `formatting()` reports it
+   * instead of null (the run-defaults twin of `defaultParagraphStyleId`).
+   */
+  defaultFontFamily?(): string | null;
 }
 
 type FormatMethods = Pick<
@@ -324,8 +329,16 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         formattingAt(
           currentLayout.value,
           selectionNow.value,
-          (paragraphId: string, runProperties) =>
-            session.effectiveRunDefaults(paragraphId, runProperties),
+          (paragraphId: string, runProperties) => {
+            const resolved = session.effectiveRunDefaults(paragraphId, runProperties);
+            // A run whose chain authored NOTHING is still measured in the surface's
+            // default face; report that face rather than null, per span — so a blank
+            // document reads "Calibri" while a genuinely mixed selection still
+            // disagrees its way to null.
+            if (resolved.fontFamily !== null) return resolved;
+            const fallback = deps.defaultFontFamily?.() ?? null;
+            return fallback === null ? resolved : { ...resolved, fontFamily: fallback };
+          },
           deps.selectedCells?.(),
           deps.defaultParagraphStyleId?.() ?? null
         ),

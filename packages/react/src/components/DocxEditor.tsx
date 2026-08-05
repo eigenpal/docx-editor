@@ -15,6 +15,7 @@ import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
 import { Navigation as DocxEditorNavigationCompound } from '../editor/navigation';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
+import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
 import { DocxEditorReview } from '../editor/DocxEditorReview';
 import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
@@ -23,6 +24,7 @@ import {
   ContextMenu as DocxEditorContextMenuCompound,
   DocxEditorContextMenu,
 } from '../editor/contextmenu';
+import { DocxEditorContentControl } from '../editor/DocxEditorContentControl';
 import { useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
@@ -209,6 +211,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
           {...(typeof contextMenu === 'object' ? contextMenu : {})}
         />
       )}
+      <DocxEditorContentControl />
     </DocxEditorViewport>
   );
 
@@ -272,6 +275,9 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
           so `defaultChromeGroups()` filters it out and only explicit composition mounts it.
           The title bar above carries the save control instead. */}
       <DocxEditorToolbar t={translate} />
+      {/* Word's font compatibility bar: shown when the document's declared faces render
+          in substitutes, dismissible per set of missing families. */}
+      <DocxEditorFontNotice t={translate} />
       {/* The navigation pane is a SIBLING of the viewport inside a positioned row, not a
           column beside it: it floats over the gutter to the left of the centred page and
           leaves the page alone until the window is too narrow to hold both. Without a
@@ -288,6 +294,11 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
     viewport
   );
 
+  const tableInteractionLabel = useCallback(
+    (key: 'table.insertRowBelow' | 'table.insertColumnRight') => translate(key),
+    [translate]
+  );
+
   // Root owns the facade: created once per document/fonts identity, zoom follows
   // through `setZoom`, callbacks are read at their latest identity.
   return (
@@ -298,6 +309,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
       {...(locale !== undefined ? { locale } : {})}
       {...(mode !== undefined ? { mode } : {})}
       {...(zoom !== undefined ? { zoom } : {})}
+      tableInteractionLabel={tableInteractionLabel}
       {...(onReady ? { onReady } : {})}
       {...(onChange ? { onChange } : {})}
       {...(onFontError ? { onFontError } : {})}
@@ -346,6 +358,8 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
   /** Floating localized page readout for the active viewport. */
   readonly PageNumber: typeof DocxEditorPageNumber;
+  /** Word-style notice when document fonts render in substitute faces. */
+  readonly FontNotice: typeof DocxEditorFontNotice;
   /** Header/footer scope chrome while editing page furniture. */
   readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
   readonly NotesChrome: typeof DocxEditorNotesChrome;
@@ -366,6 +380,12 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
    * browser's own menu through.
    */
   readonly ContextMenu: typeof DocxEditorContextMenuCompound;
+  /**
+   * The content-control inspector — alias, tag, type, lock, placeholder, bound — and
+   * remove-keeping-content. Mounted by default inside the viewport; opens from the
+   * `contentControl.inspector` chrome slot.
+   */
+  readonly ContentControl: typeof DocxEditorContentControl;
 }
 
 export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
@@ -381,9 +401,11 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   Navigation: DocxEditorNavigationCompound,
   PageSetupDialog: DocxEditorPageSetupDialog,
   PageNumber: DocxEditorPageNumber,
+  FontNotice: DocxEditorFontNotice,
   HeaderFooterChrome: DocxEditorHeaderFooterChrome,
   NotesChrome: DocxEditorNotesChrome,
   HyperLink: DocxEditorHyperLink,
   Review: DocxEditorReview,
   ContextMenu: DocxEditorContextMenuCompound,
+  ContentControl: DocxEditorContentControl,
 });
