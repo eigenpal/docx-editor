@@ -103,16 +103,8 @@ const RAIL_OVERSCAN = 600;
 /** How many author slots the token ramp defines; past it, colours repeat. */
 const AUTHOR_SLOTS = 8;
 
-/** What an unmeasured, uncollapsed card reserves in the stacking run, in CSS px. */
+/** What an unmeasured card reserves in the stacking run, in CSS px. */
 const DEFAULT_CARD_HEIGHT = 72;
-/** A collapsed card: the head row and its padding, in CSS px. */
-const COLLAPSED_CARD_HEIGHT = 54;
-/**
- * How far (CSS px) a card may be pushed below its own text before it collapses to a
- * header. Roughly half a viewport: nearer than that the eye still connects card to text;
- * further, a full card reads as annotating whatever happens to be beside it.
- */
-const COLLAPSE_DISPLACEMENT_PX = 480;
 
 /** Keeps the caret: a mousedown that bubbles to the editor moves it. Inputs are exempt. */
 function guardMousedown(event: React.MouseEvent): void {
@@ -278,6 +270,10 @@ function ReviewRoot({
   // a rail that guessed would overlap the moment a comment ran to three lines.
   const [heights, setHeights] = useState<ReadonlyMap<string, number>>(() => new Map());
   const measure = useCallback((key: string, height: number) => {
+    // A real card is never 0px tall — zero is a layout-less read (a DOM without a
+    // renderer, or a mid-transition detach), and recording it collapses the stacking run
+    // to gaps. The content-derived estimate keeps standing in until a real height lands.
+    if (height <= 0) return;
     setHeights((previous) => {
       if (previous.get(key) === height) return previous;
       const next = new Map(previous);
@@ -481,36 +477,78 @@ function ReviewRoot({
     return merged;
   }, [heights, roots]);
 
-  // Stacking with CROWDING COLLAPSE, one deterministic pass. Push-down stacking cannot be
-  // cheated: a cluster of tall cards needs more room than its text region has, and the
-  // overflow used to spill page after page — the reader at the bottom of the document saw
-  // full cards whose text lived pages earlier. A card pushed further than the threshold
-  // from its own text renders COLLAPSED (header only), which both bounds how misleading a
-  // displaced card can be and shrinks the pressure that displaces everything after it.
-  // The ACTIVE card and the compose box never collapse. Collapse decisions feed the cursor
-  // with the collapsed height, so the pass is stable: each decision depends only on the
-  // cards before it.
-  const { stacked, collapsedKeys } = useMemo(() => {
+  // CLUSTERED stacking, the way Google Docs places its cards. Push-down alone cannot be
+  // cheated: a dense cluster of cards needs more room than its text region has, and
+  // one-directional overflow marched full cards page after page below their text. Here
+  // colliding cards merge into a CLUSTER that centres on its members' anchors — spreading
+  // the overflow both up and down, so every card stays a full card and sits as close to
+  // its text as geometry allows. A cluster holding the ACTIVE card shifts so that card
+  // sits exactly at its own text, which is what makes click-to-review feel anchored.
+  // One deterministic pass over document-ordered entries: each entry opens a cluster, and
+  // clusters merge while they collide, the standard 1-D label-placement algorithm.
+  const stacked = useMemo(() => {
     const scale = metrics.scale;
-    const positions = new Map<string, number>();
-    const collapsed = new Set<string>();
-    let cursor = Number.NEGATIVE_INFINITY;
+    interface ClusterEntry {
+      readonly key: string;
+      readonly anchorY: number;
+      /** This entry's offset from the cluster top, in LAYOUT points. */
+      offset: number;
+      readonly heightPt: number;
+      readonly isActive: boolean;
+    }
+    interface Cluster {
+      entries: ClusterEntry[];
+      /** Sum over entries of (anchor − offset): the numerator of the centred top. */
+      desiredSum: number;
+      heightPt: number;
+      top: number;
+    }
+    const clusters: Cluster[] = [];
+    const place = (cluster: Cluster): void => {
+      // Centred on its members' anchors; the active member overrides the centre so ITS
+      // card aligns with its text; never above the document.
+      const active = cluster.entries.find((entry) => entry.isActive);
+      const centred = cluster.desiredSum / cluster.entries.length;
+      cluster.top = Math.max(0, active ? active.anchorY - active.offset : centred);
+    };
     for (const entry of stackInput) {
       if (entry.anchorY === null) continue;
-      const top = Math.max(entry.anchorY, cursor);
-      positions.set(entry.key, top);
-      const displacedPx = (top - entry.anchorY) * scale;
-      const isActive = 'isActive' in entry && entry.isActive;
-      const collapse =
-        displacedPx > COLLAPSE_DISPLACEMENT_PX && !isActive && entry.key !== COMPOSE_KEY;
-      if (collapse) collapsed.add(entry.key);
-      const height = collapse
-        ? COLLAPSED_CARD_HEIGHT
-        : (estimatedHeights.get(entry.key) ?? DEFAULT_CARD_HEIGHT);
-      // Pixels to points before they meet an anchor.
-      cursor = top + (height + gap) / scale;
+      const heightPt = ((estimatedHeights.get(entry.key) ?? DEFAULT_CARD_HEIGHT) + gap) / scale;
+      const member: ClusterEntry = {
+        key: entry.key,
+        anchorY: entry.anchorY,
+        offset: 0,
+        heightPt,
+        isActive: 'isActive' in entry && entry.isActive === true,
+      };
+      clusters.push({
+        entries: [member],
+        desiredSum: entry.anchorY,
+        heightPt,
+        top: Math.max(0, entry.anchorY),
+      });
+      place(clusters[clusters.length - 1]!);
+      // Merge while the new cluster overlaps the one before it; merging can push the
+      // combined cluster up into ITS predecessor, so the loop continues until clear.
+      while (clusters.length > 1) {
+        const previous = clusters[clusters.length - 2]!;
+        const current = clusters[clusters.length - 1]!;
+        if (previous.top + previous.heightPt <= current.top) break;
+        for (const moved of current.entries) {
+          moved.offset += previous.heightPt;
+          previous.desiredSum += moved.anchorY - moved.offset;
+          previous.entries.push(moved);
+        }
+        previous.heightPt += current.heightPt;
+        clusters.pop();
+        place(previous);
+      }
     }
-    return { stacked: positions, collapsedKeys: collapsed };
+    const positions = new Map<string, number>();
+    for (const cluster of clusters) {
+      for (const entry of cluster.entries) positions.set(entry.key, cluster.top + entry.offset);
+    }
+    return positions;
   }, [stackInput, estimatedHeights, gap, metrics.scale]);
   const composeTop =
     composeAnchorY === null
@@ -575,7 +613,6 @@ function ReviewRoot({
           <ReviewList
             stack={stack}
             positions={stacked}
-            collapsed={collapsedKeys}
             scale={metrics.scale}
             offset={metrics.top}
             window={window_}
@@ -607,7 +644,6 @@ function ReviewRoot({
               <ReviewList
                 stack={stack}
                 positions={stacked}
-                collapsed={collapsedKeys}
                 scale={metrics.scale}
                 offset={metrics.top}
                 window={window_}
@@ -629,8 +665,6 @@ function ReviewRoot({
 interface ReviewListProps {
   stack?: boolean;
   positions?: ReadonlyMap<string, number>;
-  /** Cards the stacking pass collapsed to a header — pushed too far from their text. */
-  collapsed?: ReadonlySet<string>;
   scale?: number;
   offset?: number;
   /** Visible band of the scroller; cards outside it are not mounted. Null renders all. */
@@ -655,7 +689,6 @@ interface ReviewListProps {
 function ReviewList({
   stack = true,
   positions,
-  collapsed,
   scale = 1,
   offset = 0,
   window: visible = null,
@@ -688,10 +721,6 @@ function ReviewList({
             <div
               className="docx-review__slot"
               style={style}
-              // Header-only, because the card sits far from the text it annotates and a
-              // full summary there reads as annotating the wrong text. Clicking it makes
-              // the item active, and the active card always renders in full.
-              {...(collapsed?.has(entry.key) ? { 'data-collapsed': '' } : {})}
               ref={(node) => {
                 measure(node, entry.key);
               }}

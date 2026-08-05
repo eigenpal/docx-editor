@@ -405,6 +405,71 @@ describe('the review sidebar', () => {
     });
     expect(view.queryByTestId('review-balloon')).toBeNull();
   });
+
+  test('a crowded cluster spreads around its text instead of spilling below it', async () => {
+    // Many changes packed line-on-line: their cards cannot all fit beside the text.
+    // Push-down alone marched the tail pages below; the cluster instead CENTRES on its
+    // anchors, so cards spread up as well as down and every card stays a full card.
+    const CROWDED = docx(
+      // Plain paragraphs first, so the cluster has room ABOVE it to spread into — enough
+      // that aligning a mid-cluster member to its text never hits the top of the document.
+      Array.from({ length: 60 }, (_, index) => `<w:p><w:r><w:t>plain ${index}</w:t></w:r></w:p>`)
+        .join('') +
+        Array.from(
+          { length: 16 },
+          (_, index) =>
+            `<w:p><w:ins w:id="${index + 1}" w:author="A${index}" ` +
+            `w:date="2026-01-01T00:00:${String(index).padStart(2, '0')}Z">` +
+            `<w:r><w:t>change ${index}</w:t></w:r></w:ins></w:p>`
+        ).join('')
+    );
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={CROWDED}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    // EVERY decision renders as a full card — nothing is minimized or demoted.
+    const slots = [...view.container.querySelectorAll('.docx-review__slot')];
+    expect(slots.length).toBe(16);
+    const items = instance!.getReviewItems();
+    const anchors = new Map(items.map((item) => [item.key, item.anchorY] as const));
+    const tops = slots.map((slot) => parseFloat((slot as HTMLElement).style.top));
+    // Ordered and non-overlapping (estimates space them; happy-dom measures no heights).
+    for (let index = 1; index < tops.length; index += 1) {
+      expect(tops[index]!).toBeGreaterThan(tops[index - 1]!);
+    }
+    // Centred: the run starts ABOVE the first anchor (spread went upward too, in CSS px —
+    // slot tops are layout points times the render scale), and the last card sits closer
+    // to its text than pure push-down would have put it.
+    const SCALE = 96 / 72;
+    const firstAnchorPx = ([...anchors.values()][0] as number) * SCALE;
+    const lastAnchorPx = ([...anchors.values()].at(-1) as number) * SCALE;
+    expect(tops[0]!).toBeLessThan(firstAnchorPx);
+    const pushDownLastTop = firstAnchorPx + (tops.length - 1) * (tops[1]! - tops[0]!);
+    expect(tops.at(-1)! - lastAnchorPx).toBeLessThan(pushDownLastTop - lastAnchorPx);
+
+    // Activating a member shifts the cluster so THAT card aligns with its own text.
+    const target = items[7]!;
+    await act(async () => {
+      instance!.setActiveReviewItem(target.key);
+    });
+    const activeSlot = view.container
+      .querySelector('[data-testid="review-card"][data-active]')
+      ?.closest('.docx-review__slot') as HTMLElement | null;
+    expect(activeSlot).not.toBeNull();
+    expect(
+      Math.abs(parseFloat(activeSlot!.style.top) - (target.anchorY as number) * SCALE)
+    ).toBeLessThan(2);
+  });
 });
 
 describe('useEditorEvent', () => {
