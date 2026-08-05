@@ -852,11 +852,22 @@ interface HoverAnchor {
   readonly bottom: number;
   /** True when the balloon opens upward — the target sits low in the window. */
   readonly above: boolean;
+  /**
+   * True when a CLICK opened it. A pinned balloon stops following the pointer and stays
+   * until a press lands somewhere that is neither a tracked change nor the balloon.
+   */
+  readonly pinned: boolean;
 }
 
 /** Word's own delays, near enough: deliberate hover opens, a passing pointer does not. */
 const HOVER_SHOW_MS = 250;
 const HOVER_HIDE_MS = 200;
+/**
+ * Retarget delay while a balloon is ALREADY up. Much shorter than the opening delay: the
+ * reader is plainly working through the changes, and making each one wait the full
+ * deliberate-hover pause reads as the balloon failing to follow.
+ */
+const HOVER_RETARGET_MS = 80;
 
 /**
  * The hover balloon: pointing at a tracked change in the PAGE raises its decision card
@@ -869,6 +880,11 @@ const HOVER_HIDE_MS = 200;
  * An element whose attribution matches nothing (mid-edit staleness) still shows what the
  * DOM itself carries — author, kind, date — just without actions.
  *
+ * FOLLOW, THEN PIN. With a balloon up, moving onto another change retargets it after a
+ * short beat — the reader is walking the redline and the balloon walks with them.
+ * CLICKING a change pins its balloon in place; it ignores the pointer until a press lands
+ * somewhere that is neither a tracked change nor the balloon itself.
+ *
  * @public
  */
 function ReviewHover({ className, hidden }: ReviewPartProps) {
@@ -876,6 +892,12 @@ function ReviewHover({ className, hidden }: ReviewPartProps) {
   const { t } = useTranslation();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [anchor, setAnchor] = useState<HoverAnchor | null>(null);
+  // What the LISTENERS need to know about the state they cannot read: whether a balloon
+  // is up (retarget fast) and whether it is pinned (ignore hover altogether).
+  const openRef = useRef(false);
+  const pinnedRef = useRef(false);
+  openRef.current = anchor !== null;
+  pinnedRef.current = anchor?.pinned ?? false;
 
   useEffect(() => {
     const host = rootRef.current;
@@ -889,7 +911,7 @@ function ReviewHover({ className, hidden }: ReviewPartProps) {
     let hideTimer = 0;
     let current: HTMLElement | null = null;
 
-    const show = (element: HTMLElement): void => {
+    const show = (element: HTMLElement, pinned: boolean): void => {
       const railRect = rail.getBoundingClientRect();
       const rect = element.getBoundingClientRect();
       const viewportBottom = element.ownerDocument.defaultView?.innerHeight ?? Infinity;
@@ -908,10 +930,14 @@ function ReviewHover({ className, hidden }: ReviewPartProps) {
         // Opens upward when there is no room below — a change on the last visible line
         // would otherwise push its balloon under the fold.
         above: rect.bottom + 220 > viewportBottom,
+        pinned,
       });
     };
 
     const onOver = (event: MouseEvent): void => {
+      // A pinned balloon holds still: the reader clicked THIS change, and having the card
+      // wander off while they reach for its buttons is the failure pinning exists to stop.
+      if (pinnedRef.current) return;
       const target = event.target;
       if (!(target instanceof Element)) return;
       // Travelling INTO the balloon keeps it open — that is how its buttons get clicked.
@@ -925,7 +951,12 @@ function ReviewHover({ className, hidden }: ReviewPartProps) {
         if (element === current) return;
         current = element;
         window.clearTimeout(showTimer);
-        showTimer = window.setTimeout(() => show(element), HOVER_SHOW_MS);
+        // With a balloon already up the pointer is FOLLOWED: retargeting waits only long
+        // enough to skip changes the pointer merely crosses.
+        showTimer = window.setTimeout(
+          () => show(element, false),
+          openRef.current ? HOVER_RETARGET_MS : HOVER_SHOW_MS
+        );
       } else {
         current = null;
         window.clearTimeout(showTimer);
@@ -934,37 +965,89 @@ function ReviewHover({ className, hidden }: ReviewPartProps) {
       }
     };
     const onLeave = (): void => {
+      if (pinnedRef.current) return;
       current = null;
       window.clearTimeout(showTimer);
       window.clearTimeout(hideTimer);
       hideTimer = window.setTimeout(() => setAnchor(null), HOVER_HIDE_MS);
     };
+    // Clicking a change PINS its balloon — Word's own gesture for "I am deciding this
+    // one". Observation only: the press still moves the caret and opens the rail card,
+    // exactly as it did before the balloon existed. A press anywhere else lets go —
+    // including the pinned change's own text, where the reader is now placing a caret.
+    const onDown = (event: MouseEvent): void => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      // Pressing the balloon itself (accept, reject) is not a dismissal.
+      if (host.contains(target)) return;
+      const element = target.closest('[data-revision-id]');
+      window.clearTimeout(showTimer);
+      window.clearTimeout(hideTimer);
+      if (element instanceof HTMLElement && scroller.contains(element)) {
+        // Pressing a change pins it — including one whose balloon hover already opened.
+        current = element;
+        show(element, true);
+      } else {
+        current = null;
+        setAnchor(null);
+      }
+    };
     scroller.addEventListener('mouseover', onOver, true);
     scroller.addEventListener('mouseleave', onLeave);
+    scroller.addEventListener('mousedown', onDown, true);
     return () => {
       window.clearTimeout(showTimer);
       window.clearTimeout(hideTimer);
       scroller.removeEventListener('mouseover', onOver, true);
       scroller.removeEventListener('mouseleave', onLeave);
+      scroller.removeEventListener('mousedown', onDown, true);
     };
   }, []);
 
   // The decision the hovered SITE belongs to. Sites coalesce into decisions by the
-  // `(id, author, date)` triple, which is exactly what the painted element carries.
+  // `(id, author, date)` triple, which is what the painted element carries — but real
+  // files drift: producers reuse ids, omit dates on one wrapper and not another, and a
+  // strict triple left the balloon informational over changes the rail could resolve. So
+  // the match RELAXES in steps, taking the strictest interpretation with a single answer:
+  // the full triple, then `(id, author)`, then the id alone — and never a guess between
+  // two candidates.
   const entry = useMemo(() => {
     if (!anchor) return null;
+    const revisions = allItems.filter(
+      (candidate) => candidate.kind === 'revision' && candidate.item.kind === 'revision'
+    );
+    const only = (matches: readonly ReviewItemView[]): ReviewItemView | null =>
+      matches.length === 1 ? matches[0]! : null;
+    const byTriple = revisions.filter(
+      (candidate) =>
+        candidate.item.kind === 'revision' &&
+        candidate.item.addresses.some(
+          (address) =>
+            address.id === anchor.revisionId &&
+            address.author === anchor.author &&
+            address.date === anchor.date
+        )
+    );
+    // The exact triple may legitimately match SEVERAL decisions (Word reuses ids across
+    // an editing burst); reading order put the right one first often enough before, so
+    // the first stays the answer at this rung.
+    if (byTriple.length > 0) return byTriple[0]!;
+    const byAuthor = revisions.filter(
+      (candidate) =>
+        candidate.item.kind === 'revision' &&
+        candidate.item.addresses.some(
+          (address) => address.id === anchor.revisionId && address.author === anchor.author
+        )
+    );
     return (
-      allItems.find(
-        (candidate) =>
-          candidate.kind === 'revision' &&
-          candidate.item.kind === 'revision' &&
-          candidate.item.addresses.some(
-            (address) =>
-              address.id === anchor.revisionId &&
-              address.author === anchor.author &&
-              address.date === anchor.date
-          )
-      ) ?? null
+      only(byAuthor) ??
+      only(
+        revisions.filter(
+          (candidate) =>
+            candidate.item.kind === 'revision' &&
+            candidate.item.addresses.some((address) => address.id === anchor.revisionId)
+        )
+      )
     );
   }, [allItems, anchor]);
 

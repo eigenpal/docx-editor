@@ -388,6 +388,25 @@ describe('the review sidebar', () => {
       await new Promise((resolve) => setTimeout(resolve, 260));
     });
     expect(view.queryByTestId('review-hover')).toBeNull();
+
+    // CLICKING a change pins its balloon: it opens at once, ignores the pointer moving to
+    // other changes, and lets go when a press lands outside any tracked change.
+    const pinSpan = view.container.querySelector(
+      '.docx-paginated-surface [data-revision-id][data-revision-kind="insert"]'
+    )!;
+    await act(async () => {
+      fireEvent.mouseDown(pinSpan);
+    });
+    expect((view.getByTestId('review-hover-card') as HTMLElement).dataset.kind).toBe('insert');
+    await act(async () => {
+      fireEvent.mouseOver(view.container.querySelector('.docx-table-row--revision')!);
+      await new Promise((resolve) => setTimeout(resolve, 320));
+    });
+    expect((view.getByTestId('review-hover-card') as HTMLElement).dataset.kind).toBe('insert');
+    await act(async () => {
+      fireEvent.mouseDown(view.container.querySelector('.docx-editor__scroll-container')!);
+    });
+    expect(view.queryByTestId('review-hover')).toBeNull();
   });
 });
 
