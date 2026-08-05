@@ -618,6 +618,11 @@ function leavesContainer(
       const nested =
         node.kind === 'hyperlink' ||
         node.kind === 'fldSimple' ||
+        // A content control is a container the same way a link is: typing at
+        // its OUTER edge must not join the run inside and grow the control —
+        // which is exactly what pressing space after a custom-node chip did
+        // before this branch (pro-review-and-custom-nodes 4.6).
+        node.kind === 'contentControl' ||
         (node.kind === 'generic' && node.localName === 'fldSimple')
           ? node
           : inside;

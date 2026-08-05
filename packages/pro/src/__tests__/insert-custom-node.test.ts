@@ -108,6 +108,22 @@ describe('insertCustomNode', () => {
     expect(recognizeCustomNodes(editor.surface!.session.part(), [citation])).toEqual([]);
   });
 
+  test('typing at the chip edge stays OUTSIDE the control', () => {
+    const editor = mount('<w:p><w:r><w:t>before after</w:t></w:r></w:p>');
+    insertCustomNode(editor, citation, { sourceId: 's1' }, 'LABEL', {
+      at: { paragraphId: firstParagraphId(editor), offset: 7 },
+    });
+    // Caret right after the label's last character = the control's outer edge.
+    editor.surface!.setSelection({
+      anchor: { paragraphId: firstParagraphId(editor), offset: 12 },
+      head: { paragraphId: firstParagraphId(editor), offset: 12 },
+    });
+    editor.surface!.type(' ');
+    const [node] = recognizeCustomNodes(editor.surface!.session.part(), [citation]);
+    // The space landed BESIDE the control, never inside it (ledger 4.6).
+    expect(node?.text).toBe('LABEL');
+  });
+
   test('a tag past the Word cap is refused with the data-part hint', () => {
     const editor = mount('<w:p><w:r><w:t>text</w:t></w:r></w:p>');
     const result = insertCustomNode(

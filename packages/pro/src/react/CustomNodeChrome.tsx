@@ -83,7 +83,27 @@ export function CustomNodeChrome(props: CustomNodeChromeProps): null {
     const definitionOf = (node: ActivatedCustomNode) =>
       nodes.find((entry) => entry.name === node.name)!;
     const onClick = (event: MouseEvent) => {
-      const node = activationOf(event.target);
+      let node = activationOf(event.target);
+      if (!node) {
+        // Geometry fallback (ledger 4.5a): with non-single line spacing the
+        // boundary rect can sit on the LEADING above the text, so the text the
+        // user actually clicks is just below it. Hit-test every chip rect
+        // expanded one rect-height downward before giving up.
+        for (const boundary of document.querySelectorAll(BOUNDARY)) {
+          const candidate = activationOf(boundary);
+          if (!candidate) continue;
+          const rect = candidate.rect;
+          if (
+            event.clientX >= rect.left &&
+            event.clientX <= rect.right &&
+            event.clientY >= rect.top &&
+            event.clientY <= rect.bottom + rect.height
+          ) {
+            node = candidate;
+            break;
+          }
+        }
+      }
       if (!node) return;
       definitionOf(node).onClick?.(node);
       onNodeClick?.(node);
