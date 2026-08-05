@@ -1,7 +1,7 @@
 ---
 title: 'Hooks'
-description: 'The React API the packaged chrome is built on: subscribe to editor state, run commands, read the outline, search, and drive page setup.'
-category: 'React'
+description: "The React API the packaged chrome is built on: subscribe to editor state, run commands, read the document outline, search, and drive page setup."
+category: "React"
 order: 33
 ---
 
@@ -104,7 +104,7 @@ function SaveButton() {
 }
 ```
 
-Reading state through `editor.snapshot()` in render will not re-render your component when the document changes — that is what `useEditorState` is for. Use the instance for actions and one-shot reads.
+Reading state through `editor.snapshot()` in render will not re-render your component when the document changes. That is what `useEditorState` is for. Use the instance for actions and one-shot reads.
 
 ## useEditorEvent
 
@@ -237,6 +237,13 @@ function Find() {
 | `useContextMenuTarget()`          | The element the last right-click landed on.                              |
 | `useNavigationPane(options?)`     | Open state and width for the navigation pane.                            |
 | `useTranslation()`                | `{ t }` bound to the active locale catalogue.                            |
+| `useFonts(source, ...fragments)`  | Builds a `FontResolver` from a source plus fragments. See [Fonts](/docs/2.x/guides/fonts). |
+| `useNotePropertiesState()`        | Footnote and endnote numbering properties for the current scope.        |
+| `useEditorSnapshot(editor)`       | Revision counter for an editor, for your own `useSyncExternalStore`.    |
+| `useNavigationShift()`            | Horizontal offset the open navigation pane pushes the page by.          |
+| `useTableBorderTargetLabel()`     | Label for the active table border target, for a custom border control.  |
+
+`useContentControlInstance()` and `useHyperlinkPopupInstance()` are the context-free variants of `useContentControl()` and `useHyperlinkPopup()`, for a control mounted outside the part that owns the state.
 
 Review hooks (`useReview`, `useReviewOf`, `useReviewItem`) ship in [`@docx-editor.dev/pro/react`](/docs/2.x/pro).
 

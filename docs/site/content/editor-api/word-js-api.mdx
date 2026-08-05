@@ -1,7 +1,7 @@
 ---
 title: 'Office.js compatibility'
-description: 'The Office.js-compatible subset: what of the Word JavaScript object model is implemented, how the shape is verified, and what it omits.'
-category: 'Editor API'
+description: "The Office.js-compatible subset: which parts of the Word JavaScript object model are implemented, how the shape is verified in CI, and what it omits."
+category: "Editor API"
 order: 53
 ---
 
@@ -9,13 +9,13 @@ order: 53
 
 Being exact about the scope of that claim:
 
-- **Compatible, not hosted.** It does not run inside an Office add-in host, so there is no `Office.onReady` and no `Word.run` — a batch is opened by a runtime you construct, with `DocxEditor.createServer(bytes)` or `DocxEditor.createBrowser(editor)`. Everything inside the callback is the same code.
+- **Compatible, not hosted.** It does not run inside an Office add-in host, so there is no `Office.onReady` and no `Word.run`: a batch is opened by a runtime you construct, with `DocxEditor.createServer(bytes)` or `DocxEditor.createBrowser(editor)`. Everything inside the callback is the same code.
 - **No Microsoft dependency.** Every type in the public surface is authored in this repository. Nothing is vendored, copied, or code-generated from Microsoft's declarations.
-- **A subset**, and the omissions below are the interesting part.
+- **A subset.** The omissions are listed below.
 
 ## How the shape is kept honest
 
-Microsoft's published declarations are used as reference-only conformance input, never as a dependency. A checked-in manifest allowlists which symbols and members the surface is measured against; a network-capable maintainer script reads a pinned `@types/office-js` release into a normalized fixture of names and call shapes; and the repository's own hand-authored declarations are compared against that fixture two independent ways — a strict per-overload comparison, and generated TypeScript assertions that the real compiler checks. Representative Word samples, rewritten only in their namespace, have to type-check against the authored declarations.
+Microsoft's published declarations are used as reference-only conformance input, never as a dependency. A checked-in manifest allowlists which symbols and members the surface is measured against; a network-capable maintainer script reads a pinned `@types/office-js` release into a normalized fixture of names and call shapes; and the repository's own hand-authored declarations are compared against that fixture two independent ways: a strict per-overload comparison, and generated TypeScript assertions that the real compiler checks. Representative Word samples, rewritten only in their namespace, have to type-check against the authored declarations.
 
 None of that runs at install, test or build time. Everything CI gates on reads files already in the repository, and the published package contains no reference data at all.
 
@@ -40,7 +40,7 @@ Omitted means **absent**, not stubbed. There is no type in this surface shaped l
 | `getHtml`, `getOoxml`, `getText`, `exists`                 | Deferred with their `ClientResult` shapes; `Body.text` and `Paragraph.text` cover the loaded-read case.                                          |
 | Creating and deleting comments                             | Comments can be read, replied to and resolved. Creating one is not in this release.                                                              |
 
-A few members are implemented but deliberately shaped differently from upstream — a content control's id is a string because the file format lets a document repeat it and leave it out, and its type is reported in the file format's own vocabulary rather than Word's UI wording. Where that happens it is recorded as a divergence rather than quietly re-shaped.
+A few members are implemented but deliberately shaped differently from upstream. A content control's id is a string because the file format lets a document repeat it and leave it out, and its type is reported in the file format's own vocabulary rather than Word's UI wording. Where that happens it is recorded as a divergence rather than quietly re-shaped.
 
 ## Migrating an add-in
 
@@ -50,5 +50,5 @@ A few members are implemented but deliberately shaped differently from upstream 
 
 ## Next steps
 
-- [Overview](/docs/2.x/editor-api) — the object model, server and browser
-- [API reference](/docs/2.x/api/docx-editor-editor-api)
+- [Overview](/docs/2.x/editor-api): the object model, server and browser
+- [API reference](/docs/2.x/api/editor-api)

@@ -1,7 +1,7 @@
 ---
 title: 'Installation'
-description: 'Install the DOCX editor in React, Next.js, Vite, Remix, or Astro. Styles import, SSR setup, and package choices.'
-category: 'Getting Started'
+description: "Install the DOCX editor in React, Next.js, Vite, Remix, or Astro. Covers the stylesheet import, the client-only SSR boundary, fonts, and which package to pick."
+category: "Getting Started"
 order: 2
 ---
 
@@ -12,15 +12,15 @@ order: 2
 The adapter carries the engine and the string catalogue, so for most apps it is one install.
 
 ```bash
-# React adapter — the editor
+# React adapter: the editor
 npm install @docx-editor.dev/react
 
 # Tracked changes, comments, custom nodes
-# Commercially licensed — free to evaluate, production use needs an agreement
+# Commercially licensed: free to evaluate, production use needs an agreement
 npm install @docx-editor.dev/pro
 
 # Office.js-compatible editing API, on a server or beside an open editor
-# Commercially licensed — same terms
+# Commercially licensed: same terms
 npm install @docx-editor.dev/editor-api
 
 # Metric-compatible substitutes for Word's default fonts (optional)
@@ -76,7 +76,7 @@ See [Fonts and measurement](/docs/2.x/guides/fonts) for how the sources compose.
 
 ## No UI
 
-To read, edit, and write a `.docx` with no editor on screen — on a server, in a worker, in a script — use [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api). It opens bytes, edits them through an Office.js-compatible batching object model, and saves them back.
+To read, edit, and write a `.docx` headlessly, on a server, in a worker, or in a script, use [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api). It opens bytes, edits them through an Office.js-compatible batching object model, and saves them back.
 
 ## Next steps
 

@@ -1,22 +1,22 @@
 ---
 title: 'Fonts and measurement'
 description: 'How the editor resolves fonts for Word-accurate line wrap and pagination: embedded DOCX fonts, metric-compatible substitutes, and app-supplied font URLs.'
-category: 'Guides'
+category: "Guides"
 seoTitle: 'Fonts and text measurement'
 ---
 
 The editor measures text with a real shaping engine (HarfBuzz) whenever it has font
-bytes to measure with. With no fonts at all it still works — layout falls back to a
-fixed-width estimate — but wrap and page-break points are then approximations rather
+bytes to measure with. With no fonts at all it still works: layout falls back to a
+fixed-width estimate, but wrap and page-break points are then approximations rather
 than Word's. This guide covers the three ways fonts reach the editor, the two ways of
 timing them, and how they combine.
 
 ## The three font sources
 
-**1. Fonts embedded in the document — automatic.** A `.docx` can carry the faces it was
+**1. Fonts embedded in the document, automatic.** A `.docx` can carry the faces it was
 written in. When it does, the editor extracts them on load and measures with them. No
 configuration, no assets, no network: a document that brings its own fonts is
-Word-accurate out of the box, in metrics and in pixels — the editor also registers the
+Word-accurate out of the box, in metrics and in pixels. The editor also registers the
 embedded bytes with the browser so the painted pages show the real glyphs, not a platform
 substitute.
 
@@ -25,14 +25,14 @@ declares. A `.docx` controls its own font names, and the browser's font registry
 page-wide, so registering a document's `Segoe UI` would repaint your application's own
 buttons and dialogs with glyphs from that file.
 
-**2. Metric-compatible substitutes — one call.** Most documents use Word's default
+**2. Metric-compatible substitutes, one call.** Most documents use Word's default
 fonts (Calibri, Cambria, Times New Roman, Arial, Courier New), which are proprietary
 and cannot be bundled. The optional `@docx-editor.dev/fonts` package ships open-licensed
-faces built to match their metrics — identical advance widths, so lines wrap where Word
+faces built to match their metrics: identical advance widths, so lines wrap where Word
 wraps them:
 
 <Callout>
-  `@docx-editor.dev/fonts` is not published to npm yet — it ships with the v2 line. The API below is
+  `@docx-editor.dev/fonts` is not published to npm yet. It ships with the v2 line. The API below is
   stable; the package is workspace-only until then.
 </Callout>
 
@@ -52,7 +52,7 @@ import type { FontConfigurationFragment } from '@docx-editor.dev/react';
 
 function Editor({ bytes }: { bytes: Uint8Array }) {
   // `settled` gates the FIRST mount. `fonts` is sampled at mount and an identity change
-  // remounts, so mounting before fonts resolve costs a visible remount — and a remount
+  // remounts, so mounting before fonts resolve costs a visible remount, and a remount
   // resets the undo stack and the caret. Waiting once avoids both.
   const [fonts, setFonts] = useState<{
     settled: boolean;
@@ -87,9 +87,9 @@ function Editor({ bytes }: { bytes: Uint8Array }) {
 Font binaries load lazily as separate assets, only for the families you ask for.
 Importing the package fetches nothing.
 
-**3. Your own fonts — explicit URLs.** For brand fonts or licensed copies of the real
+**3. Your own fonts, explicit URLs.** For brand fonts or licensed copies of the real
 faces, `loadFonts` fetches URLs you specify and caches them locally. When you pin a
-`sha256:` hash it gates admission hard — pin it for any URL not under your sole
+`sha256:` hash it gates admission hard. Pin it for any URL not under your sole
 control:
 
 ```ts
@@ -114,7 +114,7 @@ const fonts = composeFontConfiguration(brand, await loadDefaultFonts());
 `loadFonts` never rejects for a single bad source: it returns the admitted sources plus
 a typed `failures` list, so the editor can open with partial coverage.
 
-You never have to compute a hash by hand. Pins are optional — omit `hash` for URLs on
+You never have to compute a hash by hand. Pins are optional: omit `hash` for URLs on
 your own origin and `loadFonts` computes one for you. When you do want to pin a
 third-party URL, run it once without a pin and read the values back off the result:
 
@@ -126,7 +126,7 @@ console.log(result.sources.map((source) => `${source.id}: ${source.hash}`));
 Paste those into your source list (or generate the list at build time, which is how
 `@docx-editor.dev/fonts` bakes the hashes for its own assets).
 
-Already hold the bytes — a file input, IndexedDB, a bundler import? `createFontSource`
+Already hold the bytes, from a file input, IndexedDB, or a bundler import? `createFontSource`
 turns them into a source directly, with the hash computed for you. It returns a typed
 failure rather than throwing when the descriptor or the bytes are unusable:
 
@@ -221,10 +221,10 @@ one immutable configuration the editor samples per mount. Precedence is simple:
 Fonts never block a document from opening. The document mounts immediately on the
 fixed measurer and swaps to shaped measurement in a single re-mount when fonts resolve.
 Edits made before fonts resolve survive that remount, but the undo stack and caret
-position do not — which is why the upfront sample above waits for fonts before the first
+position do not, which is why the upfront sample above waits for fonts before the first
 mount. A resolver skips that step. It runs after the document is parsed, so you have
 nothing to gate the first mount on.
-Every failure — a corrupt embedded face, a 404, a hash mismatch — degrades exactly one
+Every failure (a corrupt embedded face, a 404, a hash mismatch) degrades exactly one
 face, reports a typed `EditorFontError` through `onFontError`, and leaves the rest
 measuring accurately.
 
@@ -261,3 +261,10 @@ usable font source; `resolving: true` means shaped resolution is still in flight
   resolver you pass run because your code asked for them. Embedded fonts come from inside
   the file. Opening a document makes no network request unless you passed a resolver that
   fetches, which is the one case where a font request happens on open.
+
+
+## Next steps
+
+- [Props: Fonts](/docs/2.x/react/props#fonts): `fonts` and `onFontError`
+- [Word fidelity](/docs/2.x/word-fidelity): how measurement affects pagination
+- [Custom styles](/docs/2.x/guides/custom-styles): styles, themes, and the font picker

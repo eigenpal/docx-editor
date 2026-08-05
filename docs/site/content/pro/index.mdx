@@ -1,7 +1,7 @@
 ---
 title: '@docx-editor.dev/pro'
-description: 'Tracked changes, comments, and custom nodes. Register a module on the editor root and take the hook or the packaged sidebar.'
-category: 'Pro'
+description: "Tracked changes, comments, and custom nodes for the React DOCX editor. Register a module on the editor root, then take the hook or the packaged sidebar."
+category: "Pro"
 order: 60
 ---
 
@@ -9,9 +9,9 @@ order: 60
 
 `@docx-editor.dev/pro` adds three capabilities to the React editor:
 
-- **[Tracked changes](/docs/2.x/pro/tracked-changes)** — suggesting mode, markup rendering, accept and reject.
-- **[Comments](/docs/2.x/pro/comments)** — threads anchored to a range, with replies.
-- **[Custom nodes](/docs/2.x/pro/custom-nodes)** — your own inline node types, stored as Word content controls.
+- **[Tracked changes](/docs/2.x/pro/tracked-changes)**: suggesting mode, markup rendering, accept and reject.
+- **[Comments](/docs/2.x/pro/comments)**: threads anchored to a range, with replies.
+- **[Custom nodes](/docs/2.x/pro/custom-nodes)**: your own inline node types, stored as Word content controls.
 
 ## Install
 
@@ -23,7 +23,7 @@ The framework-neutral entry is `@docx-editor.dev/pro`; React chrome lives at `@d
 
 ## Register a module
 
-Capabilities are modules you pass to the editor root. Module registration happens at construction, like `mode`, so the array identity must be stable — build it outside the component or memoize it, or the editor rebuilds on every render.
+Capabilities are modules you pass to the editor root. Module registration happens at construction, like `mode`, so the array identity must be stable. Build it outside the component or memoize it, or the editor rebuilds on every render.
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -48,7 +48,7 @@ export function Reviewer({ bytes }: { bytes: Uint8Array }) {
 
 `modules` is also a prop on the packaged `<DocxEditor modules={MODULES} />`.
 
-Without a review module the editor still opens a document containing revisions and comments and still saves them back untouched — it renders revisions in their final state and offers no review UI. Registering the module is what makes them visible and actionable.
+Without a review module the editor still opens a document containing revisions and comments and still saves them back untouched. It renders revisions in their final state and offers no review UI. Registering the module is what makes them visible and actionable.
 
 ## Author attribution
 

@@ -1,12 +1,12 @@
 ---
 title: 'Architecture'
 description: 'How the editor renders DOCX with Word fidelity: one canonical OOXML tree, a DOM-free layout pass, and painted pages that are themselves the editable surface.'
-category: 'Core'
+category: "Reference"
 ---
 
 There is one document model and one pipeline:
 
-```
+```text
 bytes → bounded OPC/XML read → canonical OOXML tree → layout → painted pages → serialize
 ```
 
@@ -14,14 +14,14 @@ There is one document model. What you see painted and what an edit mutates are t
 
 ## The canonical tree
 
-Reading a `.docx` produces one tree per package part. Nodes are **typed** where layout needs them — the paragraph, run, and table vocabulary — and **generic** everywhere else, preserving the element verbatim.
+Reading a `.docx` produces one tree per package part. Nodes are **typed** where layout needs them (the paragraph, run, and table vocabulary) and **generic** everywhere else, preserving the element verbatim.
 
 Two consequences:
 
 - Content the engine does not model is carried, not dropped. A known element in an invalid position demotes to generic rather than erroring.
 - Unknown content never blocks editing. A document full of extensions the engine has never seen still opens, still edits, and still saves.
 
-Every write is a transaction over the tree, addressed by node id and character offset. That is the only write path — there is no second way to mutate a document, so undo, the editing API, and every command go through the same door.
+Every write is a transaction over the tree, addressed by node id and character offset. That is the only write path. There is no second way to mutate a document, so undo, the editing API, and every command go through the same door.
 
 ## Layout
 
@@ -30,7 +30,7 @@ The layout pass is DOM-free. It takes the tree and a text measurer and returns p
 Because it is not constrained by what `contenteditable` can express, it lays text out the way Word does:
 
 - Pagination is computed, not approximated: lines are measured, blocks split where Word splits them, and tables fragment across page boundaries with the right border treatment at the cut.
-- Paragraph fidelity resolves through the real style cascade — `w:spacing` line rules, first-line and hanging indents, `w:contextualSpacing`, paragraph borders, tab stops and leaders, list markers from `numbering.xml`, and table styles through their `basedOn` chain gated by `w:tblLook`.
+- Paragraph fidelity resolves through the real style cascade: `w:spacing` line rules, first-line and hanging indents, `w:contextualSpacing`, paragraph borders, tab stops and leaders, list markers from `numbering.xml`, and table styles through their `basedOn` chain gated by `w:tblLook`.
 - Headers and footers lay out once per variant and attach per page. Editing one behaves exactly like editing the body.
 
 The pass is incremental: per-block cache keys and flow checkpoints mean a keystroke re-lays out what changed, and a pass with no changes returns the previous pages by identity.
@@ -39,19 +39,19 @@ The pass is incremental: per-block cache keys and flow checkpoints mean a keystr
 
 The painted pages are `contenteditable`, but the DOM is a **picture**. Browser mutations are prevented and re-expressed as tree operations, so the browser never gets to invent markup inside your document.
 
-The editor also paints its own caret, from layout geometry rather than from the DOM — which is why an empty paragraph gets a caret at all. It fails soft: range selection, IME composition, or a position it cannot place all hand the native caret back rather than leaving none.
+The editor also paints its own caret, from layout geometry rather than from the DOM, which is why an empty paragraph gets a caret at all. It fails soft: range selection, IME composition, or a position it cannot place all hand the native caret back rather than leaving none.
 
 Selection maps through paragraph identity and offsets, never through DOM traversal. Page furniture (headers, footers, page numbers) is marked non-editable and excluded from selection.
 
 ## Saving
 
-Modeled parts are re-emitted normalized from the tree. Everything else — custom XML, embedded fonts, media, extensions the engine has never seen — is repacked from the original file untouched.
+Modeled parts are re-emitted normalized from the tree. Everything else (custom XML, embedded fonts, media, extensions the engine has never seen) is repacked from the original file untouched.
 
-That is what "structural fidelity" means here: the editor rewrites what it understands and preserves the rest byte-for-byte. Two oracles gate it in CI — a canonical fingerprint over the tree, and a save-and-reopen semantic digest.
+That is what "structural fidelity" means here: the editor rewrites what it understands and preserves the rest byte-for-byte. Two oracles gate it in CI: a canonical fingerprint over the tree, and a save-and-reopen semantic digest.
 
 ## Adapters
 
-`@docx-editor.dev/core` contains everything above and no framework code. An adapter supplies DOM and paints the engine's positioned display list; it holds no editing state of its own. `@docx-editor.dev/react` is one such adapter, and it is thin by design — every control it ships is a consumer of the same public contract your own controls would use.
+`@docx-editor.dev/core` contains everything above and no framework code. An adapter supplies DOM and paints the engine's positioned display list; it holds no editing state of its own. `@docx-editor.dev/react` is one such adapter, and it is thin by design. Every control it ships is a consumer of the same public contract your own controls would use.
 
 ## Next steps
 

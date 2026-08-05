@@ -1,13 +1,13 @@
 ---
 title: 'Comments'
-description: 'Comment threads anchored to a range: read them, write them, reply, and render your own comment UI over the review hook.'
-category: 'Pro'
+description: "Comment threads anchored to a range in a DOCX: read them, write them, reply and resolve, and render your own comment UI over the review hook."
+category: "Pro"
 order: 62
 ---
 
 Comments anchor discussion to a range of text. The editor reads a document's existing OOXML comments on load, shows them beside the page, and writes them back on save, so threads started in Word continue here and the other way round.
 
-Comments share the review surface with [tracked changes](/docs/2.x/pro/tracked-changes) — one sidebar, one hook, one card layout. Requires the review module from [`@docx-editor.dev/pro`](/docs/2.x/pro).
+Comments share the review surface with [tracked changes](/docs/2.x/pro/tracked-changes): one sidebar, one hook, one card layout. Requires the review module from [`@docx-editor.dev/pro`](/docs/2.x/pro).
 
 ## Setup
 
@@ -63,7 +63,7 @@ function CommentBox() {
 }
 ```
 
-`selectionAnchorY` is the document-space Y where the comment would sit, from the engine rather than from the DOM — the same rule the card anchors follow. Use it to position your own compose box beside the selection.
+`selectionAnchorY` is the document-space Y where the comment would sit, from the engine rather than from the DOM, the same rule the card anchors follow. Use it to position your own compose box beside the selection.
 
 The packaged `<DocxEditorReview.AddComment />` and `<DocxEditorReview.Draft />` are this, already built.
 

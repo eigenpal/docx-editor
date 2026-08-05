@@ -1,7 +1,7 @@
 ---
 title: 'Toolbar'
-description: 'Customize the current React root chrome: keep the packaged toolbar, drop to provider primitives, or compose with DocxEditor.Toolbar and friends from the package root.'
-category: 'Guides'
+description: "Customize the React editor chrome: keep the packaged toolbar, override single slots, or compose your own from DocxEditor.Toolbar and its parts."
+category: "Guides"
 seoTitle: 'Toolbar customization'
 ---
 
@@ -75,9 +75,9 @@ function BoldButton() {
 
 When the caret or a rectangular cell selection is inside a table, the formatting toolbar shows contextual table controls:
 
-- **Resize** — hover a column divider or the table’s right edge; drag to commit Word-compatible twip widths (inner divider resize preserves total table width; outer-right resize changes table width).
-- **Insert rows/columns** — hover the row band or column header band and click the `+` control, or use the table rows on the right-click menu.
-- **Borders and fill** — with one or more cells selected, choose a border target, style, width, and colour, then pick a cell fill (clear fill removes direct shading).
+- **Resize**: hover a column divider or the table’s right edge; drag to commit Word-compatible twip widths (inner divider resize preserves total table width; outer-right resize changes table width).
+- **Insert rows/columns**: hover the row band or column header band and click the `+` control, or use the table rows on the right-click menu.
+- **Borders and fill**: with one or more cells selected, choose a border target, style, width, and colour, then pick a cell fill (clear fill removes direct shading).
 
 These controls target the **innermost** nested table under the pointer or selection. Merge and split remain unsupported; tables with merged cells refuse column resize/insert/delete with an explicit disabled reason.
 

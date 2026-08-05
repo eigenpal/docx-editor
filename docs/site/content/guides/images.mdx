@@ -1,7 +1,7 @@
 ---
 title: 'Images & drawings'
-description: 'Inline and floating DrawingML pictures: supported formats, wrap modes, React authoring, accessibility, and security boundaries.'
-category: 'Guides'
+description: "Inline and floating DrawingML pictures in DOCX: supported formats, wrap modes, authoring them from React, accessibility, and the security boundaries."
+category: "Guides"
 seoTitle: 'Images and floating pictures'
 ---
 
@@ -11,7 +11,7 @@ DrawingML pictures (`w:drawing` with `pic:pic`) now layout, paint, and round-tri
 
 | Format | Insert (React) | Layout & paint | Round-trip |
 | --- | --- | --- | --- |
-| PNG, JPEG, GIF | Yes — `normalizeImageBytes` preflight | Full decode at authored `wp:extent` | Byte-identical media unless replaced |
+| PNG, JPEG, GIF | Yes, `normalizeImageBytes` preflight | Full decode at authored `wp:extent` | Byte-identical media unless replaced |
 | SVG | No insert | Painted at authored `wp:extent` | Byte-identical media |
 | TIFF, EMF, WMF | No insert | Extent reserved; labelled placeholder | Preserved; no zero-click fetch |
 | External `r:link` / `TargetMode="External"` | No auto-load | Placeholder + preserved rel | Preserved; explicit user gesture to embed |
@@ -31,7 +31,7 @@ Use the canonical read model shared by snapshot and imperative API:
 import { useEditorState } from '@docx-editor.dev/react';
 
 const image = useEditorState((s) => s.image);
-// SelectedImageState | null — widthEmu/heightEmu, crop, wrap, position, locks, resourceStatus
+// SelectedImageState | null: widthEmu/heightEmu, crop, wrap, position, locks, resourceStatus
 ```
 
 ```ts
@@ -73,7 +73,7 @@ Floating pictures: select in the canvas, drag to move (`setImagePosition`), eigh
 
 ## Wrap modes and text reflow
 
-Wrap changes are **layout-structural**: exclusion zones feed line breaking before paint. Square/tight/through use authored polygons (with distances and `effectExtent`); top-and-bottom and square variants reflow body text accordingly. Header/footer rule: page-relative anchored letterheads do **not** inflate the header box — body flow height still sizes the furniture band.
+Wrap changes are **layout-structural**: exclusion zones feed line breaking before paint. Square/tight/through use authored polygons (with distances and `effectExtent`); top-and-bottom and square variants reflow body text accordingly. Header/footer rule: page-relative anchored letterheads do **not** inflate the header box. Body flow height still sizes the furniture band.
 
 ## Accessibility
 
@@ -90,14 +90,14 @@ Alt text uses `@descr`, then `@title`; `@name` is never announced. A picture wit
 
 Not edited or raster-rendered in this release:
 
-- VML (`w:pict`) — follow-up `typed-vml-watermarks`
-- Charts, SmartArt, groups, canvases, text-box stories — extent + labelled placeholder
-- `w:object` / `w:altChunk` — generic preservation with diagnostics
+- VML (`w:pict`): follow-up `typed-vml-watermarks`
+- Charts, SmartArt, groups, canvases, text-box stories: extent + labelled placeholder
+- `w:object` / `w:altChunk`: generic preservation with diagnostics
 - Artistic effects (`a:effectLst`), TIFF/EMF/WMF converters
-- Tracked-change accept/reject on drawings — `typed-revisions-and-comments`
+- Tracked-change accept/reject on drawings: `typed-revisions-and-comments`
 
 ## Next steps
 
-- [Toolbar customization](/docs/2.x/guides/toolbar) — override `DocxEditor.Toolbar.ImageWrap` and siblings
-- [Word fidelity matrix](/docs/2.x/word-fidelity) — live support claims
-- [Headers & footers](/docs/2.x/guides/headers-footers) — letterhead anchors in furniture bands
+- [Toolbar customization](/docs/2.x/guides/toolbar): override `DocxEditor.Toolbar.ImageWrap` and siblings
+- [Word fidelity matrix](/docs/2.x/word-fidelity): live support claims
+- [Headers & footers](/docs/2.x/guides/headers-footers): letterhead anchors in furniture bands
