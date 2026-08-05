@@ -343,6 +343,7 @@
    is furniture, so the swallowed click doubles as chip-like atomicity). */
 .docx-content-control-chrome[data-tag^='docx:citation'] .docx-content-control-boundary {
   pointer-events: auto !important;
+  opacity: 1; /* core hides boundaries until active; a chip is always visible */
   background: rgba(37, 99, 235, 0.1);
   border: 1px solid rgba(37, 99, 235, 0.4);
   border-radius: 6px;

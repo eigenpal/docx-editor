@@ -1095,10 +1095,37 @@ function applyInsertInlineContentControl(
     after.push(...right!);
   }
 
-  const control = inlineContentControlElement(nextId, op);
+  // The label INHERITS the neighboring run's formatting, the way typing does —
+  // a citation inserted mid-title must not come out body-sized. Left run wins,
+  // matching the insert-content boundary rule; falls back to the run on the
+  // right at paragraph start.
+  const anchorSegment =
+    findLast(segments, (segment) => segment.end <= op.offset && segment.end > 0) ??
+    segments.find((segment) => segment.start >= op.offset);
+  const anchorRun = anchorSegment ? findNode(part, anchorSegment.runId) : null;
+  const inheritedProperties =
+    anchorRun && anchorRun.kind === 'run' ? runPropertiesNodeOf(anchorRun) : null;
+
+  const control = inlineContentControlElement(
+    nextId,
+    op,
+    inheritedProperties ? remintClone(inheritedProperties, nextId) : null
+  );
   const pPr = paragraphPropertiesNodeOf(paragraph);
   const children = [...(pPr ? [pPr] : []), ...before, control, ...after];
   return fromEdit(replaceChildren(part, paragraph.id, children, options), effect);
+}
+
+/** Deep copy with FRESH node ids — reusing ids would corrupt the part's node index. */
+function remintClone(node: OoxmlNode, nextId: () => string): OoxmlNode {
+  if (node.kind === 'textValue') {
+    return { id: nextId(), kind: 'textValue', value: node.value };
+  }
+  return {
+    ...node,
+    id: nextId(),
+    children: node.children.map((child) => remintClone(child, nextId)),
+  } as OoxmlNode;
 }
 
 /** Build the `w:sdt` element: typed kinds, so reads see an ordinary content control. */
@@ -1109,7 +1136,8 @@ function inlineContentControlElement(
     readonly text: string;
     readonly alias?: string;
     readonly lock?: 'sdtLocked' | 'sdtContentLocked' | 'contentLocked';
-  }
+  },
+  inheritedRunProperties: OoxmlNode | null = null
 ): OoxmlNode {
   const valued = (localName: string, value: string): OoxmlNode =>
     ({
@@ -1155,7 +1183,12 @@ function inlineContentControlElement(
     prefix: 'w',
     namespaceBindings: [],
     attributes: [],
-    children: [runElement(nextId, [textElement(nextId, op.text)])],
+    children: [
+      runElement(nextId, [
+        ...(inheritedRunProperties ? [inheritedRunProperties] : []),
+        textElement(nextId, op.text),
+      ]),
+    ],
   } as unknown as OoxmlNode;
   return {
     id: nextId(),
