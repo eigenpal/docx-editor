@@ -281,6 +281,30 @@ describe('rows carry the engine, not a paraphrase', () => {
     });
     expect(opened).toBe(1);
   });
+
+  test('the packaged Open loads the file and reports its name through `onOpenFile`', async () => {
+    const seen: string[] = [];
+    const { view, editor } = mountMenu(
+      <DocxEditorMenu onOpenFile={(file) => seen.push(file.name)} />
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const input = view.container.querySelector('input[type="file"]') as HTMLInputElement;
+    expect(input).not.toBeNull();
+    const file = new File(
+      [docx('<w:p><w:r><w:t>reopened</w:t></w:r></w:p>')],
+      'contract-v2.docx',
+      { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }
+    );
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+      // `file.arrayBuffer()` resolves on a later microtask; give the load a turn to land.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(seen).toEqual(['contract-v2.docx']);
+    expect(editor().surface!.session.bodyText()).toBe('reopened');
+  });
 });
 
 describe('chrome contracts', () => {

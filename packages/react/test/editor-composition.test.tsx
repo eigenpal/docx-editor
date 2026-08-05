@@ -287,6 +287,58 @@ describe('the review sidebar', () => {
 
     expect(view.queryByTestId('review-draft')).toBeNull();
   });
+
+  test('hides the read-only structural cards by default, and shows them on request', () => {
+    // One resolvable insertion plus one structural site (a tracked row insertion,
+    // `w:trPr/w:ins`) — the kind of markup a heavily revised contract carries by the dozen.
+    const TRACKED = docx(
+      '<w:p><w:r><w:t>base </w:t></w:r>' +
+        '<w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:t>added</w:t></w:r></w:ins></w:p>' +
+        '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>' +
+        '<w:tr><w:tc><w:tcPr/><w:p><w:r><w:t>a</w:t></w:r></w:p></w:tc></w:tr>' +
+        '<w:tr><w:trPr><w:ins w:id="2" w:author="A" w:date="2026-01-01T00:00:00Z"/></w:trPr>' +
+        '<w:tc><w:tcPr/><w:p><w:r><w:t>b</w:t></w:r></w:p></w:tc></w:tr>' +
+        '</w:tbl>'
+    );
+    const kindsOf = (root: HTMLElement) =>
+      [...root.querySelectorAll('[data-testid="review-card"]')].map(
+        (card) => (card as HTMLElement).dataset.kind
+      );
+
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={TRACKED}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    // The ENGINE still lists the structural revision — only its card is hidden.
+    expect(
+      instance!
+        .getReviewItems()
+        .some((item) => item.kind === 'revision' && item.revisionKind === 'structural')
+    ).toBe(true);
+    expect(kindsOf(view.container)).toContain('insert');
+    expect(kindsOf(view.container)).not.toContain('structural');
+    view.unmount();
+
+    const shown = render(
+      <DocxEditorRoot document={TRACKED}>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview structural />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    expect(kindsOf(shown.container)).toContain('structural');
+  });
 });
 
 describe('useEditorEvent', () => {
