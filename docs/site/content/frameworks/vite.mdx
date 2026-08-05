@@ -10,7 +10,7 @@ This page builds the open-edit-download flow in a Vite + React app. Vite is clie
 ## Install
 
 ```bash
-npm install @docx-editor.dev/react
+npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
 ## Mount the editor
@@ -32,7 +32,7 @@ if (container) {
 // src/App.tsx
 import { useRef, useState } from 'react';
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
-import '@docx-editor.dev/react/styles.css';
+import '@docx-editor.dev/core/styles/editor.css';
 
 export function App() {
   const editorRef = useRef<DocxEditorRef>(null);

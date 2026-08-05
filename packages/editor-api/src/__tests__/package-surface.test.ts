@@ -119,7 +119,11 @@ describe('what the package depends on', () => {
     // `@docx-editor.dev/core` is a published package and stays external in both outputs, so a
     // consumer resolves one copy of the engine. Inlining it would put a second engine in this
     // tarball, and a page running this next to the adapter would hold two instances.
-    expect(manifest.dependencies?.['@docx-editor.dev/core']).toBe('workspace:*');
+    // A plain range, never `workspace:*`: that protocol survives `changeset version` and
+    // `npm publish` untouched, so it would reach the tarball and fail the consumer's
+    // install. `scripts/__tests__/published-manifests.test.ts` holds the rule for every
+    // package; this asserts the range still points at the engine.
+    expect(manifest.dependencies?.['@docx-editor.dev/core']).toMatch(/^\^\d+\.\d+\.\d+/);
     expect(Object.keys(manifest.devDependencies ?? {})).not.toContain('@docx-editor.dev/core');
   });
 

@@ -17,7 +17,7 @@ Open-source WYSIWYG `.docx` editor for React. Word-faithful pagination, tracked 
 ## Quick Start
 
 ```bash
-npm install @docx-editor.dev/react
+npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
 See the [React quick start](#react) below.
@@ -55,7 +55,7 @@ Every package above is Apache 2.0 except `@docx-editor.dev/editor-api` and `@doc
 ```tsx
 import { useState } from 'react';
 import { DocxEditor } from '@docx-editor.dev/react';
-import '@docx-editor.dev/react/styles.css';
+import '@docx-editor.dev/core/styles/editor.css';
 
 export function App() {
   const [doc, setDoc] = useState<Uint8Array>();

@@ -71,18 +71,11 @@ jobs:
       - name: React demo app builds
         run: bun run check:app-build
 
-      - name: Install Playwright Chromium
-        run: bunx playwright install chromium
-
-      - name: Chromium accessibility-tree gate
-        run: bun run verify:a11y-tree
-
-      - name: Chromium production-adapter load/paginate/save/reopen smoke
-        run: bun run verify:real-adapter-smoke
-
-      - name: Chromium production-adapter input-host gate
-        run: bun run verify:real-adapter-gate
-
+      # The three Chromium gates that used to run here (`verify:a11y-tree`,
+      # `verify:real-adapter-smoke`, `verify:real-adapter-gate`) drove the legacy editor
+      # lane and went away with it — the scripts no longer exist, so the steps could only
+      # fail. The browser specs that replaced them (`bun run test:e2e:editor`) still need a
+      # Vue dev server this branch does not ship, so they are not wired in here yet.
       - name: CLA logic tests
         run: bash .github/cla/cla.test.sh
 

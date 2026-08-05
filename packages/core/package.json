@@ -76,7 +76,7 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
-    "@docx-editor.dev/i18n": "workspace:*",
+    "@docx-editor.dev/i18n": "^1.0.0",
     "bidi-js": "1.0.3",
     "emf-converter": "2.0.2",
     "fast-xml-parser": "^4.5.0",
@@ -102,6 +102,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "!dist/metafile-*.json",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
   ]
 }

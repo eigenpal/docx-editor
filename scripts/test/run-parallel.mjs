@@ -23,7 +23,10 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const SEARCH_ROOT = join(ROOT, 'packages');
+// `scripts/` as well as `packages/`: the checks that guard the published manifests and the
+// docs surface live next to the scripts they cover, and a suite that only walks `packages`
+// leaves them sitting there passing locally and running nowhere.
+const SEARCH_ROOTS = [join(ROOT, 'packages'), join(ROOT, 'scripts')];
 const CACHE_FILE = join(ROOT, 'node_modules', '.cache', 'docx-editor', 'test-durations.json');
 
 /** Directories that hold build output or dependencies, never sources to run. */
@@ -108,7 +111,10 @@ function parseArguments(argv) {
 function runFile(file, passthrough) {
   return new Promise((settle) => {
     const started = Date.now();
-    const args = ['test', file];
+    // `./` matters: a bare relative path is a FILTER that bun matches against the files its
+    // own scan finds, and that scan does not reach everything this one does. With the
+    // prefix it is a path, and the file runs whether or not bun would have discovered it.
+    const args = ['test', `./${file}`];
     if (!passthrough.some((argument) => argument.startsWith('--timeout'))) {
       args.push('--timeout', String(DEFAULT_TIMEOUT_MS));
     }
@@ -131,9 +137,9 @@ function runFile(file, passthrough) {
 
 async function main() {
   const { jobs, passthrough } = parseArguments(process.argv.slice(2));
-  const files = discover(SEARCH_ROOT);
+  const files = SEARCH_ROOTS.flatMap((searchRoot) => discover(searchRoot));
   if (files.length === 0) {
-    console.error('no test files found under packages/');
+    console.error('no test files found under packages/ or scripts/');
     process.exit(1);
   }
 

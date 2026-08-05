@@ -208,7 +208,7 @@
       "name": "@docx-editor.dev/core",
       "version": "1.0.0",
       "dependencies": {
-        "@docx-editor.dev/i18n": "workspace:*",
+        "@docx-editor.dev/i18n": "^1.0.0",
         "bidi-js": "1.0.3",
         "emf-converter": "2.0.2",
         "fast-xml-parser": "^4.5.0",
@@ -303,8 +303,8 @@
         "typescript": "^5.3.3",
       },
       "peerDependencies": {
-        "@docx-editor.dev/core": "workspace:*",
-        "@docx-editor.dev/react": "workspace:*",
+        "@docx-editor.dev/core": "^1.0.0",
+        "@docx-editor.dev/react": "^1.0.0",
         "react": "^18.0.0 || ^19.0.0",
         "react-dom": "^18.0.0 || ^19.0.0",
       },
@@ -318,7 +318,7 @@
       "name": "@docx-editor.dev/react",
       "version": "1.0.0",
       "dependencies": {
-        "@docx-editor.dev/i18n": "workspace:*",
+        "@docx-editor.dev/i18n": "^1.0.0",
         "@radix-ui/react-select": "^2.3.3",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -330,7 +330,7 @@
         "fflate": "^0.8.2",
       },
       "peerDependencies": {
-        "@docx-editor.dev/core": "workspace:*",
+        "@docx-editor.dev/core": "^1.0.0",
         "react": "^18.0.0 || ^19.0.0",
         "react-dom": "^18.0.0 || ^19.0.0",
       },

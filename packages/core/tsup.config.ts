@@ -34,6 +34,12 @@ export default defineConfig({
   clean: true,
   treeshake: true,
   minify: true,
+  // `scripts/generate-third-party-notices.mjs` reads `dist/metafile-*.json` to learn
+  // which third-party packages esbuild actually inlined into the shipped bundles, and
+  // emits the attribution file for exactly those. This package is the one that inlines
+  // the most of them: fast-xml-parser, fflate and the prosemirror-* family all end up as
+  // source inside `dist/`.
+  metafile: true,
   external: ['harfbuzzjs', 'emf-converter'],
   // The engine's own files import it by package name ('@docx-editor.dev/core/store'
   // and friends), which resolved through the export map back when that map pointed

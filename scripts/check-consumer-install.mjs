@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+//
+// Installs the packages the way a consumer does — from tarballs, into an empty project,
+// with npm resolving what it finds inside them — and builds a real app against the result.
+//
+// This is the only check that reads a published manifest rather than a workspace one, so
+// it is the only place a `workspace:` range, a missing `exports` subpath or a `files` list
+// that drops a needed file can fail before a user hits it.
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -11,23 +18,6 @@ const packDir = path.join(tempRoot, 'packs');
 // @docx-editor.dev/vue is WIP and unpublished — there is no tarball for a real
 // consumer to install. Restore it when the package ships again.
 const reactAppDir = path.join(tempRoot, 'react-app');
-
-function coreContractPaths(projectDir) {
-  const publicEntries = {
-    '@docx-editor.dev/core': 'packages/core/src/index.ts',
-    '@docx-editor.dev/core/editor': 'packages/core/src/editor.ts',
-    '@docx-editor.dev/core/geometry': 'packages/core/src/geometry.ts',
-    '@docx-editor.dev/core/plugin': 'packages/core/src/plugin.ts',
-    '@docx-editor.dev/core/mcp': 'packages/core/src/mcp.ts',
-    '@docx-editor.dev/core/types': 'packages/core/src/types-barrel.ts',
-  };
-  return Object.fromEntries(
-    Object.entries(publicEntries).map(([specifier, relativeTarget]) => [
-      specifier,
-      [path.relative(projectDir, path.join(ROOT, relativeTarget))],
-    ])
-  );
-}
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -66,11 +56,17 @@ try {
 
   mkdirSync(packDir, { recursive: true });
 
-  // `@docx-editor.dev/core` ships from a separate repo, so it is not packed
-  // here — npm resolves it from the registry as a transitive dep, which is
-  // what a real consumer gets.
-  const sharedTarballs = [packPackage('packages/i18n'), packPackage('packages/editor-api')];
-  const reactTarballs = [...sharedTarballs, packPackage('packages/react')];
+  // Every published package, including the ones the app below only imports for their
+  // types: an unpublished version of any of them turns into a registry lookup during
+  // install, and the registry has nothing to give.
+  const tarballs = [
+    packPackage('packages/i18n'),
+    packPackage('packages/core'),
+    packPackage('packages/react'),
+    packPackage('packages/fonts'),
+    packPackage('packages/editor-api'),
+    packPackage('packages/pro'),
+  ];
 
   mkdirSync(path.join(reactAppDir, 'src'), { recursive: true });
   writeFileSync(
@@ -94,21 +90,26 @@ try {
     path.join(reactAppDir, 'index.html'),
     '<div id="root"></div><script type="module" src="/src/main.tsx"></script>\n'
   );
+  // The imports are the contract: the packaged editor, the engine the adapter holds as a
+  // peer, the stylesheet (which ships from the engine, not the adapter), the fonts, and
+  // the two licensed packages. A subpath that stops being exported fails here.
   writeFileSync(
     path.join(reactAppDir, 'src/main.tsx'),
     `import { createRoot } from 'react-dom/client';
 import { DocxEditor } from '@docx-editor.dev/react';
-import * as ReactUi from '@docx-editor.dev/react/ui';
-import * as ReactDialogs from '@docx-editor.dev/react/dialogs';
-import * as ReactHooks from '@docx-editor.dev/react/hooks';
-import * as ReactPluginApi from '@docx-editor.dev/react/plugin-api';
-import '@docx-editor.dev/react/styles.css';
+import * as Engine from '@docx-editor.dev/core';
+import * as EngineEditor from '@docx-editor.dev/core/editor';
+import * as Fonts from '@docx-editor.dev/fonts';
+import * as EditorApi from '@docx-editor.dev/editor-api';
+import * as Pro from '@docx-editor.dev/pro';
+import * as ProReact from '@docx-editor.dev/pro/react';
+import '@docx-editor.dev/core/styles/editor.css';
 
-const exportedSurfaceChecks = [ReactUi, ReactDialogs, ReactHooks, ReactPluginApi];
+const exportedSurfaceChecks = [Engine, EngineEditor, Fonts, EditorApi, Pro, ProReact];
 console.assert(exportedSurfaceChecks.every((entry) => typeof entry === 'object' && entry !== null));
 void exportedSurfaceChecks;
 
-createRoot(document.getElementById('root')!).render(<DocxEditor showToolbar={false} />);
+createRoot(document.getElementById('root')!).render(<DocxEditor />);
 `
   );
   writeFileSync(
@@ -128,14 +129,12 @@ export default defineConfig({ plugins: [react()] });
     JSON.stringify(
       {
         compilerOptions: {
-          baseUrl: '.',
           strict: true,
           target: 'ES2022',
           module: 'ESNext',
           moduleResolution: 'Bundler',
           jsx: 'react-jsx',
           skipLibCheck: true,
-          paths: coreContractPaths(reactAppDir),
         },
         include: ['src/**/*.ts', 'src/**/*.tsx'],
       },
@@ -155,7 +154,7 @@ export default defineConfig({ plugins: [react()] });
       '@vitejs/plugin-react',
       'vite',
       'typescript',
-      ...reactTarballs,
+      ...tarballs,
     ],
     { cwd: reactAppDir }
   );

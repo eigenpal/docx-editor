@@ -12,7 +12,7 @@
  * The DOCUMENT CANVAS is untouched. `--doc-page-bg` and friends stay Word's.
  */
 
-/* In a standalone app this is `@import '@docx-editor.dev/react/styles.css'`. The demo reads
+/* In a standalone app this is `@import '@docx-editor.dev/core/styles/editor.css'`. The demo reads
    the canonical core chrome stylesheet from source, so editing it repaints the page. */
 @import '../../../packages/core/src/styles/editor.css';
 

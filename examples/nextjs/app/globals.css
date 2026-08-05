@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* Import editor styles (CSS variables, custom properties, etc.)
-   In standalone usage: @import '@docx-editor.dev/react/styles.css'; */
+   In standalone usage: @import '@docx-editor.dev/core/styles/editor.css'; */
 @import '../../../packages/react/src/styles/editor.css';
 
 /* Boot spinner shown until the client-only editor chunk loads. */

@@ -131,6 +131,27 @@ export default defineConfig(async () => {
               replacement: path.join(monorepoRoot, 'packages/core/src/contracts/$1.ts'),
             },
             {
+              find: '@docx-editor.dev/pro/react',
+              replacement: path.join(monorepoRoot, 'packages/pro/src/react/index.ts'),
+            },
+            {
+              find: '@docx-editor.dev/pro',
+              replacement: path.join(monorepoRoot, 'packages/pro/src/index.ts'),
+            },
+            {
+              find: '@docx-editor.dev/fonts/google',
+              replacement: path.join(monorepoRoot, 'packages/fonts/src/google-fonts.ts'),
+            },
+            // Every package points its export map at `dist/`, so a specifier missing from
+            // this list resolves through node_modules to a build instead of to source.
+            // That is the whole reason the list exists, and `pro` and `fonts` were simply
+            // never added to it: the demo built anyway on any machine that had run
+            // `build:packages`, and only failed on the CI job that had not.
+            {
+              find: '@docx-editor.dev/fonts',
+              replacement: path.join(monorepoRoot, 'packages/fonts/src/index.ts'),
+            },
+            {
               find: '@docx-editor.dev/i18n',
               replacement: path.join(monorepoRoot, 'packages/i18n/src/index.ts'),
             },
