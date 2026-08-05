@@ -184,8 +184,11 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
   // union derived from `en.json`, while the prop takes a plain `string` so a host can
   // supply any resolver. Every key this component passes is a real catalogue key.
   const { t: catalogT } = useTranslation();
-  const fallbackT = useCallback((key: string) => catalogT(key as TranslationKey), [catalogT]);
-  const translate = t ?? fallbackT;
+  const translate = useCallback(
+    (key: string, params?: Record<string, string | number>) =>
+      t ? t(key) : catalogT(key as TranslationKey, params),
+    [t, catalogT]
+  );
 
   // The painted document: the primitive Viewport (scroll container, load-bearing
   // classes) around the primitive Content (the engine's mount point). Chrome-off
@@ -303,6 +306,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
       {...(fonts ? { fonts } : {})}
       {...(author !== undefined ? { author } : {})}
       {...(locale !== undefined ? { locale } : {})}
+      translate={translate}
       {...(mode !== undefined ? { mode } : {})}
       {...(zoom !== undefined ? { zoom } : {})}
       tableInteractionLabel={tableInteractionLabel}

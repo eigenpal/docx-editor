@@ -22,6 +22,7 @@ import type {
   PageRecord,
   ParagraphBorderStrokeRecord,
   ParagraphFragmentRecord,
+  HeaderFooterStoryRecord,
   ResolvedRunStyle,
   SemanticLayout,
   SpanLinkRecord,
@@ -30,6 +31,19 @@ import type {
   TableFragmentRecord,
 } from '@docx-editor.dev/core-contract/layout';
 import { paintPageNoteAreas } from './semantic-paint-notes.ts';
+import { anchoredDrawingsOf } from '../layout/semantic-records.ts';
+import type { AnchoredDrawingRecord } from '../layout/drawing-layout.ts';
+import {
+  collectUsedDrawingResourceKeys,
+  DEFAULT_DRAWING_PAINT_STRINGS,
+  drawingPaintStringsCacheToken,
+  drawingUrlRegistryFor,
+  paintAnchoredDrawingsLayer,
+  paintInlineDrawingsOnLine,
+  type DrawingPaintContext,
+  type DrawingPaintStrings,
+  type PaintImageUrlPort,
+} from './semantic-paint-drawings.ts';
 
 /**
  * What the run painters need beyond the records: the pixel scale, and the optional
@@ -57,6 +71,10 @@ export interface PaintContext {
    * deriving it per page would give the same author different colours on different sheets.
    */
   readonly authorSlots?: ReadonlyMap<string, number>;
+  /** Localized drawing refusal labels (defaults to English fallbacks). */
+  readonly drawingStrings?: DrawingPaintStrings;
+  /** Host port for ready-image blob URLs; omitted means ready images paint as placeholders. */
+  readonly imageUrlPort?: PaintImageUrlPort;
 }
 
 /**
@@ -122,6 +140,150 @@ export interface PaintOptions {
     /** Checkbox control ids whose canonical `w14:checked` state is on. */
     readonly checkedIds?: ReadonlySet<string>;
   };
+  readonly drawingStrings?: DrawingPaintStrings;
+  readonly imageUrlPort?: PaintImageUrlPort;
+}
+
+export type { DrawingPaintStrings, PaintImageUrlPort } from './semantic-paint-drawings.ts';
+
+type DrawingUrlRegistry = ReturnType<typeof drawingUrlRegistryFor>;
+
+type DrawingPaintHostContext = PaintContext & {
+  readonly drawingStrings?: DrawingPaintStrings;
+  readonly urlRegistry?: DrawingUrlRegistry | null;
+};
+
+interface ResolvedPaintContext extends DrawingPaintHostContext {
+  readonly drawingStrings: DrawingPaintStrings;
+  readonly urlRegistry: DrawingUrlRegistry | null;
+}
+
+function asResolvedPaintContext(ctx: DrawingPaintHostContext): ResolvedPaintContext {
+  return {
+    ...ctx,
+    drawingStrings: ctx.drawingStrings ?? DEFAULT_DRAWING_PAINT_STRINGS,
+    urlRegistry: ctx.urlRegistry ?? null,
+  };
+}
+
+function resolvedDrawingPaint(ctx: ResolvedPaintContext): DrawingPaintContext {
+  return Object.freeze({
+    scale: ctx.scale,
+    strings: ctx.drawingStrings,
+    ...(ctx.imageUrlPort ? { imageUrlPort: ctx.imageUrlPort } : {}),
+    ...(ctx.inertLinks ? { inertLinks: true } : {}),
+  });
+}
+
+function drawingContextOf(ctx: ResolvedPaintContext): {
+  readonly ctx: DrawingPaintContext;
+  readonly urlRegistry: DrawingUrlRegistry | null;
+} {
+  return Object.freeze({
+    ctx: resolvedDrawingPaint(ctx),
+    urlRegistry: ctx.urlRegistry,
+  });
+}
+
+function appendAnchoredDrawingLayer(
+  document: Document,
+  parent: HTMLElement,
+  page: PageRecord,
+  ctx: ResolvedPaintContext,
+  pageOrigin: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  },
+  layer: 'behind' | 'inFront'
+): void {
+  appendAnchoredDrawingsForRecords(
+    document,
+    parent,
+    anchoredDrawingsOf(page),
+    ctx,
+    pageOrigin,
+    layer
+  );
+}
+
+function appendAnchoredDrawingsForRecords(
+  document: Document,
+  parent: HTMLElement,
+  drawings: readonly AnchoredDrawingRecord[],
+  ctx: ResolvedPaintContext,
+  origin: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  },
+  layer: 'behind' | 'inFront'
+): void {
+  if (drawings.length === 0) return;
+  const drawing = drawingContextOf(ctx);
+
+  const layerElement = document.createElement('div');
+  layerElement.className =
+    layer === 'behind'
+      ? 'docx-drawing-layer docx-drawing-layer-behind'
+      : 'docx-drawing-layer docx-drawing-layer-front';
+  layerElement.style.position = 'absolute';
+  layerElement.style.inset = '0';
+  layerElement.style.pointerEvents = 'none';
+  for (const element of paintAnchoredDrawingsLayer(
+    document,
+    drawings,
+    layer,
+    drawing.ctx,
+    drawing.urlRegistry,
+    origin
+  )) {
+    element.style.pointerEvents = 'auto';
+    layerElement.append(element);
+  }
+  if (layerElement.childElementCount > 0) parent.append(layerElement);
+}
+
+function isPageRelativeHfAnchor(drawing: AnchoredDrawingRecord): boolean {
+  return drawing.horizontalFrame === 'page' || drawing.verticalFrame === 'page';
+}
+
+function hfAnchorOnPageSheet(
+  story: HeaderFooterStoryRecord,
+  drawing: AnchoredDrawingRecord
+): AnchoredDrawingRecord {
+  const pb = drawing.paintBounds;
+  return Object.freeze({
+    ...drawing,
+    paintBounds: Object.freeze({
+      x: story.box.x + pb.x,
+      y: story.box.y + pb.y,
+      width: pb.width,
+      height: pb.height,
+    }),
+  });
+}
+
+function appendHfPageRelativeDrawingLayer(
+  document: Document,
+  pageElement: HTMLElement,
+  story: HeaderFooterStoryRecord,
+  drawings: readonly AnchoredDrawingRecord[],
+  ctx: ResolvedPaintContext,
+  pageOrigin: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  },
+  layer: 'behind' | 'inFront'
+): void {
+  const pageRelative = drawings
+    .filter(isPageRelativeHfAnchor)
+    .map((drawing) => hfAnchorOnPageSheet(story, drawing));
+  appendAnchoredDrawingsForRecords(document, pageElement, pageRelative, ctx, pageOrigin, layer);
 }
 
 const HEX = /^[0-9A-Fa-f]{6}$/;
@@ -740,7 +902,11 @@ function paintHyperlinkAnchor(
  * `white-space: pre` keeps the browser from re-wrapping a line layout already decided, so
  * a line that measured slightly wide overflows by a hair rather than becoming two lines.
  */
-function paintLine(document: Document, line: LineRecord, ctx: PaintContext): HTMLElement {
+function paintLine(
+  document: Document,
+  line: LineRecord,
+  ctx: DrawingPaintHostContext
+): HTMLElement {
   const scale = ctx.scale;
   const element = document.createElement('div');
   element.className = 'docx-line layout-line';
@@ -819,10 +985,28 @@ function paintLine(document: Document, line: LineRecord, ctx: PaintContext): HTM
     anchor.style.lineHeight = `${line.box.height * scale}px`;
     element.append(anchor);
   }
+
+  const lineOrigin = Object.freeze({
+    x: line.spans[0]?.box.x ?? line.box.x,
+    y: line.box.y,
+    width: line.box.width,
+    height: line.box.height,
+  });
+  const drawingCtx = drawingContextOf(asResolvedPaintContext(ctx));
+  if (line.drawings && line.drawings.length > 0) {
+    for (const painted of paintInlineDrawingsOnLine(
+      document,
+      line,
+      drawingCtx.ctx,
+      drawingCtx.urlRegistry,
+      lineOrigin
+    )) {
+      element.append(painted);
+    }
+  }
   return element;
 }
 
-/** The extra space layout put between spans, beyond their own advances. */
 function interSpanGap(line: LineRecord): number {
   if (line.spans.length < 2) return 0;
   let total = 0;
@@ -838,7 +1022,7 @@ function interSpanGap(line: LineRecord): number {
 function paintFragment(
   document: Document,
   fragment: ParagraphFragmentRecord,
-  ctx: PaintContext
+  ctx: DrawingPaintHostContext
 ): HTMLElement {
   const scale = ctx.scale;
   const element = positioned(document, 'div', fragment.box, scale);
@@ -1180,7 +1364,7 @@ function paintTableCell(
   document: Document,
   cell: TableCellFragmentRecord,
   rowBox: { readonly x: number; readonly y: number },
-  ctx: PaintContext
+  ctx: DrawingPaintHostContext
 ): HTMLElement {
   const scale = ctx.scale;
   const cellElement = positioned(document, 'div', cell.box, scale);
@@ -1234,7 +1418,7 @@ function paintTableCell(
 function paintTableFragment(
   document: Document,
   fragment: TableFragmentRecord,
-  ctx: PaintContext
+  ctx: DrawingPaintHostContext
 ): HTMLElement {
   const scale = ctx.scale;
   const element = positioned(document, 'div', fragment.box, scale);
@@ -1267,7 +1451,7 @@ function paintTableFragment(
 function paintPage(
   document: Document,
   page: PageRecord,
-  options: PaintContext & {
+  options: ResolvedPaintContext & {
     readonly ariaHidden: boolean;
     readonly activeHeaderFooterRId?: string;
     readonly activeHeaderFooterPageIndex?: number;
@@ -1293,6 +1477,24 @@ function paintPage(
   // scrolling to a page reveals it rather than reflowing the document underneath.
   element.dataset.materialized = String(materialize);
   if (!materialize) return element;
+
+  const pageOrigin = Object.freeze({
+    x: page.box.x,
+    y: page.box.y,
+    width: page.box.width,
+    height: page.box.height,
+  });
+  // Body anchored records are per-page CONTENT-relative (a page-frame drawing at offset 0
+  // publishes paintBounds x/y = -margin). The layer lives on the page element, so the
+  // origin is the negated content inset — never page.box, which is absolute and would
+  // both drop the margins and displace every page after the first.
+  const bodyAnchorOrigin = Object.freeze({
+    x: -(page.contentBox.x - page.box.x),
+    y: -(page.contentBox.y - page.box.y),
+    width: page.box.width,
+    height: page.box.height,
+  });
+  appendAnchoredDrawingLayer(document, element, page, options, bodyAnchorOrigin, 'behind');
 
   const content = document.createElement('div');
   content.className = 'docx-page-content';
@@ -1326,6 +1528,8 @@ function paintPage(
   }
   element.append(content);
 
+  appendAnchoredDrawingLayer(document, element, page, options, bodyAnchorOrigin, 'inFront');
+
   // Footnotes / endnotes — editable stories inside the sheet (not [data-docx-hf] furniture).
   paintPageNoteAreas(document, element, page, options, paintFragment, paintTableFragment);
 
@@ -1334,6 +1538,16 @@ function paintPage(
   // browser caret inside the furniture back to a model position.
   for (const story of [page.header, page.footer]) {
     if (!story) continue;
+    const anchored = story.anchoredDrawings ?? [];
+    appendHfPageRelativeDrawingLayer(
+      document,
+      element,
+      story,
+      anchored,
+      options,
+      pageOrigin,
+      'behind'
+    );
     const container = document.createElement('div');
     container.className = 'docx-hf';
     container.dataset.docxHf = story.kind;
@@ -1356,8 +1570,23 @@ function paintPage(
     container.style.width = `${story.box.width * options.scale}px`;
     container.style.height = `${story.box.height * options.scale}px`;
     container.style.overflow = 'hidden';
+    const storyOrigin = Object.freeze({
+      x: 0,
+      y: 0,
+      width: story.box.width,
+      height: story.box.height,
+    });
+    const storyRelative = anchored.filter((drawing) => !isPageRelativeHfAnchor(drawing));
+    appendAnchoredDrawingsForRecords(
+      document,
+      container,
+      storyRelative,
+      asResolvedPaintContext(options),
+      storyOrigin,
+      'behind'
+    );
     // Furniture links paint styled but inert — see `paintHyperlinkAnchor`.
-    const furnitureCtx: PaintContext & { readonly ariaHidden: boolean } = {
+    const furnitureCtx: ResolvedPaintContext = {
       ...options,
       inertLinks: true,
     };
@@ -1368,7 +1597,24 @@ function paintPage(
           : paintFragment(document, fragment, furnitureCtx)
       );
     }
+    appendAnchoredDrawingsForRecords(
+      document,
+      container,
+      storyRelative,
+      asResolvedPaintContext(options),
+      storyOrigin,
+      'inFront'
+    );
     element.append(container);
+    appendHfPageRelativeDrawingLayer(
+      document,
+      element,
+      story,
+      anchored,
+      options,
+      pageOrigin,
+      'inFront'
+    );
   }
 
   paintContentControlChrome(document, element, page, options);
@@ -1571,11 +1817,19 @@ export function paintSemanticLayout(
   const chromeKey = chrome
     ? `${chrome.showAll === true ? '1' : '0'}:${chrome.activeIds ? [...chrome.activeIds].sort().join(',') : ''}:${chrome.checkedIds ? [...chrome.checkedIds].sort().join(',') : ''}`
     : '';
+  const drawingStrings = options.drawingStrings ?? DEFAULT_DRAWING_PAINT_STRINGS;
+  const urlRegistry =
+    options.imageUrlPort !== undefined
+      ? drawingUrlRegistryFor(container, options.imageUrlPort)
+      : null;
   const resolved = {
     scale: options.scale ?? 96 / 72,
     ariaHidden: options.ariaHidden ?? true,
+    drawingStrings,
+    urlRegistry,
     ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
     authorSlots: authorSlotsOf(layout),
+    ...(options.imageUrlPort ? { imageUrlPort: options.imageUrlPort } : {}),
     ...(options.activeHeaderFooterRId
       ? { activeHeaderFooterRId: options.activeHeaderFooterRId }
       : {}),
@@ -1583,6 +1837,10 @@ export function paintSemanticLayout(
       ? { activeHeaderFooterPageIndex: options.activeHeaderFooterPageIndex }
       : {}),
     ...(chrome ? { contentControlChrome: chrome } : {}),
+  } satisfies ResolvedPaintContext & {
+    ariaHidden: boolean;
+    activeHeaderFooterRId?: string;
+    activeHeaderFooterPageIndex?: number;
   };
   const document = container.ownerDocument;
   // The alias lookup is part of the paint parameters: a page painted before fonts
@@ -1590,7 +1848,7 @@ export function paintSemanticLayout(
   // moving the caret host across shared furniture copies rebuilds active markers.
   // Content-control chrome is furniture only, but toggling it must rebuild painted pages
   // so show-all / caret chrome appear.
-  const parameters = `${resolved.scale}|${resolved.ariaHidden}|${resolved.fontAlias ? aliasIdentity(resolved.fontAlias) : ''}|${resolved.activeHeaderFooterRId ?? ''}|${resolved.activeHeaderFooterPageIndex ?? ''}|cc:${chromeKey}`;
+  const parameters = `${resolved.scale}|${resolved.ariaHidden}|${resolved.fontAlias ? aliasIdentity(resolved.fontAlias) : ''}|${resolved.activeHeaderFooterRId ?? ''}|${resolved.activeHeaderFooterPageIndex ?? ''}|cc:${chromeKey}|${options.imageUrlPort ? 'url' : ''}|${drawingPaintStringsCacheToken(drawingStrings)}`;
   const previous = retainedPaints.get(container);
   const reusable =
     previous && previous.parameters === parameters
@@ -1609,6 +1867,10 @@ export function paintSemanticLayout(
   });
   retainedPaints.set(container, { parameters, pages });
   container.dataset.revision = String(layout.revision);
+
+  if (urlRegistry) {
+    urlRegistry.reconcile(collectUsedDrawingResourceKeys(layout));
+  }
 
   // Keyed reconcile instead of `replaceChildren`: retained elements stay where they are —
   // keeping the browser's style and layout for them, and the DOM selection anchored inside

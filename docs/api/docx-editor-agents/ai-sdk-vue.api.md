@@ -4,17 +4,50 @@
 
 ```ts
 
-import { AgentMessage } from '../agent-types';
-import { AgentToolCall } from '../agent-types';
-import { AiSdkUIMessage } from './shared';
-import { toAgentMessages } from './shared';
+// @public (undocumented)
+export interface AgentMessage {
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    role: 'user' | 'assistant';
+    status?: 'streaming' | 'done';
+    // (undocumented)
+    text: string;
+    toolCalls?: AgentToolCall[];
+}
 
-export { AgentMessage }
+// @public
+export interface AgentToolCall {
+    error?: string;
+    id: string;
+    input?: unknown;
+    name: string;
+    result?: string;
+    status: 'running' | 'done' | 'error';
+}
 
-export { AgentToolCall }
+// @public (undocumented)
+export interface AiSdkUIMessage {
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    parts?: ReadonlyArray<{
+        type: string;
+        text?: string;
+        toolCallId?: string;
+        state?: string;
+        input?: unknown;
+        output?: unknown;
+        errorText?: string;
+    }>;
+    // (undocumented)
+    role: 'user' | 'assistant' | 'system';
+}
 
-export { AiSdkUIMessage }
-
-export { toAgentMessages }
+// @public (undocumented)
+export function toAgentMessages(
+uiMessages: ReadonlyArray<AiSdkUIMessage>,
+status: string
+): AgentMessage[];
 
 ```

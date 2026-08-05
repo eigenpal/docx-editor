@@ -3,6 +3,7 @@
 // Separate from the paragraph break cache: the cache stores how a paragraph BREAKS; this
 // stores where the flow WAS. One survives reflow, the other is invalidated by it.
 
+import type { AnchoredDrawingRecord } from './drawing-layout.ts';
 import type { PageRecord, SemanticLayout } from './semantic-records.ts';
 
 /** The flow state as it stood immediately before one block was placed. */
@@ -11,10 +12,14 @@ export interface FlowCheckpoint {
   readonly pageCount: number;
   /** Fragments already on the page being built. */
   readonly pageFragments: readonly import('./semantic-records.ts').BlockFragmentRecord[];
+  /** Anchored drawings already collected for the open page. */
+  readonly pendingAnchoredDrawings: readonly AnchoredDrawingRecord[];
   readonly cursorY: number;
   readonly lineCounter: number;
   /** Trailing paragraph spacing participating in adjacent-spacing collapse. */
   readonly previousSpaceAfter: number;
+  /** Active column index when the section uses multiple columns. */
+  readonly flowColumnIndex: number;
 }
 
 export interface LayoutSessionStats {

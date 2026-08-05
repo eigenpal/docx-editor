@@ -16,7 +16,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node ../../scripts/rollup-package-dts.mjs --package @docx-editor.dev/react && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/react",
     "typecheck": "tsc --noEmit",
     "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/react --local",
     "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/react"
@@ -60,9 +60,8 @@
     "access": "public"
   },
   "dependencies": {
-    "@docx-editor.dev/agents": "workspace:*",
-    "@docx-editor.dev/core-contract": "workspace:*",
-    "@docx-editor.dev/i18n": "workspace:*",
+    "@docx-editor.dev/agents": "^0.0.1",
+    "@docx-editor.dev/i18n": "^0.0.1",
     "@radix-ui/react-select": "^2.3.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

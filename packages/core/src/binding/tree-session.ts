@@ -359,6 +359,34 @@ export interface TreeDocxSession {
   paraIdOf(nodeId: string): string | null;
   /** Canonical node id for a `w14:paraId`, matched case-insensitively, or null. */
   nodeIdOf(paraId: string): string | null;
+
+  /** Insert a validated raster image as one package undo unit (task 12). */
+  insertImage(
+    scope: StoryScope,
+    input: import('../store/store/tree-package-images.ts').InsertImageInput
+  ): Promise<import('../store/store/tree-package-images.ts').ImageIntentResult>;
+
+  /** Replace a picture drawing's embedded media in one package undo unit. */
+  replaceImage(
+    scope: StoryScope,
+    drawingNodeId: string,
+    bytes: Uint8Array,
+    mime: import('../store/package/image-resources.ts').SupportedImageMime,
+    decodePort: import('../store/package/image-resources.ts').ImageDecodePort,
+    options: import('../store/store/tree-package-images.ts').ReplaceImageOptions
+  ): Promise<import('../store/store/tree-package-images.ts').ImageIntentResult>;
+
+  /** Delete a picture drawing and collect orphaned media in one package undo unit. */
+  deleteImage(
+    scope: StoryScope,
+    drawingNodeId: string
+  ): import('../store/store/tree-package-images.ts').ImageIntentResult;
+
+  /** Apply image property tree ops plus hyperlink relationship wiring atomically. */
+  applyImageProperties(
+    scope: StoryScope,
+    input: import('../store/store/tree-package-images.ts').ApplyImagePropertiesInput
+  ): import('../store/store/tree-package-images.ts').ImageIntentResult;
 }
 
 export type { DocumentStyleEntry } from './document-catalog.ts';
@@ -963,6 +991,22 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
           numberingRoot = null;
         }
         return true;
+      },
+
+      insertImage(scope, input) {
+        return packageStore.insertImage(scope, input);
+      },
+
+      replaceImage(scope, drawingNodeId, bytes, mime, decodePort, options) {
+        return packageStore.replaceImage(scope, drawingNodeId, bytes, mime, decodePort, options);
+      },
+
+      deleteImage(scope, drawingNodeId) {
+        return packageStore.deleteImage(scope, drawingNodeId);
+      },
+
+      applyImageProperties(scope, input) {
+        return packageStore.applyImageProperties(scope, input);
       },
     },
   };

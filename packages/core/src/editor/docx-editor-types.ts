@@ -43,8 +43,12 @@ export interface DocxEditorConfig {
   fonts?: FontConfiguration | FontConfigurationFragment;
   author?: string;
   locale?: string;
+  /** Localized drawing refusal labels; defaults to English when omitted. */
+  translate?: (key: string, params?: Record<string, string | number>) => string;
   /** `'view'` refuses every mutating command through the facade; default `'edit'`. */
   mode?: 'edit' | 'view';
+  /** Override raster decode for insert/replace image commands; defaults to browser/headless. */
+  imageDecodePort?: import('../store/package/image-resources.ts').ImageDecodePort;
   zoom?: number;
   onFontError?: (error: EditorFontError) => void;
   /** Localized labels for table insertion furniture on the painted surface. */
@@ -87,6 +91,8 @@ export interface HyperlinkChromeHandlers {
  * need. Production adapters program against `Editor` for everything else.
  */
 export interface DocxEditorInstance extends Editor {
+  /** Bumps on mount, detach, destroy, and document reload — guards async image intents. */
+  readonly mountGeneration: number;
   /**
    * The underlying paginated surface for harnesses and tests that need capabilities the
    * contract does not carry yet (select-all, node-id addressed selection).

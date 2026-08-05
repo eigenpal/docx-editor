@@ -1,6 +1,6 @@
 ---
 title: "@docx-editor.dev/react"
-description: "React adapter: <DocxEditor>, hooks, dialogs, toolbar, plugin host. Works with Next.js, Vite, Remix, Astro."
+description: "React adapter: <DocxEditor>, provider-first composition, hooks, and chrome compounds."
 category: "Packages"
 order: 30
 ---
@@ -13,41 +13,35 @@ order: 30
 npm install @docx-editor.dev/react
 ```
 
-Pulls in `@docx-editor.dev/core` and `@docx-editor.dev/i18n`. Add `@docx-editor.dev/agents` if you need the agent toolkit.
+Pulls in `@docx-editor.dev/core-contract` and `@docx-editor.dev/i18n`. Add `@docx-editor.dev/agents` if you need the agent toolkit UI.
 
 ## Quickstart
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
-import '@docx-editor.dev/react/styles.css';
 
 export default function App() {
-  return <DocxEditor documentBuffer={null} />;
+  return <DocxEditor document={docxBytes} />;
 }
 ```
 
-On Next.js App Router, render this inside a `"use client"` component. ProseMirror touches the DOM at mount, so there's nothing to SSR. The [Next.js DOCX editor guide](/blog/nextjs-docx-editor) walks through file uploads, saving to an API route, and the common errors.
+On Next.js App Router, render this inside a `"use client"` component. The editor mounts a painted surface in the browser; there is nothing to SSR. The [Next.js DOCX editor guide](/blog/nextjs-docx-editor) walks through file uploads, saving to an API route, and the common errors.
 
 <DemoPlayground />
 
 ## Subpaths
 
-- `@docx-editor.dev/react`: `<DocxEditor>`, `DocxEditorRef`, `DocxEditorProps`, `EditorMode`, `createEmptyDocument` (re-exported from `-core` in 1.0.1)
-- `@docx-editor.dev/react/ui`: `Toolbar`, `EditorToolbar`, `ResponsiveToolbar`, `TableToolbar`, `ToolbarButton`, `ToolbarGroup`, `ToolbarSeparator`, `ColorPicker`, font/color pickers
-- `@docx-editor.dev/react/hooks`: `useHistory`, `useFindReplace`, `useAutoSave`, `useClipboard`, `useTableSelection`, `useWheelZoom`, `useDragAutoScroll`
-- `@docx-editor.dev/react/dialogs`: hyperlink, find/replace, paste special, page setup, keyboard shortcuts
-- `@docx-editor.dev/react/plugin-api`: `PluginHost`, plugin registration types
-- `@docx-editor.dev/react/styles`: CSS
+- `@docx-editor.dev/react`: `<DocxEditor>`, `DocxEditorRef`, `DocxEditorProps`, `EditorMode`, composition primitives (`DocxEditor.Root` / `.Viewport` / `.Content`), hooks, and chrome compounds (`DocxEditor.Toolbar`, `.Menu`, `.Navigation`, …)
 
 Every export is in the [API reference](/docs/1.x/api/react).
 
 ## Loading a document
 
-`documentBuffer` accepts the `DocxInput` union: `File`, `Blob`, `ArrayBuffer`, or `Uint8Array`. Pass a `File` from an `<input type="file" accept=".docx">` directly, or a fetched buffer. `null` mounts an empty document; `undefined` defers mount until the input arrives. Full patterns (URL, file input, saving) are in [Loading and saving](/docs/1.x/guides/loading-and-saving).
+Pass a `document` prop: DOCX bytes (`ArrayBuffer` / `Uint8Array`) or an existing `DocumentHandle` from a prior save. Omit it to mount an empty document. Full patterns (URL, file input, saving) are in [Loading and saving](/docs/1.x/guides/loading-and-saving).
 
 ## Ref methods
 
-`DocxEditorRef` exposes imperative methods through `forwardRef`:
+`DocxEditorRef` is a seven-member imperative handle shared with Vue (enforced by `bun run check:parity-contract`):
 
 ```tsx
 import { useRef } from 'react';
@@ -55,29 +49,22 @@ import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
 
 const editorRef = useRef<DocxEditorRef>(null);
 
-editorRef.current?.addComment({ paraId: 'ABC12300', text: 'Tighten this.', author: 'Jess Lin' });
-editorRef.current?.scrollToParaId('DEF45600');
+await editorRef.current?.save();
+const editor = editorRef.current?.getEditor();
+editorRef.current?.exec({ kind: 'text.bold' });
 ```
 
-`paraId` is Word's `w14:paraId` attribute. It survives concurrent edits and round-trips through OOXML, which is why we use it instead of positional addressing. Every method signature is in the [API reference](/docs/1.x/api/react).
-
-The ref also reaches block-level content controls in the live document: `getContentControls` lists them (filtered by tag, alias, id, or type), `scrollToContentControl` brings one into view, and `setContentControlContent` / `setContentControlValue` / `removeContentControl` edit one by tag as normal undoable edits. Locked controls are refused unless forced. The Vue adapter pairs the same methods.
+Advanced reads (formatting state, outline, page setup) go through `getEditor()` and `snapshot()`. Every method is safe before mount — reads return honest empty answers, mutations no-op.
 
 ## Toolbar
 
-`@docx-editor.dev/react/ui` exports the toolbar pieces. `EditorToolbar` is the full toolbar used by the default editor UI; `Toolbar` is the formatting-button strip on its own; `ResponsiveToolbar` wraps either with adaptive layout. Compose your own from `ToolbarButton`, `ToolbarGroup`, and `ToolbarSeparator`:
+The default chrome renders `DocxEditor.Toolbar` from the root export. Compose your own from the same primitives:
 
 ```tsx
-import { DocxEditor } from '@docx-editor.dev/react';
-import {
-  EditorToolbar,
-  Toolbar,
-  ToolbarButton,
-  ToolbarGroup,
-} from '@docx-editor.dev/react/ui';
+import { DocxEditor, DocxEditorToolbar, Toolbar, ToolbarButton } from '@docx-editor.dev/react';
 ```
 
-In 0.x the formatting buttons were called `FormattingBar` and the composite was `Toolbar`. In 1.x, the formatting buttons are `Toolbar` and the composite is `EditorToolbar`.
+See [Toolbar customization](/docs/1.x/guides/toolbar) for slot overrides, menu bar wiring, and title-bar slots.
 
 ## Agent integration
 
@@ -88,11 +75,10 @@ import { DocxEditor } from '@docx-editor.dev/react';
 import { useDocxAgentTools } from '@docx-editor.dev/agents/react';
 ```
 
-Full client + server wiring is on [Agents → Live editor](/docs/1.x/agents/live-editor).
+The live bridge is pending rebuild over the greenfield engine; static review via `DocxReviewer` remains available from `@docx-editor.dev/agents`. Full client + server wiring is on [Agents → Live editor](/docs/1.x/agents/live-editor).
 
 ## Next steps
 
 - [API reference](/docs/1.x/api/react)
 - [Next.js DOCX editor guide](/blog/nextjs-docx-editor)
-- [Plugins](/docs/1.x/plugins)
 - [Agents](/docs/1.x/agents)

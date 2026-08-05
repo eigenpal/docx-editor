@@ -42,6 +42,8 @@ import {
   sectionChild,
   targetSectionNodes,
 } from './tree-op-section-address.ts';
+import { rangePartiallyOverlapsDrawingAtom } from '../package/drawing-projection.ts';
+import { isDrawingTreeDocOp, validateDrawingOp } from './tree-op-drawings.ts';
 import { isParagraph, paragraphLength, segmentsOf, splitsSurrogate } from './tree-op-segments.ts';
 import {
   ACCEPTED_PARAGRAPH_PROPERTIES,
@@ -73,6 +75,14 @@ function validateProperties(
 
 /** Longest `r:id`, `w:anchor` or `w:tooltip` an op may write. */
 const MAX_HYPERLINK_ATTRIBUTE_LENGTH = 512;
+
+function rangePartiallyOverlapsDrawing(
+  paragraph: OoxmlParagraphNode,
+  start: number,
+  end: number
+): boolean {
+  return rangePartiallyOverlapsDrawingAtom(segmentsOf(paragraph), start, end);
+}
 
 /** Whether `[start, end)` overlaps any text already inside a `w:hyperlink`. */
 function rangeTouchesHyperlink(paragraph: OoxmlParagraphNode, start: number, end: number): boolean {
@@ -323,6 +333,7 @@ function validateRemoveContentControl(part: OoxmlPart, controlId: string): TreeO
 /** Structural validation, run before any tree work so a rejection changes nothing. */
 export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection | null {
   if (!TREE_DOC_OP_KINDS.includes(op.op)) return 'unknown-op';
+  if (isDrawingTreeDocOp(op)) return validateDrawingOp(part, op);
 
   // Package-level furniture ops cannot run against a single part. Shape-check here so
   // applyTreeOp refuses them; TreePackageStore.applyLifecycleOp is the commit path.
@@ -624,6 +635,9 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
         return 'offset-out-of-range';
       }
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
+      if (rangePartiallyOverlapsDrawing(paragraph, op.offset, op.offset + 1)) {
+        return 'invalid-range';
+      }
       return rejectContentEdit(part, paragraph, op.offset, op.offset);
     }
     case 'splitParagraphMany': {
@@ -641,6 +655,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
         if (splitsSurrogate(paragraph, offset)) return 'splits-surrogate-pair';
         const restriction = rejectContentEdit(part, paragraph, offset, offset);
         if (restriction) return restriction;
+        if (rangePartiallyOverlapsDrawing(paragraph, offset, offset + 1)) return 'invalid-range';
       }
       return null;
     }
@@ -651,6 +666,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (splitsSurrogate(paragraph, op.start) || splitsSurrogate(paragraph, op.end)) {
         return 'splits-surrogate-pair';
       }
+      if (rangePartiallyOverlapsDrawing(paragraph, op.start, op.end)) return 'invalid-range';
       return rejectContentEdit(part, paragraph, op.start, op.end);
     }
     case 'setRunProperties': {
@@ -728,6 +744,7 @@ export {
   type RevisionAttributionInput,
   type TreeDocOp,
   type TreeDocOpKind,
+  type DrawingTreeDocOp,
   type TreeOpEffect,
   type TreeOpRejection,
   type TreeOpResult,

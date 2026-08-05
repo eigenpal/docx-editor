@@ -4,18 +4,9 @@
 
 ```ts
 
-import { AgentMessage } from '../agent-types';
-import { AgentMessage as AgentMessage_2 } from '../../agent-types';
-import { AgentToolCall } from '../agent-types';
-import { AgentToolCall as AgentToolCall_2 } from '../../agent-types';
-import { AgentToolDefinition } from './tools';
-import { AgentToolResult } from './tools';
-import { AgentToolResult as AgentToolResult_2 } from '../../tools';
 import { ComponentOptionsMixin } from 'vue';
 import { ComponentProvideOptions } from 'vue';
 import { DefineComponent } from 'vue';
-import { getToolDisplayName } from './tools';
-import { getToolSchemas } from '../../tools';
 import { MaybeRef } from 'vue';
 import { PublicProps } from 'vue';
 import { Ref } from 'vue';
@@ -40,7 +31,7 @@ export interface AgentChatLogProps {
     // (undocumented)
     maxVisibleCalls?: number;
     // (undocumented)
-    messages: AgentMessage_2[];
+    messages: AgentMessage[];
     // (undocumented)
     summaryLabel?: (count: number) => string;
     // (undocumented)
@@ -66,7 +57,17 @@ export interface AgentComposerProps {
     sendLabel?: string;
 }
 
-export { AgentMessage }
+// @public (undocumented)
+export interface AgentMessage {
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    role: 'user' | 'assistant';
+    status?: 'streaming' | 'done';
+    // (undocumented)
+    text: string;
+    toolCalls?: AgentToolCall[];
+}
 
 // @public (undocumented)
 export const AgentPanel: __VLS_WithSlots<typeof __VLS_component, __VLS_Slots>;
@@ -132,16 +133,39 @@ export interface AgentTimelineProps {
     // (undocumented)
     summaryLabel?: (count: number) => string;
     // (undocumented)
-    toolCalls: AgentToolCall_2[];
+    toolCalls: AgentToolCall[];
     // (undocumented)
     workingLabel?: (count: number) => string;
 }
 
-export { AgentToolCall }
+// @public
+export interface AgentToolCall {
+    error?: string;
+    id: string;
+    input?: unknown;
+    name: string;
+    result?: string;
+    status: 'running' | 'done' | 'error';
+}
 
-export { AgentToolDefinition }
+// @public
+export interface AgentToolDefinition<TInput = Record<string, unknown>> {
+    description: string;
+    displayName?: string;
+    handler: (input: TInput, bridge: EditorBridge) => AgentToolResult;
+    inputSchema: Record<string, unknown>;
+    name: string;
+}
 
-export { AgentToolResult }
+// @public
+export interface AgentToolResult {
+    // (undocumented)
+    data?: unknown;
+    // (undocumented)
+    error?: string;
+    // (undocumented)
+    success: boolean;
+}
 
 // @public (undocumented)
 export const AIContextMenu: DefineComponent<AIContextMenuProps, {}, {}, {}, {}, ComponentOptionsMixin, ComponentOptionsMixin, {} & {
@@ -279,7 +303,8 @@ export interface EditorRefLike {
     }): boolean;
 }
 
-export { getToolDisplayName }
+// @public
+export function getToolDisplayName(name: string): string;
 
 // @public (undocumented)
 export function useAgentBridge(options: UseAgentBridgeOptions): UseAgentBridgeReturn;
@@ -293,7 +318,7 @@ export interface UseAgentBridgeOptions {
 // @public (undocumented)
 export interface UseAgentBridgeReturn {
     // (undocumented)
-    executeToolCall: (toolName: string, input: Record<string, unknown>) => AgentToolResult_2;
+    executeToolCall: (toolName: string, input: Record<string, unknown>) => AgentToolResult;
     // (undocumented)
     toolSchemas: ReturnType<typeof getToolSchemas>;
 }

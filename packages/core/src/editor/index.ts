@@ -97,6 +97,7 @@ export {
   chromeMenuSlots,
   chromeSlotId,
   defaultChromeGroups,
+  formattingBarChromeGroups,
   type ChromeControl,
   type ChromeControlId,
   type ChromeControlState,
@@ -134,6 +135,78 @@ export {
   validateThemeModifier,
 } from './color-value-lower.ts';
 export type { ColorLowerResult } from './color-value-lower.ts';
+export {
+  canExecuteImageCommand,
+  captureImageMutationPreconditions,
+  executeImageCommand,
+  selectedImageStateOf,
+  selectedDrawingOverlayTargetOf,
+  computeMovedImagePosition,
+  computeResizedImageExtentEmu,
+  isStaleImageInteractionCommit,
+  pointsToEmu,
+  emuToOverlayPoints,
+  IMAGE_OVERLAY_NUDGE_PT,
+  IMAGE_OVERLAY_NUDGE_SHIFT_PT,
+  EMU_PER_POINT,
+  type ImageContext,
+  type SelectedImageState,
+  type ImageInteractionSession,
+  type ImageOverlayScrollPort,
+  type ImageResizeHandle,
+  type SelectedDrawingOverlayTarget,
+} from './docx-editor-images.ts';
+export { surfaceExtent, type SurfaceExtent } from './surface-pages.ts';
+export {
+  computeImageResizeResult,
+  createImageOverlayScrollPort,
+  cssPixelsToLayoutPoints,
+  layoutPointsToCssPixels,
+  overlayFrameToSheetCssPixels,
+  resizePreservesAspect,
+  surfacePaintScale,
+  finalizeImageOverlayInteraction,
+  type AnchorFrameOrigin,
+  type ImageResizeResult,
+  type FinalizedImageOverlayInteraction,
+  type OverlayFrameRect,
+  type SurfaceOverlayCoordinates,
+} from './surface-overlay-coordinates.ts';
+export {
+  IMAGE_WRAP_TARGETS,
+  type ImageWrapTarget,
+  type DrawingPositionInput,
+} from '../store/package/drawing-projection.ts';
+export {
+  DRAWING_REL_FROM_H,
+  DRAWING_REL_FROM_V,
+  propertiesCommandHasPositionFields,
+  positionInputFromPropertiesCommand,
+  validateDrawingPositionInput,
+  validateSetImagePositionCommand,
+} from '../store/package/drawing-position-input.ts';
+export {
+  cropPercentFromCropPermille,
+  cropPercentFromPermille,
+  cropPercentFromSourceCrop,
+  cropPermilleFromCropPercent,
+  cropPermilleFromPercent,
+  sourceCropFromCropPercent,
+  validateImageCropPercent,
+  type ImageCropPercent,
+  type ImageCropPermille,
+} from '../store/package/image-crop-units.ts';
+export {
+  sniffImageMime,
+  validateRasterHeader,
+  type ImageDecodePort,
+  type SupportedImageMime,
+} from '../store/package/image-resources.ts';
+export {
+  DEFAULT_IMAGE_RESOURCE_LIMITS,
+  resolveImageResourceLimits,
+  type ImageResourceLimits,
+} from '../store/runtime/limits.ts';
 export type { HyperlinkOps, SurfaceHyperlink } from './surface-hyperlinks.ts';
 export type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
 // The types an adapter needs to CALL the surface, re-exported from the composition root.

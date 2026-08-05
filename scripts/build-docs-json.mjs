@@ -30,6 +30,12 @@ import { buildSourceIndex } from './lib/source-index.mjs';
 import { transformApiPackageJson } from './lib/docs-model.mjs';
 import { PACKAGES, buildHintFor, reportDirFor } from './lib/packages.mjs';
 
+function hasBuiltTypes(packageRoot) {
+  const distDir = path.join(packageRoot, 'dist');
+  if (!fs.existsSync(distDir)) return false;
+  return fs.readdirSync(distDir).some((file) => file.endsWith('.d.ts'));
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 const docsJsonDir = path.join(repoRoot, 'docs', 'json');
@@ -227,6 +233,18 @@ function main() {
   fs.mkdirSync(docsJsonDir, { recursive: true });
 
   for (const pkg of PACKAGES) {
+    const pkgRoot = path.join(repoRoot, pkg.root);
+    if (pkg.disconnected) {
+      if (hasBuiltTypes(pkgRoot)) {
+        console.error(
+          `${pkg.name} is marked disconnected but has built .d.ts files. ` +
+            `Remove the 'disconnected' flag in scripts/lib/packages.mjs so docs JSON is generated again.`
+        );
+        process.exit(1);
+      }
+      console.warn(`SKIPPED ${pkg.name}: ${pkg.disconnected}`);
+      continue;
+    }
     processPackage(pkg);
   }
 

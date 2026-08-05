@@ -85,6 +85,11 @@ export interface ReviewChange {
   noteId?: number;
   /** Which note store the change came from. Absent for body changes. */
   noteType?: 'footnote' | 'endnote';
+  /**
+   * Opaque canonical revision target. Pass back unchanged to {@link acceptChange} /
+   * {@link rejectChange} so the engine resolves the exact wrapper in the correct story.
+   */
+  revisionRef?: string;
 }
 
 export interface ReviewCommentReply {

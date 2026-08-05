@@ -478,18 +478,25 @@ function fingerprintNode(
   return ['element', node.namespaceUri, node.localName, attributes, children];
 }
 
+/** Default namespace bindings for fingerprinting a subtree in isolation. */
+export const DEFAULT_FINGERPRINT_BINDINGS = new Map<string, string>([
+  ['xml', XML_NAMESPACE_URI],
+  ['xmlns', XMLNS_NAMESPACE_URI],
+]);
+
+/** Repository-owned namespace-aware semantic XML oracle. */
+export function canonicalOoxmlFingerprintWithBindings(
+  value: OoxmlPart | OoxmlNode,
+  inheritedBindings: ReadonlyMap<string, string> = DEFAULT_FINGERPRINT_BINDINGS
+): string {
+  return JSON.stringify(
+    fingerprintNode('root' in value ? value.root : value, false, inheritedBindings)
+  );
+}
+
 /** Repository-owned namespace-aware semantic XML oracle. */
 export function canonicalOoxmlFingerprint(value: OoxmlPart | OoxmlNode): string {
-  return JSON.stringify(
-    fingerprintNode(
-      'root' in value ? value.root : value,
-      false,
-      new Map([
-        ['xml', XML_NAMESPACE_URI],
-        ['xmlns', XMLNS_NAMESPACE_URI],
-      ])
-    )
-  );
+  return canonicalOoxmlFingerprintWithBindings(value);
 }
 
 export function ooxmlTreesEqual(

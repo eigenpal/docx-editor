@@ -3,6 +3,7 @@
  */
 
 import type {
+  Document,
   DocumentBody,
   Paragraph,
   Run,
@@ -12,6 +13,8 @@ import type {
   Footnote,
   Endnote,
 } from '@docx-editor.dev/core/headless';
+import type { RevisionIndex } from '@docx-editor.dev/core/headless';
+import { headlessContextOf, recordResolution } from '@docx-editor.dev/core/headless';
 import type {
   ProposeReplacementOptions,
   ProposeInsertionOptions,
@@ -30,74 +33,150 @@ import {
   type TrackedChangeItem,
 } from './utils';
 
+function resolveTarget(
+  doc: Document,
+  target: number | ReviewChange,
+  notes?: ChangeNotes
+): { entry: NonNullable<ReturnType<RevisionIndex['entryBySyntheticId']>> } | null {
+  const index = headlessContextOf(doc)?.revisionIndex;
+  if (!index) return null;
+  if (typeof target !== 'number') {
+    if (target.revisionRef) {
+      const entry = index.entryByRevisionRef(target.revisionRef);
+      return entry ? { entry } : null;
+    }
+    const story =
+      target.noteType && target.noteId !== undefined
+        ? ({ kind: target.noteType, noteId: target.noteId } as const)
+        : ({ kind: 'body' } as const);
+    const match = index.entries.find(
+      (entry) =>
+        entry.syntheticId === target.id &&
+        entry.ref.type === target.type &&
+        (entry.ref.story.kind === 'body'
+          ? story.kind === 'body'
+          : story.kind !== 'body' &&
+            entry.ref.story.noteId === (story as { noteId: number }).noteId)
+    );
+    return match ? { entry: match } : null;
+  }
+  const bodyMatches = index.entries.filter(
+    (entry) => entry.syntheticId === target && entry.ref.story.kind === 'body'
+  );
+  if (bodyMatches.length === 1) return { entry: bodyMatches[0]! };
+  if (bodyMatches.length > 1) return { entry: bodyMatches[0]! };
+  if (notes) {
+    for (const change of index.entries) {
+      if (change.syntheticId !== target) continue;
+      if (change.ref.story.kind === 'footnote' || change.ref.story.kind === 'endnote') {
+        return { entry: change };
+      }
+    }
+  }
+  return null;
+}
+
+function applyLegacyResolution(
+  doc: Document,
+  body: DocumentBody,
+  entry: NonNullable<ReturnType<RevisionIndex['entryBySyntheticId']>>,
+  mode: 'accept' | 'reject',
+  notes?: ChangeNotes,
+  processedRefs: Set<string> = new Set()
+): boolean {
+  if (processedRefs.has(entry.revisionRef)) return false;
+  processedRefs.add(entry.revisionRef);
+  const { ref, paragraphIndex } = entry;
+  const story = ref.story;
+  const targets: Array<{ para: Paragraph; match: (item: TrackedChangeItem) => boolean }> = [];
+
+  const matchItem = (item: TrackedChangeItem): boolean =>
+    item.type === ref.type &&
+    String(item.info.id) === ref.address.id &&
+    item.info.author === ref.address.author &&
+    (item.info.date ?? null) === (ref.address.date ?? null);
+
+  if (story.kind === 'body') {
+    forEachParagraph(body, (para, index) => {
+      if (index === paragraphIndex) targets.push({ para, match: matchItem });
+    });
+  } else if (story.kind === 'footnote') {
+    const note = notes?.footnotes?.find((fn) => fn.id === story.noteId);
+    if (!note) return false;
+    forEachNoteParagraph(note, (para, index) => {
+      if (index === paragraphIndex) targets.push({ para, match: matchItem });
+    });
+  } else {
+    const note = notes?.endnotes?.find((en) => en.id === story.noteId);
+    if (!note) return false;
+    forEachNoteParagraph(note, (para, index) => {
+      if (index === paragraphIndex) targets.push({ para, match: matchItem });
+    });
+  }
+
+  if (targets.length === 0) return false;
+  let count = 0;
+  for (const target of targets) {
+    count += processParagraph(target.para, mode, target.match);
+  }
+
+  if (ref.moveName !== undefined) {
+    const revisionIndex = headlessContextOf(doc)?.revisionIndex;
+    if (revisionIndex) {
+      for (const paired of revisionIndex.entriesByMoveName(ref.story, ref.moveName)) {
+        if (paired.revisionRef === entry.revisionRef) continue;
+        if (applyLegacyResolution(doc, body, paired, mode, notes, processedRefs)) count += 1;
+      }
+    }
+  }
+
+  return count > 0;
+}
+
 // ============================================================================
 // ACCEPT / REJECT
 // ============================================================================
 
-/**
- * Accept a tracked change.
- *
- * Pass a numeric revision id to accept a change in the document **body** (the
- * historical signature). Pass a {@link ReviewChange} from `getChanges` to accept
- * a change wherever it lives — a change carrying `noteType`/`noteId` is resolved
- * inside that footnote/endnote (the `notes` arg supplies the note stores). A
- * `ReviewChange` with no `noteType` resolves in the body, like the numeric form.
- *
- * Insertion: keep text, remove wrapper. Deletion: remove text and wrapper.
- */
 export function acceptChange(
+  doc: Document,
   body: DocumentBody,
   target: number | ReviewChange,
   notes?: ChangeNotes
 ): void {
-  if (!processChange(body, target, 'accept', notes)) {
+  if (!processChange(doc, body, target, 'accept', notes)) {
     throw new ChangeNotFoundError(typeof target === 'number' ? target : target.id);
   }
 }
 
-/**
- * Reject a tracked change. See {@link acceptChange} for body-vs-note targeting.
- * Insertion: remove text and wrapper. Deletion: keep text, remove wrapper.
- */
 export function rejectChange(
+  doc: Document,
   body: DocumentBody,
   target: number | ReviewChange,
   notes?: ChangeNotes
 ): void {
-  if (!processChange(body, target, 'reject', notes)) {
+  if (!processChange(doc, body, target, 'reject', notes)) {
     throw new ChangeNotFoundError(typeof target === 'number' ? target : target.id);
   }
 }
 
-/**
- * Accept all tracked changes in the body. Pass `{ includeFootnotes,
- * includeEndnotes }` (and the `notes` stores) to also resolve changes inside
- * note bodies. Returns the total count processed.
- */
 export function acceptAll(
+  doc: Document,
   body: DocumentBody,
   opts?: AcceptChangesOptions,
   notes?: ChangeNotes
 ): number {
-  return processAllChanges(body, 'accept', opts, notes);
+  return processAllChanges(doc, body, 'accept', opts, notes);
 }
 
-/**
- * Reject all tracked changes. See {@link acceptAll} for note opt-in.
- */
 export function rejectAll(
+  doc: Document,
   body: DocumentBody,
   opts?: AcceptChangesOptions,
   notes?: ChangeNotes
 ): number {
-  return processAllChanges(body, 'reject', opts, notes);
+  return processAllChanges(doc, body, 'reject', opts, notes);
 }
 
-/**
- * Accept/reject every tracked-change item in a paragraph that matches `match`.
- * Iterates backward so splice doesn't shift unprocessed indices. Returns the
- * number of items processed. Shared by the body walk and the note walk.
- */
 function processParagraph(
   para: Paragraph,
   mode: 'accept' | 'reject',
@@ -114,16 +193,20 @@ function processParagraph(
   return count;
 }
 
-/** Resolve a single change — in the body, or in a note when `target` carries `noteType`/`noteId`. */
 function processChange(
+  doc: Document,
   body: DocumentBody,
   target: number | ReviewChange,
   mode: 'accept' | 'reject',
   notes?: ChangeNotes
 ): boolean {
-  // Note-intent: any ReviewChange carrying `noteType` routes to the note path —
-  // including a malformed one missing `noteId`, which then fails loud (note not
-  // found → ChangeNotFoundError) rather than silently resolving in the body.
+  const resolved = resolveTarget(doc, target, notes);
+  if (resolved) {
+    const applied = applyLegacyResolution(doc, body, resolved.entry, mode, notes);
+    if (applied) recordResolution(doc, resolved.entry.ref, mode);
+    return applied;
+  }
+
   if (typeof target !== 'number' && target.noteType) {
     const list = target.noteType === 'footnote' ? notes?.footnotes : notes?.endnotes;
     const note =
@@ -135,16 +218,40 @@ function processChange(
   return processChangeById(body, id, mode);
 }
 
-/**
- * Process all tracked changes in a single pass (O(M) where M = total paragraphs),
- * across the body and — when opted in — footnote/endnote bodies.
- */
 function processAllChanges(
+  doc: Document,
   body: DocumentBody,
   mode: 'accept' | 'reject',
   opts?: AcceptChangesOptions,
   notes?: ChangeNotes
 ): number {
+  const index = headlessContextOf(doc)?.revisionIndex;
+  if (index) {
+    let count = 0;
+    for (const entry of index.entries) {
+      if (entry.ref.story.kind === 'footnote' && !opts?.includeFootnotes) continue;
+      if (entry.ref.story.kind === 'endnote' && !opts?.includeEndnotes) continue;
+      if (
+        entry.ref.story.kind !== 'body' &&
+        entry.ref.story.kind !== 'footnote' &&
+        entry.ref.story.kind !== 'endnote'
+      ) {
+        continue;
+      }
+      if (
+        entry.ref.story.kind === 'body' ||
+        (entry.ref.story.kind === 'footnote' && opts?.includeFootnotes) ||
+        (entry.ref.story.kind === 'endnote' && opts?.includeEndnotes)
+      ) {
+        if (applyLegacyResolution(doc, body, entry, mode, notes)) {
+          recordResolution(doc, entry.ref, mode);
+          count += 1;
+        }
+      }
+    }
+    return count;
+  }
+
   let count = 0;
   forEachParagraph(body, (para) => {
     count += processParagraph(para, mode, () => true);
@@ -166,28 +273,15 @@ function processAllChanges(
   return count;
 }
 
-/**
- * Find and process a tracked change by revision id in the document body.
- * Processes ALL items with matching id within the first paragraph that contains
- * it (a revision can span multiple items), then stops — the body's established
- * semantics.
- */
 function processChangeById(body: DocumentBody, id: number, mode: 'accept' | 'reject'): boolean {
   let found = false;
   forEachParagraph(body, (para) => {
     if (processParagraph(para, mode, (item) => item.info.id === id) > 0) found = true;
-    // Stop traversal once we've found and processed the change
     if (found) return false;
   });
   return found;
 }
 
-/**
- * Process a tracked change by revision id inside a single note. Unlike the body
- * path, this scans ALL of the note's paragraphs (a note is a small, bounded
- * scope, and a revision can span its paragraphs) — matching what `getChanges`
- * accumulates for that change.
- */
 function processChangeInNote(
   note: Footnote | Endnote,
   id: number,
@@ -213,11 +307,9 @@ function applyChangeAtIndex(
     (item.type === 'moveFrom' && mode === 'reject');
 
   if (keepContent) {
-    // Unwrap: replace the tracked change wrapper with its content runs
     const runs = item.content as ParagraphContent[];
     para.content.splice(index, 1, ...runs);
   } else {
-    // Remove: delete the tracked change and its content
     para.content.splice(index, 1);
   }
 }
@@ -226,9 +318,6 @@ function applyChangeAtIndex(
 // PROPOSE CHANGES
 // ============================================================================
 
-/**
- * Propose a text replacement as a tracked change (deletion + insertion).
- */
 export function proposeReplacement(body: DocumentBody, options: ProposeReplacementOptions): void {
   const { paragraphIndex, search, author = 'AI', replaceWith } = options;
   const para = getParagraphAtIndex(body, paragraphIndex);
@@ -255,9 +344,6 @@ export function proposeReplacement(body: DocumentBody, options: ProposeReplaceme
   para.content.splice(startIndex, endIndex - startIndex + 1, deletion, insertion);
 }
 
-/**
- * Propose an insertion as a tracked change.
- */
 export function proposeInsertion(body: DocumentBody, options: ProposeInsertionOptions): void {
   const { paragraphIndex, author = 'AI', insertText, position = 'after', search } = options;
   const para = getParagraphAtIndex(body, paragraphIndex);
@@ -284,9 +370,6 @@ export function proposeInsertion(body: DocumentBody, options: ProposeInsertionOp
   }
 }
 
-/**
- * Propose a deletion as a tracked change.
- */
 export function proposeDeletion(body: DocumentBody, options: ProposeDeletionOptions): void {
   const { paragraphIndex, search, author = 'AI' } = options;
   const para = getParagraphAtIndex(body, paragraphIndex);
@@ -307,11 +390,6 @@ export function proposeDeletion(body: DocumentBody, options: ProposeDeletionOpti
   para.content.splice(startIndex, endIndex - startIndex + 1, deletion);
 }
 
-// ============================================================================
-// HELPERS
-// ============================================================================
-
-/** Cached max revision ID per body — avoids O(N) scan on every proposal. */
 const revisionIdCache = new WeakMap<DocumentBody, number>();
 
 function nextRevisionId(body: DocumentBody): number {
@@ -327,7 +405,6 @@ function nextRevisionId(body: DocumentBody): number {
     });
   }
   const next = maxId + 1;
-  // Reserve both next and next+1 (replacement uses two IDs)
   revisionIdCache.set(body, next + 1);
   return next;
 }

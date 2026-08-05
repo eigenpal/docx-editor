@@ -21,9 +21,16 @@ import type {
 } from './paragraph-style.ts';
 import type { TabLeader } from './paragraph-tabs.ts';
 import type { ModelRange } from './field-projection.ts';
+import type { InlineDrawingRecord, AnchoredDrawingRecord } from './drawing-layout.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import type { ResolvedCellBorders } from './table-borders.ts';
+
+export type {
+  InlineDrawingRecord,
+  AnchoredDrawingRecord,
+  DrawingGeometry,
+} from './drawing-layout.ts';
 
 export type {
   ParagraphBorderEdge,
@@ -202,6 +209,13 @@ export interface LineRecord {
    * positions with no glyph.
    */
   readonly deletedRanges?: readonly ModelRange[];
+  /**
+   * Inline drawings on this line, absent when there are none.
+   *
+   * Each occupies one UTF-16 model unit at {@link InlineDrawingRecord.start}. Hidden drawings
+   * are omitted — they remain in the tree and projection but publish no geometry.
+   */
+  readonly drawings?: readonly InlineDrawingRecord[];
 }
 
 /**
@@ -438,6 +452,8 @@ export interface HeaderFooterStoryRecord {
   readonly rId?: string;
   readonly box: LayoutBox;
   readonly fragments: readonly BlockFragmentRecord[];
+  /** Anchored drawings owned by this story, in story-relative coordinates. */
+  readonly anchoredDrawings?: readonly AnchoredDrawingRecord[];
   /**
    * Transient projector used between furniture attach and document-level page-field
    * finalize. Absent on published layout records after finalize.
@@ -579,6 +595,8 @@ export interface PageRecord {
   readonly fragments: readonly BlockFragmentRecord[];
   /** Layout-owned vertical rules requested by `w:cols/@w:sep`, content-box relative. */
   readonly columnSeparators?: readonly LayoutBox[];
+  /** Page-content anchored drawings on this sheet, absent when there are none. */
+  readonly anchoredDrawings?: readonly AnchoredDrawingRecord[];
   /** Page furniture for this page's variant, absent when the document declares none. */
   readonly header?: HeaderFooterStoryRecord;
   readonly footer?: HeaderFooterStoryRecord;
@@ -701,6 +719,11 @@ export function linesOf(layout: SemanticLayout): LineRecord[] {
     for (const fragment of paragraphFragmentsOf(page)) lines.push(...fragment.lines);
   }
   return lines;
+}
+
+/** Anchored drawings on one body page (page-content coordinates). */
+export function anchoredDrawingsOf(page: PageRecord): readonly AnchoredDrawingRecord[] {
+  return page.anchoredDrawings ?? [];
 }
 
 /** Every fragment belonging to one paragraph, in order, across page boundaries. */

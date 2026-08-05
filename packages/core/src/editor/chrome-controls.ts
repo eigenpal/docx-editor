@@ -31,6 +31,7 @@
 // SLOT id, never the bare control id.
 
 import { GENERATED_ICON_PATHS } from './generated-icon-paths.ts';
+import type { ImageContext } from '@docx-editor.dev/core-contract/contracts/editor';
 
 /**
  * HOW a control reaches the engine — never WHETHER it is enabled.
@@ -457,6 +458,22 @@ export const CHROME_GROUPS = [
         paths: GENERATED_ICON_PATHS['tune'],
         state: { kind: 'command' },
       },
+      {
+        id: 'wrap',
+        shape: 'dropdown',
+        labelKey: 'formattingBar.imageWrap',
+        paths: GENERATED_ICON_PATHS['wrap_text'],
+        valueKey: 'imageWrap.inline',
+        state: { kind: 'value' },
+      },
+      {
+        id: 'altText',
+        shape: 'dropdown',
+        labelKey: 'formattingBar.altText',
+        paths: null,
+        valueKey: 'imageProperties.altText',
+        state: { kind: 'value' },
+      },
     ],
   },
   {
@@ -702,6 +719,8 @@ export type ChromeSlotId =
   | 'contentControl.remove'
   | 'image.insert'
   | 'image.properties'
+  | 'image.wrap'
+  | 'image.altText'
   | 'table.insert'
   | 'table.borderTarget'
   | 'table.borderColor'
@@ -770,6 +789,20 @@ export function defaultChromeGroups(): readonly ChromeGroup[] {
   // Filtered through the ChromeGroup-typed view: the literal union's members omit
   // the optional `contextual` key entirely, which TS treats as an unknown property.
   return CHROME_GROUPS_CONFORMANCE.filter((group) => !group.contextual);
+}
+
+/**
+ * The formatting-bar groups for one editor snapshot: the default bar, plus the
+ * contextual `image` group when a drawing is selected. Insertion without a selection
+ * remains available from the Insert menu via `image.insert`.
+ *
+ * @public
+ */
+export function formattingBarChromeGroups(image: ImageContext | null): readonly ChromeGroup[] {
+  const base = defaultChromeGroups();
+  if (!image) return base;
+  const imageGroup = CHROME_GROUPS_CONFORMANCE.find((group) => group.id === 'image');
+  return imageGroup ? [...base, imageGroup] : base;
 }
 
 // ── The menu region above the toolbar ─────────────────────────────────────────────────

@@ -19,7 +19,7 @@ export type DeepPartial<T> = {
 };
 
 // @public
-export const en: LocaleStrings;
+export const en: AnyRecord;
 
 // @public
 export const fr: PartialLocaleStrings;
@@ -40,7 +40,7 @@ export type LocaleCode = 'en' | 'de' | 'fr' | 'he' | 'hi' | 'id' | 'pl' | 'pt-BR
 export const locales: Record<LocaleCode, PartialLocaleStrings>;
 
 // @public
-export type LocaleStrings = typeof enJson;
+export type LocaleStrings = typeof en;
 
 // @public
 export type PartialLocaleStrings = DeepPartial<LocaleStrings> & {

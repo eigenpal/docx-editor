@@ -131,6 +131,17 @@ import {
   isContentControlEditorCommand,
 } from './content-controls.ts';
 import {
+  imageContextEqual,
+  selectedImageStateOf,
+  canExecuteImageCommand as canExecuteImageCommandOf,
+  canAsyncImageCommand as canAsyncImageCommandOf,
+  executeImageCommand as executeImageCommandOf,
+  captureImageMutationPreconditions,
+  verifyImageCommandIdentity,
+  isImageCommand,
+  imageCommandHasIdentityFields,
+} from './docx-editor-images.ts';
+import {
   createLayoutShaping,
   disposeLayoutShaping,
   toEditorFontError,
@@ -148,6 +159,7 @@ import {
   type PaginatedSurfaceOptions,
   type PaginatedSurfaceState,
 } from './paginated-surface.ts';
+import { drawingPaintStringsFromTranslate } from '../output/semantic-paint-drawings.ts';
 import type {
   DocxEditorConfig,
   DocxEditorInstance,
@@ -280,6 +292,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let cachedCaret: ReturnType<PaginatedSurface['state']>['selection'] | null = null;
   /** The document revision the cached snapshot was derived for — see `snapshotNow`. */
   let cachedRevision = -1;
+  /** Monotonic mount generation for async image mutation preconditions. */
+  let mountGeneration = 0;
   let cachedVersion = -1;
 
   /** Called at every place observable state can move. Derivation stays lazy. */
@@ -315,6 +329,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     lastSelection = null;
     lastPendingFormat = null;
     lastHeaderFooterKey = null;
+    mountGeneration += 1;
   }
 
   /** Points to CSS pixels: zoom 1 paints at the browser's 96dpi reading of a 72dpi point. */
@@ -333,6 +348,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     teardownSurface();
     const result = mountPaginatedSurface(container, bytes, {
       scale: scaleOf(),
+      ...(config.translate
+        ? { drawingStrings: drawingPaintStringsFromTranslate(config.translate) }
+        : {}),
       // Suggesting needs both: an author to attribute a proposal to, and the mode itself,
       // which survives a document reload because the reader chose it, not the file.
       ...(config.author ? { author: config.author } : {}),
@@ -345,6 +363,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       ...(config.tableInteractionLabel
         ? { tableInteractionLabel: config.tableInteractionLabel }
         : {}),
+      ...(config.imageDecodePort ? { imageDecodePort: config.imageDecodePort } : {}),
       // Read through the holder rather than captured: the popover mounts AFTER the editor
       // exists (the provider-first shape), and a document that reloads must not leave the
       // host's chrome wired to the surface it replaced.
@@ -394,6 +413,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     parseError = null;
     surface = result.surface;
     adoptDocumentTracking();
+    mountGeneration += 1;
     // A surface is rebuilt on load and on the font remount, and it comes up editable. The
     // engine's own guards refuse the WRITE, but the pages layer stays `contenteditable`
     // without this — so a document open for viewing still drew a caret, still opened an IME,
@@ -703,7 +723,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           state.selection.anchor.offset === state.selection.head.offset),
       formatting: runFormattingOf(surface),
       table: tableContextOf(surface),
-      image: null,
+      image: selectedImageStateOf(surface),
       page: { current: currentPageOf(surface), total: totalPagesOf(surface) },
       canUndo: state?.canUndo ?? false,
       canRedo: state?.canRedo ?? false,
@@ -729,7 +749,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const caret = surface?.state().selection ?? null;
     const caretUnmoved = selectionsMatch(caret, cachedCaret);
     cachedCaret = caret;
-    const revision = surface?.session.revision() ?? -1;
+    const revision = surface?.session.packageRevision() ?? -1;
     const documentUnmoved = revision === cachedRevision;
     cachedRevision = revision;
     const fresh = deriveSnapshot();
@@ -745,7 +765,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const selection = docRangeEqual(fresh.selection, previous.selection)
         ? previous.selection
         : fresh.selection;
-      next = { ...fresh, formatting, page, pageSetup, selection };
+      const image = imageContextEqual(fresh.image, previous.image) ? previous.image : fresh.image;
+      next = { ...fresh, formatting, page, pageSetup, selection, image };
       // Reuse the previous REFERENCE only when neither the caret NOR the document moved.
       //
       // The snapshot is a lossy projection: `selection` is paragraph-granular (a
@@ -1056,6 +1077,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   }
 
   const editor: DocxEditorInstance = {
+    get mountGeneration() {
+      return mountGeneration;
+    },
     get surface() {
       return surface;
     },
@@ -1199,11 +1223,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // revision would report HF / create-header edits as `changed: false`.
       const before = mounted.session.packageRevision();
 
-      const result = execEditorCommand(
-        mounted,
-        command,
-        gated.tablePlan ? { admittedTablePlan: gated.tablePlan } : undefined
-      );
+      const result = execEditorCommand(mounted, command, {
+        ...(gated.tablePlan ? { admittedTablePlan: gated.tablePlan } : {}),
+        editor,
+      });
       if (result) return result;
       // `changed` is read from the model, not assumed: reporting `changed: true` where the
       // document did not move would be a lie. It answers for the DOCUMENT, not for
@@ -1215,6 +1238,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
 
     can(command, options): CanResult {
+      if (command.type === 'insertImage' || command.type === 'replaceImage') {
+        if (destroyed) return { ok: false, code: 'notFound', reason: 'the editor was destroyed' };
+        if (options?.scope) {
+          const scoped = gateCommand(command, surface, mode, options);
+          if (!scoped.ok) return scoped.refusal;
+        }
+        return canAsyncImageCommandOf(command, surface);
+      }
       if (command.type === 'toggleReviewPane' || command.type === 'setEditingMode') {
         // Not on a destroyed instance, and not for a mode this document refuses. `can` is
         // the one thing chrome trusts; answering `ok` for an editor that no longer exists is
@@ -1242,7 +1273,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
       }
       const gated = gateCommand(command, surface, mode, options);
-      return gated.ok ? { ok: true } : gated.refusal;
+      if (!gated.ok) return gated.refusal;
+      if (isImageCommand(command) && imageCommandHasIdentityFields(command)) {
+        const pre = captureImageMutationPreconditions(editor);
+        if (pre) {
+          const identity = verifyImageCommandIdentity(editor, command, pre);
+          if (identity) return identity;
+        }
+      }
+      return { ok: true };
     },
 
     // Derived for marks and alignment from the cached snapshot's formatting — Word's
@@ -1335,7 +1374,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       return { ok: true, changed: false };
     },
 
-    getSelectedImage: () => null,
+    getSelectedImage: () => snapshotNow().image,
     getSelectedTable: () => selectedTableOf(surface),
 
     getTableCellSelection: () => {
@@ -1351,6 +1390,21 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     setTableInteractionLabel(resolver) {
       surface?.setTableInteractionLabel(resolver);
+    },
+
+    canExecuteImageCommand(command, options) {
+      if (destroyed) return { ok: false, code: 'notFound', reason: 'the editor was destroyed' };
+      if (options?.scope) {
+        const gated = gateCommand(command, surface, mode, options);
+        if (!gated.ok) return gated.refusal;
+      }
+      return canExecuteImageCommandOf(command, surface);
+    },
+
+    executeImageCommand(command) {
+      if (destroyed)
+        return Promise.resolve({ ok: false, code: 'notFound', reason: 'the editor was destroyed' });
+      return executeImageCommandOf(editor, command);
     },
 
     getPageSetup: () => pageSetupOf(surface),
@@ -1634,6 +1688,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       teardownSurface();
       container = null;
       pendingBytes = null;
+      mountGeneration += 1;
       bump();
       for (const set of Object.values(handlers)) set.clear();
     },

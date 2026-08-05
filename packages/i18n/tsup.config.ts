@@ -12,7 +12,7 @@ const localeCodes = readLocaleCodes(import.meta.dirname);
 export default defineConfig({
   entry: ['src/index.ts', ...localeCodes.map((code) => `src/${code}.ts`)],
   format: ['cjs', 'esm'],
-  dts: { resolve: true },
+  dts: true,
   splitting: false,
   sourcemap: false,
   clean: true,

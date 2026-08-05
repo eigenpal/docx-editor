@@ -18,6 +18,7 @@ export {
   type Segment,
   type TreeDocOp,
   type TreeDocOpKind,
+  type DrawingTreeDocOp,
   type TreeOpEffect,
   type TreeOpRejection,
   type TreeOpResult,
@@ -51,3 +52,26 @@ export {
   type CommentAnchorRequest,
 } from './comment-writes.ts';
 export { collectRevisionSites, type RevisionAddress } from './tree-op-revisions.ts';
+export {
+  drawingOpImpact,
+  isDrawingTreeDocOp,
+  validateDrawingOp,
+  wrapTargetToAnchorSpec,
+} from './tree-op-drawings.ts';
+export {
+  allocateDrawingPropertyId,
+  withBinaryPart,
+  withEmbeddedImage,
+  withoutUnreferencedImagePart,
+  type DrawingPropertyIdResult,
+} from '../package/drawing-package-edit.ts';
+export {
+  IMAGE_WRAP_TARGETS,
+  projectDrawing,
+  type DrawingKind,
+  type DrawingLocks,
+  type DrawingPositionInput,
+  type ImageWrapTarget,
+  type SourceCrop,
+} from '../package/drawing-projection.ts';
+export type { ImageResourceState, SupportedImageMime } from '../package/image-resources.ts';

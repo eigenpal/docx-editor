@@ -99,8 +99,7 @@ Every composable from `@docx-editor.dev/vue/composables` (`useDocxEditor`, `useT
 The module re-exports the `<DocxEditor>` component and the composables, not the whole adapter. These come from `@docx-editor.dev/vue` directly:
 
 - the `DocxEditorProps` and `DocxEditorRef` types
-- `renderAsync`, `createEmptyDocument`
-- the `/ui`, `/dialogs`, and `/plugin-api` subpaths
+- paginated host helpers (`PaginatedDocxEditor`, …) and deferred React-first chrome
 
 If you use any of them, add the adapter to your own `dependencies` so the import is explicit:
 

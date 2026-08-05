@@ -12,7 +12,9 @@ import type {
   Editor,
   EditorCommand,
   ExecResult,
+  SelectedImageState,
 } from '@docx-editor.dev/core-contract/contracts/editor';
+import { IMAGE_WRAP_TARGETS } from '../../store/package/drawing-projection.ts';
 import {
   chromeProbeForSlot,
   commandForSlot,
@@ -71,6 +73,7 @@ function fakeEditor(
       calls.can.push(command);
       return canResult(command);
     },
+    canExecuteImageCommand: (command: EditorCommand) => canResult(command),
     exec: (command: EditorCommand) => {
       calls.exec.push(command);
       return execResult;
@@ -591,5 +594,182 @@ describe('table chrome slots (Task 9)', () => {
   test('defaultTableLabel resolves insertion labels from en.json', () => {
     expect(defaultTableLabel('table.insertRowBelow')).toBe('Insert row below');
     expect(defaultTableLabel('table.insertColumnRight')).toBe('Insert column right');
+  });
+});
+
+function selectedImage(overrides: Partial<SelectedImageState> = {}): SelectedImageState {
+  return Object.freeze({
+    id: 'drawing-1',
+    kind: 'inline',
+    widthEmu: 914_400,
+    heightEmu: 914_400,
+    crop: Object.freeze({ left: 0, top: 0, right: 0, bottom: 0 }),
+    rotationDegrees: 0,
+    wrap: 'inline',
+    position: null,
+    name: 'Picture 1',
+    title: '',
+    description: 'Green square',
+    hyperlink: null,
+    locks: Object.freeze({
+      select: false,
+      move: false,
+      resize: false,
+      changeAspect: false,
+    }),
+    hidden: false,
+    resourceStatus: 'ready',
+    intrinsic: null,
+    canResize: true,
+    canMove: false,
+    canChangeWrap: true,
+    canCrop: true,
+    ...overrides,
+  });
+}
+
+function editorWithImage(
+  image: SelectedImageState | null,
+  canResult: (command: EditorCommand) => CanResult = ALLOW
+): Editor {
+  return {
+    can: (command: EditorCommand) => canResult(command),
+    canExecuteImageCommand: (command: EditorCommand) => canResult(command),
+    exec: (command: EditorCommand) => ({ ok: true, changed: true }),
+    getSelectedImage: () => image,
+    getEditingMode: () => 'editing',
+  } as unknown as Editor;
+}
+
+describe('registers image authoring slots', () => {
+  test('payload-bearing insert and properties stay out of SLOT_COMMANDS', () => {
+    expect(commandForSlot('image.insert')).toBeNull();
+    expect(commandForSlot('image.properties')).toBeNull();
+  });
+
+  test('value slots resolve to typed image commands', () => {
+    for (const target of IMAGE_WRAP_TARGETS) {
+      expect(commandForSlotValue('image.wrap', target)).toEqual({
+        type: 'setImageWrapType',
+        target,
+      });
+    }
+    expect(commandForSlotValue('image.altText', 'Accessible label')).toEqual({
+      type: 'setImageProperties',
+      description: 'Accessible label',
+    });
+  });
+
+  test('invalid wrap and alt-text values refuse command resolution', () => {
+    expect(commandForSlotValue('image.wrap', 'not-a-wrap')).toBeNull();
+    expect(commandForSlotValue('image.altText', 42)).toBeNull();
+  });
+
+  test('shape probes exist without empty-byte false positives', () => {
+    expect(chromeProbeForSlot('image.insert')).toMatchObject({ type: 'insertImage' });
+    expect(chromeProbeForSlot('image.properties')).toMatchObject({ type: 'setImageProperties' });
+    expect(
+      (chromeProbeForSlot('image.insert') as { data: Uint8Array }).data.byteLength
+    ).toBeGreaterThan(0);
+  });
+});
+
+describe('reports image value command state', () => {
+  test('image.wrap reports current wrap value and editable gate from the engine', () => {
+    const editor = editorWithImage(selectedImage({ wrap: 'squareLeft' }));
+    expect(toolbarCommandState(editor, 'image.wrap')).toEqual({
+      id: 'image.wrap',
+      enabled: true,
+      disabledReason: null,
+      active: false,
+      value: 'squareLeft',
+    });
+  });
+
+  test('image.altText reports current description value', () => {
+    const editor = editorWithImage(selectedImage({ description: 'Chart legend' }));
+    expect(toolbarCommandState(editor, 'image.altText')).toEqual({
+      id: 'image.altText',
+      enabled: true,
+      disabledReason: null,
+      active: false,
+      value: 'Chart legend',
+    });
+  });
+
+  test('contextual properties disable with the engine reason when nothing is selected', () => {
+    const editor = editorWithImage(null, DENY('no drawing is selected'));
+    expect(toolbarCommandState(editor, 'image.properties')).toEqual({
+      id: 'image.properties',
+      enabled: false,
+      disabledReason: 'no drawing is selected',
+      active: false,
+    });
+    expect(toolbarCommandState(editor, 'image.wrap').disabledReason).toBe('no drawing is selected');
+    expect(toolbarCommandState(editor, 'image.altText').disabledReason).toBe(
+      'no drawing is selected'
+    );
+  });
+
+  test('locked wrap change disables with the engine reason', () => {
+    const editor = editorWithImage(
+      selectedImage({ canChangeWrap: false }),
+      DENY('wrap cannot be changed on this drawing')
+    );
+    expect(toolbarCommandState(editor, 'image.wrap')).toEqual({
+      id: 'image.wrap',
+      enabled: false,
+      disabledReason: 'wrap cannot be changed on this drawing',
+      active: false,
+      value: 'inline',
+    });
+  });
+
+  test('insert enables when async canExecuteImageCommand accepts valid probe bytes', () => {
+    const editor = editorWithImage(null, ALLOW);
+    expect(toolbarCommandState(editor, 'image.insert')).toEqual({
+      id: 'image.insert',
+      enabled: true,
+      disabledReason: null,
+      active: false,
+    });
+  });
+
+  test('runToolbarCommand dispatches typed wrap and alt-text values with can-before-exec', () => {
+    const calls = { can: [] as EditorCommand[], exec: [] as EditorCommand[] };
+    const editor = {
+      ...editorWithImage(selectedImage()),
+      can: (command: EditorCommand) => {
+        calls.can.push(command);
+        return ALLOW();
+      },
+      exec: (command: EditorCommand) => {
+        calls.exec.push(command);
+        return { ok: true, changed: true };
+      },
+    } as unknown as Editor;
+    expect(runToolbarCommand(editor, 'image.wrap', 'tight')).toEqual({ ok: true, changed: true });
+    expect(calls.can).toEqual([{ type: 'setImageWrapType', target: 'tight' }]);
+    expect(calls.exec).toEqual([{ type: 'setImageWrapType', target: 'tight' }]);
+
+    calls.can.length = 0;
+    calls.exec.length = 0;
+    expect(runToolbarCommand(editor, 'image.altText', 'New alt')).toEqual({
+      ok: true,
+      changed: true,
+    });
+    expect(calls.can).toEqual([{ type: 'setImageProperties', description: 'New alt' }]);
+    expect(calls.exec).toEqual([{ type: 'setImageProperties', description: 'New alt' }]);
+  });
+
+  test('runToolbarCommand refuses missing or invalid image values without exec', () => {
+    const editor = editorWithImage(selectedImage());
+    const missing = runToolbarCommand(editor, 'image.wrap');
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.reason).toContain('not wired');
+
+    const invalid = runToolbarCommand(editor, 'image.wrap', 'bogus-wrap');
+    expect(invalid.ok).toBe(false);
+    if (!invalid.ok) expect(invalid.code).toBe('unsupported');
   });
 });

@@ -3,19 +3,18 @@
 The documented root API shape is shared by the React and Vue packages:
 
 ```ts
-import { DocxEditor, type DocxEditorRef, renderAsync } from '@docx-editor.dev/react';
-import '@docx-editor.dev/react/styles.css';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
 ```
 
 ```ts
-import { DocxEditor, type DocxEditorRef, renderAsync } from '@docx-editor.dev/vue';
-import '@docx-editor.dev/vue/styles.css';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
 ```
 
-Both packages export `DocxEditor`, `DocxEditorProps`, `DocxEditorRef`,
-`DocxEditorHandle`, `RenderAsyncOptions`, `EditorMode`, and `renderAsync`.
-Framework-specific customization stays in explicit subpaths such as `/ui`,
-`/hooks` or `/composables`, `/dialogs`, and `/plugin-api`.
+Both packages export `DocxEditor`, `DocxEditorProps`, `DocxEditorRef`, and
+`EditorMode`. React additionally exports provider-first composition primitives
+and chrome compounds from the same root barrel (`DocxEditor.Root`, `.Toolbar`,
+`.Menu`, hooks, …). The retired subpaths (`/ui`, `/plugin-api`, `renderAsync`,
+`DocxEditorHandle`) are not re-shipped on the greenfield adapters.
 
 React still exposes a few wider host-integration props, but Vue now supports the
 common document, mode, toolbar, title-bar, i18n, plugin, error, ready, save,

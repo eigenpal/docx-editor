@@ -16,172 +16,25 @@ import { RendererNode } from 'vue';
 import { VNode } from 'vue';
 
 // @public
-export type ChromeSlotId =
-| 'history.undo'
-| 'history.redo'
-| 'zoom.level'
-| 'styles.style'
-| 'font.family'
-| 'font.size'
-| 'text.bold'
-| 'text.italic'
-| 'text.underline'
-| 'text.strike'
-| 'text.color'
-| 'text.highlight'
-| 'text.link'
-| 'script.super'
-| 'script.sub'
-| 'alignment.left'
-| 'alignment.center'
-| 'alignment.right'
-| 'alignment.justify'
-| 'list.bullet'
-| 'list.numbered'
-| 'list.outdent'
-| 'list.indent'
-| 'list.lineSpacing'
-| 'format.clear'
-| 'review.comments'
-| 'review.editingMode'
-| 'contentControl.showAll'
-| 'contentControl.formFill'
-| 'contentControl.inspector'
-| 'contentControl.remove'
-| 'image.insert'
-| 'image.properties'
-| 'table.insert'
-| 'table.borderTarget'
-| 'table.borderColor'
-| 'table.borderStyle'
-| 'table.borderWidth'
-| 'table.cellFill'
-| 'file.open'
-| 'file.save'
-| 'file.pageSetup'
-| 'insert.footnote'
-| 'insert.endnote'
-| 'insert.pageNumber'
-| 'insert.totalPages'
-| 'insert.sectionPages'
-| 'insert.pageXofY'
-| 'insert.pageBreak'
-| 'insert.sectionBreakNextPage'
-| 'insert.sectionBreakContinuous'
-| 'insert.toc';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.clear' | 'review.comments' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
 
 // @public
-export function commandForSlot(slotId: ChromeSlotId): EditorCommand | null {
-    return SLOT_COMMANDS[slotId] ?? null;
-}
+export function commandForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
-export function composeFontConfiguration(
-base: FontConfigurationBase,
-...fragments: readonly FontConfigurationFragment[]
-): FontConfiguration {
-    const // (undocumented)
-    origins: readonly FontConfigurationFragment[] = [base, ...fragments];
-
-    const // (undocumented)
-    sources: FontSource[] = [];
-    const // (undocumented)
-    sourceKeys = new Set<string>();
-    for (const // (undocumented)
-    origin of origins) {
-        for (const // (undocumented)
-        source of origin.sources ?? []) {
-            const // (undocumented)
-            key = fontRequestKey(source.request);
-            if (sourceKeys.has(key)) continue;
-            sourceKeys.add(key);
-            sources.push(source);
-        }
-    }
-
-    const // (undocumented)
-    substitutions: FontSourceSubstitution[] = [];
-    const // (undocumented)
-    substitutionKeys = new Set<string>();
-    for (const // (undocumented)
-    origin of origins) {
-        for (const // (undocumented)
-        substitution of origin.substitutions ?? []) {
-            const // (undocumented)
-            key = fontRequestKey(substitution.from);
-            if (sourceKeys.has(key) || substitutionKeys.has(key)) continue;
-            substitutionKeys.add(key);
-            substitutions.push(substitution);
-        }
-    }
-
-    return Object.freeze({
-        epoch: base.epoch ?? 0,
-        maxFontBytes: base.maxFontBytes ?? HARD_MAX_FONT_BYTES,
-        sources: Object.freeze(sources),
-        ...(substitutions.length > 0 ? { substitutions: Object.freeze(substitutions) } : {}),
-        defaultFont: base.defaultFont ?? WORD_DEFAULT_FONT,
-        ...(base.language !== undefined ? { language: base.language } : {}),
-    });
-}
+export function composeFontConfiguration(base: FontConfigurationBase, ...fragments: readonly FontConfigurationFragment[]): FontConfiguration;
 
 // @public
-export function createFontSource(
-bytes: Uint8Array,
-request: FontFaceRequest & { readonly faceIndex?: number },
-options: { readonly id?: string; readonly maxFontBytes?: number } = {}
-): { readonly source: FontSource } | { readonly failure: FontLoadFailure } {
-    const // (undocumented)
-    faceRequest: FontFaceRequest = Object.freeze({
-        family: request.family,
-        weight: request.weight,
-        style: request.style,
-    });
-    const // (undocumented)
-    url =
-    options.id ?? `bytes:${faceRequest.family}#${faceRequest.weight}#${faceRequest.style}`;
-    const // (undocumented)
-    descriptorProblem = faceRequestProblem(faceRequest);
-    if (descriptorProblem) {
-        return {
-            failure: {
-                url,
-                request: faceRequest,
-                reason: 'invalidRequest',
-                diagnostic: descriptorProblem,
-            },
-        };
-    }
-    if (bytes.byteLength === 0) {
-        return { failure: { url, request: faceRequest, reason: 'emptyResponse' } };
-    }
-    if (bytes.byteLength > (options.maxFontBytes ?? HARD_MAX_FONT_BYTES)) {
-        return { failure: { url, request: faceRequest, reason: 'overLimit' } };
-    }
-    const // (undocumented)
-    faceIndex = request.faceIndex ?? 0;
-    const // (undocumented)
-    structural = boundedStructuralFontValidator(bytes, faceIndex);
-    if (!structural.valid) {
-        return {
-            failure: {
-                url,
-                request: faceRequest,
-                reason: 'malformed',
-                diagnostic: structural.diagnostic,
-            },
-        };
-    }
-    return {
-        source: {
-            request: faceRequest,
-            id: url,
-            bytes,
-            hash: sha256FontBytes(bytes),
-            faceIndex,
-        },
-    };
-}
+export function createFontSource(bytes: Uint8Array, request: FontFaceRequest & {
+    readonly faceIndex?: number;
+}, options?: {
+    readonly id?: string;
+    readonly maxFontBytes?: number;
+}): {
+    readonly source: FontSource;
+} | {
+    readonly failure: FontLoadFailure;
+};
 
 // @public
 export const DEFERRED_DIALOGS: readonly ["findReplace", "hyperlink", "insertImage", "insertTable", "insertSymbol", "imageProperties", "footnoteProperties"];
@@ -261,15 +114,15 @@ type: PropType<FontConfiguration | FontConfigurationFragment>;
 default: undefined;
 };
 }>> & Readonly<{
-onChange?: ((_change: DocumentChange) => any) | undefined;
 onReady?: ((_editor: Editor) => any) | undefined;
+onChange?: ((_change: DocumentChange) => any) | undefined;
 onFontError?: ((_error: EditorFontError) => any) | undefined;
 }>, {
 fonts: FontConfiguration | FontConfigurationFragment;
 document: DocumentSource;
 author: string;
-zoom: number;
 mode: EditorMode;
+zoom: number;
 locale: string;
 }, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
 
@@ -448,15 +301,27 @@ export interface DocxEditorToolbarProps {
 export interface Editor {
     acceptReviewItem(key: string): ExecResult;
     addComment(text: string, author?: string): ExecResult;
-    can(command: EditorCommand, options?: { scope?: EditorScope }): CanResult;
+    can(command: EditorCommand, options?: {
+        scope?: EditorScope;
+    }): CanResult;
+    canExecuteImageCommand(command: Extract<EditorCommand, {
+        type: 'insertImage' | 'replaceImage';
+    }>, options?: {
+        scope?: EditorScope;
+    }): CanResult;
     // (undocumented)
     destroy(): void;
     // (undocumented)
-    exec(command: EditorCommand, options?: { scope?: EditorScope }): ExecResult;
-    findMatches(
-    query: string,
-    options?: { readonly matchCase?: boolean; readonly wholeWord?: boolean }
-    ): readonly TextMatch[];
+    exec(command: EditorCommand, options?: {
+        scope?: EditorScope;
+    }): ExecResult;
+    executeImageCommand(command: Extract<EditorCommand, {
+        type: 'insertImage' | 'replaceImage';
+    }>): Promise<ExecResult>;
+    findMatches(query: string, options?: {
+        readonly matchCase?: boolean;
+        readonly wholeWord?: boolean;
+    }): readonly TextMatch[];
     // (undocumented)
     focus(scope?: EditorScope): InteractionOutcome<void>;
     // (undocumented)
@@ -481,7 +346,10 @@ export interface Editor {
             readonly color: string | null;
         };
     }[];
-    getDocumentThemeColors(): readonly { readonly slot: string; readonly hex: string }[];
+    getDocumentThemeColors(): readonly {
+        readonly slot: string;
+        readonly hex: string;
+    }[];
     getEditingMode(): DocumentEditingMode;
     getHeaderFooterState(): HeaderFooterState | null;
     getNotePreviewText(scopeId: string): string | null;
@@ -491,21 +359,24 @@ export interface Editor {
         readonly level: number;
         readonly blockId: string;
     }[];
-    getPageGeometry(): readonly { index: number; box: Rect; contentBox: Rect }[];
+    getPageGeometry(): readonly {
+        index: number;
+        box: Rect;
+        contentBox: Rect;
+    }[];
     getPageSetup(): PageSetup | null;
     getRenderScale(): number;
     getReviewItems(): readonly ReviewItemPlacement[];
     getReviewRevision(): number;
-    getSelectedImage(): {
-        readonly id: string;
-        readonly widthEmu: number;
-        readonly heightEmu: number;
-    } | null;
+    getSelectedImage(): SelectedImageState | null;
     getSelectedTable(): {
         readonly blockId: string;
         readonly rowCount: number;
         readonly columnCount: number;
-        readonly cell: { readonly row: number; readonly column: number } | null;
+        readonly cell: {
+            readonly row: number;
+            readonly column: number;
+        } | null;
     } | null;
     getSelectionFormatting(): {
         readonly fontFamily?: string;
@@ -516,11 +387,20 @@ export interface Editor {
         readonly italic?: boolean;
         readonly underline?: boolean;
     } | null;
-    getSelectionPlacement(): { readonly anchorY: number; readonly pageIndex: number } | null;
+    getSelectionPlacement(): {
+        readonly anchorY: number;
+        readonly pageIndex: number;
+    } | null;
     getTableCellSelection(): {
         readonly tableId: string;
-        readonly rows: { readonly from: number; readonly to: number };
-        readonly columns: { readonly from: number; readonly to: number };
+        readonly rows: {
+            readonly from: number;
+            readonly to: number;
+        };
+        readonly columns: {
+            readonly from: number;
+            readonly to: number;
+        };
         readonly cellIds: readonly string[];
     } | null;
     // (undocumented)
@@ -530,22 +410,30 @@ export interface Editor {
         readonly kind: string;
         readonly author?: string;
     }[];
-    getWatermark(): { readonly kind: 'text' | 'image'; readonly text?: string } | null;
+    getWatermark(): {
+        readonly kind: 'text' | 'image';
+        readonly text?: string;
+    } | null;
     // (undocumented)
     getZoom(): number;
-    isActive(command: EditorCommand, options?: { scope?: EditorScope }): boolean;
+    isActive(command: EditorCommand, options?: {
+        scope?: EditorScope;
+    }): boolean;
     isReviewPaneOpen(): boolean;
     load(document: DocumentSource): void;
     // (undocumented)
     on<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): Unsubscribe;
     // (undocumented)
-    query<K extends keyof EditorQueries>(
-    query: { type: K } & EditorQueries[K],
-    options?: { scope?: EditorScope }
-    ): EditorQueryResults[K];
+    query<K extends keyof EditorQueries>(query: {
+        type: K;
+    } & EditorQueries[K], options?: {
+        scope?: EditorScope;
+    }): EditorQueryResults[K];
     // (undocumented)
     rejectReviewItem(key: string): ExecResult;
-    relayout(options?: { sync?: boolean }): void;
+    relayout(options?: {
+        sync?: boolean;
+    }): void;
     replyToReviewItem(key: string, text: string, author?: string): ExecResult;
     save(): Promise<ArrayBuffer>;
     // (undocumented)
@@ -557,61 +445,40 @@ export interface Editor {
     setActiveScope(scope: ViewScope): void;
     // (undocumented)
     setEditingMode(mode: DocumentEditingMode): ExecResult;
-    setTableInteractionLabel(
-    resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string
-    ): void;
+    setTableInteractionLabel(resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string): void;
     setZoom(zoom: number): ExecResult;
     // (undocumented)
-    snapshot(options?: { scope?: EditorScope }): EditorSnapshot;
+    snapshot(options?: {
+        scope?: EditorScope;
+    }): EditorSnapshot;
 }
 
 // @public (undocumented)
 export type EditorCommand = {
-    [K in keyof EditorCommands]: { type: K } & EditorCommands[K];
+    [K in keyof EditorCommands]: {
+        type: K;
+    } & EditorCommands[K];
 }[keyof EditorCommands];
 
 // @public
 export class EditorFontError extends Error {
-    constructor(
-    code: EditorFontErrorCode,
-    message: string,
-    details: {
+    constructor(code: EditorFontErrorCode, message: string, details?: {
         readonly request?: FontFaceRequest;
         readonly diagnostic?: string;
         readonly cause?: unknown;
-    } = {}
-    ) {
-        super(message, { cause: details.cause });
-        this.code = code;
-        this.request = details.request;
-        this.diagnostic = details.diagnostic;
-    }
+    });
     // (undocumented)
     readonly code: EditorFontErrorCode;
     // (undocumented)
     readonly diagnostic?: string;
     // (undocumented)
-    readonly name: string = 'EditorFontError';
+    readonly name: string;
     // (undocumented)
     readonly request?: FontFaceRequest;
 }
 
 // @public (undocumented)
-export type EditorFontErrorCode =
-| 'initializationFailed'
-| 'missing'
-| 'forbidden'
-| 'overLimit'
-| 'malformed'
-| 'hashMismatch'
-| 'metadataMismatch'
-| 'fontFaceLoadFailed'
-| 'unsupportedFaceIndex'
-| 'missingFont'
-| 'hashInvalid'
-| 'fontMismatch'
-| 'unsupportedFace'
-| 'loadFailed';
+export type EditorFontErrorCode = 'initializationFailed' | 'missing' | 'forbidden' | 'overLimit' | 'malformed' | 'hashMismatch' | 'metadataMismatch' | 'fontFaceLoadFailed' | 'unsupportedFaceIndex' | 'missingFont' | 'hashInvalid' | 'fontMismatch' | 'unsupportedFace' | 'loadFailed';
 
 // @public
 export interface EditorHost {
@@ -635,13 +502,18 @@ export type EditorMode = 'edit' | 'view';
 
 // @public (undocumented)
 export type EditorQuery = {
-    [K in keyof EditorQueries]: { type: K } & EditorQueries[K];
+    [K in keyof EditorQueries]: {
+        type: K;
+    } & EditorQueries[K];
 }[keyof EditorQueries];
 
 // @public
-export type EditorScope =
-| { kind: 'body' }
-| { kind: 'headerFooter'; rId: string }
+export type EditorScope = {
+    kind: 'body';
+} | {
+    kind: 'headerFooter';
+    rId: string;
+}
 /**
 * A footnote/endnote region.
 *
@@ -649,11 +521,19 @@ export type EditorScope =
 * (e.g. `footnote:2`). Use `formatNoteScopeId` / `parseNoteScopeId` from the
 * store package. Do not invent a parallel `{ noteKind, noteId }` scope arm.
 */
-| { kind: 'note'; id: string }
+| {
+    kind: 'note';
+    id: string;
+}
 /** A text box or floating frame with its own content, addressed by id. */
-| { kind: 'frame'; id: string }
+| {
+    kind: 'frame';
+    id: string;
+}
 /** Read-only aggregate across every view. Valid for queries, not for writes. */
-| { kind: 'all' };
+| {
+    kind: 'all';
+};
 
 // @public
 export interface EditorSnapshot {
@@ -669,7 +549,10 @@ export interface EditorSnapshot {
     readonly isLoading: boolean;
     readonly lastRejection?: string | null;
     // (undocumented)
-    readonly page: { readonly current: number; readonly total: number };
+    readonly page: {
+        readonly current: number;
+        readonly total: number;
+    };
     readonly pageSetup?: PageSetup | null;
     // (undocumented)
     readonly parseError: string | null;
@@ -748,12 +631,7 @@ export interface FontLoadFailure {
 }
 
 // @public (undocumented)
-export type FontLoadFailureReason =
-| 'networkError'
-| 'httpError'
-| 'hashMismatch'
-| 'overLimit'
-| 'emptyResponse'
+export type FontLoadFailureReason = 'networkError' | 'httpError' | 'hashMismatch' | 'overLimit' | 'emptyResponse'
 /** The declared face itself is unusable (empty family, out-of-range weight); nothing was fetched. */
 | 'invalidRequest'
 /** The bytes are not a font at all — most often an HTML error page served with 200. */
@@ -799,46 +677,7 @@ export interface FontUrlSource {
 }
 
 // @public
-export function generateRulerTicks(lengthPx: number, unit: RulerUnit): RulerTick[] {
-    if (!Number.isFinite(lengthPx) || lengthPx <= 0) return [];
-    const // (undocumented)
-    ticks: RulerTick[] = [];
-    if (unit === 'inch') {
-        const // (undocumented)
-        step = PX_PER_INCH / 8;
-        const // (undocumented)
-        count = Math.floor(lengthPx / step);
-        for (let // (undocumented)
-        i = 0; i <= count; i += 1) {
-            const // (undocumented)
-            position = i * step;
-            if (i % 8 === 0) {
-                const // (undocumented)
-                inches = i / 8;
-                ticks.push({ position, height: 10, ...(inches > 0 ? { label: String(inches) } : {}) });
-            } else if (i % 4 === 0) ticks.push({ position, height: 6 });
-            else if (i % 2 === 0) ticks.push({ position, height: 4 });
-            else ticks.push({ position, height: 2 });
-        }
-        return ticks;
-    }
-    const // (undocumented)
-    step = PX_PER_CM / 10;
-    const // (undocumented)
-    count = Math.floor(lengthPx / step);
-    for (let // (undocumented)
-    i = 0; i <= count; i += 1) {
-        const // (undocumented)
-        position = i * step;
-        if (i % 10 === 0) {
-            const // (undocumented)
-            cm = i / 10;
-            ticks.push({ position, height: 10, ...(cm > 0 ? { label: String(cm) } : {}) });
-        } else if (i % 5 === 0) ticks.push({ position, height: 6 });
-        else ticks.push({ position, height: 3 });
-    }
-    return ticks;
-}
+export function generateRulerTicks(lengthPx: number, unit: RulerUnit): RulerTick[];
 
 // @public (undocumented)
 export const HorizontalRuler: DefineComponent<ExtractPropTypes<    {
@@ -886,160 +725,7 @@ export interface HorizontalRulerProps {
 }
 
 // @public
-export async function loadFonts(request: LoadFontsRequest): Promise<LoadFontsResult> {
-    const // (undocumented)
-    fetcher = request.fetcher ?? fetch;
-    const // (undocumented)
-    maxFontBytes = request.maxFontBytes ?? HARD_MAX_FONT_BYTES;
-    const // (undocumented)
-    cache = await openCache(request.cacheName ?? 'docx-editor-fonts');
-
-    // (undocumented)
-    export type Outcome = { readonly source: FontSource } | { readonly failure: FontLoadFailure };
-
-    // (undocumented)
-    export async function loadOne(source: FontUrlSource): Promise<Outcome> {
-        const // (undocumented)
-        faceRequest: FontFaceRequest = Object.freeze({
-            family: source.family,
-            weight: source.weight,
-            style: source.style,
-        });
-        // Screened HERE, not at composition: the request contract refuses a malformed face
-        // with a THROW, so admitting one would detonate the configuration carrying every
-        // other font instead of degrading this single source. Same discipline the embedded
-        // lane applies to file-declared families. Nothing is fetched for a bad descriptor.
-        const // (undocumented)
-        descriptorProblem = faceRequestProblem(faceRequest);
-        if (descriptorProblem) {
-            return {
-                failure: {
-                    url: source.url,
-                    request: faceRequest,
-                    reason: 'invalidRequest',
-                    diagnostic: descriptorProblem,
-                },
-            };
-        }
-
-        const // (undocumented)
-        admit = (bytes: Uint8Array, fromCache: boolean): FontSource | FontLoadFailure => {
-            if (bytes.byteLength === 0) {
-                return { url: source.url, request: faceRequest, reason: 'emptyResponse' };
-            }
-            if (bytes.byteLength > maxFontBytes) {
-                return { url: source.url, request: faceRequest, reason: 'overLimit' };
-            }
-            // A 200 response carrying an HTML error page passes every size check. Without this
-            // it would be admitted, cached, and then fail deep in shaping on EVERY later load,
-            // with nothing ever discarding the entry. A signature check is cheap and turns that
-            // into one typed failure at the boundary.
-            const // (undocumented)
-            structural = boundedStructuralFontValidator(bytes, source.faceIndex ?? 0);
-            if (!structural.valid) {
-                return {
-                    url: source.url,
-                    request: faceRequest,
-                    reason: 'malformed',
-                    diagnostic: structural.diagnostic,
-                };
-            }
-            const // (undocumented)
-            actualHash = sha256FontBytes(bytes);
-            if (source.hash !== undefined && source.hash !== actualHash) {
-                return {
-                    url: source.url,
-                    request: faceRequest,
-                    reason: 'hashMismatch',
-                    expectedHash: source.hash,
-                    actualHash,
-                    ...(fromCache ? { diagnostic: 'cached bytes failed revalidation' } : {}),
-                };
-            }
-            return {
-                request: faceRequest,
-                id: `url:${source.url}`,
-                bytes,
-                hash: actualHash,
-                faceIndex: source.faceIndex ?? 0,
-            };
-        };
-
-        // Cache first, revalidated by content hash. A poisoned or stale entry is discarded
-        // and the URL refetched — a cache problem is never a hard failure by itself.
-        const // (undocumented)
-        cached = await cachedBytes(cache, source.url);
-        if (cached) {
-            const // (undocumented)
-            verdict = admit(cached, true);
-            if (!('reason' in verdict)) return { source: verdict };
-            await discardEntry(cache, source.url);
-        }
-
-        let // (undocumented)
-        response: Response;
-        try {
-            response = await fetcher(source.url);
-        } catch (// (undocumented)
-        error) {
-            return {
-                failure: {
-                    url: source.url,
-                    request: faceRequest,
-                    reason: 'networkError',
-                    diagnostic: error instanceof Error ? error.message : String(error),
-                },
-            };
-        }
-        if (!response.ok) {
-            return {
-                failure: {
-                    url: source.url,
-                    request: faceRequest,
-                    reason: 'httpError',
-                    status: response.status,
-                },
-            };
-        }
-        let // (undocumented)
-        bytes: Uint8Array;
-        try {
-            bytes = new Uint8Array(await response.arrayBuffer());
-        } catch (// (undocumented)
-        error) {
-            return {
-                failure: {
-                    url: source.url,
-                    request: faceRequest,
-                    reason: 'networkError',
-                    diagnostic: error instanceof Error ? error.message : String(error),
-                },
-            };
-        }
-        const // (undocumented)
-        verdict = admit(bytes, false);
-        if ('reason' in verdict) return { failure: verdict };
-        await storeBytes(cache, source.url, bytes);
-        return { source: verdict };
-    }
-
-    // Fetched CONCURRENTLY — eight brand faces should be one round trip's wait, not eight.
-    // Results are reassembled in list order, so admission stays deterministic regardless of
-    // which response lands first.
-    const // (undocumented)
-    outcomes = await Promise.all(request.sources.map((source) => loadOne(source)));
-
-    const // (undocumented)
-    sources: FontSource[] = [];
-    const // (undocumented)
-    failures: FontLoadFailure[] = [];
-    for (const // (undocumented)
-    outcome of outcomes) {
-        if ('source' in outcome) sources.push(outcome.source);
-        else failures.push(outcome.failure);
-    }
-    return { sources, failures };
-}
+export function loadFonts(request: LoadFontsRequest): Promise<LoadFontsResult>;
 
 // @public (undocumented)
 export interface LoadFontsRequest {
@@ -1203,7 +889,7 @@ export interface PaginatedDocxEditorProps {
 }
 
 // @public (undocumented)
-export const PX_PER_CM = PX_PER_INCH / 2.54;
+export const PX_PER_CM: number;
 
 // @public
 export const PX_PER_INCH = 96;
@@ -1212,13 +898,16 @@ export const PX_PER_INCH = 96;
 export const RULER_WIDTH = 20;
 
 // @public
-export function rulerPageBox(
-pages: readonly { readonly index: number; readonly box: { width: number; height: number } }[]
-): { width: number; height: number } | null {
-    const // (undocumented)
-    first = [...pages].sort((a, b) => a.index - b.index)[0];
-    return first ? first.box : null;
-}
+export function rulerPageBox(pages: readonly {
+    readonly index: number;
+    readonly box: {
+        width: number;
+        height: number;
+    };
+}[]): {
+    width: number;
+    height: number;
+} | null;
 
 // @public (undocumented)
 export interface RulerTick {
@@ -1232,94 +921,11 @@ export interface RulerTick {
 export type RulerUnit = 'inch' | 'cm';
 
 // @public
-export function runSave(editor: Editor | null): Promise<ArrayBuffer> {
-    if (!editor) return Promise.reject(new Error('editor is not ready'));
-    return editor.save();
-}
+export function runSave(editor: Editor | null): Promise<ArrayBuffer>;
 
 // @public
-export function runToolbarCommand(
-editor: Editor | null,
-id: ChromeSlotId,
-value?: unknown
-): ExecResult {
-    if (!editor) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
-    if (id === 'contentControl.showAll') {
-        const // (undocumented)
-        surface = surfaceOf(editor);
-        if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
-        surface.contentControls.setShowAll(!surface.contentControls.showAll());
-        return { ok: true, changed: false };
-    }
-    if (id === 'contentControl.formFill') {
-        const // (undocumented)
-        surface = surfaceOf(editor);
-        if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
-        surface.contentControls.setFormFill(!surface.contentControls.formFill());
-        return { ok: true, changed: false };
-    }
-    if (id === 'contentControl.inspector') {
-        // Inspector is a host chrome surface: the slot enables when a control is at the caret.
-        // Opening the panel is the adapter's job — there is nothing for the engine to execute.
-        const // (undocumented)
-        surface = surfaceOf(editor);
-        if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
-        if (!surface.state().contentControls.activeControlId) {
-            return { ok: false, code: 'notFound', reason: 'no content control at the selection' };
-        }
-        return { ok: true, changed: false };
-    }
-    if (id === 'contentControl.remove') {
-        const // (undocumented)
-        surface = surfaceOf(editor);
-        if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
-        const // (undocumented)
-        activeId = surface.state().contentControls.activeControlId;
-        if (!activeId) {
-            return { ok: false, code: 'notFound', reason: 'no content control at the selection' };
-        }
-        const // (undocumented)
-        reason = surface.contentControls.disabledReason(activeId, 'remove');
-        if (reason) return { ok: false, code: reason === 'bound' ? 'bound' : 'locked', reason };
-        const // (undocumented)
-        removed = surface.contentControls.remove(activeId);
-        return removed
-        ? { ok: true, changed: true }
-        : {
-            ok: false,
-            code:
-            (surface.state().lastRejection as 'locked' | 'bound' | 'notFound' | undefined) ??
-            'unsupported',
-            reason: surface.state().lastRejection ?? 'removeContentControl was refused',
-        };
-    }
-    const // (undocumented)
-    command =
-    value === undefined
-    ? commandForSlot(id)
-    : (commandForSlotValue(id, value) ?? commandForSlot(id));
-    if (!command) {
-        if (id === 'file.save') {
-            return {
-                ok: false,
-                code: 'unsupported',
-                reason: 'save is not a command; run it with runSave(editor)',
-            };
-        }
-        if (id === 'file.open') {
-            return {
-                ok: false,
-                code: 'unsupported',
-                reason: 'open is not a command; run it with editor.load(bytes)',
-            };
-        }
-        return { ok: false, code: 'unsupported', reason: 'not wired to an editor command' };
-    }
-    const // (undocumented)
-    allowed = editor.can(command);
-    if (!allowed.ok) return { ok: false, code: allowed.code, reason: allowed.reason };
-    return editor.exec(command);
-}
+export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId,
+value?: unknown): ExecResult;
 
 // @public
 export interface SidebarPanel {
@@ -1343,139 +949,10 @@ export interface ToolbarCommandState {
 }
 
 // @public
-export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): ToolbarCommandState {
-    if (!editor) return { id, enabled: false, disabledReason: 'editor is not ready', active: false };
-    if (isTableChromeSlot(id)) {
-        return tableChromeToolbarState(editor, id);
-    }
-    if (id === 'review.editingMode') {
-        const // (undocumented)
-        mode = editor.getEditingMode?.() ?? 'editing';
-        // Enabled state comes from the ENGINE, like every other control: a document opened
-        // read-only refuses the switch, and the control must say so rather than look live.
-        const // (undocumented)
-        probe = editor.can(
-        commandForSlotValue(id, mode === 'editing' ? 'suggesting' : 'editing')!
-        );
-        return {
-            id,
-            enabled: probe.ok,
-            disabledReason: probe.ok ? null : probe.reason,
-            active: false,
-            value: mode,
-        };
-    }
-    // Surface-owned content-control chrome toggles. Enabled whenever the editor is mounted;
-    // `active` reflects snapshot surface state when the facade publishes it, else false.
-    // Adapters that drive the surface directly also read `surface.state().contentControls`.
-    if (id === 'contentControl.showAll' || id === 'contentControl.formFill') {
-        const // (undocumented)
-        surface = surfaceOf(editor);
-        const // (undocumented)
-        cc = surface?.state().contentControls;
-        const // (undocumented)
-        active =
-        id === 'contentControl.showAll' ? (cc?.showAll ?? false) : (cc?.formFill ?? false);
-        return {
-            id,
-            enabled: surface !== null,
-            disabledReason: surface ? null : 'editor is not ready',
-            active,
-        };
-    }
-    if (id === 'contentControl.inspector') {
-        const // (undocumented)
-        surface = surfaceOf(editor);
-        if (!surface)
-        return { id, enabled: false, disabledReason: 'editor is not ready', active: false };
-        const // (undocumented)
-        activeId = surface.state().contentControls.activeControlId;
-        return activeId
-        ? { id, enabled: true, disabledReason: null, active: false }
-        : {
-            id,
-            enabled: false,
-            disabledReason: 'no content control at the selection',
-            active: false,
-        };
-    }
-    const // (undocumented)
-    command = commandForSlot(id);
-    if (!command) {
-        // A value-typed slot has no fixed command, but it still has an honest enabled
-        // state: whether a well-formed value would be honoured right now. `active` stays
-        // false — "the selection is Arial" is a VALUE for the picker to show, not a
-        // pressed state.
-        const // (undocumented)
-        probe = VALUE_SLOT_PROBES[id];
-        if (probe !== undefined) {
-            const // (undocumented)
-            canApply: CanResult = editor.can(commandForSlotValue(id, probe)!);
-            return canApply.ok
-            ? { id, enabled: true, disabledReason: null, active: false }
-            : { id, enabled: false, disabledReason: canApply.reason, active: false };
-        }
-        // A slot with a PROBE has a command shape the engine can judge, even though no fixed
-        // command can be dispatched from a bare click. When the engine REFUSES the probe, that
-        // refusal is the honest reason and it is the engine's own words — quote it rather than
-        // inventing one. When the engine ALLOWS it, the gap is this chrome's, not the engine's,
-        // so the answer falls through below: the capability exists, this control cannot reach
-        // it. That asymmetry is deliberate — reporting "enabled" here would light up
-        // `text.link` in an adapter that has grown no link UI, which is the enabled-dead-button
-        // this table exists to avoid.
-        const // (undocumented)
-        shapeProbe = CHROME_PROBES[id];
-        if (shapeProbe) {
-            const // (undocumented)
-            judged: CanResult = editor.can(shapeProbe);
-            if (!judged.ok) {
-                return { id, enabled: false, disabledReason: judged.reason, active: false };
-            }
-        }
-        // Save is wired — just not as a command. Reporting it "not wired to an editor
-        // command" told a host the capability is missing when what is actually missing is a
-        // COMMAND for it: the control runs `runSave`, and both adapters reach it by branching
-        // on the registry's `kind: 'save'`. Say which of the two it is.
-        if (id === 'file.save') {
-            return {
-                id,
-                enabled: false,
-                disabledReason: 'save is not a command; run it with runSave(editor)',
-                active: false,
-            };
-        }
-        // Open is save's twin and gets the same distinction: the capability is there, a
-        // COMMAND for it is not. Bytes come from a picker the host owns and go in through
-        // `Editor.load`, so chrome that has one drives the control itself.
-        if (id === 'file.open') {
-            return {
-                id,
-                enabled: false,
-                disabledReason: 'open is not a command; run it with editor.load(bytes)',
-                active: false,
-            };
-        }
-        return { id, enabled: false, disabledReason: 'not wired to an editor command', active: false };
-    }
-    const // (undocumented)
-    result: CanResult = editor.can(command);
-    // Optional call: `isActive` is newer than this helper's callers, and a host or test
-    // double built against the earlier contract must not crash the toolbar. Absent means
-    // "not active", which is the same honest default an underived command returns.
-    const // (undocumented)
-    active = editor.isActive?.(command) ?? false;
-    return result.ok
-    ? { id, enabled: true, disabledReason: null, active }
-    : { id, enabled: false, disabledReason: result.reason, active };
-}
+export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): ToolbarCommandState;
 
 // @public
-export function toolbarCommandStates(
-editor: Editor | null,
-ids: readonly ChromeSlotId[]
-): readonly ToolbarCommandState[] {
-    return ids.map((id) => toolbarCommandState(editor, id));
-}
+export function toolbarCommandStates(editor: Editor | null, ids: readonly ChromeSlotId[]): readonly ToolbarCommandState[];
 
 // @public
 export function useEditorSnapshot(editor: () => Editor | null): Ref<number>;
@@ -1529,9 +1006,6 @@ export interface VerticalRulerProps {
 }
 
 // @public
-export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'] = Object.freeze({
-    family: 'Calibri',
-    sizeHalfPoints: 22,
-});
+export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'];
 
 ```

@@ -69,7 +69,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsup && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/i18n",
+    "build": "tsup && node ../../scripts/rollup-package-dts.mjs --package @docx-editor.dev/i18n && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/i18n",
     "typecheck": "tsc --noEmit",
     "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/i18n --local",
     "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/i18n"

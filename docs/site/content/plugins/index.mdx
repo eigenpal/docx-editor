@@ -1,32 +1,32 @@
 ---
 title: "Plugin system"
-description: "Overview of the two plugin systems: EditorPlugin for browser UI panels and overlays, and CorePlugin for headless document processing in Node.js."
+description: "Overview of the planned EditorPlugin and CorePlugin systems. Browser UI plugins and headless core plugins are not shipped on the greenfield adapters yet."
 category: "Plugins"
 order: 70
 ---
 
-The editor has two plugin systems. **EditorPlugin** extends the browser editor with React UI: side panels, overlays painted over the pages, ProseMirror plugins, and scoped CSS. **CorePlugin** extends the headless document engine with command handlers that edit a `Document` without a browser. They share the same document model and parsers but run in different environments and do not communicate with each other.
+The editor will expose two plugin systems. **EditorPlugin** will extend the browser editor with React UI: side panels, overlays painted over the pages, and scoped CSS. **CorePlugin** will extend the headless document engine with command handlers that edit a document without a browser. They share the same document model but run in different environments.
 
-|              | **EditorPlugin**                                | **CorePlugin**                                  |
-| ------------ | ----------------------------------------------- | ----------------------------------------------- |
-| Environment  | Browser (React)                                 | Node.js (headless)                              |
-| Extends      | `<DocxEditor>` UI: panels, overlays, ProseMirror | `Document` edits via command handlers           |
-| Registration | `<PluginHost plugins={[...]}>`                  | `pluginRegistry.register(plugin)`               |
-| Entry point  | `@docx-editor.dev/react/plugin-api`        | `@docx-editor.dev/core/core-plugins`       |
+|              | **EditorPlugin** (planned)                         | **CorePlugin** (planned)                         |
+| ------------ | -------------------------------------------------- | ------------------------------------------------ |
+| Environment  | Browser (React)                                    | Node.js (headless)                               |
+| Extends      | `<DocxEditor>` UI: panels, overlays                | `Document` edits via command handlers              |
+| Registration | provider/hooks host surface (TBD)                  | `pluginRegistry.register(plugin)` (TBD)            |
+| Entry point  | `@docx-editor.dev/react` composition layer         | `@docx-editor.dev/core` (TBD)                    |
 
-Building UI inside the editor? Write an EditorPlugin. Processing documents in API routes, Node.js scripts, or CI pipelines? Write a CorePlugin.
+These surfaces are **not shipped** on the current greenfield React and Vue adapters. The pages below describe the intended design from the archived plugin work; treat them as design reference until task 11.x lands paired acceptance.
 
 <Cards>
   <Card title="Getting started" href="/docs/1.x/plugins/getting-started">
-    The decision table in depth, how registration works, and a hello-world word count plugin.
+    Decision table, registration patterns, and a hello-world word count plugin (design reference).
   </Card>
   <Card title="EditorPlugin API" href="/docs/1.x/plugins/editor-plugins">
-    Full reference: panels, overlays, ProseMirror plugins, CSS injection, PluginHostRef, limitations.
+    Planned panel/overlay API (design reference).
   </Card>
   <Card title="CorePlugin & headless API" href="/docs/1.x/plugins/core-plugins">
-    Command handlers, the plugin registry, and template processing in Node.js.
+    Planned command-handler registry for Node.js (design reference).
   </Card>
   <Card title="Examples & cookbook" href="/docs/1.x/plugins/examples">
-    Runnable example plugins and recipes: shortcuts, decorations, overlays, transaction filters.
+    Example plugin recipes from the archived implementation (design reference).
   </Card>
 </Cards>

@@ -6,6 +6,10 @@
 
 Layout is deferred today, so a `w:drawing` occupies no space and paints nothing. The comprehensive fixture has eleven and four PNG parts, all present in the package and none visible. The text reflows into the space the pictures should hold, so the document is not merely missing images — its pagination is wrong.
 
+## D8 boundary review
+
+The D8 expansion for this lane adds typed `w:drawing`/DrawingML picture nodes, inline and anchored layout, wrap exclusion, embedded-media validation, and image store operations. **Approved in user session 2026-08-04** against the written design at `docs/superpowers/specs/2026-08-04-typed-drawings-and-images-design.md`. This entry is the boundary-review evidence for task 0.4; it does not substitute for full change review sign-off.
+
 ## Decisions
 
 ### I1: Inline and anchored are different layout problems and one model
@@ -62,16 +66,40 @@ Three drawings in the fixture reference `rId14`. Deleting one drawing and removi
 
 A pointer-move-per-op drag produces hundreds of `ModelChange`s, hundreds of layout passes, and an undo stack the user cannot use. Live feedback is a preview; the commit happens on release. This matches D10's rule that one user intent is one semantic history entry.
 
-## Open questions
+### I10: mc:AlternateContent branch selection is projection-only
 
-1. **Overflow behaviour for an image wider than the content box.** Word scales some cases and clips others depending on the container. The requirement demands a defined, consistent answer; which one is right needs a Word comparison. Task 3.4.
+For `mc:AlternateContent`, the wrapper and every `mc:Choice` and `mc:Fallback` branch are preserved exactly in the canonical tree. The bounded semantic projector selects the first `mc:Choice` whose `Requires` namespaces are all supported; otherwise it selects `mc:Fallback`. Only the selected branch contributes a semantic drawing; save emits every authored branch.
 
-2. **Tight and through polygons.** `wp:wrapPolygon` is a real exclusion shape, and implementing it as a bounding box is a visible fidelity loss on any document that uses it. Whether this change implements the polygon or approximates it with the bounding box **and says so** is unresolved. Approximating silently is not an option.
+### I11: simplePos overrides positionH/V when declared
 
-3. **Text boxes and groups.** `wps:wsp` and `wpg:wgp` contain flowable content — a text box is a story. That makes them much closer to `typed-notes-footnotes-endnotes` than to a picture, and they belong in their own change. Here they reserve their extent and paint a placeholder.
+When `wp:anchor/@simplePos="1"`, the required `wp:simplePos` child is authoritative for x/y. There is no `wp:simplePos/@use`. `wp:positionH` and `wp:positionV` remain preserved but do not drive placement in this case.
 
-4. **Watermarks.** Usually a `w:pict`/VML shape in a header rather than a DrawingML anchor. VML is a separate vocabulary this change does not type. `scoped-header-footer-editing` also defers it; between the two changes it is currently nobody's, which is worth fixing before either merges.
+### I12: Rotation, effect extent, and exact wrap polygons
 
-5. **Interaction with tracked changes.** Deleting a drawing in suggesting mode should track it. Owned by `typed-revisions-and-comments`; this change must not invent a second revision model.
+Rotation is read in 60000ths of a degree. `a:xfrm/a:ext` is unrotated source geometry; `wp:extent` is the authored rotated layout bounding box. `wp:effectExtent` expands paint, hit, reserved, and exclusion bounds on its respective edges before wrap distances apply. `wrapTight` and `wrapThrough` use the authored `wp:wrapPolygon` mapped through scale, crop, flips, and rotation — not a bounding-box approximation. Overlap displacement under `@allowOverlap="0"` is deterministic.
 
-6. **Vue parity.** Out of scope by request; no production support claim follows from this change alone.
+### I13: Accessibility and hidden metadata
+
+`wp:docPr/@hidden` and equivalent non-visual drawing properties suppress paint, hit testing, and authoring handles while remaining preserved. Accessibility uses `@descr`, then `@title`; `@name` is an authored object name, never announced as alt text. A drawing without description or title is decorative.
+
+### I14: Selected-image state is canonical
+
+`EditorSnapshot` and `Editor.getSelectedImage()` share one `SelectedImageState` type with reference-stable nested state until values change. All nine wrap choices are readable, writable, and reported through shared chrome value state.
+
+### I15: DrawingML image watermarks; VML deferred
+
+This change owns DrawingML image watermark rendering (`a:lum`, `a:grayscl`, behind-text layering, transforms, crop, image paint) and fills `Editor.getWatermark()` for supported DrawingML image watermarks. VML watermarks (`w:pict`) are owned by the named follow-up `typed-vml-watermarks`.
+
+## Resolved questions
+
+1. **Overflow behaviour for an image wider than the content box.** Word clips; the engine retains authored extent, clips at the content box and page paint boundary, and never implicitly scales. Task 3.4 implements against Word comparison fixtures.
+
+2. **Tight and through polygons.** Exact transformed polygon exclusion with wrap distances and effect extent — not a bounding-box approximation. See I12.
+
+3. **Text boxes and groups.** Deferred to a future story change; here they reserve extent and paint a labelled placeholder.
+
+4. **Watermarks.** DrawingML image watermarks: this change. VML: `typed-vml-watermarks`. Header/footer scope: `scoped-header-footer-editing`.
+
+5. **Interaction with tracked changes.** Suggesting-mode drawing deletion returns `trackedDrawingDeletionUnsupported`; owned by `typed-revisions-and-comments`.
+
+6. **Vue parity.** Deferred to `vue-drawing-authoring-parity`; React ships authoring chrome; shared engine commands and `toolbarCommandState` are available in Vue but value/overlay UI is not. No paired-support claim until that follow-up lands.

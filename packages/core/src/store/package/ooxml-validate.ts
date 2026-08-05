@@ -12,12 +12,20 @@ import {
   WML_NAMESPACE_URI,
   XML_NAMESPACE_URI,
   XMLNS_NAMESPACE_URI,
+  DRAWINGML_MAIN_NAMESPACE_URI,
+  WP_NAMESPACE_URI,
+  PIC_NAMESPACE_URI,
   expandedKey,
   knownKindAllowsWmlVal,
   validKnownKind,
   validateQNameAttributeValues,
   type KnownKind,
 } from './ooxml-shared.ts';
+import {
+  isDrawingKnownKind,
+  validateDrawingNode,
+  type DrawingParentContext,
+} from './ooxml-drawing-rules.ts';
 import type {
   OoxmlAttribute,
   OoxmlElement,
@@ -91,6 +99,40 @@ const KNOWN_ELEMENT_NAMES: Readonly<
   contentControlChecked: [W14_NAMESPACE_URI, 'checked'],
   contentControlCheckedState: [W14_NAMESPACE_URI, 'checkedState'],
   contentControlUncheckedState: [W14_NAMESPACE_URI, 'uncheckedState'],
+  drawing: [WML_NAMESPACE_URI, 'drawing'],
+  inlineDrawing: [WP_NAMESPACE_URI, 'inline'],
+  anchoredDrawing: [WP_NAMESPACE_URI, 'anchor'],
+  drawingExtent: [WP_NAMESPACE_URI, 'extent'],
+  drawingEffectExtent: [WP_NAMESPACE_URI, 'effectExtent'],
+  drawingDocPr: [WP_NAMESPACE_URI, 'docPr'],
+  drawingGraphicFramePr: [WP_NAMESPACE_URI, 'cNvGraphicFramePr'],
+  drawingGraphic: [DRAWINGML_MAIN_NAMESPACE_URI, 'graphic'],
+  drawingGraphicData: [DRAWINGML_MAIN_NAMESPACE_URI, 'graphicData'],
+  drawingSimplePos: [WP_NAMESPACE_URI, 'simplePos'],
+  drawingPositionH: [WP_NAMESPACE_URI, 'positionH'],
+  drawingPositionV: [WP_NAMESPACE_URI, 'positionV'],
+  drawingPositionAlign: [WP_NAMESPACE_URI, 'align'],
+  drawingPositionOffset: [WP_NAMESPACE_URI, 'posOffset'],
+  drawingWrapNone: [WP_NAMESPACE_URI, 'wrapNone'],
+  drawingWrapSquare: [WP_NAMESPACE_URI, 'wrapSquare'],
+  drawingWrapTight: [WP_NAMESPACE_URI, 'wrapTight'],
+  drawingWrapThrough: [WP_NAMESPACE_URI, 'wrapThrough'],
+  drawingWrapTopBottom: [WP_NAMESPACE_URI, 'wrapTopAndBottom'],
+  drawingWrapPolygon: [WP_NAMESPACE_URI, 'wrapPolygon'],
+  drawingWrapPolygonStart: [WP_NAMESPACE_URI, 'start'],
+  drawingWrapPolygonLineTo: [WP_NAMESPACE_URI, 'lineTo'],
+  picture: [PIC_NAMESPACE_URI, 'pic'],
+  pictureNvPicPr: [PIC_NAMESPACE_URI, 'nvPicPr'],
+  pictureBlipFill: [PIC_NAMESPACE_URI, 'blipFill'],
+  pictureBlip: [DRAWINGML_MAIN_NAMESPACE_URI, 'blip'],
+  pictureSrcRect: [DRAWINGML_MAIN_NAMESPACE_URI, 'srcRect'],
+  pictureStretch: [DRAWINGML_MAIN_NAMESPACE_URI, 'stretch'],
+  pictureTile: [DRAWINGML_MAIN_NAMESPACE_URI, 'tile'],
+  pictureShapeProperties: [PIC_NAMESPACE_URI, 'spPr'],
+  pictureTransform: [DRAWINGML_MAIN_NAMESPACE_URI, 'xfrm'],
+  pictureTransformOffset: [DRAWINGML_MAIN_NAMESPACE_URI, 'off'],
+  pictureTransformExtent: [DRAWINGML_MAIN_NAMESPACE_URI, 'ext'],
+  picturePresetGeometry: [DRAWINGML_MAIN_NAMESPACE_URI, 'prstGeom'],
 };
 
 function knownAttributesAreValid(kind: KnownKind, attributes: readonly OoxmlAttribute[]): boolean {
@@ -151,7 +193,8 @@ function runValidation(part: OoxmlPart, previous: OoxmlPart | null): OoxmlInvari
     inheritedBindings: ReadonlyMap<string, string>,
     path: string,
     priorNode: OoxmlNode | undefined,
-    priorContext: boolean
+    priorContext: boolean,
+    parent?: DrawingParentContext
   ): void => {
     // The prune: this very object was validated as part of `previous`, under an inherited
     // context proven identical — nothing in the subtree can have changed.
@@ -228,8 +271,10 @@ function runValidation(part: OoxmlPart, previous: OoxmlPart | null): OoxmlInvari
       if (
         node.namespaceUri !== namespaceUri ||
         !localNameOk ||
-        !knownAttributesAreValid(node.kind, node.attributes) ||
-        !validKnownKind(node.kind, node.children)
+        (isDrawingKnownKind(node.kind)
+          ? !validateDrawingNode(node.kind, node.localName, node.attributes, node.children, parent)
+          : !knownAttributesAreValid(node.kind, node.attributes) ||
+            !validKnownKind(node.kind, node.children))
       )
         report('known-node-invariant', path, node.id);
     }
@@ -250,13 +295,22 @@ function runValidation(part: OoxmlPart, previous: OoxmlPart | null): OoxmlInvari
       }
       priorChildren = paired;
     }
+    const isWml = node.namespaceUri === WML_NAMESPACE_URI;
+    const childParent: DrawingParentContext = {
+      wmlLocalName: isWml ? node.localName : undefined,
+      kind: node.kind,
+      namespaceUri: node.namespaceUri,
+      localName: node.localName,
+      attributes: node.attributes,
+    };
     node.children.forEach((child, index) =>
       walk(
         child,
         bindings,
         `${path}.children[${index}]`,
         priorChildren?.get(child.id),
-        childContext
+        childContext,
+        childParent
       )
     );
   };
@@ -269,7 +323,8 @@ function runValidation(part: OoxmlPart, previous: OoxmlPart | null): OoxmlInvari
     ]),
     'root',
     previous?.root,
-    previous !== null
+    previous !== null,
+    undefined
   );
   return issues.length === 0 ? { ok: true } : { ok: false, issues: Object.freeze(issues) };
 }

@@ -236,9 +236,10 @@ describe('rows carry the engine, not a paraphrase', () => {
     });
     openMenu(view, 'toolbar.insert');
     const image = row(view, 'image.insert');
-    expect(image.getAttribute('aria-disabled')).toBe('true');
-    expect(image.getAttribute('title')).toContain('not supported by the tree editor');
-    expect(image.getAttribute('title')).not.toBe('not wired to an editor command');
+    expect(image.getAttribute('aria-disabled')).toBeNull();
+    const table = row(view, 'table.insert');
+    expect(table.getAttribute('aria-disabled')).toBe('true');
+    expect(table.getAttribute('title')).toBe("command 'insertTable' is not supported by the tree editor");
   });
 
   test('Open and Save work with no configuration at all', async () => {

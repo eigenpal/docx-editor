@@ -1,0 +1,762 @@
+// Pure package primitives for embedded drawing media (typed-drawings-and-images task 5).
+//
+// Adds binary media parts, owner-relative image relationships, package-wide wp:docPr/@id
+// allocation, and orphan media cleanup. No store transaction wiring or drawing-tree insertion.
+
+import { resolveContentType } from './content-types.ts';
+import { removeNode } from './ooxml-edit.ts';
+import { normalizePartName, partNameKey, resolveInternalTarget } from './opc-names.ts';
+import {
+  sniffImageMime,
+  validateRasterHeader,
+  type ImageDecodePort,
+  type SupportedImageMime,
+} from './image-resources.ts';
+import { projectDrawingsInPackage } from './drawing-projection.ts';
+import { resolveImageResourceLimits } from '../runtime/limits.ts';
+import {
+  readOoxmlPart,
+  type OoxmlAttribute,
+  type OoxmlNode,
+  type OoxmlPart,
+} from './ooxml-tree.ts';
+import type { OoxmlPackage } from './ooxml-package.ts';
+import { relsPartNameFor, withContentTypeOverride, withRelationship } from './package-edit.ts';
+import { IMAGE_RELATIONSHIP_TYPE, resolveImageRelationship } from './relationships.ts';
+import { withoutContentTypeOverride } from './hf-lifecycle-shell.ts';
+
+const WP_NAMESPACE_URI = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+const MAX_UNSIGNED_INT = 4_294_967_295;
+
+const MIME_TO_CONTENT_TYPE: Readonly<Record<SupportedImageMime, string>> = Object.freeze({
+  'image/png': 'image/png',
+  'image/jpeg': 'image/jpeg',
+  'image/gif': 'image/gif',
+});
+
+const MIME_TO_EXTENSION: Readonly<Record<SupportedImageMime, string>> = Object.freeze({
+  'image/png': 'png',
+  'image/jpeg': 'jpeg',
+  'image/gif': 'gif',
+});
+
+const IMAGE_CONTENT_TYPES: ReadonlySet<string> = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/gif',
+  'image/svg+xml',
+  'image/tiff',
+  'image/x-emf',
+  'image/x-wmf',
+]);
+
+export type DrawingPropertyIdResult =
+  | { readonly ok: true; readonly id: number }
+  | { readonly ok: false; readonly reason: 'invalidArgs' };
+
+function isDocPrNode(node: OoxmlNode): boolean {
+  if (node.kind === 'textValue') return false;
+  if (node.kind === 'drawingDocPr') return true;
+  return node.localName === 'docPr' && node.namespaceUri === WP_NAMESPACE_URI;
+}
+
+function isUnqualifiedIdAttribute(attribute: OoxmlAttribute): boolean {
+  return attribute.localName === 'id' && attribute.namespaceUri === '';
+}
+
+/** Only the unqualified `wp:docPr/@id` attribute participates in allocation. */
+function docPrIdAttributeValue(node: OoxmlNode): string | undefined {
+  if (node.kind === 'textValue' || !('attributes' in node)) return undefined;
+  for (const attribute of node.attributes) {
+    if (!isUnqualifiedIdAttribute(attribute)) continue;
+    return attribute.value;
+  }
+  return undefined;
+}
+
+/** Parse xsd:unsignedInt for allocation scanning; null when not a valid 1..4294967295 value. */
+function parseValidDocPrId(raw: string | undefined): number | null {
+  if (raw === undefined) return null;
+  let lexical = raw.trim();
+  if (lexical.length === 0) return null;
+  if (lexical.startsWith('+')) lexical = lexical.slice(1);
+  if (lexical.length === 0) return null;
+  for (let index = 0; index < lexical.length; index += 1) {
+    const code = lexical.charCodeAt(index);
+    if (code < 0x30 || code > 0x39) return null;
+  }
+  let digits = lexical;
+  while (digits.length > 1 && digits.startsWith('0')) {
+    digits = digits.slice(1);
+  }
+  if (digits.length > 10) return null;
+  const value = Number(digits);
+  if (!Number.isInteger(value) || value <= 0 || value > MAX_UNSIGNED_INT) return null;
+  return value;
+}
+
+function walkNodes(node: OoxmlNode, visit: (node: OoxmlNode) => void): void {
+  visit(node);
+  if (node.kind === 'textValue') return;
+  for (const child of node.children) walkNodes(child, visit);
+}
+
+function highestValidDocPrId(pkg: OoxmlPackage): number {
+  let max = 0;
+  for (const part of pkg.parts.values()) {
+    walkNodes(part.root, (node) => {
+      if (!isDocPrNode(node)) return;
+      const parsed = parseValidDocPrId(docPrIdAttributeValue(node));
+      if (parsed !== null) max = Math.max(max, parsed);
+    });
+  }
+  return max;
+}
+
+export function allocateDrawingPropertyId(pkg: OoxmlPackage): DrawingPropertyIdResult {
+  const next = highestValidDocPrId(pkg) + 1;
+  if (next <= 0 || next > MAX_UNSIGNED_INT) {
+    return { ok: false, reason: 'invalidArgs' };
+  }
+  return { ok: true, id: next };
+}
+
+function canonicalPartKey(partName: string): string | null {
+  const normalized = normalizePartName(partName);
+  return normalized.ok ? partNameKey(normalized.partName) : null;
+}
+
+function partPresent(pkg: OoxmlPackage, partName: string): boolean {
+  const key = canonicalPartKey(partName);
+  if (key === null) return false;
+  for (const name of pkg.parts.keys()) {
+    if (canonicalPartKey(name) === key) return true;
+  }
+  for (const name of pkg.partBytes.keys()) {
+    if (canonicalPartKey(name) === key) return true;
+  }
+  return false;
+}
+
+function storagePartName(canonical: string, pkg: OoxmlPackage): string {
+  for (const name of [...pkg.partBytes.keys(), ...pkg.parts.keys()]) {
+    if (name.startsWith('/')) return canonical;
+  }
+  return canonical.startsWith('/') ? canonical.slice(1) : canonical;
+}
+
+function snapshotPartBytes(bytes: Uint8Array): Uint8Array {
+  return new Uint8Array(bytes);
+}
+
+function bytesEqual(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
+
+function storedPartBytes(pkg: OoxmlPackage, partName: string): Uint8Array | null {
+  const key = canonicalPartKey(partName);
+  if (key === null) return null;
+  for (const [name, bytes] of pkg.partBytes) {
+    if (canonicalPartKey(name) === key) return bytes;
+  }
+  return null;
+}
+
+function validateEmbeddedImageBytes(bytes: Uint8Array, mime: SupportedImageMime): boolean {
+  const limits = resolveImageResourceLimits();
+  if (bytes.length === 0 || bytes.length > limits.maxEncodedBytes) return false;
+  if (sniffImageMime(bytes) !== mime) return false;
+  const header = validateRasterHeader(bytes, mime);
+  if (!header) return false;
+  if (header.pixelWidth > limits.maxDimension || header.pixelHeight > limits.maxDimension) {
+    return false;
+  }
+  if (header.pixelWidth > Number.MAX_SAFE_INTEGER / header.pixelHeight) return false;
+  if (header.pixelWidth * header.pixelHeight > limits.maxPixels) return false;
+  return true;
+}
+
+/** Bounded decode-port validation required before any package media write (task 12). */
+export async function validateEmbeddedImageForCommit(
+  decodePort: ImageDecodePort,
+  bytes: Uint8Array,
+  mime: SupportedImageMime,
+  limits: ReturnType<typeof resolveImageResourceLimits> = resolveImageResourceLimits()
+): Promise<Readonly<{ ok: true; bytes: Uint8Array } | { ok: false; reason: 'invalid-image' }>> {
+  const snapshotted = snapshotPartBytes(bytes);
+  if (!validateEmbeddedImageBytes(snapshotted, mime)) {
+    return { ok: false, reason: 'invalid-image' };
+  }
+  const header = validateRasterHeader(snapshotted, mime);
+  if (!header) return { ok: false, reason: 'invalid-image' };
+  const decodeCopy = snapshotPartBytes(snapshotted);
+  try {
+    const decoded = await decodePort.decode(decodeCopy, mime, limits);
+    if (
+      decoded.pixelWidth !== header.pixelWidth ||
+      decoded.pixelHeight !== header.pixelHeight ||
+      decoded.pixelWidth <= 0 ||
+      decoded.pixelHeight <= 0 ||
+      decoded.pixelWidth > limits.maxDimension ||
+      decoded.pixelHeight > limits.maxDimension ||
+      decoded.pixelWidth * decoded.pixelHeight > limits.maxPixels
+    ) {
+      return { ok: false, reason: 'invalid-image' };
+    }
+  } catch {
+    return { ok: false, reason: 'invalid-image' };
+  }
+  return { ok: true, bytes: snapshotted };
+}
+
+function allocateMediaPartName(pkg: OoxmlPackage, ext: string): string | null {
+  for (let index = 1; index <= Number.MAX_SAFE_INTEGER; index += 1) {
+    const canonical = `/word/media/image${index}.${ext}`;
+    if (!partPresent(pkg, canonical)) return storagePartName(canonical, pkg);
+  }
+  return null;
+}
+
+function relationshipTargetForMediaPart(partName: string): string | null {
+  const normalized = normalizePartName(partName);
+  if (!normalized.ok) return null;
+  const canonical = normalized.partName;
+  if (!canonical.startsWith('/word/media/')) return null;
+  return canonical.slice('/word/'.length);
+}
+
+function drawingReferencesRelationship(
+  pkg: OoxmlPackage,
+  ownerPart: string,
+  relationshipId: string
+): boolean {
+  return projectDrawingsInPackage(pkg).some((projection) => {
+    if (projection.ownerPartName !== ownerPart) return false;
+    const embed = projection.picture?.embeddedRelationshipId;
+    const link = projection.picture?.linkedRelationshipId;
+    return embed === relationshipId || link === relationshipId;
+  });
+}
+
+function resolvedInternalMediaPart(
+  pkg: OoxmlPackage,
+  ownerPart: string,
+  relationshipId: string
+): string | null {
+  const records = pkg.relationships.get(ownerPart) ?? [];
+  const resolved = resolveImageRelationship(records, ownerPart, relationshipId);
+  return resolved.mode === 'internal' ? resolved.partName : null;
+}
+
+function isPartReferencedByAnyInternalRelationship(pkg: OoxmlPackage, partName: string): boolean {
+  const key = canonicalPartKey(partName);
+  if (key === null) return false;
+  for (const records of pkg.relationships.values()) {
+    for (const record of records) {
+      if (record.targetMode === 'External') continue;
+      const resolved = resolveInternalTarget(record.ownerPart, record.rawTarget);
+      if (resolved.ok && canonicalPartKey(resolved.partName) === key) return true;
+    }
+  }
+  return false;
+}
+
+/** Package-wide live drawing references to a media part through owner-scoped relationships. */
+export function liveDrawingReferenceCount(pkg: OoxmlPackage, partName: string): number {
+  const key = canonicalPartKey(partName);
+  if (key === null) return 0;
+  let count = 0;
+  for (const projection of projectDrawingsInPackage(pkg)) {
+    const embedId = projection.picture?.embeddedRelationshipId;
+    if (!embedId) continue;
+    const resolvedPart = resolvedInternalMediaPart(pkg, projection.ownerPartName, embedId);
+    if (resolvedPart !== null && canonicalPartKey(resolvedPart) === key) count += 1;
+  }
+  return count;
+}
+
+function isRemovableImageMediaPart(pkg: OoxmlPackage, partName: string): boolean {
+  const normalized = normalizePartName(partName);
+  if (!normalized.ok) return false;
+  if (!normalized.partName.startsWith('/word/media/')) return false;
+  const resolved = resolveContentType(pkg.contentTypes, normalized.partName);
+  if (!resolved.ok) return false;
+  return IMAGE_CONTENT_TYPES.has(resolved.contentType.toLowerCase());
+}
+
+/**
+ * Store raw bytes for a part and declare its exact content type.
+ *
+ * Does not create a relationship; callers decide which owner points at the part.
+ */
+export function withBinaryPart(
+  pkg: OoxmlPackage,
+  partName: string,
+  bytes: Uint8Array,
+  contentType: string
+): OoxmlPackage {
+  const normalized = normalizePartName(partName);
+  if (!normalized.ok) return pkg;
+  const storedName = storagePartName(normalized.partName, pkg);
+  const copied = snapshotPartBytes(bytes);
+  const existingBytes = storedPartBytes(pkg, normalized.partName);
+  if (existingBytes !== null && bytesEqual(existingBytes, copied)) {
+    return withContentTypeOverride(pkg, normalized.partName, contentType, { forceOverride: true });
+  }
+  const partBytes = new Map(pkg.partBytes);
+  partBytes.set(storedName, copied);
+  const parts = new Map(pkg.parts);
+  const storedKey = canonicalPartKey(storedName);
+  for (const name of [...parts.keys()]) {
+    if (storedKey !== null && canonicalPartKey(name) === storedKey) parts.delete(name);
+  }
+  return withContentTypeOverride(
+    Object.freeze({ ...pkg, partBytes, parts }),
+    normalized.partName,
+    contentType,
+    { forceOverride: true }
+  );
+}
+
+export function withEmbeddedImage(
+  pkg: OoxmlPackage,
+  ownerPartName: string,
+  input: Readonly<{ bytes: Uint8Array; mime: SupportedImageMime }>
+):
+  | Readonly<{
+      ok: true;
+      pkg: OoxmlPackage;
+      partName: string;
+      relationshipId: string;
+      docPrId: number;
+    }>
+  | Readonly<{ ok: false; reason: 'invalidArgs' | 'invalid-image' }> {
+  const ownerNormalized = normalizePartName(ownerPartName);
+  if (!ownerNormalized.ok) return { ok: false, reason: 'invalidArgs' };
+  const owner = ownerNormalized.partName;
+  if (!pkg.parts.has(owner)) return { ok: false, reason: 'invalidArgs' };
+  if (!validateEmbeddedImageBytes(input.bytes, input.mime)) {
+    return { ok: false, reason: 'invalid-image' };
+  }
+
+  const allocatedId = allocateDrawingPropertyId(pkg);
+  if (!allocatedId.ok) return { ok: false, reason: 'invalidArgs' };
+
+  const ext = MIME_TO_EXTENSION[input.mime];
+  const mediaPartName = allocateMediaPartName(pkg, ext);
+  if (mediaPartName === null) return { ok: false, reason: 'invalidArgs' };
+
+  const contentType = MIME_TO_CONTENT_TYPE[input.mime];
+  let next = withBinaryPart(pkg, mediaPartName, input.bytes, contentType);
+
+  const target = relationshipTargetForMediaPart(mediaPartName);
+  if (target === null) return { ok: false, reason: 'invalidArgs' };
+
+  const related = withRelationship(next, owner, IMAGE_RELATIONSHIP_TYPE, target);
+  if (!related.ok) return { ok: false, reason: 'invalidArgs' };
+  next = related.pkg;
+
+  return Object.freeze({
+    ok: true,
+    pkg: next,
+    partName: mediaPartName,
+    relationshipId: related.relationshipId,
+    docPrId: allocatedId.id,
+  });
+}
+
+/** English typographic points → EMUs (914400 EMU per inch, 72 pt per inch). */
+export const EMU_PER_POINT = 12_700;
+
+export function pointsToEmu(points: number): number | null {
+  if (!Number.isFinite(points) || points <= 0) return null;
+  const emu = Math.round(points * EMU_PER_POINT);
+  if (emu <= 0 || emu > ST_POSITIVE_COORDINATE_MAX) return null;
+  return emu;
+}
+
+import { ST_POSITIVE_COORDINATE_MAX } from './ooxml-drawing-rules.ts';
+
+const WML_NAMESPACE_URI = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const DRAWINGML_MAIN_NAMESPACE_URI = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+const PIC_NAMESPACE_URI = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+const RELATIONSHIPS_NAMESPACE_URI =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const PIC_URI = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+
+export interface InlinePictureDrawingInput {
+  readonly docPrId: number;
+  readonly relationshipId: string;
+  readonly extentEmu: { readonly cx: number; readonly cy: number };
+  readonly title?: string;
+  readonly description?: string;
+  readonly hyperlinkRelationshipId?: string;
+}
+
+function walkDrawingNode(node: OoxmlNode, visit: (node: OoxmlNode) => void): void {
+  visit(node);
+  if (node.kind === 'textValue') return;
+  for (const child of node.children) walkDrawingNode(child, visit);
+}
+
+function firstDrawingNode(part: OoxmlPart): OoxmlNode | null {
+  let found: OoxmlNode | null = null;
+  walkDrawingNode(part.root, (node) => {
+    if (found === null && node.kind === 'drawing') found = node;
+  });
+  return found;
+}
+
+/** Build a schema-valid inline picture `w:drawing` for {@link insertDrawing}. */
+export function buildInlinePictureDrawing(input: InlinePictureDrawingInput): OoxmlNode {
+  const cx = Math.round(input.extentEmu.cx);
+  const cy = Math.round(input.extentEmu.cy);
+  const docPrParts = [`id="${input.docPrId}"`, 'name=""'];
+  if (input.title && input.title.length > 0) {
+    docPrParts.push(`title="${escapeXmlAttribute(input.title)}"`);
+  }
+  if (input.description && input.description.length > 0) {
+    docPrParts.push(`descr="${escapeXmlAttribute(input.description)}"`);
+  }
+  const hlinkChild = input.hyperlinkRelationshipId
+    ? `<a:hlinkClick r:id="${escapeXmlAttribute(input.hyperlinkRelationshipId)}"/>`
+    : '';
+  const xml =
+    `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP_NAMESPACE_URI}"` +
+    ` xmlns:a="${DRAWINGML_MAIN_NAMESPACE_URI}" xmlns:pic="${PIC_NAMESPACE_URI}"` +
+    ` xmlns:r="${RELATIONSHIPS_NAMESPACE_URI}">` +
+    '<w:body><w:p><w:r><w:drawing>' +
+    '<wp:inline distT="0" distB="0" distL="0" distR="0">' +
+    `<wp:extent cx="${cx}" cy="${cy}"/>` +
+    `<wp:docPr ${docPrParts.join(' ')}>${hlinkChild}</wp:docPr>` +
+    '<wp:cNvGraphicFramePr/>' +
+    `<a:graphic><a:graphicData uri="${PIC_URI}">` +
+    '<pic:pic>' +
+    '<pic:nvPicPr><pic:cNvPr id="0" name="" descr=""/><pic:cNvPicPr/></pic:nvPicPr>' +
+    `<pic:blipFill><a:blip r:embed="${escapeXmlAttribute(input.relationshipId)}"/>` +
+    '<a:srcRect/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+    `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>` +
+    '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>' +
+    '</pic:pic></a:graphicData></a:graphic>' +
+    '</wp:inline></w:drawing></w:r></w:p></w:body></w:document>';
+  const parsed = readOoxmlPart(xml, {
+    name: '/word/document.xml',
+    contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
+  });
+  if (!parsed.ok) throw new Error(`buildInlinePictureDrawing: ${parsed.reason}`);
+  const drawing = firstDrawingNode(parsed.part);
+  if (!drawing || drawing.kind !== 'drawing') {
+    throw new Error('buildInlinePictureDrawing: missing drawing');
+  }
+  return drawing;
+}
+
+function escapeXmlAttribute(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+}
+
+/** Remove an orphaned image media part after a package-wide internal relationship target check. */
+export function withoutUnreferencedImagePart(pkg: OoxmlPackage, partName: string): OoxmlPackage {
+  const normalized = normalizePartName(partName);
+  if (!normalized.ok) return pkg;
+  if (!isRemovableImageMediaPart(pkg, normalized.partName)) return pkg;
+  if (liveDrawingReferenceCount(pkg, normalized.partName) > 0) return pkg;
+  if (isPartReferencedByAnyInternalRelationship(pkg, normalized.partName)) return pkg;
+
+  const storedName = storagePartName(normalized.partName, pkg);
+  const partBytes = new Map(pkg.partBytes);
+  const storedKey = canonicalPartKey(storedName);
+  let removed = false;
+  if (storedKey !== null) {
+    for (const name of [...partBytes.keys()]) {
+      if (canonicalPartKey(name) === storedKey) {
+        partBytes.delete(name);
+        removed = true;
+      }
+    }
+  }
+  if (!removed && !partPresent(pkg, normalized.partName)) return pkg;
+
+  const parts = new Map(pkg.parts);
+  if (storedKey !== null) {
+    for (const name of [...parts.keys()]) {
+      if (canonicalPartKey(name) === storedKey) parts.delete(name);
+    }
+  }
+
+  const withoutBytes = Object.freeze({ ...pkg, partBytes, parts });
+  return withoutContentTypeOverride(withoutBytes, normalized.partName) ?? withoutBytes;
+}
+
+function relsAttribute(node: OoxmlNode, localName: string): string | undefined {
+  if (node.kind === 'textValue' || !('attributes' in node)) return undefined;
+  return node.attributes.find(
+    (attribute) => attribute.localName === localName && attribute.namespaceUri === ''
+  )?.value;
+}
+
+/** Drop one internal relationship from an owner part and its `.rels` tree. */
+export function removeOwnerRelationship(
+  pkg: OoxmlPackage,
+  ownerPart: string,
+  relationshipId: string
+): OoxmlPackage | null {
+  const owned = pkg.relationships.get(ownerPart) ?? [];
+  const record = owned.find((entry) => entry.id === relationshipId);
+  if (!record) return pkg;
+  const nextOwned = owned.filter((entry) => entry.id !== relationshipId);
+  const relationships = new Map([...pkg.relationships, [ownerPart, nextOwned]]);
+
+  const relsName = relsPartNameFor(ownerPart);
+  const relsPart = pkg.parts.get(relsName);
+  if (!relsPart) {
+    return Object.freeze({ ...pkg, relationships });
+  }
+
+  const node = relsPart.root.children.find(
+    (child) =>
+      child.kind !== 'textValue' &&
+      child.localName === 'Relationship' &&
+      relsAttribute(child, 'Id') === relationshipId
+  );
+  if (!node) {
+    return Object.freeze({ ...pkg, relationships });
+  }
+  const removed = removeNode(relsPart, node.id);
+  if (!removed.ok) return null;
+  return Object.freeze({
+    ...pkg,
+    parts: new Map([...pkg.parts, [relsName, removed.part]]),
+    relationships,
+  });
+}
+
+/** Remove external image target metadata when nothing references the relationship id. */
+export function removeExternalImageTargetIfUnused(
+  pkg: OoxmlPackage,
+  ownerPart: string,
+  relationshipId: string
+): OoxmlPackage {
+  if (drawingReferencesRelationship(pkg, ownerPart, relationshipId)) return pkg;
+  const externalTargets = pkg.externalTargets.filter(
+    (entry) => !(entry.ownerPart === ownerPart && entry.id === relationshipId)
+  );
+  if (externalTargets.length === pkg.externalTargets.length) return pkg;
+  return Object.freeze({ ...pkg, externalTargets: Object.freeze(externalTargets) });
+}
+
+/**
+ * After a drawing resource swap or delete, drop orphaned media parts/relationships.
+ * Uses {@link liveDrawingReferenceCount} for embedded parts and relationship scans for cleanup.
+ */
+export function cleanupOrphanImageMedia(
+  pkg: OoxmlPackage,
+  ownerPart: string,
+  previousMediaPart: string | null,
+  previousRelationshipId: string | null
+): OoxmlPackage {
+  let next = pkg;
+  if (previousRelationshipId !== null) {
+    if (!drawingReferencesRelationship(next, ownerPart, previousRelationshipId)) {
+      const removed = removeOwnerRelationship(next, ownerPart, previousRelationshipId);
+      if (removed !== null) next = removed;
+    }
+  }
+  if (previousMediaPart !== null && liveDrawingReferenceCount(next, previousMediaPart) === 0) {
+    next = withoutUnreferencedImagePart(next, previousMediaPart);
+  }
+  if (previousRelationshipId !== null) {
+    next = removeExternalImageTargetIfUnused(next, ownerPart, previousRelationshipId);
+  }
+  return next;
+}
+
+export interface ExternalImageFetchPort {
+  /** Atomically resolve, reject non-public addresses, and connect for one HTTPS hop. */
+  requestPublicHttps(
+    url: string,
+    init: Readonly<{ redirect: 'manual'; signal: AbortSignal }>
+  ): Promise<
+    Readonly<{
+      status: number;
+      location: string | null;
+      contentType: string | null;
+      body: AsyncIterable<Uint8Array>;
+      /** Must equal the requested absolute URL for this hop. */
+      connectedUrl: string;
+    }>
+  >;
+}
+
+export type ExternalImageFetchRejection = 'fetch-refused' | 'invalid-image' | 'invalidArgs';
+
+function isPrivateOrLocalHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[/, '').replace(/\]$/, '');
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return true;
+  if (host === '::1' || host === '0:0:0:0:0:0:0:1') return true;
+  if (host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd')) return true;
+  if (host.startsWith('ff')) return true;
+  const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (ipv4) {
+    const a = Number(ipv4[1]);
+    const b = Number(ipv4[2]);
+    if (a === 10) return true;
+    if (a === 127) return true;
+    if (a === 0) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a >= 224) return true;
+  }
+  return false;
+}
+
+function validateExternalImageFetchUrl(
+  raw: string
+): Readonly<{ ok: true; href: string } | { ok: false; detail: string }> {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return { ok: false, detail: 'relative-url' };
+  }
+  if (parsed.protocol !== 'https:') return { ok: false, detail: 'https-only' };
+  if (parsed.username.length > 0 || parsed.password.length > 0) {
+    return { ok: false, detail: 'embedded-credentials' };
+  }
+  if (isPrivateOrLocalHost(parsed.hostname)) return { ok: false, detail: 'private-network' };
+  return { ok: true, href: parsed.href };
+}
+
+function resolveRedirectUrl(base: string, location: string): string | null {
+  try {
+    return new URL(location, base).href;
+  } catch {
+    return null;
+  }
+}
+
+function concatBytes(chunks: readonly Uint8Array[]): Uint8Array {
+  let total = 0;
+  for (const chunk of chunks) total += chunk.length;
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return out;
+}
+
+function mimeFromContentTypeHeader(contentType: string | null): SupportedImageMime | 'unknown' {
+  if (!contentType) return 'unknown';
+  const base = contentType.split(';')[0]?.trim().toLowerCase() ?? '';
+  if (base === 'image/png') return 'image/png';
+  if (base === 'image/jpeg' || base === 'image/jpg') return 'image/jpeg';
+  if (base === 'image/gif') return 'image/gif';
+  return 'unknown';
+}
+
+/** Manual-hop external fetch with scheme validation, byte cap, and raster validation. */
+export async function fetchExternalImageBytes(
+  port: ExternalImageFetchPort,
+  initialUrl: string,
+  signal: AbortSignal,
+  limits: ReturnType<typeof resolveImageResourceLimits> = resolveImageResourceLimits(),
+  decodePort?: ImageDecodePort
+): Promise<
+  | { readonly ok: true; readonly bytes: Uint8Array; readonly mime: SupportedImageMime }
+  | { readonly ok: false; readonly reason: ExternalImageFetchRejection; readonly detail?: string }
+> {
+  if (typeof port.requestPublicHttps !== 'function') {
+    return { ok: false, reason: 'fetch-refused', detail: 'atomic-fetch-port-required' };
+  }
+
+  const allowed = validateExternalImageFetchUrl(initialUrl);
+  if (!allowed.ok) {
+    return { ok: false, reason: 'fetch-refused', detail: allowed.detail };
+  }
+  let url = allowed.href;
+  let redirects = 0;
+
+  while (true) {
+    if (signal.aborted) return { ok: false, reason: 'fetch-refused', detail: 'aborted' };
+    const hopAllowed = validateExternalImageFetchUrl(url);
+    if (!hopAllowed.ok) {
+      return { ok: false, reason: 'fetch-refused', detail: hopAllowed.detail };
+    }
+    url = hopAllowed.href;
+    let response: Awaited<ReturnType<ExternalImageFetchPort['requestPublicHttps']>>;
+    try {
+      response = await port.requestPublicHttps(url, { redirect: 'manual', signal });
+    } catch {
+      return { ok: false, reason: 'fetch-refused', detail: 'network-error' };
+    }
+
+    if (response.connectedUrl !== url) {
+      return { ok: false, reason: 'fetch-refused', detail: 'connected-url-mismatch' };
+    }
+
+    if (response.status >= 300 && response.status < 400 && response.location) {
+      if (redirects >= limits.maxExternalRedirects) {
+        return { ok: false, reason: 'fetch-refused', detail: 'redirect-limit' };
+      }
+      const resolved = resolveRedirectUrl(url, response.location);
+      if (resolved === null) {
+        return { ok: false, reason: 'fetch-refused', detail: 'bad-redirect' };
+      }
+      const nextAllowed = validateExternalImageFetchUrl(resolved);
+      if (!nextAllowed.ok) {
+        return { ok: false, reason: 'fetch-refused', detail: nextAllowed.detail };
+      }
+      url = nextAllowed.href;
+      redirects += 1;
+      continue;
+    }
+
+    if (response.status !== 200) {
+      return { ok: false, reason: 'fetch-refused', detail: `status-${response.status}` };
+    }
+
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    try {
+      for await (const chunk of response.body) {
+        if (signal.aborted) return { ok: false, reason: 'fetch-refused', detail: 'aborted' };
+        total += chunk.length;
+        if (total > limits.maxEncodedBytes) {
+          return { ok: false, reason: 'invalid-image', detail: 'byte-limit' };
+        }
+        chunks.push(chunk);
+      }
+    } catch {
+      return { ok: false, reason: 'fetch-refused', detail: 'network-error' };
+    }
+
+    const bytes = concatBytes(chunks);
+    const sniffed = sniffImageMime(bytes);
+    if (sniffed !== 'image/png' && sniffed !== 'image/jpeg' && sniffed !== 'image/gif') {
+      return { ok: false, reason: 'invalid-image', detail: 'unsupported-format' };
+    }
+    const claimed = mimeFromContentTypeHeader(response.contentType);
+    if (claimed !== 'unknown' && claimed !== sniffed) {
+      return { ok: false, reason: 'invalid-image', detail: 'content-type-spoof' };
+    }
+    if (!validateEmbeddedImageBytes(bytes, sniffed)) {
+      return { ok: false, reason: 'invalid-image', detail: 'invalid-bytes' };
+    }
+    if (decodePort) {
+      const decoded = await validateEmbeddedImageForCommit(decodePort, bytes, sniffed, limits);
+      if (!decoded.ok) {
+        return { ok: false, reason: 'invalid-image', detail: 'invalid-bytes' };
+      }
+      return { ok: true, bytes: decoded.bytes, mime: sniffed };
+    }
+    return { ok: true, bytes: snapshotPartBytes(bytes), mime: sniffed };
+  }
+}

@@ -448,3 +448,48 @@ describe('package writer (cutover step 2)', () => {
     expect(savedXml).toContain('fallback');
   });
 });
+
+describe('drawing resources', () => {
+  test('resolves embedded media through owner-relative relationships without fetch', async () => {
+    const { createImageResourceCache } = await import('../package/image-resources.ts');
+    const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+    const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+    const PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+    const png = Uint8Array.from(
+      atob(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+      ),
+      (c) => c.charCodeAt(0)
+    );
+    const drawing =
+      `<w:p><w:r><w:drawing><wp:inline xmlns:wp="${WP}">` +
+      `<wp:extent cx="914400" cy="914400"/><wp:docPr id="1" name="pic"/>` +
+      `<a:graphic xmlns:a="${A}"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
+      `<pic:pic xmlns:pic="${PIC}"><pic:blipFill><a:blip r:embed="rId2" xmlns:r="${R}"/></pic:blipFill></pic:pic>` +
+      `</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+    const loaded = readOoxmlPackage(
+      build({
+        'word/_rels/document.xml.rels':
+          `<Relationships xmlns="${REL_NS}">` +
+          `<Relationship Id="rId2" Type="${IMAGE_REL}" Target="media/image1.png"/>` +
+          '</Relationships>',
+        'word/document.xml': `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${drawing}</w:body></w:document>`,
+        'word/media/image1.png': png,
+      })
+    );
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const decodeCalls = { n: 0 };
+    const cache = createImageResourceCache(loaded.package, {
+      decodePort: {
+        decode: async () => {
+          decodeCalls.n += 1;
+          return { pixelWidth: 1, pixelHeight: 1, dpiX: 96, dpiY: 96 };
+        },
+      },
+    });
+    const state = await cache.resolveEmbedded('/word/document.xml', 'rId2');
+    expect(state.kind).toBe('ready');
+    expect(decodeCalls.n).toBe(1);
+    cache.dispose();
+  });
+});

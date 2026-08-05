@@ -4,6 +4,7 @@
 // fail-closed, MIME validation, record-count N/N+1, and relationship retention.
 
 import { describe, expect, test } from 'bun:test';
+import { zipSync, strToU8 } from 'fflate';
 import {
   buildContentTypeIndex,
   resolveContentType,
@@ -13,7 +14,31 @@ import {
   buildRelationshipSet,
   resolveRelationship,
   type RelationshipRecord,
+  readOoxmlPackage,
+  writeOoxmlPackage,
+  resolveContentTypeOf,
 } from '../package/index.ts';
+
+const CT_NS = 'http://schemas.openxmlformats.org/package/2006/content-types';
+const REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const OFFICE_DOC =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+const FOREIGN_CT = 'http://example.com/foreign-content-types';
+
+function minimalPackage(contentTypesXml: string): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(contentTypesXml),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL_NS}">` +
+        `<Relationship Id="rId1" Type="${OFFICE_DOC}" Target="word/document.xml"/>` +
+        '</Relationships>'
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>x</w:t></w:r></w:p></w:body></w:document>`
+    ),
+  });
+}
 
 const records = (
   defaults: [string, string][],
@@ -110,6 +135,113 @@ describe('content-type index', () => {
       ok: false,
       error: { code: 'too-many-records', limit: 3 },
     });
+  });
+});
+
+describe('content-types reader namespace awareness', () => {
+  test('indexes Default and Override under a prefixed content-types namespace', () => {
+    const xml =
+      `<ct:Types xmlns:ct="${CT_NS}">` +
+      '<ct:Default Extension="png" ContentType="image/png"/>' +
+      '<ct:Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '</ct:Types>';
+    const loaded = readOoxmlPackage(minimalPackage(xml));
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(resolveContentTypeOf(loaded.package, '/word/document.xml')).toBe(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml'
+    );
+    expect(loaded.package.contentTypes.defaults.get('png')).toBe('image/png');
+    expect(loaded.package.contentTypes.defaults.has('rels')).toBe(false);
+  });
+
+  test('indexes unqualified PartName and ContentType under the default namespace', () => {
+    const xml =
+      `<Types xmlns="${CT_NS}">` +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="png" ContentType="image/png"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '</Types>';
+    const loaded = readOoxmlPackage(minimalPackage(xml));
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(loaded.package.contentTypes.overrides.get('/word/document.xml')).toBe(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml'
+    );
+  });
+
+  test('ignores foreign-namespace Override and Lookalike nodes with the same local name', () => {
+    const target = '/word/media/decoy.png';
+    const xml =
+      `<Types xmlns="${CT_NS}" xmlns:foreign="${FOREIGN_CT}">` +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="png" ContentType="image/png"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      `<foreign:Override PartName="${target}" ContentType="image/jpeg"/>` +
+      `<foreign:Lookalike PartName="${target}" ContentType="image/jpeg"/>` +
+      '</Types>';
+    const loaded = readOoxmlPackage(minimalPackage(xml));
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(loaded.package.contentTypes.overrides.has(target.toLowerCase())).toBe(false);
+    expect(resolveContentTypeOf(loaded.package, target)).toBe('image/png');
+  });
+
+  test('ignores namespaced PartName and ContentType attributes on real Override elements', () => {
+    const target = '/word/media/namespaced.png';
+    const xml =
+      `<Types xmlns="${CT_NS}" xmlns:ct="${CT_NS}">` +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="png" ContentType="image/png"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      `<Override ct:PartName="${target}" ct:ContentType="image/jpeg"/>` +
+      '</Types>';
+    const loaded = readOoxmlPackage(minimalPackage(xml));
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(loaded.package.contentTypes.overrides.has(target.toLowerCase())).toBe(false);
+    expect(resolveContentTypeOf(loaded.package, target)).toBe('image/png');
+  });
+
+  test('skips Override entries missing unqualified ContentType without rejecting the package', () => {
+    const target = '/word/media/missing-type.png';
+    const xml =
+      `<Types xmlns="${CT_NS}">` +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="png" ContentType="image/png"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      `<Override PartName="${target}"/>` +
+      '</Types>';
+    const loaded = readOoxmlPackage(minimalPackage(xml));
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(loaded.package.contentTypes.overrides.has(target.toLowerCase())).toBe(false);
+    expect(resolveContentTypeOf(loaded.package, target)).toBe('image/png');
+  });
+
+  test('save/reopen stays valid when foreign and malformed lookalikes coexist with real overrides', () => {
+    const xml =
+      `<Types xmlns="${CT_NS}" xmlns:foreign="${FOREIGN_CT}" xmlns:ct="${CT_NS}">` +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="png" ContentType="image/png"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '<foreign:Override PartName="/word/media/decoy.png" ContentType="image/jpeg"/>' +
+      '<Override PartName="/word/media/real.png" ContentType="image/png"/>' +
+      `<Override PartName="/word/media/malformed.png"/>` +
+      `<foreign:Lookalike PartName="/word/media/real.png" ContentType="image/jpeg" ct:PartName="/word/media/real.png" ct:ContentType="image/jpeg"/>` +
+      '</Types>';
+    const loaded = readOoxmlPackage(minimalPackage(xml));
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(resolveContentTypeOf(loaded.package, '/word/media/real.png')).toBe('image/png');
+    expect(loaded.package.contentTypes.overrides.has('/word/media/malformed.png')).toBe(false);
+
+    const reopened = readOoxmlPackage(writeOoxmlPackage(loaded.package));
+    expect(reopened.ok).toBe(true);
+    if (!reopened.ok) return;
+    expect(resolveContentTypeOf(reopened.package, '/word/media/real.png')).toBe('image/png');
+    expect(reopened.package.contentTypes.overrides.has('/word/media/malformed.png')).toBe(false);
   });
 });
 

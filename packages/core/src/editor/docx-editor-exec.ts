@@ -27,6 +27,7 @@ import {
   execSetNoteProperties,
 } from './docx-editor-notes.ts';
 import { isTableEditorCommand, planTableCommand } from './table-command-plan.ts';
+import { execImageCommand, isImageCommand } from './docx-editor-images.ts';
 
 /**
  * Run one admitted command against the surface.
@@ -38,7 +39,13 @@ import { isTableEditorCommand, planTableCommand } from './table-command-plan.ts'
 export function execEditorCommand(
   mounted: PaginatedSurface,
   command: EditorCommand,
-  options?: { readonly admittedTablePlan?: import('./table-command-plan.ts').TableCommandPlan }
+  options?: {
+    readonly admittedTablePlan?: import('./table-command-plan.ts').TableCommandPlan;
+    readonly editor?: Pick<
+      import('./docx-editor-types.ts').DocxEditorInstance,
+      'surface' | 'mountGeneration'
+    >;
+  }
 ): ExecResult | null {
   switch (command.type) {
     case 'toggleMark': {
@@ -345,6 +352,9 @@ export function execEditorCommand(
       return { ok: true, changed: false };
     }
     default:
+      if (isImageCommand(command)) {
+        return execImageCommand(mounted, command, options?.editor);
+      }
       // Unreachable: `classifyCommand` refused everything else. Typed for the compiler.
       return { ok: false, code: 'unsupported', reason: 'unsupported command' };
   }

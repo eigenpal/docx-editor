@@ -2,7 +2,7 @@
  * applyReview() — batch review operations in a single call.
  */
 
-import type { DocumentBody } from '@docx-editor.dev/core/headless';
+import type { Document, DocumentBody } from '@docx-editor.dev/core/headless';
 import type { BatchReviewOptions, BatchResult, BatchError } from './types';
 import type { ChangeNotes } from './discovery';
 import { acceptChange, rejectChange, proposeReplacement } from './changes';
@@ -23,6 +23,7 @@ import { addComment, replyTo } from './comments';
  * "not found", so the caller knows the id exists but isn't body-mutable here.
  */
 export function applyReview(
+  doc: Document,
   body: DocumentBody,
   ops: BatchReviewOptions,
   defaultAuthor = 'AI',
@@ -55,7 +56,7 @@ export function applyReview(
 
   for (const id of ops.accept ?? []) {
     try {
-      acceptChange(body, id);
+      acceptChange(doc, body, id, notes);
       accepted++;
     } catch (e) {
       errors.push({ operation: 'accept', id, error: explain(id, e as Error) });
@@ -64,7 +65,7 @@ export function applyReview(
 
   for (const id of ops.reject ?? []) {
     try {
-      rejectChange(body, id);
+      rejectChange(doc, body, id, notes);
       rejected++;
     } catch (e) {
       errors.push({ operation: 'reject', id, error: explain(id, e as Error) });
