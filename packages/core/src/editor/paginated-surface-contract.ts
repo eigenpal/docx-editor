@@ -92,6 +92,13 @@ export interface PaginatedSurfaceOptions {
   /** Points to CSS pixels. */
   readonly scale?: number;
   /**
+   * The family a run with no authored font is reported as by `formatting()` AND painted
+   * in — the face the measurer falls back to. Absent, such a run reports
+   * `fontFamily: null` and paints in whatever font the page inherits, which the measurer
+   * did not measure: visible glyphs drift from wrap points and caret geometry.
+   */
+  readonly defaultFontFamily?: string;
+  /**
    * Who resolves a pointer to a caret.
    *
    * `'engine'` (the default) answers from the layout records, which is what makes a click in

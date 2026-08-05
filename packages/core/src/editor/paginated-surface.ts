@@ -553,6 +553,7 @@ export function mountPaginatedSurface(
     textOf: (paragraphId) => textOf(paragraphId),
     selectedCells: () => cellSelection?.cellIds,
     defaultParagraphStyleId: () => styleCascade?.defaultParagraphStyleId ?? null,
+    defaultFontFamily: () => options.defaultFontFamily ?? null,
     pendingFormats: () => pendingAtCaret(),
     setPendingFormats: (next) => {
       if (next === null || next.length === 0) {
@@ -1663,6 +1664,7 @@ export function mountPaginatedSurface(
       readOnlyParagraphIds: tocParagraphIds(),
       ...(emptyTocIds.size > 0 ? { emptyTocPlaceholderIds: emptyTocIds } : {}),
       ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+      ...(options.defaultFontFamily ? { defaultFontFamily: options.defaultFontFamily } : {}),
       materialize: materializedSet,
       ariaHidden: false,
       ...(activeHf

@@ -317,6 +317,14 @@ export interface Editor {
   getDocumentFonts(): readonly string[];
 
   /**
+   * Every font family the editor can offer: the configured catalog (the default face,
+   * the Word-name families the substitution map stands in for, and host-registered
+   * source families) merged with {@link getDocumentFonts}. Never empty — a brand-new
+   * document offers the configured catalog rather than a dead picker.
+   */
+  getAvailableFonts(): readonly string[];
+
+  /**
    * The document theme's ten picker colours (`a:clrScheme`) in Word's column order
    * (Background 1, Text 1, Background 2, Text 2, Accent 1-6), each a six-digit hex
    * without '#'. Empty when the document has no complete scheme — the picker then
