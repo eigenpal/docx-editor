@@ -49,6 +49,26 @@ export interface CustomNodeDefinition {
     readonly attrs: Readonly<Record<string, string>>;
     readonly text: string;
   }) => Readonly<Record<string, string>> | null;
+  /**
+   * Chip appearance, HOST-authored (never file data). `color` tints the chip
+   * and its border; applied by `CustomNodeChrome` from `@docx-editor.dev/pro/react`.
+   */
+  readonly chrome?: {
+    readonly color?: string;
+  };
+  /** Click on the painted chip. UI state belongs in `CustomNodeChrome`'s `onNodeClick`. */
+  readonly onClick?: (node: ActivatedCustomNode) => void;
+  /** Pointer enters the painted chip. */
+  readonly onHover?: (node: ActivatedCustomNode) => void;
+}
+
+/** A chip activation: identity + attrs decoded from the document, plus where it sits. */
+export interface ActivatedCustomNode {
+  readonly name: string;
+  readonly attrs: Readonly<Record<string, string>>;
+  readonly tag: string;
+  /** Viewport-relative rect of the chip's boundary, for anchoring host UI. */
+  readonly rect: DOMRect;
 }
 
 /** Validate and freeze a definition. Throws on a shape mistake — author error, not file input. */

@@ -20,6 +20,7 @@ export {
   type ReviewPartProps,
   type ReviewProps,
 } from './DocxEditorReview';
+export { CustomNodeChrome, type CustomNodeChromeProps } from './CustomNodeChrome.tsx';
 export {
   useReview,
   useReviewOf,

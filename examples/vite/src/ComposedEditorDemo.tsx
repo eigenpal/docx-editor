@@ -28,12 +28,11 @@ import {
 // disable with the engine's own "requires the pro review module" reason.
 import {
   customNodesModule,
-  decodeCustomNodeTag,
   defineCustomNode,
   insertCustomNode,
   reviewModule,
 } from '@docx-editor.dev/pro';
-import { DocxEditorReview } from '@docx-editor.dev/pro/react';
+import { CustomNodeChrome, DocxEditorReview } from '@docx-editor.dev/pro/react';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
 import { BrandLogo } from '../../shared/BrandLogo';
@@ -58,6 +57,8 @@ import { DEMO_BUTTON, DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON } from './demoB
 const DEMO_CITATION = defineCustomNode({
   name: 'citation',
   tagPrefix: 'docx',
+  // HOST-authored chip appearance — CustomNodeChrome applies it.
+  chrome: { color: '#7c3aed' },
   // Recognition hook: attrs decoded from the tag, text is the literal
   // SDT content (which a Word user may have edited — label drift).
   fromDocx: ({ attrs, text }) => ({ ...attrs, label: text }),
@@ -201,26 +202,30 @@ function CitationPopover() {
     y: number;
     attrs: Readonly<Record<string, string>>;
   } | null>(null);
+  // Close when a click lands outside the card (chip clicks reopen through the API).
   useEffect(() => {
+    if (!card) return;
     const onClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
-      const boundary = target?.closest?.('.docx-content-control-boundary');
-      const tag = boundary
-        ?.closest('.docx-content-control-chrome[data-tag^="docx:citation"]')
-        ?.getAttribute('data-tag');
-      const decoded = tag ? decodeCustomNodeTag(tag) : null;
-      if (!boundary || !decoded) {
+      if (!target?.closest('[role="dialog"]') && !target?.closest('.docx-content-control-boundary')) {
         setCard(null);
-        return;
       }
-      const rect = boundary.getBoundingClientRect();
-      setCard({ x: rect.left, y: rect.bottom + 8, attrs: decoded.attrs });
     };
     document.addEventListener('click', onClick);
     return () => document.removeEventListener('click', onClick);
-  }, []);
-  if (!card) return null;
+  }, [card]);
+  const chrome = (
+    <CustomNodeChrome
+      nodes={[DEMO_CITATION]}
+      onNodeClick={(node) =>
+        setCard({ x: node.rect.left, y: node.rect.bottom + 8, attrs: node.attrs })
+      }
+    />
+  );
+  if (!card) return chrome;
   return (
+    <>
+      {chrome}
     <div
       role="dialog"
       aria-label="Citation details"
@@ -257,6 +262,7 @@ function CitationPopover() {
         Open source
       </button>
     </div>
+    </>
   );
 }
 

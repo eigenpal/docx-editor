@@ -16,6 +16,7 @@ export {
   customNodesModule,
   defineCustomNode,
   recognizeCustomNodes,
+  type ActivatedCustomNode,
   type CustomNodeDefinition,
   type CustomNodesModuleOptions,
   type RecognizedCustomNode,
