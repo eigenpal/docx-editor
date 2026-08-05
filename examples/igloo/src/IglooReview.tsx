@@ -59,10 +59,7 @@ export function IglooReview() {
 
 /** What has been drilled out of this document. Ordinary React over the rail's own hook. */
 function CoreLog() {
-  const { items, paneOpen } = useReview();
-  // Unmounted when the rail is shut, not hidden: `furniture` renders either way, and a 300px
-  // summary inside the closed rail's 32px strip wraps one letter per line.
-  if (!paneOpen) return null;
+  const { items } = useReview();
   // Replies are not separate entries, for the same reason they are not separate cards.
   const observations = items.filter(
     (entry) => entry.kind === 'comment' && entry.parentId === undefined

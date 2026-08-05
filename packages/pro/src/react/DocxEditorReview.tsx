@@ -230,9 +230,12 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
    */
   children?: ReactNode | ((item: ReviewItemView) => ReactNode);
   /**
-   * Host furniture rendered at the top of the rail, above the cards — filters,
-   * legends, custom summaries (pro-review-and-custom-nodes task 4.11). Plain
-   * flow content; per-item custom CARDS (4.10 reviewCard) are the follow-up.
+   * Host content at the top of the rail, above the cards — filters, legends, summaries.
+   *
+   * Rendered only while the pane is OPEN. A closed rail gives up its width for a 32px strip
+   * of markers, and content laid out for the 300px column has nowhere to go in it; unmounting
+   * is the rail's own business, not something a host should have to subscribe to `paneOpen`
+   * to discover. Furniture that should outlive the toggle belongs outside the rail.
    */
   furniture?: ReactNode;
   /**
@@ -729,7 +732,7 @@ function ReviewRoot({
         </Slot>
       ) : (
         <aside {...shared}>
-          {furniture !== undefined ? (
+          {open && furniture !== undefined ? (
             <div className="docx-review__furniture" data-testid="review-furniture">
               {furniture}
             </div>

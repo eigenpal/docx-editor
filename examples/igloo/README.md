@@ -55,9 +55,8 @@ library's; everything a reader sees is this demo's, through five different rungs
 slot, so its pressed state is the engine's answer to "is the pane open" — which matters,
 because the pane also opens when you click a margin marker or start a comment, and a boolean
 kept in this demo would be a third opinion about it. A shut rail gives up its width for a
-32px strip of markers, and the core log unmounts rather than trying to fit: `furniture`
-renders either way, and a summary built for a 300px column wrapped one letter per line inside
-that strip.
+32px strip of markers, and the rail unmounts its own `furniture` when that happens — the core
+log here does nothing to arrange it.
 
 **Tracked changes on the page are themed too, and they are the only canvas thing that is.**
 Every mark reads `--doc-revision-*`, so restating those on the page wrapper turns insertions
@@ -113,7 +112,8 @@ demo's:
 - an **igloo** lays another block on every click — a real `updateCustomNode` write, so the
   paragraph's label, the rail card and the saved file all move in one undo step.
 
-Insert one from the **Igloo** menu or the right-click **Carve…** submenu: author your own, or
+Insert one from the **Custom Actions** menu or the right-click **Custom elements…** submenu:
+author your own, or
 take whatever the water gives. Attrs ride in a `w:tag` Word caps at 64 characters, so the
 engine refuses an oversized one with its own reason — which the notice strip repeats verbatim
 rather than inventing.
