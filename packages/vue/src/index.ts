@@ -2,7 +2,7 @@
  * @docx-editor.dev/vue
  *
  * Vue 3 adapter for the DOCX editor. A thin renderer over the `Editor`
- * contract from `@docx-editor.dev/core-contract`: it supplies DOM and paints
+ * contract from `@docx-editor.dev/core`: it supplies DOM and paints
  * the engine's positioned display list, and holds no editing-engine state.
  *
  * @packageDocumentation
@@ -43,7 +43,7 @@ export {
   type FontUrlSource,
   type LoadFontsRequest,
   type LoadFontsResult,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/editor';
 
 // Re-export the contract types a consumer needs to drive the editor.
 export type {
@@ -54,8 +54,8 @@ export type {
   EditorSnapshot,
   EditorScope,
   PageSetup,
-} from '@docx-editor.dev/core-contract/contracts/editor';
-export type { DocxDocument } from '@docx-editor.dev/core-contract/contracts/types';
+} from '@docx-editor.dev/core/contracts/editor';
+export type { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 export { default as DocxEditorShell, type DocxEditorShellProps } from './DocxEditorShell';
 export { default as DocxEditorTitleBar, type DocxEditorTitleBarProps } from './DocxEditorTitleBar';
 export { default as DocxEditorToolbar, type DocxEditorToolbarProps } from './DocxEditorToolbar';
@@ -86,4 +86,4 @@ export {
   PX_PER_CM,
   type RulerTick,
   type RulerUnit,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/editor';

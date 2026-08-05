@@ -5,11 +5,7 @@
 // position-independent — span x offsets are relative to the paragraph origin — which is
 // what lets one cached break serve the same content at any x (body or any cell).
 
-import {
-  PAGE_BREAK_CHAR,
-  type OoxmlNode,
-  type OoxmlProperty,
-} from '@docx-editor.dev/core-contract/store';
+import { PAGE_BREAK_CHAR, type OoxmlNode, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import {
   piecesOfParagraph,
   propertiesOfRunContainer,

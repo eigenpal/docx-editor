@@ -18,7 +18,7 @@
 // applier resolves; the two walks have to descend in exactly the same places.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { runPropertyEdits } from '../surface-formatting.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

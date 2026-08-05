@@ -12,7 +12,7 @@ import type {
   EditorScope,
   ExecErrorCode,
   ExecResult,
-} from '@docx-editor.dev/core-contract/contracts/editor';
+} from '@docx-editor.dev/core/contracts/editor';
 import type { ContentControlFilter, ContentControlSummary, ContentControlType } from '../index.ts';
 import type { DocAnchor, DocLocation, DocRange } from '../contracts/types.ts';
 import {
@@ -28,7 +28,7 @@ import {
   type OoxmlNode,
   type OoxmlPart,
   type TreeDocOp,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import type { ParagraphAnchorIndex } from '../binding/paragraph-anchors.ts';
 import { isDocAnchor, resolveDocAnchor } from './anchor-resolution.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';

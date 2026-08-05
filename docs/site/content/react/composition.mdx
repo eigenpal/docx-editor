@@ -1,0 +1,161 @@
+---
+title: 'Composition'
+description: 'Build your own editor UI on unstyled primitives: provider, viewport, content, compound parts, asChild, and slot overrides.'
+category: 'React'
+order: 32
+---
+
+`<DocxEditor>` is one arrangement of parts that are all public. When the packaged chrome is not what you want, take the parts.
+
+There is no second implementation behind the packaged editor: the toolbar you get out of the box is built from the same hooks and primitives documented here, so nothing you compose yourself is second-class.
+
+## The three primitives
+
+Every editor is these three, in this order:
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+
+export function Editor({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <DocxEditor.Root document={bytes}>
+      <DocxEditor.Viewport>
+        <DocxEditor.Content />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  );
+}
+```
+
+- **`Root`** owns the editor instance and publishes it on context. It renders no DOM of its own. It is where document-level props live: `document`, `mode`, `author`, `fonts`, `locale`, `modules`, `onReady`, `onChange`.
+- **`Viewport`** is the scroll container, and carries the layout classes the engine positions pages against.
+- **`Content`** is the mount point the engine paints pages into. The painted pages *are* the editable surface.
+
+Everything else — toolbar, menu, rulers, navigation pane, link popover, context menu — is optional and can be placed anywhere inside `Root`.
+
+## Escalation ladder
+
+Start at the top and go down only as far as you need:
+
+1. **CSS.** Every packaged control takes `className` and exposes `data-active` / `data-disabled`.
+2. **`icon` prop.** Swap a glyph without touching behavior.
+3. **`asChild`.** Merge the wiring onto your own element instead of the packaged one.
+4. **Slot override.** Replace one part of a compound in place; keep the rest.
+5. **Hooks.** Write the markup yourself. See [Hooks](/docs/2.x/react/hooks).
+
+### asChild
+
+`asChild` hands the part's behavior (click handler, disabled state, ARIA, active state) to the child you supply and renders no wrapper:
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { Button } from '@/components/ui/button';
+
+<DocxEditor.Toolbar.Bold asChild>
+  <Button variant="ghost">Bold</Button>
+</DocxEditor.Toolbar.Bold>;
+```
+
+### Slot override
+
+A part child replaces the slot of the same name and leaves the rest of the default arrangement alone. `hidden` removes a slot; `preset={false}` opts out of the defaults entirely so only your children render:
+
+```tsx
+{/* Default toolbar, but with our own bold button and no highlight control. */}
+<DocxEditor.Toolbar>
+  <DocxEditor.Toolbar.Bold className="my-bold" />
+  <DocxEditor.Toolbar.Highlight hidden />
+</DocxEditor.Toolbar>
+
+{/* Nothing packaged. Only these three. */}
+<DocxEditor.Toolbar preset={false}>
+  <DocxEditor.Toolbar.Bold />
+  <DocxEditor.Toolbar.Italic />
+  <DocxEditor.Toolbar.Underline />
+</DocxEditor.Toolbar>
+```
+
+## Compound parts
+
+Controls with internal state are compounds over a part-level context, so you own the markup and the library owns the behavior:
+
+```tsx
+import { DocxEditor, useFontFamily } from '@docx-editor.dev/react';
+
+// The option list comes from the hook, so your rows and the packaged rows
+// read the same source: configured fonts merged with the document's own.
+function FontItems() {
+  const { options } = useFontFamily();
+  return (
+    <>
+      {options.map((family) => (
+        <DocxEditor.Toolbar.FontFamily.Item key={family} value={family}>
+          <span style={{ fontFamily: family }}>{family}</span>
+        </DocxEditor.Toolbar.FontFamily.Item>
+      ))}
+    </>
+  );
+}
+
+<DocxEditor.Toolbar.FontFamily>
+  <DocxEditor.Toolbar.FontFamily.Trigger className="my-trigger" />
+  <DocxEditor.Toolbar.FontFamily.Content>
+    <FontItems />
+  </DocxEditor.Toolbar.FontFamily.Content>
+</DocxEditor.Toolbar.FontFamily>;
+```
+
+`ParagraphStyle` follows the same `Trigger` / `Content` / `Item` shape.
+
+## A full composition
+
+The parts a composed tree usually wants, placed by hand. This is the shape the [Vite starter](https://github.com/eigenpal/docx-editor/tree/main/examples/vite) uses:
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+
+export function Workspace({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <DocxEditor.Root document={bytes} author="Jess Lin">
+      <MyTitleBar />
+      <DocxEditor.Menu />
+      <DocxEditor.Toolbar />
+      <DocxEditor.HorizontalRuler />
+
+      <div style={{ position: 'relative', display: 'flex', flex: 1, minHeight: 0 }}>
+        <DocxEditor.Navigation />
+        <DocxEditor.Viewport>
+          <DocxEditor.VerticalRuler />
+          {/* Overlay chrome the packaged host mounts for you. A composed tree
+              places it by name, or the feature has no UI. */}
+          <DocxEditor.HeaderFooterChrome />
+          <DocxEditor.NotesChrome />
+          <DocxEditor.Content />
+          <DocxEditor.HyperLink />
+          <DocxEditor.ContextMenu />
+        </DocxEditor.Viewport>
+        <DocxEditor.PageNumber />
+      </div>
+    </DocxEditor.Root>
+  );
+}
+```
+
+The trade-off is explicit: composing gets you every part by name, and parts you do not place simply have no UI. `<DocxEditor>` places all of them for you.
+
+## Keep the caret
+
+Any mousedown that reaches the document moves the caret. Chrome that should not steal focus must prevent it:
+
+```tsx
+<div onMouseDown={(e) => e.preventDefault()}>{/* your toolbar */}</div>
+```
+
+Skip inputs, selects, and textareas — they need the focus. The packaged chrome already does this; hand-written chrome must.
+
+## Next steps
+
+- [Hooks](/docs/2.x/react/hooks): the API every part above is built on
+- [Toolbar](/docs/2.x/guides/toolbar): the slot registry and the full part list
+- [Props](/docs/2.x/react/props): `<DocxEditor>` and the imperative ref
+- [Igloo starter](https://github.com/eigenpal/docx-editor/tree/main/examples/igloo): a fully themed editor built this way

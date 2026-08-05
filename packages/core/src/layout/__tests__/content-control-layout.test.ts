@@ -11,7 +11,7 @@
 // layout rather than read back out of the DOM.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer } from '../index.ts';
 import { contentControlBoundaries } from '../content-control-boundaries.ts';
 import { layoutSemanticDocument } from '../semantic-layout.ts';

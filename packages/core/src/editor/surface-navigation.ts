@@ -17,9 +17,9 @@
 // `window.open` is called from ONE place in the whole engine — `openExternal` below — and
 // only ever with the sanitized projection, never with an authored target.
 
-import { caretAt, type SemanticLayout } from '@docx-editor.dev/core-contract/layout';
+import { caretAt, type SemanticLayout } from '@docx-editor.dev/core/layout';
 import { sanitizeHref } from '../store/package/sinks.ts';
-import type { BookmarkIndex } from '@docx-editor.dev/core-contract/store';
+import type { BookmarkIndex } from '@docx-editor.dev/core/store';
 import type { SurfaceHyperlink } from './surface-hyperlinks.ts';
 
 /** A click on a painted link, after native navigation was refused. */

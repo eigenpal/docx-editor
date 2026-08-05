@@ -16,7 +16,7 @@
 // not applied.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { commandForSlotValue, type ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
+import { commandForSlotValue, type ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';

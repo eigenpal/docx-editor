@@ -1,14 +1,10 @@
 // Canonical tree <-> ProseMirror binding (tasks 6.1, 6.2, 6.3).
 
 import { describe, expect, test } from 'bun:test';
-import {
-  readOoxmlPart,
-  TreeDocumentStore,
-  type OoxmlPart,
-} from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, TreeDocumentStore, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { treeSchema } from '../tree-schema.ts';
 import { bodyParagraphs, docToTreeOps, reconcileDoc, treeToDoc } from '../tree-binding.ts';
-import { paragraphTextOf, ORIGIN_IDS } from '@docx-editor.dev/core-contract/store';
+import { paragraphTextOf, ORIGIN_IDS } from '@docx-editor.dev/core/store';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';

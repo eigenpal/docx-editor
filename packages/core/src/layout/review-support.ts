@@ -14,7 +14,7 @@ import type {
   OoxmlNode,
   OoxmlPart,
   RevisionAddress,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 
 // ── Comment vocabulary (authored in `word/comments.xml` and its siblings) ──────
 

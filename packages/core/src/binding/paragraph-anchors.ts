@@ -10,8 +10,8 @@
 // SDTs). Header/footer/footnote paragraphs are `DocLocation` territory — the contract
 // keeps a structural address form precisely "for content the paraId map cannot reach".
 
-import type { OoxmlPart } from '@docx-editor.dev/core-contract/store';
-import { isValidParaId, paraIdOf } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlPart } from '@docx-editor.dev/core/store';
+import { isValidParaId, paraIdOf } from '@docx-editor.dev/core/store';
 import { allParagraphs } from './tree-binding.ts';
 
 export interface ParagraphAnchorIndex {

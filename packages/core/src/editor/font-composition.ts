@@ -18,8 +18,8 @@ import type {
   FontConfiguration,
   FontSource,
   FontSourceSubstitution,
-} from '@docx-editor.dev/core-contract/contracts/editor';
-import { HARD_MAX_FONT_BYTES, fontRequestKey } from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/contracts/editor';
+import { HARD_MAX_FONT_BYTES, fontRequestKey } from '@docx-editor.dev/core/layout';
 
 /**
  * A partial font configuration one origin contributes: sources, substitutions, or both.

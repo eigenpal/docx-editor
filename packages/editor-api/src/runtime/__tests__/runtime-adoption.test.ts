@@ -28,7 +28,7 @@ import type {
   AutomationBatchResponse,
   AutomationHandle,
   AutomationHost,
-} from '@docx-editor.dev/core-contract/automation';
+} from '@docx-editor.dev/core/automation';
 import { createRuntime } from '../runtime.ts';
 import { messageFor } from '../errors.ts';
 import { hydratedHandle, hydratedHandles } from '../hydrate.ts';

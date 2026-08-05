@@ -9,8 +9,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // typing can drift the label away from the attrs, with the literal label text
 // as its content (what Word and the free tier render).
 
-import type { Editor, ExecResult } from '@docx-editor.dev/core-contract/contracts/editor';
-import type { PaginatedSurface } from '@docx-editor.dev/core-contract/editor';
+import type { Editor, ExecResult } from '@docx-editor.dev/core/contracts/editor';
+import type { PaginatedSurface } from '@docx-editor.dev/core/editor';
 import type { CustomNodeDefinition } from './define-custom-node.ts';
 import { encodeCustomNodeTag } from './tag-codec.ts';
 

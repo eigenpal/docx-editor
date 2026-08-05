@@ -24,14 +24,14 @@ import { gateImageCommand } from './docx-editor-images.ts';
 export type CommandGate =
   | { ok: true; tablePlan?: import('./table-command-plan.ts').TableCommandPlan }
   | { ok: false; refusal: Exclude<ExecResult, { ok: true }> };
-import { tableContextAt } from '@docx-editor.dev/core-contract/layout';
+import { tableContextAt } from '@docx-editor.dev/core/layout';
 import {
   isTableEditorCommand,
   planTableCommand,
   type TableCommandPlan,
   type TableCommandPlannerInput,
 } from './table-command-plan.ts';
-import { paragraphTextOf } from '@docx-editor.dev/core-contract/store';
+import { paragraphTextOf } from '@docx-editor.dev/core/store';
 import { allParagraphs } from '../binding/tree-binding.ts';
 import { paragraphStyleId } from '../binding/document-outline.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';

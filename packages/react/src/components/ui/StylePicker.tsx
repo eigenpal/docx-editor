@@ -8,7 +8,7 @@
 import * as React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger } from './Select';
 import { cn } from '../../lib/utils';
-import type { Theme } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { Theme } from '@docx-editor.dev/core/contracts/editor';
 import type { DocumentStyleSummary } from '../../lib/stylePreview';
 import { getStylePreviewProps, resolveParagraphStyleOptions } from '../../lib/stylePreview';
 import { useTranslation } from '../../i18n';

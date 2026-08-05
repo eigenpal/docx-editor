@@ -278,7 +278,7 @@ export {
   type ChromeMenuSubmenuEntry,
   type ChromeSlotId,
   type ToolbarCommandState,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/editor';
 export { PaginatedDocxEditor } from './components/PaginatedDocxEditor';
 export { PaginatedDocxEditorShell } from './components/PaginatedDocxEditorShell';
 export type { PaginatedDocxEditorShellProps } from './components/PaginatedDocxEditorShell';
@@ -313,7 +313,7 @@ export {
   type FontUrlSource,
   type LoadFontsRequest,
   type LoadFontsResult,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/editor';
 
 // Re-export the contract types a consumer needs to drive the editor.
 export type {
@@ -324,8 +324,8 @@ export type {
   EditorSnapshot,
   EditorScope,
   PageSetup,
-} from '@docx-editor.dev/core-contract/contracts/editor';
-export type { DocxDocument } from '@docx-editor.dev/core-contract/contracts/types';
+} from '@docx-editor.dev/core/contracts/editor';
+export type { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 export { DocxEditorShell } from './components/DocxEditor/DocxEditorShell';
 export { Toolbar, ToolbarButton, ToolbarGroup, type ToolbarProps } from './components/Toolbar';
 export { TitleBar, MenuBar, DocumentName, Logo, TitleBarRight } from './components/TitleBar';

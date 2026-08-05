@@ -1,0 +1,156 @@
+---
+title: 'Custom nodes'
+description: 'Define your own inline node types — citations, mentions, merge fields — stored as Word content controls that survive a Word round-trip.'
+category: 'Pro'
+order: 63
+---
+
+A custom node is an inline node type you define: a citation, a mention, a merge field, a clause reference. It is stored as a Word content control (an inline `w:sdt`) whose `w:tag` carries your identity and attributes, so Word opens the document, shows the node's text, and gives it back unchanged.
+
+Requires the custom-nodes module from [`@docx-editor.dev/pro`](/docs/2.x/pro).
+
+## Define one
+
+```tsx
+import { defineCustomNode, customNodesModule } from '@docx-editor.dev/pro';
+
+const Citation = defineCustomNode({
+  name: 'citation',
+  tagPrefix: 'docx',
+  label: 'Citation',
+  // Host-authored chip appearance. Never file data.
+  chrome: { color: '#7c3aed' },
+  // Recognition: attrs decoded from the tag, text is the literal control content
+  // (which a Word user may have edited, so label drift is visible here).
+  fromDocx: ({ attrs, text }) => ({ ...attrs, label: text }),
+  // Optional: contribute a card to the review sidebar for every recognized node.
+  reviewCard: ({ attrs, text }) => ({
+    title: `Citation — ${attrs['sourceId'] ?? 'unknown source'}`,
+    detail: text || (attrs['label'] ?? ''),
+  }),
+});
+
+// Stable identity: module registration is construction-time.
+const MODULES = [customNodesModule({ nodes: [Citation] })];
+```
+
+| Field | Purpose |
+|---|---|
+| `name` | Node type name. The second segment of the tag. |
+| `tagPrefix` | The prefix this definition claims — `docx` claims `docx:*`. No colons. |
+| `fromDocx` | Recognition hook. Return the attrs the node should carry, or `null` to leave the control literal. |
+| `label` | Display name for chrome. Defaults to `name`. Localize it yourself. |
+| `chrome.color` | Chip tint and border, applied by `CustomNodeChrome`. |
+| `reviewCard` | Contribute a sidebar card per node. Return `null` to skip one. |
+| `onClick` / `onHover` / `onEdit` | Interaction hooks on the painted chip. |
+
+Every value reaching `fromDocx` came out of a `.docx` — a zip of XML an attacker controls end to end. Treat `attrs` and `text` as untrusted: they are rendered as text, never as markup, and you must not build URLs or DOM from them without sanitizing.
+
+## Render the chips
+
+`CustomNodeChrome` paints the recognized nodes and dispatches interaction. `CustomNodeContextMenu` adds a section on top of the packaged context menu, which is the editing entry point since chips are content-locked by default:
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { CustomNodeChrome, CustomNodeContextMenu } from '@docx-editor.dev/pro/react';
+
+export function Editor({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <DocxEditor.Root document={bytes} modules={MODULES}>
+      <DocxEditor.Viewport>
+        <DocxEditor.Content />
+        <CustomNodeChrome onNodeClick={(node) => openPopover(node)} />
+        <DocxEditor.ContextMenu>
+          <CustomNodeContextMenu onEditNode={(node) => openEditForm(node)} />
+        </DocxEditor.ContextMenu>
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  );
+}
+```
+
+An activated node gives you `name`, `attrs`, `tag`, `rect` (viewport-relative, for anchoring your own popover), and — when resolvable — `nodeId` and `text`.
+
+## Insert, update, remove
+
+These take the editor instance, so reach it with `useDocxEditor()`:
+
+```tsx
+import { useDocxEditor } from '@docx-editor.dev/react';
+import { insertCustomNode, updateCustomNode, removeCustomNode } from '@docx-editor.dev/pro';
+
+function InsertCitationButton() {
+  const editor = useDocxEditor();
+
+  return (
+    <button
+      disabled={!editor}
+      onClick={() => {
+        if (!editor) return;
+        // At the caret, unless you pass `at: { paragraphId, offset }`.
+        const result = insertCustomNode(
+          editor,
+          Citation,
+          { sourceId: 'smith-2024', page: '14' },
+          '(Smith 2024, p. 14)',
+          { alias: 'Citation' }
+        );
+        if (!result.ok) console.warn(result.reason);
+      }}
+    >
+      Insert citation
+    </button>
+  );
+}
+```
+
+`updateCustomNode(editor, definition, nodeId, attrs, text, options?)` rewrites one in place, and `removeCustomNode(editor, nodeId)` deletes it. All three return an `ExecResult` — check `ok` and show `reason`; they do not throw.
+
+The default `lock` is `contentLocked`: the text cannot be edited inline, so a label can never drift out of sync with its attributes, while the node stays deletable as one unit in both the editor and Word. Pass `lock: false` for no lock, or `'sdtContentLocked'` to forbid deleting it too.
+
+## Cards in the review sidebar
+
+A definition with `reviewCard` puts one card per node into the review sidebar, anchored at the node's range. `useReviewItem()` scopes host content to the card it is rendered inside, so you can add your own actions to citation cards only:
+
+```tsx
+import { DocxEditorReview, useReviewItem } from '@docx-editor.dev/pro/react';
+
+function CitationActions() {
+  const item = useReviewItem();
+  if (item?.kind !== 'custom') return null;
+
+  return <button onClick={() => openSource(item)}>Open source</button>;
+}
+
+<DocxEditorReview>
+  <CitationActions />
+</DocxEditorReview>;
+```
+
+This needs the review module registered alongside the custom-nodes module.
+
+## Server-side authoring
+
+`customNodeXml(...)` builds the same content control as XML, with no editor and no DOM, so a node written on a server is recognized identically when the document opens in the editor:
+
+```ts
+import { customNodeXml } from '@docx-editor.dev/pro';
+```
+
+`encodeCustomNodeTag` / `decodeCustomNodeTag` are the tag codec if you need to read or write the identity yourself. Tags are capped at `MAX_TAG_LENGTH`.
+
+## Word round-trip
+
+A recognized node is an ordinary inline content control. Word shows its text, honors the lock, and preserves the tag. A document edited in Word and reopened here is recognized again from the same tag — and if a Word user edited the text despite the lock, `fromDocx` sees the drift and can decide what to do about it.
+
+A document opened without your definition registered renders the control's content literally, which is also what Word does. Nothing is lost.
+
+## Known limit
+
+There is no in-place edit dialog. Re-authoring a node is `removeCustomNode` plus `insertCustomNode`, or `updateCustomNode`, with the form supplied by you — the activation carries `nodeId` and the current `text` to prefill it. Schema-driven edit forms are a planned follow-up.
+
+## Next steps
+
+- [Tracked changes](/docs/2.x/pro/tracked-changes)
+- [Comments](/docs/2.x/pro/comments)
+- [Content controls](/docs/2.x/guides/content-controls): the built-in control surface these build on

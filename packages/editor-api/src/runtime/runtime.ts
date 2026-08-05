@@ -31,7 +31,7 @@ import type {
   AutomationBatchResponse,
   AutomationHandle,
   AutomationHost,
-} from '@docx-editor.dev/core-contract/automation';
+} from '@docx-editor.dev/core/automation';
 import { Document } from '../model/document.ts';
 import { hostFailure } from './batch.ts';
 import type { ClientObject } from './client-object.ts';

@@ -1,7 +1,7 @@
 // Header/footer editing state as a hook — reference-stable slices for overlay chrome.
 
 import { useCallback } from 'react';
-import type { Editor, EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { Editor, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 

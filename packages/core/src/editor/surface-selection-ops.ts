@@ -5,20 +5,20 @@
 // produces. No DOM and no session here: the surface closure passes in its current layout,
 // selection and part, so every function is a plain input-to-output computation.
 
-import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
+import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
 import {
   parentNodeOf,
   type OoxmlElement,
   type OoxmlNode,
   type OoxmlPart,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import {
   documentOrder,
   paragraphTextFromLayout,
   type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';
 
 export function collapsedAt(position: SemanticPosition): SemanticSelection {
   return { anchor: position, head: position };

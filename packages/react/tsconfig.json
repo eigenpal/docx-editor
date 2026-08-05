@@ -20,12 +20,12 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@docx-editor.dev/core-contract": ["../core/src/index.ts"],
-      "@docx-editor.dev/core-contract/editor": ["../core/src/editor.ts"],
-      "@docx-editor.dev/core-contract/geometry": ["../core/src/geometry.ts"],
-      "@docx-editor.dev/core-contract/types": ["../core/src/types-barrel.ts"],
-      "@docx-editor.dev/core-contract/plugin": ["../core/src/plugin.ts"],
-      "@docx-editor.dev/core-contract/mcp": ["../core/src/mcp.ts"]
+      "@docx-editor.dev/core": ["../core/src/index.ts"],
+      "@docx-editor.dev/core/editor": ["../core/src/editor.ts"],
+      "@docx-editor.dev/core/geometry": ["../core/src/geometry.ts"],
+      "@docx-editor.dev/core/types": ["../core/src/types-barrel.ts"],
+      "@docx-editor.dev/core/plugin": ["../core/src/plugin.ts"],
+      "@docx-editor.dev/core/mcp": ["../core/src/mcp.ts"]
     }
   },
   "include": ["src"],

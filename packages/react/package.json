@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/react",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "React DOCX editor adapter for the @docx-editor.dev editor contract.",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -34,7 +34,7 @@
     }
   },
   "devDependencies": {
-    "@docx-editor.dev/core-contract": "workspace:*",
+    "@docx-editor.dev/core": "workspace:*",
     "fflate": "^0.8.2"
   },
   "keywords": [
@@ -60,7 +60,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@docx-editor.dev/core-contract": "workspace:*",
+    "@docx-editor.dev/core": "workspace:*",
     "@docx-editor.dev/i18n": "workspace:*",
     "@radix-ui/react-select": "^2.3.3",
     "class-variance-authority": "^0.7.1",

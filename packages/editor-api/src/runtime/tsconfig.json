@@ -27,8 +27,8 @@
     "types": [],
     "baseUrl": ".",
     "paths": {
-      "@docx-editor.dev/core-contract/automation": ["../../../core/src/automation/index.ts"],
-      "@docx-editor.dev/core-contract/editor": ["../../../core/src/editor/index.ts"]
+      "@docx-editor.dev/core/automation": ["../../../core/src/automation/index.ts"],
+      "@docx-editor.dev/core/editor": ["../../../core/src/editor/index.ts"]
     }
   },
   "include": ["*.ts", "examples/*.ts", "../model/*.ts", "../index.ts", "../browser.ts"],

@@ -12,7 +12,7 @@
  * drifted apart.
  */
 import { useImperativeHandle } from 'react';
-import type { Editor, EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { Editor, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { LOADING_SNAPSHOT } from '../../../editor/loading-snapshot';
 import type { DocxEditorRef } from '../../../types';
 

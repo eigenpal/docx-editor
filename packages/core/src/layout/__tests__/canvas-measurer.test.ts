@@ -1,7 +1,7 @@
 // Canvas-backed text measurement: selection, security, and centered geometry.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import {
   DEFAULT_RUN_STYLE,
   createFixedMeasurer,

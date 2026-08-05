@@ -3,13 +3,13 @@
 // Keeps the composition root under the max-lines budget while owning the furniture
 // scope transitions that bind EditorScope { kind: 'headerFooter', rId }.
 
-import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
+import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
 import type {
   SemanticLayout,
   SemanticPosition,
   SemanticSelection,
-} from '@docx-editor.dev/core-contract/layout';
-import type { TreeDocOp } from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/layout';
+import type { TreeDocOp } from '@docx-editor.dev/core/store';
 import type { ViewScope } from '../contracts/editor.ts';
 import { enumerateDocumentSections } from '../layout/section-properties.ts';
 import {

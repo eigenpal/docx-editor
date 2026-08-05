@@ -6,9 +6,9 @@
 // its session, measurer and cache; nothing here holds surface state beyond the per-part
 // story memo.
 
-import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import type { OoxmlElement, OoxmlPart } from '@docx-editor.dev/core-contract/store';
-import { resolveRelationship } from '@docx-editor.dev/core-contract/store';
+import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { OoxmlElement, OoxmlPart } from '@docx-editor.dev/core/store';
+import { resolveRelationship } from '@docx-editor.dev/core/store';
 import {
   buildNumberingIndex,
   buildStyleCascadeTable,
@@ -28,7 +28,7 @@ import {
   type SemanticSelection,
   type StyleCascadeTable,
   type TextMeasurer,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';
 import {
   authoredDocumentEndnoteProperties,
   authoredDocumentFootnoteProperties,
@@ -70,7 +70,7 @@ export function createFurnitureSource(env: {
   readonly drawingLayoutTokenForPart?: (partName: string) => string;
   readonly drawingTokenForParagraphForPart?: (
     partName: string,
-    paragraph: import('@docx-editor.dev/core-contract/store').OoxmlNode
+    paragraph: import('@docx-editor.dev/core/store').OoxmlNode
   ) => string;
 }): FurnitureSource {
   const {

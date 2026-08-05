@@ -1,10 +1,10 @@
-# `@docx-editor.dev/core-contract`
+# `@docx-editor.dev/core`
 
 **This package's exported surface contains no implementation.** It declares the
 public API that `@docx-editor.dev/core` must satisfy. The published package is
 installed from npm.
 
-It is deliberately named `@docx-editor.dev/core-contract`, not
+It is deliberately named `@docx-editor.dev/core`, not
 `@docx-editor.dev/core`. Sharing the name would make the workspace resolve every
 consumer to this package instead of the published one, silently, since a
 workspace member outranks the registry. It is also `"private": true`, and every

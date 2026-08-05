@@ -27,7 +27,7 @@ import type {
   AutomationBatchRequest,
   AutomationCapabilities,
   AutomationHost,
-} from '@docx-editor.dev/core-contract/automation';
+} from '@docx-editor.dev/core/automation';
 import type { Document } from '../model/document.ts';
 import { batchFailure, planBatch, settleBatch } from './batch.ts';
 import type { ClientObject } from './client-object.ts';

@@ -16,7 +16,7 @@ import type {
   ParagraphFragmentRecord,
   TableFragmentRecord,
 } from '../layout/semantic-records.ts';
-import type { SemanticLayout } from '@docx-editor.dev/core-contract/layout';
+import type { SemanticLayout } from '@docx-editor.dev/core/layout';
 import { paintLayerOf } from '../layout/drawing-exclusion.ts';
 
 /** Host port for safe blob URLs — only called for {@link ImageResourceState.kind} `ready`. */

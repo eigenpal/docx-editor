@@ -7,11 +7,7 @@
 // document opened left-aligned and unindented, and the toolbar agreed with the wrong picture.
 
 import { describe, expect, test } from 'bun:test';
-import {
-  readOoxmlPart,
-  type OoxmlElement,
-  type OoxmlNode,
-} from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlElement, type OoxmlNode } from '@docx-editor.dev/core/store';
 import { buildStyleCascadeTable, resolveParagraphLayoutInputs } from '../style-cascade.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

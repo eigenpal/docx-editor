@@ -31,7 +31,7 @@
 // SLOT id, never the bare control id.
 
 import { GENERATED_ICON_PATHS } from './generated-icon-paths.ts';
-import type { ImageContext } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { ImageContext } from '@docx-editor.dev/core/contracts/editor';
 
 /**
  * HOW a control reaches the engine — never WHETHER it is enabled.

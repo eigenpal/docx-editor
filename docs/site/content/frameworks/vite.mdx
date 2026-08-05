@@ -66,13 +66,15 @@ export function App() {
         <input type="file" accept=".docx" onChange={onFileSelect} />
         <button onClick={onSave}>Save .docx</button>
       </div>
-      <DocxEditor ref={editorRef} documentBuffer={buffer} showToolbar />
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <DocxEditor ref={editorRef} document={buffer ?? undefined} />
+      </div>
     </div>
   );
 }
 ```
 
-`documentBuffer` and `save()` work as described in the [Quickstart](/docs/1.x/quickstart); the only Vite-specific fact is that there is no SSR boundary to manage.
+`document` and `save()` work as described in the [Quickstart](/docs/2.x/quickstart); the only Vite-specific fact is that there is no SSR boundary to manage.
 
 The full example also wires `createEmptyDocument()` for a New button and an agent panel; see [`src/App.tsx`](https://github.com/eigenpal/docx-editor/tree/main/examples/vite) in the repo.
 
@@ -89,7 +91,7 @@ bun run dev:react   # http://localhost:5173
 
 ## Next steps
 
-- [Quickstart](/docs/1.x/quickstart): the load, edit, save flow in detail
-- [Loading and saving](/docs/1.x/guides/loading-and-saving): URLs, autosave, upload to your API
+- [Quickstart](/docs/2.x/quickstart): the load, edit, save flow in detail
+- [Loading and saving](/docs/2.x/guides/loading-and-saving): URLs, autosave, upload to your API
 - [Vite DOCX editor guide](/blog/vite-docx-editor): the long-form walkthrough
 - [Vite example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/vite)

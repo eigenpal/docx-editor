@@ -12,7 +12,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { readOoxmlPackage, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPackage, type OoxmlPart } from '@docx-editor.dev/core/store';
 import {
   decodeCustomNodeTag,
   encodeCustomNodeTag,

@@ -1,0 +1,141 @@
+---
+title: 'Comments'
+description: 'Comment threads anchored to a range: read them, write them, reply, and render your own comment UI over the review hook.'
+category: 'Pro'
+order: 62
+---
+
+Comments anchor discussion to a range of text. The editor reads a document's existing OOXML comments on load, shows them beside the page, and writes them back on save, so threads started in Word continue here and the other way round.
+
+Comments share the review surface with [tracked changes](/docs/2.x/pro/tracked-changes) — one sidebar, one hook, one card layout. Requires the review module from [`@docx-editor.dev/pro`](/docs/2.x/pro).
+
+## Setup
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
+
+const MODULES = [reviewModule()];
+
+export function Commentable({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
+      <DocxEditor.Toolbar />
+      <DocxEditor.Viewport>
+        <DocxEditor.Content />
+        <DocxEditorReview />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  );
+}
+```
+
+`author` is what lands in `w:author` on anything the user writes. OOXML requires it, so the engine refuses a comment or reply with no author rather than writing an empty attribute.
+
+## Writing a comment
+
+`comment(text, author?)` on the review hook comments on the current selection. It returns whether it landed, so a compose box can keep the user's text on refusal instead of clearing it and showing nothing:
+
+```tsx
+import { useState } from 'react';
+import { useReview } from '@docx-editor.dev/pro/react';
+
+function CommentBox() {
+  const { comment, selectionAnchorY } = useReview();
+  const [text, setText] = useState('');
+
+  // null when nothing is selected: there is nowhere to anchor a comment.
+  if (selectionAnchorY === null) return null;
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (comment(text)) setText('');
+      }}
+    >
+      <textarea value={text} onChange={(e) => setText(e.target.value)} />
+      <button type="submit" disabled={!text.trim()}>Comment</button>
+    </form>
+  );
+}
+```
+
+`selectionAnchorY` is the document-space Y where the comment would sit, from the engine rather than from the DOM — the same rule the card anchors follow. Use it to position your own compose box beside the selection.
+
+The packaged `<DocxEditorReview.AddComment />` and `<DocxEditorReview.Draft />` are this, already built.
+
+## Replying
+
+`reply(item, text, author?)` threads onto a comment. Replying to a *revision* also works and produces a comment anchored over that revision's range, because OOXML gives `w:ins` and `w:del` no body of their own:
+
+```tsx
+function Thread() {
+  const { items, reply } = useReview();
+
+  return (
+    <ul>
+      {items.map((item) => (
+        <li key={item.key}>
+          <p>{item.text}</p>
+          <span>{item.author}{item.date ? ` · ${item.date}` : ''}</span>
+          <span>{item.replyIds.length} replies</span>
+          <button onClick={() => reply(item, 'Agreed, rephrased.')}>Reply</button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+Like `comment`, `reply` reports whether it landed rather than throwing.
+
+## Reading threads
+
+`items` from `useReview()` carries comments and revisions together. Narrow by `kind` when you want only one:
+
+```tsx
+import type { ReviewItemView } from '@docx-editor.dev/pro/react';
+
+function CommentsOnly() {
+  const { items } = useReview();
+  const comments = items.filter(
+    (item): item is Extract<ReviewItemView, { kind: 'comment' }> => item.kind === 'comment'
+  );
+
+  return (
+    <ul>
+      {comments.map((c) => (
+        <li key={c.key} data-resolved={c.resolved || undefined}>
+          {/* File-derived. Render as text, never as markup. */}
+          {c.text} — {c.author}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+Comment items add `resolved` (whether `w15:commentsEx` marks the thread done) and `parentId` (absent at the top of a thread) on top of the shared fields: `key`, `id`, `author`, `initials`, `date`, `text`, `replyIds`, `anchorY`, `pageIndex`, `isActive`.
+
+`initials` comes from `w:initials` when the file carries one and is derived from the name otherwise, so an avatar always has something to show.
+
+For a document-level read without the review module, `editor.getComments()` returns `{ id, text, resolved }` per thread.
+
+## Writes emit changes
+
+Writing a comment or a reply fires the editor's `change` event, so autosave and dirty tracking pick it up like any other edit:
+
+```tsx
+useEditorEvent('change', (change) => void autosave(change.revision));
+```
+
+## Word round-trip
+
+Comments parse from and serialize to the document's comments part, including author, initials, date, reply threading, and resolved state. A document annotated here opens in Word with the same threads, and resolved threads stay resolved. Comments in headers, footers, footnotes, and endnotes are read and written in their own scope.
+
+## Next steps
+
+- [Tracked changes](/docs/2.x/pro/tracked-changes): the full `useReview` surface and the sidebar parts
+- [Custom nodes](/docs/2.x/pro/custom-nodes)
+- [Hooks](/docs/2.x/react/hooks)

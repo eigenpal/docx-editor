@@ -3,7 +3,7 @@
 // Toolbar and menu both trigger the same picker; Content attaches paste/drop to the same path.
 
 import { createContext, useCallback, useContext, useMemo, useRef, type ReactNode } from 'react';
-import { executeImageCommand, toolbarCommandState } from '@docx-editor.dev/core-contract/editor';
+import { executeImageCommand, toolbarCommandState } from '@docx-editor.dev/core/editor';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 import { useDocxEditor } from '../context';

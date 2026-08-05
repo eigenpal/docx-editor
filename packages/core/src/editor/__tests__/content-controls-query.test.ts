@@ -10,8 +10,8 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor } from '../docx-editor.ts';
 import { contentControlSummaryOf, inlineContentControlsAt } from '../content-controls.ts';
-import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core-contract/store';
-import { WML_NAMESPACE_URI } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
+import { WML_NAMESPACE_URI } from '@docx-editor.dev/core/store';
 
 const W = WML_NAMESPACE_URI;
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';

@@ -10,11 +10,8 @@
 // pane as proposals. Viewing is the permission one: every command is refused while it is on.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type {
-  DocumentEditingMode,
-  EditorSnapshot,
-} from '@docx-editor.dev/core-contract/contracts/editor';
-import { runToolbarCommand, toolbarCommandState } from '@docx-editor.dev/core-contract/editor';
+import type { DocumentEditingMode, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+import { runToolbarCommand, toolbarCommandState } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useToolbarLabel } from './toolbar-context';

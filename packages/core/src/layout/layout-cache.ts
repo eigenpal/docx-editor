@@ -22,7 +22,7 @@
 // a paragraph whose content and context are unchanged lays out identically whatever the
 // document around it did.
 
-import type { OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
 
 /** A fingerprint over one paragraph's layout inputs. */
 export type ParagraphLayoutKey = string;

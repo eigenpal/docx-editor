@@ -12,8 +12,8 @@
 
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
-import type { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
-import type { RulerIndent } from '@docx-editor.dev/core-contract/editor';
+import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+import type { RulerIndent } from '@docx-editor.dev/core/editor';
 import { HorizontalRuler, type RulerPageSetup } from '../components/ui/HorizontalRuler';
 import { VerticalRuler } from '../components/ui/VerticalRuler';
 import { ReviewRailContext, useDocxEditor } from './context';

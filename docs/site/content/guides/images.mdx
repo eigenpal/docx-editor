@@ -5,7 +5,7 @@ category: 'Guides'
 seoTitle: 'Images and floating pictures'
 ---
 
-DrawingML pictures (`w:drawing` with `pic:pic`) now layout, paint, and round-trip through the shared engine. **React** ships insert, wrap, properties, alt text, and selection-overlay authoring; **Vue** reads the same engine commands through `toolbarCommandState` but value/overlay chrome is deferred to `vue-drawing-authoring-parity`.
+DrawingML pictures (`w:drawing` with `pic:pic`) now layout, paint, and round-trip through the shared engine. React ships insert, wrap, properties, alt text, and selection-overlay authoring.
 
 ## Supported formats
 
@@ -95,10 +95,9 @@ Not edited or raster-rendered in this release:
 - `w:object` / `w:altChunk` — generic preservation with diagnostics
 - Artistic effects (`a:effectLst`), TIFF/EMF/WMF converters
 - Tracked-change accept/reject on drawings — `typed-revisions-and-comments`
-- Vue authoring parity — `vue-drawing-authoring-parity`
 
 ## Next steps
 
-- [Toolbar customization](/docs/1.x/guides/toolbar) — override `DocxEditor.Toolbar.ImageWrap` and siblings
-- [Word fidelity matrix](/docs/1.x/word-fidelity) — live support claims
-- [Headers & footers](/docs/1.x/guides/headers-footers) — letterhead anchors in furniture bands
+- [Toolbar customization](/docs/2.x/guides/toolbar) — override `DocxEditor.Toolbar.ImageWrap` and siblings
+- [Word fidelity matrix](/docs/2.x/word-fidelity) — live support claims
+- [Headers & footers](/docs/2.x/guides/headers-footers) — letterhead anchors in furniture bands

@@ -25,7 +25,7 @@ import {
   chromeSlotId,
   defaultChromeGroups,
   type DocxEditorInstance,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/editor';
 import { DocxEditor } from '../src/components/DocxEditor.tsx';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { testReviewModule } from './review-test-module.ts';

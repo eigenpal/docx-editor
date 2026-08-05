@@ -23,7 +23,7 @@ import {
   type ChromeMenuId,
   type ChromeMenuItemEntry,
   type ChromeSlotId,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { openReportIssue } from '../../lib/reportIssue';
 import { useEditorCommand } from '../useEditorCommand';

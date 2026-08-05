@@ -15,7 +15,7 @@ import {
   readOoxmlPackage,
   readOoxmlPart,
   type OoxmlPart,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { linesOf } from '../semantic-records.ts';
 import type { RevisionDisplayMode } from '../revision-projection.ts';

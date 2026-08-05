@@ -12,7 +12,7 @@
 // exactly the page an outline jump asks for.
 
 import { useCallback, useMemo, useState } from 'react';
-import type { Editor, EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { Editor, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 

@@ -71,7 +71,7 @@
     "test:e2e:editor": "playwright test --config e2e/editor-smoke.config.ts",
     "test:watch": "bun test --watch",
     "typecheck": "bun run --filter '*' typecheck",
-    "version-packages": "changeset version"
+    "version-packages": "changeset version && bun run --filter '@docx-editor.dev/editor-api' compat:generate"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",

@@ -83,9 +83,7 @@ describe('contentControlsIn default-option cache', () => {
 
     const limited = contentControlsIn(part.root, { limit: 1 });
     expect(limited).toHaveLength(1);
-    expect(contentControlsIn(part.root, { maxDepth: MAX_CONTENT_CONTROL_NESTING })).toHaveLength(
-      2
-    );
+    expect(contentControlsIn(part.root, { maxDepth: MAX_CONTENT_CONTROL_NESTING })).toHaveLength(2);
 
     const cached = contentControlsIn(part.root);
     expect(contentControlsIn(part.root)).toBe(cached);

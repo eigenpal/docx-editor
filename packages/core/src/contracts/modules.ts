@@ -12,13 +12,9 @@
  * the review chrome slots stay disabled with the engine's own reason.
  */
 
-import type { OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlPart } from '@docx-editor.dev/core/store';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
-import type {
-  ReviewItem,
-  ReviewModelInput,
-  ReviewRevisionItem,
-} from '../layout/review-support.ts';
+import type { ReviewItem, ReviewModelInput, ReviewRevisionItem } from '../layout/review-support.ts';
 
 export type { ReviewModelInput };
 

@@ -22,8 +22,8 @@ import type {
   Editor,
   EditorSnapshot,
   FontConfiguration,
-} from '@docx-editor.dev/core-contract/contracts/editor';
-import type { DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/contracts/editor';
+import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditor } from '../src/components/DocxEditor.tsx';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';

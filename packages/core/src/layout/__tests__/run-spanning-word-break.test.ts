@@ -7,7 +7,7 @@
 // count drifted from Word's.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlNode } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlNode } from '@docx-editor.dev/core/store';
 import { breakParagraph } from '../paragraph-flow.ts';
 import { createFixedMeasurer } from '../semantic-layout.ts';
 

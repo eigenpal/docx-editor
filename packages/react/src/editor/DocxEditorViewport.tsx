@@ -10,7 +10,7 @@
 
 import { useCallback, useContext } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { ReviewRailContext, useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';

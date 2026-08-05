@@ -1,94 +1,81 @@
 ---
 title: '@docx-editor.dev/core'
-description: 'Framework-agnostic core: document tree, OOXML parser/serializer, ProseMirror schema, plugin contract. Underlies both the React and Vue adapters.'
-category: 'Packages'
-order: 20
+description: 'The framework-agnostic engine: OOXML read and write, the canonical document tree, layout, paint, and the Editor contract adapters render.'
+category: 'Reference'
+order: 70
 ---
 
 <PackageStats name="@docx-editor.dev/core" />
 
-## What's in it
+The engine. It reads a `.docx` into a canonical document tree, lays that tree out into pages, paints them, and writes the tree back to OOXML. It has no framework dependency and no UI.
 
-The core package contains the document tree, OOXML parser and serializer, ProseMirror schema, layout engine, and plugin contract. It has no framework dependency. The React and Vue adapters depend on it. Install `-core` directly for headless DOCX processing or custom hosts.
+Most apps never import it directly: `@docx-editor.dev/react` carries it. Reach for it when you are writing your own adapter, or when you need the contract types to type a function signature.
 
 ```bash
 npm install @docx-editor.dev/core
 ```
 
-## When to use it directly
+## Entry points
 
-- Server-side `.docx` processing: parse a buffer, walk the tree, mutate, and serialize back out.
-- Headless extraction: pull text, tables, headers/footers without rendering.
-- Custom renderer or DOM bridge against the shared schema.
-- Plugins that need to work in React, Vue, and headless contexts. Use the `core-plugins` subpath.
-
-If you want the editor UI in a React or Vue app, install `@docx-editor.dev/react` or `@docx-editor.dev/vue`. Both pull `-core` transitively.
-
-## In this section
-
-<Cards>
-  <Card
-    title="Architecture"
-    href="/docs/1.x/core/architecture"
-    description="The dual-renderer design: hidden ProseMirror for editing state, layout painter for Word-fidelity pages, and the data flow between them."
-  />
-  <Card
-    title="Headless API"
-    href="/docs/1.x/core/headless"
-    description="Parse, mutate, and serialize DOCX in Node or workers: text helpers, content controls, templates, watermarks, DocumentAgent."
-  />
-</Cards>
-
-## Subpaths
-
-The most common subpaths:
-
-- `@docx-editor.dev/core`: root barrel
-- `@docx-editor.dev/core/headless`: the full DOM-free surface in one import
-- `@docx-editor.dev/core/docx/parser`: `parseDocx(buffer)` → `Document` tree
-- `@docx-editor.dev/core/docx/rezip`: `repackDocx` / `createDocx` → `.docx` bytes
-- `@docx-editor.dev/core/types/document`: `Document`, `Paragraph`, `Run`, `Insertion`, `Deletion`, `Comment`
-- `@docx-editor.dev/core/core-plugins`: plugin contract for non-React, non-Vue hosts
-
-All generated subpaths are in the [API reference](/docs/1.x/api/core).
-
-## Parse, mutate, serialize
+The root is the 80% path: create an editor over bytes, the contract it implements, fonts, and the chrome registry.
 
 ```ts
-import {
-  parseDocx,
-  getParagraphs,
-  getParagraphText,
-  repackDocx,
-} from '@docx-editor.dev/core/headless';
+import { createDocxEditor, loadFonts, WORD_DEFAULT_FONT } from '@docx-editor.dev/core';
+import type { Editor, EditorSnapshot } from '@docx-editor.dev/core';
+```
 
-const buffer = await fetch('./document.docx').then((r) => r.arrayBuffer());
-const doc = await parseDocx(buffer);
+Subpaths are the escape hatch, not the entry fee — reach for one when you need the canonical tree, the layout pass, or the paint step directly.
 
-for (const para of getParagraphs(doc.package.document)) {
-  console.log(para.paraId, getParagraphText(para));
+| Subpath | What's there |
+|---|---|
+| `.` | Create an editor, the `Editor` contract, fonts, the chrome registry, the document model types. |
+| `./editor` | Everything the root re-exports, plus the paginated surface, ruler geometry, and module resolution. |
+| `./contracts/editor` | `Editor`, `EditorCommand`, `EditorQuery`, `EditorSnapshot`, `DocumentSource`, `PageSetup` — the contract an adapter renders. |
+| `./contracts/types` | Document model types. |
+| `./contracts/modules` | `EditorModule`, the shape [`@docx-editor.dev/pro`](/docs/2.x/pro) implements. |
+| `./contracts/plugin` | The plugin contract. |
+| `./contracts/interaction` | Pointer, selection, and keymap contracts. |
+| `./store` | The canonical tree and its transactional store. |
+| `./layout` | The DOM-free layout pass. |
+| `./output` | Serialization. |
+| `./automation` | The document object model behind [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api). |
+| `./styles/editor.css` | The one editor stylesheet. The packaged chrome and your own chrome both use it. |
+
+## The contract
+
+`Editor` is the whole public surface an adapter talks to. Commands go in through `exec`, reads come out through `query` and `snapshot`:
+
+```ts
+import type { Editor, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+
+function pageLabel(editor: Editor): string {
+  const snapshot: EditorSnapshot = editor.snapshot();
+  return `${snapshot.page.current} / ${snapshot.page.total}`;
 }
-
-const out = await repackDocx(doc); // ArrayBuffer, ready to download or store
 ```
 
-The tree shape is the same one the editor renders. Code written against `-core` can run before or after a document is opened in the live editor. Full walkthrough: [Headless processing](/docs/1.x/guides/headless-processing).
+`snapshot()` is version-cached: it returns the same reference until state actually moves, and its sub-objects are reference-stable. That is what makes `useSyncExternalStore` — and therefore [`useEditorState`](/docs/2.x/react/hooks) — correct without a deep compare on every tick.
 
-## Content controls
+## The pipeline
 
-Block-level content controls (Word's `w:sdt`) are addressable by tag, alias, id, or type. `findContentControls` lists matches, `setContentControlContent` fills a control, `setContentControlValue` sets typed values (dropdown selection, checkbox, date), and `addRepeatingSectionItem` / `removeRepeatingSectionItem` manage repeating sections. Edits preserve the control's identity and raw properties, so content controls can act as anchors for templates and document automation.
+One path, in one direction:
 
-```ts
-import { findContentControls, setContentControlValue } from '@docx-editor.dev/core/headless';
-
-const boxes = findContentControls(doc, { type: 'checkbox' });
-const next = setContentControlValue(doc, { tag: 'agreed' }, { kind: 'checkbox', checked: true });
+```
+bytes → bounded OPC/XML read → canonical document tree → layout → painted pages → serialize
 ```
 
-Full behavior contract (locks, typed controls, data binding): [Content controls guide](/docs/1.x/guides/content-controls).
+The painted pages *are* the editable surface. There is no shadow document model to keep in sync with what you see.
+
+Fidelity is structural. Parts the engine models are re-emitted normalized; parts it does not model are carried through byte-for-byte. Content it cannot type — an unknown element, or a known one in an invalid position — becomes a generic node rather than being dropped, so unknown content never blocks editing and never disappears on save.
+
+## Untrusted input
+
+A `.docx` is a zip of XML that whoever sent it controls end to end. The engine sanitizes at the parse boundary — URL allowlisting, entity and zip-bomb limits, recursion and element caps, no zero-click external fetches, escaping on the way back out — so everything downstream receives an already-sanitized projection.
+
+Anything you then render from document data (a font name, a hyperlink target, a comment body, a custom node's attributes) is still attacker-controlled at your boundary. Render it as text; do not build markup or URLs from it.
 
 ## Next steps
 
-- [Architecture](/docs/1.x/core/architecture) for how the pieces fit
-- [Headless API](/docs/1.x/core/headless) for the grouped DOM-free surface
-- [API reference (70 subpaths)](/docs/1.x/api/core)
+- [Architecture](/docs/2.x/core/architecture): how the pipeline fits together
+- [React](/docs/2.x/react): the adapter that renders this contract
+- [Editing API](/docs/2.x/editor-api): the object model over `./automation`

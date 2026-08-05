@@ -1,12 +1,69 @@
 /**
- * `@docx-editor.dev/core` — the document layer.
+ * `@docx-editor.dev/core` — the engine.
  *
- * No DOM, no framework, no editor. Parse a .docx, query it, edit it, write it
- * back. This is the entry `packages/editor-api` uses and the entry any headless or
- * server-side consumer needs.
+ * THIS ENTRY IS THE 80% PATH. Everything needed to stand up an editor over DOCX bytes,
+ * measure it with real fonts, and drive it from chrome is here, so the common case is one
+ * import. The subpaths (`./store`, `./layout`, `./output`, `./automation`, and the
+ * `./contracts/*` declarations) stay available for the deeper work — walking the canonical
+ * tree, running layout by hand, painting — and nothing here hides them.
  *
- * CONTRACT ONLY. Every function here throws.
+ * If you want the editor already wired to a UI, use `@docx-editor.dev/react`.
  */
+
+// ─── Create an editor ────────────────────────────────────────────────────────
+export {
+  createDocxEditor,
+  blankDocumentBytes,
+  type DocxEditorInstance,
+  type DocxEditorConfig,
+} from './editor/index.ts';
+
+// ─── The contract it implements ──────────────────────────────────────────────
+export type {
+  Editor,
+  EditorHost,
+  EditorConfig,
+  EditorCommand,
+  EditorQuery,
+  EditorSnapshot,
+  EditorScope,
+  ViewScope,
+  DocumentSource,
+  DocumentHandle,
+  DocumentChange,
+  DocumentEditingMode,
+  PageSetup,
+} from './contracts/editor.ts';
+
+// ─── Fonts: the reason pagination matches Word ───────────────────────────────
+export {
+  WORD_DEFAULT_FONT,
+  loadFonts,
+  createFontSource,
+  composeFontConfiguration,
+  type FontConfigurationBase,
+  type FontConfigurationFragment,
+  type LoadFontsRequest,
+  type LoadFontsResult,
+  type FontLoadFailure,
+} from './editor/index.ts';
+export type { FontConfiguration, FontSource, FontFaceRequest } from './contracts/editor.ts';
+
+// ─── Chrome registry: what a toolbar is built from ───────────────────────────
+export {
+  CHROME_GROUPS,
+  CHROME_MENUS,
+  chromeMenuSlots,
+  commandForSlot,
+  commandForSlotValue,
+  toolbarCommandState,
+  runToolbarCommand,
+  type ChromeSlotId,
+  type ToolbarCommandState,
+} from './editor/index.ts';
+
+// ─── Capability modules (what `@docx-editor.dev/pro` implements) ─────────────
+export type { EditorModule } from './contracts/modules.ts';
 
 import type {
   ContainerRef,
@@ -18,44 +75,12 @@ import type {
   StyleDefinitions,
   DocTarget,
   DocxDocument,
-  DocxDocumentJSON,
   ExecResult,
   Extent,
-  ColorValue,
-  FontDefinition,
-  JSONSchema,
-  Run,
   RunFormatting,
-  Theme,
-  ThemeColorScheme,
-  Watermark,
 } from './contracts/types';
 
 export type * from './contracts/types';
-
-const NOT_IMPLEMENTED = 'contract-only stub: no implementation';
-
-// ─── Parse / serialize ───────────────────────────────────────────────────────
-
-export function parseDocx(_input: ArrayBuffer | Uint8Array): Promise<DocxDocument> {
-  return Promise.reject(new Error(NOT_IMPLEMENTED));
-}
-
-export function serializeDocx(_doc: DocxDocument): Promise<ArrayBuffer> {
-  return Promise.reject(new Error(NOT_IMPLEMENTED));
-}
-
-/**
- * `DocxDocument` holds Maps, Dates, and a verbatim-XML side table, so it is not
- * JSON-round-trippable. Project it before crossing a JSON boundary.
- */
-export function toJSON(_doc: DocxDocument): DocxDocumentJSON {
-  throw new Error(NOT_IMPLEMENTED);
-}
-
-export function fromJSON(_json: DocxDocumentJSON): DocxDocument {
-  throw new Error(NOT_IMPLEMENTED);
-}
 
 // ─── Edits ───────────────────────────────────────────────────────────────────
 
@@ -127,11 +152,6 @@ export interface ApplyResult {
   results: ExecResult[];
 }
 
-/** Pure: `doc` is never mutated, which is what lets agents diff before committing. */
-export function applyEdits(_doc: DocxDocument, _edits: readonly DocEdit[]): ApplyResult {
-  throw new Error(NOT_IMPLEMENTED);
-}
-
 // ─── Queries ─────────────────────────────────────────────────────────────────
 
 export interface DocQueries {
@@ -169,69 +189,4 @@ export interface ContentControlSummary {
   readonly alias?: string;
   readonly controlType: ContentControlType;
   readonly locked?: boolean;
-}
-
-export function queryDoc<K extends keyof DocQueries>(
-  _doc: DocxDocument,
-  _query: { type: K } & DocQueries[K]
-): DocQueryResults[K] {
-  throw new Error(NOT_IMPLEMENTED);
-}
-
-// ─── Runtime schemas ─────────────────────────────────────────────────────────
-
-/**
- * Runtime JSON Schema per edit and query. A TypeScript union vanishes at
- * compile time, and MCP `tools/list` needs real schemas at runtime.
- */
-export declare const docEditSchemas: Readonly<Record<keyof DocEdits, JSONSchema>>;
-export declare const docQuerySchemas: Readonly<Record<keyof DocQueries, JSONSchema>>;
-
-// ─── OOXML semantics that cannot move out of core ────────────────────────────
-
-export function resolveColor(_color: ColorValue, _theme?: Theme): ColorValue {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function resolveColorToHex(_color: ColorValue, _theme?: Theme): string {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function resolveHighlightColor(_name: string): string {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function generateThemeTintShadeMatrix(_scheme: ThemeColorScheme): string[][] {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function loadDocumentFonts(_doc: DocxDocument): Promise<void> {
-  return Promise.reject(new Error(NOT_IMPLEMENTED));
-}
-export function getEmbeddedFontFamilies(_doc: DocxDocument): string[] {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function getRenderableDocumentFonts(_doc: DocxDocument): FontDefinition[] {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function parseClipboardHtml(_html: string, _theme?: Theme): Run[] {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function setDocumentWatermark(
-  _doc: DocxDocument,
-  _watermark: Watermark | null
-): DocxDocument {
-  throw new Error(NOT_IMPLEMENTED);
-}
-
-export declare const TWIPS_PER_INCH: number;
-export declare const PIXELS_PER_INCH: number;
-
-export function twipsToPixels(_twips: number): number {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function pixelsToTwips(_px: number): number {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function emuToPixels(_emu: number): number {
-  throw new Error(NOT_IMPLEMENTED);
-}
-export function pixelsToEmu(_px: number): number {
-  throw new Error(NOT_IMPLEMENTED);
 }

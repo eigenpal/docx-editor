@@ -4,12 +4,12 @@
 // from semantic layout records — never from painted table DOM.
 
 import type { ExecResult } from '../contracts/editor.ts';
-import type { SemanticLayout, SemanticSelection } from '@docx-editor.dev/core-contract/layout';
-import type { OoxmlElement } from '@docx-editor.dev/core-contract/store';
+import type { SemanticLayout, SemanticSelection } from '@docx-editor.dev/core/layout';
+import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { readEditableTableTopology } from '../store/store/tree-op-table-topology.ts';
 import { wmlAttributeValue } from '../store/store/tree-op-table-shared.ts';
 import { MIN_TABLE_COLUMN_WIDTH_TWIPS } from '../store/store/table-constraints.ts';
-import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
+import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
 import type { BlockFragmentRecord, TableFragmentRecord } from '../layout/semantic-records.ts';
 import type { CellSelection } from '../layout/semantic-cell-selection.ts';
 import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
@@ -31,7 +31,7 @@ import {
 import type {
   TableColumnDividerResizeTarget,
   TableRightEdgeResizeTarget,
-} from '@docx-editor.dev/core-contract/contracts/editor';
+} from '@docx-editor.dev/core/contracts/editor';
 import {
   findTableOccurrence,
   tableColumnDividerResizeTargetFrom,

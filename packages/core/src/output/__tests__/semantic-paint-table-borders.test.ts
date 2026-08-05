@@ -5,14 +5,11 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { readOoxmlPart, readOoxmlPackage } from '@docx-editor.dev/core-contract/store';
-import { createFixedMeasurer, layoutSemanticDocument } from '@docx-editor.dev/core-contract/layout';
+import { readOoxmlPart, readOoxmlPackage } from '@docx-editor.dev/core/store';
+import { createFixedMeasurer, layoutSemanticDocument } from '@docx-editor.dev/core/layout';
 import { paintSemanticLayout } from '../semantic-paint.ts';
 import { applyCellBorders } from '../semantic-paint-table-borders.ts';
-import type {
-  ResolvedCellBorders,
-  TableBorderStrokeRecord,
-} from '@docx-editor.dev/core-contract/layout';
+import type { ResolvedCellBorders, TableBorderStrokeRecord } from '@docx-editor.dev/core/layout';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 

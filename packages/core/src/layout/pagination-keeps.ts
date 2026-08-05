@@ -23,7 +23,7 @@
 // (unpriceable → the keep is abandoned), which is also what Word does with a heading kept with
 // a table it cannot fit beside.
 
-import type { OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 
 /**
  * How many blocks one `w:keepNext` chain may bind together before layout gives up.

@@ -11,7 +11,7 @@
 //
 // Remove is a live `ToolbarButton` — can-before-exec and the engine's reason are enough.
 
-import type { ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
+import type { ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { useEditorCommand } from '../useEditorCommand';
 import { useContentControl, CONTENT_CONTROL_SLOTS } from '../useContentControl';
 import { useToolbarLabel } from './toolbar-context';

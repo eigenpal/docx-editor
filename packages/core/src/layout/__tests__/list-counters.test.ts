@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import { buildNumberingIndex } from '../numbering-index.ts';
 import { createListCounterState } from '../list-counters.ts';
 

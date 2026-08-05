@@ -29,7 +29,7 @@ export default defineConfig({
   minify: true,
   // The editor contract is a private, declaration-only package; bundle it so
   // published JS carries no reference to a private path.
-  noExternal: [/^@docx-editor\.dev\/core-contract(?:\/|$)/],
+  noExternal: [/^@docx-editor\.dev\/core(?:\/|$)/],
   // emf-converter is lazily imported; external keeps the metafile rasterizer out of
   // the main bundle.
   external: ['react', 'react-dom', 'harfbuzzjs', 'emf-converter'],

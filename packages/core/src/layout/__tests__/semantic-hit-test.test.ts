@@ -6,7 +6,7 @@
 // difference between a caret that goes where it was meant to and one that jumps.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import {
   caretBoxOnLine,
   DEFAULT_VERTICAL_WEIGHT,

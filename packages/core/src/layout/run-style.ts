@@ -10,7 +10,7 @@
 // inheritance is a separate layer (the style resolver); this is the direct-formatting half,
 // which is what the D8 boundary covers.
 
-import type { OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import { resolveOoxmlShadingFill } from './ooxml-shading.ts';
 
 export type VerticalAlign = 'baseline' | 'superscript' | 'subscript';

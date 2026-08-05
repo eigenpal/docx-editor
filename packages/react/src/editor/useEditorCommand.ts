@@ -19,8 +19,8 @@ import {
   runToolbarCommand,
   toolbarCommandState,
   type ChromeSlotId,
-} from '@docx-editor.dev/core-contract/editor';
-import type { EditorCommand } from '@docx-editor.dev/core-contract/contracts/editor';
+} from '@docx-editor.dev/core/editor';
+import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 

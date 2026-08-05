@@ -1,0 +1,241 @@
+---
+title: 'Hooks'
+description: 'The React API the packaged chrome is built on: subscribe to editor state, run commands, read the outline, search, and drive page setup.'
+category: 'React'
+order: 33
+---
+
+Every hook here must be called inside `<DocxEditor.Root>` (or inside `<DocxEditor>`, which renders one). They read the editor off context.
+
+These are the same hooks the packaged toolbar, menu, and navigation pane use. There is no private API behind them.
+
+## useEditorCommand
+
+The one you reach for most. Give it a slot id and get back a button's worth of state:
+
+```tsx
+import { useEditorCommand } from '@docx-editor.dev/react';
+
+function BoldButton() {
+  const bold = useEditorCommand('text.bold');
+
+  return (
+    <button
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => bold.execute()}
+      disabled={!bold.isEnabled}
+      data-active={bold.isActive || undefined}
+      title={bold.disabledReason ?? 'Bold'}
+    >
+      B
+    </button>
+  );
+}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `execute()` | `() => boolean` | Run it. Returns whether it applied. |
+| `isActive` | `boolean` | The command's state at the caret (bold on, list applied). |
+| `isEnabled` | `boolean` | Whether it can run right now. |
+| `disabledReason` | `string \| null` | Why not, when it can't. Show it; don't invent your own. |
+
+Enabled state has exactly one source. A control that hardcodes `disabled` will drift from the engine.
+
+It also takes a full `EditorCommand` object when there is no slot for what you want:
+
+```tsx
+const suggest = useEditorCommand({ type: 'setEditingMode', mode: 'suggesting' });
+```
+
+## useEditorState
+
+Subscribe to a slice of the editor snapshot. The selector runs on every tick; the component re-renders only when the slice changes:
+
+```tsx
+import { useEditorState } from '@docx-editor.dev/react';
+
+function PageIndicator() {
+  const page = useEditorState((s) => s.page);
+  return <span>{page.current} / {page.total}</span>;
+}
+
+function SaveButton() {
+  const dirty = useEditorState((s) => s.canUndo ?? false);
+  return <button disabled={!dirty}>Save</button>;
+}
+```
+
+Pass a comparator as the second argument when the slice is an object:
+
+```tsx
+const formatting = useEditorState(
+  (s) => s.formatting,
+  (a, b) => a?.bold === b?.bold && a?.italic === b?.italic
+);
+```
+
+Selecting narrowly is the point: a page-number selector must not re-render when someone toggles bold. Useful snapshot fields include `page`, `selection`, `selectionCollapsed`, `formatting`, `table`, `image`, `editable`, `isLoading`, `parseError`, `editingMode`, `canUndo` / `canRedo`, `pageSetup`, `fontSubstitutions`, `hasReviewContent`, and `lastRejection`.
+
+## useDocxEditor
+
+The editor instance itself, or `null` before content mounts. The escape hatch for anything the other hooks don't cover:
+
+```tsx
+import { useDocxEditor } from '@docx-editor.dev/react';
+
+function SaveButton() {
+  const editor = useDocxEditor();
+  return (
+    <button
+      disabled={!editor}
+      onClick={async () => {
+        const bytes = await editor?.save();
+        if (bytes) void upload(bytes);
+      }}
+    >
+      Save
+    </button>
+  );
+}
+```
+
+Reading state through `editor.snapshot()` in render will not re-render your component when the document changes — that is what `useEditorState` is for. Use the instance for actions and one-shot reads.
+
+## useEditorEvent
+
+Subscribe to an editor event for the life of the component:
+
+```tsx
+import { useEditorEvent } from '@docx-editor.dev/react';
+
+useEditorEvent('selectionChange', () => setPanelOpen(false));
+useEditorEvent('change', (change) => void autosave(change.revision));
+```
+
+## useFontFamily
+
+Backs the font picker. The same shape as any value control: current value, options, setter, enabled flag.
+
+```tsx
+import { useFontFamily } from '@docx-editor.dev/react';
+
+function FontPicker() {
+  const font = useFontFamily();
+
+  return (
+    <select
+      value={font.value ?? ''}
+      disabled={!font.isEnabled}
+      onChange={(e) => font.setValue(e.target.value)}
+    >
+      {font.options.map((family) => (
+        <option key={family} value={family}>{family}</option>
+      ))}
+    </select>
+  );
+}
+```
+
+`useParagraphStyle` has the same shape for the style list.
+
+## usePageSetup
+
+Read and change margins, orientation, and paper size for the current section:
+
+```tsx
+import { usePageSetup } from '@docx-editor.dev/react';
+
+function OrientationToggle() {
+  const { pageSetup, apply, isEnabled } = usePageSetup();
+  const landscape = pageSetup?.orientation === 'landscape';
+
+  return (
+    <button
+      disabled={!isEnabled}
+      onClick={() => apply({ orientation: landscape ? 'portrait' : 'landscape' })}
+    >
+      {landscape ? 'Portrait' : 'Landscape'}
+    </button>
+  );
+}
+```
+
+## useDocumentOutline
+
+Headings in document order, plus a jump. This is the whole navigation pane:
+
+```tsx
+import { useDocumentOutline } from '@docx-editor.dev/react';
+
+function Outline() {
+  const { items, selectedBlockId, goTo, isEmpty } = useDocumentOutline();
+  if (isEmpty) return <p>No headings</p>;
+
+  return (
+    <ul>
+      {items.map(({ heading, depth }) => (
+        <li key={heading.blockId} style={{ paddingLeft: depth * 12 }}>
+          <button
+            data-active={heading.blockId === selectedBlockId || undefined}
+            onClick={() => goTo(heading.blockId)}
+          >
+            {heading.text}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+Each item is `{ heading, depth }`: `heading` is `{ text, level, blockId }` and `depth` is the indent relative to the shallowest heading present, so a document whose top sections are Heading 2 still left-aligns at the base. `headings` gives you the flat list without the indent math.
+
+## useDocumentSearch
+
+Debounced find, with match navigation:
+
+```tsx
+import { useDocumentSearch } from '@docx-editor.dev/react';
+
+function Find() {
+  const search = useDocumentSearch();
+
+  return (
+    <>
+      <input value={search.query} onChange={(e) => search.setQuery(e.target.value)} />
+      <span>
+        {search.matches.length === 0 ? 0 : search.activeIndex + 1} / {search.matches.length}
+        {search.truncated && '+'}
+      </span>
+      <button onClick={search.previous}>Prev</button>
+      <button onClick={search.next}>Next</button>
+    </>
+  );
+}
+```
+
+`matchCase` / `setMatchCase` and `wholeWord` / `setWholeWord` are on the same object.
+
+## The rest
+
+| Hook | Returns |
+|---|---|
+| `useDocxSource(source, options?)` | Fetches bytes and fonts for a URL, `File`, or `Blob`, with cancellation. |
+| `useEditorValueCommand(slotId)` | Value-taking commands: `'image.wrap'`, `'image.altText'`. |
+| `useParagraphIndent()` | Current indents plus an `apply` for ruler-style editing. |
+| `useHyperlinkPopup()` | State behind the link popover, for a custom panel. |
+| `useContentControl()` | The content-control inspector: locks, value writes, form fill. |
+| `useHeaderFooterState()` | Which header/footer scope is being edited, or `null`. |
+| `useNoteScopeState()` | The same for footnotes and endnotes. |
+| `useContextMenuTarget()` | The element the last right-click landed on. |
+| `useNavigationPane(options?)` | Open state and width for the navigation pane. |
+| `useTranslation()` | `{ t }` bound to the active locale catalogue. |
+
+Review hooks (`useReview`, `useReviewOf`, `useReviewItem`) ship in [`@docx-editor.dev/pro/react`](/docs/2.x/pro).
+
+## Next steps
+
+- [Composition](/docs/2.x/react/composition): the primitives these hooks live inside
+- [Toolbar](/docs/2.x/guides/toolbar): every slot id `useEditorCommand` accepts
+- [Full API reference](/docs/2.x/api/react)

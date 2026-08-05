@@ -6,9 +6,9 @@
 // the little state it cannot own — so React, Vue and a plain page get identical behaviour
 // instead of three hand-written keymaps that drift.
 
-import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import type { NavigationCommand, SemanticSelection } from '@docx-editor.dev/core-contract/layout';
-import type { StoryScope, TreeDocOp } from '@docx-editor.dev/core-contract/store';
+import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { NavigationCommand, SemanticSelection } from '@docx-editor.dev/core/layout';
+import type { StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { plainTextFromTransfer } from './clipboard-plain-text.ts';
 

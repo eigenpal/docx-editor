@@ -4,12 +4,12 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import {
   buildNumberingIndex,
   createFixedMeasurer,
   layoutSemanticDocument,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';
 import { paintSemanticLayout } from '../semantic-paint.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

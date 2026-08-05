@@ -33,7 +33,7 @@ import {
   type SemanticLayout,
   type SemanticSelection,
   type TextMeasurer,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';
 
 /** What the caret reads at paint time. Both move independently of the caret itself. */
 export interface SurfaceCaretInput {

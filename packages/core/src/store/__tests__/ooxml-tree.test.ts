@@ -2233,7 +2233,8 @@ describe('drawing is one atomic segment', () => {
     const { applyTreeOp, paragraphTextOf } = await import('../store/tree-ops.ts');
     const { FIELD_ATOM_CHAR } = await import('../package/field-nodes.ts');
     const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
-    let picInner = '<pic:blipFill><a:blip r:embed="rId14"/></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>';
+    let picInner =
+      '<pic:blipFill><a:blip r:embed="rId14"/></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>';
     for (let index = 0; index < 80; index += 1) {
       picInner = `<a:extra xmlns:a="${A}">${picInner}</a:extra>`;
     }

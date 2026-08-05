@@ -7,8 +7,8 @@
 // different neighbors. Layout expands double/triple into explicit stroke segments with
 // corner-adjusted endpoints in points; paint only scales and draws those records.
 
-import type { OoxmlElement } from '@docx-editor.dev/core-contract/store';
-import type { TableBorderStyle } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlElement } from '@docx-editor.dev/core/store';
+import type { TableBorderStyle } from '@docx-editor.dev/core/store';
 import {
   COMPOUND_BORDER_MIN_GAP_PT,
   computeDoubleBorderMetricsPt,
@@ -24,7 +24,7 @@ import {
   type TableBorderOwnershipBudget,
 } from './table-border-ownership.ts';
 
-export type { TableBorderStyle } from '@docx-editor.dev/core-contract/store';
+export type { TableBorderStyle } from '@docx-editor.dev/core/store';
 export type { TableBorderGridResolveWork, TableBorderOwnershipBudget };
 export { effectiveBorderSide } from './table-border-cascade.ts';
 export {

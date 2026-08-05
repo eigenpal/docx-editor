@@ -14,7 +14,7 @@ import {
   isFldChar as isFldCharHelper,
   isInstrText as isInstrTextHelper,
   type OoxmlNode,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 
 /** Caps hostile instruction blobs and nesting depth (fail closed → inert). */
 export const MAX_FIELD_INSTRUCTION_CHARS = 256;

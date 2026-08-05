@@ -9,7 +9,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { readOoxmlPart, readOoxmlPackage, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, readOoxmlPackage, type OoxmlPart } from '@docx-editor.dev/core/store';
 import {
   applyLineSpacing,
   buildStyleCascadeTable,
@@ -129,7 +129,9 @@ describe('auto line spacing and paragraph-mark height', () => {
     };
 
     const labels = focus.map((line) => line.spans.map((span) => span.text).join(''));
-    const gaps = focus.slice(0, -1).map((_, index) => glyphTop(focus[index + 1]!) - glyphBottom(focus[index]!));
+    const gaps = focus
+      .slice(0, -1)
+      .map((_, index) => glyphTop(focus[index + 1]!) - glyphBottom(focus[index]!));
 
     // Word expected with this measurer (auto/atLeast extras BELOW; mark deepens below):
     //   LOAN→between     = before 202twip = 10.1

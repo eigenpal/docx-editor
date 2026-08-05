@@ -23,9 +23,9 @@
 // Every drop is returned as a typed report, so the editor can say WHICH face fell and why
 // rather than silently measuring it with the fallback.
 
-import type { EmbeddedFont, FontStyleKey } from '@docx-editor.dev/core-contract/store';
-import type { FontFaceRequest, FontSource } from '@docx-editor.dev/core-contract/contracts/editor';
-import { fontRequestKey, sha256FontBytes } from '@docx-editor.dev/core-contract/layout';
+import type { EmbeddedFont, FontStyleKey } from '@docx-editor.dev/core/store';
+import type { FontFaceRequest, FontSource } from '@docx-editor.dev/core/contracts/editor';
+import { fontRequestKey, sha256FontBytes } from '@docx-editor.dev/core/layout';
 
 /** Word's four embed slots, in the vocabulary the resolver requests faces in. */
 const STYLE_REQUESTS: Record<FontStyleKey, { weight: number; style: 'normal' | 'italic' }> = {

@@ -6,7 +6,7 @@
 // migration. Production placement: docs/architecture/production-engine-packages.md.
 
 /** Stable package identity used by the import-graph / package-authority checks. */
-export const ENGINE_EDITOR_PACKAGE = '@docx-editor.dev/core-contract/editor' as const;
+export const ENGINE_EDITOR_PACKAGE = '@docx-editor.dev/core/editor' as const;
 
 export {
   createLayoutShaping,
@@ -236,4 +236,4 @@ export type {
   SemanticPosition,
   SemanticSelection,
   TextMeasurer,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';

@@ -6,11 +6,7 @@
 // paragraph that holds it.
 
 import { describe, expect, test } from 'bun:test';
-import {
-  readOoxmlPart,
-  type OoxmlNode,
-  type OoxmlPart,
-} from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlNode, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { piecesOfParagraph } from '../field-projection.ts';
 import { breakParagraph } from '../paragraph-flow.ts';
 import { resolveRunStyle, runStylesEqual } from '../run-style.ts';

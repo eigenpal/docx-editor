@@ -16,14 +16,14 @@ export default defineConfig({
         // entries (`editor/index.ts`, `layout/index.ts`, ...). Mapping every subpath to
         // `$1.ts` broke the library build the moment a lane became a directory, so the
         // resolver tries the flat file first and falls back to the directory index.
-        find: /^@docx-editor\.dev\/core-contract\/(.+)$/,
+        find: /^@docx-editor\.dev\/core\/(.+)$/,
         replacement: `${resolve(__dirname, '../core/src')}/$1`,
         customResolver(source: string) {
           return existsSync(`${source}.ts`) ? `${source}.ts` : resolve(source, 'index.ts');
         },
       },
       {
-        find: '@docx-editor.dev/core-contract',
+        find: '@docx-editor.dev/core',
         replacement: resolve(__dirname, '../core/src/index.ts'),
       },
     ],

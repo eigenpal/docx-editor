@@ -25,7 +25,7 @@ import {
   type OoxmlParagraphNode,
   type OoxmlProperty,
   type HardBreakKind,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import {
   allowlistedPageField,
   consumeScanNode,

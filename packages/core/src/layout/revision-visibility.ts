@@ -16,7 +16,7 @@
 // has to keep its box, because that content is visible and Word merely merges it forward —
 // dropping it would lose text. Only the intersection is removed.
 
-import type { OoxmlNode } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import {
   contentControlContentOf,
   isContentControl,

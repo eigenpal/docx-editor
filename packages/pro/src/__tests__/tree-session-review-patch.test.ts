@@ -7,13 +7,13 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
-import { openTreeSession, treeSchema, type TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import type { ReviewItem, ReviewRevisionItem } from '@docx-editor.dev/core-contract/layout';
+import { openTreeSession, treeSchema, type TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { ReviewItem, ReviewRevisionItem } from '@docx-editor.dev/core/layout';
 import {
   commentPartNameOf,
   commentsExtendedPartNameOf,
   type OoxmlPart,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import { collectReviewItems, revisionItemsOfParagraph } from '../review/review-model.ts';
 import { reviewModule } from '../review/review-module.ts';
 
@@ -23,22 +23,19 @@ const CT_NS = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OFFICE_DOC =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
-const COMMENTS_REL =
-  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
+const COMMENTS_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
 
 const run = (text: string) => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
 const ins = (id: string, inner: string) =>
   `<w:ins w:id="${id}" w:author="Ada" w:date="2026-01-01T00:00:00Z">${inner}</w:ins>`;
-const delRun = (text: string) =>
-  `<w:r><w:delText xml:space="preserve">${text}</w:delText></w:r>`;
+const delRun = (text: string) => `<w:r><w:delText xml:space="preserve">${text}</w:delText></w:r>`;
 const del = (id: string, inner: string) =>
   `<w:del w:id="${id}" w:author="QA" w:date="2026-01-01T00:00:00Z">${inner}</w:del>`;
 const cStart = (id: string) => `<w:commentRangeStart w:id="${id}"/>`;
 const cEnd = (id: string) =>
   `<w:commentRangeEnd w:id="${id}"/><w:r><w:commentReference w:id="${id}"/></w:r>`;
 
-const OFFICE_HEADER =
-  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
+const OFFICE_HEADER = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
 
 function isRevision(item: ReviewItem): item is ReviewRevisionItem {
   return item.kind === 'revision';
@@ -161,8 +158,7 @@ const BODY_TABLE_STRUCTURAL =
   `<w:tbl><w:tblPr>${tblPrIns('99', 'Bob', '2026-01-02T00:00:00Z')}</w:tblPr>` +
   `<w:tr><w:tc><w:p>${run('cell')}</w:p></w:tc></w:tr></w:tbl>`;
 
-const TRACKED_WITH_UNRELATED_RANGELESS_STRUCTURAL =
-  TWO_PARAGRAPH_TRACKED + BODY_TABLE_STRUCTURAL;
+const TRACKED_WITH_UNRELATED_RANGELESS_STRUCTURAL = TWO_PARAGRAPH_TRACKED + BODY_TABLE_STRUCTURAL;
 
 const NESTED_TBLPR_COLLISION =
   `<w:p>${ins(
@@ -187,9 +183,7 @@ describe('local review patch after one-paragraph text-local edits', () => {
     const session = open(docx(MIXED_LOCAL_REVISION_ORDER));
     const part = session.part();
     const paragraphId = session.paragraphIds()[0]!;
-    const localKinds = revisionItemsOfParagraph(part, paragraphId).map(
-      (item) => item.revisionKind
-    );
+    const localKinds = revisionItemsOfParagraph(part, paragraphId).map((item) => item.revisionKind);
     expect(localKinds).toEqual(['paragraphMark', 'delete', 'format']);
     const documentOrderKinds = collectReviewItems({ storyPart: part })
       .filter(
@@ -242,8 +236,7 @@ describe('local review patch after one-paragraph text-local edits', () => {
     const session = open(docx(TRACKED_WITH_UNRELATED_RANGELESS_STRUCTURAL));
     const before = session.reviewItems();
     const structural = before.find(
-      (item): item is ReviewRevisionItem =>
-        isRevision(item) && item.revisionKind === 'structural'
+      (item): item is ReviewRevisionItem => isRevision(item) && item.revisionKind === 'structural'
     )!;
     expect(structural.ranges).toHaveLength(0);
     const neighbor = before.find(
@@ -367,8 +360,7 @@ describe('local review patch after one-paragraph text-local edits', () => {
     const body =
       `<w:p>${cStart('c1')}${run('first')}${cEnd('c1')}</w:p>` +
       `<w:p>${run('second ')}${ins('1', run('tracked'))}</w:p>`;
-    const comments =
-      `<w:comment w:id="c1" w:author="QA" w:date="D"><w:p>${run('note')}</w:p></w:comment>`;
+    const comments = `<w:comment w:id="c1" w:author="QA" w:date="D"><w:p>${run('note')}</w:p></w:comment>`;
     const session = open(docx(body, comments));
     const before = session.reviewItems();
     const commentItem = before.find((item) => item.kind === 'comment')!;
@@ -383,8 +375,7 @@ describe('local review patch after one-paragraph text-local edits', () => {
     const body =
       `<w:p>${cStart('c1')}${run('first ')}${ins('1', run('tracked'))}${cEnd('c1')}</w:p>` +
       `<w:p>${run('second')}</w:p>`;
-    const comments =
-      `<w:comment w:id="c1" w:author="QA" w:date="D"><w:p>${run('note')}</w:p></w:comment>`;
+    const comments = `<w:comment w:id="c1" w:author="QA" w:date="D"><w:p>${run('note')}</w:p></w:comment>`;
     const session = open(docx(body, comments));
     session.reviewItems();
     const commentBefore = session.reviewItems().find((item) => item.kind === 'comment')!;
@@ -411,8 +402,7 @@ describe('local review patch after one-paragraph text-local edits', () => {
   });
 
   test('header furniture change between cache and body edit forces full derivation', () => {
-    const header =
-      `<w:p>${run('Confidential ')}${ins('7', run('draft'))}</w:p>`;
+    const header = `<w:p>${run('Confidential ')}${ins('7', run('draft'))}</w:p>`;
     const session = open(docx(TWO_PARAGRAPH_TRACKED, undefined, header));
     const cached = session.reviewItems();
     const headerBefore = cached.find(
@@ -453,7 +443,10 @@ describe('local review patch after one-paragraph text-local edits', () => {
     expect(after).toEqual(oracle(session));
     expect(after.find((item) => item === headerBefore)).toBeUndefined();
     expect(
-      after.some((item) => isRevision(item) && item.author === 'Margaret Hamilton' && item.text?.includes('v2'))
+      after.some(
+        (item) =>
+          isRevision(item) && item.author === 'Margaret Hamilton' && item.text?.includes('v2')
+      )
     ).toBe(true);
   });
 

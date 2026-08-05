@@ -10,7 +10,7 @@ import type {
   EditorFontError,
   FontConfiguration,
   Unsubscribe,
-} from '@docx-editor.dev/core-contract/contracts/editor';
+} from '@docx-editor.dev/core/contracts/editor';
 import type { EditorModule } from '../contracts/modules.ts';
 import type { FontConfigurationFragment } from './font-composition.ts';
 import type { PaginatedSurface } from './paginated-surface.ts';

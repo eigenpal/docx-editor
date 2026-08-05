@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { strToU8, zipSync } from 'fflate';
-import { readOoxmlPackage } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPackage } from '@docx-editor.dev/core/store';
 import {
   createFixedMeasurer,
   createLayoutSession,

@@ -13,9 +13,9 @@
 // defaults — and owns only the wiring around it.
 
 import { useEffect, useRef, useState } from 'react';
-import { composeFontConfiguration } from '@docx-editor.dev/core-contract/editor';
-import type { FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
-import type { FontConfiguration } from '@docx-editor.dev/core-contract/contracts/editor';
+import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
+import type { FontConfigurationFragment } from '@docx-editor.dev/core/editor';
+import type { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
 
 /** A complete configuration, or a fragment this hook composes with the defaults. @public */
 export type DocxFontsInput = FontConfiguration | FontConfigurationFragment;

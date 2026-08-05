@@ -50,7 +50,7 @@
       "name": "docx-editor-example-astro",
       "dependencies": {
         "@astrojs/react": "^5.0.4",
-        "@docx-editor.dev/core": "^0.0.1",
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/pro": "workspace:*",
         "@docx-editor.dev/react": "workspace:*",
         "astro": "^6.3.1",
@@ -69,7 +69,7 @@
     "examples/igloo": {
       "name": "docx-editor-example-igloo",
       "dependencies": {
-        "@docx-editor.dev/core-contract": "workspace:*",
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/fonts": "workspace:*",
         "@docx-editor.dev/i18n": "workspace:*",
         "@docx-editor.dev/pro": "workspace:*",
@@ -88,7 +88,7 @@
     "examples/nextjs": {
       "name": "docx-editor-example-nextjs",
       "dependencies": {
-        "@docx-editor.dev/core": "^0.0.1",
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/pro": "workspace:*",
         "@docx-editor.dev/react": "workspace:*",
         "fflate": "^0.8.2",
@@ -107,7 +107,7 @@
     "examples/nuxt": {
       "name": "docx-editor-example-nuxt",
       "dependencies": {
-        "@docx-editor.dev/core": "^0.0.1",
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/nuxt": "workspace:*",
         "@docx-editor.dev/pro": "workspace:*",
         "@docx-editor.dev/vue": "workspace:*",
@@ -122,7 +122,7 @@
     "examples/remix": {
       "name": "docx-editor-example-remix",
       "dependencies": {
-        "@docx-editor.dev/core": "^0.0.1",
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/pro": "workspace:*",
         "@docx-editor.dev/react": "workspace:*",
         "@remix-run/node": "^2.16.0",
@@ -147,7 +147,7 @@
     "examples/vite": {
       "name": "docx-editor-example-vite",
       "dependencies": {
-        "@docx-editor.dev/core-contract": "workspace:*",
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/fonts": "workspace:*",
         "@docx-editor.dev/i18n": "workspace:*",
         "@docx-editor.dev/pro": "workspace:*",
@@ -167,8 +167,7 @@
     "examples/vue": {
       "name": "docx-editor-example-vue",
       "dependencies": {
-        "@docx-editor.dev/core": "^0.0.1",
-        "@docx-editor.dev/core-contract": "workspace:*",
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/i18n": "workspace:*",
         "@docx-editor.dev/pro": "workspace:*",
         "@docx-editor.dev/vue": "workspace:*",
@@ -182,8 +181,8 @@
       },
     },
     "packages/core": {
-      "name": "@docx-editor.dev/core-contract",
-      "version": "0.0.1",
+      "name": "@docx-editor.dev/core",
+      "version": "1.0.0",
       "dependencies": {
         "@docx-editor.dev/i18n": "workspace:*",
         "bidi-js": "1.0.3",
@@ -211,9 +210,9 @@
     },
     "packages/editor-api": {
       "name": "@docx-editor.dev/editor-api",
-      "version": "0.0.1",
+      "version": "1.0.0",
       "devDependencies": {
-        "@docx-editor.dev/core-contract": "workspace:*",
+        "@docx-editor.dev/core": "workspace:*",
         "@microsoft/api-extractor": "^7.50.0",
         "fflate": "^0.8.2",
         "license-check-and-add": "^4.0.5",
@@ -223,13 +222,13 @@
       "name": "@docx-editor.dev/fonts",
       "version": "0.0.1",
       "devDependencies": {
-        "@docx-editor.dev/core-contract": "workspace:*",
+        "@docx-editor.dev/core": "workspace:*",
         "typescript": "^5.3.3",
       },
     },
     "packages/i18n": {
       "name": "@docx-editor.dev/i18n",
-      "version": "0.0.1",
+      "version": "1.0.0",
       "devDependencies": {
         "tsup": "^8.0.1",
         "typescript": "^5.3.3",
@@ -263,9 +262,9 @@
     },
     "packages/pro": {
       "name": "@docx-editor.dev/pro",
-      "version": "0.0.1",
+      "version": "1.0.0",
       "dependencies": {
-        "@docx-editor.dev/core-contract": "workspace:*",
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/i18n": "workspace:*",
       },
       "devDependencies": {
@@ -292,9 +291,9 @@
     },
     "packages/react": {
       "name": "@docx-editor.dev/react",
-      "version": "0.0.1",
+      "version": "1.0.0",
       "dependencies": {
-        "@docx-editor.dev/core-contract": "workspace:*",
+        "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/i18n": "workspace:*",
         "@radix-ui/react-select": "^2.3.3",
         "class-variance-authority": "^0.7.1",
@@ -303,7 +302,7 @@
         "harfbuzzjs": "1.4.0",
       },
       "devDependencies": {
-        "@docx-editor.dev/core-contract": "workspace:*",
+        "@docx-editor.dev/core": "workspace:*",
         "fflate": "^0.8.2",
       },
       "peerDependencies": {
@@ -319,12 +318,12 @@
       "name": "@docx-editor.dev/vue",
       "version": "0.0.1",
       "dependencies": {
-        "@docx-editor.dev/core-contract": "workspace:*",
+        "@docx-editor.dev/core": "workspace:*",
         "emf-converter": "2.0.2",
         "harfbuzzjs": "1.4.0",
       },
       "devDependencies": {
-        "@docx-editor.dev/core-contract": "workspace:*",
+        "@docx-editor.dev/core": "workspace:*",
         "fflate": "^0.8.2",
         "vite-plugin-dts": "^5.0.0",
       },
@@ -468,9 +467,7 @@
 
     "@colordx/core": ["@colordx/core@5.4.3", "", {}, "sha512-kIxYSfA5T8HXjav55UaaH/o/cKivF6jCCGIb8eqtcsfI46wsvlSiT8jMDyrl779qLec3c2c2oHBZo4oAhvbjrQ=="],
 
-    "@docx-editor.dev/core": ["@docx-editor.dev/core@0.0.1", "", {}, "sha512-bgs6qj+1g0QfmyjK6XHet8xhxxbsgm+zS+dW5NYTjAMMLXQo5QY1erJNmLfjtg7fDehzDrIxNM3jgiFWSYKtuw=="],
-
-    "@docx-editor.dev/core-contract": ["@docx-editor.dev/core-contract@workspace:packages/core"],
+    "@docx-editor.dev/core": ["@docx-editor.dev/core@workspace:packages/core"],
 
     "@docx-editor.dev/editor-api": ["@docx-editor.dev/editor-api@workspace:packages/editor-api"],
 

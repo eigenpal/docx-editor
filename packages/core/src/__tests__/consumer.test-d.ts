@@ -7,7 +7,7 @@
  * an adapter would write it, and each one caught a real defect when added.
  */
 
-import { parseDocx, queryDoc, applyEdits, type DocEdit } from '../index';
+import type { ApplyResult, DocEdit, DocQueryResults } from '../index';
 import {
   createEditor,
   type Editor,
@@ -208,17 +208,23 @@ export function exercise(editor: Editor, doc: DocxDocument): void {
     void focusCode;
   }
 
-  // Document-layer queries are typed the same way.
-  const paras = queryDoc(doc, { type: 'paragraphs' });
+  // Document-layer query results are readable without narrowing by hand.
+  const paras: DocQueryResults['paragraphs'] = [{ text: 'hello' }];
   const first: string | undefined = paras[0]?.text;
   void first;
 
-  // Batch edits return one result per edit.
+  // An edit must be CONSTRUCTIBLE from the vocabulary: `type` has to narrow the
+  // rest of the shape, or a consumer cannot write one down without a cast.
   const anchor: DocAnchor = { paraId: 'A1B2C3D4', search: 'hello' };
   const edits: DocEdit[] = [{ type: 'insertText', target: anchor, text: 'x' }];
-  const applied = applyEdits(doc, edits);
+  void edits;
+
+  // And a batch result is one entry per edit, positionally aligned.
+  const applied: Pick<ApplyResult, 'results'> = { results: [] };
   const n: number = applied.results.length;
   void n;
+
+  void doc;
 
   void undoCmd;
   void redoCmd;
@@ -237,12 +243,6 @@ export function exercise(editor: Editor, doc: DocxDocument): void {
   void rowTargetMissingRepeat;
   void dividerTargetMissingRepeat;
   void rightEdgeTargetMissingRepeat;
-}
-
-// Async-declared functions must return a rejected promise, not throw
-// synchronously, or a caller's `.catch` never runs.
-export async function exerciseAsync(buffer: ArrayBuffer): Promise<void> {
-  await parseDocx(buffer).catch(() => undefined);
 }
 
 export function build(): Editor {

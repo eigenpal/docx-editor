@@ -23,7 +23,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // a method) refuses with `InvalidObjectPath`. The line is "does this need the document", not
 // "does this look like a read".
 
-import type { AutomationHandle } from '@docx-editor.dev/core-contract/automation';
+import type { AutomationHandle } from '@docx-editor.dev/core/automation';
 import { fail } from './errors.ts';
 import {
   INTERNALS,

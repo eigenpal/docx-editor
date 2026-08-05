@@ -8,7 +8,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // recognized exactly like a chip `insertCustomNode` authored in the editor.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import { customNodeXml, defineCustomNode, recognizeCustomNodes } from '../index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

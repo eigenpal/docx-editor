@@ -29,7 +29,7 @@ const PACKAGES = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
  * Importable specifier to the source root it resolves to.
  *
  * Built from the lane DAG rather than from directory names, so a lane that moves into
- * `packages/core` is still followed — as its subpath (`@docx-editor.dev/core-contract/store`)
+ * `packages/core` is still followed — as its subpath (`@docx-editor.dev/core/store`)
  * instead of its old package name. Resolving by hand here would make this walk silently stop
  * at the first moved lane, and a walk that reaches nothing cannot fail.
  */
@@ -38,7 +38,7 @@ const WORKSPACE: ReadonlyMap<string, string> = new Map(
     const root = join(PACKAGES, laneSourceRoot(lane));
     if (!laneHasMoved(lane)) return [[CORE_LANES[lane].package!, root] as const];
     const subpath = CORE_LANES[lane].subpath;
-    const CORE = '@docx-editor.dev/core-contract';
+    const CORE = '@docx-editor.dev/core';
     const specifier = !subpath || subpath === '.' ? CORE : `${CORE}/${subpath.slice(2)}`;
     const alias = CORE_LANES[lane].alias;
     // Both names reach the same source while the alias lives, which is what keeps this
@@ -101,7 +101,7 @@ function reachFrom(entry: string): Reach {
         continue;
       }
       // LONGEST first. Every lane subpath now begins with the core package's own name, so a
-      // shortest-match walk resolved `.../core-contract/store` to the contracts lane and the
+      // shortest-match walk resolved `.../core/store` to the contracts lane and the
       // graph collapsed to one node.
       const workspace = [...WORKSPACE.keys()]
         .sort((a, b) => b.length - a.length)

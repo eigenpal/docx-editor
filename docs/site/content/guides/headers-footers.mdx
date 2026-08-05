@@ -52,32 +52,10 @@ Watermarks in opened documents render as Word shows them, and edits round-trip t
 
 ### Headless
 
-`getDocumentWatermark` and `setDocumentWatermark` from `@docx-editor.dev/core/headless` read and write the same model:
-
-```ts
-import { parseDocx, setDocumentWatermark, repackDocx } from "@docx-editor.dev/core/headless";
-
-let doc = await parseDocx(buffer);
-
-doc = setDocumentWatermark(doc, {
-  kind: "text",
-  text: "DRAFT",
-  font: "Calibri",
-  color: "#C0C0C0",
-  layout: "diagonal",
-  semitransparent: true,
-});
-
-// or remove it
-doc = setDocumentWatermark(doc, null);
-
-const out = await repackDocx(doc);
-```
-
-The `Watermark` type is a union of `TextWatermark` (`kind: 'text'`, with `text`, `font`, `fontSize?`, `color`, `layout`, `semitransparent`) and `PictureWatermark` (`kind: 'picture'`, with image data, `scale`, `washout`).
+To stamp a watermark on a server, drive the document through [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api). The editor's own watermark chrome is the interactive path.
 
 ## Next steps
 
-- [Architecture](/docs/1.x/core/architecture) for how header/footer editing shares the body's editing model
-- [Loading and saving](/docs/1.x/guides/loading-and-saving) for the save pipeline that round-trips these parts
-- [Headless processing](/docs/1.x/guides/headless-processing) for server-side watermark stamping
+- [Architecture](/docs/2.x/core/architecture) for how header/footer editing shares the body's editing model
+- [Loading and saving](/docs/2.x/guides/loading-and-saving) for the save pipeline that round-trips these parts
+- [Editing API](/docs/2.x/editor-api) for editing a document from a server

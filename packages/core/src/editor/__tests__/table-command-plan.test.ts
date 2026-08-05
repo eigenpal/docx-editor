@@ -4,7 +4,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import type { EditorCommand } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
 import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { paragraphTextOf } from '../../store/store/tree-ops.ts';

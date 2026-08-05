@@ -14,7 +14,7 @@ import {
   commandForSlot,
   type ChromeControl,
   type ChromeSlotId,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/editor';
 import { useEditorCommand } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
 import { Slot } from './Slot';

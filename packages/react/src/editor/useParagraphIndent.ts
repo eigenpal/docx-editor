@@ -6,10 +6,7 @@
 // never disagree about what the selection's indent is.
 
 import { useCallback, useMemo } from 'react';
-import type {
-  EditorSnapshot,
-  IndentFormatting,
-} from '@docx-editor.dev/core-contract/contracts/editor';
+import type { EditorSnapshot, IndentFormatting } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 

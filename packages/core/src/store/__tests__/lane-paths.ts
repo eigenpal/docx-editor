@@ -28,7 +28,7 @@ const LANE_BY_LEGACY_PREFIX: ReadonlyMap<string, LaneName> = new Map(
       const name = CORE_LANES[lane].package ?? CORE_LANES[lane].alias;
       if (!name) return null;
       const directory = name.replace('@docx-editor.dev/', '');
-      return [`${directory === 'core-contract' ? 'core' : directory}/src`, lane] as const;
+      return [`${directory === 'core' ? 'core' : directory}/src`, lane] as const;
     })
     .filter((entry): entry is readonly [string, LaneName] => entry !== null)
 );

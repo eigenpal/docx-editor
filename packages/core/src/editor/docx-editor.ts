@@ -90,8 +90,8 @@ import type {
   TextMatch,
   Unsubscribe,
   ViewScope,
-} from '@docx-editor.dev/core-contract/contracts/editor';
-import { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
+} from '@docx-editor.dev/core/contracts/editor';
+import { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 import {
   FontResolutionError,
   HARD_MAX_AGGREGATE_FONT_BYTES,
@@ -102,7 +102,7 @@ import {
   resolveDefaultSurfaceMeasurer,
   type SemanticSelection as SurfaceSelection,
   type TextMeasurer,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';
 import {
   classifyCommand,
   deepFreezeValue,

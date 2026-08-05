@@ -119,14 +119,12 @@ describe('what the runtime imports', () => {
   const files = runtimeFiles();
 
   test('the neutral modules import the automation protocol and nothing else', () => {
-    expect(bareSpecifiers(files.filter(isNeutral))).toEqual([
-      '@docx-editor.dev/core-contract/automation',
-    ]);
+    expect(bareSpecifiers(files.filter(isNeutral))).toEqual(['@docx-editor.dev/core/automation']);
   });
 
   test('exactly one module names the editor lane', () => {
     const reaching = files
-      .filter((file) => specifiersOf(file).includes('@docx-editor.dev/core-contract/editor'))
+      .filter((file) => specifiersOf(file).includes('@docx-editor.dev/core/editor'))
       .map((file) => relative(PACKAGE_SRC, file));
     expect(reaching).toEqual([join('runtime', 'browser.ts')]);
   });

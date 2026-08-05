@@ -14,8 +14,8 @@ import type {
   EditorSnapshot,
   PageSetup,
   RunFormatting,
-} from '@docx-editor.dev/core-contract/contracts/editor';
-import type { SemanticSelection as SurfaceSelection } from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/contracts/editor';
+import type { SemanticSelection as SurfaceSelection } from '@docx-editor.dev/core/layout';
 // Direct, not through the layout barrel: this is an internal bound the write shares with
 // the reader, not something the layout package publishes.
 import { MAX_PARAGRAPH_INDENT_TWIPS } from '../layout/paragraph-flow.ts';

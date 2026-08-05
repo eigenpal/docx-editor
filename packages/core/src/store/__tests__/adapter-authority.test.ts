@@ -27,15 +27,15 @@ const FORBIDDEN_PACKAGE_ROOTS = [
   'prosemirror-inputrules',
   'prosemirror-schema-basic',
   'prosemirror-schema-list',
-  '@docx-editor.dev/core-contract/binding',
-  '@docx-editor.dev/core-contract/layout',
-  '@docx-editor.dev/core-contract/output',
+  '@docx-editor.dev/core/binding',
+  '@docx-editor.dev/core/layout',
+  '@docx-editor.dev/core/output',
 ];
 
 /** Workspace dependencies that keep adapters thin without granting private engine authority. */
 const ALLOWED_ENGINE_DEPS = new Set([
-  '@docx-editor.dev/core-contract',
-  '@docx-editor.dev/core-contract/editor',
+  '@docx-editor.dev/core',
+  '@docx-editor.dev/core/editor',
   // A leaf string catalogue, not an engine lane: no document model, geometry, or editing
   // authority, so it cannot violate the "no engine internals in an adapter" rule.
   '@docx-editor.dev/i18n',
@@ -116,7 +116,7 @@ export function auditImportSpecifiers(specifiers: readonly string[]): string[] {
     }
     // Two shapes, because section 10 turned lanes into subpaths of one package. A bare entry
     // ('prosemirror-view') is matched on the package root so any deep import counts; an entry
-    // that names a subpath ('.../core-contract/binding') has to be matched on the whole
+    // that names a subpath ('.../core/binding') has to be matched on the whole
     // specifier, since its package root is the shared core package the adapters MAY import.
     if (
       FORBIDDEN_PACKAGE_ROOTS.some((forbidden) =>
@@ -186,7 +186,7 @@ export function auditUsesPublicEditorFacade(sources: readonly string[]): boolean
     if (
       // Task 10.5 migrated adapters off the `engine-editor` alias onto the lane's subpath.
       // Both are accepted while the alias exists; task 10.6 drops the alias form.
-      /from\s*['"]@docx-editor\.dev\/(?:engine-editor|core-contract\/editor)['"]/.test(source) &&
+      /from\s*['"]@docx-editor\.dev\/(?:engine-editor|core\/editor)['"]/.test(source) &&
       /\bcreateDocxEditor\b/.test(source)
     ) {
       return true;
@@ -232,8 +232,8 @@ describe('adapter authority rule fixtures', () => {
     expect(auditImportSpecifiers(['prosemirror-state', './local'])).toEqual([
       'forbidden package import: prosemirror-state',
     ]);
-    expect(auditImportSpecifiers(['@docx-editor.dev/core-contract/binding'])).toEqual([
-      'forbidden package import: @docx-editor.dev/core-contract/binding',
+    expect(auditImportSpecifiers(['@docx-editor.dev/core/binding'])).toEqual([
+      'forbidden package import: @docx-editor.dev/core/binding',
     ]);
     expect(auditImportSpecifiers(['examples/shared/mountDocxEditor'])).toEqual([
       'example orchestration import: examples/shared/mountDocxEditor',
@@ -257,7 +257,7 @@ describe('adapter authority rule fixtures', () => {
     const commented = `
       // adapters must not import ProseMirror
       /* EditorView is forbidden */
-      import { createEditor } from '@docx-editor.dev/core-contract/editor';
+      import { createEditor } from '@docx-editor.dev/core/editor';
     `;
     expect(auditForbiddenSource(commented)).toEqual([]);
   });
@@ -270,9 +270,9 @@ describe('adapter authority rule fixtures', () => {
     ).toEqual(['devDependencies: forbidden prosemirror-view']);
     expect(
       auditAdapterPackageJson({
-        dependencies: { '@docx-editor.dev/core-contract/layout': 'workspace:*' },
+        dependencies: { '@docx-editor.dev/core/layout': 'workspace:*' },
       })
-    ).toEqual(['dependencies: forbidden @docx-editor.dev/core-contract/layout']);
+    ).toEqual(['dependencies: forbidden @docx-editor.dev/core/layout']);
   });
 
   test('detects missing public editor facade wiring', () => {
@@ -281,13 +281,13 @@ describe('adapter authority rule fixtures', () => {
     // must not read as composition-root wiring.
     expect(
       auditUsesPublicEditorFacade([
-        "import { createEditor } from '@docx-editor.dev/core-contract/editor';",
-        "import type { EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';",
+        "import { createEditor } from '@docx-editor.dev/core/editor';",
+        "import type { EditorHost } from '@docx-editor.dev/core/contracts/editor';",
       ])
     ).toBe(false);
     expect(
       auditUsesPublicEditorFacade([
-        "import { createDocxEditor } from '@docx-editor.dev/core-contract/editor';",
+        "import { createDocxEditor } from '@docx-editor.dev/core/editor';",
       ])
     ).toBe(true);
   });

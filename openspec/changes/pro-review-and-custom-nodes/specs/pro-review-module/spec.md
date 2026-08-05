@@ -13,7 +13,7 @@
 
 #### Scenario: Free packages contain no review derivation or pane
 
-- **WHEN** the published `@docx-editor.dev/core-contract` and `@docx-editor.dev/react` artifacts are inspected
+- **WHEN** the published `@docx-editor.dev/core` and `@docx-editor.dev/react` artifacts are inspected
 - **THEN** they contain no review model derivation and no review pane code, and every review command refuses with the pro reason
 
 ### Requirement: Review mutations go through the single write path

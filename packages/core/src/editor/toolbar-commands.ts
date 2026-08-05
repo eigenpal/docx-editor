@@ -21,7 +21,7 @@ import type {
   Editor,
   EditorCommand,
   ExecResult,
-} from '@docx-editor.dev/core-contract/contracts/editor';
+} from '@docx-editor.dev/core/contracts/editor';
 import type { ChromeSlotId } from './chrome-controls.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { tableCommandState } from './docx-editor-derive.ts';

@@ -1,7 +1,7 @@
 // @docx-editor.dev/engine-binding
 
 /** Stable package identity used by the import-graph / package-authority checks. */
-export const ENGINE_BINDING_PACKAGE = '@docx-editor.dev/core-contract/binding' as const;
+export const ENGINE_BINDING_PACKAGE = '@docx-editor.dev/core/binding' as const;
 
 export { treeSchema, runPropsOf, type ParagraphAttrs } from './tree-schema.ts';
 export {
@@ -22,7 +22,7 @@ export {
   type TreeDocxSession,
   type TreeSessionRejection,
 } from './tree-session.ts';
-export type { StoryScope, StoryTargetRejection } from '@docx-editor.dev/core-contract/store';
+export type { StoryScope, StoryTargetRejection } from '@docx-editor.dev/core/store';
 export {
   mountTreeSurface,
   type TreeSurface,

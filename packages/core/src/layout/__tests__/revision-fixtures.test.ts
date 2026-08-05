@@ -8,11 +8,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import {
-  paragraphTextOf,
-  readOoxmlPackage,
-  type OoxmlPart,
-} from '@docx-editor.dev/core-contract/store';
+import { paragraphTextOf, readOoxmlPackage, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { piecesOfParagraph } from '../field-projection.ts';
 import type { RevisionAttribution, RevisionDisplayMode } from '../revision-projection.ts';
 import { storyBlocks } from '../story-roots.ts';

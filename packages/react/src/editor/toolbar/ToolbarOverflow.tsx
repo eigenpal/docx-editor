@@ -20,7 +20,7 @@ import {
   useState,
 } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
-import { commandForSlot, type ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
+import { commandForSlot, type ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { useEditorCommand } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';

@@ -9,7 +9,7 @@ import {
   runToolbarCommand,
   toolbarCommandState,
   type ImageWrapTarget,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 

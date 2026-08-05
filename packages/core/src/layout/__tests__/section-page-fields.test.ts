@@ -20,7 +20,7 @@ import {
   readOoxmlPackage,
   resolveHeaderFooterPartsBySection,
   type OoxmlPart,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -77,7 +77,7 @@ function footerDoc(
 }
 
 function furnitureFromPackage(
-  pkg: import('@docx-editor.dev/core-contract/store').OoxmlPackage,
+  pkg: import('@docx-editor.dev/core/store').OoxmlPackage,
   part: OoxmlPart
 ): readonly (PageFurniture | undefined)[] {
   const sections = enumerateDocumentSections(part);

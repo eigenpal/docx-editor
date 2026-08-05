@@ -59,7 +59,7 @@ A custom node occupies the UTF-16 offsets of its underlying SDT run text under t
 
 ### D8: Licensing and packaging
 
-`@docx-editor.dev/pro`, `"license": "SEE LICENSE IN LICENSE.md"`, in the fixed changeset group, peer-deps on core-contract (+ react for chrome, optional); any registry works (public npm by default). v1 licensing is honor-system: `licenseKey` is accepted but unvalidated (owner decision 2026-08-05), so adding Ed25519 verification later is non-breaking. Never a network call, never crippling.
+`@docx-editor.dev/pro`, `"license": "SEE LICENSE IN LICENSE.md"`, in the fixed changeset group, peer-deps on core (+ react for chrome, optional); any registry works (public npm by default). v1 licensing is honor-system: `licenseKey` is accepted but unvalidated (owner decision 2026-08-05), so adding Ed25519 verification later is non-breaking. Never a network call, never crippling.
 
 ## Risks / Trade-offs
 

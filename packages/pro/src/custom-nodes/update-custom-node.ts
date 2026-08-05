@@ -9,14 +9,14 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // one undo step — the tag codec has no in-place rewrite, and pretending it did would put
 // a second write path beside `insertInlineContentControl`.
 
-import type { Editor, ExecResult } from '@docx-editor.dev/core-contract/contracts/editor';
-import type { PaginatedSurface } from '@docx-editor.dev/core-contract/editor';
+import type { Editor, ExecResult } from '@docx-editor.dev/core/contracts/editor';
+import type { PaginatedSurface } from '@docx-editor.dev/core/editor';
 import {
   segmentsOf,
   type OoxmlNode,
   type OoxmlParagraphNode,
   type OoxmlPart,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import type { CustomNodeDefinition } from './define-custom-node.ts';
 import { encodeCustomNodeTag } from './tag-codec.ts';
 

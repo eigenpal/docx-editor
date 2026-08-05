@@ -8,7 +8,7 @@ import type {
   TableBorderSpec,
   TableBorderStyle,
   TableContext,
-} from '@docx-editor.dev/core-contract/contracts/editor';
+} from '@docx-editor.dev/core/contracts/editor';
 import { createT, en } from '@docx-editor.dev/i18n';
 import type { ChromeSlotId } from './chrome-controls.ts';
 import { GENERATED_ICON_PATHS } from './generated-icon-paths.ts';

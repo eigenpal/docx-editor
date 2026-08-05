@@ -4,7 +4,7 @@
 // `window.__DOCX_EDITOR_E2E__` over real Editor APIs — no test-only mutation paths.
 
 import { useEffect, useRef } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import {
   DocxEditor,
   useDocxEditor,
