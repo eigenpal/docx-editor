@@ -9,7 +9,7 @@
  */
 
 import type { EditorModule } from '@docx-editor.dev/core-contract/editor';
-import { collectReviewItems } from '@docx-editor.dev/core-contract/layout';
+import { collectReviewItems } from './review-model.ts';
 import { rememberLicenseKey, type ProLicenseOptions } from '../license.ts';
 
 export interface ReviewModuleOptions extends ProLicenseOptions {}

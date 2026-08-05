@@ -158,7 +158,10 @@ export function mountPaginatedSurface(
   const runtimeOptions = options as PaginatedSurfaceOptions & {
     readonly onTrackedChange?: () => void;
   };
-  const opened = openTreeSession(bytes);
+  const opened = openTreeSession(
+    bytes,
+    options.collectReviewItems ? { reviewModel: options.collectReviewItems } : {}
+  );
   if (!opened.ok) {
     return {
       ok: false,

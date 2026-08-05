@@ -320,15 +320,22 @@
         "@docx-editor.dev/i18n": "workspace:*",
       },
       "devDependencies": {
+        "@docx-editor.dev/react": "workspace:*",
+        "@happy-dom/global-registrator": "^20.8.3",
+        "@testing-library/react": "^16.0.0",
         "@types/react": "^19.0.0",
         "fflate": "^0.8.2",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
         "typescript": "^5.3.3",
       },
       "peerDependencies": {
+        "@docx-editor.dev/react": "workspace:*",
         "react": "^18.0.0 || ^19.0.0",
         "react-dom": "^18.0.0 || ^19.0.0",
       },
       "optionalPeers": [
+        "@docx-editor.dev/react",
         "react",
         "react-dom",
       ],

@@ -359,6 +359,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // review-module display mode; with one registered the surface keeps the layout
       // default (`all-markup`), which is what the review rail annotates.
       ...(reviewEnabled ? {} : { revisionDisplayMode: 'proposed' as const }),
+      // The module's derivation reaches the session through the surface: the session
+      // owns the per-revision memo, the module owns the algorithm.
+      ...(modules.review ? { collectReviewItems: modules.review.collectReviewItems } : {}),
       ...(shapedMeasurer
         ? { measurer: shapedMeasurer, ...(shapedProducer ? { producer: shapedProducer } : {}) }
         : {}),

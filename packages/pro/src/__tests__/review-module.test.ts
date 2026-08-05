@@ -75,3 +75,15 @@ describe('reviewModule without a key (honor system)', () => {
     expect(module.review).toBeDefined();
   });
 });
+
+describe('the free packages carry no review derivation', () => {
+  test('core layout no longer exports the queue derivation', async () => {
+    const layout = await import('@docx-editor.dev/core-contract/layout');
+    // The vocabulary and pure helpers stay; the derivation is this package's.
+    expect('reviewItemKey' in layout).toBe(true);
+    expect('collectReviewItems' in layout).toBe(false);
+    expect('revisionItemsOf' in layout).toBe(false);
+    expect('commentAnchorsOfStory' in layout).toBe(false);
+    expect('commentsOfPart' in layout).toBe(false);
+  });
+});

@@ -18,16 +18,16 @@ import {
   validatePackageInvariants,
   type OoxmlPackage,
   type OoxmlPart,
-} from '../index.ts';
+} from '@docx-editor.dev/core-contract/store';
 import {
   commentAnchorsOfStory,
   commentsOfPart,
   threadStateOfPart,
-} from '../../layout/comment-anchors.ts';
+} from '../review/comment-anchors.ts';
 
 const FIXTURE = resolve(
   import.meta.dir,
-  '../../../../../e2e/fixtures/comprehensive-word-element-test.docx'
+  '../../../../e2e/fixtures/comprehensive-word-element-test.docx'
 );
 
 function fixture(): OoxmlPackage {
@@ -408,6 +408,7 @@ describe('a crafted comments relationship cannot redirect the write', () => {
           type: COMMENTS_REL,
           rawTarget: 'settings.xml',
           targetMode: 'Internal' as const,
+          order: 9_999,
         },
       ]),
     };
@@ -447,6 +448,7 @@ describe('a crafted comments relationship cannot redirect the write', () => {
           type: COMMENTS_REL,
           rawTarget: 'review/comments.xml',
           targetMode: 'Internal' as const,
+          order: 9_999,
         },
       ]),
     };

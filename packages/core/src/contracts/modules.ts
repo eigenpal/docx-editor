@@ -13,7 +13,7 @@
  */
 
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
-import type { ReviewItem, ReviewModelInput } from '../layout/review-model.ts';
+import type { ReviewItem, ReviewModelInput } from '../layout/review-support.ts';
 
 export type { ReviewModelInput };
 

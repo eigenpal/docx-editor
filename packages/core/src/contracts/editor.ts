@@ -7,7 +7,7 @@
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from '../index';
 // Type-only, so the adapters reach the review vocabulary through THIS contract rather than
 // naming the layout lane, which they are not allowed to import.
-import type { ReviewItem, ReviewRevisionKind } from '../layout/review-model.ts';
+import type { ReviewItem, ReviewRevisionKind } from '../layout/review-support.ts';
 import type { InteractionOutcome, SemanticSelection, SemanticTarget } from './interaction';
 import type {
   ColorValue,

@@ -15,17 +15,16 @@ import {
 } from '@docx-editor.dev/core-contract/store';
 import {
   activeReviewItem,
-  collectReviewItems,
   commentBodyText,
   commentInitials,
   paragraphOrderOfPart,
   reviewAnchorIndex,
   reviewItemGeometry,
   reviewItemsAt,
-  revisionItemsOf,
   type ReviewItem,
   type ReviewRevisionItem,
-} from '../review-model.ts';
+} from '@docx-editor.dev/core-contract/layout';
+import { collectReviewItems, revisionItemsOf } from '../review/review-model.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
@@ -440,7 +439,7 @@ describe('against the tracked fixture', () => {
   test('every revision in a real document is listed, structural ones included', () => {
     const bytes = new Uint8Array(
       readFileSync(
-        resolve(import.meta.dir, '../../../../../e2e/fixtures/list-pagination-break.docx')
+        resolve(import.meta.dir, '../../../../e2e/fixtures/list-pagination-break.docx')
       )
     );
     const pkg = readOoxmlPackage(bytes);

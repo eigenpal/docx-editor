@@ -42,9 +42,7 @@ import {
 import type { CSSProperties, ReactNode } from 'react';
 import type { ReviewRevisionKind } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
-import { useTranslation } from '../i18n';
-import { ReviewRailContext, useDocxEditor } from './context';
-import { Slot } from './toolbar/Slot';
+import { ReviewRailContext, Slot, useDocxEditor, useTranslation } from '@docx-editor.dev/react';
 import { useReview, useStackedReviewPositions, type ReviewItemView } from './useReview';
 
 /** The rail's data, provided once by the Root so a card never re-subscribes. */

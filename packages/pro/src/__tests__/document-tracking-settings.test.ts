@@ -14,10 +14,9 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
-import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
-import { readOoxmlPart } from '@docx-editor.dev/core-contract/store';
-import { testReviewModule } from './review-test-module.ts';
-import { readTrackingSettings } from '../../store/package/tracking-settings.ts';
+import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
+import { readOoxmlPart, readTrackingSettings } from '@docx-editor.dev/core-contract/store';
+import { reviewModule as testReviewModule } from '../review/review-module.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';

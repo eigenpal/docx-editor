@@ -43,23 +43,13 @@ export {
   DocxEditorPageSetupDialog,
   type DocxEditorPageSetupDialogProps,
 } from './editor/DocxEditorPageSetup';
-// The review rail (also reachable as `DocxEditor.Review`) and its headless hook. The parts
-// live on the namespace statics; a host that wants a different surface takes the hook, which
-// is where the queue, the anchors and the accept/reject/reply actions actually live.
-export {
-  DocxEditorReview,
-  type DocxEditorReviewNamespace,
-  type ReviewActionProps,
-  type ReviewPartProps,
-  type ReviewProps,
-} from './editor/DocxEditorReview';
-export {
-  useReview,
-  useReviewOf,
-  useStackedReviewPositions,
-  type ReviewItemView,
-  type UseReviewReturn,
-} from './editor/useReview';
+// The review PANE lives in `@docx-editor.dev/pro/react` (the review capability is
+// module-gated). What this package exports are the integration points the pro pane —
+// or any external chrome — composes with: the rail registry the Viewport and rulers
+// reserve gutter space through, the in-tree Slot, and the locale binding.
+export { ReviewRailContext, type ReviewRailRegistry } from './editor/context';
+export { Slot, type SlotProps } from './editor/toolbar/Slot';
+export { LocaleProvider, useTranslation } from './i18n';
 // The navigation pane (also reachable as `DocxEditor.Navigation`): the compound over the
 // left gutter, its parts, and the three hooks a custom pane is built from. The pane FLOATS
 // — it displaces the page only when the gutter is too narrow to hold it, and

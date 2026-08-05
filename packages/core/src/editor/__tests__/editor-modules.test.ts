@@ -13,7 +13,7 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8, unzipSync, strFromU8 } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { toolbarCommandState } from '../toolbar-commands.ts';
-import { testReviewModule } from './review-test-module.ts';
+import { stubReviewModule } from './review-test-module.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -46,7 +46,7 @@ const TRACKED =
 
 const PLAIN = `<w:p><w:r><w:t>Nothing tracked here.</w:t></w:r></w:p>`;
 
-function mount(body: string, modules?: readonly ReturnType<typeof testReviewModule>[]) {
+function mount(body: string, modules?: readonly ReturnType<typeof stubReviewModule>[]) {
   const container = document.createElement('div');
   const editor: DocxEditorInstance = createDocxEditor({
     container,
@@ -115,13 +115,14 @@ describe('free tier: no modules registered', () => {
   });
 });
 
-describe('with the review module registered', () => {
-  test('markup rendering and the queue come back', () => {
-    const { editor, container } = mount(TRACKED, [testReviewModule()]);
+describe('with a review module registered', () => {
+  // The seam's mechanics only: a STUB module flips the gates. What the real
+  // derivation produces is pinned by @docx-editor.dev/pro's own tests.
+  test('markup rendering and the review gates come back', () => {
+    const { editor, container } = mount(TRACKED, [stubReviewModule()]);
     const painted = container.textContent ?? '';
     // All-markup: the deletion is struck, not hidden.
     expect(painted).toContain('gone');
-    expect(editor.getReviewItems().length).toBeGreaterThan(0);
     expect(editor.can({ type: 'setEditingMode', mode: 'suggesting' }).ok).toBe(true);
     expect(editor.exec({ type: 'toggleReviewPane' }).ok).toBe(true);
   });

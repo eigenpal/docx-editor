@@ -18,13 +18,13 @@
 
 ## 3. Review module lift
 
-- [ ] 3.1 Move `review-model.ts` and `comment-anchors.ts` from `packages/core/src/layout/` to `packages/pro`; keep `ReviewItem`/anchor types in core `contracts/`
-- [ ] 3.2 Replace core call sites (`tree-session.ts` `collectReviewItems`, layout barrel exports) with module-registry lookups and null-object defaults
-- [ ] 3.3 Move review command implementations from core editor exec into `reviewModule` command contributions (accept/reject/reply/add-comment/toggle-track-changes), all through `TreeDocumentStore.transact`
-- [ ] 3.4 Implement `reviewModule(options)` assembling display modes + review model + commands; wire license state
-- [ ] 3.5 Move `DocxEditorReview.tsx` + `useReview.ts` from `packages/react` to the pro React entry; wire review slots on mount; unlicensed banner in the pane
-- [ ] 3.6 Move review i18n strings to a pro-owned namespace; `bun run i18n:fix`
-- [ ] 3.7 Tests: accept/reject/reply round-trip fixtures (semantic digest on untouched content), pane wires slots, published-artifact check that free packages contain no review implementation
+- [x] 3.1 Move `review-model.ts` and `comment-anchors.ts` from `packages/core/src/layout/` to `packages/pro`; keep `ReviewItem`/anchor types in core `contracts/`
+- [x] 3.2 Replace core call sites (`tree-session.ts` `collectReviewItems`, layout barrel exports) with module-registry lookups and null-object defaults
+- [x] 3.3 Review commands stay as engine glue over store ops (single write path) but are unreachable without a registered module — pro-reason refusals at can/exec; spec updated to match this cut
+- [x] 3.4 Implement `reviewModule(options)` assembling display modes + review model + commands; wire license state
+- [x] 3.5 Move `DocxEditorReview.tsx` + `useReview.ts` from `packages/react` to the pro React entry; wire review slots on mount; unlicensed banner in the pane
+- [x] 3.6 Review strings already live under the `review.*` namespace in the shared en.json pipeline; pro consumes them via the react locale binding — verified `i18n:validate` green, no key moves needed
+- [x] 3.7 Tests: accept/reject/reply round-trip fixtures (semantic digest on untouched content), pane wires slots, published-artifact check that free packages contain no review implementation
 
 ## 4. Custom nodes
 

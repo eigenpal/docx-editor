@@ -14,7 +14,7 @@
 
 import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import type { Editor, ReviewItemPlacement } from '@docx-editor.dev/core-contract/contracts/editor';
-import { useDocxEditor } from './context';
+import { useDocxEditor } from '@docx-editor.dev/react';
 
 /**
  * One card's data plus where it belongs on screen.

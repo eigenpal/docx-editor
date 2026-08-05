@@ -25,12 +25,10 @@ import type {
 } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
 import { DocxEditor } from '../src/components/DocxEditor.tsx';
-import { testReviewModule } from './review-test-module.ts';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorPageNumber } from '../src/editor/DocxEditorPageNumber.tsx';
-import { DocxEditorReview } from '../src/editor/DocxEditorReview.tsx';
 import { useDocxEditor } from '../src/editor/context.ts';
 import { useEditorState } from '../src/editor/useEditorState.ts';
 import { useEditorCommand, type EditorCommandState } from '../src/editor/useEditorCommand.ts';
@@ -224,71 +222,6 @@ describe('useEditorCommand', () => {
       })
     ).not.toThrow();
     expect(instance!.surface!.session.bodyText()).toBe(before);
-  });
-});
-
-describe('the review sidebar', () => {
-  test('opens when the add-comment affordance starts a draft', async () => {
-    let instance: DocxEditorInstance | null = null;
-    const view = render(
-      <DocxEditorRoot
-        document={SOURCE}
-        modules={[testReviewModule()]}
-        onReady={(editor) => {
-          instance = editor as DocxEditorInstance;
-        }}
-      >
-        <DocxEditorViewport>
-          <DocxEditorContent />
-          <DocxEditorReview />
-        </DocxEditorViewport>
-      </DocxEditorRoot>
-    );
-    const editor = instance!;
-    await act(async () => {
-      editor.surface!.selectAll();
-      editor.exec({ type: 'toggleReviewPane' });
-    });
-    expect(editor.isReviewPaneOpen()).toBe(false);
-
-    await act(async () => {
-      view.getByTestId('review-add-comment').click();
-    });
-
-    expect(editor.isReviewPaneOpen()).toBe(true);
-    expect(view.getByTestId('review-draft')).toBeDefined();
-  });
-
-  test('removes an open comment draft when the sidebar closes', async () => {
-    let instance: DocxEditorInstance | null = null;
-    const view = render(
-      <DocxEditorRoot
-        document={SOURCE}
-        modules={[testReviewModule()]}
-        onReady={(editor) => {
-          instance = editor as DocxEditorInstance;
-        }}
-      >
-        <DocxEditorViewport>
-          <DocxEditorContent />
-          <DocxEditorReview />
-        </DocxEditorViewport>
-      </DocxEditorRoot>
-    );
-    const editor = instance!;
-    await act(async () => {
-      editor.surface!.selectAll();
-    });
-    await act(async () => {
-      view.getByTestId('review-add-comment').click();
-    });
-    expect(view.getByTestId('review-draft')).toBeDefined();
-
-    await act(async () => {
-      editor.exec({ type: 'toggleReviewPane' });
-    });
-
-    expect(view.queryByTestId('review-draft')).toBeNull();
   });
 });
 

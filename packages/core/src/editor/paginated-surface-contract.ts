@@ -9,6 +9,7 @@ import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
 import type { BookmarkIndex } from '@docx-editor.dev/core-contract/store';
 import type { ViewScope } from '../contracts/editor.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
+import type { CollectReviewItems } from '../contracts/modules.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
 import type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
 import type {
@@ -99,6 +100,12 @@ export interface PaginatedSurfaceOptions {
    * option is shared either way.
    */
   readonly revisionDisplayMode?: RevisionDisplayMode;
+  /**
+   * The review queue derivation for this surface's session, from the registered
+   * review module. Absent, `session.reviewItems()` is the typed empty queue and
+   * every review affordance built on it stays inert.
+   */
+  readonly collectReviewItems?: CollectReviewItems;
   /**
    * Who resolves a pointer to a caret.
    *

@@ -12,7 +12,8 @@
 // collapse to a single honest statement of what the part contains.
 
 import type { Node as PMNode } from 'prosemirror-model';
-import { collectReviewItems, type ReviewItem } from '../layout/review-model.ts';
+import type { ReviewItem } from '../layout/review-support.ts';
+import type { CollectReviewItems } from '../contracts/modules.ts';
 import {
   addComment,
   commentPartNameOf,
@@ -390,7 +391,23 @@ export type OpenTreeSessionResult =
  * FILE, and a host needs to tell "this is not a package" from "this package is malicious"
  * from "this document has no body".
  */
-export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
+/** One frozen empty queue, so a module-less `reviewItems()` is reference-stable. */
+const EMPTY_REVIEW_ITEMS: readonly ReviewItem[] = Object.freeze([]);
+
+export interface OpenTreeSessionOptions {
+  /**
+   * The review queue derivation, contributed by the pro review module through
+   * the editor's `EditorModule` seam. Absent — the free engine — the session's
+   * `reviewItems()` reports the typed empty queue; parse, preservation, and
+   * `hasReviewContent` are unaffected.
+   */
+  readonly reviewModel?: CollectReviewItems;
+}
+
+export function openTreeSession(
+  bytes: Uint8Array,
+  options: OpenTreeSessionOptions = {}
+): OpenTreeSessionResult {
   const loaded = readOoxmlPackage(bytes);
   if (!loaded.ok) {
     return {
@@ -892,6 +909,10 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       },
 
       reviewItems() {
+        // The derivation is the review MODULE's: without one the queue is the typed
+        // empty value, never a partial answer derived in-engine.
+        const derive = options.reviewModel;
+        if (!derive) return EMPTY_REVIEW_ITEMS;
         const store = bodyStore();
         if (!reviewCache || reviewCache.revision !== store.revision) {
           const pkg = currentPackage();
@@ -901,7 +922,7 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
           // the comment was written and then never read back.
           reviewCache = {
             revision: store.revision,
-            items: collectReviewItems({
+            items: derive({
               storyPart: store.part,
               commentsPart: pkg.parts.get(commentPartNameOf(pkg, store.part.name)),
               commentsExtendedPart: pkg.parts.get(commentsExtendedPartNameOf(pkg, store.part.name)),

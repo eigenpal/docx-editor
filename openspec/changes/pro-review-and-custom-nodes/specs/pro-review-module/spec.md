@@ -4,17 +4,17 @@
 
 ### Requirement: Review module delivers review functionality via the seam
 
-`@docx-editor.dev/pro` SHALL export `reviewModule(options)` returning an `EditorModule` that contributes: review item derivation (review model + comment anchor geometry), markup/original display modes, and commands for accept, reject, reply, add-comment, and toggle-track-changes. The implementation SHALL live in `packages/pro`; Apache-licensed packages SHALL NOT contain the review model derivation, review commands, or review pane after the lift.
+`@docx-editor.dev/pro` SHALL export `reviewModule(options)` returning an `EditorModule` that contributes the review item derivation (review model + comment anchor readers) and the markup/original display modes, which is what makes the engine's review commands (accept, reject, reply, add-comment, toggle-track-changes) reachable. The derivation SHALL live in `packages/pro`; Apache-licensed packages SHALL NOT contain the review model derivation or the review pane after the lift. The command GLUE and the store mutation ops remain in the engine (they are part of the single write path) but SHALL be unreachable without a registered review module, refusing with the pro reason — the same API-layer gating the display modes use.
 
 #### Scenario: Registered review module unlocks review
 
 - **WHEN** `createDocxEditor({ modules: [reviewModule({ licenseKey })] })` opens a document with tracked changes
 - **THEN** markup display mode is available, review items are derived, and accept/reject/reply commands execute through the standard exec path
 
-#### Scenario: Free packages contain no review implementation
+#### Scenario: Free packages contain no review derivation or pane
 
 - **WHEN** the published `@docx-editor.dev/core-contract` and `@docx-editor.dev/react` artifacts are inspected
-- **THEN** they contain no review model derivation, review command implementations, or review pane code
+- **THEN** they contain no review model derivation and no review pane code, and every review command refuses with the pro reason
 
 ### Requirement: Review mutations go through the single write path
 

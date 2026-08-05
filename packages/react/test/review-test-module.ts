@@ -1,16 +1,18 @@
-// The review module the ADAPTER tests register — review behavior is module-gated
-// in the engine, and these tests exercise the module-registered path. Stand-in
-// for the pro package's `reviewModule()` until the derivation moves there.
+// A STUB review module for the free adapter's tests.
+//
+// These tests exercise seam mechanics (the editing-mode pill enabling, review
+// slots lighting up) which key on a review contribution being registered, not
+// on what it derives. The real module and the review pane live in
+// `@docx-editor.dev/pro`, whose own tests cover the derived queue.
 
 import type { EditorModule } from '@docx-editor.dev/core-contract/editor';
-import { collectReviewItems } from '@docx-editor.dev/core-contract/layout';
 
 export function testReviewModule(): EditorModule {
   return {
     id: 'review',
     review: {
       displayModes: ['all-markup', 'proposed', 'original'],
-      collectReviewItems,
+      collectReviewItems: () => [],
     },
   };
 }
