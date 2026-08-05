@@ -4599,16 +4599,16 @@ a.docx-hyperlink:focus-visible {
   border-color: var(--doc-primary, #1a73e8);
 }
 
-/* The Word-style hover balloon: pointing at a tracked change in the page raises its
-   decision card beside the text. The wrapper is a zero-size positioning origin only —
+/* The Word-style decision balloon: clicking a format or structural change in the page
+   raises its card beside the text. The wrapper is a zero-size positioning origin only —
    the balloon positions in rail coordinates, so it scrolls with the text it annotates. */
-.docx-review__hover-root {
+.docx-review__balloon-root {
   position: absolute;
   top: 0;
   left: 0;
 }
 
-.docx-review__hover {
+.docx-review__balloon {
   position: absolute;
   width: 280px;
   pointer-events: auto;
@@ -4616,7 +4616,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* Raised harder than a rail card: it floats OVER the sheet, not beside it. */
-.docx-review__hover .docx-review__card {
+.docx-review__balloon .docx-review__card {
   margin: 0;
   box-shadow: 0 6px 20px rgb(0 0 0 / 18%);
 }

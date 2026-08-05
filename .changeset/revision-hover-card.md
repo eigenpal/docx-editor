@@ -2,4 +2,4 @@
 '@docx-editor.dev/react': patch
 ---
 
-Hovering a tracked change in the page now raises a Word-style balloon with the author, what changed, when, and accept/reject where the change is resolvable. The balloon follows the pointer across changes, and clicking a change pins it until you press elsewhere. Tracked format changes mark their range with a quiet grey wash and dotted rule, tracked rows wear their insertion/deletion wash as a box, and rows carry their revision attribution in the painted DOM — so changes hidden from the review rail stay visible and one hover away.
+The review rail now shows only the decisions a reviewer reads in order — content changes and comments; "changed text formatting" and "changed the document structure" cards are hidden by default (opt back in with `formatting` / `structural` on `DocxEditor.Review`). Those changes stay marked in the page — format changes with a grey wash and dotted rule, tracked rows with their insertion/deletion wash — and clicking the marking opens a Word-style balloon with the author, the change, the date, and accept/reject where resolvable; the balloon stays until you press elsewhere.

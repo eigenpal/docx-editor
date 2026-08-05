@@ -55,9 +55,9 @@ const ReviewItemContext = createContext<ReviewItemView | null>(null);
 interface ReviewRailValue {
   readonly review: ReturnType<typeof useReview>;
   /**
-   * The UNFILTERED queue. The rail's cards render `review.items`, which the `structural`
-   * default and the host's `filter` have already narrowed — but the hover balloon exists
-   * precisely for the items those filters hide, so it matches against everything.
+   * The UNFILTERED queue. The rail's cards render `review.items`, which the structural and
+   * formatting defaults and the host's `filter` have already narrowed — but the balloon
+   * exists precisely for the items those filters hide, so it matches against everything.
    */
   readonly allItems: readonly ReviewItemView[];
   /** Author colour slot per author, by order of first appearance — Word's own rule. */
@@ -173,12 +173,19 @@ export interface ReviewProps extends ReviewPartProps {
   /** Show only some of the queue — comments in one rail, revisions in another. */
   filter?: (item: ReviewItemView) => boolean;
   /**
-   * Show the read-only "changed the document structure" cards. Default `false`: a heavily
-   * revised document carries one per structural site, they cannot be accepted or rejected
-   * from the rail, and together they crowd out the cards a reviewer can act on. The
-   * revisions themselves stay in the document either way — this hides only their cards.
+   * Show the "changed the document structure" cards. Default `false`: a heavily revised
+   * document carries one per structural site and together they crowd out the cards a
+   * reviewer can act on. The revisions stay marked in the document, where clicking one
+   * opens its balloon — this hides only their rail cards.
    */
   structural?: boolean;
+  /**
+   * Show the "changed text formatting" cards. Default `false`, same reasoning as
+   * {@link structural}: a restyled document mints one per run, and the decision is
+   * reachable by clicking the grey-marked text instead. The rail keeps the decisions a
+   * reviewer reads in order — content changes and comments.
+   */
+  formatting?: boolean;
 }
 
 // Inline SVG, like the toolbar's icons: this package ships no icon font.
@@ -215,6 +222,7 @@ function ReviewRoot({
   gap = 8,
   filter,
   structural = false,
+  formatting = false,
 }: ReviewProps) {
   const editor = useDocxEditor();
   const review = useReview();
@@ -230,11 +238,13 @@ function ReviewRoot({
   const open = review.paneOpen;
 
   const items = useMemo(() => {
-    const shown = structural
-      ? review.items
-      : review.items.filter((entry) => entry.revisionKind !== 'structural');
+    const shown = review.items.filter(
+      (entry) =>
+        (structural || entry.revisionKind !== 'structural') &&
+        (formatting || entry.revisionKind !== 'format')
+    );
     return filter ? shown.filter((entry) => filter(entry)) : shown;
-  }, [review.items, filter, structural]);
+  }, [review.items, filter, structural, formatting]);
 
   // Word's rule: a colour per author by ORDER OF FIRST APPEARANCE. A hash of the name is
   // stable but collides, and two reviewers drawn in one colour tells the reader the wrong
@@ -493,7 +503,7 @@ function ReviewRoot({
         : takeRoot('Draft', <ReviewDraft top={composeTop} />)}
       {/* Mounted open OR closed: the balloon is how a reader inspects a change whose rail
           card is filtered away, and a closed pane filters ALL of them away. */}
-      {takeRoot('Hover', <ReviewHover />)}
+      {takeRoot('Balloon', <ReviewBalloon />)}
     </>
   ) : null;
 
@@ -840,64 +850,54 @@ function ReviewDraft({ top, className, hidden }: ReviewPartProps & { top: number
 }
 ReviewDraft.docxReviewPart = 'Draft' as const;
 
-/** What a hovered tracked change tells us before any item matching — straight off its DOM. */
-interface HoverAnchor {
+/** What a clicked tracked change tells us before any item matching — straight off its DOM. */
+interface BalloonAnchor {
   readonly revisionId: string;
   readonly author: string;
   readonly date?: string;
   readonly kind?: string;
-  /** Rail-relative CSS px of the hovered element's box. */
+  /** True when the pressed element is a tracked table ROW — a structural site. */
+  readonly structuralSite: boolean;
+  /** The pressed span's own range, for the position rung of the match. */
+  readonly paragraphId?: string;
+  readonly start?: number;
+  readonly end?: number;
+  /** Rail-relative CSS px of the pressed element's box. */
   readonly left: number;
   readonly top: number;
   readonly bottom: number;
   /** True when the balloon opens upward — the target sits low in the window. */
   readonly above: boolean;
-  /**
-   * True when a CLICK opened it. A pinned balloon stops following the pointer and stays
-   * until a press lands somewhere that is neither a tracked change nor the balloon.
-   */
-  readonly pinned: boolean;
 }
 
-/** Word's own delays, near enough: deliberate hover opens, a passing pointer does not. */
-const HOVER_SHOW_MS = 250;
-const HOVER_HIDE_MS = 200;
 /**
- * Retarget delay while a balloon is ALREADY up. Much shorter than the opening delay: the
- * reader is plainly working through the changes, and making each one wait the full
- * deliberate-hover pause reads as the balloon failing to follow.
- */
-const HOVER_RETARGET_MS = 80;
-
-/**
- * The hover balloon: pointing at a tracked change in the PAGE raises its decision card
+ * The decision balloon: CLICKING a format or structural change in the PAGE opens its card
  * beside the text — author, what changed, when, and accept/reject where the engine can
- * resolve it. This is how Word presents a change, and it is what makes hiding noisy card
- * kinds from the rail safe: the information moves from a permanent column to a gesture.
+ * resolve it — and the card stays until a press lands somewhere that is neither a tracked
+ * change nor the balloon itself. Click-opened on purpose: a hover-opened card vanished
+ * under the pointer travelling toward its own buttons.
  *
- * Matches the painted element's `data-revision-*` attribution against the UNFILTERED
- * queue, so it answers for kinds the rail's `structural` default or a host `filter` hid.
- * An element whose attribution matches nothing (mid-edit staleness) still shows what the
- * DOM itself carries — author, kind, date — just without actions.
+ * ONLY the kinds whose rail cards are hidden by default. Content changes and comments are
+ * the rail's — a balloon over "added" text repeats a card already beside the page — while
+ * a format or structural change has nothing but its grey/washed marking, so the click on
+ * that marking is where its decision lives.
  *
- * FOLLOW, THEN PIN. With a balloon up, moving onto another change retargets it after a
- * short beat — the reader is walking the redline and the balloon walks with them.
- * CLICKING a change pins its balloon in place; it ignores the pointer until a press lands
- * somewhere that is neither a tracked change nor the balloon itself.
+ * Matches the pressed element against the UNFILTERED queue, attribution first and POSITION
+ * last: the `(id, author, date)` triple, then `(id, author)`, then the id, then the span's
+ * own paragraph range against the items' ranges — real files drift on attribution, and the
+ * range is the one thing the painter and the review model cannot disagree about. An
+ * element matching nothing still shows what its DOM carries, just without actions.
  *
  * @public
  */
-function ReviewHover({ className, hidden }: ReviewPartProps) {
+function ReviewBalloon({ className, hidden }: ReviewPartProps) {
   const { review, allItems, authorSlots } = useRail();
   const { t } = useTranslation();
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const [anchor, setAnchor] = useState<HoverAnchor | null>(null);
-  // What the LISTENERS need to know about the state they cannot read: whether a balloon
-  // is up (retarget fast) and whether it is pinned (ignore hover altogether).
+  const [anchor, setAnchor] = useState<BalloonAnchor | null>(null);
+  // Whether a balloon is up, readable from the listener without re-binding it.
   const openRef = useRef(false);
-  const pinnedRef = useRef(false);
   openRef.current = anchor !== null;
-  pinnedRef.current = anchor?.pinned ?? false;
 
   useEffect(() => {
     const host = rootRef.current;
@@ -907,14 +907,13 @@ function ReviewHover({ className, hidden }: ReviewPartProps) {
     const scroller = (rail?.closest('.docx-editor__scroll-container') ??
       rail?.offsetParent) as HTMLElement | null;
     if (!host || !rail || !scroller) return undefined;
-    let showTimer = 0;
-    let hideTimer = 0;
-    let current: HTMLElement | null = null;
 
-    const show = (element: HTMLElement, pinned: boolean): void => {
+    const open = (element: HTMLElement, structuralSite: boolean): void => {
       const railRect = rail.getBoundingClientRect();
       const rect = element.getBoundingClientRect();
       const viewportBottom = element.ownerDocument.defaultView?.innerHeight ?? Infinity;
+      const start = Number(element.dataset.start);
+      const end = Number(element.dataset.end);
       setAnchor({
         revisionId: element.dataset.revisionId!,
         author: element.dataset.revisionAuthor ?? '',
@@ -924,91 +923,45 @@ function ReviewHover({ className, hidden }: ReviewPartProps) {
         ...(element.dataset.revisionKind !== undefined
           ? { kind: element.dataset.revisionKind }
           : {}),
+        structuralSite,
+        ...(element.dataset.paragraphId !== undefined
+          ? { paragraphId: element.dataset.paragraphId }
+          : {}),
+        ...(Number.isFinite(start) ? { start } : {}),
+        ...(Number.isFinite(end) ? { end } : {}),
         left: rect.left - railRect.left,
         top: rect.top - railRect.top,
         bottom: rect.bottom - railRect.top,
         // Opens upward when there is no room below — a change on the last visible line
         // would otherwise push its balloon under the fold.
         above: rect.bottom + 220 > viewportBottom,
-        pinned,
       });
     };
 
-    const onOver = (event: MouseEvent): void => {
-      // A pinned balloon holds still: the reader clicked THIS change, and having the card
-      // wander off while they reach for its buttons is the failure pinning exists to stop.
-      if (pinnedRef.current) return;
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      // Travelling INTO the balloon keeps it open — that is how its buttons get clicked.
-      if (host.contains(target)) {
-        window.clearTimeout(hideTimer);
-        return;
-      }
-      const element = target.closest('[data-revision-id]');
-      if (element instanceof HTMLElement && scroller.contains(element)) {
-        window.clearTimeout(hideTimer);
-        if (element === current) return;
-        current = element;
-        window.clearTimeout(showTimer);
-        // With a balloon already up the pointer is FOLLOWED: retargeting waits only long
-        // enough to skip changes the pointer merely crosses.
-        showTimer = window.setTimeout(
-          () => show(element, false),
-          openRef.current ? HOVER_RETARGET_MS : HOVER_SHOW_MS
-        );
-      } else if (openRef.current || current !== null) {
-        // Only when there is something to put away. This branch is the one ordinary mouse
-        // movement lands in — every element crossing on a page with no balloon up — and
-        // unconditionally cancelling and re-arming a timer per crossing is allocation at
-        // pointer frequency for nothing.
-        current = null;
-        window.clearTimeout(showTimer);
-        window.clearTimeout(hideTimer);
-        hideTimer = window.setTimeout(() => setAnchor(null), HOVER_HIDE_MS);
-      }
-    };
-    const onLeave = (): void => {
-      if (pinnedRef.current || (!openRef.current && current === null)) return;
-      current = null;
-      window.clearTimeout(showTimer);
-      window.clearTimeout(hideTimer);
-      hideTimer = window.setTimeout(() => setAnchor(null), HOVER_HIDE_MS);
-    };
-    // Clicking a change PINS its balloon — Word's own gesture for "I am deciding this
-    // one". Observation only: the press still moves the caret and opens the rail card,
-    // exactly as it did before the balloon existed. A press anywhere else lets go —
-    // including the pinned change's own text, where the reader is now placing a caret.
+    // ONE capture-phase mousedown listener; nothing runs at pointer-movement frequency.
+    // Observation only: the press still moves the caret exactly as it did before the
+    // balloon existed. A press anywhere that is not a qualifying change closes the card —
+    // including on an insertion or deletion, whose decision lives in the rail.
     const onDown = (event: MouseEvent): void => {
       const target = event.target;
       if (!(target instanceof Element)) return;
       // Pressing the balloon itself (accept, reject) is not a dismissal.
       if (host.contains(target)) return;
       const element = target.closest('[data-revision-id]');
-      window.clearTimeout(showTimer);
-      window.clearTimeout(hideTimer);
       if (element instanceof HTMLElement && scroller.contains(element)) {
-        // Pressing a change pins it — including one whose balloon hover already opened.
-        current = element;
-        show(element, true);
-      } else {
-        current = null;
-        setAnchor(null);
+        const structuralSite = element.classList.contains('docx-table-row--revision');
+        if (element.dataset.revisionKind === 'format' || structuralSite) {
+          open(element, structuralSite);
+          return;
+        }
       }
+      if (openRef.current) setAnchor(null);
     };
-    scroller.addEventListener('mouseover', onOver, true);
-    scroller.addEventListener('mouseleave', onLeave);
     scroller.addEventListener('mousedown', onDown, true);
-    return () => {
-      window.clearTimeout(showTimer);
-      window.clearTimeout(hideTimer);
-      scroller.removeEventListener('mouseover', onOver, true);
-      scroller.removeEventListener('mouseleave', onLeave);
-      scroller.removeEventListener('mousedown', onDown, true);
-    };
+    return () => scroller.removeEventListener('mousedown', onDown, true);
   }, []);
 
-  // The decision the hovered SITE belongs to. Sites coalesce into decisions by the
+  // The decision the pressed SITE belongs to. Sites coalesce into decisions by the
   // `(id, author, date)` triple, which is what the painted element carries — but real
   // files drift: producers reuse ids, omit dates on one wrapper and not another, and a
   // strict triple left the balloon informational over changes the rail could resolve. So
@@ -1019,13 +972,18 @@ function ReviewHover({ className, hidden }: ReviewPartProps) {
   // tick while a balloon is up, and the queue behind a heavy redline runs to thousands.
   // The exact triple returns the FIRST hit immediately (Word reuses ids across an editing
   // burst, and reading order picks the right one); the relaxed rungs each keep a single
-  // candidate and disqualify themselves on a second distinct hit.
+  // candidate and disqualify themselves on a second distinct hit. The POSITION rung runs
+  // over the same pass: the pressed span's own paragraph range against the item's ranges,
+  // restricted to the balloon's kinds — attribution can drift between the painter's read
+  // and the review model's, but both took the range from the same characters.
   const entry = useMemo(() => {
     if (!anchor) return null;
     let byAuthor: ReviewItemView | null = null;
     let byAuthorAmbiguous = false;
     let byId: ReviewItemView | null = null;
     let byIdAmbiguous = false;
+    let byRange: ReviewItemView | null = null;
+    let byRangeAmbiguous = false;
     for (const candidate of allItems) {
       if (candidate.kind !== 'revision' || candidate.item.kind !== 'revision') continue;
       for (const address of candidate.item.addresses) {
@@ -1038,17 +996,43 @@ function ReviewHover({ className, hidden }: ReviewPartProps) {
         if (byId === null) byId = candidate;
         else if (byId !== candidate) byIdAmbiguous = true;
       }
+      if (
+        anchor.paragraphId !== undefined &&
+        anchor.start !== undefined &&
+        anchor.end !== undefined &&
+        (candidate.revisionKind === 'format' || candidate.revisionKind === 'structural')
+      ) {
+        for (const range of candidate.item.ranges) {
+          if (
+            range.start.paragraphId === anchor.paragraphId &&
+            range.start.offset < anchor.end &&
+            range.end.offset > anchor.start
+          ) {
+            if (byRange === null) byRange = candidate;
+            else if (byRange !== candidate) byRangeAmbiguous = true;
+            break;
+          }
+        }
+      }
     }
     if (byAuthor !== null && !byAuthorAmbiguous) return byAuthor;
     if (byId !== null && !byIdAmbiguous) return byId;
+    if (byRange !== null && !byRangeAmbiguous) return byRange;
     return null;
   }, [allItems, anchor]);
+
+  // The balloon serves the kinds the rail does not; a drifted id that happened to land on
+  // a CONTENT decision must not raise a balloon over text whose card is beside the page.
+  const served =
+    entry && (entry.revisionKind === 'format' || entry.revisionKind === 'structural')
+      ? entry
+      : null;
 
   // Resolving the decision removes it from the queue; the balloon it was resolved from
   // must not linger over the text the accept just changed.
   const hadEntry = useRef(false);
   useEffect(() => {
-    if (entry) {
+    if (served) {
       hadEntry.current = true;
       return;
     }
@@ -1056,26 +1040,19 @@ function ReviewHover({ className, hidden }: ReviewPartProps) {
       hadEntry.current = false;
       setAnchor(null);
     }
-  }, [entry]);
+  }, [served]);
 
   if (hidden) return null;
-  const fallbackKind =
-    anchor?.kind === 'insert' ||
-    anchor?.kind === 'delete' ||
-    anchor?.kind === 'moveFrom' ||
-    anchor?.kind === 'moveTo' ||
-    anchor?.kind === 'format'
-      ? (anchor.kind as ReviewRevisionKind)
-      : ('structural' as const);
+  const fallbackKind = anchor?.kind === 'format' ? ('format' as const) : ('structural' as const);
 
   return (
     // The wrapper always mounts — it is what the wiring effect climbs from — and carries
     // no box of its own until there is a balloon to show.
-    <div ref={rootRef} className={`docx-review__hover-root${className ? ` ${className}` : ''}`}>
+    <div ref={rootRef} className={`docx-review__balloon-root${className ? ` ${className}` : ''}`}>
       {anchor === null ? null : (
         <div
-          className="docx-review__hover"
-          data-testid="review-hover"
+          className="docx-review__balloon"
+          data-testid="review-balloon"
           style={{
             left: anchor.left,
             top: anchor.above ? anchor.top - 6 : anchor.bottom + 6,
@@ -1083,18 +1060,18 @@ function ReviewHover({ className, hidden }: ReviewPartProps) {
           }}
           onMouseDown={guardMousedown}
         >
-          {entry ? (
-            <ReviewItemContext.Provider value={entry}>
+          {served ? (
+            <ReviewItemContext.Provider value={served}>
               <div
                 className="docx-review__card"
-                data-testid="review-hover-card"
-                data-kind={entry.revisionKind ?? 'revision'}
+                data-testid="review-balloon-card"
+                data-kind={served.revisionKind ?? 'revision'}
                 style={
                   {
-                    '--doc-review-author': `var(--doc-review-author-${(authorSlots.get(entry.author) ?? 0) % AUTHOR_SLOTS})`,
+                    '--doc-review-author': `var(--doc-review-author-${(authorSlots.get(served.author) ?? 0) % AUTHOR_SLOTS})`,
                   } as CSSProperties
                 }
-                onClick={() => review.setActive(entry.key)}
+                onClick={() => review.setActive(served.key)}
               >
                 <div className="docx-review__head">
                   <ReviewAvatar />
@@ -1102,7 +1079,7 @@ function ReviewHover({ className, hidden }: ReviewPartProps) {
                     <ReviewAuthor />
                     <ReviewTime />
                   </div>
-                  {entry.kind === 'revision' && !entry.readOnly ? (
+                  {served.kind === 'revision' && !served.readOnly ? (
                     <div className="docx-review__actions">
                       <ReviewAccept />
                       <ReviewReject />
@@ -1115,7 +1092,7 @@ function ReviewHover({ className, hidden }: ReviewPartProps) {
           ) : (
             <div
               className="docx-review__card"
-              data-testid="review-hover-card"
+              data-testid="review-balloon-card"
               data-kind={fallbackKind}
             >
               <div className="docx-review__head">
@@ -1126,7 +1103,7 @@ function ReviewHover({ className, hidden }: ReviewPartProps) {
                   <span className="docx-review__author">
                     {anchor.author || t('comments.unknown')}
                   </span>
-                  {anchor.date ? <HoverTime raw={anchor.date} /> : null}
+                  {anchor.date ? <BalloonTime raw={anchor.date} /> : null}
                 </div>
               </div>
               <div className="docx-review__summary">
@@ -1141,7 +1118,7 @@ function ReviewHover({ className, hidden }: ReviewPartProps) {
     </div>
   );
 }
-ReviewHover.docxReviewPart = 'Hover' as const;
+ReviewBalloon.docxReviewPart = 'Balloon' as const;
 
 /** Initials for the dataset-only fallback, matching the engine's own derivation. */
 function initialsOf(author: string): string {
@@ -1154,7 +1131,7 @@ function initialsOf(author: string): string {
 }
 
 /** `ReviewTime` for a raw dataset date, outside any item context. */
-function HoverTime({ raw }: { raw: string }) {
+function BalloonTime({ raw }: { raw: string }) {
   const when = new Date(raw);
   if (Number.isNaN(when.getTime())) return null;
   return (
@@ -1649,8 +1626,8 @@ export interface DocxEditorReviewNamespace {
   readonly AddComment: typeof ReviewAddComment;
   /** The compose box a new comment is written in. */
   readonly Draft: typeof ReviewDraft;
-  /** The Word-style balloon raised by hovering a tracked change in the page. */
-  readonly Hover: typeof ReviewHover;
+  /** The decision balloon opened by clicking a format or structural change in the page. */
+  readonly Balloon: typeof ReviewBalloon;
 }
 
 export const DocxEditorReview: DocxEditorReviewNamespace = Object.assign(ReviewRoot, {
@@ -1668,5 +1645,5 @@ export const DocxEditorReview: DocxEditorReviewNamespace = Object.assign(ReviewR
   Markers: ReviewMarkers,
   AddComment: ReviewAddComment,
   Draft: ReviewDraft,
-  Hover: ReviewHover,
+  Balloon: ReviewBalloon,
 });
