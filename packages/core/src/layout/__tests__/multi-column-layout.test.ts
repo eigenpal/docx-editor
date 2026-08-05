@@ -288,7 +288,14 @@ describe('multi-column section layout', () => {
     const cell = (text: string) =>
       `<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>${paragraph(text)}</w:tc>`;
     const part = packageWithBody(
-      '<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/></w:tblPr>' +
+      paragraph('INTRO') +
+        '<w:p><w:pPr><w:sectPr>' +
+        '<w:type w:val="continuous"/>' +
+        '<w:pgSz w:w="7200" w:h="7200"/>' +
+        '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/>' +
+        '<w:cols w:space="240"/>' +
+        '</w:sectPr></w:pPr></w:p>' +
+        '<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/></w:tblPr>' +
         '<w:tblGrid><w:gridCol w:w="1380"/></w:tblGrid>' +
         `<w:tr>${cell('ROW ONE')}</w:tr>` +
         `<w:tr>${cell('ROW TWO')}</w:tr>` +
@@ -314,6 +321,11 @@ describe('multi-column section layout', () => {
     const tables = layout.pages[0]!.fragments.filter((fragment) => fragment.kind === 'table');
     expect(tables).toHaveLength(2);
     expect(tables.map((fragment) => Math.round(fragment.box.x))).toEqual([0, 150]);
+    // Both fragments open at the shared-sheet column REGION top, below the INTRO section.
+    // A continuation anchored at 0 stretched its box over the section above the region,
+    // and the oversized invisible fragment swallowed pointer hits on that text.
+    expect(tables[1]!.box.y).toBe(tables[0]!.box.y);
+    expect(tables[0]!.box.y).toBeGreaterThan(0);
   });
 
   test('an unchanged balanced pass preserves physical page identity', () => {

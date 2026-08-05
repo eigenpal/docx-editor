@@ -999,7 +999,10 @@ function layoutBlocksPass(
         closeTableFragment();
         advanceColumn();
         tableLeft = originX();
-        fragmentTop = 0;
+        // The cursor, not 0: a same-sheet column advance opens at the column REGION top
+        // (a continuous section shares its sheet), and a fragment box anchored at 0 would
+        // stretch over whatever the earlier section already painted above the region.
+        fragmentTop = cursorY;
       }
 
       for (const headerRow of headerRows) {
@@ -1029,7 +1032,9 @@ function layoutBlocksPass(
       closeTableFragment();
       advanceColumn();
       tableLeft = originX();
-      fragmentTop = 0;
+      // See placeHeaderGroup: the new fragment opens at the advanced cursor, which is the
+      // column region top on a shared sheet and 0 only when a fresh page was opened.
+      fragmentTop = cursorY;
       if (emitHeaders) placeHeaderGroup(true);
     };
 
