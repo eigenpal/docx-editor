@@ -845,7 +845,8 @@
     "failedToParse": "Belge ayrıştırılamadı",
     "linkRemoved": "Bağlantı kaldırıldı",
     "linkCopied": "Bağlantı panoya kopyalandı",
-    "failedToSave": "Belge kaydedilemedi"
+    "failedToSave": "Belge kaydedilemedi",
+    "fontSubstitutionNotice": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Görüntülenen metin",
@@ -962,7 +963,9 @@
     "runPropertiesChanged": null
   },
   "toc": {
-    "updatePrompt": null
+    "updatePrompt": null,
+    "refresh": "Tüm tabloyu güncelle",
+    "refreshPageNumbers": "Yalnızca sayfa numaralarını güncelle"
   },
   "app": {
     "name": null,

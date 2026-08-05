@@ -47,6 +47,8 @@ import {
   ContextMenuItem,
   ContextMenuPaste,
   ContextMenuSelectAll,
+  ContextMenuRefreshToc,
+  ContextMenuRefreshTocPageNumbers,
   useTableContextMenuVisible,
 } from './parts';
 
@@ -153,10 +155,28 @@ function tableContextEntries(): readonly DefaultEntry[] {
   ];
 }
 
-/** Build the default set, optionally including table rows. @internal */
-export function contextMenuDefaultSet(tableContextVisible: boolean): readonly DefaultEntry[] {
-  if (!tableContextVisible) return BASE_DEFAULT_SET;
-  return [...BASE_DEFAULT_SET, ...tableContextEntries()];
+function tocContextEntries(): readonly DefaultEntry[] {
+  return [
+    { kind: 'separator', id: 'sep.toc' },
+    { kind: 'row', id: ContextMenuRefreshToc.docxRow, render: () => <ContextMenuRefreshToc /> },
+    {
+      kind: 'row',
+      id: ContextMenuRefreshTocPageNumbers.docxRow,
+      render: () => <ContextMenuRefreshTocPageNumbers />,
+    },
+  ];
+}
+
+/** Build the default set, with the contextual groups the current target earns. @internal */
+export function contextMenuDefaultSet(
+  tableContextVisible: boolean,
+  tocContextVisible = false
+): readonly DefaultEntry[] {
+  return [
+    ...BASE_DEFAULT_SET,
+    ...(tableContextVisible ? tableContextEntries() : []),
+    ...(tocContextVisible ? tocContextEntries() : []),
+  ];
 }
 
 /**
@@ -216,13 +236,15 @@ export function DocxEditorContextMenu({
 }: DocxEditorContextMenuProps) {
   const editor = useDocxEditor();
   const tableContextVisible = useTableContextMenuVisible();
-  const defaultSet = useMemo(
-    () => contextMenuDefaultSet(tableContextVisible),
-    [tableContextVisible]
-  );
   const hostRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [anchor, setAnchor] = useState<ContextMenuAnchor | null>(null);
+  // Captured with the anchor, not subscribed to — see `tocId` on the context value.
+  const [tocId, setTocId] = useState<string | null>(null);
+  const defaultSet = useMemo(
+    () => contextMenuDefaultSet(tableContextVisible, tocId !== null),
+    [tableContextVisible, tocId]
+  );
   // Placement is measured AFTER the panel renders — its size depends on the rows the host
   // composed — so the first paint is at the raw anchor and the flip lands in a layout
   // effect, before the browser paints.
@@ -240,6 +262,7 @@ export function DocxEditorContextMenu({
     (restoreFocus = false) => {
       setAnchor(null);
       setPlacement(null);
+      setTocId(null);
       if (restoreFocus) editor?.focus();
     },
     [editor]
@@ -259,6 +282,9 @@ export function DocxEditorContextMenu({
       // far off the top of the window).
       const keyboard = event.button === -1 || (event.clientX === 0 && event.clientY === 0);
       const box = scroller.getBoundingClientRect();
+      // The engine's own listener sits INSIDE this one and has already recorded which table
+      // of contents the press landed on, so reading it here is reading it current.
+      setTocId(editor?.snapshot().tocContext?.id ?? null);
       setAnchor(
         keyboard ? { x: box.left + 16, y: box.top + 16 } : { x: event.clientX, y: event.clientY }
       );
@@ -373,8 +399,8 @@ export function DocxEditorContextMenu({
   // Root-owned, so it survives the panel unmounting when a row is selected.
   const [clipboardRefusal, setClipboardRefusal] = useState<string | null>(null);
   const contextMenuContext = useMemo(
-    () => ({ close, anchor, clipboardRefusal, reportClipboardRefusal: setClipboardRefusal }),
-    [close, anchor, clipboardRefusal]
+    () => ({ close, anchor, tocId, clipboardRefusal, reportClipboardRefusal: setClipboardRefusal }),
+    [close, anchor, tocId, clipboardRefusal]
   );
 
   const style: CSSProperties = {
@@ -457,6 +483,8 @@ export interface DocxEditorContextMenuNamespace {
   readonly DeleteTableColumn: typeof ContextMenuDeleteTableColumn;
   readonly DeleteTable: typeof ContextMenuDeleteTable;
   readonly CellVerticalAlignment: typeof ContextMenuCellVerticalAlignment;
+  readonly RefreshToc: typeof ContextMenuRefreshToc;
+  readonly RefreshTocPageNumbers: typeof ContextMenuRefreshTocPageNumbers;
   /** A host-owned row: no slot, no command, the host's own label and action. */
   readonly Item: typeof ContextMenuItem;
   /** Any chrome slot as a live row (`<ContextMenu.Slot slot="text.bold" />`). */
@@ -481,6 +509,8 @@ export const ContextMenu: DocxEditorContextMenuNamespace = Object.assign(DocxEdi
   DeleteTableColumn: ContextMenuDeleteTableColumn,
   DeleteTable: ContextMenuDeleteTable,
   CellVerticalAlignment: ContextMenuCellVerticalAlignment,
+  RefreshToc: ContextMenuRefreshToc,
+  RefreshTocPageNumbers: ContextMenuRefreshTocPageNumbers,
   Item: ContextMenuItem,
   Slot: MenuItem,
   Row: MenuRow,

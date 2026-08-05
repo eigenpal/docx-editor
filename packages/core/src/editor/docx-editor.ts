@@ -54,6 +54,7 @@ import {
   commentInitials,
   documentOrder,
   paragraphFragmentsOf,
+  paragraphFragmentsOfBlocks,
   reviewAnchorIndex,
   reviewItemGeometry,
   reviewItemKey,
@@ -93,8 +94,8 @@ import {
   HARD_MAX_FONT_BYTES,
   HARFBUZZ_SHAPING_LIBRARY,
   fontRequestKey,
-  createFixedMeasurer,
   createShapedMeasurer,
+  resolveDefaultSurfaceMeasurer,
   type SemanticSelection as SurfaceSelection,
   type TextMeasurer,
 } from '@docx-editor.dev/core-contract/layout';
@@ -110,6 +111,14 @@ import {
   selectionsMatch,
   snapshotsEqual,
 } from './docx-editor-support.ts';
+import {
+  createT,
+  deepMerge,
+  en,
+  locales,
+  type LocaleCode,
+  type LocaleStrings,
+} from '@docx-editor.dev/i18n';
 import { execEditorCommand } from './docx-editor-exec.ts';
 import {
   currentPage as currentPageOf,
@@ -137,7 +146,10 @@ import {
   toEditorFontError,
 } from './font-configuration.ts';
 import { composeFontConfiguration } from './font-composition.ts';
+import { availableFontFamilies, configuredDefaultFontFamily } from './font-catalog.ts';
 import { embeddedFontSources } from './embedded-font-sources.ts';
+import { createLocalFontProbe, detectFontSubstitutions } from './font-availability.ts';
+import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import {
   registerEmbeddedFontFaces,
   type EmbeddedFontFaceRegistration,
@@ -149,6 +161,7 @@ import {
   type PaginatedSurfaceOptions,
   type PaginatedSurfaceState,
 } from './paginated-surface.ts';
+import { surfaceScroller } from './surface-pages.ts';
 import type {
   DocxEditorConfig,
   DocxEditorInstance,
@@ -185,6 +198,8 @@ function toContentPixels(box: { x: number; y: number; width: number; height: num
 
 /** The one frozen scope object every snapshot shares, so scope stays reference-equal. */
 const SCOPE_BODY: EditorScope = Object.freeze({ kind: 'body' as const });
+/** One frozen empty answer, so "nothing substituted" never mints a new reference. */
+const EMPTY_FONT_SUBSTITUTIONS: readonly string[] = Object.freeze([]);
 
 /**
  * The refusal every review write gets when no review module is registered.
@@ -196,6 +211,13 @@ const PRO_REVIEW_REASON =
   'comments and tracked changes require the pro review module (@docx-editor.dev/pro)';
 
 export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
+  const localeCode =
+    config.locale && config.locale in locales ? (config.locale as LocaleCode) : ('en' as const);
+  const t = createT(
+    deepMerge(en, localeCode === 'en' ? undefined : locales[localeCode]) as LocaleStrings,
+    localeCode
+  );
+  const tocLabels = { title: t('toolbar.tableOfContents') };
   let container: HTMLElement | null = config.container ?? null;
   /**
    * The capability registry, resolved once — module registration is
@@ -289,6 +311,44 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   /** True from the moment a load starts font work until it lands (or fails). */
   let fontsResolving = false;
 
+  /**
+   * Local-resolution probe for the compatibility notice, created against the attached
+   * container's document and dropped with it — a probe answers for ONE platform's font
+   * set, and headless (no container) honestly reports nothing substituted.
+   */
+  let localFontProbe: ((family: string) => boolean) | null = null;
+  const probeLocalFont = (family: string): boolean => {
+    if (!localFontProbe) {
+      localFontProbe = createLocalFontProbe(
+        container ? tryCreateBrowserCanvasContext(container.ownerDocument) : null
+      );
+    }
+    return localFontProbe(family);
+  };
+  /** Families the app's font configuration supplies or substitutes, case-folded. */
+  const configCoveredFamilies = new Set<string>(
+    [
+      ...(config.fonts?.sources ?? []).map((source) => source.request.family),
+      ...(config.fonts?.substitutions ?? []).map((substitution) => substitution.from.family),
+    ]
+      .filter((family) => typeof family === 'string' && family.trim().length > 0)
+      .map((family) => family.toLowerCase())
+  );
+  const fontFamilyCovered = (family: string): boolean =>
+    configCoveredFamilies.has(family.toLowerCase()) || embeddedFaces?.alias(family) !== undefined;
+  /**
+   * While font work is still in flight the answer would flicker: embedded faces register
+   * at resolution, so a file whose own fonts are arriving must not flash a notice first.
+   */
+  const deriveFontSubstitutions = (): readonly string[] => {
+    if (!surface || fontsResolving) return EMPTY_FONT_SUBSTITUTIONS;
+    return detectFontSubstitutions(
+      surface.session.documentFonts(),
+      fontFamilyCovered,
+      probeLocalFont
+    );
+  };
+
   // ── State tick + cached snapshot ─────────────────────────────────────────────────────
   let stateVersion = 0;
   let cachedSnapshot: EditorSnapshot | null = null;
@@ -349,6 +409,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     teardownSurface();
     const result = mountPaginatedSurface(container, bytes, {
       scale: scaleOf(),
+      // What a run with no authored font is REPORTED as, matching what it is measured
+      // as (`resolveFont`'s fallback below) — so a blank document's font box reads
+      // "Calibri", not an em-dash.
+      defaultFontFamily: configuredDefaultFontFamily(config.fonts),
       // Suggesting needs both: an author to attribute a proposal to, and the mode itself,
       // which survives a document reload because the reader chose it, not the file.
       ...(config.author ? { author: config.author } : {}),
@@ -380,6 +444,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         bump();
         emitSelectionChange();
       },
+      tocLabels,
       onChange: (state) => {
         // The mount-time render reports before `surface` is assigned; nothing observable
         // has changed at that point, so it is not a selection change.
@@ -461,6 +526,19 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // guard will refuse to touch state, so the flag must reset here or a load that
     // starts no font work of its own reports `resolving: true` forever.
     fontsResolving = false;
+    // A NEW document opens at its first page. The scroller is the host's element and
+    // survives the remount, so the previous document's scroll offset would otherwise
+    // carry over — a reader ten pages into one file opened the next file ten pages in.
+    // BEFORE the mount, so the initial paint materializes the pages actually in view.
+    // Only here, never in `mountBytes`: the font remount and `attach` re-enter that
+    // function for the SAME document and must keep the reader's place.
+    if (container) {
+      const scroller = surfaceScroller(container);
+      if (scroller) {
+        scroller.scrollTop = 0;
+        scroller.scrollLeft = 0;
+      }
+    }
     mountBytes(bytes);
   }
 
@@ -623,6 +701,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       }
       disposeEmbeddedFaces();
       embeddedFaces = registration;
+      // HarfBuzz can only shape faces whose bytes reached its resource snapshot. A run may
+      // still name a locally installed browser face (Helvetica is the common macOS case):
+      // paint resolves that face through CSS, so falling back to the deterministic monospace
+      // grid here makes every later caret drift farther from the glyphs. Resolve the fallback
+      // through the same browser canvas + alias stack the unshaped surface uses. Headless
+      // environments still receive the fixed measurer from this resolver.
+      const fallbackResolution = resolveDefaultSurfaceMeasurer(scaleOf(), {
+        context: container ? tryCreateBrowserCanvasContext(container.ownerDocument) : null,
+        ...(embeddedFaces ? { fontAlias: embeddedFaces.alias } : {}),
+      });
       shapedMeasurer = createShapedMeasurer({
         shaper: shaping.shaper,
         resolveFont: (style) => {
@@ -645,12 +733,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           }
           return resolved instanceof FontResolutionError ? null : resolved;
         },
-        fallback: createFixedMeasurer(),
+        fallback: fallbackResolution.measurer,
         shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
         unicodeDataVersion: '16.0.0',
         ...(fonts.language ? { language: fonts.language } : {}),
       });
-      shapedProducer = `shaped:${shaping.operation.extensionFingerprint}`;
+      // The fallback is part of the geometry producer: the same HarfBuzz faces over a
+      // different unresolved-family measurer must never share paragraph-cache entries.
+      shapedProducer = `shaped:${shaping.operation.extensionFingerprint}+fallback:${fallbackResolution.producer}@scale:${scaleOf()}`;
       fontsResolving = false;
       if (surface) {
         // The remount tears the surface down BEFORE building the replacement, so the
@@ -685,6 +775,20 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       bump();
       reportFontError(toEditorFontError(error));
     }
+  }
+
+  /**
+   * The right-click TOC context, reference-stable while the id holds.
+   *
+   * A fresh object per derivation would make `snapshotsEqual` report every tick as a change
+   * and hand every subscriber a new snapshot, which is the opposite of what the cache is
+   * for. The id is the only value, so one object per id is enough.
+   */
+  let cachedTocContext: { readonly id: string } | null = null;
+  function tocContextOf(id: string | null): { readonly id: string } | null {
+    if (id === null) cachedTocContext = null;
+    else if (cachedTocContext?.id !== id) cachedTocContext = Object.freeze({ id });
+    return cachedTocContext;
   }
 
   function deriveSnapshot(): EditorSnapshot {
@@ -727,6 +831,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           state.selection.anchor.offset === state.selection.head.offset),
       formatting: runFormattingOf(surface),
       table: tableContextOf(surface),
+      tocContext: tocContextOf(state?.contextTocId ?? null),
       image: null,
       page: { current: currentPageOf(surface), total: totalPagesOf(surface) },
       canUndo: state?.canUndo ?? false,
@@ -740,6 +845,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // — is refused before any keystroke reaches the surface, so there is nothing in the
       // surface state to report it. Cleared the moment the surface refuses anything itself.
       lastRejection: state?.lastRejection ?? facadeRejection,
+      fontSubstitutions: deriveFontSubstitutions(),
     };
   }
 
@@ -770,7 +876,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const selection = docRangeEqual(fresh.selection, previous.selection)
         ? previous.selection
         : fresh.selection;
-      next = { ...fresh, formatting, page, pageSetup, selection };
+      const fontSubstitutions =
+        previous.fontSubstitutions !== undefined &&
+        fresh.fontSubstitutions !== undefined &&
+        previous.fontSubstitutions.length === fresh.fontSubstitutions.length &&
+        fresh.fontSubstitutions.every((family, i) => previous.fontSubstitutions![i] === family)
+          ? previous.fontSubstitutions
+          : fresh.fontSubstitutions;
+      next = { ...fresh, formatting, page, pageSetup, selection, fontSubstitutions };
       // Reuse the previous REFERENCE only when neither the caret NOR the document moved.
       //
       // The snapshot is a lossy projection: `selection` is paragraph-granular (a
@@ -819,13 +932,18 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    */
   let reviewTick = 0;
   let reviewSurface: unknown = null;
-  let reviewSeenRevision = -1;
+  let reviewSeenRevision = '';
   let reviewSeenActive: string | null = null;
   let reviewSeenPaneOpen = true;
   let reviewSeenSelectionAnchor: number | null = null;
 
   function reviewRevision(): number {
-    const revision = surface?.session.revision() ?? -1;
+    // BOTH revisions, like the session's own queue cache: an accept inside a header moves
+    // only the package revision, and a tick watching the body alone left the rail frozen —
+    // undoing that accept put the tracked change back with no card beside it.
+    const revision = `${surface?.session.packageRevision() ?? -1}:${
+      surface?.session.revision() ?? -1
+    }`;
     const active = activeReviewKeyNow();
     // The selection is an input too: the "comment on this" affordance appears and moves with
     // it, and a counter blind to it left the button absent no matter what was selected.
@@ -871,8 +989,49 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const cached = anchorIndexCache.get(layout);
     if (cached) return cached;
     const index = reviewAnchorIndex(layout, (page) => paragraphFragmentsOf(page));
+    // Header/footer stories join the same index so their cards get real geometry. A story's
+    // box is sheet-absolute like a page's content box, and its fragments are story-relative
+    // like body fragments are content-relative — the same two-space sum `reviewItemGeometry`
+    // performs. FIRST page wins, matching the body rule: a shared part painted on every
+    // page anchors its card where the reader first meets it.
+    for (const page of layout.pages) {
+      for (const story of [page.header, page.footer]) {
+        if (!story) continue;
+        for (const fragment of paragraphFragmentsOfBlocks(story.fragments)) {
+          if (index.has(fragment.paragraphId)) continue;
+          index.set(fragment.paragraphId, {
+            pageIndex: page.index,
+            contentY: story.box.y,
+            fragmentY: fragment.box.y,
+            ...(fragment.lines ? { lines: fragment.lines } : {}),
+          });
+        }
+      }
+    }
     anchorIndexCache.set(layout, index);
     return index;
+  }
+
+  /**
+   * Which story a review item lives in, from the part name its ranges carry.
+   *
+   * `null` rId means the part is not a header/footer this document's sections resolve —
+   * i.e. the body (or an unknown part, which is treated as body rather than guessed at).
+   */
+  function furnitureHomeOf(
+    item: ReviewItem
+  ): { readonly kind: 'header' | 'footer'; readonly rId: string } | null {
+    const partName = firstReviewRange(item)?.partName;
+    if (!partName || !surface || partName === surface.session.part().name) return null;
+    for (const section of surface.session.headerFooterResolutionBySection()) {
+      for (const kind of ['header', 'footer'] as const) {
+        const slots = kind === 'header' ? section.headers : section.footers;
+        for (const slot of slots.values()) {
+          if (slot.partName === partName) return { kind, rId: slot.rId };
+        }
+      }
+    }
+    return null;
   }
 
   /** Word writes `@w:date` to the second; milliseconds group with nothing. */
@@ -951,7 +1110,30 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const layout = surface?.publishedLayout() ?? null;
     const anchors = layout ? anchorIndexOf(layout) : null;
     const activeReviewKey = activeReviewKeyNow();
-    return items.map((item) => {
+    // The queue ranks furniture stories after the whole body (tree order), but the rail
+    // stacks cards top-down and never moves one UP past its anchor — a header card sorted
+    // after page 40's cards would render at the rail's bottom, pages away from the header
+    // it annotates. Reorder by the page a card sits beside; within a page, header cards
+    // first, then body cards in document order, then footer cards. The sort is stable, so
+    // body cards keep the tree order the queue promised.
+    const groupOf = (item: ReviewItem): number => {
+      const home = furnitureHomeOf(item);
+      return home === null ? 1 : home.kind === 'header' ? 0 : 2;
+    };
+    const ranked = items.map((item, position) => ({
+      item,
+      position,
+      pageIndex: anchors ? (reviewItemGeometry(item, anchors)?.pageIndex ?? null) : null,
+      group: groupOf(item),
+    }));
+    ranked.sort((a, b) => {
+      const aPage = a.pageIndex ?? Number.MAX_SAFE_INTEGER;
+      const bPage = b.pageIndex ?? Number.MAX_SAFE_INTEGER;
+      if (aPage !== bPage) return aPage - bPage;
+      if (a.group !== b.group) return a.group - b.group;
+      return a.position - b.position;
+    });
+    return ranked.map(({ item }) => {
       const key = reviewItemKey(item);
       const geometry = anchors ? reviewItemGeometry(item, anchors) : null;
       const comment = item.kind === 'comment' ? item.comment : null;
@@ -1074,13 +1256,20 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // accepted, the replacement text still pending — is a state nobody asked for and one
     // undo would not take back.
     let applied: { committed: boolean; reason?: unknown } | undefined;
+    // A revision in a header/footer resolves against ITS story store, not the body's. The
+    // default body scope simply failed to find the address, so an Accept on a header card
+    // reported "refused" over a change the queue itself had listed.
+    const home = furnitureHomeOf(item);
     surface?.commitReviewOps(() => {
       applied = surface!.session.applyTreeOps(
         item.addresses.map((revision) =>
           action === 'accept'
             ? ({ op: 'acceptRevision', revision } as const)
             : ({ op: 'rejectRevision', revision } as const)
-        )
+        ),
+        undefined,
+        undefined,
+        home === null ? undefined : { kind: 'headerFooter', rId: home.rId }
       );
       return applied;
     });
@@ -1132,6 +1321,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         teardownSurface();
       }
       container = el;
+      // A probe answers for one document's font set; the new container may live in a
+      // different one (an iframe host), so it re-creates on the next derivation.
+      localFontProbe = null;
       const bytes = pendingBytes;
       pendingBytes = null;
       // A mount bumps the tick and emits change/selectionChange itself.
@@ -1146,6 +1338,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         teardownSurface();
       }
       container = null;
+      localFontProbe = null;
       bump();
     },
 
@@ -1337,6 +1530,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // Real derivations from the canonical trees (session-memoized), no longer stubs.
     getDocumentStyles: () => surface?.session.documentStyles() ?? [],
     getDocumentFonts: () => surface?.session.documentFonts() ?? [],
+    // The picker's list: the configured catalog is offerable with no document at all,
+    // and the document's declared families join it once one is mounted.
+    getAvailableFonts: () =>
+      availableFontFamilies(config.fonts, surface?.session.documentFonts() ?? []),
     getDocumentThemeColors: () => surface?.session.documentThemeColors() ?? [],
     getOutline: () => surface?.session.documentOutline() ?? [],
     getComments: () => [],
@@ -1408,11 +1605,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getTrackedChanges: () =>
       (surface?.session.reviewItems() ?? [])
         .filter((item) => item.kind === 'revision')
-        .map((item) => ({
-          id: item.id,
-          kind: item.kind === 'revision' ? item.revisionKind : 'revision',
-          ...(item.kind === 'revision' && item.author ? { author: item.author } : {}),
-        })),
+        .map((item) => {
+          const home = furnitureHomeOf(item);
+          return {
+            id: item.id,
+            kind: item.kind === 'revision' ? item.revisionKind : 'revision',
+            ...(item.kind === 'revision' && item.author ? { author: item.author } : {}),
+            story: home === null ? ('body' as const) : home.kind,
+          };
+        }),
 
     getReviewItems: () => reviewPlacements(),
 
@@ -1485,6 +1686,18 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const item = placement?.item;
       const range = item ? firstReviewRange(item) : null;
       if (!range || !surface) return;
+      // A card whose range lives in a header/footer opens that scope, exactly as Word does:
+      // the body selection cannot address a furniture paragraph, so setting it would only
+      // clamp the caret to some unrelated body position.
+      const home = item ? furnitureHomeOf(item) : null;
+      if (home !== null) {
+        surface.enterHeaderFooter?.({
+          rId: home.rId,
+          kind: home.kind,
+          position: { paragraphId: range.start.paragraphId, offset: range.start.offset },
+        });
+        return;
+      }
       // Card to document: put the CARET at the range's start. Selecting the whole range
       // instead turned the text grey and — because a range selection is what the "comment on
       // this" affordance keys on — offered to add a second comment on top of the one the
@@ -1567,7 +1780,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
             (query as { container?: ContainerRef }).container
           ) as unknown as EditorQueryResults[K];
         case 'isInsideToc':
-          return false as EditorQueryResults[K];
+          return (
+            surface ? surface.isInsideToc(surface.state().selection.head.paragraphId) : false
+          ) as EditorQueryResults[K];
         case 'hyperlinkAt':
           return hyperlinkAtOf(surface) as EditorQueryResults[K];
         case 'contentControls':

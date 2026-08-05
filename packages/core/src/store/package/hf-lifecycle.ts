@@ -496,6 +496,27 @@ function cloneNodeIds(node: OoxmlNode, nextId: () => string): OoxmlNode {
 // sectPr reference mutation
 // ---------------------------------------------------------------------------
 
+/**
+ * The main part with `xmlns:r` guaranteed on its root, or null when the prefix is taken.
+ *
+ * A minted `w:headerReference` carries `r:id`, and a minimal document that never declared
+ * the relationships namespace fails the invariant validator with `invalid-qname` — the
+ * whole create refused over a missing binding. Same discipline as the `w14:paraId` root
+ * binding: add it at the root, in the same mutation that needs it.
+ */
+function withRelationshipRootBinding(main: OoxmlPart): OoxmlPart | null {
+  const bound = main.root.namespaceBindings.find((binding) => binding.prefix === 'r');
+  if (bound) return bound.namespaceUri === R_NS ? main : null;
+  const root = {
+    ...main.root,
+    namespaceBindings: Object.freeze([
+      ...main.root.namespaceBindings,
+      Object.freeze({ prefix: 'r', namespaceUri: R_NS }),
+    ]),
+  } as typeof main.root;
+  return { ...main, root };
+}
+
 function setSectionReference(
   pkg: OoxmlPackage,
   sectionIndex: number,
@@ -504,7 +525,9 @@ function setSectionReference(
   rId: string
 ): OoxmlPackage | null {
   if (!/^rId\d{1,9}$/.test(rId)) return null;
-  const main = pkg.parts.get(pkg.mainDocumentPart);
+  const located = pkg.parts.get(pkg.mainDocumentPart);
+  if (!located) return null;
+  const main = withRelationshipRootBinding(located);
   if (!main) return null;
   const sectPrNodes = collectSectionPropertyNodes(main.root);
   if (sectionIndex >= sectPrNodes.length) return null;

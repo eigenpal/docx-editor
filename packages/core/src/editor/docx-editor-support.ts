@@ -453,6 +453,31 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
     case 'undo':
     case 'redo':
       return { supported: true, mutating: true };
+    case 'insertToc':
+      return { supported: true, mutating: true };
+    case 'refreshToc':
+      if (
+        command.mode !== undefined &&
+        command.mode !== 'entire' &&
+        command.mode !== 'pageNumbers'
+      ) {
+        return {
+          supported: false,
+          code: 'invalidArgs',
+          reason: "refreshToc mode must be 'entire' or 'pageNumbers'",
+        };
+      }
+      if (
+        command.tocId !== undefined &&
+        (typeof command.tocId !== 'string' || command.tocId.length === 0)
+      ) {
+        return {
+          supported: false,
+          code: 'invalidArgs',
+          reason: 'refreshToc tocId must be a non-empty string',
+        };
+      }
+      return { supported: true, mutating: true };
     case 'editHeaderFooter': {
       if (command.position !== 'header' && command.position !== 'footer') {
         return {
@@ -751,6 +776,7 @@ export function snapshotsEqual(a: EditorSnapshot, b: EditorSnapshot): boolean {
     a.selectionCollapsed === b.selectionCollapsed &&
     a.formatting === b.formatting &&
     a.table === b.table &&
+    a.tocContext === b.tocContext &&
     a.image === b.image &&
     a.page === b.page &&
     a.canUndo === b.canUndo &&

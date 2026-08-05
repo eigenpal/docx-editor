@@ -19,6 +19,7 @@ export {
   type FontConfigurationBase,
   type FontConfigurationFragment,
 } from './font-composition.ts';
+export { blankDocumentBytes } from './blank-document.ts';
 export {
   createFontSource,
   loadFonts,

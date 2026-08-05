@@ -173,6 +173,12 @@ export type ReviewItem = ReviewRevisionItem | ReviewCommentItem;
 export interface ReviewModelInput {
   /** The story the ranges live in — the main document, a header, a note. */
   readonly storyPart: OoxmlPart;
+  /**
+   * Header/footer story parts, in section order. Their revisions and comment anchors join
+   * the queue: a tracked change in a header is a pending decision like any other, and a
+   * queue that only walked the body silently hid it from the rail AND from Accept All.
+   */
+  readonly furnitureParts?: readonly OoxmlPart[] | undefined;
   /** `word/comments.xml`, absent when the package has none. */
   readonly commentsPart?: OoxmlPart | undefined;
   /** `word/commentsExtended.xml`, absent when the package has none. */

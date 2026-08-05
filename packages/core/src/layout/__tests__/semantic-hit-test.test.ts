@@ -455,7 +455,25 @@ describe('the caches key on everything their answer depends on', () => {
       measure: (text) => text.length * 2,
       lineMetrics: () => ({ height: 14, baseline: 11 }),
     };
-    const layout = lay(p('abcdefghij'), wide);
+    // Layout always publishes caretEdges now; those win over a live measurer (covered
+    // below). Strip them so this case still exercises the measurer-keyed prefix cache.
+    const laid = lay(p('abcdefghij'), wide);
+    const layout: SemanticLayout = {
+      ...laid,
+      pages: laid.pages.map((page) => ({
+        ...page,
+        fragments: page.fragments.map((fragment) => {
+          if (fragment.kind !== 'paragraph') return fragment;
+          return {
+            ...fragment,
+            lines: fragment.lines.map((line) => ({
+              ...line,
+              spans: line.spans.map((span) => ({ ...span, caretEdges: undefined })),
+            })),
+          };
+        }),
+      })),
+    };
     const first = hit(layout, 50, 5, narrow)!.position.offset;
     const second = hit(layout, 50, 5, wide)!.position.offset;
     // At 20pt per character x=50 is nearest the boundary after 2; at 2pt it is past the end.
@@ -522,7 +540,12 @@ describe('the caret sits at a glyph edge', () => {
     const span = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!.spans[0]!;
     // True edge after "iii" is 3 narrow glyphs; interpolation would say half of 96.
     expect(spanOffsetX(span, 3, proportional)).toBe(span.box.x + 6);
-    expect(spanOffsetX(span, 3, undefined)).toBe(span.box.x + span.box.width / 2);
+    // Published caretEdges are layout authority even without a live measurer.
+    expect(span.caretEdges?.[3]).toBe(6);
+    expect(spanOffsetX(span, 3, undefined)).toBe(span.box.x + 6);
+    // Interpolation remains the fallback only when edges were never published.
+    const naked = { ...span, caretEdges: undefined };
+    expect(spanOffsetX(naked, 3, undefined)).toBe(span.box.x + span.box.width / 2);
   });
 
   test('and caretAt uses it, so the caret and the hit test agree', () => {
@@ -532,6 +555,40 @@ describe('the caret sits at a glyph edge', () => {
     expect(caret.x).toBe(span.box.x + 6);
     // Clicking where the caret is drawn resolves back to the offset it was drawn for.
     expect(hit(layout, caret.x, 5, proportional)!.position.offset).toBe(3);
+  });
+
+  test('published caretEdges win over a disagreeing measurer', () => {
+    // Once layout freezes cluster edges on the span, interaction must not re-measure a
+    // prefix that could disagree (canvas vs CSS, or a swapped host measurer).
+    const layout = lay(p('Irurein'), proportional);
+    const span = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!.spans[0]!;
+    expect(span.caretEdges).toBeDefined();
+    const beforeE = 4; // Irur|
+    const published = span.box.x + span.caretEdges![beforeE]!;
+    const liar: TextMeasurer = {
+      measure: () => 999,
+      lineMetrics: () => ({ height: 14, baseline: 11 }),
+    };
+    expect(spanOffsetX(span, beforeE, liar)).toBe(published);
+    expect(caretAt(layout, { paragraphId: P0, offset: beforeE }, liar)!.x).toBe(published);
+  });
+
+  test('after a justified space the caret sits with the next word, not inside the gap', () => {
+    // Wide column + short words so the first line is justified and layout leaves slack
+    // only after expandable spaces (the paint `word-spacing` slots).
+    const words = Array.from({ length: 12 }, (_, index) => `w${index}`).join(' ');
+    const layout = lay(
+      `<w:p><w:pPr><w:jc w:val="both"/></w:pPr><w:r><w:t>${words}</w:t></w:r></w:p>`,
+      proportional
+    );
+    const line = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!;
+    expect(line.spans.length).toBeGreaterThan(2);
+    const first = line.spans[0]!;
+    const second = line.spans[1]!;
+    expect(first.text.endsWith(' ')).toBe(true);
+    expect(second.box.x).toBeGreaterThan(first.box.x + first.box.width + 0.25);
+    const caret = caretAt(layout, { paragraphId: P0, offset: first.range.end }, proportional)!;
+    expect(caret.x).toBe(second.box.x);
   });
 });
 

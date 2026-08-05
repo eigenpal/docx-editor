@@ -435,8 +435,8 @@ export function openTreeSession(
     readonly resolution: readonly HeaderFooterSectionResolution[];
   } | null = null;
   /** Memoized per package revision: the queue only changes when the document does. */
-  let reviewCache: { revision: number; items: readonly ReviewItem[] } | null = null;
-  /** Memoized per package revision, like `reviewCache` — see `hasReviewContent`. */
+  let reviewCache: { revision: string; items: readonly ReviewItem[] } | null = null;
+  /** Memoized per body revision, like `reviewCache` — see `hasReviewContent`. */
   let reviewContentCache: { revision: number; present: boolean } | null = null;
   let lastChange: TreeModelChange | null = null;
   packageStore.subscribe((change) => {
@@ -797,7 +797,7 @@ export function openTreeSession(
         }
         fontsCache = {
           revision: packageStore.packageRevision,
-          fonts: collectDocumentFonts(roots),
+          fonts: collectDocumentFonts(roots, collectDocumentThemeFonts(resolveThemeRoot())),
         };
         return fontsCache.fonts;
       },
@@ -914,16 +914,36 @@ export function openTreeSession(
         const derive = options.reviewModel;
         if (!derive) return EMPTY_REVIEW_ITEMS;
         const store = bodyStore();
-        if (!reviewCache || reviewCache.revision !== store.revision) {
+        // Keyed on BOTH revisions. The body store's alone missed a tracked change typed
+        // into a header (only the package revision moves); the package revision alone
+        // missed a comment written straight through the body store (`replyToComment`
+        // commits on the story store, which moves only the body revision).
+        const revisionKey = `${packageStore.packageRevision}:${store.revision}`;
+        if (!reviewCache || reviewCache.revision !== revisionKey) {
           const pkg = currentPackage();
+          // Every header/footer story that any section resolves to, deduped by part
+          // identity — the same pattern `documentFonts` walks, and for the same reason:
+          // a shared part must contribute its cards once.
+          const furnitureParts: OoxmlPart[] = [];
+          const seenFurniture = new Set<OoxmlPart>();
+          for (const section of resolvedHeaderFooterBySection().parts) {
+            for (const slots of [section.headers, section.footers]) {
+              for (const part of slots.values()) {
+                if (seenFurniture.has(part)) continue;
+                seenFurniture.add(part);
+                furnitureParts.push(part);
+              }
+            }
+          }
           // Resolved through the story's own relationships, exactly as the WRITE side
           // resolves them. Hardcoding `/word/comments.xml` here made the reader disagree
           // with the writer for any package that names its comment part something else —
           // the comment was written and then never read back.
           reviewCache = {
-            revision: store.revision,
+            revision: revisionKey,
             items: derive({
               storyPart: store.part,
+              furnitureParts,
               commentsPart: pkg.parts.get(commentPartNameOf(pkg, store.part.name)),
               commentsExtendedPart: pkg.parts.get(commentsExtendedPartNameOf(pkg, store.part.name)),
             }),

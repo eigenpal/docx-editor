@@ -15,6 +15,7 @@ import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
 import { Navigation as DocxEditorNavigationCompound } from '../editor/navigation';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
+import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
 import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
 import { DocxEditorNotesChrome } from '../editor/DocxEditorNotes';
@@ -275,6 +276,9 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
           so `defaultChromeGroups()` filters it out and only explicit composition mounts it.
           The title bar above carries the save control instead. */}
       <DocxEditorToolbar t={translate} />
+      {/* Word's font compatibility bar: shown when the document's declared faces render
+          in substitutes, dismissible per set of missing families. */}
+      <DocxEditorFontNotice t={translate} />
       {/* The navigation pane is a SIBLING of the viewport inside a positioned row, not a
           column beside it: it floats over the gutter to the left of the centred page and
           leaves the page alone until the window is too narrow to hold both. Without a
@@ -356,6 +360,8 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
   /** Floating localized page readout for the active viewport. */
   readonly PageNumber: typeof DocxEditorPageNumber;
+  /** Word-style notice when document fonts render in substitute faces. */
+  readonly FontNotice: typeof DocxEditorFontNotice;
   /** Header/footer scope chrome while editing page furniture. */
   readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
   readonly NotesChrome: typeof DocxEditorNotesChrome;
@@ -392,6 +398,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   Navigation: DocxEditorNavigationCompound,
   PageSetupDialog: DocxEditorPageSetupDialog,
   PageNumber: DocxEditorPageNumber,
+  FontNotice: DocxEditorFontNotice,
   HeaderFooterChrome: DocxEditorHeaderFooterChrome,
   NotesChrome: DocxEditorNotesChrome,
   HyperLink: DocxEditorHyperLink,

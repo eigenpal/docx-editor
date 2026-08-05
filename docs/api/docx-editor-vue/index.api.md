@@ -471,6 +471,7 @@ export interface Editor {
     focus(scope?: EditorScope): InteractionOutcome<void>;
     // (undocumented)
     getActiveScope(): ViewScope;
+    getAvailableFonts(): readonly string[];
     getComments(): readonly {
         readonly id: string;
         readonly text: string;
@@ -539,6 +540,7 @@ export interface Editor {
         readonly id: string;
         readonly kind: string;
         readonly author?: string;
+        readonly story?: 'body' | 'header' | 'footer';
     }[];
     getWatermark(): { readonly kind: 'text' | 'image'; readonly text?: string } | null;
     // (undocumented)
@@ -672,6 +674,7 @@ export interface EditorSnapshot {
     readonly canUndo?: boolean;
     readonly editable: boolean;
     readonly editingMode?: DocumentEditingMode;
+    readonly fontSubstitutions?: readonly string[];
     // (undocumented)
     readonly formatting: RunFormatting | null;
     readonly hasReviewContent?: boolean;
@@ -692,6 +695,7 @@ export interface EditorSnapshot {
     readonly selectionCollapsed: boolean;
     // (undocumented)
     readonly table: TableContext | null;
+    readonly tocContext: { readonly id: string } | null;
     // (undocumented)
     readonly zoom: number;
 }

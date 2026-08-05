@@ -152,6 +152,22 @@ afterEach(() => {
 });
 
 describe('DocxEditor.NotesChrome', () => {
+  test('note banner anchors through the shared story-label chrome hook', async () => {
+    // Footnote/endnote chrome uses `useScopedChromeAnchor(..., 'story-label')` — the same
+    // path as header/footer. Gutter regression coverage lives with that hook; this pins the
+    // notes banner to the shared placement mode so a future fork cannot silently diverge.
+    const { view, editor } = mountChrome(footnoteDoc());
+    await enterFootnote(editor());
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    const banner = view.getByTestId('docx-notes-banner');
+    expect(banner.style.position).toBe('absolute');
+    expect(banner.style.visibility).toBe('visible');
+    expect(banner.style.left).toMatch(/^\d+(\.\d+)?px$/);
+    expect(banner.style.width).toMatch(/^\d+(\.\d+)?px$/);
+  });
+
   test('banner hidden in body, visible in note scope with label and scope id', async () => {
     const { view, editor } = mountChrome(footnoteDoc());
     expect(view.getByTestId('docx-notes-chrome')).toBeTruthy();

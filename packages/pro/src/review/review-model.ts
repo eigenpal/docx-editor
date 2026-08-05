@@ -564,17 +564,41 @@ export function commentItemsOf(
  * Everything the review surface lists, in document order.
  *
  * Order is by paragraph position within the story, then by offset. A comment and the revision
- * it covers therefore arrive together, which is what lets a surface group them.
+ * it covers therefore arrive together, which is what lets a surface group them. Furniture
+ * stories rank after the body in one merged order — their geometry (the page they first paint
+ * on) is a layout question the queue deliberately does not answer.
  */
 export function collectReviewItems(input: ReviewModelInput): ReviewItem[] {
-  const revisions = revisionItemsOf(input.storyPart);
+  // The body part deduped against the furniture list, so a caller passing a part twice —
+  // or the same shared header under two sections — cannot double every card in it.
+  const parts: OoxmlPart[] = [input.storyPart];
+  const seen = new Set<string>([input.storyPart.name]);
+  for (const part of input.furnitureParts ?? []) {
+    if (seen.has(part.name)) continue;
+    seen.add(part.name);
+    parts.push(part);
+  }
+
   const comments = input.commentsPart ? commentsOfPart(input.commentsPart) : [];
-  const anchors = commentAnchorsOfStory(input.storyPart);
   const threadState = input.commentsExtendedPart
     ? threadStateOfPart(input.commentsExtendedPart)
     : new Map<string, CommentThreadState>();
 
-  const order = paragraphOrderOfPart(input.storyPart);
+  // ONE anchor set across every story, then ONE pass over `comments.xml`. Collecting
+  // per-story and concatenating listed each comment once per story — anchored in one,
+  // orphaned in all the others.
+  const revisions: ReviewRevisionItem[] = [];
+  const anchors: ReturnType<typeof commentAnchorsOfStory> = [];
+  const order = new Map<string, number>();
+  for (const part of parts) {
+    revisions.push(...revisionItemsOf(part));
+    anchors.push(...commentAnchorsOfStory(part));
+    const base = order.size;
+    for (const [id, position] of paragraphOrderOfPart(part)) {
+      if (!order.has(id)) order.set(id, base + position);
+    }
+  }
+
   const items: ReviewItem[] = [...revisions, ...commentItemsOf(comments, anchors, threadState)];
   return items.sort((a, b) => reviewItemPositionRank(a, order) - reviewItemPositionRank(b, order));
 }

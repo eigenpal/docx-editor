@@ -48,6 +48,18 @@ import {
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 
 /**
+ * How far past the line's right edge a span may reach before it counts as overflow.
+ *
+ * A right/centre/decimal tab computes its advance in ABSOLUTE x — `destination - currentX -
+ * segmentWidth` — while wrapping is decided in line-local width. Converting between the two
+ * subtracts and re-adds the paragraph origin, so a segment the tab placed to end EXACTLY at
+ * the edge lands a fraction of an ulp beyond it. Without a tolerance that hairline decides a
+ * line break, and a right-aligned tab is built to reach the edge exactly. A thousandth of a
+ * point is far below one device pixel, so nothing a reader could see wraps because of this.
+ */
+const OVERFLOW_TOLERANCE_PT = 0.001;
+
+/**
  * Per-paragraph geometry the BREAK depends on, beyond width.
  *
  * Both change where lines start and how tall they are, so both belong in the caller's
@@ -86,6 +98,12 @@ export interface ParagraphFlowOptions {
   readonly displayMode?: RevisionDisplayMode;
   /** Derived footnote/endnote marks for noteReference / noteRef projection. */
   readonly noteMarks?: import('./note-projection.ts').NoteMarkContext;
+  /**
+   * Cross-paragraph TOC field begin/end paragraphs carry only `w:fldChar` / `w:instrText`
+   * chrome with no measurable text. When set, an otherwise empty break returns no lines so
+   * layout does not reserve the caret placeholder row ordinary empty paragraphs need.
+   */
+  readonly suppressEmptyPlaceholderLine?: boolean;
 }
 
 /** One measurable piece of a paragraph: text carrying one property set. */
@@ -117,8 +135,19 @@ export function propertiesOf(container: OoxmlNode | undefined): OoxmlProperty[] 
 }
 
 /**
- * Break points inside a piece: after each run of spaces (words stay whole), and with each
- * tab as its own atom so tab-stop geometry can size `\t` independently of neighbouring text.
+ * Dashes a line may break AFTER, the way Word wraps "ALPHA-PRIME" as "ALPHA-" / "PRIME":
+ * hyphen-minus, hyphen, en dash, em dash. U+2011 NON-BREAKING HYPHEN is deliberately
+ * absent — its whole meaning is "no wrap here".
+ */
+const BREAK_AFTER_DASH = new Set(['-', '‐', '–', '—']);
+
+/**
+ * Break points inside a piece: after each run of spaces (words stay whole), after a dash
+ * that sits between non-space text, and with each tab as its own atom so tab-stop
+ * geometry can size `\t` independently of neighbouring text.
+ *
+ * A dash run breaks only after its LAST dash, mirroring how a run of spaces is one
+ * boundary; a dash beside a space adds nothing the space boundary does not already give.
  */
 function wordBoundaries(text: string): number[] {
   const boundaries: number[] = [];
@@ -128,6 +157,15 @@ function wordBoundaries(text: string): number[] {
       if (index > 0 && boundaries[boundaries.length - 1] !== index) boundaries.push(index);
       boundaries.push(index + 1);
     } else if (ch === ' ') {
+      boundaries.push(index + 1);
+    } else if (
+      BREAK_AFTER_DASH.has(ch) &&
+      index > 0 &&
+      text[index - 1] !== ' ' &&
+      index + 1 < text.length &&
+      text[index + 1] !== ' ' &&
+      !BREAK_AFTER_DASH.has(text[index + 1]!)
+    ) {
       boundaries.push(index + 1);
     }
   }
@@ -332,12 +370,51 @@ export function paragraphAlignment(props: readonly OoxmlProperty[]): Alignment {
 }
 
 /**
+ * True when this span's trailing U+0020 is an inter-word slot Word can stretch.
+ *
+ * Paint reapplies justification as CSS `word-spacing` on those same spaces. Inserting layout
+ * slack at every style-span boundary (tabs, run splits mid-phrase) put gaps where paint has
+ * none and shifted every later span — caret mid-word drifted by a multiple of the step while
+ * the highlight (DOM) stayed on the glyphs.
+ */
+function endsWithExpandableSpace(text: string): boolean {
+  return text.endsWith(' ');
+}
+
+/**
+ * Per-UTF-16 caret edges from the span origin, matching {@link TextMeasurer.measure} prefixes.
+ *
+ * Tabs and non-1:1 projections collapse to the published box endpoints — measuring `\t` or
+ * projected ink would disagree with breakParagraph's reserved advance.
+ */
+function caretEdgesForSpan(span: StyleSpanRecord, measurer: TextMeasurer): readonly number[] {
+  const length = span.range.end - span.range.start;
+  if (length <= 0 || span.text === '\t' || span.projected || span.text.length !== length) {
+    return Object.freeze([0, span.box.width]);
+  }
+  const edges: number[] = [0];
+  for (let index = 1; index <= span.text.length; index += 1) {
+    edges.push(measurer.measure(span.text.slice(0, index), span.style));
+  }
+  return Object.freeze(edges);
+}
+
+function withCaretEdges(
+  spans: readonly StyleSpanRecord[],
+  measurer: TextMeasurer
+): readonly StyleSpanRecord[] {
+  return spans.map((span) =>
+    span.caretEdges ? span : { ...span, caretEdges: caretEdgesForSpan(span, measurer) }
+  );
+}
+
+/**
  * Shift a line's spans to satisfy the paragraph alignment.
  *
- * Layout is the only geometry authority, so alignment has to move the published span boxes
- * rather than being left to CSS: the painter positions each span absolutely, and hit testing
- * and the caret read the same boxes. Delegating this to `text-align` would put the caret
- * where no glyph is.
+ * Layout is the only geometry authority: hit testing and the caret read published span boxes
+ * (and {@link StyleSpanRecord.caretEdges}). Paint starts the line at the first span's x and
+ * flows inline — justification slack must therefore land on the same inter-word spaces
+ * `word-spacing` expands, not on every style-span boundary.
  */
 export function alignSpans(
   spans: readonly StyleSpanRecord[],
@@ -347,7 +424,8 @@ export function alignSpans(
   alignment: Alignment,
   isLastLine: boolean
 ): readonly StyleSpanRecord[] {
-  if (spans.length === 0 || alignment === 'left') return spans;
+  if (spans.length === 0) return spans;
+  if (alignment === 'left') return withCaretEdges(spans, measurer);
 
   // Trailing whitespace hangs into the margin rather than pushing the text off-centre, which
   // is what Word does and what stops a line ending in a space from looking misaligned.
@@ -357,20 +435,36 @@ export function alignSpans(
     visible === last.text ? 0 : last.box.width - measurer.measure(visible, last.style);
   const used = last.box.x - indentLeft + last.box.width - trailing;
   const slack = available - used;
-  if (slack <= 0) return spans;
+  if (slack <= 0) return withCaretEdges(spans, measurer);
 
   // The last line of a justified paragraph is set flush left, never stretched.
   if (alignment === 'both') {
-    const gaps = spans.length - 1;
-    if (isLastLine || gaps <= 0) return spans;
-    const step = slack / gaps;
-    return spans.map((span, index) =>
-      index === 0 ? span : { ...span, box: { ...span.box, x: span.box.x + step * index } }
+    if (isLastLine) return withCaretEdges(spans, measurer);
+    // Only boundaries after an expandable space receive slack — the same slots paint stretches
+    // with `word-spacing`. A uniform step across every span pair invented gaps before tabs and
+    // run splits and drifted every later caret by N×step.
+    const gapBefore: number[] = [];
+    for (let index = 1; index < spans.length; index += 1) {
+      if (endsWithExpandableSpace(spans[index - 1]!.text)) gapBefore.push(index);
+    }
+    if (gapBefore.length === 0) return withCaretEdges(spans, measurer);
+    const step = slack / gapBefore.length;
+    const gapSet = new Set(gapBefore);
+    let shift = 0;
+    return withCaretEdges(
+      spans.map((span, index) => {
+        if (gapSet.has(index)) shift += step;
+        return shift === 0 ? span : { ...span, box: { ...span.box, x: span.box.x + shift } };
+      }),
+      measurer
     );
   }
 
   const offset = alignment === 'center' ? slack / 2 : slack;
-  return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } }));
+  return withCaretEdges(
+    spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } })),
+    measurer
+  );
 }
 
 /**
@@ -430,6 +524,9 @@ export function breakParagraph(
       },
     ];
   });
+  if (pieces.length === 0 && flow?.suppressEmptyPlaceholderLine) {
+    return [];
+  }
   /** Carried onto every span so paint and the review surface read one attribution. */
   const revisionsOf = (piece: FieldAwarePiece): { revisions?: readonly RevisionAttribution[] } =>
     piece.revisions === undefined ? {} : { revisions: piece.revisions };
@@ -529,7 +626,13 @@ export function breakParagraph(
       line.end = piece.end;
       closeLine();
       lines[lines.length - 1]!.columnBreakAfter = true;
-      trailingLineBreak = false;
+      // Like a trailing hard break, NOT like a page break: Word still lays out the
+      // paragraph's remainder after the column advance. The common authoring form
+      // `<w:p><w:r><w:br w:type="column"/></w:r></w:p>` therefore opens one empty line
+      // at the top of the next column before the following block — the paragraph mark
+      // after the break. Suppressing that remainder put "After Column Break" flush with
+      // the prior column's first line.
+      trailingLineBreak = true;
       continue;
     }
     if (piece.text === PAGE_BREAK_CHAR) {
@@ -548,6 +651,13 @@ export function breakParagraph(
       line.end = piece.end;
       closeLine();
       lines[lines.length - 1]!.pageBreakAfter = true;
+      // NOT `trailingLineBreak`, unlike the hard break / column break above. An empty
+      // remainder publishes no line on the page the break opened: Word Online puts the
+      // following block flush at the top of that page, which `paragraph-spacing-borders`
+      // and `section-aware-pagination` pin against the comprehensive fixture. The caret
+      // after such a break therefore has nowhere to go on the new page, which is why the
+      // click that lands in the blank space beside the mark resolves BEFORE it — see
+      // `hitTestSemantic`.
       trailingLineBreak = false;
       continue;
     }
@@ -657,6 +767,13 @@ export function breakParagraph(
         line.height = Math.max(line.height, metrics.height);
         line.baseline = Math.max(line.baseline, metrics.baseline);
         line.end = layoutOwned ? piece.end : piece.start + boundary;
+        // A tab is a break opportunity, so whatever follows it may open a line. Leaving the
+        // previous word recorded here made the following text a CONTINUATION of it, and an
+        // overflow then took the mid-word path: the word before the tab was carried onto the
+        // next line together with the tab, whose advance was re-laid unchanged and no longer
+        // reached its stop — a heading split mid-phrase with its page number stranded in the
+        // middle of the line.
+        lastEmitted = '\t';
         consumed = boundary;
         continue;
       }
@@ -667,20 +784,24 @@ export function breakParagraph(
       const measureSource = piece.measureText ?? candidate;
       const width = measurer.measure(displayText(measureSource, piece.style), piece.style);
       // A candidate may open a line only at a real break opportunity. Within a piece,
-      // `wordBoundaries` cuts after spaces and tabs, so every candidate but the first is one.
-      // The FIRST candidate of a piece continues whatever the previous piece ended with, so it
-      // is a break opportunity only if that ended in whitespace.
+      // `wordBoundaries` cuts after spaces, dashes and tabs, so every candidate but the
+      // first is one. The FIRST candidate of a piece continues whatever the previous piece
+      // ended with, so it is a break opportunity only if that ended in whitespace \u2014 or in a
+      // dash, which stays a break opportunity across run boundaries (a tracked change can
+      // split "ALPHA-" and "PRIME" into different runs without gluing them).
       const opensWord =
         consumed > 0 ||
         lastEmitted === '' ||
         /[\s\u00a0]$/.test(lastEmitted) ||
-        /^[\s\u00a0]/.test(candidate);
+        /^[\s\u00a0]/.test(candidate) ||
+        (BREAK_AFTER_DASH.has(lastEmitted[lastEmitted.length - 1]!) &&
+          !BREAK_AFTER_DASH.has(candidate[0]!));
       if (opensWord) {
         wordStartSpan = line.spans.length;
         wordStartWidth = line.width;
         wordStartEnd = line.end;
       }
-      if (line.width + width > lineAvailable() && line.spans.length > 0) {
+      if (line.width + width > lineAvailable() + OVERFLOW_TOLERANCE_PT && line.spans.length > 0) {
         if (opensWord || wordStartSpan <= 0) {
           closeLine();
         } else {
@@ -713,18 +834,74 @@ export function breakParagraph(
           wordStartWidth = 0;
         }
       }
+      // A word wider than an EMPTY line has no boundary to wrap at, and Word breaks it at
+      // the margin rather than letting it run past the right edge — or, in a table cell,
+      // into the neighbouring cell. The longest fitting prefix closes each full line and
+      // the tail falls through to ordinary placement. Layout-owned pieces stay whole:
+      // every span they emit publishes the piece's model range, so cutting one would
+      // publish the same range twice; `measureText` pieces reserve a width their sliced
+      // text does not measure to.
+      let remaining = candidate;
+      let remainingStart = piece.start + consumed;
+      let remainingWidth = width;
+      if (!layoutOwned && piece.measureText === undefined) {
+        while (
+          line.spans.length === 0 &&
+          remaining.length > 1 &&
+          remainingWidth > lineAvailable()
+        ) {
+          let low = 1;
+          let high = remaining.length - 1;
+          let fitLength = 1;
+          while (low <= high) {
+            const mid = (low + high) >> 1;
+            const midWidth = measurer.measure(
+              displayText(remaining.slice(0, mid), piece.style),
+              piece.style
+            );
+            if (midWidth <= lineAvailable()) {
+              fitLength = mid;
+              low = mid + 1;
+            } else {
+              high = mid - 1;
+            }
+          }
+          const prefix = remaining.slice(0, fitLength);
+          const prefixWidth = measurer.measure(displayText(prefix, piece.style), piece.style);
+          line.spans.push({
+            range: { paragraphId, start: remainingStart, end: remainingStart + fitLength },
+            text: prefix,
+            props: piece.props,
+            style: piece.style,
+            box: { x: lineOrigin() + line.width, y: 0, width: prefixWidth, height: metrics.height },
+            ...(piece.link ? { link: piece.link } : {}),
+            ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
+            ...revisionsOf(piece),
+          });
+          line.width += prefixWidth;
+          line.height = Math.max(line.height, metrics.height);
+          line.baseline = Math.max(line.baseline, metrics.baseline);
+          line.end = remainingStart + fitLength;
+          closeLine();
+          remaining = remaining.slice(fitLength);
+          remainingStart += fitLength;
+          remainingWidth = measurer.measure(displayText(remaining, piece.style), piece.style);
+        }
+      }
       line.spans.push({
-        range: spanRange,
-        text: candidate,
+        range: layoutOwned
+          ? spanRange
+          : { paragraphId, start: remainingStart, end: piece.start + boundary },
+        text: remaining,
         props: piece.props,
         style: piece.style,
-        box: { x: lineOrigin() + line.width, y: 0, width, height: metrics.height },
+        box: { x: lineOrigin() + line.width, y: 0, width: remainingWidth, height: metrics.height },
         ...(piece.link ? { link: piece.link } : {}),
         ...(layoutOwned && !piece.positionalTab ? { projected: true as const } : {}),
         ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
         ...revisionsOf(piece),
       });
-      line.width += width;
+      line.width += remainingWidth;
       line.height = Math.max(line.height, metrics.height);
       line.baseline = Math.max(line.baseline, metrics.baseline);
       line.end = layoutOwned ? piece.end : piece.start + boundary;

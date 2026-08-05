@@ -135,6 +135,7 @@ export {
   lineAtPosition,
   linesOf,
   paragraphFragmentsOf,
+  paragraphFragmentsOfBlocks,
   unionLayoutBoxes,
   type BlockFragmentRecord,
   type ContentControlBoundaryRecord,
@@ -173,6 +174,7 @@ export {
   appliedSpaceBefore,
   applyLineSpacing,
   paragraphBorderExtentPt,
+  paragraphBorderStrokeWidthPt,
   bottomBorderExtentPt,
   cascadedParagraphBorders,
   collapsedSpaceBefore,
@@ -222,7 +224,7 @@ export {
   type PageFurniture,
   type SemanticLayoutOptions,
 } from './semantic-layout.ts';
-export type { HyperlinkProjector } from './field-projection.ts';
+export { formatPageNumber, type HyperlinkProjector } from './field-projection.ts';
 export {
   EMPTY_NUMBERING_INDEX,
   MAX_LVL_OVERRIDES,
@@ -320,6 +322,11 @@ export {
 } from './note-pagination.ts';
 export { noteMarkKey, projectedNoteMarkText, type NoteMarkContext } from './note-projection.ts';
 export { storyBlocks, noteStoryBlocks, MAX_SDT_NESTING } from './story-roots.ts';
+export {
+  emptyTocPlaceholderParagraphIds,
+  emptyTocSuppressedResultParagraphIds,
+  tocFieldChromeParagraphIds,
+} from './toc-layout.ts';
 export {
   collectFlowBlocks,
   contentControlContentChildren,

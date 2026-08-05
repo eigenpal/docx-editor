@@ -226,6 +226,28 @@ export {
   type FldCharType,
 } from './field-nodes.ts';
 export {
+  TOC_MAX_BOOKMARKS_PER_REFRESH,
+  TOC_MAX_ENTRIES,
+  TOC_MAX_FIELD_NESTING,
+  TOC_MAX_INSTRUCTION_CHARS,
+  TOC_MAX_PAGE_PASSES,
+  parseTocInstruction,
+  type TocInstruction,
+} from './toc-instruction.ts';
+export { detectBodyTocs, findDetectedToc, type DetectedToc } from './toc-detect.ts';
+export {
+  bookmarkPairNodes,
+  buildTocContentControl,
+  buildTocEntryParagraph,
+  planTocEntries,
+  TOC_LEVEL_INDENT_TWIPS,
+  tocEntryText,
+  tocLeftIndentTwips,
+  type TocEntryPlan,
+  type TocOutlineHeading,
+} from './toc-build.ts';
+export { resolveTocRowHeadings } from './toc-rows.ts';
+export {
   deriveOoxmlIndexes,
   type OoxmlIndexes,
   type ParagraphIndexEntry,

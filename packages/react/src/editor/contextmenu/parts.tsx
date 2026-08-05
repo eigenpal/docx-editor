@@ -29,6 +29,8 @@ import {
   DELETE_PATHS,
   PASTE_PATHS,
   SELECT_ALL_PATHS,
+  REFRESH_TOC_PATHS,
+  REFRESH_TOC_PAGE_NUMBERS_PATHS,
 } from './contextmenu-icons';
 import { chromeIcon } from '../toolbar/ToolbarButton';
 
@@ -365,6 +367,69 @@ export function ContextMenuCellVerticalAlignment({ hidden }: ContextMenuCommandP
 }
 
 ContextMenuCellVerticalAlignment.docxRow = 'table.cellVerticalAlignment' as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Table of contents
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Define a row that only exists while the right-click landed on a table of contents.
+ *
+ * Contextual the same way the table rows are, but keyed on the TOC the OPEN captured
+ * rather than on the caret: a right-click does not move the caret and a generated TOC
+ * refuses it outright, so the pointed-at table of contents is the only thing that can say
+ * these rows apply. The row also carries that id into the command, so a document with two
+ * tables of contents refreshes the one the user pointed at.
+ */
+function defineTocCommandRow(
+  rowId: string,
+  mode: 'entire' | 'pageNumbers',
+  defaults: { labelKey: string; paths: readonly string[] }
+) {
+  const Part = ({ icon, labelKey, className, hidden }: ContextMenuCommandProps) => {
+    const editor = useDocxEditor();
+    const { close, tocId } = useContextMenuContext();
+    const label = useMenuLabel();
+    const command = useMemo(
+      (): EditorCommand => ({ type: 'refreshToc', mode, ...(tocId ? { tocId } : {}) }),
+      [tocId]
+    );
+    const { isEnabled, disabledReason } = useEditorCommand(command);
+    if (hidden || tocId === null) return null;
+    return (
+      <MenuRow
+        slot={rowId}
+        icon={icon ?? chromeIcon(defaults.paths)}
+        disabled={!isEnabled}
+        {...(disabledReason ? { title: disabledReason } : {})}
+        onSelect={() => {
+          editor?.exec(command);
+          close(true);
+        }}
+        {...(className ? { className } : {})}
+      >
+        {label(labelKey ?? defaults.labelKey)}
+      </MenuRow>
+    );
+  };
+  return Object.assign(Part, { docxRow: rowId });
+}
+
+/** Rebuild the pointed-at table of contents from the document's headings. @public */
+export const ContextMenuRefreshToc = defineTocCommandRow('toc.refresh', 'entire', {
+  labelKey: 'toc.refresh',
+  paths: REFRESH_TOC_PATHS,
+});
+
+/** Re-resolve only the page numbers of the pointed-at table of contents. @public */
+export const ContextMenuRefreshTocPageNumbers = defineTocCommandRow(
+  'toc.refreshPageNumbers',
+  'pageNumbers',
+  { labelKey: 'toc.refreshPageNumbers', paths: REFRESH_TOC_PAGE_NUMBERS_PATHS }
+);
+
+/** Fixed table-of-contents context rows, in menu order. @internal */
+export const TOC_CONTEXT_ROWS = [ContextMenuRefreshToc, ContextMenuRefreshTocPageNumbers] as const;
 
 /** Whether table context rows should render for the current selection. @internal */
 export function useTableContextMenuVisible(): boolean {

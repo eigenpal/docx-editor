@@ -193,10 +193,7 @@ describe('useEditorCommand', () => {
     let binding: EditorCommandState | null = null;
     let instance: DocxEditorInstance | null = null;
     function Probe() {
-      // `insert.toc` has no command and no probe. (`text.link` used to be the example
-      // here; it is now chrome-driven, and `list.lineSpacing` has its own picker, so both
-      // enable through the engine.)
-      binding = useEditorCommand('insert.toc');
+      binding = useEditorCommand('insert.sectionBreakContinuous');
       return null;
     }
     render(

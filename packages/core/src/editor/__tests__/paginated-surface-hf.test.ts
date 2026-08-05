@@ -208,9 +208,20 @@ describe('headers and footers, read-only', () => {
     expect(surface.session.paragraphIds()).toHaveLength(3);
   });
 
-  test('a document without furniture renders none', () => {
+  test('a document without furniture renders no story, only the blank-band affordance', () => {
     const { container } = mount(docx({}));
-    expect(container.querySelector('[data-docx-hf]')).toBeNull();
+    // No STORY furniture — nothing carries a relationship id and nothing has content.
+    expect(container.querySelector('[data-docx-hf][data-docx-r-id]')).toBeNull();
+    // The empty margin bands are painted so hover can invite and double-click can create.
+    const placeholders = [...container.querySelectorAll('.docx-hf--placeholder')];
+    expect(placeholders.map((band) => band.getAttribute('data-docx-hf')).sort()).toEqual([
+      'footer',
+      'header',
+    ]);
+    for (const band of placeholders) {
+      expect(band.getAttribute('contenteditable')).toBe('false');
+      expect(band.textContent).toBe('');
+    }
   });
 
   test('comprehensive fixture: HF right tabs reach the authored stop on the surface', () => {
@@ -273,7 +284,7 @@ describe('headers and footers, read-only', () => {
     // Page index 1 is the first body sheet with header1/footer1 (cover is index 0).
     const cover = pages[0]!;
     const sheet = pages[1]!;
-    expect(cover.querySelector('[data-docx-hf]')).toBeNull();
+    expect(cover.querySelector('[data-docx-hf][data-docx-r-id]')).toBeNull();
     expect(sheet.querySelector('[data-docx-hf="header"]')).not.toBeNull();
     expect(sheet.querySelector('[data-docx-hf="footer"]')).not.toBeNull();
     // Cover must not visually host body furniture: relative story Y is authored distance,

@@ -241,6 +241,24 @@ export function execEditorCommand(
     case 'redo':
       mounted.redo();
       break;
+    case 'insertToc':
+      if (!mounted.insertToc()) {
+        return {
+          ok: false,
+          code: 'unsupported',
+          reason: mounted.state().lastRejection ?? 'the table of contents could not be inserted',
+        };
+      }
+      break;
+    case 'refreshToc':
+      if (!mounted.refreshToc(command.tocId, command.mode)) {
+        return {
+          ok: false,
+          code: 'unsupported',
+          reason: mounted.state().lastRejection ?? 'the table of contents could not be refreshed',
+        };
+      }
+      break;
     case 'editHeaderFooter':
       return execEditHeaderFooter(mounted, command);
     case 'exitHeaderFooter': {

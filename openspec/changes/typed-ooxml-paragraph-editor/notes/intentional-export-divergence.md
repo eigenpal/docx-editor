@@ -200,6 +200,12 @@ not the contract. Publishing retain/release on `Editor` is the prerequisite.
 - `SlotProps`
 - `LocaleProvider`
 - `useTranslation`
+
+The font-fallback notice is React chrome with no Vue twin yet, same lane as the
+rest of the notice/banner chrome:
+
+- `DocxEditorFontNotice`
+- `DocxEditorFontNoticeProps`
 The navigation pane rides the same provider/hooks layer: a compound plus three behavior
 hooks over the context-published editor, so its Vue twin is the composable form and lands
 with the rest of that layer. The ENGINE half is already adapter-neutral — the search

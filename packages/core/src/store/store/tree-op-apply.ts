@@ -87,6 +87,11 @@ import {
   applySetSectionProperties,
 } from './tree-op-section.ts';
 import { pageFieldContentBuilders } from './tree-op-fields.ts';
+import {
+  applyInsertToc,
+  applyReplaceTocResult,
+  applyRewriteTocPageNumbers,
+} from './tree-op-toc.ts';
 import { isParagraph, runsUnder, segmentsOf, type Segment } from './tree-op-segments.ts';
 import type {
   OoxmlProperty,
@@ -196,6 +201,9 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   }
 
   if (op.op === 'deleteBlock') return applyDeleteBlock(part, op.blockId, options);
+  if (op.op === 'insertToc') return applyInsertToc(part, op, options);
+  if (op.op === 'replaceTocResult') return applyReplaceTocResult(part, op, options);
+  if (op.op === 'rewriteTocPageNumbers') return applyRewriteTocPageNumbers(part, op, options);
   if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);
   if (op.op === 'setHyperlinkTarget') return applySetHyperlinkTarget(part, op, options);
   if (op.op === 'removeHyperlink') return applyRemoveHyperlink(part, op.linkId, options);

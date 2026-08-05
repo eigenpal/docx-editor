@@ -43,6 +43,10 @@ export {
   DocxEditorPageSetupDialog,
   type DocxEditorPageSetupDialogProps,
 } from './editor/DocxEditorPageSetup';
+export {
+  DocxEditorFontNotice,
+  type DocxEditorFontNoticeProps,
+} from './editor/DocxEditorFontNotice';
 // The review PANE lives in `@docx-editor.dev/pro/react` (the review capability is
 // module-gated). What this package exports are the integration points the pro pane —
 // or any external chrome — composes with: the rail registry the Viewport and rulers

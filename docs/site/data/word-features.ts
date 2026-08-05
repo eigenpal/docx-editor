@@ -234,7 +234,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Paragraph shading (w:shd) is editable. Borders render and round-trip but cannot be added, changed or removed from the editor yet.',
+      'Paragraph shading (w:shd) is editable. Borders render common ST_Border line styles (single, double, dashed, dotted, and CSS approximations for thick/3-D/inset/outset); decorative art borders paint as a solid rule. Thin doubles inflate to a visible compound band in layout, matching table borders. Borders round-trip but cannot be added, changed or removed from the editor yet.',
   },
   {
     id: 'paragraphs.tabs',
@@ -245,7 +245,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Existing tab stops render, including right/decimal tabs and dot, hyphen and underscore leaders. Positional tabs (w:ptab) render too, so a table-of-contents line reads as one: entry left, leader dots between, page number flush right. The document\'s own w:defaultTabStop is honoured, so a metric-locale grid lands where Word puts it, in headers and footers as well as the body. A tab-stop editing UI is not built yet.',
+      "Existing tab stops render, including right/decimal tabs and dot, hyphen and underscore leaders. Positional tabs (w:ptab) render too, so a table-of-contents line reads as one: entry left, leader dots between, page number flush right. The document's own w:defaultTabStop is honoured, so a metric-locale grid lands where Word puts it, in headers and footers as well as the body. A tab-stop editing UI is not built yet.",
   },
   {
     id: 'paragraphs.frames',
@@ -395,6 +395,17 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes:
       'Table styles resolve through their basedOn chain: borders, cell margins, shading and the paragraph/run formatting a conditional format carries (so a header row comes out bold and centred) all come from styles.xml, gated by w:tblLook, with an explicit w:cnfStyle taking precedence. Conditional cell margins and switching table styles from the UI are not built yet.',
+  },
+  {
+    id: 'tables.floating',
+    name: 'Floating tables (tblpPr anchored position)',
+    category: 'tables',
+    editing: 'none',
+    rendering: 'partial',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'An anchored table lands where Word puts it across the page: tblpXSpec/tblpX against the text, margin or page box, plus a tblpY offset from the text anchor. Text does not yet wrap beside it, and page- or margin-anchored vertical positions keep their place in the flow.',
   },
   {
     id: 'tables.text-direction',
@@ -595,11 +606,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'Multi-column layout',
     category: 'layout',
     editing: 'none',
-    rendering: 'none',
+    rendering: 'partial',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'The section w:cols count and gap are read and round-trip, but text does not yet flow into columns: a three-column section renders as one full-width column.',
+      "Section w:cols count, gap, separator and equal/unequal widths paginate into columns; explicit column breaks leave the break paragraph's empty remainder at the top of the next column. Balancing continuous multi-column sections is supported. Column editing chrome is not exposed.",
   },
   {
     id: 'layout.page-borders',
@@ -630,7 +641,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'First, even, and default variants are selected by the page\'s number in the document (so the alternation carries across section breaks) and editable in an open furniture scope. Programmatic `editHeaderFooter({ variant: \'even\' })` (or `evenPage: true`) creates/opens the even story and enables `w:evenAndOddHeaders` in one undo unit. React header/footer chrome can toggle different even and odd pages; Vue chrome deferred.',
+      "First, even, and default variants are selected by the page's number in the document (so the alternation carries across section breaks) and editable in an open furniture scope. Programmatic `editHeaderFooter({ variant: 'even' })` (or `evenPage: true`) creates/opens the even story and enables `w:evenAndOddHeaders` in one undo unit. React header/footer chrome can toggle different even and odd pages; Vue chrome deferred.",
   },
   {
     id: 'layout.vertical-align',
@@ -768,7 +779,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'TOCs can be inserted and stale or empty TOCs regenerated from document headings, with tab leaders, page numbers, and working links.',
+      'Body TOCs can be inserted from the shared Insert menu and refreshed from document headings, including page-numbers-only updates, tab leaders, section-formatted page numbers, and bookmark links. Generated rows are read-only navigation links.',
   },
   {
     id: 'fields.other-codes',

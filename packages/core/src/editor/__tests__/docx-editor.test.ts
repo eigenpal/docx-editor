@@ -11,6 +11,7 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import { blankDocumentBytes } from '../blank-document.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -238,6 +239,23 @@ describe('createDocxEditor', () => {
     expect(container.textContent).toContain('second');
     expect(container.textContent).not.toContain('first');
     expect(editor.surface!.session.bodyText()).toBe('second');
+  });
+
+  test('load() with new bytes opens at the top, not at the previous scroll offset', () => {
+    // The scroller is the HOST's element and survives the remount, so without an explicit
+    // reset a reader ten pages into one file opened the next file ten pages in.
+    const scroller = document.createElement('div');
+    scroller.className = 'docx-editor__scroll-container';
+    const container = document.createElement('div');
+    scroller.appendChild(container);
+    const editor = createDocxEditor({ container, document: docx(p('first')) });
+    expect(editor.surface).not.toBeNull();
+    scroller.scrollTop = 4321;
+    scroller.scrollLeft = 17;
+    editor.load(docx(p('second')));
+    expect(scroller.scrollTop).toBe(0);
+    expect(scroller.scrollLeft).toBe(0);
+    editor.destroy();
   });
 
   test('load() with a DocumentHandle emits a typed error and keeps the document', () => {
@@ -853,6 +871,63 @@ describe('setMarkAttr (value-typed run formatting)', () => {
     editor.exec({ type: 'setSelection', range: caret('/word/document.xml#0.0.1', 3) });
     expect(editor.snapshot().formatting?.fontFamily).toBe('Calibri');
     expect(editor.snapshot().formatting?.fontSizePt).toBe(11);
+  });
+
+  test('a run with no authored font PAINTS in the default face it was measured in', () => {
+    // Measurement falls back to the default face; paint must fall back to the SAME face,
+    // or the browser draws the page's inherited font over Calibri-computed geometry.
+    const { container } = mount(p('hello'));
+    const span = container.querySelector<HTMLElement>('[data-paragraph-id][data-start]');
+    expect(span).not.toBeNull();
+    // happy-dom normalizes away the quotes; the family itself is the contract.
+    expect(span!.style.fontFamily).toContain('Calibri');
+  });
+
+  test('the blank-document template is Word: Calibri 11, Normal, Letter', () => {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({ container, document: blankDocumentBytes() });
+    expect(editor.surface).not.toBeNull();
+    // The toolbar's boxes read Word's blank-template defaults, authored in docDefaults —
+    // not the format's 10pt floor.
+    expect(editor.snapshot().formatting?.fontFamily).toBe('Calibri');
+    expect(editor.snapshot().formatting?.fontSizePt).toBe(11);
+    expect(editor.snapshot().formatting?.styleId).toBe('Normal');
+    expect(editor.getAvailableFonts()).toContain('Calibri');
+    // Layout measures the same 11pt the box shows (22 half-points through the cascade).
+    const span = container.querySelector<HTMLElement>('[data-paragraph-id]');
+    expect(span).not.toBeNull();
+    // US Letter at one-inch margins.
+    expect(editor.getPageSetup()?.pageWidthTwips).toBe(12240);
+    expect(editor.getPageSetup()?.pageHeightTwips).toBe(15840);
+    // Typing works and the saved bytes round-trip.
+    editor.exec({ type: 'insertText', text: 'hello' });
+    expect(editor.snapshot().pages?.length ?? editor.getTotalPages()).toBeGreaterThan(0);
+  });
+
+  test('a blank document still reports the default face, and offers a catalog', () => {
+    // No styles part, no theme, no rFonts anywhere: the document derivation is empty,
+    // but the run is measured in the configured default face — the font box must say
+    // so, and the picker must offer something to change it to.
+    const { editor } = mount(p('hello'));
+    editor.surface!.selectAll();
+    expect(editor.getDocumentFonts()).toEqual([]);
+    expect(editor.snapshot().formatting?.fontFamily).toBe('Calibri');
+    expect(editor.getAvailableFonts()).toEqual(['Calibri']);
+    // Declaring a font in the document joins the catalog without displacing it.
+    editor.exec({ type: 'setMarkAttr', mark: 'fontFamily', attr: 'family', value: 'Georgia' });
+    expect(editor.getDocumentFonts()).toEqual(['Georgia']);
+    expect(editor.getAvailableFonts()).toEqual(['Calibri', 'Georgia']);
+  });
+
+  test('a mixed-font selection still reports no agreed family', () => {
+    // The default-face fallback is per span; it must not launder a real disagreement
+    // into the default font.
+    const { editor } = mount(
+      '<w:p><w:r><w:rPr><w:rFonts w:ascii="Georgia"/></w:rPr><w:t>serif</w:t></w:r>' +
+        '<w:r><w:t>plain</w:t></w:r></w:p>'
+    );
+    editor.surface!.selectAll();
+    expect(editor.snapshot().formatting?.fontFamily).toBeUndefined();
   });
 
   test('invalid values are refused as invalidArgs before touching the document', () => {
