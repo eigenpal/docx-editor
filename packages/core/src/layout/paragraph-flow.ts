@@ -370,12 +370,51 @@ export function paragraphAlignment(props: readonly OoxmlProperty[]): Alignment {
 }
 
 /**
+ * True when this span's trailing U+0020 is an inter-word slot Word can stretch.
+ *
+ * Paint reapplies justification as CSS `word-spacing` on those same spaces. Inserting layout
+ * slack at every style-span boundary (tabs, run splits mid-phrase) put gaps where paint has
+ * none and shifted every later span — caret mid-word drifted by a multiple of the step while
+ * the highlight (DOM) stayed on the glyphs.
+ */
+function endsWithExpandableSpace(text: string): boolean {
+  return text.endsWith(' ');
+}
+
+/**
+ * Per-UTF-16 caret edges from the span origin, matching {@link TextMeasurer.measure} prefixes.
+ *
+ * Tabs and non-1:1 projections collapse to the published box endpoints — measuring `\t` or
+ * projected ink would disagree with breakParagraph's reserved advance.
+ */
+function caretEdgesForSpan(span: StyleSpanRecord, measurer: TextMeasurer): readonly number[] {
+  const length = span.range.end - span.range.start;
+  if (length <= 0 || span.text === '\t' || span.projected || span.text.length !== length) {
+    return Object.freeze([0, span.box.width]);
+  }
+  const edges: number[] = [0];
+  for (let index = 1; index <= span.text.length; index += 1) {
+    edges.push(measurer.measure(span.text.slice(0, index), span.style));
+  }
+  return Object.freeze(edges);
+}
+
+function withCaretEdges(
+  spans: readonly StyleSpanRecord[],
+  measurer: TextMeasurer
+): readonly StyleSpanRecord[] {
+  return spans.map((span) =>
+    span.caretEdges ? span : { ...span, caretEdges: caretEdgesForSpan(span, measurer) }
+  );
+}
+
+/**
  * Shift a line's spans to satisfy the paragraph alignment.
  *
- * Layout is the only geometry authority, so alignment has to move the published span boxes
- * rather than being left to CSS: the painter positions each span absolutely, and hit testing
- * and the caret read the same boxes. Delegating this to `text-align` would put the caret
- * where no glyph is.
+ * Layout is the only geometry authority: hit testing and the caret read published span boxes
+ * (and {@link StyleSpanRecord.caretEdges}). Paint starts the line at the first span's x and
+ * flows inline — justification slack must therefore land on the same inter-word spaces
+ * `word-spacing` expands, not on every style-span boundary.
  */
 export function alignSpans(
   spans: readonly StyleSpanRecord[],
@@ -385,7 +424,8 @@ export function alignSpans(
   alignment: Alignment,
   isLastLine: boolean
 ): readonly StyleSpanRecord[] {
-  if (spans.length === 0 || alignment === 'left') return spans;
+  if (spans.length === 0) return spans;
+  if (alignment === 'left') return withCaretEdges(spans, measurer);
 
   // Trailing whitespace hangs into the margin rather than pushing the text off-centre, which
   // is what Word does and what stops a line ending in a space from looking misaligned.
@@ -395,20 +435,36 @@ export function alignSpans(
     visible === last.text ? 0 : last.box.width - measurer.measure(visible, last.style);
   const used = last.box.x - indentLeft + last.box.width - trailing;
   const slack = available - used;
-  if (slack <= 0) return spans;
+  if (slack <= 0) return withCaretEdges(spans, measurer);
 
   // The last line of a justified paragraph is set flush left, never stretched.
   if (alignment === 'both') {
-    const gaps = spans.length - 1;
-    if (isLastLine || gaps <= 0) return spans;
-    const step = slack / gaps;
-    return spans.map((span, index) =>
-      index === 0 ? span : { ...span, box: { ...span.box, x: span.box.x + step * index } }
+    if (isLastLine) return withCaretEdges(spans, measurer);
+    // Only boundaries after an expandable space receive slack — the same slots paint stretches
+    // with `word-spacing`. A uniform step across every span pair invented gaps before tabs and
+    // run splits and drifted every later caret by N×step.
+    const gapBefore: number[] = [];
+    for (let index = 1; index < spans.length; index += 1) {
+      if (endsWithExpandableSpace(spans[index - 1]!.text)) gapBefore.push(index);
+    }
+    if (gapBefore.length === 0) return withCaretEdges(spans, measurer);
+    const step = slack / gapBefore.length;
+    const gapSet = new Set(gapBefore);
+    let shift = 0;
+    return withCaretEdges(
+      spans.map((span, index) => {
+        if (gapSet.has(index)) shift += step;
+        return shift === 0 ? span : { ...span, box: { ...span.box, x: span.box.x + shift } };
+      }),
+      measurer
     );
   }
 
   const offset = alignment === 'center' ? slack / 2 : slack;
-  return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } }));
+  return withCaretEdges(
+    spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } })),
+    measurer
+  );
 }
 
 /**
