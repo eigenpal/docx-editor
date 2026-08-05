@@ -555,10 +555,26 @@ function EditorChrome({
                 <span className="docx-menubar__item-label">Documentation</span>
               </a>
             </DocxEditor.Menu.Help>
-            {/* A menu the library knows nothing about, with the host's own id and label. */}
-            <DocxEditor.Menu.Menu id="review" label="Review">
-              <DocxEditor.Menu.Row onSelect={() => window.alert('Sent for approval.')}>
-                Send for approval
+            {/* A menu the library knows nothing about, with the host's own id and
+                label — here it carries the PRO custom-node insert: one call authors
+                a tagged, sdtLocked content control at the caret. In this editor it
+                is a recognized citation chip; in Word it is a locked control
+                showing the literal label. */}
+            <DocxEditor.Menu.Menu id="my-menu" label="My Menu">
+              <DocxEditor.Menu.Row
+                onSelect={() => {
+                  if (!editor) return;
+                  const result = insertCustomNode(
+                    editor,
+                    DEMO_CITATION,
+                    { sourceId: `src_${Date.now().toString(36)}`, locator: 'p.42' },
+                    '(Smith 2024, p. 42)',
+                    { alias: 'Citation' }
+                  );
+                  if (!result.ok) console.warn(`[custom-nodes] ${result.reason}`);
+                }}
+              >
+                Insert citation
               </DocxEditor.Menu.Row>
             </DocxEditor.Menu.Menu>
           </DocxEditor.Menu>
@@ -592,31 +608,6 @@ function EditorChrome({
             onClick={saveDocument}
           >
             Save
-          </button>
-          {/* PRO custom nodes, programmatically: one call inserts a tagged,
-              sdtLocked content control at the caret. In this editor it is a
-              recognized custom node; in Word it is a locked control showing
-              the literal label — save and open the file there to see it. */}
-          <button
-            type="button"
-            style={DEMO_BUTTON}
-            disabled={!editor}
-            onMouseDown={keepCaret}
-            onClick={() => {
-              if (!editor) return;
-              const result = insertCustomNode(
-                editor,
-                DEMO_CITATION,
-                { sourceId: `src_${Date.now().toString(36)}`, locator: 'p.42' },
-                '(Smith 2024, p. 42)',
-                // The alias is what Word titles the control with, and what the
-                // demo's chip styling shows in its hover balloon.
-                { alias: 'Citation' }
-              );
-              if (!result.ok) console.warn(`[custom-nodes] ${result.reason}`);
-            }}
-          >
-            Insert citation
           </button>
         </div>
       </header>
