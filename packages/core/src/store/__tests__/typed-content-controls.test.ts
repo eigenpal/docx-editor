@@ -239,11 +239,9 @@ describe('CT_SdtPr is projected as typed properties', () => {
     const control = controlsOf(part)[0]!;
     const sdtPr = control.children[0]!;
     if (sdtPr.kind === 'textValue') throw new Error('unreachable');
-    expect(sdtPr.children.map((child) => (child.kind === 'textValue' ? '' : child.localName))).toEqual([
-      'alias',
-      'repeatingSection',
-      'tag',
-    ]);
+    expect(
+      sdtPr.children.map((child) => (child.kind === 'textValue' ? '' : child.localName))
+    ).toEqual(['alias', 'repeatingSection', 'tag']);
     expect(contentControlPropertiesOf(control).type).toBe('untyped');
     expect(canonicalOoxmlFingerprint(reparse(part))).toBe(canonicalOoxmlFingerprint(part));
   });
@@ -364,18 +362,16 @@ describe('the comprehensive fixture survives the D9 fingerprint oracle', () => {
     for (const entry of contentControlsIn(part.root)) {
       const binding = contentControlPropertiesOf(entry.node).dataBinding;
       // The projection is metadata only: it names no resolver and no fetch.
-      expect(binding === undefined || typeof binding.xpath === 'string' || binding.xpath === undefined).toBe(
-        true
-      );
+      expect(
+        binding === undefined || typeof binding.xpath === 'string' || binding.xpath === undefined
+      ).toBe(true);
     }
   });
 });
 
 describe('the walk is shared, not re-derived', () => {
   test('`isContentControlNode` recognizes typed controls and refuses everything else', () => {
-    const part = parseDoc(
-      `<w:sdt><w:sdtPr/><w:sdtContent><w:p/></w:sdtContent></w:sdt><w:p/>`
-    );
+    const part = parseDoc(`<w:sdt><w:sdtPr/><w:sdtContent><w:p/></w:sdtContent></w:sdt><w:p/>`);
     const [control, paragraph] = bodyOf(part).children as readonly OoxmlNode[];
     expect(isContentControlNode(control!)).toBe(true);
     expect(isContentControlNode(paragraph!)).toBe(false);

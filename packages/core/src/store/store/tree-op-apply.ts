@@ -68,7 +68,21 @@ import {
   applySetSectionProperties,
 } from './tree-op-section.ts';
 import { pageFieldContentBuilders } from './tree-op-fields.ts';
-import { isParagraph, runsUnder, segmentsOf, type Segment } from './tree-op-segments.ts';
+import {
+  applyInsertContentControl,
+  applyRemoveContentControl,
+  applySetContentControlProperties,
+  applySetContentControlValue,
+  clearPlaceholder,
+  placeholderControlForInsertion,
+} from './tree-op-content-controls.ts';
+import {
+  isParagraph,
+  paragraphLength,
+  runsUnder,
+  segmentsOf,
+  type Segment,
+} from './tree-op-segments.ts';
 import type {
   OoxmlProperty,
   TreeDocOp,
@@ -123,6 +137,19 @@ function simpleElement(
   } as unknown as OoxmlNode;
 }
 
+/**
+ * Where the caller's characters go once a prompt has been emptied.
+ *
+ * The prompt's own characters are gone, so the offset the caller planned against them cannot
+ * be honoured — Word puts the text where the prompt started, and clamping keeps the op inside
+ * a paragraph that is now shorter than it was.
+ */
+function promptInsertionOffset(part: OoxmlPart, paragraphId: string, planned: number): number {
+  const paragraph = findNode(part, paragraphId);
+  if (!paragraph || paragraph.kind !== 'paragraph') return planned;
+  return Math.min(planned, paragraphLength(paragraph));
+}
+
 function runElement(nextId: () => string, children: readonly OoxmlNode[]): OoxmlNode {
   return {
     id: nextId(),
@@ -150,6 +177,29 @@ function runElement(nextId: () => string, children: readonly OoxmlNode[]): Ooxml
 export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOptions): TreeOpResult {
   const rejection = validateTreeOp(part, op);
   if (rejection) return { ok: false, reason: rejection };
+
+  if (op.op === 'setContentControlValue') return applySetContentControlValue(part, op, options);
+  if (op.op === 'setContentControlProperties') {
+    return applySetContentControlProperties(part, op, options);
+  }
+  if (op.op === 'removeContentControl') return applyRemoveContentControl(part, op, options);
+  if (op.op === 'insertContentControl') return applyInsertContentControl(part, op, options);
+  // Typing into a prompt REPLACES it. The transition belongs here rather than beside the
+  // caret: an automation call and a paste insert text too, and a prompt that survived them
+  // would leave the typed characters appended to "Click here to enter text.".
+  if (op.op === 'insertText' && !op.revision) {
+    const prompt = placeholderControlForInsertion(part, op.paragraphId, op.offset);
+    if (prompt) {
+      const emptied = clearPlaceholder(part, prompt.control.id, options);
+      if (emptied) {
+        return applyTreeOp(
+          emptied,
+          { ...op, offset: promptInsertionOffset(emptied, op.paragraphId, prompt.offset) },
+          options
+        );
+      }
+    }
+  }
 
   if (op.op === 'deleteBlock') return applyDeleteBlock(part, op.blockId, options);
   if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);

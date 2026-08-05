@@ -9,6 +9,11 @@ import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-
 import { findNode } from '../package/ooxml-edit.ts';
 import { isValidXmlText } from '../package/sinks.ts';
 import { validateDeleteBlock } from './tree-op-blocks.ts';
+import {
+  INSERTABLE_CONTENT_CONTROL_TYPES,
+  contentControlLockRefusal,
+  isWritableContentControlMetadata,
+} from './tree-op-content-controls.ts';
 import { paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
 import {
   bodyNodeOf,
@@ -29,6 +34,12 @@ import {
 } from './tree-op-types.ts';
 
 const RUN_PROPERTY_SET: ReadonlySet<string> = new Set(ACCEPTED_RUN_PROPERTIES);
+const CONTENT_CONTROL_LOCKS: ReadonlySet<string> = new Set([
+  'unlocked',
+  'sdtLocked',
+  'contentLocked',
+  'sdtContentLocked',
+]);
 const PARAGRAPH_PROPERTY_SET: ReadonlySet<string> = new Set(ACCEPTED_PARAGRAPH_PROPERTIES);
 
 function validateProperties(
@@ -96,6 +107,47 @@ function validateHyperlinkTarget(op: {
 /** Structural validation, run before any tree work so a rejection changes nothing. */
 export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection | null {
   if (!TREE_DOC_OP_KINDS.includes(op.op)) return 'unknown-op';
+
+  // A lock is checked FIRST and for the whole editing vocabulary, so no op reaches the tree
+  // that a control forbids. The appliers for the control ops themselves resolve their own
+  // locks, because removal and editing are refused by different halves of `ST_Lock`.
+  const lockRefusal = contentControlLockRefusal(part, op);
+  if (lockRefusal) return lockRefusal;
+
+  if (
+    op.op === 'setContentControlValue' ||
+    op.op === 'setContentControlProperties' ||
+    op.op === 'removeContentControl'
+  ) {
+    const control = findNode(part, op.controlId);
+    if (!control) return 'unknown-content-control';
+    if (control.kind !== 'contentControl') return 'not-a-content-control';
+    if (op.op === 'removeContentControl' && typeof op.keepContent !== 'boolean') {
+      return 'invalidArgs';
+    }
+    if (op.op === 'setContentControlProperties') {
+      if (op.tag === undefined && op.alias === undefined && op.lock === undefined) {
+        return 'invalidArgs';
+      }
+      for (const value of [op.tag, op.alias]) {
+        if (!isWritableContentControlMetadata(value)) return 'invalid-property-value';
+      }
+      if (op.lock !== undefined && !CONTENT_CONTROL_LOCKS.has(op.lock)) return 'invalidArgs';
+    }
+    return null;
+  }
+  if (op.op === 'insertContentControl') {
+    if (!INSERTABLE_CONTENT_CONTROL_TYPES.includes(op.type)) return 'invalidArgs';
+    for (const value of [op.tag, op.alias]) {
+      if (!isWritableContentControlMetadata(value)) return 'invalid-property-value';
+    }
+    if (op.lock !== undefined && !CONTENT_CONTROL_LOCKS.has(op.lock)) return 'invalidArgs';
+    if (!Number.isInteger(op.start) || !Number.isInteger(op.end)) return 'invalid-range';
+    const paragraph = findNode(part, op.paragraphId);
+    if (!paragraph) return 'unknown-paragraph';
+    if (!isParagraph(paragraph)) return 'not-a-paragraph';
+    return null;
+  }
 
   // Package-level furniture ops cannot run against a single part. Shape-check here so
   // applyTreeOp refuses them; TreePackageStore.applyLifecycleOp is the commit path.

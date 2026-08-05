@@ -11,10 +11,7 @@
 // layout rather than read back out of the DOM.
 
 import { describe, expect, test } from 'bun:test';
-import {
-  readOoxmlPart,
-  type OoxmlPart,
-} from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
 import { createFixedMeasurer } from '../index.ts';
 import { contentControlBoundaries } from '../content-control-boundaries.ts';
 import { layoutSemanticDocument } from '../semantic-layout.ts';
@@ -92,9 +89,7 @@ describe('a control wrapper changes nothing about the page', () => {
   });
 
   test('geometry is identical with and without the wrapper', () => {
-    const bare = layoutOf(
-      parseDoc(`<w:p><w:r><w:t>before inside after</w:t></w:r></w:p>`)
-    );
+    const bare = layoutOf(parseDoc(`<w:p><w:r><w:t>before inside after</w:t></w:r></w:p>`));
     const wrapped = layoutOf(
       parseDoc(
         `<w:p><w:r><w:t>before </w:t></w:r>` +

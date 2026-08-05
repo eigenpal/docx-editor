@@ -42,11 +42,7 @@ export const MAX_CONTENT_CONTROLS_PER_PART = 10_000;
 export const CONTENT_CONTROL_ID_MAX = 0x7fffffff;
 
 /** `ST_Lock` (§17.5.2.24). An absent `w:lock` is `unlocked`. */
-export type ContentControlLock =
-  | 'unlocked'
-  | 'sdtLocked'
-  | 'contentLocked'
-  | 'sdtContentLocked';
+export type ContentControlLock = 'unlocked' | 'sdtLocked' | 'contentLocked' | 'sdtContentLocked';
 
 const LOCK_VALUES: ReadonlySet<string> = new Set([
   'unlocked',
@@ -198,8 +194,7 @@ export function contentControlPropertiesNodeOf(
 ): OoxmlContentControlPropertiesNode | undefined {
   if (control.kind !== 'contentControl') return undefined;
   return control.children.find(
-    (child): child is OoxmlContentControlPropertiesNode =>
-      child.kind === 'contentControlProperties'
+    (child): child is OoxmlContentControlPropertiesNode => child.kind === 'contentControlProperties'
   );
 }
 
@@ -222,7 +217,11 @@ export function contentControlContentNodeOf(
   );
 }
 
-function attributeValue(node: OoxmlNode, localName: string, namespaceUri: string): string | undefined {
+function attributeValue(
+  node: OoxmlNode,
+  localName: string,
+  namespaceUri: string
+): string | undefined {
   if (node.kind === 'textValue') return undefined;
   for (const attribute of node.attributes) {
     if (attribute.localName !== localName) continue;
@@ -645,7 +644,9 @@ export function orderedContentControlProperties(
   // a `w15:*` sibling) keep their authored order relative to one another.
   return [...children]
     .map((node, index) => ({ node, index, rank: rank(node) }))
-    .sort((left, right) => (left.rank !== right.rank ? left.rank - right.rank : left.index - right.index))
+    .sort((left, right) =>
+      left.rank !== right.rank ? left.rank - right.rank : left.index - right.index
+    )
     .map((entry) => entry.node);
 }
 

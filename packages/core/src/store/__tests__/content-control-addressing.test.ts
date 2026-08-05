@@ -58,9 +58,7 @@ describe('an inline control contributes its characters to the paragraph', () => 
 
   test('the control text is segmented in document order', () => {
     const paragraph = firstParagraph(parseDoc(INLINE_CONTROL));
-    expect(
-      segmentsOf(paragraph).map((segment) => [segment.start, segment.end] as const)
-    ).toEqual([
+    expect(segmentsOf(paragraph).map((segment) => [segment.start, segment.end] as const)).toEqual([
       [0, 1],
       [1, 3],
       [3, 4],

@@ -191,9 +191,7 @@ export function contentControlBoundaries(
       ...(properties.tag === undefined ? {} : { tag: properties.tag }),
       ...(properties.alias === undefined ? {} : { alias: properties.alias }),
       ...(properties.id === undefined ? {} : { id: properties.id }),
-      ...(properties.dataBinding === undefined
-        ? {}
-        : { dataBinding: properties.dataBinding }),
+      ...(properties.dataBinding === undefined ? {} : { dataBinding: properties.dataBinding }),
       paragraphIds,
       fragments,
     });

@@ -4,7 +4,12 @@
 // accepted property boundaries, and the effect/rejection contracts. Validation lives in
 // tree-op-validate.ts; application lives in tree-op-apply.ts; both re-export via tree-ops.ts.
 
+import type { ContentControlLock } from '../package/content-control-nodes.ts';
 import type { OoxmlPart } from '../package/ooxml-tree.ts';
+import type {
+  ContentControlValueInput,
+  InsertableContentControlType,
+} from './tree-op-content-controls.ts';
 
 /**
  * The accepted RUN property boundary (design D8), as the OOXML element names that carry it.
@@ -435,6 +440,58 @@ export type TreeDocOp =
     }
   | {
       /**
+       * Write a content control's VALUE, in the vocabulary its own type accepts.
+       *
+       * One transaction for the whole transition: the content, `w:showingPlcHdr`, and the
+       * type's own record of the value (`@w:lastValue`, `@w:fullDate`, `w14:checked`) move
+       * together, because a control whose glyph says checked and whose flag says unchecked is
+       * a document Word and this engine read differently.
+       */
+      readonly op: 'setContentControlValue';
+      readonly controlId: string;
+      readonly value: ContentControlValueInput;
+    }
+  | {
+      /**
+       * Author the metadata a control carries: its tag, its title, its lock.
+       *
+       * `null` removes the property. Everything else in `CT_SdtPr` — the type payload, a data
+       * binding, an extension this vocabulary does not model — survives in schema order.
+       */
+      readonly op: 'setContentControlProperties';
+      readonly controlId: string;
+      readonly tag?: string | null;
+      readonly alias?: string | null;
+      readonly lock?: ContentControlLock;
+    }
+  | {
+      /**
+       * Remove a control. `keepContent` splices its content into its place — Word's own
+       * "Remove content control" — and false takes the content with it.
+       */
+      readonly op: 'removeContentControl';
+      readonly controlId: string;
+      readonly keepContent: boolean;
+    }
+  | {
+      /**
+       * Wrap `[start, end)` of a paragraph in a new control of the named type.
+       *
+       * A control is a SIBLING of runs, never a thing inside one, so a range ending mid-run
+       * splits that run at both edges first. The characters and their formatting are the ones
+       * that were there; only the run boundaries move.
+       */
+      readonly op: 'insertContentControl';
+      readonly paragraphId: string;
+      readonly start: number;
+      readonly end: number;
+      readonly type: InsertableContentControlType;
+      readonly tag?: string;
+      readonly alias?: string;
+      readonly lock?: ContentControlLock;
+    }
+  | {
+      /**
        * Author `w:footnotePr` / `w:endnotePr` at document (settings) or section scope.
        * Refuse endnote `pageBottom`. Package-level; does not invent props on unedited saves.
        */
@@ -495,6 +552,10 @@ export const TREE_DOC_OP_KINDS = [
   'convertNote',
   'convertAllNotes',
   'setNoteProperties',
+  'setContentControlValue',
+  'setContentControlProperties',
+  'removeContentControl',
+  'insertContentControl',
 ] as const satisfies readonly TreeDocOpKind[];
 
 // Compile-time exhaustiveness, matching the legacy `DOC_OP_KINDS` guard: a new op must be
@@ -557,6 +618,22 @@ export type TreeOpRejection =
    */
   | 'unsupported-revision'
   | 'tree-invariant'
+  /** No content control in this part carries the addressed node id. */
+  | 'unknown-content-control'
+  /** The addressed node exists and is not a `w:sdt`. */
+  | 'not-a-content-control'
+  /**
+   * A content control's `w:lock` — or one an enclosing control imposes — forbids this.
+   *
+   * The same code for an edit inside `contentLocked` content and for the removal of an
+   * `sdtLocked` control: both are "the document says no", and the two halves are already
+   * distinguished by which operation was refused.
+   */
+  | 'locked'
+  /** The control declares `w:dataBinding`; its value belongs to a custom XML part. */
+  | 'bound'
+  /** The value offered is not one this control's type accepts. */
+  | 'typeMismatch'
   /** Malformed lifecycle args / first-section link — mirrors Editor `invalidArgs`. */
   | 'invalidArgs';
 
