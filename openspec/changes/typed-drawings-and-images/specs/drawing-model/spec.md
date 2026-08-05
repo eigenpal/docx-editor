@@ -88,6 +88,35 @@ Media SHALL be resolved from the package part named by `r:embed` through the exi
 - **WHEN** three drawings reference `rId14`, as the comprehensive fixture's do
 - **THEN** the part is decoded once and shared, and deleting one drawing does not remove the part while another still references it
 
+### Requirement: Embedded SVG is painted, never scripted
+
+An embedded `image/svg+xml` part SHALL be painted from its validated bytes rather than refused as an unsupported format. It SHALL be presented so that scripts inside the file cannot run and references inside the file cannot be fetched. Its intrinsic size SHALL be read from the root element's `width`, `height`, and `viewBox`, and SHALL be treated as metadata only: layout SHALL use the authored `wp:extent`, and no allocation SHALL be sized by the value.
+
+#### Scenario: Embedded SVG renders
+
+- **WHEN** a drawing's `r:embed` names an SVG part in the package
+- **THEN** the bytes are painted at the authored extent, and no decode of raster pixels is attempted
+
+#### Scenario: Script and external references in an SVG stay inert
+
+- **WHEN** an SVG containing a `script` element and a reference to a remote resource is painted
+- **THEN** the script does not run and no network request is made
+
+#### Scenario: Declared type still has to match the signature
+
+- **WHEN** a part declared as TIFF carries SVG bytes, or a part declared as SVG carries raster bytes
+- **THEN** it is refused as a signature mismatch rather than rendered
+
+#### Scenario: An unreadable root is not guessed at
+
+- **WHEN** the root `svg` element cannot be read within the bounded scan window
+- **THEN** the drawing reserves its extent and paints a placeholder, and the document still loads
+
+#### Scenario: Intrinsic size falls back rather than refusing
+
+- **WHEN** the root declares percentage sizes, no sizing attributes, or a size beyond the configured dimension bound
+- **THEN** the intrinsic size falls back to the `viewBox`, then to the replaced-element default, and an out-of-range value is clamped rather than refused
+
 ### Requirement: No image causes a network or filesystem fetch
 
 A `r:link` relationship, a `TargetMode="External"` image relationship, or any remote reference inside a drawing SHALL NOT be fetched at load, layout, paint, or save. The relationship SHALL be preserved, the drawing SHALL reserve its extent, and a placeholder SHALL be painted stating that the image is external.

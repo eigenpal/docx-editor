@@ -3,7 +3,7 @@
 // Bytes stay behind an opaque validated handle — paint consumers never receive raw package bytes.
 
 import type { ValidatedImageBytesHandle } from '../store/package/image-resources.ts';
-import type { SupportedImageMime } from '../store/package/image-resources.ts';
+import type { RenderableImageMime } from '../store/package/image-resources.ts';
 import type { PaintImageUrlPort } from '../output/semantic-paint-drawings.ts';
 
 /** Cache-owned validated-byte lookup; only the URL port factory receives this. */
@@ -25,7 +25,7 @@ export function createBrowserPaintImageUrlPort(
     return null;
   }
   return Object.freeze({
-    create(handle: ValidatedImageBytesHandle, mime: SupportedImageMime): string {
+    create(handle: ValidatedImageBytesHandle, mime: RenderableImageMime): string {
       const bytes = source.mintValidatedBytes(handle, handle.contentId);
       if (!bytes) {
         throw new Error(

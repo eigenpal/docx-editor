@@ -7,15 +7,21 @@ seoTitle: 'Images and floating pictures'
 
 DrawingML pictures (`w:drawing` with `pic:pic`) now layout, paint, and round-trip through the shared engine. **React** ships insert, wrap, properties, alt text, and selection-overlay authoring; **Vue** reads the same engine commands through `toolbarCommandState` but value/overlay chrome is deferred to `vue-drawing-authoring-parity`.
 
-## Supported raster formats
+## Supported formats
 
 | Format | Insert (React) | Layout & paint | Round-trip |
 | --- | --- | --- | --- |
 | PNG, JPEG, GIF | Yes — `normalizeImageBytes` preflight | Full decode at authored `wp:extent` | Byte-identical media unless replaced |
-| SVG, TIFF, EMF, WMF | No insert | Extent reserved; labelled placeholder | Preserved; no zero-click fetch |
+| SVG | No insert | Painted at authored `wp:extent` | Byte-identical media |
+| TIFF, EMF, WMF | No insert | Extent reserved; labelled placeholder | Preserved; no zero-click fetch |
 | External `r:link` / `TargetMode="External"` | No auto-load | Placeholder + preserved rel | Preserved; explicit user gesture to embed |
 
 Insert accepts PNG/JPEG/GIF only. Other payloads stay in the package and participate in pagination through their authored extent.
+
+SVG is painted through an `<img>`, which puts the browser in secure static mode: scripts in the
+file never run and external references in it are never fetched. Its intrinsic size is read from
+`width`/`height`/`viewBox` for reset-to-natural-size; layout always uses the authored `wp:extent`.
+An SVG whose root element cannot be read renders as a placeholder rather than being guessed at.
 
 ## Reading selection state
 

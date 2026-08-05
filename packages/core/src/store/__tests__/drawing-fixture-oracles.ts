@@ -164,8 +164,9 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
       expectNames(projections, ['png', 'jpeg', 'gif', 'svg', 'tif', 'emf', 'wmf']);
     },
     assertResourceKinds: (kinds) => {
-      expect(kinds.filter((kind) => kind === 'ready')).toHaveLength(3);
-      expect(kinds.filter((kind) => kind === 'unrenderable')).toHaveLength(4);
+      // PNG, JPEG, GIF decode; SVG paints straight from bytes. TIFF/EMF/WMF stay placeholders.
+      expect(kinds.filter((kind) => kind === 'ready')).toHaveLength(4);
+      expect(kinds.filter((kind) => kind === 'unrenderable')).toHaveLength(3);
     },
   },
   'images-header.docx': {

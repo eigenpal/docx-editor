@@ -6,7 +6,9 @@ import {
   hasBoundedSvgRoot,
   imageResourceLookupFor,
   liveDrawingReferenceCount,
+  MAX_SVG_ROOT_SCAN_BYTES,
   MAX_SVG_SNIFF_BYTES,
+  resolveSvgIntrinsicSize,
   sniffImageMime,
   validateGifHeader,
   validateJpegHeader,
@@ -59,6 +61,8 @@ const GIF_1X1 = new Uint8Array([
 const GIF_PREFIX_ONLY = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]);
 
 const SVG_MIN = strToU8('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+const SVG_SIZED =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="180" height="90" viewBox="0 0 180 90"></svg>';
 const XML_NOT_SVG = strToU8('<?xml version="1.0"?><root></root>');
 const TIFF_MIN = new Uint8Array([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00]);
 const EMF_MIN = new Uint8Array([0x01, 0x00, 0x00, 0x00, ...new Array(40).fill(0)]);
@@ -510,7 +514,6 @@ describe('image resource validation and cache (task 4)', () => {
 
     test('preserved formats remain unrenderable without decode', async () => {
       for (const [path, bytes, mime] of [
-        ['word/media/image.svg', SVG_MIN, 'image/svg+xml'],
         ['word/media/image.tif', TIFF_MIN, 'image/tiff'],
         ['word/media/image.emf', EMF_MIN, 'image/x-emf'],
         ['word/media/image.wmf', WMF_MIN, 'image/x-wmf'],
@@ -534,6 +537,122 @@ describe('image resource validation and cache (task 4)', () => {
         }
         expect(decode.calls).toBe(0);
       }
+    });
+
+    test('SVG resolves ready without touching the decode port', async () => {
+      const loaded = buildPackage({
+        media: { 'word/media/art.svg': strToU8(SVG_SIZED) },
+        docRels:
+          `<Relationships xmlns="${REL_NS}">` +
+          `<Relationship Id="rId2" Type="${IMAGE_REL}" Target="media/art.svg"/>` +
+          '</Relationships>',
+      });
+      if (!loaded.ok) throw new Error(loaded.reason);
+      const decode = mockDecodePort();
+      const cache = createImageResourceCache(loaded.package, { decodePort: decode });
+      const state = await cache.resolveEmbedded('/word/document.xml', 'rId2');
+      expect(state.kind).toBe('ready');
+      if (state.kind === 'ready') {
+        expect(state.mime).toBe('image/svg+xml');
+        expect(state.pixelWidth).toBe(180);
+        expect(state.pixelHeight).toBe(90);
+        expect(state.dpiX).toBe(96);
+      }
+      // No raster decode: an SVG never round-trips through createImageBitmap.
+      expect(decode.calls).toBe(0);
+    });
+
+    test('SVG bytes declared as TIFF are a signature mismatch, not a render', async () => {
+      const loaded = buildPackage({
+        media: { 'word/media/image.tif': strToU8(SVG_SIZED) },
+        docRels:
+          `<Relationships xmlns="${REL_NS}">` +
+          `<Relationship Id="rId2" Type="${IMAGE_REL}" Target="media/image.tif"/>` +
+          '</Relationships>',
+      });
+      if (!loaded.ok) throw new Error(loaded.reason);
+      const cache = createImageResourceCache(loaded.package, { decodePort: mockDecodePort() });
+      const state = await cache.resolveEmbedded('/word/document.xml', 'rId2');
+      expect(state.kind).toBe('unrenderable');
+      if (state.kind === 'unrenderable') expect(state.reason).toBe('signature-mismatch');
+    });
+  });
+
+  describe('SVG intrinsic sizing', () => {
+    const limits = resolveImageResourceLimits();
+    const sizeOf = (markup: string) => resolveSvgIntrinsicSize(strToU8(markup), limits);
+
+    test('absolute width and height win', () => {
+      expect(sizeOf('<svg width="180" height="90"/>')).toEqual({
+        pixelWidth: 180,
+        pixelHeight: 90,
+      });
+    });
+
+    test('absolute units convert to CSS pixels', () => {
+      expect(sizeOf('<svg width="1in" height="72pt"/>')).toEqual({
+        pixelWidth: 96,
+        pixelHeight: 96,
+      });
+    });
+
+    test('viewBox supplies the missing axis through the aspect ratio', () => {
+      expect(sizeOf('<svg width="200" viewBox="0 0 100 50"/>')).toEqual({
+        pixelWidth: 200,
+        pixelHeight: 100,
+      });
+      expect(sizeOf('<svg height="50" viewBox="0 0 100 50"/>')).toEqual({
+        pixelWidth: 100,
+        pixelHeight: 50,
+      });
+    });
+
+    test('viewBox alone is the intrinsic size', () => {
+      expect(sizeOf('<svg viewBox="0,0,120,60"/>')).toEqual({ pixelWidth: 120, pixelHeight: 60 });
+    });
+
+    test('percentage sizes are not intrinsic and fall back', () => {
+      expect(sizeOf('<svg width="100%" height="100%"/>')).toEqual({
+        pixelWidth: 300,
+        pixelHeight: 150,
+      });
+      expect(sizeOf('<svg width="100%" height="100%" viewBox="0 0 40 20"/>')).toEqual({
+        pixelWidth: 40,
+        pixelHeight: 20,
+      });
+    });
+
+    test('no sizing attributes falls back to the CSS replaced-element default', () => {
+      expect(sizeOf('<svg xmlns="http://www.w3.org/2000/svg"/>')).toEqual({
+        pixelWidth: 300,
+        pixelHeight: 150,
+      });
+    });
+
+    test('an out-of-range viewBox is clamped, never refused', () => {
+      const size = sizeOf(`<svg viewBox="0 0 ${limits.maxDimension * 4} 10"/>`);
+      expect(size).not.toBeNull();
+      expect(size!.pixelWidth).toBe(limits.maxDimension);
+    });
+
+    test('degenerate values fall back rather than producing a zero or NaN size', () => {
+      expect(sizeOf('<svg width="0" height="0"/>')).toEqual({
+        pixelWidth: 300,
+        pixelHeight: 150,
+      });
+      expect(sizeOf('<svg viewBox="0 0 nope 10"/>')).toEqual({
+        pixelWidth: 300,
+        pixelHeight: 150,
+      });
+    });
+
+    test('a root element longer than the scan window is refused, not guessed', () => {
+      const padding = ' '.repeat(MAX_SVG_ROOT_SCAN_BYTES);
+      expect(sizeOf(`<svg data-pad="${padding}" width="10" height="10"/>`)).toBeNull();
+    });
+
+    test('non-svg bytes have no intrinsic size', () => {
+      expect(resolveSvgIntrinsicSize(PNG_1X1, limits)).toBeNull();
     });
   });
 
