@@ -258,3 +258,88 @@ describe('cached breaks are re-tagged for the paragraph that uses them (review r
     }
   });
 });
+
+describe('key memoization over immutable nodes', () => {
+  const firstParagraphOf = (part: OoxmlPart) => {
+    const body = part.root.children.find((child) => child.kind === 'body')!;
+    return (body as { children: readonly { kind: string }[] }).children.find(
+      (child) => child.kind === 'paragraph'
+    )! as never;
+  };
+
+  test('unchanged inputs return the SAME key string object, not just an equal one', () => {
+    // The key embeds the whole content token, so it is long — and a freshly joined string
+    // has no cached hash. Handing back the same object keeps every cache get on the
+    // engine's cached string hash, which is what makes the cache cheap to consult per pass.
+    const part = load(paragraph('memoized paragraph content'));
+    const node = firstParagraphOf(part);
+    const inputs = { paragraph: node, properties: [], width: 100, producer: 'p' } as const;
+    expect(paragraphLayoutKey(inputs)).toBe(paragraphLayoutKey(inputs));
+  });
+
+  test('a changed width recomputes, and recomputation is value-stable', () => {
+    const part = load(paragraph('memoized paragraph content'));
+    const node = firstParagraphOf(part);
+    const at100 = paragraphLayoutKey({
+      paragraph: node,
+      properties: [],
+      width: 100,
+      producer: 'p',
+    });
+    const at200 = paragraphLayoutKey({
+      paragraph: node,
+      properties: [],
+      width: 200,
+      producer: 'p',
+    });
+    expect(at200).not.toBe(at100);
+    // The memo holds one entry per node; alternating widths must still produce the same VALUE.
+    const at100again = paragraphLayoutKey({
+      paragraph: node,
+      properties: [],
+      width: 100,
+      producer: 'p',
+    });
+    expect(at100again).toEqual(at100);
+  });
+
+  test('a changed producer or drawing token recomputes the key', () => {
+    const part = load(paragraph('memoized paragraph content'));
+    const node = firstParagraphOf(part);
+    const base = paragraphLayoutKey({ paragraph: node, properties: [], width: 100, producer: 'p' });
+    const otherProducer = paragraphLayoutKey({
+      paragraph: node,
+      properties: [],
+      width: 100,
+      producer: 'q',
+    });
+    expect(otherProducer).not.toEqual(base);
+    const withDrawing = paragraphLayoutKey({
+      paragraph: node,
+      properties: [],
+      width: 100,
+      producer: 'p',
+      drawingToken: 'd1',
+    });
+    expect(withDrawing).not.toEqual(base);
+  });
+
+  test('a REPLACED paragraph node with identical content keys to the same value', () => {
+    // Two parses of the same XML are different node objects with the same structural ids;
+    // the memo must never let one node object's cached key answer for another object, and
+    // equal content at the same structural id must still produce an equal key value.
+    const a = paragraphLayoutKey({
+      paragraph: firstParagraphOf(load(paragraph('same content'))),
+      properties: [],
+      width: 100,
+      producer: 'p',
+    });
+    const b = paragraphLayoutKey({
+      paragraph: firstParagraphOf(load(paragraph('same content'))),
+      properties: [],
+      width: 100,
+      producer: 'p',
+    });
+    expect(a).toEqual(b);
+  });
+});

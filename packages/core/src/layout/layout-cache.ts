@@ -70,7 +70,29 @@ function propertiesToken(properties: readonly OoxmlProperty[]): string {
  * Walks the tree rather than reading text alone: a run property changes advances without
  * changing a character, and an unknown child changes the ordering of what surrounds it.
  */
+/**
+ * Canonical-tree nodes are immutable (deep-frozen at construction; edits replace nodes), so a
+ * node's token can never change — memoizing per object turns the per-pass key computation for
+ * an unchanged paragraph into a single WeakMap hit instead of a full subtree walk.
+ *
+ * Only paragraph and table nodes are stored (the granularity `paragraphLayoutKey` is called
+ * at): caching every descendant would hold one string per nesting level of the same content.
+ */
+const nodeTokens = new WeakMap<object, string>();
+
 function nodeToken(node: OoxmlNode): string {
+  if (node.kind === 'textValue') return `t:${node.value}`;
+  const cacheable = node.kind === 'paragraph' || node.kind === 'table';
+  if (cacheable) {
+    const cached = nodeTokens.get(node);
+    if (cached !== undefined) return cached;
+  }
+  const token = computeNodeToken(node);
+  if (cacheable) nodeTokens.set(node, token);
+  return token;
+}
+
+function computeNodeToken(node: OoxmlNode): string {
   if (node.kind === 'textValue') return `t:${node.value}`;
   // The node's OWN identity, not just its shape. Ids are structural paths, so inserting a
   // table above a paragraph renumbers every paragraph below it while nothing about their
@@ -130,19 +152,61 @@ export interface ParagraphKeyInputs {
  * Folds in the content, the available width, and the measurement producer. Anything that changes
  * where lines fall must be in here, or the cache serves a break taken under different conditions.
  */
+interface ParagraphKeyMemo {
+  readonly producer: string;
+  readonly width: number;
+  readonly drawingToken: string;
+  readonly exclusionToken: string;
+  readonly propertiesToken: string;
+  readonly key: ParagraphLayoutKey;
+}
+
+/**
+ * Single-entry memo of the assembled key per (immutable) paragraph node.
+ *
+ * The key embeds the whole content token, so it is a LONG string — and a freshly joined
+ * string has no cached hash, which made every cache `get` re-hash kilobytes per paragraph
+ * per pass. Handing back the SAME string object keeps the engine on V8's cached string
+ * hash, which is what makes the paragraph cache cheap to consult on every keystroke.
+ */
+const paragraphKeyMemos = new WeakMap<object, ParagraphKeyMemo>();
+
 export function paragraphLayoutKey(inputs: ParagraphKeyInputs): ParagraphLayoutKey {
   // Width is quantized to a thousandth of a point: a width that differs by less than that
   // cannot move a break, and keying on the raw float would miss on every scroll that
   // recomputes it.
   const width = Math.round(inputs.width * 1000);
-  return [
+  const drawingToken = inputs.drawingToken ?? '';
+  const exclusionToken = inputs.exclusionToken ?? '';
+  const properties = propertiesToken(inputs.properties);
+  const memo = paragraphKeyMemos.get(inputs.paragraph);
+  if (
+    memo &&
+    memo.producer === inputs.producer &&
+    memo.width === width &&
+    memo.drawingToken === drawingToken &&
+    memo.exclusionToken === exclusionToken &&
+    memo.propertiesToken === properties
+  ) {
+    return memo.key;
+  }
+  const key = [
     inputs.producer,
     width,
-    inputs.drawingToken ?? '',
-    inputs.exclusionToken ?? '',
-    propertiesToken(inputs.properties),
+    drawingToken,
+    exclusionToken,
+    properties,
     nodeToken(inputs.paragraph),
   ].join('\0');
+  paragraphKeyMemos.set(inputs.paragraph, {
+    producer: inputs.producer,
+    width,
+    drawingToken,
+    exclusionToken,
+    propertiesToken: properties,
+    key,
+  });
+  return key;
 }
 
 /** How large the paragraph cache grows before least-recently-used eviction. */

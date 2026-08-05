@@ -2790,6 +2790,19 @@ function controlLevelOf(control: OoxmlElement): ContentControlLevel {
  * changes this token, which is folded into the layout producer.
  */
 export function contentControlContextToken(part: OoxmlPart): string {
+  // Parts are immutable (edits publish a new part object), so the token is a pure function
+  // of the part reference. Without the memo this whole-tree walk ran on EVERY layout pass —
+  // including no-change passes that reuse every page.
+  const cached = contentControlContextTokens.get(part);
+  if (cached !== undefined) return cached;
+  const token = computeContentControlContextToken(part);
+  contentControlContextTokens.set(part, token);
+  return token;
+}
+
+const contentControlContextTokens = new WeakMap<OoxmlPart, string>();
+
+function computeContentControlContextToken(part: OoxmlPart): string {
   const parts: string[] = [];
   const walk = (node: OoxmlNode, depth: number): void => {
     if (node.kind === 'textValue') return;

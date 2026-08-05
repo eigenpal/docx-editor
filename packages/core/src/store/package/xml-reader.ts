@@ -109,7 +109,7 @@ export type XmlResult =
   | { readonly ok: true; readonly nodes: readonly XmlNode[] }
   | { readonly ok: false; readonly reason: XmlRejection };
 
-const CUSTOM_ENTITY_REF_AT_RE = /^&(?!(amp|lt|gt|quot|apos);)[A-Za-z_][\w.-]*;/;
+const CUSTOM_ENTITY_REF_STICKY_RE = /&(?!(amp|lt|gt|quot|apos);)[A-Za-z_][\w.-]*;/y;
 
 function validLimit(value: number): boolean {
   return Number.isFinite(value) && Number.isInteger(value) && value >= 0;
@@ -118,6 +118,15 @@ function validLimit(value: number): boolean {
 /** Reject active declarations/references while treating CDATA, comments, and PIs as literal. */
 function preflightForbiddenXml(xml: string): XmlRejection | undefined {
   for (let i = 0; i < xml.length; i += 1) {
+    // Everything this preflight can object to starts at '<' or '&'; skipping every other
+    // character keeps the scan linear without per-character slicing on multi-megabyte parts.
+    const ch = xml.charCodeAt(i);
+    if (ch !== 0x3c /* '<' */ && ch !== 0x26 /* '&' */) continue;
+    if (ch === 0x26) {
+      CUSTOM_ENTITY_REF_STICKY_RE.lastIndex = i;
+      if (CUSTOM_ENTITY_REF_STICKY_RE.test(xml)) return 'entity-forbidden';
+      continue;
+    }
     if (xml.startsWith('<![CDATA[', i)) {
       const end = xml.indexOf(']]>', i + 9);
       if (end < 0) return 'parse-error';
@@ -136,10 +145,11 @@ function preflightForbiddenXml(xml: string): XmlRejection | undefined {
       i = end + 1;
       continue;
     }
-    const declaration = xml.slice(i, i + 10).toUpperCase();
-    if (declaration.startsWith('<!DOCTYPE')) return 'dtd-forbidden';
-    if (declaration.startsWith('<!ENTITY')) return 'entity-forbidden';
-    if (xml[i] === '&' && CUSTOM_ENTITY_REF_AT_RE.test(xml.slice(i))) return 'entity-forbidden';
+    if (xml.startsWith('<!', i)) {
+      const declaration = xml.slice(i, i + 10).toUpperCase();
+      if (declaration.startsWith('<!DOCTYPE')) return 'dtd-forbidden';
+      if (declaration.startsWith('<!ENTITY')) return 'entity-forbidden';
+    }
   }
   return undefined;
 }

@@ -727,6 +727,21 @@ function conditionalTypesFor(input: {
   return ordered;
 }
 
+interface TableStructureMemo {
+  readonly contentWidthPt: number;
+  readonly depth: number;
+  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly displayMode: RevisionDisplayMode;
+  readonly structure: SemanticTableStructure | null;
+}
+
+/**
+ * Single-entry memo per (immutable) table node. One layout pass reads the same table under
+ * the same inputs more than once — document-order indexing, flow layout, row measurement —
+ * and the structure is deeply readonly, so the last read can be handed back by identity.
+ */
+const tableStructureMemos = new WeakMap<object, TableStructureMemo>();
+
 /**
  * Read one typed table node into a bounded structure, or null when the node is not a
  * typed table or sits beyond the nesting ceiling.
@@ -738,6 +753,34 @@ export function readTableStructure(
   styleCascade?: StyleCascadeTable,
   /** Which revisions the view resolves away; only the proposed result performs the join. */
   displayMode: RevisionDisplayMode = 'all-markup'
+): SemanticTableStructure | null {
+  const memo = tableStructureMemos.get(table);
+  if (
+    memo &&
+    memo.contentWidthPt === contentWidthPt &&
+    memo.depth === depth &&
+    memo.styleCascade === styleCascade &&
+    memo.displayMode === displayMode
+  ) {
+    return memo.structure;
+  }
+  const structure = readTableStructureUncached(
+    table,
+    contentWidthPt,
+    depth,
+    styleCascade,
+    displayMode
+  );
+  tableStructureMemos.set(table, { contentWidthPt, depth, styleCascade, displayMode, structure });
+  return structure;
+}
+
+function readTableStructureUncached(
+  table: OoxmlNode,
+  contentWidthPt: number,
+  depth: number,
+  styleCascade: StyleCascadeTable | undefined,
+  displayMode: RevisionDisplayMode
 ): SemanticTableStructure | null {
   if (depth >= MAX_TABLE_NESTING) return null;
   if (table.kind !== 'table') return null;

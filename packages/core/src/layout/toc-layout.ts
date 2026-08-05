@@ -36,13 +36,23 @@ function tocHasVisibleResultContent(part: OoxmlPart, toc: DetectedToc): boolean 
   return false;
 }
 
+// Parts are immutable (edits publish a new part object), so each of these id sets is a pure
+// function of the part reference. Memoized because layout recomputes them on EVERY pass —
+// including no-change passes — and `tocHasVisibleResultContent` walks result paragraphs.
+const chromeIdsByPart = new WeakMap<OoxmlPart, ReadonlySet<string>>();
+const placeholderIdsByPart = new WeakMap<OoxmlPart, ReadonlySet<string>>();
+const suppressedIdsByPart = new WeakMap<OoxmlPart, ReadonlySet<string>>();
+
 /** Paragraph ids for TOC field begin/end chrome that must not reserve vertical flow when empty. */
 export function tocFieldChromeParagraphIds(part: OoxmlPart): ReadonlySet<string> {
+  const cached = chromeIdsByPart.get(part);
+  if (cached) return cached;
   const ids = new Set<string>();
   for (const toc of detectBodyTocs(part)) {
     ids.add(toc.beginParagraphId);
     ids.add(toc.endParagraphId);
   }
+  chromeIdsByPart.set(part, ids);
   return ids;
 }
 
@@ -53,10 +63,13 @@ export function tocFieldChromeParagraphIds(part: OoxmlPart): ReadonlySet<string>
  * empty-TOC furniture placeholder; ordinary field chrome on the same ids stays suppressed.
  */
 export function emptyTocPlaceholderParagraphIds(part: OoxmlPart): ReadonlySet<string> {
+  const cached = placeholderIdsByPart.get(part);
+  if (cached) return cached;
   const ids = new Set<string>();
   for (const toc of detectBodyTocs(part)) {
     if (!tocHasVisibleResultContent(part, toc)) ids.add(toc.beginParagraphId);
   }
+  placeholderIdsByPart.set(part, ids);
   return ids;
 }
 
@@ -66,10 +79,13 @@ export function emptyTocPlaceholderParagraphIds(part: OoxmlPart): ReadonlySet<st
  * Suppressed like field chrome so blank cached rows do not stack under the empty placeholder.
  */
 export function emptyTocSuppressedResultParagraphIds(part: OoxmlPart): ReadonlySet<string> {
+  const cached = suppressedIdsByPart.get(part);
+  if (cached) return cached;
   const ids = new Set<string>();
   for (const toc of detectBodyTocs(part)) {
     if (tocHasVisibleResultContent(part, toc)) continue;
     for (const paragraphId of toc.resultParagraphIds) ids.add(paragraphId);
   }
+  suppressedIdsByPart.set(part, ids);
   return ids;
 }

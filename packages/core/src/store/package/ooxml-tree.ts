@@ -1613,10 +1613,13 @@ function namespaceDeclarations(
   readonly bindings: ReadonlyMap<string, string>;
   readonly authored: readonly OoxmlNamespaceBinding[];
 } {
-  const bindings = new Map(inherited);
+  // Copy-on-write: most elements declare nothing, and copying the inherited map per element
+  // dominated parse allocation on long documents.
+  let bindings: Map<string, string> | null = null;
   const authored: OoxmlNamespaceBinding[] = [];
   for (const [name, namespaceUri] of Object.entries(element.attributes)) {
     if (name !== 'xmlns' && !name.startsWith('xmlns:')) continue;
+    bindings ??= new Map(inherited);
     const prefix = name === 'xmlns' ? '' : name.slice('xmlns:'.length);
     if (
       (prefix !== '' && !isValidNCName(prefix)) ||
@@ -1630,7 +1633,7 @@ function namespaceDeclarations(
     bindings.set(prefix, namespaceUri);
     authored.push({ prefix, namespaceUri });
   }
-  return { bindings, authored };
+  return { bindings: bindings ?? inherited, authored };
 }
 
 function resolveElementName(
@@ -1727,6 +1730,10 @@ function canonicalLegacyChildren(
   preserve: boolean,
   isWmlText: boolean
 ): readonly XmlNode[] {
+  // Whitespace stripping and adjacent-text merging only apply to TEXT children; the
+  // structural bulk of a part has none, and skipping the filter/merge allocation there
+  // is a measurable parse win on long documents.
+  if (!children.some((child) => child.type === 'text')) return children;
   const hasElement = children.some((child) => child.type === 'element');
   const hasNonWhitespaceText = children.some(
     (child) => child.type === 'text' && !/^\s*$/.test(child.value)

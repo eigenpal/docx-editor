@@ -79,8 +79,14 @@ function collectNonEmptyPrefixUris(
   uris: Set<string>
 ): void {
   if (node.kind === 'textValue') return;
-  const bindings = new Map(inheritedBindings);
-  for (const binding of node.namespaceBindings) bindings.set(binding.prefix, binding.namespaceUri);
+  // Copy-on-write: most nodes declare no namespaces, and copying the inherited map per node
+  // dominated the cost of this whole-tree walk on long documents.
+  let bindings = inheritedBindings;
+  if (node.namespaceBindings.length > 0) {
+    const own = new Map(inheritedBindings);
+    for (const binding of node.namespaceBindings) own.set(binding.prefix, binding.namespaceUri);
+    bindings = own;
+  }
   for (const attribute of node.attributes) {
     if (attribute.namespaceUri !== '') uris.add(attribute.namespaceUri);
     if (typeof attribute.value !== 'string') continue;
@@ -244,10 +250,13 @@ function controlledQualifiedName(
 }
 
 function sortedAttributes(attributes: readonly OoxmlAttribute[]): readonly OoxmlAttribute[] {
-  const seen = new Set<string>();
+  if (attributes.length === 0) return attributes;
+  // A single attribute cannot collide or need ordering; skip the set and the sort copy.
+  const seen = attributes.length > 1 ? new Set<string>() : null;
   for (const attribute of attributes) {
     assertSerializableName(attribute.localName);
     assertSerializableNamespace(attribute.namespaceUri);
+    if (!seen) continue;
     const key = expandedKey(attribute.namespaceUri, attribute.localName);
     if (seen.has(key))
       throw new Error(
@@ -255,6 +264,7 @@ function sortedAttributes(attributes: readonly OoxmlAttribute[]): readonly Ooxml
       );
     seen.add(key);
   }
+  if (attributes.length === 1) return attributes;
   return [...attributes].sort((left, right) => {
     const leftKey = expandedKey(left.namespaceUri, left.localName);
     const rightKey = expandedKey(right.namespaceUri, right.localName);
@@ -319,33 +329,49 @@ function serializeNode(
   prefixes: ControlledPrefixes,
   inheritedBindings: ReadonlyMap<string, string>,
   inheritedPreserve: boolean,
-  rootDeclarations: string
-): string {
-  if (node.kind === 'textValue') return escapeXmlChecked(node.value, 'OOXML text');
-  const bindings = new Map(inheritedBindings);
-  const seenDeclarationPrefixes = new Set<string>();
-  const declarations = [...node.namespaceBindings]
-    .sort((left, right) => {
-      const prefixOrder = left.prefix.localeCompare(right.prefix);
-      return prefixOrder !== 0 ? prefixOrder : left.namespaceUri.localeCompare(right.namespaceUri);
-    })
-    .map((binding) => {
-      if (
-        (binding.prefix !== '' && !isValidNCName(binding.prefix)) ||
-        binding.prefix === 'xmlns' ||
-        seenDeclarationPrefixes.has(binding.prefix)
-      )
-        throw new Error(`invalid or duplicate namespace prefix ${JSON.stringify(binding.prefix)}`);
-      assertSerializableNamespace(binding.namespaceUri);
-      seenDeclarationPrefixes.add(binding.prefix);
-      const declaredByControlledRoot =
-        rootDeclarations !== '' && controlledRootDeclares(binding, bindings, prefixes);
-      bindings.set(binding.prefix, binding.namespaceUri);
-      if (declaredByControlledRoot) return '';
-      const declarationName = binding.prefix === '' ? 'xmlns' : `xmlns:${binding.prefix}`;
-      return ` ${declarationName}="${escapeXmlChecked(binding.namespaceUri, declarationName)}"`;
-    })
-    .join('');
+  rootDeclarations: string,
+  /** Output accumulator — one flat join at the end beats per-element string assembly. */
+  out: string[]
+): void {
+  if (node.kind === 'textValue') {
+    out.push(escapeXmlChecked(node.value, 'OOXML text'));
+    return;
+  }
+  // Copy-on-write: most nodes declare no namespaces, and copying the inherited map (plus the
+  // sort/dedup scaffolding) per node dominated serialization cost on long documents.
+  let bindings = inheritedBindings;
+  let declarations = '';
+  if (node.namespaceBindings.length > 0) {
+    const own = new Map(inheritedBindings);
+    const seenDeclarationPrefixes = new Set<string>();
+    declarations = [...node.namespaceBindings]
+      .sort((left, right) => {
+        const prefixOrder = left.prefix.localeCompare(right.prefix);
+        return prefixOrder !== 0
+          ? prefixOrder
+          : left.namespaceUri.localeCompare(right.namespaceUri);
+      })
+      .map((binding) => {
+        if (
+          (binding.prefix !== '' && !isValidNCName(binding.prefix)) ||
+          binding.prefix === 'xmlns' ||
+          seenDeclarationPrefixes.has(binding.prefix)
+        )
+          throw new Error(
+            `invalid or duplicate namespace prefix ${JSON.stringify(binding.prefix)}`
+          );
+        assertSerializableNamespace(binding.namespaceUri);
+        seenDeclarationPrefixes.add(binding.prefix);
+        const declaredByControlledRoot =
+          rootDeclarations !== '' && controlledRootDeclares(binding, own, prefixes);
+        own.set(binding.prefix, binding.namespaceUri);
+        if (declaredByControlledRoot) return '';
+        const declarationName = binding.prefix === '' ? 'xmlns' : `xmlns:${binding.prefix}`;
+        return ` ${declarationName}="${escapeXmlChecked(binding.namespaceUri, declarationName)}"`;
+      })
+      .join('');
+    bindings = own;
+  }
   const elementAttributes =
     // `w:delText` is `CT_Text` exactly as `w:t` is (§17.3.3.7), so it needs the same
     // `xml:space` normalization. Without it, striking " b " wrote `<w:delText> b </w:delText>`
@@ -359,24 +385,25 @@ function serializeNode(
   const preserve =
     ownSpace === 'preserve' ? true : ownSpace === 'default' ? false : inheritedPreserve;
   const name = controlledQualifiedName(node.namespaceUri, node.localName, prefixes, false);
-  const attributes = sortedAttributes(elementAttributes)
-    .map((attribute) => {
-      const attributeName = controlledQualifiedName(
-        attribute.namespaceUri,
-        attribute.localName,
-        prefixes,
-        true
-      );
-      const value = controlledQNameValue(attribute, node, bindings, prefixes);
-      return ` ${attributeName}="${escapeXmlChecked(value, `attribute ${attributeName}`)}"`;
-    })
-    .join('');
-  const open = `<${name}${rootDeclarations}${declarations}${attributes}`;
+  out.push(`<${name}${rootDeclarations}${declarations}`);
+  for (const attribute of sortedAttributes(elementAttributes)) {
+    const attributeName = controlledQualifiedName(
+      attribute.namespaceUri,
+      attribute.localName,
+      prefixes,
+      true
+    );
+    const value = controlledQNameValue(attribute, node, bindings, prefixes);
+    out.push(` ${attributeName}="${escapeXmlChecked(value, `attribute ${attributeName}`)}"`);
+  }
   const children = significantChildren(node, preserve);
-  if (children.length === 0) return `${open}/>`;
-  return `${open}>${children
-    .map((child) => serializeNode(child, prefixes, bindings, preserve, ''))
-    .join('')}</${name}>`;
+  if (children.length === 0) {
+    out.push('/>');
+    return;
+  }
+  out.push('>');
+  for (const child of children) serializeNode(child, prefixes, bindings, preserve, '', out);
+  out.push(`</${name}>`);
 }
 
 function formatNamespaceDeclaration(namespaceUri: string, prefix: string): string {
@@ -409,7 +436,9 @@ export function serializeOoxmlPart(part: OoxmlPart): string {
       return formatNamespaceDeclaration(namespaceUri, prefix);
     })
     .join('');
-  return serializeNode(part.root, prefixes, rootBindings, false, declarations);
+  const out: string[] = [];
+  serializeNode(part.root, prefixes, rootBindings, false, declarations, out);
+  return out.join('');
 }
 
 type FingerprintValue =
@@ -429,6 +458,9 @@ function xmlSpaceValue(attributes: readonly OoxmlAttribute[]): string | undefine
 }
 
 function significantChildren(node: OoxmlElement, preserve: boolean): readonly OoxmlNode[] {
+  // Whitespace stripping only ever drops TEXT children; a child list without any is
+  // returned as-is, which skips the filter allocation for the structural bulk of a part.
+  if (!node.children.some((child) => child.kind === 'textValue')) return node.children;
   const hasElementChild = node.children.some((child) => child.kind !== 'textValue');
   const hasNonWhitespaceText = node.children.some(
     (child) => child.kind === 'textValue' && !/^\s*$/.test(child.value)
