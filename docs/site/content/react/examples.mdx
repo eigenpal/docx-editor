@@ -1,6 +1,6 @@
 ---
 title: "React examples"
-description: "Concrete patterns for embedding <DocxEditor> in React: load from URL, controlled comments, autosave, custom toolbar, custom fonts, Yjs collaboration, agent panel."
+description: "Concrete patterns for embedding <DocxEditor> in React: load from URL, controlled comments, autosave, custom toolbar, custom fonts, Yjs collaboration, document automation."
 category: "React"
 order: 32
 ---
@@ -264,25 +264,42 @@ import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from 'y-prosemirror';
 
 The provider setup, presence, and comment sync live on the canonical page: [Realtime collaboration](/docs/1.x/realtime-collaboration).
 
-## Agent panel
+## Automating the open document
 
-`agentPanel={{ render }}` mounts a resizable side panel next to the document, and `useDocxAgentTools` bridges tool calls to the live editor:
+`@docx-editor.dev/agents/browser` takes the editor instance this adapter already created and drives it through an object model, so edits land in the open document with the reader's undo stack intact. There is no panel prop and no chat UI in the packages — render your own chrome wherever the rest of it lives:
 
 ```tsx
-import { useDocxAgentTools } from '@docx-editor.dev/agents/react';
+import { useDocxEditor } from '@docx-editor.dev/react';
+import { DocxEditor as Automation } from '@docx-editor.dev/agents/browser';
 
-const { tools, executeToolCall, getContext } = useDocxAgentTools({ editorRef });
+function ReadDocumentButton() {
+  const editor = useDocxEditor(); // null until DocxEditor.Content has mounted
 
-<DocxEditor ref={editorRef} documentBuffer={buf} agentPanel={{ render: () => <MyChat /> }} />;
+  return (
+    <button
+      disabled={!editor}
+      onClick={async () => {
+        const runtime = Automation.createBrowser(editor!);
+        const text = await runtime.run(async (context) => {
+          const body = context.document.body;
+          body.load('text');
+          await context.sync();
+          return body.text;
+        });
+        console.log(text);
+      }}
+    >
+      Read the document
+    </button>
+  );
+}
 ```
 
-The full loop (AI SDK transport, `onToolCall` execution, `toAgentMessages` for `<AgentChatLog>`, the server route) is the [AI document editing](/docs/1.x/agents/ai-editing) tutorial; the bridge reference is [Agents → Live editor](/docs/1.x/agents/live-editor).
-
-<AgentChatDemo />
+The object model, its load/sync rules and the supported subset are in [Automation](/docs/1.x/agents).
 
 ## Next steps
 
 - [Props reference](/docs/1.x/react/props)
 - [React API reference](/docs/1.x/api/react)
 - [Realtime collaboration](/docs/1.x/realtime-collaboration)
-- [Agents](/docs/1.x/agents)
+- [Automation](/docs/1.x/agents)

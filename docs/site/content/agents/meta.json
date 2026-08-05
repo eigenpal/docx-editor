@@ -1,15 +1,5 @@
 {
-  "title": "AI & Agents",
+  "title": "Automation",
   "defaultOpen": true,
-  "pages": [
-    "index",
-    "ai-editing",
-    "redlining",
-    "live-editor",
-    "tools",
-    "docx-reviewer",
-    "mcp",
-    "bring-your-own",
-    "word-js-api"
-  ]
+  "pages": ["index", "word-js-api", "migration"]
 }

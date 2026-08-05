@@ -29,8 +29,7 @@ bun run dev:astro   # examples/astro
 | `remix/`                 | Remix integration.                                                                                              |
 | `collaboration/`         | Real-time collab proof-of-concept.                                                                              |
 | `parity/`                | Single deployment serving React + Vue adapters with a switcher pill. Used by `bun run preview`.                 |
-| `agents-demo/`           | DocxReviewer + agent tool calls operating on a static `Document` model.                                         |
-| `agent-chat-demo/`       | Live chat panel agent reading the editor + suggesting changes (see `openspec/changes/live-agent-chat/spec.md`). |
+| `automation/`            | `@docx-editor.dev/agents` driving a document with no browser and no framework: a template filled from a script, plus what the browser subpath adds. |
 | `plugins/hello-world/`   | Minimal plugin scaffold for `@docx-editor.dev/react`'s plugin API.                                              |
 | `plugins/docxtemplater/` | Plugin showing docxtemplater variable insertion with live preview.                                              |
 | `shared/`                | Shared switcher widgets + the demo `sample.docx`. Not a runnable example; imported by `vite/` and `vue/`.       |

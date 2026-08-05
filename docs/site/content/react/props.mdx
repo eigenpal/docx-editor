@@ -245,22 +245,6 @@ import pl from '@docx-editor.dev/i18n/pl';
 <DocxEditor documentBuffer={buf} i18n={pl} />;
 ```
 
-## Agents
-
-| Prop | Type | Description |
-|---|---|---|
-| `agentPanel` | `AgentPanelOptions` | Wires a side panel slot. Pair with `useDocxAgentTools`. |
-
-```tsx
-<DocxEditor
-  ref={editorRef}
-  documentBuffer={buf}
-  agentPanel={{ render: () => <AgentChatLog messages={messages} /> }}
-/>;
-```
-
-`agentPanel` is React-only; the Vue adapter pairs `useAgentBridge` with your own chat UI instead. Full setup in [Agents → Live editor](/docs/1.x/agents/live-editor).
-
 ## Plugins
 
 | Prop | Type | Description |

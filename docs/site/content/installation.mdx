@@ -25,7 +25,7 @@ npm install @docx-editor.dev/nuxt
 # Headless / server-side (no UI)
 npm install @docx-editor.dev/core
 
-# Agent toolkit (layer on top of an adapter)
+# Document automation (a server on its own, or beside an adapter)
 npm install @docx-editor.dev/agents
 
 # Metric-compatible substitutes for Word's default fonts (optional)
@@ -114,11 +114,11 @@ const doc = await parseDocx(buffer);
 const out = await repackDocx(doc);
 ```
 
-For server-side AI review, see [DocxReviewer](/docs/1.x/agents/docx-reviewer).
+To edit through an object model instead of the raw document model, see [Automation](/docs/1.x/agents).
 
 ## Next steps
 
 - [Quickstart](/docs/1.x/quickstart): load, edit, and save a `.docx`
-- [Quickstart: AI](/docs/1.x/quickstart-ai): add an agent panel in two files
+- [Quickstart: AI](/docs/1.x/quickstart-ai): give a model tools that edit the document
 - [Word fidelity](/docs/1.x/word-fidelity): feature support and round-trip behavior
 - [React props](/docs/1.x/react/props) and the [API reference](/docs/1.x/api)

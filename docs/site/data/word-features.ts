@@ -8,7 +8,7 @@
  * everything ships in `community`.
  *
  * Status axes:
- * - editing:   can the user (or an agent) change it in the editor?
+ * - editing:   can the user (or code driving the editor) change it in the editor?
  * - rendering: does it display like Microsoft Word renders it?
  * - roundTrip: does it survive open -> save unchanged?
  *
@@ -339,7 +339,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Resize commits Word-compatible twip widths. Agent-API table mutation is read-only for now.',
+      'Resize commits Word-compatible twip widths. Tables are not addressable from the automation object model yet.',
   },
   {
     id: 'tables.borders-shading',
@@ -680,7 +680,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Per-change and bulk accept/reject in the sidebar; headless acceptChangeById/rejectChangeById. Deliberately not exposed as agent tools: humans decide.',
+      'Per-change and bulk accept/reject in the sidebar; headless acceptChangeById/rejectChangeById, and revision.accept()/reject() through the automation object model.',
     docsLink: '/docs/1.x/guides/tracked-changes',
   },
   {
@@ -695,15 +695,15 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'review.ai-redlining',
-    name: 'AI redlining (agent-proposed tracked changes)',
+    name: 'Programmatic redlining (code-proposed tracked changes)',
     category: 'review',
     editing: 'full',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Agents propose Word-native tracked changes via suggest_change; live in the editor, headless via DocxReviewer, or over MCP.',
-    docsLink: '/docs/1.x/agents/redlining',
+      'Word-native tracked changes written through the automation object model, against DOCX bytes on a server or an editor open in a page.',
+    docsLink: '/docs/1.x/agents',
   },
   {
     id: 'review.moves',
@@ -929,13 +929,14 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'collab.agent-tools',
-    name: 'AI agent toolkit (14 tools, 3 transports)',
+    name: 'Document automation object model',
     category: 'collaboration',
     editing: 'full',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'Live editor bridge, headless DocxReviewer, MCP server; Word-JS-API-shaped.',
+    notes:
+      'Batching object model shaped after a documented subset of the Word JavaScript API; server entry over bytes, browser entry over an open editor. No model integration, tool catalog or MCP transport ships with it.',
     docsLink: '/docs/1.x/agents',
   },
 ];

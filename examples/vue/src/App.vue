@@ -91,17 +91,6 @@
           <span v-if="status" class="status">{{ status }}</span>
         </template>
       </DocxEditor>
-      <AgentPanel v-if="showAgentPanel" :closed="agentClosed" @close="agentClosed = true">
-        <div data-testid="agent-panel-content" class="agent-panel-body">
-          <AgentChatLog
-            :messages="messages"
-            :loading="loading"
-            :humanize-tool-name="getToolDisplayName"
-            :auto-scroll="true"
-          />
-          <AgentComposer v-model="input" :disabled="loading" @submit="sendMessage" />
-        </div>
-      </AgentPanel>
     </main>
   </div>
 </template>
@@ -126,13 +115,6 @@ import {
 import type { Node as PMNode } from 'prosemirror-model';
 
 const randomAuthorVue = `Docx Editor User ${Math.floor(Math.random() * 900) + 100}`;
-import {
-  AgentPanel,
-  AgentChatLog,
-  AgentComposer,
-  type AgentMessage,
-} from '@docx-editor.dev/agents/vue';
-import { getToolDisplayName } from '@docx-editor.dev/agents/vue';
 
 function extractDocumentText(value: unknown): string {
   if (!value || typeof value !== 'object') return '';
@@ -214,96 +196,11 @@ const editorLocale = computed(() => {
   return params.get('locale') === 'de' ? deLocale : undefined;
 });
 
-// Agent panel — opt-in via `?agentPanel=1` like the React demo. Keeps the
-// live preview clean and gives Playwright parity tests a stable toggle.
-// `?agentTimeline=…` also opens the panel since the timeline only renders
-// inside it.
-const showAgentPanel = computed(() => {
-  if (typeof window === 'undefined') return false;
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('agentPanel') === '1' || params.has('agentTimeline')) return true;
-  return import.meta.env.VITE_DOCX_EDITOR_AGENT_PANEL === '1';
-});
-
 // E2E hook: `?hideHelpMenu=1` hides the Help menu (parity with the React prop).
 const showHelpMenu = computed(() => {
   if (typeof window === 'undefined') return true;
   return new URLSearchParams(window.location.search).get('hideHelpMenu') !== '1';
 });
-
-// AgentTimeline fixture for E2E parity. Mirrors examples/vite App.tsx so a
-// single Playwright spec can drive both adapters with the same query string.
-const timelineFixture = computed<AgentMessage[] | null>(() => {
-  if (typeof window === 'undefined') return null;
-  const mode = new URLSearchParams(window.location.search).get('agentTimeline');
-  if (!mode) return null;
-  const isStreaming = mode === 'streaming';
-  if (mode === 'long') {
-    const calls: NonNullable<AgentMessage['toolCalls']> = [
-      { id: 't1', name: 'read_document', status: 'done', result: '...' },
-      ...Array.from({ length: 7 }, (_, i) => ({
-        id: `t${i + 2}`,
-        name: 'add_comment',
-        status: 'done' as const,
-        result: `Comment ${i + 1} added.`,
-      })),
-    ];
-    return [
-      { id: 'u1', role: 'user', text: 'Roast everything.' },
-      {
-        id: 'a1',
-        role: 'assistant',
-        text: 'Done — 7 comments.',
-        status: 'done',
-        toolCalls: calls,
-      },
-    ];
-  }
-  return [
-    { id: 'u1', role: 'user', text: 'Roast my doc.' },
-    {
-      id: 'a1',
-      role: 'assistant',
-      text: isStreaming ? '' : 'Done — left 3 comments.',
-      status: isStreaming ? 'streaming' : 'done',
-      toolCalls: [
-        { id: 't1', name: 'read_document', status: 'done', result: '...' },
-        { id: 't2', name: 'add_comment', status: 'done', result: 'Comment 1 added.' },
-        {
-          id: 't3',
-          name: 'add_comment',
-          status: isStreaming ? 'running' : 'done',
-          result: isStreaming ? undefined : 'Comment 2 added.',
-        },
-      ],
-    },
-  ];
-});
-
-const baseMessages = ref<AgentMessage[]>([]);
-const messages = computed<AgentMessage[]>(() => timelineFixture.value ?? baseMessages.value);
-const input = ref('');
-const loading = ref(false);
-const agentClosed = ref(false);
-
-function sendMessage() {
-  const text = input.value.trim();
-  if (!text) return;
-  baseMessages.value.push({ id: `u-${Date.now()}`, role: 'user', text });
-  input.value = '';
-  // Stub assistant reply — the demo doesn't call a real model. Replace
-  // this with `useAgentBridge` + your transport in your own app.
-  loading.value = true;
-  setTimeout(() => {
-    baseMessages.value.push({
-      id: `a-${Date.now()}`,
-      role: 'assistant',
-      text: 'BYO chat goes here. Wire `useAgentBridge` + your transport to make this real.',
-      status: 'done',
-    });
-    loading.value = false;
-  }, 600);
-}
 
 onMounted(async () => {
   const params = new URLSearchParams(window.location.search);
@@ -948,10 +845,4 @@ function handleReady() {
   overflow: hidden;
 }
 
-.agent-panel-body {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
 </style>

@@ -267,32 +267,9 @@ import { DocxEditor } from '@docx-editor.dev/vue';
 </template>
 ```
 
-### Agents
+### Automation
 
-The React `agentPanel` prop has no Vue equivalent (deferred in the parity contract), and there is no `#agentPanel` slot. Wire the agent toolkit with the `useAgentBridge` composable and render your chat UI beside the editor:
-
-```vue
-<script setup lang="ts">
-import { useTemplateRef } from 'vue';
-import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
-import { useAgentBridge } from '@docx-editor.dev/agents/vue';
-
-const editor = useTemplateRef<DocxEditorRef>('editor');
-const { executeToolCall, toolSchemas } = useAgentBridge({
-  editorRef: editor,
-  author: 'Assistant',
-});
-</script>
-
-<template>
-  <div style="display: flex">
-    <DocxEditor ref="editor" :document-buffer="buf" />
-    <!-- your chat pane next to the editor -->
-  </div>
-</template>
-```
-
-Full agent wiring in [Agents → Live editor](/docs/1.x/agents/live-editor).
+There is no automation prop or slot on either adapter. `@docx-editor.dev/agents` is imported directly; in Vue that means the server entry over bytes, because the `/browser` entry needs an editor instance the Vue ref does not expose yet. The round trip is in [Vue examples](/docs/1.x/vue/examples).
 
 ## Next steps
 

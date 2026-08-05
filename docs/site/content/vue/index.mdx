@@ -61,22 +61,26 @@ Every export is in the [Vue API reference](/docs/1.x/api/vue).
 
 ## Parity with React
 
-`scripts/parity/parity.contract.json` lists every public prop and ref member shipped under either adapter, grouped as paired, deferred-in-Vue, or adapter-specific. CI parses both packages' API snapshots and fails when the contract changes without an update. Deferred-in-Vue items today include the `agentPanel` prop, the controlled `comments` prop, `onSave`/`onFontsLoaded`/clipboard callbacks, and the plugin overlay surface. Items in the paired bucket are expected to behave the same in both adapters.
+`scripts/parity/parity.contract.json` lists every public prop and ref member shipped under either adapter, grouped as paired, deferred-in-Vue, or adapter-specific. CI parses both packages' API snapshots and fails when the contract changes without an update. Deferred-in-Vue items today include the controlled `comments` prop, `onSave`/`onFontsLoaded`/clipboard callbacks, and the plugin overlay surface. Items in the paired bucket are expected to behave the same in both adapters.
 
-## Agent integration
+## Automating the document
 
-Same toolkit, Vue subpath:
+`@docx-editor.dev/agents` drives a document through an object model. Its `/browser` entry needs the engine's editor instance, and the Vue adapter's ref does not expose one yet — `getEditor()` answers the `Editor` facade, which is not the same object. Until the Vue provider surface lands, automate from the server entry over DOCX bytes:
 
 ```ts
-import { useAgentBridge } from '@docx-editor.dev/agents/vue';
+import { DocxEditor } from '@docx-editor.dev/agents';
 
-const { executeToolCall, toolSchemas } = useAgentBridge({
-  editorRef,
-  author: 'Assistant',
+const runtime = await DocxEditor.createServer(bytes, { author: 'Assistant' });
+const text = await runtime.run(async (context) => {
+  const body = context.document.body;
+  body.load('text');
+  await context.sync();
+  return body.text;
 });
+runtime.dispose();
 ```
 
-Use the composable instead of the React hook. The server route can still use `@docx-editor.dev/agents/ai-sdk/server`. The React-only `agentPanel` prop has no Vue equivalent yet; render the chat UI components next to the editor (see [Vue examples](/docs/1.x/vue/examples)).
+Save the result with `runtime.save()` and hand the bytes back to the editor with `ref.load(...)`. The object model and its rules are in [Automation](/docs/1.x/agents).
 
 ## Next steps
 

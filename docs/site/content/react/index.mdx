@@ -13,7 +13,7 @@ order: 30
 npm install @docx-editor.dev/react
 ```
 
-Pulls in `@docx-editor.dev/core` and `@docx-editor.dev/i18n`. Add `@docx-editor.dev/agents` if you need the agent toolkit.
+Pulls in `@docx-editor.dev/core` and `@docx-editor.dev/i18n`. Add `@docx-editor.dev/agents` if you want to automate the document from code.
 
 ## Quickstart
 
@@ -79,20 +79,23 @@ import {
 
 In 0.x the formatting buttons were called `FormattingBar` and the composite was `Toolbar`. In 1.x, the formatting buttons are `Toolbar` and the composite is `EditorToolbar`.
 
-## Agent integration
+## Automation
 
-Wire AI tools to a live editor with `@docx-editor.dev/agents/react`:
+Drive the open document from code with `@docx-editor.dev/agents/browser`, which takes the editor instance this adapter created:
 
 ```tsx
-import { DocxEditor } from '@docx-editor.dev/react';
-import { useDocxAgentTools } from '@docx-editor.dev/agents/react';
+import { useDocxEditor } from '@docx-editor.dev/react';
+import { DocxEditor as Automation } from '@docx-editor.dev/agents/browser';
+
+const editor = useDocxEditor(); // null until the content is mounted
+const runtime = Automation.createBrowser(editor!);
 ```
 
-Full client + server wiring is on [Agents → Live editor](/docs/1.x/agents/live-editor).
+The object model and its rules are in [Automation](/docs/1.x/agents).
 
 ## Next steps
 
 - [API reference](/docs/1.x/api/react)
 - [Next.js DOCX editor guide](/blog/nextjs-docx-editor)
 - [Plugins](/docs/1.x/plugins)
-- [Agents](/docs/1.x/agents)
+- [Automation](/docs/1.x/agents)

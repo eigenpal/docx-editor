@@ -9,7 +9,7 @@ seoTitle: 'Word feature support and fidelity'
 
 ## Overview
 
-- **Browser editor use is client-side.** Parsing, rendering, editing, and serialization run in the browser for normal `<DocxEditor>` usage. Headless core, `DocxReviewer`, and MCP run wherever you host them.
+- **Browser editor use is client-side.** Parsing, rendering, editing, and serialization run in the browser for normal `<DocxEditor>` usage. Headless core and server-side automation run wherever you host them.
 - **`.docx` in, `.docx` out.** The editor reads OOXML and writes OOXML. Parts of the file it does not edit are carried over from the original archive unchanged.
 - **Apache 2.0**, all published packages. **SemVer**, with the public API tracked by generated snapshots in CI. React and Vue parity is a machine-checked contract.
 - **Commercial support**: [docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com).
@@ -18,7 +18,7 @@ seoTitle: 'Word feature support and fidelity'
 
 Every feature is tracked on three axes:
 
-- **Editing**: can a user (or an AI agent) change it in the editor?
+- **Editing**: can a user (or code driving the editor) change it in the editor?
 - **Rendering**: does it display the way Microsoft Word renders it?
 - **Round-trip**: does it survive open, then save, unchanged?
 
@@ -128,7 +128,7 @@ breaks this behavior is a bug; attach it to a
 
 - **Normal editor use is browser-only.** The editor package does not upload documents or call a conversion API.
 - **No macro execution.** VBA macros and embedded code are not evaluated.
-- **AI integrations are host-controlled.** With the [agents toolkit](/docs/1.x/agents), the live-editor setup keeps the DOCX file client-side and sends chat/tool-call text to a route you own. Headless review and MCP setups run wherever you host them.
+- **Automation is host-controlled.** [Document automation](/docs/1.x/agents) ships no network transport and no model integration: the browser entry drives an editor already in the page and the DOCX never leaves it, and the server entry runs wherever you host it. What reaches a model is whatever your own code sends.
 
 ## Bundle and performance
 
@@ -145,7 +145,7 @@ No published benchmarks; test with your own documents in the
 - **Apache 2.0**, all packages. Contributions need a one-time [CLA](https://github.com/eigenpal/docx-editor/blob/main/CLA.md).
 - **SemVer** via changesets; all packages share one version number.
 - The public API is tracked by [API Extractor snapshots](https://github.com/eigenpal/docx-editor/tree/main/docs/api); CI fails on drift.
-- React/Vue parity is a checked contract; `agentPanel` and controlled `comments` are still React-only.
+- React/Vue parity is a checked contract; controlled `comments` is still React-only.
 - `pagination-model`, `painter-model`, `flow-model` and `plugin-api` are `@experimental`.
 - Some advanced fidelity features may move to a commercial plan later; everything published stays Apache 2.0.
 
