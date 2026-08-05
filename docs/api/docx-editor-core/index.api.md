@@ -953,6 +953,7 @@ export interface Editor {
     }>, options?: {
         scope?: EditorScope;
     }): CanResult;
+    deleteReviewItem(key: string): ExecResult;
     // (undocumented)
     destroy(): void;
     // (undocumented)
@@ -1106,39 +1107,6 @@ export type EditorCommand = {
         type: K;
     } & EditorCommands[K];
 }[keyof EditorCommands];
-
-// @public
-export interface EditorConfig {
-    accessibilityAtomLabels?: Readonly<Record<string, string>>;
-    accessibleName?: string;
-    author?: string;
-    document?: DocumentSource;
-    extensions?: readonly Extension[];
-    // (undocumented)
-    host: EditorHost;
-    // (undocumented)
-    locale?: string;
-    mode?: 'edit' | 'view';
-    // (undocumented)
-    zoom?: number;
-}
-
-// @public
-export interface EditorHost {
-    afterCommit?(callback: () => void): void;
-    // (undocumented)
-    getBodyHostEl(): HTMLElement | null;
-    // (undocumented)
-    getHfHostEl(rId: string): HTMLElement | null;
-    // (undocumented)
-    getPagesContainer(): HTMLElement | null;
-    getScrollContainer(): HTMLElement | null;
-    // (undocumented)
-    onSelectionChange?(snapshot: EditorSnapshot): void;
-    // (undocumented)
-    onTotalPages?(total: number): void;
-    scheduleFrame(callback: () => void): () => void;
-}
 
 // @public
 export interface EditorModule {

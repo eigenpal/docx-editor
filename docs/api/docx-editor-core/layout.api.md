@@ -1222,6 +1222,7 @@ export interface LineRecord {
     readonly range: SourceRange;
     // (undocumented)
     readonly spans: readonly StyleSpanRecord[];
+    readonly trailingSpacing?: number;
 }
 
 // @public
@@ -2152,6 +2153,7 @@ export interface ReviewCommentItem {
     readonly kind: 'comment';
     readonly orphaned: boolean;
     readonly parentId?: string;
+    readonly parentRevisionId?: string;
     // (undocumented)
     readonly range: ReviewRange | null;
     readonly replyIds: readonly string[];
@@ -2255,6 +2257,7 @@ export interface ReviewRevisionItem {
     readonly readOnly: boolean;
     readonly replacedRangeCount?: number;
     readonly replacedText: string;
+    readonly replyIds: readonly string[];
     // (undocumented)
     readonly revisionKind: ReviewRevisionKind;
     readonly text: string;
@@ -2276,6 +2279,9 @@ export type ReviewRevisionKind = 'insert' | 'delete'
 | 'paragraphMark'
 /** A row, cell, section or grid revision. Supported row revisions are resolvable. */
 | 'structural';
+
+// @public
+export function reviewThreadRootOf(items: readonly ReviewItem[], comment: ReviewCommentItem): ReviewItem;
 
 // @public
 export interface RevisionAttribution {

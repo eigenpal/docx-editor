@@ -29,12 +29,12 @@ const REPO = join(PACKAGES, '..');
  */
 const PM_FREE_ROOTS: readonly { readonly label: string; readonly dir: string }[] = [
   { label: 'public host contracts', dir: 'core/src' },
-  { label: 'store + save + semantic history', dir: 'engine-core/src' },
-  { label: 'layout', dir: 'engine-layout/src' },
-  { label: 'output', dir: 'engine-output/src' },
+  { label: 'store + save + semantic history', dir: 'core/src/store' },
+  { label: 'layout', dir: 'core/src/layout' },
+  { label: 'output', dir: 'core/src/output' },
   // The browser editor facade is the composition root the adapters bind to, so it is a
   // public host contract in practice even though it is not the contract package.
-  { label: 'editor facade', dir: 'engine-editor/src' },
+  { label: 'editor facade', dir: 'core/src/editor' },
 ];
 
 /**
@@ -112,8 +112,8 @@ describe('ProseMirror stays inside the binding (tasks 6.5, 6.6)', () => {
     // The legacy byte-capsule save path (wml-serialize.ts, docx/write.ts) was deleted with
     // the legacy store; the tree serializer and the package writer are the whole save path.
     const savePath = [
-      'engine-core/src/package/ooxml-tree.ts',
-      'engine-core/src/package/ooxml-package.ts',
+      'core/src/store/package/ooxml-tree.ts',
+      'core/src/store/package/ooxml-package.ts',
     ];
     for (const relativePath of savePath) {
       const file = existingLanePath(relativePath);
@@ -125,7 +125,7 @@ describe('ProseMirror stays inside the binding (tasks 6.5, 6.6)', () => {
   });
 
   test('semantic history reads the canonical tree, never the PM history plugin', () => {
-    const file = existingLanePath('engine-core/src/store/tree-store.ts');
+    const file = existingLanePath('core/src/store/store/tree-store.ts');
     expect(violations(readFileSync(file, 'utf8'))).toEqual([]);
     // Positive statement of the same fact: entries are canonical parts and revisions.
     const source = readFileSync(file, 'utf8');
@@ -151,7 +151,7 @@ describe('ProseMirror stays inside the binding (tasks 6.5, 6.6)', () => {
   test('the binding IS allowed to own ProseMirror, so the guard is not vacuous', () => {
     // If engine-binding were also clean, the whole suite would pass for the wrong reason:
     // ProseMirror having been removed entirely rather than confined.
-    const bindingFiles = collectSources(existingLanePath('engine-binding/src'));
+    const bindingFiles = collectSources(existingLanePath('core/src/binding'));
     const owning = bindingFiles.filter((file) => violations(readFileSync(file, 'utf8')).length > 0);
     expect(owning.length).toBeGreaterThan(0);
   });

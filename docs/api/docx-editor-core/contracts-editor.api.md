@@ -84,9 +84,6 @@ export interface ContentControlFilter {
 export type ContentControlType = 'richText' | 'plainText' | 'checkbox' | 'dropdown' | 'comboBox' | 'date' | 'picture' | 'repeatingSection';
 
 // @public
-export function createEditor(_config: EditorConfig): Editor;
-
-// @public
 export interface DocAnchor {
     occurrence?: number;
     // (undocumented)
@@ -204,6 +201,7 @@ export interface Editor {
     }>, options?: {
         scope?: EditorScope;
     }): CanResult;
+    deleteReviewItem(key: string): ExecResult;
     // (undocumented)
     destroy(): void;
     // (undocumented)
@@ -571,22 +569,6 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
 }
 
 // @public
-export interface EditorConfig {
-    accessibilityAtomLabels?: Readonly<Record<string, string>>;
-    accessibleName?: string;
-    author?: string;
-    document?: DocumentSource;
-    extensions?: readonly Extension[];
-    // (undocumented)
-    host: EditorHost;
-    // (undocumented)
-    locale?: string;
-    mode?: 'edit' | 'view';
-    // (undocumented)
-    zoom?: number;
-}
-
-// @public
 export interface EditorError extends Error {
     // (undocumented)
     readonly code?: string;
@@ -643,23 +625,6 @@ export interface EditorHeaderFooterCommands {
         footerDistanceTwips?: number;
     };
     unlinkHeaderFooterFromPrevious: HeaderFooterSlotArgs;
-}
-
-// @public
-export interface EditorHost {
-    afterCommit?(callback: () => void): void;
-    // (undocumented)
-    getBodyHostEl(): HTMLElement | null;
-    // (undocumented)
-    getHfHostEl(rId: string): HTMLElement | null;
-    // (undocumented)
-    getPagesContainer(): HTMLElement | null;
-    getScrollContainer(): HTMLElement | null;
-    // (undocumented)
-    onSelectionChange?(snapshot: EditorSnapshot): void;
-    // (undocumented)
-    onTotalPages?(total: number): void;
-    scheduleFrame(callback: () => void): () => void;
 }
 
 // @public
@@ -1142,6 +1107,7 @@ export interface ReviewCommentPlacement extends ReviewItemPlacementBase {
     // (undocumented)
     readonly kind: 'comment';
     readonly parentId?: string;
+    readonly parentRevisionId?: string;
     readonly resolved: boolean;
 }
 

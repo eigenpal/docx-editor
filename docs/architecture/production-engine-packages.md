@@ -1,75 +1,96 @@
-# Production engine package topology
+# Engine lane topology
 
-Authoritative record for **document-engine task 1.4**: the production
-implementation package boundaries, their responsibilities, and the dependency
-rules enforced in CI.
+The engine is ONE package, `@docx-editor.dev/core`, divided into guarded internal
+lanes under `packages/core/src/`. This record covers the lane boundaries, their
+responsibilities, and the rules CI enforces.
 
-- Machine-readable source of truth: `packages/engine-core/test/package-graph.ts`
-- Enforcement: `packages/engine-core/test/import-graph.test.ts` (runs under `bun test`)
+- Machine-readable source of truth: `packages/core/src/__tests__/core-lane-graph.ts`
+- Enforcement (all under `bun test`):
+  - `packages/core/src/__tests__/core-lane-graph.test.ts` — the DAG is acyclic,
+    every lane resolves to real source, subpaths and directories are unique.
+  - `packages/core/src/__tests__/browser-bundle-graph.test.ts` — walks the real
+    import graph from the browser entry points, because a `package.json` rule is
+    not what a bundler follows.
+  - `packages/core/src/store/__tests__/prosemirror-isolation.test.ts` — PM-free
+    lanes stay PM-free, by identifier and not just by import.
+  - `bun run check:lane-boundaries` — compiles each runtime-neutral lane against
+    its own DOM-free `tsconfig`.
 
-## Placement
+## Why lanes and not packages
 
-The production engine is implemented **in this monorepo** as new workspace
-packages under `packages/engine-*`. This supersedes the earlier "source is not in
-this tree" note. `packages/core` (`@docx-editor.dev/core`) remains the
-private declaration-only contract — no production package imports its
-implementation. The old spike architecture that once sat under
-`packages/core/spike` has been removed now that the production lanes carry the
-behavior it was built to justify; ADR-S9's isolation rule retired with it.
+Eight `engine-*` workspace packages were collapsed into this one. npm enforced
+those boundaries for free — a package cannot import what it does not depend on —
+and that enforcement disappears the moment the code shares a directory tree. So
+the same boundaries are re-declared as a rule over paths and checked in CI.
 
-The semantic core ships internally as `@docx-editor.dev/engine-core` during the
-greenfield build and becomes the published `@docx-editor.dev/core` at the section
-7/14 public-namespace and adapter-migration milestone, so the in-tree package
-does not collide with the `@docx-editor.dev/core` alias adapters resolve today.
+The DAG was kept identical to the package graph it replaced. A lane quietly
+gaining a dependency during the move would have been a design change smuggled in
+as a file move.
 
-## Packages and responsibilities
+## Lanes
 
-| Package | Responsibility | May import | DOM |
-| --- | --- | --- | --- |
-| `@docx-editor.dev/engine-core` | Bounded OPC/OOXML trust boundary, canonical authored package model, `DocumentStore`, `DocOp`/`ModelChange` contracts, opaque anchors, history, `DocxEditor.*` dispatch/registry, ports & budgets | — | no |
-| `@docx-editor.dev/engine-binding` | The **only** ProseMirror-aware integration: PM transactions ⇄ `DocOp`s, view reconciliation from `ModelChange` | core | yes |
-| `@docx-editor.dev/engine-sync` | Local + Yjs `ReplicatedStoreBackend`, the sole `ReplicationCoordinator`, relative-position anchors, snapshots, persistence, awareness | core | no |
-| `@docx-editor.dev/engine-layout` | Resolved caches, dependency closure, shaping, convergent pagination, anchored `DisplayItem[]` IR | core | no |
-| `@docx-editor.dev/engine-output` | DOM paint, print, native PDF, a11y projection, hit-testing over `DisplayItem[]` | core, layout | yes |
-| `@docx-editor.dev/engine-server` | Addressable-sync hub, versioned RPC, headless parse/edit/layout/save/export, tenant isolation, streaming | core, sync, layout, output | no |
-| `@docx-editor.dev/engine-clients` | Generated language clients (schema bindings only) | core | no |
-| `@docx-editor.dev/engine-editor` | Browser editor composition root: the production `createEditor`; composes the PM-free binding surface + layout + display into the PM-free `Editor`/`EditorHost` contract. Becomes `@docx-editor.dev/core/editor` at migration | core, binding, layout, output | yes |
+| Lane         | Directory        | Subpath        | May import                                            | Environment |
+| ------------ | ---------------- | -------------- | ----------------------------------------------------- | ----------- |
+| `contracts`  | `src/contracts`  | `./contracts`  | —                                                     | neutral     |
+| `store`      | `src/store`      | `./store`      | —                                                     | neutral     |
+| `binding`    | `src/binding`    | `./binding`    | contracts, store                                      | browser     |
+| `layout`     | `src/layout`     | `./layout`     | store                                                 | neutral     |
+| `output`     | `src/output`     | `./output`     | store, layout                                         | browser     |
+| `automation` | `src/automation` | `./automation` | store                                                 | neutral     |
+| `editor`     | `src/editor`     | `./editor`     | contracts, store, binding, layout, output, automation | browser     |
 
-## Dependency rules (the DAG)
+Responsibilities:
 
-```
-engine-core            (base; depends on nothing internal)
-  ├── engine-binding   (+ prosemirror-*)
-  ├── engine-sync      (+ yjs, y-protocols)
-  ├── engine-layout    (+ shaping/font/unicode libs)
-  │     └── engine-output   (+ pdf-lib/pdfkit; DOM backends)
-  ├── engine-server    (composes sync + layout + output; + transport)
-  ├── engine-clients   (generated)
-  └── engine-editor    (composes binding + layout + output; PM-free browser editor)
-```
+- **`contracts`** — declaration-only public API: `Editor`, `EditorHost`,
+  commands, queries, document types.
+- **`store`** — the bounded OPC/OOXML trust boundary, the canonical ordered OOXML
+  tree, `TreeDocumentStore`, and the `TreeDocOp` vocabulary. The source of truth.
+- **`binding`** — the ONLY ProseMirror-aware lane: projects a tree revision into
+  a PM doc, and maps an edited doc back into tree ops or refuses.
+- **`layout`** — resolved caches, shaping, convergent pagination, positioned
+  semantic layout records. Emits geometry, never paints.
+- **`output`** — the painter over those records. Never rederives geometry or
+  interprets CSS.
+- **`automation`** — the transport-neutral host port an automation object model
+  programs against (`@docx-editor.dev/editor-api`). Store and nothing else: a
+  server has to be able to run it, so reaching into binding, output or editor
+  would put a DOM in a headless host.
+- **`editor`** — the browser composition root. Composes the tree session,
+  pagination and the paginated surface into the `Editor`/`EditorHost` contract.
 
-`engine-editor` is the only package above the binding/layout/output trio. It is
-PM-free: it composes `engine-binding`'s PM-free edit surface and never imports
-`prosemirror-*` directly, so ProseMirror stays contained to `engine-binding`.
-`engine-server` deliberately does NOT depend on `engine-binding`, so no headless
-/ server path transitively pulls in ProseMirror.
+Edges point downward only. A lane that acquires a new dependency declares it in
+`core-lane-graph.ts`, in a diff a reviewer sees.
 
-Edges point "downward" only: no package imports a sibling not listed in its
-`internalDeps`, so `engine-core` can never depend on `engine-sync`,
-`engine-layout` can never depend on `engine-output`, and so on.
+## Guarantees
 
-## Semantic-core guarantees (task 1.4 named invariants)
+**ProseMirror is contained to `binding`.** `contracts`, `store`, `layout` and
+`output` may not name a PM type or reach a PM view — enforced by identifier scan,
+since a structurally-typed leak (a parameter shaped like an `EditorView`, a
+re-exported PM alias) needs no import to exist. Nothing on a headless or
+server path transitively pulls in ProseMirror.
 
-`engine-core` is:
+**Runtime-neutral lanes are DOM-free.** `store`, `layout` and `automation` each
+carry their own `tsconfig.json` with a DOM-free `lib`, so a `document` or
+`window` reference fails to typecheck. The shared core config includes DOM for
+the browser lanes, which is exactly why the per-lane projects have to exist —
+without them, a DOM reference in the store lane would compile. `contracts` is
+excluded on purpose: it is declaration-only and names `HTMLElement` for host
+element accessors, a type reference rather than a runtime need.
 
-- **PM-free** — no `prosemirror-*` import.
-- **DOM-free** — its `tsconfig` omits the `DOM` lib, so any `document`/`window`
-  use fails to typecheck; no `jsdom`/`linkedom`/`happy-dom` import.
-- **Yjs-free** — no `yjs`/`y-*` import (Yjs lives entirely in `engine-sync`).
-- **transport-neutral** — no `ws`/`socket.io`/`http`/`net`/`tls`/`fetch`
-  transport import.
-- **PDF-free** — no `pdf-lib`/`pdfkit`/`pdfjs` import (PDF lives in
-  `engine-output`).
+**A browser bundle stays a browser bundle.** `yjs`, `y-protocols`, `pdfkit`,
+`node:fs`, `node:net` and `node:http` must not reach a default browser import.
+The bundle-graph test follows real `import` statements through re-export barrels
+to prove it, because one `export *` is enough to put a transport stack in every
+consumer's bundle while every manifest still looks correct.
 
-These are enforced by scanning real source and each package manifest in the
-import-graph test, plus the structural DOM-free tsconfig check.
+## Guards must fail loudly
+
+Every guard scans a lane by path and calls `collectSources` on the result.
+`collectSources` on a missing directory returns an empty list, so a guard whose
+lane moved passes having examined no files. That is not a hypothetical: the
+collapse of the `engine-*` packages turned several guards into vacuous passes,
+and the suite stayed green.
+
+So every scanned path goes through `existingLanePath`, which throws when the path
+does not resolve. When you move a lane, update its `directory` in
+`core-lane-graph.ts` and the guards that name it — the throw tells you which.

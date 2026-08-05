@@ -9,10 +9,8 @@
 
 import type { ApplyResult, DocEdit, DocQueryResults } from '../index';
 import {
-  createEditor,
   type Editor,
   type EditorCommand,
-  type EditorHost,
   type EditorSnapshot,
   type TableColumnDividerResizeTarget,
   type TableColumnOccurrenceTarget,
@@ -143,19 +141,6 @@ void extension;
 void rendered;
 void handlerResult;
 
-// A minimal host. Everything optional is omitted on purpose: a host that
-// implements only the required members must still typecheck.
-const host: EditorHost = {
-  getBodyHostEl: () => null,
-  getHfHostEl: () => null,
-  getPagesContainer: () => null,
-  getScrollContainer: () => null,
-  scheduleFrame: (cb) => {
-    cb();
-    return () => {};
-  },
-};
-
 export function exercise(editor: Editor, doc: DocxDocument): void {
   // Writes return a result that narrows.
   const result = editor.exec(boldCmd);
@@ -243,8 +228,4 @@ export function exercise(editor: Editor, doc: DocxDocument): void {
   void rowTargetMissingRepeat;
   void dividerTargetMissingRepeat;
   void rightEdgeTargetMissingRepeat;
-}
-
-export function build(): Editor {
-  return createEditor({ host });
 }

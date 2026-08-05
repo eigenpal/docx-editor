@@ -8,7 +8,11 @@
  * @packageDocumentation
  * @public
  */
-// @docx-editor.dev/engine-binding
+// Lane: binding. Responsibilities and dependency rules:
+// docs/architecture/production-engine-packages.md.
+//
+// The only ProseMirror-aware lane: projects a tree revision into a PM doc, and maps an
+// edited doc back into tree ops or refuses.
 
 /** Stable package identity used by the import-graph / package-authority checks. */
 export const ENGINE_BINDING_PACKAGE = '@docx-editor.dev/core/binding' as const;

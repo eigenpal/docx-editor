@@ -12,15 +12,12 @@
  * @packageDocumentation
  * @public
  */
-// @docx-editor.dev/engine-core
+// Lane: store. Responsibilities and dependency rules:
+// docs/architecture/production-engine-packages.md.
 //
 // Semantic core: bounded OPC/OOXML trust boundary, the canonical ordered OOXML tree,
 // TreeDocumentStore, and TreeDocOp contracts. PM-free, DOM-free, Yjs-free,
-// transport-neutral, PDF-free. Becomes the published @docx-editor.dev/core at the
-// section 7/14 migration.
-//
-// Production placement is fixed by document-engine task 1.4. Responsibilities and
-// dependency rules: docs/architecture/production-engine-packages.md.
+// transport-neutral, PDF-free.
 
 /** Stable package identity used by the import-graph / package-authority checks. */
 export const ENGINE_CORE_PACKAGE = '@docx-editor.dev/core/store' as const;

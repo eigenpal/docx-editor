@@ -35,19 +35,10 @@ export interface Lane {
    */
   readonly package: string | null;
   /**
-   * The package name that still resolves to this lane while a compatibility alias exists.
-   *
-   * Task 10.5 permits an alias only while a lane is in flight, so this is deliberately
-   * temporary: it exists so the bundle-graph walk keeps following importers that have not
-   * been migrated yet, and task 10.6 deletes it along with the shim package.
-   */
-  readonly alias?: string;
-  /**
    * Declared straight into `packages/core`, never a standalone package.
    *
    * `package: null` reads as "moved" for every path-resolving caller, which is what a lane
-   * that was born here wants — but there is no legacy importer to keep resolving, so it has
-   * no compatibility alias and never gets one.
+   * that was born here wants — it simply never had a package of its own to move out of.
    */
   readonly nativeToCore?: boolean;
   /** Lanes this one may import. Anything else is a violation. */
@@ -72,8 +63,7 @@ export interface Lane {
  */
 export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
   contracts: {
-    // Relocated by the contract half of task 10.2; still owns the core package itself, so
-    // it has no alias and never "moves" in the sense the other lanes do.
+    // Owns the core package itself, so it never "moves" in the sense the other lanes do.
     directory: 'src/contracts',
     package: '@docx-editor.dev/core',
     mayImport: [],
@@ -82,20 +72,14 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
   },
   store: {
     directory: 'src/store',
-    // MOVED (task 10.2). `packages/engine-core` remains as the compatibility alias task 10.5
-    // allows while a lane is in flight; task 10.6 removes it once every importer has been
-    // migrated to the subpath.
     package: null,
-    alias: '@docx-editor.dev/engine-core',
     mayImport: [],
     environment: 'neutral',
     subpath: './store',
   },
   binding: {
     directory: 'src/binding',
-    // MOVED (task 10.3); alias kept per task 10.5, removed by task 10.6.
     package: null,
-    alias: '@docx-editor.dev/engine-binding',
     mayImport: ['contracts', 'store'],
     environment: 'browser',
     subpath: './binding',
@@ -105,26 +89,21 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
   // and the deferred collaboration/server-binding slices own any future replacements.
   layout: {
     directory: 'src/layout',
-    // MOVED (task 10.3); alias kept per task 10.5, removed by task 10.6.
     package: null,
-    alias: '@docx-editor.dev/engine-layout',
     mayImport: ['store'],
     environment: 'neutral',
     subpath: './layout',
   },
   output: {
     directory: 'src/output',
-    // MOVED (task 10.3); alias kept per task 10.5, removed by task 10.6.
     package: null,
-    alias: '@docx-editor.dev/engine-output',
     mayImport: ['store', 'layout'],
     environment: 'browser',
     subpath: './output',
   },
   automation: {
     directory: 'src/automation',
-    // Born in `packages/core`: there is no `engine-automation` package and never was, so
-    // no compatibility alias exists to keep resolving.
+    // Born in `packages/core`: there is no `engine-automation` package and never was.
     package: null,
     nativeToCore: true,
     // The store lane and nothing else. This lane is the transport-neutral host port an
@@ -136,9 +115,7 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
   },
   editor: {
     directory: 'src/editor',
-    // MOVED (task 10.3); alias kept per task 10.5, removed by task 10.6.
     package: null,
-    alias: '@docx-editor.dev/engine-editor',
     mayImport: ['contracts', 'store', 'binding', 'layout', 'output', 'automation'],
     environment: 'browser',
     subpath: './editor',

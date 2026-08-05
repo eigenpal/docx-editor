@@ -55,6 +55,7 @@ export interface DocxEditorReviewNamespace {
     readonly Balloon: typeof ReviewBalloon;
     // (undocumented)
     readonly Card: typeof ReviewCard;
+    readonly Delete: typeof ReviewDelete;
     readonly Draft: typeof ReviewDraft;
     // (undocumented)
     readonly Empty: typeof ReviewEmpty;
@@ -151,6 +152,7 @@ export interface UseReviewReturn {
     readonly paneOpen: boolean;
     readonly ready: boolean;
     readonly reject: (item: ReviewItemView) => void;
+    readonly remove: (item: ReviewItemView) => boolean;
     readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
     readonly selectionAnchorY: number | null;
     readonly setActive: (key: string | null) => void;

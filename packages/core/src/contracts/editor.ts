@@ -33,7 +33,6 @@ import type {
   RunFormatting,
   ExecErrorCode,
   ExecResult,
-  Extension,
   Unsubscribe,
   Watermark,
 } from './types';
@@ -57,8 +56,6 @@ export type * from './interaction';
 export type * from './editor-hf-notes.ts';
 export type { ImageCropPercent } from '../store/package/image-crop-units.ts';
 
-const NOT_IMPLEMENTED = 'contract-only stub: no implementation';
-
 /**
  * An opaque handle to a loaded document — its stable identity and current
  * revision. The canonical authored state is the engine's `PackageModel`, NOT a
@@ -73,7 +70,7 @@ export interface DocumentHandle {
 }
 
 /**
- * What `createEditor`/`load` accept as a document: raw DOCX bytes, or an existing
+ * What `createDocxEditor`/`load` accept as a document: raw DOCX bytes, or an existing
  * in-memory `DocumentHandle` (shared/handed off). The engine is byte-native
  * (`PackageModel` is canonical); there is intentionally no structured-tree input,
  * which would be lossy against the canonical package.
@@ -180,36 +177,6 @@ export interface DocumentChange {
 }
 
 /**
- * Everything `createDocxEditor` needs.
- *
- * Only {@link EditorConfig.host} is required — it is what lets the engine schedule work and
- * measure text without owning a DOM of its own. Passing `document` loads at construction;
- * omitting it produces an editor waiting for `load()`.
- */
-export interface EditorConfig {
-  host: EditorHost;
-  /** A document to load at construction: DOCX bytes or an existing handle. */
-  document?: DocumentSource;
-  /** Defaults to `createStarterKit()` from `core/plugin`. */
-  extensions?: readonly Extension[];
-  /** Ambient author for authored commands (comments, tracked changes), sourced
-   * the way the Office JS API sources it from context. A command may still
-   * override it per call. */
-  author?: string;
-  locale?: string;
-  /** Localized accessible name for the hidden semantic projection; omit to leave the name unset. */
-  accessibleName?: string;
-  /** Localized read-only atom labels keyed by block kind (for example `table`); omit to leave atom names unset. */
-  accessibilityAtomLabels?: Readonly<Record<string, string>>;
-  zoom?: number;
-  /** `'view'` opens the document read-only even when it is otherwise editable; `'edit'`
-   *  (default) mounts the editing surface for a patchable document. This is the INITIAL
-   *  value only — move it afterwards with {@link Editor.setEditingMode}, which does not
-   *  rebuild the editor and so keeps the undo history and the reader's place. */
-  mode?: 'edit' | 'view';
-}
-
-/**
  * The editor is N+1 editing views: one body plus one per header/footer
  * relationship, plus footnotes, text boxes, and other addressable regions.
  * Commands must say which one they target, or they silently hit the wrong
@@ -253,41 +220,6 @@ export type EditorSelection =
   | SemanticTarget;
 
 /**
- * Everything a framework adapter must supply: DOM to paint into, and a way to coalesce
- * work. The adapter does not measure, lay out, or interpret the document — core owns all
- * of that, and paints it directly into the element the adapter hands over.
- *
- * IT DOES NOT RECEIVE A RENDER LIST. This interface used to declare `onDisplay`, a sink for
- * a positioned `DisplayPage[]` core would emit for the adapter to paint. Core never called
- * it, neither adapter implemented it, and rendering has always worked the other way round —
- * `Editor.attach(element)`, with core painting into the host's DOM. The declaration
- * described an architecture that lost, which is a costly thing to leave in a public
- * contract: it is the first thing someone building a new adapter reads.
- *
- * DOM handles are getters, not values: all of them are null through first
- * render, and React's scroll container can change identity between renders.
- */
-export interface EditorHost {
-  getBodyHostEl(): HTMLElement | null;
-  getHfHostEl(rId: string): HTMLElement | null;
-  getPagesContainer(): HTMLElement | null;
-  /** React returns the real scroller; Vue may return null. */
-  getScrollContainer(): HTMLElement | null;
-
-  /** Coalesces engine work. Returns a canceller. */
-  scheduleFrame(callback: () => void): () => void;
-  /**
-   * Runs after the adapter has flushed its own render: `useLayoutEffect` in
-   * React, `nextTick` in Vue. Two phases, because engine paint and adapter
-   * commit are not the same moment. Optional; Vue may omit it.
-   */
-  afterCommit?(callback: () => void): void;
-
-  onSelectionChange?(snapshot: EditorSnapshot): void;
-  onTotalPages?(total: number): void;
-}
-
-/**
  * Whether a command would be accepted, and why not when it would not.
  *
  * The `reason` is the ENGINE's own words, which is what lets disabled chrome explain itself
@@ -306,7 +238,7 @@ export type CanResult = { ok: true } | { ok: false; code: ExecErrorCode; reason:
  *
  * @example
  * ```ts
- * const editor = createDocxEditor({ host });
+ * const editor = createDocxEditor({ container });
  * editor.load(bytes);
  * if (editor.can({ type: 'toggleBold' }).ok) editor.exec({ type: 'toggleBold' });
  * const bytesOut = await editor.save();
@@ -517,7 +449,7 @@ export interface Editor {
   /**
    * How edits are written: directly, as suggestions, or not at all.
    *
-   * Runtime state, unlike the construction-time `EditorConfig.mode` — a reader who switches
+   * Runtime state, unlike the construction-time `DocxEditorConfig.mode` — a reader who switches
    * to Viewing and back expects the same document, not a remount.
    */
   getEditingMode(): DocumentEditingMode;
@@ -606,7 +538,7 @@ export interface Editor {
    * over that revision's range: OOXML gives `w:ins` and `w:del` no body and no thread, so
    * there is nowhere else for the text to live.
    *
-   * The author is AMBIENT — `EditorConfig.author`, the way the rest of the authored commands
+   * The author is AMBIENT — `DocxEditorConfig.author`, the way the rest of the authored commands
    * source it — and the argument overrides it for one call. `CT_Comment` makes `@w:author`
    * required, so a reply with neither is refused rather than written as an empty attribute.
    */
@@ -689,7 +621,7 @@ export interface Editor {
  */
 /**
  * In the editor a command targets the current selection unless told otherwise,
- * and authoring is ambient — the author comes from `EditorConfig`/the session,
+ * and authoring is ambient — the author comes from `DocxEditorConfig`/the session,
  * the way the Office JS API sources it from context — so the document layer's
  * required `target` and `author` both become optional here.
  */
@@ -1540,15 +1472,4 @@ export interface EditorEvents {
   /** The selection or its derived formatting moved. */
   selectionChange: (snapshot: EditorSnapshot) => void;
   error: (error: EditorError) => void;
-}
-
-/**
- * CONTRACT-ONLY stub. The production implementation lives in
- * `@docx-editor.dev/engine-editor` (it composes the engine packages, which this
- * declaration package may not import) and is what the React/Vue adapters call;
- * it becomes `@docx-editor.dev/core/editor` at the section 7/14 migration. This
- * throwing stub only exists so the contract package typechecks standalone.
- */
-export function createEditor(_config: EditorConfig): Editor {
-  throw new Error(NOT_IMPLEMENTED);
 }

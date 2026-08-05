@@ -318,6 +318,9 @@ export interface CascadeDeletedNoteReferencesOptions {
 }
 
 // @public
+export function cascadeEmptiedComments(before: OoxmlPackage, after: OoxmlPackage): OoxmlPackage | null;
+
+// @public
 export function childElements(node: Extract<XmlNode, {
     type: 'element';
 }>, name: string): Extract<XmlNode, {
@@ -821,6 +824,9 @@ export interface DefaultRecord {
 }
 
 // @public
+export function deleteCommentThread(pkg: OoxmlPackage, commentId: string): OoxmlPackage | null;
+
+// @public
 export function deobfuscateFont(bytes: Uint8Array, fontKey: string): Uint8Array | null;
 
 // @public
@@ -1181,6 +1187,9 @@ export function hardBreakKind(node: OoxmlHardBreakNode): HardBreakKind;
 
 // @public
 export function hardBreakText(node: OoxmlHardBreakNode): string;
+
+// @public
+export function hasAnyComment(pkg: OoxmlPackage): boolean;
 
 // @public
 export function hasBoundedSvgRoot(bytes: Uint8Array): boolean;
@@ -1659,6 +1668,29 @@ export interface LimitSpec {
 
 // @public
 export type LimitUnit = 'bytes' | 'count' | 'depth' | 'ratio' | 'passes';
+
+// @public
+export interface LinkableReviewItem {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly kind: string;
+    // (undocumented)
+    readonly orphaned?: boolean;
+    // (undocumented)
+    readonly parentId?: string;
+    // (undocumented)
+    readonly parentRevisionId?: string;
+    // (undocumented)
+    readonly range?: ReviewRange | null;
+    // (undocumented)
+    readonly ranges?: readonly ReviewRange[];
+    // (undocumented)
+    readonly replyIds?: readonly string[];
+}
+
+// @public
+export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonly T[]): T[];
 
 // @public
 export type ListKind = 'bullet' | 'ordered';
@@ -3053,6 +3085,7 @@ export interface ReviewCommentItem {
     readonly kind: 'comment';
     readonly orphaned: boolean;
     readonly parentId?: string;
+    readonly parentRevisionId?: string;
     // (undocumented)
     readonly range: ReviewRange | null;
     readonly replyIds: readonly string[];
@@ -3111,6 +3144,7 @@ export interface ReviewRevisionItem {
     readonly readOnly: boolean;
     readonly replacedRangeCount?: number;
     readonly replacedText: string;
+    readonly replyIds: readonly string[];
     // (undocumented)
     readonly revisionKind: ReviewRevisionKind;
     readonly text: string;
@@ -4074,6 +4108,7 @@ export type TreeOpResult = {
 // @public
 export class TreePackageStore {
     constructor(pkg: OoxmlPackage, main: OoxmlPart, options?: TreePackageStoreOptions);
+    adoptPackageUnit(before: OoxmlPackage): void;
     applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
     applyLifecycleOp(op: HeaderFooterLifecycleOp | NoteLifecycleOp | TreeDocOp): PackageTransactResult;
     // (undocumented)
