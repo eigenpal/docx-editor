@@ -111,7 +111,13 @@ export function recognizeCustomNodes(
   if (definitions.length === 0) return [];
   const byIdentity = new Map<string, CustomNodeDefinition>();
   for (const definition of definitions) {
-    byIdentity.set(`${definition.tagPrefix}:${definition.name}`, definition);
+    const identity = `${definition.tagPrefix}:${definition.name}`;
+    // Author error, thrown like `defineCustomNode`'s own validation: two
+    // definitions claiming one identity would silently last-win otherwise.
+    if (byIdentity.has(identity)) {
+      throw new Error(`recognizeCustomNodes: duplicate definition for ${JSON.stringify(identity)}`);
+    }
+    byIdentity.set(identity, definition);
   }
   const found: RecognizedCustomNode[] = [];
   const walk = (node: OoxmlNode, depth: number): void => {

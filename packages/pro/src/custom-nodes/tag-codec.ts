@@ -53,6 +53,9 @@ export interface DecodedCustomNodeTag {
  * whose tags mean something else entirely.
  */
 export function decodeCustomNodeTag(tag: string): DecodedCustomNodeTag | null {
+  // Word never stores more than 64 characters in `w:tag`; a longer value in a
+  // crafted file is not one of ours. Rejecting early also bounds the parse.
+  if (tag.length > MAX_TAG_LENGTH) return null;
   const colon = tag.indexOf(':');
   if (colon <= 0) return null;
   const prefix = tag.slice(0, colon);

@@ -6,12 +6,12 @@
 - [x] 1.2 Add `modules` option to `createDocxEditor`; build the module registry and thread it to exec/chrome dispatch points
 - [x] 1.3 Gate display modes: editor stays in final-state projection unless a module grants additional `RevisionDisplayMode`s; remove/redirect any free-core API that switches modes
 - [x] 1.4 Add `hasReviewContent` derived read to the snapshot (lazy, version-cached, reference-stable)
-- [x] 1.5 Add the `pro` unavailable reason for unwired review slots (`review.comments`, `review.editingMode`) in `toolbarCommandState`; i18n string for the reason
+- [x] 1.5 Add the pro unavailable reason for review slots via `can` refusals (chrome disables through existing plumbing). Reason is engine English like every other refusal reason — no i18n key, matching precedent
 - [x] 1.6 Tests: no-module editor renders final state for a tracked-changes fixture, round-trips losslessly, `hasReviewContent` true, review slots disabled with `pro` reason
 
 ## 2. Pro package scaffolding
 
-- [x] 2.1 Create `packages/pro` (`@docx-editor.dev/pro`): package.json (`SEE LICENSE IN LICENSE.md`, peer-deps core-contract + optional react entry), tsup/build config matching sibling packages
+- [x] 2.1 Create `packages/pro` (`@docx-editor.dev/pro`): package.json (`LicenseRef-EigenPal-Pro-Evaluation-1.0`, EigenPal author, peer-deps core-contract + optional react), typecheck config. NOTE: `private: true` for now — publishing is deferred branch-wide with the other adapters
 - [x] 2.2 Write commercial `LICENSE.md`; add package to the fixed changeset group and workspace tooling (typecheck, test, api:extract targets)
 - [x] 2.3 Accept optional `licenseKey` on pro entry points (stored, unvalidated in v1 — honor system); no warning, no banner, never a network call
 - [x] 2.4 Tests: module without key is fully functional and silent; no licensing network traffic
@@ -22,7 +22,7 @@
 - [x] 3.2 Replace core call sites (`tree-session.ts` `collectReviewItems`, layout barrel exports) with module-registry lookups and null-object defaults
 - [x] 3.3 Review commands stay as engine glue over store ops (single write path) but are unreachable without a registered module — pro-reason refusals at can/exec; spec updated to match this cut
 - [x] 3.4 Implement `reviewModule(options)` assembling display modes + review model + commands; wire license state
-- [x] 3.5 Move `DocxEditorReview.tsx` + `useReview.ts` from `packages/react` to the pro React entry; wire review slots on mount; unlicensed banner in the pane
+- [x] 3.5 Move `DocxEditorReview.tsx` + `useReview.ts` from `packages/react` to the pro React entry; wire review slots on mount (no banner — licensing is silent honor-system per 2.3)
 - [x] 3.6 Review strings already live under the `review.*` namespace in the shared en.json pipeline; pro consumes them via the react locale binding — verified `i18n:validate` green, no key moves needed
 - [x] 3.7 Tests: accept/reject/reply round-trip fixtures (semantic digest on untouched content), pane wires slots, published-artifact check that free packages contain no review implementation
 

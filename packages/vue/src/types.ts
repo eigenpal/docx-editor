@@ -9,7 +9,7 @@ import type {
   ExecResult,
   FontConfiguration,
 } from '@docx-editor.dev/core-contract/contracts/editor';
-import type { FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
+import type { EditorModule, FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
 export { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
 export type {
   EditorFontErrorCode,
@@ -41,6 +41,13 @@ export interface DocxEditorProps {
   zoom?: number;
   locale?: string;
   author?: string;
+  /**
+   * Capability modules to register (`@docx-editor.dev/pro`'s review module,
+   * custom nodes — the framework-neutral entry works under Vue). Applied at
+   * mount only, like `mode`. Vue has no review pane chrome yet, so a review
+   * module enables markup rendering and suggesting without a sidebar.
+   */
+  modules?: readonly EditorModule[];
   /** Fired with the same typed font failure shown by the accessible alert UI. */
   onFontError?: (error: EditorFontError) => void;
 }

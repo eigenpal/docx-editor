@@ -91,6 +91,10 @@ describe('free tier: no modules registered', () => {
     if (!accept.ok) expect(accept.reason).toContain('pro');
     const reply = editor.replyToReviewItem('any-key', 'text');
     expect(reply.ok).toBe(false);
+    // Comment AUTHORING is a review write too — the one the first gating pass missed.
+    const comment = editor.addComment('new comment');
+    expect(comment.ok).toBe(false);
+    if (!comment.ok) expect(comment.reason).toContain('pro');
     const pane = editor.exec({ type: 'toggleReviewPane' });
     expect(pane.ok).toBe(false);
     const suggest = editor.can({ type: 'setEditingMode', mode: 'suggesting' });

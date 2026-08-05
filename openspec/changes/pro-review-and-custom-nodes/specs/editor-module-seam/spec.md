@@ -4,17 +4,17 @@
 
 ### Requirement: EditorModule registration on createDocxEditor
 
-`createDocxEditor` SHALL accept an optional `modules: EditorModule[]` option. `EditorModule` SHALL be a closed-shape interface defined in core contracts with named contribution points: `reviewModel` (review item derivation and comment anchor geometry), `commands` (exec-layer contributions keyed by existing `ChromeSlotId`s), `displayModes` (additional `RevisionDisplayMode` values the editor may enter), and `customNodes` (custom node definitions). Core SHALL iterate registered modules at its existing dispatch points and SHALL NOT import any pro package.
+`createDocxEditor` SHALL accept an optional `modules: EditorModule[]` option. `EditorModule` SHALL be a closed-shape interface defined in core contracts with named contribution points: `review` (the queue derivation `collectReviewItems` plus the `displayModes` the editor may enter beyond final-state) and `customNodes` (custom node definitions). The engine's review command implementations stay engine glue over the single write path; a registered review contribution is what makes them reachable, and their enabled state flows through the existing `can`/`toolbarCommandState` plumbing. Core SHALL iterate registered modules at its existing dispatch points and SHALL NOT import any pro package.
 
 #### Scenario: Editor without modules behaves as free tier
 
 - **WHEN** `createDocxEditor` is called with no `modules` option
 - **THEN** the editor constructs successfully and all module contribution points resolve to null-object defaults; no code path throws for lack of a module
 
-#### Scenario: Module contributions are dispatched
+#### Scenario: Registration flips the command gates
 
-- **WHEN** a module providing `commands` for `review.comments` is registered
-- **THEN** `runToolbarCommand`/`toolbarCommandState` for that slot route through the module contribution
+- **WHEN** a module carrying a `review` contribution is registered
+- **THEN** `can`/`toolbarCommandState` for the review commands and slots answer enabled, with no per-command module dispatch table
 
 ### Requirement: Display-mode gating without a module
 

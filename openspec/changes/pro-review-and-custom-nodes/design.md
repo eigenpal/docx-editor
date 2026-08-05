@@ -72,5 +72,8 @@ A custom node occupies the UTF-16 offsets of its underlying SDT run text under t
 
 ## Open Questions
 
+- **`@docx-editor.dev/agents` still exposes ungated review authoring** (addComment/proposeChange tools over store ops, Apache-licensed) — flagged by branch review 2026-08-05. The headless agent lane predates the split and is not covered by this change's scope; owner must decide before shipping whether agents' review tools move behind the module gate, move into pro, or stay free as an agent-lane exception. Recorded here so the hole is a decision, not an accident.
+
+
 - ~~Key signing scheme~~ Resolved: Ed25519-signed payload (`DOCXPRO.<base64 org/tier/expiry>.<signature>`), public key embedded in the package, verified offline, never a network call. Expiry gates release dates (versions published while licensed keep working forever), not runtime.
 - Whether `hasReviewContent` should also count custom-node SDTs or stay review-only (leaning review-only).

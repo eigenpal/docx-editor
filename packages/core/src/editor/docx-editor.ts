@@ -1417,6 +1417,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getReviewItems: () => reviewPlacements(),
 
     addComment(text: string, author?: string): ExecResult {
+      // Comment AUTHORING is the review module's capability, like every other
+      // review write above. Missed in the first gating pass — caught by review.
+      if (!reviewEnabled) {
+        return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
+      }
       const range = commentTargetRange();
       if (!range || !surface) {
         return { ok: false, code: 'invalidArgs', reason: 'a comment needs a selected range' };

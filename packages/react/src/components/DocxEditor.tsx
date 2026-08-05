@@ -148,6 +148,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
     author,
     locale,
     mode,
+    modules,
     zoom,
     onReady,
     onChange,
@@ -210,6 +211,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
         />
       )}
       <DocxEditorContentControl />
+      {props.children}
     </DocxEditorViewport>
   );
 
@@ -303,6 +305,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
       {...(author !== undefined ? { author } : {})}
       {...(locale !== undefined ? { locale } : {})}
       {...(mode !== undefined ? { mode } : {})}
+      {...(modules !== undefined ? { modules } : {})}
       {...(zoom !== undefined ? { zoom } : {})}
       tableInteractionLabel={tableInteractionLabel}
       {...(onReady ? { onReady } : {})}

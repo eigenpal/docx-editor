@@ -4,7 +4,7 @@
 
 ### Requirement: Commercial packaging of the pro package
 
-`@docx-editor.dev/pro` SHALL carry `"license": "SEE LICENSE IN LICENSE.md"` and a commercial license file; it SHALL NOT be Apache-2.0. It SHALL join the fixed changeset version group and peer-depend on the core contract package (React chrome entry peer-depends on react). It MAY be published to any registry (public npm by default).
+`@docx-editor.dev/pro` SHALL carry a named commercial license identity (`LicenseRef-EigenPal-Pro-Evaluation-1.0`) and the license file (EigenPal Pro Evaluation License 1.0); it SHALL NOT be Apache-2.0. It SHALL join the fixed changeset version group and peer-depend on the core contract package (React chrome entry peer-depends on react). It MAY be published to any registry (public npm by default).
 
 #### Scenario: Package artifact is commercially licensed
 

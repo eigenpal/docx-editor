@@ -571,6 +571,7 @@ export interface DocxEditorPageSetupDialogProps {
 export interface DocxEditorProps {
     // (undocumented)
     author?: string;
+    children?: ReactNode;
     chrome?: boolean;
     // (undocumented)
     className?: string;
@@ -583,6 +584,7 @@ export interface DocxEditorProps {
     locale?: string;
     menu?: boolean | DocxEditorMenuProps;
     mode?: EditorMode;
+    modules?: readonly EditorModule[];
     navigation?: boolean;
     onChange?: (change: DocumentChange) => void;
     onFontError?: (error: EditorFontError) => void;

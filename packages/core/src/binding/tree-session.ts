@@ -1035,14 +1035,34 @@ function projectedText(part: OoxmlPart): string {
  * Deliberately not `commentAnchorsOfStory`: that is review-model derivation and
  * lives with the review module. This answers presence only, for
  * `hasReviewContent`, and must keep answering with no module registered.
+ *
+ * Memoized per immutable node, because `snapshot()` reads `hasReviewContent`
+ * every tick: without the memo a comment-less document paid a full-tree walk
+ * per keystroke (the answer only early-exits when an anchor IS found). An edit
+ * replaces only the nodes on its path, so every untouched subtree answers from
+ * the cache. Depth-capped like the sibling walks — nesting is the cheapest
+ * unbounded axis in an attacker-controlled file.
  */
-function storyCarriesCommentAnchor(node: OoxmlElement): boolean {
+const commentAnchorPresenceCache = new WeakMap<OoxmlElement, boolean>();
+
+function storyCarriesCommentAnchor(node: OoxmlElement, depth = 0): boolean {
+  if (depth > 64) return false;
+  const cached = commentAnchorPresenceCache.get(node);
+  if (cached !== undefined) return cached;
+  let present = false;
   for (const child of node.children as readonly OoxmlNode[]) {
     if (child.kind === 'textValue') continue;
-    if (child.kind === 'commentRangeStart' || child.kind === 'commentReference') return true;
-    if (storyCarriesCommentAnchor(child)) return true;
+    if (
+      child.kind === 'commentRangeStart' ||
+      child.kind === 'commentReference' ||
+      storyCarriesCommentAnchor(child, depth + 1)
+    ) {
+      present = true;
+      break;
+    }
   }
-  return false;
+  commentAnchorPresenceCache.set(node, present);
+  return present;
 }
 
 /** The origin a host should use when committing a reconciliation rather than a user edit. */

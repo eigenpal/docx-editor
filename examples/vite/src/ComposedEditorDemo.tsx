@@ -22,6 +22,12 @@ import {
   useEditorEvent,
   useFontFamily,
 } from '@docx-editor.dev/react';
+// PRO: comments + tracked changes ship in @docx-editor.dev/pro. Register the
+// review module on the Root and mount the pane; without the module the same
+// document still opens (final-state view) and the review toolbar controls
+// disable with the engine's own "requires the pro review module" reason.
+import { customNodesModule, defineCustomNode, reviewModule } from '@docx-editor.dev/pro';
+import { DocxEditorReview } from '@docx-editor.dev/pro/react';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
 import { BrandLogo } from '../../shared/BrandLogo';
@@ -33,6 +39,30 @@ import { DEMO_BUTTON, DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON } from './demoB
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared bits
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The pro capabilities this demo registers. One stable array — module
+ * registration is construction-time (like `mode`), so the identity must not
+ * change per render. `reviewModule()` enables markup rendering, suggesting
+ * mode, and the review pane; `customNodesModule` shows `defineCustomNode`:
+ * an inline content control tagged `docx:citation?...` is recognized as a
+ * typed node (open e2e/fixtures/sdt-custom-tag-original.docx to see one).
+ * Both accept `{ licenseKey }` — optional while licensing is honor-system.
+ */
+const PRO_MODULES = [
+  reviewModule(),
+  customNodesModule({
+    nodes: [
+      defineCustomNode({
+        name: 'citation',
+        tagPrefix: 'docx',
+        // Recognition hook: attrs decoded from the tag, text is the literal
+        // SDT content (which a Word user may have edited — label drift).
+        fromDocx: ({ attrs, text }) => ({ ...attrs, label: text }),
+      }),
+    ],
+  }),
+];
 
 /** English labels for the library toolbar's i18n keys. Demos are apps: English is fine. */
 const tEnglish = createT(en);
@@ -579,6 +609,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
         <DocxEditor.Root
           document={bytes}
           author="Demo Reviewer"
+          modules={PRO_MODULES}
           {...(fonts ? { fonts } : {})}
           onFontError={(error) => console.warn(`[fonts] ${error.code}: ${error.message}`)}
         >
@@ -618,10 +649,12 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
                   scrolling. `<DocxEditor>` mounts it for you; a composition like this one
                   places it by name, exactly like the rulers above. */}
               <DocxEditor.HyperLink />
-              {/* The review rail: tracked changes and comments as cards beside the page,
-                  with accept / reject / reply. Inside the viewport for the same reason as
-                  the popover — it scrolls with the document rather than chasing it. */}
-              <DocxEditor.Review />
+              {/* The review rail (PRO): tracked changes and comments as cards beside the
+                  page, with accept / reject / reply. Imported from
+                  `@docx-editor.dev/pro/react` and enabled by the `reviewModule()` on the
+                  Root. Inside the viewport for the same reason as the popover — it
+                  scrolls with the document rather than chasing it. */}
+              <DocxEditorReview />
             </DocxEditor.Viewport>
             <DocxEditor.PageNumber />
             {/* Floating diagnostics chrome, above the overlay panels. */}

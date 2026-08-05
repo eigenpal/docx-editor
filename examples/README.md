@@ -20,7 +20,7 @@ bun run dev:astro   # examples/astro
 
 | Path                     | What it shows                                                                                                   |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `vite/`                  | Vanilla Vite + React. Default React dev target; point new contributors here first.                              |
+| `vite/`                  | Vanilla Vite + React, composed (`DocxEditor.Root`/`Viewport`/`Content`). Default React dev target. Registers the PRO review module + a `defineCustomNode` citation definition; the review pane comes from `@docx-editor.dev/pro/react`. |
 | `igloo/`                 | Deep customization (see [`docs/CUSTOMIZING.md`](../docs/CUSTOMIZING.md)): every `DocxEditor.*` part re-skinned, re-iconed and re-labelled under one theme, plus a host-composed context menu. Point people here who ask "how far can I take this?" |
 | `vue/`                   | Vue 3 adapter, mirrors the Vite example.                                                                        |
 | `nextjs/`                | Next.js App Router integration.                                                                                 |

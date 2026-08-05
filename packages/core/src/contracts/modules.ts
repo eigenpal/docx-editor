@@ -35,7 +35,14 @@ export type CollectReviewItems = (input: ReviewModelInput) => readonly ReviewIte
  * @public
  */
 export interface ReviewModuleContribution {
-  /** Display modes this module unlocks (the free engine renders `proposed` only). */
+  /**
+   * Display modes this module unlocks (the free engine renders `proposed` only).
+   *
+   * Currently DECLARATIVE: any registered review module restores the layout
+   * default (`all-markup`), and no runtime mode switch exists yet. The list is
+   * carried so the future `setRevisionDisplayMode` command can validate against
+   * it without a breaking module-shape change.
+   */
   readonly displayModes: readonly RevisionDisplayMode[];
   /** The review queue derivation. */
   readonly collectReviewItems: CollectReviewItems;

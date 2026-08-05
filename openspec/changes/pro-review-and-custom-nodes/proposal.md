@@ -11,7 +11,7 @@ The editor needs a commercial tier to fund development. Comments/tracked changes
 - **Review module (pro)**: revision display modes beyond final-state (markup/original), review model derivation (lifted `review-model.ts` + `comment-anchors.ts`), accept/reject/reply/add-comment/toggle-track-changes commands, and the React review pane (`DocxEditorReview.tsx`, `useReview.ts`).
 - **Custom nodes (pro)**: `defineCustomNode` — integrator-defined inline nodes anchored on run-level SDTs with `w:tag` identity (`sdtLocked` by default), tag-prefix `fromDocx` recognition and `toDocx` serialization, framework-neutral `render` (DOM element + measurable extent for `TextMeasurer`) with React portal sugar, atomic UTF-16 offset semantics, hover/interaction hooks.
 - **Free tier behavior**: lossless round-trip of revisions/comments/SDTs is unchanged; rendering is locked to final-state projection; review chrome slots render disabled with a `pro` reason; unrecognized or unlicensed SDTs render their literal content.
-- License-key validation at module construction; missing/invalid key degrades to a console warning plus an "unlicensed" banner in pro chrome (no crippling, no network call).
+- Licensing v1 is honor-system: pro entry points accept an optional `licenseKey`, never validate it, never warn, and never touch the network (owner decision 2026-08-05). The package carries the EigenPal Pro Evaluation License 1.0 (`LicenseRef-EigenPal-Pro-Evaluation-1.0`).
 - Review code physically moves out of Apache-licensed packages (core layout/editor exec, React adapter) into `packages/pro`.
 
 ## Capabilities

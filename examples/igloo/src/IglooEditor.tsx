@@ -12,7 +12,12 @@
 
 import { useState } from 'react';
 import { DocxEditor, useDocxSource } from '@docx-editor.dev/react';
+import { reviewModule } from '@docx-editor.dev/pro';
+import { DocxEditorReview } from '@docx-editor.dev/pro/react';
 import { defaultFonts } from '@docx-editor.dev/fonts';
+
+/** Stable identity: module registration is construction-time, like `author`. */
+const PRO_MODULES = [reviewModule()];
 import { IceSea } from './art/IceSea';
 import { Iceberg } from './art/Iceberg';
 import { IglooContextMenu } from './IglooContextMenu';
@@ -45,6 +50,7 @@ export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
         {...(bytes ? { document: bytes } : {})}
         {...(fonts ? { fonts } : {})}
         author="Igloo"
+        modules={PRO_MODULES}
       >
         <div className="igloo-chrome">
           <header className="igloo-brand">
@@ -116,6 +122,10 @@ export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
 
             {/* The packaged link popover, restyled into an ice shard by class alone. */}
             <DocxEditor.HyperLink className="igloo-shard" />
+            {/* The PRO review rail — comments and tracked changes as cards beside the
+                page. Enabled by `reviewModule()` on the Root; the pane is chrome from
+                `@docx-editor.dev/pro/react` and reskins by class like everything else. */}
+            <DocxEditorReview />
             <IglooContextMenu />
           </DocxEditor.Viewport>
         </div>
