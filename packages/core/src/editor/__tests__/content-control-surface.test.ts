@@ -183,11 +183,15 @@ describe('content-control surface chrome', () => {
       const controlId = widget.getAttribute('data-docx-cc-id');
       const fragment = records.find((record) => record.id === controlId)!.fragments[0]!;
       const page = surface.layout().pages[fragment.pageIndex]!;
-      expect(menu!.style.left).toBe(
-        `${page.box.x + (page.contentBox.x - page.box.x) + fragment.box.x + fragment.box.width}px`
+      // Compared as numbers: CSS serializes to six decimals, so a coordinate that is a
+      // repeating decimal never matches its own `${value}px` spelling.
+      expect(Number.parseFloat(menu!.style.left)).toBeCloseTo(
+        page.box.x + (page.contentBox.x - page.box.x) + fragment.box.x + fragment.box.width,
+        5
       );
-      expect(menu!.style.top).toBe(
-        `${page.box.y + (page.contentBox.y - page.box.y) + fragment.box.y + fragment.box.height}px`
+      expect(Number.parseFloat(menu!.style.top)).toBeCloseTo(
+        page.box.y + (page.contentBox.y - page.box.y) + fragment.box.y + fragment.box.height,
+        5
       );
       expect(menu!.style.transform).toBe('translateX(-100%)');
       if (widget.dataset.docxCcWidget === 'date') {

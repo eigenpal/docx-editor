@@ -744,6 +744,7 @@ function placeCellParagraph(
       contentX: alignedSpans[0]?.box.x ?? lineIndent + alignOffset,
       baseline: pendingLine.baseline,
       leading: pendingLine.leading,
+      trailingSpacing: pendingLine.trailingSpacing,
       ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
     });
     y += pendingLine.height;

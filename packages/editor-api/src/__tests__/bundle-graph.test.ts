@@ -234,16 +234,48 @@ describe('neither bundle', () => {
   });
 });
 
-/** Comment-free and string-free source, so prose and proxy path labels are not read as code. */
+/**
+ * Comment-free and string-free source, so prose and proxy path labels are not read as code.
+ *
+ * This is a single left-to-right scan rather than a chain of replaces, because strings and
+ * comments can only be told apart by reading the file in order. A pass that stripped `//`
+ * comments first turned `startsWith('//')` into a dangling quote, and the string stripper
+ * then swallowed everything up to the next apostrophe — which is how `/word/document.xml`
+ * in `opc-names.ts` came back as a DOM `document.` access.
+ *
+ * Template-literal interpolations survive (they are real code); their text does not.
+ */
 function codeOnly(source: string): string {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .split('\n')
-    .map((line) => (/^\s*\/\//.test(line) ? '' : line.replace(/([^:])\/\/.*$/, '$1')))
-    .join('\n')
-    .replace(/`(?:\\.|[^`\\])*`/g, (literal) =>
-      [...literal.matchAll(/\$\{([^{}]*)\}/g)].map((match) => match[1]).join(';')
-    )
-    .replace(/'(?:\\.|[^'\\])*'/g, "''")
-    .replace(/"(?:\\.|[^"\\])*"/g, '""');
+  let out = '';
+  let index = 0;
+  const at = (offset: number): string => source[index + offset] ?? '';
+  while (index < source.length) {
+    const char = source[index]!;
+    if (char === '/' && at(1) === '*') {
+      const end = source.indexOf('*/', index + 2);
+      index = end === -1 ? source.length : end + 2;
+      out += ' ';
+    } else if (char === '/' && at(1) === '/') {
+      while (index < source.length && source[index] !== '\n') index += 1;
+    } else if (char === "'" || char === '"' || char === '`') {
+      const quote = char;
+      index += 1;
+      while (index < source.length && source[index] !== quote) {
+        if (source[index] === '\\') index += 1;
+        // Interpolations are code, so keep their contents and drop the surrounding text.
+        else if (quote === '`' && source[index] === '$' && at(1) === '{') {
+          const end = source.indexOf('}', index + 2);
+          out += `;${source.slice(index + 2, end === -1 ? source.length : end)};`;
+          index = end === -1 ? source.length : end;
+        }
+        index += 1;
+      }
+      index += 1;
+      out += `${quote}${quote}`;
+    } else {
+      out += char;
+      index += 1;
+    }
+  }
+  return out;
 }

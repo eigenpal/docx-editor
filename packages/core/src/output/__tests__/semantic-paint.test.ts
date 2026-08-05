@@ -7,12 +7,27 @@ import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import {
   buildNumberingIndex,
+  buildStyleCascadeTable,
   createFixedMeasurer,
   layoutSemanticDocument,
 } from '@docx-editor.dev/core/layout';
 import { paintSemanticLayout } from '../semantic-paint.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+// The 6pt/14pt measurer base describes an 11pt run, so these fixtures carry the `w:sz="22"`
+// docDefaults a real document would. Without it every run resolves to the 10pt terminal
+// fallback (see `DEFAULT_RUN_STYLE`) and every painted box scales by 10/11.
+function elevenPointDefaults(): ReturnType<typeof buildStyleCascadeTable> {
+  const styles = readOoxmlPart(
+    `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr>` +
+      '<w:sz w:val="22"/>' +
+      '</w:rPr></w:rPrDefault></w:docDefaults></w:styles>',
+    { name: '/word/styles.xml', contentType: 'app/xml' }
+  );
+  if (!styles.ok) throw new Error(styles.reason);
+  return buildStyleCascadeTable(styles.part.root);
+}
 
 function layoutOf(body: string, numbering?: string) {
   const read = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
@@ -31,6 +46,7 @@ function layoutOf(body: string, numbering?: string) {
   }
   return layoutSemanticDocument(read.part, 7, {
     measurer: createFixedMeasurer(6, 14),
+    styleCascade: elevenPointDefaults(),
     ...(numberingIndex ? { numberingIndex } : {}),
   });
 }
@@ -308,8 +324,9 @@ describe('each run is its own box, so a mixed-size line highlights stepped', () 
   test('auto line spacing puts the extra depth below the glyph band', () => {
     // Double spacing doubles the line box. Word adds that extra BELOW the glyphs, so run
     // padding-top stays 0 and the line carries padding-bottom.
-    // Fixed measurer: height scales from 11pt base — default 10pt → 14*(10/11), 22pt → 28.
-    const h10 = 14 * (10 / 11);
+    // Fixed measurer: height scales from its 11pt base, so the docDefaults run is 14 and
+    // the `w:sz="44"` run is 28.
+    const hDefault = 14;
     const h22 = 14 * (22 / 11);
     const container = paint(
       '<w:p><w:pPr><w:spacing w:line="480" w:lineRule="auto"/></w:pPr>' +
@@ -320,7 +337,7 @@ describe('each run is its own box, so a mixed-size line highlights stepped', () 
     expect(parseFloat(line.style.height)).toBeCloseTo(h22 * 2, 5);
     expect(parseFloat(line.style.paddingBottom)).toBeCloseTo(h22, 5);
     const [small, big] = [...line.querySelectorAll<HTMLElement>('.layout-run-text')];
-    expect(parseFloat(small!.style.height)).toBeCloseTo(h10, 5);
+    expect(parseFloat(small!.style.height)).toBeCloseTo(hDefault, 5);
     expect(parseFloat(big!.style.height)).toBeCloseTo(h22, 5);
     expect(parseFloat(small!.style.paddingTop)).toBe(0);
     expect(parseFloat(big!.style.paddingTop)).toBe(0);
@@ -336,7 +353,7 @@ describe('each run is its own box, so a mixed-size line highlights stepped', () 
   test('the list marker sits on the same baseline as the text beside it', () => {
     // Marker and text must share the glyph band at the top of an auto-spaced line; the
     // below-extra is padding-bottom on both sinks.
-    const h10 = 14 * (10 / 11);
+    const hDefault = 14;
     const layout = layoutOf(
       '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>' +
         '<w:spacing w:line="480" w:lineRule="auto"/></w:pPr>' +
@@ -351,10 +368,10 @@ describe('each run is its own box, so a mixed-size line highlights stepped', () 
     const run = container.querySelector<HTMLElement>('.layout-run-text')!;
     const marker = container.querySelector<HTMLElement>('[data-docx-marker]')!;
     expect(parseFloat(run.style.paddingTop)).toBe(0);
-    expect(parseFloat(marker.style.paddingBottom)).toBeCloseTo(h10, 5);
+    expect(parseFloat(marker.style.paddingBottom)).toBeCloseTo(hDefault, 5);
     expect(
       parseFloat(container.querySelector<HTMLElement>('.docx-line')!.style.paddingBottom)
-    ).toBeCloseTo(h10, 5);
+    ).toBeCloseTo(hDefault, 5);
   });
 
   test('a tab span gets its own band too, not the full line height', () => {

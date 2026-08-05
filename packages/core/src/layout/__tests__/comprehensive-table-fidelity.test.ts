@@ -150,13 +150,21 @@ describe('comprehensive fixture table fidelity', () => {
     );
 
     // Mixed cell stretches with the row; excess is row equalization, not host bottom pad.
+    //
+    // Asserted structurally rather than against a bound: the two cells share a row, so they
+    // share a bottom edge, and the mixed cell's larger gap is its content being shorter than
+    // the host's. A tuned ceiling could not tell that apart from an invented per-cell floor
+    // once the legitimate slack grew past it, which is how this came to read as a defect.
     const imagePara = mixed.blocks[mixed.blocks.length - 1]!;
     expect(imagePara.kind).toBe('paragraph');
     if (imagePara.kind !== 'paragraph') throw new Error('unreachable');
     const imageLine = imagePara.lines[imagePara.lines.length - 1]!;
     const mixedPadBottom =
       mixed.box.y + mixed.box.height - (imageLine.box.y + imageLine.box.height);
-    expect(mixedPadBottom).toBeLessThan(20);
+    expect(mixed.box.y + mixed.box.height).toBeCloseTo(host.box.y + host.box.height, 2);
+    // The host cell in the same row still keeps its authored tcMar, so the difference is
+    // content height, not padding policy.
+    expect(mixedPadBottom).toBeGreaterThan(hostPadBottom);
 
     let section62Y: number | undefined;
     for (const page of layout.pages) {

@@ -7,7 +7,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { readOoxmlPart, readOoxmlPackage, type OoxmlPart } from '@docx-editor.dev/core/store';
 import {
@@ -204,13 +204,20 @@ describe('second case: BodyText line=336 extras stay below (same fixture family)
   });
 });
 
-describe('real package smoke (optional geometry)', () => {
+// A smoke test over a real package, and genuinely optional: the document it reads was never
+// committed alongside the test, so on a clean checkout there is nothing to open. The
+// below-band rule itself is covered above against authored fixtures — this only adds the
+// evidence that a producer's own file behaves the same. Skipped rather than deleted so it
+// starts running again the day the document lands.
+const PR140_FIXTURE = resolve(
+  import.meta.dir,
+  '../../../../../e2e/fixtures/pr140-shapes-and-page-breaks.docx'
+);
+const describeWithPr140 = existsSync(PR140_FIXTURE) ? describe : describe.skip;
+
+describeWithPr140('real package smoke (optional geometry)', () => {
   test('pr140 fixture title lines expose below-band extras on line=460 paras', () => {
-    const fixture = resolve(
-      import.meta.dir,
-      '../../../../../e2e/fixtures/pr140-shapes-and-page-breaks.docx'
-    );
-    const loaded = readOoxmlPackage(new Uint8Array(readFileSync(fixture)));
+    const loaded = readOoxmlPackage(new Uint8Array(readFileSync(PR140_FIXTURE)));
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
     const main = loaded.package.parts.get(loaded.package.mainDocumentPart)!;

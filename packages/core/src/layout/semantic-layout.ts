@@ -2251,6 +2251,7 @@ function layoutBlocksPass(
                   : origin.columnX + indent.left,
               baseline: brokenLine.baseline,
               leading: brokenLine.leading,
+              trailingSpacing: brokenLine.trailingSpacing,
               spans: brokenLine.spans.map((span) => ({
                 ...span,
                 box: { ...span.box, x: span.box.x + origin.columnX, y: syntheticY },
@@ -2449,6 +2450,7 @@ function layoutBlocksPass(
         contentX: alignedSpans[0]?.box.x ?? lineIndent + alignOffset,
         baseline: pendingLine.baseline,
         leading: pendingLine.leading,
+        trailingSpacing: pendingLine.trailingSpacing,
         ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
         ...(alignedDrawings.length > 0 ? { drawings: alignedDrawings } : {}),
       };
@@ -3033,7 +3035,14 @@ function placedGeometryOf(
       for (const line of fragment.lines) {
         const lineKey = lineOrdinal;
         lineOrdinal += 1;
-        const textHeight = Math.max(0, line.box.height - line.leading);
+        // The glyph band: the box less the spacing on BOTH sides of it. Subtracting only
+        // `leading` was right while every rule put its extra above the text; `auto`/`atLeast`
+        // put it below and leave `leading` at zero, which handed a double-spaced line a
+        // boundary chip covering the whole doubled box instead of the glyphs in it.
+        const textHeight = Math.max(
+          0,
+          line.box.height - line.leading - (line.trailingSpacing ?? 0)
+        );
         for (const span of line.spans) {
           addSpan({
             pageIndex,

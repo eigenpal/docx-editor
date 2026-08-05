@@ -10,6 +10,7 @@ import {
   paragraphSpacing,
 } from '../paragraph-style.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import { elevenPointDefaults } from './fixtures/eleven-point-defaults.ts';
 import { fragmentsOfParagraph, linesOf, type PageGeometry } from '../semantic-records.ts';
 import { propertiesOf } from '../paragraph-flow.ts';
 
@@ -26,7 +27,11 @@ function load(body: string): OoxmlPart {
 
 const measurer = createFixedMeasurer(6, 14);
 const lay = (part: OoxmlPart, geometry?: PageGeometry, revision = 1) =>
-  layoutSemanticDocument(part, revision, { measurer, ...(geometry ? { geometry } : {}) });
+  layoutSemanticDocument(part, revision, {
+    measurer,
+    styleCascade: elevenPointDefaults(),
+    ...(geometry ? { geometry } : {}),
+  });
 
 const SMALL: PageGeometry = {
   width: 200,

@@ -38,7 +38,13 @@ function document(body: string): OoxmlPart {
 
 const listParagraph = (text: string, numId: string, ilvl = '0') =>
   `<w:p><w:pPr><w:numPr><w:ilvl w:val="${ilvl}"/><w:numId w:val="${numId}"/></w:numPr></w:pPr>` +
-  `<w:r><w:t>${text}</w:t></w:r></w:p>`;
+  `<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
+
+// The marker is measured with the LEVEL's own `w:rPr` (these fixtures resolve without a
+// style cascade, so the paragraph mark never reaches it). The 6pt measurer base describes an
+// 11pt run, so the level authors `w:sz="22"`; the 10pt terminal fallback (see
+// `DEFAULT_RUN_STYLE`) would make the `1.` marker 10.9pt wide instead of 12.
+const LEVEL_SZ = '<w:rPr><w:sz w:val="22"/></w:rPr>';
 
 /** One resolved item for the single list paragraph in `body`. */
 function itemOf(body: string, numberingXml: string): ResolvedItemAndPart {
@@ -64,7 +70,7 @@ interface ResolvedItemAndPart {
 const flat = (suff: string) => `
   <w:abstractNum w:abstractNumId="1">
     <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:suff w:val="${suff}"/>
-      <w:lvlText w:val="%1."/><w:lvlJc w:val="left"/>
+      <w:lvlText w:val="%1."/><w:lvlJc w:val="left"/>${LEVEL_SZ}
       <w:pPr><w:ind w:left="720"/></w:pPr></w:lvl>
   </w:abstractNum>
   <w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>
@@ -78,7 +84,7 @@ describe('w:suff decides where the first line starts', () => {
       `
         <w:abstractNum w:abstractNumId="1">
           <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/>
-            <w:lvlText w:val="%1."/><w:lvlJc w:val="left"/>
+            <w:lvlText w:val="%1."/><w:lvlJc w:val="left"/>${LEVEL_SZ}
             <w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl>
         </w:abstractNum>
         <w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>
@@ -107,7 +113,7 @@ describe('w:suff decides where the first line starts', () => {
       `
         <w:abstractNum w:abstractNumId="1">
           <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="bullet"/><w:suff w:val="space"/>
-            <w:lvlText w:val="•"/><w:lvlJc w:val="left"/>
+            <w:lvlText w:val="•"/><w:lvlJc w:val="left"/>${LEVEL_SZ}
             <w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl>
         </w:abstractNum>
         <w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>
@@ -122,11 +128,11 @@ describe('a marker wider than its hanging slot', () => {
   const deep = `
     <w:abstractNum w:abstractNumId="1">
       <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>
-        <w:lvlJc w:val="left"/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl>
+        <w:lvlJc w:val="left"/>${LEVEL_SZ}<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl>
       <w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1.%2."/>
-        <w:lvlJc w:val="left"/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl>
+        <w:lvlJc w:val="left"/>${LEVEL_SZ}<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl>
       <w:lvl w:ilvl="2"><w:start w:val="1"/><w:numFmt w:val="decimal"/>
-        <w:lvlText w:val="%1.%2.%3."/><w:lvlJc w:val="left"/>
+        <w:lvlText w:val="%1.%2.%3."/><w:lvlJc w:val="left"/>${LEVEL_SZ}
         <w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl>
     </w:abstractNum>
     <w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>

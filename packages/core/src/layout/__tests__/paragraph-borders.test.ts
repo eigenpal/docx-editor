@@ -16,6 +16,7 @@ import {
   paragraphBordersFingerprint,
 } from '../paragraph-style.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import { elevenPointDefaults } from './fixtures/eleven-point-defaults.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
 import {
   fragmentsOfParagraph,
@@ -25,11 +26,8 @@ import {
 } from '../semantic-records.ts';
 import { paintSemanticLayout } from '../../output/semantic-paint.ts';
 import { storyBlocks } from '../story-roots.ts';
-import { readFileSync } from 'node:fs';
-import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-const COMPREHENSIVE = `${import.meta.dir}/../../../../../e2e/fixtures/comprehensive-word-element-test.docx`;
 
 function load(body: string): OoxmlPart {
   const result = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
@@ -49,7 +47,11 @@ const SMALL: PageGeometry = {
 };
 
 const lay = (body: string, geometry?: PageGeometry) =>
-  layoutSemanticDocument(load(body), 1, { measurer, ...(geometry ? { geometry } : {}) });
+  layoutSemanticDocument(load(body), 1, {
+    measurer,
+    styleCascade: elevenPointDefaults(),
+    ...(geometry ? { geometry } : {}),
+  });
 
 const paragraph = (text: string, pPr = '') =>
   `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ''}${text ? `<w:r><w:t>${text}</w:t></w:r>` : ''}</w:p>`;
@@ -604,75 +606,37 @@ describe('misplaced body-level w:pBdr is not a thematic break', () => {
     paintSemanticLayout(container, lay(body), { scale: 1 });
     expect(container.querySelectorAll('.docx-paragraph-border-bottom')).toHaveLength(1);
   });
-
-  test('comprehensive fixture section 11.3 keeps the orphaned pBdr and paints no rule', () => {
-    const loaded = readOoxmlPackage(new Uint8Array(readFileSync(COMPREHENSIVE)));
-    expect(loaded.ok).toBe(true);
-    if (!loaded.ok) return;
-    const part = [...loaded.package.parts.values()].find((entry) =>
-      entry.name.endsWith('document.xml')
+  test('a misplaced body-level w:pBdr is kept as generic and paints no rule', () => {
+    // Word writes `w:pBdr` inside `w:pPr`. A producer that emits one as a BODY sibling has
+    // written something the schema does not allow, and the canonical tree demotes it to
+    // `generic` rather than losing it. The paragraphs either side must be unaffected: the
+    // stray element is not a thematic break and must not put a rule on anything.
+    //
+    // Built here rather than read from a fixture — the comprehensive document used to carry
+    // one of these and was repaired to open in Word, so the malformed shape has to be
+    // authored by the test that asserts the tolerance.
+    const part = load(
+      '<w:p><w:r><w:t>11.3 Thematic Break</w:t></w:r></w:p>' +
+        '<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="auto"/></w:pBdr>' +
+        '<w:p><w:r><w:t>Content after thematic break</w:t></w:r></w:p>'
     );
-    expect(part).toBeDefined();
-    if (!part) return;
-
-    const textOf = (node: {
-      kind: string;
-      text?: string;
-      value?: string;
-      children?: readonly unknown[];
-    }): string => {
-      if (node.kind === 'textValue') return String(node.value ?? node.text ?? '');
-      return ((node.children ?? []) as { kind: string }[])
-        .map((child) => textOf(child as never))
-        .join('');
-    };
-    const body = (() => {
-      const find = (node: { kind: string; children?: readonly unknown[] }): unknown => {
-        if (node.kind === 'body') return node;
-        for (const child of node.children ?? []) {
-          const found = find(child as never);
-          if (found) return found;
-        }
-        return undefined;
-      };
-      return find(part.root) as {
-        children: readonly { kind: string; localName?: string; children?: readonly unknown[] }[];
-      };
-    })();
-    const heading = body.children.findIndex(
-      (child, index) =>
-        child.kind === 'paragraph' &&
-        textOf(child as never).includes('11.3 Thematic Break') &&
-        body.children[index + 1]?.kind === 'generic' &&
-        body.children[index + 1]?.localName === 'pBdr'
-    );
-    expect(heading).toBeGreaterThanOrEqual(0);
-    const around = body.children.slice(heading, heading + 3);
-    expect(around.map((child) => child.kind)).toEqual(['paragraph', 'generic', 'paragraph']);
-    expect(around[1]!.localName).toBe('pBdr');
-    expect(textOf(around[2] as never)).toContain('Content after thematic break');
+    const body = part.root!.children.find((child) => child.localName === 'body')!;
+    // Kept, and kept in place: preservation is the point, tolerance is the behaviour.
+    expect(body.children.map((child) => child.kind)).toEqual(['paragraph', 'generic', 'paragraph']);
+    expect(body.children[1]!.localName).toBe('pBdr');
 
     const layout = layoutSemanticDocument(part, 1, { measurer });
     const frags = layout.pages.flatMap((page) =>
       page.fragments.filter((fragment) => fragment.kind === 'paragraph')
     );
-    const h = frags.findIndex(
-      (fragment) =>
-        fragment.kind === 'paragraph' &&
-        fragment.lines.some((line) => line.spans.some((span) => span.text.includes('11.3')))
-    );
-    expect(h).toBeGreaterThanOrEqual(0);
-    const next = frags[h + 1]!;
-    expect(next.kind).toBe('paragraph');
-    if (next.kind !== 'paragraph') return;
-    expect(next.lines.flatMap((line) => line.spans.map((span) => span.text)).join('')).toContain(
+    const heading = frags[0]!;
+    const after = frags[1]!;
+    if (heading.kind !== 'paragraph' || after.kind !== 'paragraph') throw new Error('expected two');
+    expect(after.lines.flatMap((line) => line.spans.map((span) => span.text)).join('')).toContain(
       'Content after thematic break'
     );
-    expect(next.bottomBorder).toBeUndefined();
-    const headingFrag = frags[h]!;
-    expect(headingFrag.kind).toBe('paragraph');
-    if (headingFrag.kind !== 'paragraph') return;
-    expect(headingFrag.borders).toBeUndefined();
-    expect(headingFrag.bottomBorder).toBeUndefined();
+    expect(heading.borders).toBeUndefined();
+    expect(heading.bottomBorder).toBeUndefined();
+    expect(after.bottomBorder).toBeUndefined();
   });
 });

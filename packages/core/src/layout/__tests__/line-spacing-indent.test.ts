@@ -30,8 +30,10 @@ function load(body: string): OoxmlPart {
 }
 
 const lay = (body: string) => layoutSemanticDocument(load(body), 1, { measurer });
+// The measurer's 6pt/14pt base describes an 11pt run, so the fixtures author `w:sz="22"`
+// rather than leaning on the terminal fallback, which is 10pt (see `DEFAULT_RUN_STYLE`).
 const para = (text: string, pPr = '') =>
-  `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ''}<w:r><w:t>${text}</w:t></w:r></w:p>`;
+  `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ''}<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
 
 describe('paragraphLineSpacing reads w:line and w:lineRule', () => {
   test('absent spacing is single', () => {
@@ -241,7 +243,7 @@ describe('w:contextualSpacing drops the gap between same-style paragraphs', () =
 
   test('consecutive same-style items sit flush; a different style keeps its gap', () => {
     const item = (text: string) =>
-      `<w:p><w:pPr><w:pStyle w:val="ListParagraph"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+      `<w:p><w:pPr><w:pStyle w:val="ListParagraph"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
     const layout = layoutSemanticDocument(load(item('one') + item('two') + para('after')), 1, {
       measurer,
       styleCascade: cascade(),
@@ -255,7 +257,7 @@ describe('w:contextualSpacing drops the gap between same-style paragraphs', () =
 
   test('without the flag the same two paragraphs keep their gap', () => {
     const item = (text: string) =>
-      `<w:p><w:pPr><w:spacing w:after="160"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+      `<w:p><w:pPr><w:spacing w:after="160"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
     const layout = layoutSemanticDocument(load(item('one') + item('two')), 1, { measurer });
     const ys = layout.pages[0]!.fragments.map((fragment) => fragment.box.y);
     expect(ys[1]! - ys[0]!).toBeGreaterThan(14);

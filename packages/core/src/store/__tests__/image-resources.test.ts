@@ -125,7 +125,12 @@ function drawingXml(options: { embed?: string | null; link?: string } = {}): str
     `<wp:extent cx="914400" cy="914400"/>` +
     `<wp:docPr id="1" name="pic"/>` +
     `<a:graphic xmlns:a="${A}"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
-    `<pic:pic xmlns:pic="${PIC}"><pic:blipFill><a:blip${embedAttr}${linkAttr}/></pic:blipFill></pic:pic>` +
+    `<pic:pic xmlns:pic="${PIC}">` +
+    // `nvPicPr` is minOccurs="1" in CT_Picture, so a fixture without it is not a picture.
+    `<pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr>` +
+    `<pic:blipFill><a:blip${embedAttr}${linkAttr}/></pic:blipFill>` +
+    `<pic:spPr/>` +
+    `</pic:pic>` +
     `</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`
   );
 }

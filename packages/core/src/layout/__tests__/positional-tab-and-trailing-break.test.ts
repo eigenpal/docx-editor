@@ -132,9 +132,14 @@ describe('a w:ptab leader is PAINTED across the advance, not merely published', 
     const span = ptabSpan(CONTENTS);
     const fragment = paragraphs(lay(CONTENTS))[0]!;
     expect(leader!.style.overflow).toBe('hidden');
-    expect(leader!.style.width).toBe(`${span.box.width}px`);
-    expect(Number.parseFloat(leader!.style.left)).toBe(span.box.x - fragment.box.x);
-    expect(Number.parseFloat(leader!.style.top)).toBe(fragment.lines[0]!.box.y - fragment.box.y);
+    // Compared as a number: CSS serializes a width to six decimals, so a published advance
+    // that is a repeating decimal never matches its own `${value}px` spelling.
+    expect(Number.parseFloat(leader!.style.width)).toBeCloseTo(span.box.width, 5);
+    expect(Number.parseFloat(leader!.style.left)).toBeCloseTo(span.box.x - fragment.box.x, 5);
+    expect(Number.parseFloat(leader!.style.top)).toBeCloseTo(
+      fragment.lines[0]!.box.y - fragment.box.y,
+      5
+    );
   });
 
   test('the leader layer is furniture and carries NO model offset', () => {

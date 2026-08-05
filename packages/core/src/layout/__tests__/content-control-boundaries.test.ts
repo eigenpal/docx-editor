@@ -177,8 +177,9 @@ describe('inline boundary fragments', () => {
   });
 
   test('non-single line spacing keeps the fragment on the text, not the leading above it', () => {
-    // Double spacing (w:line 480 auto) puts the whole extra leading ABOVE the glyphs; the
-    // boundary must sit where the text is, or the chip tints the gap and clicks miss.
+    // Double spacing (w:line 480 auto) grows the box BELOW the glyphs, so the band is at the
+    // top and `leading` — which is the `exact`-rule space above it — stays zero. Either way
+    // the boundary must sit on the text, or the chip tints the gap and clicks miss.
     const layout = lay(
       `<w:p><w:pPr><w:spacing w:line="480" w:lineRule="auto"/></w:pPr>` +
         `${run('aa')}${sdt('<w:tag w:val="spaced"/>', run('bb'))}${run('cc')}</w:p>`
@@ -186,12 +187,14 @@ describe('inline boundary fragments', () => {
     const paragraph = layout.pages[0]!.fragments[0]!;
     if (paragraph.kind !== 'paragraph') throw new Error('expected a paragraph');
     const line = paragraph.lines[0]!;
-    expect(line.leading).toBeGreaterThan(0);
+    expect(line.leading).toBe(0);
     const control = layout.contentControls![0]!;
     expect(control.fragments).toHaveLength(1);
     const box = control.fragments[0]!.box;
     expect(box.y).toBe(line.box.y + line.leading);
-    expect(box.height).toBe(line.box.height - line.leading);
+    // The chip covers the glyphs, not the doubled box the spacing produced.
+    expect(box.height).toBeLessThan(line.box.height);
+    expect(box.height).toBe(line.box.height - line.leading - (line.trailingSpacing ?? 0));
   });
 });
 

@@ -14,6 +14,7 @@ import {
   MAX_TAB_STOPS,
   paragraphTabStops,
 } from '../index.ts';
+import { elevenPointDefaults } from './fixtures/eleven-point-defaults.ts';
 import {
   readOoxmlPackage,
   readOoxmlPart,
@@ -45,7 +46,8 @@ function loadStyles(inner: string) {
 }
 
 const measurer = createFixedMeasurer(6, 14);
-const lay = (part: OoxmlPart) => layoutSemanticDocument(part, 1, { measurer });
+const lay = (part: OoxmlPart) =>
+  layoutSemanticDocument(part, 1, { measurer, styleCascade: elevenPointDefaults() });
 
 const FIXTURE = resolve(
   import.meta.dir,

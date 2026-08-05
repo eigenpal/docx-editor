@@ -37,7 +37,10 @@ function docx(body: string): Uint8Array {
   });
 }
 
-const paragraph = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+// The surface measurer's 6pt base describes an 11pt run, so fixtures author `w:sz="22"`
+// rather than resolving to the 10pt terminal fallback (see `DEFAULT_RUN_STYLE`).
+const paragraph = (text: string) =>
+  `<w:p><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
 
 /** The page's content box origin, which page-content coordinates are measured from. */
 const MARGIN = 72;

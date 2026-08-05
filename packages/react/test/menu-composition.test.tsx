@@ -290,7 +290,9 @@ describe('rows carry the engine, not a paraphrase', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    const input = view.container.querySelector('input[type="file"]') as HTMLInputElement;
+    // Scoped by `accept`: the menu also mounts the image-insert picker, and picking whichever
+    // file input came first fed a .docx to the image signature check once that landed.
+    const input = view.container.querySelector('input[type="file"][accept*=".docx"]');
     expect(input).not.toBeNull();
     const file = new File(
       [docx('<w:p><w:r><w:t>reopened</w:t></w:r></w:p>')],

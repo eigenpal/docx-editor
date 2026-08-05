@@ -242,6 +242,22 @@ export interface LineRecord {
    */
   readonly leading: number;
   /**
+   * Auto/atLeast line-spacing depth BELOW the glyph band, inside {@link box}.
+   *
+   * The complement of {@link leading}: exact spacing centres the glyphs and moves the
+   * baseline down, while auto/atLeast leave the band at the top and grow the box beneath it.
+   * So the band a consumer needs is `box.height - trailingSpacing - leading`, and
+   * subtracting `leading` alone is right only under the exact rule.
+   *
+   * A line WITH spans carries its band in the span heights too. An empty paragraph carries
+   * nothing, which is why the caret, paint's `padding-bottom` and the content-control
+   * boundary all need this published rather than recovered from the box.
+   *
+   * Zero under the exact rule and on lines holding drawings, where the box is authored.
+   * Absent on lines published before this was measured; treat as zero.
+   */
+  readonly trailingSpacing?: number;
+  /**
    * Model ranges on this line covering DELETED content, absent when there is none.
    *
    * The caret steps over these rather than entering them: text typed inside a deletion exists

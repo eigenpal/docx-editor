@@ -1,5 +1,49 @@
 # Baseline evidence
 
+## Re-recorded after the drift repair (106 failures → 0)
+
+The suite had drifted to **106 failures** against the 0 this file records. Nothing hid it:
+`.github/workflows/ci.yml` triggers only on `main`, and every one of these landed through a
+PR targeting `docx-editor-v2`, so no test job ever ran on any of them. Fixing that trigger
+is a separate change; until it lands, the suite has to be run locally before merge.
+
+- `bun test`: **5908 pass, 1 skip, 0 fail** across 387 files.
+- `bun run typecheck`: passes for all eight packages.
+- `bun run api:check`, `bun run check:parity`, `bun run i18n:validate` (957 keys),
+  `openspec validate typed-ooxml-paragraph-editor --strict`: all pass.
+- `bun run lint`: 98 problems (43 errors), byte-identical to the count before this repair.
+  Pre-existing and untouched here.
+- `check:public-docs-surface`, recorded below as deliberately red under task 11.4, now
+  passes — the surface it objected to has since been reconciled.
+- Note: `bun run build` must have run, or `packages/pro` cannot resolve
+  `@docx-editor.dev/react` and three tests fail at module load. `api:check` needs
+  `packages/editor-api` built for the same reason.
+
+The one skip is a smoke test over `e2e/fixtures/pr140-shapes-and-page-breaks.docx`, which was
+never committed. It now skips on a missing fixture instead of failing, and starts running
+again if the document lands.
+
+Two product defects were found and fixed rather than papered over, both invisible because
+the tests that would have caught them were failing for an unrelated reason:
+
+1. **Spec-valid pictures vanished.** `pic:blipFill` demanded exactly one of `a:stretch` /
+   `a:tile` and `pic:spPr` demanded both `a:xfrm` and `a:prstGeom`. ECMA-376 makes all three
+   `minOccurs="0"`, so a conforming picture demoted to `generic` and never rendered.
+2. **Empty spaced paragraphs took the whole line box.** Once `auto`/`atLeast` extras moved
+   BELOW the glyph band, `leading` correctly became zero — but the caret, the painter and the
+   content-control boundary all still derived the band as `box.height - leading`. On a
+   double-spaced empty paragraph that is the entire box, so the caret was twice the height of
+   the text about to be typed. Layout now publishes `LineRecord.glyphBand` and all three read
+   it.
+
+The remaining 104 were test defects, not product defects. The largest group by far: PR #119
+(`feat: add rich table editing`) changed `DEFAULT_RUN_STYLE.fontSizePt` from 11 to 10 as an
+unrelated one-liner. The change is right — 10pt is Word's terminal fallback when no level of
+the style hierarchy authors `w:sz`, and `run-style.test.ts` asserts exactly that — but
+`createFixedMeasurer`'s 6pt/14pt base describes an 11pt run, so 51 layout and paint tests
+silently began measuring everything at 10/11. They now author `w:sz="22"` (or the
+`elevenPointDefaults()` docDefaults) so the expectation is stated rather than inherited.
+
 ## Re-recorded at section 13 (Word-accurate pointer interaction)
 
 - `bun test`: **2682 pass, 0 fail, 0 errors**, with section 13 rebased onto the Word-fidelity
