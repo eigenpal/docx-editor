@@ -49,7 +49,15 @@ function setStoryRect(node: HTMLDivElement | null, left: number, top: number, wi
   };
 }
 
-function AnchorProbe({ active }: { active: 'first' | 'second' }): ReactNode {
+function AnchorProbe({
+  active,
+  clientLeft = 0,
+  clientTop = 0,
+}: {
+  active: 'first' | 'second';
+  clientLeft?: number;
+  clientTop?: number;
+}): ReactNode {
   const anchor = useScopedChromeAnchor(findActiveProbe, 'story-label');
   return (
     <div
@@ -58,6 +66,8 @@ function AnchorProbe({ active }: { active: 'first' | 'second' }): ReactNode {
         if (!node) return;
         node.getBoundingClientRect = () => rect(0, 0, 800, 600);
         Object.defineProperty(node, 'clientWidth', { value: 800, configurable: true });
+        Object.defineProperty(node, 'clientLeft', { value: clientLeft, configurable: true });
+        Object.defineProperty(node, 'clientTop', { value: clientTop, configurable: true });
       }}
     >
       <div className="docx-paginated-surface">
@@ -196,6 +206,19 @@ describe('DocxEditor.HeaderFooterChrome', () => {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     });
     expect(view.getByTestId('anchor-probe').style.left).toBe('420px');
+  });
+
+  test('story bar subtracts the scroller padding-edge gutter (scrollbar-gutter both-edges)', async () => {
+    // Chromium reports clientLeft ≈ 15 when `scrollbar-gutter: stable both-edges` reserves
+    // a left gutter. Absolute `left` is relative to that padding edge, not the border box
+    // from getBoundingClientRect — without subtracting clientLeft the rail sits 15px right
+    // of the painted header/footer box (visible on Chrome, often invisible on Safari).
+    const view = render(<AnchorProbe active="first" clientLeft={15} clientTop={0} />);
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    expect(view.getByTestId('anchor-probe').style.left).toBe('105px');
+    expect(view.getByTestId('anchor-probe').style.top).toBe('46px');
   });
 
   test('story bar scrolls away with its focused occurrence', async () => {

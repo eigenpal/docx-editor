@@ -55,14 +55,19 @@ export function useScopedChromeAnchor(
         placement === 'story-label' ? Math.max(chrome.offsetHeight, 28) : chrome.offsetHeight;
       const clearance = placement === 'story-label' ? 6 : 4;
       const attachedInsideViewport = containingViewport === viewport;
+      // Absolute children resolve against the scroller's padding edge. `getBoundingClientRect`
+      // is the border box, so a reserved left/top gutter (`scrollbar-gutter: stable both-edges`
+      // sets a non-zero `clientLeft` in Chromium) must be subtracted or the rail sits that
+      // many pixels to the right/below the painted story.
       const documentLeft = attachedInsideViewport
-        ? anchorRect.left - viewportRect.left + viewport.scrollLeft
+        ? anchorRect.left - viewportRect.left - viewport.clientLeft + viewport.scrollLeft
         : anchorRect.left;
       const documentTop = attachedInsideViewport
         ? (placement === 'after'
             ? anchorRect.bottom + 6
             : anchorRect.top - chromeHeight - clearance) -
-          viewportRect.top +
+          viewportRect.top -
+          viewport.clientTop +
           viewport.scrollTop
         : placement === 'after'
           ? anchorRect.bottom + 6
