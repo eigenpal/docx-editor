@@ -322,8 +322,8 @@ describe('the automation lane is a neutral host port (Office-compatible automati
     const entry = manifest.exports?.['./automation'];
     // The package publishes a built dist, so the lane has its own entry point
     // rather than resolving into the store lane's files.
-    expect(entry?.import?.default).toBe('./dist/automation.js');
-    expect(entry?.import?.types).toBe('./dist/automation.d.ts');
-    expect(entry?.require?.default).toBe('./dist/automation.cjs');
+    expect(entry?.types).toBe('./dist/automation.d.ts');
+    expect(entry?.import).toBe('./dist/automation.js');
+    expect(entry?.require).toBe('./dist/automation.cjs');
   });
 });

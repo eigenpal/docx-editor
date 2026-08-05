@@ -61,4 +61,6 @@ export type SemanticTarget = {
     readonly objectId: string;
 };
 
+// (No @packageDocumentation comment for this package)
+
 ```

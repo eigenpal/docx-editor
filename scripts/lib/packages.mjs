@@ -53,9 +53,6 @@ export const PACKAGES = [
       protectedExportFiles: ['src/runtime/public.ts', 'src/model/index.ts'],
       allowlist: {
         index: [
-          'AutomationHandle',
-          'AutomationOperation',
-          'AutomationValue',
           'CommentBase',
           'ContentControlScope',
           'ContextInternals',
@@ -72,13 +69,6 @@ export const PACKAGES = [
           'SpanOwner',
         ],
         browser: [
-          // The engine's own editor instance — the thing `createBrowser` borrows. A consumer
-          // that has one already imports its type from the engine package, so this package
-          // re-exporting it would be a second name for one type rather than a missing one.
-          'DocxEditorInstance',
-          'AutomationHandle',
-          'AutomationOperation',
-          'AutomationValue',
           'CommentBase',
           'ContentControlScope',
           'ContextInternals',

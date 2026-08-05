@@ -4381,4 +4381,6 @@ export type ZipReadResult = {
 // @public
 export type ZipRejection = 'too-many-entries' | 'too-large' | 'bad-name' | 'inflate-error';
 
+// (No @packageDocumentation comment for this package)
+
 ```

@@ -280,4 +280,6 @@ export interface StarterKitOptions {
     readonly [key: string]: unknown;
 }
 
+// (No @packageDocumentation comment for this package)
+
 ```

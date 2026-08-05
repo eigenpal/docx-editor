@@ -30,4 +30,6 @@ export interface McpToolDefinition {
     readonly name: string;
 }
 
+// (No @packageDocumentation comment for this package)
+
 ```

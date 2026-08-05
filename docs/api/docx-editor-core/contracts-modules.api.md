@@ -41,4 +41,6 @@ export interface ReviewModuleContribution {
     readonly revisionItemsOfParagraph: (part: OoxmlPart, paragraphId: string) => readonly ReviewRevisionItem[];
 }
 
+// (No @packageDocumentation comment for this package)
+
 ```

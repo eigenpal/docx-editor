@@ -61,4 +61,6 @@ export interface SelectionOverlayOptions {
     readonly scale: number;
 }
 
+// (No @packageDocumentation comment for this package)
+
 ```

@@ -6,24 +6,14 @@
   "type": "module",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     },
     "./google": {
-      "import": {
-        "types": "./dist/google.d.ts",
-        "default": "./dist/google.js"
-      },
-      "require": {
-        "types": "./dist/google.d.cts",
-        "default": "./dist/google.cjs"
-      }
+      "types": "./dist/google.d.ts",
+      "import": "./dist/google.js",
+      "require": "./dist/google.cjs"
     },
     "./package.json": "./package.json"
   },

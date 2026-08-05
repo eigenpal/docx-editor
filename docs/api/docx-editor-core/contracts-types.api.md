@@ -417,4 +417,6 @@ export interface Watermark {
     readonly text?: string;
 }
 
+// (No @packageDocumentation comment for this package)
+
 ```

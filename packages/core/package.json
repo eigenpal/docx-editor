@@ -5,144 +5,74 @@
   "type": "module",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     },
     "./automation": {
-      "import": {
-        "types": "./dist/automation.d.ts",
-        "default": "./dist/automation.js"
-      },
-      "require": {
-        "types": "./dist/automation.d.cts",
-        "default": "./dist/automation.cjs"
-      }
+      "types": "./dist/automation.d.ts",
+      "import": "./dist/automation.js",
+      "require": "./dist/automation.cjs"
     },
     "./binding": {
-      "import": {
-        "types": "./dist/binding.d.ts",
-        "default": "./dist/binding.js"
-      },
-      "require": {
-        "types": "./dist/binding.d.cts",
-        "default": "./dist/binding.cjs"
-      }
+      "types": "./dist/binding.d.ts",
+      "import": "./dist/binding.js",
+      "require": "./dist/binding.cjs"
     },
     "./contracts/editor": {
-      "import": {
-        "types": "./dist/contracts/editor.d.ts",
-        "default": "./dist/contracts/editor.js"
-      },
-      "require": {
-        "types": "./dist/contracts/editor.d.cts",
-        "default": "./dist/contracts/editor.cjs"
-      }
+      "types": "./dist/contracts/editor.d.ts",
+      "import": "./dist/contracts/editor.js",
+      "require": "./dist/contracts/editor.cjs"
     },
     "./contracts/document": {
-      "import": {
-        "types": "./dist/contracts/document.d.ts",
-        "default": "./dist/contracts/document.js"
-      },
-      "require": {
-        "types": "./dist/contracts/document.d.cts",
-        "default": "./dist/contracts/document.cjs"
-      }
+      "types": "./dist/contracts/document.d.ts",
+      "import": "./dist/contracts/document.js",
+      "require": "./dist/contracts/document.cjs"
     },
     "./contracts/interaction": {
-      "import": {
-        "types": "./dist/contracts/interaction.d.ts",
-        "default": "./dist/contracts/interaction.js"
-      },
-      "require": {
-        "types": "./dist/contracts/interaction.d.cts",
-        "default": "./dist/contracts/interaction.cjs"
-      }
+      "types": "./dist/contracts/interaction.d.ts",
+      "import": "./dist/contracts/interaction.js",
+      "require": "./dist/contracts/interaction.cjs"
     },
     "./contracts/mcp": {
-      "import": {
-        "types": "./dist/contracts/mcp.d.ts",
-        "default": "./dist/contracts/mcp.js"
-      },
-      "require": {
-        "types": "./dist/contracts/mcp.d.cts",
-        "default": "./dist/contracts/mcp.cjs"
-      }
+      "types": "./dist/contracts/mcp.d.ts",
+      "import": "./dist/contracts/mcp.js",
+      "require": "./dist/contracts/mcp.cjs"
     },
     "./contracts/modules": {
-      "import": {
-        "types": "./dist/contracts/modules.d.ts",
-        "default": "./dist/contracts/modules.js"
-      },
-      "require": {
-        "types": "./dist/contracts/modules.d.cts",
-        "default": "./dist/contracts/modules.cjs"
-      }
+      "types": "./dist/contracts/modules.d.ts",
+      "import": "./dist/contracts/modules.js",
+      "require": "./dist/contracts/modules.cjs"
     },
     "./contracts/plugin": {
-      "import": {
-        "types": "./dist/contracts/plugin.d.ts",
-        "default": "./dist/contracts/plugin.js"
-      },
-      "require": {
-        "types": "./dist/contracts/plugin.d.cts",
-        "default": "./dist/contracts/plugin.cjs"
-      }
+      "types": "./dist/contracts/plugin.d.ts",
+      "import": "./dist/contracts/plugin.js",
+      "require": "./dist/contracts/plugin.cjs"
     },
     "./contracts/types": {
-      "import": {
-        "types": "./dist/contracts/types.d.ts",
-        "default": "./dist/contracts/types.js"
-      },
-      "require": {
-        "types": "./dist/contracts/types.d.cts",
-        "default": "./dist/contracts/types.cjs"
-      }
+      "types": "./dist/contracts/types.d.ts",
+      "import": "./dist/contracts/types.js",
+      "require": "./dist/contracts/types.cjs"
     },
     "./layout": {
-      "import": {
-        "types": "./dist/layout.d.ts",
-        "default": "./dist/layout.js"
-      },
-      "require": {
-        "types": "./dist/layout.d.cts",
-        "default": "./dist/layout.cjs"
-      }
+      "types": "./dist/layout.d.ts",
+      "import": "./dist/layout.js",
+      "require": "./dist/layout.cjs"
     },
     "./output": {
-      "import": {
-        "types": "./dist/output.d.ts",
-        "default": "./dist/output.js"
-      },
-      "require": {
-        "types": "./dist/output.d.cts",
-        "default": "./dist/output.cjs"
-      }
+      "types": "./dist/output.d.ts",
+      "import": "./dist/output.js",
+      "require": "./dist/output.cjs"
     },
     "./store": {
-      "import": {
-        "types": "./dist/store.d.ts",
-        "default": "./dist/store.js"
-      },
-      "require": {
-        "types": "./dist/store.d.cts",
-        "default": "./dist/store.cjs"
-      }
+      "types": "./dist/store.d.ts",
+      "import": "./dist/store.js",
+      "require": "./dist/store.cjs"
     },
     "./editor": {
-      "import": {
-        "types": "./dist/editor.d.ts",
-        "default": "./dist/editor.js"
-      },
-      "require": {
-        "types": "./dist/editor.d.cts",
-        "default": "./dist/editor.cjs"
-      }
+      "types": "./dist/editor.d.ts",
+      "import": "./dist/editor.js",
+      "require": "./dist/editor.cjs"
     },
     "./styles/editor.css": "./dist/editor.css",
     "./package.json": "./package.json"

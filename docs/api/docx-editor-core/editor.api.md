@@ -4,7 +4,7 @@
 
 ```ts
 
-import type { Node as Node_2 } from 'prosemirror-model';
+import { Node as Node_2 } from 'prosemirror-model';
 
 // @public
 export interface AnchorFrameOrigin {
@@ -1945,5 +1945,7 @@ export type VectorImageMime = 'image/svg+xml';
 
 // @public
 export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'];
+
+// (No @packageDocumentation comment for this package)
 
 ```

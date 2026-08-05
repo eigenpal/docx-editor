@@ -90,4 +90,6 @@ export interface LoadDefaultFontsOptions {
 // @public
 export type WordDefaultFamily = 'Calibri' | 'Cambria' | 'Times New Roman' | 'Arial' | 'Courier New';
 
+// (No @packageDocumentation comment for this package)
+
 ```

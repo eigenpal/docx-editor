@@ -4,6 +4,13 @@
 
 ```ts
 
+import { AutomationCapabilities } from '@docx-editor.dev/core/automation';
+import { AutomationHandle } from '@docx-editor.dev/core/automation';
+import { AutomationHost } from '@docx-editor.dev/core/automation';
+import { AutomationOperation } from '@docx-editor.dev/core/automation';
+import { AutomationSpan } from '@docx-editor.dev/core/automation';
+import { AutomationValue } from '@docx-editor.dev/core/automation';
+
 // @public
 export type BesideLocation = Extract<InsertLocation, 'Before' | 'After'>;
 
