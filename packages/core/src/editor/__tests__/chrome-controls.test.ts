@@ -19,6 +19,8 @@ import {
   chromeControlCount,
   chromeMenuSlots,
   chromeSlotId,
+  defaultChromeGroups,
+  formattingBarChromeGroups,
   type ChromeMenuEntry,
   type ChromeSlotId,
 } from '../chrome-controls.ts';
@@ -90,6 +92,8 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'contentControl.remove',
   'image.insert',
   'image.properties',
+  'image.wrap',
+  'image.altText',
   'table.insert',
   'table.borderTarget',
   'table.borderColor',
@@ -150,6 +154,8 @@ describe('legacy chrome descriptor', () => {
     expect([...valueSlots].sort()).toEqual([
       'font.family',
       'font.size',
+      'image.altText',
+      'image.wrap',
       'styles.style',
       'table.borderColor',
       'table.borderStyle',
@@ -175,7 +181,9 @@ describe('legacy chrome descriptor', () => {
         expect(commandForSlotValue(slot, probe)).not.toBeNull();
         continue;
       }
-      expect(commandForSlotValue(slot, 'Arial')).not.toBeNull();
+      const sample =
+        slot === 'image.wrap' ? 'square' : slot === 'image.altText' ? 'Accessible label' : 'Arial';
+      expect(commandForSlotValue(slot, sample)).not.toBeNull();
     }
   });
 
@@ -261,7 +269,7 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(chromeControlCount()).toBe(52);
+    expect(chromeControlCount()).toBe(54);
   });
 
   test('the table group is contextual and carries border/fill chrome slots', () => {
@@ -279,6 +287,42 @@ describe('legacy chrome descriptor', () => {
     for (const slot of slots.slice(1)) {
       expect(commandForSlot(slot as ChromeSlotId)).toBeNull();
     }
+  });
+
+  test('the image group carries insert, properties, wrap, and altText in order', () => {
+    const image = CHROME_GROUPS.find((g) => g.id === 'image');
+    expect(image).toBeDefined();
+    expect(image!.contextual).toBe(true);
+    expect(image!.controls.map((c) => c.id)).toEqual(['insert', 'properties', 'wrap', 'altText']);
+    expect(image!.controls.map((c) => c.state.kind)).toEqual([
+      'command',
+      'command',
+      'value',
+      'value',
+    ]);
+    expect(image!.controls.find((c) => c.id === 'wrap')!.shape).toBe('dropdown');
+    expect(commandForSlot('image.insert')).toBeNull();
+    expect(commandForSlot('image.properties')).toBeNull();
+    expect(commandForSlot('image.wrap')).toBeNull();
+    expect(commandForSlot('image.altText')).toBeNull();
+  });
+
+  test('formatting bar includes the image group only when a drawing is selected', () => {
+    const withoutImage = formattingBarChromeGroups(null);
+    expect(withoutImage.map((g) => g.id)).toEqual(defaultChromeGroups().map((g) => g.id));
+    expect(withoutImage.some((g) => g.id === 'image')).toBe(false);
+
+    const withImage = formattingBarChromeGroups({
+      id: 'd1',
+    } as Parameters<typeof formattingBarChromeGroups>[0]);
+    expect(withImage.map((g) => g.id)).toEqual([
+      ...defaultChromeGroups().map((g) => g.id),
+      'image',
+    ]);
+  });
+
+  test('Insert menu still exposes image.insert separately from the contextual group', () => {
+    expect(chromeMenuSlots()).toContain('image.insert');
   });
 
   test('the menu region carries the chrome menus, in bar order', () => {

@@ -35,6 +35,11 @@
       "import": "./src/contracts/mcp.ts",
       "default": "./src/contracts/mcp.ts"
     },
+    "./contracts/modules": {
+      "types": "./src/contracts/modules.ts",
+      "import": "./src/contracts/modules.ts",
+      "default": "./src/contracts/modules.ts"
+    },
     "./contracts/plugin": {
       "types": "./src/contracts/plugin.ts",
       "import": "./src/contracts/plugin.ts",
@@ -76,6 +81,7 @@
   "dependencies": {
     "@docx-editor.dev/i18n": "workspace:*",
     "bidi-js": "1.0.3",
+    "emf-converter": "2.0.2",
     "fast-xml-parser": "^4.5.0",
     "fflate": "^0.8.2",
     "harfbuzzjs": "1.4.0",

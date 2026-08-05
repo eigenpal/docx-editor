@@ -24,6 +24,12 @@ import {
   guardToolbarMousedown,
   type ToolbarButtonProps,
 } from './ToolbarButton';
+import {
+  ToolbarImageInsert,
+  ToolbarImageProperties,
+  ToolbarImageWrap,
+  ToolbarImageAltText,
+} from '../images';
 
 /** Props for the named parts (`DocxEditorToolbar.Bold`, ...): the slot is pinned. @public */
 export type ToolbarPartProps = Omit<ToolbarButtonProps, 'slot'>;
@@ -70,8 +76,7 @@ export const ToolbarBulletList = definePart('list.bullet');
 export const ToolbarNumberedList = definePart('list.numbered');
 export const ToolbarOutdent = definePart('list.outdent');
 export const ToolbarIndent = definePart('list.indent');
-export const ToolbarImageInsert = definePart('image.insert');
-export const ToolbarImageProperties = definePart('image.properties');
+export { ToolbarImageInsert, ToolbarImageProperties, ToolbarImageWrap, ToolbarImageAltText };
 export const ToolbarTableInsert = definePart('table.insert');
 export const ToolbarComments = definePart('review.comments');
 

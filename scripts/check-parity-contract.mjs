@@ -49,8 +49,17 @@ function extractInterfaceFields(snapshotText, interfaceName) {
   // literals at deeper indent are skipped by the regex.
   const fields = new Set();
   let depth = 0;
+  let inBlockComment = false;
   for (let i = startIdx; i < lines.length; i++) {
     const line = lines[i];
+    if (inBlockComment) {
+      if (line.includes('*/')) inBlockComment = false;
+      continue;
+    }
+    if (line.trimStart().startsWith('/*')) {
+      if (!line.includes('*/')) inBlockComment = true;
+      continue;
+    }
     for (const ch of line) {
       if (ch === '{') depth++;
       else if (ch === '}') depth--;

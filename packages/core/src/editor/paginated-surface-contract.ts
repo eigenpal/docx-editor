@@ -8,6 +8,8 @@ import type { IndentFormatting } from '../contracts/types.ts';
 import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
 import type { BookmarkIndex, StoryScope, TreeDocOp } from '@docx-editor.dev/core-contract/store';
 import type { ViewScope } from '../contracts/editor.ts';
+import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
+import type { CollectReviewItems } from '../contracts/modules.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
 import type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
 import type {
@@ -92,6 +94,19 @@ export interface PaginatedSurfaceOptions {
   /** Points to CSS pixels. */
   readonly scale?: number;
   /**
+   * How revisions project into layout and paint. Omitted keeps the layout default
+   * (`all-markup`). The editor facade passes `proposed` when no review module is
+   * registered — the free tier's final-state rendering; the machinery below this
+   * option is shared either way.
+   */
+  readonly revisionDisplayMode?: RevisionDisplayMode;
+  /**
+   * The review queue derivation for this surface's session, from the registered
+   * review module. Absent, `session.reviewItems()` is the typed empty queue and
+   * every review affordance built on it stays inert.
+   */
+  readonly collectReviewItems?: CollectReviewItems;
+  /**
    * The family a run with no authored font is reported as by `formatting()` AND painted
    * in — the face the measurer falls back to. Absent, such a run reports
    * `fontFamily: null` and paints in whatever font the page inherits, which the measurer
@@ -128,6 +143,10 @@ export interface PaginatedSurfaceOptions {
   readonly tableInteractionLabel?: (
     key: 'table.insertRowBelow' | 'table.insertColumnRight'
   ) => string;
+  /** Localized drawing refusal labels; defaults to English when omitted. */
+  readonly drawingStrings?: import('../output/semantic-paint-drawings.ts').DrawingPaintStrings;
+  /** Override raster decode for package image intents; defaults to browser/headless. */
+  readonly imageDecodePort?: import('../store/package/image-resources.ts').ImageDecodePort;
   /**
    * Localized name for a generated TOC, written as the control's `w:alias` on insert.
    *
@@ -285,6 +304,29 @@ export interface ContentControlSurfaceState {
 
 export interface PaginatedSurface {
   readonly session: TreeDocxSession;
+  storyScope(): import('@docx-editor.dev/core-contract/store').StoryScope;
+  imageDecodePort(): import('../store/package/image-resources.ts').ImageDecodePort;
+  applyDrawingOps(
+    ops: readonly import('../store/store/tree-op-types.ts').DrawingTreeDocOp[]
+  ): ReturnType<TreeDocxSession['applyTreeOps']>;
+  applyImageProperties(
+    input: import('../store/store/tree-package-images.ts').ApplyImagePropertiesInput
+  ): import('../store/store/tree-package-images.ts').ImageIntentResult;
+  deleteImage(
+    drawingNodeId: string
+  ): import('../store/store/tree-package-images.ts').ImageIntentResult;
+  insertImage(
+    input: Omit<import('../store/store/tree-package-images.ts').InsertImageInput, 'decodePort'>
+  ): Promise<import('../store/store/tree-package-images.ts').ImageIntentResult>;
+  replaceImage(
+    drawingNodeId: string,
+    bytes: Uint8Array,
+    mime: import('../store/package/image-resources.ts').SupportedImageMime,
+    options: {
+      readonly expectedPackageRevision: number;
+      readonly commitGuard?: () => boolean;
+    }
+  ): Promise<import('../store/store/tree-package-images.ts').ImageIntentResult>;
   layout(): SemanticLayout;
   state(): PaginatedSurfaceState;
   /** One-based page at the caret, or at the centre of the mounted viewport. */
@@ -604,6 +646,13 @@ export interface PaginatedSurface {
    * follows the flush republishes it.
    */
   publishedLayout(): SemanticLayout;
+  /**
+   * Paint-scale coordinate context for overlay chrome.
+   *
+   * Internal seam — not part of the public editor contract. Image overlay uses the same
+   * `zoom * 96/72` scale and per-page horizontal offsets the painter applied.
+   */
+  overlayCoordinates(): import('./surface-overlay-coordinates.ts').SurfaceOverlayCoordinates;
   /**
    * The comment or tracked change the caret is in, as the painted bands report it.
    *

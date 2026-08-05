@@ -51,8 +51,10 @@
       "dependencies": {
         "@astrojs/react": "^5.0.4",
         "@docx-editor.dev/core": "^0.0.1",
+        "@docx-editor.dev/pro": "workspace:*",
         "@docx-editor.dev/react": "workspace:*",
         "astro": "^6.3.1",
+        "fflate": "^0.8.2",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
       },
@@ -64,18 +66,13 @@
         "typescript": "^6.0.3",
       },
     },
-    "examples/automation": {
-      "name": "automation-example",
-      "dependencies": {
-        "@docx-editor.dev/editor-api": "workspace:*",
-      },
-    },
     "examples/igloo": {
       "name": "docx-editor-example-igloo",
       "dependencies": {
         "@docx-editor.dev/core-contract": "workspace:*",
         "@docx-editor.dev/fonts": "workspace:*",
         "@docx-editor.dev/i18n": "workspace:*",
+        "@docx-editor.dev/pro": "workspace:*",
         "@docx-editor.dev/react": "workspace:*",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
@@ -92,7 +89,9 @@
       "name": "docx-editor-example-nextjs",
       "dependencies": {
         "@docx-editor.dev/core": "^0.0.1",
+        "@docx-editor.dev/pro": "workspace:*",
         "@docx-editor.dev/react": "workspace:*",
+        "fflate": "^0.8.2",
         "next": "^16.2.7",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
@@ -110,7 +109,9 @@
       "dependencies": {
         "@docx-editor.dev/core": "^0.0.1",
         "@docx-editor.dev/nuxt": "workspace:*",
+        "@docx-editor.dev/pro": "workspace:*",
         "@docx-editor.dev/vue": "workspace:*",
+        "fflate": "^0.8.2",
         "vue": "^3.5.0",
       },
       "devDependencies": {
@@ -122,10 +123,12 @@
       "name": "docx-editor-example-remix",
       "dependencies": {
         "@docx-editor.dev/core": "^0.0.1",
+        "@docx-editor.dev/pro": "workspace:*",
         "@docx-editor.dev/react": "workspace:*",
         "@remix-run/node": "^2.16.0",
         "@remix-run/react": "^2.16.0",
         "@remix-run/serve": "^2.16.0",
+        "fflate": "^0.8.2",
         "isbot": "^5.1.0",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
@@ -147,6 +150,7 @@
         "@docx-editor.dev/core-contract": "workspace:*",
         "@docx-editor.dev/fonts": "workspace:*",
         "@docx-editor.dev/i18n": "workspace:*",
+        "@docx-editor.dev/pro": "workspace:*",
         "@docx-editor.dev/react": "workspace:*",
         "fflate": "^0.8.2",
         "react": "^19.0.0",
@@ -166,7 +170,9 @@
         "@docx-editor.dev/core": "^0.0.1",
         "@docx-editor.dev/core-contract": "workspace:*",
         "@docx-editor.dev/i18n": "workspace:*",
+        "@docx-editor.dev/pro": "workspace:*",
         "@docx-editor.dev/vue": "workspace:*",
+        "fflate": "^0.8.2",
         "vue": "^3.5.0",
       },
       "devDependencies": {
@@ -181,6 +187,7 @@
       "dependencies": {
         "@docx-editor.dev/i18n": "workspace:*",
         "bidi-js": "1.0.3",
+        "emf-converter": "2.0.2",
         "fast-xml-parser": "^4.5.0",
         "fflate": "^0.8.2",
         "harfbuzzjs": "1.4.0",
@@ -254,6 +261,35 @@
         "vue": "^3.3.0",
       },
     },
+    "packages/pro": {
+      "name": "@docx-editor.dev/pro",
+      "version": "0.0.1",
+      "dependencies": {
+        "@docx-editor.dev/core-contract": "workspace:*",
+        "@docx-editor.dev/i18n": "workspace:*",
+      },
+      "devDependencies": {
+        "@docx-editor.dev/react": "workspace:*",
+        "@happy-dom/global-registrator": "^20.8.3",
+        "@testing-library/react": "^16.0.0",
+        "@types/react": "^19.0.0",
+        "fflate": "^0.8.2",
+        "license-check-and-add": "^4.0.5",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
+        "typescript": "^5.3.3",
+      },
+      "peerDependencies": {
+        "@docx-editor.dev/react": "workspace:*",
+        "react": "^18.0.0 || ^19.0.0",
+        "react-dom": "^18.0.0 || ^19.0.0",
+      },
+      "optionalPeers": [
+        "@docx-editor.dev/react",
+        "react",
+        "react-dom",
+      ],
+    },
     "packages/react": {
       "name": "@docx-editor.dev/react",
       "version": "0.0.1",
@@ -263,6 +299,7 @@
         "@radix-ui/react-select": "^2.3.3",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
+        "emf-converter": "2.0.2",
         "harfbuzzjs": "1.4.0",
       },
       "devDependencies": {
@@ -283,6 +320,7 @@
       "version": "0.0.1",
       "dependencies": {
         "@docx-editor.dev/core-contract": "workspace:*",
+        "emf-converter": "2.0.2",
         "harfbuzzjs": "1.4.0",
       },
       "devDependencies": {
@@ -441,6 +479,8 @@
     "@docx-editor.dev/i18n": ["@docx-editor.dev/i18n@workspace:packages/i18n"],
 
     "@docx-editor.dev/nuxt": ["@docx-editor.dev/nuxt@workspace:packages/nuxt"],
+
+    "@docx-editor.dev/pro": ["@docx-editor.dev/pro@workspace:packages/pro"],
 
     "@docx-editor.dev/react": ["@docx-editor.dev/react@workspace:packages/react"],
 
@@ -1308,8 +1348,6 @@
 
     "async-sema": ["async-sema@3.1.1", "", {}, "sha512-tLRNUXati5MFePdAk8dw7Qt7DpxPB60ofAgn8WRhW6a2rcimZnYBP9oxHiv0OHy+Wz7kPMG+t4LGdt31+4EmGg=="],
 
-    "automation-example": ["automation-example@workspace:examples/automation"],
-
     "autoprefixer": ["autoprefixer@10.5.0", "", { "dependencies": { "browserslist": "^4.28.2", "caniuse-lite": "^1.0.30001787", "fraction.js": "^5.3.4", "picocolors": "^1.1.1", "postcss-value-parser": "^4.2.0" }, "peerDependencies": { "postcss": "^8.1.0" }, "bin": { "autoprefixer": "bin/autoprefixer" } }, "sha512-FMhOoZV4+qR6aTUALKX2rEqGG+oyATvwBt9IIzVR5rMa2HRWPkxf+P+PAJLD1I/H5/II+HuZcBJYEFBpq39ong=="],
 
     "available-typed-arrays": ["available-typed-arrays@1.0.7", "", { "dependencies": { "possible-typed-array-names": "^1.0.0" } }, "sha512-wvUjBtSGN7+7SjNpq/9M2Tg350UZD3q62IFZLbRAR1bSMlCo1ZaeW+BJ+D090e4hIIZLBcTDWe4Mh4jvUDajzQ=="],
@@ -1625,6 +1663,8 @@
     "ee-first": ["ee-first@1.1.1", "", {}, "sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow=="],
 
     "electron-to-chromium": ["electron-to-chromium@1.5.349", "", {}, "sha512-QsWVGyRuY07Aqb234QytTfwd5d9AJlfNIQ5wIOl1L+PZDzI9d9+Fn0FRale/QYlFxt/bUnB0/nLd1jFPGxGK1A=="],
+
+    "emf-converter": ["emf-converter@2.0.2", "", {}, "sha512-QLUufb45P3LlOudCoizBtJpO8cBw8LayH0mkvkRvIjvMlb6junwP0EXgUkdDyZUEF2QSEZUPV8rO8DS5rsJmkA=="],
 
     "emoji-regex": ["emoji-regex@7.0.3", "", {}, "sha512-CwBLREIQ7LvYFB0WyRvwhq5N5qPhc6PMjD6bYggFlI5YyDgl+0vxq5VHbMOFqLg7hfWzmu8T5Z1QofhmTIhItA=="],
 
@@ -3458,7 +3498,7 @@
 
     "@testing-library/dom/aria-query": ["aria-query@5.3.0", "", { "dependencies": { "dequal": "^2.0.3" } }, "sha512-b0P0sZPKtyu8HkeRAfCq0IfURZK+SuwMjY1UXGBU27wpAiTwQAIlq56IbIO+ytk/JjS1fMR14ee5WBBfKi5J6A=="],
 
-    "@types/glob/@types/node": ["@types/node@25.6.0", "", { "dependencies": { "undici-types": "~7.19.0" } }, "sha512-+qIYRKdNYJwY3vRCZMdJbPLJAtGjQBudzZzdzwQYkEPQd+PJGixUL5QfvCLDaULoLv+RhT3LDkwEfKaAkgSmNQ=="],
+    "@types/glob/@types/node": ["@types/node@26.1.1", "", { "dependencies": { "undici-types": "~8.3.0" } }, "sha512-nxAkRSVkN1Y0JC1W8ky/fTfkGsMmcrRsbx+3XoZE+rMOX71kLYTV7fLXpqud1GpbpP5TuffXFqfX7fH2GgZREw=="],
 
     "@types/mdast/@types/unist": ["@types/unist@2.0.11", "", {}, "sha512-CmBKiL6NNo/OqgmMn95Fk9Whlp2mtvIv+KNpQKN2F4SjvrEesubTRWGYSg+BnWZOnlCaSTU1sMpsBOzgbYhnsA=="],
 
@@ -4248,7 +4288,7 @@
 
     "@rushstack/node-core-library/fs-extra/universalify": ["universalify@2.0.1", "", {}, "sha512-gptHNQghINnc/vTGIk0SOFGFNXw7JVrlRUtConJRlvaw6DuX0wO5Jeko9sWrMBhh+PsYAZ7oXAiOnf/UKogyiw=="],
 
-    "@types/glob/@types/node/undici-types": ["undici-types@7.19.2", "", {}, "sha512-qYVnV5OEm2AW8cJMCpdV20CDyaN3g0AjDlOGf1OW4iaDEx8MwdtChUp4zu4H0VP3nDRF/8RKWH+IPp9uW0YGZg=="],
+    "@types/glob/@types/node/undici-types": ["undici-types@8.3.0", "", {}, "sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ=="],
 
     "@vanilla-extract/integration/esbuild/@esbuild/android-arm": ["@esbuild/android-arm@0.17.6", "", { "os": "android", "cpu": "arm" }, "sha512-bSC9YVUjADDy1gae8RrioINU6e1lCkg3VGVwm0QQ2E1CWcC4gnMce9+B6RpxuSsrsXsk1yojn7sp1fnG8erE2g=="],
 

@@ -14,13 +14,18 @@
 // The URL here is HOST-supplied (a popover input), not file-derived, but it reaches XML all
 // the same, so it is validated and escaped rather than interpolated on trust.
 
-import { createNodeIdAllocator, insertChildren } from './ooxml-edit.ts';
+import { createNodeIdAllocator, insertChildren, removeNode } from './ooxml-edit.ts';
 import { readOoxmlPart } from './ooxml-tree.ts';
 import type { OoxmlNode } from './ooxml-tree.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { escapeXmlChecked, isValidXmlText, sanitizeHref } from './sinks.ts';
 import { validateExternalTarget } from './opc-names.ts';
-import { HYPERLINK_RELATIONSHIP_TYPE } from './hyperlink.ts';
+import {
+  HYPERLINK_RELATIONSHIP_TYPE,
+  hyperlinkRelationshipIdOf,
+  isHyperlinkNode,
+} from './hyperlink.ts';
+import { DRAWINGML_MAIN_NAMESPACE_URI, RELATIONSHIPS_NAMESPACE_URI } from './ooxml-tree.ts';
 
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const RELS_CONTENT_TYPE = 'application/vnd.openxmlformats-package.relationships+xml';
@@ -228,3 +233,111 @@ export function relationshipTargetIn(
 
 /** Unused ids are never reclaimed, so an unreferenced relationship keeps its slot. */
 export const HYPERLINK_RELATIONSHIP_MAX_TARGET_LENGTH = MAX_TARGET_LENGTH;
+
+function relsRelationshipId(node: OoxmlNode): string | undefined {
+  if (node.kind === 'textValue' || !('attributes' in node)) return undefined;
+  return node.attributes.find(
+    (attribute) => attribute.localName === 'Id' && attribute.namespaceUri === ''
+  )?.value;
+}
+
+function drawingHlinkClickRelationshipId(node: OoxmlNode): string | undefined {
+  if (node.kind === 'textValue' || !('attributes' in node)) return undefined;
+  if (node.kind !== 'generic') return undefined;
+  if (node.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI || node.localName !== 'hlinkClick') {
+    return undefined;
+  }
+  for (const attribute of node.attributes) {
+    if (attribute.localName !== 'id') continue;
+    if (attribute.namespaceUri !== RELATIONSHIPS_NAMESPACE_URI) continue;
+    return attribute.value;
+  }
+  return undefined;
+}
+
+function walkPartNodes(node: OoxmlNode, visit: (node: OoxmlNode) => void): void {
+  visit(node);
+  if (node.kind === 'textValue') return;
+  for (const child of node.children) walkPartNodes(child, visit);
+}
+
+/**
+ * Whether any canonical reference in `ownerPart` still names this external hyperlink `r:id`.
+ *
+ * Counts typed `w:hyperlink/@r:id` and direct `wp:docPr/a:hlinkClick/@r:id` only — the same
+ * vocabulary projection reads. Scoped to one owner part so duplicate ids across header/body
+ * parts stay independent.
+ */
+export function ownerPartReferencesHyperlinkRelationshipId(
+  pkg: OoxmlPackage,
+  ownerPart: string,
+  relationshipId: string
+): boolean {
+  const part = pkg.parts.get(ownerPart);
+  if (!part) return false;
+  let referenced = false;
+  walkPartNodes(part.root, (node) => {
+    if (referenced) return;
+    if (isHyperlinkNode(node)) {
+      if (hyperlinkRelationshipIdOf(node) === relationshipId) referenced = true;
+      return;
+    }
+    if (drawingHlinkClickRelationshipId(node) === relationshipId) referenced = true;
+  });
+  return referenced;
+}
+
+/** Drop one owner-scoped external hyperlink relationship from `.rels` and `externalTargets`. */
+export function removeExternalHyperlinkRelationship(
+  pkg: OoxmlPackage,
+  ownerPart: string,
+  relationshipId: string
+): OoxmlPackage | null {
+  const external = pkg.externalTargets.find(
+    (entry) =>
+      entry.ownerPart === ownerPart &&
+      entry.id === relationshipId &&
+      entry.type === HYPERLINK_RELATIONSHIP_TYPE
+  );
+  if (!external) return pkg;
+
+  const relsName = relsPartNameFor(ownerPart);
+  const relsPart = pkg.parts.get(relsName);
+  let parts = pkg.parts;
+  if (relsPart) {
+    const node = relsPart.root.children.find(
+      (child) =>
+        child.kind !== 'textValue' &&
+        child.localName === 'Relationship' &&
+        relsRelationshipId(child) === relationshipId
+    );
+    if (node) {
+      const removed = removeNode(relsPart, node.id);
+      if (!removed.ok) return null;
+      parts = new Map([...pkg.parts, [relsName, removed.part]]);
+    }
+  }
+
+  const externalTargets = Object.freeze(
+    pkg.externalTargets.filter(
+      (entry) => !(entry.ownerPart === ownerPart && entry.id === relationshipId)
+    )
+  );
+  return Object.freeze({ ...pkg, parts, externalTargets });
+}
+
+/**
+ * After a drawing `a:hlinkClick` update or removal, drop the prior owner rel when nothing
+ * in that part still references it. Shared rels and an unchanged same-target rel are kept.
+ */
+export function cleanupOrphanDrawingHyperlinkRelationship(
+  pkg: OoxmlPackage,
+  ownerPart: string,
+  previousRelationshipId: string | null
+): OoxmlPackage | null {
+  if (previousRelationshipId === null) return pkg;
+  if (ownerPartReferencesHyperlinkRelationshipId(pkg, ownerPart, previousRelationshipId)) {
+    return pkg;
+  }
+  return removeExternalHyperlinkRelationship(pkg, ownerPart, previousRelationshipId);
+}

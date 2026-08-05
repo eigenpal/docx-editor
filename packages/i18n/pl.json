@@ -89,7 +89,9 @@
     "commentsAndChanges": null,
     "moreItems": null,
     "unavailableInPreview": null,
-    "more": null
+    "more": null,
+    "altText": null,
+    "imageWrap": null
   },
   "alignment": {
     "alignLeft": "Wyrównaj do lewej",
@@ -814,7 +816,21 @@
       "inLineWithText": "Obraz przepływa w linii jako glif",
       "squareLeft": "Obraz po lewej, tekst zawija się po prawej",
       "squareRight": "Obraz po prawej, tekst zawija się po lewej"
-    }
+    },
+    "square": null,
+    "targets": {
+      "behind": null,
+      "inFront": null,
+      "inline": null,
+      "square": null,
+      "squareLeft": null,
+      "squareRight": null,
+      "through": null,
+      "tight": null,
+      "topAndBottom": null
+    },
+    "through": null,
+    "tight": null
   },
   "responsePreview": {
     "loading": "{action}...",
@@ -858,7 +874,8 @@
     "inertTarget": null,
     "insertTitle": null,
     "openLink": null,
-    "refused": null
+    "refused": null,
+    "urlLabel": null
   },
   "headerFooter": {
     "header": "Nagłówek",
@@ -894,7 +911,16 @@
   "image": {
     "placeholder": "Symbol zastępczy obrazu",
     "placeholderText": "[Obraz]",
-    "editableAriaLabel": "Edytowalny obraz"
+    "editableAriaLabel": "Edytowalny obraz",
+    "contentMismatch": null,
+    "decodeFailed": null,
+    "externalResource": null,
+    "invalidResource": null,
+    "missingResource": null,
+    "nonPictureGraphic": null,
+    "pendingResource": null,
+    "resourceLimit": null,
+    "unsupportedFormat": null
   },
   "ruler": {
     "horizontal": "Linijka pozioma",
@@ -930,7 +956,18 @@
     "deleteImage": "Usuń obraz",
     "imageProperties": "Właściwości obrazu",
     "rotate": "Obróć",
-    "replaceImage": null
+    "replaceImage": null,
+    "handle": {
+      "e": null,
+      "n": null,
+      "ne": null,
+      "nw": null,
+      "s": null,
+      "se": null,
+      "sw": null,
+      "w": null
+    },
+    "selection": null
   },
   "revisions": {
     "cellDeleted": null,
@@ -1073,5 +1110,45 @@
     "replyRefused": null,
     "showPane": null,
     "structural": null
+  },
+  "imageAltText": {
+    "description": null,
+    "panelTitle": null,
+    "title": null
+  },
+  "imageInsert": {
+    "errors": {
+      "emptyFile": null,
+      "invalidSignature": null,
+      "oversize": null,
+      "refused": null,
+      "unsupportedFormat": null
+    }
+  },
+  "imageProperties": {
+    "crop": null,
+    "cropBottom": null,
+    "cropLeft": null,
+    "cropRight": null,
+    "cropTop": null,
+    "errors": {
+      "invalidCrop": null,
+      "invalidDimensions": null,
+      "refused": null,
+      "invalidPosition": null
+    },
+    "hyperlink": null,
+    "nonPictureHint": null,
+    "resetNaturalSize": null,
+    "units": {
+      "points": null
+    },
+    "horizontalOffset": null,
+    "position": null,
+    "positionLocked": null,
+    "positionUnavailable": null,
+    "relativeToHorizontal": null,
+    "relativeToVertical": null,
+    "verticalOffset": null
   }
 }

@@ -57,7 +57,7 @@ D8 fixes the first paragraph property boundary in `typed-ooxml-paragraph-editor`
 | Section properties | `w:pgNumType` (`start`, `fmt`, `chapStyle`, `chapSep`), `w:cols/@w:sep`, per-column `w:col/@w:w` and `@w:space` |
 | Section property sweep (read + round-trip; layout where stated) | `w:pgBorders`, `w:vAlign`, `w:lnNumType` — deferred layout behaviour documented per task 11.6 |
 
-**Not in this D8 expansion:** `CT_FldChar/w:ffData` (deferred §H7), body-story field evaluation (remains deferred; furniture-only projection stays), watermark VML (`typed-drawings-and-images`).
+**Not in this D8 expansion:** `CT_FldChar/w:ffData` (deferred §H7), body-story field evaluation (remains deferred; furniture-only projection stays), watermark VML (`typed-vml-watermarks` — sole VML watermark owner).
 
 Task 0.4 requires review acceptance of this expansion before typing any node.
 
@@ -71,7 +71,7 @@ Reconcile against shipped `@public` members before implementation (`word-fidelit
 | `editHeaderFooter` / `exitHeaderFooter` / `removeHeaderFooter` | **Wire** in `docx-editor.ts`. Prefer `variant: 'default' \| 'first' \| 'even'`; `firstPage` / `evenPage` remain aliases. Creating a missing `first`/`even` part enables `titlePg` / `evenAndOddHeaders` in the same undo unit. **Patch** — behaviour addition on existing commands. |
 | `getHeaderFooterState(): { editing, sectionIndex } \| null` | **Minor expansion:** add `variant`, `rId`, `inherited`, `partName` (or equivalent) so chrome can render without adapter guesses. Existing fields stay; adapters ignoring new fields remain valid. |
 | `setActiveScope` / `getActiveScope` | **Wire** for furniture scope transitions. **Patch.** |
-| `Editor.getWatermark()` | **Unchanged stub** — watermarks owned by `typed-drawings-and-images`. |
+| `Editor.getWatermark()` | **Unchanged stub until watermark owners land** — DrawingML image watermarks: `typed-drawings-and-images`; VML watermarks: `typed-vml-watermarks`. |
 
 `bun run api:extract` + commit snapshot after contract changes. Vue `UseDocxEditorReturn` must declare a named return interface if new reads leak into the Vue API Extractor snapshot.
 
@@ -79,7 +79,7 @@ Reconcile against shipped `@public` members before implementation (`word-fidelit
 
 | Topic | Decision |
 | --- | --- |
-| **Watermarks** (`w:pict`/VML shape or floating drawing in a header) | **Owner: `typed-drawings-and-images`.** This change defers typing, layout, and editing. `watermark-confidential.docx` exists but is not in this lane's acceptance. |
+| **Watermarks** (`w:pict`/VML shape or floating drawing in a header) | **VML owner: `typed-vml-watermarks`.** DrawingML image watermarks: `typed-drawings-and-images`. This change defers typing, layout, and editing of VML watermarks. `watermark-confidential.docx` exists but is not in this lane's acceptance. |
 | **`CT_FldChar/w:ffData` legacy form fields** | **Deferred by this change.** Round-trip as generic; never execute macros; no `w:formProt` editing surface. Revisit only with an explicit security review. |
 | **`w:sectPr/@w:type` ≠ `nextPage` for section-start page index** | **Deferred for `titlePg` on `continuous` sections.** `SectionBreakType` is read (`section-properties.ts`) but continuous section-start page numbering is not modelled for furniture variant pick or `titlePg` "first page of section" when the section shares a sheet. Do not claim mid-document `titlePg` correctness on `continuous` breaks until section-start indexing lands; the new `hf-variants.docx` fixture uses `nextPage` breaks only. |
 | **`ST_NumberFormat` shared with notes** | Coordinate with `typed-notes-footnotes-endnotes` before implementing `w:pgNumType/@w:fmt` display (finding 3). |

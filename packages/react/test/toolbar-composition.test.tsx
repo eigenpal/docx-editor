@@ -28,6 +28,7 @@ import {
 } from '@docx-editor.dev/core-contract/editor';
 import { DocxEditor } from '../src/components/DocxEditor.tsx';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
+import { testReviewModule } from './review-test-module.ts';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorToolbar } from '../src/editor/toolbar/index.ts';
@@ -86,6 +87,7 @@ function mountToolbar(
   const view = render(
     <DocxEditorRoot
       document={source}
+      modules={[testReviewModule()]}
       onReady={(editor) => {
         instance = editor as DocxEditorInstance;
       }}
@@ -238,7 +240,7 @@ describe('live button state', () => {
     expect(editor().snapshot().formatting?.bold).toBe(true);
   });
 
-  test('a generic Button on an unwired slot is disabled, quoting the ENGINE', () => {
+  test('a generic Button on image.insert reflects engine probe state', () => {
     const { view } = mountToolbar(
       <DocxEditorToolbar preset={false}>
         <DocxEditorToolbar.Button slot="image.insert" />
@@ -247,14 +249,9 @@ describe('live button state', () => {
     const button = view.container.querySelector(
       '[aria-label="toolbar.image"]'
     ) as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
-    expect(button.hasAttribute('data-disabled')).toBe(true);
-    // `insertImage` IS in the edit vocabulary — it is simply not executed by this engine
-    // yet — so the slot carries a probe and the tooltip is the engine's own refusal.
-    // Chrome's "not wired to an editor command" would have been a guess about a question
-    // the engine can answer, and would have gone stale the day the engine wires it.
-    expect(button.title).toBe("command 'insertImage' is not supported by the tree editor");
-    // Not a toggle: no aria-pressed claim.
+    expect(button.disabled).toBe(false);
+    expect(button.hasAttribute('data-disabled')).toBe(false);
+    expect(button.title).not.toBe('not wired to an editor command');
     expect(button.hasAttribute('aria-pressed')).toBe(false);
   });
 

@@ -64,7 +64,10 @@ function canonicalFixturePlugin(): Plugin {
             );
             res.end(bytes);
           })
-          .catch(next);
+          // Not a fixture name (the demo's own `public/sample.docx` is the common case):
+          // fall through so vite serves it statically. Forwarding the error instead would
+          // turn every non-fixture `.docx` request into a 500.
+          .catch(() => next());
       });
     },
     async generateBundle() {

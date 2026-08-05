@@ -8,7 +8,8 @@ import type {
   FontConfiguration,
 } from '@docx-editor.dev/core-contract/contracts/editor';
 import { createDocxEditor } from '@docx-editor.dev/core-contract/editor';
-import type { FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
+import type { EditorModule, FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
+import { createT, deepMerge, en, locales, type LocaleCode } from '@docx-editor.dev/i18n';
 import type { DocxEditorRef, EditorMode } from './types';
 
 /**
@@ -55,6 +56,11 @@ export default defineComponent({
     zoom: { type: Number, default: undefined },
     locale: { type: String, default: undefined },
     author: { type: String, default: undefined },
+    /** Capability modules (`@docx-editor.dev/pro`). Applied at mount only, like `mode`. */
+    modules: {
+      type: Array as PropType<readonly EditorModule[]>,
+      default: undefined,
+    },
     /**
      * Font bytes for Word-accurate (HarfBuzz-shaped) wrap and pagination — optional,
      * exactly as in the React adapter: omitted, layout uses a fixed-width estimate and
@@ -92,13 +98,20 @@ export default defineComponent({
       teardown();
       const element = container.value;
       if (!element) return;
+      const localeCode = (props.locale ?? 'en') as LocaleCode;
+      const localeStrings = locales[localeCode] ?? en;
+      const merged = (localeCode === 'en' ? en : deepMerge(en, localeStrings)) as typeof en;
+      const translate = (key: string, params?: Record<string, string | number>) =>
+        createT(merged, localeCode)(key as never, params);
       const created = createDocxEditor({
         container: element,
         ...(props.document !== undefined ? { document: props.document } : {}),
         ...(props.fonts !== undefined ? { fonts: props.fonts } : {}),
         ...(props.author !== undefined ? { author: props.author } : {}),
         ...(props.locale !== undefined ? { locale: props.locale } : {}),
+        translate,
         ...(props.mode !== undefined ? { mode: props.mode } : {}),
+        ...(props.modules !== undefined ? { modules: props.modules } : {}),
         ...(props.zoom !== undefined ? { zoom: props.zoom } : {}),
         onFontError: (error) => emit('fontError', error),
       });

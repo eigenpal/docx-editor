@@ -6,6 +6,13 @@
 
 import type { OoxmlElement, OoxmlNode, OoxmlParagraphNode } from '../package/ooxml-tree.ts';
 import {
+  DEFAULT_SUPPORTED_MC_REQUIRES,
+  emptyNamespaceScope,
+  isRunLevelMcAlternateContent,
+  namespaceScopeForNode,
+  resolveRunLevelMcAtom,
+} from '../package/drawing-projection.ts';
+import {
   atomicFieldSpansOf,
   isFieldChrome,
   isFldChar,
@@ -174,8 +181,16 @@ function walkParagraph(
     offset += 1;
   };
 
-  const visitRunChild = (node: OoxmlNode, runId: string): void => {
+  const visitRunChild = (
+    node: OoxmlNode,
+    runId: string,
+    namespaceScope: ReadonlyMap<string, string> = emptyNamespaceScope()
+  ): void => {
     const start = offset;
+    const scope =
+      node.kind !== 'textValue' && 'localName' in node
+        ? namespaceScopeForNode(namespaceScope, node as OoxmlElement)
+        : namespaceScope;
     const atom = atomByBeginId.get(node.id);
     if (atom && atom.kind === 'complex') {
       emitAtom(atom);
@@ -221,7 +236,20 @@ function walkParagraph(
       record(node, start);
       return;
     }
-    if (node.kind === 'runProperties' || node.kind === 'generic') {
+    if (node.kind === 'drawing') {
+      emitAtom({ runId, node, removeNodeIds: [node.id] });
+      record(node, start);
+      return;
+    }
+    if (node.kind === 'runProperties') {
+      record(node, start);
+      return;
+    }
+    if (node.kind === 'generic') {
+      if (isRunLevelMcAlternateContent(node)) {
+        const mcAtom = resolveRunLevelMcAtom(node, scope, DEFAULT_SUPPORTED_MC_REQUIRES);
+        emitAtom({ runId, node: mcAtom.segmentNode, removeNodeIds: mcAtom.removeNodeIds });
+      }
       record(node, start);
       return;
     }
@@ -232,11 +260,11 @@ function walkParagraph(
       return;
     }
     if (node.kind === 'text' || node.kind === 'deletedText') {
-      for (const child of node.children) visitRunChild(child, runId);
+      for (const child of node.children) visitRunChild(child, runId, scope);
       record(node, start);
       return;
     }
-    for (const child of node.children) visitRunChild(child, runId);
+    for (const child of node.children) visitRunChild(child, runId, scope);
     record(node, start);
   };
   const visitInline = (child: OoxmlNode, depth: number): void => {
@@ -252,7 +280,8 @@ function walkParagraph(
       return;
     }
     if (child.kind === 'run') {
-      for (const grand of child.children) visitRunChild(grand, child.id);
+      const runScope = namespaceScopeForNode(emptyNamespaceScope(), child);
+      for (const grand of child.children) visitRunChild(grand, child.id, runScope);
       record(child, start);
       return;
     }

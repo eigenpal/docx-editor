@@ -51,6 +51,12 @@ import {
   type StoryPageFieldNeeds,
 } from './field-instruction.ts';
 import { formatDecimal, formatNumFmt } from './numbering-format.ts';
+import type { InlineDrawingLayoutContext, InlineDrawingLayoutInput } from './drawing-layout.ts';
+import { isRunLevelMcAlternateContent } from '../store/package/drawing-projection.ts';
+import {
+  emptyNamespaceScope,
+  namespaceScopeForNode,
+} from '../store/package/drawing-projection-walk.ts';
 import {
   isProjectableNoteAtom,
   projectedNoteMarkText,
@@ -179,6 +185,8 @@ export interface FieldAwarePiece {
     readonly scopeId: string;
     readonly direction: 'to-note' | 'to-body';
   };
+  /** Typed inline drawing occupying one UTF-16 model unit. */
+  readonly inlineDrawing?: InlineDrawingLayoutInput;
   /**
    * The revision wrappers enclosing this text, outermost first, absent when untracked.
    *
@@ -373,7 +381,8 @@ export function piecesOfParagraph(
   projectLink?: HyperlinkProjector,
   noteMarks?: NoteMarkContext,
   displayMode: RevisionDisplayMode = DEFAULT_REVISION_DISPLAY_MODE,
-  deletedRanges?: MutableModelRange[]
+  deletedRanges?: MutableModelRange[],
+  inlineDrawingLayout?: InlineDrawingLayoutContext
 ): FieldAwarePiece[] {
   if (paragraph.kind === 'textValue') return [];
   if (paragraph.kind !== 'paragraph') return [];
@@ -421,9 +430,10 @@ export function piecesOfParagraph(
       readonly breakKind?: HardBreakKind;
       readonly measureText?: string;
       readonly noteNav?: FieldAwarePiece['noteNav'];
+      readonly inlineDrawing?: InlineDrawingLayoutInput;
     }
   ): void => {
-    if (text.length === 0 && !projected) return;
+    if (text.length === 0 && !projected && !extras?.inlineDrawing) return;
     const link = currentLink ? { link: currentLink } : {};
     const attribution = revisions.length === 0 ? {} : { revisions };
     if (projected) {
@@ -436,6 +446,7 @@ export function piecesOfParagraph(
         projected: true,
         ...(extras?.measureText !== undefined ? { measureText: extras.measureText } : {}),
         ...(extras?.noteNav ? { noteNav: extras.noteNav } : {}),
+        ...(extras?.inlineDrawing ? { inlineDrawing: extras.inlineDrawing } : {}),
         ...link,
         ...attribution,
       });
@@ -519,6 +530,58 @@ export function piecesOfParagraph(
     props: readonly OoxmlProperty[],
     style: ResolvedRunStyle
   ): void => {
+    const emitInlineDrawing = (
+      drawingNodeId: string,
+      projection: NonNullable<ReturnType<InlineDrawingLayoutContext['project']>>,
+      start: number,
+      end: number
+    ): void => {
+      const deleted = revisionsAreDeletion(revisions);
+      const suppressed = style.hidden || !revisionsVisible(revisions, displayMode) || deleted;
+      if (projection.hidden || suppressed) {
+        if (deleted && deletedRanges) appendModelRange(deletedRanges, start, end);
+        if (!projection.hidden) return;
+        push('\uFFFC', props, style, true, start, end);
+        return;
+      }
+      push('\uFFFC', props, style, true, start, end, {
+        inlineDrawing: Object.freeze({
+          drawingNodeId,
+          ownerPartName: inlineDrawingLayout!.ownerPartName,
+          projection,
+          resource: inlineDrawingLayout!.resourceOf(projection),
+        }),
+      });
+    };
+
+    if (grand.kind === 'drawing') {
+      const start = offset;
+      offset += 1;
+      const end = offset;
+      if (!inlineDrawingLayout) return;
+      const projection =
+        inlineDrawingLayout.projectionForAtom?.(grand.id) ??
+        (grand.kind === 'drawing' ? inlineDrawingLayout.project(grand) : null);
+      if (!projection || projection.kind !== 'inline') {
+        push('\uFFFC', props, style, true, start, end);
+        return;
+      }
+      emitInlineDrawing(grand.id, projection, start, end);
+      return;
+    }
+    if (isRunLevelMcAlternateContent(grand)) {
+      const start = offset;
+      offset += 1;
+      const end = offset;
+      if (!inlineDrawingLayout) return;
+      const projection = inlineDrawingLayout.projectionForAtom?.(grand.id) ?? null;
+      if (!projection || projection.kind !== 'inline') {
+        push('\uFFFC', props, style, true, start, end);
+        return;
+      }
+      emitInlineDrawing(grand.id, projection, start, end);
+      return;
+    }
     if (isProjectableNoteAtom(grand)) {
       const projected = projectedNoteMarkText(grand, noteMarks);
       const start = offset;
@@ -733,7 +796,7 @@ export function piecesOfParagraph(
    *
    * Typed runs contribute measurable / selectable text. Generic siblings stay structurally
    * preserved but layout-inert for page-field evaluation; typed/generic `w:fldSimple` advances
-   * one model unit (atomic) without emitting a piece. The exceptions are the containers
+   * one model unit (atomic) without emitting a piece. The exceptions are the two containers
    * that are not content themselves but hold runs that are:
    *
    *   - `w:hyperlink`. Skipping it is what made every link's words vanish from the painted
@@ -752,7 +815,13 @@ export function piecesOfParagraph(
    * block flattening; field-scan depth stays separate.
    */
   if (!consumeScanNode(budget)) return pieces;
-  const processInline = (child: OoxmlNode, depth: number, sdtDepth: number): void => {
+  const paragraphScope = emptyNamespaceScope();
+  const processInline = (
+    child: OoxmlNode,
+    depth: number,
+    namespaceScope: ReadonlyMap<string, string>,
+    sdtDepth: number
+  ): void => {
     if (isFldSimple(child)) {
       offset += 1;
       return;
@@ -761,23 +830,25 @@ export function piecesOfParagraph(
       processRun(child, depth);
       return;
     }
-    // Inline content controls flatten transparently: their runs contribute the same UTF-16
-    // offsets as bare sibling runs, and the wrapper creates no break opportunity of its own.
     if (isContentControl(child)) {
       if (sdtDepth >= MAX_CONTENT_CONTROL_NESTING) return;
       if (depth > MAX_STORY_FIELD_SCAN_DEPTH) return;
       for (const inner of contentControlContentChildren(child)) {
-        processInline(inner, depth + 1, sdtDepth + 1);
+        processInline(inner, depth + 1, namespaceScope, sdtDepth + 1);
       }
       return;
     }
     if (depth > MAX_STORY_FIELD_SCAN_DEPTH || depth >= MAX_REVISION_DEPTH) return;
+    const childScope =
+      child.kind !== 'textValue' && 'localName' in child
+        ? namespaceScopeForNode(namespaceScope, child)
+        : namespaceScope;
     if (child.kind === 'hyperlink') {
       // The link is projected ONCE per element, not per run: sanitization is not free, and a
       // link's runs must all carry the same record so paint can group them by identity.
       const previous = currentLink;
       currentLink = projectLink?.(child) ?? undefined;
-      for (const inner of child.children) processInline(inner, depth + 1, sdtDepth);
+      for (const inner of child.children) processInline(inner, depth + 1, childScope, sdtDepth);
       currentLink = previous;
       return;
     }
@@ -787,11 +858,11 @@ export function piecesOfParagraph(
     if (!consumeScanNode(budget)) return;
     const enclosing = revisions;
     revisions = withRevision(enclosing, attribution);
-    for (const inner of child.children) processInline(inner, depth + 1, sdtDepth);
+    for (const inner of child.children) processInline(inner, depth + 1, childScope, sdtDepth);
     revisions = enclosing;
   };
   // Paragraph root counts as depth 0; run children sit at depth 1.
-  for (const child of paragraph.children) processInline(child, 1, 0);
+  for (const child of paragraph.children) processInline(child, 1, paragraphScope, 0);
   // Malformed field missing end: demote — surface cached/buffered text, no live projection.
   abandonPending();
 
@@ -910,16 +981,5 @@ export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLay
     };
   });
 
-  return changed
-    ? {
-        revision: layout.revision,
-        pages,
-        ...(layout.contentControls !== undefined
-          ? { contentControls: layout.contentControls }
-          : {}),
-        ...(layout.controlContextToken !== undefined
-          ? { controlContextToken: layout.controlContextToken }
-          : {}),
-      }
-    : layout;
+  return changed ? { revision: layout.revision, pages } : layout;
 }

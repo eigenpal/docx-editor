@@ -9,7 +9,7 @@ order: 40
 
 ## Status
 
-`@docx-editor.dev/vue` targets Vue 3 and ships in the same fixed version group as the React package.
+`@docx-editor.dev/vue` targets Vue 3 and ships in the same fixed version group as the React package. It shares the greenfield `DocxEditorProps` / seven-member `DocxEditorRef` contract where parity is enforced. React-first provider/hooks chrome (navigation pane, menu bar, context menu, hyperlink popover) is deferred; the engine commands those surfaces would drive are already shared.
 
 ## Install
 
@@ -17,7 +17,7 @@ order: 40
 npm install @docx-editor.dev/vue
 ```
 
-Pulls in `@docx-editor.dev/core` and `@docx-editor.dev/i18n`.
+Pulls in `@docx-editor.dev/core-contract` and `@docx-editor.dev/i18n`.
 
 ## Quickstart
 
@@ -58,7 +58,7 @@ There are no separate `/ui`, `/composables`, `/dialogs`, or `/plugin-api` packag
 
 ## Parity with React
 
-`scripts/parity/parity.contract.json` lists every public prop and ref member shipped under either adapter. CI parses both packages' API snapshots and fails when the contract changes without an update.
+`scripts/parity/parity.contract.json` lists every public prop and ref member shipped under either adapter, grouped as paired, deferred-in-Vue, or adapter-specific. CI parses both packages' API snapshots and fails when the contract changes without an update.
 
 ## Automating the document
 

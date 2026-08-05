@@ -8,7 +8,8 @@
       "@docx-editor.dev/editor-api",
       "@docx-editor.dev/vue",
       "@docx-editor.dev/nuxt",
-      "@docx-editor.dev/i18n"
+      "@docx-editor.dev/i18n",
+      "@docx-editor.dev/pro"
     ]
   ],
   "linked": [],

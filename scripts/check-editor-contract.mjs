@@ -60,6 +60,8 @@ const REACT_PROPS_NOT_YET_IN_VUE = new Set([
   // twin lands.
   'menu',
   'onOpen',
+  // React renders viewport extras as children; Vue's equivalent is its default slot.
+  'children',
   // The right-click menu rides that same provider/hooks layer, and its engine half is the
   // most shared of the four: `selectAll`, `copy`, `cut` and `paste` are core commands, the
   // rows ARE the menu bar's rows, every enabled state comes from the same `Editor.can`, the

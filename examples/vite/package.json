@@ -11,6 +11,7 @@
     "@docx-editor.dev/core-contract": "workspace:*",
     "@docx-editor.dev/fonts": "workspace:*",
     "@docx-editor.dev/i18n": "workspace:*",
+    "@docx-editor.dev/pro": "workspace:*",
     "@docx-editor.dev/react": "workspace:*",
     "fflate": "^0.8.2",
     "react": "^19.0.0",

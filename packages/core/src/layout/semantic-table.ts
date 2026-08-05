@@ -237,6 +237,15 @@ export interface SemanticTableRow {
   readonly id: string;
   /** Pending Word row insertion/deletion authored in `w:trPr`. */
   readonly revisionKind?: 'insert' | 'delete';
+  /**
+   * The `w:trPr/w:ins|w:del` attribution, carried with the kind so a painted row can say
+   * WHOSE pending decision it is — the review model addresses the decision by exactly this
+   * `(id, author, date)` triple, and a surface with only the kind could highlight the row
+   * but never open its card.
+   */
+  readonly revisionId?: string;
+  readonly revisionAuthor?: string;
+  readonly revisionDate?: string;
   /** `w:trPr/w:tblHeader` — the row repeats atop each page the table continues onto. */
   readonly isHeader: boolean;
   /**
@@ -910,13 +919,23 @@ export function readTableStructure(
         blocks,
       });
     }
+    const rowRevision = rowProperties
+      ? (childNamed(rowProperties, 'ins') ?? childNamed(rowProperties, 'del'))
+      : undefined;
+    const rowRevisionKind = rowRevision
+      ? rowRevision.localName === 'ins'
+        ? ('insert' as const)
+        : ('delete' as const)
+      : undefined;
+    const rowRevisionId = rowRevision && attributeValue(rowRevision, 'id');
+    const rowRevisionAuthor = rowRevision && attributeValue(rowRevision, 'author');
+    const rowRevisionDate = rowRevision && attributeValue(rowRevision, 'date');
     rows.push({
       id: rowNode.id,
-      ...(rowProperties && childNamed(rowProperties, 'ins')
-        ? { revisionKind: 'insert' as const }
-        : rowProperties && childNamed(rowProperties, 'del')
-          ? { revisionKind: 'delete' as const }
-          : {}),
+      ...(rowRevisionKind ? { revisionKind: rowRevisionKind } : {}),
+      ...(rowRevisionId !== undefined ? { revisionId: rowRevisionId } : {}),
+      ...(rowRevisionAuthor !== undefined ? { revisionAuthor: rowRevisionAuthor } : {}),
+      ...(rowRevisionDate !== undefined ? { revisionDate: rowRevisionDate } : {}),
       isHeader: readFlag(rowProperties, 'tblHeader'),
       cantSplit: readFlag(rowProperties, 'cantSplit'),
       height: readRowHeight(rowProperties),

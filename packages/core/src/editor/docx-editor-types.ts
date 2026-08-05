@@ -11,6 +11,7 @@ import type {
   FontConfiguration,
   Unsubscribe,
 } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { EditorModule } from '../contracts/modules.ts';
 import type { FontConfigurationFragment } from './font-composition.ts';
 import type { PaginatedSurface } from './paginated-surface.ts';
 import type { HyperlinkActivation } from './surface-navigation.ts';
@@ -43,8 +44,19 @@ export interface DocxEditorConfig {
   fonts?: FontConfiguration | FontConfigurationFragment;
   author?: string;
   locale?: string;
+  /** Localized drawing refusal labels; defaults to English when omitted. */
+  translate?: (key: string, params?: Record<string, string | number>) => string;
+  /**
+   * Capability modules to register — the seam `@docx-editor.dev/pro` plugs in
+   * through. Omitted, the editor runs the free tier: lossless round-trip,
+   * final-state revision rendering, review chrome disabled with the engine's
+   * reason. See {@link EditorModule}.
+   */
+  modules?: readonly EditorModule[];
   /** `'view'` refuses every mutating command through the facade; default `'edit'`. */
   mode?: 'edit' | 'view';
+  /** Override raster decode for insert/replace image commands; defaults to browser/headless. */
+  imageDecodePort?: import('../store/package/image-resources.ts').ImageDecodePort;
   zoom?: number;
   onFontError?: (error: EditorFontError) => void;
   /** Localized labels for table insertion furniture on the painted surface. */
@@ -87,6 +99,8 @@ export interface HyperlinkChromeHandlers {
  * need. Production adapters program against `Editor` for everything else.
  */
 export interface DocxEditorInstance extends Editor {
+  /** Bumps on mount, detach, destroy, and document reload — guards async image intents. */
+  readonly mountGeneration: number;
   /**
    * The underlying paginated surface for harnesses and tests that need capabilities the
    * contract does not carry yet (select-all, node-id addressed selection).

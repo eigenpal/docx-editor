@@ -3,12 +3,10 @@
 // The queue used to live in the layout lane, which meant anything that could not import layout —
 // the automation lane, a headless host — had no way to answer "what comments does this document
 // hold" without deriving it a second time. Two derivations of a reviewer's queue is how a comment
-// comes to be listed by one surface and not the other, so the derivation moved here and layout
-// re-exports it.
+// comes to be listed by one surface and not the other, so the derivation moved here.
 //
-// These tests are about the MOVE being real: the store barrel answers, the answers are the same
-// ones layout hands out, and a comment inside a note — a story the layout reader never reached
-// through this path — is now anchored rather than dropped.
+// These tests verify that the store barrel answers and that a comment inside a note — a story the
+// old layout reader never reached through this path — is anchored rather than dropped.
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
@@ -16,22 +14,14 @@ import { resolve } from 'node:path';
 import {
   addComment,
   collectReviewItems,
-  commentAnchorsOfStory,
   commentBodyText,
-  commentItemsOf,
-  commentsOfPart,
   commentPartNameOf,
   commentsExtendedPartNameOf,
-  paragraphOrderOfPart,
   readOoxmlPackage,
-  revisionItemsOf,
-  threadStateOfPart,
   TreeDocumentStore,
   type OoxmlPackage,
   type OoxmlPart,
 } from '../index.ts';
-import * as layoutReview from '../../layout/review-model.ts';
-import * as layoutAnchors from '../../layout/comment-anchors.ts';
 
 const FIXTURE = resolve(
   import.meta.dir,
@@ -95,17 +85,5 @@ describe('the store lane answers the review queue', () => {
     expect(comment.orphaned).toBe(false);
     expect(comment.range?.start).toEqual({ paragraphId, offset: 0 });
     expect(comment.range?.end).toEqual({ paragraphId, offset: 5 });
-  });
-
-  test('the store derivation and the layout re-export are the same function', () => {
-    // Not "they agree": the same reference. Two implementations that agree today are two
-    // implementations that disagree after the next fix to one of them.
-    expect(layoutReview.collectReviewItems).toBe(collectReviewItems);
-    expect(layoutReview.revisionItemsOf).toBe(revisionItemsOf);
-    expect(layoutReview.commentItemsOf).toBe(commentItemsOf);
-    expect(layoutReview.paragraphOrderOfPart).toBe(paragraphOrderOfPart);
-    expect(layoutAnchors.commentsOfPart).toBe(commentsOfPart);
-    expect(layoutAnchors.commentAnchorsOfStory).toBe(commentAnchorsOfStory);
-    expect(layoutAnchors.threadStateOfPart).toBe(threadStateOfPart);
   });
 });

@@ -13,7 +13,7 @@ order: 30
 npm install @docx-editor.dev/react
 ```
 
-Pulls in `@docx-editor.dev/core` and `@docx-editor.dev/i18n`. Add `@docx-editor.dev/editor-api` if you want to automate the document from code.
+Pulls in `@docx-editor.dev/core-contract` and `@docx-editor.dev/i18n`. Add `@docx-editor.dev/editor-api` if you want to automate the document from code.
 
 ## Quickstart
 
@@ -21,19 +21,21 @@ Pulls in `@docx-editor.dev/core` and `@docx-editor.dev/i18n`. Add `@docx-editor.
 import { DocxEditor } from '@docx-editor.dev/react';
 
 export default function App() {
-  return <DocxEditor document={new Uint8Array()} />;
+  return <DocxEditor document={docxBytes} />;
 }
 ```
 
-`<DocxEditor>` is the batteries-included host: title bar, menu, toolbar, navigation pane, hyperlink popover, context menu, and the painted editable document. On Next.js App Router, render it inside a `"use client"` component.
+`<DocxEditor>` is the batteries-included host: title bar, menu, toolbar, navigation pane, hyperlink popover, context menu, and the painted editable document. On Next.js App Router, render it inside a `"use client"` component; the editor has nothing to SSR.
 
 <DemoPlayground />
 
 ## Root surface
 
-- `DocxEditor`: the one-line host plus compound statics like `DocxEditor.Root`, `DocxEditor.Viewport`, `DocxEditor.Content`, `DocxEditor.Toolbar`, `DocxEditor.Menu`, `DocxEditor.Navigation`, `DocxEditor.Review`, `DocxEditor.HyperLink`, and `DocxEditor.ContextMenu`
+- `DocxEditor`: the one-line host plus compound statics like `DocxEditor.Root`, `DocxEditor.Viewport`, `DocxEditor.Content`, `DocxEditor.Toolbar`, `DocxEditor.Menu`, `DocxEditor.Navigation`, `DocxEditor.HyperLink`, and `DocxEditor.ContextMenu`
 - hooks from the same root: `useDocxEditor`, `useEditorState`, `useEditorCommand`, `useEditorEvent`, `usePageSetup`, `useParagraphIndent`, `useFontFamily`
-- shared top-level pieces: `DocxEditorRoot`, `DocxEditorViewport`, `DocxEditorContent`, `DocxEditorToolbar`, `DocxEditorMenu`, `DocxEditorNavigation`, `DocxEditorReview`, `DocxEditorPageSetupDialog`
+- shared top-level pieces: `DocxEditorRoot`, `DocxEditorViewport`, `DocxEditorContent`, `DocxEditorToolbar`, `DocxEditorMenu`, `DocxEditorNavigation`, `DocxEditorPageSetupDialog`
+
+The review module and pane are licensed PRO surfaces from `@docx-editor.dev/pro` and `@docx-editor.dev/pro/react`; they are not exports of the React adapter.
 
 There are no separate `/ui`, `/hooks`, `/dialogs`, or `/plugin-api` package exports in v2. The documented React surface lives on the package root.
 

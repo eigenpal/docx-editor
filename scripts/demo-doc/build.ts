@@ -28,9 +28,8 @@ import JSZip from 'jszip';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, '..', '..');
 
-/** Example apps that serve the default document. */
+/** Example apps that serve the default document from their own `public/`. */
 const PUBLIC_DIRS = [
-  'examples/shared',
   'examples/vite/public',
   'examples/vue/public',
   'examples/nuxt/public',

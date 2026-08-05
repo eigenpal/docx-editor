@@ -1,137 +1,96 @@
 <template>
-  <div class="app">
+  <div class="ep-root app">
     <header class="header">
       <h1 class="title">docx-editor · Nuxt module</h1>
-      <span v-if="status" class="status">{{ status }}</span>
-      <label class="btn btn-primary">
-        <input type="file" accept=".docx" class="file-input" @change="onFileSelect" />
-        Open DOCX
-      </label>
-      <button class="btn" @click="onNew">New</button>
+      <input v-model="title" class="doc-title" aria-label="Document name" />
     </header>
+    <!-- The shared Vue toolbar — enabled/pressed state comes from the engine.
+         The Suggesting pill works because of the pro review module below. -->
+    <DocxEditorToolbar :editor="editor" :t="translate" />
     <main class="main">
       <!--
         <DocxEditor> is auto-imported and registered client-only by
         @docx-editor.dev/nuxt — no import or <ClientOnly> wrapper needed.
+
+        PRO: `:modules="[reviewModule()]"` registers comments + tracked changes
+        from @docx-editor.dev/pro (the framework-neutral entry works under
+        Vue/Nuxt). Without it the same document opens in its final-state view
+        and the review controls disable with the engine's own reason. Vue has
+        no packaged review PANE yet; the queue is reachable via
+        editor.getReviewItems().
       -->
       <DocxEditor
-        :document="documentBuffer ? undefined : currentDocument"
-        :document-buffer="documentBuffer"
-        :show-toolbar="true"
-        @error="onError"
+        class="editor"
+        :document="bytes"
+        :modules="proModules"
+        author="Demo Reviewer"
+        @ready="onReady"
       />
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { createEmptyDocument, type Document } from '@docx-editor.dev/core';
+import { ref, shallowRef } from 'vue';
+import { DocxEditorToolbar, type Editor } from '@docx-editor.dev/vue';
+import { reviewModule } from '@docx-editor.dev/pro';
+import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
+import { emptyDocx } from '../shared/demoDocument';
 
-const documentBuffer = ref<ArrayBuffer | undefined>(undefined);
-const currentDocument = ref<Document | null>(null);
-const status = ref('');
+const tEnglish = createT(en);
+const translate = (key: string): string => tEnglish(key as TranslationKey);
 
-// Runs in the browser only — the editor never renders during SSR.
-onMounted(async () => {
-  try {
-    const res = await fetch('/sample.docx');
-    documentBuffer.value = await res.arrayBuffer();
-  } catch {
-    currentDocument.value = createEmptyDocument();
-  }
-});
+// One stable array: module registration is construction-time, like `author`.
+const proModules = [reviewModule()];
 
-async function onFileSelect(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0];
-  if (!file) return;
-  status.value = 'Loading…';
-  try {
-    const buffer = await file.arrayBuffer();
-    currentDocument.value = null;
-    documentBuffer.value = buffer;
-    status.value = '';
-  } catch {
-    status.value = 'Error loading file';
-  }
-}
+const bytes = emptyDocx();
+const title = ref('Untitled document');
+const editor = shallowRef<Editor | null>(null);
 
-function onNew() {
-  documentBuffer.value = undefined;
-  currentDocument.value = createEmptyDocument();
-  status.value = '';
-}
-
-function onError(error: Error) {
-  console.error('Editor error:', error);
-  status.value = `Error: ${error.message}`;
+// The editor arrives MOUNTED: `ready` fires after the pages have painted, so
+// commands and reads work right here — no second "view ready" callback.
+function onReady(created: Editor): void {
+  editor.value = created;
 }
 </script>
 
-<style>
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
+<style scoped>
 .app {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  overflow: hidden;
-  background: #f8fafc;
 }
 .header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 16px;
-  background: #fff;
+  padding: 8px 14px;
   border-bottom: 1px solid #e2e8f0;
 }
 .title {
   font-size: 14px;
   font-weight: 600;
-  color: #0f172a;
-  margin-right: auto;
+  margin: 0;
 }
-.btn {
-  padding: 6px 12px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  color: #334155;
-}
-.btn:hover {
-  background: #f1f5f9;
-}
-.btn-primary {
-  background: #0f172a;
-  color: #fff;
-  border-color: #0f172a;
-}
-.btn-primary:hover {
-  background: #1e293b;
-}
-.file-input {
-  display: none;
-}
-.status {
-  font-size: 12px;
-  color: #64748b;
-  padding: 4px 8px;
-  background: #f1f5f9;
+.doc-title {
+  font: inherit;
+  border: 1px solid transparent;
   border-radius: 4px;
+  padding: 2px 6px;
+  min-width: 220px;
+}
+.doc-title:hover,
+.doc-title:focus {
+  border-color: #e2e8f0;
 }
 .main {
   flex: 1;
+  min-height: 0;
   display: flex;
-  overflow: hidden;
+  flex-direction: column;
+}
+.editor {
+  flex: 1;
+  min-height: 0;
 }
 </style>

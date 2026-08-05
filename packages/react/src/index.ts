@@ -2,7 +2,7 @@
  * @docx-editor.dev/react
  *
  * React adapter for the DOCX editor. A thin renderer over the `Editor`
- * contract from `@docx-editor.dev/core-contract`: it supplies DOM and paints
+ * contract from `@docx-editor.dev/core`: it supplies DOM and paints
  * the engine's positioned display list, and holds no editing-engine state.
  *
  * @packageDocumentation
@@ -47,23 +47,13 @@ export {
   DocxEditorFontNotice,
   type DocxEditorFontNoticeProps,
 } from './editor/DocxEditorFontNotice';
-// The review rail (also reachable as `DocxEditor.Review`) and its headless hook. The parts
-// live on the namespace statics; a host that wants a different surface takes the hook, which
-// is where the queue, the anchors and the accept/reject/reply actions actually live.
-export {
-  DocxEditorReview,
-  type DocxEditorReviewNamespace,
-  type ReviewActionProps,
-  type ReviewPartProps,
-  type ReviewProps,
-} from './editor/DocxEditorReview';
-export {
-  useReview,
-  useReviewOf,
-  useStackedReviewPositions,
-  type ReviewItemView,
-  type UseReviewReturn,
-} from './editor/useReview';
+// The review PANE lives in `@docx-editor.dev/pro/react` (the review capability is
+// module-gated). What this package exports are the integration points the pro pane —
+// or any external chrome — composes with: the rail registry the Viewport and rulers
+// reserve gutter space through, the in-tree Slot, and the locale binding.
+export { ReviewRailContext, type ReviewRailRegistry } from './editor/context';
+export { Slot, type SlotProps } from './editor/toolbar/Slot';
+export { LocaleProvider, useTranslation } from './i18n';
 // The navigation pane (also reachable as `DocxEditor.Navigation`): the compound over the
 // left gutter, its parts, and the three hooks a custom pane is built from. The pane FLOATS
 // — it displaces the page only when the gutter is too narrow to hold it, and
@@ -184,6 +174,22 @@ export {
 } from './editor/DocxEditorContentControl';
 export { useEditorState } from './editor/useEditorState';
 export { useEditorCommand, type EditorCommandState } from './editor/useEditorCommand';
+export {
+  useEditorValueCommand,
+  type EditorValueCommandState,
+  type ImageWrapTarget,
+} from './editor/useEditorValueCommand';
+export {
+  DocxEditorImagePropertiesDialog,
+  ImageInsertProvider,
+  ImageInsertTrigger,
+  ImageWrap,
+  ImageAltText,
+  ImagePropertiesTrigger,
+  normalizeImageBytes,
+  type DocxEditorImagePropertiesDialogProps,
+  type NormalizedImagePayload,
+} from './editor/images';
 export { useEditorEvent } from './editor/useEditorEvent';
 export { usePageSetup, type PageSetupUpdate, type UsePageSetupReturn } from './editor/usePageSetup';
 export {

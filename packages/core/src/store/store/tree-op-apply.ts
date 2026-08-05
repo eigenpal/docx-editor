@@ -122,6 +122,7 @@ import {
   applyTableCellPropertyOp,
 } from './tree-op-tables.ts';
 import { contentControlAtCaret, validateTreeOp } from './tree-op-validate.ts';
+import { applyDrawingOp, isDrawingTreeDocOp } from './tree-op-drawings.ts';
 
 /**
  * A `w:t`, or a `w:delText` when the text being rebuilt was already struck.
@@ -256,6 +257,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   ) {
     return applyTableCellPropertyOp(part, op, options);
   }
+  if (isDrawingTreeDocOp(op)) return applyDrawingOp(part, op, options);
 
   if (op.op === 'deleteBlock') return applyDeleteBlock(part, op.blockId, options);
   if (op.op === 'insertToc') return applyInsertToc(part, op, options);
@@ -279,7 +281,12 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     const accept = op.op === 'acceptRevision' || op.op === 'acceptAllRevisions';
     const address =
       op.op === 'acceptRevision' || op.op === 'rejectRevision' ? op.revision : undefined;
-    const resolved = resolveRevisions(part, accept ? 'accept' : 'reject', address, options);
+    const localName =
+      op.op === 'acceptRevision' || op.op === 'rejectRevision' ? op.localName : undefined;
+    const resolved = resolveRevisions(part, accept ? 'accept' : 'reject', address, {
+      ...options,
+      ...(localName === undefined ? {} : { localName }),
+    });
     if (!resolved.ok || !resolved.part || !resolved.effect) {
       return { ok: false, reason: resolved.reason ?? 'tree-invariant' };
     }
@@ -375,6 +382,8 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
       return applyDeleteText(part, paragraph, op.start, op.end, options);
     case 'insertHyperlink':
       return applyInsertHyperlink(part, paragraph, op, options);
+    case 'insertInlineContentControl':
+      return applyInsertInlineContentControl(part, paragraph, op, options);
     case 'setParagraphMarkRevision': {
       // Taking your own proposed break back is a real join, not a second proposal.
       if (op.kind === 'del' && retractsOwnParagraphMark(paragraph, op.revision.author)) {
@@ -744,6 +753,11 @@ function leavesContainer(
       const nested =
         node.kind === 'hyperlink' ||
         node.kind === 'fldSimple' ||
+        // A content control is a container the same way a link is: typing at
+        // its OUTER edge must not join the run inside and grow the control —
+        // which is exactly what pressing space after a custom-node chip did
+        // before this branch (pro-review-and-custom-nodes 4.6).
+        node.kind === 'contentControl' ||
         (node.kind === 'generic' && node.localName === 'fldSimple')
           ? node
           : inside;
@@ -1156,6 +1170,176 @@ function applyInsertHyperlink(
   const pPr = paragraphPropertiesNodeOf(paragraph);
   const children = [...(pPr ? [pPr] : []), ...before, link, ...after];
   return fromEdit(replaceChildren(part, paragraph.id, children, options), effect);
+}
+
+/**
+ * Insert a NEW run-level `w:sdt` at a collapsed text offset.
+ *
+ * The paragraph's children divide at the offset exactly the way
+ * `applyInsertHyperlink` divides a range — the same distribute machinery, with
+ * an empty middle — and the freshly built control lands between the halves.
+ * A run-level SDT is a SIBLING of runs, never inside one, which is why this
+ * does not go through `applyInsertContent` (that path splices into a run's
+ * children, where a `w:sdt` is invalid structure).
+ */
+function applyInsertInlineContentControl(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  op: {
+    readonly offset: number;
+    readonly tag: string;
+    readonly text: string;
+    readonly alias?: string;
+    readonly lock?: 'sdtLocked' | 'sdtContentLocked' | 'contentLocked';
+  },
+  options?: EditOptions
+): TreeOpResult {
+  const nextId = createNodeIdAllocator(part);
+  const segments = segmentsOf(paragraph);
+  const before: OoxmlNode[] = [];
+  const after: OoxmlNode[] = [];
+  const effect: TreeOpEffect = {
+    dirty: [paragraph.id],
+    created: [],
+    deleted: [],
+    dependencyKeys: TEXT_DEPS,
+    impact: 'paragraph-local',
+  };
+
+  let cursor = 0;
+  for (const child of paragraph.children) {
+    if (isParagraphPropertiesNode(child)) continue;
+    const childSegments = segmentsForChild(child, segments);
+    if (childSegments.length === 0) {
+      // Zero-length content takes the bucket its POSITION puts it in, exactly
+      // as the hyperlink divide treats markers.
+      (cursor < op.offset ? before : after).push(child);
+      continue;
+    }
+    const childStart = childSegments[0]!.start;
+    const childEnd = childSegments[childSegments.length - 1]!.end;
+    cursor = childEnd;
+    if (childEnd <= op.offset) {
+      before.push(child);
+      continue;
+    }
+    if (childStart >= op.offset) {
+      after.push(child);
+      continue;
+    }
+    // Straddles the offset: one divide against the original segments, for the
+    // same reason the hyperlink path cuts once — a second cut would run against
+    // rebuilt nodes no segment knows.
+    const [left, right] = distributeInline(child, [op.offset], 2, segments, nextId);
+    before.push(...left!);
+    after.push(...right!);
+  }
+
+  // The label INHERITS the neighboring run's formatting, the way typing does —
+  // a citation inserted mid-title must not come out body-sized. Left run wins,
+  // matching the insert-content boundary rule; falls back to the run on the
+  // right at paragraph start.
+  const anchorSegment =
+    findLast(segments, (segment) => segment.end <= op.offset && segment.end > 0) ??
+    segments.find((segment) => segment.start >= op.offset);
+  const anchorRun = anchorSegment ? findNode(part, anchorSegment.runId) : null;
+  const inheritedProperties =
+    anchorRun && anchorRun.kind === 'run' ? runPropertiesNodeOf(anchorRun) : null;
+
+  const control = inlineContentControlElement(
+    nextId,
+    op,
+    inheritedProperties ? remintClone(inheritedProperties, nextId) : null
+  );
+  const pPr = paragraphPropertiesNodeOf(paragraph);
+  const children = [...(pPr ? [pPr] : []), ...before, control, ...after];
+  return fromEdit(replaceChildren(part, paragraph.id, children, options), effect);
+}
+
+/** Deep copy with FRESH node ids — reusing ids would corrupt the part's node index. */
+function remintClone(node: OoxmlNode, nextId: () => string): OoxmlNode {
+  if (node.kind === 'textValue') {
+    return { id: nextId(), kind: 'textValue', value: node.value };
+  }
+  return {
+    ...node,
+    id: nextId(),
+    children: node.children.map((child) => remintClone(child, nextId)),
+  } as OoxmlNode;
+}
+
+/** Build the `w:sdt` element: typed kinds, so reads see an ordinary content control. */
+function inlineContentControlElement(
+  nextId: () => string,
+  op: {
+    readonly tag: string;
+    readonly text: string;
+    readonly alias?: string;
+    readonly lock?: 'sdtLocked' | 'sdtContentLocked' | 'contentLocked';
+  },
+  inheritedRunProperties: OoxmlNode | null = null
+): OoxmlNode {
+  const valued = (localName: string, value: string): OoxmlNode =>
+    ({
+      id: nextId(),
+      kind: 'generic',
+      namespaceUri: WML_NAMESPACE_URI,
+      localName,
+      prefix: 'w',
+      namespaceBindings: [],
+      attributes: [
+        {
+          kind: 'genericExtension',
+          namespaceUri: WML_NAMESPACE_URI,
+          localName: 'val',
+          prefix: 'w',
+          value,
+        },
+      ],
+      children: [],
+    }) as unknown as OoxmlNode;
+  // Property leaves stay GENERIC under a typed properties node — the same shape
+  // the parser produces, so a document that round-trips through this op is
+  // indistinguishable from one that was authored elsewhere.
+  const properties = {
+    id: nextId(),
+    kind: 'contentControlProperties',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName: 'sdtPr',
+    prefix: 'w',
+    namespaceBindings: [],
+    attributes: [],
+    children: [
+      ...(op.alias === undefined ? [] : [valued('alias', op.alias)]),
+      valued('tag', op.tag),
+      ...(op.lock === undefined ? [] : [valued('lock', op.lock)]),
+    ],
+  } as unknown as OoxmlNode;
+  const content = {
+    id: nextId(),
+    kind: 'contentControlContent',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName: 'sdtContent',
+    prefix: 'w',
+    namespaceBindings: [],
+    attributes: [],
+    children: [
+      runElement(nextId, [
+        ...(inheritedRunProperties ? [inheritedRunProperties] : []),
+        textElement(nextId, op.text),
+      ]),
+    ],
+  } as unknown as OoxmlNode;
+  return {
+    id: nextId(),
+    kind: 'contentControl',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName: 'sdt',
+    prefix: 'w',
+    namespaceBindings: [],
+    attributes: [],
+    children: [properties, content],
+  } as unknown as OoxmlNode;
 }
 
 /** Re-aim a link: one target attribute replaces the other, and the tooltip follows. */

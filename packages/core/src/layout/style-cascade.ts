@@ -173,6 +173,31 @@ function findParagraphProperties(container: OoxmlElement | undefined): OoxmlElem
   return undefined;
 }
 
+/**
+ * Tracked-change RECORDS a style definition's property lists can carry: editing a style
+ * with tracking on writes `w:rPrChange`/`w:pPrChange` (and `w:ins`/`w:del` for the
+ * definition itself) INSIDE the style's `rPr`/`pPr`. They are decisions about the STYLE,
+ * not formatting, and none of the property resolvers read them — but cascaded into span
+ * property lists they made `formatRevisionOf` mark EVERY span of every paragraph using
+ * the style as one tracked format change, painting a whole document grey over a single
+ * restyled style definition.
+ */
+const STYLE_CHANGE_RECORDS: ReadonlySet<string> = new Set([
+  'rPrChange',
+  'pPrChange',
+  'ins',
+  'del',
+  'moveFrom',
+  'moveTo',
+]);
+
+function withoutChangeRecords(props: OoxmlProperty[]): OoxmlProperty[] {
+  // The common style carries none; keep the allocated array in that case.
+  return props.some((property) => STYLE_CHANGE_RECORDS.has(property.localName))
+    ? props.filter((property) => !STYLE_CHANGE_RECORDS.has(property.localName))
+    : props;
+}
+
 function readDocDefaults(stylesRoot: OoxmlElement): {
   run: readonly OoxmlProperty[];
   paragraph: readonly OoxmlProperty[];
@@ -185,8 +210,8 @@ function readDocDefaults(stylesRoot: OoxmlElement): {
   const runNode = findRunProperties(rPrDefault);
   const paragraphNode = findParagraphProperties(pPrDefault);
   return {
-    run: propertiesOf(runNode),
-    paragraph: propertiesOf(paragraphNode),
+    run: withoutChangeRecords(propertiesOf(runNode)),
+    paragraph: withoutChangeRecords(propertiesOf(paragraphNode)),
     paragraphNode,
   };
 }
@@ -222,8 +247,8 @@ function readStyleDefinition(
     type,
     basedOn,
     isDefault: isDefaultFlag(attributeValue(node, 'default')),
-    paragraphProperties: propertiesOf(paragraphPropertiesNode),
-    runProperties: propertiesOf(runPropertiesNode),
+    paragraphProperties: withoutChangeRecords(propertiesOf(paragraphPropertiesNode)),
+    runProperties: withoutChangeRecords(propertiesOf(runPropertiesNode)),
     paragraphPropertiesNode,
     tablePropertiesNode: childNamed(node, 'tblPr'),
     conditionalTableFormats,
@@ -326,10 +351,10 @@ export function tableCellStyleFormatting(
     const conditionPPr = findParagraphProperties(format);
     if (conditionPPr) {
       paragraphPropertyNodes.push(conditionPPr);
-      paragraphProperties.push(...propertiesOf(conditionPPr));
+      paragraphProperties.push(...withoutChangeRecords(propertiesOf(conditionPPr)));
     }
     const conditionRPr = findRunProperties(format);
-    if (conditionRPr) runProperties.push(...propertiesOf(conditionRPr));
+    if (conditionRPr) runProperties.push(...withoutChangeRecords(propertiesOf(conditionRPr)));
   }
   if (
     paragraphPropertyNodes.length === 0 &&

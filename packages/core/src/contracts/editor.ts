@@ -7,7 +7,7 @@
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from '../index';
 // Type-only, so the adapters reach the review vocabulary through THIS contract rather than
 // naming the layout lane, which they are not allowed to import.
-import type { ReviewItem, ReviewRevisionKind } from '../layout/review-model.ts';
+import type { ReviewItem, ReviewRevisionKind } from '../layout/review-support.ts';
 import type { InteractionOutcome, SemanticSelection, SemanticTarget } from './interaction';
 import type {
   ColorValue,
@@ -30,10 +30,19 @@ import type {
   HeaderFooterState,
   NotePropertiesState,
 } from './editor-hf-notes.ts';
+import type {
+  DrawingKind,
+  DrawingLocks,
+  DrawingPositionInput,
+  ImageWrapTarget,
+} from '../store/package/drawing-projection.ts';
+import type { ImageCropPercent } from '../store/package/image-crop-units.ts';
+import type { ImageResourceState, SupportedImageMime } from '../store/package/image-resources.ts';
 
 export type * from './types';
 export type * from './interaction';
 export type * from './editor-hf-notes.ts';
+export type { ImageCropPercent } from '../store/package/image-crop-units.ts';
 
 const NOT_IMPLEMENTED = 'contract-only stub: no implementation';
 
@@ -266,6 +275,19 @@ export interface Editor {
   /** Dry run: reports whether `exec` would apply. Never reports `changed`. */
   can(command: EditorCommand, options?: { scope?: EditorScope }): CanResult;
   /**
+   * Dry run for byte commands that require {@link Editor.executeImageCommand}.
+   * Generic {@link Editor.can} on `insertImage` / `replaceImage` refuses with an async-path
+   * reason; this method answers whether async execution can proceed right now.
+   */
+  canExecuteImageCommand(
+    command: Extract<EditorCommand, { type: 'insertImage' | 'replaceImage' }>,
+    options?: { scope?: EditorScope }
+  ): CanResult;
+  /** Insert or replace picture bytes as one package undo unit. */
+  executeImageCommand(
+    command: Extract<EditorCommand, { type: 'insertImage' | 'replaceImage' }>
+  ): Promise<ExecResult>;
+  /**
    * Whether a formatting command is currently APPLIED at the selection — distinct from
    * `can`, which answers whether it may run.
    *
@@ -373,11 +395,7 @@ export interface Editor {
   selectMatch(match: TextMatch): ExecResult;
 
   /** The image at the selection, for the image toolbar and transform controls. */
-  getSelectedImage(): {
-    readonly id: string;
-    readonly widthEmu: number;
-    readonly heightEmu: number;
-  } | null;
+  getSelectedImage(): SelectedImageState | null;
 
   /** The table containing the selection, for the table toolbar. `null` outside a table. */
   getSelectedTable(): {
@@ -929,6 +947,8 @@ export interface EditorCommands
    * text wraps on. Legacy's vocabulary, unchanged.
    */
   setImageWrapType: {
+    drawingNodeId?: string;
+    expectedPackageRevision?: number;
     target:
       | 'inline'
       | 'square'
@@ -944,23 +964,73 @@ export interface EditorCommands
   };
 
   /** Rotate or flip the selected image. Legacy composed these into a CSS transform. */
-  transformImage: { action: 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV' };
+  transformImage: {
+    drawingNodeId?: string;
+    expectedPackageRevision?: number;
+    action: 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV';
+  };
 
   /** Anchor position of the selected floating image, from the position dialog. */
   setImagePosition: {
+    drawingNodeId?: string;
+    expectedPackageRevision?: number;
     horizontalEmu?: number;
     verticalEmu?: number;
     relativeToH?: string;
     relativeToV?: string;
   };
 
-  /** Size, alt text and border of the selected image, from the properties dialog. */
+  /** Size, alt text, crop, position, and border of the selected image, from the properties dialog. */
   setImageProperties: {
+    /** Expected drawing node id captured when the dialog opened. */
+    drawingNodeId?: string;
+    /** Package revision captured when the dialog opened. */
+    expectedPackageRevision?: number;
+    /** Selection anchor captured when the dialog opened. */
+    selectionParagraphId?: string;
+    /** Selection offset captured when the dialog opened. */
+    selectionOffset?: number;
     widthEmu?: number;
     heightEmu?: number;
     alt?: string;
+    title?: string;
+    description?: string;
+    hyperlink?: string | null;
+    crop?: ImageCropPercent;
+    resetToNaturalSize?: boolean;
+    wrap?: ImageWrapTarget;
+    horizontalEmu?: number;
+    verticalEmu?: number;
+    relativeToH?: string;
+    relativeToV?: string;
     borderWidthEmu?: number;
     borderColor?: ColorValue;
+  };
+
+  /** Insert a raster image at the caret as one package undo unit. */
+  insertImage: {
+    data: Uint8Array;
+    mime: SupportedImageMime;
+    widthPoints: number;
+    heightPoints: number;
+    expectedPackageRevision?: number;
+    title?: string;
+    description?: string;
+    hyperlink?: string;
+  };
+
+  /** Replace the selected picture's bytes as one package undo unit. */
+  replaceImage: {
+    data: Uint8Array;
+    mime?: SupportedImageMime;
+    drawingNodeId?: string;
+    expectedPackageRevision?: number;
+  };
+
+  /** Delete the selected picture drawing as one package undo unit. */
+  deleteImage: {
+    drawingNodeId?: string;
+    expectedPackageRevision?: number;
   };
 
   setWatermark: { watermark: Watermark | null };
@@ -1191,6 +1261,17 @@ export interface EditorSnapshot {
    */
   readonly reviewPaneOpen?: boolean;
   /**
+   * Whether the document carries review content — tracked changes or comment
+   * anchors — independent of any registered review module.
+   *
+   * The free tier's honest signal: revisions render in their final-state
+   * projection there, so without this a host cannot tell its user "this
+   * document has tracked changes" — the one fact the upsell hint needs.
+   * Optional and additive like `canUndo`; derived cheaply from store
+   * vocabulary and memoized per revision.
+   */
+  readonly hasReviewContent?: boolean;
+  /**
    * How edits are written right now.
    *
    * In the snapshot for the same reason `reviewPaneOpen` is: the editing-mode control shows
@@ -1216,11 +1297,43 @@ export interface EditorSnapshot {
   readonly fontSubstitutions?: readonly string[];
 }
 
-export interface ImageContext {
+/**
+ * Canonical selected-image read model shared by {@link EditorSnapshot.image} and
+ * {@link Editor.getSelectedImage}.
+ *
+ * @public
+ */
+export interface SelectedImageState {
+  readonly id: string;
+  readonly kind: DrawingKind;
   readonly widthEmu: number;
   readonly heightEmu: number;
-  readonly wrap: 'inline' | 'square' | 'tight' | 'topAndBottom' | 'behind' | 'inFront';
+  /** Crop inset per edge in UI percent (0–100); OOXML stores permille (×1000). */
+  readonly crop: ImageCropPercent;
+  readonly rotationDegrees: number;
+  readonly wrap: ImageWrapTarget;
+  readonly position: DrawingPositionInput | null;
+  readonly name: string;
+  readonly title: string;
+  readonly description: string;
+  readonly hyperlink: string | null;
+  readonly locks: DrawingLocks;
+  readonly hidden: boolean;
+  readonly resourceStatus: ImageResourceState['kind'];
+  readonly intrinsic: Readonly<{
+    readonly pixelWidth: number;
+    readonly pixelHeight: number;
+    readonly dpiX: number;
+    readonly dpiY: number;
+  }> | null;
+  readonly canResize: boolean;
+  readonly canMove: boolean;
+  readonly canChangeWrap: boolean;
+  readonly canCrop: boolean;
 }
+
+/** @public */
+export type ImageContext = SelectedImageState;
 
 export interface EditorError extends Error {
   readonly code?: string;

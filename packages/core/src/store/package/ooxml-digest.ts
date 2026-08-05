@@ -27,11 +27,20 @@
 //     `styles.xml` and `settings.xml` were not covered by ANY oracle: an `abstractNum`
 //     could lose eight of its nine levels in silence.
 
+import { fieldAtomText } from './field-nodes.ts';
 import { hardBreakText } from './hard-break.ts';
 import { contentControlContentOf, isContentControl } from './content-control-walk.ts';
 import { MAX_XML_DEPTH } from './xml-reader.ts';
 import { paraIdOf } from './para-id.ts';
-import { canonicalOoxmlFingerprint, WML_NAMESPACE_URI } from './ooxml-tree.ts';
+import { isDrawingKnownKind } from './ooxml-drawing-rules.ts';
+import { TreeReadError } from './ooxml-shared.ts';
+import {
+  canonicalOoxmlFingerprint,
+  canonicalOoxmlFingerprintWithBindings,
+  DEFAULT_FINGERPRINT_BINDINGS,
+  RELATIONSHIPS_NAMESPACE_URI,
+  WML_NAMESPACE_URI,
+} from './ooxml-tree.ts';
 import type {
   OoxmlElement,
   OoxmlNode,
@@ -166,6 +175,7 @@ function textOf(node: OoxmlNode): string {
   if (node.kind === 'textValue') return node.value;
   if (node.kind === 'tab') return '\t';
   if (node.kind === 'hardBreak') return hardBreakText(node);
+  if (node.kind === 'drawing') return fieldAtomText();
   if (node.kind === 'runProperties' || node.kind === 'paragraphProperties') return '';
   if (node.kind === 'generic') return '';
   if (node.kind === 'hyperlink' || isContentControl(node)) {
@@ -180,7 +190,34 @@ function textOf(node: OoxmlNode): string {
   return text;
 }
 
-function collectGeneric(node: OoxmlNode, out: string[]): void {
+function bindingsForElement(
+  inherited: ReadonlyMap<string, string>,
+  node: OoxmlElement
+): ReadonlyMap<string, string> {
+  const bindings = new Map(inherited);
+  for (const binding of node.namespaceBindings) bindings.set(binding.prefix, binding.namespaceUri);
+  return bindings;
+}
+
+function genericStructureFingerprint(
+  node: OoxmlElement,
+  inheritedBindings: ReadonlyMap<string, string>
+): string {
+  try {
+    return canonicalOoxmlFingerprintWithBindings(node, inheritedBindings);
+  } catch (error) {
+    if (error instanceof TreeReadError && error.reason === 'undeclared-prefix') {
+      return `generic-refusal:undeclared-prefix:{${node.namespaceUri}}${node.localName}`;
+    }
+    throw error;
+  }
+}
+
+function collectGeneric(
+  node: OoxmlNode,
+  out: string[],
+  inheritedBindings: ReadonlyMap<string, string> = DEFAULT_FINGERPRINT_BINDINGS
+): void {
   if (node.kind === 'textValue') return;
   // A property container's children are covered by `propertyTokens`, which sorts them
   // because OOXML property order is schema-fixed and carries no authored meaning. Walking
@@ -189,17 +226,18 @@ function collectGeneric(node: OoxmlNode, out: string[]): void {
   // semantic loss. Foreign-namespace children are the exception: `propertyTokens` skips
   // those, so this is their only owner.
   if (node.kind === 'runProperties' || node.kind === 'paragraphProperties') {
+    const childBindings = bindingsForElement(inheritedBindings, node);
     const foreign: string[] = [];
     for (const child of node.children) {
       if (child.namespaceUri === WML_NAMESPACE_URI) continue;
-      foreign.push(canonicalOoxmlFingerprint(child));
+      foreign.push(genericStructureFingerprint(child, childBindings));
     }
     foreign.sort(); // order among properties is not authored meaning
     out.push(...foreign);
     return;
   }
   if (node.kind === 'generic') {
-    out.push(canonicalOoxmlFingerprint(node));
+    out.push(genericStructureFingerprint(node, inheritedBindings));
     return; // fingerprint covers the whole subtree; do not double-count descendants
   }
   if (isContentControl(node)) {
@@ -213,10 +251,16 @@ function collectGeneric(node: OoxmlNode, out: string[]): void {
   // was dropped. Fingerprinting them keeps a lost anchor a reported loss, which is what it
   // was while they were generic.
   if (node.kind === 'bookmarkStart' || node.kind === 'bookmarkEnd') {
-    out.push(canonicalOoxmlFingerprint(node));
+    out.push(canonicalOoxmlFingerprintWithBindings(node, inheritedBindings));
     return;
   }
-  for (const child of node.children) collectGeneric(child, out);
+  if (node.kind === 'drawing') {
+    out.push(drawingStructureToken(node));
+    return;
+  }
+  if (isDrawingKnownKind(node.kind)) return;
+  const childBindings = bindingsForElement(inheritedBindings, node);
+  for (const child of node.children) collectGeneric(child, out, childBindings);
 }
 
 /**
@@ -230,6 +274,143 @@ function linkIdentityToken(link: OoxmlElement): string {
     .map((attribute) => `${attribute.namespaceUri}|${attribute.localName}=${attribute.value}`)
     .sort();
   return `hyperlink(${attributes.join(',')})`;
+}
+
+function blipRelationshipToken(picture: OoxmlElement): string | undefined {
+  for (const child of picture.children) {
+    if (child.kind !== 'pictureBlipFill') continue;
+    for (const blip of child.children) {
+      if (blip.kind !== 'pictureBlip') continue;
+      const embed = blip.attributes.find(
+        (attribute) =>
+          attribute.localName === 'embed' && attribute.namespaceUri === RELATIONSHIPS_NAMESPACE_URI
+      )?.value;
+      const link = blip.attributes.find(
+        (attribute) =>
+          attribute.localName === 'link' && attribute.namespaceUri === RELATIONSHIPS_NAMESPACE_URI
+      )?.value;
+      if (embed !== undefined) return `embed=${embed}`;
+      if (link !== undefined) return `link=${link}`;
+    }
+  }
+  return undefined;
+}
+
+function pictureSemanticChildToken(
+  node: OoxmlNode,
+  depth: number,
+  inheritedBindings: ReadonlyMap<string, string>
+): string {
+  if (node.kind === 'textValue') return `#${node.value}`;
+  if (depth >= MAX_XML_DEPTH) return qualifiedName(node);
+  const bindings = bindingsForElement(inheritedBindings, node);
+  if (node.kind === 'generic') return genericStructureFingerprint(node, bindings);
+  const attrs = attributeTokens(node);
+  const head =
+    attrs.length > 0 ? `${qualifiedName(node)}(${attrs.join(',')})` : qualifiedName(node);
+  const nested: string[] = [];
+  for (const child of node.children) {
+    if (child.kind === 'textValue') continue;
+    nested.push(pictureSemanticChildToken(child, depth + 1, bindings));
+  }
+  nested.sort();
+  return nested.length > 0 ? `${head}[${nested.join(',')}]` : head;
+}
+
+function pictureSemanticTokens(
+  picture: OoxmlElement,
+  depth: number,
+  inheritedBindings: ReadonlyMap<string, string>
+): string[] {
+  const bindings = bindingsForElement(inheritedBindings, picture);
+  const tokens: string[] = [];
+  for (const child of picture.children) {
+    if (child.kind === 'textValue') continue;
+    if (child.kind === 'pictureBlipFill') {
+      const blipFillChildren = child.children;
+      const blip = blipFillChildren.find((c) => c.kind === 'pictureBlip');
+      const effects = blipFillChildren
+        .filter((c) => c.kind !== 'pictureBlip')
+        .map((effect) => pictureSemanticChildToken(effect, depth + 1, bindings));
+      effects.sort();
+      if (blip && blip.kind === 'pictureBlip') {
+        const blipAttrs = attributeTokens(blip);
+        const blipHead =
+          blipAttrs.length > 0 ? `pictureBlip(${blipAttrs.join(',')})` : 'pictureBlip';
+        tokens.push(effects.length > 0 ? `${blipHead}[${effects.join(',')}]` : blipHead);
+      } else {
+        for (const blipChild of blipFillChildren) {
+          tokens.push(pictureSemanticChildToken(blipChild, depth + 1, bindings));
+        }
+      }
+      continue;
+    }
+    tokens.push(pictureSemanticChildToken(child, depth + 1, bindings));
+  }
+  tokens.sort();
+  return tokens;
+}
+
+function drawingChildFingerprint(
+  node: OoxmlNode,
+  depth: number,
+  inheritedBindings: ReadonlyMap<string, string>
+): string {
+  if (node.kind === 'textValue') return `#${node.value}`;
+  if (depth >= MAX_XML_DEPTH) return qualifiedName(node);
+  const bindings = bindingsForElement(inheritedBindings, node);
+  if (node.kind === 'drawingDocPr') {
+    const attrs = attributeTokens(node);
+    return attrs.length > 0 ? `docPr(${attrs.join(',')})` : 'docPr';
+  }
+  if (node.kind === 'picture') {
+    const relationship = blipRelationshipToken(node);
+    const semantic = pictureSemanticTokens(node, depth + 1, bindings);
+    const head = relationship === undefined ? 'picture' : `picture(${relationship})`;
+    return semantic.length > 0 ? `${head}[${semantic.join(',')}]` : head;
+  }
+  const attributes = attributeTokens(node);
+  const head =
+    attributes.length > 0 ? `${qualifiedName(node)}(${attributes.join(',')})` : qualifiedName(node);
+  const nested: string[] = [];
+  for (const child of node.children) {
+    if (child.kind === 'picture') {
+      nested.push(drawingChildFingerprint(child, depth + 1, bindings));
+      continue;
+    }
+    if (child.kind === 'generic') {
+      nested.push(genericStructureFingerprint(child, bindings));
+      continue;
+    }
+    if (child.kind !== 'textValue')
+      nested.push(drawingChildFingerprint(child, depth + 1, bindings));
+  }
+  return nested.length > 0 ? `${head}[${nested.join(',')}]` : head;
+}
+
+function drawingStructureToken(drawing: OoxmlElement): string {
+  const drawingBindings = bindingsForElement(DEFAULT_FINGERPRINT_BINDINGS, drawing);
+  const anchor = drawing.children.find(
+    (child) => child.kind === 'inlineDrawing' || child.kind === 'anchoredDrawing'
+  );
+  if (!anchor || anchor.kind === 'textValue') {
+    return `drawing(${attributeTokens(drawing).join(',')})`;
+  }
+  const anchorBindings = bindingsForElement(drawingBindings, anchor);
+  const anchorAttributes = attributeTokens(anchor);
+  const anchorHead =
+    anchorAttributes.length > 0 ? `${anchor.kind}(${anchorAttributes.join(',')})` : anchor.kind;
+  const payload: string[] = [];
+  for (const child of anchor.children) {
+    if (child.kind === 'generic') {
+      payload.push(genericStructureFingerprint(child, anchorBindings));
+      continue;
+    }
+    if (child.kind !== 'textValue') payload.push(drawingChildFingerprint(child, 1, anchorBindings));
+  }
+  return payload.length > 0
+    ? `drawing[${anchorHead};${payload.join(';')}]`
+    : `drawing[${anchorHead}]`;
 }
 
 function digestParagraph(
@@ -247,8 +428,10 @@ function digestParagraph(
   // text and properties. Digesting the link as an opaque blob would have been the easy
   // reading, but then editing a word inside a link would show up as "the whole link changed"
   // and a lost run inside one would not show up at all.
-  const visit = (child: OoxmlNode): void => {
+  const paragraphBindings = bindingsForElement(DEFAULT_FINGERPRINT_BINDINGS, paragraph);
+  const visit = (child: OoxmlNode, inheritedBindings: ReadonlyMap<string, string>): void => {
     if (child.kind === 'run') {
+      const runBindings = bindingsForElement(inheritedBindings, child);
       const rPr = child.children.find(
         (grand): grand is OoxmlRunPropertiesNode => grand.kind === 'runProperties'
       );
@@ -256,12 +439,17 @@ function digestParagraph(
       text += textOf(child);
       // Includes the run's own `w:rPr`, so a FOREIGN-namespace property child is digested
       // exactly once (there) rather than falling between the two collectors.
-      for (const grand of child.children) collectGeneric(grand, genericStructure);
+      for (const grand of child.children) collectGeneric(grand, genericStructure, runBindings);
+      return;
+    }
+    if (child.kind === 'drawing') {
+      genericStructure.push(drawingStructureToken(child));
       return;
     }
     if (child.kind === 'hyperlink') {
       genericStructure.push(linkIdentityToken(child));
-      for (const inner of child.children) visit(inner);
+      const linkBindings = bindingsForElement(inheritedBindings, child);
+      for (const inner of child.children) visit(inner, linkBindings);
       return;
     }
     // An inline content control, read the same way as a hyperlink and for the same reason.
@@ -270,6 +458,8 @@ function digestParagraph(
     // that emptied a form field would digest identically to one that kept its value. The
     // control's own `w:sdtPr`/`w:sdtEndPr` are fingerprinted — a lost tag, lock or type is a
     // reported loss — and its content is visited, so the runs inside contribute as runs.
+    // A still-generic `w:sdt` is not this case: it falls through to `collectGeneric`, whose
+    // whole-subtree fingerprint already covers its content exactly once.
     if (child.kind === 'contentControl') {
       genericStructure.push(
         canonicalOoxmlFingerprint({
@@ -277,20 +467,17 @@ function digestParagraph(
           children: child.children.filter((inner) => inner.kind !== 'contentControlContent'),
         })
       );
+      const controlBindings = bindingsForElement(inheritedBindings, child);
       for (const inner of child.children) {
-        if (inner.kind === 'contentControlContent') {
-          for (const held of inner.children) visit(held);
-          continue;
-        }
+        if (inner.kind !== 'contentControlContent') continue;
+        const contentBindings = bindingsForElement(controlBindings, inner);
+        for (const held of inner.children) visit(held, contentBindings);
       }
       return;
     }
-    collectGeneric(child, genericStructure);
+    collectGeneric(child, genericStructure, inheritedBindings);
   };
-  for (const child of paragraph.children) {
-    if (child.kind === 'paragraphProperties') continue;
-    visit(child);
-  }
+  for (const child of paragraph.children) visit(child, paragraphBindings);
   const paraId = paraIdOf(paragraph);
   return {
     ordinal,

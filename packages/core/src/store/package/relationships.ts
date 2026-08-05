@@ -7,6 +7,10 @@
 
 import { resolveInternalTarget, validateExternalTarget, type NameResult } from './opc-names.ts';
 
+/** OOXML image relationship type for embedded or linked media parts. */
+export const IMAGE_RELATIONSHIP_TYPE =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image';
+
 export type TargetMode = 'Internal' | 'External';
 
 export interface RelationshipRecord {
@@ -71,4 +75,33 @@ export function resolveRelationship(rec: RelationshipRecord): ResolvedRelationsh
     target: resolveInternalTarget(rec.ownerPart, rec.rawTarget),
     raw: rec.rawTarget,
   };
+}
+
+export type ImageRelationshipResolution =
+  | { readonly mode: 'internal'; readonly partName: string; readonly raw: string }
+  | { readonly mode: 'external'; readonly sinkSafe: boolean; readonly raw: string }
+  | { readonly mode: 'missing' };
+
+/**
+ * Resolve an image relationship id from an owner part. Internal targets resolve
+ * owner-relative; external targets are never fetched; a missing id is `missing`.
+ */
+export function resolveImageRelationship(
+  records: readonly RelationshipRecord[] | undefined,
+  ownerPart: string,
+  relationshipId: string
+): ImageRelationshipResolution {
+  if (!records) return { mode: 'missing' };
+  for (const record of records) {
+    if (record.ownerPart !== ownerPart) continue;
+    if (record.id !== relationshipId) continue;
+    if (record.type !== IMAGE_RELATIONSHIP_TYPE) return { mode: 'missing' };
+    const resolved = resolveRelationship(record);
+    if (resolved.mode === 'External') {
+      return { mode: 'external', sinkSafe: resolved.sinkSafe.ok, raw: resolved.raw };
+    }
+    if (!resolved.target.ok) return { mode: 'missing' };
+    return { mode: 'internal', partName: resolved.target.partName, raw: resolved.raw };
+  }
+  return { mode: 'missing' };
 }

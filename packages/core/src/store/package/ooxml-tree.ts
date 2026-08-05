@@ -14,6 +14,9 @@ import {
   WML_NAMESPACE_URI,
   XML_NAMESPACE_URI,
   XMLNS_NAMESPACE_URI,
+  DRAWINGML_MAIN_NAMESPACE_URI,
+  WP_NAMESPACE_URI,
+  PIC_NAMESPACE_URI,
   expandedKey,
   knownKindAllowsWmlVal,
   splitQName,
@@ -22,15 +25,29 @@ import {
   type ExpandedName,
   type KnownKind,
 } from './ooxml-shared.ts';
+import {
+  demoteDrawingKindsInSubtree,
+  isDrawingKnownKind,
+  resolveDrawingElementKind,
+  validateDrawingNode,
+  type DrawingParentContext,
+} from './ooxml-drawing-rules.ts';
 
 export {
   W14_NAMESPACE_URI,
   WML_NAMESPACE_URI,
   XML_NAMESPACE_URI,
   XMLNS_NAMESPACE_URI,
+  DRAWINGML_MAIN_NAMESPACE_URI,
+  WP_NAMESPACE_URI,
+  PIC_NAMESPACE_URI,
+  RELATIONSHIPS_NAMESPACE_URI,
+  PIC_GRAPHIC_DATA_URI,
 } from './ooxml-shared.ts';
 export {
   canonicalOoxmlFingerprint,
+  canonicalOoxmlFingerprintWithBindings,
+  DEFAULT_FINGERPRINT_BINDINGS,
   ooxmlTreesEqual,
   serializeOoxmlPart,
 } from './ooxml-serialize.ts';
@@ -387,6 +404,7 @@ export interface OoxmlRunNode extends OoxmlElementBase<
     | OoxmlNoteRefNode
     | OoxmlSeparatorNode
     | OoxmlContinuationSeparatorNode
+    | OoxmlDrawingNode
     | OoxmlGenericElementNode
   )[],
   readonly OoxmlKnownNodeAttribute[]
@@ -394,6 +412,360 @@ export interface OoxmlRunNode extends OoxmlElementBase<
   readonly kind: 'run';
   readonly namespaceUri: typeof WML_NAMESPACE_URI;
   readonly localName: 'r';
+}
+
+/** `w:drawing` — run content only; exactly one typed inline or anchored child. */
+export interface OoxmlDrawingNode extends OoxmlElementBase<
+  readonly (OoxmlInlineDrawingNode | OoxmlAnchoredDrawingNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'drawing';
+  readonly namespaceUri: typeof WML_NAMESPACE_URI;
+  readonly localName: 'drawing';
+}
+
+/** `wp:inline` / `wp:anchor` shared payload children. */
+type OoxmlDrawingAnchorChild =
+  | OoxmlDrawingExtentNode
+  | OoxmlDrawingEffectExtentNode
+  | OoxmlDrawingDocPrNode
+  | OoxmlDrawingGraphicFramePrNode
+  | OoxmlDrawingGraphicNode
+  | OoxmlDrawingSimplePosNode
+  | OoxmlDrawingPositionHNode
+  | OoxmlDrawingPositionVNode
+  | OoxmlDrawingWrapNoneNode
+  | OoxmlDrawingWrapSquareNode
+  | OoxmlDrawingWrapTightNode
+  | OoxmlDrawingWrapThroughNode
+  | OoxmlDrawingWrapTopBottomNode
+  | OoxmlGenericElementNode;
+
+/** `wp:inline` (`CT_Inline`) — typed only under `w:drawing`. */
+export interface OoxmlInlineDrawingNode extends OoxmlElementBase<
+  readonly OoxmlDrawingAnchorChild[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'inlineDrawing';
+  readonly namespaceUri: typeof WP_NAMESPACE_URI;
+  readonly localName: 'inline';
+}
+
+/** `wp:anchor` (`CT_Anchor`) — typed only under `w:drawing`. */
+export interface OoxmlAnchoredDrawingNode extends OoxmlElementBase<
+  readonly OoxmlDrawingAnchorChild[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'anchoredDrawing';
+  readonly namespaceUri: typeof WP_NAMESPACE_URI;
+  readonly localName: 'anchor';
+}
+
+export interface OoxmlDrawingExtentNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'drawingExtent';
+  readonly namespaceUri: typeof WP_NAMESPACE_URI;
+  readonly localName: 'extent';
+}
+
+export interface OoxmlDrawingEffectExtentNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'drawingEffectExtent';
+  readonly namespaceUri: typeof WP_NAMESPACE_URI;
+  readonly localName: 'effectExtent';
+}
+
+export interface OoxmlDrawingDocPrNode extends OoxmlElementBase<
+  readonly OoxmlGenericElementNode[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'drawingDocPr';
+  readonly namespaceUri: typeof WP_NAMESPACE_URI;
+  readonly localName: 'docPr';
+}
+
+export interface OoxmlDrawingGraphicFramePrNode extends OoxmlElementBase<
+  readonly OoxmlGenericElementNode[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'drawingGraphicFramePr';
+  readonly namespaceUri: typeof WP_NAMESPACE_URI;
+  readonly localName: 'cNvGraphicFramePr';
+}
+
+export interface OoxmlDrawingGraphicNode extends OoxmlElementBase<
+  readonly (OoxmlDrawingGraphicDataNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'drawingGraphic';
+  readonly namespaceUri: typeof DRAWINGML_MAIN_NAMESPACE_URI;
+  readonly localName: 'graphic';
+}
+
+export interface OoxmlDrawingGraphicDataNode extends OoxmlElementBase<
+  readonly (OoxmlPictureNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'drawingGraphicData';
+  readonly namespaceUri: typeof DRAWINGML_MAIN_NAMESPACE_URI;
+  readonly localName: 'graphicData';
+}
+
+export interface OoxmlDrawingSimplePosNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'drawingSimplePos';
+  readonly namespaceUri: typeof WP_NAMESPACE_URI;
+  readonly localName: 'simplePos';
+}
+
+export interface OoxmlDrawingPositionHNode extends OoxmlElementBase<
+  readonly (
+    | OoxmlDrawingPositionAlignNode
+    | OoxmlDrawingPositionOffsetNode
+    | OoxmlGenericElementNode
+  )[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'drawingPositionH';
+  readonly namespaceUri: typeof WP_NAMESPACE_URI;
+  readonly localName: 'positionH';
+}
+
+export interface OoxmlDrawingPositionVNode extends OoxmlElementBase<
+  readonly (
+    | OoxmlDrawingPositionAlignNode
+    | OoxmlDrawingPositionOffsetNode
+    | OoxmlGenericElementNode
+  )[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'drawingPositionV';
+  readonly namespaceUri: typeof WP_NAMESPACE_URI;
+  readonly localName: 'positionV';
+}
+
+export interface OoxmlDrawingPositionAlignNode extends OoxmlElementBase<
+  readonly (OoxmlTextNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'drawingPositionAlign';
+  readonly namespaceUri: typeof WP_NAMESPACE_URI;
+  readonly localName: 'align';
+}
+
+export interface OoxmlDrawingPositionOffsetNode extends OoxmlElementBase<
+  readonly (OoxmlTextNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'drawingPositionOffset';
+  readonly namespaceUri: typeof WP_NAMESPACE_URI;
+  readonly localName: 'posOffset';
+}
+
+export interface OoxmlDrawingWrapNoneNode extends OoxmlElementBase<
+  readonly OoxmlGenericElementNode[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'drawingWrapNone';
+  readonly namespaceUri: typeof WP_NAMESPACE_URI;
+  readonly localName: 'wrapNone';
+}
+
+export interface OoxmlDrawingWrapSquareNode extends OoxmlElementBase<
+  readonly (OoxmlDrawingEffectExtentNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'drawingWrapSquare';
+  readonly namespaceUri: typeof WP_NAMESPACE_URI;
+  readonly localName: 'wrapSquare';
+}
+
+export interface OoxmlDrawingWrapTightNode extends OoxmlElementBase<
+  readonly (OoxmlDrawingWrapPolygonNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'drawingWrapTight';
+  readonly namespaceUri: typeof WP_NAMESPACE_URI;
+  readonly localName: 'wrapTight';
+}
+
+export interface OoxmlDrawingWrapThroughNode extends OoxmlElementBase<
+  readonly (OoxmlDrawingWrapPolygonNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'drawingWrapThrough';
+  readonly namespaceUri: typeof WP_NAMESPACE_URI;
+  readonly localName: 'wrapThrough';
+}
+
+export interface OoxmlDrawingWrapTopBottomNode extends OoxmlElementBase<
+  readonly (OoxmlDrawingEffectExtentNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'drawingWrapTopBottom';
+  readonly namespaceUri: typeof WP_NAMESPACE_URI;
+  readonly localName: 'wrapTopAndBottom';
+}
+
+export interface OoxmlDrawingWrapPolygonNode extends OoxmlElementBase<
+  readonly (
+    | OoxmlDrawingWrapPolygonStartNode
+    | OoxmlDrawingWrapPolygonLineToNode
+    | OoxmlGenericElementNode
+  )[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'drawingWrapPolygon';
+  readonly namespaceUri: typeof WP_NAMESPACE_URI;
+  readonly localName: 'wrapPolygon';
+}
+
+export interface OoxmlDrawingWrapPolygonStartNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'drawingWrapPolygonStart';
+  readonly namespaceUri: typeof WP_NAMESPACE_URI;
+  readonly localName: 'start';
+}
+
+export interface OoxmlDrawingWrapPolygonLineToNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'drawingWrapPolygonLineTo';
+  readonly namespaceUri: typeof WP_NAMESPACE_URI;
+  readonly localName: 'lineTo';
+}
+
+/** `pic:pic` (`CT_Picture`) — typed only under picture `a:graphicData`. */
+export interface OoxmlPictureNode extends OoxmlElementBase<
+  readonly (
+    | OoxmlPictureNvPicPrNode
+    | OoxmlPictureBlipFillNode
+    | OoxmlPictureShapePropertiesNode
+    | OoxmlGenericElementNode
+  )[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'picture';
+  readonly namespaceUri: typeof PIC_NAMESPACE_URI;
+  readonly localName: 'pic';
+}
+
+export interface OoxmlPictureNvPicPrNode extends OoxmlElementBase<
+  readonly OoxmlGenericElementNode[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'pictureNvPicPr';
+  readonly namespaceUri: typeof PIC_NAMESPACE_URI;
+  readonly localName: 'nvPicPr';
+}
+
+export interface OoxmlPictureBlipFillNode extends OoxmlElementBase<
+  readonly (
+    | OoxmlPictureBlipNode
+    | OoxmlPictureSrcRectNode
+    | OoxmlPictureStretchNode
+    | OoxmlPictureTileNode
+    | OoxmlGenericElementNode
+  )[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'pictureBlipFill';
+  readonly namespaceUri: typeof PIC_NAMESPACE_URI;
+  readonly localName: 'blipFill';
+}
+
+export interface OoxmlPictureBlipNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'pictureBlip';
+  readonly namespaceUri: typeof DRAWINGML_MAIN_NAMESPACE_URI;
+  readonly localName: 'blip';
+}
+
+export interface OoxmlPictureSrcRectNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'pictureSrcRect';
+  readonly namespaceUri: typeof DRAWINGML_MAIN_NAMESPACE_URI;
+  readonly localName: 'srcRect';
+}
+
+export interface OoxmlPictureStretchNode extends OoxmlElementBase<
+  readonly OoxmlGenericElementNode[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'pictureStretch';
+  readonly namespaceUri: typeof DRAWINGML_MAIN_NAMESPACE_URI;
+  readonly localName: 'stretch';
+}
+
+export interface OoxmlPictureTileNode extends OoxmlElementBase<
+  readonly OoxmlGenericElementNode[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'pictureTile';
+  readonly namespaceUri: typeof DRAWINGML_MAIN_NAMESPACE_URI;
+  readonly localName: 'tile';
+}
+
+export interface OoxmlPictureShapePropertiesNode extends OoxmlElementBase<
+  readonly (OoxmlPictureTransformNode | OoxmlPicturePresetGeometryNode | OoxmlGenericElementNode)[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'pictureShapeProperties';
+  readonly namespaceUri: typeof PIC_NAMESPACE_URI;
+  readonly localName: 'spPr';
+}
+
+export interface OoxmlPictureTransformNode extends OoxmlElementBase<
+  readonly (
+    | OoxmlPictureTransformOffsetNode
+    | OoxmlPictureTransformExtentNode
+    | OoxmlGenericElementNode
+  )[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'pictureTransform';
+  readonly namespaceUri: typeof DRAWINGML_MAIN_NAMESPACE_URI;
+  readonly localName: 'xfrm';
+}
+
+export interface OoxmlPictureTransformOffsetNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'pictureTransformOffset';
+  readonly namespaceUri: typeof DRAWINGML_MAIN_NAMESPACE_URI;
+  readonly localName: 'off';
+}
+
+export interface OoxmlPictureTransformExtentNode extends OoxmlElementBase<
+  readonly [],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'pictureTransformExtent';
+  readonly namespaceUri: typeof DRAWINGML_MAIN_NAMESPACE_URI;
+  readonly localName: 'ext';
+}
+
+export interface OoxmlPicturePresetGeometryNode extends OoxmlElementBase<
+  readonly OoxmlGenericElementNode[],
+  readonly OoxmlKnownNodeAttribute[]
+> {
+  readonly kind: 'picturePresetGeometry';
+  readonly namespaceUri: typeof DRAWINGML_MAIN_NAMESPACE_URI;
+  readonly localName: 'prstGeom';
 }
 
 /**
@@ -871,6 +1243,40 @@ export type OoxmlElement =
   | OoxmlContentControlCheckedNode
   | OoxmlContentControlCheckedStateNode
   | OoxmlContentControlUncheckedStateNode
+  | OoxmlDrawingNode
+  | OoxmlInlineDrawingNode
+  | OoxmlAnchoredDrawingNode
+  | OoxmlDrawingExtentNode
+  | OoxmlDrawingEffectExtentNode
+  | OoxmlDrawingDocPrNode
+  | OoxmlDrawingGraphicFramePrNode
+  | OoxmlDrawingGraphicNode
+  | OoxmlDrawingGraphicDataNode
+  | OoxmlDrawingSimplePosNode
+  | OoxmlDrawingPositionHNode
+  | OoxmlDrawingPositionVNode
+  | OoxmlDrawingPositionAlignNode
+  | OoxmlDrawingPositionOffsetNode
+  | OoxmlDrawingWrapNoneNode
+  | OoxmlDrawingWrapSquareNode
+  | OoxmlDrawingWrapTightNode
+  | OoxmlDrawingWrapThroughNode
+  | OoxmlDrawingWrapTopBottomNode
+  | OoxmlDrawingWrapPolygonNode
+  | OoxmlDrawingWrapPolygonStartNode
+  | OoxmlDrawingWrapPolygonLineToNode
+  | OoxmlPictureNode
+  | OoxmlPictureNvPicPrNode
+  | OoxmlPictureBlipFillNode
+  | OoxmlPictureBlipNode
+  | OoxmlPictureSrcRectNode
+  | OoxmlPictureStretchNode
+  | OoxmlPictureTileNode
+  | OoxmlPictureShapePropertiesNode
+  | OoxmlPictureTransformNode
+  | OoxmlPictureTransformOffsetNode
+  | OoxmlPictureTransformExtentNode
+  | OoxmlPicturePresetGeometryNode
   | OoxmlGenericElementNode;
 
 export type OoxmlNode = OoxmlElement | OoxmlTextNode;
@@ -1011,6 +1417,17 @@ const SDT_MEMBER_KINDS: Readonly<Record<string, KnownKind>> = {
   sdtEndPr: 'contentControlEndProperties',
   sdtContent: 'contentControlContent',
 };
+
+function resolveElementKind(
+  namespaceUri: string,
+  localName: string,
+  parent?: DrawingParentContext
+): KnownKind | 'generic' {
+  const drawingKind = resolveDrawingElementKind(namespaceUri, localName, parent);
+  if (drawingKind !== null) return drawingKind as KnownKind | 'generic';
+  if (namespaceUri === WML_NAMESPACE_URI) return wmlKindFor(localName, parent?.wmlLocalName);
+  return 'generic';
+}
 
 /**
  * `w:ins` / `w:del` / `w:moveFrom` / `w:moveTo` in a CONTENT position, by parent.
@@ -1253,7 +1670,8 @@ function convertElement(
   path: string,
   inheritedPreserve: boolean,
   parentWmlLocalName?: string,
-  parentCandidate: KnownKind | 'generic' | undefined = undefined
+  parentCandidate: KnownKind | 'generic' | undefined = undefined,
+  parent?: DrawingParentContext
 ): OoxmlElement {
   const declarations = namespaceDeclarations(element, inherited);
   const name = resolveElementName(element.name, declarations.bindings);
@@ -1278,21 +1696,27 @@ function convertElement(
     contextualSdtMember && parentCandidate !== 'contentControl'
       ? undefined
       : candidateSdtKind(name.namespaceUri, name.localName, parentCandidate);
-  const candidateKind: KnownKind | 'generic' =
+  const wmlKind: KnownKind | 'generic' =
     sdtKind !== undefined
       ? (sdtKind as KnownKind)
       : isWml
         ? wmlKindFor(name.localName, parentWmlLocalName)
         : 'generic';
+  const drawingKind = resolveElementKind(name.namespaceUri, name.localName, parent);
+  const candidateKind =
+    drawingKind !== 'generic' && isDrawingKnownKind(drawingKind) ? drawingKind : wmlKind;
   const retainedChildren = canonicalLegacyChildren(
     element.children,
     preserve,
     candidateKind === 'text' || candidateKind === 'deletedText' || candidateKind === 'instrText'
   );
-  // A non-WML element is not a WML property parent, so it must not suppress a nested
-  // revision. Passing undefined keeps `w:ins` inside, say, an `mc:Fallback` a content
-  // revision, which is what it is.
-  const childParentName = isWml ? name.localName : undefined;
+  const childParent: DrawingParentContext = {
+    wmlLocalName: isWml ? name.localName : undefined,
+    kind: candidateKind,
+    namespaceUri: name.namespaceUri,
+    localName: name.localName,
+    attributes,
+  };
   const children = retainedChildren.map((child, index): OoxmlNode => {
     const childPath = `${path}.${index}`;
     if (child.type === 'text')
@@ -1307,31 +1731,40 @@ function convertElement(
       partName,
       childPath,
       preserve,
-      childParentName,
-      candidateKind
+      childParent.wmlLocalName,
+      childParent.kind === 'generic' ? undefined : (childParent.kind as KnownKind),
+      childParent
     );
   });
   const attributesOk =
     resolvedAttributes.compatibleWithKnownNode &&
     (!resolvedAttributes.hasWmlVal ||
       (candidateKind !== 'generic' && knownKindAllowsWmlVal(candidateKind)));
+  const kindChecksPass =
+    candidateKind !== 'generic' && isDrawingKnownKind(candidateKind)
+      ? validateDrawingNode(candidateKind, name.localName, attributes, children, parent)
+      : candidateKind !== 'generic' &&
+        validKnownKind(candidateKind, children) &&
+        noteKindCompatible(candidateKind, name.localName, attributes) &&
+        (candidateKind !== 'fldChar' ||
+          attributes.some((attribute) => {
+            if (attribute.localName !== 'fldCharType') return false;
+            if (attribute.namespaceUri !== WML_NAMESPACE_URI && attribute.namespaceUri !== '') {
+              return false;
+            }
+            return (
+              attribute.value === 'begin' ||
+              attribute.value === 'separate' ||
+              attribute.value === 'end'
+            );
+          }));
+
   const kind =
-    candidateKind !== 'generic' &&
-    attributesOk &&
-    validKnownKind(candidateKind, children) &&
-    (candidateKind !== 'fldChar' ||
-      attributes.some((attribute) => {
-        if (attribute.localName !== 'fldCharType') return false;
-        if (attribute.namespaceUri !== WML_NAMESPACE_URI && attribute.namespaceUri !== '') {
-          return false;
-        }
-        return (
-          attribute.value === 'begin' || attribute.value === 'separate' || attribute.value === 'end'
-        );
-      })) &&
-    noteKindCompatible(candidateKind, name.localName, attributes)
-      ? candidateKind
-      : 'generic';
+    candidateKind !== 'generic' && attributesOk && kindChecksPass ? candidateKind : 'generic';
+  const finalChildren =
+    kind === 'generic' && isDrawingKnownKind(candidateKind)
+      ? demoteDrawingKindsInSubtree(children)
+      : children;
   return {
     id: `${partName}#${path}`,
     kind,
@@ -1340,7 +1773,7 @@ function convertElement(
     ...(name.prefix === undefined ? {} : { prefix: name.prefix }),
     namespaceBindings: declarations.authored,
     attributes,
-    children,
+    children: finalChildren,
   } as OoxmlElement;
 }
 

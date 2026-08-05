@@ -5,7 +5,13 @@
 // tree-op-validate.ts; application lives in tree-op-apply.ts; both re-export via tree-ops.ts.
 
 import type { ContentControlLock } from '../package/content-control-nodes.ts';
-import type { OoxmlPart } from '../package/ooxml-tree.ts';
+import type { OoxmlDrawingNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import type {
+  DrawingLocksInput,
+  DrawingPositionInput,
+  ImageWrapTarget,
+  SourceCrop,
+} from '../package/drawing-projection.ts';
 import type {
   ContentControlValueInput,
   InsertableContentControlType,
@@ -44,7 +50,6 @@ export interface TableBorderSpecInput {
   readonly size: number;
   readonly color: TreeDocColorValue;
 }
-
 /**
  * The accepted RUN property boundary (design D8), as the OOXML element names that carry it.
  *
@@ -234,8 +239,14 @@ export type TreeDocOp =
        */
       readonly op: 'acceptRevision';
       readonly revision: RevisionAddress;
+      /** When set, only wrappers with this element local name resolve (ins/del/moveFrom/moveTo). */
+      readonly localName?: string;
     }
-  | { readonly op: 'rejectRevision'; readonly revision: RevisionAddress }
+  | {
+      readonly op: 'rejectRevision';
+      readonly revision: RevisionAddress;
+      readonly localName?: string;
+    }
   | {
       /**
        * Accept every revision in the part, in ONE transaction and one history entry.
@@ -425,6 +436,28 @@ export type TreeDocOp =
        */
       readonly op: 'removeHyperlink';
       readonly linkId: string;
+    }
+  | {
+      /**
+       * Insert a NEW run-level content control at a text offset: `w:sdt` with a
+       * `w:sdtPr` carrying the given tag (and alias/lock) and a `w:sdtContent`
+       * holding one run of `text`.
+       *
+       * The write half of the custom-node contract (pro-review-and-custom-nodes):
+       * a node's identity lives in `w:tag`, `sdtLocked` keeps Word users from
+       * unwrapping the anchor, and the literal run text is what Word (and the
+       * free tier) render. The TAG IS ATTACKER-ADJACENT ON READ but authored
+       * here; it is written as an ordinary attribute value, so the serializer's
+       * escaping covers it like every other attribute.
+       */
+      readonly op: 'insertInlineContentControl';
+      readonly paragraphId: string;
+      readonly offset: number;
+      readonly tag: string;
+      readonly text: string;
+      readonly alias?: string;
+      /** `w:lock` value; omitted writes no lock. */
+      readonly lock?: 'sdtLocked' | 'sdtContentLocked' | 'contentLocked';
     }
   | {
       /** Repeating-section item insert — unsupported at this layer (out of scope). */
@@ -702,6 +735,57 @@ export type TreeDocOp =
       };
     }
   | {
+      readonly op: 'insertDrawing';
+      readonly paragraphId: string;
+      readonly offset: number;
+      readonly drawing: OoxmlDrawingNode;
+    }
+  | {
+      readonly op: 'replaceDrawingResource';
+      readonly drawingNodeId: string;
+      readonly relationshipId: string;
+    }
+  | {
+      readonly op: 'deleteDrawing';
+      readonly drawingNodeId: string;
+      /** Suggesting-mode tracked deletion is refused; owned by typed-revisions-and-comments. */
+      readonly revision?: RevisionAttributionInput;
+    }
+  | {
+      readonly op: 'resizeDrawing';
+      readonly drawingNodeId: string;
+      readonly extentEmu: { readonly cx: number; readonly cy: number };
+    }
+  | { readonly op: 'cropDrawing'; readonly drawingNodeId: string; readonly crop: SourceCrop }
+  | {
+      readonly op: 'positionDrawing';
+      readonly drawingNodeId: string;
+      readonly position: DrawingPositionInput;
+    }
+  | {
+      readonly op: 'setDrawingWrap';
+      readonly drawingNodeId: string;
+      readonly wrap: ImageWrapTarget;
+    }
+  | {
+      readonly op: 'setDrawingMetadata';
+      readonly drawingNodeId: string;
+      readonly title: string;
+      readonly description: string;
+      /** Omitted preserves existing `a:hlinkClick`; null removes it; a URL needs a package transaction. */
+      readonly hyperlink?: string | null;
+    }
+  | {
+      readonly op: 'setDrawingLocks';
+      readonly drawingNodeId: string;
+      readonly locks: DrawingLocksInput;
+    }
+  | {
+      readonly op: 'transformDrawing';
+      readonly drawingNodeId: string;
+      readonly action: 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV';
+    }
+  | {
       /**
        * Replace a detected TOC field's cached result paragraphs and ensure heading bookmarks.
        * Preserves field chrome / instruction. One undo unit (phase A of TOC refresh).
@@ -732,6 +816,24 @@ export type TreeDocOp =
         readonly pageNumberText: string;
       }[];
     };
+
+/** Drawing mutation ops from typed-drawings-and-images task 11. */
+export type DrawingTreeDocOp = Extract<
+  TreeDocOp,
+  {
+    readonly op:
+      | 'insertDrawing'
+      | 'replaceDrawingResource'
+      | 'deleteDrawing'
+      | 'resizeDrawing'
+      | 'cropDrawing'
+      | 'positionDrawing'
+      | 'setDrawingWrap'
+      | 'setDrawingMetadata'
+      | 'setDrawingLocks'
+      | 'transformDrawing';
+  }
+>;
 
 export type TreeDocOpKind = TreeDocOp['op'];
 
@@ -764,6 +866,7 @@ export const TREE_DOC_OP_KINDS = [
   'removeHyperlink',
   'setContentControlValue',
   'removeContentControl',
+  'insertInlineContentControl',
   'addRepeatingSectionItem',
   'removeRepeatingSectionItem',
   'deleteBlock',
@@ -789,6 +892,16 @@ export const TREE_DOC_OP_KINDS = [
   'setNoteProperties',
   'setContentControlProperties',
   'insertContentControl',
+  'insertDrawing',
+  'replaceDrawingResource',
+  'deleteDrawing',
+  'resizeDrawing',
+  'cropDrawing',
+  'positionDrawing',
+  'setDrawingWrap',
+  'setDrawingMetadata',
+  'setDrawingLocks',
+  'transformDrawing',
   'insertToc',
   'replaceTocResult',
   'rewriteTocPageNumbers',
@@ -894,7 +1007,23 @@ export type TreeOpRejection =
   /** The addressed grid column id is missing or ambiguous without `w:tblGrid`. */
   | 'unknown-grid-column'
   /** The operation would exceed bounded table topology limits. */
-  | 'resource-limit';
+  | 'resource-limit'
+  /** The addressed node is not a top-level `w:drawing`. */
+  | 'not-a-drawing'
+  /** No `w:drawing` with this id exists in the part. */
+  | 'unknown-drawing'
+  /** The drawing's graphic payload is not a supported picture. */
+  | 'not-a-picture-drawing'
+  /** A lock flag or `@locked` forbids this mutation. */
+  | 'drawing-locked'
+  /** Finite EMU extent, crop, or position value is out of range. */
+  | 'invalid-drawing-value'
+  /** Insertion would cross a table-cell boundary or wrong story container. */
+  | 'cross-cell-drawing'
+  /** Suggesting-mode drawing deletion is not implemented in this change. */
+  | 'trackedDrawingDeletionUnsupported'
+  /** Hyperlink target creation or change needs an OPC relationship in a package transaction. */
+  | 'packageTransactionRequired';
 
 export type TreeOpResult =
   | { readonly ok: true; readonly part: OoxmlPart; readonly effect: TreeOpEffect }

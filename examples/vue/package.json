@@ -11,8 +11,10 @@
     "@docx-editor.dev/core": "^0.0.1",
     "@docx-editor.dev/core-contract": "workspace:*",
     "@docx-editor.dev/i18n": "workspace:*",
+    "@docx-editor.dev/pro": "workspace:*",
     "@docx-editor.dev/vue": "workspace:*",
-    "vue": "^3.5.0"
+    "vue": "^3.5.0",
+    "fflate": "^0.8.2"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",

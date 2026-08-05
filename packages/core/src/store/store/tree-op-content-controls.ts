@@ -297,6 +297,7 @@ const TREE_OP_REACH: {
   setRunProperties: (op) => over(op.paragraphId, op.start, op.end),
   insertHyperlink: (op) => over(op.paragraphId, op.start, op.end),
   insertContentControl: (op) => over(op.paragraphId, op.start, op.end),
+  insertInlineContentControl: (op) => writingAt(op.paragraphId, op.offset),
   // A split at a control's edge moves the whole control to one side of the break and changes
   // nothing it holds, so neither edge is inside. A split WITHIN it is, and the range says so.
   splitParagraph: (op) => beside(op.paragraphId, op.offset),
@@ -402,6 +403,19 @@ const TREE_OP_REACH: {
   setTableCellBorders: (op) => each(op.cellIds),
   setTableCellFill: (op) => each(op.cellIds),
   setTableCellVerticalAlignment: (op) => each(op.cellIds),
+  insertDrawing: (op) => writingAt(op.paragraphId, op.offset),
+  replaceDrawingResource: (op) => whole(op.drawingNodeId),
+  deleteDrawing: (op) => ({
+    kind: 'nodes',
+    targets: [{ nodeId: op.drawingNodeId, removes: true }],
+  }),
+  resizeDrawing: (op) => whole(op.drawingNodeId),
+  cropDrawing: (op) => whole(op.drawingNodeId),
+  positionDrawing: (op) => whole(op.drawingNodeId),
+  setDrawingWrap: (op) => whole(op.drawingNodeId),
+  setDrawingMetadata: (op) => whole(op.drawingNodeId),
+  setDrawingLocks: (op) => whole(op.drawingNodeId),
+  transformDrawing: (op) => whole(op.drawingNodeId),
   // A TOC is inserted BESIDE the named paragraph, in the body: the controls that matter are the
   // ones enclosing that paragraph, plus the headings the op writes bookmarks into.
   insertToc: (op) => ({

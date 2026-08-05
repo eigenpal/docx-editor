@@ -617,6 +617,54 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
             reason:
               'setSelection accepts { anchor: { paraId } }, a { range } whose from/to are paraId anchors, or a { range } carrying a semantic { anchor: { paragraphId, offset }, head } selection',
           };
+    case 'insertImage':
+      return command.data instanceof Uint8Array &&
+        (command.mime === 'image/png' ||
+          command.mime === 'image/jpeg' ||
+          command.mime === 'image/gif') &&
+        Number.isFinite(command.widthPoints) &&
+        Number.isFinite(command.heightPoints) &&
+        command.widthPoints > 0 &&
+        command.heightPoints > 0
+        ? { supported: true, mutating: true }
+        : {
+            supported: false,
+            code: 'invalidArgs',
+            reason: 'insertImage requires png/jpeg/gif bytes and finite dimensions',
+          };
+    case 'replaceImage':
+      return command.data instanceof Uint8Array
+        ? { supported: true, mutating: true }
+        : { supported: false, code: 'invalidArgs', reason: 'replaceImage requires image bytes' };
+    case 'deleteImage':
+      return { supported: true, mutating: true };
+    case 'setImageWrapType': {
+      const wraps = [
+        'inline',
+        'square',
+        'squareLeft',
+        'squareRight',
+        'tight',
+        'through',
+        'topAndBottom',
+        'behind',
+        'inFront',
+      ] as const;
+      return wraps.includes(command.target)
+        ? { supported: true, mutating: true }
+        : { supported: false, code: 'invalidArgs', reason: 'unsupported wrap target' };
+    }
+    case 'transformImage':
+      return command.action === 'rotateCW' ||
+        command.action === 'rotateCCW' ||
+        command.action === 'flipH' ||
+        command.action === 'flipV'
+        ? { supported: true, mutating: true }
+        : { supported: false, code: 'invalidArgs', reason: 'unsupported transform action' };
+    case 'setImagePosition':
+      return { supported: true, mutating: true };
+    case 'setImageProperties':
+      return { supported: true, mutating: true };
     default:
       return {
         supported: false,
@@ -778,6 +826,7 @@ export function snapshotsEqual(a: EditorSnapshot, b: EditorSnapshot): boolean {
     a.table === b.table &&
     a.tocContext === b.tocContext &&
     a.image === b.image &&
+    a.fontSubstitutions === b.fontSubstitutions &&
     a.page === b.page &&
     a.canUndo === b.canUndo &&
     a.canRedo === b.canRedo &&

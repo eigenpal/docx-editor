@@ -29,8 +29,11 @@ export {
   type RelationshipError,
   type RelationshipSetResult,
   type ResolvedRelationship,
+  type ImageRelationshipResolution,
+  IMAGE_RELATIONSHIP_TYPE,
   buildRelationshipSet,
   resolveRelationship,
+  resolveImageRelationship,
 } from './relationships.ts';
 export {
   DANGEROUS_KEYS,
@@ -124,6 +127,7 @@ export {
   relationshipsOf,
   relsPartNameFor,
   resolveContentTypeOf,
+  contentTypesPartBytes,
   validatePackageInvariants,
   withContentTypeOverride,
   withNewPart,
@@ -132,6 +136,13 @@ export {
   type PackageInvariantIssue,
   type PackageInvariantResult,
 } from './package-edit.ts';
+export {
+  allocateDrawingPropertyId,
+  withBinaryPart,
+  withEmbeddedImage,
+  withoutUnreferencedImagePart,
+  type DrawingPropertyIdResult,
+} from './drawing-package-edit.ts';
 export {
   type ZipRejection,
   type ZipLimits,
@@ -166,6 +177,25 @@ export {
   type OoxmlPackageResult,
   type OoxmlExternalTarget,
 } from './ooxml-package.ts';
+export {
+  type SupportedImageMime,
+  type PreservedImageMime,
+  type ImageResourceState,
+  type ImageDecodePort,
+  type ImageResourceLookup,
+  type CreateImageResourceCacheOptions,
+  createImageResourceCache,
+  imageResourceLookupFor,
+  liveDrawingReferenceCount,
+  sniffImageMime,
+  hasBoundedSvgRoot,
+  MAX_SVG_SNIFF_BYTES,
+  validatePngHeader,
+  validateGifHeader,
+  validateJpegHeader,
+  validateRasterHeader,
+  type ValidatedRasterHeader,
+} from './image-resources.ts';
 export {
   resolveHeaderFooterParts,
   resolveHeaderFooterPartsBySection,

@@ -7,6 +7,8 @@
 // `currentPackage()` / save always merge every open store back into the canonical OOXML
 // package.
 //
+// Drawing media/package intents (task 12) wire through `tree-package-images.ts`.
+//
 // Story targeting: body / headerFooter mirror `EditorScope`; notes use internal
 // `{ kind: 'notesPart'; noteKind }` (one store per footnotes/endnotes part, not per note).
 // Editing focus still uses `EditorScope { kind: 'note'; id: 'footnote:N' }`. Furniture and
@@ -47,6 +49,19 @@ import {
   type TreeStoryRef,
   type TransactionContext,
 } from './tree-store.ts';
+import {
+  applyImagePropertiesIntent,
+  deleteImage as deleteImageIntent,
+  embedExternalImage as embedExternalImageIntent,
+  insertImage as insertImageIntent,
+  replaceImage as replaceImageIntent,
+  setDrawingMetadataWithHyperlink as setDrawingMetadataWithHyperlinkIntent,
+  type ApplyImagePropertiesInput,
+  type ExternalImageFetchPort,
+  type ImageIntentResult,
+  type InsertImageInput,
+} from './tree-package-images.ts';
+import type { ImageDecodePort, SupportedImageMime } from '../package/image-resources.ts';
 
 type NoteCascadeFn = (before: OoxmlPackage, after: OoxmlPackage) => OoxmlPackage | null;
 
@@ -355,11 +370,11 @@ export class TreePackageStore {
       if (cascadedPkg === null) {
         // Roll back story mutation AND history stacks (including redo cleared by transact).
         store.restoreCheckpoint(checkpoint);
-        this.installPackageSnapshot(beforePackage);
+        this.installPackageSnapshotInternal(beforePackage);
         return { ok: false, reason: 'invalidArgs', detail: 'note-cascade-failed' };
       }
       if (cascadedPkg !== afterStory) {
-        this.installPackageSnapshot(cascadedPkg);
+        this.installPackageSnapshotInternal(cascadedPkg);
         if (!compositionWasOpen) {
           store.restoreHistoryStacks(checkpoint);
         } else if (this.compositionSession) {
@@ -392,6 +407,11 @@ export class TreePackageStore {
       return { ok: true, change };
     }
     return { ok: true, change: result.change };
+  }
+
+  /** Whether a package-wide IME composition session is open on any story. */
+  compositionSessionOpen(): boolean {
+    return this.compositionSession !== null;
   }
 
   beginComposition(scope: StoryScope, selectionBefore: SelectionMark | null = null): boolean {
@@ -466,7 +486,7 @@ export class TreePackageStore {
       // Cascade already deleted note bodies with no history unit yet — restore the
       // pre-composition package so cancel cannot strand irreversible note loss.
       if (store) store.restoreCheckpoint(session.storyCheckpoint);
-      this.installPackageSnapshot(session.beforePackage);
+      this.installPackageSnapshotInternal(session.beforePackage);
       this.packageRev += 1;
       const story =
         session.partName === this.body.part.name
@@ -505,7 +525,7 @@ export class TreePackageStore {
       if (result.package === before) {
         return { ok: true, change: null };
       }
-      this.installPackageSnapshot(result.package);
+      this.installPackageSnapshotInternal(result.package);
       this.pushUndoPointer({ kind: 'package', before, after: result.package });
       this.packageRev += 1;
       const story: TreeStoryRef = { kind: 'body', partName: this.body.part.name };
@@ -531,7 +551,7 @@ export class TreePackageStore {
       };
     }
 
-    this.installPackageSnapshot(result.package);
+    this.installPackageSnapshotInternal(result.package);
     this.pushUndoPointer({ kind: 'package', before, after: result.package });
     this.packageRev += 1;
 
@@ -550,7 +570,7 @@ export class TreePackageStore {
     const pointer = this.undoOrder.pop();
     if (!pointer) return null;
     if (pointer.kind === 'package') {
-      this.installPackageSnapshot(pointer.before);
+      this.installPackageSnapshotInternal(pointer.before);
       this.redoOrder.push(pointer);
       this.packageRev += 1;
       const change = this.publishSynthetic(
@@ -579,7 +599,7 @@ export class TreePackageStore {
     const pointer = this.redoOrder.pop();
     if (!pointer) return null;
     if (pointer.kind === 'package') {
-      this.installPackageSnapshot(pointer.after);
+      this.installPackageSnapshotInternal(pointer.after);
       this.undoOrder.push(pointer);
       this.packageRev += 1;
       const change = this.publishSynthetic(
@@ -626,6 +646,102 @@ export class TreePackageStore {
   }
 
   /**
+   * Insert a validated raster image as one package undo unit (task 12).
+   */
+  insertImage(scope: StoryScope, input: InsertImageInput): Promise<ImageIntentResult> {
+    return insertImageIntent(this, scope, input);
+  }
+
+  /** Replace a picture drawing's embedded media in one package undo unit. */
+  replaceImage(
+    scope: StoryScope,
+    drawingNodeId: string,
+    bytes: Uint8Array,
+    mime: SupportedImageMime,
+    decodePort: ImageDecodePort,
+    options: import('./tree-package-images.ts').ReplaceImageOptions
+  ): Promise<ImageIntentResult> {
+    return replaceImageIntent(this, scope, drawingNodeId, bytes, mime, decodePort, options);
+  }
+
+  /** Delete a picture drawing and collect orphaned media in one package undo unit. */
+  deleteImage(scope: StoryScope, drawingNodeId: string): ImageIntentResult {
+    return deleteImageIntent(this, scope, drawingNodeId);
+  }
+
+  /** Fetch external bytes explicitly and embed them; no fetch on open/load. */
+  embedExternalImage(
+    scope: StoryScope,
+    drawingNodeId: string,
+    url: string,
+    port: ExternalImageFetchPort,
+    signal: AbortSignal,
+    decodePort: ImageDecodePort
+  ): Promise<ImageIntentResult> {
+    return embedExternalImageIntent(this, scope, drawingNodeId, url, port, signal, decodePort);
+  }
+
+  /** Metadata plus hyperlink target creation in one package transaction. */
+  setDrawingMetadataWithHyperlink(
+    scope: StoryScope,
+    drawingNodeId: string,
+    title: string,
+    description: string,
+    hyperlink: string | null
+  ): ImageIntentResult {
+    return setDrawingMetadataWithHyperlinkIntent(
+      this,
+      scope,
+      drawingNodeId,
+      title,
+      description,
+      hyperlink
+    );
+  }
+
+  /** Properties batch with hyperlink relationship create/update/remove in one package unit. */
+  applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult {
+    return applyImagePropertiesIntent(this, scope, input);
+  }
+
+  /**
+   * Promote a story transaction that wrote package bytes to one package undo pointer.
+   * Used by image intents and note-reference cascade.
+   */
+  promoteStoryTransactionToPackageUnit(
+    beforePackage: OoxmlPackage,
+    store: TreeDocumentStore,
+    checkpoint: TreeDocumentCheckpoint,
+    beforeDepth: number
+  ): TreeModelChange {
+    this.installPackageSnapshotInternal(store.package);
+    if (store.historyDepth > beforeDepth) {
+      store.restoreHistoryStacks(checkpoint);
+    }
+    this.pushUndoPointer({
+      kind: 'package',
+      before: beforePackage,
+      after: this.currentPackage(),
+    });
+    this.packageRev += 1;
+    const story =
+      store.part.name === this.body.part.name
+        ? ({ kind: 'body', partName: store.part.name } as const)
+        : this.storyRefForPart(store.part.name);
+    return this.publishSynthetic(
+      ORIGIN_IDS.mutationHuman,
+      story?.kind === 'headerFooter' ? 'global' : 'flow-structural',
+      story ?? { kind: 'body', partName: this.body.part.name },
+      []
+    );
+  }
+
+  /** Install a full package snapshot (public seam for post-fetch cleanup). */
+  installPackageSnapshot(snapshot: OoxmlPackage): void {
+    this.installPackageSnapshotInternal(snapshot);
+  }
+
+  /**
    * Replace the package shell while preserving opened stores. Used when numbering /
    * content-types mutate the package outside story trees.
    */
@@ -655,7 +771,7 @@ export class TreePackageStore {
    * park when the part is temporarily absent and are pruned once history can no longer restore
    * the owner. Lifecycle-cloned owned relationships are not shell-minted and GC with the part.
    */
-  private installPackageSnapshot(snapshot: OoxmlPackage): void {
+  private installPackageSnapshotInternal(snapshot: OoxmlPackage): void {
     // Capture live shell before replacing — snapshot may predate numbering/hyperlink writes.
     const merged = mergePersistentPackageShell(snapshot, this.pkg, this.shellHyperlinks);
     const main = merged.parts.get(merged.mainDocumentPart);

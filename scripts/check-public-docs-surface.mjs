@@ -35,7 +35,6 @@ const required = {
       'DocxEditorToolbar',
       'DocxEditorMenu',
       'DocxEditorNavigation',
-      'DocxEditorReview',
       'DocxEditorPageSetupDialog',
     ],
   },

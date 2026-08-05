@@ -4,12 +4,10 @@ The documented root API shape is shared by the React and Vue packages.
 
 ```ts
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
-import '@docx-editor.dev/react/styles.css';
 ```
 
 ```ts
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
-import '@docx-editor.dev/vue/styles.css';
 ```
 
 Both packages export `DocxEditor`, `DocxEditorProps`, `DocxEditorRef`, and

@@ -1,0 +1,1878 @@
+// Bounded semantic projection for typed `w:drawing` nodes and run-level MC wrappers (task 3).
+//
+// Reads the canonical tree without mutating it. `mc:AlternateContent` branch selection is
+// projection-only — every authored branch stays in the tree on save.
+
+import { sanitizeHref } from './sinks.ts';
+import { HYPERLINK_RELATIONSHIP_TYPE, type RelationshipTargetResolver } from './hyperlink.ts';
+import { resolveRelationship } from './relationships.ts';
+import {
+  DRAWING_WRAP_POLYGON_MAX_POINTS,
+  MAX_XML_DEPTH,
+  ST_COORDINATE_MAX,
+  ST_COORDINATE_MIN,
+  ST_POSITION_OFFSET_MAX,
+  ST_POSITION_OFFSET_MIN,
+  schemaAttributeValue,
+} from './ooxml-drawing-rules.ts';
+import {
+  createWalkState,
+  emptyNamespaceScope,
+  findDirectKind,
+  isElement,
+  isMcAlternateContent,
+  isMcChoice,
+  isMcFallback,
+  namespaceScopeForNode,
+  type DrawingDiagnostic,
+  type DrawingProjectionLimits,
+  type WalkState,
+} from './drawing-projection-walk.ts';
+import {
+  MC_NAMESPACE_URI,
+  RELATIONSHIPS_NAMESPACE_URI,
+  W14_NAMESPACE_URI,
+  WML_NAMESPACE_URI,
+} from './ooxml-shared.ts';
+import {
+  DRAWINGML_MAIN_NAMESPACE_URI,
+  PIC_NAMESPACE_URI,
+  WP_NAMESPACE_URI,
+  type OoxmlDrawingNode,
+  type OoxmlElement,
+  type OoxmlGenericElementNode,
+  type OoxmlNode,
+  type OoxmlPart,
+} from './ooxml-tree.ts';
+import type { OoxmlPackage } from './ooxml-package.ts';
+
+export type { DrawingDiagnostic, DrawingProjectionLimits };
+
+export type DrawingKind = 'inline' | 'anchored';
+
+/** Nine Word wrap menu targets (inline plus eight floating modes). @public */
+export type ImageWrapTarget =
+  | 'inline'
+  | 'square'
+  | 'squareLeft'
+  | 'squareRight'
+  | 'tight'
+  | 'through'
+  | 'topAndBottom'
+  | 'behind'
+  | 'inFront';
+
+export const IMAGE_WRAP_TARGETS: readonly ImageWrapTarget[] = [
+  'inline',
+  'square',
+  'squareLeft',
+  'squareRight',
+  'tight',
+  'through',
+  'topAndBottom',
+  'behind',
+  'inFront',
+];
+
+export type DrawingWrapElement = 'none' | 'square' | 'tight' | 'through' | 'topAndBottom';
+
+export type DrawingHorizontalReferenceFrame =
+  | 'character'
+  | 'column'
+  | 'insideMargin'
+  | 'leftMargin'
+  | 'margin'
+  | 'outsideMargin'
+  | 'page'
+  | 'rightMargin';
+
+export type DrawingVerticalReferenceFrame =
+  | 'bottomMargin'
+  | 'insideMargin'
+  | 'line'
+  | 'margin'
+  | 'outsideMargin'
+  | 'page'
+  | 'paragraph'
+  | 'topMargin';
+
+export interface SourceCrop {
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+}
+
+export interface DrawingTransform {
+  readonly rotationDegrees: number;
+  readonly flipHorizontal: boolean;
+  readonly flipVertical: boolean;
+  /** Source `a:off` in EMU; defaults to origin when absent. */
+  readonly offsetEmu: Readonly<{ x: number; y: number }>;
+  /** Source `a:ext` in EMU; zero falls back to `wp:extent` at geometry time. */
+  readonly extentEmu: Readonly<{ cx: number; cy: number }>;
+}
+
+export interface DrawingLocks {
+  readonly select: boolean;
+  readonly move: boolean;
+  readonly resize: boolean;
+  readonly changeAspect: boolean;
+}
+
+export interface DrawingLocksInput {
+  readonly select?: boolean;
+  readonly move?: boolean;
+  readonly resize?: boolean;
+  readonly changeAspect?: boolean;
+}
+
+export interface DrawingPositionInput {
+  /**
+   * `'simple'` when `@simplePos="1"`: `horizontalEmu` / `verticalEmu` are authoritative
+   * `wp:simplePos` x/y. `'frame'` (default) uses positionH/V relative frames.
+   */
+  readonly mode?: 'frame' | 'simple';
+  readonly horizontalEmu?: number;
+  readonly verticalEmu?: number;
+  readonly relativeToH?: DrawingHorizontalReferenceFrame;
+  readonly relativeToV?: DrawingVerticalReferenceFrame;
+}
+
+export interface DrawingProjection {
+  readonly drawingNodeId: string;
+  readonly ownerPartName: string;
+  readonly kind: DrawingKind;
+  readonly relationshipId: string | null;
+  readonly docPrId: number | null;
+  readonly name: string;
+  readonly title: string;
+  readonly description: string;
+  readonly hyperlinkHref: string | null;
+  readonly hidden: boolean;
+  readonly extentEmu: Readonly<{ cx: number; cy: number }>;
+  readonly effectExtentEmu: Readonly<{ top: number; right: number; bottom: number; left: number }>;
+  readonly inlineDistancesEmu: Readonly<{
+    top: number;
+    right: number;
+    bottom: number;
+    left: number;
+  }>;
+  readonly wrap: ImageWrapTarget;
+  readonly wrapGeometry: DrawingWrapProjection | null;
+  readonly position: DrawingPositionProjection | null;
+  readonly anchor: Readonly<{
+    simplePos: boolean;
+    relativeHeight: number;
+    behindDocument: boolean;
+    layoutInCell: boolean;
+    allowOverlap: boolean;
+  }> | null;
+  readonly picture: PictureProjection | null;
+  readonly vectorShape: VectorShapeProjection | null;
+  readonly locks: DrawingLocks;
+  readonly effects: Readonly<{ grayscale: boolean; brightness: number; contrast: number }>;
+  readonly compatibilityBranchNodeId: string | null;
+  readonly diagnostics: readonly DrawingDiagnostic[];
+}
+
+/**
+ * The renderable subset of a `wps:wsp` non-picture graphic: closed polygon subpaths
+ * (`a:custGeom` with move/line/close verbs only, or `a:prstGeom prst="rect"`) with a
+ * solid sRGB fill and/or stroke. Anything richer (curves, theme fills, text bodies,
+ * rotation) projects as `null` and paints the labelled placeholder instead.
+ */
+export interface VectorShapeProjection {
+  /** The drawing extent that frames the subpath coordinate space. */
+  readonly extentEmu: Readonly<{ cx: number; cy: number }>;
+  /** Closed subpath polygons in extent-EMU space; fill rule is even-odd. */
+  readonly subpathsEmu: readonly (readonly Readonly<{ x: number; y: number }>[])[];
+  /** Validated 6-digit sRGB hex (no `#`), or null for no fill. */
+  readonly fillHex: string | null;
+  /** Validated 6-digit sRGB hex (no `#`), or null for no stroke. */
+  readonly strokeHex: string | null;
+  /** Stroke width in EMU; 0 when absent. */
+  readonly strokeWidthEmu: number;
+}
+
+export interface DrawingAccessibility {
+  readonly hidden: boolean;
+  readonly decorative: boolean;
+  readonly label: string | null;
+}
+
+export interface DrawingPositionProjection {
+  readonly simplePosition: Readonly<{ xEmu: number; yEmu: number }>;
+  readonly horizontal: Readonly<{
+    relativeFrom: DrawingHorizontalReferenceFrame;
+    align: string | null;
+    offsetEmu: number | null;
+  }>;
+  readonly vertical: Readonly<{
+    relativeFrom: DrawingVerticalReferenceFrame;
+    align: string | null;
+    offsetEmu: number | null;
+  }>;
+}
+
+export interface DrawingWrapProjection {
+  readonly element: DrawingWrapElement;
+  readonly textSide: 'bothSides' | 'left' | 'right' | 'largest';
+  readonly distancesEmu: Readonly<{ top: number; right: number; bottom: number; left: number }>;
+  readonly polygon: readonly Readonly<{ x: number; y: number }>[];
+}
+
+export interface PictureProjection {
+  readonly embeddedRelationshipId: string | null;
+  readonly linkedRelationshipId: string | null;
+  readonly crop: SourceCrop;
+  readonly fillMode: 'stretch' | 'tile';
+  readonly transform: DrawingTransform;
+  readonly presetGeometry: string | null;
+}
+
+export const DEFAULT_DRAWING_PROJECTION_LIMITS: DrawingProjectionLimits = Object.freeze({
+  maxCompatibilityBranches: 64,
+  maxVisitedElements: 4096,
+  maxDrawingDepth: 64,
+});
+
+/** Supported namespace URIs for `mc:Choice/@Requires` prefix resolution. */
+export const DEFAULT_SUPPORTED_MC_REQUIRES: ReadonlySet<string> = new Set([
+  W14_NAMESPACE_URI,
+  'http://schemas.microsoft.com/office/word/2012/wordml',
+  'http://schemas.microsoft.com/office/word/2015/wordml',
+  'http://schemas.microsoft.com/office/word/2016/wordml',
+  WP_NAMESPACE_URI,
+  DRAWINGML_MAIN_NAMESPACE_URI,
+  PIC_NAMESPACE_URI,
+  RELATIONSHIPS_NAMESPACE_URI,
+  WML_NAMESPACE_URI,
+  MC_NAMESPACE_URI,
+  // Word wraps `wps:wsp` shapes in `mc:Choice Requires="wps"`; the engine renders the
+  // solid-geometry subset and placeholders the rest, so the Choice branch is understood.
+  'http://schemas.microsoft.com/office/word/2010/wordprocessingShape',
+]);
+
+const PIC_GRAPHIC_DATA_URI = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+const WPS_GRAPHIC_DATA_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+
+/** Whole-part drawing scan budget — the parsed tree is already store-limit bounded. */
+const MAX_PART_SCAN_ELEMENTS = 1_000_000;
+const MAX_EMU = 2 ** 31 - 1;
+
+const EMPTY_EDGES = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
+const EMPTY_CROP: SourceCrop = Object.freeze({ left: 0, top: 0, right: 0, bottom: 0 });
+const EMPTY_LOCKS: DrawingLocks = Object.freeze({
+  select: false,
+  move: false,
+  resize: false,
+  changeAspect: false,
+});
+const EMPTY_EFFECTS = Object.freeze({ grayscale: false, brightness: 0, contrast: 0 });
+
+interface ProjectionContext {
+  readonly ownerPartName: string;
+  readonly supportedMcRequires: ReadonlySet<string>;
+  readonly limits: DrawingProjectionLimits;
+  readonly resolveRelationship?: RelationshipTargetResolver;
+}
+
+/** Resolve `(ownerPartName, r:id)` against a package's relationship records. */
+export function createDrawingRelationshipResolver(
+  pkg: OoxmlPackage,
+  ownerPartName: string
+): RelationshipTargetResolver {
+  return (relationshipId: string) => {
+    for (const external of pkg.externalTargets) {
+      if (external.ownerPart !== ownerPartName || external.id !== relationshipId) continue;
+      if (external.type !== HYPERLINK_RELATIONSHIP_TYPE) return null;
+      return {
+        target: external.rawTarget,
+        external: true,
+        sinkSafe: external.sinkSafe,
+      };
+    }
+    for (const record of pkg.relationships.get(ownerPartName) ?? []) {
+      if (record.id !== relationshipId) continue;
+      const resolved = resolveRelationship(record);
+      if (resolved.mode === 'External') {
+        if (record.type !== HYPERLINK_RELATIONSHIP_TYPE) return null;
+        return {
+          target: record.rawTarget,
+          external: true,
+          sinkSafe: resolved.sinkSafe.ok,
+        };
+      }
+      return { target: record.rawTarget, external: false };
+    }
+    return null;
+  };
+}
+
+function resolveDrawingHyperlinkHref(
+  relationshipId: string,
+  resolve: RelationshipTargetResolver | undefined
+): string | null {
+  if (resolve === undefined) return null;
+  const record = resolve(relationshipId);
+  if (record === null || !record.external) return null;
+  const projection = sanitizeHref(record.target);
+  if (!projection.ok || record.sinkSafe !== true) return null;
+  return projection.href;
+}
+
+function findDirectDocPrHlinkClick(docPr: OoxmlElement): OoxmlElement | null {
+  for (const child of docPr.children) {
+    if (!isElement(child)) continue;
+    if (
+      child.kind === 'generic' &&
+      child.namespaceUri === DRAWINGML_MAIN_NAMESPACE_URI &&
+      child.localName === 'hlinkClick'
+    ) {
+      return child;
+    }
+  }
+  return null;
+}
+
+export interface RunLevelMcAtom {
+  readonly segmentNode: OoxmlGenericElementNode;
+  readonly drawing: OoxmlDrawingNode | null;
+  readonly removeNodeIds: readonly string[];
+}
+
+function relationshipAttribute(
+  attributes: readonly {
+    readonly localName: string;
+    readonly namespaceUri: string;
+    readonly value: string;
+  }[],
+  localName: 'embed' | 'link' | 'id'
+): string | undefined {
+  for (const attribute of attributes) {
+    if (attribute.localName !== localName) continue;
+    if (attribute.namespaceUri !== RELATIONSHIPS_NAMESPACE_URI) continue;
+    return attribute.value;
+  }
+  return undefined;
+}
+
+function mcAttribute(
+  attributes: readonly {
+    readonly localName: string;
+    readonly namespaceUri: string;
+    readonly value: string;
+  }[],
+  localName: string
+): string | undefined {
+  for (const attribute of attributes) {
+    if (attribute.localName !== localName) continue;
+    if (attribute.namespaceUri !== MC_NAMESPACE_URI) continue;
+    return attribute.value;
+  }
+  return undefined;
+}
+
+function parseEmu(value: string | undefined, clamp = true): number | null {
+  if (value === undefined || !/^-?\d{1,15}$/.test(value)) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  if (!clamp) return parsed;
+  if (parsed < 0) return 0;
+  if (parsed > MAX_EMU) return MAX_EMU;
+  return parsed;
+}
+
+/** Signed ST_PositionOffset (`xsd:int`) — reject out-of-range values, never clamp. */
+function parsePosOffset(value: string | undefined): number | null {
+  if (value === undefined || !/^-?\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) return null;
+  if (parsed < ST_POSITION_OFFSET_MIN || parsed > ST_POSITION_OFFSET_MAX) return null;
+  return parsed;
+}
+
+/** Signed ST_Coordinate for wp:simplePos x/y — full schema range, never truncated to 32-bit. */
+function parseSimplePosCoordinate(value: string | undefined): number | null {
+  if (value === undefined || !/^-?\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) return null;
+  if (parsed < ST_COORDINATE_MIN || parsed > ST_COORDINATE_MAX) return null;
+  return parsed;
+}
+
+function parseCropPercent(value: string | undefined): number {
+  const parsed = parseEmu(value, false);
+  if (parsed === null || parsed <= 0) return 0;
+  return Math.min(parsed / 100_000, 1);
+}
+
+function parseDocPrId(value: string | undefined): number | null {
+  if (value === undefined || !/^\d{1,10}$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Direct-child text only — never descends into nested elements. */
+function directTextValueOf(node: OoxmlElement): string | null {
+  for (const child of node.children) {
+    if (child.kind === 'textValue') return child.value;
+  }
+  return null;
+}
+
+function choiceRequiresSupported(
+  choice: OoxmlGenericElementNode,
+  namespaceScope: ReadonlyMap<string, string>,
+  supportedNamespaceUris: ReadonlySet<string>
+): boolean {
+  const requires =
+    mcAttribute(choice.attributes, 'Requires') ??
+    schemaAttributeValue(choice.attributes, 'Requires');
+  if (requires === undefined || requires.trim().length === 0) return false;
+  const prefixes = requires
+    .trim()
+    .split(/\s+/)
+    .filter((prefix) => prefix.length > 0);
+  if (prefixes.length === 0) return false;
+  return prefixes.every((prefix) => {
+    const namespaceUri = namespaceScope.get(prefix);
+    if (namespaceUri === undefined || namespaceUri.length === 0) return false;
+    return supportedNamespaceUris.has(namespaceUri);
+  });
+}
+
+function firstElementChild(node: OoxmlGenericElementNode): OoxmlNode | null {
+  for (const child of node.children) {
+    if (isElement(child)) return child;
+  }
+  return null;
+}
+
+function validateMcBranchContent(
+  branch: OoxmlNode | null
+): OoxmlDrawingNode | 'non-picture' | null {
+  if (branch === null || !isElement(branch)) return null;
+  if (branch.kind === 'drawing') return branch;
+  if (
+    branch.kind === 'generic' &&
+    branch.namespaceUri === WML_NAMESPACE_URI &&
+    branch.localName === 'drawing'
+  ) {
+    return branch as unknown as OoxmlDrawingNode;
+  }
+  return 'non-picture';
+}
+
+function isCompatibilityDrawing(node: OoxmlElement): boolean {
+  return (
+    node.kind === 'generic' &&
+    node.namespaceUri === WML_NAMESPACE_URI &&
+    node.localName === 'drawing'
+  );
+}
+
+function isCompatibilityAnchor(node: OoxmlElement): boolean {
+  return (
+    node.kind === 'inlineDrawing' ||
+    node.kind === 'anchoredDrawing' ||
+    (node.kind === 'generic' &&
+      node.namespaceUri === WP_NAMESPACE_URI &&
+      (node.localName === 'inline' || node.localName === 'anchor'))
+  );
+}
+
+function findDirectChild(
+  nodes: readonly OoxmlNode[],
+  options: {
+    readonly typedKind?: string;
+    readonly namespaceUri?: string;
+    readonly localName?: string;
+  }
+): OoxmlElement | null {
+  for (const node of nodes) {
+    if (!isElement(node)) continue;
+    if (options.typedKind !== undefined && node.kind === options.typedKind) return node;
+    if (
+      options.namespaceUri !== undefined &&
+      options.localName !== undefined &&
+      node.kind === 'generic' &&
+      node.namespaceUri === options.namespaceUri &&
+      node.localName === options.localName
+    ) {
+      return node;
+    }
+  }
+  return null;
+}
+
+function selectCompatibilityBranch(
+  node: OoxmlGenericElementNode,
+  state: WalkState,
+  limits: DrawingProjectionLimits,
+  namespaceScope: ReadonlyMap<string, string>,
+  supportedNamespaceUris: ReadonlySet<string>
+): { readonly branch: OoxmlNode | null; readonly branchNodeId: string | null } {
+  const scope = namespaceScopeForNode(namespaceScope, node);
+  state.compatibilityBranches += 1;
+  if (state.compatibilityBranches > limits.maxCompatibilityBranches) {
+    state.refused = true;
+    return { branch: null, branchNodeId: null };
+  }
+  let fallback: OoxmlNode | null = null;
+  let fallbackId: string | null = null;
+  for (const child of node.children) {
+    if (!isElement(child)) continue;
+    if (isMcChoice(child)) {
+      state.compatibilityBranches += 1;
+      if (state.compatibilityBranches > limits.maxCompatibilityBranches) {
+        state.refused = true;
+        return { branch: null, branchNodeId: null };
+      }
+      const choice = child as OoxmlGenericElementNode;
+      const choiceScope = namespaceScopeForNode(scope, choice);
+      if (choiceRequiresSupported(choice, choiceScope, supportedNamespaceUris)) {
+        const selected = firstElementChild(choice);
+        state.compatibilityBranchNodeId = choice.id;
+        return { branch: selected, branchNodeId: choice.id };
+      }
+      continue;
+    }
+    if (isMcFallback(child)) {
+      const fallbackNode = child as OoxmlGenericElementNode;
+      fallback = firstElementChild(fallbackNode);
+      fallbackId = fallbackNode.id;
+    }
+  }
+  if (fallback !== null) state.compatibilityBranchNodeId = fallbackId;
+  return { branch: fallback, branchNodeId: fallbackId };
+}
+
+function flattenAnchorRoot(
+  drawing: OoxmlDrawingNode,
+  state: WalkState,
+  limits: DrawingProjectionLimits,
+  namespaceScope: ReadonlyMap<string, string>,
+  supportedNamespaceUris: ReadonlySet<string>
+): { readonly anchor: OoxmlElement | null } {
+  for (const child of drawing.children) {
+    if (!visitNode(state, limits)) return { anchor: null };
+    if (isCompatibilityAnchor(child)) {
+      return { anchor: child };
+    }
+    if (isMcAlternateContent(child)) {
+      const childScope = namespaceScopeForNode(namespaceScope, child);
+      const selected = selectCompatibilityBranch(
+        child,
+        state,
+        limits,
+        childScope,
+        supportedNamespaceUris
+      );
+      if (selected.branch === null || !isElement(selected.branch)) continue;
+      if (isCompatibilityAnchor(selected.branch)) {
+        return { anchor: selected.branch };
+      }
+    }
+  }
+  return { anchor: null };
+}
+
+function visitNode(state: WalkState, limits: DrawingProjectionLimits): boolean {
+  state.visited += 1;
+  if (state.visited > limits.maxVisitedElements) {
+    state.refused = true;
+    return false;
+  }
+  return true;
+}
+
+function isMcValidatedPic(node: OoxmlElement): boolean {
+  return (
+    node.kind === 'picture' ||
+    (node.kind === 'generic' && node.namespaceUri === PIC_NAMESPACE_URI && node.localName === 'pic')
+  );
+}
+
+function findPictureInGraphicData(
+  data: OoxmlElement,
+  state: WalkState,
+  limits: DrawingProjectionLimits,
+  namespaceScope: ReadonlyMap<string, string>,
+  supportedNamespaceUris: ReadonlySet<string>,
+  compatibilityMode: boolean
+): OoxmlElement | null {
+  for (const child of data.children) {
+    if (!visitNode(state, limits)) return null;
+    if (isMcAlternateContent(child)) {
+      const childScope = namespaceScopeForNode(namespaceScope, child);
+      const selected = selectCompatibilityBranch(
+        child,
+        state,
+        limits,
+        childScope,
+        supportedNamespaceUris
+      );
+      if (selected.branch && isElement(selected.branch) && isMcValidatedPic(selected.branch)) {
+        return selected.branch;
+      }
+      continue;
+    }
+    if (!isElement(child)) continue;
+    if (child.kind === 'picture') return child;
+    if (compatibilityMode && isMcValidatedPic(child)) return child;
+  }
+  return null;
+}
+
+function readDirectPictureBlip(picture: OoxmlElement): OoxmlElement | null {
+  const typedFill = findDirectKind(picture.children, 'pictureBlipFill');
+  if (typedFill) {
+    const typedBlip = findDirectKind(typedFill.children, 'pictureBlip');
+    if (typedBlip) return typedBlip;
+  }
+  for (const child of picture.children) {
+    if (!isElement(child)) continue;
+    if (
+      child.kind === 'generic' &&
+      child.namespaceUri === PIC_NAMESPACE_URI &&
+      child.localName === 'blipFill'
+    ) {
+      for (const grand of child.children) {
+        if (!isElement(grand)) continue;
+        if (grand.kind === 'pictureBlip') return grand;
+        if (
+          grand.kind === 'generic' &&
+          grand.namespaceUri === DRAWINGML_MAIN_NAMESPACE_URI &&
+          grand.localName === 'blip'
+        ) {
+          return grand;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function readDirectPictureSrcRect(picture: OoxmlElement): OoxmlElement | null {
+  const typedFill = findDirectKind(picture.children, 'pictureBlipFill');
+  if (typedFill) {
+    const typedRect = findDirectKind(typedFill.children, 'pictureSrcRect');
+    if (typedRect) return typedRect;
+    for (const child of typedFill.children) {
+      if (!isElement(child)) continue;
+      if (
+        child.kind === 'generic' &&
+        child.namespaceUri === DRAWINGML_MAIN_NAMESPACE_URI &&
+        child.localName === 'srcRect'
+      ) {
+        return child;
+      }
+    }
+  }
+  for (const child of picture.children) {
+    if (!isElement(child)) continue;
+    if (
+      child.kind === 'generic' &&
+      child.namespaceUri === PIC_NAMESPACE_URI &&
+      child.localName === 'blipFill'
+    ) {
+      for (const grand of child.children) {
+        if (!isElement(grand)) continue;
+        if (
+          grand.kind === 'generic' &&
+          grand.namespaceUri === DRAWINGML_MAIN_NAMESPACE_URI &&
+          grand.localName === 'srcRect'
+        ) {
+          return grand;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function pictureUsesTileFillDirect(picture: OoxmlElement): boolean {
+  const typedFill = findDirectKind(picture.children, 'pictureBlipFill');
+  if (typedFill && findDirectKind(typedFill.children, 'pictureTile') !== null) return true;
+  for (const child of picture.children) {
+    if (!isElement(child)) continue;
+    if (
+      child.kind === 'generic' &&
+      child.namespaceUri === PIC_NAMESPACE_URI &&
+      child.localName === 'blipFill'
+    ) {
+      for (const grand of child.children) {
+        if (!isElement(grand)) continue;
+        if (grand.kind === 'pictureTile') return true;
+        if (
+          grand.kind === 'generic' &&
+          grand.namespaceUri === DRAWINGML_MAIN_NAMESPACE_URI &&
+          grand.localName === 'tile'
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function findWrapElement(anchor: OoxmlElement, compatibilityMode: boolean): OoxmlElement | null {
+  for (const child of anchor.children) {
+    if (!isElement(child)) continue;
+    if (
+      child.kind === 'drawingWrapNone' ||
+      child.kind === 'drawingWrapSquare' ||
+      child.kind === 'drawingWrapTight' ||
+      child.kind === 'drawingWrapThrough' ||
+      child.kind === 'drawingWrapTopBottom'
+    ) {
+      return child;
+    }
+    if (!compatibilityMode) continue;
+    if (
+      child.kind === 'generic' &&
+      child.namespaceUri === WP_NAMESPACE_URI &&
+      (child.localName === 'wrapNone' ||
+        child.localName === 'wrapSquare' ||
+        child.localName === 'wrapTight' ||
+        child.localName === 'wrapThrough' ||
+        child.localName === 'wrapTopAndBottom')
+    ) {
+      return child;
+    }
+  }
+  return null;
+}
+
+function readDistances(
+  node: OoxmlElement
+): Readonly<{ top: number; right: number; bottom: number; left: number }> {
+  return Object.freeze({
+    top: parseEmu(schemaAttributeValue(node.attributes, 'distT')) ?? 0,
+    right: parseEmu(schemaAttributeValue(node.attributes, 'distR')) ?? 0,
+    bottom: parseEmu(schemaAttributeValue(node.attributes, 'distB')) ?? 0,
+    left: parseEmu(schemaAttributeValue(node.attributes, 'distL')) ?? 0,
+  });
+}
+
+function readEffectExtentFromNode(
+  node: OoxmlElement | null,
+  compatibilityMode: boolean
+): Readonly<{ top: number; right: number; bottom: number; left: number }> | null {
+  if (!node) return null;
+  const effect =
+    findDirectKind(node.children, 'drawingEffectExtent') ??
+    (compatibilityMode
+      ? findDirectChild(node.children, {
+          namespaceUri: WP_NAMESPACE_URI,
+          localName: 'effectExtent',
+        })
+      : null);
+  if (!effect) return null;
+  return Object.freeze({
+    left: parseEmu(schemaAttributeValue(effect.attributes, 'l'), false) ?? 0,
+    top: parseEmu(schemaAttributeValue(effect.attributes, 't'), false) ?? 0,
+    right: parseEmu(schemaAttributeValue(effect.attributes, 'r'), false) ?? 0,
+    bottom: parseEmu(schemaAttributeValue(effect.attributes, 'b'), false) ?? 0,
+  });
+}
+
+function readEffectExtent(
+  anchor: OoxmlElement,
+  wrapElement: OoxmlElement | null,
+  compatibilityMode: boolean
+): Readonly<{ top: number; right: number; bottom: number; left: number }> {
+  const wrapKind = wrapElementKind(wrapElement);
+  if (wrapKind === 'square' || wrapKind === 'topAndBottom') {
+    const fromWrap = readEffectExtentFromNode(wrapElement, compatibilityMode);
+    if (fromWrap) return fromWrap;
+  }
+  const fromAnchor = readEffectExtentFromNode(anchor, compatibilityMode);
+  if (fromAnchor) return fromAnchor;
+  return EMPTY_EDGES;
+}
+
+function readExtent(
+  anchor: OoxmlElement,
+  compatibilityMode: boolean
+): Readonly<{ cx: number; cy: number }> | null {
+  const extent =
+    findDirectKind(anchor.children, 'drawingExtent') ??
+    (compatibilityMode
+      ? findDirectChild(anchor.children, { namespaceUri: WP_NAMESPACE_URI, localName: 'extent' })
+      : null);
+  if (!extent) return null;
+  const cx = parseEmu(schemaAttributeValue(extent.attributes, 'cx'));
+  const cy = parseEmu(schemaAttributeValue(extent.attributes, 'cy'));
+  if (cx === null || cy === null) return null;
+  return Object.freeze({ cx, cy });
+}
+
+function readPositionAxis<H extends string>(
+  node: OoxmlElement | null,
+  fallback: H
+): Readonly<{ relativeFrom: H; align: string | null; offsetEmu: number | null }> {
+  if (!node) {
+    return Object.freeze({ relativeFrom: fallback, align: null, offsetEmu: null });
+  }
+  const relativeFromRaw = schemaAttributeValue(node.attributes, 'relativeFrom') ?? fallback;
+  const relativeFrom = relativeFromRaw as H;
+  const alignNode =
+    findDirectKind(node.children, 'drawingPositionAlign') ??
+    findDirectChild(node.children, { namespaceUri: WP_NAMESPACE_URI, localName: 'align' });
+  if (alignNode) {
+    const align = directTextValueOf(alignNode)?.trim() ?? null;
+    return Object.freeze({ relativeFrom, align, offsetEmu: null });
+  }
+  const offsetNode =
+    findDirectKind(node.children, 'drawingPositionOffset') ??
+    findDirectChild(node.children, { namespaceUri: WP_NAMESPACE_URI, localName: 'posOffset' });
+  if (offsetNode) {
+    const offset = directTextValueOf(offsetNode);
+    const offsetEmu = offset !== null ? parsePosOffset(offset) : null;
+    return Object.freeze({ relativeFrom, align: null, offsetEmu });
+  }
+  return Object.freeze({ relativeFrom, align: null, offsetEmu: null });
+}
+
+function readPosition(
+  anchor: OoxmlElement,
+  simplePosEnabled: boolean
+): DrawingPositionProjection | null {
+  // Generic fallbacks: compatibility (MC-wrapped) anchors carry plain `wp:*` children.
+  const simplePosNode =
+    findDirectKind(anchor.children, 'drawingSimplePos') ??
+    findDirectChild(anchor.children, { namespaceUri: WP_NAMESPACE_URI, localName: 'simplePos' });
+  const simplePosition = Object.freeze({
+    xEmu: simplePosNode
+      ? (parseSimplePosCoordinate(schemaAttributeValue(simplePosNode.attributes, 'x')) ?? 0)
+      : 0,
+    yEmu: simplePosNode
+      ? (parseSimplePosCoordinate(schemaAttributeValue(simplePosNode.attributes, 'y')) ?? 0)
+      : 0,
+  });
+  const horizontalNode =
+    findDirectKind(anchor.children, 'drawingPositionH') ??
+    findDirectChild(anchor.children, { namespaceUri: WP_NAMESPACE_URI, localName: 'positionH' });
+  const verticalNode =
+    findDirectKind(anchor.children, 'drawingPositionV') ??
+    findDirectChild(anchor.children, { namespaceUri: WP_NAMESPACE_URI, localName: 'positionV' });
+  const horizontal = readPositionAxis(horizontalNode, 'column');
+  const vertical = readPositionAxis(verticalNode, 'paragraph');
+  if (!simplePosEnabled && !horizontalNode && !verticalNode && !simplePosNode) return null;
+  return Object.freeze({
+    simplePosition,
+    horizontal,
+    vertical,
+  });
+}
+
+/** Signed ST_Coordinate for wp:wrapPolygon x/y — full schema range. */
+function parseWrapPolygonCoordinate(value: string | undefined): number | null {
+  if (value === undefined || !/^-?\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) return null;
+  if (parsed < ST_COORDINATE_MIN || parsed > ST_COORDINATE_MAX) return null;
+  return parsed;
+}
+
+function readPolygon(
+  wrap: OoxmlElement,
+  state: WalkState,
+  nodeId: string
+): readonly Readonly<{ x: number; y: number }>[] {
+  const polygon = findDirectKind(wrap.children, 'drawingWrapPolygon');
+  if (!polygon) return Object.freeze([]);
+  let pointCount = 0;
+  for (const child of polygon.children) {
+    if (!isElement(child)) continue;
+    if (child.kind !== 'drawingWrapPolygonStart' && child.kind !== 'drawingWrapPolygonLineTo')
+      continue;
+    pointCount += 1;
+  }
+  if (pointCount > DRAWING_WRAP_POLYGON_MAX_POINTS) {
+    state.diagnostics.push({
+      code: 'wrap-polygon-over-limit',
+      nodeId,
+      detail: String(pointCount),
+    });
+    return Object.freeze([]);
+  }
+  const points: Readonly<{ x: number; y: number }>[] = [];
+  let malformed = false;
+  for (const child of polygon.children) {
+    if (!isElement(child)) continue;
+    if (child.kind !== 'drawingWrapPolygonStart' && child.kind !== 'drawingWrapPolygonLineTo') {
+      continue;
+    }
+    const x = parseWrapPolygonCoordinate(schemaAttributeValue(child.attributes, 'x'));
+    const y = parseWrapPolygonCoordinate(schemaAttributeValue(child.attributes, 'y'));
+    if (x === null || y === null) {
+      malformed = true;
+      continue;
+    }
+    points.push(Object.freeze({ x, y }));
+  }
+  if (malformed || points.length < 3) {
+    state.diagnostics.push({
+      code: 'wrap-polygon-malformed',
+      nodeId,
+      detail: malformed ? 'invalid-coordinate' : 'insufficient-points',
+    });
+    return Object.freeze([]);
+  }
+  return Object.freeze(points);
+}
+
+function wrapElementKind(wrap: OoxmlElement | null): DrawingWrapElement {
+  switch (wrap?.kind) {
+    case 'drawingWrapSquare':
+      return 'square';
+    case 'drawingWrapTight':
+      return 'tight';
+    case 'drawingWrapThrough':
+      return 'through';
+    case 'drawingWrapTopBottom':
+      return 'topAndBottom';
+    default:
+      break;
+  }
+  // Compatibility branches (MC-wrapped drawings) parse generic, so the wrap element
+  // arrives as a plain `wp:*` node rather than a typed kind.
+  if (wrap && wrap.kind === 'generic' && wrap.namespaceUri === WP_NAMESPACE_URI) {
+    switch (wrap.localName) {
+      case 'wrapSquare':
+        return 'square';
+      case 'wrapTight':
+        return 'tight';
+      case 'wrapThrough':
+        return 'through';
+      case 'wrapTopAndBottom':
+        return 'topAndBottom';
+      default:
+        break;
+    }
+  }
+  return 'none';
+}
+
+function wrapTargetFromAnchor(
+  kind: DrawingKind,
+  wrap: OoxmlElement | null,
+  behindDocument: boolean
+): ImageWrapTarget {
+  if (kind === 'inline') return 'inline';
+  const element = wrapElementKind(wrap);
+  if (element === 'none') return behindDocument ? 'behind' : 'inFront';
+  if (element === 'square') {
+    const side = schemaAttributeValue(wrap!.attributes, 'wrapText') ?? 'bothSides';
+    if (side === 'left') return 'squareLeft';
+    if (side === 'right') return 'squareRight';
+    return 'square';
+  }
+  if (element === 'tight') return 'tight';
+  if (element === 'through') return 'through';
+  return 'topAndBottom';
+}
+
+function readWrapGeometry(
+  wrap: OoxmlElement | null,
+  state: WalkState,
+  nodeId: string
+): DrawingWrapProjection | null {
+  if (!wrap) return null;
+  const element = wrapElementKind(wrap);
+  const textSideRaw = schemaAttributeValue(wrap.attributes, 'wrapText') ?? 'bothSides';
+  const textSide =
+    textSideRaw === 'left' || textSideRaw === 'right' || textSideRaw === 'largest'
+      ? textSideRaw
+      : 'bothSides';
+  return Object.freeze({
+    element,
+    textSide,
+    distancesEmu: readDistances(wrap),
+    polygon:
+      element === 'tight' || element === 'through'
+        ? readPolygon(wrap, state, nodeId)
+        : Object.freeze([]),
+  });
+}
+
+function readFrameLocks(node: OoxmlElement | null): DrawingLocksInput {
+  if (!node) return {};
+  const frameLocks = node.children.find(
+    (child) =>
+      isElement(child) &&
+      child.kind === 'generic' &&
+      child.namespaceUri === DRAWINGML_MAIN_NAMESPACE_URI &&
+      child.localName === 'graphicFrameLocks'
+  );
+  if (!frameLocks || !isElement(frameLocks)) return {};
+  const attrs = frameLocks.attributes;
+  const locked = (name: string): boolean | undefined => {
+    const value = schemaAttributeValue(attrs, name);
+    if (value === undefined) return undefined;
+    return value === '1' || value === 'true';
+  };
+  return {
+    select: locked('noSelect'),
+    move: locked('noMove'),
+    resize: locked('noResize'),
+    changeAspect: locked('noChangeAspect'),
+  };
+}
+
+function mergeLocks(anchorLocked: boolean, frame: DrawingLocksInput): DrawingLocks {
+  if (anchorLocked) {
+    return Object.freeze({ select: true, move: true, resize: true, changeAspect: true });
+  }
+  return Object.freeze({
+    select: frame.select ?? false,
+    move: frame.move ?? false,
+    resize: frame.resize ?? false,
+    changeAspect: frame.changeAspect ?? false,
+  });
+}
+
+function readDocPrMetadata(
+  anchor: OoxmlElement,
+  compatibilityMode: boolean,
+  resolveRelationship?: RelationshipTargetResolver
+): {
+  readonly docPrId: number | null;
+  readonly name: string;
+  readonly title: string;
+  readonly description: string;
+  readonly hidden: boolean;
+  readonly hyperlinkHref: string | null;
+} {
+  const docPr =
+    findDirectKind(anchor.children, 'drawingDocPr') ??
+    (compatibilityMode
+      ? findDirectChild(anchor.children, { namespaceUri: WP_NAMESPACE_URI, localName: 'docPr' })
+      : null);
+  if (!docPr) {
+    return Object.freeze({
+      docPrId: null,
+      name: '',
+      title: '',
+      description: '',
+      hidden: schemaAttributeValue(anchor.attributes, 'hidden') === '1',
+      hyperlinkHref: null,
+    });
+  }
+  let hyperlinkHref: string | null = null;
+  const hlinkClick = findDirectDocPrHlinkClick(docPr);
+  if (hlinkClick !== null) {
+    const relId = relationshipAttribute(hlinkClick.attributes, 'id');
+    if (relId) {
+      hyperlinkHref = resolveDrawingHyperlinkHref(relId, resolveRelationship);
+    }
+  }
+  return Object.freeze({
+    docPrId: parseDocPrId(schemaAttributeValue(docPr.attributes, 'id')),
+    name: schemaAttributeValue(docPr.attributes, 'name') ?? '',
+    title: schemaAttributeValue(docPr.attributes, 'title') ?? '',
+    description: schemaAttributeValue(docPr.attributes, 'descr') ?? '',
+    hidden:
+      schemaAttributeValue(docPr.attributes, 'hidden') === '1' ||
+      schemaAttributeValue(anchor.attributes, 'hidden') === '1',
+    hyperlinkHref,
+  });
+}
+
+function parseLumPercent(value: string | undefined): number | null {
+  if (value === undefined || !/^-?\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) return null;
+  return parsed / 1000;
+}
+
+function readBlipEffects(
+  blip: OoxmlElement
+): Readonly<{ grayscale: boolean; brightness: number; contrast: number }> {
+  let grayscale = false;
+  let brightness = 0;
+  let contrast = 0;
+  for (const child of blip.children) {
+    if (!isElement(child) || child.kind !== 'generic') continue;
+    if (child.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI) continue;
+    if (child.localName === 'grayscl') {
+      grayscale = true;
+      continue;
+    }
+    if (child.localName === 'lum') {
+      const bright = parseLumPercent(schemaAttributeValue(child.attributes, 'bright'));
+      const contrastRaw = parseLumPercent(schemaAttributeValue(child.attributes, 'contrast'));
+      if (bright !== null) brightness = bright;
+      if (contrastRaw !== null) contrast = contrastRaw;
+    }
+  }
+  return Object.freeze({ grayscale, brightness, contrast });
+}
+
+const WPS_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+const SHAPE_HEX_RE = /^[0-9A-Fa-f]{6}$/;
+const MAX_VECTOR_SHAPE_SUBPATHS = 64;
+const MAX_VECTOR_SHAPE_POINTS = 1024;
+
+/** Direct `a:solidFill > a:srgbClr @val` under `parent`; only a validated 6-hex passes. */
+function readSolidFillHex(parent: OoxmlElement): string | null {
+  const solidFill = findDirectChild(parent.children, {
+    namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
+    localName: 'solidFill',
+  });
+  if (!solidFill) return null;
+  const srgb = findDirectChild(solidFill.children, {
+    namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
+    localName: 'srgbClr',
+  });
+  if (!srgb) return null;
+  const value = schemaAttributeValue(srgb.attributes, 'val');
+  return value !== undefined && SHAPE_HEX_RE.test(value) ? value : null;
+}
+
+/** Polygon subpaths of one `a:path` — move/line/close verbs only; anything else refuses. */
+function readShapePathPolygons(
+  path: OoxmlElement,
+  scaleX: number,
+  scaleY: number,
+  sink: { x: number; y: number }[][],
+  pointBudget: { remaining: number }
+): boolean {
+  let current: { x: number; y: number }[] | null = null;
+  for (const verb of path.children) {
+    if (!isElement(verb)) continue;
+    if (verb.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI) return false;
+    if (verb.localName === 'close') {
+      current = null;
+      continue;
+    }
+    if (verb.localName !== 'moveTo' && verb.localName !== 'lnTo') return false;
+    const pt = findDirectChild(verb.children, {
+      namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
+      localName: 'pt',
+    });
+    if (!pt) return false;
+    const x = parseEmu(schemaAttributeValue(pt.attributes, 'x'), false);
+    const y = parseEmu(schemaAttributeValue(pt.attributes, 'y'), false);
+    if (x === null || y === null) return false;
+    const scaled = { x: x * scaleX, y: y * scaleY };
+    if (!Number.isFinite(scaled.x) || !Number.isFinite(scaled.y)) return false;
+    if (pointBudget.remaining <= 0) return false;
+    pointBudget.remaining -= 1;
+    if (verb.localName === 'moveTo' || current === null) {
+      if (sink.length >= MAX_VECTOR_SHAPE_SUBPATHS) return false;
+      current = [scaled];
+      sink.push(current);
+    } else {
+      current.push(scaled);
+    }
+  }
+  return true;
+}
+
+/**
+ * Renderable-subset projection of a `wps:wsp` graphic. Returns null (→ placeholder) for
+ * text bodies, rotated/flipped transforms, non-solid fills, curves, or over-limit paths.
+ */
+function projectVectorShape(
+  anchor: OoxmlElement,
+  extent: Readonly<{ cx: number; cy: number }>,
+  compatibilityMode: boolean
+): VectorShapeProjection | null {
+  void compatibilityMode;
+  if (extent.cx <= 0 || extent.cy <= 0) return null;
+  // Non-picture graphic payloads demote to generic nodes even under a typed
+  // `drawingGraphic`, so the generic lookup is always in play here.
+  const graphic =
+    findDirectKind(anchor.children, 'drawingGraphic') ??
+    findDirectChild(anchor.children, {
+      namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
+      localName: 'graphic',
+    });
+  if (!graphic) return null;
+  const data =
+    findDirectKind(graphic.children, 'drawingGraphicData') ??
+    findDirectChild(graphic.children, {
+      namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
+      localName: 'graphicData',
+    });
+  if (!data) return null;
+  if (schemaAttributeValue(data.attributes, 'uri') !== WPS_GRAPHIC_DATA_URI) return null;
+  const wsp = findDirectChild(data.children, {
+    namespaceUri: WPS_NAMESPACE_URI,
+    localName: 'wsp',
+  });
+  if (!wsp) return null;
+  if (findDirectChild(wsp.children, { namespaceUri: WPS_NAMESPACE_URI, localName: 'txbx' })) {
+    return null;
+  }
+  const spPr = findDirectChild(wsp.children, {
+    namespaceUri: WPS_NAMESPACE_URI,
+    localName: 'spPr',
+  });
+  if (!spPr) return null;
+  const xfrm = findDirectChild(spPr.children, {
+    namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
+    localName: 'xfrm',
+  });
+  if (xfrm) {
+    const rot = schemaAttributeValue(xfrm.attributes, 'rot');
+    if (rot !== undefined && rot !== '0') return null;
+    if (schemaAttributeValue(xfrm.attributes, 'flipH') === '1') return null;
+    if (schemaAttributeValue(xfrm.attributes, 'flipV') === '1') return null;
+  }
+
+  const fillHex = readSolidFillHex(spPr);
+  const ln = findDirectChild(spPr.children, {
+    namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
+    localName: 'ln',
+  });
+  const strokeHex = ln ? readSolidFillHex(ln) : null;
+  const strokeWidthEmu =
+    strokeHex !== null ? (parseEmu(schemaAttributeValue(ln!.attributes, 'w')) ?? 12_700) : 0;
+  if (fillHex === null && strokeHex === null) return null;
+
+  const subpaths: { x: number; y: number }[][] = [];
+  const custGeom = findDirectChild(spPr.children, {
+    namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
+    localName: 'custGeom',
+  });
+  if (custGeom) {
+    const pathLst = findDirectChild(custGeom.children, {
+      namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
+      localName: 'pathLst',
+    });
+    if (!pathLst) return null;
+    const pointBudget = { remaining: MAX_VECTOR_SHAPE_POINTS };
+    for (const child of pathLst.children) {
+      if (!isElement(child)) continue;
+      if (child.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI || child.localName !== 'path') {
+        return null;
+      }
+      const pathW = parseEmu(schemaAttributeValue(child.attributes, 'w')) ?? extent.cx;
+      const pathH = parseEmu(schemaAttributeValue(child.attributes, 'h')) ?? extent.cy;
+      if (pathW <= 0 || pathH <= 0) return null;
+      if (
+        !readShapePathPolygons(child, extent.cx / pathW, extent.cy / pathH, subpaths, pointBudget)
+      ) {
+        return null;
+      }
+    }
+  } else {
+    const prstGeom = findDirectChild(spPr.children, {
+      namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
+      localName: 'prstGeom',
+    });
+    if (!prstGeom || schemaAttributeValue(prstGeom.attributes, 'prst') !== 'rect') return null;
+    subpaths.push([
+      { x: 0, y: 0 },
+      { x: extent.cx, y: 0 },
+      { x: extent.cx, y: extent.cy },
+      { x: 0, y: extent.cy },
+    ]);
+  }
+  const polygons = subpaths.filter((points) => points.length >= 3);
+  if (polygons.length === 0) return null;
+  return {
+    extentEmu: { cx: extent.cx, cy: extent.cy },
+    subpathsEmu: polygons,
+    fillHex,
+    strokeHex,
+    strokeWidthEmu,
+  };
+}
+
+function projectPicture(
+  anchor: OoxmlElement,
+  state: WalkState,
+  ctx: ProjectionContext,
+  namespaceScope: ReadonlyMap<string, string>,
+  compatibilityMode: boolean
+): {
+  readonly picture: PictureProjection | null;
+  readonly relationshipId: string | null;
+  readonly effects: Readonly<{ grayscale: boolean; brightness: number; contrast: number }>;
+  readonly diagnostic: DrawingDiagnostic | null;
+} {
+  if (!visitNode(state, ctx.limits)) {
+    return { picture: null, relationshipId: null, effects: EMPTY_EFFECTS, diagnostic: null };
+  }
+  const graphic =
+    findDirectKind(anchor.children, 'drawingGraphic') ??
+    (compatibilityMode
+      ? findDirectChild(anchor.children, {
+          namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
+          localName: 'graphic',
+        })
+      : null);
+  if (!graphic) {
+    return {
+      picture: null,
+      relationshipId: null,
+      effects: EMPTY_EFFECTS,
+      diagnostic: {
+        code: 'unsupported-graphic',
+        nodeId: anchor.id,
+        detail: 'missing-graphic',
+      },
+    };
+  }
+  const data =
+    findDirectKind(graphic.children, 'drawingGraphicData') ??
+    (compatibilityMode
+      ? findDirectChild(graphic.children, {
+          namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
+          localName: 'graphicData',
+        })
+      : null);
+  if (!data) {
+    return {
+      picture: null,
+      relationshipId: null,
+      effects: EMPTY_EFFECTS,
+      diagnostic: {
+        code: 'unsupported-graphic',
+        nodeId: graphic.id,
+        detail: 'missing-graphic-data',
+      },
+    };
+  }
+  const uri = schemaAttributeValue(data.attributes, 'uri');
+  const anchorScope = namespaceScopeForNode(namespaceScope, anchor);
+  const graphicScope = namespaceScopeForNode(anchorScope, graphic);
+  const dataScope = namespaceScopeForNode(graphicScope, data);
+  const picture = findPictureInGraphicData(
+    data,
+    state,
+    ctx.limits,
+    dataScope,
+    ctx.supportedMcRequires,
+    compatibilityMode
+  );
+  if (uri !== PIC_GRAPHIC_DATA_URI || !picture) {
+    return {
+      picture: null,
+      relationshipId: null,
+      effects: EMPTY_EFFECTS,
+      diagnostic: {
+        code: 'unsupported-graphic',
+        nodeId: data.id,
+        detail: uri ?? 'non-picture',
+      },
+    };
+  }
+  const blip = readDirectPictureBlip(picture);
+  const embeddedRelationshipId = blip
+    ? (relationshipAttribute(blip.attributes, 'embed') ?? null)
+    : null;
+  const linkedRelationshipId = blip
+    ? (relationshipAttribute(blip.attributes, 'link') ?? null)
+    : null;
+  const relationshipId = embeddedRelationshipId ?? linkedRelationshipId;
+  const srcRect = readDirectPictureSrcRect(picture);
+  const crop: SourceCrop = srcRect
+    ? Object.freeze({
+        left: parseCropPercent(schemaAttributeValue(srcRect.attributes, 'l')),
+        top: parseCropPercent(schemaAttributeValue(srcRect.attributes, 't')),
+        right: parseCropPercent(schemaAttributeValue(srcRect.attributes, 'r')),
+        bottom: parseCropPercent(schemaAttributeValue(srcRect.attributes, 'b')),
+      })
+    : EMPTY_CROP;
+  const fillMode = pictureUsesTileFillDirect(picture) ? 'tile' : 'stretch';
+  const shapeProps = findDirectKind(picture.children, 'pictureShapeProperties');
+  const xfrm = shapeProps ? findDirectKind(shapeProps.children, 'pictureTransform') : null;
+  const offNode = xfrm ? findDirectKind(xfrm.children, 'pictureTransformOffset') : null;
+  const extNode = xfrm ? findDirectKind(xfrm.children, 'pictureTransformExtent') : null;
+  const rotRaw = xfrm ? schemaAttributeValue(xfrm.attributes, 'rot') : undefined;
+  const rotEmu = rotRaw !== undefined ? parseEmu(rotRaw, false) : null;
+  const transform: DrawingTransform = Object.freeze({
+    rotationDegrees: rotEmu === null ? 0 : rotEmu / 60_000,
+    flipHorizontal: xfrm ? schemaAttributeValue(xfrm.attributes, 'flipH') === '1' : false,
+    flipVertical: xfrm ? schemaAttributeValue(xfrm.attributes, 'flipV') === '1' : false,
+    offsetEmu: Object.freeze({
+      x: offNode ? (parseEmu(schemaAttributeValue(offNode.attributes, 'x'), false) ?? 0) : 0,
+      y: offNode ? (parseEmu(schemaAttributeValue(offNode.attributes, 'y'), false) ?? 0) : 0,
+    }),
+    extentEmu: Object.freeze({
+      cx: extNode ? (parseEmu(schemaAttributeValue(extNode.attributes, 'cx')) ?? 0) : 0,
+      cy: extNode ? (parseEmu(schemaAttributeValue(extNode.attributes, 'cy')) ?? 0) : 0,
+    }),
+  });
+  const preset = shapeProps ? findDirectKind(shapeProps.children, 'picturePresetGeometry') : null;
+  const presetGeometry = preset ? (schemaAttributeValue(preset.attributes, 'prst') ?? null) : null;
+  const effects = blip ? readBlipEffects(blip) : EMPTY_EFFECTS;
+  return {
+    picture: Object.freeze({
+      embeddedRelationshipId,
+      linkedRelationshipId,
+      crop,
+      fillMode,
+      transform,
+      presetGeometry,
+    }),
+    relationshipId,
+    effects,
+    diagnostic: null,
+  };
+}
+
+function freezeDrawingProjection(projection: DrawingProjection): DrawingProjection {
+  return Object.freeze({
+    ...projection,
+    extentEmu: Object.freeze({ ...projection.extentEmu }),
+    effectExtentEmu: Object.freeze({ ...projection.effectExtentEmu }),
+    inlineDistancesEmu: Object.freeze({ ...projection.inlineDistancesEmu }),
+    wrapGeometry: projection.wrapGeometry
+      ? Object.freeze({
+          ...projection.wrapGeometry,
+          distancesEmu: Object.freeze({ ...projection.wrapGeometry.distancesEmu }),
+          polygon: Object.freeze(
+            projection.wrapGeometry.polygon.map((point) => Object.freeze({ ...point }))
+          ),
+        })
+      : null,
+    position: projection.position
+      ? Object.freeze({
+          ...projection.position,
+          simplePosition: Object.freeze({ ...projection.position.simplePosition }),
+          horizontal: Object.freeze({ ...projection.position.horizontal }),
+          vertical: Object.freeze({ ...projection.position.vertical }),
+        })
+      : null,
+    anchor: projection.anchor ? Object.freeze({ ...projection.anchor }) : null,
+    picture: projection.picture
+      ? Object.freeze({
+          ...projection.picture,
+          crop: Object.freeze({ ...projection.picture.crop }),
+          transform: Object.freeze({ ...projection.picture.transform }),
+        })
+      : null,
+    vectorShape: projection.vectorShape
+      ? Object.freeze({
+          ...projection.vectorShape,
+          extentEmu: Object.freeze({ ...projection.vectorShape.extentEmu }),
+          subpathsEmu: Object.freeze(
+            projection.vectorShape.subpathsEmu.map((points) =>
+              Object.freeze(points.map((point) => Object.freeze({ ...point })))
+            )
+          ),
+        })
+      : null,
+    locks: Object.freeze({ ...projection.locks }),
+    effects: Object.freeze({ ...projection.effects }),
+    diagnostics: Object.freeze(
+      projection.diagnostics.map((diagnostic) => Object.freeze({ ...diagnostic }))
+    ),
+  });
+}
+
+function buildUnrenderableProjection(
+  drawing: OoxmlDrawingNode,
+  ctx: ProjectionContext,
+  state: WalkState,
+  kind: DrawingKind,
+  extent: Readonly<{ cx: number; cy: number }>
+): DrawingProjection {
+  if (!state.diagnostics.some((diagnostic) => diagnostic.code === 'resource-refused')) {
+    state.diagnostics.push({
+      code: 'resource-refused',
+      nodeId: drawing.id,
+      detail: 'projection-limit',
+    });
+  }
+  return freezeDrawingProjection(
+    Object.freeze({
+      drawingNodeId: drawing.id,
+      ownerPartName: ctx.ownerPartName,
+      kind,
+      relationshipId: null,
+      docPrId: null,
+      name: '',
+      title: '',
+      description: '',
+      hyperlinkHref: null,
+      hidden: false,
+      extentEmu: extent,
+      effectExtentEmu: EMPTY_EDGES,
+      inlineDistancesEmu: EMPTY_EDGES,
+      wrap: kind === 'inline' ? 'inline' : 'inFront',
+      wrapGeometry: null,
+      position: null,
+      anchor: null,
+      picture: null,
+      vectorShape: null,
+      locks: EMPTY_LOCKS,
+      effects: EMPTY_EFFECTS,
+      compatibilityBranchNodeId: state.compatibilityBranchNodeId,
+      diagnostics: state.diagnostics,
+    })
+  );
+}
+
+/** Whether a run-level `mc:AlternateContent` wraps typed drawing content. */
+export function isRunLevelMcAlternateContent(node: OoxmlNode): node is OoxmlGenericElementNode {
+  return isMcAlternateContent(node);
+}
+
+/** Resolve a run-level MC wrapper into an atomic drawing segment descriptor. */
+export function resolveRunLevelMcAtom(
+  wrapper: OoxmlGenericElementNode,
+  namespaceScope: ReadonlyMap<string, string>,
+  supportedNamespaceUris: ReadonlySet<string> = DEFAULT_SUPPORTED_MC_REQUIRES,
+  limits: DrawingProjectionLimits = DEFAULT_DRAWING_PROJECTION_LIMITS
+): RunLevelMcAtom {
+  const state = createWalkState();
+  const selected = selectCompatibilityBranch(
+    wrapper,
+    state,
+    limits,
+    namespaceScope,
+    supportedNamespaceUris
+  );
+  const branch = validateMcBranchContent(selected.branch);
+  if (branch === null || branch === 'non-picture') {
+    return Object.freeze({
+      segmentNode: wrapper,
+      drawing: null,
+      removeNodeIds: Object.freeze([wrapper.id]),
+    });
+  }
+  return Object.freeze({
+    segmentNode: wrapper,
+    drawing: branch,
+    removeNodeIds: Object.freeze([wrapper.id]),
+  });
+}
+
+export function drawingAccessibility(projection: DrawingProjection): DrawingAccessibility {
+  const label =
+    projection.description.length > 0
+      ? projection.description
+      : projection.title.length > 0
+        ? projection.title
+        : null;
+  return Object.freeze({
+    hidden: projection.hidden,
+    decorative: label === null,
+    label,
+  });
+}
+
+export function projectDrawing(
+  drawing: OoxmlDrawingNode,
+  context: Readonly<{
+    ownerPartName: string;
+    supportedMcRequires: ReadonlySet<string>;
+    limits: DrawingProjectionLimits;
+    namespaceScope?: ReadonlyMap<string, string>;
+    resolveRelationship?: RelationshipTargetResolver;
+  }>
+): DrawingProjection | null {
+  const ctx: ProjectionContext = {
+    ownerPartName: context.ownerPartName,
+    supportedMcRequires: context.supportedMcRequires,
+    limits: context.limits,
+    resolveRelationship: context.resolveRelationship,
+  };
+  const namespaceScope = context.namespaceScope ?? emptyNamespaceScope();
+  const compatibilityMode = isCompatibilityDrawing(drawing);
+  const state = createWalkState();
+  if (state.depth >= ctx.limits.maxDrawingDepth) {
+    state.refused = true;
+  }
+  state.depth += 1;
+  const { anchor } = flattenAnchorRoot(
+    drawing,
+    state,
+    ctx.limits,
+    namespaceScope,
+    ctx.supportedMcRequires
+  );
+  state.depth -= 1;
+
+  const extentFromAnchor = anchor ? readExtent(anchor, compatibilityMode) : null;
+  if (state.refused && extentFromAnchor) {
+    const kind: DrawingKind =
+      anchor!.kind === 'anchoredDrawing' ||
+      (anchor!.kind === 'generic' && anchor!.localName === 'anchor')
+        ? 'anchored'
+        : 'inline';
+    return buildUnrenderableProjection(drawing, ctx, state, kind, extentFromAnchor);
+  }
+
+  if (!anchor) {
+    state.diagnostics.push({
+      code: 'malformed-drawing',
+      nodeId: drawing.id,
+      detail: 'missing-anchor',
+    });
+    return null;
+  }
+
+  const kind: DrawingKind =
+    anchor.kind === 'anchoredDrawing' ||
+    (anchor.kind === 'generic' && anchor.localName === 'anchor')
+      ? 'anchored'
+      : 'inline';
+  const extent = readExtent(anchor, compatibilityMode);
+  if (!extent) {
+    if (state.refused) return null;
+    state.diagnostics.push({
+      code: 'invalid-geometry',
+      nodeId: anchor.id,
+      detail: 'extent',
+    });
+    return null;
+  }
+
+  if (state.refused) {
+    return buildUnrenderableProjection(drawing, ctx, state, kind, extent);
+  }
+
+  const metadata = readDocPrMetadata(anchor, compatibilityMode, ctx.resolveRelationship);
+  const wrapElement = kind === 'anchored' ? findWrapElement(anchor, compatibilityMode) : null;
+  const behindDocument = schemaAttributeValue(anchor.attributes, 'behindDoc') === '1';
+  const simplePosEnabled = schemaAttributeValue(anchor.attributes, 'simplePos') === '1';
+  const framePr =
+    findDirectKind(anchor.children, 'drawingGraphicFramePr') ??
+    (compatibilityMode
+      ? findDirectChild(anchor.children, {
+          namespaceUri: WP_NAMESPACE_URI,
+          localName: 'cNvGraphicFramePr',
+        })
+      : null);
+  const locks = mergeLocks(
+    schemaAttributeValue(anchor.attributes, 'locked') === '1',
+    readFrameLocks(framePr)
+  );
+  const pictureResult = projectPicture(anchor, state, ctx, namespaceScope, compatibilityMode);
+  if (pictureResult.diagnostic) state.diagnostics.push(pictureResult.diagnostic);
+  if (state.refused) {
+    return buildUnrenderableProjection(drawing, ctx, state, kind, extent);
+  }
+  const wrapGeometry =
+    kind === 'anchored' ? readWrapGeometry(wrapElement, state, drawing.id) : null;
+  const position = kind === 'anchored' ? readPosition(anchor, simplePosEnabled) : null;
+  const anchorMeta =
+    kind === 'anchored'
+      ? Object.freeze({
+          simplePos: simplePosEnabled,
+          relativeHeight: parseEmu(schemaAttributeValue(anchor.attributes, 'relativeHeight')) ?? 0,
+          behindDocument,
+          layoutInCell: schemaAttributeValue(anchor.attributes, 'layoutInCell') !== '0',
+          allowOverlap: schemaAttributeValue(anchor.attributes, 'allowOverlap') !== '0',
+        })
+      : null;
+  return freezeDrawingProjection(
+    Object.freeze({
+      drawingNodeId: drawing.id,
+      ownerPartName: ctx.ownerPartName,
+      kind,
+      relationshipId: pictureResult.relationshipId,
+      docPrId: metadata.docPrId,
+      name: metadata.name,
+      title: metadata.title,
+      description: metadata.description,
+      hyperlinkHref: metadata.hyperlinkHref,
+      hidden: metadata.hidden,
+      extentEmu: extent,
+      effectExtentEmu: readEffectExtent(anchor, wrapElement, compatibilityMode),
+      inlineDistancesEmu: kind === 'inline' ? readDistances(anchor) : EMPTY_EDGES,
+      wrap: wrapTargetFromAnchor(kind, wrapElement, behindDocument),
+      wrapGeometry,
+      position,
+      anchor: anchorMeta,
+      picture: pictureResult.picture,
+      vectorShape: pictureResult.picture
+        ? null
+        : projectVectorShape(anchor, extent, compatibilityMode),
+      locks,
+      effects: pictureResult.effects,
+      compatibilityBranchNodeId: state.compatibilityBranchNodeId,
+      diagnostics: state.diagnostics,
+    })
+  );
+}
+
+/** Project a drawing nested under a run-level MC wrapper. */
+export function projectRunLevelMcDrawing(
+  wrapper: OoxmlGenericElementNode,
+  context: Readonly<{
+    ownerPartName: string;
+    supportedMcRequires: ReadonlySet<string>;
+    limits: DrawingProjectionLimits;
+    namespaceScope: ReadonlyMap<string, string>;
+    resolveRelationship?: RelationshipTargetResolver;
+  }>
+): DrawingProjection | null {
+  const atom = resolveRunLevelMcAtom(
+    wrapper,
+    context.namespaceScope,
+    context.supportedMcRequires,
+    context.limits
+  );
+  if (atom.drawing === null) return null;
+  const projection = projectDrawing(atom.drawing, {
+    ...context,
+    namespaceScope: context.namespaceScope,
+  });
+  if (!projection) return null;
+  // An MC-wrapped payload the engine cannot actually draw (textboxes, charts) stays
+  // invisible like its VML fallback always was — a labelled placeholder card over
+  // letterhead furniture would be noisier than what either branch renders today.
+  if (projection.picture === null && projection.vectorShape === null) return null;
+  return projection;
+}
+
+interface PartCollectFrame {
+  readonly node: OoxmlNode;
+  readonly namespaceScope: ReadonlyMap<string, string>;
+  readonly depth: number;
+}
+
+function collectDrawingsInPartBounded(
+  root: OoxmlElement,
+  ownerPartName: string,
+  ctx: ProjectionContext,
+  out: DrawingProjection[],
+  atomIndex?: Map<string, DrawingProjection>
+): void {
+  const stack: PartCollectFrame[] = [
+    { node: root, namespaceScope: emptyNamespaceScope(), depth: 0 },
+  ];
+  let visited = 0;
+  while (stack.length > 0) {
+    const frame = stack.pop()!;
+    if (!isElement(frame.node)) continue;
+    visited += 1;
+    // The tree is already size-bounded by the package read limits; this scan cap only
+    // guards CPU on adversarial parts. `limits.maxVisitedElements` budgets one DRAWING's
+    // subtree walk and is far below an ordinary document's total element count — using it
+    // here silently dropped every drawing past the first few thousand elements.
+    if (visited > MAX_PART_SCAN_ELEMENTS) break;
+    if (frame.depth > MAX_XML_DEPTH) continue;
+
+    const scope = namespaceScopeForNode(frame.namespaceScope, frame.node);
+
+    if (frame.node.kind === 'drawing') {
+      const projected = projectDrawing(frame.node, { ...ctx, namespaceScope: scope });
+      if (projected) {
+        out.push(projected);
+        atomIndex?.set(frame.node.id, projected);
+      }
+      continue;
+    }
+
+    if (isMcAlternateContent(frame.node)) {
+      const projected = projectRunLevelMcDrawing(frame.node, {
+        ownerPartName,
+        supportedMcRequires: ctx.supportedMcRequires,
+        limits: ctx.limits,
+        namespaceScope: scope,
+        resolveRelationship: ctx.resolveRelationship,
+      });
+      if (projected) {
+        out.push(projected);
+        atomIndex?.set(frame.node.id, projected);
+      }
+      continue;
+    }
+
+    if (frame.depth >= MAX_XML_DEPTH) continue;
+    for (let index = frame.node.children.length - 1; index >= 0; index -= 1) {
+      const child = frame.node.children[index];
+      if (isElement(child)) {
+        stack.push({ node: child, namespaceScope: scope, depth: frame.depth + 1 });
+      }
+    }
+  }
+}
+
+export function projectDrawingsInPart(
+  part: OoxmlPart,
+  context?: Partial<{
+    supportedMcRequires: ReadonlySet<string>;
+    limits: DrawingProjectionLimits;
+    resolveRelationship?: RelationshipTargetResolver;
+  }>
+): readonly DrawingProjection[] {
+  const ctx: ProjectionContext = {
+    ownerPartName: part.name,
+    supportedMcRequires: context?.supportedMcRequires ?? DEFAULT_SUPPORTED_MC_REQUIRES,
+    limits: context?.limits ?? DEFAULT_DRAWING_PROJECTION_LIMITS,
+    resolveRelationship: context?.resolveRelationship,
+  };
+  const out: DrawingProjection[] = [];
+  collectDrawingsInPartBounded(part.root, part.name, ctx, out);
+  return Object.freeze(out.map(freezeDrawingProjection));
+}
+
+/** Run-level drawing / MC wrapper atom id → inline projection (namespace scope from part root). */
+export function indexInlineDrawingProjectionsInPart(
+  part: OoxmlPart,
+  context?: Partial<{
+    supportedMcRequires: ReadonlySet<string>;
+    limits: DrawingProjectionLimits;
+    resolveRelationship?: RelationshipTargetResolver;
+  }>
+): ReadonlyMap<string, DrawingProjection> {
+  const ctx: ProjectionContext = {
+    ownerPartName: part.name,
+    supportedMcRequires: context?.supportedMcRequires ?? DEFAULT_SUPPORTED_MC_REQUIRES,
+    limits: context?.limits ?? DEFAULT_DRAWING_PROJECTION_LIMITS,
+    resolveRelationship: context?.resolveRelationship,
+  };
+  const out: DrawingProjection[] = [];
+  const atomIndex = new Map<string, DrawingProjection>();
+  collectDrawingsInPartBounded(part.root, part.name, ctx, out, atomIndex);
+  return Object.freeze(atomIndex);
+}
+
+const STORY_PART_RE =
+  /^\/word\/(document|footnotes|endnotes)\.xml$|^\/word\/(header|footer)[^/]+\.xml$/;
+
+export function projectDrawingsInPackage(
+  pkg: OoxmlPackage,
+  context?: Partial<{
+    supportedMcRequires: ReadonlySet<string>;
+    limits: DrawingProjectionLimits;
+  }>
+): readonly DrawingProjection[] {
+  const projections: DrawingProjection[] = [];
+  for (const [partName, part] of pkg.parts) {
+    if (!STORY_PART_RE.test(partName)) continue;
+    projections.push(
+      ...projectDrawingsInPart(part, {
+        ...context,
+        resolveRelationship: createDrawingRelationshipResolver(pkg, partName),
+      })
+    );
+  }
+  return Object.freeze(projections.map(freezeDrawingProjection));
+}
+
+export function rangePartiallyOverlapsDrawingAtom(
+  segments: readonly {
+    readonly start: number;
+    readonly end: number;
+    readonly removeNodeIds?: readonly string[];
+  }[],
+  start: number,
+  end: number
+): boolean {
+  for (const segment of segments) {
+    if (!segment.removeNodeIds || segment.removeNodeIds.length === 0) continue;
+    const overlaps = start < segment.end && end > segment.start;
+    if (!overlaps) continue;
+    const covers = start <= segment.start && end >= segment.end;
+    if (!covers) return true;
+  }
+  return false;
+}
+
+export { isMcAlternateContent, namespaceScopeForNode, emptyNamespaceScope };

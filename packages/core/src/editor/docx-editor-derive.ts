@@ -18,6 +18,7 @@ import type {
 } from '../contracts/editor.ts';
 import type { ContainerRef, ParagraphSummary } from '../index.ts';
 import { classifyCommand } from './docx-editor-support.ts';
+import { gateImageCommand } from './docx-editor-images.ts';
 
 /** Whether a command may run, and the engine's own refusal when it may not. */
 export type CommandGate =
@@ -415,6 +416,10 @@ export function gateCommand(
     const tableGate = gateTableCommand(command, surface);
     if (!tableGate.ok) return tableGate;
     return { ok: true, tablePlan: tableGate.tablePlan };
+  }
+  const imageGate = gateImageCommand(command, surface);
+  if (imageGate && !imageGate.ok) {
+    return { ok: false, refusal: imageGate };
   }
   return { ok: true };
 }
