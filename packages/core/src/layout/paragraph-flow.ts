@@ -313,16 +313,20 @@ export interface PendingLine {
   height: number;
   baseline: number;
   /**
-   * How much of {@link height} is line-spacing leading rather than glyphs.
+   * Space ABOVE the glyph band inside {@link height}.
    *
-   * PUBLISHED, not re-derived. `applyLineSpacing` decides where the leading goes, and the
-   * whole of it sits ABOVE the text, which is what moves `baseline` down. Paint used to
-   * recover this by subtracting the tallest span height from the line box — an identity
-   * that only holds while the spacing rule is the multiplying one, and that is already
-   * false for an `exact` box clipped below its glyphs. Every consumer reads the one number
-   * the spacing rule produced instead of guessing at it from the box.
+   * Exact spacing can center the glyphs and move the baseline. Auto/atLeast spacing leaves
+   * this at zero and puts its extra depth below instead.
    */
   leading: number;
+  /**
+   * Auto/atLeast line-spacing depth below the painted glyph band.
+   *
+   * Word lets this external depth cross the bottom text margin when the glyphs themselves
+   * still fit. Pagination therefore budgets {@link height} minus this amount at a page
+   * bottom, while paint keeps the full box and padding.
+   */
+  trailingSpacing: number;
   /** When true, layout must start a new page after this line is placed. */
   pageBreakAfter?: boolean;
   /** When true, layout must advance to the next authored section column. */
@@ -335,16 +339,16 @@ export interface PendingLine {
 
 /** Vertical extent of a pending line for flow/pagination budget checks (skip + box + optional tail). */
 export function pendingLineFlowExtent(
-  line: Pick<PendingLine, 'height' | 'exclusionSkipBefore'>,
+  line: Pick<PendingLine, 'height' | 'trailingSpacing' | 'exclusionSkipBefore'>,
   tail = 0
 ): number {
-  return (line.exclusionSkipBefore ?? 0) + line.height + tail;
+  return (line.exclusionSkipBefore ?? 0) + Math.max(0, line.height - line.trailingSpacing) + tail;
 }
 
 /** Recompute topAndBottom skip at placement time from live page zones and absolute line top. */
 export function pendingLineFlowExtentAtPlacement(
   lineTopY: number,
-  line: Pick<PendingLine, 'height' | 'exclusionSkipBefore'>,
+  line: Pick<PendingLine, 'height' | 'trailingSpacing' | 'exclusionSkipBefore'>,
   zones: readonly ExclusionZone[],
   tail = 0
 ): number {
@@ -352,7 +356,7 @@ export function pendingLineFlowExtentAtPlacement(
     zones.length > 0
       ? topAndBottomSkipBeforeLine(lineTopY, line.height, zones)
       : (line.exclusionSkipBefore ?? 0);
-  return skip + line.height + tail;
+  return skip + Math.max(0, line.height - line.trailingSpacing) + tail;
 }
 
 /**
@@ -380,6 +384,7 @@ export function frozenLine(line: PendingLine): PendingLine {
     height: line.height,
     baseline: line.baseline,
     leading: line.leading,
+    trailingSpacing: line.trailingSpacing,
     ...(line.pageBreakAfter ? { pageBreakAfter: true } : {}),
     ...(line.columnBreakAfter ? { columnBreakAfter: true } : {}),
     ...(line.deletedRanges ? { deletedRanges: Object.freeze(line.deletedRanges) } : {}),
@@ -657,6 +662,7 @@ export function breakParagraph(
     height: 0,
     baseline: 0,
     leading: 0,
+    trailingSpacing: 0,
   };
   let topAndBottomSkipApplied = false;
   const anchorLineTopByModelStart = new Map<number, number>();
@@ -1116,7 +1122,8 @@ export function breakParagraph(
     finalizeDrawingGeometry();
     // Line spacing applies to the finished box, once, so a paragraph's rule governs every
     // line it produced regardless of which run happened to be tallest.
-    const spaced = applyLineSpacing(lineSpacing, line.height, line.baseline);
+    const naturalHeight = line.height;
+    const spaced = applyLineSpacing(lineSpacing, naturalHeight, line.baseline);
     line.baseline = spaced.baseline;
     // Space ABOVE the glyph band only (exact centering, not auto/atLeast). Never negative.
     line.leading = Math.max(0, spaced.baseline - glyphBaseline);
@@ -1126,6 +1133,10 @@ export function breakParagraph(
     // clip/overflow per content-clip policy; auto/atLeast still grow to contain distB.
     repositionDrawingsToFinalBaseline();
     if (lineSpacing.rule !== 'exact') growLineHeightForDrawingExtent();
+    line.trailingSpacing =
+      line.drawings.length === 0 && lineSpacing.rule !== 'exact'
+        ? Math.max(0, spaced.height - naturalHeight)
+        : 0;
     const finalizeTopAndBottomClearance = (): void => {
       const zones = activeExclusionZones();
       if (zones.length === 0) return;
@@ -1150,6 +1161,7 @@ export function breakParagraph(
       height: 0,
       baseline: 0,
       leading: 0,
+      trailingSpacing: 0,
     };
     applyTopAndBottomSkipIfNeeded();
   };

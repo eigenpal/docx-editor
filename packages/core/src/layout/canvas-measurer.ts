@@ -257,9 +257,8 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
       if (typeof ascent === 'number' && Number.isFinite(ascent) && ascent > 0) {
         baseline = ascent / scale;
         if (typeof descent === 'number' && Number.isFinite(descent) && descent >= 0) {
-          // Canvas reports the em box (ascent + descent), not the typographic line gap.
-          // Exact Word single-spacing needs the shaped measurer (hhea lineGap). This keeps
-          // the browser path aligned with painted glyph boxes without a DOM probe.
+          // Canvas reports the face box (ascent + descent). That is also Word's line-box
+          // basis: `hhea.lineGap` is external leading and must not inflate every line.
           const box = (ascent + descent) / scale;
           if (box > 0) height = box;
         }

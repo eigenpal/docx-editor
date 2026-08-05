@@ -1,11 +1,9 @@
 // Exact line metrics and advances, from the font itself (task 7.7).
 //
 // Every host-side measurement is a fraction out, and the fraction is not cosmetic. Word
-// derives single line spacing from the font's `hhea` table — ascent + descent + line gap —
-// and a browser will not tell you the line gap: canvas reports the font bounding box
-// (ascent and descent only), and a DOM probe reports a rounded composite. Build a line
-// height from either and every run either overflows the line reserved for it or leaves a
-// gap beneath it, which is what a selection band draws attention to.
+// derives single line spacing from the font's ascent and descent. `hhea.lineGap` is external
+// leading: Word does not add it to the line box. Including it makes every line a fraction too
+// tall, and that fraction accumulates until text paginates earlier than Word.
 //
 // The font bytes carry the exact numbers, and the shaper already reads them. This adapts
 // that shaper to the semantic layout lane's `TextMeasurer` port, so the lane stays DOM-free
@@ -183,10 +181,9 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
         const shaped = shape(' ', font, style);
         const ascent = shaped.metrics.ascent / fixedPointScale;
         const descent = shaped.metrics.descent / fixedPointScale;
-        const lineGap = shaped.metrics.lineGap / fixedPointScale;
-        // Word's single spacing, exactly: the gap is part of the line, not padding around
-        // it. Leaving it out is what made every line a fraction too short.
-        const height = ascent + descent + lineGap;
+        // `lineGap` is external leading. Word's line box uses the face ascent + descent;
+        // adding the gap again makes Arial/Liberation Sans about 2.9% too tall per line.
+        const height = ascent + descent;
         metrics = height > 0 ? { height, baseline: ascent } : fallback.lineMetrics(style);
       } catch {
         metrics = fallback.lineMetrics(style);

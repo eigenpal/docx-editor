@@ -2323,7 +2323,11 @@ function layoutBlocksPass(
         pendingLine,
         appliedSkipByLineIndex
       );
-      const lineExtent = skipBefore + pendingLine.height + tail;
+      // Word can let auto/atLeast spacing below the glyph band cross the bottom text
+      // margin. The painted line keeps its full box; only the pagination budget drops that
+      // trailing external depth.
+      const lineExtent =
+        skipBefore + Math.max(0, pendingLine.height - pendingLine.trailingSpacing) + tail;
       const overflowsPage =
         cursorY + lineExtent > contentHeight() &&
         !holdsSheet() &&
