@@ -633,6 +633,44 @@ export interface DocxEditorRef {
     }): EditorSnapshot;
 }
 
+<<<<<<< HEAD
+=======
+// @public (undocumented)
+export const DocxEditorReview: DocxEditorReviewNamespace;
+
+// @public
+export interface DocxEditorReviewNamespace {
+    // (undocumented)
+    (props: ReviewProps): ReturnType<typeof ReviewRoot>;
+    // (undocumented)
+    readonly Accept: typeof ReviewAccept;
+    readonly AddComment: typeof ReviewAddComment;
+    // (undocumented)
+    readonly Author: typeof ReviewAuthor;
+    // (undocumented)
+    readonly Avatar: typeof ReviewAvatar;
+    readonly Balloon: typeof ReviewBalloon;
+    // (undocumented)
+    readonly Card: typeof ReviewCard;
+    readonly Draft: typeof ReviewDraft;
+    // (undocumented)
+    readonly Empty: typeof ReviewEmpty;
+    // (undocumented)
+    readonly List: typeof ReviewList;
+    readonly Markers: typeof ReviewMarkers;
+    // (undocumented)
+    readonly Reject: typeof ReviewReject;
+    // (undocumented)
+    readonly Replies: typeof ReviewReplies;
+    // (undocumented)
+    readonly Reply: typeof ReviewReply;
+    // (undocumented)
+    readonly Summary: typeof ReviewSummary;
+    // (undocumented)
+    readonly Time: typeof ReviewTime;
+}
+
+>>>>>>> origin/docx-editor-v2
 // @public
 export function DocxEditorRoot(props: DocxEditorRootProps): react.JSX.Element;
 
@@ -1354,7 +1392,22 @@ export interface ReviewRailRegistry {
     // (undocumented)
     readonly mounted: number;
     // (undocumented)
+<<<<<<< HEAD
     readonly register: () => () => void;
+=======
+    className?: string;
+    hidden?: boolean;
+}
+
+// @public
+export interface ReviewProps extends ReviewPartProps {
+    filter?: (item: ReviewItemView) => boolean;
+    formatting?: boolean;
+    gap?: number;
+    preset?: boolean;
+    stack?: boolean;
+    structural?: boolean;
+>>>>>>> origin/docx-editor-v2
 }
 
 // @public (undocumented)

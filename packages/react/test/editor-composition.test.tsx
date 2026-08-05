@@ -16,7 +16,7 @@ import './dom-setup.ts';
 import { afterEach, describe, expect, test } from 'bun:test';
 import { StrictMode, createRef } from 'react';
 import { renderToString } from 'react-dom/server';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
 import type {
   Editor,
