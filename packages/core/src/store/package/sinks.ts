@@ -93,7 +93,6 @@ export function escapeXmlChecked(value: string, what: string): string {
  * controls so the value cannot break out of its CSS string.
  */
 export function escapeCssString(value: string): string {
-   
   return value.replace(/[\x00-\x1f\x7f"'\\]/g, (c) => `\\${c.charCodeAt(0).toString(16)} `);
 }
 
