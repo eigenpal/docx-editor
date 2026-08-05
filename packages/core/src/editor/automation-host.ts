@@ -22,6 +22,7 @@
 
 import type { AutomationCapabilities, AutomationHost } from '../automation/index.ts';
 import type {
+  AutomationCommentWriteResult,
   AutomationDocumentPort,
   AutomationPortApplyResult,
 } from '../automation/document-port.ts';
@@ -125,6 +126,39 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       const result = surface.applyAutomationOps([op]);
       if (result.rejected) return { ok: false, reason: String(result.reason ?? 'refused') };
       return { ok: true, changed: result.committed };
+    },
+    applyCommentWrite(write, scope): AutomationCommentWriteResult {
+      const surface = editor.surface;
+      const session = sync();
+      if (!surface || !session) return { ok: false, reason: 'no-document' };
+      // THE BODY'S COMMENTS, for as long as the session's comment lane is the body store's: the
+      // scope is carried so this refuses a story it cannot write rather than silently commenting
+      // on the wrong one.
+      if (scope.kind !== 'body') return { ok: false, reason: 'unsupported-story' };
+      let outcome: AutomationCommentWriteResult = { ok: false, reason: 'refused' };
+      // `commitReviewOps` is the gate a comment goes through in the editor: viewing refuses, and
+      // the pages and the rail repaint from the commit. Reaching past it would let a script
+      // comment on a document open for reading.
+      surface.commitReviewOps(() => {
+        if (write.kind === 'resolve') {
+          const done = session.setCommentResolved(write.commentId, write.resolved);
+          outcome = done ? { ok: true, changed: true } : { ok: false, reason: 'unknown-comment' };
+          return { committed: done };
+        }
+        const created = session.replyToComment(
+          write.parentCommentId,
+          write.anchor,
+          write.text,
+          write.author,
+          write.date
+        );
+        outcome =
+          created === null
+            ? { ok: false, reason: 'refused' }
+            : { ok: true, changed: true, commentId: created };
+        return { committed: created !== null };
+      });
+      return outcome;
     },
     ensureExternalTarget(url: string, scope: StoryScope): string | null {
       // The SESSION's minting, which is the same `ensureHyperlinkRelationship` the headless host

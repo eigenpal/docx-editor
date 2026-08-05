@@ -566,6 +566,185 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
   return { ok: true, commentId };
 }
 
+export type SetCommentResolvedResult =
+  | { readonly ok: true; readonly changed: boolean }
+  | { readonly ok: false; readonly reason: TreeOpRejection | 'unknown-comment' };
+
+/** Every `w15:commentEx` in the part, by the `w15:paraId` it records state for. */
+function extendedEntries(part: OoxmlPart | undefined): Map<string, OoxmlElement> {
+  const byParaId = new Map<string, OoxmlElement>();
+  if (!part) return byParaId;
+  const visit = (node: OoxmlNode): void => {
+    if (node.kind === 'textValue') return;
+    if (node.namespaceUri === W15_NAMESPACE_URI && node.localName === 'commentEx') {
+      const paraId = attribute(node, W15_NAMESPACE_URI, 'paraId');
+      if (paraId !== undefined && isValidParaId(paraId)) byParaId.set(paraId.toUpperCase(), node);
+    }
+    for (const child of node.children) visit(child);
+  };
+  visit(part.root);
+  return byParaId;
+}
+
+function w15Attr(localName: string, value: string): OoxmlElement['attributes'][number] {
+  return {
+    kind: 'genericExtension' as const,
+    namespaceUri: W15_NAMESPACE_URI,
+    localName,
+    prefix: 'w15',
+    value,
+  };
+}
+
+/**
+ * A `w15:commentEx` for one comment, keeping the thread link it already recorded.
+ *
+ * The parent link is carried rather than rebuilt because it is the ONLY record of the thread:
+ * dropping it while writing `@w15:done` would resolve a reply and promote it to a top-level
+ * comment in the same edit.
+ */
+function resolvedEntry(
+  id: string,
+  paraId: string,
+  parentParaId: string | undefined,
+  done: boolean
+): OoxmlElement {
+  return element(
+    id,
+    'generic',
+    W15_NAMESPACE_URI,
+    'w15',
+    'commentEx',
+    [
+      w15Attr('paraId', paraId),
+      ...(parentParaId === undefined ? [] : [w15Attr('paraIdParent', parentParaId)]),
+      w15Attr('done', done ? '1' : '0'),
+    ],
+    []
+  );
+}
+
+/**
+ * Mark a comment thread resolved, or reopen it.
+ *
+ * A THREAD, not one remark: Word resolves a conversation, and its own pane greys the replies with
+ * the comment they answer. Resolving only the parent would leave a file whose reply still reads as
+ * open under a closed remark — a state Word does not produce and no reader would draw sensibly.
+ *
+ * `@w15:done` lives in `commentsExtended.xml`, which many documents do not have: a file with no
+ * reply has no thread state to record. So the part is created when it is missing, exactly as
+ * {@link addComment} creates it, and every comment being resolved gets an entry — a comment with
+ * no `w14:paraId` gets one minted, because the state is keyed by it and there is nothing else to
+ * key it by.
+ *
+ * ONE package transaction: the part, its relationship, its content-type override and the entries
+ * commit together, so a resolved thread is never half-recorded.
+ */
+export function setCommentResolved(
+  store: TreeDocumentStore,
+  commentId: string,
+  resolved: boolean
+): SetCommentResolvedResult {
+  const pkg = store.package;
+  const storyPartName = store.part.name;
+  const commentsName = commentsPartNameFor(pkg, storyPartName);
+  const extendedName = extendedPartNameFor(pkg, storyPartName);
+  const commentsPart = pkg.parts.get(commentsName);
+  if (!commentsPart) return { ok: false, reason: 'unknown-comment' };
+  const target = firstParagraphOfComment(commentsPart, commentId);
+  if (!target) return { ok: false, reason: 'unknown-comment' };
+
+  // The thread: this comment, plus every comment whose recorded parent is it.
+  const ownParaId = paraIdOfComment(commentsPart, commentId);
+  const used = paraIdsInPackage(pkg);
+  const mintedOwn =
+    ownParaId ?? mintParaId(`${commentsName}#done-${commentId}`, used);
+  const entries = extendedEntries(pkg.parts.get(extendedName));
+  const replies: string[] = [];
+  for (const [paraId, entry] of entries) {
+    const parent = attribute(entry, W15_NAMESPACE_URI, 'paraIdParent');
+    if (parent !== undefined && parent.toUpperCase() === mintedOwn.toUpperCase()) {
+      replies.push(paraId);
+    }
+  }
+
+  const result = store.transact((ctx) => {
+    if (ownParaId === null) {
+      ctx.applyPackage((current) => {
+        const part = current.parts.get(commentsName);
+        if (!part) return current;
+        const bound = withW14Binding(part);
+        const paragraph = findNode(bound.part, target.id);
+        if (!paragraph || paragraph.kind !== 'paragraph') return withPart(current, bound.part);
+        const stamped = replaceNode(
+          bound.part,
+          paragraph.id,
+          element(
+            paragraph.id,
+            'paragraph',
+            paragraph.namespaceUri,
+            paragraph.prefix ?? 'w',
+            paragraph.localName,
+            [
+              ...paragraph.attributes,
+              {
+                kind: 'genericExtension' as const,
+                namespaceUri: W14_NAMESPACE_URI,
+                localName: 'paraId',
+                prefix: bound.prefix,
+                value: mintedOwn,
+              },
+            ],
+            paragraph.children
+          ),
+          { deferValidation: true }
+        );
+        return withPart(current, stamped.ok ? stamped.part : bound.part);
+      });
+    }
+
+    ctx.applyPackage((current) => {
+      if (current.parts.has(extendedName)) return current;
+      const root = emptyPart(extendedName, `<w15:commentsEx xmlns:w15="${W15_NAMESPACE_URI}"/>`);
+      if (!root) return current;
+      const withExtended = withNewPart(current, extendedName, root, COMMENTS_EXTENDED_TYPE);
+      return withRelationship(
+        withExtended,
+        storyPartName,
+        COMMENTS_EXTENDED_REL,
+        'commentsExtended.xml'
+      ).pkg;
+    });
+
+    for (const paraId of [mintedOwn, ...replies]) {
+      ctx.applyPackage((current) => {
+        const part = current.parts.get(extendedName);
+        if (!part) return current;
+        const existing = extendedEntries(part).get(paraId.toUpperCase());
+        const parent =
+          existing === undefined
+            ? undefined
+            : attribute(existing, W15_NAMESPACE_URI, 'paraIdParent');
+        const entry = resolvedEntry(
+          existing?.id ?? `${extendedName}#done-${paraId}`,
+          paraId,
+          parent,
+          resolved
+        );
+        const written = existing
+          ? replaceNode(part, existing.id, entry, { deferValidation: true })
+          : insertChildren(part, part.root.id, part.root.children.length, [entry], {
+              deferValidation: true,
+            });
+        return written.ok ? withPart(current, written.part) : current;
+      });
+    }
+  });
+
+  if (!result.ok) return { ok: false, reason: result.reason };
+  return { ok: true, changed: true };
+}
+
 /** A comment part exists and declares the comment content type. */
 export function hasCommentPart(pkg: OoxmlPackage, storyPartName: string): boolean {
   const name = commentsPartNameFor(pkg, storyPartName);

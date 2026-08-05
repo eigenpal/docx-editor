@@ -176,6 +176,8 @@ export type AutomationValue =
    * back into a number is a caller that can parse it wrongly.
    */
   | { readonly kind: 'number'; readonly value: number }
+  /** A yes-or-no the document states: whether a comment thread is resolved. */
+  | { readonly kind: 'flag'; readonly value: boolean }
   /**
    * A paragraph style NAME, or null where nothing names one — the paragraphs disagree, or the
    * document declares no styles at all.

@@ -72,6 +72,10 @@ function fixture(
       return { ok: true, changed: true };
     },
     ensureExternalTarget: () => 'rId99',
+    applyCommentWrite: () => {
+      state.applied += 1;
+      return { ok: true, changed: true, commentId: '1' };
+    },
     save: () => new Uint8Array([1]),
     subscribe: (listener) => {
       listeners.add(listener);
@@ -198,9 +202,19 @@ describe('the operation vocabulary declares which operations write', () => {
       'setListLevel',
       'insertListParagraph',
       'setHyperlink',
+      'setCommentResolved',
+      'replyToComment',
+      'acceptRevision',
+      'rejectRevision',
+      'acceptAllRevisions',
+      'rejectAllRevisions',
     ]);
     // And the ones that commit as a PACKAGE transaction, which is why they travel alone.
-    expect([...AUTOMATION_SOLITARY_OPERATIONS]).toEqual(['deleteNote']);
+    expect([...AUTOMATION_SOLITARY_OPERATIONS]).toEqual([
+      'deleteNote',
+      'setCommentResolved',
+      'replyToComment',
+    ]);
     expect(
       isAutomationCommand({ op: 'insertText', at: { paragraph: FORGED, offset: 0 }, text: 'x' })
     ).toBe(true);

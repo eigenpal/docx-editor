@@ -43,12 +43,14 @@ export {
 } from './tree-package-store.ts';
 export {
   addComment,
+  setCommentResolved,
   commentPartNameOf,
   commentsExtendedPartNameOf,
   hasCommentPart,
   type AddCommentRequest,
   type AddCommentResult,
   type CommentAnchorRequest,
+  type SetCommentResolvedResult,
 } from './comment-writes.ts';
 export {
   AUTHORABLE_PARAGRAPH_PROPERTIES,

@@ -73,10 +73,15 @@ export type AutomationHandleTarget =
   | { readonly kind: 'section'; readonly index: number }
   /** One footnote or endnote, by the `w:id` the reference in the story names. */
   | { readonly kind: 'note'; readonly noteKind: NoteKind; readonly noteId: number }
-  /** One comment, by its `w:id`. */
-  | { readonly kind: 'comment'; readonly commentId: string }
-  /** One tracked-change decision, by the review queue's own item id. */
-  | { readonly kind: 'revision'; readonly revisionId: string }
+  /**
+   * One comment, by its `w:id` AND the story its markers are anchored in.
+   *
+   * Story-qualified for the same reason a bookmark is: `w:id` is scoped to the comments part a
+   * story's relationship names, so two stories can each hold a comment 1 and they are two remarks.
+   */
+  | { readonly kind: 'comment'; readonly commentId: string; readonly story: AutomationStoryId }
+  /** One tracked-change decision, by the review queue's item id and the story it sits in. */
+  | { readonly kind: 'revision'; readonly revisionId: string; readonly story: AutomationStoryId }
   /**
    * One bookmark, by the name it is declared with and the story its markers sit in.
    *
@@ -102,8 +107,8 @@ export interface AutomationHandleTable {
   paragraph(paragraphId: string, story: AutomationStoryId): AutomationHandle<'paragraph'>;
   section(index: number): AutomationHandle<'section'>;
   note(noteKind: NoteKind, noteId: number): AutomationHandle<'note'>;
-  comment(commentId: string): AutomationHandle<'comment'>;
-  revision(revisionId: string): AutomationHandle<'revision'>;
+  comment(commentId: string, story: AutomationStoryId): AutomationHandle<'comment'>;
+  revision(revisionId: string, story: AutomationStoryId): AutomationHandle<'revision'>;
   bookmark(name: string, story: AutomationStoryId): AutomationHandle<'bookmark'>;
   list(numId: string, story: AutomationStoryId): AutomationHandle<'list'>;
   /**
@@ -185,11 +190,19 @@ export function createHandleTable(): AutomationHandleTable {
     note(noteKind, noteId) {
       return named('note', `${noteKind}:${String(noteId)}`, { kind: 'note', noteKind, noteId });
     },
-    comment(commentId) {
-      return named('comment', commentId, { kind: 'comment', commentId });
+    comment(commentId, story) {
+      return named('comment', `${storyKey(story)}\u0000${commentId}`, {
+        kind: 'comment',
+        commentId,
+        story,
+      });
     },
-    revision(revisionId) {
-      return named('revision', revisionId, { kind: 'revision', revisionId });
+    revision(revisionId, story) {
+      return named('revision', `${storyKey(story)}\u0000${revisionId}`, {
+        kind: 'revision',
+        revisionId,
+        story,
+      });
     },
     bookmark(name, story) {
       return named('bookmark', `${storyKey(story)}\u0000${name}`, {

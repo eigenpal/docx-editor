@@ -34,7 +34,11 @@ import type {
   AutomationSaveResult,
   AutomationUnsubscribe,
 } from './protocol.ts';
-import type { AutomationDocumentPort } from './document-port.ts';
+import type {
+  AutomationCommentWrite,
+  AutomationDocumentPort,
+} from './document-port.ts';
+import type { StoryScope } from '../store/store/tree-package-store.ts';
 
 export interface AutomationHostComposition {
   readonly port: AutomationDocumentPort;
@@ -149,6 +153,8 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     const ops: TreeDocOp[] = [];
     /** The one package-level op a batch may hold, which travels alone. See the planner. */
     let lifecycle: TreeDocOp | null = null;
+    /** The one comment write a batch may hold, likewise solitary and likewise its own commit. */
+    let commentWrite: { write: AutomationCommentWrite; scope: StoryScope } | null = null;
     let firstCommand = -1;
     for (let index = 0; index < operations.length; index += 1) {
       const step = planner.plan(operations[index]!);
@@ -158,10 +164,29 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
         if (firstCommand < 0) firstCommand = index;
         if (step.lifecycle) lifecycle = step.ops[0] ?? null;
         else ops.push(...step.ops);
+      } else if (step.kind === 'commentWrite') {
+        if (firstCommand < 0) firstCommand = index;
+        commentWrite = { write: step.write, scope: planner.writeScope ?? { kind: 'body' } };
       }
     }
 
     let changed = false;
+    if (commentWrite) {
+      const applied = port.applyCommentWrite(commentWrite.write, commentWrite.scope);
+      if (!applied.ok) {
+        return refuse(
+          operations,
+          firstCommand < 0 ? 0 : firstCommand,
+          automationError(
+            'transaction-refused',
+            'the document store refused the comment write',
+            applied.reason
+          ),
+          revision
+        );
+      }
+      changed = applied.changed;
+    }
     if (lifecycle) {
       const applied = port.applyLifecycle(lifecycle);
       if (!applied.ok) {

@@ -14,6 +14,27 @@ import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 
+/** What a comment write asks for: a reply on a comment's own range, or a thread's state. */
+export type AutomationCommentWrite =
+  | {
+      readonly kind: 'reply';
+      readonly parentCommentId: string;
+      readonly anchor: {
+        readonly paragraphId: string;
+        readonly start: number;
+        readonly end: number;
+        readonly endParagraphId?: string;
+      };
+      readonly text: string;
+      readonly author: string;
+      readonly date?: string;
+    }
+  | { readonly kind: 'resolve'; readonly commentId: string; readonly resolved: boolean };
+
+export type AutomationCommentWriteResult =
+  | { readonly ok: true; readonly changed: boolean; readonly commentId?: string }
+  | { readonly ok: false; readonly reason: string };
+
 export type AutomationPortApplyResult =
   | { readonly ok: true; readonly changed: boolean }
   | { readonly ok: false; readonly reason: string };
@@ -67,6 +88,19 @@ export interface AutomationDocumentPort {
    * engine would refuse to open is a scheme it must not author.
    */
   ensureExternalTarget(url: string, scope: StoryScope): string | null;
+  /**
+   * Commit ONE comment write — a reply, or a thread's resolved state — as its own transaction.
+   *
+   * A third path rather than an op, because a comment is not a tree edit: a reply writes the story
+   * markers AND `comments.xml` AND `commentsExtended.xml` AND their relationships AND their
+   * content types, and the engine already spells that as one package transaction (`addComment`).
+   * Expressing it as `TreeDocOp`s would mean a second implementation of the same write, and the
+   * two would diverge on the part a document happens not to have.
+   *
+   * Solitary, like the lifecycle path: the planner refuses these any company, so a batch reaching
+   * here is exactly one write and atomicity still means what it says.
+   */
+  applyCommentWrite(write: AutomationCommentWrite, scope: StoryScope): AutomationCommentWriteResult;
   /** DOCX bytes through the normalizing serializer, or null when there is no document. */
   save(): Uint8Array | null;
   /**

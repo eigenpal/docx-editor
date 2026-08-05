@@ -102,6 +102,9 @@ import { pageSetupProperties, type AutomationSectionRead } from './sections.ts';
 import type { NoteKind } from '../store/package/note-nodes.ts';
 import { paragraphStyleName, styleIdFor } from './styles.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
+import type { AutomationCommentWrite } from './document-port.ts';
+import { commentReads, revisionReads, type AutomationRevisionRead } from './review.ts';
+import type { ReviewCommentItem } from '../store/store/review-reads.ts';
 
 /**
  * Characters that mean "a new paragraph" in a document but are merely characters in a run.
@@ -139,6 +142,20 @@ export type PlannedOperation =
        */
       readonly lifecycle?: boolean;
       /** Computed after the commit, so a created paragraph can be named. */
+      readonly answer: (post: AutomationPackageReads) => AutomationValue;
+    }
+  | {
+      readonly ok: true;
+      /**
+       * A comment write, which is a package transaction of its own rather than a tree op.
+       *
+       * See `AutomationDocumentPort.applyCommentWrite`: a reply is markers plus `comments.xml`
+       * plus `commentsExtended.xml` plus a relationship plus a content type, and the engine
+       * already commits that as one thing. Solitary like a lifecycle op, for the same reason.
+       */
+      readonly kind: 'commentWrite';
+      readonly write: AutomationCommentWrite;
+      readonly story: AutomationStoryId;
       readonly answer: (post: AutomationPackageReads) => AutomationValue;
     }
   | { readonly ok: false; readonly error: AutomationError };
@@ -366,6 +383,113 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       'one batch writes into one story',
       `${storyKey(writeStory.reads.story)} then ${storyKey(plan.reads.story)}`
     );
+  };
+
+  /**
+   * The comments of one story, or null when the document is gone.
+   *
+   * Read through the package rather than cached per batch: a reply commits and the next
+   * operation must see it, and a batch that answered a stale thread would report a reply it
+   * had just written as absent.
+   */
+  const commentsOf = (reads: AutomationStoryReads): ReturnType<typeof commentReads> | null => {
+    const pkg = packageReads.package;
+    return pkg === null ? null : commentReads(pkg, reads);
+  };
+
+  /** One comment's item, with the story it lives in, or a refusal naming which half failed. */
+  const commentAt = (
+    handle: unknown
+  ):
+    | { readonly ok: true; readonly reads: AutomationStoryReads; readonly item: ReviewCommentItem }
+    | { readonly ok: false; readonly planned: PlannedOperation } => {
+    const target = handles.resolve(handle, 'comment');
+    if (!target || target.kind !== 'comment') {
+      return {
+        ok: false,
+        planned: refuse('invalid-handle', 'that handle does not name a comment', 'comment'),
+      };
+    }
+    const reads = packageReads.story(target.story);
+    if (!reads) {
+      return {
+        ok: false,
+        planned: refuse('invalid-handle', 'that story is not in this document'),
+      };
+    }
+    const comments = commentsOf(reads);
+    const item = comments?.byId(target.commentId) ?? null;
+    if (!item) {
+      return {
+        ok: false,
+        planned: refuse(
+          'invalid-handle',
+          'this document no longer holds that comment',
+          target.commentId
+        ),
+      };
+    }
+    return { ok: true, reads, item };
+  };
+
+  /** One decision, with its story. A change the engine cannot resolve is not one of these. */
+  const revisionAt = (
+    handle: unknown
+  ):
+    | {
+        readonly ok: true;
+        readonly reads: AutomationStoryReads;
+        readonly item: AutomationRevisionRead;
+      }
+    | { readonly ok: false; readonly planned: PlannedOperation } => {
+    const target = handles.resolve(handle, 'revision');
+    if (!target || target.kind !== 'revision') {
+      return {
+        ok: false,
+        planned: refuse('invalid-handle', 'that handle does not name a tracked change', 'revision'),
+      };
+    }
+    const reads = packageReads.story(target.story);
+    if (!reads) {
+      return { ok: false, planned: refuse('invalid-handle', 'that story is not in this document') };
+    }
+    const item = revisionReads(reads).find((each) => each.id === target.revisionId) ?? null;
+    // RESOLVED MEANS GONE. A decision already made is not re-applied to whatever now occupies
+    // its offsets — that would edit text the caller never named.
+    if (!item) {
+      return {
+        ok: false,
+        planned: refuse(
+          'invalid-handle',
+          'this document no longer holds that tracked change',
+          target.revisionId
+        ),
+      };
+    }
+    return { ok: true, reads, item };
+  };
+
+  /** A review range as a protocol span, clamped to what the story still holds. */
+  const spanOfReviewRange = (
+    reads: AutomationStoryReads,
+    range: { readonly start: { paragraphId: string; offset: number }; readonly end: { paragraphId: string; offset: number } }
+  ): AutomationSpan | null => {
+    const startText = reads.paragraphText(range.start.paragraphId);
+    const endText = reads.paragraphText(range.end.paragraphId);
+    if (startText === null || endText === null) return null;
+    const start: ResolvedPoint = {
+      story: reads.story,
+      paragraphId: range.start.paragraphId,
+      index: reads.indexOf(range.start.paragraphId),
+      offset: Math.min(range.start.offset, startText.length),
+    };
+    const end: ResolvedPoint = {
+      story: reads.story,
+      paragraphId: range.end.paragraphId,
+      index: reads.indexOf(range.end.paragraphId),
+      offset: Math.min(range.end.offset, endText.length),
+    };
+    return spanOf({ start, end });
   };
 
   const positionOf = (plan: StoryPlan, slot: Slot): number => plan.order.indexOf(slot);
@@ -1851,6 +1975,226 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           offset: bookmark.end.offset,
         };
         return query({ kind: 'span', span: spanOf({ start, end }) });
+      }
+
+      case 'getComments': {
+        const scope = resolveSpanRef(operation.scope, handles, packageReads);
+        if (!scope.ok) return refuse(scope.code, 'that scope is not a place', scope.detail);
+        const story = storyOfSpanRef(operation.scope, handles, packageReads);
+        if (!story.ok) return refuse(story.code, 'that scope names no story', story.detail);
+        const reads = story.value;
+        const comments = commentsOf(reads);
+        if (!comments) return refuse('document-unavailable', 'this host holds no document');
+        // A SCOPE NARROWS: a whole-story ask answers every top-level comment, a span answers the
+        // ones whose words it overlaps, so `Range#getComments` is not the body's list again.
+        const covering = scope.value;
+        const roots = comments.roots.filter((item) => {
+          if (!covering) return true;
+          const range = item.range;
+          if (!range) return false;
+          const from = reads.indexOf(range.start.paragraphId);
+          const to = reads.indexOf(range.end.paragraphId);
+          const low = reads.indexOf(covering.start.paragraphId);
+          const high = reads.indexOf(covering.end.paragraphId);
+          if (to < low || from > high) return false;
+          if (to === low && from === low && high === low) {
+            return range.end.offset > covering.start.offset && range.start.offset < covering.end.offset;
+          }
+          return true;
+        });
+        return query({
+          kind: 'handles',
+          handles: roots.map((item) => handles.comment(item.id, reads.story)),
+        });
+      }
+
+      case 'getCommentReplies': {
+        const found = commentAt(operation.comment);
+        if (!found.ok) return found.planned;
+        return query({
+          kind: 'handles',
+          handles: found.item.replyIds.map((id) => handles.comment(id, found.reads.story)),
+        });
+      }
+
+      case 'getCommentAuthor': {
+        const found = commentAt(operation.comment);
+        if (!found.ok) return found.planned;
+        return query({ kind: 'text', text: found.item.comment.author });
+      }
+
+      case 'getCommentDate': {
+        const found = commentAt(operation.comment);
+        if (!found.ok) return found.planned;
+        return query({ kind: 'text', text: found.item.comment.date ?? '' });
+      }
+
+      case 'getCommentText': {
+        const found = commentAt(operation.comment);
+        if (!found.ok) return found.planned;
+        const comments = commentsOf(found.reads);
+        return query({ kind: 'text', text: comments?.textOf(found.item.id) ?? '' });
+      }
+
+      case 'getCommentRange': {
+        const found = commentAt(operation.comment);
+        if (!found.ok) return found.planned;
+        const range = found.item.range;
+        // ORPHANED IS NOT A PLACE. A file can reference a comment with no usable range, and
+        // answering the story's start would put a caller's edit somewhere nobody commented on.
+        if (!range || found.item.orphaned)
+          return refuse('invalid-handle', 'that comment has no range in this document');
+        const span = spanOfReviewRange(found.reads, range);
+        if (!span) return refuse('invalid-handle', 'that comment’s range is no longer in the story');
+        return query({ kind: 'span', span });
+      }
+
+      case 'getCommentResolved': {
+        const found = commentAt(operation.comment);
+        if (!found.ok) return found.planned;
+        return query({ kind: 'flag', value: found.item.resolved });
+      }
+
+      case 'setCommentResolved': {
+        const found = commentAt(operation.comment);
+        if (!found.ok) return found.planned;
+        if (typeof operation.resolved !== 'boolean')
+          return refuse('unsupported-content', 'resolved is a yes or a no', String(operation.resolved));
+        const conflict = pinWrite(planFor(found.reads));
+        if (conflict) return conflict;
+        return {
+          ok: true,
+          kind: 'commentWrite',
+          write: { kind: 'resolve', commentId: found.item.id, resolved: operation.resolved },
+          story: found.reads.story,
+          answer: () => APPLIED,
+        };
+      }
+
+      case 'replyToComment': {
+        const found = commentAt(operation.comment);
+        if (!found.ok) return found.planned;
+        // `CT_TrackChange` makes `@w:author` mandatory. A blank one writes invalid XML rather
+        // than an anonymous remark, so it is refused before anything is staged.
+        if (typeof operation.author !== 'string' || operation.author.trim().length === 0)
+          return refuse('unsupported-content', 'a comment records who wrote it', 'author');
+        if (typeof operation.text !== 'string' || operation.text.length === 0)
+          return refuse('unsupported-content', 'a reply says something', 'text');
+        if (PARAGRAPH_BREAKING.test(operation.text))
+          return refuse('unsupported-content', 'a reply is one paragraph in this slice', 'text');
+        const range = found.item.range;
+        if (!range || found.item.orphaned)
+          return refuse('invalid-handle', 'that comment has no range to reply over');
+        const conflict = pinWrite(planFor(found.reads));
+        if (conflict) return conflict;
+        return {
+          ok: true,
+          kind: 'commentWrite',
+          write: {
+            kind: 'reply',
+            parentCommentId: found.item.id,
+            anchor: {
+              paragraphId: range.start.paragraphId,
+              start: range.start.offset,
+              end: range.end.offset,
+              ...(range.end.paragraphId === range.start.paragraphId
+                ? {}
+                : { endParagraphId: range.end.paragraphId }),
+            },
+            text: operation.text,
+            author: operation.author,
+            ...(typeof operation.date === 'string' ? { date: operation.date } : {}),
+          },
+          story: found.reads.story,
+          answer: () => APPLIED,
+        };
+      }
+
+      case 'getRevisions': {
+        const story = storyOfHandle(operation.body, 'body', handles, packageReads);
+        if (!story.ok) return refuse(story.code, 'that handle does not name a body', story.detail);
+        const reads = story.value;
+        return query({
+          kind: 'handles',
+          handles: revisionReads(reads).map((item) => handles.revision(item.id, reads.story)),
+        });
+      }
+
+      case 'getRevisionType': {
+        const found = revisionAt(operation.revision);
+        if (!found.ok) return found.planned;
+        return query({ kind: 'text', text: found.item.type });
+      }
+
+      case 'getRevisionAuthor': {
+        const found = revisionAt(operation.revision);
+        if (!found.ok) return found.planned;
+        return query({ kind: 'text', text: found.item.author });
+      }
+
+      case 'getRevisionDate': {
+        const found = revisionAt(operation.revision);
+        if (!found.ok) return found.planned;
+        return query({ kind: 'text', text: found.item.date });
+      }
+
+      case 'getRevisionRange': {
+        const found = revisionAt(operation.revision);
+        if (!found.ok) return found.planned;
+        const [first] = found.item.item.ranges;
+        if (!first) return refuse('invalid-handle', 'that change covers no characters');
+        const span = spanOfReviewRange(found.reads, first);
+        if (!span) return refuse('invalid-handle', 'that change’s range is no longer in the story');
+        return query({ kind: 'span', span });
+      }
+
+      case 'acceptRevision':
+      case 'rejectRevision': {
+        const found = revisionAt(operation.revision);
+        if (!found.ok) return found.planned;
+        const plan = planFor(found.reads);
+        const conflict = pinWrite(plan);
+        if (conflict) return conflict;
+        // EVERY ADDRESS THE DECISION COVERS, in one transaction — a replacement written as two
+        // revisions is one decision, and resolving half of it is a state no reviewer asked for.
+        const accept = operation.op === 'acceptRevision';
+        return {
+          ok: true,
+          kind: 'command',
+          story: found.reads.story,
+          ops: found.item.item.addresses.map((address) =>
+            accept
+              ? ({ op: 'acceptRevision', revision: address } as const)
+              : ({ op: 'rejectRevision', revision: address } as const)
+          ),
+          answer: () => APPLIED,
+        };
+      }
+
+      case 'acceptAllRevisions':
+      case 'rejectAllRevisions': {
+        if (!handles.resolve(operation.document, 'document'))
+          return refuse('invalid-handle', 'that handle does not name a document', 'document');
+        const reads = packageReads.body;
+        if (!reads) return refuse('document-unavailable', 'this host holds no document');
+        const plan = planFor(reads);
+        const conflict = pinWrite(plan);
+        if (conflict) return conflict;
+        // The store's own whole-part op, not a loop: one decision, one undo unit. It refuses
+        // outright if the part holds a change the engine cannot resolve, which is the honest
+        // answer — accepting the resolvable ones and silently leaving the rest would report a
+        // document as reviewed while it still carries pending changes.
+        return {
+          ok: true,
+          kind: 'command',
+          story: reads.story,
+          ops: [
+            operation.op === 'acceptAllRevisions'
+              ? ({ op: 'acceptAllRevisions' } as const)
+              : ({ op: 'rejectAllRevisions' } as const),
+          ],
+          answer: () => APPLIED,
+        };
       }
 
       case 'selectSpan': {

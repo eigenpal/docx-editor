@@ -357,6 +357,76 @@ export type AutomationOperation =
    */
   | { readonly op: 'getBookmarkRange'; readonly bookmark: AutomationHandle }
   /**
+   * The comments anchored in a scope, in document order — the TOP-LEVEL ones.
+   *
+   * A reply is reached through the comment it answers rather than listed beside it, because a flat
+   * list makes a conversation look like several remarks and loses which answered which.
+   */
+  | { readonly op: 'getComments'; readonly scope: AutomationSpanRef }
+  /** Replies to one comment, in document order. */
+  | { readonly op: 'getCommentReplies'; readonly comment: AutomationHandle }
+  /** Who wrote a comment. `CT_TrackChange` requires it, so a comment always has one. */
+  | { readonly op: 'getCommentAuthor'; readonly comment: AutomationHandle }
+  /** `@w:date` verbatim, or empty where the file wrote none. Never invented. */
+  | { readonly op: 'getCommentDate'; readonly comment: AutomationHandle }
+  /** A comment's body as plain text. */
+  | { readonly op: 'getCommentText'; readonly comment: AutomationHandle }
+  /** The words a comment is about. Refused for a comment the file gave no usable range. */
+  | { readonly op: 'getCommentRange'; readonly comment: AutomationHandle }
+  /** Whether the thread is resolved (`w15:commentEx/@w15:done`). */
+  | { readonly op: 'getCommentResolved'; readonly comment: AutomationHandle }
+  /**
+   * Resolve a comment thread, or reopen it.
+   *
+   * A THREAD: the comment and its replies together, which is what resolving means in Word. Marking
+   * the parent alone would leave a reply reading as open under a closed remark.
+   */
+  | {
+      readonly op: 'setCommentResolved';
+      readonly comment: AutomationHandle;
+      readonly resolved: boolean;
+    }
+  /**
+   * Reply to a comment, over the same words it is anchored to.
+   *
+   * `author` is required and must not be blank: `CT_TrackChange` makes `@w:author` mandatory, so a
+   * reply without one is invalid XML rather than an anonymous remark.
+   */
+  | {
+      readonly op: 'replyToComment';
+      readonly comment: AutomationHandle;
+      readonly text: string;
+      readonly author: string;
+      /** ISO-8601. Omitted writes no `@w:date` — inventing one is a content change. */
+      readonly date?: string;
+    }
+  /**
+   * The tracked changes of a story, in document order.
+   *
+   * The ones this engine can RESOLVE. A structural revision — a row, a cell, a section, the table
+   * grid — is refused by accept and reject, so it is not answered here: an object that can only
+   * refuse is not an object a caller can do anything with.
+   */
+  | { readonly op: 'getRevisions'; readonly body: AutomationHandle }
+  /** Word's name for the kind of change: `Insert`, `Delete`, `Replace`, `Property`, … */
+  | { readonly op: 'getRevisionType'; readonly revision: AutomationHandle }
+  | { readonly op: 'getRevisionAuthor'; readonly revision: AutomationHandle }
+  /** `@w:date` verbatim, or empty where the file wrote none. */
+  | { readonly op: 'getRevisionDate'; readonly revision: AutomationHandle }
+  /** The words a change covers. Empty-range changes — a formatting one — answer their site. */
+  | { readonly op: 'getRevisionRange'; readonly revision: AutomationHandle }
+  /**
+   * Accept one change, resolving every site that carries its identity.
+   *
+   * Both halves of a replacement go together: accepting the deletion and leaving the insertion
+   * unproposed is a state no reviewer asked for.
+   */
+  | { readonly op: 'acceptRevision'; readonly revision: AutomationHandle }
+  | { readonly op: 'rejectRevision'; readonly revision: AutomationHandle }
+  /** Accept every change in the main story, as ONE decision and one undo unit. */
+  | { readonly op: 'acceptAllRevisions'; readonly document: AutomationHandle }
+  | { readonly op: 'rejectAllRevisions'; readonly document: AutomationHandle }
+  /**
    * Put the reader's selection on a span. Requires the `selection` capability, so a headless
    * host refuses it rather than pretending to have a caret.
    */
@@ -396,6 +466,18 @@ export const AUTOMATION_QUERY_OPERATIONS = [
   'getBookmarks',
   'getBookmarkName',
   'getBookmarkRange',
+  'getComments',
+  'getCommentReplies',
+  'getCommentAuthor',
+  'getCommentDate',
+  'getCommentText',
+  'getCommentRange',
+  'getCommentResolved',
+  'getRevisions',
+  'getRevisionType',
+  'getRevisionAuthor',
+  'getRevisionDate',
+  'getRevisionRange',
 ] as const satisfies readonly AutomationOperationKind[];
 
 /** Operations that write. Every one of these goes through the single transaction path. */
@@ -414,6 +496,12 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
   'setListLevel',
   'insertListParagraph',
   'setHyperlink',
+  'setCommentResolved',
+  'replyToComment',
+  'acceptRevision',
+  'rejectRevision',
+  'acceptAllRevisions',
+  'rejectAllRevisions',
 ] as const satisfies readonly AutomationOperationKind[];
 
 /**
@@ -427,6 +515,8 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
  */
 export const AUTOMATION_SOLITARY_OPERATIONS = [
   'deleteNote',
+  'setCommentResolved',
+  'replyToComment',
 ] as const satisfies readonly AutomationOperationKind[];
 
 const SOLITARY: ReadonlySet<string> = new Set(AUTOMATION_SOLITARY_OPERATIONS);

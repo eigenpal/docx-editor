@@ -29,7 +29,12 @@ import { ensureHyperlinkRelationship } from '../store/package/hyperlink-part.ts'
 import { normalizeParagraphIdentity } from '../store/package/para-id.ts';
 import { TreePackageStore, type StoryScope } from '../store/store/tree-package-store.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
-import type { AutomationDocumentPort, AutomationPortApplyResult } from './document-port.ts';
+import { addComment, setCommentResolved } from '../store/store/comment-writes.ts';
+import type {
+  AutomationCommentWriteResult,
+  AutomationDocumentPort,
+  AutomationPortApplyResult,
+} from './document-port.ts';
 import { createAutomationHost } from './host.ts';
 import type { AutomationCapabilities, AutomationHost } from './protocol.ts';
 
@@ -151,6 +156,33 @@ function packageStorePort(store: TreePackageStore): AutomationDocumentPort {
       // committed link names.
       store.replacePackageShell(minted.pkg);
       return minted.relationshipId;
+    },
+    applyCommentWrite(write, scope): AutomationCommentWriteResult {
+      if (!live) return { ok: false, reason: 'disposed' };
+      const story = store.resolveStory(scope);
+      if (!story.ok) return { ok: false, reason: story.reason };
+      // The story store keeps a package of its own, and the coordinator's copy carries writes the
+      // story store has not seen — a minted hyperlink relationship, a numbering graft. Grafting
+      // before and republishing after is the same order the editor's own comment path uses; skip
+      // either half and one write silently overwrites the other's parts.
+      story.store.graftPackage(() => store.currentPackage());
+      const result =
+        write.kind === 'reply'
+          ? addComment(story.store, {
+              anchor: write.anchor,
+              author: write.author,
+              text: write.text,
+              ...(write.date === undefined ? {} : { date: write.date }),
+              replyToCommentId: write.parentCommentId,
+            })
+          : setCommentResolved(story.store, write.commentId, write.resolved);
+      if (!result.ok) return { ok: false, reason: result.reason };
+      store.replacePackageShell(story.store.package);
+      return {
+        ok: true,
+        changed: true,
+        ...('commentId' in result ? { commentId: result.commentId } : {}),
+      };
     },
     save: () => (live ? writeOoxmlPackage(store.currentPackage()) : null),
     subscribe: (listener) => store.subscribe(() => listener()),
