@@ -318,13 +318,8 @@ describe('nesting is bounded and content survives past the bound', () => {
 });
 
 describe('the comprehensive fixture survives the D9 fingerprint oracle', () => {
-  const fixture = join(
-    import.meta.dir,
-    '../../../../../e2e/fixtures/comprehensive-word-element-test.docx'
-  );
-
-  function documentPart(): OoxmlPart {
-    const bytes = readFileSync(fixture);
+  function partOf(name: string): OoxmlPart {
+    const bytes = readFileSync(join(import.meta.dir, '../../../../../e2e/fixtures', name));
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { unzipSync } = require('fflate') as typeof import('fflate');
     const entries = unzipSync(new Uint8Array(bytes));
@@ -332,6 +327,10 @@ describe('the comprehensive fixture survives the D9 fingerprint oracle', () => {
     const result = readOoxmlPart(xml, docMeta);
     if (!result.ok) throw new Error(result.reason);
     return result.part;
+  }
+
+  function documentPart(): OoxmlPart {
+    return partOf('comprehensive-word-element-test.docx');
   }
 
   test('all seventeen controls type, and an unedited round trip matches by fingerprint', () => {
@@ -357,15 +356,50 @@ describe('the comprehensive fixture survives the D9 fingerprint oracle', () => {
     expect(texts.some((text) => text.length > 0)).toBe(true);
   });
 
-  test('nothing in the fixture is reachable as a network or filesystem target', () => {
-    const part = documentPart();
-    for (const entry of contentControlsIn(part.root)) {
-      const binding = contentControlPropertiesOf(entry.node).dataBinding;
-      // The projection is metadata only: it names no resolver and no fetch.
-      expect(
-        binding === undefined || typeof binding.xpath === 'string' || binding.xpath === undefined
-      ).toBe(true);
+  // A `w:dataBinding` NAMES a custom XML part and an XPath into it, and a control's placeholder
+  // names a glossary entry. Reading either as an instruction to go and get something is the
+  // zero-click fetch the file-safety rules forbid, so the whole cycle — load, project, lay out,
+  // save — is run with every fetch primitive replaced by a throw.
+  test('no part of the cycle fetches anything on account of a binding or a placeholder', () => {
+    const reached: string[] = [];
+    const trap =
+      (name: string) =>
+      (...args: readonly unknown[]) => {
+        reached.push(`${name}(${String(args[0] ?? '')})`);
+        throw new Error(`${name} must not be called`);
+      };
+    const globals = globalThis as unknown as Record<string, unknown>;
+    const saved = {
+      fetch: globals.fetch,
+      XMLHttpRequest: globals.XMLHttpRequest,
+      importScripts: globals.importScripts,
+    };
+    globals.fetch = trap('fetch');
+    globals.XMLHttpRequest = trap('XMLHttpRequest');
+    globals.importScripts = trap('importScripts');
+    try {
+      // Two files: the round-trip fixture, and the one that actually declares bindings.
+      const part = documentPart();
+      const boundPart = partOf('block-sdt-comprehensive.docx');
+      const bound = contentControlsIn(boundPart.root).filter(
+        (entry) => contentControlPropertiesOf(entry.node).dataBinding !== undefined
+      );
+      for (const entry of [...contentControlsIn(part.root), ...contentControlsIn(boundPart.root)]) {
+        const properties = contentControlPropertiesOf(entry.node);
+        // Both are read as the metadata they are: a string, not a resolver.
+        expect(properties.dataBinding?.xpath ?? '').toBeTypeOf('string');
+        expect(properties.placeholder ?? '').toBeTypeOf('string');
+        contentControlTextOf(entry.node);
+      }
+      expect(bound.length).toBeGreaterThan(0);
+      serializeOoxmlPart(part);
+      serializeOoxmlPart(boundPart);
+    } finally {
+      globals.fetch = saved.fetch;
+      globals.XMLHttpRequest = saved.XMLHttpRequest;
+      globals.importScripts = saved.importScripts;
     }
+    expect(reached).toEqual([]);
   });
 });
 

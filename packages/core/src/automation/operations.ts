@@ -78,6 +78,21 @@ export type AutomationContentControlLock =
   | 'contentLocked'
   | 'sdtContentLocked';
 
+/**
+ * Which part of a control a range read answers.
+ *
+ * `whole` and `content` are the same stretch, and `before`/`after` are the content's own edges:
+ * a control's boundary marks occupy no offset in the text a caller addresses, so there is no
+ * position between a mark and the first character to answer with.
+ */
+export type AutomationContentControlRangeLocation =
+  | 'whole'
+  | 'content'
+  | 'start'
+  | 'end'
+  | 'before'
+  | 'after';
+
 /** The control types an insertion may author. Picture and repeating section are deferred. */
 export type AutomationContentControlSubtype =
   | 'richText'
@@ -537,8 +552,17 @@ export type AutomationOperation =
   | { readonly op: 'getContentControlText'; readonly contentControl: AutomationHandle }
   /** The paragraphs the control holds, in reading order. Empty for an inline control's own. */
   | { readonly op: 'getContentControlParagraphs'; readonly contentControl: AutomationHandle }
-  /** The span the control's content covers, so a caller can read or format it. */
-  | { readonly op: 'getContentControlRange'; readonly contentControl: AutomationHandle }
+  /**
+   * The span the control's content covers, so a caller can read or format it.
+   *
+   * `location` narrows it: `start`/`end` collapse onto the content's edges, and `before`/`after`
+   * answer those same edges because a control's boundary marks occupy no offset here.
+   */
+  | {
+      readonly op: 'getContentControlRange';
+      readonly contentControl: AutomationHandle;
+      readonly location?: AutomationContentControlRangeLocation;
+    }
   /**
    * Write the control's value in the vocabulary its own type accepts.
    *
@@ -564,6 +588,19 @@ export type AutomationOperation =
       readonly op: 'deleteContentControl';
       readonly contentControl: AutomationHandle;
       readonly keepContent: boolean;
+    }
+  /**
+   * Put text into the control, at `replace` (its value) or at one edge of its content.
+   *
+   * The edge is resolved HERE and not by the caller: a script that read the span first and wrote
+   * to it second could only write to where the control was when it asked, and the read and the
+   * write would be two refusals instead of one.
+   */
+  | {
+      readonly op: 'insertContentControlText';
+      readonly contentControl: AutomationHandle;
+      readonly text: string;
+      readonly at: 'replace' | 'start' | 'end';
     }
   /** Wrap a span in a new control of the named type. */
   | {
@@ -659,6 +696,7 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
   'setContentControlValue',
   'setContentControlProperties',
   'deleteContentControl',
+  'insertContentControlText',
   'insertContentControl',
 ] as const satisfies readonly AutomationOperationKind[];
 

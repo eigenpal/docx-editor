@@ -214,6 +214,7 @@ describe('the operation vocabulary declares which operations write', () => {
       'setContentControlValue',
       'setContentControlProperties',
       'deleteContentControl',
+      'insertContentControlText',
       'insertContentControl',
     ]);
     // And the ones that commit as a PACKAGE transaction, which is why they travel alone.

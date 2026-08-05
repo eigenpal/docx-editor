@@ -28,6 +28,7 @@ import {
   hydratedHandle,
   hydratedSpan,
   hydratedText,
+  type AutomationContentControlRangeLocation,
   type AutomationHandle,
   type AutomationOperation,
   type ObjectAddress,
@@ -83,7 +84,7 @@ const LOCKS: ReadonlySet<string> = new Set([
 const MAX_METADATA = 4_096;
 
 export class ContentControl extends ModelObject implements PromisedItem {
-  #range: Range | undefined;
+  readonly #range = new Map<AutomationContentControlRangeLocation, Range>();
   #paragraphs: ParagraphCollection | undefined;
   #contentControls: ContentControlCollection | undefined;
 
@@ -221,9 +222,14 @@ export class ContentControl extends ModelObject implements PromisedItem {
    * Read when it is asked for rather than carried by the control, because the content moves as
    * the document is edited: the range a caller gets is where the control is now.
    */
-  getRange(): Range {
-    this.#range ??= this.#rangeAt(`${this.path.label}.getRange`);
-    return this.#range;
+  getRange(rangeLocation?: 'Whole' | 'Start' | 'End' | 'Before' | 'After' | 'Content'): Range {
+    const target = `${this.path.label}.getRange`;
+    const location = contentControlRangeLocation(rangeLocation ?? 'Whole', target);
+    const held = this.#range.get(location);
+    if (held) return held;
+    const made = this.#rangeAt(target, location);
+    this.#range.set(location, made);
+    return made;
   }
 
   /**
@@ -245,23 +251,34 @@ export class ContentControl extends ModelObject implements PromisedItem {
   }
 
   /**
-   * Put text into the control, replacing what it holds.
+   * Put text into the control: over what it holds, or at one end of it.
    *
-   * `Replace` only. Word also accepts `Start` and `End`, which insert BESIDE the existing
-   * content; this API does not, because the interesting case for a field is replacing its value
-   * and the two edge locations are recorded as omissions rather than approximated by an
-   * insertion at an offset a caller cannot see.
+   * `Replace` goes through the control's own value path, so the prompt it was showing and a
+   * `w:temporary` wrapper are dealt with there rather than a second time here. The range comes
+   * back from the WRITE and not from a read beside it: reads answer the document as it is when
+   * the batch is planned, so a read here would name the text the write was about to replace.
    */
-  insertText(text: string, insertLocation: 'Replace'): void {
+  insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range {
     const target = `${this.path.label}.insertText`;
     const written = insertableText(text, target);
-    if (insertLocation !== 'Replace') fail({ code: 'InvalidArgument', target });
+    const at =
+      insertLocation === 'Replace'
+        ? 'replace'
+        : insertLocation === 'Start'
+          ? 'start'
+          : insertLocation === 'End'
+            ? 'end'
+            : fail({ code: 'InvalidArgument', target });
     const contentControl = this.#handle();
-    this.command('insertText', () => ({
-      op: 'setContentControlValue',
-      contentControl,
-      value: { kind: 'text' as const, text: written },
-    }));
+    const made = Range.promised(this.context, target, false);
+    this.commandAnswering(
+      target,
+      () => ({ op: 'insertContentControlText', contentControl, text: written, at }),
+      (value) => {
+        made.hydrateAddress({ kind: 'span', span: hydratedSpan(value, target) });
+      }
+    );
+    return made;
   }
 
   /**
@@ -339,12 +356,12 @@ export class ContentControl extends ModelObject implements PromisedItem {
     );
   }
 
-  #rangeAt(label: string): Range {
+  #rangeAt(label: string, location: AutomationContentControlRangeLocation): Range {
     const contentControl = this.#handle();
     const found = Range.promised(this.context, label, false);
     this.read(
       label,
-      () => ({ op: 'getContentControlRange', contentControl }),
+      () => ({ op: 'getContentControlRange', contentControl, location }),
       (value) => {
         found.hydrateAddress({ kind: 'span', span: hydratedSpan(value, label) });
       }
@@ -505,6 +522,35 @@ function requiredMetadata(value: unknown, target: string): string {
   const checked = metadata(value, target);
   if (checked.length === 0) fail({ code: 'InvalidArgument', target });
   return checked;
+}
+
+/**
+ * Word's range locations, in the protocol's own words.
+ *
+ * `Whole` and `Content` name the same stretch and `Before`/`After` the content's own edges,
+ * because a control's boundary marks take up no offset in the text this API addresses — the same
+ * reason `Range#insertText` treats `Before` and `Start` as one place.
+ */
+function contentControlRangeLocation(
+  location: unknown,
+  target: string
+): AutomationContentControlRangeLocation {
+  switch (location) {
+    case 'Whole':
+      return 'whole';
+    case 'Content':
+      return 'content';
+    case 'Start':
+      return 'start';
+    case 'End':
+      return 'end';
+    case 'Before':
+      return 'before';
+    case 'After':
+      return 'after';
+    default:
+      return fail({ code: 'InvalidArgument', target });
+  }
 }
 
 /** The value a caller offered, or `InvalidArgument` where it is not one any control accepts. */

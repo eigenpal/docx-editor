@@ -457,17 +457,6 @@
       "kind": "class",
       "requirementSet": null,
       "members": {
-        "appearance": {
-          "uid": "DocxEditor.ContentControl#appearance",
-          "kind": "property",
-          "requirementSet": null,
-          "overloads": [
-            {
-              "params": [],
-              "returns": "\"BoundingBox\" | \"Tags\" | \"Hidden\""
-            }
-          ]
-        },
         "cannotDelete": {
           "uid": "DocxEditor.ContentControl#cannotDelete",
           "kind": "property",
@@ -487,17 +476,6 @@
             {
               "params": [],
               "returns": "boolean"
-            }
-          ]
-        },
-        "color": {
-          "uid": "DocxEditor.ContentControl#color",
-          "kind": "property",
-          "requirementSet": null,
-          "overloads": [
-            {
-              "params": [],
-              "returns": "string"
             }
           ]
         },
@@ -546,18 +524,6 @@
             }
           ]
         },
-        "id": {
-          "uid": "DocxEditor.ContentControl#id",
-          "kind": "property",
-          "readonly": true,
-          "requirementSet": null,
-          "overloads": [
-            {
-              "params": [],
-              "returns": "number"
-            }
-          ]
-        },
         "insertText": {
           "uid": "DocxEditor.ContentControl#insertText",
           "kind": "method",
@@ -587,29 +553,6 @@
             {
               "params": [],
               "returns": "ParagraphCollection"
-            }
-          ]
-        },
-        "placeholderText": {
-          "uid": "DocxEditor.ContentControl#placeholderText",
-          "kind": "property",
-          "requirementSet": null,
-          "overloads": [
-            {
-              "params": [],
-              "returns": "string"
-            }
-          ]
-        },
-        "subtype": {
-          "uid": "DocxEditor.ContentControl#subtype",
-          "kind": "property",
-          "readonly": true,
-          "requirementSet": null,
-          "overloads": [
-            {
-              "params": [],
-              "returns": "\"Unknown\" | \"RichTextInline\" | \"RichTextParagraphs\" | \"RichTextTableCell\" | \"RichTextTableRow\" | \"RichTextTable\" | \"PlainTextInline\" | \"PlainTextParagraph\" | \"Picture\" | \"BuildingBlockGallery\" | \"CheckBox\" | \"ComboBox\" | \"DropDownList\" | \"DatePicker\" | \"RepeatingSection\" | \"RichText\" | \"PlainText\" | \"Group\""
             }
           ]
         },

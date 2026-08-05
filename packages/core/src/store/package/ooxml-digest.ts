@@ -251,6 +251,22 @@ function digestParagraph(
       for (const inner of child.children) visit(inner);
       return;
     }
+    // An inline content control, read the same way as a hyperlink and for the same reason.
+    // WHILE IT WAS GENERIC its fingerprint covered the whole subtree, text included; typing it
+    // would otherwise hand its runs to a walk that digests properties and drops text, so a save
+    // that emptied a form field would digest identically to one that kept its value. The
+    // control's own `w:sdtPr`/`w:sdtEndPr` are fingerprinted — a lost tag, lock or type is a
+    // reported loss — and its content is visited, so the runs inside contribute as runs.
+    if (child.kind === 'contentControl') {
+      for (const inner of child.children) {
+        if (inner.kind === 'contentControlContent') {
+          for (const held of inner.children) visit(held);
+          continue;
+        }
+        genericStructure.push(canonicalOoxmlFingerprint(inner));
+      }
+      return;
+    }
     collectGeneric(child, genericStructure);
   };
   for (const child of paragraph.children) visit(child);

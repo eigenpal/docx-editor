@@ -267,6 +267,15 @@ const CONTENT_CONTROL_LOCKS: ReadonlySet<string> = new Set([
   'sdtContentLocked',
 ]);
 
+const CONTENT_CONTROL_RANGE_LOCATIONS: ReadonlySet<string> = new Set([
+  'whole',
+  'content',
+  'start',
+  'end',
+  'before',
+  'after',
+]);
+
 const CONTENT_CONTROL_SUBTYPES: ReadonlySet<string> = new Set([
   'richText',
   'plainText',
@@ -2514,27 +2523,30 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       case 'getContentControlRange': {
         const found = controlOf(operation.contentControl);
         if (!('control' in found)) return found;
+        const location = operation.location ?? 'whole';
+        if (!CONTENT_CONTROL_RANGE_LOCATIONS.has(location)) {
+          return refuse('unsupported-content', 'that is not a place in a control', location);
+        }
         const span = contentControlSpan(found.reads, found.node);
         if (!span) {
           return refuse('unsupported-content', 'that control holds nothing addressable', 'empty');
         }
+        // `before`/`start` and `after`/`end` land on the same point on purpose: the control's
+        // boundary marks take no offset, so there is no position outside the content to answer.
+        const edge = location === 'start' || location === 'before' ? span.start : span.end;
+        const collapsed = location !== 'whole' && location !== 'content';
+        const point = (at: { readonly paragraphId: string; readonly offset: number }) => ({
+          story: found.reads.story,
+          paragraphId: at.paragraphId,
+          index: found.reads.indexOf(at.paragraphId),
+          offset: at.offset,
+        });
         return query({
           kind: 'span',
           span: spanValue(
-            {
-              start: {
-                story: found.reads.story,
-                paragraphId: span.start.paragraphId,
-                index: found.reads.indexOf(span.start.paragraphId),
-                offset: span.start.offset,
-              },
-              end: {
-                story: found.reads.story,
-                paragraphId: span.end.paragraphId,
-                index: found.reads.indexOf(span.end.paragraphId),
-                offset: span.end.offset,
-              },
-            },
+            collapsed
+              ? { start: point(edge), end: point(edge) }
+              : { start: point(span.start), end: point(span.end) },
             handles
           ),
         });
@@ -2595,6 +2607,85 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             },
           ],
           answer: () => APPLIED,
+        };
+      }
+
+      case 'insertContentControlText': {
+        const found = controlOf(operation.contentControl);
+        if (!('control' in found)) return found;
+        if (typeof operation.text !== 'string') {
+          return refuse('unsupported-content', 'text is required', 'text');
+        }
+        if (operation.at !== 'replace' && operation.at !== 'start' && operation.at !== 'end') {
+          return refuse(
+            'unsupported-content',
+            'that is not a place to insert at',
+            String(operation.at)
+          );
+        }
+        const plan = planFor(found.reads);
+        const pin = pinWrite(plan);
+        if (pin) return pin;
+        const span = contentControlSpan(found.reads, found.node);
+        if (!span) {
+          return refuse('unsupported-content', 'that control holds nothing addressable', 'empty');
+        }
+        // WHERE THE WRITTEN TEXT WILL BE, answered by the command itself rather than by a read
+        // beside it: reads are planned against the document as it is now, so a read enqueued after
+        // this write would answer the span the control had BEFORE it. `replace` puts the whole
+        // value in the content's first paragraph, which keeps its identity across the write.
+        const at = operation.at === 'end' ? span.end : span.start;
+        const written = (): AutomationValue => ({
+          kind: 'span',
+          span: spanOf({
+            start: {
+              story: found.reads.story,
+              paragraphId: at.paragraphId,
+              index: found.reads.indexOf(at.paragraphId),
+              offset: at.offset,
+            },
+            end: {
+              story: found.reads.story,
+              paragraphId: at.paragraphId,
+              index: found.reads.indexOf(at.paragraphId),
+              offset: at.offset + operation.text.length,
+            },
+          }),
+        });
+        // `replace` is the control's own value path, so the prompt and `w:temporary` are dealt
+        // with there rather than twice. The edges are ordinary insertions at the ends of the
+        // content: the lock the control carries refuses them as it refuses a keystroke.
+        if (operation.at === 'replace') {
+          return {
+            ok: true,
+            kind: 'command',
+            story: found.reads.story,
+            ops: [
+              {
+                op: 'setContentControlValue',
+                controlId: found.control.nodeId,
+                value: { kind: 'text', text: operation.text },
+              },
+            ],
+            answer: written,
+          };
+        }
+        return {
+          ok: true,
+          kind: 'command',
+          story: found.reads.story,
+          ops:
+            operation.text.length === 0
+              ? []
+              : [
+                  {
+                    op: 'insertText',
+                    paragraphId: at.paragraphId,
+                    offset: at.offset,
+                    text: operation.text,
+                  },
+                ],
+          answer: written,
         };
       }
 

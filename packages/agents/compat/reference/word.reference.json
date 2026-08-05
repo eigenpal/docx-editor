@@ -457,17 +457,6 @@
       "kind": "class",
       "requirementSet": "WordApi 1.1",
       "members": {
-        "appearance": {
-          "uid": "Word.ContentControl#appearance",
-          "kind": "property",
-          "requirementSet": "WordApi 1.1",
-          "overloads": [
-            {
-              "params": [],
-              "returns": "\"BoundingBox\" | \"Tags\" | \"Hidden\""
-            }
-          ]
-        },
         "cannotDelete": {
           "uid": "Word.ContentControl#cannotDelete",
           "kind": "property",
@@ -487,17 +476,6 @@
             {
               "params": [],
               "returns": "boolean"
-            }
-          ]
-        },
-        "color": {
-          "uid": "Word.ContentControl#color",
-          "kind": "property",
-          "requirementSet": "WordApi 1.1",
-          "overloads": [
-            {
-              "params": [],
-              "returns": "string"
             }
           ]
         },
@@ -546,18 +524,6 @@
             }
           ]
         },
-        "id": {
-          "uid": "Word.ContentControl#id",
-          "kind": "property",
-          "readonly": true,
-          "requirementSet": "WordApi 1.1",
-          "overloads": [
-            {
-              "params": [],
-              "returns": "number"
-            }
-          ]
-        },
         "insertText": {
           "uid": "Word.ContentControl#insertText",
           "kind": "method",
@@ -587,29 +553,6 @@
             {
               "params": [],
               "returns": "ParagraphCollection"
-            }
-          ]
-        },
-        "placeholderText": {
-          "uid": "Word.ContentControl#placeholderText",
-          "kind": "property",
-          "requirementSet": "WordApi 1.1",
-          "overloads": [
-            {
-              "params": [],
-              "returns": "string"
-            }
-          ]
-        },
-        "subtype": {
-          "uid": "Word.ContentControl#subtype",
-          "kind": "property",
-          "readonly": true,
-          "requirementSet": "WordApi 1.3",
-          "overloads": [
-            {
-              "params": [],
-              "returns": "\"Unknown\" | \"RichTextInline\" | \"RichTextParagraphs\" | \"RichTextTableCell\" | \"RichTextTableRow\" | \"RichTextTable\" | \"PlainTextInline\" | \"PlainTextParagraph\" | \"Picture\" | \"BuildingBlockGallery\" | \"CheckBox\" | \"ComboBox\" | \"DropDownList\" | \"DatePicker\" | \"RepeatingSection\" | \"RichText\" | \"PlainText\" | \"Group\""
             }
           ]
         },

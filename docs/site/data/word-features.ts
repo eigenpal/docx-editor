@@ -807,7 +807,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Discover, create, fill, and remove by tag/id/alias from the headless API and the editor (inline controls in table cells, headers and footers included). Content is editable; control properties (tag, alias, lock) are not UI-editable, and a block control inside a table cell or text box is not modeled.',
+      'Block, inline, row and cell controls are typed and addressable in every story (table cells, headers, footers and note bodies included). Discover, create, fill and remove them by tag, title or file id from the document object model; content is editable, and tag, title and lock are writable through the API but have no toolbar chrome. All four `w:lock` modes are enforced, an enclosing control’s lock wins over an inner one, and `w:documentProtection w:edit="forms"` leaves only unlocked controls editable. Picture and repeating-section controls, custom-XML-bound controls and docPart galleries are preserved as they were rather than typed; a write to a bound control is refused instead of desynchronising it from its part.',
     docsLink: '/docs/1.x/guides/content-controls',
   },
   {
@@ -818,7 +818,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'Add and remove items from the editor; the section configuration itself is read-only.',
+    notes:
+      'Add and remove items from the editor; the section configuration itself is read-only. A repeating section is not typed as a content control in the document object model — it is preserved as authored, so a script reaches the controls inside it rather than the section itself.',
     docsLink: '/docs/1.x/guides/content-controls',
   },
   {
@@ -829,6 +830,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Each control takes the value its own type accepts: a dropdown must name an item it declares, a combo box also takes free text, a date validates an ISO instant and writes both `w:fullDate` and the formatted text, and a checkbox writes its declared glyph and state together. A prompt is replaced whole on the first write and comes back when the value is cleared; a `w:temporary` control removes its own wrapper on the first edit and leaves the content.',
     docsLink: '/docs/1.x/guides/content-controls',
   },
   {

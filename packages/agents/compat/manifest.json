@@ -105,15 +105,10 @@
     },
     "ContentControl": {
       "members": [
-        "id",
         "tag",
         "title",
-        "appearance",
         "cannotEdit",
         "cannotDelete",
-        "placeholderText",
-        "color",
-        "subtype",
         "text",
         "paragraphs",
         "contentControls",
@@ -183,6 +178,26 @@
     }
   },
   "omissions": [
+    {
+      "uid": "Word.ContentControl#id",
+      "reason": "The control's file id IS implemented and readable, as a string. Not selected because it cannot match upstream's `number`: `w:id` is optional and the schema lets a document repeat it, so a number has no value for \"the file wrote none\" and would invite a caller to key a map on something ambiguous. The control's identity is its handle; the file id is metadata beside it."
+    },
+    {
+      "uid": "Word.ContentControl#subtype",
+      "reason": "The control's type IS implemented and readable, in the schema's own vocabulary (`plainText`, `dropDownList`, `checkbox`, `date`, ...). Not selected because upstream's enum is Word's UI wording and mixes in the two control kinds this lane defers (`Picture`, `RepeatingSection`), so answering it would mean naming types no read can produce."
+    },
+    {
+      "uid": "Word.ContentControl#appearance",
+      "reason": "A `w15` extension property describing how Word DRAWS the control's boundary. The engine paints its own furniture from the control's properties, so there is no stored chrome value to answer and nothing would consume one."
+    },
+    {
+      "uid": "Word.ContentControl#color",
+      "reason": "A `w15` extension property, omitted with `appearance` for the same reason."
+    },
+    {
+      "uid": "Word.ContentControl#placeholderText",
+      "reason": "Upstream answers the glossary entry's text. Placeholder STATE is implemented (the prompt is replaced on the first write and restored when the value is cleared) but the glossary part is preserved rather than read, and a zero-click load of a document part to answer a property is exactly what the file-safety rules forbid."
+    },
     {
       "uid": "Word.Table",
       "reason": "Tables are omitted from the published subset until the table engine lane lands. Not represented as a working stub anywhere in DocxEditor's declarations."
@@ -408,6 +423,18 @@
     {
       "uid": "Word.List#insertParagraph",
       "note": "All four locations are accepted, and Before/After land INSIDE the list at its first and last position \u2014 the same places Start and End name. A list is a set of paragraphs sharing a w:numId rather than a contiguous region of the story, so 'before the list' is a position in the story, not in the list, and Word.Paragraph#insertParagraph is the member that addresses it. A refusal on two of the four locations would fail scripts written against the shape; a silent unnumbered insert outside the list would answer a paragraph the list does not contain."
+    },
+    {
+      "uid": "Word.ContentControl#getRange",
+      "note": "All six locations are accepted. Whole and Content answer the same stretch, and Before/After answer the content's own edges, because a control's boundary marks occupy no offset in the text this API addresses \u2014 there is no position between a mark and the first character for a range to start at. Refusing four of the six would fail scripts written against the shape; answering an invented offset would be worse."
+    },
+    {
+      "uid": "Word.ContentControl#insertText",
+      "note": "All three locations are accepted and the answer is the range of the text that was written. Replace goes through the control's own value path, so the prompt a control was showing is replaced whole and a w:temporary wrapper is removed \u2014 upstream's own behaviour, reached through the one write path the keyboard also takes, which is why a locked or custom-XML-bound control refuses this call with the same named reason a keystroke gets."
+    },
+    {
+      "uid": "Word.ContentControlCollection",
+      "note": "getByTag, getByTitle, getFirst, getFirstOrNullObject and ContentControl#setValue are implemented and are NOT in this list's frozen reference fixture, so they are published as DocxEditor's own additions rather than as conformance-checked members. setValue exists because a control's value is not its characters: a dropdown takes a declared item, a date an ISO instant, a checkbox a state, and upstream spreads those over five sibling objects this subset does not ship."
     },
     {
       "uid": "Word.Section#getHeader / #getFooter",

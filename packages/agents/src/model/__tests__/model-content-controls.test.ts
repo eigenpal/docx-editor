@@ -384,6 +384,57 @@ describe('a control is written through the document’s own write path', () => {
     expect(await mainXmlOf(runtime)).toBe(before);
   });
 
+  // The three locations source-compatible code writes. `Replace` takes the control's value path;
+  // the edges are insertions at the ends of what it holds. The range that comes back names the
+  // TEXT THAT WAS WRITTEN in every case, not the control's whole content.
+  test.each([
+    ['Replace', 'ACME'],
+    ['Start', 'ACMEAcme'],
+    ['End', 'AcmeACME'],
+  ] as const)('insertText at %s writes and answers what it wrote', async (where, held) => {
+    const runtime = await serverRuntime(CONTROLS);
+    const read = await runtime.run(async (context) => {
+      const control = context.document.contentControls.getFirst();
+      await context.sync();
+      const written = control.insertText('ACME', where);
+      await context.sync();
+      written.load('text');
+      control.load('text');
+      await context.sync();
+      return { written: written.text, held: control.text };
+    });
+    expect(read).toEqual({ written: 'ACME', held });
+  });
+
+  test('a location no control has is refused before anything is sent', async () => {
+    const runtime = await serverRuntime(CONTROLS);
+    const code = await codeOf(() =>
+      runtime.run(async (context) => {
+        const control = context.document.contentControls.getFirst();
+        await context.sync();
+        control.getRange('Middle' as never);
+        await context.sync();
+      })
+    );
+    expect(code).toBe('InvalidArgument');
+  });
+
+  test('the range at an edge is empty and the whole range is the content', async () => {
+    const runtime = await serverRuntime(CONTROLS);
+    const read = await runtime.run(async (context) => {
+      const control = context.document.contentControls.getFirst();
+      await context.sync();
+      const whole = control.getRange('Whole');
+      const start = control.getRange('Start');
+      await context.sync();
+      whole.load('text');
+      start.load('text');
+      await context.sync();
+      return { whole: whole.text, start: start.text };
+    });
+    expect(read).toEqual({ whole: 'Acme', start: '' });
+  });
+
   test('delete keeps the content it wrapped', async () => {
     const runtime = await serverRuntime(CONTROLS);
     await runtime.run(async (context) => {

@@ -17,6 +17,7 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from '../index.ts';
+import { diffSemanticDigests, semanticDigest } from '../package/ooxml-digest.ts';
 import { applyTreeOp } from '../store/tree-op-apply.ts';
 import type { TreeDocOp, TreeOpRejection } from '../store/tree-op-types.ts';
 
@@ -291,6 +292,103 @@ describe('placeholder and temporary state are transitions, not text', () => {
     });
     // The reference stays; the engine never reads the glossary part it names.
     expect(serializeOoxmlPart(next)).toContain('DefaultPlaceholder_1');
+  });
+});
+
+// D9: a value edit is the only thing the file records. The digest is taken from the saved bytes
+// and reopened bytes, so a difference here is a difference a consumer's Word would see, not an
+// in-memory tree shape; every control the edit did not name must compare equal across it.
+describe('a value edit survives save and reopen, and touches nothing else', () => {
+  const THREE = parseDoc(
+    `<w:p><w:sdt><w:sdtPr><w:tag w:val="one"/><w:id w:val="1"/><w:text/></w:sdtPr>` +
+      `<w:sdtContent><w:r><w:t>first</w:t></w:r></w:sdtContent></w:sdt></w:p>` +
+      `<w:p><w:sdt><w:sdtPr><w:tag w:val="two"/><w:id w:val="2"/><w:text/></w:sdtPr>` +
+      `<w:sdtContent><w:r><w:t>second</w:t></w:r></w:sdtContent></w:sdt></w:p>` +
+      `<w:sdt><w:sdtPr><w:tag w:val="three"/><w:id w:val="3"/><w:dropDownList>` +
+      `<w:listItem w:displayText="Yes" w:value="yes"/></w:dropDownList></w:sdtPr>` +
+      `<w:sdtContent><w:p><w:r><w:t>Yes</w:t></w:r></w:p></w:sdtContent></w:sdt>`
+  );
+
+  test('the edited control reads its new value and the others are unchanged', () => {
+    const before = contentControlsIn(THREE.root).map((entry) => entry.node.id);
+    const edited = apply(THREE, {
+      op: 'setContentControlValue',
+      controlId: before[1]!,
+      value: { kind: 'text', text: 'written' },
+    });
+    const reopened = readOoxmlPart(serializeOoxmlPart(edited), docMeta);
+    expect(reopened.ok).toBe(true);
+    if (!reopened.ok) throw new Error(reopened.reason);
+    const texts = contentControlsIn(reopened.part.root).map((entry) =>
+      contentControlTextOf(entry.node)
+    );
+    expect(texts).toEqual(['first', 'written', 'Yes']);
+    const tags = contentControlsIn(reopened.part.root).map(
+      (entry) => contentControlPropertiesOf(entry.node).tag
+    );
+    expect(tags).toEqual(['one', 'two', 'three']);
+  });
+
+  test('the semantic digest of the saved file differs only where the edit was', () => {
+    const controls = contentControlsIn(THREE.root);
+    const edited = apply(THREE, {
+      op: 'setContentControlValue',
+      controlId: controls[1]!.node.id,
+      value: { kind: 'text', text: 'written' },
+    });
+    const reopen = (part: OoxmlPart): OoxmlPart => {
+      const result = readOoxmlPart(serializeOoxmlPart(part), docMeta);
+      if (!result.ok) throw new Error(result.reason);
+      return result.part;
+    };
+    const differences = diffSemanticDigests(
+      semanticDigest([reopen(THREE)]),
+      semanticDigest([reopen(edited)])
+    );
+    // ONE difference, at the text of the one paragraph the write landed in. The controls either
+    // side of it, their properties and the structure holding them all compare equal.
+    expect(differences).toEqual([
+      { path: '/word/document.xml.p[1].text', before: '"second"', after: '"written"' },
+    ]);
+    // And an unedited save is identical by digest, so the difference above is the edit.
+    expect(
+      diffSemanticDigests(semanticDigest([reopen(THREE)]), semanticDigest([reopen(reopen(THREE))]))
+    ).toEqual([]);
+  });
+
+  // The oracle's whole job. Typing `w:sdt` moved an inline control's runs from a subtree
+  // fingerprint onto a walk that digests properties and drops text, which would have made a
+  // save that emptied a form field indistinguishable from one that kept its value.
+  test('a control that lost its content is a reported loss, not a silent one', () => {
+    const emptied = parseDoc(
+      `<w:p><w:sdt><w:sdtPr><w:tag w:val="one"/><w:id w:val="1"/><w:text/></w:sdtPr>` +
+        `<w:sdtContent/></w:sdt></w:p>` +
+        `<w:p><w:sdt><w:sdtPr><w:tag w:val="two"/><w:id w:val="2"/><w:text/></w:sdtPr>` +
+        `<w:sdtContent><w:r><w:t>second</w:t></w:r></w:sdtContent></w:sdt></w:p>` +
+        `<w:sdt><w:sdtPr><w:tag w:val="three"/><w:id w:val="3"/><w:dropDownList>` +
+        `<w:listItem w:displayText="Yes" w:value="yes"/></w:dropDownList></w:sdtPr>` +
+        `<w:sdtContent><w:p><w:r><w:t>Yes</w:t></w:r></w:p></w:sdtContent></w:sdt>`
+    );
+    expect(
+      diffSemanticDigests(semanticDigest([THREE]), semanticDigest([emptied])).map(
+        (difference) => difference.path
+      )
+    ).toEqual(['/word/document.xml.p[0].text', '/word/document.xml.p[0].runProperties']);
+  });
+
+  // A tag, a lock or a type is the control's identity, and none of them is text.
+  test('a control that lost its tag is a reported loss too', () => {
+    const untagged = parseDoc(
+      `<w:p><w:sdt><w:sdtPr><w:id w:val="1"/><w:text/></w:sdtPr>` +
+        `<w:sdtContent><w:r><w:t>first</w:t></w:r></w:sdtContent></w:sdt></w:p>`
+    );
+    const tagged = parseDoc(
+      `<w:p><w:sdt><w:sdtPr><w:tag w:val="one"/><w:id w:val="1"/><w:text/></w:sdtPr>` +
+        `<w:sdtContent><w:r><w:t>first</w:t></w:r></w:sdtContent></w:sdt></w:p>`
+    );
+    expect(diffSemanticDigests(semanticDigest([tagged]), semanticDigest([untagged]))).not.toEqual(
+      []
+    );
   });
 });
 

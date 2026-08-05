@@ -120,6 +120,32 @@ describe('a control answers what the document says about it', () => {
     ).toBe('Acme');
   });
 
+  // `whole` and `content` are the same stretch here and `before`/`after` collapse onto the
+  // content's own edges, because a control's boundary marks occupy no offset in this model — there
+  // is no position between the mark and the first character for a caret to be at. Word draws the
+  // distinction; a snapshot of the text cannot, and answering an invented offset would be worse
+  // than answering the edge.
+  test.each([
+    ['whole', 'Acme'],
+    ['content', 'Acme'],
+    ['start', ''],
+    ['end', ''],
+    ['before', ''],
+    ['after', ''],
+  ] as const)('the range at %s covers %p', (location, expected) => {
+    const host = withControls();
+    const control = controlsOf(host, roots(host).body)[0]!;
+    const answer = host.execute({
+      operations: [
+        { op: 'getContentControlTag', contentControl: control },
+        { op: 'getContentControlRange', contentControl: control, location },
+      ],
+    });
+    expect(
+      textAt(host.execute({ operations: [{ op: 'getSpanText', span: spanOf(answer) }] }), 0)
+    ).toBe(expected);
+  });
+
   test('a control inside a control is listed by the one that holds it', () => {
     const host = open(
       docx(
@@ -395,6 +421,51 @@ describe('a script writes through the same refusals the keyboard meets', () => {
         0
       )
     ).toBe('invalid-handle');
+  });
+
+  // The three insertion locations a source-compatible caller writes. `replace` is the control's
+  // own value path — prompt and `w:temporary` included — and the two edges are ordinary story
+  // insertions at the ends of the content the control holds. THE HOST RESOLVES THE EDGE, not the
+  // caller: a script that had to read the span first could only write to where the control used
+  // to be, and the two operations would not be one refusal.
+  test.each([
+    ['replace', 'ACME'],
+    ['start', 'ACMEAcme'],
+    ['end', 'AcmeACME'],
+  ] as const)('text is inserted at %s', (at, expected) => {
+    const host = withControls();
+    const control = controlsOf(host, roots(host).body)[0]!;
+    const answer = host.execute({
+      operations: [{ op: 'insertContentControlText', contentControl: control, text: 'ACME', at }],
+    });
+    expect(answer.results[0]?.status).toBe('ok');
+    expect(
+      textAt(
+        host.execute({ operations: [{ op: 'getContentControlText', contentControl: control }] }),
+        0
+      )
+    ).toBe(expected);
+  });
+
+  test('an insertion into a locked control is refused wherever it lands', () => {
+    const host = open(
+      docx(
+        `<w:sdt><w:sdtPr><w:tag w:val="fixed"/><w:lock w:val="contentLocked"/></w:sdtPr>` +
+          `<w:sdtContent><w:p><w:r><w:t>kept</w:t></w:r></w:p></w:sdtContent></w:sdt>`
+      )
+    );
+    const control = controlsOf(host, roots(host).body)[0]!;
+    for (const at of ['replace', 'start', 'end'] as const) {
+      expect(
+        refusedBecause(
+          host.execute({
+            operations: [
+              { op: 'insertContentControlText', contentControl: control, text: 'x', at },
+            ],
+          })
+        )
+      ).toBe('transaction-refused/locked');
+    }
   });
 
   test('a forged handle is refused', () => {

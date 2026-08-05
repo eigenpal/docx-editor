@@ -23,9 +23,13 @@
  * values appear on `Paragraph` but there is no `ParagraphFormat`, why `Font`
  * declares five members and not `highlightColor`, why `Bookmark` declares
  * `name`/`range`/`select` and not the document-wide `start`/`end` offsets, and
- * why a `Comment`'s body is readable and not assignable. `ContentControl` is
- * the one exception, and a scheduled one: the plan completes it as its own
- * step, and its members are declared here from that contract freeze.
+ * why a `Comment`'s body is readable and not assignable, and why
+ * `ContentControl` declares eight members: the control's own `id` and `subtype`
+ * ARE implemented, but not in upstream's types — the id as a string, because
+ * `w:id` is optional and repeatable and no number can say "the file wrote
+ * none", and the subtype in the schema's own vocabulary rather than Word's UI
+ * enum. Neither would survive the exact-shape comparison, so both are recorded
+ * omissions and the object model publishes them under its own names.
  *
  * A NULL A DECLARATION CANNOT SAY. `Font#bold`, `Paragraph#alignment` and
  * `#style` are declared with upstream's own non-nullable types, and the runtime
@@ -364,33 +368,10 @@ export declare namespace DocxEditor {
   // ---------------------------------------------------------------------
 
   export class ContentControl {
-    appearance: 'BoundingBox' | 'Tags' | 'Hidden';
     cannotDelete: boolean;
     cannotEdit: boolean;
-    color: string;
     readonly contentControls: ContentControlCollection;
-    readonly id: number;
     readonly paragraphs: ParagraphCollection;
-    placeholderText: string;
-    readonly subtype:
-      | 'Unknown'
-      | 'RichTextInline'
-      | 'RichTextParagraphs'
-      | 'RichTextTableCell'
-      | 'RichTextTableRow'
-      | 'RichTextTable'
-      | 'PlainTextInline'
-      | 'PlainTextParagraph'
-      | 'Picture'
-      | 'BuildingBlockGallery'
-      | 'CheckBox'
-      | 'ComboBox'
-      | 'DropDownList'
-      | 'DatePicker'
-      | 'RepeatingSection'
-      | 'RichText'
-      | 'PlainText'
-      | 'Group';
     tag: string;
     readonly text: string;
     title: string;

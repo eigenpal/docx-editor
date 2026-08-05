@@ -39,6 +39,7 @@ export { RequestContext } from './request-context.ts';
 export { selectedProperties } from './selection.ts';
 export type {
   AutomationAlignment,
+  AutomationContentControlRangeLocation,
   AutomationFontRead,
   AutomationFontWrite,
   AutomationHandle,
