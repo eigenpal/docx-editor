@@ -12,7 +12,7 @@ import type {
   Unsubscribe,
 } from '@docx-editor.dev/core/contracts/editor';
 import type { EditorModule } from '../contracts/modules.ts';
-import type { FontConfigurationFragment } from './font-composition.ts';
+import type { FontConfigurationFragment, FontResolver } from './font-composition.ts';
 import type { PaginatedSurface } from './paginated-surface.ts';
 import type { HyperlinkActivation } from './surface-navigation.ts';
 
@@ -40,8 +40,14 @@ export interface DocxEditorConfig {
    * fragment (`{ sources, substitutions }`) is accepted and composed with defaults, or
    * merge several origins yourself with `composeFontConfiguration`. Sampled per load;
    * failures degrade to the fixed measurer and report through `onFontError`.
+   *
+   * Pass a {@link FontResolver} instead to resolve ON DEMAND: the function is called once
+   * per load, after the document is parsed, with the families it actually declares, and
+   * only what it returns is loaded. A document naming nothing the resolver covers costs
+   * nothing. Note that a fetching resolver makes opening a document perform network
+   * requests — the engine never supplies one, so that stays your call.
    */
-  fonts?: FontConfiguration | FontConfigurationFragment;
+  fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
   author?: string;
   locale?: string;
   /** Localized drawing refusal labels; defaults to English when omitted. */

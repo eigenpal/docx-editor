@@ -51,6 +51,54 @@ export interface FontConfigurationBase extends FontConfigurationFragment {
   readonly language?: string;
 }
 
+/**
+ * What the document turned out to need, handed to an on-demand resolver.
+ *
+ * The families are the ones the file actually names — already name-validated and capped,
+ * so a resolver may treat them as a list to look up, never as URLs or paths to build.
+ */
+export interface FontResolutionRequest {
+  /**
+   * Families declared anywhere in the document (body, headers/footers, styles), deduped,
+   * sorted, and capped at {@link MAX_RESOLVER_FAMILIES}.
+   */
+  readonly families: readonly string[];
+  /** The face a run naming no font resolves to, so a resolver can cover it too. */
+  readonly defaultFamily: string;
+}
+
+/**
+ * Resolve fonts once the document's needs are known, instead of ahead of them.
+ *
+ * Called once per load, AFTER the file is parsed and mounted, with the families it
+ * declares; whatever it returns composes exactly like a statically supplied fragment.
+ * Returning nothing is a valid answer — it means "I cover none of this", and the
+ * document stays on the fixed measurer.
+ *
+ * A resolver that fetches makes opening a document perform network requests. That is a
+ * real change in posture and it must stay the APP's decision: the engine never supplies
+ * one, and the families here are file-derived, so a resolver must look them up in a set
+ * it shipped rather than interpolate them into a URL.
+ */
+export type FontResolver = (
+  request: FontResolutionRequest
+) =>
+  | FontConfiguration
+  | FontConfigurationFragment
+  | undefined
+  | Promise<FontConfiguration | FontConfigurationFragment | undefined>;
+
+/**
+ * Ceiling on the families one document can put in front of a resolver.
+ *
+ * A resolver typically turns each family into up to four faces, and the resource snapshot
+ * refuses more than `HARD_MAX_FONT_SOURCES` (256) sources — so 64 families is the point
+ * past which a document could no longer be served anyway. Capping here means a file
+ * declaring thousands of distinct `w:rFonts` cannot fan a resolver out across thousands
+ * of lookups (or fetches) before that limit is ever reached.
+ */
+export const MAX_RESOLVER_FAMILIES = 64;
+
 /** Word's document default when nothing else says otherwise: Calibri at 11pt. */
 export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'] = Object.freeze({
   family: 'Calibri',

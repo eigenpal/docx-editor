@@ -32,6 +32,7 @@ export type {
 // The font-composition surface, re-exported so the 80% path (fonts package + adapter)
 // never needs a core import. Paired with the React barrel.
 export {
+  MAX_RESOLVER_FAMILIES,
   WORD_DEFAULT_FONT,
   composeFontConfiguration,
   createFontSource,
@@ -40,6 +41,8 @@ export {
   type FontConfigurationFragment,
   type FontLoadFailure,
   type FontLoadFailureReason,
+  type FontResolutionRequest,
+  type FontResolver,
   type FontUrlSource,
   type LoadFontsRequest,
   type LoadFontsResult,
