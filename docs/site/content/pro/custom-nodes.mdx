@@ -34,17 +34,17 @@ const Citation = defineCustomNode({
 const MODULES = [customNodesModule({ nodes: [Citation] })];
 ```
 
-| Field | Purpose |
-|---|---|
-| `name` | Node type name. The second segment of the tag. |
-| `tagPrefix` | The prefix this definition claims — `docx` claims `docx:*`. No colons. |
-| `fromDocx` | Recognition hook. Return the attrs the node should carry, or `null` to leave the control literal. |
-| `label` | Display name for chrome. Defaults to `name`. Localize it yourself. |
-| `chrome.color` | Chip tint and border, applied by `CustomNodeChrome`. |
-| `reviewCard` | Contribute a sidebar card per node. Return `null` to skip one. |
-| `onClick` / `onHover` / `onEdit` | Interaction hooks on the painted chip. |
+| Field                            | Purpose                                                                                           |
+| -------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `name`                           | Node type name. The second segment of the tag.                                                    |
+| `tagPrefix`                      | The prefix this definition claims. `docx` claims `docx:*`. No colons.                             |
+| `fromDocx`                       | Recognition hook. Return the attrs the node should carry, or `null` to leave the control literal. |
+| `label`                          | Display name for chrome. Defaults to `name`. Localize it yourself.                                |
+| `chrome.color`                   | Chip tint and border, applied by `CustomNodeChrome`.                                              |
+| `reviewCard`                     | Contribute a sidebar card per node. Return `null` to skip one.                                    |
+| `onClick` / `onHover` / `onEdit` | Interaction hooks on the painted chip.                                                            |
 
-Every value reaching `fromDocx` came out of a `.docx` — a zip of XML an attacker controls end to end. Treat `attrs` and `text` as untrusted: they are rendered as text, never as markup, and you must not build URLs or DOM from them without sanitizing.
+Every value reaching `fromDocx` came out of a `.docx`, which is a zip of XML an attacker controls end to end. Treat `attrs` and `text` as untrusted: they are rendered as text, never as markup, and you must not build URLs or DOM from them without sanitizing.
 
 ## Render the chips
 
@@ -69,7 +69,7 @@ export function Editor({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
-An activated node gives you `name`, `attrs`, `tag`, `rect` (viewport-relative, for anchoring your own popover), and — when resolvable — `nodeId` and `text`.
+An activated node gives you `name`, `attrs`, `tag`, `rect` (viewport-relative, for anchoring your own popover), plus `nodeId` and `text` when they resolve.
 
 ## Insert, update, remove
 
@@ -104,7 +104,7 @@ function InsertCitationButton() {
 }
 ```
 
-`updateCustomNode(editor, definition, nodeId, attrs, text, options?)` rewrites one in place, and `removeCustomNode(editor, nodeId)` deletes it. All three return an `ExecResult` — check `ok` and show `reason`; they do not throw.
+`updateCustomNode(editor, definition, nodeId, attrs, text, options?)` rewrites one in place, and `removeCustomNode(editor, nodeId)` deletes it. All three return an `ExecResult` rather than throwing, so check `ok` and show `reason`.
 
 The default `lock` is `contentLocked`: the text cannot be edited inline, so a label can never drift out of sync with its attributes, while the node stays deletable as one unit in both the editor and Word. Pass `lock: false` for no lock, or `'sdtContentLocked'` to forbid deleting it too.
 
@@ -141,16 +141,17 @@ import { customNodeXml } from '@docx-editor.dev/pro';
 
 ## Word round-trip
 
-A recognized node is an ordinary inline content control. Word shows its text, honors the lock, and preserves the tag. A document edited in Word and reopened here is recognized again from the same tag — and if a Word user edited the text despite the lock, `fromDocx` sees the drift and can decide what to do about it.
+A recognized node is an ordinary inline content control. Word shows its text, honors the lock, and preserves the tag. A document edited in Word and reopened here is recognized again from the same tag. If a Word user edited the text despite the lock, `fromDocx` sees the drift and decides what to do about it.
 
 A document opened without your definition registered renders the control's content literally, which is also what Word does. Nothing is lost.
 
 ## Known limit
 
-There is no in-place edit dialog. Re-authoring a node is `removeCustomNode` plus `insertCustomNode`, or `updateCustomNode`, with the form supplied by you — the activation carries `nodeId` and the current `text` to prefill it. Schema-driven edit forms are a planned follow-up.
+There is no in-place edit dialog. Re-authoring a node is `removeCustomNode` plus `insertCustomNode`, or `updateCustomNode`, with the form supplied by you. The activation carries `nodeId` and the current `text` to prefill it. Schema-driven edit forms are a planned follow-up.
 
 ## Next steps
 
 - [Tracked changes](/docs/2.x/pro/tracked-changes)
 - [Comments](/docs/2.x/pro/comments)
 - [Content controls](/docs/2.x/guides/content-controls): the built-in control surface these build on
+- [Runnable example](https://github.com/eigenpal/docx-editor/tree/main/examples/custom-nodes): define, insert, edit, and round-trip a citation

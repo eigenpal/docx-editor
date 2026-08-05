@@ -11,7 +11,7 @@ These are the same hooks the packaged toolbar, menu, and navigation pane use. Th
 
 ## useEditorCommand
 
-The one you reach for most. Give it a slot id and get back a button's worth of state:
+Most chrome is built on this one. Give it a slot id and get back a button's worth of state:
 
 ```tsx
 import { useEditorCommand } from '@docx-editor.dev/react';
@@ -33,12 +33,12 @@ function BoldButton() {
 }
 ```
 
-| Field | Type | Meaning |
-|---|---|---|
-| `execute()` | `() => boolean` | Run it. Returns whether it applied. |
-| `isActive` | `boolean` | The command's state at the caret (bold on, list applied). |
-| `isEnabled` | `boolean` | Whether it can run right now. |
-| `disabledReason` | `string \| null` | Why not, when it can't. Show it; don't invent your own. |
+| Field            | Type             | Meaning                                                   |
+| ---------------- | ---------------- | --------------------------------------------------------- |
+| `execute()`      | `() => boolean`  | Run it. Returns whether it applied.                       |
+| `isActive`       | `boolean`        | The command's state at the caret (bold on, list applied). |
+| `isEnabled`      | `boolean`        | Whether it can run right now.                             |
+| `disabledReason` | `string \| null` | Why not, when it can't. Show it; don't invent your own.   |
 
 Enabled state has exactly one source. A control that hardcodes `disabled` will drift from the engine.
 
@@ -57,7 +57,11 @@ import { useEditorState } from '@docx-editor.dev/react';
 
 function PageIndicator() {
   const page = useEditorState((s) => s.page);
-  return <span>{page.current} / {page.total}</span>;
+  return (
+    <span>
+      {page.current} / {page.total}
+    </span>
+  );
 }
 
 function SaveButton() {
@@ -75,7 +79,7 @@ const formatting = useEditorState(
 );
 ```
 
-Selecting narrowly is the point: a page-number selector must not re-render when someone toggles bold. Useful snapshot fields include `page`, `selection`, `selectionCollapsed`, `formatting`, `table`, `image`, `editable`, `isLoading`, `parseError`, `editingMode`, `canUndo` / `canRedo`, `pageSetup`, `fontSubstitutions`, `hasReviewContent`, and `lastRejection`.
+Select narrowly. A page-number selector should not re-render when someone toggles bold. Useful snapshot fields include `page`, `selection`, `selectionCollapsed`, `formatting`, `table`, `image`, `editable`, `isLoading`, `parseError`, `editingMode`, `canUndo` / `canRedo`, `pageSetup`, `fontSubstitutions`, `hasReviewContent`, and `lastRejection`.
 
 ## useDocxEditor
 
@@ -130,7 +134,9 @@ function FontPicker() {
       onChange={(e) => font.setValue(e.target.value)}
     >
       {font.options.map((family) => (
-        <option key={family} value={family}>{family}</option>
+        <option key={family} value={family}>
+          {family}
+        </option>
       ))}
     </select>
   );
@@ -219,18 +225,18 @@ function Find() {
 
 ## The rest
 
-| Hook | Returns |
-|---|---|
+| Hook                              | Returns                                                                  |
+| --------------------------------- | ------------------------------------------------------------------------ |
 | `useDocxSource(source, options?)` | Fetches bytes and fonts for a URL, `File`, or `Blob`, with cancellation. |
-| `useEditorValueCommand(slotId)` | Value-taking commands: `'image.wrap'`, `'image.altText'`. |
-| `useParagraphIndent()` | Current indents plus an `apply` for ruler-style editing. |
-| `useHyperlinkPopup()` | State behind the link popover, for a custom panel. |
-| `useContentControl()` | The content-control inspector: locks, value writes, form fill. |
-| `useHeaderFooterState()` | Which header/footer scope is being edited, or `null`. |
-| `useNoteScopeState()` | The same for footnotes and endnotes. |
-| `useContextMenuTarget()` | The element the last right-click landed on. |
-| `useNavigationPane(options?)` | Open state and width for the navigation pane. |
-| `useTranslation()` | `{ t }` bound to the active locale catalogue. |
+| `useEditorValueCommand(slotId)`   | Value-taking commands: `'image.wrap'`, `'image.altText'`.                |
+| `useParagraphIndent()`            | Current indents plus an `apply` for ruler-style editing.                 |
+| `useHyperlinkPopup()`             | State behind the link popover, for a custom panel.                       |
+| `useContentControl()`             | The content-control inspector: locks, value writes, form fill.           |
+| `useHeaderFooterState()`          | Which header/footer scope is being edited, or `null`.                    |
+| `useNoteScopeState()`             | The same for footnotes and endnotes.                                     |
+| `useContextMenuTarget()`          | The element the last right-click landed on.                              |
+| `useNavigationPane(options?)`     | Open state and width for the navigation pane.                            |
+| `useTranslation()`                | `{ t }` bound to the active locale catalogue.                            |
 
 Review hooks (`useReview`, `useReviewOf`, `useReviewItem`) ship in [`@docx-editor.dev/pro/react`](/docs/2.x/pro).
 

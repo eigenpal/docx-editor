@@ -5,6 +5,7 @@
   "workspaces": [
     "packages/*",
     "examples/astro",
+    "examples/custom-nodes",
     "examples/igloo",
     "examples/nextjs",
     "examples/nuxt",
@@ -45,6 +46,7 @@
     "demo-doc:build": "bun scripts/demo-doc/build.ts",
     "dev": "bun run --filter './examples/vite' --filter './examples/vue' dev",
     "dev:astro": "cd examples/astro && npm run dev",
+    "dev:custom-nodes": "bun run --filter './examples/custom-nodes' dev",
     "dev:demo": "bash examples/dev-all.sh",
     "dev:igloo": "bun run --filter './examples/igloo' dev",
     "dev:nextjs": "cd examples/nextjs && npm run dev",

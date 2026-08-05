@@ -29,7 +29,7 @@ The framework-neutral entry is `@docx-editor.dev/pro`; React chrome lives at
 ## Register a module
 
 Capabilities are modules passed to the editor root. Registration happens at construction, so
-the array identity must be stable — build it outside render, or the editor rebuilds every time.
+the array identity must be stable. Build it outside render, or the editor rebuilds every time.
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -55,8 +55,8 @@ export function Reviewer({ bytes }: { bytes: Uint8Array }) {
 reply with no author rather than writing an empty attribute.
 
 Without a review module the editor still opens a document containing revisions and comments and
-still saves them back untouched — it renders revisions in their final state and offers no review
-UI. The module is what makes them visible and actionable.
+still saves them back untouched. It renders revisions in their final state and offers no review
+UI; the module is what makes them visible and actionable.
 
 ## Chrome or hooks
 
@@ -90,7 +90,7 @@ function ChangeList() {
 ```
 
 Items come from the document tree rather than from what is currently painted, and each anchor
-comes from layout records rather than measured DOM — so a sidebar built on this does not lag a
+comes from layout records rather than measured DOM, so a sidebar built on this does not lag a
 repaint behind the page or break during pagination.
 
 ## Custom nodes
@@ -113,7 +113,7 @@ const Citation = defineCustomNode({
 const MODULES = [customNodesModule({ nodes: [Citation] })];
 ```
 
-Every value reaching `fromDocx` came out of a `.docx` — treat `attrs` and `text` as untrusted.
+Every value reaching `fromDocx` came out of a `.docx`, so treat `attrs` and `text` as untrusted.
 
 `insertCustomNode`, `updateCustomNode`, and `removeCustomNode` author them from code, and
 `customNodeXml` builds the same content control on a server with no editor and no DOM.

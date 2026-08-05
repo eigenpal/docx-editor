@@ -33,7 +33,8 @@ import type { Editor, EditorSnapshot } from '@docx-editor.dev/core';
 ```
 
 Create an editor, the `Editor` contract it implements, fonts, the chrome registry, and the
-document model types. Subpaths are the escape hatch, not the entry fee.
+document model types. Reach for a subpath when you need the canonical tree, the layout pass,
+or the paint step directly.
 
 | Subpath                | What's there                                                                    |
 | ---------------------- | ------------------------------------------------------------------------------- |
@@ -49,15 +50,21 @@ document model types. Subpaths are the escape hatch, not the entry fee.
 | `./automation`         | The object model behind `@docx-editor.dev/editor-api`.                          |
 | `./styles/editor.css`  | The one editor stylesheet, shared by packaged and custom chrome.                |
 
+## Nothing is lost
+
+Everything you do not edit comes back byte for byte, including parts the engine does not
+model — custom XML, embedded fonts, macros, media, unknown extensions. Two oracles gate it in
+CI: a canonical fingerprint over the tree, and a save-and-reopen semantic digest.
+
 ## One pipeline
 
 ```
 bytes → bounded OPC/XML read → canonical OOXML tree → layout → painted pages → serialize
 ```
 
-No shadow document and no second representation to keep in sync. The painted pages _are_ the
-editable surface: they are `contenteditable`, but the DOM is a picture — browser mutations are
-prevented and re-expressed as tree operations.
+There is one document model. The painted pages are the editable surface: they are
+`contenteditable`, but the DOM is a picture. Browser mutations are prevented and re-expressed
+as tree operations, so the browser never invents markup inside your document.
 
 Nodes are **typed** where layout needs them and **generic** everywhere else, preserving the
 element verbatim. So content the engine does not model is carried rather than dropped, and a

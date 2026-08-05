@@ -7,7 +7,7 @@ order: 32
 
 `<DocxEditor>` is one arrangement of parts that are all public. When the packaged chrome is not what you want, take the parts.
 
-There is no second implementation behind the packaged editor: the toolbar you get out of the box is built from the same hooks and primitives documented here, so nothing you compose yourself is second-class.
+The packaged toolbar is built from the hooks and primitives on this page, so a control you write has the same capabilities as one that ships in the box.
 
 ## The three primitives
 
@@ -29,7 +29,7 @@ export function Editor({ bytes }: { bytes: Uint8Array }) {
 
 - **`Root`** owns the editor instance and publishes it on context. It renders no DOM of its own. It is where document-level props live: `document`, `mode`, `author`, `fonts`, `locale`, `modules`, `onReady`, `onChange`.
 - **`Viewport`** is the scroll container, and carries the layout classes the engine positions pages against.
-- **`Content`** is the mount point the engine paints pages into. The painted pages *are* the editable surface.
+- **`Content`** is the mount point the engine paints pages into. The painted pages _are_ the editable surface.
 
 Everything else — toolbar, menu, rulers, navigation pane, link popover, context menu — is optional and can be placed anywhere inside `Root`.
 
@@ -61,18 +61,22 @@ import { Button } from '@/components/ui/button';
 A part child replaces the slot of the same name and leaves the rest of the default arrangement alone. `hidden` removes a slot; `preset={false}` opts out of the defaults entirely so only your children render:
 
 ```tsx
-{/* Default toolbar, but with our own bold button and no highlight control. */}
+{
+  /* Default toolbar, but with our own bold button and no highlight control. */
+}
 <DocxEditor.Toolbar>
   <DocxEditor.Toolbar.Bold className="my-bold" />
   <DocxEditor.Toolbar.Highlight hidden />
-</DocxEditor.Toolbar>
+</DocxEditor.Toolbar>;
 
-{/* Nothing packaged. Only these three. */}
+{
+  /* Nothing packaged. Only these three. */
+}
 <DocxEditor.Toolbar preset={false}>
   <DocxEditor.Toolbar.Bold />
   <DocxEditor.Toolbar.Italic />
   <DocxEditor.Toolbar.Underline />
-</DocxEditor.Toolbar>
+</DocxEditor.Toolbar>;
 ```
 
 ## Compound parts
@@ -141,7 +145,7 @@ export function Workspace({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
-The trade-off is explicit: composing gets you every part by name, and parts you do not place simply have no UI. `<DocxEditor>` places all of them for you.
+Composing gets you every part by name. Parts you do not place have no UI, which is the work `<DocxEditor>` does for you.
 
 ## Keep the caret
 

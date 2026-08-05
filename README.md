@@ -12,7 +12,7 @@
   <a href="https://www.docx-editor.dev/docs"><img src="https://img.shields.io/badge/Docs-3B5BDB?style=flat-square&logo=readthedocs&logoColor=white" alt="Documentation" /></a>
 </p>
 
-Open-source WYSIWYG `.docx` editor for React: canonical OOXML in, canonical OOXML out, with Word-faithful pagination, tracked changes, and comments. **[Live demo](https://docx-editor.dev/editor)** | **[Documentation](https://www.docx-editor.dev/docs)**
+Open-source WYSIWYG `.docx` editor for React. Word-faithful pagination, tracked changes, comments — and **lossless**: everything you do not edit comes back byte for byte, including the parts the editor does not understand. **[Live demo](https://docx-editor.dev/editor)** | **[Documentation](https://www.docx-editor.dev/docs)**
 
 ## Quick Start
 
@@ -28,6 +28,14 @@ See the [React quick start](#react) below.
   </a>
 </p>
 
+## Nothing is lost
+
+Open a document, edit one word, save it. Everything you did not touch comes back byte for byte: custom XML, embedded fonts, macros, media, Smart Tags, and markup from add-ins the editor has never heard of.
+
+The mechanism is the canonical tree. Parsing types a node only where layout needs it and keeps everything else generic, holding the original element verbatim. On save, typed parts re-serialize and the rest is repacked from the source file. An element the parser cannot type — unknown, or known but in an invalid position — becomes a generic node instead of being dropped, so unrecognized markup never blocks editing.
+
+CI checks this on a corpus of real documents with two oracles: a canonical fingerprint over the tree, and a semantic digest compared across save and reopen. A change that drops content fails the build.
+
 ## Packages
 
 | Package                                                                                    | Description                                                                                                                                                                    | Docs                                                    |
@@ -36,7 +44,7 @@ See the [React quick start](#react) below.
 | [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)             | Framework-agnostic engine: OOXML read/write, canonical document tree, layout, paint. Depend on this if you fork the React adapter.                                             | [Docs](https://www.docx-editor.dev/docs/2.x/core)       |
 | [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)             | Shared locale strings and types consumed by the adapter.                                                                                                                       | [Docs](https://www.docx-editor.dev/docs/2.x/i18n)       |
 | [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro)               | Tracked changes, comments, and custom nodes.                                                                                                                                   | [Docs](https://www.docx-editor.dev/docs/2.x/pro)        |
-| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Office.js-compatible editing API: a batching object model that edits a document from a server, or an editor already open in a page.                               | [Docs](https://www.docx-editor.dev/docs/2.x/editor-api) |
+| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Office.js-compatible editing API: a batching object model that edits a document from a server, or an editor already open in a page.                                            | [Docs](https://www.docx-editor.dev/docs/2.x/editor-api) |
 
 Every package above is Apache 2.0 except `@docx-editor.dev/editor-api` and `@docx-editor.dev/pro`, which are licensed under the EigenPal Pro Evaluation License 1.0 ([editor-api](packages/editor-api/LICENSE.md), [pro](packages/pro/LICENSE.md)): free to evaluate, production use requires a commercial agreement — **[licensing@eigenpal.com](mailto:licensing@eigenpal.com)**.
 

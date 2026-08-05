@@ -10,13 +10,13 @@ There is one document model and one pipeline:
 bytes → bounded OPC/XML read → canonical OOXML tree → layout → painted pages → serialize
 ```
 
-No shadow document, no second representation to keep in sync, no translation layer between "what you edit" and "what you see".
+There is one document model. What you see painted and what an edit mutates are the same tree, so nothing has to be kept in sync.
 
 ## The canonical tree
 
 Reading a `.docx` produces one tree per package part. Nodes are **typed** where layout needs them — the paragraph, run, and table vocabulary — and **generic** everywhere else, preserving the element verbatim.
 
-Two consequences follow, and they are the whole preservation story:
+Two consequences:
 
 - Content the engine does not model is carried, not dropped. A known element in an invalid position demotes to generic rather than erroring.
 - Unknown content never blocks editing. A document full of extensions the engine has never seen still opens, still edits, and still saves.

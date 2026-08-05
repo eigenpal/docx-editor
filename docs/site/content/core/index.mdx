@@ -24,22 +24,22 @@ import { createDocxEditor, loadFonts, WORD_DEFAULT_FONT } from '@docx-editor.dev
 import type { Editor, EditorSnapshot } from '@docx-editor.dev/core';
 ```
 
-Subpaths are the escape hatch, not the entry fee — reach for one when you need the canonical tree, the layout pass, or the paint step directly.
+Reach for a subpath when you need the canonical tree, the layout pass, or the paint step directly.
 
-| Subpath | What's there |
-|---|---|
-| `.` | Create an editor, the `Editor` contract, fonts, the chrome registry, the document model types. |
-| `./editor` | Everything the root re-exports, plus the paginated surface, ruler geometry, and module resolution. |
-| `./contracts/editor` | `Editor`, `EditorCommand`, `EditorQuery`, `EditorSnapshot`, `DocumentSource`, `PageSetup` — the contract an adapter renders. |
-| `./contracts/types` | Document model types. |
-| `./contracts/modules` | `EditorModule`, the shape [`@docx-editor.dev/pro`](/docs/2.x/pro) implements. |
-| `./contracts/plugin` | The plugin contract. |
-| `./contracts/interaction` | Pointer, selection, and keymap contracts. |
-| `./store` | The canonical tree and its transactional store. |
-| `./layout` | The DOM-free layout pass. |
-| `./output` | Serialization. |
-| `./automation` | The document object model behind [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api). |
-| `./styles/editor.css` | The one editor stylesheet. The packaged chrome and your own chrome both use it. |
+| Subpath                   | What's there                                                                                                                 |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `.`                       | Create an editor, the `Editor` contract, fonts, the chrome registry, the document model types.                               |
+| `./editor`                | Everything the root re-exports, plus the paginated surface, ruler geometry, and module resolution.                           |
+| `./contracts/editor`      | `Editor`, `EditorCommand`, `EditorQuery`, `EditorSnapshot`, `DocumentSource`, `PageSetup` — the contract an adapter renders. |
+| `./contracts/types`       | Document model types.                                                                                                        |
+| `./contracts/modules`     | `EditorModule`, the shape [`@docx-editor.dev/pro`](/docs/2.x/pro) implements.                                                |
+| `./contracts/plugin`      | The plugin contract.                                                                                                         |
+| `./contracts/interaction` | Pointer, selection, and keymap contracts.                                                                                    |
+| `./store`                 | The canonical tree and its transactional store.                                                                              |
+| `./layout`                | The DOM-free layout pass.                                                                                                    |
+| `./output`                | Serialization.                                                                                                               |
+| `./automation`            | The document object model behind [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api).                                      |
+| `./styles/editor.css`     | The one editor stylesheet. The packaged chrome and your own chrome both use it.                                              |
 
 ## The contract
 
@@ -64,7 +64,7 @@ One path, in one direction:
 bytes → bounded OPC/XML read → canonical document tree → layout → painted pages → serialize
 ```
 
-The painted pages *are* the editable surface. There is no shadow document model to keep in sync with what you see.
+The painted pages _are_ the editable surface. There is no shadow document model to keep in sync with what you see.
 
 Fidelity is structural. Parts the engine models are re-emitted normalized; parts it does not model are carried through byte-for-byte. Content it cannot type — an unknown element, or a known one in an invalid position — becomes a generic node rather than being dropped, so unknown content never blocks editing and never disappears on save.
 
