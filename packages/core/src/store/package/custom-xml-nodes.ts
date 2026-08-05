@@ -209,18 +209,35 @@ export function withoutOrphanCustomXmlNodes(
   };
 }
 
+/** Ids this will address: XPath 1.0 has no escape for a quote inside a literal, so a node id
+ *  carrying one could close the predicate and append an expression of the sender's choosing.
+ *  Restricting the id is honest — we mint them — and refusing beats emitting a broken binding. */
+const ADDRESSABLE_ID = /^[A-Za-z_][\w.-]{0,127}$/;
+
 /**
- * The `w:xpath` a binding uses to reach a node's label.
+ * The `w:xpath` a binding uses to reach a node's label, or null when the id cannot be addressed.
  *
  * Word needs a prefix for the payload namespace even when the store declares it as a default —
  * an unprefixed step in an XPath means "no namespace", so `/docxEditor/node` would match
  * nothing in a namespaced store. The prefix is declared in `w:prefixMappings` beside it.
  */
-export function customXmlLabelXPath(prefix: string, rootLocalName: string, nodeId: string): string {
+export function customXmlLabelXPath(
+  prefix: string,
+  rootLocalName: string,
+  nodeId: string
+): string | null {
+  if (!ADDRESSABLE_ID.test(prefix) || !ADDRESSABLE_ID.test(rootLocalName)) return null;
+  if (!ADDRESSABLE_ID.test(nodeId)) return null;
   return `/${prefix}:${rootLocalName}/${prefix}:${NODE}[@id='${nodeId}']/${prefix}:${LABEL}`;
 }
 
-/** The `w:prefixMappings` value declaring that prefix. */
-export function customXmlPrefixMappings(prefix: string, namespaceUri: string): string {
+/** The `w:prefixMappings` value declaring that prefix, or null when it cannot be written.
+ *  The namespace sits inside single quotes inside a double-quoted attribute, so a namespace
+ *  carrying either quote character has no representation here. */
+export function customXmlPrefixMappings(prefix: string, namespaceUri: string): string | null {
+  if (!ADDRESSABLE_ID.test(prefix)) return null;
+  if (/['"<>&]/.test(namespaceUri)) return null;
+  // eslint-disable-next-line no-control-regex -- unrepresentable, not merely awkward.
+  if (/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(namespaceUri)) return null;
   return `xmlns:${prefix}='${namespaceUri}'`;
 }

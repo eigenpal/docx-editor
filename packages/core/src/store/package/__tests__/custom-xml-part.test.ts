@@ -95,8 +95,81 @@ describe('authoring a store', () => {
   });
 });
 
+describe('a package that lies about its stores', () => {
+  // Every one of these was a working attack before the checks that refuse them.
+  test('a relationships part presented as a store is not one', () => {
+    // Without the guard a caller writes payload nodes into `document.xml.rels`, and the
+    // relationships part ships with foreign children for Word to repair away.
+    const pkg = fixture('comprehensive-word-element-test.docx');
+    const relsName = '/word/_rels/document.xml.rels';
+    expect(customXmlDataParts(pkg, STORY).some((p) => p.partName === relsName)).toBe(false);
+    const { part } = withCustomXmlDataPart(pkg, STORY, NS, 'docxEditor');
+    expect(part?.partName).not.toBe(relsName);
+  });
+
+  test('a store is not adopted unless its properties really are properties', () => {
+    // The props part decides the `ds:itemID` a binding quotes, so a planted one that is not
+    // typed as properties would let the sender choose which store Word binds the control to.
+    const pkg = fixture('sdt-custom-tag-word-roundtrip.docx');
+    const found = customXmlDataParts(pkg, STORY);
+    for (const store of found) {
+      expect(resolveContentTypeOf(pkg, store.propsPartName)).toBe(CUSTOM_XML_PROPS_TYPE);
+    }
+  });
+
+  test('a namespace that cannot be written is refused, not rewritten', () => {
+    // Stripping instead of refusing meant the store never matched on read, so every call
+    // authored another pair until the document passed the reader's part cap.
+    const pkg = fixture('comprehensive-word-element-test.docx');
+    const hostile = 'urn:host\u0001store';
+    const once = withCustomXmlDataPart(pkg, STORY, hostile, 'docxEditor');
+    expect(once.part).toBeNull();
+    expect(once.pkg).toBe(pkg);
+  });
+
+  test('a root name is a name, not a place to inject attributes', () => {
+    const pkg = fixture('comprehensive-word-element-test.docx');
+    const injected = withCustomXmlDataPart(pkg, STORY, NS, 'evil xmlns:q="urn:q" q:attr="1"');
+    expect(injected.part).toBeNull();
+    expect(injected.pkg).toBe(pkg);
+  });
+
+  test('an id the package already carries is not reused', () => {
+    // The derivation is public, so a sender can precompute ours and plant a store holding it.
+    const pkg = fixture('sdt-custom-tag-word-roundtrip.docx');
+    const existing = customXmlDataParts(pkg, STORY).map((store) => store.itemId.toUpperCase());
+    const { part } = withCustomXmlDataPart(pkg, STORY, 'urn:second', 'second');
+    expect(existing).not.toContain(part?.itemId.toUpperCase() ?? '');
+  });
+});
+
 describe('the item id', () => {
   // Randomness here would make the same document save to different bytes each time.
+  test('differs between documents, or Word dedupes two stores into one', () => {
+    // Word's data store keys on `ds:itemID`. One id for every document we write means a bound
+    // control pasted from one into another silently binds to the host's payload.
+    const a = withCustomXmlDataPart(
+      fixture('comprehensive-word-element-test.docx'),
+      STORY,
+      NS,
+      'docxEditor'
+    );
+    const b = withCustomXmlDataPart(
+      fixture('sdt-custom-tag-word-roundtrip.docx'),
+      STORY,
+      'urn:x',
+      'x'
+    );
+    expect(a.part?.itemId).not.toBe(b.part?.itemId);
+  });
+
+  test('is stable for one document, so a save is a fixed point', () => {
+    const pkg = fixture('comprehensive-word-element-test.docx');
+    const first = withCustomXmlDataPart(pkg, STORY, NS, 'docxEditor');
+    const second = withCustomXmlDataPart(pkg, STORY, NS, 'docxEditor');
+    expect(first.part?.itemId).toBe(second.part?.itemId ?? '');
+  });
+
   test('is a pure function of the seed', () => {
     expect(datastoreItemIdFor('a')).toBe(datastoreItemIdFor('a'));
     expect(datastoreItemIdFor('a')).not.toBe(datastoreItemIdFor('b'));

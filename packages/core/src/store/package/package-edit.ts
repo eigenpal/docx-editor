@@ -161,10 +161,18 @@ function isReservedAsTree(canonical: string): boolean {
   return partNameKey(canonical) === partNameKey(CONTENT_TYPES_PART);
 }
 
-/** True when the package already holds a part OPC considers the same name. */
+/**
+ * True when the package already holds a part OPC considers the same name.
+ *
+ * `partBytes` as well as `parts`: only parts whose content type resolves to something XML-ish
+ * become trees, so a part declared `image/svg+xml` — or one with no declared type at all —
+ * exists solely as bytes. Creating "a new part" over one of those destroys it on save, because
+ * `writeOoxmlPackage` writes trees over bytes.
+ */
 function hasEquivalentPart(pkg: OoxmlPackage, canonical: string): boolean {
   const key = partNameKey(canonical);
   for (const name of pkg.parts.keys()) if (partNameKey(name) === key) return true;
+  for (const name of pkg.partBytes.keys()) if (partNameKey(name) === key) return true;
   return false;
 }
 
@@ -382,20 +390,33 @@ export function allocateOwnerRelationshipId(pkg: OoxmlPackage, ownerPart: string
  * are reachable only through its own relationship.
  *
  * Idempotent, and deliberately narrow: it mints the empty `<Relationships/>` tree and nothing
- * else. `Default Extension="rels"` covers the content type in every real package; a package
- * missing it gets an explicit override rather than an unopenable part.
+ * else. The content type comes from `Default Extension="rels"`, which every real package
+ * declares. A package missing that default cannot be helped here — `withContentTypeOverride`
+ * refuses `.rels` names for the same reason `withNewPart` does — so the part ships with no
+ * resolvable type rather than with an override this pretends to add.
  */
 export function withRelationshipsPartFor(pkg: OoxmlPackage, ownerPart: string): OoxmlPackage {
   const canonical = normalizePartName(ownerPart);
   if (!canonical.ok) return pkg;
   const relsName = relsPartNameFor(canonical.partName);
   if (pkg.parts.has(relsName)) return pkg;
-  const root = element(`${relsName}#root`, RELATIONSHIPS_NAMESPACE, 'Relationships', {});
+  // Held as bytes rather than as a tree — a package whose `rels` content type does not resolve
+  // still loads that way. Minting an empty tree here would be serialized OVER those bytes on
+  // save, destroying relationships `pkg.relationships` still lists, so the model and the file
+  // would disagree with nothing reporting it. Fail closed and let the caller refuse.
+  for (const name of pkg.partBytes.keys()) {
+    if (partNameKey(name) === partNameKey(relsName)) return pkg;
+  }
+  // Bind the namespace to the DEFAULT prefix, as every `.rels` Word writes does. Without the
+  // binding the serializer has no prefix to reach for and invents one, so this part alone would
+  // come out as `<ns1:Relationships xmlns:ns1="…">` while every sibling `.rels` in the same
+  // package is `<Relationships xmlns="…">`. Equivalent to a namespace-aware reader, and a
+  // gratuitous difference on the part type most likely to meet one that is not.
+  const root = element(`${relsName}#root`, RELATIONSHIPS_NAMESPACE, 'Relationships', {}, [
+    { prefix: '', namespaceUri: RELATIONSHIPS_NAMESPACE },
+  ]);
   const part: OoxmlPart = { id: relsName, name: relsName, contentType: RELATIONSHIPS_TYPE, root };
-  const next = withPart(pkg, part);
-  return resolveContentTypeOf(next, relsName) === null
-    ? withContentTypeOverride(next, relsName, RELATIONSHIPS_TYPE)
-    : next;
+  return withPart(pkg, part);
 }
 
 export function withRelationship(
