@@ -589,6 +589,12 @@ export function breakParagraph(
       line.end = piece.end;
       closeLine();
       lines[lines.length - 1]!.pageBreakAfter = true;
+      // NOT `trailingLineBreak`, unlike the hard break below. An empty remainder publishes
+      // no line on the page the break opened: Word Online puts the following block flush at
+      // the top of that page, which `paragraph-spacing-borders` and `section-aware-
+      // pagination` pin against the comprehensive fixture. The caret after such a break
+      // therefore has nowhere to go on the new page, which is why the click that lands in
+      // the blank space beside the mark resolves BEFORE it — see `hitTestSemantic`.
       trailingLineBreak = false;
       continue;
     }
