@@ -1,10 +1,5 @@
 import type { Document, DocumentBody } from '@docx-editor.dev/core/headless';
-import {
-  parseDocx,
-  cloneDocumentPreservingContext,
-  repackDocx,
-  headlessContextOf,
-} from '@docx-editor.dev/core/headless';
+import { parseDocx } from '@docx-editor.dev/core/headless';
 import type {
   ContentBlock,
   GetContentOptions,
@@ -67,8 +62,10 @@ export class DocxReviewer {
    * @param originalBuffer - Original DOCX buffer, needed for toBuffer()
    */
   constructor(document: Document, author = 'AI', originalBuffer?: ArrayBuffer) {
+    // Strip originalBuffer before cloning to avoid deep-copying potentially large ArrayBuffer
     const savedBuffer = originalBuffer ?? document.originalBuffer;
-    this.doc = cloneDocumentPreservingContext(document);
+    const { originalBuffer: _discard, ...rest } = document;
+    this.doc = structuredClone(rest) as Document;
     if (savedBuffer) this.doc.originalBuffer = savedBuffer;
     this.author = author;
   }
@@ -131,15 +128,10 @@ export class DocxReviewer {
    * option; the result persists on {@link toBuffer}.
    */
   getChanges(filter?: ChangeFilter): ReviewChange[] {
-    return getChangesImpl(
-      this.body,
-      filter,
-      {
-        footnotes: this.doc.package.footnotes,
-        endnotes: this.doc.package.endnotes,
-      },
-      headlessContextOf(this.doc)?.revisionIndex
-    );
+    return getChangesImpl(this.body, filter, {
+      footnotes: this.doc.package.footnotes,
+      endnotes: this.doc.package.endnotes,
+    });
   }
 
   /** Get all comments with their replies. */
@@ -266,12 +258,12 @@ export class DocxReviewer {
    * `noteId`/`noteType` locate it); a bare id resolves to the body change, if any.
    */
   acceptChange(target: number | ReviewChange): void {
-    acceptChangeImpl(this.doc, this.body, target, this.changeNotes());
+    acceptChangeImpl(this.body, target, this.changeNotes());
   }
 
   /** Reject a tracked change. See {@link acceptChange} for body-vs-note targeting. */
   rejectChange(target: number | ReviewChange): void {
-    rejectChangeImpl(this.doc, this.body, target, this.changeNotes());
+    rejectChangeImpl(this.body, target, this.changeNotes());
   }
 
   /**
@@ -279,12 +271,12 @@ export class DocxReviewer {
    * includeEndnotes }` to also accept changes inside note bodies. Returns count.
    */
   acceptAll(opts?: AcceptChangesOptions): number {
-    return acceptAllImpl(this.doc, this.body, opts, this.changeNotes());
+    return acceptAllImpl(this.body, opts, this.changeNotes());
   }
 
   /** Reject all tracked changes. See {@link acceptAll} for the note opt-in. */
   rejectAll(opts?: AcceptChangesOptions): number {
-    return rejectAllImpl(this.doc, this.body, opts, this.changeNotes());
+    return rejectAllImpl(this.body, opts, this.changeNotes());
   }
 
   /** The package's note stores, passed to change ops so note changes resolve. */
@@ -301,7 +293,7 @@ export class DocxReviewer {
    * Uses the reviewer's default author. Individual failures are collected, not thrown.
    */
   applyReview(ops: BatchReviewOptions): BatchResult {
-    return applyReviewImpl(this.doc, this.body, ops, this.author, this.changeNotes());
+    return applyReviewImpl(this.body, ops, this.author, this.changeNotes());
   }
 
   // ==========================================================================
@@ -321,6 +313,7 @@ export class DocxReviewer {
           'Use DocxReviewer.fromBuffer() or pass originalBuffer to the constructor.'
       );
     }
+    const { repackDocx } = await import('@docx-editor.dev/core/headless');
     return repackDocx(this.doc);
   }
 }

@@ -151,16 +151,13 @@ export function getToolSchemas(): {
 
 // @public
 export interface ParagraphHighlightOptions {
-    // (undocumented)
-    readonly color?: string;
-    // (undocumented)
-    readonly durationMs?: number;
+    color?: string;
+    durationMs?: number;
 }
 
 // @public
 export interface ScrollToParaIdOptions {
-    // (undocumented)
-    readonly highlight?: ParagraphHighlightOptions;
+    highlight?: ParagraphHighlightOptions;
 }
 
 // @public

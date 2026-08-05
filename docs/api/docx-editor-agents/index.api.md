@@ -151,7 +151,6 @@ export interface ReviewChange {
     noteId?: number;
     noteType?: 'footnote' | 'endnote';
     paragraphIndex: number;
-    revisionRef?: string;
     // (undocumented)
     text: string;
     // (undocumented)

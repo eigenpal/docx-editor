@@ -1,2 +1,0 @@
-src/store/package/ooxml-package.ts: error TS2345: Argument of type '"utf-16le"' is not assignable to parameter of type 'Encoding | undefined'.
-src/store/package/ooxml-package.ts: error TS2345: Argument of type '"utf-16be"' is not assignable to parameter of type 'Encoding | undefined'.

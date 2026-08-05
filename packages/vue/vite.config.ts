@@ -34,7 +34,6 @@ export default defineConfig({
       include: ['src/**/*'],
       exclude: ['src/**/__tests__/**', 'src/**/*.test-d.ts'],
       entryRoot: 'src',
-      rollupTypes: true,
       pathsToAliases: false,
       compilerOptions: { declarationMap: false, stripInternal: true },
     }),

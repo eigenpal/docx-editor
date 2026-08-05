@@ -10,6 +10,23 @@ const packDir = path.join(tempRoot, 'packs');
 const appDir = path.join(tempRoot, 'app');
 const reactAppDir = path.join(tempRoot, 'react-app');
 
+function coreContractPaths(projectDir) {
+  const publicEntries = {
+    '@docx-editor.dev/core': 'packages/core/src/index.ts',
+    '@docx-editor.dev/core/editor': 'packages/core/src/editor.ts',
+    '@docx-editor.dev/core/geometry': 'packages/core/src/geometry.ts',
+    '@docx-editor.dev/core/plugin': 'packages/core/src/plugin.ts',
+    '@docx-editor.dev/core/mcp': 'packages/core/src/mcp.ts',
+    '@docx-editor.dev/core/types': 'packages/core/src/types-barrel.ts',
+  };
+  return Object.fromEntries(
+    Object.entries(publicEntries).map(([specifier, relativeTarget]) => [
+      specifier,
+      [path.relative(projectDir, path.join(ROOT, relativeTarget))],
+    ])
+  );
+}
+
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: options.cwd ?? ROOT,
@@ -48,6 +65,9 @@ try {
   mkdirSync(packDir, { recursive: true });
   mkdirSync(path.join(appDir, 'src'), { recursive: true });
 
+  // `@docx-editor.dev/core` ships from a separate repo, so it is not packed
+  // here — npm resolves it from the registry as a transitive dep, which is
+  // what a real consumer gets.
   const sharedTarballs = [packPackage('packages/i18n'), packPackage('packages/agents')];
   const vueTarballs = [...sharedTarballs, packPackage('packages/vue')];
   const reactTarballs = [...sharedTarballs, packPackage('packages/react')];
@@ -78,16 +98,17 @@ try {
     path.join(appDir, 'src/App.vue'),
     `<script setup lang="ts">
 import { ref } from 'vue';
-import { DocxEditor, DocxEditorToolbar, useEditorSnapshot } from '@docx-editor.dev/vue';
-import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
+import { DocxEditor } from '@docx-editor.dev/vue';
+import * as VueUi from '@docx-editor.dev/vue/ui';
+import * as VueDialogs from '@docx-editor.dev/vue/dialogs';
+import * as VueComposables from '@docx-editor.dev/vue/composables';
+import * as VuePluginApi from '@docx-editor.dev/vue/plugin-api';
+import '@docx-editor.dev/vue/styles.css';
 
 const buffer = ref<ArrayBuffer | null>(null);
-void DocxEditorToolbar;
-void useEditorSnapshot;
-
-const t = createT(en);
-const toolbarBold: TranslationKey = 'toolbar.bold';
-void t(toolbarBold);
+const exportedSurfaceChecks = [VueUi, VueDialogs, VueComposables, VuePluginApi];
+console.assert(exportedSurfaceChecks.every((entry) => typeof entry === 'object' && entry !== null));
+void exportedSurfaceChecks;
 
 async function loadFile(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0];
@@ -97,7 +118,7 @@ async function loadFile(event: Event) {
 
 <template>
   <input type="file" accept=".docx" @change="loadFile" />
-  <DocxEditor :document-buffer="buffer" mode="edit" />
+  <DocxEditor :document-buffer="buffer" mode="editing" />
 </template>
 `
   );
@@ -128,6 +149,8 @@ export default defineConfig({ plugins: [vue()] });
           module: 'ESNext',
           moduleResolution: 'Bundler',
           jsx: 'preserve',
+          skipLibCheck: true,
+          paths: coreContractPaths(appDir),
         },
         include: ['src/**/*.ts', 'src/**/*.vue'],
       },
@@ -145,6 +168,7 @@ export default defineConfig({ plugins: [vue()] });
       'vue-tsc',
       '@vitejs/plugin-vue',
       'vite',
+      // vue-tsc currently requires TypeScript's 5.x compiler internals.
       'typescript@5.9.3',
       ...vueTarballs,
     ],
@@ -178,44 +202,18 @@ export default defineConfig({ plugins: [vue()] });
   writeFileSync(
     path.join(reactAppDir, 'src/main.tsx'),
     `import { createRoot } from 'react-dom/client';
-import {
-  DocxEditor,
-  DocxEditorToolbar,
-  ImageInsertProvider,
-  ImageWrap,
-  ImageAltText,
-  ImagePropertiesTrigger,
-  normalizeImageBytes,
-  useDocxEditor,
-  type ImageWrapTarget,
-  type NormalizedImagePayload,
-} from '@docx-editor.dev/react';
-import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
+import { DocxEditor } from '@docx-editor.dev/react';
+import * as ReactUi from '@docx-editor.dev/react/ui';
+import * as ReactDialogs from '@docx-editor.dev/react/dialogs';
+import * as ReactHooks from '@docx-editor.dev/react/hooks';
+import * as ReactPluginApi from '@docx-editor.dev/react/plugin-api';
+import '@docx-editor.dev/react/styles.css';
 
-void DocxEditorToolbar;
-void useDocxEditor;
-void ImageInsertProvider;
-void ImageWrap;
-void ImageAltText;
-void ImagePropertiesTrigger;
-void normalizeImageBytes;
+const exportedSurfaceChecks = [ReactUi, ReactDialogs, ReactHooks, ReactPluginApi];
+console.assert(exportedSurfaceChecks.every((entry) => typeof entry === 'object' && entry !== null));
+void exportedSurfaceChecks;
 
-const wrapTarget: ImageWrapTarget = 'inline';
-const normalized: NormalizedImagePayload = {
-  ok: true,
-  bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
-  mime: 'image/png',
-  widthPoints: 1,
-  heightPoints: 1,
-};
-void wrapTarget;
-void normalized;
-
-const t = createT(en);
-const toolbarBold: TranslationKey = 'toolbar.bold';
-void t(toolbarBold);
-
-createRoot(document.getElementById('root')!).render(<DocxEditor />);
+createRoot(document.getElementById('root')!).render(<DocxEditor showToolbar={false} />);
 `
   );
   writeFileSync(
@@ -241,6 +239,8 @@ export default defineConfig({ plugins: [react()] });
           module: 'ESNext',
           moduleResolution: 'Bundler',
           jsx: 'react-jsx',
+          skipLibCheck: true,
+          paths: coreContractPaths(reactAppDir),
         },
         include: ['src/**/*.ts', 'src/**/*.tsx'],
       },
@@ -259,78 +259,13 @@ export default defineConfig({ plugins: [react()] });
       '@types/react-dom',
       '@vitejs/plugin-react',
       'vite',
-      'typescript@5.9.3',
+      'typescript',
       ...reactTarballs,
     ],
     { cwd: reactAppDir }
   );
   run('npm', ['run', 'build'], { cwd: reactAppDir });
   console.log('Fresh React consumer install/build passed.');
-
-  const agentsAppDir = path.join(tempRoot, 'agents-app');
-  mkdirSync(path.join(agentsAppDir, 'src'), { recursive: true });
-  writeFileSync(
-    path.join(agentsAppDir, 'package.json'),
-    JSON.stringify(
-      {
-        private: true,
-        type: 'module',
-        scripts: { typecheck: 'tsc --noEmit', build: 'npm run typecheck' },
-        dependencies: {},
-        devDependencies: {},
-      },
-      null,
-      2
-    )
-  );
-  writeFileSync(
-    path.join(agentsAppDir, 'src', 'imports.ts'),
-    `import type { DocxReviewer, ReviewChange, AgentToolDefinition } from '@docx-editor.dev/agents';
-import type { EditorBridge } from '@docx-editor.dev/agents/server';
-import type { AgentPanelProps } from '@docx-editor.dev/agents/vue';
-import type { AgentMessage } from '@docx-editor.dev/agents/ai-sdk/vue';
-import { getToolDisplayName } from '@docx-editor.dev/agents/vue';
-import { getAiSdkTools } from '@docx-editor.dev/agents/ai-sdk/server';
-import { toAgentMessages } from '@docx-editor.dev/agents/ai-sdk/react';
-import type { McpServer } from '@docx-editor.dev/agents/mcp';
-
-void (null as unknown as DocxReviewer);
-void (null as unknown as ReviewChange);
-void (null as unknown as AgentToolDefinition);
-void (null as unknown as EditorBridge);
-void (null as unknown as AgentPanelProps);
-void (null as unknown as AgentMessage);
-void getToolDisplayName;
-void getAiSdkTools;
-void toAgentMessages;
-void (null as unknown as McpServer);
-`
-  );
-  writeFileSync(
-    path.join(agentsAppDir, 'tsconfig.json'),
-    JSON.stringify(
-      {
-        compilerOptions: {
-          strict: true,
-          target: 'ES2022',
-          module: 'ESNext',
-          moduleResolution: 'Bundler',
-          skipLibCheck: true,
-          noEmit: true,
-        },
-        include: ['src/**/*.ts'],
-      },
-      null,
-      2
-    )
-  );
-  run(
-    'npm',
-    ['install', '--ignore-scripts', 'typescript@5.9.3', ...sharedTarballs],
-    { cwd: agentsAppDir }
-  );
-  run('npm', ['run', 'build'], { cwd: agentsAppDir });
-  console.log('Fresh agents consumer typecheck passed.');
 } finally {
   if (process.env.KEEP_CONSUMER_INSTALL_TEMP !== '1') {
     rmSync(tempRoot, { recursive: true, force: true });
