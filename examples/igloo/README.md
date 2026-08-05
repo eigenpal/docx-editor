@@ -180,6 +180,27 @@ Full reference: [`docs/CUSTOMIZING.md`](../../docs/CUSTOMIZING.md).
   `rsvg-convert -w 1200 -h 630 public/og/igloo-card.svg -o public/og/igloo.png`.
 - The default document is `public/sample-igloo.docx` — the shared sample with an iceberg and
   an igloo already saved into it, so the custom nodes and their rail cards are on screen
-  before anyone touches a menu. `?fixture=<name>.docx` swaps in the Vite example's
-  `sample.docx` or any e2e fixture, mapped onto the real path by a vite plugin so a second
-  copy of somebody else's file cannot drift.
+  before anyone touches a menu. `?fixture=sample.docx` swaps in the Vite example's copy,
+  mapped onto the real path by a vite plugin so a second copy of somebody else's file cannot
+  drift. That is the only fixture the plugin serves; `e2e/fixtures/` is off limits, because
+  those files change to suit a test run and this demo is deployed.
+
+## Deploying
+
+`vercel.json` covers the build. It is its own Vercel project, separate from the parity demo
+the repo root deploys, with **Root Directory** set to `examples/igloo`.
+
+Two settings live in the project rather than the file, and it does not build without either:
+
+- **Include source files outside of the Root Directory: on.** `vite.config.ts` aliases the
+  library to `../../packages/*/src`, and the fixture plugin reads
+  `../../examples/vite/public/sample.docx` and emits it into the bundle.
+- **Production Branch: `docx-editor-v2`.** This directory does not exist on `main`.
+
+`build:packages:demo` runs first because only `react`, `i18n` and the `core/*` subpaths are
+aliased to source. `pro` and `fonts` resolve through node_modules to their `dist/`, which a
+clean clone does not have. The install step clears `node_modules` for the reason the root
+`vercel.json` does: the build cache and a symlinked workspace disagree.
+
+An **Ignored Build Step** of `git diff --quiet HEAD^ HEAD -- examples/igloo packages` keeps
+docs and spec commits from rebuilding it.
