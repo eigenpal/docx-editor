@@ -358,7 +358,14 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
   if (reach.kind === 'control') {
     const chain = enclosingContentControls(part, reach.controlId);
     const own = chain[chain.length - 1];
-    if (!own) return NOTHING;
+    // A NAME THAT IS NOT A CONTROL BUYS NOTHING. Being addressed at a control is what forms
+    // protection exempts, so a reach that says so and cannot produce the control is the shape a
+    // forged one has — resolving it to "nothing touched, nothing unprotected" would let any node
+    // in a protected document be written to by claiming to be a field. Validation refuses these
+    // too; this is the half that runs before it, at the package gate.
+    if (!own || own.id !== reach.controlId || own.kind !== 'contentControl') {
+      return { touches: [], unprotected: [part.root.id] };
+    }
     return {
       touches: [{ control: own, locks: locksOf(chain), removed: reach.intent === 'removal' }],
       // A write ADDRESSED to a control is what forms protection exists to allow; changing or
@@ -568,9 +575,11 @@ export function contentControlBindingRefusal(
   op: TreeDocOp
 ): TreeOpRejection | null {
   const reach = treeOpReach(op);
-  // Metadata and removal do not touch the bound value; a value write is refused by its applier
-  // with the same code, where the control is already resolved.
-  if (reach.kind === 'control') return null;
+  // Metadata and removal do not touch the bound value. A VALUE write does, and is refused here
+  // rather than left to an applier: `setContentControlValue` has one that answers this, but an
+  // insertion that merely NAMES the control it writes into reaches the same content through the
+  // ordinary text path, where no applier was looking.
+  if (reach.kind === 'control' && reach.intent !== 'value') return null;
   // A document-scoped op does not write the bound value either: page setup and note settings
   // cannot desync a custom XML part, and refusing them would make a bound field freeze the
   // document's own layout.

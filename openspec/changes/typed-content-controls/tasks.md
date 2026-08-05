@@ -43,6 +43,8 @@
 - [x] 4.9 Own a control's LEADING edge and not its trailing one, matching where an insertion applied at a boundary offset actually lands, and let a caller name the control it writes into when the offset cannot say
 - [x] 4.10 Keep a `w:lock` to content: page setup, section furniture and note numbering are the document's own properties and are not refused by a locked control, while forms protection still refuses them
 - [x] 4.11 Resolve the forms-protection exemption from the range an operation addresses, so an unlocked INLINE field can be filled in while the paragraph holding it stays protected
+- [x] 4.12 Validate a named insertion owner before resolving anything against it — a typed control, on the addressed paragraph's ancestor line, holding the addressed offset — and fail an unresolvable control reach closed, so a forged name cannot claim the forms-protection exemption
+- [x] 4.13 Refuse a bound control's content for a value-reaching insertion in validation, not only in the value applier, so the insert-text command cannot desync a `w:dataBinding` control
 - [x] 4.5 Prove enforcement from a path that never touches the surface, so the claim is about the store and not the widget
 - [ ] 4.6 Surface the lock as a disabled control with the engine's own reason before the user types
 

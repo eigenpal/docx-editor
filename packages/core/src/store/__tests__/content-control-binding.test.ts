@@ -323,3 +323,73 @@ describe('nesting: a binding on either side is enough to refuse', () => {
     ).toBeNull();
   });
 });
+
+// A CALLER THAT NAMES THE CONTROL IT WRITES INTO IS STILL WRITING INTO IT. `insertText.inside`
+// classifies the operation as a value write addressed AT a control, which is exactly the write a
+// binding refuses — the name changes where the text goes, not whether the document may hold it.
+describe('naming the control does not get around its binding', () => {
+  const boundInline = () =>
+    parseDoc(
+      `<w:p><w:r><w:t>abc</w:t></w:r>` +
+        `<w:sdt><w:sdtPr><w:tag w:val="f"/>` +
+        `<w:dataBinding w:xpath="/a/b" w:storeItemID="{2C0E8B1A-1111-2222-3333-444455556666}"/>` +
+        `</w:sdtPr><w:sdtContent><w:r><w:t>MID</w:t></w:r></w:sdtContent></w:sdt>` +
+        `<w:r><w:t>xyz</w:t></w:r></w:p>`
+    );
+
+  test('an insertion naming a bound control is refused at its trailing edge', () => {
+    const part = boundInline();
+    expect(
+      refusal(part, {
+        op: 'insertText',
+        paragraphId: paragraphs(part)[0]!.id,
+        offset: 6,
+        text: 'PWNED',
+        inside: contentControlsIn(part.root)[0]!.node.id,
+      })
+    ).toBe('bound');
+  });
+
+  test('and at its leading edge', () => {
+    const part = boundInline();
+    expect(
+      refusal(part, {
+        op: 'insertText',
+        paragraphId: paragraphs(part)[0]!.id,
+        offset: 3,
+        text: 'PWNED',
+        inside: contentControlsIn(part.root)[0]!.node.id,
+      })
+    ).toBe('bound');
+  });
+
+  test('and the content the file wrote is still the content it holds', () => {
+    const part = boundInline();
+    const result = applyTreeOp(part, {
+      op: 'insertText',
+      paragraphId: paragraphs(part)[0]!.id,
+      offset: 6,
+      text: 'PWNED',
+      inside: contentControlsIn(part.root)[0]!.node.id,
+    });
+    expect(result.ok).toBe(false);
+    expect(serializeOoxmlPart(part)).not.toContain('PWNED');
+  });
+
+  test('a bound BLOCK control refuses a named insertion too', () => {
+    const part = parseDoc(
+      `<w:sdt><w:sdtPr><w:tag w:val="b"/>` +
+        `<w:dataBinding w:xpath="/a/b" w:storeItemID="{2C0E8B1A-1111-2222-3333-444455556666}"/>` +
+        `</w:sdtPr><w:sdtContent><w:p><w:r><w:t>MID</w:t></w:r></w:p></w:sdtContent></w:sdt>`
+    );
+    expect(
+      refusal(part, {
+        op: 'insertText',
+        paragraphId: paragraphs(part)[0]!.id,
+        offset: 3,
+        text: 'PWNED',
+        inside: contentControlsIn(part.root)[0]!.node.id,
+      })
+    ).toBe('bound');
+  });
+});

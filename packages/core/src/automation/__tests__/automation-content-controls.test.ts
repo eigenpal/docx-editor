@@ -482,6 +482,36 @@ describe('a script writes through the same refusals the keyboard meets', () => {
     expect(savedMainXml(host)).toContain('xyz');
   });
 
+  // The shipped command, on a control whose value belongs to a custom XML part. `replace` was
+  // always refused; the two edges reach the same content through an ordinary insertion, and a
+  // binding that only the value path honoured would be a binding the command could walk around.
+  test.each(['replace', 'start', 'end'] as const)(
+    'inserting at %s of a bound control is refused',
+    (at) => {
+      const host = open(
+        docx(
+          `<w:p><w:r><w:t>abc</w:t></w:r>` +
+            `<w:sdt><w:sdtPr><w:tag w:val="f"/><w:text/>` +
+            `<w:dataBinding w:xpath="/a/b" w:storeItemID="{2C0E8B1A-1111-2222-3333-444455556666}"/>` +
+            `</w:sdtPr><w:sdtContent><w:r><w:t>MID</w:t></w:r></w:sdtContent></w:sdt>` +
+            `<w:r><w:t>xyz</w:t></w:r></w:p>`
+        )
+      );
+      const control = controlsOf(host, roots(host).body)[0]!;
+      expect(
+        refusedBecause(
+          host.execute({
+            operations: [
+              { op: 'insertContentControlText', contentControl: control, text: 'PWNED', at },
+            ],
+          })
+        )
+      ).toBe('transaction-refused/bound');
+      expect(savedMainXml(host)).not.toContain('PWNED');
+      expect(savedMainXml(host)).toContain('MID');
+    }
+  );
+
   test('an insertion into a locked inline control is refused wherever it lands', () => {
     const host = open(
       docx(

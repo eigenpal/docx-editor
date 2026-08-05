@@ -246,6 +246,77 @@ describe('forms protection over an inline field', () => {
     expect(typeAt(pkg, 4)).toBeNull();
   });
 
+  // A WRITE THAT CLAIMS TO BE FILLING IN A FIELD HAS TO BE. `insertText.inside` classifies the
+  // operation as addressed at a control, which is the one reach forms protection exempts, so a
+  // name nobody checked is a way to write anywhere in a protected document by asserting that the
+  // write was a field. The exemption holds only for a name that resolves to a real control which
+  // really encloses the write.
+  describe('a forged owner does not buy the exemption', () => {
+    test('naming the paragraph itself is refused', () => {
+      const pkg = build(inlineBody(), FORMS);
+      const paragraph = paragraphIds(pkg)[0]!;
+      expect(
+        refusal(pkg, {
+          op: 'insertText',
+          paragraphId: paragraph,
+          offset: 0,
+          text: 'X',
+          inside: paragraph,
+        })
+      ).not.toBeNull();
+    });
+
+    test('naming a control in another paragraph is refused', () => {
+      const pkg = build(
+        `<w:p><w:r><w:t>read only</w:t></w:r></w:p>` +
+          `<w:p><w:sdt><w:sdtPr><w:tag w:val="f"/></w:sdtPr>` +
+          `<w:sdtContent><w:r><w:t>MID</w:t></w:r></w:sdtContent></w:sdt></w:p><w:sectPr/>`,
+        FORMS
+      );
+      const main = pkg.parts.get(pkg.mainDocumentPart)!;
+      const far = contentControlsIn(main.root)[0]!.node;
+      expect(
+        refusal(pkg, {
+          op: 'insertText',
+          paragraphId: paragraphIds(pkg)[0]!,
+          offset: 0,
+          text: 'X',
+          inside: far.id,
+        })
+      ).not.toBeNull();
+    });
+
+    test('and naming the field a write really is in still fills it in', () => {
+      const pkg = build(inlineBody(), FORMS);
+      const main = pkg.parts.get(pkg.mainDocumentPart)!;
+      const control = contentControlsIn(main.root)[0]!.node;
+      expect(
+        refusal(pkg, {
+          op: 'insertText',
+          paragraphId: paragraphIds(pkg)[0]!,
+          offset: span(pkg).end,
+          text: 'X',
+          inside: control.id,
+        })
+      ).toBeNull();
+    });
+
+    test('but not when that field is locked', () => {
+      const pkg = build(inlineBody('contentLocked'), FORMS);
+      const main = pkg.parts.get(pkg.mainDocumentPart)!;
+      const control = contentControlsIn(main.root)[0]!.node;
+      expect(
+        refusal(pkg, {
+          op: 'insertText',
+          paragraphId: paragraphIds(pkg)[0]!,
+          offset: span(pkg).end,
+          text: 'X',
+          inside: control.id,
+        })
+      ).toBe('locked');
+    });
+  });
+
   test('a paragraph-wide property write is still refused: that is not filling in a field', () => {
     const pkg = build(inlineBody(), FORMS);
     expect(

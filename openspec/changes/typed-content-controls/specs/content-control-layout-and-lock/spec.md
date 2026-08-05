@@ -113,6 +113,20 @@ An offset at a boundary is owned by the run that STARTS there, which is what an 
 - **THEN** the text is written into that control's own runs at either edge, keeping the formatting of the run it joins
 - **AND** the control's lock and `w:dataBinding` are resolved against that control
 
+### Requirement: A named owner is validated before anything is resolved against it
+
+Naming a control on an insertion decides where the text is written AND what the refusals are resolved against, so the name SHALL be validated before either. The name SHALL resolve to a typed content control in the addressed part; a node of any other kind — including a `w:sdt` the read demoted — SHALL be refused with `not-a-content-control`. The control SHALL lie on the same ancestor line as the addressed paragraph, holding it or held by it, and a control elsewhere in the document SHALL be refused with `unknown-content-control`. The addressed offset SHALL fall within the control's own span, and one outside it SHALL be refused with `offset-out-of-range`. A reach addressed at a control that cannot be resolved to one SHALL be treated as reaching the whole part, so a forged name is refused by forms protection even where it is resolved before validation runs.
+
+#### Scenario: A name that is not a control
+
+- **WHEN** an insertion names the addressed paragraph, a run, or a demoted `w:sdt` as its owner
+- **THEN** it is refused, and in a form-protected document it is refused as protected content rather than exempted as a field
+
+#### Scenario: A control somewhere else in the document
+
+- **WHEN** an insertion in one paragraph names a control held by another
+- **THEN** it is refused with `unknown-content-control` and neither paragraph is changed
+
 ### Requirement: Every mutating operation meets the lock, and an unclassified one fails closed
 
 Lock and forms-protection enforcement SHALL be resolved from what an operation would CHANGE, not from a list of operation names. Each `TreeDocOp` kind SHALL declare its reach — the nodes, character ranges, tracked changes, the document's own properties, or the whole part — exhaustively over the operation union, so an operation added without a declared reach does not compile. An operation whose reach cannot be resolved SHALL be treated as reaching the whole part and refused wherever protected or locked content would change. Read and part-lifecycle operations SHALL NOT be treated as content mutations.
@@ -167,12 +181,17 @@ Under `w:documentProtection @w:edit="forms"` the document is read-only EXCEPT in
 
 ### Requirement: A bound control refuses every content mutation, and removal takes the binding with it
 
-A control declaring `w:dataBinding` names a custom XML part this engine preserves without evaluating. Every content mutation targeting or intersecting such a control SHALL be refused with `bound` — ordinary typing, deletion, formatting, structural splits and tracked-change decisions, not only a value write — so the document's two answers cannot diverge. Removing the control SHALL be allowed: it removes the claim that the content mirrors a part, leaving both sides as the file wrote them. A lock SHALL still refuse the removal on its own terms.
+A control declaring `w:dataBinding` names a custom XML part this engine preserves without evaluating. Every content mutation targeting or intersecting such a control SHALL be refused with `bound` — ordinary typing, deletion, formatting, structural splits, tracked-change decisions and an insertion that names the control as its owner, not only a value write — so the document's two answers cannot diverge. The refusal SHALL be resolved in validation for every one of those paths rather than delegated to the applier of any single operation. Removing the control SHALL be allowed: it removes the claim that the content mirrors a part, leaving both sides as the file wrote them. A lock SHALL still refuse the removal on its own terms.
 
 #### Scenario: Typing inside a bound control
 
 - **WHEN** text is inserted, deleted or formatted inside a control declaring `w:dataBinding`
 - **THEN** it is refused with `bound` and the file is unchanged
+
+#### Scenario: The insert-text command on a bound control
+
+- **WHEN** the object model inserts text at the start, the end, or in place of a bound control's value
+- **THEN** all three are refused with `bound` and the control still holds what the file wrote
 
 #### Scenario: Metadata is not the bound value
 

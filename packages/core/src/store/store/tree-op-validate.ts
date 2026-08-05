@@ -24,7 +24,13 @@ import {
   sectionChild,
   targetSectionNodes,
 } from './tree-op-section-address.ts';
-import { isParagraph, paragraphLength, segmentsOf, splitsSurrogate } from './tree-op-segments.ts';
+import {
+  isParagraph,
+  paragraphLength,
+  paragraphOffsetIndex,
+  segmentsOf,
+  splitsSurrogate,
+} from './tree-op-segments.ts';
 import {
   ACCEPTED_PARAGRAPH_PROPERTIES,
   ACCEPTED_RUN_PROPERTIES,
@@ -105,9 +111,56 @@ function validateHyperlinkTarget(op: {
   return null;
 }
 
+/**
+ * Whether the control an insertion names is one it could actually be writing into.
+ *
+ * Three things have to hold, and each of them is a way in if it does not. The name must resolve
+ * to a TYPED content control — a paragraph, a run, or a `w:sdt` the read demoted is not something
+ * this engine can address as a field. The control and the addressed paragraph must be on one
+ * ancestor line: a block control holds the paragraph, an inline control sits in it, and a control
+ * somewhere else in the document is not the owner of this write however sincerely it is named.
+ * And the offset must fall in the control's own span, so the write lands where the name claims.
+ */
+function namedOwnerRefusal(
+  part: OoxmlPart,
+  paragraphId: string,
+  offset: number,
+  inside: string
+): TreeOpRejection | null {
+  if (typeof inside !== 'string' || inside.length === 0) return 'invalidArgs';
+  const owner = findNode(part, inside);
+  if (!owner) return 'unknown-content-control';
+  if (owner.kind !== 'contentControl') return 'not-a-content-control';
+  const paragraph = findNode(part, paragraphId);
+  if (!paragraph || !isParagraph(paragraph)) return null;
+  // A block control holds the paragraph; an inline control is held by it. Anything else is a
+  // control in some other part of the document.
+  if (holds(owner, paragraphId)) return null;
+  if (!holds(paragraph, inside)) return 'unknown-content-control';
+  const span = paragraphOffsetIndex(paragraph).spanOf(owner);
+  if (!span) return 'unknown-content-control';
+  if (offset < span.start || offset > span.end) return 'offset-out-of-range';
+  return null;
+}
+
+function holds(node: OoxmlNode, id: string): boolean {
+  if (node.id === id) return true;
+  if (node.kind === 'textValue') return false;
+  return node.children.some((child) => holds(child, id));
+}
+
 /** Structural validation, run before any tree work so a rejection changes nothing. */
 export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection | null {
   if (!TREE_DOC_OP_KINDS.includes(op.op)) return 'unknown-op';
+
+  // A NAMED OWNER IS AN ASSERTION ABOUT THE DOCUMENT, so it is checked before anything acts on
+  // it. `inside` decides where the text goes AND what the refusals are resolved against — a name
+  // that is not a control the write lands in would classify the op as filling in a field, which
+  // is the one thing forms protection lets through.
+  if (op.op === 'insertText' && op.inside !== undefined) {
+    const owner = namedOwnerRefusal(part, op.paragraphId, op.offset, op.inside);
+    if (owner) return owner;
+  }
 
   // A lock is checked FIRST and for the whole editing vocabulary, so no op reaches the tree
   // that a control forbids. The appliers for the control ops themselves resolve their own

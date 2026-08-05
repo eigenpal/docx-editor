@@ -561,3 +561,150 @@ describe('an insertion can name the control it belongs to', () => {
     ).toBe('unknown-content-control');
   });
 });
+
+// `inside` SAYS WHERE THE TEXT GOES, so what it names has to be checked before it is believed.
+// A name that resolves to a paragraph, to a control in another paragraph, or to nothing at all
+// would otherwise be taken at its word: the operation would classify as a value write addressed
+// at a control — the reach that forms protection exempts — while the applier wrote wherever the
+// offset pointed. The name is validated against the addressed paragraph, and a bad one refuses.
+describe('a named owner is checked before it is trusted', () => {
+  const oneControl = () =>
+    parseDoc(
+      `<w:p><w:r><w:t>abc</w:t></w:r>` +
+        `<w:sdt><w:sdtPr><w:tag w:val="f"/></w:sdtPr>` +
+        `<w:sdtContent><w:r><w:t>MID</w:t></w:r></w:sdtContent></w:sdt>` +
+        `<w:r><w:t>xyz</w:t></w:r></w:p>` +
+        `<w:p><w:r><w:t>elsewhere</w:t></w:r>` +
+        `<w:sdt><w:sdtPr><w:tag w:val="g"/></w:sdtPr>` +
+        `<w:sdtContent><w:r><w:t>FAR</w:t></w:r></w:sdtContent></w:sdt></w:p>`
+    );
+
+  test('a name that is a paragraph, not a control, is refused', () => {
+    const part = oneControl();
+    expect(
+      refusal(part, {
+        op: 'insertText',
+        paragraphId: paragraphs(part)[0]!.id,
+        offset: 0,
+        text: 'X',
+        inside: paragraphs(part)[0]!.id,
+      })
+    ).toBe('not-a-content-control');
+  });
+
+  test('a name that is a run inside the control is refused as well', () => {
+    const part = oneControl();
+    const control = contentControlsIn(part.root)[0]!.node;
+    const run = findRun(control);
+    expect(
+      refusal(part, {
+        op: 'insertText',
+        paragraphId: paragraphs(part)[0]!.id,
+        offset: 4,
+        text: 'X',
+        inside: run.id,
+      })
+    ).toBe('not-a-content-control');
+  });
+
+  test('a control in another paragraph is not this paragraph’s owner', () => {
+    const part = oneControl();
+    const far = contentControlsIn(part.root)[1]!.node;
+    expect(
+      refusal(part, {
+        op: 'insertText',
+        paragraphId: paragraphs(part)[0]!.id,
+        offset: 4,
+        text: 'X',
+        inside: far.id,
+      })
+    ).toBe('unknown-content-control');
+  });
+
+  test('and the foreign control is left exactly as it was', () => {
+    const part = oneControl();
+    const far = contentControlsIn(part.root)[1]!.node;
+    const result = applyTreeOp(part, {
+      op: 'insertText',
+      paragraphId: paragraphs(part)[0]!.id,
+      offset: 4,
+      text: 'PWNED',
+      inside: far.id,
+    });
+    expect(result.ok).toBe(false);
+    expect(serializeOoxmlPart(part)).not.toContain('PWNED');
+  });
+
+  test('an offset outside the named control’s own span is refused', () => {
+    const part = oneControl();
+    expect(
+      refusal(part, {
+        op: 'insertText',
+        paragraphId: paragraphs(part)[0]!.id,
+        offset: 0,
+        text: 'X',
+        inside: contentControlsIn(part.root)[0]!.node.id,
+      })
+    ).toBe('offset-out-of-range');
+  });
+
+  test('a demoted w:sdt is not a control to write into', () => {
+    // A `w:sdt` the read demoted to generic is markup nobody could type; naming it is a mistake,
+    // and answering it with a write would be writing into something the model does not model.
+    // Out of schema order — content before properties — so the read keeps it as generic markup.
+    const part = parseDoc(
+      `<w:p><w:r><w:t>abc</w:t></w:r>` +
+        `<w:sdt><w:sdtContent/><w:sdtPr><w:tag w:val="f"/></w:sdtPr></w:sdt></w:p>`
+    );
+    const demoted = findDemotedSdt(part);
+    expect(
+      refusal(part, {
+        op: 'insertText',
+        paragraphId: paragraphs(part)[0]!.id,
+        offset: 3,
+        text: 'X',
+        inside: demoted,
+      })
+    ).toBe('not-a-content-control');
+  });
+
+  test('the honest case still writes', () => {
+    const part = oneControl();
+    const next = apply(part, {
+      op: 'insertText',
+      paragraphId: paragraphs(part)[0]!.id,
+      offset: 6,
+      text: '#',
+      inside: contentControlsIn(part.root)[0]!.node.id,
+    });
+    expect(contentControlTextOf(contentControlsIn(next.root)[0]!.node)).toBe('MID#');
+  });
+});
+
+function findRun(node: OoxmlNode): OoxmlNode {
+  if (node.kind === 'run') return node;
+  if (node.kind === 'textValue') throw new Error('no run');
+  for (const child of node.children) {
+    try {
+      return findRun(child);
+    } catch {
+      continue;
+    }
+  }
+  throw new Error('no run');
+}
+
+function findDemotedSdt(part: OoxmlPart): string {
+  const walk = (node: OoxmlNode): string | null => {
+    if (node.kind === 'textValue') return null;
+    if (node.kind === 'generic' && node.localName === 'sdt') return node.id;
+    for (const child of node.children) {
+      const found = walk(child);
+      if (found) return found;
+    }
+    return null;
+  };
+  const found = walk(part.root);
+  if (!found) throw new Error('the read did not demote the sdt');
+  return found;
+}
