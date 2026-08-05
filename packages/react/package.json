@@ -60,7 +60,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@docx-editor.dev/agents": "workspace:*",
     "@docx-editor.dev/core-contract": "workspace:*",
     "@docx-editor.dev/i18n": "workspace:*",
     "@radix-ui/react-select": "^2.3.3",

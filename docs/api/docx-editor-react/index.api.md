@@ -567,9 +567,6 @@ export function DocxEditorShell(input: {
     outlineProps: OutlineProps;
     onToggleOutline: () => void;
     scrollPageInfo: ScrollPageInfo;
-    agentPanel: AgentPanelOptions | undefined;
-    agentPanelOpen: boolean;
-    onAgentPanelClose: () => void;
     toolbar: ReactNode;
     pagedArea: ReactNode;
     overlays: ReactNode;

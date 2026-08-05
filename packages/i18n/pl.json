@@ -904,20 +904,6 @@
   "loading": {
     "label": "Ładowanie"
   },
-  "agentPanel": {
-    "close": "Zamknij panel",
-    "composerPlaceholder": "Zapytaj asystenta…",
-    "defaultTitle": "Asystent",
-    "resizeHandle": "Zmień rozmiar panelu asystenta",
-    "send": "Wyślij",
-    "thinking": "Asystent myśli",
-    "timeline": {
-      "earlier": "+ {count, plural, one {# wcześniejszy krok} few {# wcześniejsze kroki} many {# wcześniejszych kroków} other {# wcześniejszych kroków}}",
-      "summary": "{count, plural, one {# krok} few {# kroki} many {# kroków} other {# kroków}}",
-      "working": "Pracuję… {count, plural, one {# krok} few {# kroki} many {# kroków} other {# kroków}}"
-    },
-    "toggle": "Otwórz asystenta"
-  },
   "viewer": {
     "pageIndicator": "{current} z {total}"
   },
