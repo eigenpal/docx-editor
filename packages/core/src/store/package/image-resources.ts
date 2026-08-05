@@ -25,8 +25,6 @@ import {
 
 export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif';
 export type PreservedImageMime = 'image/svg+xml' | 'image/tiff' | 'image/x-emf' | 'image/x-wmf';
-/** What a `ready` resource can carry: decoded rasters, or host-converted metafile SVG. */
-export type RenderableImageMime = SupportedImageMime | 'image/svg+xml';
 export type MetafileImageMime = 'image/x-emf' | 'image/x-wmf';
 
 export type { ImageResourceLimits };
@@ -43,7 +41,7 @@ export type ImageResourceState =
       readonly contentId: string;
       readonly resourceKey: string;
       readonly validatedHandle: ValidatedImageBytesHandle;
-      readonly mime: RenderableImageMime;
+      readonly mime: SupportedImageMime;
       readonly pixelWidth: number;
       readonly pixelHeight: number;
       readonly dpiX: number;
@@ -75,16 +73,16 @@ export interface ImageDecodePort {
     limits: ImageResourceLimits
   ): Promise<Readonly<{ pixelWidth: number; pixelHeight: number; dpiX: number; dpiY: number }>>;
   /**
-   * Optional metafile (EMF/WMF) → SVG conversion. The returned SVG is validated at this
-   * trust boundary (bounded `<svg` root, encoded-size and pixel caps) and only ever
-   * reaches the DOM through a blob-URL `<img>`, where scripts and external loads are
-   * inert. Absent (or throwing), the metafile keeps its labelled placeholder.
+   * Optional metafile (EMF/WMF) → raster conversion. The returned bytes are untrusted
+   * and re-enter the full raster validation path (sniff, header, pixel caps, decode)
+   * before they can become a ready resource. A null return declines the format and
+   * keeps the labelled placeholder; so does a throw, as `decode-failed`.
    */
   convertMetafile?(
     bytes: Uint8Array,
     mime: MetafileImageMime,
     limits: ImageResourceLimits
-  ): Promise<Readonly<{ svgBytes: Uint8Array; pixelWidth: number; pixelHeight: number }> | null>;
+  ): Promise<Readonly<{ bytes: Uint8Array; mime: SupportedImageMime }> | null>;
 }
 
 export interface ImageResourceLookup {
@@ -654,11 +652,7 @@ function createImageResourceCacheInternal(
       flight = new Promise<ImageResourceState>((resolve, reject) => {
         void (async () => {
           try {
-            let converted: Readonly<{
-              svgBytes: Uint8Array;
-              pixelWidth: number;
-              pixelHeight: number;
-            }> | null;
+            let converted: Readonly<{ bytes: Uint8Array; mime: SupportedImageMime }> | null;
             try {
               converted = await convert(convertCopy, metafileMime, limits);
             } catch {
@@ -676,29 +670,58 @@ function createImageResourceCacheInternal(
               return;
             }
             // The converter runs on attacker-controlled bytes; its OUTPUT is untrusted
-            // too. Re-validate at this boundary before it can become a ready resource.
-            if (converted.svgBytes.length > limits.maxEncodedBytes) {
+            // too. Converted rasters take the same validation the source raster path
+            // applies: size cap, signature sniff, header structure, pixel caps, decode.
+            if (converted.bytes.length > limits.maxEncodedBytes) {
               resolve(unrenderable(resolvedPartName, metafileMime, 'resource-limit'));
               return;
             }
-            if (!hasBoundedSvgRoot(converted.svgBytes)) {
+            const convertedSniffed = sniffImageMime(converted.bytes);
+            if (convertedSniffed !== converted.mime || !isRasterSupportedMime(convertedSniffed)) {
+              resolve(unrenderable(resolvedPartName, metafileMime, 'decode-failed'));
+              return;
+            }
+            const convertedHeader = validateRasterHeader(converted.bytes, convertedSniffed);
+            if (convertedHeader === null) {
               resolve(unrenderable(resolvedPartName, metafileMime, 'decode-failed'));
               return;
             }
             const pixelCount = checkedPixelCount(
-              converted.pixelWidth,
-              converted.pixelHeight,
+              convertedHeader.pixelWidth,
+              convertedHeader.pixelHeight,
               limits
             );
             if (pixelCount === null || !checkedDecodedRgbaBytes(pixelCount, limits)) {
               resolve(unrenderable(resolvedPartName, metafileMime, 'resource-limit'));
               return;
             }
+            let decoded: Readonly<{ pixelWidth: number; pixelHeight: number }>;
+            try {
+              decoded = await decodePort.decode(
+                snapshotBytes(converted.bytes),
+                convertedSniffed,
+                limits
+              );
+            } catch {
+              resolve(unrenderable(resolvedPartName, metafileMime, 'decode-failed'));
+              return;
+            }
+            if (startGeneration !== generation || disposed) {
+              reject(new Error('ImageResourceLookup stale'));
+              return;
+            }
+            if (
+              decoded.pixelWidth !== convertedHeader.pixelWidth ||
+              decoded.pixelHeight !== convertedHeader.pixelHeight
+            ) {
+              resolve(unrenderable(resolvedPartName, metafileMime, 'decode-failed'));
+              return;
+            }
             const resourceKey = resourceKeyOf(ownerPartName, resolvedPartName, contentId);
             const validatedHandle = validatedBytesRegistry.acquire(
               resourceKey,
               contentId,
-              snapshotBytes(converted.svgBytes)
+              snapshotBytes(converted.bytes)
             );
             validatedBytesRegistry.retain(validatedHandle);
             resolve(
@@ -708,9 +731,9 @@ function createImageResourceCacheInternal(
                 contentId,
                 resourceKey,
                 validatedHandle,
-                mime: 'image/svg+xml',
-                pixelWidth: converted.pixelWidth,
-                pixelHeight: converted.pixelHeight,
+                mime: convertedSniffed,
+                pixelWidth: convertedHeader.pixelWidth,
+                pixelHeight: convertedHeader.pixelHeight,
                 dpiX: DEFAULT_DPI,
                 dpiY: DEFAULT_DPI,
               })

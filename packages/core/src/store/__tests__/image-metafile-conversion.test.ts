@@ -1,6 +1,6 @@
-// EMF media renders through the decode-port seam: the host converts the metafile to SVG
-// once, the resource becomes an ordinary ready state with `image/svg+xml`, and paint's
-// blob-URL <img> path draws it inert. Without a converter the placeholder behavior stays.
+// EMF media renders through the decode-port seam: the host rasterizes the metafile once,
+// the converted bytes re-enter the full raster validation path, and the resource becomes
+// an ordinary ready PNG. Without a converter the placeholder behavior stays.
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
@@ -15,6 +15,13 @@ const OFFICE_DOC =
 const IMAGE_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
+const PNG_1X1 = Uint8Array.from(
+  atob(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+  ),
+  (c) => c.charCodeAt(0)
+);
+
 /** Minimal EMF: `01 00 00 00` signature dword + 84 bytes of header padding. */
 function emfBytes(): Uint8Array {
   const bytes = new Uint8Array(88);
@@ -26,8 +33,6 @@ function emfBytes(): Uint8Array {
   bytes[43] = 0x46;
   return bytes;
 }
-
-const SVG_BYTES = strToU8('<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0L1 1"/></svg>');
 
 function emfPackage() {
   const parsed = readOoxmlPackage(
@@ -57,38 +62,36 @@ function emfPackage() {
   return parsed.package;
 }
 
-function rasterRejectingPort(
-  convertMetafile?: ImageDecodePort['convertMetafile']
-): ImageDecodePort {
+function pngDecodingPort(convertMetafile?: ImageDecodePort['convertMetafile']): ImageDecodePort {
   return Object.freeze({
-    async decode(): Promise<never> {
-      throw new Error('raster decode not expected');
+    async decode() {
+      return Object.freeze({ pixelWidth: 1, pixelHeight: 1, dpiX: 96, dpiY: 96 });
     },
     ...(convertMetafile ? { convertMetafile } : {}),
   });
 }
 
 describe('metafile conversion through the decode port', () => {
-  test('EMF resolves ready as svg when the port converts it', async () => {
+  test('EMF resolves ready as PNG when the port converts it', async () => {
     const cache = createImageResourceCache(emfPackage(), {
-      decodePort: rasterRejectingPort(async (bytes, mime) => {
+      decodePort: pngDecodingPort(async (bytes, mime) => {
         expect(mime).toBe('image/x-emf');
         expect(bytes[0]).toBe(0x01);
-        return Object.freeze({ svgBytes: SVG_BYTES, pixelWidth: 795, pixelHeight: 1124 });
+        return Object.freeze({ bytes: PNG_1X1, mime: 'image/png' as const });
       }),
     });
     const state = await cache.resolveEmbedded('/word/document.xml', 'rId7');
     expect(state.kind).toBe('ready');
     if (state.kind !== 'ready') return;
-    expect(state.mime).toBe('image/svg+xml');
-    expect(state.pixelWidth).toBe(795);
-    expect(state.pixelHeight).toBe(1124);
-    expect(mintValidatedImageBytes(state.validatedHandle, state.contentId)).toEqual(SVG_BYTES);
+    expect(state.mime).toBe('image/png');
+    expect(state.pixelWidth).toBe(1);
+    expect(state.pixelHeight).toBe(1);
+    expect(mintValidatedImageBytes(state.validatedHandle, state.contentId)).toEqual(PNG_1X1);
   });
 
   test('EMF stays an unsupported-format placeholder without a converter', async () => {
     const cache = createImageResourceCache(emfPackage(), {
-      decodePort: rasterRejectingPort(),
+      decodePort: pngDecodingPort(),
     });
     const state = await cache.resolveEmbedded('/word/document.xml', 'rId7');
     expect(state).toMatchObject({
@@ -98,14 +101,10 @@ describe('metafile conversion through the decode port', () => {
     });
   });
 
-  test('a converter returning non-SVG output is refused as decode-failed', async () => {
+  test('a converter returning non-raster output is refused as decode-failed', async () => {
     const cache = createImageResourceCache(emfPackage(), {
-      decodePort: rasterRejectingPort(async () =>
-        Object.freeze({
-          svgBytes: strToU8('<script>alert(1)</script>'),
-          pixelWidth: 10,
-          pixelHeight: 10,
-        })
+      decodePort: pngDecodingPort(async () =>
+        Object.freeze({ bytes: strToU8('<script>alert(1)</script>'), mime: 'image/png' as const })
       ),
     });
     const state = await cache.resolveEmbedded('/word/document.xml', 'rId7');
@@ -114,7 +113,7 @@ describe('metafile conversion through the decode port', () => {
 
   test('a throwing converter is refused as decode-failed', async () => {
     const cache = createImageResourceCache(emfPackage(), {
-      decodePort: rasterRejectingPort(async () => {
+      decodePort: pngDecodingPort(async () => {
         throw new Error('bad metafile');
       }),
     });
@@ -122,12 +121,20 @@ describe('metafile conversion through the decode port', () => {
     expect(state).toMatchObject({ kind: 'unrenderable', reason: 'decode-failed' });
   });
 
+  test('a declining converter (null) keeps the unsupported-format placeholder', async () => {
+    const cache = createImageResourceCache(emfPackage(), {
+      decodePort: pngDecodingPort(async () => null),
+    });
+    const state = await cache.resolveEmbedded('/word/document.xml', 'rId7');
+    expect(state).toMatchObject({ kind: 'unrenderable', reason: 'unsupported-format' });
+  });
+
   test('oversized converter output is refused as resource-limit', async () => {
     const huge = new Uint8Array(64 * 1024 * 1024 + 1);
-    huge.set(strToU8('<svg xmlns="http://www.w3.org/2000/svg">'));
+    huge.set(PNG_1X1);
     const cache = createImageResourceCache(emfPackage(), {
-      decodePort: rasterRejectingPort(async () =>
-        Object.freeze({ svgBytes: huge, pixelWidth: 10, pixelHeight: 10 })
+      decodePort: pngDecodingPort(async () =>
+        Object.freeze({ bytes: huge, mime: 'image/png' as const })
       ),
     });
     const state = await cache.resolveEmbedded('/word/document.xml', 'rId7');

@@ -71,6 +71,7 @@
   "dependencies": {
     "@docx-editor.dev/i18n": "workspace:*",
     "bidi-js": "1.0.3",
+    "emf-converter": "2.0.2",
     "fast-xml-parser": "^4.5.0",
     "fflate": "^0.8.2",
     "harfbuzzjs": "1.4.0",
@@ -78,8 +79,7 @@
     "prosemirror-keymap": "^1.2.3",
     "prosemirror-model": "^1.25.4",
     "prosemirror-state": "^1.4.4",
-    "prosemirror-view": "^1.41.8",
-    "rtf.js": "3.0.9"
+    "prosemirror-view": "^1.41.8"
   },
   "peerDependencies": {
     "pdf-lib": "^1.17.1",
