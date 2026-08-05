@@ -245,7 +245,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Existing tab stops render, including right/decimal tabs and dot, hyphen and underscore leaders. Positional tabs (w:ptab) render too, so a table-of-contents line reads as one: entry left, leader dots between, page number flush right. The document\'s own w:defaultTabStop is honoured, so a metric-locale grid lands where Word puts it, in headers and footers as well as the body. A tab-stop editing UI is not built yet.',
+      "Existing tab stops render, including right/decimal tabs and dot, hyphen and underscore leaders. Positional tabs (w:ptab) render too, so a table-of-contents line reads as one: entry left, leader dots between, page number flush right. The document's own w:defaultTabStop is honoured, so a metric-locale grid lands where Word puts it, in headers and footers as well as the body. A tab-stop editing UI is not built yet.",
   },
   {
     id: 'paragraphs.frames',
@@ -606,11 +606,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'Multi-column layout',
     category: 'layout',
     editing: 'none',
-    rendering: 'none',
+    rendering: 'partial',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'The section w:cols count and gap are read and round-trip, but text does not yet flow into columns: a three-column section renders as one full-width column.',
+      "Section w:cols count, gap, separator and equal/unequal widths paginate into columns; explicit column breaks leave the break paragraph's empty remainder at the top of the next column. Balancing continuous multi-column sections is supported. Column editing chrome is not exposed.",
   },
   {
     id: 'layout.page-borders',
@@ -641,7 +641,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'First, even, and default variants are selected by the page\'s number in the document (so the alternation carries across section breaks) and editable in an open furniture scope. Programmatic `editHeaderFooter({ variant: \'even\' })` (or `evenPage: true`) creates/opens the even story and enables `w:evenAndOddHeaders` in one undo unit. React header/footer chrome can toggle different even and odd pages; Vue chrome deferred.',
+      "First, even, and default variants are selected by the page's number in the document (so the alternation carries across section breaks) and editable in an open furniture scope. Programmatic `editHeaderFooter({ variant: 'even' })` (or `evenPage: true`) creates/opens the even story and enables `w:evenAndOddHeaders` in one undo unit. React header/footer chrome can toggle different even and odd pages; Vue chrome deferred.",
   },
   {
     id: 'layout.vertical-align',

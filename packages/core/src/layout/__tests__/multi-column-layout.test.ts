@@ -110,6 +110,8 @@ describe('multi-column section layout', () => {
     );
     expect(first?.box.x).toBe(0);
     expect(second?.box.x).toBe(120);
+    // Column one holds FIRST plus the break line; column two holds the empty remainder
+    // plus SECOND. Both columns therefore reach two line heights with this measurer.
     expect(
       (
         layout.pages[0] as (typeof layout.pages)[number] & {
@@ -117,6 +119,42 @@ describe('multi-column section layout', () => {
         }
       ).columnSeparators
     ).toEqual([{ x: 104.625, y: 0, width: 0.75, height: 25.454545454545453 }]);
+  });
+
+  test('a column break in an otherwise empty paragraph leaves an empty line in the next column', () => {
+    // Word authoring form for an explicit column cut: a paragraph whose only run is the
+    // break. After the break advances the flow, the paragraph's remainder still occupies a
+    // line at the top of the new column — the empty line visible above "After Column Break"
+    // in section 19 of the comprehensive fixture.
+    const part = packageWithBody(
+      paragraph('FIRST COLUMN') +
+        '<w:p><w:r><w:br w:type="column"/></w:r></w:p>' +
+        paragraph('SECOND COLUMN') +
+        '<w:sectPr>' +
+        '<w:pgSz w:w="7200" w:h="7200"/>' +
+        '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/>' +
+        '<w:cols w:num="2" w:space="600"/>' +
+        '</w:sectPr>'
+    );
+
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+    });
+    const first = layout.pages[0]!.fragments.find((item) => fragmentText(item) === 'FIRST COLUMN');
+    const second = layout.pages[0]!.fragments.find(
+      (item) => fragmentText(item) === 'SECOND COLUMN'
+    );
+    const breakRemnant = layout.pages[0]!.fragments.find(
+      (item) =>
+        item.kind === 'paragraph' &&
+        item.box.x === second?.box.x &&
+        fragmentText(item) === '' &&
+        item.paragraphId !== second?.paragraphId
+    );
+    expect(breakRemnant).toBeDefined();
+    expect(breakRemnant!.box.y).toBe(first!.box.y);
+    expect(second!.box.y).toBeGreaterThan(breakRemnant!.box.y);
+    expect(second!.box.y - breakRemnant!.box.y).toBe(breakRemnant!.box.height);
   });
 
   test('inline content after a column break is rebroken in the new column', () => {
@@ -380,6 +418,9 @@ describe('multi-column section layout', () => {
     );
     expect(heading?.box.x).toBeLessThan(200);
     expect(afterBreak?.box.x).toBeGreaterThan(200);
+    // The break paragraph's empty remainder sits above "After Column Break" in column two,
+    // so that text starts one line below the heading rather than flush with it.
+    expect(afterBreak!.box.y).toBeGreaterThan(heading!.box.y);
     expect(
       (
         sectionPage as typeof sectionPage & {
