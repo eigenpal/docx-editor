@@ -720,7 +720,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes:
       'Word-native tracked changes written through the automation object model, against DOCX bytes on a server or an editor open in a page.',
-    docsLink: '/docs/1.x/agents',
+    docsLink: '/docs/1.x/editor-api',
   },
   {
     id: 'review.moves',
@@ -954,7 +954,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes:
       'Batching object model shaped after a documented subset of the Word JavaScript API; server entry over bytes, browser entry over an open editor. No model integration, tool catalog or MCP transport ships with it.',
-    docsLink: '/docs/1.x/agents',
+    docsLink: '/docs/1.x/editor-api',
   },
 ];
 

@@ -5,7 +5,7 @@ describe('forgotten export policy', () => {
   test('accepts the reviewed internal/plumbing allowlist only', () => {
     expect(
       policy.evaluateForgottenExportPolicy({
-        packageName: '@docx-editor.dev/agents',
+        packageName: '@docx-editor.dev/editor-api',
         isLocal: false,
         allowlist: {
           index: ['RuntimeSession'],
@@ -28,7 +28,7 @@ describe('forgotten export policy', () => {
     for (const isLocal of [true, false]) {
       expect(
         policy.evaluateForgottenExportPolicy({
-          packageName: '@docx-editor.dev/agents',
+          packageName: '@docx-editor.dev/editor-api',
           isLocal,
           allowlist: {
             index: ['RuntimeSession'],
@@ -47,7 +47,7 @@ describe('forgotten export policy', () => {
   test('fails stale allowlist entries once the warning disappears', () => {
     expect(
       policy.evaluateForgottenExportPolicy({
-        packageName: '@docx-editor.dev/agents',
+        packageName: '@docx-editor.dev/editor-api',
         isLocal: false,
         allowlist: {
           index: ['RuntimeSession', 'QueuedAction'],
@@ -63,7 +63,7 @@ describe('forgotten export policy', () => {
   test('rejects allowlisting package-owned public symbols', () => {
     expect(
       policy.evaluateForgottenExportPolicy({
-        packageName: '@docx-editor.dev/agents',
+        packageName: '@docx-editor.dev/editor-api',
         isLocal: false,
         allowlist: {
           index: ['DocumentCapabilities', 'Paragraph'],

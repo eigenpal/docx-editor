@@ -1,0 +1,55 @@
+---
+title: 'Word JS API compatibility'
+description: 'What subset of the Word JavaScript object model DocxEditor implements, where the shape comes from, and what it deliberately omits.'
+category: 'Editor API'
+order: 53
+---
+
+`@docx-editor.dev/editor-api` exposes the DocxEditor API. Its shape lets code written against Word's JavaScript object model compile against it. `context.document.body.paragraphs`, `load()` then `sync()`, `search(text, options)`, `getFirstOrNullObject()` and `isNullObject` all mean here what they mean there.
+
+That is a compatibility claim about **shape**, and it is worth being exact about what it is not:
+
+- It is **not Office.js**. It does not run in an Office add-in host, there is no `Office.onReady`, and there is no `Word.run` — a batch is opened by a runtime you constructed, with `DocxEditor.createServer(bytes)` or `DocxEditor.createBrowser(editor)`.
+- It **depends on no Microsoft package**. Every type in the public surface is authored in this repository. Nothing is vendored, copied, or code-generated from Microsoft's declarations.
+- It is a **subset**, and the omissions below are the interesting part.
+
+## How the shape is kept honest
+
+Microsoft's published declarations are used as reference-only conformance input, never as a dependency. A checked-in manifest allowlists which symbols and members the surface is measured against; a network-capable maintainer script reads a pinned `@types/office-js` release into a normalized fixture of names and call shapes; and the repository's own hand-authored declarations are compared against that fixture two independent ways — a strict per-overload comparison, and generated TypeScript assertions that the real compiler checks. Representative Word samples, rewritten only in their namespace, have to type-check against the authored declarations.
+
+None of that runs at install, test or build time. Everything CI gates on reads files already in the repository, and the published package contains no reference data at all.
+
+## What is implemented
+
+The document, its body, paragraphs, ranges and the collections over them; search with `matchCase` / `matchWholeWord`; character formatting through `font`; paragraph formatting (style, alignment, indents, spacing); lists and list items; bookmarks; sections and page setup; footnotes and endnotes; comments with replies and a resolved flag; revisions with accept and reject, individually or all at once; and content controls, addressed by id, tag or title.
+
+The lifecycle around them is the whole point: `load()` declares reads, `sync()` is the only round trip, `getFirstOrNullObject` / `getLastOrNullObject` answer an object rather than throwing, and `context.trackedObjects` keeps a proxy alive across syncs.
+
+## What is omitted
+
+Omitted means **absent**, not stubbed. There is no type in this surface shaped like the ones below, working or not, so a call site that needs one fails to compile rather than compiling and doing nothing.
+
+| Omitted                                                    | Why                                                                                                                                              |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Tables (`Table`, `TableCollection`, `TableCell`)           | The engine's table lane is not addressable from this API yet. Tables are read, laid out and painted by the editor; they are not scriptable here. |
+| Images (`InlinePicture`, and picture list levels)          | Same: no image lane targets this API yet.                                                                                                        |
+| Floating shapes and canvases (`Shape`)                     | Out of scope for the published subset.                                                                                                           |
+| Repeating sections and picture content controls            | The control kinds this lane defers. Every other control kind is readable and writable.                                                           |
+| Custom XML mapping (`ContentControl.xmlMapping`)           | A control bound to custom XML refuses writes rather than editing content whose binding it cannot maintain. Mapping is a separate lane.           |
+| Standalone hyperlinks (`Hyperlink`, `HyperlinkCollection`) | `Range.hyperlink` covers reading and writing a range's hyperlink; the standalone object model is deferred.                                       |
+| `getHtml`, `getOoxml`, `getText`, `exists`                 | Deferred with their `ClientResult` shapes; `Body.text` and `Paragraph.text` cover the loaded-read case.                                          |
+| Creating and deleting comments                             | Comments can be read, replied to and resolved. Creating one is not in this release.                                                              |
+
+A few members are implemented but deliberately shaped differently from upstream — a content control's id is a string because the file format lets a document repeat it and leave it out, and its type is reported in the file format's own vocabulary rather than Word's UI wording. Where that happens it is recorded as a divergence rather than quietly re-shaped.
+
+## Migrating an add-in
+
+1. Replace `Word.run(async (context) => { … })` with a runtime you construct: `DocxEditor.createServer(bytes)` on a server, `DocxEditor.createBrowser(editor)` in a page. The callback body is the part that stays the same.
+2. Expect the same load/sync discipline you already write. Reads still have to be declared, and a property you did not load still fails.
+3. Check the omissions above. If your add-in walks tables or inserts pictures, that work has no equivalent here yet.
+
+## Next steps
+
+- [Overview](/docs/1.x/editor-api) — the object model, server and browser
+- [Migrating to the object model](/docs/1.x/editor-api/migration) — from this package's earlier surfaces
+- [API reference](/docs/1.x/api/docx-editor-editor-api)

@@ -25,11 +25,13 @@ Green:
 
 Notes:
 
-- The agents entry no longer leaks `createServer`, `createBrowser`,
+- The editor API entry no longer leaks `createServer`, `createBrowser`,
   `AutomationCapabilities`, or `DocxEditorInstance` through public signatures.
 - The remaining reviewed allowlist is explicit and entry-specific.
 - Package-owned public model/capability exports are protected from being added
   to that allowlist.
+- The command evidence below retains the package name in use when it was
+  recorded. The current package is `@docx-editor.dev/editor-api`.
 
 ### H2: public docs surface and stale package claims
 
@@ -85,6 +87,6 @@ Green:
 - `bun test ./scripts/__tests__/api-extractor-forgotten-exports.test.ts ./scripts/__tests__/public-docs-surface.test.ts`
 - `bun run check:public-docs-surface`
 - `bun run check:parity`
-- `bunx prettier --write ...` on the touched scripts, docs, and agents files
+- `bunx prettier --write ...` on the touched scripts, docs, and editor API files
 - `bun test ./scripts/__tests__/public-docs-surface.test.ts`
 - `node scripts/check-public-docs-surface.mjs`

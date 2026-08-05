@@ -26,7 +26,7 @@ npm install @docx-editor.dev/nuxt
 npm install @docx-editor.dev/core
 
 # Document automation (a server on its own, or beside an adapter)
-npm install @docx-editor.dev/agents
+npm install @docx-editor.dev/editor-api
 
 # Metric-compatible substitutes for Word's default fonts (optional)
 npm install @docx-editor.dev/fonts
@@ -114,7 +114,7 @@ const doc = await parseDocx(buffer);
 const out = await repackDocx(doc);
 ```
 
-To edit through an object model instead of the raw document model, see [Automation](/docs/1.x/agents).
+To edit through an object model instead of the raw document model, see [DocxEditor API](/docs/1.x/editor-api).
 
 ## Next steps
 

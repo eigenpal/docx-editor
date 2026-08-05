@@ -13,8 +13,8 @@ const docsRoot = resolve(root, 'docs/site/content');
 const entries = {
   react: collectNamedExports(resolve(root, 'packages/react/src/index.ts')),
   vue: collectNamedExports(resolve(root, 'packages/vue/src/index.ts')),
-  automation: collectNamedExports(resolve(root, 'packages/agents/src/index.ts')),
-  automationBrowser: collectNamedExports(resolve(root, 'packages/agents/src/browser.ts')),
+  automation: collectNamedExports(resolve(root, 'packages/editor-api/src/index.ts')),
+  automationBrowser: collectNamedExports(resolve(root, 'packages/editor-api/src/browser.ts')),
 };
 
 const required = {

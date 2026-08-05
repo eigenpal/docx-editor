@@ -1,6 +1,6 @@
 # Document automation
 
-`@docx-editor.dev/agents` drives a document through a batching object model. Nothing here
+`@docx-editor.dev/editor-api` drives a document through a batching object model. Nothing here
 needs a framework, and the server half needs no browser: it opens DOCX bytes, edits them and
 writes them back.
 
@@ -11,7 +11,7 @@ bun run examples/automation/fill-template.ts examples/remix/public/sample.docx o
 ## The shape of it
 
 ```ts
-import { DocxEditor } from '@docx-editor.dev/agents';
+import { DocxEditor } from '@docx-editor.dev/editor-api';
 
 const runtime = await DocxEditor.createServer(bytes, { author: 'Payroll bot' });
 try {
@@ -52,7 +52,7 @@ Edits land in the open document, with the reader's undo stack intact, so there i
 here: the host saves the way it already did.
 
 ```ts
-import { DocxEditor } from '@docx-editor.dev/agents/browser';
+import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
 
 const runtime = DocxEditor.createBrowser(editor);
 await runtime.run(async (context) => {
@@ -82,11 +82,11 @@ stays true.
 
 ## What this is, and is not
 
-This is a DocxEditor-owned API whose shape is compatible with a documented subset of Word's
+The Office.js Word-shaped DocxEditor API is compatible with a documented subset of Word's
 JavaScript object model, so a call site written against that vocabulary compiles here. It is
-not Office.js, it does not run in an Office add-in host, and it depends on no Microsoft
-package — every type in the surface is authored in this repository.
+not Office.js, does not run in an Office add-in host, and depends on no Microsoft package.
+Every type in the surface is authored in this repository.
 
 The supported subset, and the omissions that matter (tables, images, repeating sections and
 custom XML mapping), are listed in
-[`docs/site/content/agents/word-js-api.mdx`](../../docs/site/content/agents/word-js-api.mdx).
+[`docs/site/content/editor-api/word-js-api.mdx`](../../docs/site/content/editor-api/word-js-api.mdx).

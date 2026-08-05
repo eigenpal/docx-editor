@@ -99,7 +99,7 @@ const out = processTemplate(buffer, { customer_name: "Acme GmbH", date: "2026-07
 ## When to use this vs the automation object model
 
 - **Headless core** (this page) runs code you write against the document model. Use it for template fills, extraction, format conversion steps, and pipelines where the document changes are known in advance.
-- **`@docx-editor.dev/agents`** wraps this same engine in a batching object model: reach a paragraph or a search match, queue edits against it, and one `sync()` applies them atomically. Use it when the transformation is described against document objects rather than against the raw model — including when a model decides what to change. See [Automation](/docs/1.x/agents).
+- **`@docx-editor.dev/editor-api`** wraps this same engine in a batching object model: reach a paragraph or a search match, queue edits against it, and one `sync()` applies them atomically. Use it when the transformation is described against document objects rather than against the raw model — including when a model decides what to change. See [DocxEditor API](/docs/1.x/editor-api).
 
 A pipeline can fill a template headlessly, then pass the bytes to `DocxEditor.createServer` for object-model edits.
 
@@ -107,4 +107,4 @@ A pipeline can fill a template headlessly, then pass the bytes to `DocxEditor.cr
 
 - [Core headless API](/docs/1.x/core/headless) for the full export list
 - [Content controls](/docs/1.x/guides/content-controls) for tag-addressed document generation
-- [Automation](/docs/1.x/agents) for the object-model alternative
+- [DocxEditor API](/docs/1.x/editor-api) for the object-model alternative

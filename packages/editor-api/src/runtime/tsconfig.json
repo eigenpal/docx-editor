@@ -1,0 +1,36 @@
+{
+  // The whole runtime, browser entry included, under the strictest settings the repository uses.
+  //
+  // Separate from `packages/editor-api/tsconfig.json` for the same reason `compat/tsconfig.json` is:
+  // the package around this slice is mid-rebuild, and a brand new public surface should be held to
+  // zero diagnostics now rather than whenever the rest of the package gets there. The lane checks
+  // in `__tests__/runtime-boundaries.test.ts` compile both this project and the neutral one.
+  //
+  // DOM is in `lib` here because `browser.ts` takes an editor instance. That is exactly the reach
+  // `tsconfig.neutral.json` refuses, which is why there are two projects and not one.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    // Same strictness as `packages/core/tsconfig.json`, for the reason given in
+    // `tsconfig.neutral.json`: these programs contain core's sources, and the point of these two
+    // projects is the lib boundary, not a new strictness bar for another package.
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "declaration": true,
+    "types": [],
+    "baseUrl": ".",
+    "paths": {
+      "@docx-editor.dev/core-contract/automation": ["../../../core/src/automation/index.ts"],
+      "@docx-editor.dev/core-contract/editor": ["../../../core/src/editor/index.ts"]
+    }
+  },
+  "include": ["*.ts", "examples/*.ts", "../model/*.ts", "../index.ts", "../browser.ts"],
+  "exclude": ["node_modules", "__tests__"]
+}

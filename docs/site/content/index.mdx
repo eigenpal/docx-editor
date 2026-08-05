@@ -15,7 +15,7 @@ seoTitle: 'DOCX Editor for React and Vue'
   <Card title="Evaluate fidelity" href="/docs/1.x/word-fidelity">
     Feature support, round-trip behavior, security model, API stability, and known limits.
   </Card>
-  <Card title="Automate a document" href="/docs/1.x/agents">
+  <Card title="Automate a document" href="/docs/1.x/editor-api">
     Drive a DOCX from code: on a server over bytes, or against an editor already open.
   </Card>
 </Cards>
@@ -28,7 +28,7 @@ seoTitle: 'DOCX Editor for React and Vue'
 | [`@docx-editor.dev/vue`](/docs/1.x/vue) | Vue 3 adapter. Same `<DocxEditor>`, same props and ref methods; hooks become composables. |
 | [`@docx-editor.dev/nuxt`](/docs/1.x/vue/nuxt) | Nuxt 3 & 4 module wrapping the Vue adapter. Auto-imports an SSR-safe `<DocxEditor>`. |
 | [`@docx-editor.dev/core`](/docs/1.x/core) | Framework-agnostic core: OOXML parser/serializer, document model, ProseMirror schema, layout engine. |
-| [`@docx-editor.dev/agents`](/docs/1.x/agents) | Document automation: a batching object model that drives a document from a server or from an editor already open in a page. |
+| [`@docx-editor.dev/editor-api`](/docs/1.x/editor-api) | Document automation: a batching object model that drives a document from a server or from an editor already open in a page. |
 | [`@docx-editor.dev/i18n`](/docs/1.x/i18n) | Locale data for both adapters. Ships `en`, `de`, `fr`, `he`, `hi`, `pl`, `pt-BR`, `tr`, `zh-CN`. |
 
 All packages are Apache 2.0 and released together in a fixed version group.
@@ -47,13 +47,13 @@ npm install @docx-editor.dev/react
 npm install @docx-editor.dev/vue
 ```
 
-**Server-side editing, no UI.** `-agents` opens DOCX bytes, edits them through its object model, and saves them back; `-core` if you want the document model directly.
+**Server-side editing, no UI.** `-editor-api` opens DOCX bytes, edits them through its object model, and saves them back; `-core` if you want the document model directly.
 
 ```bash
-npm install @docx-editor.dev/agents
+npm install @docx-editor.dev/editor-api
 ```
 
-**Automating an editor a reader has open.** Add `-agents` next to `-react` or `-vue` and use its `/browser` entry, which drives the editor instance the adapter already created.
+**Automating an editor a reader has open.** Add `-editor-api` next to `-react` or `-vue` and use its `/browser` entry, which drives the editor instance the adapter already created.
 
 ## What it handles
 

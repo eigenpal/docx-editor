@@ -9,7 +9,7 @@
  *   3. read the story back, to print what the document says now.
  */
 
-import { DocxEditor } from '@docx-editor.dev/agents';
+import { DocxEditor } from '@docx-editor.dev/editor-api';
 
 const VALUES: Record<string, string> = {
   '{{name}}': 'Ada Lovelace',

@@ -54,7 +54,7 @@ async function save() {
 ## Automate through the server runtime
 
 ```ts
-import { DocxEditor } from '@docx-editor.dev/agents';
+import { DocxEditor } from '@docx-editor.dev/editor-api';
 
 export async function summarize(bytes: Uint8Array) {
   const runtime = await DocxEditor.createServer(bytes, { author: 'Assistant' });

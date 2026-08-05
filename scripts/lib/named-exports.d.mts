@@ -1,9 +1,8 @@
-// Declarations for the export parser, which the parity scripts and one package test share.
+// Declarations for the export parser shared by the parity and public-docs-surface scripts.
 //
-// The scripts are plain Node modules — they run as `node scripts/*.mjs` with no build step — but
-// `packages/agents/src/__tests__/export-completeness.test.ts` imports this one, and that test is
-// inside a package typecheck. Without a declaration the import is an implicit `any`, and the fix
-// must not be to write a second parser in TypeScript that can disagree with this one.
+// The scripts are plain Node modules — they run as `node scripts/*.mjs` with no build step — but a
+// TypeScript importer inside a package typecheck would get an implicit `any` without a declaration,
+// and the fix must not be to write a second parser in TypeScript that can disagree with this one.
 
 /**
  * Top-level named exports of a TypeScript source file, following relative `export *` re-exports.

@@ -62,10 +62,10 @@ There are no separate `/ui`, `/composables`, `/dialogs`, or `/plugin-api` packag
 
 ## Automating the document
 
-`@docx-editor.dev/agents` drives a document through an object model. In Vue, the stable path today is the server entry over DOCX bytes:
+`@docx-editor.dev/editor-api` drives a document through an object model. In Vue, the stable path today is the server entry over DOCX bytes:
 
 ```ts
-import { DocxEditor } from '@docx-editor.dev/agents';
+import { DocxEditor } from '@docx-editor.dev/editor-api';
 
 const runtime = await DocxEditor.createServer(bytes, { author: 'Assistant' });
 const text = await runtime.run(async (context) => {
@@ -77,7 +77,7 @@ const text = await runtime.run(async (context) => {
 runtime.dispose();
 ```
 
-Save the result with `runtime.save()` and hand the bytes back to the editor with `ref.load(...)`. The object model and its rules are in [Automation](/docs/1.x/agents).
+Save the result with `runtime.save()` and hand the bytes back to the editor with `ref.load(...)`. The object model and its rules are in [DocxEditor API](/docs/1.x/editor-api).
 
 ## Next steps
 

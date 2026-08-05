@@ -5,10 +5,10 @@ category: 'Getting Started'
 seoTitle: 'AI DOCX editor quickstart'
 ---
 
-`@docx-editor.dev/agents` gives a model's tool calls somewhere to land. You define the tools — you own the schema, the wording and the refusal behavior — and each one does its work inside a `run` block against the document.
+`@docx-editor.dev/editor-api` gives a model's tool calls somewhere to land. You define the tools — you own the schema, the wording and the refusal behavior — and each one does its work inside a `run` block against the document.
 
 ```bash
-npm install @docx-editor.dev/agents
+npm install @docx-editor.dev/editor-api
 ```
 
 <Steps>
@@ -19,7 +19,7 @@ npm install @docx-editor.dev/agents
 On a server, from bytes. Nothing here needs a browser.
 
 ```ts
-import { DocxEditor } from '@docx-editor.dev/agents';
+import { DocxEditor } from '@docx-editor.dev/editor-api';
 
 const runtime = await DocxEditor.createServer(bytes, { author: 'Assistant' });
 ```
@@ -27,7 +27,7 @@ const runtime = await DocxEditor.createServer(bytes, { author: 'Assistant' });
 In a page instead, hand it the editor the host already created — from `@docx-editor.dev/react`, `@docx-editor.dev/vue`, or a plain page — and edits land in the open document with the reader's undo stack intact:
 
 ```ts
-import { DocxEditor } from '@docx-editor.dev/agents/browser';
+import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
 
 const runtime = DocxEditor.createBrowser(editor);
 ```
@@ -124,10 +124,10 @@ try {
 
 Earlier versions of this package shipped a fixed tool catalog, an MCP server and a chat UI. They are gone, because a tool schema is a decision about your model's interface — which operations to expose, how to describe them, what a refusal should say — and it belongs in the application that owns the model. What remains is the layer underneath, which is the part that is hard: batching, declared reads, atomic writes, and a document that ends up valid.
 
-If you were using those surfaces, [the migration guide](/docs/1.x/agents/migration) maps every removed call.
+If you were using those surfaces, [the migration guide](/docs/1.x/editor-api/migration) maps every removed call.
 
 ## Next steps
 
-- [Automation overview](/docs/1.x/agents): the object model, its four rules, and capabilities
-- [Word JS API compatibility](/docs/1.x/agents/word-js-api): the supported subset and what it omits
-- [Migration guide](/docs/1.x/agents/migration)
+- [DocxEditor API overview](/docs/1.x/editor-api): the object model, its four rules, and capabilities
+- [Word JS API compatibility](/docs/1.x/editor-api/word-js-api): the supported subset and what it omits
+- [Migration guide](/docs/1.x/editor-api/migration)

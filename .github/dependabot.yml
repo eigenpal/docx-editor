@@ -10,178 +10,118 @@
 # still get their own PR (real upgrade work).
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directory: "/"
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: 'weekly'
+      day: 'monday'
     cooldown:
       default-days: 7
     groups:
       dev-dependencies:
-        dependency-type: "development"
-        update-types: ["minor", "patch"]
+        dependency-type: 'development'
+        update-types: ['minor', 'patch']
 
-  - package-ecosystem: "npm"
-    directory: "/packages/agents"
+  - package-ecosystem: 'npm'
+    directory: '/packages/editor-api'
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: 'weekly'
+      day: 'monday'
     cooldown:
       default-days: 7
     groups:
       dev-dependencies:
-        dependency-type: "development"
-        update-types: ["minor", "patch"]
+        dependency-type: 'development'
+        update-types: ['minor', 'patch']
 
-  - package-ecosystem: "npm"
-    directory: "/packages/i18n"
+  - package-ecosystem: 'npm'
+    directory: '/packages/i18n'
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: 'weekly'
+      day: 'monday'
     cooldown:
       default-days: 7
     groups:
       dev-dependencies:
-        dependency-type: "development"
-        update-types: ["minor", "patch"]
+        dependency-type: 'development'
+        update-types: ['minor', 'patch']
 
-  - package-ecosystem: "npm"
-    directory: "/packages/react"
+  - package-ecosystem: 'npm'
+    directory: '/packages/react'
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: 'weekly'
+      day: 'monday'
     cooldown:
       default-days: 7
     groups:
       dev-dependencies:
-        dependency-type: "development"
-        update-types: ["minor", "patch"]
+        dependency-type: 'development'
+        update-types: ['minor', 'patch']
 
-  - package-ecosystem: "npm"
-    directory: "/packages/vue"
+  - package-ecosystem: 'npm'
+    directory: '/packages/vue'
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: 'weekly'
+      day: 'monday'
     cooldown:
       default-days: 7
     groups:
       dev-dependencies:
-        dependency-type: "development"
-        update-types: ["minor", "patch"]
+        dependency-type: 'development'
+        update-types: ['minor', 'patch']
 
-  - package-ecosystem: "npm"
-    directory: "/examples/agents-demo"
+  - package-ecosystem: 'npm'
+    directory: '/examples/astro'
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: 'weekly'
+      day: 'monday'
     cooldown:
       default-days: 7
     groups:
       dev-dependencies:
-        dependency-type: "development"
-        update-types: ["minor", "patch"]
+        dependency-type: 'development'
+        update-types: ['minor', 'patch']
 
-  - package-ecosystem: "npm"
-    directory: "/examples/agent-chat-demo"
+  - package-ecosystem: 'npm'
+    directory: '/examples/remix'
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: 'weekly'
+      day: 'monday'
     cooldown:
       default-days: 7
     groups:
       dev-dependencies:
-        dependency-type: "development"
-        update-types: ["minor", "patch"]
+        dependency-type: 'development'
+        update-types: ['minor', 'patch']
 
-  - package-ecosystem: "npm"
-    directory: "/examples/astro"
+  - package-ecosystem: 'npm'
+    directory: '/examples/vite'
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: 'weekly'
+      day: 'monday'
     cooldown:
       default-days: 7
     groups:
       dev-dependencies:
-        dependency-type: "development"
-        update-types: ["minor", "patch"]
+        dependency-type: 'development'
+        update-types: ['minor', 'patch']
 
-  - package-ecosystem: "npm"
-    directory: "/examples/collaboration"
+  - package-ecosystem: 'npm'
+    directory: '/examples/vue'
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: 'weekly'
+      day: 'monday'
     cooldown:
       default-days: 7
     groups:
       dev-dependencies:
-        dependency-type: "development"
-        update-types: ["minor", "patch"]
+        dependency-type: 'development'
+        update-types: ['minor', 'patch']
 
-  - package-ecosystem: "npm"
-    directory: "/examples/plugins/docxtemplater"
+  - package-ecosystem: 'github-actions'
+    directory: '/'
     schedule:
-      interval: "weekly"
-      day: "monday"
-    cooldown:
-      default-days: 7
-    groups:
-      dev-dependencies:
-        dependency-type: "development"
-        update-types: ["minor", "patch"]
-
-  - package-ecosystem: "npm"
-    directory: "/examples/plugins/hello-world"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    cooldown:
-      default-days: 7
-    groups:
-      dev-dependencies:
-        dependency-type: "development"
-        update-types: ["minor", "patch"]
-
-  - package-ecosystem: "npm"
-    directory: "/examples/remix"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    cooldown:
-      default-days: 7
-    groups:
-      dev-dependencies:
-        dependency-type: "development"
-        update-types: ["minor", "patch"]
-
-  - package-ecosystem: "npm"
-    directory: "/examples/vite"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    cooldown:
-      default-days: 7
-    groups:
-      dev-dependencies:
-        dependency-type: "development"
-        update-types: ["minor", "patch"]
-
-  - package-ecosystem: "npm"
-    directory: "/examples/vue"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    cooldown:
-      default-days: 7
-    groups:
-      dev-dependencies:
-        dependency-type: "development"
-        update-types: ["minor", "patch"]
-
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: 'weekly'
+      day: 'monday'
     cooldown:
       default-days: 7

@@ -32,13 +32,13 @@ export const PACKAGES = [
     tsconfigPath: 'packages/vue/tsconfig.api.json',
   },
   {
-    name: '@docx-editor.dev/agents',
-    root: 'packages/agents',
-    pkgSlug: 'docx-editor-agents',
+    name: '@docx-editor.dev/editor-api',
+    root: 'packages/editor-api',
+    pkgSlug: 'docx-editor-editor-api',
     // Strips dev-time `paths` for the same reason the React entry does: Extractor should
     // read the built `dist/*.d.ts` as a consumer would, not follow `@docx-editor.dev/...`
     // back into workspace source.
-    tsconfigPath: 'packages/agents/tsconfig.api.json',
+    tsconfigPath: 'packages/editor-api/tsconfig.api.json',
     // The one package whose entries are ROLLED UP into a single `.d.ts` each, so a
     // "forgotten export" here means what it says: a name a public signature hands a consumer
     // that the consumer cannot import to write the signature down. The blanket silence exists

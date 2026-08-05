@@ -91,14 +91,14 @@ export function CustomChrome({ bytes }: { bytes: Uint8Array }) {
 
 ```tsx
 import { useDocxEditor } from '@docx-editor.dev/react';
-import { DocxEditor as Automation } from '@docx-editor.dev/agents/browser';
+import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
 
 export function AutomateButton() {
   const editor = useDocxEditor();
 
   async function run() {
     if (!editor) return;
-    const runtime = Automation.createBrowser(editor);
+    const runtime = DocxEditor.createBrowser(editor);
     try {
       await runtime.run(async (context) => {
         const first = context.document.body.paragraphs.getFirst();
@@ -119,4 +119,4 @@ export function AutomateButton() {
 - [React package overview](/docs/1.x/react)
 - [Props reference](/docs/1.x/react/props)
 - [Toolbar guide](/docs/1.x/guides/toolbar)
-- [Automation](/docs/1.x/agents)
+- [DocxEditor API](/docs/1.x/editor-api)

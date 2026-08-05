@@ -1,8 +1,8 @@
 ---
-'@docx-editor.dev/agents': major
+'@docx-editor.dev/editor-api': major
 ---
 
-`@docx-editor.dev/agents` is now one thing: a document automation object model for DOCX. Everything else it used to ship — `DocxReviewer`, the editor bridge, the 14-tool catalog, the MCP server, the AI SDK adapter, and the React and Vue chat components — is removed. See MIGRATION.md for the mapping, including the calls that have no equivalent.
+Replace `@docx-editor.dev/agents` with `@docx-editor.dev/editor-api`. This hard package rename requires consumers to update their dependencies and imports. The renamed package is now one thing: a document automation object model for DOCX. Everything else the old package used to ship — `DocxReviewer`, the editor bridge, the 14-tool catalog, the MCP server, the AI SDK adapter, and the React and Vue chat components — is removed. See MIGRATION.md for the mapping, including the calls that have no equivalent.
 
 The package has two entry points. `DocxEditor.createServer(bytes)` opens DOCX bytes anywhere JavaScript runs, with no DOM and no Node builtins, and saves them back. `DocxEditor.createBrowser(editor)`, from the `./browser` subpath, drives an editor a reader already has open and leaves its lifetime, undo history and caret to the editor. The same script does the same thing on either one; the differences are declared on `runtime.capabilities` rather than discovered.
 

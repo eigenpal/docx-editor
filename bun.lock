@@ -67,7 +67,7 @@
     "examples/automation": {
       "name": "automation-example",
       "dependencies": {
-        "@docx-editor.dev/agents": "workspace:*",
+        "@docx-editor.dev/editor-api": "workspace:*",
       },
     },
     "examples/igloo": {
@@ -175,15 +175,6 @@
         "vite": "^8.0.10",
       },
     },
-    "packages/agents": {
-      "name": "@docx-editor.dev/agents",
-      "version": "0.0.1",
-      "devDependencies": {
-        "@docx-editor.dev/core-contract": "workspace:*",
-        "@microsoft/api-extractor": "^7.50.0",
-        "fflate": "^0.8.2",
-      },
-    },
     "packages/core": {
       "name": "@docx-editor.dev/core-contract",
       "version": "0.0.1",
@@ -210,6 +201,15 @@
         "pdf-lib",
         "yjs",
       ],
+    },
+    "packages/editor-api": {
+      "name": "@docx-editor.dev/editor-api",
+      "version": "0.0.1",
+      "devDependencies": {
+        "@docx-editor.dev/core-contract": "workspace:*",
+        "@microsoft/api-extractor": "^7.50.0",
+        "fflate": "^0.8.2",
+      },
     },
     "packages/fonts": {
       "name": "@docx-editor.dev/fonts",
@@ -429,11 +429,11 @@
 
     "@colordx/core": ["@colordx/core@5.4.3", "", {}, "sha512-kIxYSfA5T8HXjav55UaaH/o/cKivF6jCCGIb8eqtcsfI46wsvlSiT8jMDyrl779qLec3c2c2oHBZo4oAhvbjrQ=="],
 
-    "@docx-editor.dev/agents": ["@docx-editor.dev/agents@workspace:packages/agents"],
-
     "@docx-editor.dev/core": ["@docx-editor.dev/core@0.0.1", "", {}, "sha512-bgs6qj+1g0QfmyjK6XHet8xhxxbsgm+zS+dW5NYTjAMMLXQo5QY1erJNmLfjtg7fDehzDrIxNM3jgiFWSYKtuw=="],
 
     "@docx-editor.dev/core-contract": ["@docx-editor.dev/core-contract@workspace:packages/core"],
+
+    "@docx-editor.dev/editor-api": ["@docx-editor.dev/editor-api@workspace:packages/editor-api"],
 
     "@docx-editor.dev/fonts": ["@docx-editor.dev/fonts@workspace:packages/fonts"],
 

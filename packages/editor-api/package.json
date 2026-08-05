@@ -1,0 +1,71 @@
+{
+  "name": "@docx-editor.dev/editor-api",
+  "version": "0.0.1",
+  "description": "Document automation for DOCX: a batching object model that drives a document from a server or from an editor already open in a page",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.mjs",
+      "require": "./dist/browser.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "browser": [
+        "./dist/browser.d.ts"
+      ]
+    }
+  },
+  "devDependencies": {
+    "@docx-editor.dev/core-contract": "workspace:*",
+    "@microsoft/api-extractor": "^7.50.0",
+    "fflate": "^0.8.2"
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/editor-api",
+    "typecheck": "tsc --noEmit",
+    "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/editor-api --local",
+    "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/editor-api",
+    "pack:smoke": "node scripts/pack-smoke.mjs",
+    "compat:generate": "node scripts/generate-conformance.mjs",
+    "compat:fetch-reference": "node scripts/fetch-office-reference.mjs",
+    "compat:check-drift": "node scripts/fetch-office-reference.mjs --check"
+  },
+  "keywords": [
+    "docx",
+    "word",
+    "ooxml",
+    "document",
+    "automation",
+    "headless"
+  ],
+  "author": {
+    "name": "Jedr Blaszyk",
+    "email": "jedr@eigenpal.com",
+    "url": "https://github.com/jedrazb"
+  },
+  "license": "Apache-2.0",
+  "homepage": "https://docx-editor.dev/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eigenpal/docx-editor.git",
+    "directory": "packages/editor-api"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

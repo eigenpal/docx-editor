@@ -4,7 +4,7 @@ import vueParser from 'vue-eslint-parser';
 import reactPlugin from 'eslint-plugin-react';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
 
-// Framework-isolation: keep core/react/vue/agents packages from cross-importing
+// Framework-isolation: keep core/react/vue/editor-api packages from cross-importing
 // each other's UI framework. Spec:
 //   openspec/changes/vue-editor-robust-implementation/specs/framework-isolation-lint/spec.md
 
@@ -96,7 +96,13 @@ const commonRules = {
 
 export default [
   {
-    ignores: ['dist/**', 'node_modules/**', '*.config.js', '*.config.ts'],
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      '*.config.js',
+      '*.config.ts',
+      'packages/editor-api/compat/generated/**',
+    ],
   },
 
   // Vue SFC files: parse with vue-eslint-parser, delegate <script lang="ts"> to tsparser.
@@ -254,7 +260,7 @@ export default [
   // entry to carve out any more: the two published entries differ by whether they reach a live
   // editor, not by which UI library the host chose.
   {
-    files: ['packages/agents/src/**/*.ts'],
+    files: ['packages/editor-api/src/**/*.ts'],
     rules: restrictBoth,
   },
 ];

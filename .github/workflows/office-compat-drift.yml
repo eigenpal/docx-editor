@@ -2,7 +2,7 @@ name: Office.js compatibility drift check
 
 # Scheduled-only: fetches the current stable @types/office-js release into
 # a temporary directory, verifies its integrity, and regenerates the
-# normalized reference fixture (packages/agents/compat/reference/word.reference.json)
+# normalized reference fixture (packages/editor-api/compat/reference/word.reference.json)
 # to see whether it differs from what's checked in. This is the ONLY
 # workflow in this repository that needs network access to Microsoft-derived
 # material; normal CI (ci.yml) never fetches it and never depends on it.
@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: packages/agents
+        working-directory: packages/editor-api
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.3
@@ -65,17 +65,17 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const output = fs.readFileSync('packages/agents/drift-output.txt', 'utf8');
+            const output = fs.readFileSync('packages/editor-api/drift-output.txt', 'utf8');
             const title = 'Office.js compatibility reference drift detected';
             const body = [
               'The scheduled drift check found that the current stable `@types/office-js` release',
-              'no longer matches `packages/agents/compat/reference/word.reference.json`.',
+              'no longer matches `packages/editor-api/compat/reference/word.reference.json`.',
               '',
               'This issue is informational — nothing in this repository was changed automatically.',
               'To review and adopt the new reference:',
               '',
               '```bash',
-              'cd packages/agents',
+              'cd packages/editor-api',
               'bun run compat:fetch-reference',
               'bun run compat:generate',
               'bun test',

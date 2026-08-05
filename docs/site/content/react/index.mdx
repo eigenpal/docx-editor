@@ -13,7 +13,7 @@ order: 30
 npm install @docx-editor.dev/react
 ```
 
-Pulls in `@docx-editor.dev/core` and `@docx-editor.dev/i18n`. Add `@docx-editor.dev/agents` if you want to automate the document from code.
+Pulls in `@docx-editor.dev/core` and `@docx-editor.dev/i18n`. Add `@docx-editor.dev/editor-api` if you want to automate the document from code.
 
 ## Quickstart
 
@@ -91,23 +91,23 @@ export function ToolbarOnly({ bytes }: { bytes: Uint8Array }) {
 
 The lower-level helpers (`useEditorCommand`, `useEditorState`, `useFontFamily`) also come from the root package.
 
-## Automation
+## DocxEditor API
 
-Drive the open document from code with `@docx-editor.dev/agents/browser`, which takes the editor instance this adapter created:
+Drive the open document from code with `@docx-editor.dev/editor-api/browser`, which takes the editor instance this adapter created:
 
 ```tsx
 import { useDocxEditor } from '@docx-editor.dev/react';
-import { DocxEditor as Automation } from '@docx-editor.dev/agents/browser';
+import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
 
 const editor = useDocxEditor(); // null until the content is mounted
-const runtime = Automation.createBrowser(editor!);
+const runtime = DocxEditor.createBrowser(editor!);
 ```
 
-The object model and its rules are in [Automation](/docs/1.x/agents).
+The object model and its rules are in [DocxEditor API](/docs/1.x/editor-api).
 
 ## Next steps
 
 - [API reference](/docs/1.x/api/react)
 - [React props](/docs/1.x/react/props)
 - [React examples](/docs/1.x/react/examples)
-- [Automation](/docs/1.x/agents)
+- [DocxEditor API](/docs/1.x/editor-api)

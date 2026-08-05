@@ -10,13 +10,13 @@ Releases follow the canonical [`changesets/action@v1`](https://github.com/change
 
 ## Packages
 
-| Package                   | Path              | Published?               |
-| ------------------------- | ----------------- | ------------------------ |
-| `@docx-editor.dev/react`  | `packages/react`  | ✅                       |
-| `@docx-editor.dev/agents` | `packages/agents` | ✅                       |
-| `@docx-editor.dev/vue`    | `packages/vue`    | ✅                       |
-| `@docx-editor.dev/i18n`   | `packages/i18n`   | ✅ (shared locale JSONs) |
-| `@docx-editor.dev/nuxt`   | `packages/nuxt`   | ✅                       |
+| Package                       | Path                  | Published?               |
+| ----------------------------- | --------------------- | ------------------------ |
+| `@docx-editor.dev/react`      | `packages/react`      | ✅                       |
+| `@docx-editor.dev/editor-api` | `packages/editor-api` | ✅                       |
+| `@docx-editor.dev/vue`        | `packages/vue`        | ✅                       |
+| `@docx-editor.dev/i18n`       | `packages/i18n`       | ✅ (shared locale JSONs) |
+| `@docx-editor.dev/nuxt`       | `packages/nuxt`       | ✅                       |
 
 All five packages are in a **fixed group** in `.changeset/config.json` — they always ship the same version. A changeset only needs to declare the bump for one; the others follow automatically. `@docx-editor.dev/i18n` ships the locale JSONs that the React and Vue adapters both consume, so adding a new key to `en.json` only needs a changeset on `@docx-editor.dev/i18n` (the consumers pick it up at build time).
 
@@ -44,8 +44,10 @@ The summary you write (`Add foo prop to DocxEditor`) goes verbatim into `CHANGEL
 
 1. **Look for an open PR titled `chore: release`** on `main`. The bot opens it automatically the first time a changeset lands; subsequent changeset-bearing PRs update the same PR with the latest bumps and CHANGELOG entries.
 2. **Review the PR.** It shows: version bumps in `package.json`s, new CHANGELOG sections, and the `.md` files being drained from `.changeset/`. Treat it like any other PR — CI runs on it.
-3. **Merge it.** Standard merge. No bypass, no manual workflow trigger needed.
-4. **Wait ~3 minutes.** The post-merge workflow run sees an empty changeset queue, runs `changeset publish` against npm via OIDC Trusted Publishing (no `NPM_TOKEN`), creates per-package git tags (`@docx-editor.dev/react@X.Y.Z`), and creates a GitHub Release with the new CHANGELOG section.
+3. **Before the first `@docx-editor.dev/editor-api` release, configure its npm Trusted Publisher.** It must authorize repo `eigenpal/docx-editor` and workflow `release.yml`; the release workflow has no `NPM_TOKEN` fallback.
+4. **Merge it.** Standard merge. No bypass, no manual workflow trigger needed.
+5. **Wait ~3 minutes.** The post-merge workflow run sees an empty changeset queue, runs `changeset publish` against npm via OIDC Trusted Publishing (no `NPM_TOKEN`), creates per-package git tags (`@docx-editor.dev/react@X.Y.Z`), and creates a GitHub Release with the new CHANGELOG section.
+6. **After the renamed package is available, deprecate `@docx-editor.dev/agents` on npm.** Point consumers to `@docx-editor.dev/editor-api`; this is a one-time maintainer action outside the release workflow.
 
 That's the entire release. One PR merge.
 
@@ -63,13 +65,13 @@ That's the entire release. One PR merge.
 
 ## First-time setup (already configured, documented for future reference)
 
-| Where                    | What                                                                                                                                        |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| npmjs.com                | Trusted Publisher configured for each published `@docx-editor.dev/*` package → repo `eigenpal/docx-editor`, workflow `release.yml`          |
-| `package.json`           | `"publishConfig": { "access": "public" }` on each published package                                                                         |
-| `.changeset/config.json` | `"access": "public"`; fixed release group for react, agents, vue, i18n, and nuxt packages                                             |
-| GitHub perms             | Settings → Actions → General → Workflow permissions = **Read and write**, **Allow GitHub Actions to create and approve pull requests** = on |
-| GitHub secrets           | `SLACK_WEBHOOK_URL` (optional — release notifications)                                                                                      |
+| Where                    | What                                                                                                                                                        |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| npmjs.com                | Trusted Publisher configured for each published `@docx-editor.dev/*` package, including `editor-api`, → repo `eigenpal/docx-editor`, workflow `release.yml` |
+| `package.json`           | `"publishConfig": { "access": "public" }` on each published package                                                                                         |
+| `.changeset/config.json` | `"access": "public"`; fixed release group for react, editor-api, vue, i18n, and nuxt packages                                                               |
+| GitHub perms             | Settings → Actions → General → Workflow permissions = **Read and write**, **Allow GitHub Actions to create and approve pull requests** = on                 |
+| GitHub secrets           | `SLACK_WEBHOOK_URL` (optional — release notifications)                                                                                                      |
 
 ## Manual / local releases (don't, but if you must)
 

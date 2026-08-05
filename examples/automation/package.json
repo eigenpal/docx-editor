@@ -6,6 +6,6 @@
     "fill": "bun run fill-template.ts ../remix/public/sample.docx filled.docx"
   },
   "dependencies": {
-    "@docx-editor.dev/agents": "workspace:*"
+    "@docx-editor.dev/editor-api": "workspace:*"
   }
 }
