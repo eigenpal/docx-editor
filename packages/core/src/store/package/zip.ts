@@ -98,6 +98,19 @@ export function readZip(bytes: Uint8Array, limits: ZipLimits = DEFAULT_ZIP_LIMIT
   return { ok: true, entries };
 }
 
+/** The modification time stamped on every entry written.
+ *
+ *  Without one, fflate stamps `Date.now()`, which makes the same document save to
+ *  different bytes depending on when it was saved: a ZIP entry carries its time in the DOS
+ *  format, whose resolution is two seconds, so two saves that land either side of a tick
+ *  differ in that field and nowhere else. Save/reopen/save then stops being a fixed point,
+ *  and any digest a caller takes over saved bytes stops being stable.
+ *
+ *  Mid-day on 1980-01-02 rather than the DOS epoch itself: fflate derives the year through
+ *  the local-time `getFullYear`, so midnight on 1980-01-01 UTC lands in 1979 west of
+ *  Greenwich and the year field underflows. */
+const FIXED_ENTRY_MTIME = new Date(Date.UTC(1980, 0, 2, 12));
+
 /** Deflate a set of canonical-part-name -> bytes into a ZIP archive. Every part name
  *  is re-validated through the OPC normalization profile before writing, so a
  *  traversal/encoded/normalized-alias name from an untrusted serialized model can
@@ -117,7 +130,7 @@ export function writeZip(entries: ReadonlyMap<string, Uint8Array>): Uint8Array {
     // Canonical part names carry a leading slash; ZIP entry names do not.
     record[norm.partName.replace(/^\//, '')] = data;
   }
-  return zipSync(record);
+  return zipSync(record, { mtime: FIXED_ENTRY_MTIME });
 }
 
 export { strToU8, strFromU8 };
