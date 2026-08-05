@@ -55,6 +55,7 @@ function entriesFromExports(packageRoot, exportsMap) {
  *   buildHint: string,
  *   tsconfigPath?: string,
  *   emitDocModel?: boolean,
+ *   forgottenExports?: 'none' | 'warning' | 'error',
  * }} options
  */
 export function runApiExtractor(options) {
@@ -65,6 +66,7 @@ export function runApiExtractor(options) {
     buildHint,
     tsconfigPath = path.join(packageRoot, 'tsconfig.json'),
     emitDocModel = false,
+    forgottenExports = 'none',
   } = options;
 
   if (!reportDir) {
@@ -90,13 +92,16 @@ export function runApiExtractor(options) {
   const tsdocMessageReporting = {
     'tsdoc-undefined-tag': { logLevel: 'none' },
   };
-  // `ae-forgotten-export`: silenced because re-export-heavy barrels and
+  // `ae-forgotten-export`: silenced by default because re-export-heavy barrels and
   // non-rolled-up dist trees (Vue's vite-plugin-dts emits per-file `.d.ts`)
-  // surface every internal helper as "forgotten."
+  // surface every internal helper as "forgotten." A package that rolls its
+  // entries up into one `.d.ts` each opts in through `forgottenExports`, where
+  // the message means a real thing: a type a public signature hands out that a
+  // consumer cannot import in order to name it.
   // `ae-missing-release-tag`: warning instead of the default error, so
   // undocumented `@public` exports increment warningCount but don't fail CI.
   const extractorMessageReporting = {
-    'ae-forgotten-export': { logLevel: 'none' },
+    'ae-forgotten-export': { logLevel: forgottenExports },
     'ae-missing-release-tag': { logLevel: 'warning' },
   };
 
@@ -163,6 +168,7 @@ export function runApiExtractor(options) {
   let totalErrors = 0;
   let totalWarnings = 0;
   const driftedEntries = [];
+  const forgotten = [];
 
   for (const target of present) {
     const extractorConfig = buildConfig(target);
@@ -171,6 +177,12 @@ export function runApiExtractor(options) {
       showVerboseMessages: false,
       compilerState,
       messageCallback: (message) => {
+        // Counts alone are enough for the messages every package emits by the dozen. A package
+        // that asked for forgotten-export reporting asked to READ it, so those are printed:
+        // "warnings: 58" tells nobody which type a consumer cannot name.
+        if (forgottenExports !== 'none' && message.messageId === 'ae-forgotten-export') {
+          forgotten.push(`${target.slug}: ${message.text}`);
+        }
         message.handled = true;
       },
     });
@@ -187,6 +199,10 @@ export function runApiExtractor(options) {
   console.log(`  errors: ${totalErrors}`);
   console.log(`  warnings: ${totalWarnings}`);
   if (skipped.length > 0) console.log(`  skipped: ${skipped.length}`);
+  if (forgotten.length > 0) {
+    console.log(`  types a public signature hands out but does not export: ${forgotten.length}`);
+    for (const message of forgotten) console.log(`    ${message}`);
+  }
 
   if (!isLocal && skipped.length > 0) {
     console.error(`\nMissing dist files for ${skipped.length} entr${skipped.length === 1 ? 'y' : 'ies'}:`);

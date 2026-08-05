@@ -23,7 +23,6 @@ import {
   hydratedHandle,
   hydratedParagraphFormat,
   hydratedSpan,
-  type AutomationAlignment,
   type AutomationHandle,
   type ObjectAddress,
   type RequestContext,
@@ -39,6 +38,9 @@ import { Range } from './range.ts';
 
 /** Most delimiters one `split` may name. The host applies its own cap as well. */
 const MAX_DELIMITERS = 16;
+
+/** Paragraph alignment values readable and writable through this object model. */
+export type ParagraphAlignment = 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
 
 export class Paragraph extends ModelObject implements PromisedItem {
   #font: Font | undefined;
@@ -114,11 +116,11 @@ export class Paragraph extends ModelObject implements PromisedItem {
    * `Unknown` rather than `Left`: a paragraph that states nothing may still be centred by its
    * style, and naming a side would be a claim about the cascade this lane does not resolve.
    */
-  get alignment(): AutomationAlignment {
-    return this.loadedProperty<AutomationAlignment>('alignment');
+  get alignment(): ParagraphAlignment {
+    return this.loadedProperty<ParagraphAlignment>('alignment');
   }
 
-  set alignment(value: AutomationAlignment) {
+  set alignment(value: ParagraphAlignment) {
     this.#authorFormat('alignment', requireAlignment(value, `${this.path.label}.alignment`));
   }
 
@@ -379,7 +381,7 @@ const FORMAT_FIELDS = [
 
 type FormatField = (typeof FORMAT_FIELDS)[number];
 
-const ALIGNMENTS: readonly AutomationAlignment[] = [
+const ALIGNMENTS: readonly ParagraphAlignment[] = [
   'Left',
   'Centered',
   'Right',
@@ -392,11 +394,11 @@ const ALIGNMENTS: readonly AutomationAlignment[] = [
  * `Mixed` and `Unknown` are READ answers — "they disagree" and "nothing is stated" — and there is
  * nothing for a write to mean by either. Refusing says so rather than picking a side.
  */
-function requireAlignment(value: unknown, target: string): AutomationAlignment {
-  if (!ALIGNMENTS.includes(value as AutomationAlignment)) {
+function requireAlignment(value: unknown, target: string): ParagraphAlignment {
+  if (!ALIGNMENTS.includes(value as ParagraphAlignment)) {
     fail({ code: 'InvalidArgument', target });
   }
-  return value as AutomationAlignment;
+  return value as ParagraphAlignment;
 }
 
 function requirePoints(value: unknown, target: string): number {

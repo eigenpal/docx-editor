@@ -13,18 +13,44 @@
 
 export {
   Body,
+  Bookmark,
+  BookmarkCollection,
+  Comment,
+  CommentCollection,
+  CommentReply,
+  CommentReplyCollection,
+  ContentControl,
+  ContentControlCollection,
   Document,
   Font,
+  List,
+  ListCollection,
+  ListItem,
+  NoteItem,
+  NoteItemCollection,
+  PageSetup,
   Paragraph,
   ParagraphCollection,
   Range,
   RangeCollection,
+  Revision,
+  RevisionCollection,
+  Section,
+  SectionCollection,
   type BesideLocation,
   type BodyInsertParagraphLocation,
   type BodyInsertTextLocation,
+  type ContentControlLockState,
+  type ContentControlSubtype,
+  type ContentControlValue,
+  type HeaderFooterType,
   type InsertLocation,
+  type NoteItemType,
+  type PageOrientation,
+  type ParagraphAlignment,
   type ParagraphInsertTextLocation,
   type RangeInsertTextLocation,
+  type RevisionType,
   type SearchOptions,
   type SelectionMode,
 } from '../model/index.ts';
@@ -38,6 +64,16 @@ export {
 } from './errors.ts';
 export type { LoadOption, LoadQueryOptions } from './load-options.ts';
 export { RequestContext } from './request-context.ts';
-export type { DocxEditorRuntime, DocxEditorServerRuntime, RunCallback } from './runtime.ts';
-export type { CreateServerOptions } from './server.ts';
+export type {
+  DocumentCapabilities,
+  DocxEditorRuntime,
+  DocxEditorServerRuntime,
+  RunCallback,
+} from './runtime.ts';
+export type {
+  CreateServerOptions,
+  DocumentLimits,
+  DocumentXmlLimits,
+  DocumentZipLimits,
+} from './server.ts';
 export { TrackedObjects } from './tracked-objects.ts';

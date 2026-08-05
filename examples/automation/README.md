@@ -41,7 +41,7 @@ Four rules carry most of the API:
 - **Objects live inside `run`.** They are proxies into a document the runtime owns; keeping one
   past the callback, or past `dispose()`, is an error rather than a stale read. To keep a proxy
   across syncs deliberately, use `context.trackedObjects`.
-- **Ask before you assume.** `getItemOrNullObject` answers an object whose `isNullObject` is
+- **Ask before you assume.** `getFirstOrNullObject` and `getLastOrNullObject` answer an object whose `isNullObject` is
   `true` instead of throwing, which is the difference between "no such heading" and a crash.
 
 ## In a page, on a document already open
@@ -60,7 +60,7 @@ await runtime.run(async (context) => {
   heading.load('text');
   await context.sync();
 
-  if (!heading.isNullObject) heading.font.set({ bold: true });
+  if (!heading.isNullObject) heading.font.bold = true;
   await context.sync();
 });
 ```

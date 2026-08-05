@@ -53,7 +53,7 @@ await runtime.run(async (context) => {
   heading.load('text');
   await context.sync();
 
-  if (!heading.isNullObject) heading.font.set({ bold: true });
+  if (!heading.isNullObject) heading.font.bold = true;
   await context.sync();
 });
 ```
@@ -65,7 +65,7 @@ Import it from `/browser` deliberately: reaching a live editor means reaching th
 - **Read what you asked for.** A property you did not `load()` throws instead of answering `undefined`, so a typo fails at the read rather than producing a wrong document three steps later.
 - **`sync()` is the only round trip.** Everything queued between two syncs is one ordered transaction. If any operation in it is refused, none of them happened.
 - **Objects live inside `run`.** They are proxies into a document the runtime owns. Keeping one past the callback, or past `dispose()`, is an error rather than a stale read — to keep one across syncs deliberately, hand it to `context.trackedObjects`.
-- **Ask before you assume.** `getItemOrNullObject` and `getFirstOrNullObject` answer an object whose `isNullObject` is `true` after the sync, which is the difference between "no such heading" and a crash.
+- **Ask before you assume.** `getFirstOrNullObject` and `getLastOrNullObject` answer an object whose `isNullObject` is `true` after the sync, which is the difference between "no such heading" and a crash.
 
 ## Capabilities
 

@@ -38,9 +38,19 @@ import { RequestContext, type RuntimeSession } from './request-context.ts';
 /** What a `run` callback is given, and what it may answer with. */
 export type RunCallback<T> = (context: RequestContext) => Promise<T>;
 
+/** Capabilities exposed by a DocxEditor runtime, frozen for its lifetime. */
+export interface DocumentCapabilities {
+  readonly document: boolean;
+  readonly save: boolean;
+  readonly events: boolean;
+  readonly selection: boolean;
+  readonly scrolling: boolean;
+  readonly layout: boolean;
+}
+
 export interface DocxEditorRuntime {
   /** What the document host behind this runtime can do. Frozen at construction. */
-  readonly capabilities: AutomationHost['capabilities'];
+  readonly capabilities: DocumentCapabilities;
   /** Run one batch of work against the document. Answers with the callback's value. */
   run<T>(callback: RunCallback<T>): Promise<T>;
   /** Run one batch of work, adopting objects a previous run tracked. */

@@ -6,8 +6,6 @@ const root = resolve(import.meta.dirname, '..');
 const entries = {
   react: collectNamedExports(resolve(root, 'packages/react/src/index.ts')),
   vue: collectNamedExports(resolve(root, 'packages/vue/src/index.ts')),
-  reactUi: collectNamedExports(resolve(root, 'packages/react/src/ui.ts')),
-  reactPluginApi: collectNamedExports(resolve(root, 'packages/react/src/plugin-api/index.ts')),
   automation: collectNamedExports(resolve(root, 'packages/agents/src/index.ts')),
   automationBrowser: collectNamedExports(resolve(root, 'packages/agents/src/browser.ts')),
 };
@@ -19,41 +17,13 @@ const required = {
       'DocxEditor',
       'DocxEditorProps',
       'DocxEditorRef',
-      'DocxEditorHandle',
       'EditorMode',
-      'RenderAsyncOptions',
-      'renderAsync',
     ],
   },
   // Locale string types (LocaleStrings, Translations, PartialLocaleStrings,
   // TranslationKey) live in `@docx-editor.dev/i18n` and are no longer
   // re-exported from the React or Vue adapters. Consumers import them from
   // the i18n package directly.
-  'documented React toolbar/customization surface': {
-    entries: ['reactUi'],
-    names: [
-      'EditorToolbar',
-      'EditorToolbarProps',
-      'Toolbar',
-      'ToolbarProps',
-      'ColorPicker',
-      'ColorPickerProps',
-      'FontOption',
-    ],
-  },
-  'documented React plugin surface': {
-    entries: ['reactPluginApi'],
-    names: [
-      'PluginHost',
-      'EditorPlugin',
-      'PluginPanelProps',
-      'PluginHostRef',
-      'RenderedDomContext',
-      'PositionCoordinates',
-      'templatePlugin',
-      'createTemplatePlugin',
-    ],
-  },
   // Both automation entries carry the whole documented vocabulary — the lifecycle types, the
   // object model and the error type — because a consumer's own code is written against those
   // names whichever entry constructed the runtime. The entries differ by ONE member,
@@ -72,6 +42,14 @@ const required = {
       'TrackedObjects',
       'LoadOption',
       'CreateServerOptions',
+      'DocumentCapabilities',
+      'DocumentLimits',
+      'Paragraph',
+      'Range',
+      'ContentControl',
+      'Section',
+      'Comment',
+      'Revision',
     ],
   },
 };

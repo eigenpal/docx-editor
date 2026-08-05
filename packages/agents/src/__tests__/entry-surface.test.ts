@@ -10,6 +10,7 @@
 import { describe, expect, test } from 'bun:test';
 import * as root from '../index.ts';
 import * as browser from '../browser.ts';
+import * as model from '../model/index.ts';
 
 /** Names the legacy package exported. None of them has an equivalent; all of them are gone. */
 const REMOVED = [
@@ -44,23 +45,19 @@ describe('the root entry', () => {
   });
 
   test('carries the vocabulary a caller needs to name what they are handed', () => {
-    for (const name of [
-      'Body',
-      'Document',
-      'Font',
-      'Paragraph',
-      'ParagraphCollection',
-      'Range',
-      'RangeCollection',
+    const expected = [
+      ...Object.keys(model),
       'ClientObject',
       'ClientResult',
       'RequestContext',
       'TrackedObjects',
       'DocxEditorError',
       'isDocxEditorError',
-    ]) {
+    ];
+    for (const name of expected) {
       expect(root).toHaveProperty(name);
     }
+    expect(expected.length).toBeGreaterThan(20);
   });
 
   test('exports nothing that served a removed surface', () => {

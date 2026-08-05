@@ -38,8 +38,11 @@
  *
  * const runtime = DocxEditor.createBrowser(editor);
  * await runtime.run(async (context) => {
- *   const [heading] = context.document.body.paragraphs.items;
- *   heading?.font.set({ bold: true });
+ *   const heading = context.document.body.paragraphs.getFirstOrNullObject();
+ *   heading.load('text');
+ *   await context.sync();
+ *
+ *   if (!heading.isNullObject) heading.font.bold = true;
  *   await context.sync();
  * });
  * ```

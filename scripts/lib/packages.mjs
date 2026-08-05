@@ -39,6 +39,11 @@ export const PACKAGES = [
     // read the built `dist/*.d.ts` as a consumer would, not follow `@docx-editor.dev/...`
     // back into workspace source.
     tsconfigPath: 'packages/agents/tsconfig.api.json',
+    // The one package whose entries are ROLLED UP into a single `.d.ts` each, so a
+    // "forgotten export" here means what it says: a name a public signature hands a consumer
+    // that the consumer cannot import to write the signature down. The blanket silence exists
+    // for the barrel-and-per-file adapters, where the same message is mostly noise.
+    forgottenExports: 'warning',
   },
 ];
 

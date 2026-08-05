@@ -23,7 +23,7 @@ None of that runs at install, test or build time. Everything CI gates on reads f
 
 The document, its body, paragraphs, ranges and the collections over them; search with `matchCase` / `matchWholeWord`; character formatting through `font`; paragraph formatting (style, alignment, indents, spacing); lists and list items; bookmarks; sections and page setup; footnotes and endnotes; comments with replies and a resolved flag; revisions with accept and reject, individually or all at once; and content controls, addressed by id, tag or title.
 
-The lifecycle around them is the whole point: `load()` declares reads, `sync()` is the only round trip, `getItemOrNullObject` / `getFirstOrNullObject` answer an object rather than throwing, and `context.trackedObjects` keeps a proxy alive across syncs.
+The lifecycle around them is the whole point: `load()` declares reads, `sync()` is the only round trip, `getFirstOrNullObject` / `getLastOrNullObject` answer an object rather than throwing, and `context.trackedObjects` keeps a proxy alive across syncs.
 
 ## What is omitted
 

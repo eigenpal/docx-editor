@@ -67,7 +67,7 @@ await runtime.run(async (context) => {
   heading.load('text');
   await context.sync();
 
-  if (!heading.isNullObject) heading.font.set({ bold: true });
+  if (!heading.isNullObject) heading.font.bold = true;
   await context.sync();
 });
 ```
@@ -84,7 +84,7 @@ and a server holding bytes should not pay for that.
 - **Objects live inside `run`.** They are proxies into a document the runtime owns. Keeping one
   past the callback, or past `dispose()`, is an error rather than a stale read — to keep one
   across syncs deliberately, hand it to `context.trackedObjects`.
-- **Ask before you assume.** `getItemOrNullObject` / `getFirstOrNullObject` answer an object whose
+- **Ask before you assume.** `getFirstOrNullObject` / `getLastOrNullObject` answer an object whose
   `isNullObject` is `true`, which is the difference between "no such heading" and a crash.
 
 `runtime.capabilities` says what the host behind a runtime can do — `save` is false in the
@@ -93,10 +93,10 @@ life of the runtime, so one read stays true.
 
 ## Entries
 
-| Entry                                   | Use when                                                     |
-| --------------------------------------- | ------------------------------------------------------------ |
-| `@docx-editor.dev/agents`               | Servers, workers, build scripts: bytes in, bytes out         |
-| `@docx-editor.dev/agents/browser`       | A page, driving an editor the host already created           |
+| Entry                             | Use when                                             |
+| --------------------------------- | ---------------------------------------------------- |
+| `@docx-editor.dev/agents`         | Servers, workers, build scripts: bytes in, bytes out |
+| `@docx-editor.dev/agents/browser` | A page, driving an editor the host already created   |
 
 Both entries export the same vocabulary — the lifecycle types, the object model and the error
 type — so consumer code compiles against either. They differ by one member: `createBrowser`.

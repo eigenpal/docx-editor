@@ -13,12 +13,30 @@
 // did not author gets "not a document this API can open", and a probe cannot use the error to
 // learn about the reader's limits.
 
-import {
-  createServerAutomationHost,
-  type ServerAutomationHostOptions,
-} from '@docx-editor.dev/core-contract/automation';
+import { createServerAutomationHost } from '@docx-editor.dev/core-contract/automation';
 import { fail } from './errors.ts';
 import { createRuntime, type DocxEditorServerRuntime } from './runtime.ts';
+
+/** Resource limits for the DOCX archive. */
+export interface DocumentZipLimits {
+  readonly maxEntries: number;
+  readonly maxTotalBytes: number;
+  readonly maxRatio?: number;
+}
+
+/** Resource limits for each parsed XML part. */
+export interface DocumentXmlLimits {
+  readonly maxBytes: number;
+  readonly maxElements?: number;
+}
+
+/** Optional tighter limits applied while opening untrusted DOCX bytes. */
+export interface DocumentLimits {
+  readonly zip?: DocumentZipLimits;
+  readonly xml?: DocumentXmlLimits;
+  readonly maxXmlParts?: number;
+  readonly maxRelationships?: number;
+}
 
 export interface CreateServerOptions {
   /**
@@ -27,7 +45,7 @@ export interface CreateServerOptions {
    * Exposed because a server opening documents it did not author is exactly where a caller may
    * want smaller limits than the defaults. Omitted means the engine's own defaults.
    */
-  readonly limits?: ServerAutomationHostOptions['limits'];
+  readonly limits?: DocumentLimits;
   /**
    * Who comments this runtime writes are recorded as.
    *
