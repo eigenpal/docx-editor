@@ -17,6 +17,9 @@ export default defineConfig({
   sourcemap: false,
   clean: true,
   minify: false,
+  // Read by `scripts/generate-third-party-notices.mjs` — see the note in
+  // `packages/react/tsup.config.ts`.
+  metafile: true,
   // Keep non-ASCII characters raw instead of `\uHHHH`-escaping them. esbuild
   // defaults to `ascii` for max compatibility, but every script and tag in
   // these JSONs is BMP UTF-8 that consumers' bundlers handle natively.

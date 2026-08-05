@@ -34,7 +34,9 @@
   },
   "files": [
     "dist",
-    "LICENSE.md"
+    "!dist/metafile-*.json",
+    "LICENSE.md",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
     "build": "tsup && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/editor-api",
