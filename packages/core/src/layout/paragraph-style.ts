@@ -5,6 +5,7 @@
 // guessed — a wrong before-spacing moves every subsequent page break.
 
 import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import { borderStrokeWidthPt } from './border-metrics.ts';
 
 /** Whether a paragraph must start a new page (`w:pageBreakBefore`). */
 export function paragraphBreaksBefore(props: readonly OoxmlProperty[]): boolean {
@@ -335,6 +336,16 @@ export function cascadedParagraphBorders(
 }
 
 /**
+ * Visual stroke thickness layout publishes for one edge (points).
+ *
+ * Compound `ST_Border` values (`double`, …) use the shared inflated band so a thin
+ * `w:sz="3"` double still occupies a visible double-line box — matching table borders.
+ */
+export function paragraphBorderStrokeWidthPt(edge: ParagraphBorderEdge): number {
+  return borderStrokeWidthPt(edge.val, edge.widthPt);
+}
+
+/**
  * Extent one border edge occupies away from the text it decorates: gap plus rule, in points.
  *
  * Vertically that is flow height — a top rule pushes the first line down, a bottom rule holds
@@ -344,7 +355,7 @@ export function cascadedParagraphBorders(
  */
 export function paragraphBorderExtentPt(edge: ParagraphBorderEdge | undefined): number {
   if (!edge) return 0;
-  return edge.spacePt + edge.widthPt;
+  return edge.spacePt + paragraphBorderStrokeWidthPt(edge);
 }
 
 /** Vertical extent a bottom border adds below the last line (gap + rule). */

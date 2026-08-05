@@ -174,6 +174,7 @@ export {
   appliedSpaceBefore,
   applyLineSpacing,
   paragraphBorderExtentPt,
+  paragraphBorderStrokeWidthPt,
   bottomBorderExtentPt,
   cascadedParagraphBorders,
   collapsedSpaceBefore,
