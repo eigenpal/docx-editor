@@ -80,6 +80,14 @@ function propertiesToken(properties: readonly OoxmlProperty[]): string {
  */
 const nodeTokens = new WeakMap<object, string>();
 
+/**
+ * Tokens longer than this are computed transiently instead of retained. A table token embeds
+ * its whole subtree, so a hostile document nesting a large payload inside ~50 table levels
+ * would otherwise retain depth × payload of strings for the document's lifetime; the ceiling
+ * bounds retention while leaving every realistic paragraph and table memoized.
+ */
+const MAX_MEMOIZED_TOKEN_LENGTH = 1 << 18;
+
 function nodeToken(node: OoxmlNode): string {
   if (node.kind === 'textValue') return `t:${node.value}`;
   const cacheable = node.kind === 'paragraph' || node.kind === 'table';
@@ -88,7 +96,7 @@ function nodeToken(node: OoxmlNode): string {
     if (cached !== undefined) return cached;
   }
   const token = computeNodeToken(node);
-  if (cacheable) nodeTokens.set(node, token);
+  if (cacheable && token.length <= MAX_MEMOIZED_TOKEN_LENGTH) nodeTokens.set(node, token);
   return token;
 }
 
@@ -198,14 +206,16 @@ export function paragraphLayoutKey(inputs: ParagraphKeyInputs): ParagraphLayoutK
     properties,
     nodeToken(inputs.paragraph),
   ].join('\0');
-  paragraphKeyMemos.set(inputs.paragraph, {
-    producer: inputs.producer,
-    width,
-    drawingToken,
-    exclusionToken,
-    propertiesToken: properties,
-    key,
-  });
+  if (key.length <= MAX_MEMOIZED_TOKEN_LENGTH) {
+    paragraphKeyMemos.set(inputs.paragraph, {
+      producer: inputs.producer,
+      width,
+      drawingToken,
+      exclusionToken,
+      propertiesToken: properties,
+      key,
+    });
+  }
   return key;
 }
 

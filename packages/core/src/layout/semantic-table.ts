@@ -759,6 +759,8 @@ export function readTableStructure(
     memo &&
     memo.contentWidthPt === contentWidthPt &&
     memo.depth === depth &&
+    // Identity compare is sound because a cascade table is built once per styles part and
+    // never mutated; a fresh-but-equal cascade only misses the memo, never lies to it.
     memo.styleCascade === styleCascade &&
     memo.displayMode === displayMode
   ) {

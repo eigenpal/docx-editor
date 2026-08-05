@@ -109,6 +109,9 @@ export type XmlResult =
   | { readonly ok: true; readonly nodes: readonly XmlNode[] }
   | { readonly ok: false; readonly reason: XmlRejection };
 
+// Sticky (`y`) so the scan can anchor at an ampersand without slicing the tail of a
+// multi-megabyte part. `lastIndex` is shared mutable state: every caller MUST assign it
+// immediately before `test`, as `preflightForbiddenXml` does.
 const CUSTOM_ENTITY_REF_STICKY_RE = /&(?!(amp|lt|gt|quot|apos);)[A-Za-z_][\w.-]*;/y;
 
 function validLimit(value: number): boolean {
