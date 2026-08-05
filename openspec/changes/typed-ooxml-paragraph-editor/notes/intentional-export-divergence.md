@@ -184,26 +184,28 @@ does. Only the panel is React-only.
 - `HyperlinkPopupMode`
 - `HyperlinkPopupAnchor`
 
-### Review surface (React only, for now)
+### Pro integration points (React only, for now)
 
-The review rail and its hook. Vue has no twin yet, and the engine members behind them
-(`getReviewItems`, `acceptReviewItem`, `addComment`, …) are on the shared `Editor` contract,
-so a Vue host can already reach the capability — what is missing is the chrome.
+The review PANE moved to `@docx-editor.dev/pro/react` (pro-review-and-custom-nodes); what
+this package now exports are the seams the pro pane composes with. Vue has no review
+chrome and therefore no pro pane to feed — its twins land with the Vue review lane.
 
-One thing blocks a faithful Vue twin beyond the component work: the compose box pins the
-selection with `editor.surface.retainSelection()`, and `surface` is the escape hatch, not
-the contract. Publishing retain/release on `Editor` is the prerequisite.
+One thing still blocks a faithful Vue twin beyond the component work: the compose box pins
+the selection with `editor.surface.retainSelection()`, and `surface` is the escape hatch,
+not the contract. Publishing retain/release on `Editor` is the prerequisite.
 
-- `DocxEditorReview`
-- `DocxEditorReviewNamespace`
-- `ReviewActionProps`
-- `ReviewPartProps`
-- `ReviewProps`
-- `useReview`
-- `useReviewOf`
-- `useStackedReviewPositions`
-- `ReviewItemView`
-- `UseReviewReturn`
+- `ReviewRailContext`
+- `ReviewRailRegistry`
+- `Slot`
+- `SlotProps`
+- `LocaleProvider`
+- `useTranslation`
+
+The font-fallback notice is React chrome with no Vue twin yet, same lane as the
+rest of the notice/banner chrome:
+
+- `DocxEditorFontNotice`
+- `DocxEditorFontNoticeProps`
 The navigation pane rides the same provider/hooks layer: a compound plus three behavior
 hooks over the context-published editor, so its Vue twin is the composable form and lands
 with the rest of that layer. The ENGINE half is already adapter-neutral — the search

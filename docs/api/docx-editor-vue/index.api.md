@@ -225,6 +225,10 @@ author: {
 type: StringConstructor;
 default: undefined;
 };
+modules: {
+type: PropType<readonly EditorModule[]>;
+default: undefined;
+};
 fonts: {
 type: PropType<FontConfiguration | FontConfigurationFragment>;
 default: undefined;
@@ -256,6 +260,10 @@ author: {
 type: StringConstructor;
 default: undefined;
 };
+modules: {
+type: PropType<readonly EditorModule[]>;
+default: undefined;
+};
 fonts: {
 type: PropType<FontConfiguration | FontConfigurationFragment>;
 default: undefined;
@@ -271,6 +279,7 @@ author: string;
 zoom: number;
 mode: EditorMode;
 locale: string;
+modules: readonly EditorModule[];
 }, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
 
 // @public
@@ -282,6 +291,7 @@ export interface DocxEditorProps {
     // (undocumented)
     locale?: string;
     mode?: EditorMode;
+    modules?: readonly EditorModule[];
     onFontError?: (error: EditorFontError) => void;
     // (undocumented)
     zoom?: number;
@@ -461,6 +471,7 @@ export interface Editor {
     focus(scope?: EditorScope): InteractionOutcome<void>;
     // (undocumented)
     getActiveScope(): ViewScope;
+    getAvailableFonts(): readonly string[];
     getComments(): readonly {
         readonly id: string;
         readonly text: string;
@@ -666,6 +677,7 @@ export interface EditorSnapshot {
     readonly fontSubstitutions?: readonly string[];
     // (undocumented)
     readonly formatting: RunFormatting | null;
+    readonly hasReviewContent?: boolean;
     // (undocumented)
     readonly image: ImageContext | null;
     readonly isLoading: boolean;

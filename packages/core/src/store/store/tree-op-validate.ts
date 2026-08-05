@@ -685,6 +685,23 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
       return null;
     }
+    case 'insertInlineContentControl': {
+      if (!Number.isInteger(op.offset)) return 'invalid-range';
+      if (op.offset < 0 || op.offset > length) return 'offset-out-of-range';
+      if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
+      // The tag is the node's IDENTITY and Word caps `w:tag` at 64 characters;
+      // writing a longer one authors a control Word will refuse to keep.
+      if (typeof op.tag !== 'string' || op.tag.length === 0 || op.tag.length > 64) {
+        return 'invalid-property-value';
+      }
+      if (typeof op.text !== 'string' || op.text.length === 0) return 'invalid-property-value';
+      // Inside another control's content the wrapper nests; inside a LINK it is
+      // not a shape Word writes — reuse the link-nesting refusal.
+      if (rangeTouchesHyperlink(paragraph, op.offset, op.offset)) {
+        return 'invalid-property-value';
+      }
+      return null;
+    }
     case 'insertHyperlink': {
       if (!Number.isInteger(op.start) || !Number.isInteger(op.end)) return 'invalid-range';
       if (op.start < 0 || op.end > length) return 'offset-out-of-range';

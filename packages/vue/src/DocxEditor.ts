@@ -8,7 +8,7 @@ import type {
   FontConfiguration,
 } from '@docx-editor.dev/core-contract/contracts/editor';
 import { createDocxEditor } from '@docx-editor.dev/core-contract/editor';
-import type { FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
+import type { EditorModule, FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
 import type { DocxEditorRef, EditorMode } from './types';
 
 /**
@@ -55,6 +55,11 @@ export default defineComponent({
     zoom: { type: Number, default: undefined },
     locale: { type: String, default: undefined },
     author: { type: String, default: undefined },
+    /** Capability modules (`@docx-editor.dev/pro`). Applied at mount only, like `mode`. */
+    modules: {
+      type: Array as PropType<readonly EditorModule[]>,
+      default: undefined,
+    },
     /**
      * Font bytes for Word-accurate (HarfBuzz-shaped) wrap and pagination — optional,
      * exactly as in the React adapter: omitted, layout uses a fixed-width estimate and
@@ -99,6 +104,7 @@ export default defineComponent({
         ...(props.author !== undefined ? { author: props.author } : {}),
         ...(props.locale !== undefined ? { locale: props.locale } : {}),
         ...(props.mode !== undefined ? { mode: props.mode } : {}),
+        ...(props.modules !== undefined ? { modules: props.modules } : {}),
         ...(props.zoom !== undefined ? { zoom: props.zoom } : {}),
         onFontError: (error) => emit('fontError', error),
       });

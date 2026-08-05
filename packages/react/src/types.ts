@@ -11,7 +11,7 @@ import type {
   ExecResult,
   FontConfiguration,
 } from '@docx-editor.dev/core-contract/contracts/editor';
-import type { FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
+import type { EditorModule, FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
 import type { DocxEditorMenuProps } from './editor/menu';
 import type { DocxEditorContextMenuProps } from './editor/contextmenu';
 export { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
@@ -138,6 +138,18 @@ export interface DocxEditorProps {
   zoom?: number;
   locale?: string;
   author?: string;
+  /**
+   * Capability modules to register (`@docx-editor.dev/pro`'s review module,
+   * custom nodes). Applied at mount only, like `mode`.
+   */
+  modules?: readonly EditorModule[];
+  /**
+   * Extra chrome rendered INSIDE the viewport, after the painted pages — the
+   * slot pro or host chrome mounts into without leaving the sugar (e.g.
+   * `DocxEditorReview` from `@docx-editor.dev/pro/react`). For more control,
+   * compose `DocxEditor.Root`/`Viewport`/`Content` directly.
+   */
+  children?: ReactNode;
   className?: string;
   /** Fired after the underlying `Editor` is created. */
   onReady?: (editor: Editor) => void;

@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // `DocxEditor.Review` — the review rail: every pending decision in the document, as cards
 // beside the page it belongs to.
 //
@@ -42,9 +47,7 @@ import {
 import type { CSSProperties, ReactNode } from 'react';
 import type { ReviewRevisionKind } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
-import { useTranslation } from '../i18n';
-import { ReviewRailContext, useDocxEditor } from './context';
-import { Slot } from './toolbar/Slot';
+import { ReviewRailContext, Slot, useDocxEditor, useTranslation } from '@docx-editor.dev/react';
 import { useReview, type ReviewItemView } from './useReview';
 
 /** The rail's data, provided once by the Root so a card never re-subscribes. */
@@ -162,6 +165,12 @@ export interface ReviewActionProps extends ReviewPartProps {
 /** Props for `DocxEditor.Review`. @public */
 export interface ReviewProps extends ReviewPartProps {
   /**
+   * Host furniture rendered at the top of the rail, above the cards — filters,
+   * legends, custom summaries (pro-review-and-custom-nodes task 4.11). Plain
+   * flow content; per-item custom CARDS (4.10 reviewCard) are the follow-up.
+   */
+  furniture?: ReactNode;
+  /**
    * Render the packaged arrangement. `false` mounts the rail and its context only, so a host
    * can lay the cards out itself while keeping the subscription and the anchoring.
    */
@@ -217,6 +226,7 @@ const REJECT_ICON =
  */
 function ReviewRoot({
   className,
+  furniture,
   asChild,
   hidden,
   children,
@@ -654,6 +664,11 @@ function ReviewRoot({
         </Slot>
       ) : (
         <aside {...shared}>
+          {furniture !== undefined ? (
+            <div className="docx-review__furniture" data-testid="review-furniture">
+              {furniture}
+            </div>
+          ) : null}
           {body}
           {affordances}
         </aside>

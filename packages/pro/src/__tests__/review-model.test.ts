@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // The review queue.
 //
 // The rule this file exists to protect: the queue is a property of the DOCUMENT, not of the
@@ -15,17 +20,16 @@ import {
 } from '@docx-editor.dev/core-contract/store';
 import {
   activeReviewItem,
-  collectReviewItems,
   commentBodyText,
   commentInitials,
   paragraphOrderOfPart,
   reviewAnchorIndex,
   reviewItemGeometry,
   reviewItemsAt,
-  revisionItemsOf,
   type ReviewItem,
   type ReviewRevisionItem,
-} from '../review-model.ts';
+} from '@docx-editor.dev/core-contract/layout';
+import { collectReviewItems, revisionItemsOf } from '../review/review-model.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
@@ -439,9 +443,7 @@ describe('caret activation', () => {
 describe('against the tracked fixture', () => {
   test('every revision in a real document is listed, structural ones included', () => {
     const bytes = new Uint8Array(
-      readFileSync(
-        resolve(import.meta.dir, '../../../../../e2e/fixtures/list-pagination-break.docx')
-      )
+      readFileSync(resolve(import.meta.dir, '../../../../e2e/fixtures/list-pagination-break.docx'))
     );
     const pkg = readOoxmlPackage(bytes);
     if (!pkg.ok) throw new Error(pkg.reason);
