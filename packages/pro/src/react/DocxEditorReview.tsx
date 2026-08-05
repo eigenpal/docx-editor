@@ -47,7 +47,13 @@ import {
 import type { CSSProperties, ReactNode } from 'react';
 import type { ReviewItemQuery, ReviewRevisionKind } from '@docx-editor.dev/core/contracts/editor';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
-import { ReviewRailContext, Slot, useDocxEditor, useTranslation } from '@docx-editor.dev/react';
+import {
+  ReviewRailContext,
+  Slot,
+  useDocxEditor,
+  useTranslation,
+  type ToolbarTranslate,
+} from '@docx-editor.dev/react';
 import { useReview, type ReviewItemView } from './useReview';
 
 /** The rail's data, provided once by the Root so a card never re-subscribes. */
@@ -69,6 +75,10 @@ export function useReviewItem(): ReviewItemView | null {
 }
 
 interface ReviewRailValue {
+  /** The host's label resolver, when it passed one. Parts read through {@link useReviewLabel}. */
+  readonly t: ToolbarTranslate | undefined;
+  /** A card's className, from the rail's `card` prop. */
+  readonly cardClassName: string | undefined;
   readonly review: ReturnType<typeof useReview>;
   /**
    * The UNFILTERED queue. The rail's cards render `review.items`, which the structural and
@@ -148,7 +158,21 @@ function useRail(): ReviewRailValue {
   return INERT_RAIL;
 }
 
+/**
+ * A part's strings: the host's `t`, else the bundled catalogue.
+ *
+ * The fallback is the packaged English, not the raw key — unlike the toolbar and menu bar,
+ * whose labels are registry keys a host is expected to resolve, every string here ships one.
+ */
+function useReviewLabel(): (key: TranslationKey) => string {
+  const { t: hostT } = useContext(ReviewContext) ?? {};
+  const { t } = useTranslation();
+  return useCallback((key: TranslationKey) => hostT?.(key) ?? t(key), [hostT, t]);
+}
+
 const INERT_RAIL: ReviewRailValue = {
+  t: undefined,
+  cardClassName: undefined,
   review: {
     items: [],
     activeKey: null,
@@ -187,11 +211,31 @@ export interface ReviewActionProps extends ReviewPartProps {
 }
 
 /** Props for `DocxEditor.Review`. @public */
-export interface ReviewProps extends ReviewPartProps {
+export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
   /**
-   * Host furniture rendered at the top of the rail, above the cards — filters,
-   * legends, custom summaries (pro-review-and-custom-nodes task 4.11). Plain
-   * flow content; per-item custom CARDS (4.10 reviewCard) are the follow-up.
+   * Label resolver, as `DocxEditor.Toolbar`, `.Menu` and `.ContextMenu` take one. Unresolved
+   * keys fall back to the bundled catalogue rather than to the key.
+   */
+  t?: ToolbarTranslate;
+  /** Class for each card. The rail's own `className` styles the column; this the boxes in it. */
+  card?: { className?: string };
+  /**
+   * The cards, or a render prop that replaces the packaged card entirely while keeping the
+   * rail's subscription, anchoring, stacking and virtualization. Nodes are treated as part
+   * overrides for the packaged card instead.
+   *
+   * ```tsx
+   * <DocxEditor.Review>{(item) => <MyCard item={item} />}</DocxEditor.Review>
+   * ```
+   */
+  children?: ReactNode | ((item: ReviewItemView) => ReactNode);
+  /**
+   * Host content at the top of the rail, above the cards — filters, legends, summaries.
+   *
+   * Rendered only while the pane is OPEN. A closed rail gives up its width for a 32px strip
+   * of markers, and content laid out for the 300px column has nowhere to go in it; unmounting
+   * is the rail's own business, not something a host should have to subscribe to `paneOpen`
+   * to discover. Furniture that should outlive the toggle belongs outside the rail.
    */
   furniture?: ReactNode;
   /**
@@ -254,6 +298,8 @@ function ReviewRoot({
   asChild,
   hidden,
   children,
+  t: hostT,
+  card,
   preset = true,
   stack = true,
   gap = 8,
@@ -277,7 +323,9 @@ function ReviewRoot({
   const allReview = useReview(NO_PLACEMENT_REVIEW_QUERY);
   const review = useReview(railQuery);
   const setReviewPaneOpen = review.setPaneOpen;
-  const { t } = useTranslation();
+  // The root provides the context `useReviewLabel` reads, so it resolves from the prop.
+  const { t: bundled } = useTranslation();
+  const t = useCallback((key: TranslationKey) => hostT?.(key) ?? bundled(key), [hostT, bundled]);
   const railRef = useRef<HTMLElement | null>(null);
   // Claim the gutter. Without this the viewport reserved it for every consumer, mounted
   // rail or not, and the tier-2 `<DocxEditor>` sugar mounts none.
@@ -358,6 +406,11 @@ function ReviewRoot({
   // a rail pinned to the right edge floats away from the page it annotates; it belongs one
   // gutter to the right of the sheet, and it moves with the sheet when the window resizes or
   // the zoom changes.
+  //
+  // Client rects, not `offsetLeft`/`offsetTop`: those are relative to each element's own
+  // `offsetParent`, and a host that positions its page wrapper makes the surface report
+  // `offsetLeft: 0` — landing the rail a page-width left, on top of the document. `scrollTop`
+  // and `clientTop` put the rects back into the same space the offsets used to describe.
   const [metrics, setMetrics] = useState<RailMetrics>(INITIAL_METRICS);
   useEffect(() => {
     const rail = railRef.current;
@@ -366,12 +419,18 @@ function ReviewRoot({
     const surface = parent?.querySelector<HTMLElement>('.docx-paginated-surface') ?? null;
     const sync = (): void => {
       setMetrics((previous) => {
+        const box = surface && parent ? surface.getBoundingClientRect() : null;
+        const frame = box && parent ? parent.getBoundingClientRect() : null;
         const next: RailMetrics = {
           // The engine's own points-to-pixels factor, zoom included. Deriving it here from
           // `getZoom()` alone dropped the 96/72 and put every card at three quarters height.
           scale: editor.getRenderScale(),
-          top: surface ? surface.offsetTop : 0,
-          left: surface ? surface.offsetLeft + surface.offsetWidth + RAIL_GUTTER : null,
+          top:
+            box && frame && parent ? box.top - frame.top - parent.clientTop + parent.scrollTop : 0,
+          left:
+            box && frame && parent
+              ? box.right - frame.left - parent.clientLeft + parent.scrollLeft + RAIL_GUTTER
+              : null,
         };
         return previous.scale === next.scale &&
           previous.top === next.top &&
@@ -555,8 +614,11 @@ function ReviewRoot({
       ? null
       : metrics.top + (stacked.get(COMPOSE_KEY) ?? composeAnchorY) * metrics.scale;
 
+  const cardClassName = card?.className;
   const value = useMemo<ReviewRailValue>(
     () => ({
+      t: hostT,
+      cardClassName,
       review: { ...review, items },
       allItems: allReview.items,
       authorSlots,
@@ -565,7 +627,18 @@ function ReviewRoot({
       beginDraft,
       endDraft,
     }),
-    [review, allReview.items, items, authorSlots, byId, observeSlot, beginDraft, endDraft]
+    [
+      hostT,
+      cardClassName,
+      review,
+      allReview.items,
+      items,
+      authorSlots,
+      byId,
+      observeSlot,
+      beginDraft,
+      endDraft,
+    ]
   );
 
   if (hidden) return null;
@@ -584,9 +657,9 @@ function ReviewRoot({
     style: metrics.left === null ? undefined : { left: metrics.left, right: 'auto' },
   };
 
-  // Root-level slots a child can replace in place. Collected but never consumed, six of the
-  // fourteen parts advertised the override rung and silently did nothing.
-  const rootParts = partOverrides(children);
+  // Root-level slots a child can replace in place. A render prop is not an override — it is
+  // the card itself, and travels down to `ReviewList` untouched.
+  const rootParts = typeof children === 'function' ? {} : partOverrides(children);
   const takeRoot = (key: string, fallback: ReactNode): ReactNode =>
     key in rootParts ? rootParts[key] : fallback;
 
@@ -605,8 +678,11 @@ function ReviewRoot({
     </>
   ) : null;
 
+  // `preset={false}` hands the panel over verbatim, but a render prop needs the list to run it.
   const body = !preset
-    ? children
+    ? typeof children === 'function'
+      ? null
+      : children
     : open
       ? takeRoot(
           'List',
@@ -656,7 +732,7 @@ function ReviewRoot({
         </Slot>
       ) : (
         <aside {...shared}>
-          {furniture !== undefined ? (
+          {open && furniture !== undefined ? (
             <div className="docx-review__furniture" data-testid="review-furniture">
               {furniture}
             </div>
@@ -706,7 +782,7 @@ function ReviewList({
   className,
   hidden,
 }: ReviewListProps) {
-  const { review, measure } = useRail();
+  const { review, measure, cardClassName } = useRail();
   if (hidden) return null;
 
   const roots = review.items.filter(
@@ -742,7 +818,9 @@ function ReviewList({
               {typeof children === 'function' ? (
                 children(entry)
               ) : (
-                <ReviewCard>{children}</ReviewCard>
+                <ReviewCard {...(cardClassName ? { className: cardClassName } : {})}>
+                  {children}
+                </ReviewCard>
               )}
             </div>
           </ReviewItemContext.Provider>
@@ -773,7 +851,7 @@ function ReviewMarkers({
   hidden?: boolean;
 }) {
   const { review } = useRail();
-  const { t } = useTranslation();
+  const t = useReviewLabel();
   if (hidden) return null;
   const roots = review.items.filter(
     (entry) => !(entry.kind === 'comment' && entry.parentId !== undefined)
@@ -831,7 +909,7 @@ function ReviewAddComment({
   children,
 }: ReviewPartProps & { top: number | null; drafting?: boolean }) {
   const { beginDraft } = useRail();
-  const { t } = useTranslation();
+  const t = useReviewLabel();
   // Offered for ANY range, including one inside an existing comment: overlapping comments
   // are ordinary in OOXML and ordinary in Word, and a reader picking out three words of a
   // commented sentence usually has something new to say about exactly those words. This used
@@ -865,7 +943,7 @@ ReviewAddComment.docxReviewPart = 'AddComment' as const;
  */
 function ReviewDraft({ top, className, hidden }: ReviewPartProps & { top: number }) {
   const { review, endDraft, measure } = useRail();
-  const { t } = useTranslation();
+  const t = useReviewLabel();
   const [text, setText] = useState('');
   const [refused, setRefused] = useState(false);
   const fieldRef = useRef<HTMLInputElement | null>(null);
@@ -1005,7 +1083,7 @@ interface BalloonAnchor {
  */
 function ReviewBalloon({ className, hidden }: ReviewPartProps) {
   const { review, allItems, authorSlots } = useRail();
-  const { t } = useTranslation();
+  const t = useReviewLabel();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [anchor, setAnchor] = useState<BalloonAnchor | null>(null);
   // Whether a balloon is up, readable from the listener without re-binding it.
@@ -1265,7 +1343,7 @@ function BalloonTime({ raw }: { raw: string }) {
 
 /** Shown when nothing is pending. @public */
 function ReviewEmpty({ className, hidden, children }: ReviewPartProps) {
-  const { t } = useTranslation();
+  const t = useReviewLabel();
   if (hidden) return null;
   return (
     <div
@@ -1299,6 +1377,11 @@ function ReviewCard({ className, asChild, hidden, children }: ReviewPartProps) {
     'data-testid': 'review-card',
     'aria-labelledby': `${cardId}-author ${cardId}-summary`,
     'data-kind': entry.kind === 'revision' ? (entry.revisionKind ?? 'revision') : entry.kind,
+    // Which custom node, not just that it is one: every custom card is `data-kind="custom"`,
+    // so a theme could otherwise never tell a citation card from a clause card.
+    ...(entry.kind === 'custom' && entry.item.kind === 'custom'
+      ? { 'data-node-name': entry.item.name }
+      : {}),
     ...(entry.isActive ? { 'data-active': '' } : {}),
     ...(entry.kind === 'comment' && entry.resolved ? { 'data-resolved': '' } : {}),
     // The author colour is a CSS variable rather than a class, so a host restyling the card
@@ -1357,24 +1440,33 @@ function ReviewCardPreset({ children }: { children?: ReactNode }) {
   // attrs and label originate in the file.
   if (entry.kind === 'custom' && entry.item.kind === 'custom') {
     const item = entry.item;
+    // Overridable like every other kind. `Author` carries the title because that is the slot
+    // it occupies in the packaged card.
     return (
       <>
         <div className="docx-review__head">
+          {take('Avatar', null)}
           <div className="docx-review__meta">
-            <span className="docx-review__author" data-testid="review-custom-title">
-              {item.title}
-            </span>
+            {take(
+              'Author',
+              <span className="docx-review__author" data-testid="review-custom-title">
+                {item.title}
+              </span>
+            )}
           </div>
         </div>
-        {item.detail ? (
-          <div
-            className="docx-review__summary"
-            data-testid="review-summary"
-            data-review-selectable=""
-          >
-            <span className="docx-review__text">{item.detail}</span>
-          </div>
-        ) : null}
+        {take(
+          'Summary',
+          item.detail ? (
+            <div
+              className="docx-review__summary"
+              data-testid="review-summary"
+              data-review-selectable=""
+            >
+              <span className="docx-review__text">{item.detail}</span>
+            </div>
+          ) : null
+        )}
         {overrides.__extra}
       </>
     );
@@ -1439,6 +1531,9 @@ function partOverrides(children: ReactNode): Record<string, ReactNode> {
 function ReviewAvatar({ className, asChild, hidden, children }: ReviewPartProps) {
   const entry = useContext(ReviewItemContext);
   if (hidden || !entry) return null;
+  // Nothing to show is not an empty disc: a custom node's card has no author. Children win,
+  // because a host passing its own glyph means it whatever the item says.
+  if (children === undefined && !entry.initials) return null;
   const shared = {
     className: `docx-review__avatar${className ? ` ${className}` : ''}`,
     'data-testid': 'review-avatar',
@@ -1452,7 +1547,7 @@ ReviewAvatar.docxReviewPart = 'Avatar' as const;
 /** The author's name. @public */
 function ReviewAuthor({ className, asChild, hidden, children }: ReviewPartProps) {
   const entry = useContext(ReviewItemContext);
-  const { t } = useTranslation();
+  const t = useReviewLabel();
   if (hidden || !entry) return null;
   const author = entry.author || t('comments.unknown');
   const shared = {
@@ -1513,7 +1608,7 @@ const REVIEW_DATE_FORMAT = new Intl.DateTimeFormat(undefined, {
  */
 function ReviewSummary({ className, asChild, hidden, children }: ReviewPartProps) {
   const entry = useContext(ReviewItemContext);
-  const { t } = useTranslation();
+  const t = useReviewLabel();
   if (hidden || !entry) return null;
   const text = entry.text;
   const label = entry.kind !== 'revision' ? null : t(revisionLabelKey(entry.revisionKind));
@@ -1584,7 +1679,7 @@ function revisionLabelKey(kind: ReviewRevisionKind): TranslationKey {
 function ReviewAccept({ className, asChild, hidden, children, icon: glyph }: ReviewActionProps) {
   const { review } = useRail();
   const entry = useContext(ReviewItemContext);
-  const { t } = useTranslation();
+  const t = useReviewLabel();
   if (hidden || !entry || entry.kind !== 'revision' || entry.readOnly) return null;
   const label = t('review.accept');
   const shared = {
@@ -1608,7 +1703,7 @@ ReviewAccept.docxReviewPart = 'Accept' as const;
 function ReviewReject({ className, asChild, hidden, children, icon: glyph }: ReviewActionProps) {
   const { review } = useRail();
   const entry = useContext(ReviewItemContext);
-  const { t } = useTranslation();
+  const t = useReviewLabel();
   if (hidden || !entry || entry.kind !== 'revision' || entry.readOnly) return null;
   const label = t('review.reject');
   const shared = {
@@ -1672,7 +1767,7 @@ ReviewReplies.docxReviewPart = 'Replies' as const;
 function ReviewReply({ className, hidden, children }: ReviewPartProps) {
   const { review } = useRail();
   const entry = useContext(ReviewItemContext);
-  const { t } = useTranslation();
+  const t = useReviewLabel();
   const [draft, setDraft] = useState('');
   const [refused, setRefused] = useState(false);
   const fieldId = useId();

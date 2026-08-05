@@ -48,6 +48,7 @@ import {
   MenuPageSetup,
   MenuRow,
   MenuSave,
+  MenuGroup,
   MenuSeparator,
   MenuReportIssue,
   MenuSubmenu,
@@ -393,6 +394,8 @@ export interface DocxEditorMenuNamespace {
   readonly Item: typeof MenuItem;
   /** A presentational row, for a host action that is not a chrome slot. */
   readonly Row: typeof MenuRow;
+  /** A named section of rows: a visible heading plus a real ARIA group. */
+  readonly Group: typeof MenuGroup;
   readonly Separator: typeof MenuSeparator;
   readonly Submenu: typeof MenuSubmenu;
   /** Word's 6×6 insert-table size picker. */
@@ -424,6 +427,7 @@ export const DocxEditorMenu: DocxEditorMenuNamespace = Object.assign(DocxEditorM
   Help: MenuHelp,
   Item: MenuItem,
   Row: MenuRow,
+  Group: MenuGroup,
   Separator: MenuSeparator,
   Submenu: MenuSubmenu,
   TableGrid: MenuTableGrid,

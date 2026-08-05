@@ -12,19 +12,30 @@
 
 import { useState } from 'react';
 import { DocxEditor, useDocxSource } from '@docx-editor.dev/react';
-import { reviewModule } from '@docx-editor.dev/pro';
-import { DocxEditorReview } from '@docx-editor.dev/pro/react';
+import { customNodesModule, reviewModule } from '@docx-editor.dev/pro';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 
-/** Stable identity: module registration is construction-time, like `author`. */
-const PRO_MODULES = [reviewModule()];
 import { IceSea } from './art/IceSea';
 import { Iceberg } from './art/Iceberg';
 import { IglooContextMenu } from './IglooContextMenu';
 import { IglooMenu } from './IglooMenu';
+import { IglooReview } from './IglooReview';
 import { IglooToolbar } from './IglooToolbar';
 import { Blizzard } from './art/Blizzard';
 import { iglooT } from './labels';
+import { SPECIMENS } from './specimens';
+import { SpecimenProvider } from './useSpecimens';
+
+/**
+ * The pro capabilities this demo registers.
+ *
+ * Stable identity: module registration is construction-time, like `author`, so this array is
+ * built once at module scope rather than per render. `reviewModule()` turns on the review
+ * rail; `customNodesModule` hands the engine two definitions the library has never heard of
+ * (`specimens.ts`), and from that one registration the chip tint, the click dispatch, the
+ * context-menu section and the rail cards all follow.
+ */
+const PRO_MODULES = [reviewModule(), customNodesModule({ nodes: [...SPECIMENS] })];
 
 export interface IglooEditorProps {
   /** Same-origin DOCX to open. */
@@ -52,6 +63,10 @@ export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
         author="Igloo"
         modules={PRO_MODULES}
       >
+        {/* Everything specimen-shaped, in one owner: the chip chrome, the authoring dialog,
+            the click popover and the notice strip, plus the actions the two menus call. It
+            wraps the chrome because those menus are inside it. */}
+        <SpecimenProvider>
         <div className="igloo-chrome">
           <header className="igloo-brand">
             <IglooMark />
@@ -122,13 +137,14 @@ export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
 
             {/* The packaged link popover, restyled into an ice shard by class alone. */}
             <DocxEditor.HyperLink className="igloo-shard" />
-            {/* The PRO review rail — comments and tracked changes as cards beside the
-                page. Enabled by `reviewModule()` on the Root; the pane is chrome from
-                `@docx-editor.dev/pro/react` and reskins by class like everything else. */}
-            <DocxEditorReview />
+            {/* The PRO review rail — comments, tracked changes AND this demo's own
+                specimens, as cards beside the page. Enabled by `reviewModule()` on the
+                Root; `IglooReview.tsx` is where it is re-cut. */}
+            <IglooReview />
             <IglooContextMenu />
           </DocxEditor.Viewport>
         </div>
+        </SpecimenProvider>
       </DocxEditor.Root>
     </div>
   );

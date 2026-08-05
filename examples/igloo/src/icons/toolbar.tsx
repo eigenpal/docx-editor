@@ -103,6 +103,15 @@ export const IceFreeze = (
   </Frost>
 );
 
+/** The ice core: the sample tube the review rail reads as. Toggles the rail open and shut. */
+export const IceCoreRail = (
+  <Frost>
+    <path d="M4 4h9v16H4z" />
+    <path d="M16 5h4v14h-4z" />
+    <path d="M16 9h4M16 13h4" />
+  </Frost>
+);
+
 /** Blizzard: a cloud with fall lines. Pure decoration the engine knows nothing about. */
 export const IceBlizzard = (
   <Frost>

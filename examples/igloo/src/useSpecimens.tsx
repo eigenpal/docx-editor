@@ -1,0 +1,234 @@
+// Every specimen action, in one place, behind a context.
+//
+// Four surfaces reach these: the Igloo menu, the right-click menu, the chip itself and the
+// context menu's Edit row. One owner for the dialog, the popover and the notice, for the same
+// reason `useFrost` has one definition — surfaces that decide independently drift apart.
+//
+// It also mounts `CustomNodeChrome`, which belongs inside `DocxEditor.Root` and drives its
+// `onNodeClick` from the state held here.
+
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { useDocxEditor, useEditorCaret, useEditorState } from '@docx-editor.dev/react';
+import { insertCustomNode, updateCustomNode, type ActivatedCustomNode } from '@docx-editor.dev/pro';
+import { CustomNodeChrome } from '@docx-editor.dev/pro/react';
+import {
+  blocksOf,
+  defaultAttrs,
+  definitionOf,
+  depthOf,
+  labelFor,
+  randomSpecimen,
+  type SpecimenAt,
+  type SpecimenKind,
+} from './specimens';
+import { SpecimenDialog, type SpecimenForm } from './SpecimenDialog';
+import { SpecimenPopover, type SpecimenProbe } from './SpecimenPopover';
+
+/** Structurally the engine's `ExecResult`: a refusal carries the engine's own reason. */
+type Refusable = { readonly ok: true } | { readonly ok: false; readonly reason: string };
+
+export interface SpecimenActions {
+  /** Whether the ENGINE would take a write right now. A view-only document reports false. */
+  readonly editable: boolean;
+  /**
+   * Why not, when `editable` is false. There is no `Editor.can` for a node write, so this is
+   * the host's own sentence; the engine's verbatim refusal arrives in the notice on attempt.
+   */
+  readonly disabledReason: string | null;
+  /** Open the authoring form, on the caret it was opened from. */
+  readonly compose: (kind: SpecimenKind) => void;
+  /** One specimen picked out of the water, straight into the document. */
+  readonly dropRandom: () => void;
+  /** Re-author an existing node — what the context menu's Edit row runs. */
+  readonly edit: (node: ActivatedCustomNode) => void;
+}
+
+const SpecimenContext = createContext<SpecimenActions | null>(null);
+
+/** Inert outside the provider: a part rendered by mistake shows nothing rather than throwing. */
+const INERT: SpecimenActions = {
+  editable: false,
+  disabledReason: null,
+  compose: () => {},
+  dropRandom: () => {},
+  edit: () => {},
+};
+
+export function useSpecimens(): SpecimenActions {
+  return useContext(SpecimenContext) ?? INERT;
+}
+
+/** A notice keyed by its own id, so the same words twice still replay the fade. */
+interface Notice {
+  readonly id: number;
+  readonly text: string;
+}
+
+/**
+ * Mount inside `DocxEditor.Root`.
+ *
+ * Renders the chip chrome, the authoring dialog, the specimen popover and the notice strip,
+ * and provides the actions the menus call.
+ */
+export function SpecimenProvider({ children }: { children: ReactNode }) {
+  const editor = useDocxEditor();
+  const editable = useEditorState((snapshot) => snapshot.editable);
+  // Separate, because `editable` folds "read-only" and "Viewing mode" into one boolean and
+  // those are two different things to tell somebody.
+  const mode = useEditorState((snapshot) => snapshot.editingMode);
+  const [form, setForm] = useState<SpecimenForm | null>(null);
+  const [probe, setProbe] = useState<SpecimenProbe | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+
+  // The caret at the moment a row is chosen. A dialog takes focus, so inserting at "wherever
+  // the selection is by then" lands the specimen wherever the last click left it. The value is
+  // reference-stable, so capturing it in a handler is safe.
+  const caret = useEditorCaret();
+
+  const say = useCallback((text: string) => {
+    setNotice((previous) => ({ id: (previous?.id ?? 0) + 1, text }));
+  }, []);
+
+  const report = useCallback(
+    (result: Refusable, done: string) => {
+      say(result.ok ? done : `Refused: ${result.reason}`);
+    },
+    [say]
+  );
+
+  const place = useCallback(
+    (kind: SpecimenKind, attrs: Record<string, string>, label: string, at: SpecimenAt) => {
+      if (!editor) return;
+      const definition = definitionOf(kind);
+      report(
+        insertCustomNode(editor, definition, attrs, label, {
+          alias: definition.label ?? definition.name,
+          ...(at ? { at } : {}),
+        }),
+        kind === 'iceberg' ? 'A berg calved into the paragraph.' : 'An igloo went up.'
+      );
+    },
+    [editor, report]
+  );
+
+  const compose = useCallback(
+    (kind: SpecimenKind) => {
+      const attrs = defaultAttrs(kind);
+      setForm({ mode: 'insert', kind, attrs, label: labelFor(kind, attrs), at: caret });
+    },
+    [caret]
+  );
+
+  const dropRandom = useCallback(() => {
+    const picked = randomSpecimen();
+    place(picked.kind, picked.attrs, picked.label, caret);
+  }, [caret, place]);
+
+  const edit = useCallback(
+    (node: ActivatedCustomNode) => {
+      // `nodeId` resolves only against a registered review module. Without it there is no
+      // address to re-author, and saying so beats a dialog whose Save can only fail.
+      if (node.nodeId === undefined) {
+        say('That specimen has no id to re-author yet.');
+        return;
+      }
+      const kind: SpecimenKind = node.name === 'iceberg' ? 'iceberg' : 'igloo';
+      setForm({
+        mode: 'edit',
+        kind,
+        nodeId: node.nodeId,
+        attrs: { ...node.attrs },
+        label: node.text ?? labelFor(kind, node.attrs),
+      });
+    },
+    [say]
+  );
+
+  /**
+   * The chip click. An iceberg surfaces what is under it; an igloo lays another block, which
+   * is a real `updateCustomNode` write — one transaction, one undo step, so the paragraph
+   * label, the rail card and the saved file move together.
+   */
+  const activate = useCallback(
+    (node: ActivatedCustomNode) => {
+      if (node.name === 'iceberg') {
+        setProbe({ kind: 'iceberg', rect: node.rect, depth: depthOf(node.attrs) });
+        return;
+      }
+      const blocks = blocksOf(node.attrs) + 1;
+      if (!editor || node.nodeId === undefined) {
+        say('That igloo has no id to build on yet.');
+        return;
+      }
+      const attrs = { blocks: String(blocks) };
+      const result = updateCustomNode(
+        editor,
+        definitionOf('igloo'),
+        node.nodeId,
+        attrs,
+        labelFor('igloo', attrs),
+        { alias: 'Igloo' }
+      );
+      if (!result.ok) {
+        report(result, '');
+        return;
+      }
+      setProbe({ kind: 'igloo', rect: node.rect, blocks });
+    },
+    [editor, report, say]
+  );
+
+  const value = useMemo<SpecimenActions>(
+    () => ({
+      editable,
+      disabledReason: editable
+        ? null
+        : mode === 'viewing'
+          ? 'Viewing mode — switch to Editing or Suggesting'
+          : 'this document is read-only',
+      compose,
+      dropRandom,
+      edit,
+    }),
+    [editable, mode, compose, dropRandom, edit]
+  );
+
+  const commit = useCallback(
+    (next: SpecimenForm) => {
+      setForm(null);
+      if (!editor) return;
+      if (next.mode === 'insert') {
+        place(next.kind, next.attrs, next.label, next.at);
+        return;
+      }
+      const definition = definitionOf(next.kind);
+      report(
+        updateCustomNode(editor, definition, next.nodeId, next.attrs, next.label, {
+          alias: definition.label ?? definition.name,
+        }),
+        'Re-carved.'
+      );
+    },
+    [editor, place, report]
+  );
+
+  return (
+    <SpecimenContext.Provider value={value}>
+      {/* Chip tint and click delegation. Defaults to the definitions registered on the Root. */}
+      <CustomNodeChrome onNodeClick={activate} />
+      {children}
+      {form ? <SpecimenDialog form={form} onCommit={commit} onClose={() => setForm(null)} /> : null}
+      {probe ? <SpecimenPopover probe={probe} onClose={() => setProbe(null)} /> : null}
+      {notice ? (
+        <div
+          key={notice.id}
+          className="igloo-notice"
+          role="status"
+          onAnimationEnd={() => setNotice(null)}
+        >
+          {notice.text}
+        </div>
+      ) : null}
+    </SpecimenContext.Provider>
+  );
+}

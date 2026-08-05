@@ -18,8 +18,10 @@ import {
   DocxEditor,
   useDocxEditor,
   useDocxSource,
+  useEditorCaret,
   useEditorEvent,
   useFontFamily,
+  type EditorCaret,
 } from '@docx-editor.dev/react';
 // PRO: comments + tracked changes ship in @docx-editor.dev/pro. Register the
 // review module on the Root and mount the pane; without the module the same
@@ -313,7 +315,7 @@ function CitationCardActions() {
  */
 /** Insert at a captured caret, or edit an existing node by its id. */
 export type CitationFormState =
-  | { readonly mode: 'insert'; readonly at: { paragraphId: string; offset: number } | null }
+  | { readonly mode: 'insert'; readonly at: EditorCaret | null }
   | {
       readonly mode: 'edit';
       readonly nodeId: string;
@@ -631,9 +633,15 @@ function EditorChrome({
   onTitleChange: (next: string) => void;
   colorMode: 'light' | 'dark';
   onColorModeChange: (next: 'light' | 'dark') => void;
-  onInsertCitation: (at: { paragraphId: string; offset: number } | null) => void;
+  onInsertCitation: (at: EditorCaret | null) => void;
 }) {
   const editor = useDocxEditor();
+  // Where the caret is, as a paragraph and an offset — the shape the write APIs take as
+  // their `at`. `snapshot.selection` cannot answer this (it addresses paragraphs by id and
+  // carries no offsets), and reading it used to mean reaching into `editor.surface`, an
+  // escape hatch documented for chrome. The value is reference-stable, so capturing it in
+  // a menu handler is safe.
+  const caret = useEditorCaret();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [showPageSetup, setShowPageSetup] = useState(false);
 
@@ -733,16 +741,21 @@ function EditorChrome({
                 is a recognized citation chip; in Word it is a locked control
                 showing the literal label. */}
             <DocxEditor.Menu.Menu id="my-menu" label="My Menu">
+              {/* `Menu.Group` is a real `role="group"` taking its heading as the accessible
+                  name, so rows a product ADDS are visibly its own without a hand-rolled
+                  heading breaking the menu's ownership of its items. */}
+              <DocxEditor.Menu.Group label="Custom elements">
               <DocxEditor.Menu.Row
                 onSelect={() => {
                   if (!editor) return;
                   // Capture the caret NOW: the dialog's inputs take focus, and inserting
                   // at "wherever the selection is by then" lands the chip wrong.
-                  onInsertCitation(editor.surface?.state().selection.head ?? null);
+                  onInsertCitation(caret);
                 }}
               >
                 Insert citation
               </DocxEditor.Menu.Row>
+              </DocxEditor.Menu.Group>
             </DocxEditor.Menu.Menu>
           </DocxEditor.Menu>
         </div>
@@ -945,9 +958,11 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
                   `@docx-editor.dev/pro/react` and enabled by the `reviewModule()` on the
                   Root. Inside the viewport for the same reason as the popover — it
                   scrolls with the document rather than chasing it. */}
-              <DocxEditorReview>
+              <DocxEditorReview t={translate} card={{ className: 'demo-review-card' }}>
                 {/* Host content inside every card: `useReviewItem()` scopes it to
-                    citation cards, the packaged parts stay. */}
+                    citation cards, the packaged parts stay. A custom node's card carries
+                    `data-node-name`, so `demo-review-card[data-node-name='citation']`
+                    styles citations without inspecting its own children to find them. */}
                 <CitationCardActions />
               </DocxEditorReview>
             </DocxEditor.Viewport>

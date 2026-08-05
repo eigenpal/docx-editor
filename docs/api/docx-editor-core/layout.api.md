@@ -1212,6 +1212,7 @@ export interface LineRecord {
     readonly baseline: number;
     // (undocumented)
     readonly box: LayoutBox;
+    readonly contentX: number;
     readonly deletedRanges?: readonly ModelRange[];
     readonly drawings?: readonly InlineDrawingRecord[];
     // (undocumented)

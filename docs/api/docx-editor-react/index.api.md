@@ -43,6 +43,8 @@ import { FontConfigurationFragment } from '@docx-editor.dev/core/editor';
 import { FontFaceRequest } from '@docx-editor.dev/core/contracts/editor';
 import { FontLoadFailure } from '@docx-editor.dev/core/editor';
 import { FontLoadFailureReason } from '@docx-editor.dev/core/editor';
+import { FontResolutionRequest } from '@docx-editor.dev/core/editor';
+import { FontResolver } from '@docx-editor.dev/core/editor';
 import { FontSource } from '@docx-editor.dev/core/contracts/editor';
 import { FontSourceSubstitution } from '@docx-editor.dev/core/contracts/editor';
 import { FontUrlSource } from '@docx-editor.dev/core/editor';
@@ -55,6 +57,7 @@ import { IndentFormatting } from '@docx-editor.dev/core/contracts/editor';
 import { loadFonts } from '@docx-editor.dev/core/editor';
 import { LoadFontsRequest } from '@docx-editor.dev/core/editor';
 import { LoadFontsResult } from '@docx-editor.dev/core/editor';
+import { MAX_RESOLVER_FAMILIES } from '@docx-editor.dev/core/editor';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core/editor';
@@ -336,6 +339,7 @@ export interface DocxEditorContextMenuNamespace {
     readonly DeleteTableColumn: typeof ContextMenuDeleteTableColumn;
     // (undocumented)
     readonly DeleteTableRow: typeof ContextMenuDeleteTableRow;
+    readonly Group: typeof MenuGroup;
     // (undocumented)
     readonly InsertColumnLeft: typeof ContextMenuInsertColumnLeft;
     // (undocumented)
@@ -481,6 +485,7 @@ export interface DocxEditorMenuNamespace {
     readonly File: MenuPartComponent;
     // (undocumented)
     readonly Format: MenuPartComponent;
+    readonly Group: typeof MenuGroup;
     // (undocumented)
     readonly Help: MenuPartComponent;
     // (undocumented)
@@ -612,7 +617,7 @@ export interface DocxEditorProps {
     readonly colorMode?: 'light' | 'dark' | 'system';
     contextMenu?: boolean | DocxEditorContextMenuProps;
     document?: DocumentSource;
-    fonts?: FontConfiguration | FontConfigurationFragment;
+    fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     hyperlinkPopup?: boolean;
     // (undocumented)
     locale?: string;
@@ -661,7 +666,7 @@ export interface DocxEditorRootProps {
     // (undocumented)
     children?: ReactNode;
     document?: DocumentSource;
-    fonts?: FontConfiguration | FontConfigurationFragment;
+    fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     imageDecodePort?: ImageDecodePort;
     // (undocumented)
     locale?: string;
@@ -854,6 +859,14 @@ export type DocxSource = string | URL | Uint8Array | ArrayBuffer;
 
 export { Editor }
 
+// @public
+export interface EditorCaret {
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
 export { EditorCommand }
 
 // @public
@@ -938,6 +951,13 @@ export interface FontFamilyProps extends FontFamilyPartProps {
 export { FontLoadFailure }
 
 export { FontLoadFailureReason }
+
+export { FontResolutionRequest }
+
+export { FontResolver }
+
+// @public
+export type FontsInput = FontConfiguration | FontConfigurationFragment | FontResolver | Promise<FontConfiguration | FontConfigurationFragment | undefined> | undefined;
 
 export { FontSource }
 
@@ -1095,6 +1115,8 @@ export function LocaleProvider(input: LocaleProviderProps): react.JSX.Element;
 // @public (undocumented)
 export function Logo(input: LogoProps): react__default.JSX.Element;
 
+export { MAX_RESOLVER_FAMILIES }
+
 // @public
 export interface MenuActionProps {
     // (undocumented)
@@ -1105,6 +1127,18 @@ export interface MenuActionProps {
 
 // @public (undocumented)
 export function MenuBar(): react__default.JSX.Element;
+
+// @public
+export interface MenuGroupProps {
+    // (undocumented)
+    children?: ReactNode;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
+    label?: string;
+    labelKey?: string;
+}
 
 // @public
 export type MenuId = ChromeMenuId | (string & {});
@@ -1172,7 +1206,7 @@ export interface MenuSeparatorProps {
     className?: string;
 }
 
-// @public
+// @public (undocumented)
 export interface MenuSubmenuProps {
     // (undocumented)
     children?: ReactNode;
@@ -1802,6 +1836,9 @@ export interface UseDocxSourceResult {
 }
 
 // @public
+export function useEditorCaret(): EditorCaret | null;
+
+// @public
 export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCommandState;
 
 // @public
@@ -1829,6 +1866,9 @@ export interface UseFontFamilyResult {
     readonly setValue: (family: string) => void;
     readonly value: string | null;
 }
+
+// @public
+export function useFonts(source: FontsInput, ...fragments: readonly (FontConfigurationFragment | undefined)[]): FontResolver;
 
 // @public
 export function useHeaderFooterState(): HeaderFooterState | null;

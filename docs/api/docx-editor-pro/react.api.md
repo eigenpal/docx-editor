@@ -6,6 +6,7 @@
 
 import { JSX } from 'react';
 import type { ReactNode } from 'react';
+import { ToolbarTranslate } from '@docx-editor.dev/react';
 
 // @public
 export function activatedCustomNodeOf(resolved: ResolvedCustomNodeActivation, editor: Editor | null | undefined): ActivatedCustomNode | null;
@@ -114,7 +115,11 @@ export interface ReviewPartProps {
 }
 
 // @public
-export interface ReviewProps extends ReviewPartProps {
+export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
+    card?: {
+        className?: string;
+    };
+    children?: ReactNode | ((item: ReviewItemView) => ReactNode);
     filter?: (item: ReviewItemView) => boolean;
     formatting?: boolean;
     furniture?: ReactNode;
@@ -122,6 +127,7 @@ export interface ReviewProps extends ReviewPartProps {
     preset?: boolean;
     stack?: boolean;
     structural?: boolean;
+    t?: ToolbarTranslate;
 }
 
 // @public

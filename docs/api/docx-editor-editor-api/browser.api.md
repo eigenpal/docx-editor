@@ -4,26 +4,26 @@
 
 ```ts
 
-import { BookmarkIndex } from '@docx-editor.dev/core/store';
-import { CellSelection } from '@docx-editor.dev/core/layout';
-import { ContentControlBoundaryRecord } from '@docx-editor.dev/core/layout';
-import * as _docx_editor_dev_core_layout from '@docx-editor.dev/core/layout';
-import * as _docx_editor_dev_core_store from '@docx-editor.dev/core/store';
-import { Editor } from '@docx-editor.dev/core/contracts/editor';
-import { NavigationCommand } from '@docx-editor.dev/core/layout';
-import { SectionProperties } from '@docx-editor.dev/core/layout';
-import { SemanticLayout } from '@docx-editor.dev/core/layout';
-import { SemanticSelection } from '@docx-editor.dev/core/layout';
-import { StoryScope } from '@docx-editor.dev/core/store';
-import { TreeApplyResult } from '@docx-editor.dev/core/binding';
-import { TreeDocOp as TreeDocOp_2 } from '@docx-editor.dev/core/store';
-import { TreeDocxSession } from '@docx-editor.dev/core/binding';
-import { Unsubscribe } from '@docx-editor.dev/core/contracts/editor';
+import { BookmarkIndex } from '@docx-editor.dev/core-contract/store';
+import { CellSelection } from '@docx-editor.dev/core-contract/layout';
+import { ContentControlBoundaryRecord } from '@docx-editor.dev/core-contract/layout';
+import * as _docx_editor_dev_core_contract_layout from '@docx-editor.dev/core-contract/layout';
+import * as _docx_editor_dev_core_contract_store from '@docx-editor.dev/core-contract/store';
+import { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import { NavigationCommand } from '@docx-editor.dev/core-contract/layout';
+import { SectionProperties } from '@docx-editor.dev/core-contract/layout';
+import { SemanticLayout } from '@docx-editor.dev/core-contract/layout';
+import { SemanticSelection } from '@docx-editor.dev/core-contract/layout';
+import { StoryScope } from '@docx-editor.dev/core-contract/store';
+import { TreeApplyResult } from '@docx-editor.dev/core-contract/binding';
+import { TreeDocOp as TreeDocOp_2 } from '@docx-editor.dev/core-contract/store';
+import { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
+import { Unsubscribe } from '@docx-editor.dev/core-contract/contracts/editor';
 
 // @public
 export type BesideLocation = Extract<InsertLocation, 'Before' | 'After'>;
 
-// @public
+// @public (undocumented)
 class Body_2 extends ModelObject {
     clear(): void;
     get contentControls(): ContentControlCollection;
@@ -36,8 +36,9 @@ class Body_2 extends ModelObject {
     get lists(): ListCollection;
     // @internal
     static main(context: RequestContext, label: string): Body_2;
-    // @internal
+    // (undocumented)
     protected onLoad(request: ResolvedLoadOptions): void;
+    // (undocumented)
     get paragraphs(): ParagraphCollection;
     // @internal
     paragraphsUnder(label: string): ParagraphCollection;
@@ -57,16 +58,16 @@ export type BodyInsertParagraphLocation = Extract<InsertLocation, 'Start' | 'End
 // @public
 export type BodyInsertTextLocation = Extract<InsertLocation, 'Replace' | 'Start' | 'End'>;
 
-// @public
+// @public (undocumented)
 export class Bookmark extends ModelObject implements PromisedItem {
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): Bookmark;
-    // @internal
+    // @internal (undocumented)
     hydrateAddress(address: ObjectAddress): void;
-    // @internal
+    // @internal (undocumented)
     hydrateNull(): void;
     get name(): string;
-    // @internal
+    // (undocumented)
     protected onLoad(request: ResolvedLoadOptions): void;
     // @internal
     static promised(context: RequestContext, label: string, nullable: boolean): Bookmark;
@@ -74,64 +75,65 @@ export class Bookmark extends ModelObject implements PromisedItem {
     select(selectionMode_?: SelectionMode_2): void;
 }
 
-// @public
+// @public (undocumented)
 export class BookmarkCollection extends HandleCollection<Bookmark> {
-    // @internal
+    // (undocumented)
     protected itemAt(label: string, address: ObjectAddress): Bookmark;
-    // @internal
+    // (undocumented)
     protected listing(): AutomationOperation;
     // @internal
     static of(context: RequestContext, label: string, owner: ObjectPath, plan: () => AutomationOperation): BookmarkCollection;
-    // @internal
+    // (undocumented)
     protected promised(label: string, nullable: boolean): Bookmark & PromisedItem;
 }
 
-// @public
+// @public (undocumented)
 export abstract class ClientObject implements RuntimeManagedObject {
-    // @internal
+    // @internal (undocumented)
     [REBIND](context: RequestContext): void;
-    // @internal
+    // @internal (undocumented)
     [RELEASE](): void;
     protected constructor(context: RequestContext, path: ObjectPath, options?: {
         readonly nullable?: boolean;
     });
     get context(): RequestContext;
-    // @internal
+    // (undocumented)
     protected enqueue(action: QueuedAction): void;
     protected handle(): AutomationHandle;
-    // @internal
+    // (undocumented)
     protected hasLoadedProperty(name: string): boolean;
-    // @internal
+    // (undocumented)
     protected get internals(): ContextInternals;
     get isNullObject(): boolean;
     load(option?: LoadOption): this;
-    // @internal
+    // (undocumented)
     protected loadedProperty<T>(name: string): T;
     protected abstract onLoad(request: ResolvedLoadOptions): void;
-    // @internal
+    // (undocumented)
     protected get path(): ObjectPath;
     protected requireAddressable(): void;
-    // @internal
+    // (undocumented)
     protected setLoadedProperty(name: string, value: unknown): void;
 }
 
-// @public
+// @public (undocumented)
 export class ClientResult<T> {
-    // @internal
+    // @internal (undocumented)
     static create<T>(target: string): {
         result: ClientResult<T>;
         fill: (value: T) => void;
     };
     get isLoaded(): boolean;
+    // (undocumented)
     get value(): T;
 }
 
-// @public
+// @public (undocumented)
 class Comment_2 extends CommentBase {
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): Comment_2;
     getRange(): Range_2;
-    // @internal
+    // (undocumented)
     protected onLoad(request: ResolvedLoadOptions): void;
     // @internal
     static promised(context: RequestContext, label: string, nullable: boolean): Comment_2;
@@ -142,43 +144,43 @@ class Comment_2 extends CommentBase {
 }
 export { Comment_2 as Comment }
 
-// @public
+// @public (undocumented)
 export class CommentCollection extends HandleCollection<Comment_2> {
     getFirst(): Comment_2;
-    // @internal
+    // (undocumented)
     protected itemAt(label: string, address: ObjectAddress): Comment_2;
-    // @internal
+    // (undocumented)
     protected listing(): AutomationOperation;
     // @internal
     static of(context: RequestContext, label: string, owner: ObjectPath, plan: () => AutomationOperation): CommentCollection;
-    // @internal
+    // (undocumented)
     protected promised(label: string, nullable: boolean): Comment_2 & PromisedItem;
 }
 
-// @public
+// @public (undocumented)
 export class CommentReply extends CommentBase {
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): CommentReply;
-    // @internal
+    // (undocumented)
     protected onLoad(request: ResolvedLoadOptions): void;
     // @internal
     static promised(context: RequestContext, label: string, nullable: boolean): CommentReply;
 }
 
-// @public
+// @public (undocumented)
 export class CommentReplyCollection extends HandleCollection<CommentReply> {
     getFirst(): CommentReply;
-    // @internal
+    // (undocumented)
     protected itemAt(label: string, address: ObjectAddress): CommentReply;
-    // @internal
+    // (undocumented)
     protected listing(): AutomationOperation;
     // @internal
     static of(context: RequestContext, label: string, owner: ObjectPath, plan: () => AutomationOperation): CommentReplyCollection;
-    // @internal
+    // (undocumented)
     protected promised(label: string, nullable: boolean): CommentReply & PromisedItem;
 }
 
-// @public
+// @public (undocumented)
 export class ContentControl extends ModelObject implements PromisedItem {
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): ContentControl;
@@ -189,13 +191,13 @@ export class ContentControl extends ModelObject implements PromisedItem {
     get contentControls(): ContentControlCollection;
     delete(keepContent: boolean): void;
     getRange(rangeLocation?: 'Whole' | 'Start' | 'End' | 'Before' | 'After' | 'Content'): Range_2;
-    // @internal
+    // @internal (undocumented)
     hydrateAddress(address: ObjectAddress): void;
-    // @internal
+    // @internal (undocumented)
     hydrateNull(): void;
     get id(): string;
     insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range_2;
-    // @internal
+    // (undocumented)
     protected onLoad(request: ResolvedLoadOptions): void;
     get paragraphs(): ParagraphCollection;
     get placeholderShown(): boolean;
@@ -211,20 +213,20 @@ export class ContentControl extends ModelObject implements PromisedItem {
     set title(value: string);
 }
 
-// @public
+// @public (undocumented)
 export class ContentControlCollection extends HandleCollection<ContentControl> {
     getById(id: number): ContentControl;
     getByTag(tag: string): ContentControlCollection;
     getByTitle(title: string): ContentControlCollection;
     getFirst(): ContentControl;
     getFirstOrNullObject(): ContentControl;
-    // @internal
+    // (undocumented)
     protected itemAt(label: string, address: ObjectAddress): ContentControl;
-    // @internal
+    // (undocumented)
     protected listing(): AutomationOperation;
     // @internal
     static of(context: RequestContext, label: string, owner: ObjectPath, scope: ContentControlScope): ContentControlCollection;
-    // @internal
+    // (undocumented)
     protected promised(label: string, nullable: boolean): ContentControl & PromisedItem;
 }
 
@@ -251,20 +253,20 @@ export type ContentControlValue = {
     readonly iso: string;
 };
 
-// @public
+// @public (undocumented)
 export interface CreateServerOptions {
     readonly author?: string;
     readonly limits?: DocumentLimits;
 }
 
-// @public
+// @public (undocumented)
 class Document_2 extends ModelObject {
     get body(): Body_2;
     get comments(): CommentCollection;
     get contentControls(): ContentControlCollection;
     get endnotes(): NoteItemCollection;
     get footnotes(): NoteItemCollection;
-    // @internal
+    // (undocumented)
     protected onLoad(request: ResolvedLoadOptions): void;
     // @internal
     static open(context: RequestContext): Document_2;
@@ -276,44 +278,63 @@ export { Document_2 as Document }
 
 // @public
 export interface DocumentCapabilities {
+    // (undocumented)
     readonly document: boolean;
+    // (undocumented)
     readonly events: boolean;
+    // (undocumented)
     readonly layout: boolean;
+    // (undocumented)
     readonly save: boolean;
+    // (undocumented)
     readonly scrolling: boolean;
+    // (undocumented)
     readonly selection: boolean;
 }
 
 // @public
 export interface DocumentLimits {
+    // (undocumented)
     readonly maxRelationships?: number;
+    // (undocumented)
     readonly maxXmlParts?: number;
+    // (undocumented)
     readonly xml?: DocumentXmlLimits;
+    // (undocumented)
     readonly zip?: DocumentZipLimits;
 }
 
 // @public
 export interface DocumentXmlLimits {
+    // (undocumented)
     readonly maxBytes: number;
+    // (undocumented)
     readonly maxElements?: number;
 }
 
 // @public
 export interface DocumentZipLimits {
+    // (undocumented)
     readonly maxEntries: number;
+    // (undocumented)
     readonly maxRatio?: number;
+    // (undocumented)
     readonly maxTotalBytes: number;
 }
 
-// @public
+// @public (undocumented)
 export const DocxEditor: DocxEditorNamespace;
 
-// @public
+// @public (undocumented)
 export class DocxEditorError extends Error {
     constructor(init: DocxEditorErrorInit);
+    // (undocumented)
     readonly actualRevision?: number;
+    // (undocumented)
     readonly code: DocxEditorErrorCode;
+    // (undocumented)
     readonly expectedRevision?: number;
+    // (undocumented)
     readonly target?: string;
 }
 
@@ -360,9 +381,10 @@ export type DocxEditorErrorCode =
 /** The document refused the change, or answered something this runtime cannot use. */
 | 'GeneralException';
 
-// @public
+// @public (undocumented)
 export interface DocxEditorErrorInit {
     readonly actualRevision?: number;
+    // (undocumented)
     readonly code: DocxEditorErrorCode;
     readonly expectedRevision?: number;
     readonly target?: string;
@@ -370,11 +392,13 @@ export interface DocxEditorErrorInit {
 
 // @public
 export interface DocxEditorNamespace {
+    // (undocumented)
     createBrowser(editor: DocxEditorInstance): DocxEditorRuntime;
+    // (undocumented)
     createServer(bytes: Uint8Array, options?: CreateServerOptions): Promise<DocxEditorServerRuntime>;
 }
 
-// @public
+// @public (undocumented)
 export interface DocxEditorRuntime {
     readonly capabilities: DocumentCapabilities;
     dispose(): void;
@@ -382,17 +406,18 @@ export interface DocxEditorRuntime {
     run<T>(object: ClientObject | readonly ClientObject[], callback: RunCallback<T>): Promise<T>;
 }
 
-// @public
+// @public (undocumented)
 export interface DocxEditorServerRuntime extends DocxEditorRuntime {
     save(): Promise<Uint8Array>;
 }
 
-// @public
+// @public (undocumented)
 export class Font extends ModelObject {
     get bold(): boolean;
     set bold(value: boolean);
     get color(): string;
     set color(value: string);
+    // (undocumented)
     get italic(): boolean;
     set italic(value: boolean);
     get name(): string;
@@ -413,52 +438,52 @@ export type InsertLocation = 'Replace' | 'Start' | 'End' | 'Before' | 'After';
 // @public
 export function isDocxEditorError(value: unknown): value is DocxEditorError;
 
-// @public
+// @public (undocumented)
 export class List extends ModelObject implements PromisedItem {
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): List;
     getLevelParagraphs(level: number): ParagraphCollection;
-    // @internal
+    // @internal (undocumented)
     hydrateAddress(address: ObjectAddress): void;
-    // @internal
+    // @internal (undocumented)
     hydrateNull(): void;
     get id(): number;
     insertParagraph(paragraphText: string, insertLocation: 'Start' | 'End' | 'Before' | 'After'): Paragraph;
-    // @internal
+    // (undocumented)
     protected onLoad(request: ResolvedLoadOptions): void;
     get paragraphs(): ParagraphCollection;
     // @internal
     static promised(context: RequestContext, label: string, nullable: boolean): List;
 }
 
-// @public
+// @public (undocumented)
 export class ListCollection extends HandleCollection<List> {
     getById(id: number): List;
     getFirst(): List;
-    // @internal
+    // (undocumented)
     protected itemAt(label: string, address: ObjectAddress): List;
-    // @internal
+    // (undocumented)
     protected listing(): AutomationOperation;
     // @internal
     static of(context: RequestContext, label: string, owner: ObjectPath, body: AutomationHandle): ListCollection;
-    // @internal
+    // (undocumented)
     protected promised(label: string, nullable: boolean): List & PromisedItem;
 }
 
-// @public
+// @public (undocumented)
 export class ListItem extends ModelObject {
     get level(): number;
     set level(value: number);
     // @internal
     static of(context: RequestContext, label: string, owner: ObjectPath): ListItem;
-    // @internal
+    // (undocumented)
     protected onLoad(request: ResolvedLoadOptions): void;
 }
 
-// @public
+// @public (undocumented)
 export type LoadOption = string | readonly string[] | LoadQueryOptions;
 
-// @public
+// @public (undocumented)
 export interface LoadQueryOptions {
     readonly expand?: string | readonly string[];
     readonly select?: string | readonly string[];
@@ -466,18 +491,18 @@ export interface LoadQueryOptions {
     readonly top?: number;
 }
 
-// @public
+// @public (undocumented)
 export class NoteItem extends ModelObject implements PromisedItem {
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): NoteItem;
     get body(): Body_2;
     delete(): void;
     getNext(): NoteItem;
-    // @internal
+    // @internal (undocumented)
     hydrateAddress(address: ObjectAddress): void;
-    // @internal
+    // @internal (undocumented)
     hydrateNull(): void;
-    // @internal
+    // (undocumented)
     protected onLoad(request: ResolvedLoadOptions): void;
     // @internal
     static promised(context: RequestContext, label: string, nullable: boolean): NoteItem;
@@ -487,13 +512,13 @@ export class NoteItem extends ModelObject implements PromisedItem {
 // @public
 export class NoteItemCollection extends HandleCollection<NoteItem> {
     getFirst(): NoteItem;
-    // @internal
+    // (undocumented)
     protected itemAt(label: string, address: ObjectAddress): NoteItem;
-    // @internal
+    // (undocumented)
     protected listing(): AutomationOperation;
-    // @internal
+    // @internal (undocumented)
     static of(context: RequestContext, label: string, owner: ObjectPath, plan: () => AutomationOperation): NoteItemCollection;
-    // @internal
+    // (undocumented)
     protected promised(label: string, nullable: boolean): NoteItem & PromisedItem;
 }
 
@@ -503,7 +528,7 @@ export type NoteItemType = 'Footnote' | 'Endnote';
 // @public
 export type PageOrientation = 'Portrait' | 'Landscape';
 
-// @public
+// @public (undocumented)
 export class PageSetup extends ModelObject {
     get bottomMargin(): number;
     set bottomMargin(value: number);
@@ -511,7 +536,7 @@ export class PageSetup extends ModelObject {
     set leftMargin(value: number);
     // @internal
     static of(context: RequestContext, label: string, owner: ObjectPath): PageSetup;
-    // @internal
+    // (undocumented)
     protected onLoad(request: ResolvedLoadOptions): void;
     get orientation(): PageOrientation;
     set orientation(value: PageOrientation);
@@ -525,7 +550,7 @@ export class PageSetup extends ModelObject {
     set topMargin(value: number);
 }
 
-// @public
+// @public (undocumented)
 export class Paragraph extends ModelObject implements PromisedItem {
     get alignment(): ParagraphAlignment;
     set alignment(value: ParagraphAlignment);
@@ -536,9 +561,9 @@ export class Paragraph extends ModelObject implements PromisedItem {
     get firstLineIndent(): number;
     set firstLineIndent(value: number);
     get font(): Font;
-    // @internal
+    // @internal (undocumented)
     hydrateAddress(address: ObjectAddress): void;
-    // @internal
+    // @internal (undocumented)
     hydrateNull(): void;
     insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;
     insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range_2;
@@ -548,7 +573,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
     set lineSpacing(value: number);
     get list(): List;
     get listItem(): ListItem;
-    // @internal
+    // (undocumented)
     protected onLoad(request: ResolvedLoadOptions): void;
     // @internal
     static promised(context: RequestContext, label: string, nullable: boolean): Paragraph;
@@ -568,46 +593,46 @@ export class Paragraph extends ModelObject implements PromisedItem {
 // @public
 export type ParagraphAlignment = 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
 
-// @public
+// @public (undocumented)
 export class ParagraphCollection extends ItemCollection<Paragraph> {
-    // @internal
+    // (undocumented)
     protected addressAt(value: AutomationValue, label: string, index: number): ObjectAddress | undefined;
     getFirst(): Paragraph;
     getFirstOrNullObject(): Paragraph;
     getLast(): Paragraph;
     getLastOrNullObject(): Paragraph;
-    // @internal
+    // (undocumented)
     protected itemAt(label: string, address: ObjectAddress): Paragraph;
-    // @internal
+    // (undocumented)
     protected listing(): AutomationOperation;
     // @internal
     static of(context: RequestContext, label: string, owner: ObjectPath): ParagraphCollection;
     // @internal
     static overListing(context: RequestContext, label: string, owner: ObjectPath, plan: () => AutomationOperation): ParagraphCollection;
-    // @internal
+    // (undocumented)
     protected promised(label: string, nullable: boolean): Paragraph & PromisedItem;
-    // @internal
+    // (undocumented)
     protected size(value: AutomationValue, label: string): number;
 }
 
 // @public
 export type ParagraphInsertTextLocation = Extract<InsertLocation, 'Replace' | 'Start' | 'End'>;
 
-// @public
+// @public (undocumented)
 class Range_2 extends ModelObject implements PromisedItem {
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): Range_2;
     get bookmarks(): BookmarkCollection;
     get font(): Font;
-    // @internal
+    // @internal (undocumented)
     hydrateAddress(address: ObjectAddress): void;
-    // @internal
+    // @internal (undocumented)
     hydrateNull(): void;
     get hyperlink(): string;
     set hyperlink(value: string);
     insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;
     insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End' | 'Before' | 'After'): Range_2;
-    // @internal
+    // (undocumented)
     protected onLoad(request: ResolvedLoadOptions): void;
     get paragraphs(): ParagraphCollection;
     // @internal
@@ -620,31 +645,31 @@ class Range_2 extends ModelObject implements PromisedItem {
 }
 export { Range_2 as Range }
 
-// @public
+// @public (undocumented)
 export class RangeCollection extends ItemCollection<Range_2> {
-    // @internal
+    // (undocumented)
     protected addressAt(value: AutomationValue, label: string, index: number): ObjectAddress | undefined;
     // @internal
     static answered(context: RequestContext, label: string, owner: ObjectPath): RangeCollection;
     getFirst(): Range_2;
     getFirstOrNullObject(): Range_2;
     getLast(): Range_2;
-    // @internal
+    // (undocumented)
     protected itemAt(label: string, address: ObjectAddress): Range_2;
-    // @internal
+    // (undocumented)
     protected listing(): AutomationOperation | null;
     // @internal
     static of(context: RequestContext, label: string, owner: ObjectPath, plan: () => AutomationOperation): RangeCollection;
-    // @internal
+    // (undocumented)
     protected promised(label: string, nullable: boolean): Range_2 & PromisedItem;
-    // @internal
+    // (undocumented)
     protected size(value: AutomationValue, label: string): number;
 }
 
 // @public
 export type RangeInsertTextLocation = InsertLocation;
 
-// @public
+// @public (undocumented)
 export class RequestContext {
     // @internal
     get [INTERNALS](): ContextInternals;
@@ -657,21 +682,22 @@ export class RequestContext {
     get capabilities(): DocumentCapabilities;
     get document(): Document_2;
     sync(): Promise<void>;
+    // (undocumented)
     get trackedObjects(): TrackedObjects;
 }
 
-// @public
+// @public (undocumented)
 export class Revision extends ModelObject implements PromisedItem {
     accept(): void;
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): Revision;
     get author(): string;
     get date(): Date;
-    // @internal
+    // @internal (undocumented)
     hydrateAddress(address: ObjectAddress): void;
-    // @internal
+    // @internal (undocumented)
     hydrateNull(): void;
-    // @internal
+    // (undocumented)
     protected onLoad(request: ResolvedLoadOptions): void;
     // @internal
     static promised(context: RequestContext, label: string, nullable: boolean): Revision;
@@ -680,16 +706,16 @@ export class Revision extends ModelObject implements PromisedItem {
     get type(): RevisionType;
 }
 
-// @public
+// @public (undocumented)
 export class RevisionCollection extends HandleCollection<Revision> {
     acceptAll(): void;
-    // @internal
+    // (undocumented)
     protected itemAt(label: string, address: ObjectAddress): Revision;
-    // @internal
+    // (undocumented)
     protected listing(): AutomationOperation;
     // @internal
     static of(context: RequestContext, label: string, owner: ObjectPath, body: AutomationHandle, document: AutomationHandle): RevisionCollection;
-    // @internal
+    // (undocumented)
     protected promised(label: string, nullable: boolean): Revision & PromisedItem;
     rejectAll(): void;
 }
@@ -700,7 +726,7 @@ export type RevisionType = 'None' | 'Insert' | 'Delete' | 'Property' | 'Paragrap
 // @public
 export type RunCallback<T> = (context: RequestContext) => Promise<T>;
 
-// @public
+// @public (undocumented)
 export interface SearchOptions {
     readonly ignorePunct?: boolean;
     readonly ignoreSpace?: boolean;
@@ -709,7 +735,7 @@ export interface SearchOptions {
     readonly matchWildcards?: boolean;
 }
 
-// @public
+// @public (undocumented)
 export class Section extends ModelObject implements PromisedItem {
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): Section;
@@ -717,27 +743,27 @@ export class Section extends ModelObject implements PromisedItem {
     getFooter(type: HeaderFooterType): Body_2;
     getHeader(type: HeaderFooterType): Body_2;
     getNext(): Section;
-    // @internal
+    // @internal (undocumented)
     hydrateAddress(address: ObjectAddress): void;
-    // @internal
+    // @internal (undocumented)
     hydrateNull(): void;
-    // @internal
+    // (undocumented)
     protected onLoad(request: ResolvedLoadOptions): void;
     get pageSetup(): PageSetup;
     // @internal
     static promised(context: RequestContext, label: string, nullable: boolean): Section;
 }
 
-// @public
+// @public (undocumented)
 export class SectionCollection extends HandleCollection<Section> {
     getFirst(): Section;
-    // @internal
+    // (undocumented)
     protected itemAt(label: string, address: ObjectAddress): Section;
-    // @internal
+    // (undocumented)
     protected listing(): AutomationOperation;
     // @internal
     static of(context: RequestContext, label: string, owner: ObjectPath, plan: () => AutomationOperation): SectionCollection;
-    // @internal
+    // (undocumented)
     protected promised(label: string, nullable: boolean): Section & PromisedItem;
 }
 
@@ -745,7 +771,7 @@ export class SectionCollection extends HandleCollection<Section> {
 type SelectionMode_2 = 'Select' | 'Start' | 'End';
 export { SelectionMode_2 as SelectionMode }
 
-// @public
+// @public (undocumented)
 export class TrackedObjects {
     // @internal
     constructor(internals: ContextInternals, owns: (object: ClientObject) => boolean);
