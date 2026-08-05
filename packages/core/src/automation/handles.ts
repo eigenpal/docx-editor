@@ -3,11 +3,17 @@
 // INTERNAL. A handle is a name this table invented, mapped privately to the engine identity
 // it stands for. Consumers get the name; nothing else ever leaves.
 //
-// Two properties matter and both are easy to lose:
+// Three properties matter and all three are easy to lose:
 //
 // STABLE — the same document object asked for twice yields the same ref, so an object model
 // can hold a reference across batches and compare two references for identity. A table that
 // minted per read would make every held reference a distinct object naming the same thing.
+//
+// STORY-QUALIFIED — a body ref names ONE story: the main body, a header or footer of a given
+// section and variant, or one footnote. So does a paragraph ref, and it carries its story with it.
+// Without that, "the body" meant whatever story the reader happened to be in and a scripted edit
+// followed the user's caret into a header; and a paragraph ref could be planned against the wrong
+// part, which is an offset landing in different text rather than anything that looks like an error.
 //
 // HOST-SCOPED — every ref carries a token drawn from the platform CSPRNG when the table is
 // created. Without it, refs were numbered per host and every host's first paragraph was
@@ -24,7 +30,9 @@
 // a property name on a plain object is the prototype-pollution hazard this avoids by
 // construction.
 
+import type { NoteKind } from '../store/package/note-nodes.ts';
 import type { AutomationHandle, AutomationHandleRef, AutomationObjectKind } from './protocol.ts';
+import { storyKey, type AutomationStoryId } from './stories.ts';
 
 /**
  * 128 bits of hex from the platform CSPRNG.
@@ -55,16 +63,38 @@ function hostToken(): string {
 
 export type AutomationHandleTarget =
   | { readonly kind: 'document' }
-  | { readonly kind: 'body' }
-  | { readonly kind: 'paragraph'; readonly paragraphId: string };
+  | { readonly kind: 'body'; readonly story: AutomationStoryId }
+  | {
+      readonly kind: 'paragraph';
+      readonly paragraphId: string;
+      readonly story: AutomationStoryId;
+    }
+  /** One `w:sectPr`, by its position in the document. */
+  | { readonly kind: 'section'; readonly index: number }
+  /** One footnote or endnote, by the `w:id` the reference in the story names. */
+  | { readonly kind: 'note'; readonly noteKind: NoteKind; readonly noteId: number }
+  /** One comment, by its `w:id`. */
+  | { readonly kind: 'comment'; readonly commentId: string }
+  /** One tracked-change decision, by the review queue's own item id. */
+  | { readonly kind: 'revision'; readonly revisionId: string }
+  /** One bookmark, by name — the only identity a bookmark has in a document. */
+  | { readonly kind: 'bookmark'; readonly name: string }
+  /** One list definition, by `w:numId`. */
+  | { readonly kind: 'list'; readonly numId: string };
 
 export interface AutomationHandleTable {
   /** The document handle. One per host, minted on first ask. */
   document(): AutomationHandle<'document'>;
-  /** The body handle. One per host — this protocol slice addresses the main story only. */
-  body(): AutomationHandle<'body'>;
+  /** The handle for one STORY's body — the main body, a header/footer variant, or a note. */
+  body(story: AutomationStoryId): AutomationHandle<'body'>;
   /** The handle for a canonical paragraph id, minted once and reused thereafter. */
-  paragraph(paragraphId: string): AutomationHandle<'paragraph'>;
+  paragraph(paragraphId: string, story: AutomationStoryId): AutomationHandle<'paragraph'>;
+  section(index: number): AutomationHandle<'section'>;
+  note(noteKind: NoteKind, noteId: number): AutomationHandle<'note'>;
+  comment(commentId: string): AutomationHandle<'comment'>;
+  revision(revisionId: string): AutomationHandle<'revision'>;
+  bookmark(name: string): AutomationHandle<'bookmark'>;
+  list(numId: string): AutomationHandle<'list'>;
   /**
    * Point an already-issued paragraph handle at a different canonical id.
    *
@@ -91,11 +121,12 @@ function isHandleShaped(value: unknown): value is { kind: unknown; ref: unknown 
 export function createHandleTable(): AutomationHandleTable {
   const targets = new Map<string, AutomationHandleTarget>();
   const refByParagraph = new Map<string, AutomationHandleRef>();
+  /** One ref per named object, per kind: `kind\0name` -> ref. What makes a handle stable. */
+  const refByName = new Map<string, AutomationHandleRef>();
   const counters = new Map<AutomationObjectKind, number>();
   // Minted eagerly, so a host that cannot scope its handles never comes into existence at all.
   const token = hostToken();
   let documentHandle: AutomationHandle<'document'> | null = null;
-  let bodyHandle: AutomationHandle<'body'> | null = null;
 
   const mint = <K extends AutomationObjectKind>(
     kind: K,
@@ -103,9 +134,23 @@ export function createHandleTable(): AutomationHandleTable {
   ): AutomationHandle<K> => {
     const next = (counters.get(kind) ?? 0) + 1;
     counters.set(kind, next);
-    const ref = `${kind}:${token}:${next}` as AutomationHandleRef;
+    const ref = `${kind}:${token}:${String(next)}` as AutomationHandleRef;
     targets.set(ref, target);
     return Object.freeze({ kind, ref });
+  };
+
+  /** Mint once per name and reuse, so two asks for one object are one reference. */
+  const named = <K extends AutomationObjectKind>(
+    kind: K,
+    name: string,
+    target: AutomationHandleTarget
+  ): AutomationHandle<K> => {
+    const key = `${kind}\u0000${name}`;
+    const existing = refByName.get(key);
+    if (existing) return Object.freeze({ kind, ref: existing });
+    const handle = mint(kind, target);
+    refByName.set(key, handle.ref);
+    return handle;
   };
 
   return {
@@ -113,23 +158,43 @@ export function createHandleTable(): AutomationHandleTable {
       documentHandle ??= mint('document', { kind: 'document' });
       return documentHandle;
     },
-    body() {
-      bodyHandle ??= mint('body', { kind: 'body' });
-      return bodyHandle;
+    body(story) {
+      return named('body', storyKey(story), { kind: 'body', story });
     },
-    paragraph(paragraphId) {
+    paragraph(paragraphId, story) {
       const existing = refByParagraph.get(paragraphId);
       if (existing) return Object.freeze({ kind: 'paragraph' as const, ref: existing });
-      const handle = mint('paragraph', { kind: 'paragraph', paragraphId });
+      const handle = mint('paragraph', { kind: 'paragraph', paragraphId, story });
       refByParagraph.set(paragraphId, handle.ref);
       return handle;
+    },
+    section(index) {
+      return named('section', String(index), { kind: 'section', index });
+    },
+    note(noteKind, noteId) {
+      return named('note', `${noteKind}:${String(noteId)}`, { kind: 'note', noteKind, noteId });
+    },
+    comment(commentId) {
+      return named('comment', commentId, { kind: 'comment', commentId });
+    },
+    revision(revisionId) {
+      return named('revision', revisionId, { kind: 'revision', revisionId });
+    },
+    bookmark(name) {
+      return named('bookmark', name, { kind: 'bookmark', name });
+    },
+    list(numId) {
+      return named('list', numId, { kind: 'list', numId });
     },
     retarget(fromParagraphId, toParagraphId) {
       const ref = refByParagraph.get(fromParagraphId);
       // Nobody ever asked for this paragraph, so no reference can be pointing at the wrong one.
       if (!ref || fromParagraphId === toParagraphId) return;
+      const target = targets.get(ref);
+      if (!target || target.kind !== 'paragraph') return;
       refByParagraph.delete(fromParagraphId);
-      targets.set(ref, { kind: 'paragraph', paragraphId: toParagraphId });
+      // The STORY is carried over: re-aiming an identity must not also move it to another story.
+      targets.set(ref, { kind: 'paragraph', paragraphId: toParagraphId, story: target.story });
       // The destination is a node this transaction created, so it cannot already have a ref;
       // guarded anyway, because two refs naming one paragraph would break handle identity.
       if (!refByParagraph.has(toParagraphId)) refByParagraph.set(toParagraphId, ref);

@@ -112,9 +112,9 @@ function packageStorePort(store: TreePackageStore): AutomationDocumentPort {
   return {
     revision: () => store.packageRevision,
     currentPackage: (): OoxmlPackage | null => (live ? store.currentPackage() : null),
-    apply(ops: readonly TreeDocOp[]): AutomationPortApplyResult {
+    apply(ops: readonly TreeDocOp[], scope: StoryScope = BODY): AutomationPortApplyResult {
       if (!live) return { ok: false, reason: 'disposed' };
-      const result = store.transact(BODY, (ctx) => {
+      const result = store.transact(scope, (ctx) => {
         for (const op of ops) ctx.apply(op);
       });
       if (!result.ok) {

@@ -28,6 +28,7 @@ import type {
 import { createAutomationHost } from '../automation/host.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
+import type { StoryScope } from '../store/store/tree-package-store.ts';
 import type { TreeDocxSession } from '../binding/tree-session.ts';
 import type { DocxEditorInstance } from './docx-editor-types.ts';
 
@@ -99,17 +100,18 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       return base + seen;
     },
     currentPackage: (): OoxmlPackage | null => sync()?.currentPackage() ?? null,
-    apply(ops: readonly TreeDocOp[]): AutomationPortApplyResult {
+    apply(ops: readonly TreeDocOp[], scope: StoryScope): AutomationPortApplyResult {
       sync();
       const surface = editor.surface;
       if (!surface) return { ok: false, reason: 'no-document' };
       // THROUGH THE SURFACE, NOT THE SESSION. `applyAutomationOps` is one gated transaction:
-      // viewing refuses, suggesting proposes and attributes, the body is addressed explicitly,
-      // and the pages repaint from the commit. Reaching `session.applyTreeOps` from here — the
+      // viewing refuses, suggesting proposes and attributes, the story the batch named is
+      // addressed explicitly, and the pages repaint from the commit. Reaching
+      // `session.applyTreeOps` from here — the
       // first version of this adapter — wrote into a document open for viewing and turned a
       // proposal into a permanent edit. A refusal anywhere leaves the session, its history and
       // the painted pages untouched, which is what makes the batch atomic.
-      const result = surface.applyAutomationOps(ops);
+      const result = surface.applyAutomationOps(ops, scope);
       if (result.rejected) return { ok: false, reason: String(result.reason ?? 'refused') };
       return { ok: true, changed: result.committed };
     },

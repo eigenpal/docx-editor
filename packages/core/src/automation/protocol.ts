@@ -14,8 +14,22 @@
 import type { AutomationFontRead, AutomationParagraphFormatRead } from './formatting.ts';
 import type { AutomationOperation } from './operations.ts';
 
-/** What kind of document object a handle names. */
-export type AutomationObjectKind = 'document' | 'body' | 'paragraph';
+/**
+ * What kind of document object a handle names.
+ *
+ * `body` is one STORY — the main body, a header or footer variant of a section, or one note — so
+ * every object reached through a body is reached in a named story rather than in "the document".
+ */
+export type AutomationObjectKind =
+  | 'document'
+  | 'body'
+  | 'paragraph'
+  | 'section'
+  | 'note'
+  | 'comment'
+  | 'revision'
+  | 'bookmark'
+  | 'list';
 
 declare const AUTOMATION_HANDLE_BRAND: unique symbol;
 

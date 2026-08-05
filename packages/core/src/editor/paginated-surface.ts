@@ -1672,23 +1672,24 @@ export function mountPaginatedSurface(
         }
       ),
 
-    applyAutomationOps: (ops) => {
+    applyAutomationOps: (ops, scope) => {
       // THE SAME PATH A KEYSTROKE TAKES, minus the keystroke. `applyOps` is where viewing
       // refuses and where suggesting turns an edit into a proposal, and `commit` is where the
       // refusal is recorded, the caret is re-clamped and the pages are repainted. A host that
       // reached `session.applyTreeOps` instead — as this one did — typed into a document open
       // for viewing and wrote permanent text while the chrome said Suggesting.
       //
-      // The scope is the BODY, explicitly, because that is what the handle named. The input
-      // path follows the reader into a header; a scripted edit must not, or an object model
-      // holding a body paragraph would write into whatever furniture happened to be open.
+      // The scope comes from the CALLER, because the handle named a story. It defaults to the
+      // body rather than to the reader's story: the input path follows the reader into a
+      // header, and a scripted edit must not, or an object model holding a body paragraph
+      // would write into whatever furniture happened to be open.
       let result: ReturnType<TreeDocxSession['applyTreeOps']> = {
         committed: false,
         rejected: false,
         opCount: 0,
       };
       commit(
-        () => (result = applyOps(ops, undefined, undefined, BODY_STORY)),
+        () => (result = applyOps(ops, undefined, undefined, scope ?? BODY_STORY)),
         () => {
           // Flushed before the clamp for the same reason `commitReviewOps` does it: the clamp
           // needs post-edit lengths, and this thunk runs before the repaint.

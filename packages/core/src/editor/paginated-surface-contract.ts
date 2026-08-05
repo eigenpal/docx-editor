@@ -6,7 +6,7 @@
 
 import type { IndentFormatting } from '../contracts/types.ts';
 import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import type { BookmarkIndex, TreeDocOp } from '@docx-editor.dev/core-contract/store';
+import type { BookmarkIndex, StoryScope, TreeDocOp } from '@docx-editor.dev/core-contract/store';
 import type { ViewScope } from '../contracts/editor.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
 import type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
@@ -461,7 +461,7 @@ export interface PaginatedSurface {
    * The ops address the BODY, whatever story the reader is in: the caller identified its target
    * before calling, so following the caret into a header would write somewhere else entirely.
    */
-  applyAutomationOps(ops: readonly TreeDocOp[]): TreeApplyResult;
+  applyAutomationOps(ops: readonly TreeDocOp[], scope?: StoryScope): TreeApplyResult;
   /**
    * Commit review ops — accept, reject, a new comment — through the SAME path a keystroke
    * takes: layout, paint, and a caret clamped to what the document now holds.

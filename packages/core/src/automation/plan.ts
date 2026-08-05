@@ -62,7 +62,11 @@ import type {
   AutomationSpan,
   AutomationValue,
 } from './protocol.ts';
-import { PARAGRAPH_MARK, type AutomationDocumentReads } from './reads.ts';
+import {
+  PARAGRAPH_MARK,
+  type AutomationPackageReads,
+  type AutomationStoryReads,
+} from './reads.ts';
 import {
   resolveParagraphHandle,
   resolveParagraphRef,
@@ -72,11 +76,15 @@ import {
   spanParagraphIds,
   spanText,
   spanValue,
+  storyOfHandle,
+  storyOfSpanRef,
   type ResolvedPoint,
   type ResolvedRange,
   type ResolvedSpan,
 } from './spans.ts';
+import { BODY_STORY, storyKey, type AutomationStoryId } from './stories.ts';
 import { paragraphStyleName, styleIdFor } from './styles.ts';
+import type { StoryScope } from '../store/store/tree-package-store.ts';
 
 /**
  * Characters that mean "a new paragraph" in a document but are merely characters in a run.
@@ -102,8 +110,10 @@ export type PlannedOperation =
       readonly ok: true;
       readonly kind: 'command';
       readonly ops: readonly TreeDocOp[];
+      /** Which story the ops address. A batch commits into one story; see `pinWrite`. */
+      readonly story: AutomationStoryId;
       /** Computed after the commit, so a created paragraph can be named. */
-      readonly answer: (post: AutomationDocumentReads) => AutomationValue;
+      readonly answer: (post: AutomationPackageReads) => AutomationValue;
     }
   | { readonly ok: false; readonly error: AutomationError };
 
@@ -114,7 +124,7 @@ interface Slot {
 
 export interface BatchPlannerHost {
   readonly handles: AutomationHandleTable;
-  readonly reads: AutomationDocumentReads;
+  readonly reads: AutomationPackageReads;
   readonly capabilities: AutomationCapabilities;
   /** Moves a reader's caret. Only called when `capabilities.selection` is true. */
   readonly select?: (range: ResolvedRange, mode: AutomationSelectionMode) => void;
@@ -125,6 +135,15 @@ export interface BatchPlanner {
   /** Whether any planned operation writes. */
   readonly hasCommands: boolean;
   /**
+   * The transaction scope this batch's commands commit through, or null for a read-only batch.
+   *
+   * ONE scope, because one batch is one transaction and a transaction belongs to one story. A
+   * batch mixing two stories' writes is refused while planning rather than split into two
+   * commits: two commits are two revisions, two undo units and a window where half the caller's
+   * request is published — which is the partial application the batch rule exists to prevent.
+   */
+  readonly writeScope: StoryScope | null;
+  /**
    * Bind created paragraphs and re-aim moved identities against the committed state.
    *
    * Runs before any command answers, and only when a transaction committed. A mismatch here
@@ -134,7 +153,7 @@ export interface BatchPlanner {
    * names the wrong thing forever.
    */
   settle(
-    post: AutomationDocumentReads
+    post: AutomationPackageReads
   ): { readonly ok: true } | { readonly ok: false; readonly detail: string };
 }
 
@@ -177,7 +196,7 @@ function delimiterOccurrences(
 }
 
 /** Whether both ends of a range still name a paragraph and an offset inside it. */
-function placeable(range: ResolvedRange, reads: AutomationDocumentReads): boolean {
+function placeable(range: ResolvedRange, reads: AutomationStoryReads): boolean {
   for (const point of [range.start, range.end]) {
     const text = reads.paragraphText(point.paragraphId);
     if (text === null || point.offset > text.length) return false;
@@ -194,24 +213,27 @@ function trimmed(text: string, start: number, end: number): readonly [number, nu
   return [from, to];
 }
 
-export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
-  const { handles, reads, capabilities } = host;
-
-  // The symbolic story order. Known paragraphs start bound; a structural command inserts
-  // unbound slots where it will create paragraphs, and `settle` fills them in.
-  const slotById = new Map<string, Slot>();
-  const order: Slot[] = reads.bodyParagraphIds.map((id) => {
-    const slot: Slot = { id };
-    slotById.set(id, slot);
-    return slot;
-  });
-  const created: Slot[] = [];
-
+/**
+ * One story's planning state.
+ *
+ * PER STORY rather than per batch, because everything in it is addressed in one story's
+ * coordinates: a symbolic paragraph order, the claims that keep two commands from planning
+ * against the same paragraph, and the slots a structural command leaves for `settle` to bind. A
+ * single shared set of those would have a header's paragraph conflicting with a body paragraph
+ * that shares nothing but a position, and would settle created paragraphs against the wrong
+ * story's reads.
+ */
+interface StoryPlan {
+  readonly reads: AutomationStoryReads;
+  /** The symbolic story order: bound slots for paragraphs that exist, unbound for created ones. */
+  readonly order: Slot[];
+  readonly slotById: Map<string, Slot>;
+  readonly created: Slot[];
   /** Paragraphs a command has restructured, and paragraphs any command has touched. */
-  const restructured = new Set<string>();
-  const touched = new Set<string>();
+  readonly restructured: Set<string>;
+  readonly touched: Set<string>;
   /** Property containers a command has written, as `container:paragraphId` (`claimFormatting`). */
-  const formatted = new Set<string>();
+  readonly formatted: Set<string>;
   /**
    * Paragraphs a queued selection covers.
    *
@@ -221,18 +243,74 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
    * Which of the two the caller wrote first cannot matter, and this is the half that makes it not:
    * `planSelect` looks at what has been edited, and every edit looks at this.
    */
-  const selected = new Set<string>();
+  readonly selected: Set<string>;
   /** Identity moves to apply after the commit: the caller's handle for `from` must name `to`. */
-  const retargets: { readonly from: string; readonly slot: Slot }[] = [];
+  readonly retargets: { readonly from: string; readonly slot: Slot }[];
+}
+
+export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
+  const { handles, capabilities } = host;
+  const packageReads = host.reads;
+
+  const plans = new Map<string, StoryPlan>();
+  const planFor = (reads: AutomationStoryReads): StoryPlan => {
+    const key = storyKey(reads.story);
+    const existing = plans.get(key);
+    if (existing) return existing;
+    const slotById = new Map<string, Slot>();
+    const order: Slot[] = reads.paragraphIds.map((id) => {
+      const slot: Slot = { id };
+      slotById.set(id, slot);
+      return slot;
+    });
+    const fresh: StoryPlan = {
+      reads,
+      order,
+      slotById,
+      created: [],
+      restructured: new Set<string>(),
+      touched: new Set<string>(),
+      formatted: new Set<string>(),
+      selected: new Set<string>(),
+      retargets: [],
+    };
+    plans.set(key, fresh);
+    return fresh;
+  };
+
   const selections: { readonly range: ResolvedRange; readonly mode: AutomationSelectionMode }[] =
     [];
   let hasCommands = false;
+  /** The one story this batch writes into, pinned by its first command. */
+  let writeStory: StoryPlan | null = null;
 
-  const positionOf = (slot: Slot): number => order.indexOf(slot);
+  /**
+   * Claim the batch's single write story, or refuse a second one.
+   *
+   * A batch is one transaction and a transaction is scoped to one story: `TreePackageStore`
+   * commits per story, so writing a body paragraph and a header paragraph in one batch is two
+   * commits — two revisions, two undo units, and a moment where half the request is published.
+   * The caller sequences them across two syncs, which is exactly what the same rule already
+   * asks of two structural edits to one paragraph.
+   */
+  const pinWrite = (plan: StoryPlan): PlannedOperation | null => {
+    if (writeStory === null) {
+      writeStory = plan;
+      return null;
+    }
+    if (writeStory === plan) return null;
+    return refuse(
+      'conflicting-operations',
+      'one batch writes into one story',
+      `${storyKey(writeStory.reads.story)} then ${storyKey(plan.reads.story)}`
+    );
+  };
+
+  const positionOf = (plan: StoryPlan, slot: Slot): number => plan.order.indexOf(slot);
 
   /** Refuse when a paragraph a queued selection covers is about to be changed. */
-  const selectionConflict = (paragraphId: string): PlannedOperation | null =>
-    selected.has(paragraphId)
+  const selectionConflict = (plan: StoryPlan, paragraphId: string): PlannedOperation | null =>
+    plan.selected.has(paragraphId)
       ? refuse(
           'conflicting-operations',
           'this batch selects a paragraph it also edits',
@@ -241,33 +319,33 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       : null;
 
   /** Claim a paragraph for a structural command, or say why it cannot be claimed. */
-  const claim = (paragraphId: string): PlannedOperation | null => {
-    const selection = selectionConflict(paragraphId);
+  const claim = (plan: StoryPlan, paragraphId: string): PlannedOperation | null => {
+    const selection = selectionConflict(plan, paragraphId);
     if (selection) return selection;
-    if (restructured.has(paragraphId) || touched.has(paragraphId)) {
+    if (plan.restructured.has(paragraphId) || plan.touched.has(paragraphId)) {
       return refuse(
         'conflicting-operations',
         'another operation in this batch already changes that paragraph',
         paragraphId
       );
     }
-    restructured.add(paragraphId);
-    touched.add(paragraphId);
+    plan.restructured.add(paragraphId);
+    plan.touched.add(paragraphId);
     return null;
   };
 
   /** Record a non-structural touch, or say why the paragraph is already spoken for. */
-  const touch = (paragraphId: string): PlannedOperation | null => {
-    const selection = selectionConflict(paragraphId);
+  const touch = (plan: StoryPlan, paragraphId: string): PlannedOperation | null => {
+    const selection = selectionConflict(plan, paragraphId);
     if (selection) return selection;
-    if (restructured.has(paragraphId)) {
+    if (plan.restructured.has(paragraphId)) {
       return refuse(
         'conflicting-operations',
         'another operation in this batch restructures that paragraph',
         paragraphId
       );
     }
-    touched.add(paragraphId);
+    plan.touched.add(paragraphId);
     return null;
   };
 
@@ -285,34 +363,40 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
    * paragraph in one sync are one batch and both land.
    */
   const claimFormatting = (
+    plan: StoryPlan,
     paragraphId: string,
     container: 'runs' | 'paragraph'
   ): PlannedOperation | null => {
     const claimed = `${container}:${paragraphId}`;
-    if (formatted.has(claimed)) {
+    if (plan.formatted.has(claimed)) {
       return refuse(
         'conflicting-operations',
         'another operation in this batch already writes that formatting',
         paragraphId
       );
     }
-    const conflict = touch(paragraphId);
+    const conflict = touch(plan, paragraphId);
     if (conflict) return conflict;
-    formatted.add(claimed);
+    plan.formatted.add(claimed);
     return null;
   };
 
   /** A fresh unbound slot at `position`, remembered in creation-independent reading order. */
-  const insertSlot = (position: number): Slot => {
+  const insertSlot = (plan: StoryPlan, position: number): Slot => {
     const slot: Slot = { id: null };
-    order.splice(position, 0, slot);
-    created.push(slot);
+    plan.order.splice(position, 0, slot);
+    plan.created.push(slot);
     return slot;
   };
 
   const spanOf = (range: ResolvedRange): AutomationSpan => spanValue(range, handles);
 
+  /** The story a resolved range lives in, or null when the document went away. */
+  const storyReadsOf = (span: ResolvedSpan): AutomationStoryReads | null =>
+    span === null ? null : packageReads.story(span.start.story);
+
   const searchScope = (
+    reads: AutomationStoryReads,
     scope: ResolvedSpan,
     text: string,
     options: AutomationSearchOptions | undefined
@@ -361,7 +445,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         ...(position === last && scope ? { to: scope.end.offset } : {}),
       });
       for (const occurrence of found.matches) {
-        const paragraph = handles.paragraph(paragraphId);
+        const paragraph = handles.paragraph(paragraphId, reads.story);
         spans.push({
           start: { paragraph, offset: occurrence.start },
           end: { paragraph, offset: occurrence.start + occurrence.length },
@@ -372,7 +456,11 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     return query({ kind: 'spans', spans });
   };
 
-  const planInsertText = (at: ResolvedPoint, text: string): PlannedOperation => {
+  const planInsertText = (
+    plan: StoryPlan,
+    at: ResolvedPoint,
+    text: string
+  ): PlannedOperation => {
     if (typeof text !== 'string')
       return refuse('unsupported-content', 'insertText needs text', 'text');
     if (PARAGRAPH_BREAKING.test(text)) {
@@ -382,7 +470,9 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         'paragraph-mark-in-text'
       );
     }
-    const conflict = touch(at.paragraphId);
+    const pin = pinWrite(plan);
+    if (pin) return pin;
+    const conflict = touch(plan, at.paragraphId);
     if (conflict) return conflict;
     const ops: TreeDocOp[] =
       text.length === 0
@@ -395,10 +485,15 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         end: { ...at, offset: at.offset + text.length },
       }),
     });
-    return { ok: true, kind: 'command', ops, answer };
+    return { ok: true, kind: 'command', ops, story: plan.reads.story, answer };
   };
 
-  const planReplaceSpan = (range: ResolvedRange, text: string): PlannedOperation => {
+  const planReplaceSpan = (
+    plan: StoryPlan,
+    range: ResolvedRange,
+    text: string
+  ): PlannedOperation => {
+    const reads = plan.reads;
     if (typeof text !== 'string')
       return refuse('unsupported-content', 'replaceSpan needs text', 'text');
     if (PARAGRAPH_BREAKING.test(text)) {
@@ -413,8 +508,11 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     const first = range.start.paragraphId;
     const ops: TreeDocOp[] = [];
 
+    const pin = pinWrite(plan);
+    if (pin) return pin;
+
     if (ids.length === 1) {
-      const conflict = touch(first);
+      const conflict = touch(plan, first);
       if (conflict) return conflict;
       if (range.end.offset > range.start.offset) {
         ops.push({
@@ -430,7 +528,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       // The join is the canonical `joinParagraphs`, so a span that spills across a table cell
       // is refused there and the whole batch with it.
       for (const paragraphId of ids) {
-        const conflict = claim(paragraphId);
+        const conflict = claim(plan, paragraphId);
         if (conflict) return conflict;
       }
       const last = range.end.paragraphId;
@@ -447,8 +545,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       for (const middle of ids.slice(1, -1)) ops.push({ op: 'deleteBlock', blockId: middle });
       ops.push({ op: 'joinParagraphs', firstId: first, secondId: last });
       for (const gone of ids.slice(1)) {
-        const slot = slotById.get(gone);
-        if (slot) order.splice(positionOf(slot), 1);
+        const slot = plan.slotById.get(gone);
+        if (slot) plan.order.splice(positionOf(plan, slot), 1);
       }
     }
 
@@ -460,7 +558,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       kind: 'span',
       span: spanOf({ start, end: { ...start, offset: start.offset + text.length } }),
     });
-    return { ok: true, kind: 'command', ops, answer };
+    return { ok: true, kind: 'command', ops, story: plan.reads.story, answer };
   };
 
   /**
@@ -480,7 +578,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
    * `w:sdt`, so the control is not a block this plan can remove, and emptying its paragraphs is the
    * honest half of the job. Everything else — paragraphs, tables — goes.
    */
-  const planReplaceStory = (text: string): PlannedOperation => {
+  const planReplaceStory = (plan: StoryPlan, text: string): PlannedOperation => {
+    const reads = plan.reads;
     if (typeof text !== 'string')
       return refuse('unsupported-content', 'replaceSpan needs text', 'text');
     if (PARAGRAPH_BREAKING.test(text)) {
@@ -491,7 +590,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       );
     }
 
-    const blocks = reads.bodyBlocks;
+    const blocks = reads.blocks;
     const removed = blocks.filter((block) => block.removable);
     const survivors = blocks
       .filter((block) => !block.removable)
@@ -517,8 +616,10 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     // Every paragraph in the story belongs to this one command: it either goes away or is emptied,
     // so a second operation addressing any of them in this batch is planned against text that will
     // not be there.
-    for (const paragraphId of reads.bodyParagraphIds) {
-      const conflict = claim(paragraphId);
+    const pin = pinWrite(plan);
+    if (pin) return pin;
+    for (const paragraphId of reads.paragraphIds) {
+      const conflict = claim(plan, paragraphId);
       if (conflict) return conflict;
     }
 
@@ -542,24 +643,31 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     for (const block of removed) {
       if (block.id === keeper?.id) continue;
       for (const paragraphId of block.paragraphIds) {
-        const slot = slotById.get(paragraphId);
-        if (slot) order.splice(positionOf(slot), 1);
+        const slot = plan.slotById.get(paragraphId);
+        if (slot) plan.order.splice(positionOf(plan, slot), 1);
       }
     }
 
-    const start: ResolvedPoint = { paragraphId: target, index: reads.indexOf(target), offset: 0 };
+    const start: ResolvedPoint = {
+      story: reads.story,
+      paragraphId: target,
+      index: reads.indexOf(target),
+      offset: 0,
+    };
     const answer = (): AutomationValue => ({
       kind: 'span',
       span: spanOf({ start, end: { ...start, offset: text.length } }),
     });
-    return { ok: true, kind: 'command', ops, answer };
+    return { ok: true, kind: 'command', ops, story: reads.story, answer };
   };
 
   const planInsertParagraph = (
+    plan: StoryPlan,
     anchor: ResolvedPoint,
     where: 'before' | 'after',
     text: string
   ): PlannedOperation => {
+    const reads = plan.reads;
     if (typeof text !== 'string')
       return refuse('unsupported-content', 'insertParagraph needs text', 'text');
     if (PARAGRAPH_BREAKING.test(text)) {
@@ -569,10 +677,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         'paragraph-mark-in-text'
       );
     }
-    const conflict = claim(anchor.paragraphId);
+    const pin = pinWrite(plan);
+    if (pin) return pin;
+    const conflict = claim(plan, anchor.paragraphId);
     if (conflict) return conflict;
 
-    const anchorSlot = slotById.get(anchor.paragraphId);
+    const anchorSlot = plan.slotById.get(anchor.paragraphId);
     if (!anchorSlot) return refuse('invalid-handle', 'that paragraph is not in the body');
     const anchorLength = (reads.paragraphText(anchor.paragraphId) ?? '').length;
     const ops: TreeDocOp[] = [];
@@ -589,25 +699,27 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         ops.push({ op: 'insertText', paragraphId: anchor.paragraphId, offset: 0, text });
       ops.push({ op: 'splitParagraph', paragraphId: anchor.paragraphId, offset: text.length });
     }
-    const fresh = insertSlot(positionOf(anchorSlot) + 1);
-    if (where === 'before') retargets.push({ from: anchor.paragraphId, slot: fresh });
+    const fresh = insertSlot(plan, positionOf(plan, anchorSlot) + 1);
+    if (where === 'before') plan.retargets.push({ from: anchor.paragraphId, slot: fresh });
 
     // "after" names the created node; "before" names the original one, which now holds the
     // inserted paragraph. Both are asked for AFTER the retarget, so the handle is a new ref.
     const answer = (): AutomationValue => {
       const id = where === 'after' ? fresh.id : anchor.paragraphId;
       if (id === null) return APPLIED;
-      return { kind: 'handle', handle: handles.paragraph(id) };
+      return { kind: 'handle', handle: handles.paragraph(id, reads.story) };
     };
-    return { ok: true, kind: 'command', ops, answer };
+    return { ok: true, kind: 'command', ops, story: reads.story, answer };
   };
 
   const planSplitParagraph = (
+    plan: StoryPlan,
     paragraph: ResolvedPoint,
     delimiters: readonly string[],
     trimDelimiters: boolean,
     trimSpacing: boolean
   ): PlannedOperation => {
+    const reads = plan.reads;
     if (!Array.isArray(delimiters) || delimiters.length === 0)
       return refuse('unsupported-content', 'split needs at least one delimiter', 'delimiters');
     if (delimiters.length > MAX_DELIMITERS)
@@ -622,10 +734,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       if (delimiter.length > MAX_DELIMITER_LENGTH)
         return refuse('unsupported-content', 'that delimiter is too long', 'delimiters');
     }
-    const conflict = claim(paragraph.paragraphId);
+    const pin = pinWrite(plan);
+    if (pin) return pin;
+    const conflict = claim(plan, paragraph.paragraphId);
     if (conflict) return conflict;
 
-    const slot = slotById.get(paragraph.paragraphId);
+    const slot = plan.slotById.get(paragraph.paragraphId);
     if (!slot) return refuse('invalid-handle', 'that paragraph is not in the body');
     const text = reads.paragraphText(paragraph.paragraphId) ?? '';
     const occurrences = delimiterOccurrences(text, delimiters);
@@ -674,16 +788,17 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
 
     const parts: Slot[] = [slot];
     for (let index = 0; index < offsets.length; index += 1)
-      parts.push(insertSlot(positionOf(slot) + 1 + index));
+      parts.push(insertSlot(plan, positionOf(plan, slot) + 1 + index));
 
-    const answer = (post: AutomationDocumentReads): AutomationValue => {
+    const answer = (post: AutomationPackageReads): AutomationValue => {
+      const after = post.story(reads.story);
       const spans: AutomationSpan[] = [];
       parts.forEach((part, index) => {
         const id = part.id;
         if (id === null) return;
-        const piece = post.paragraphText(id) ?? pieces[index] ?? '';
+        const piece = after?.paragraphText(id) ?? pieces[index] ?? '';
         const [from, to] = trimSpacing ? trimmed(piece, 0, piece.length) : [0, piece.length];
-        const handle = handles.paragraph(id);
+        const handle = handles.paragraph(id, reads.story);
         spans.push({
           start: { paragraph: handle, offset: from },
           end: { paragraph: handle, offset: to },
@@ -691,18 +806,21 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       });
       return { kind: 'spans', spans };
     };
-    return { ok: true, kind: 'command', ops, answer };
+    return { ok: true, kind: 'command', ops, story: reads.story, answer };
   };
 
-  const planDeleteParagraph = (paragraph: ResolvedPoint): PlannedOperation => {
-    const conflict = claim(paragraph.paragraphId);
+  const planDeleteParagraph = (plan: StoryPlan, paragraph: ResolvedPoint): PlannedOperation => {
+    const pin = pinWrite(plan);
+    if (pin) return pin;
+    const conflict = claim(plan, paragraph.paragraphId);
     if (conflict) return conflict;
-    const slot = slotById.get(paragraph.paragraphId);
-    if (slot) order.splice(positionOf(slot), 1);
+    const slot = plan.slotById.get(paragraph.paragraphId);
+    if (slot) plan.order.splice(positionOf(plan, slot), 1);
     return {
       ok: true,
       kind: 'command',
       ops: [{ op: 'deleteBlock', blockId: paragraph.paragraphId }],
+      story: plan.reads.story,
       answer: () => APPLIED,
     };
   };
@@ -724,9 +842,15 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
    * A span covering no characters is refused: there is nothing to format, and writing the mark
    * alone would format a paragraph the caller addressed as a caret.
    */
-  const planSetFont = (range: ResolvedRange, request: AutomationFontWrite): PlannedOperation => {
-    const part = reads.bodyPart;
-    if (!part) return refuse('document-unavailable', 'this host holds no document right now');
+  const planSetFont = (
+    plan: StoryPlan,
+    range: ResolvedRange,
+    request: AutomationFontWrite
+  ): PlannedOperation => {
+    const reads = plan.reads;
+    const part = reads.part;
+    const pin = pinWrite(plan);
+    if (pin) return pin;
     const properties = fontProperties(request ?? {});
     if (!properties.ok)
       return refuse(
@@ -737,7 +861,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     const ops: TreeDocOp[] = [];
     for (const share of spanOffsets(range, reads)) {
       if (share.end <= share.start && !share.whole) continue;
-      const conflict = claimFormatting(share.paragraphId, 'runs');
+      const conflict = claimFormatting(plan, share.paragraphId, 'runs');
       if (conflict) return conflict;
       for (const edit of runPropertyEdits(
         part,
@@ -772,7 +896,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         'that range covers no characters to format',
         'collapsed-range'
       );
-    return { ok: true, kind: 'command', ops, answer: () => APPLIED };
+    return { ok: true, kind: 'command', ops, story: reads.story, answer: () => APPLIED };
   };
 
   /**
@@ -783,9 +907,15 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
    * the reason a style change does not delete a paragraph's indents and numbering. The style is
    * resolved ONCE for the whole span: it is a property of the document, not of a paragraph.
    */
-  const planSetStyle = (range: ResolvedRange, name: string): PlannedOperation => {
-    const part = reads.bodyPart;
-    if (!part) return refuse('document-unavailable', 'this host holds no document right now');
+  const planSetStyle = (
+    plan: StoryPlan,
+    range: ResolvedRange,
+    name: string
+  ): PlannedOperation => {
+    const reads = plan.reads;
+    const part = reads.part;
+    const pin = pinWrite(plan);
+    if (pin) return pin;
     const resolved = styleIdFor(name, reads.styles());
     if (!resolved.ok)
       return refuse(
@@ -799,7 +929,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     };
     const ops: TreeDocOp[] = [];
     for (const paragraphId of spanParagraphIds(range, reads)) {
-      const conflict = claimFormatting(paragraphId, 'paragraph');
+      const conflict = claimFormatting(plan, paragraphId, 'paragraph');
       if (conflict) return conflict;
       ops.push({
         op: 'setParagraphProperties',
@@ -809,15 +939,18 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     }
     if (ops.length === 0)
       return refuse('invalid-offset', 'that story holds no paragraph to style', 'empty-story');
-    return { ok: true, kind: 'command', ops, answer: () => APPLIED };
+    return { ok: true, kind: 'command', ops, story: reads.story, answer: () => APPLIED };
   };
 
   const planSetParagraphFormat = (
+    plan: StoryPlan,
     paragraph: ResolvedPoint,
     request: AutomationParagraphFormatWrite
   ): PlannedOperation => {
-    const part = reads.bodyPart;
-    if (!part) return refuse('document-unavailable', 'this host holds no document right now');
+    const reads = plan.reads;
+    const part = reads.part;
+    const pin = pinWrite(plan);
+    if (pin) return pin;
     const properties = paragraphFormatProperties(
       part,
       paragraph.paragraphId,
@@ -830,7 +963,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         'that is not paragraph formatting this host writes',
         properties.detail
       );
-    const conflict = claimFormatting(paragraph.paragraphId, 'paragraph');
+    const conflict = claimFormatting(plan, paragraph.paragraphId, 'paragraph');
     if (conflict) return conflict;
     return {
       ok: true,
@@ -842,11 +975,17 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           properties: properties.value,
         },
       ],
+      story: reads.story,
       answer: () => APPLIED,
     };
   };
 
-  const planSelect = (range: ResolvedRange, mode: AutomationSelectionMode): PlannedOperation => {
+  const planSelect = (
+    plan: StoryPlan,
+    range: ResolvedRange,
+    mode: AutomationSelectionMode
+  ): PlannedOperation => {
+    const reads = plan.reads;
     if (!capabilities.selection || !host.select)
       return refuse('unsupported-capability', 'this host has no reader to move', 'selection');
     if (mode !== 'select' && mode !== 'start' && mode !== 'end')
@@ -855,7 +994,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     // paragraphs the selection covers would place a caret using coordinates the edit moved.
     const covered = spanParagraphIds(range, reads);
     for (const paragraphId of covered) {
-      if (touched.has(paragraphId)) {
+      if (plan.touched.has(paragraphId)) {
         return refuse(
           'conflicting-operations',
           'this batch edits a paragraph the selection covers',
@@ -863,9 +1002,11 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         );
       }
     }
-    for (const paragraphId of covered) selected.add(paragraphId);
+    for (const paragraphId of covered) plan.selected.add(paragraphId);
     selections.push({ range, mode });
-    return { ok: true, kind: 'command', ops: [], answer: () => APPLIED };
+    // NO SCOPE PINNED. Moving a reader's caret writes nothing, so it does not claim the batch's
+    // one write story — a script may select in a header while it edits the body.
+    return { ok: true, kind: 'command', ops: [], story: reads.story, answer: () => APPLIED };
   };
 
   const plan = (operation: AutomationOperation): PlannedOperation => {
@@ -876,69 +1017,96 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       case 'getBody': {
         if (!handles.resolve(operation.document, 'document'))
           return refuse('invalid-handle', 'that handle does not name a document', 'document');
-        return query({ kind: 'handle', handle: handles.body() });
+        // A DOCUMENT'S BODY IS THE MAIN STORY, always. Headers, footers and notes are reached
+        // through the section or the note that declares them, because that is where a document
+        // says they exist — asking a document for "the header" has no answer.
+        if (!packageReads.body)
+          return refuse('document-unavailable', 'this host holds no document right now');
+        return query({ kind: 'handle', handle: handles.body(BODY_STORY) });
       }
 
       case 'getParagraphs': {
-        if (!handles.resolve(operation.body, 'body'))
-          return refuse('invalid-handle', 'that handle does not name a body', 'body');
+        const story = storyOfHandle(operation.body, 'body', handles, packageReads);
+        if (!story.ok)
+          return refuse(story.code, 'that handle does not name a body', story.detail);
         return query({
           kind: 'handles',
-          handles: reads.bodyParagraphIds.map((id) => handles.paragraph(id)),
+          handles: story.value.paragraphIds.map((id) =>
+            handles.paragraph(id, story.value.story)
+          ),
         });
       }
 
       case 'getSpanParagraphs': {
-        const resolved = resolveSpanRef(operation.span, handles, reads);
+        const resolved = resolveSpanRef(operation.span, handles, packageReads);
         if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
+        const story = storyOfSpanRef(operation.span, handles, packageReads);
+        if (!story.ok) return refuse(story.code, 'that span is not a place', story.detail);
         return query({
           kind: 'handles',
-          handles: spanParagraphIds(resolved.value, reads).map((id) => handles.paragraph(id)),
+          handles: spanParagraphIds(resolved.value, story.value).map((id) =>
+            handles.paragraph(id, story.value.story)
+          ),
         });
       }
 
       case 'getText': {
-        if (handles.resolve(operation.target, 'body'))
-          return query({ kind: 'text', text: reads.bodyText() });
-        const paragraph = resolveParagraphHandle(operation.target, handles, reads);
+        const body = handles.resolve(operation.target, 'body');
+        if (body) {
+          const story = storyOfHandle(operation.target, 'body', handles, packageReads);
+          if (!story.ok) return refuse(story.code, 'that handle does not name a body', story.detail);
+          return query({ kind: 'text', text: story.value.text() });
+        }
+        const paragraph = resolveParagraphHandle(operation.target, handles, packageReads);
         if (!paragraph.ok)
           return refuse(
             paragraph.code,
             'that handle does not name a body or a paragraph',
             paragraph.detail
           );
+        const story = packageReads.story(paragraph.value.story);
         return query({
           kind: 'text',
-          text: reads.paragraphText(paragraph.value.paragraphId) ?? '',
+          text: story?.paragraphText(paragraph.value.paragraphId) ?? '',
         });
       }
 
       case 'getSpanText': {
-        const resolved = resolveSpanRef(operation.span, handles, reads);
+        const resolved = resolveSpanRef(operation.span, handles, packageReads);
         if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
-        return query({ kind: 'text', text: spanText(resolved.value, reads, PARAGRAPH_MARK) });
+        const story = storyOfSpanRef(operation.span, handles, packageReads);
+        if (!story.ok) return refuse(story.code, 'that span is not a place', story.detail);
+        return query({
+          kind: 'text',
+          text: spanText(resolved.value, story.value, PARAGRAPH_MARK),
+        });
       }
 
       case 'getParagraphId': {
-        const paragraph = resolveParagraphHandle(operation.paragraph, handles, reads);
+        const paragraph = resolveParagraphHandle(operation.paragraph, handles, packageReads);
         if (!paragraph.ok)
           return refuse(paragraph.code, 'that handle does not name a paragraph', paragraph.detail);
-        const read = reads.paragraph(paragraph.value.paragraphId);
+        const story = packageReads.story(paragraph.value.story);
+        const read = story?.paragraph(paragraph.value.paragraphId);
         // A document Word never touched may carry no `w14:paraId`; empty text says "this
         // document does not write one" rather than inventing an identity the file lacks.
         return query({ kind: 'text', text: read?.paraId ?? '' });
       }
 
       case 'search': {
-        const scope = resolveSpanRef(operation.scope, handles, reads);
+        const scope = resolveSpanRef(operation.scope, handles, packageReads);
         if (!scope.ok) return refuse(scope.code, 'that is not a scope to search', scope.detail);
-        return searchScope(scope.value, operation.text, operation.options);
+        const story = storyOfSpanRef(operation.scope, handles, packageReads);
+        if (!story.ok) return refuse(story.code, 'that is not a scope to search', story.detail);
+        return searchScope(story.value, scope.value, operation.text, operation.options);
       }
 
       case 'insertText': {
-        const at = resolvePoint(operation.at, handles, reads);
+        const at = resolvePoint(operation.at, handles, packageReads);
         if (!at.ok) return refuse(at.code, 'that is not a place to insert at', at.detail);
-        return planInsertText(at.value, operation.text);
+        const story = packageReads.story(at.value.story);
+        if (!story) return refuse('invalid-handle', 'that story is not in this document');
+        return planInsertText(planFor(story), at.value, operation.text);
       }
 
       case 'replaceSpan': {
@@ -948,11 +1116,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         // blocks out of the story. Two explicit endpoints that happen to reach both ends stay a
         // text edit, because a caller who addressed text asked for a text edit.
         if ('body' in operation.span) {
-          if (!handles.resolve(operation.span.body, 'body'))
-            return refuse('invalid-handle', 'that handle does not name a body', 'body');
-          return planReplaceStory(operation.text);
+          const story = storyOfHandle(operation.span.body, 'body', handles, packageReads);
+          if (!story.ok)
+            return refuse(story.code, 'that handle does not name a body', story.detail);
+          return planReplaceStory(planFor(story.value), operation.text);
         }
-        const resolved = resolveSpanRef(operation.span, handles, reads);
+        const resolved = resolveSpanRef(operation.span, handles, packageReads);
         if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
         if (!resolved.value)
           return refuse(
@@ -960,11 +1129,13 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             'that story holds no paragraph to write into',
             'empty-story'
           );
-        return planReplaceSpan(resolved.value, operation.text);
+        const story = storyReadsOf(resolved.value);
+        if (!story) return refuse('invalid-handle', 'that story is not in this document');
+        return planReplaceSpan(planFor(story), resolved.value, operation.text);
       }
 
       case 'insertParagraph': {
-        const anchor = resolveParagraphRef(operation.anchor, handles, reads);
+        const anchor = resolveParagraphRef(operation.anchor, handles, packageReads);
         if (!anchor.ok)
           return refuse(anchor.code, 'that is not a paragraph to insert beside', anchor.detail);
         if (operation.where !== 'before' && operation.where !== 'after')
@@ -973,14 +1144,24 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             'that is not a place to insert',
             String(operation.where)
           );
-        return planInsertParagraph(anchor.value, operation.where, operation.text);
+        const story = packageReads.story(anchor.value.story);
+        if (!story) return refuse('invalid-handle', 'that story is not in this document');
+        return planInsertParagraph(
+          planFor(story),
+          anchor.value,
+          operation.where,
+          operation.text
+        );
       }
 
       case 'splitParagraph': {
-        const paragraph = resolveParagraphHandle(operation.paragraph, handles, reads);
+        const paragraph = resolveParagraphHandle(operation.paragraph, handles, packageReads);
         if (!paragraph.ok)
           return refuse(paragraph.code, 'that handle does not name a paragraph', paragraph.detail);
+        const story = packageReads.story(paragraph.value.story);
+        if (!story) return refuse('invalid-handle', 'that story is not in this document');
         return planSplitParagraph(
+          planFor(story),
           paragraph.value,
           operation.delimiters,
           operation.trimDelimiters === true,
@@ -989,28 +1170,34 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       }
 
       case 'getFont': {
-        const resolved = resolveSpanRef(operation.span, handles, reads);
+        const resolved = resolveSpanRef(operation.span, handles, packageReads);
         if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
-        const part = reads.bodyPart;
-        if (!part) return refuse('document-unavailable', 'this host holds no document right now');
-        return query({ kind: 'font', font: fontRead(part, spanOffsets(resolved.value, reads)) });
+        const story = storyOfSpanRef(operation.span, handles, packageReads);
+        if (!story.ok) return refuse(story.code, 'that span is not a place', story.detail);
+        return query({
+          kind: 'font',
+          font: fontRead(story.value.part, spanOffsets(resolved.value, story.value)),
+        });
       }
 
       case 'setFont': {
-        const resolved = resolveSpanRef(operation.span, handles, reads);
+        const resolved = resolveSpanRef(operation.span, handles, packageReads);
         if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
         if (!resolved.value)
           return refuse('invalid-offset', 'that story holds no paragraph to format', 'empty-story');
-        return planSetFont(resolved.value, operation.font);
+        const story = storyReadsOf(resolved.value);
+        if (!story) return refuse('invalid-handle', 'that story is not in this document');
+        return planSetFont(planFor(story), resolved.value, operation.font);
       }
 
       case 'getStyle': {
-        const resolved = resolveSpanRef(operation.span, handles, reads);
+        const resolved = resolveSpanRef(operation.span, handles, packageReads);
         if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
-        const part = reads.bodyPart;
-        if (!part) return refuse('document-unavailable', 'this host holds no document right now');
-        const styles = reads.styles();
-        const names = spanParagraphIds(resolved.value, reads).map((paragraphId) =>
+        const story = storyOfSpanRef(operation.span, handles, packageReads);
+        if (!story.ok) return refuse(story.code, 'that span is not a place', story.detail);
+        const part = story.value.part;
+        const styles = story.value.styles();
+        const names = spanParagraphIds(resolved.value, story.value).map((paragraphId) =>
           paragraphStyleName(part, paragraphId, styles)
         );
         // Agreement, same as a formatting read: one name if every paragraph the span covers states
@@ -1023,44 +1210,56 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       }
 
       case 'setStyle': {
-        const resolved = resolveSpanRef(operation.span, handles, reads);
+        const resolved = resolveSpanRef(operation.span, handles, packageReads);
         if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
         if (!resolved.value)
           return refuse('invalid-offset', 'that story holds no paragraph to style', 'empty-story');
-        return planSetStyle(resolved.value, operation.name);
+        const story = storyReadsOf(resolved.value);
+        if (!story) return refuse('invalid-handle', 'that story is not in this document');
+        return planSetStyle(planFor(story), resolved.value, operation.name);
       }
 
       case 'getParagraphFormat': {
-        const paragraph = resolveParagraphRef(operation.paragraph, handles, reads);
+        const paragraph = resolveParagraphRef(operation.paragraph, handles, packageReads);
         if (!paragraph.ok)
           return refuse(paragraph.code, 'that is not a paragraph', paragraph.detail);
-        const part = reads.bodyPart;
-        if (!part) return refuse('document-unavailable', 'this host holds no document right now');
-        const format = paragraphFormatRead(part, paragraph.value.paragraphId, reads.styles());
+        const story = packageReads.story(paragraph.value.story);
+        if (!story) return refuse('document-unavailable', 'this host holds no document right now');
+        const format = paragraphFormatRead(
+          story.part,
+          paragraph.value.paragraphId,
+          story.styles()
+        );
         if (!format) return refuse('invalid-handle', 'that handle does not name a paragraph');
         return query({ kind: 'paragraphFormat', format });
       }
 
       case 'setParagraphFormat': {
-        const paragraph = resolveParagraphRef(operation.paragraph, handles, reads);
+        const paragraph = resolveParagraphRef(operation.paragraph, handles, packageReads);
         if (!paragraph.ok)
           return refuse(paragraph.code, 'that is not a paragraph', paragraph.detail);
-        return planSetParagraphFormat(paragraph.value, operation.format);
+        const story = packageReads.story(paragraph.value.story);
+        if (!story) return refuse('invalid-handle', 'that story is not in this document');
+        return planSetParagraphFormat(planFor(story), paragraph.value, operation.format);
       }
 
       case 'deleteParagraph': {
-        const paragraph = resolveParagraphHandle(operation.paragraph, handles, reads);
+        const paragraph = resolveParagraphHandle(operation.paragraph, handles, packageReads);
         if (!paragraph.ok)
           return refuse(paragraph.code, 'that handle does not name a paragraph', paragraph.detail);
-        return planDeleteParagraph(paragraph.value);
+        const story = packageReads.story(paragraph.value.story);
+        if (!story) return refuse('invalid-handle', 'that story is not in this document');
+        return planDeleteParagraph(planFor(story), paragraph.value);
       }
 
       case 'selectSpan': {
-        const resolved = resolveSpanRef(operation.span, handles, reads);
+        const resolved = resolveSpanRef(operation.span, handles, packageReads);
         if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
         if (!resolved.value)
           return refuse('invalid-offset', 'that story holds no paragraph to select', 'empty-story');
-        return planSelect(resolved.value, operation.mode);
+        const story = storyReadsOf(resolved.value);
+        if (!story) return refuse('invalid-handle', 'that story is not in this document');
+        return planSelect(planFor(story), resolved.value, operation.mode);
       }
 
       default: {
@@ -1083,23 +1282,35 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     get hasCommands() {
       return hasCommands;
     },
+    get writeScope() {
+      return writeStory?.reads.scope ?? null;
+    },
     settle(post) {
-      const before = new Set(reads.bodyParagraphIds);
-      const fresh = post.bodyParagraphIds.filter((id) => !before.has(id));
-      if (fresh.length !== created.length) {
-        return {
-          ok: false,
-          detail: `planned ${String(created.length)} new paragraphs, the transaction made ${String(fresh.length)}`,
-        };
-      }
-      // Reading order on both sides: `created` is ordered by the symbolic story position each
-      // slot was inserted at, and `fresh` by where the paragraphs actually landed.
-      const inOrder = order.filter((slot) => slot.id === null);
-      inOrder.forEach((slot, index) => {
-        slot.id = fresh[index] ?? null;
-      });
-      for (const retarget of retargets) {
-        if (retarget.slot.id) handles.retarget(retarget.from, retarget.slot.id);
+      // ONE story settles: a batch's commands are pinned to one story, so only that story can
+      // have created paragraphs. A read-only batch has nothing to bind at all.
+      const pinned = writeStory;
+      if (pinned) {
+        const after = post.story(pinned.reads.story);
+        if (!after) {
+          return { ok: false, detail: `the story this batch wrote is gone: ${storyKey(pinned.reads.story)}` };
+        }
+        const before = new Set(pinned.reads.paragraphIds);
+        const fresh = after.paragraphIds.filter((id) => !before.has(id));
+        if (fresh.length !== pinned.created.length) {
+          return {
+            ok: false,
+            detail: `planned ${String(pinned.created.length)} new paragraphs, the transaction made ${String(fresh.length)}`,
+          };
+        }
+        // Reading order on both sides: `created` is ordered by the symbolic story position each
+        // slot was inserted at, and `fresh` by where the paragraphs actually landed.
+        const inOrder = pinned.order.filter((slot) => slot.id === null);
+        inOrder.forEach((slot, index) => {
+          slot.id = fresh[index] ?? null;
+        });
+        for (const retarget of pinned.retargets) {
+          if (retarget.slot.id) handles.retarget(retarget.from, retarget.slot.id);
+        }
       }
       // LAST GATE BEFORE A CARET MOVES. Planning already refuses a batch that selects a paragraph
       // it also changes, so a selection reaching here should describe the committed document
@@ -1107,7 +1318,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       // an effect this file did not model — the right outcome is that no caret moves, not that one
       // moves to a position that has stopped meaning what it meant.
       for (const selection of selections) {
-        if (!placeable(selection.range, post)) continue;
+        const story = post.story(selection.range.start.story);
+        if (!story || !placeable(selection.range, story)) continue;
         host.select?.(selection.range, selection.mode);
       }
       return { ok: true };

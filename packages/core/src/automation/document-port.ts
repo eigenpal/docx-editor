@@ -12,6 +12,7 @@
 
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
+import type { StoryScope } from '../store/store/tree-package-store.ts';
 
 export type AutomationPortApplyResult =
   | { readonly ok: true; readonly changed: boolean }
@@ -32,12 +33,17 @@ export interface AutomationDocumentPort {
    */
   currentPackage(): OoxmlPackage | null;
   /**
-   * Commit ops as ONE transaction against the body story.
+   * Commit ops as ONE transaction against ONE story.
    *
    * Ordered and atomic is the port's contract, not the caller's convention: on any rejection
    * the owner must leave revision, tree and subscribers exactly as they were.
+   *
+   * The scope is the caller's, because the caller is the only one who knows which story the
+   * batch addressed. A port that assumed the body would silently refuse every header and note
+   * op — the ids are not in the body's index — and a port that guessed from the ops would be a
+   * second story resolver disagreeing with the reads.
    */
-  apply(ops: readonly TreeDocOp[]): AutomationPortApplyResult;
+  apply(ops: readonly TreeDocOp[], scope: StoryScope): AutomationPortApplyResult;
   /** DOCX bytes through the normalizing serializer, or null when there is no document. */
   save(): Uint8Array | null;
   /**

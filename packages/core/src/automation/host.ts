@@ -20,7 +20,7 @@ import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { createHandleTable } from './handles.ts';
 import { createBatchPlanner, type PlannedOperation } from './plan.ts';
-import { documentReads, type AutomationDocumentReads } from './reads.ts';
+import { documentReads, type AutomationPackageReads } from './reads.ts';
 import type { AutomationOperation } from './operations.ts';
 import type {
   AutomationBatchRequest,
@@ -79,7 +79,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
   const listeners = new Set<(event: AutomationChangeEvent) => void>();
   let disposed = false;
   /** Reads keyed on package IDENTITY: packages are immutable, so an edit replaces the key. */
-  let reads: { readonly pkg: OoxmlPackage; readonly value: AutomationDocumentReads } | null = null;
+  let reads: { readonly pkg: OoxmlPackage; readonly value: AutomationPackageReads } | null = null;
 
   // Only wired when the host claims events. A capability that is false must not fire.
   const unsubscribePort = capabilities.events
@@ -90,7 +90,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       })
     : () => {};
 
-  const readsOf = (pkg: OoxmlPackage): AutomationDocumentReads => {
+  const readsOf = (pkg: OoxmlPackage): AutomationPackageReads => {
     if (reads && reads.pkg === pkg) return reads.value;
     const value = documentReads(pkg);
     reads = { pkg, value };
@@ -159,7 +159,10 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
 
     let changed = false;
     if (ops.length > 0) {
-      const applied = port.apply(ops);
+      // THE STORY THE BATCH PINNED. One transaction against one story, named by the planner
+      // rather than assumed to be the body — a header edit committed against the body scope
+      // would refuse ids the body does not hold.
+      const applied = port.apply(ops, planner.writeScope ?? { kind: 'body' });
       if (!applied.ok) {
         return refuse(
           operations,
