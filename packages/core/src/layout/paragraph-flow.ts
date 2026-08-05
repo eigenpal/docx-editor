@@ -1098,22 +1098,29 @@ export function breakParagraph(
     }
   };
 
-  const closeLine = (): void => {
+  const closeLine = (options?: { readonly includeParagraphMark?: boolean }): void => {
     const metrics = measurer.lineMetrics(emptyStyle);
+    // Baseline of the visible glyph band before mark / spacing. Paint's padding-top is
+    // `spaced.baseline - glyphBaseline` (space above); auto extras grow BELOW instead.
+    let glyphBaseline = line.baseline;
     if (line.height === 0) {
       line.height = metrics.height;
       line.baseline = metrics.baseline;
+      glyphBaseline = metrics.baseline;
+    } else if (options?.includeParagraphMark) {
+      // Paragraph mark `w:sz` (CT_PPr/rPr) can be taller than the visible runs. Grow the
+      // line box to the mark height but keep the glyph baseline — the spare depth sits
+      // below the text, matching Word's cover-page party-name rhythm. Pushing the baseline
+      // down (max-ascent) made "between"/"MERIDIAN" clump while inflating other gaps.
+      line.height = Math.max(line.height, metrics.height);
     }
     finalizeDrawingGeometry();
     // Line spacing applies to the finished box, once, so a paragraph's rule governs every
     // line it produced regardless of which run happened to be tallest.
-    const natural = line.height;
     const spaced = applyLineSpacing(lineSpacing, line.height, line.baseline);
     line.baseline = spaced.baseline;
-    // Never negative: an `exact` box clipped below its glyphs adds no leading, it removes
-    // box. Paint keys its baseline correction off this, and a negative would push the text
-    // the wrong way rather than leaving the clipped line alone.
-    line.leading = Math.max(0, spaced.height - natural);
+    // Space ABOVE the glyph band only (exact centering, not auto/atLeast). Never negative.
+    line.leading = Math.max(0, spaced.baseline - glyphBaseline);
     line.height = spaced.height;
     // Baseline shifts from line spacing must move inline drawings too, or authored distT/distB
     // and the text baseline drift apart. For `exact`, keep the authored box — tall drawings
@@ -1513,8 +1520,11 @@ export function breakParagraph(
   // there was and left nothing after it — the caret fell back to the end of the line the
   // break had just terminated, sitting a break's width to the right of the last glyph,
   // and the new line only appeared once something was typed into it.
+  //
+  // Only this final close includes the paragraph mark: intermediate wraps must not inherit
+  // a tall mark size onto every line of a multi-line paragraph.
   if (line.spans.length > 0 || line.drawings.length > 0 || lines.length === 0 || trailingLineBreak)
-    closeLine();
+    closeLine({ includeParagraphMark: true });
   if (cacheKey !== null && cache) cache.set(cacheKey, lines.map(frozenLine));
   return lines;
 }

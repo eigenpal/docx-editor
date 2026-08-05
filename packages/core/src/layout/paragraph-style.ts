@@ -216,9 +216,12 @@ export function paragraphLineSpacing(props: readonly OoxmlProperty[]): Paragraph
 /**
  * Apply resolved line spacing to a line's natural (glyph-derived) box.
  *
- * Extra leading goes ABOVE the text — the baseline moves down by the whole delta — which
- * is what Word does for `auto` and `atLeast`. An `exact` box smaller than the glyphs keeps
- * the baseline inside the box so the clipped text still sits on it.
+ * Word places `auto` / `atLeast` extras BELOW the line (the last line's multiple spacing
+ * still separates it from the next paragraph). Putting that delta above inverted cover-page
+ * rhythm: `w:line="460"` on "between" opened a large gap above the word and almost none
+ * before "MERIDIAN". `exact` taller than the glyphs centers the text (ECMA-376 17.3.1.33).
+ * An `exact` box smaller than the glyphs keeps the baseline inside so clipped text still
+ * sits on it.
  */
 export function applyLineSpacing(
   spacing: ParagraphLineSpacing,
@@ -232,8 +235,14 @@ export function applyLineSpacing(
         ? spacing.value
         : Math.max(naturalHeight, spacing.value);
   const delta = height - naturalHeight;
-  if (delta >= 0) return { height, baseline: naturalBaseline + delta };
-  return { height, baseline: Math.max(0, Math.min(naturalBaseline, height)) };
+  if (delta < 0) {
+    return { height, baseline: Math.max(0, Math.min(naturalBaseline, height)) };
+  }
+  if (spacing.rule === 'exact') {
+    return { height, baseline: naturalBaseline + delta / 2 };
+  }
+  // auto / atLeast: grow the box downward; baseline stays put.
+  return { height, baseline: naturalBaseline };
 }
 
 /**

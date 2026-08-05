@@ -90,24 +90,30 @@ describe('paragraphLineSpacing reads w:line and w:lineRule', () => {
   });
 });
 
-describe('applyLineSpacing puts the extra leading above the text', () => {
-  test('auto scales the natural box', () => {
+describe('applyLineSpacing places auto extras below the text', () => {
+  test('auto scales the box downward without moving the baseline', () => {
     expect(applyLineSpacing({ rule: 'auto', value: 480 }, 14, 11)).toEqual({
       height: 28,
-      baseline: 25,
+      baseline: 11,
     });
   });
 
-  test('atLeast is a floor, never a ceiling', () => {
+  test('atLeast is a floor, never a ceiling, and grows downward', () => {
     expect(applyLineSpacing({ rule: 'atLeast', value: 10 }, 14, 11).height).toBe(14);
     expect(applyLineSpacing({ rule: 'atLeast', value: 20 }, 14, 11)).toEqual({
       height: 20,
-      baseline: 17,
+      baseline: 11,
     });
   });
 
-  test('exact fixes the box and keeps the baseline inside it when it clips', () => {
-    expect(applyLineSpacing({ rule: 'exact', value: 20 }, 14, 11).height).toBe(20);
+  test('exact taller than the glyphs centers the text', () => {
+    expect(applyLineSpacing({ rule: 'exact', value: 20 }, 14, 11)).toEqual({
+      height: 20,
+      baseline: 14,
+    });
+  });
+
+  test('exact smaller than the glyphs keeps the baseline inside the box', () => {
     const clipped = applyLineSpacing({ rule: 'exact', value: 8 }, 14, 11);
     expect(clipped.height).toBe(8);
     expect(clipped.baseline).toBeLessThanOrEqual(8);
