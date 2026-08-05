@@ -1,7 +1,6 @@
 {
   "name": "@docx-editor.dev/core",
   "version": "1.0.0",
-  "private": true,
   "description": "Framework-agnostic core for docx-editor.dev: OOXML parse/serialize, the canonical document tree, layout and paint, and the Editor contract the adapters render.",
   "type": "module",
   "exports": {
