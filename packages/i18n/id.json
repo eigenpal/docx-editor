@@ -861,7 +861,8 @@
     "failedToParse": "Gagal membaca dokumen",
     "linkRemoved": "Tautan dihapus",
     "linkCopied": "Tautan disalin ke papan klip",
-    "failedToSave": "Gagal menyimpan dokumen"
+    "failedToSave": "Gagal menyimpan dokumen",
+    "fontSubstitutionNotice": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Teks yang ditampilkan",

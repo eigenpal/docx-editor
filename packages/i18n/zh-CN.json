@@ -842,7 +842,8 @@
     "failedToParse": "解析文档失败",
     "linkRemoved": "链接已删除",
     "linkCopied": "链接已复制到剪贴板",
-    "failedToSave": "保存文档失败"
+    "failedToSave": "保存文档失败",
+    "fontSubstitutionNotice": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "显示文本",

@@ -768,7 +768,7 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
         }
         fontsCache = {
           revision: packageStore.packageRevision,
-          fonts: collectDocumentFonts(roots),
+          fonts: collectDocumentFonts(roots, collectDocumentThemeFonts(resolveThemeRoot())),
         };
         return fontsCache.fonts;
       },

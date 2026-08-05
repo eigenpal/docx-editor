@@ -662,6 +662,7 @@ export interface EditorSnapshot {
     readonly canUndo?: boolean;
     readonly editable: boolean;
     readonly editingMode?: DocumentEditingMode;
+    readonly fontSubstitutions?: readonly string[];
     // (undocumented)
     readonly formatting: RunFormatting | null;
     // (undocumented)

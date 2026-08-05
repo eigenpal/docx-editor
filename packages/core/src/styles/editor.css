@@ -5649,3 +5649,44 @@ a.docx-hyperlink:focus-visible {
   outline: 2px solid var(--doc-primary);
   outline-offset: 1px;
 }
+
+/* Font compatibility notice (DocxEditor.FontNotice): Word's "substituted fonts" bar,
+   shown between the toolbar and the workspace when declared faces render in fallbacks. */
+.docx-font-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 16px;
+  background: var(--doc-warning-bg);
+  color: var(--doc-warning-text);
+  border-bottom: 1px solid var(--doc-border);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.docx-font-notice__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.docx-font-notice__dismiss {
+  flex: none;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--doc-warning);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.docx-font-notice__dismiss:hover {
+  background: var(--doc-bg-hover);
+}
+
+.docx-font-notice__dismiss:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 1px;
+}

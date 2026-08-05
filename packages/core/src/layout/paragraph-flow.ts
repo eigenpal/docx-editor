@@ -117,8 +117,19 @@ export function propertiesOf(container: OoxmlNode | undefined): OoxmlProperty[] 
 }
 
 /**
- * Break points inside a piece: after each run of spaces (words stay whole), and with each
- * tab as its own atom so tab-stop geometry can size `\t` independently of neighbouring text.
+ * Dashes a line may break AFTER, the way Word wraps "ALPHA-PRIME" as "ALPHA-" / "PRIME":
+ * hyphen-minus, hyphen, en dash, em dash. U+2011 NON-BREAKING HYPHEN is deliberately
+ * absent — its whole meaning is "no wrap here".
+ */
+const BREAK_AFTER_DASH = new Set(['-', '‐', '–', '—']);
+
+/**
+ * Break points inside a piece: after each run of spaces (words stay whole), after a dash
+ * that sits between non-space text, and with each tab as its own atom so tab-stop
+ * geometry can size `\t` independently of neighbouring text.
+ *
+ * A dash run breaks only after its LAST dash, mirroring how a run of spaces is one
+ * boundary; a dash beside a space adds nothing the space boundary does not already give.
  */
 function wordBoundaries(text: string): number[] {
   const boundaries: number[] = [];
@@ -128,6 +139,15 @@ function wordBoundaries(text: string): number[] {
       if (index > 0 && boundaries[boundaries.length - 1] !== index) boundaries.push(index);
       boundaries.push(index + 1);
     } else if (ch === ' ') {
+      boundaries.push(index + 1);
+    } else if (
+      BREAK_AFTER_DASH.has(ch) &&
+      index > 0 &&
+      text[index - 1] !== ' ' &&
+      index + 1 < text.length &&
+      text[index + 1] !== ' ' &&
+      !BREAK_AFTER_DASH.has(text[index + 1]!)
+    ) {
       boundaries.push(index + 1);
     }
   }
@@ -667,14 +687,18 @@ export function breakParagraph(
       const measureSource = piece.measureText ?? candidate;
       const width = measurer.measure(displayText(measureSource, piece.style), piece.style);
       // A candidate may open a line only at a real break opportunity. Within a piece,
-      // `wordBoundaries` cuts after spaces and tabs, so every candidate but the first is one.
-      // The FIRST candidate of a piece continues whatever the previous piece ended with, so it
-      // is a break opportunity only if that ended in whitespace.
+      // `wordBoundaries` cuts after spaces, dashes and tabs, so every candidate but the
+      // first is one. The FIRST candidate of a piece continues whatever the previous piece
+      // ended with, so it is a break opportunity only if that ended in whitespace \u2014 or in a
+      // dash, which stays a break opportunity across run boundaries (a tracked change can
+      // split "ALPHA-" and "PRIME" into different runs without gluing them).
       const opensWord =
         consumed > 0 ||
         lastEmitted === '' ||
         /[\s\u00a0]$/.test(lastEmitted) ||
-        /^[\s\u00a0]/.test(candidate);
+        /^[\s\u00a0]/.test(candidate) ||
+        (BREAK_AFTER_DASH.has(lastEmitted[lastEmitted.length - 1]!) &&
+          !BREAK_AFTER_DASH.has(candidate[0]!));
       if (opensWord) {
         wordStartSpan = line.spans.length;
         wordStartWidth = line.width;
@@ -713,18 +737,74 @@ export function breakParagraph(
           wordStartWidth = 0;
         }
       }
+      // A word wider than an EMPTY line has no boundary to wrap at, and Word breaks it at
+      // the margin rather than letting it run past the right edge — or, in a table cell,
+      // into the neighbouring cell. The longest fitting prefix closes each full line and
+      // the tail falls through to ordinary placement. Layout-owned pieces stay whole:
+      // every span they emit publishes the piece's model range, so cutting one would
+      // publish the same range twice; `measureText` pieces reserve a width their sliced
+      // text does not measure to.
+      let remaining = candidate;
+      let remainingStart = piece.start + consumed;
+      let remainingWidth = width;
+      if (!layoutOwned && piece.measureText === undefined) {
+        while (
+          line.spans.length === 0 &&
+          remaining.length > 1 &&
+          remainingWidth > lineAvailable()
+        ) {
+          let low = 1;
+          let high = remaining.length - 1;
+          let fitLength = 1;
+          while (low <= high) {
+            const mid = (low + high) >> 1;
+            const midWidth = measurer.measure(
+              displayText(remaining.slice(0, mid), piece.style),
+              piece.style
+            );
+            if (midWidth <= lineAvailable()) {
+              fitLength = mid;
+              low = mid + 1;
+            } else {
+              high = mid - 1;
+            }
+          }
+          const prefix = remaining.slice(0, fitLength);
+          const prefixWidth = measurer.measure(displayText(prefix, piece.style), piece.style);
+          line.spans.push({
+            range: { paragraphId, start: remainingStart, end: remainingStart + fitLength },
+            text: prefix,
+            props: piece.props,
+            style: piece.style,
+            box: { x: lineOrigin() + line.width, y: 0, width: prefixWidth, height: metrics.height },
+            ...(piece.link ? { link: piece.link } : {}),
+            ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
+            ...revisionsOf(piece),
+          });
+          line.width += prefixWidth;
+          line.height = Math.max(line.height, metrics.height);
+          line.baseline = Math.max(line.baseline, metrics.baseline);
+          line.end = remainingStart + fitLength;
+          closeLine();
+          remaining = remaining.slice(fitLength);
+          remainingStart += fitLength;
+          remainingWidth = measurer.measure(displayText(remaining, piece.style), piece.style);
+        }
+      }
       line.spans.push({
-        range: spanRange,
-        text: candidate,
+        range: layoutOwned
+          ? spanRange
+          : { paragraphId, start: remainingStart, end: piece.start + boundary },
+        text: remaining,
         props: piece.props,
         style: piece.style,
-        box: { x: lineOrigin() + line.width, y: 0, width, height: metrics.height },
+        box: { x: lineOrigin() + line.width, y: 0, width: remainingWidth, height: metrics.height },
         ...(piece.link ? { link: piece.link } : {}),
         ...(layoutOwned && !piece.positionalTab ? { projected: true as const } : {}),
         ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
         ...revisionsOf(piece),
       });
-      line.width += width;
+      line.width += remainingWidth;
       line.height = Math.max(line.height, metrics.height);
       line.baseline = Math.max(line.baseline, metrics.baseline);
       line.end = layoutOwned ? piece.end : piece.start + boundary;

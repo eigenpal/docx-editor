@@ -845,7 +845,8 @@
     "failedToParse": "Belge ayrıştırılamadı",
     "linkRemoved": "Bağlantı kaldırıldı",
     "linkCopied": "Bağlantı panoya kopyalandı",
-    "failedToSave": "Belge kaydedilemedi"
+    "failedToSave": "Belge kaydedilemedi",
+    "fontSubstitutionNotice": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Görüntülenen metin",

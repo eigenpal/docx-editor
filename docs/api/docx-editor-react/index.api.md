@@ -74,6 +74,7 @@ import { SurfaceHyperlink } from '@docx-editor.dev/core-contract/editor';
 import { TableChromeSlotId } from '@docx-editor.dev/core-contract/editor';
 import { TextMatch } from '@docx-editor.dev/core-contract/contracts/editor';
 import { TextMeasurer } from '@docx-editor.dev/core-contract/editor';
+import { TFunction } from '@docx-editor.dev/i18n';
 import { Theme } from '@docx-editor.dev/core-contract/contracts/editor';
 import { ToolbarCommandState } from '@docx-editor.dev/core-contract/editor';
 import { toolbarCommandState } from '@docx-editor.dev/core-contract/editor';
@@ -374,6 +375,16 @@ export interface DocxEditorDocumentOutlineProps {
 }
 
 // @public
+export function DocxEditorFontNotice(input: DocxEditorFontNoticeProps): react.JSX.Element | null;
+
+// @public
+export interface DocxEditorFontNoticeProps {
+    className?: string;
+    style?: CSSProperties;
+    t?: TFunction;
+}
+
+// @public
 export function DocxEditorHeaderFooterChrome(input: DocxEditorHeaderFooterChromeProps): ReactElement | null;
 
 // @public
@@ -491,6 +502,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly ContentControl: typeof DocxEditorContentControl;
     readonly ContextMenu: typeof ContextMenu;
     readonly DocumentOutline: typeof DocxEditorDocumentOutline;
+    readonly FontNotice: typeof DocxEditorFontNotice;
     readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
     readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
     readonly HyperLink: typeof DocxEditorHyperLink;

@@ -845,7 +845,8 @@
     "failedToParse": "दस्तावेज़ का विश्लेषण करने में विफल",
     "linkRemoved": "लिंक हटा दिया गया",
     "linkCopied": "लिंक क्लिपबोर्ड पर कॉपी किया गया",
-    "failedToSave": "दस्तावेज़ सहेजने में विफल"
+    "failedToSave": "दस्तावेज़ सहेजने में विफल",
+    "fontSubstitutionNotice": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "दिखाया जाने वाला टेक्स्ट",
