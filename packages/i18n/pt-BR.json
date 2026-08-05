@@ -858,7 +858,8 @@
     "failedToParse": "Falha ao analisar documento",
     "linkRemoved": "Link removido",
     "linkCopied": "Link copiado para a área de transferência",
-    "failedToSave": "Falha ao salvar documento"
+    "failedToSave": "Falha ao salvar documento",
+    "fontSubstitutionNotice": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Texto de exibição",
@@ -999,7 +1000,9 @@
     "runPropertiesChanged": null
   },
   "toc": {
-    "updatePrompt": null
+    "updatePrompt": null,
+    "refresh": "Atualizar tabela inteira",
+    "refreshPageNumbers": "Atualizar apenas números de página"
   },
   "app": {
     "name": null,

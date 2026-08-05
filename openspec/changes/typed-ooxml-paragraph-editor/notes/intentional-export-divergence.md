@@ -86,6 +86,9 @@ exemptions go when it lands.
   hand-copying its class name.
 - `DocxEditorLoadingSpinnerProps`
 - `DocxEditorLoadingComponent` — the part plus its `.Spinner` static.
+- `DocxEditorFontNotice` — context-fed warning for unavailable document fonts; Vue
+  exposes the substitution state through the shared snapshot but has no packaged notice yet.
+- `DocxEditorFontNoticeProps`
 - `DocxEditorHeaderFooterChrome` — React-only scoped HF chrome (region label, options,
   field inserts) over `useHeaderFooterState`; Vue twin deferred with notes/HF editing.
 - `DocxEditorHeaderFooterChromeProps`

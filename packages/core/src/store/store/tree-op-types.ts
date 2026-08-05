@@ -132,6 +132,27 @@ export interface RevisionAttributionInput {
 
 export type TreeDocOp =
   | {
+      /**
+       * Insert an SDT-wrapped TOC immediately before a body paragraph.
+       * The initial cached result and any heading bookmarks land in one undo unit.
+       */
+      readonly op: 'insertToc';
+      readonly beforeParagraphId: string;
+      readonly instruction: string;
+      readonly alias: string;
+      readonly entries: readonly {
+        readonly level: number;
+        readonly text: string;
+        readonly headingParagraphId: string;
+        readonly bookmarkName: string;
+        readonly pageNumberText: string;
+      }[];
+      readonly bookmarksToCreate: readonly {
+        readonly paragraphId: string;
+        readonly name: string;
+      }[];
+    }
+  | {
       readonly op: 'insertText';
       readonly paragraphId: string;
       readonly offset: number;
@@ -695,6 +716,37 @@ export type TreeDocOp =
       readonly op: 'transformDrawing';
       readonly drawingNodeId: string;
       readonly action: 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV';
+    }
+  | {
+      /**
+       * Replace a detected TOC field's cached result paragraphs and ensure heading bookmarks.
+       * Preserves field chrome / instruction. One undo unit (phase A of TOC refresh).
+       */
+      readonly op: 'replaceTocResult';
+      readonly tocId: string;
+      readonly entries: readonly {
+        readonly level: number;
+        readonly text: string;
+        readonly headingParagraphId: string;
+        readonly bookmarkName: string;
+        readonly pageNumberText: string;
+      }[];
+      readonly bookmarksToCreate: readonly {
+        readonly paragraphId: string;
+        readonly name: string;
+      }[];
+    }
+  | {
+      /**
+       * Rewrite page-number text runs inside existing TOC result paragraphs.
+       * One undo unit (phase B of TOC refresh).
+       */
+      readonly op: 'rewriteTocPageNumbers';
+      readonly tocId: string;
+      readonly updates: readonly {
+        readonly paragraphId: string;
+        readonly pageNumberText: string;
+      }[];
     };
 
 /** Drawing mutation ops from typed-drawings-and-images task 11. */
@@ -779,6 +831,9 @@ export const TREE_DOC_OP_KINDS = [
   'setDrawingMetadata',
   'setDrawingLocks',
   'transformDrawing',
+  'insertToc',
+  'replaceTocResult',
+  'rewriteTocPageNumbers',
 ] as const satisfies readonly TreeDocOpKind[];
 
 // Compile-time exhaustiveness, matching the legacy `DOC_OP_KINDS` guard: a new op must be

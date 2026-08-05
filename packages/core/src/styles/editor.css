@@ -766,6 +766,26 @@ a.docx-hyperlink:focus-visible {
   cursor: text;
 }
 
+.docx-generated-region {
+  cursor: pointer;
+  user-select: none;
+}
+
+/*
+ * Empty TOC furniture — the ONE box an empty region gets; paint-only, never model text.
+ *
+ * The control-boundary rectangle is suppressed for these regions (see the surface's
+ * `suppressedIds`), so this is the whole affordance: subtle enough to read as a slot,
+ * always on so the region stays identifiable and right-clickable. No minimum height —
+ * the box is exactly the line layout reserved, so it cannot double up against the flow.
+ */
+.docx-toc-empty-placeholder {
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--doc-primary) 28%, var(--doc-page-bg-rendered));
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--doc-primary) 6%, var(--doc-page-bg-rendered));
+}
+
 /* Non-editable elements within editor */
 .docx-list-marker,
 .docx-bookmark-start,
@@ -797,10 +817,21 @@ a.docx-hyperlink:focus-visible {
 
 .docx-content-control-chrome[data-active] .docx-content-control-boundary,
 .docx-content-control-chrome[data-open] .docx-content-control-boundary,
+.docx-content-control-chrome[data-hover] .docx-content-control-boundary,
 .docx-content-control-chrome:hover .docx-content-control-boundary {
   border-color: var(--doc-primary);
   background: color-mix(in srgb, var(--doc-primary) 10%, transparent);
   opacity: 1;
+}
+
+/*
+ * Populated TOC: nothing at rest — no border, no background — and never sticky from the
+ * caret or a click. The surface sets `data-hover` on the painted chrome while the pointer
+ * is over the region and takes it off again on the way out.
+ */
+.docx-content-control-chrome[data-docx-toc]:not([data-hover]):not([data-boundary-visible])
+  .docx-content-control-boundary {
+  opacity: 0;
 }
 
 .docx-content-control-label {
@@ -822,6 +853,7 @@ a.docx-hyperlink:focus-visible {
 
 .docx-content-control-chrome[data-active] .docx-content-control-label,
 .docx-content-control-chrome[data-open] .docx-content-control-label,
+.docx-content-control-chrome[data-hover] .docx-content-control-label,
 .docx-content-control-chrome:hover .docx-content-control-label {
   display: block;
 }
@@ -1559,120 +1591,6 @@ a.docx-hyperlink:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-}
-
-/* The refresh button hangs in the page margin, `--toc-refresh-gap` to the left
-    of its boundary box. Both it and the hover bridge below derive their geometry
-    from these two values, so the bridge can never drift out of step with the
-    button it has to reach. */
-.layout-block-sdt-box--has-toc-refresh {
-  --toc-refresh-size: 32px;
-  --toc-refresh-gap: 8px;
-  --toc-refresh-reach: calc(var(--toc-refresh-size) + var(--toc-refresh-gap));
-}
-
-/* Hover bridge — load-bearing, not decoration. The button hangs outside the
-    boundary box, so without this the pointer would cross gutter owned by
-    neither, firing `mouseleave` on the content element: that clears
-    `.is-active`, which drops the button to `pointer-events: none` just as the
-    pointer arrives, and the click falls through to the page. The strip covers
-    the button plus the gap at full box height, so hits resolve to the box (it is
-    the box's own pseudo-element) and `isPointInsideSdtBoundary`'s
-    `box.contains(target)` check keeps the reveal alive across the whole path.
-    Live only while `.is-active`, and under the button (z-index 2), so it swallows
-    neither margin clicks nor the button's own. */
-.layout-block-sdt-box--has-toc-refresh::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: calc(-1 * var(--toc-refresh-reach));
-  width: var(--toc-refresh-reach);
-  pointer-events: none;
-}
-.layout-block-sdt-box--has-toc-refresh.is-active::before {
-  pointer-events: auto;
-}
-
-/* Inline TOC refresh affordance — floating action button appended to the SDT boundary. */
-.layout-block-sdt-box--has-toc-refresh .layout-toc-refresh {
-  position: absolute;
-  top: 0;
-  left: calc(-1 * var(--toc-refresh-gap));
-  transform: translateX(-100%);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--toc-refresh-size);
-  height: var(--toc-refresh-size);
-  padding: 0;
-  margin: 0;
-  border: 1px solid var(--doc-border-light);
-  border-radius: 6px;
-  background: var(--doc-surface);
-  color: var(--doc-text-muted);
-  cursor: pointer;
-  pointer-events: none;
-  box-shadow: 0 1px 3px var(--doc-shadow);
-  opacity: 0;
-  visibility: hidden;
-  transition:
-    opacity 0.15s ease,
-    visibility 0.15s ease,
-    background-color 0.15s ease,
-    box-shadow 0.15s ease;
-  z-index: 2;
-}
-.layout-block-sdt-box--has-toc-refresh.is-active .layout-toc-refresh,
-.layout-block-sdt-box--has-toc-refresh.is-focused .layout-toc-refresh,
-.layout-block-sdt-box--has-toc-refresh:focus-within .layout-toc-refresh,
-.layout-block-sdt-box--has-toc-refresh .layout-toc-refresh.layout-toc-refresh--proxy-focused {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-}
-.layout-toc-refresh:hover {
-  background: var(--doc-primary-light);
-  color: var(--doc-primary);
-  box-shadow: 0 2px 6px var(--doc-shadow);
-}
-.layout-toc-refresh:focus-visible,
-.layout-toc-refresh.layout-toc-refresh--proxy-focused {
-  outline: 2px solid var(--doc-primary);
-  outline-offset: 1px;
-}
-.layout-toc-refresh svg {
-  display: block;
-  width: 16px;
-  height: 16px;
-}
-
-/* Accessible proxy buttons live outside aria-hidden painted pages. */
-.layout-toc-refresh-proxies {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-.layout-toc-refresh-proxy {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-.layout-toc-refresh-proxy:focus-visible {
-  outline: 2px solid var(--doc-primary);
-  outline-offset: 1px;
 }
 
 /* Header/footer CONTENT is non-interactive in normal mode: a single click on a
@@ -3064,6 +2982,109 @@ a.docx-hyperlink:focus-visible {
 .docx-paginated-surface .docx-hf:not([data-docx-hf-active]),
 .docx-pages .docx-hf:not([data-docx-hf-active]) {
   cursor: text;
+}
+
+/* Blank furniture: a page with no header/footer paints an empty band over that margin.
+ * Invisible until hovered; the hover invites the double-click that creates the story.
+ * The hint text stays in CSS (like the band itself it is screen-only chrome), and the
+ * document canvas stays Word-faithful because nothing shows until the pointer asks. */
+.docx-pages .docx-hf--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.docx-pages .docx-hf--placeholder:hover {
+  background: var(--doc-primary-light);
+  border-radius: 4px;
+}
+
+.docx-pages .docx-hf--placeholder:hover::after {
+  content: 'Double-click to add header';
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  font-size: 12px;
+  color: var(--doc-primary);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.docx-pages .docx-hf--placeholder[data-docx-hf='footer']:hover::after {
+  content: 'Double-click to add footer';
+}
+
+/* Hovering an EXISTING inactive band tints it and floats an edit invitation beside it —
+ * without this the enterable header answered a hover with nothing at all. The pill is a
+ * sibling because the band clips its own overflow. */
+.docx-pages .docx-hf:not([data-docx-hf-active]):not(.docx-hf--placeholder):hover {
+  background: var(--doc-primary-light);
+  border-radius: 4px;
+}
+
+.docx-pages .docx-hf-edit-hint {
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.docx-pages .docx-hf:not([data-docx-hf-active]):hover + .docx-hf-edit-hint {
+  opacity: 1;
+}
+
+.docx-pages .docx-hf-edit-hint::after {
+  content: 'Double-click to edit header';
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--doc-primary);
+  background: var(--doc-primary-light);
+  border-radius: 10px;
+  padding: 0 10px;
+  margin-top: 4px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.docx-pages .docx-hf-edit-hint[data-docx-hf-hint='footer'] {
+  align-items: flex-end;
+}
+
+.docx-pages .docx-hf-edit-hint[data-docx-hf-hint='footer']::after {
+  content: 'Double-click to edit footer';
+  margin-top: 0;
+  margin-bottom: 4px;
+}
+
+/* No affordance while another furniture scope is open, in view mode, or in print. */
+.docx-pages--hf-editing .docx-hf--placeholder:hover,
+.docx-paginated-surface--viewing .docx-hf--placeholder:hover,
+.docx-pages--hf-editing .docx-hf:not([data-docx-hf-active]):hover,
+.docx-paginated-surface--viewing .docx-hf:not([data-docx-hf-active]):hover {
+  background: none;
+}
+
+.docx-pages--hf-editing .docx-hf--placeholder:hover::after,
+.docx-paginated-surface--viewing .docx-hf--placeholder:hover::after {
+  content: none;
+}
+
+.docx-pages--hf-editing .docx-hf-edit-hint,
+.docx-paginated-surface--viewing .docx-hf-edit-hint {
+  display: none;
+}
+
+@media print {
+  .docx-hf--placeholder,
+  .docx-hf-edit-hint {
+    display: none !important;
+  }
 }
 
 .docx-pages--hf-editing .docx-page-content {
@@ -5778,4 +5799,45 @@ a.docx-hyperlink:focus-visible {
   border: 1px solid var(--doc-border);
   border-radius: 6px;
   box-shadow: 0 4px 16px var(--doc-shadow);
+}
+
+/* Font compatibility notice (DocxEditor.FontNotice): Word's "substituted fonts" bar,
+   shown between the toolbar and the workspace when declared faces render in fallbacks. */
+.docx-font-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 16px;
+  background: var(--doc-warning-bg);
+  color: var(--doc-warning-text);
+  border-bottom: 1px solid var(--doc-border);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.docx-font-notice__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.docx-font-notice__dismiss {
+  flex: none;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--doc-warning);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.docx-font-notice__dismiss:hover {
+  background: var(--doc-bg-hover);
+}
+
+.docx-font-notice__dismiss:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 1px;
 }

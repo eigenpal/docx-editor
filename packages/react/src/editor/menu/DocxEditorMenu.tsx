@@ -79,6 +79,12 @@ export interface DocxEditorMenuProps {
    * `Editor.load` — a user-driven file READ, never a fetch.
    */
   onOpen?: () => void;
+  /**
+   * Fired when the packaged Open reads a file, before its bytes are loaded — so a host can
+   * reflect the file's name in its own title chrome. Not fired when `onOpen` replaced the
+   * packaged picker: the host is reading the file itself and already holds the name.
+   */
+  onOpenFile?: (file: File) => void;
   /** Replaces File › Save. The default runs `Editor.save()` and downloads the bytes. */
   onSave?: () => void;
   /** Replaces File › Page setup. The default opens the packaged Page Setup dialog. */
@@ -144,6 +150,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
     t,
     fileName,
     onOpen,
+    onOpenFile,
     onSave,
     onPageSetup,
     onReportIssue,
@@ -153,6 +160,10 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
   } = props;
   const editor = useDocxEditor();
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
+  // The last file the packaged Open read. The default Save names its download after it
+  // when the host pinned no `fileName` — opening "contract-v2.docx" and saving must not
+  // produce "document.docx".
+  const [openedName, setOpenedName] = useState<string | null>(null);
   // The bar's single tab stop. Defaults to the first rendered menu; arrowing along the bar
   // moves it, and opening a menu takes it so Escape returns focus somewhere sensible.
   const [activeMenu, setActiveMenu] = useState<MenuId | null>(null);
@@ -197,11 +208,11 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
     // reported through the same channel a host's `onChange` uses.
     void editor
       .save()
-      .then((buffer) => download(buffer, downloadName(fileName)))
+      .then((buffer) => download(buffer, downloadName(fileName ?? openedName ?? undefined)))
       .catch((error: unknown) => {
         console.error('[docx-editor] save failed', error);
       });
-  }, [editor, fileName]);
+  }, [editor, fileName, openedName]);
 
   const packagedPageSetup = useCallback(() => setPageSetupOpen(true), []);
 
@@ -350,6 +361,8 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
           // Cleared so choosing the SAME file twice fires a change event again.
           event.target.value = '';
           if (!file || !editor) return;
+          setOpenedName(file.name);
+          onOpenFile?.(file);
           // A read or a parse can fail — a revoked file handle, or the package guards
           // refusing a zip bomb. Reporting it beats a silent no-op that leaves the previous
           // document painted and the user believing the new one opened.

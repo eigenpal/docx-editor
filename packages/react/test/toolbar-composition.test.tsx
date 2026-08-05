@@ -8,7 +8,8 @@
 // place (and `hidden` removes it); `preset={false}` verbatim rendering; live Bold
 // state through a click; asChild prop merging; the wired font-size stepper, zoom
 // stepper, and colour split buttons; the undriven pickers rendering disabled; that
-// FontFamily's options come from the DOCUMENT'S fonts and selecting one applies it;
+// FontFamily's options are the editor's offerable catalog (configured families merged
+// with the document's) and selecting one applies it;
 // and the caret-preserving mousedown contract.
 
 // MUST be first: happy-dom registration happens on import.
@@ -798,9 +799,12 @@ describe('the shaped parts', () => {
 });
 
 describe('the FontFamily compound', () => {
-  test('options come from the DOCUMENT fonts; selecting applies and closes', async () => {
+  test('options are the offerable catalog; selecting applies and closes', async () => {
     const { view, editor } = mountToolbar(<DocxEditorToolbar />, FONTED_SOURCE);
     expect(editor().getDocumentFonts()).toEqual(['Courier New', 'Georgia']);
+    // The catalog never collapses to the document alone: with no `fonts` configured,
+    // the default face is still offerable alongside the declared families.
+    expect(editor().getAvailableFonts()).toEqual(['Calibri', 'Courier New', 'Georgia']);
     await act(async () => {
       editor().surface!.selectAll();
     });
@@ -819,30 +823,35 @@ describe('the FontFamily compound', () => {
     // headings in the chrome spec's group order (serif before monospace), not one flat
     // alphabetical list.
     const options = [...listbox.querySelectorAll('[role="option"]')];
-    expect(options.map((option) => option.textContent)).toEqual(['Georgia', 'Courier New']);
+    expect(options.map((option) => option.textContent)).toEqual([
+      'Calibri',
+      'Georgia',
+      'Courier New',
+    ]);
     expect(
       [...listbox.querySelectorAll('.docx-toolbar__menu-label')].map((label) => label.textContent)
-    ).toEqual(['font.serif', 'font.monospace']);
+    ).toEqual(['font.sansSerif', 'font.serif', 'font.monospace']);
 
     await act(async () => {
-      (options[0] as HTMLButtonElement).click();
+      (options[1] as HTMLButtonElement).click();
     });
     // Applied through can-before-exec, popup closed, trigger shows the new value.
     expect(editor().snapshot().formatting?.fontFamily).toBe('Georgia');
     expect(view.container.querySelector('[role="listbox"]')).toBeNull();
     expect(trigger.textContent).toBe('Georgia');
     // Reopened, the OPTIONS FOLLOWED THE EDIT: applying Georgia to the whole selection
-    // rewrote both runs' rFonts, so Courier New left the document's font catalog — the
-    // list re-derives from the document, not from a mount-time snapshot. And the one
-    // remaining option is marked selected.
+    // rewrote both runs' rFonts, so Courier New left the document half of the catalog —
+    // the list re-derives from the document, not from a mount-time snapshot. The
+    // configured default face stays offerable, and the applied option is marked
+    // selected.
     await act(async () => {
       trigger.click();
     });
     const reopened = [...view.container.querySelectorAll('[role="option"]')];
     // The selected row carries the right-edge ✓ (part of its text content).
-    expect(reopened.map((option) => option.textContent)).toEqual(['Georgia✓']);
-    expect(reopened[0]!.hasAttribute('data-selected')).toBe(true);
-    expect(reopened[0]!.querySelector('.docx-toolbar__menu-check')).not.toBeNull();
+    expect(reopened.map((option) => option.textContent)).toEqual(['Calibri', 'Georgia✓']);
+    expect(reopened[1]!.hasAttribute('data-selected')).toBe(true);
+    expect(reopened[1]!.querySelector('.docx-toolbar__menu-check')).not.toBeNull();
   });
 
   test('custom Item children render inside a composed FontFamily', async () => {

@@ -50,7 +50,9 @@
     "reportIssue": "Report issue"
   },
   "toc": {
-    "updatePrompt": "This document contains a table of contents that's out of date. Regenerate it now?"
+    "updatePrompt": "This document contains a table of contents that's out of date. Regenerate it now?",
+    "refresh": "Refresh table of contents",
+    "refreshPageNumbers": "Refresh page numbers"
   },
   "formattingBar": {
     "groups": {
@@ -952,7 +954,8 @@
     "failedToParse": "Failed to parse document",
     "linkRemoved": "Link removed",
     "linkCopied": "Link copied to clipboard",
-    "failedToSave": "Failed to save document"
+    "failedToSave": "Failed to save document",
+    "fontSubstitutionNotice": "Some fonts in this document aren't available, so substitutes are shown: {fonts}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Display text",

@@ -22,6 +22,9 @@ const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
 /** `w:rFonts` attributes that name a font family (theme* attributes name theme SLOTS). */
 const RFONTS_FAMILY_ATTRS = ['ascii', 'hAnsi', 'cs', 'eastAsia'] as const;
 
+/** `w:rFonts` attributes that reference a theme font slot rather than naming a family. */
+const RFONTS_THEME_ATTRS = ['asciiTheme', 'hAnsiTheme', 'cstheme', 'eastAsiaTheme'] as const;
+
 /** Identifier-ish strings from a file (style ids, style names): bounded, no controls. */
 const STYLE_STRING_MAX = 128;
 const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/;
@@ -41,8 +44,16 @@ function attributeValue(node: OoxmlElement, localName: string): string | undefin
  * deterministic picker order. Invalid names — over 64 characters, control characters,
  * CSS-breaking punctuation — are dropped, never repaired.
  */
-export function collectDocumentFonts(roots: readonly OoxmlElement[]): readonly string[] {
+export function collectDocumentFonts(
+  roots: readonly OoxmlElement[],
+  themeFonts?: { readonly major: string | null; readonly minor: string | null }
+): readonly string[] {
   const byFold = new Map<string, string>();
+  const add = (family: string | null | undefined): void => {
+    if (!family || !FONT_NAME.test(family)) return;
+    const fold = family.toLowerCase();
+    if (!byFold.has(fold)) byFold.set(fold, family);
+  };
   // Iterative walk: the parse already bounds tree depth, but this derivation must not
   // be the one place a deep generic subtree can overflow the call stack. Children are
   // pushed in reverse so the stack pops them in DOCUMENT order — "first-seen casing"
@@ -53,10 +64,18 @@ export function collectDocumentFonts(roots: readonly OoxmlElement[]): readonly s
     if (!isElement(node)) continue;
     if (node.localName === 'rFonts') {
       for (const attr of RFONTS_FAMILY_ATTRS) {
-        const family = attributeValue(node, attr);
-        if (family === undefined || !FONT_NAME.test(family)) continue;
-        const fold = family.toLowerCase();
-        if (!byFold.has(fold)) byFold.set(fold, family);
+        add(attributeValue(node, attr));
+      }
+      // A theme reference (`w:asciiTheme="minorHAnsi"`) names no family itself, but the
+      // document still USES the theme's face — a template styled entirely through the
+      // theme otherwise reported "no fonts" while every run rendered in one.
+      if (themeFonts) {
+        for (const attr of RFONTS_THEME_ATTRS) {
+          const slot = attributeValue(node, attr);
+          if (slot === undefined) continue;
+          if (slot.startsWith('major')) add(themeFonts.major);
+          else if (slot.startsWith('minor')) add(themeFonts.minor);
+        }
       }
     }
     for (let i = node.children.length - 1; i >= 0; i -= 1) stack.push(node.children[i]!);

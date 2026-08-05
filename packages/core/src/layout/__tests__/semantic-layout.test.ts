@@ -328,6 +328,41 @@ describe('paragraph alignment moves the published span boxes (w:jc)', () => {
     expect(secondSpan.box.x).toBeGreaterThan(first.spans[0]!.box.width);
   });
 
+  test('justification stretches only after expandable spaces, not every span boundary', () => {
+    // A leading run + tab + words: Word expands inter-word spaces, never invents slack
+    // before a tab. The old uniform step×index shifted every later word by N×step and the
+    // caret drifted mid-glyph while paint (word-spacing on real spaces) stayed put.
+    const body =
+      `<w:p><w:pPr><w:jc w:val="both"/></w:pPr>` +
+      `<w:r><w:t xml:space="preserve">qu</w:t></w:r>` +
+      `<w:r><w:tab/></w:r>` +
+      `<w:r><w:t xml:space="preserve">alpha beta gamma delta epsilon zeta</w:t></w:r>` +
+      `</w:p>`;
+    const line = linesOf(lay(load(body), geometry))[0]!;
+    expect(line.spans.length).toBeGreaterThan(3);
+    expect(line.spans[0]!.text).toBe('qu');
+    expect(line.spans[1]!.text).toBe('\t');
+    // No justify gap before the tab or between tab and the first word.
+    expect(line.spans[1]!.box.x).toBeCloseTo(line.spans[0]!.box.x + line.spans[0]!.box.width, 5);
+    expect(line.spans[2]!.box.x).toBeCloseTo(line.spans[1]!.box.x + line.spans[1]!.box.width, 5);
+    // Word boundaries that end in a space DO receive slack.
+    const afterSpace = line.spans.findIndex(
+      (span, index) => index > 0 && line.spans[index - 1]!.text.endsWith(' ')
+    );
+    expect(afterSpace).toBeGreaterThan(1);
+    const previous = line.spans[afterSpace - 1]!;
+    const next = line.spans[afterSpace]!;
+    expect(next.box.x).toBeGreaterThan(previous.box.x + previous.box.width + 0.25);
+    // Cluster edges are published on every span (task 13.5).
+    for (const span of line.spans) {
+      expect(span.caretEdges?.length).toBe(
+        span.text === '\t' || span.text.length !== span.range.end - span.range.start
+          ? 2
+          : span.text.length + 1
+      );
+    }
+  });
+
   test('alignment composes with indentation instead of replacing it', () => {
     const body = paragraph('ab cd', '<w:jc w:val="right"/><w:ind w:left="200"/>');
     const line = linesOf(lay(load(body), geometry))[0]!;

@@ -861,7 +861,8 @@
     "failedToParse": "Impossible d'analyser le document",
     "linkRemoved": "Lien supprimé",
     "linkCopied": "Lien copié dans le presse-papiers",
-    "failedToSave": "Échec de l'enregistrement du document"
+    "failedToSave": "Échec de l'enregistrement du document",
+    "fontSubstitutionNotice": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Texte à afficher",
@@ -999,7 +1000,9 @@
     "runPropertiesChanged": null
   },
   "toc": {
-    "updatePrompt": null
+    "updatePrompt": null,
+    "refresh": "Mettre à jour toute la table",
+    "refreshPageNumbers": "Mettre à jour uniquement les numéros de page"
   },
   "app": {
     "name": null,

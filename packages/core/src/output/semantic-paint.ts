@@ -13,6 +13,7 @@
 /* eslint-disable max-lines -- paint seam; note areas live in semantic-paint-notes.ts */
 
 import { baselineShiftPtOf, TAB_LEADER_GLYPH } from '@docx-editor.dev/core-contract/layout';
+import { DEFAULT_CANVAS_FONT_STACK } from '../layout/canvas-measurer.ts';
 import { authorSlotsOf, revisionPresentationOf } from './revision-presentation.ts';
 import { formatRevisionOf, type RevisionAttribution } from '@docx-editor.dev/core-contract/layout';
 import type {
@@ -52,11 +53,25 @@ import {
  */
 export interface PaintContext {
   readonly scale: number;
+  /** Generated paragraphs that paint as non-editable navigation surfaces. */
+  readonly readOnlyParagraphIds?: ReadonlySet<string>;
+  /**
+   * Empty-TOC begin paragraphs that paint subtle identifiable furniture. Paint-only — never
+   * serialised into the document.
+   */
+  readonly emptyTocPlaceholderIds?: ReadonlySet<string>;
   /**
    * Maps a document-declared family to the alias the host registered its bytes under, or
    * `undefined` when that family has no aliased face. Engine-minted values only.
    */
   readonly fontAlias?: (family: string) => string | undefined;
+  /**
+   * The family painted for a run whose cascade authors no font — the SAME face the
+   * measurer falls back to. Without it such a run inherits the page's CSS font, and the
+   * browser draws one face over geometry measured for another: wrap points, caret and
+   * selection rectangles all drift from the visible glyphs.
+   */
+  readonly defaultFontFamily?: string;
   /**
    * Paint hyperlinks without an `href` and out of the tab order.
    *
@@ -96,6 +111,13 @@ function aliasIdentity(alias: (family: string) => string | undefined): string {
 export interface PaintOptions {
   /** Points to CSS pixels. 96/72 renders a point as a CSS point at 100% zoom. */
   readonly scale?: number;
+  /** Generated paragraphs that paint as non-editable navigation surfaces. */
+  readonly readOnlyParagraphIds?: ReadonlySet<string>;
+  /**
+   * Empty-TOC begin paragraphs that paint subtle identifiable furniture. Paint-only — never
+   * serialised into the document.
+   */
+  readonly emptyTocPlaceholderIds?: ReadonlySet<string>;
   /** Marks painted pages as presentational, so assistive tech reads the editable projection. */
   readonly ariaHidden?: boolean;
   /**
@@ -112,6 +134,8 @@ export interface PaintOptions {
    * family, so a file can never shadow a family name the host page uses.
    */
   readonly fontAlias?: (family: string) => string | undefined;
+  /** See {@link PaintContext.defaultFontFamily}. */
+  readonly defaultFontFamily?: string;
   /**
    * Relationship id of the header/footer story currently open for editing.
    *
@@ -137,8 +161,30 @@ export interface PaintOptions {
     readonly showAll?: boolean;
     /** Control ids whose boundaries are visible because the caret is inside them. */
     readonly activeIds?: ReadonlySet<string>;
+    /**
+     * Control ids whose boundaries are visible because the pointer is over them.
+     * Used for TOC hover chrome without projecting a persistent caret-active state.
+     *
+     * Deliberately OUTSIDE the paint-reuse key: hover must never rebuild a page. The
+     * surface toggles `data-hover` / `data-boundary-visible` on the painted chrome it
+     * already has, and this set only tells a page that rebuilds for some OTHER reason
+     * which of its controls is currently under the pointer.
+     */
+    readonly hoverIds?: ReadonlySet<string>;
+    /**
+     * Control ids whose boundary furniture is painted by something else.
+     *
+     * An empty TOC paints its own placeholder box on the begin paragraph, so drawing the
+     * control boundary as well left two rounded rectangles (of different heights) plus a
+     * label chip stacked over one empty region.
+     */
+    readonly suppressedIds?: ReadonlySet<string>;
     /** Checkbox control ids whose canonical `w14:checked` state is on. */
     readonly checkedIds?: ReadonlySet<string>;
+    /** Non-SDT structured regions that intentionally reuse content-control chrome. */
+    readonly additionalBoundaries?: readonly ContentControlBoundaryRecord[];
+    /** Control ids that represent TOC regions (hover-only chrome; never caret-sticky). */
+    readonly tocControlIds?: ReadonlySet<string>;
   };
   readonly drawingStrings?: DrawingPaintStrings;
   readonly imageUrlPort?: PaintImageUrlPort;
@@ -429,15 +475,27 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: P
   if (style.bold) css.fontWeight = 'bold';
   if (style.italic) css.fontStyle = 'italic';
   // Re-validated here even though the resolver already checked: this is the sink, and a
-  // sink that trusts its caller is one refactor away from being the hole.
-  if (style.fontFamily && FONT_NAME.test(style.fontFamily)) {
+  // sink that trusts its caller is one refactor away from being the hole. A run with no
+  // resolved family paints in the surface's default face — the face it was MEASURED in —
+  // never in whatever font the page happens to inherit.
+  const family =
+    style.fontFamily && FONT_NAME.test(style.fontFamily)
+      ? style.fontFamily
+      : ctx.defaultFontFamily && FONT_NAME.test(ctx.defaultFontFamily)
+        ? ctx.defaultFontFamily
+        : null;
+  if (family) {
     // An alias names bytes the host registered for THIS document under a family a file
     // cannot collide with. It leads, with the declared family behind it: document text
     // gets the embedded glyphs while the page-global CSS font namespace keeps its own
     // meaning for the declared name. `FONT_NAME` gates the declared family; the alias is
     // engine-minted, never file-derived.
-    const alias = ctx.fontAlias?.(style.fontFamily);
-    css.fontFamily = alias ? `"${alias}", "${style.fontFamily}"` : `"${style.fontFamily}"`;
+    const alias = ctx.fontAlias?.(family);
+    // The measurer's fallback stack trails the family so an unresolvable name falls
+    // back to the SAME face measurement fell back to — not to the inherited font.
+    css.fontFamily = alias
+      ? `"${alias}", "${family}", ${DEFAULT_CANVAS_FONT_STACK}`
+      : `"${family}", ${DEFAULT_CANVAS_FONT_STACK}`;
   }
   if (style.color && HEX.test(style.color)) css.color = `#${style.color}`;
   const highlight = style.highlight ? HIGHLIGHT.get(style.highlight) : undefined;
@@ -1010,16 +1068,21 @@ function paintLine(
   return element;
 }
 
+/** The extra space layout put between word spans, beyond their own advances. */
 function interSpanGap(line: LineRecord): number {
   if (line.spans.length < 2) return 0;
-  let total = 0;
+  // Layout justifies only after expandable spaces, so many consecutive pairs (tab→word,
+  // run split without a space) have a zero gap. Averaging those zeros in diluted
+  // `word-spacing` below the real per-space step and every later glyph drifted left of
+  // its published box — caret mid-word included.
+  const gaps: number[] = [];
   for (let index = 1; index < line.spans.length; index += 1) {
     const previous = line.spans[index - 1]!;
-    total += line.spans[index]!.box.x - (previous.box.x + previous.box.width);
+    const gap = line.spans[index]!.box.x - (previous.box.x + previous.box.width);
+    if (gap > 0.25) gaps.push(gap);
   }
-  const average = total / (line.spans.length - 1);
-  // Sub-pixel noise from measurement is not justification; only a real gap counts.
-  return average > 0.25 ? average : 0;
+  if (gaps.length === 0) return 0;
+  return gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length;
 }
 
 function paintFragment(
@@ -1032,6 +1095,16 @@ function paintFragment(
   element.className = 'docx-paragraph-fragment layout-paragraph';
   element.dataset.paragraphId = fragment.paragraphId;
   element.dataset.fragmentIndex = String(fragment.fragmentIndex);
+  if (ctx.readOnlyParagraphIds?.has(fragment.paragraphId)) {
+    element.classList.add('docx-generated-region');
+    element.dataset.docxReadOnly = '';
+    element.setAttribute('contenteditable', 'false');
+    element.setAttribute('aria-readonly', 'true');
+  }
+  if (ctx.emptyTocPlaceholderIds?.has(fragment.paragraphId)) {
+    element.classList.add('docx-toc-empty-placeholder');
+    element.dataset.docxTocEmpty = '';
+  }
   // Fragment box remains the flow/hit region (includes before/after spacing). Paragraph
   // shading paints from the published line-area box — never the outer fragment background.
   if (fragment.shading && HEX.test(fragment.shading) && fragment.shadingBox) {
@@ -1472,6 +1545,11 @@ function paintPage(
   // token names and only `.docx-page-content` below is inverted, so the theme and print
   // rules name that class instead.
   element.className = 'docx-page';
+  // The measurer's own fallback stack, so an unstyled run — or one whose declared family
+  // the platform cannot resolve — RENDERS in the same face it was MEASURED in. Left to
+  // inherit, the page picked up the host UI font, and every measured overlay (caret,
+  // selection, revision bands, strikes) drifted along the line against the painted glyphs.
+  element.style.fontFamily = DEFAULT_CANVAS_FONT_STACK;
   element.dataset.pageIndex = String(page.index);
   if (options.ariaHidden) {
     // The painted page is a PICTURE of the document; the editable projection is what
@@ -1543,6 +1621,39 @@ function paintPage(
   // Page furniture (phase 2, read-only): painted inside the sheet but OUTSIDE the content
   // box, inert to editing. `data-docx-hf` is what dom-selection uses to refuse mapping a
   // browser caret inside the furniture back to a model position.
+  // Blank furniture affordance: a page with no header (or footer) paints an EMPTY band over
+  // that margin — `data-docx-hf` with no relationship id — so hover can invite and a double
+  // click can create the story. Geometry mirrors the pointer's activation band: the full
+  // margin strip at content width. Never printed (CSS hides it), never editable.
+  for (const kind of ['header', 'footer'] as const) {
+    if (page[kind]) continue;
+    const band = document.createElement('div');
+    band.className = 'docx-hf docx-hf--placeholder';
+    band.dataset.docxHf = kind;
+    band.setAttribute('contenteditable', 'false');
+    // A SLIM strip where a real header/footer would FLOW — the default furniture distance
+    // from the sheet edge — not the whole margin and not the content edge: anchored to
+    // content, a cover page with a deep top area drew the invitation halfway down the
+    // page, glued to its own heading. Word's header area is a couple of lines near the
+    // edge; the pointer still accepts the full margin band, so the visual stays modest
+    // without shrinking the target.
+    const marginHeight =
+      kind === 'header'
+        ? page.contentBox.y - page.box.y
+        : page.box.y + page.box.height - (page.contentBox.y + page.contentBox.height);
+    const height = Math.min(marginHeight, PLACEHOLDER_BAND_PT);
+    if (height <= 0) continue;
+    // Squeezed toward the content edge when the margin is too tight for distance + band.
+    const edgeOffset = Math.max(0, Math.min(PLACEHOLDER_DISTANCE_PT, marginHeight - height));
+    const top = kind === 'header' ? edgeOffset : page.box.height - edgeOffset - height;
+    band.style.position = 'absolute';
+    band.style.left = `${(page.contentBox.x - page.box.x) * options.scale}px`;
+    band.style.top = `${top * options.scale}px`;
+    band.style.width = `${page.contentBox.width * options.scale}px`;
+    band.style.height = `${height * options.scale}px`;
+    element.append(band);
+  }
+
   for (const story of [page.header, page.footer]) {
     if (!story) continue;
     const anchored = story.anchoredDrawings ?? [];
@@ -1613,6 +1724,23 @@ function paintPage(
       'inFront'
     );
     element.append(container);
+    // Hover invitation for an EXISTING band: a pill just outside the story box, shown by
+    // CSS only while the adjacent band is hovered (`.docx-hf:hover + .docx-hf-edit-hint`).
+    // Outside the band because the band clips (`overflow: hidden`) and its content would
+    // sit under the pill. Adjacency is load-bearing — keep this append right here.
+    const hint = document.createElement('div');
+    hint.className = 'docx-hf-edit-hint';
+    hint.dataset.docxHfHint = story.kind;
+    hint.setAttribute('contenteditable', 'false');
+    hint.style.position = 'absolute';
+    hint.style.left = container.style.left;
+    hint.style.width = container.style.width;
+    hint.style.top =
+      story.kind === 'header'
+        ? `${(story.box.y + story.box.height - page.box.y) * options.scale}px`
+        : `${(story.box.y - page.box.y) * options.scale}px`;
+    if (story.kind === 'footer') hint.style.transform = 'translateY(-100%)';
+    element.append(hint);
     appendHfPageRelativeDrawingLayer(
       document,
       element,
@@ -1627,6 +1755,11 @@ function paintPage(
   paintContentControlChrome(document, element, page, options);
   return element;
 }
+
+/** Height of the blank header/footer invitation band, in points (~two text lines). */
+const PLACEHOLDER_BAND_PT = 30;
+/** Where the band starts from the sheet edge — `w:pgMar` header/footer default (720 twips). */
+const PLACEHOLDER_DISTANCE_PT = 36;
 
 /** Widget kinds the painted surface can activate without adapter chrome. */
 const WIDGET_TYPES = new Set<ContentControlMappedType>([
@@ -1653,12 +1786,27 @@ function paintContentControlChrome(
   }
 ): void {
   const chrome = options.contentControlChrome;
-  const controls = page.contentControls ?? [];
+  const suppressed = chrome?.suppressedIds;
+  const pageControls = (page.contentControls ?? []).filter(
+    (control) => suppressed?.has(control.id) !== true
+  );
+  const controls = [
+    ...pageControls,
+    ...(chrome?.additionalBoundaries ?? []).filter(
+      (candidate) =>
+        suppressed?.has(candidate.id) !== true &&
+        !pageControls.some((control) => control.id === candidate.id)
+    ),
+  ];
   if (controls.length === 0) return;
   const showAll = chrome?.showAll === true;
   const activeIds = chrome?.activeIds;
+  const hoverIds = chrome?.hoverIds;
+  const tocControlIds = chrome?.tocControlIds;
   for (const control of controls) {
-    const active = activeIds?.has(control.id) === true;
+    const isToc = tocControlIds?.has(control.id) === true;
+    const active = !isToc && activeIds?.has(control.id) === true;
+    const hovered = hoverIds?.has(control.id) === true;
     pageElement.append(
       paintContentControlBoundary(
         document,
@@ -1666,8 +1814,10 @@ function paintContentControlChrome(
         control,
         options.scale,
         active,
-        showAll || active,
-        chrome?.checkedIds?.has(control.id)
+        hovered,
+        showAll || active || (isToc && hovered),
+        chrome?.checkedIds?.has(control.id),
+        isToc
       )
     );
   }
@@ -1679,8 +1829,10 @@ function paintContentControlBoundary(
   control: ContentControlBoundaryRecord,
   scale: number,
   active: boolean,
+  hovered: boolean,
   boundaryVisible: boolean,
-  checked: boolean | undefined
+  checked: boolean | undefined,
+  isToc: boolean
 ): HTMLElement {
   const layer = document.createElement('div');
   layer.className = 'docx-content-control-chrome';
@@ -1690,7 +1842,9 @@ function paintContentControlBoundary(
   layer.dataset.lock = control.effectiveLock;
   if (control.bound) layer.dataset.bound = '';
   if (control.placeholder) layer.dataset.placeholder = '';
+  if (isToc) layer.dataset.docxToc = '';
   if (active) layer.dataset.active = '';
+  if (hovered) layer.dataset.hover = '';
   if (boundaryVisible) layer.dataset.boundaryVisible = '';
   layer.setAttribute('contenteditable', 'false');
   layer.setAttribute('role', 'group');
@@ -1821,20 +1975,45 @@ export function paintSemanticLayout(
   options: PaintOptions = {}
 ): void {
   const chrome = options.contentControlChrome;
+  // `hoverIds` is absent ON PURPOSE — see its doc comment. Including it made a pointer
+  // entering a TOC rebuild every page, which detached the node the gesture started on.
   const chromeKey = chrome
-    ? `${chrome.showAll === true ? '1' : '0'}:${chrome.activeIds ? [...chrome.activeIds].sort().join(',') : ''}:${chrome.checkedIds ? [...chrome.checkedIds].sort().join(',') : ''}`
+    ? `${chrome.showAll === true ? '1' : '0'}:${chrome.activeIds ? [...chrome.activeIds].sort().join(',') : ''}:${chrome.checkedIds ? [...chrome.checkedIds].sort().join(',') : ''}:${chrome.tocControlIds ? [...chrome.tocControlIds].sort().join(',') : ''}:${chrome.suppressedIds ? [...chrome.suppressedIds].sort().join(',') : ''}`
     : '';
   const drawingStrings = options.drawingStrings ?? DEFAULT_DRAWING_PAINT_STRINGS;
   const urlRegistry =
     options.imageUrlPort !== undefined
       ? drawingUrlRegistryFor(container, options.imageUrlPort)
       : null;
+  const additionalKey = chrome?.additionalBoundaries
+    ? chrome.additionalBoundaries
+        .flatMap((boundary) =>
+          boundary.fragments.map(
+            (fragment) =>
+              `${boundary.id}:${fragment.pageIndex}:${fragment.box.x}:${fragment.box.y}:${fragment.box.width}:${fragment.box.height}`
+          )
+        )
+        .sort()
+        .join(',')
+    : '';
+  const readOnlyKey = options.readOnlyParagraphIds
+    ? [...options.readOnlyParagraphIds].sort().join(',')
+    : '';
+  const emptyTocKey = options.emptyTocPlaceholderIds
+    ? [...options.emptyTocPlaceholderIds].sort().join(',')
+    : '';
+  const tocKey = chrome?.tocControlIds ? [...chrome.tocControlIds].sort().join(',') : '';
   const resolved = {
     scale: options.scale ?? 96 / 72,
     ariaHidden: options.ariaHidden ?? true,
     drawingStrings,
     urlRegistry,
     ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+    ...(options.readOnlyParagraphIds ? { readOnlyParagraphIds: options.readOnlyParagraphIds } : {}),
+    ...(options.emptyTocPlaceholderIds
+      ? { emptyTocPlaceholderIds: options.emptyTocPlaceholderIds }
+      : {}),
+    ...(options.defaultFontFamily ? { defaultFontFamily: options.defaultFontFamily } : {}),
     authorSlots: authorSlotsOf(layout),
     ...(options.imageUrlPort ? { imageUrlPort: options.imageUrlPort } : {}),
     ...(options.activeHeaderFooterRId
@@ -1854,8 +2033,18 @@ export function paintSemanticLayout(
   // registered must not be reused verbatim afterwards. Occurrence page is included so
   // moving the caret host across shared furniture copies rebuilds active markers.
   // Content-control chrome is furniture only, but toggling it must rebuild painted pages
-  // so show-all / caret chrome appear.
-  const parameters = `${resolved.scale}|${resolved.ariaHidden}|${resolved.fontAlias ? aliasIdentity(resolved.fontAlias) : ''}|${resolved.activeHeaderFooterRId ?? ''}|${resolved.activeHeaderFooterPageIndex ?? ''}|cc:${chromeKey}|${options.imageUrlPort ? 'url' : ''}|${drawingPaintStringsCacheToken(drawingStrings)}`;
+  // so show-all / caret chrome appear. Hover is the one exception: it is applied to the
+  // painted nodes in place, because a pointer crossing a region may not move it.
+  const parameters =
+    `${resolved.scale}|${resolved.ariaHidden}|` +
+    `${resolved.fontAlias ? aliasIdentity(resolved.fontAlias) : ''}|` +
+    `${resolved.defaultFontFamily ?? ''}|` +
+    `${resolved.activeHeaderFooterRId ?? ''}|` +
+    `${resolved.activeHeaderFooterPageIndex ?? ''}|` +
+    `cc:${chromeKey}:${additionalKey}|toc:${tocKey}|` +
+    `ro:${readOnlyKey}|tocEmpty:${emptyTocKey}|` +
+    `${options.imageUrlPort ? 'url' : ''}|` +
+    `${drawingPaintStringsCacheToken(drawingStrings)}`;
   const previous = retainedPaints.get(container);
   const reusable =
     previous && previous.parameters === parameters

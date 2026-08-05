@@ -877,7 +877,8 @@
     "failedToParse": "Gagal membaca dokumen",
     "linkRemoved": "Tautan dihapus",
     "linkCopied": "Tautan disalin ke papan klip",
-    "failedToSave": "Gagal menyimpan dokumen"
+    "failedToSave": "Gagal menyimpan dokumen",
+    "fontSubstitutionNotice": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Teks yang ditampilkan",
@@ -999,7 +1000,9 @@
     }
   },
   "toc": {
-    "updatePrompt": null
+    "updatePrompt": null,
+    "refresh": "Perbarui seluruh tabel",
+    "refreshPageNumbers": "Perbarui nomor halaman saja"
   },
   "app": {
     "name": null,

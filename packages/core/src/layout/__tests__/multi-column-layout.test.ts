@@ -213,6 +213,152 @@ describe('multi-column section layout', () => {
     expect(session.stats.placed).toBe(0);
   });
 
+  test('a two-column section ending in a continuous break balances across its columns', () => {
+    // §17.6.4: the continuous break that ENDS the two-column section balances it. Page
+    // content is 288pt wide; two columns of 138pt at x=0 and x=150.
+    const part = packageWithBody(
+      paragraph('INTRO') +
+        '<w:p><w:pPr><w:sectPr>' +
+        '<w:type w:val="continuous"/>' +
+        '<w:pgSz w:w="7200" w:h="7200"/>' +
+        '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/>' +
+        '<w:cols w:space="240"/>' +
+        '</w:sectPr></w:pPr></w:p>' +
+        paragraph('ALPHA') +
+        paragraph('BETA') +
+        paragraph('GAMMA') +
+        paragraph('DELTA') +
+        '<w:p><w:pPr><w:sectPr>' +
+        '<w:type w:val="continuous"/>' +
+        '<w:pgSz w:w="7200" w:h="7200"/>' +
+        '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/>' +
+        '<w:cols w:num="2" w:space="240"/>' +
+        '</w:sectPr></w:pPr></w:p>' +
+        paragraph('TAIL') +
+        '<w:sectPr>' +
+        '<w:type w:val="continuous"/>' +
+        '<w:pgSz w:w="7200" w:h="7200"/>' +
+        '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/>' +
+        '<w:cols w:space="240"/>' +
+        '</w:sectPr>'
+    );
+
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+    });
+    expect(layout.pages).toHaveLength(1);
+    const at = (text: string) =>
+      layout.pages[0]!.fragments.find((fragment) => fragmentText(fragment) === text)!;
+    // Five lines (DELTA plus the section-mark paragraph fill column two) balance 3/2
+    // instead of stacking all five in column one.
+    expect([at('ALPHA').box.x, at('BETA').box.x, at('GAMMA').box.x]).toEqual([0, 0, 0]);
+    expect(at('DELTA').box.x).toBe(150);
+    expect(at('DELTA').box.y).toBe(at('ALPHA').box.y);
+    // The section after the balanced region resumes below the WHOLE region, full width.
+    expect(at('TAIL').box.x).toBe(0);
+    expect(at('TAIL').box.y).toBeGreaterThanOrEqual(
+      at('GAMMA').box.y + at('GAMMA').box.height - 0.001
+    );
+    expect(at('TAIL').box.y).toBeLessThan(at('GAMMA').box.y + at('GAMMA').box.height + 15);
+  });
+
+  test('the last section of the document does not balance', () => {
+    const part = packageWithBody(
+      paragraph('ALPHA') +
+        paragraph('BETA') +
+        paragraph('GAMMA') +
+        paragraph('DELTA') +
+        '<w:sectPr>' +
+        '<w:pgSz w:w="7200" w:h="7200"/>' +
+        '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/>' +
+        '<w:cols w:num="2" w:space="240"/>' +
+        '</w:sectPr>'
+    );
+
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+    });
+    const fragments = layout.pages[0]!.fragments.filter(
+      (fragment) => fragment.kind === 'paragraph'
+    );
+    expect(fragments.map((fragment) => fragment.box.x)).toEqual([0, 0, 0, 0]);
+  });
+
+  test('a table in a balanced section splits at a row boundary across columns', () => {
+    const cell = (text: string) =>
+      `<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>${paragraph(text)}</w:tc>`;
+    const part = packageWithBody(
+      paragraph('INTRO') +
+        '<w:p><w:pPr><w:sectPr>' +
+        '<w:type w:val="continuous"/>' +
+        '<w:pgSz w:w="7200" w:h="7200"/>' +
+        '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/>' +
+        '<w:cols w:space="240"/>' +
+        '</w:sectPr></w:pPr></w:p>' +
+        '<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/></w:tblPr>' +
+        '<w:tblGrid><w:gridCol w:w="1380"/></w:tblGrid>' +
+        `<w:tr>${cell('ROW ONE')}</w:tr>` +
+        `<w:tr>${cell('ROW TWO')}</w:tr>` +
+        '</w:tbl>' +
+        '<w:p><w:pPr><w:sectPr>' +
+        '<w:type w:val="continuous"/>' +
+        '<w:pgSz w:w="7200" w:h="7200"/>' +
+        '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/>' +
+        '<w:cols w:num="2" w:space="240"/>' +
+        '</w:sectPr></w:pPr></w:p>' +
+        paragraph('TAIL') +
+        '<w:sectPr>' +
+        '<w:type w:val="continuous"/>' +
+        '<w:pgSz w:w="7200" w:h="7200"/>' +
+        '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/>' +
+        '<w:cols w:space="240"/>' +
+        '</w:sectPr>'
+    );
+
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+    });
+    const tables = layout.pages[0]!.fragments.filter((fragment) => fragment.kind === 'table');
+    expect(tables).toHaveLength(2);
+    expect(tables.map((fragment) => Math.round(fragment.box.x))).toEqual([0, 150]);
+    // Both fragments open at the shared-sheet column REGION top, below the INTRO section.
+    // A continuation anchored at 0 stretched its box over the section above the region,
+    // and the oversized invisible fragment swallowed pointer hits on that text.
+    expect(tables[1]!.box.y).toBe(tables[0]!.box.y);
+    expect(tables[0]!.box.y).toBeGreaterThan(0);
+  });
+
+  test('an unchanged balanced pass preserves physical page identity', () => {
+    const part = packageWithBody(
+      paragraph('ALPHA') +
+        paragraph('BETA') +
+        paragraph('GAMMA') +
+        '<w:p><w:pPr><w:sectPr>' +
+        '<w:type w:val="continuous"/>' +
+        '<w:pgSz w:w="7200" w:h="7200"/>' +
+        '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/>' +
+        '<w:cols w:num="2" w:space="240"/>' +
+        '</w:sectPr></w:pPr></w:p>' +
+        paragraph('TAIL') +
+        '<w:sectPr>' +
+        '<w:pgSz w:w="7200" w:h="7200"/>' +
+        '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/>' +
+        '<w:cols w:space="240"/>' +
+        '</w:sectPr>'
+    );
+    const session = createLayoutSession();
+    const options = { measurer: createFixedMeasurer(6, 14), session };
+
+    const first = layoutSemanticDocument(part, 1, options);
+    const second = layoutSemanticDocument(part, 2, options);
+
+    // A continuous section rebuilds its host sheet each pass, so top-level page identity
+    // cannot hold here; the balanced geometry must, and the pass must place nothing —
+    // the remembered balance limit early-exits without re-running the balance search.
+    expect(second.pages).toEqual(first.pages);
+    expect(session.stats.placed).toBe(0);
+  });
+
   test('the comprehensive fixture puts section 19 after its column break in column two', () => {
     const loaded = readOoxmlPackage(new Uint8Array(readFileSync(FIXTURE)));
     expect(loaded.ok).toBe(true);

@@ -120,6 +120,11 @@ import {
 import { drawingModelOffsetsInParagraph } from './drawing-layout.ts';
 import { drawingTokenForTableBlock } from './inline-drawing-source.ts';
 import { projectDrawingsInPart } from '../store/package/drawing-projection.ts';
+import {
+  emptyTocPlaceholderParagraphIds,
+  emptyTocSuppressedResultParagraphIds,
+  tocFieldChromeParagraphIds,
+} from './toc-layout.ts';
 import { type HeaderFooterStoryLayout } from './hf-layout.ts';
 import {
   DEFAULT_SECTION_PROPERTIES,
@@ -127,7 +132,7 @@ import {
   geometryOfSection,
   type SectionColumns,
 } from './section-properties.ts';
-import { resolveSectionColumns } from './section-columns.ts';
+import { resolveSectionColumns, type ResolvedSectionColumns } from './section-columns.ts';
 import { layoutSemanticDocumentWithNotes } from './note-pagination.ts';
 import {
   DEFAULT_PAGE_GEOMETRY,
@@ -301,6 +306,21 @@ export interface SemanticLayoutOptions {
   readonly drawingExclusionZonesByPage?: ReadonlyMap<number, readonly ExclusionZone[]>;
   /** Canonical drawing traversal order within the owner story part. */
   readonly drawingSourceOrder?: ReadonlyMap<string, number>;
+  /**
+   * Cross-paragraph TOC field begin/end paragraph ids. Empty chrome on these ids suppresses
+   * the caret placeholder line in layout while the tree nodes stay intact for refresh/save.
+   */
+  readonly tocFieldChromeParagraphIds?: ReadonlySet<string>;
+  /**
+   * Begin-paragraph ids of empty TOCs. These keep one layout line so paint can host an
+   * identifiable empty-TOC furniture placeholder (overrides chrome suppression).
+   */
+  readonly emptyTocPlaceholderParagraphIds?: ReadonlySet<string>;
+  /**
+   * Empty result-paragraph ids inside empty TOCs. Suppressed like field chrome so blank
+   * cached rows do not stack under the empty placeholder.
+   */
+  readonly emptyTocSuppressedResultParagraphIds?: ReadonlySet<string>;
 }
 
 /** Prepass results by block node, valid while the width and producer both hold. */
@@ -361,6 +381,12 @@ export function layoutSemanticDocument(
   const optionsWithControlContext: SemanticLayoutOptions = {
     ...options,
     producer: `${options.producer ?? 'unversioned-measurer'}|cc:${controlToken}`,
+    tocFieldChromeParagraphIds:
+      options.tocFieldChromeParagraphIds ?? tocFieldChromeParagraphIds(part),
+    emptyTocPlaceholderParagraphIds:
+      options.emptyTocPlaceholderParagraphIds ?? emptyTocPlaceholderParagraphIds(part),
+    emptyTocSuppressedResultParagraphIds:
+      options.emptyTocSuppressedResultParagraphIds ?? emptyTocSuppressedResultParagraphIds(part),
   };
   // Full-body list resolve so counters continue across sections and table cells.
   const drawingSourceOrder = options.inlineDrawingLayout
@@ -456,17 +482,31 @@ interface BlockLayoutResult {
   readonly endsOpenPage: boolean;
 }
 
-function layoutBlocksWithGeometry(
+type BlockLayoutOptions = SemanticLayoutOptions & {
+  readonly geometry: PageGeometry;
+  readonly sectionColumns?: SectionColumns;
+  readonly lineCounterStart?: number;
+  readonly flowStartY?: number;
+  readonly spaceBeforeCarry?: number;
+  readonly pageIndexStart?: number;
+  /**
+   * Balance this section's columns (ECMA-376 §17.6.4): Word divides the content of a
+   * multi-column section that ends in a continuous section break evenly across its
+   * columns instead of filling each to the page bottom first.
+   */
+  readonly balanceColumns?: boolean;
+  /**
+   * Column-height limit (content-box-relative bottom, points) applied to the FIRST page
+   * only. Internal to the balance search: overflow pages keep the full content height so
+   * an over-tall block always makes progress exactly as it does today.
+   */
+  readonly columnRegionBottom?: number;
+};
+
+function layoutBlocksPass(
   bodies: readonly OoxmlElement[],
   revision: number,
-  options: SemanticLayoutOptions & {
-    readonly geometry: PageGeometry;
-    readonly sectionColumns?: SectionColumns;
-    readonly lineCounterStart?: number;
-    readonly flowStartY?: number;
-    readonly spaceBeforeCarry?: number;
-    readonly pageIndexStart?: number;
-  }
+  options: BlockLayoutOptions
 ): BlockLayoutResult {
   const geometry = options.geometry;
   const contentWidthForReflow = geometry.width - geometry.margin.left - geometry.margin.right;
@@ -580,6 +620,9 @@ function layoutBlocksWithGeometry(
   // it into `producer` is what makes a mode switch invalidate the break cache AND the session
   // checkpoints without a `ModelChange`: the document did not change, the projection of it did.
   const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
+  const tocChromeParagraphIds = options.tocFieldChromeParagraphIds;
+  const emptyTocPlaceholderIds = options.emptyTocPlaceholderParagraphIds;
+  const emptyTocSuppressedResultIds = options.emptyTocSuppressedResultParagraphIds;
   const producer =
     (options.producer ?? 'unversioned-measurer') +
     (styleCascade ? `|sc:${styleCascade.cacheToken}` : '') +
@@ -643,13 +686,24 @@ function layoutBlocksWithGeometry(
   const noteMarksKey = options.noteMarks
     ? `|nm:${options.noteMarks.reservedMarkText ?? ''}:${options.noteMarks.marks.size}`
     : '';
-  const columnsContext = `|cols:${columns.widths.join(',')};${columns.gaps.join(',')};${columns.separator ? 1 : 0}`;
+  const columnRegionBottom = options.columnRegionBottom;
+  const columnsContext = `|cols:${columns.widths.join(',')};${columns.gaps.join(',')};${columns.separator ? 1 : 0}${columnRegionBottom !== undefined ? `;bal:${columnRegionBottom}` : ''}`;
   const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|lc:${lineCounterStart}|fs:${flowStartY},${spaceBeforeCarry}|pi:${pageIndexStart}${furnitureContext}${notesReserveKey}${noteMarksKey}${columnsContext}`;
 
   const pages: PageRecord[] = [];
-  /** Available body height on the page currently being filled (`pages.length`). */
-  const contentHeight = (): number =>
-    Math.max(1, baseContentHeight - (pageBottomReserves?.get(pages.length) ?? 0));
+  /**
+   * Available body height on the page currently being filled (`pages.length`).
+   *
+   * A balance-search limit binds the FIRST page only: content pushed past it lands on a
+   * full-height overflow page, so a block taller than the limit still terminates, and the
+   * search reads "produced a second page" as "does not fit".
+   */
+  const contentHeight = (): number => {
+    const base = Math.max(1, baseContentHeight - (pageBottomReserves?.get(pages.length) ?? 0));
+    return columnRegionBottom !== undefined && pages.length === 0
+      ? Math.max(1, Math.min(base, columnRegionBottom))
+      : base;
+  };
 
   // Prepass: everything needed to KEY a paragraph, before any of them is placed. Resuming
   // means knowing where the first change is, and that cannot be discovered while walking.
@@ -1163,6 +1217,12 @@ function layoutBlocksWithGeometry(
   // Shared by placement and by the `w:keepNext` lookahead, which needs the height of the
   // blocks it keeps WITH. Both read the same cache entry, so the lookahead re-measures nothing.
   const breakBlock = (entry: PreparedParagraph, entryIndex: number, startOffset = 0) => {
+    const paragraphId = entry.paragraph.id;
+    const keepEmptyTocPlaceholder = emptyTocPlaceholderIds?.has(paragraphId) ?? false;
+    const suppressChrome =
+      !keepEmptyTocPlaceholder &&
+      ((tocChromeParagraphIds?.has(paragraphId) ?? false) ||
+        (emptyTocSuppressedResultIds?.has(paragraphId) ?? false));
     const available = entry.available;
     const columnX = columnOffsetX();
     const allPageZones =
@@ -1186,7 +1246,7 @@ function layoutBlocksWithGeometry(
       options.drawingTokenForParagraph?.(entry.paragraph) ??
       options.drawingLayoutToken ??
       (options.inlineDrawingLayout ? 'drawing' : undefined);
-    const cacheKey = cache
+    const cacheKey = cache && !suppressChrome
       ? exclusionToken || drawingKeyed
         ? paragraphLayoutKey({
             paragraph: entry.paragraph,
@@ -1204,7 +1264,7 @@ function layoutBlocksWithGeometry(
     const usePageColumnCoords = columnCount > 1;
     return breakParagraph(
       entry.paragraph,
-      entry.paragraph.id,
+      paragraphId,
       entry.indent.left,
       available,
       measurer,
@@ -1234,6 +1294,7 @@ function layoutBlocksWithGeometry(
           : entry.indent.left + available + entry.indent.right,
         paragraphStartY: cursorY,
         ...(pageZones.length > 0 ? { pageExclusionZones: pageZones } : {}),
+        ...(suppressChrome ? { suppressEmptyPlaceholderLine: true } : {}),
       }
     );
   };
@@ -1454,7 +1515,10 @@ function layoutBlocksWithGeometry(
         closeTableFragment();
         advanceColumn();
         tableLeft = originX();
-        fragmentTop = 0;
+        // The cursor, not 0: a same-sheet column advance opens at the column REGION top
+        // (a continuous section shares its sheet), and a fragment box anchored at 0 would
+        // stretch over whatever the earlier section already painted above the region.
+        fragmentTop = cursorY;
       }
 
       for (const headerRow of headerRows) {
@@ -1484,7 +1548,9 @@ function layoutBlocksWithGeometry(
       closeTableFragment();
       advanceColumn();
       tableLeft = originX();
-      fragmentTop = 0;
+      // See placeHeaderGroup: the new fragment opens at the advanced cursor, which is the
+      // column region top on a shared sheet and 0 only when a fresh page was opened.
+      fragmentTop = cursorY;
       if (emitHeaders) placeHeaderGroup(true);
     };
 
@@ -1694,19 +1760,17 @@ function layoutBlocksWithGeometry(
       continue;
     }
 
-    let {
+    const {
       paragraph,
       props,
-      indent,
-      alignment,
       spacing: authoredSpacing,
       contextualSpacing,
       styleId,
       borders,
       shading,
-      inheritedRunProperties,
       keeps,
     } = entry;
+    let { indent, alignment, inheritedRunProperties } = entry;
     let available = entry.available;
     // `w:contextualSpacing` (17.3.1.9) drops the gap between paragraphs of the SAME style.
     // Word's own ListParagraph sets it, so without this every Word-authored list carries a
@@ -1753,6 +1817,10 @@ function layoutBlocksWithGeometry(
     }
 
     let lines = breakBlock(entry, index);
+    if (lines.length === 0) {
+      // Cross-paragraph TOC field chrome: tree preserved, no painted row or flow height.
+      continue;
+    }
     const rebreakInCurrentColumn = (startOffset: number): void => {
       const next = prepareBlock(paragraph, columnWidth());
       if (next.kind !== 'paragraph') return;
@@ -2333,6 +2401,129 @@ function layoutBlocksWithGeometry(
     };
   }
   return { layout, pages, lineCounter, endCursorY, endSpaceAfter, endsOpenPage };
+}
+
+/** Content-relative bottom of each column's content on one page, floored at the region top. */
+function columnBottomsOf(
+  page: PageRecord,
+  columns: ResolvedSectionColumns,
+  regionTop: number
+): number[] {
+  const bottoms = columns.lefts.map(() => regionTop);
+  for (const fragment of page.fragments) {
+    let column = 0;
+    // A fragment starts at its column's left edge plus indents; assign it to the LAST
+    // column whose origin it does not precede (half-point slack for table indents).
+    for (let index = columns.count - 1; index >= 0; index -= 1) {
+      if (fragment.box.x + 0.5 >= columns.lefts[index]!) {
+        column = index;
+        break;
+      }
+    }
+    bottoms[column] = Math.max(bottoms[column]!, fragment.box.y + fragment.box.height);
+  }
+  return bottoms;
+}
+
+/** The balance search stops once the fitting bound is known this tightly (points). */
+const BALANCE_TOLERANCE_PT = 0.25;
+const MAX_BALANCE_STEPS = 20;
+
+/**
+ * Lay a block run out under its section geometry, balancing columns when asked.
+ *
+ * Word balances the columns of a multi-column section that ends in a continuous section
+ * break (ECMA-376 §17.6.4): the content divides across the columns instead of filling the
+ * first one to the page bottom. The flow itself already knows how to advance columns —
+ * balancing is finding the SHORTEST first-page column height that still keeps the section
+ * on its single sheet, which is monotone in the height, so a binary search over trial
+ * passes finds it. Trials run session-less; only the final pass publishes.
+ *
+ * Conservative bounds: only a section whose natural layout is one open sheet balances.
+ * A section that already fills pages keeps Word's fill-then-flow shape for those pages,
+ * and balancing just its tail sheet is deferred.
+ */
+function layoutBlocksWithGeometry(
+  bodies: readonly OoxmlElement[],
+  revision: number,
+  options: BlockLayoutOptions
+): BlockLayoutResult {
+  const columns = resolveSectionColumns(
+    options.sectionColumns ?? DEFAULT_SECTION_PROPERTIES.columns,
+    options.geometry.width - options.geometry.margin.left - options.geometry.margin.right
+  );
+  if (!options.balanceColumns || columns.count < 2 || options.columnRegionBottom !== undefined) {
+    if (options.session) options.session.balanceLimit = null;
+    return layoutBlocksPass(bodies, revision, options);
+  }
+
+  const session = options.session;
+  const regionTop = options.flowStartY ?? 0;
+  const { session: _trialSession, ...trialOptions } = options;
+  const balancedResult = (final: BlockLayoutResult): BlockLayoutResult => {
+    const page = final.pages[0];
+    // The next continuous section resumes BELOW the whole balanced region, not below the
+    // last column's own cursor.
+    const endCursorY = page
+      ? Math.max(...columnBottomsOf(page, columns, regionTop))
+      : final.endCursorY;
+    if (session) session.endCursorY = endCursorY;
+    return { ...final, endCursorY };
+  };
+
+  // Unchanged content early-exits on ONE attempt at the remembered limit, skipping the
+  // natural pass and the search. A stale limit just means this attempt is wasted work:
+  // the section changed, so the search below reruns and overwrites everything it stored.
+  if (session && session.balanceLimit !== null) {
+    const remembered = session.balanceLimit;
+    const attempt = layoutBlocksPass(bodies, revision, {
+      ...options,
+      columnRegionBottom: remembered,
+    });
+    if (session.stats.placed === 0 && session.stats.reusedPages === attempt.pages.length) {
+      session.balanceLimit = remembered;
+      return balancedResult(attempt);
+    }
+  }
+
+  const natural = layoutBlocksPass(bodies, revision, trialOptions);
+  if (natural.pages.length !== 1 || !natural.endsOpenPage) {
+    if (session) session.balanceLimit = null;
+    return layoutBlocksPass(bodies, revision, options);
+  }
+
+  const naturalBottoms = columnBottomsOf(natural.pages[0]!, columns, regionTop);
+  const total = naturalBottoms.reduce((sum, bottom) => sum + Math.max(0, bottom - regionTop), 0);
+  if (total <= 0) {
+    if (session) session.balanceLimit = null;
+    return layoutBlocksPass(bodies, revision, options);
+  }
+
+  // The natural single-sheet layout fits its own bottom by construction; the ideal split
+  // cannot be shorter than an even division of the flowed content.
+  let low = regionTop + total / columns.count;
+  let high = Math.max(...naturalBottoms) + 0.01;
+  const fits = (limit: number): boolean => {
+    try {
+      const trial = layoutBlocksPass(bodies, revision, {
+        ...trialOptions,
+        columnRegionBottom: limit,
+      });
+      return trial.pages.length === 1 && trial.endsOpenPage;
+    } catch {
+      // Keep rules or atomic rows can refuse a band this short; that is "does not fit".
+      return false;
+    }
+  };
+  for (let step = 0; step < MAX_BALANCE_STEPS && high - low > BALANCE_TOLERANCE_PT; step += 1) {
+    const mid = (low + high) / 2;
+    if (fits(mid)) high = mid;
+    else low = mid;
+  }
+
+  const final = layoutBlocksPass(bodies, revision, { ...options, columnRegionBottom: high });
+  if (session) session.balanceLimit = high;
+  return balancedResult(final);
 }
 
 // ---------------------------------------------------------------------------------------

@@ -352,6 +352,26 @@ export function gateCommand(
       refusal: { ok: false, code: 'unsupported', reason: 'nothing to redo' },
     };
   }
+  if (command.type === 'insertToc' && !surface.canInsertToc()) {
+    return {
+      ok: false,
+      refusal: {
+        ok: false,
+        code: 'unsupported',
+        reason: 'a table of contents can only be inserted in the editable document body',
+      },
+    };
+  }
+  if (command.type === 'refreshToc' && !surface.canRefreshToc(command.tocId)) {
+    return {
+      ok: false,
+      refusal: {
+        ok: false,
+        code: 'notFound',
+        reason: 'there is no refreshable table of contents at the selection',
+      },
+    };
+  }
   if (command.type === 'insertPageField') {
     const active = surface.activeScope?.() ?? { kind: 'body' as const };
     if (active.kind !== 'headerFooter') {

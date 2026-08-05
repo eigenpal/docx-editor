@@ -46,6 +46,11 @@ import { rangePartiallyOverlapsDrawingAtom } from '../package/drawing-projection
 import { isDrawingTreeDocOp, validateDrawingOp } from './tree-op-drawings.ts';
 import { isParagraph, paragraphLength, segmentsOf, splitsSurrogate } from './tree-op-segments.ts';
 import {
+  validateInsertToc,
+  validateReplaceTocResult,
+  validateRewriteTocPageNumbers,
+} from './tree-op-toc.ts';
+import {
   ACCEPTED_PARAGRAPH_PROPERTIES,
   ACCEPTED_RUN_PROPERTIES,
   TREE_DOC_OP_KINDS,
@@ -389,6 +394,16 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
 
   if (op.op === 'removeContentControl') {
     return validateRemoveContentControl(part, op.controlId);
+  }
+
+  if (op.op === 'insertToc') {
+    return validateInsertToc(part, op);
+  }
+  if (op.op === 'replaceTocResult') {
+    return validateReplaceTocResult(part, op);
+  }
+  if (op.op === 'rewriteTocPageNumbers') {
+    return validateRewriteTocPageNumbers(part, op);
   }
 
   if (op.op === 'setSectionProperties') {

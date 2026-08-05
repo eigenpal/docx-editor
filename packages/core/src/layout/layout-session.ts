@@ -79,6 +79,15 @@ export interface LayoutSession {
   /** Whether the last page of that pass was still open (no trailing page break). */
   endsOpenPage: boolean;
   stats: LayoutSessionStats;
+  /**
+   * Column-height limit chosen by the last balanced multi-column pass, or null when the
+   * last pass did not balance.
+   *
+   * Lets the next pass try the remembered limit FIRST: an unchanged balanced section
+   * early-exits on that single attempt instead of re-running the natural pass and the
+   * whole balance search every time.
+   */
+  balanceLimit: number | null;
   /** Present when the last pass was multi-section; child sessions live here. */
   multi: MultiSectionLayoutState | null;
   /**
@@ -105,6 +114,7 @@ export function createLayoutSession(): LayoutSession {
     endSpaceAfter: 0,
     endsOpenPage: true,
     stats: { placed: 0, total: 0, reusedPages: 0, fullPasses: 0 },
+    balanceLimit: null,
     multi: null,
     notePageBottomReserves: null,
   };

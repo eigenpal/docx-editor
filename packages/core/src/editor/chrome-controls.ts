@@ -574,13 +574,13 @@ export const CHROME_GROUPS = [
       {
         id: 'footnote',
         labelKey: 'toolbar.insertFootnote',
-        paths: GENERATED_ICON_PATHS['format_list_numbered'],
+        paths: GENERATED_ICON_PATHS['superscript'],
         state: { kind: 'command' },
       },
       {
         id: 'endnote',
         labelKey: 'toolbar.insertEndnote',
-        paths: GENERATED_ICON_PATHS['format_list_numbered'],
+        paths: GENERATED_ICON_PATHS['edit_note'],
         state: { kind: 'command' },
       },
       {
@@ -633,7 +633,7 @@ export const CHROME_GROUPS = [
       {
         id: 'toc',
         labelKey: 'toolbar.tableOfContents',
-        paths: GENERATED_ICON_PATHS['format_list_numbered'],
+        paths: GENERATED_ICON_PATHS['toc'],
         state: { kind: 'command' },
       },
     ],

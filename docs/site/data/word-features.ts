@@ -791,7 +791,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'TOCs can be inserted and stale or empty TOCs regenerated from document headings, with tab leaders, page numbers, and working links.',
+      'Body TOCs can be inserted from the shared Insert menu and refreshed from document headings, including page-numbers-only updates, tab leaders, section-formatted page numbers, and bookmark links. Generated rows are read-only navigation links.',
   },
   {
     id: 'fields.other-codes',

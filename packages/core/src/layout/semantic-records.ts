@@ -127,6 +127,15 @@ export interface StyleSpanRecord {
   readonly style: ResolvedRunStyle;
   readonly box: LayoutBox;
   /**
+   * Cumulative advances from {@link box}.x to each UTF-16 caret boundary in {@link text}.
+   *
+   * Length is `text.length + 1` (both endpoints). Layout publishes these so hit-testing and
+   * the caret read the same per-cluster edges the span was measured with, rather than
+   * re-measuring a prefix at interaction time or interpolating across {@link box}.width —
+   * OpenSpec task 13.5. Absent on older records; consumers fall back to the measurer.
+   */
+  readonly caretEdges?: readonly number[];
+  /**
    * `w:tab/@w:leader` of the stop a `\t` span advanced to (ECMA-376 §17.3.1.38).
    *
    * Only ever set on a tab span, and only for a non-`none` leader. Paint repeats the glyph
@@ -695,9 +704,22 @@ export function paragraphFragmentsOf(
   page: PageRecord,
   includeHeaderRepeats = false
 ): ParagraphFragmentRecord[] {
+  return paragraphFragmentsOfBlocks(page.fragments, includeHeaderRepeats);
+}
+
+/**
+ * Depth-first paragraph fragments of one block list, in reading order.
+ *
+ * The same walk as {@link paragraphFragmentsOf} for fragment lists that do not sit on the
+ * page directly — a header/footer story's fragments, a note story's.
+ */
+export function paragraphFragmentsOfBlocks(
+  blocks: readonly BlockFragmentRecord[],
+  includeHeaderRepeats = false
+): ParagraphFragmentRecord[] {
   const found: ParagraphFragmentRecord[] = [];
-  const visitBlocks = (blocks: readonly BlockFragmentRecord[]): void => {
-    for (const block of blocks) {
+  const visitBlocks = (list: readonly BlockFragmentRecord[]): void => {
+    for (const block of list) {
       if (block.kind === 'paragraph') {
         found.push(block);
         continue;
@@ -708,7 +730,7 @@ export function paragraphFragmentsOf(
       }
     }
   };
-  visitBlocks(page.fragments);
+  visitBlocks(blocks);
   return found;
 }
 

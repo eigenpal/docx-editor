@@ -336,3 +336,54 @@ describe('a w:ptab owns no model offsets', () => {
     expect(tab.box.width).toBeGreaterThan(0);
   });
 });
+
+describe('a PAGE break carries the caret onto the page it opened', () => {
+  // Same story as the trailing hard break above, one level up. The page break ends a line
+  // AND a page, so the offset after it belongs to the continuation — the place the text
+  // typed there will actually appear. Reporting the end of the line the break closed put
+  // the caret on the page before the one it was writing to, which reads as a dead caret:
+  // you click below the last line, type, and the letters land on the next page.
+  const ALPHA = '<w:p><w:r><w:t>Alpha</w:t></w:r></w:p>';
+  const BETA = '<w:p><w:r><w:t>Beta</w:t></w:r></w:p>';
+  const pageOfCaret = (body: string, offset: number): number | null => {
+    const layout = lay(body);
+    const paragraphId = paragraphs(layout)[1]!.paragraphId;
+    return caretAt(layout, { paragraphId, offset }, measurer)?.pageIndex ?? null;
+  };
+
+  test('the offset after the break reports the continuation page', () => {
+    const body = `${ALPHA}<w:p><w:r><w:br w:type="page"/></w:r><w:r><w:t>tail</w:t></w:r></w:p>${BETA}`;
+    expect(pageOfCaret(body, 0)).toBe(0);
+    expect(pageOfCaret(body, 1)).toBe(1);
+  });
+
+  test('a break in the middle of a paragraph does the same', () => {
+    const body =
+      `${ALPHA}<w:p><w:r><w:t>head</w:t></w:r><w:r><w:br w:type="page"/></w:r>` +
+      `<w:r><w:t>tail</w:t></w:r></w:p>${BETA}`;
+    expect(pageOfCaret(body, 4)).toBe(0);
+    expect(pageOfCaret(body, 5)).toBe(1);
+  });
+
+  test('a click in the blank space beside the mark stays on the page it landed on', () => {
+    // `<w:p><w:r><w:br w:type="page"/></w:r></w:p>` is the commonest way to end a page, and
+    // its line is one break wide with the rest of the column blank. Resolving that blank to
+    // the position AFTER the break sent the caret to a page the click never touched — and
+    // the typing with it. Word stops in front of the mark, so the click types where it is.
+    const body = `${ALPHA}<w:p><w:r><w:br w:type="page"/></w:r></w:p>${BETA}`;
+    const layout = lay(body);
+    const fragment = paragraphs(layout).find(
+      (entry) => entry.paragraphId === paragraphs(layout)[1]!.paragraphId
+    )!;
+    // Well to the right of the zero-width mark, in blank column space.
+    const hit = hitTestSemantic(layout, {
+      x: fragment.box.x + fragment.box.width - 1,
+      y: fragment.box.y + fragment.box.height / 2,
+      pageIndex: 0,
+    })!;
+    expect(hit.position.paragraphId).toBe(fragment.paragraphId);
+    expect(hit.position.offset).toBe(0);
+    // And the caret for what the click resolved to is on the page that was clicked.
+    expect(caretAt(layout, hit.position, measurer)?.pageIndex).toBe(0);
+  });
+});

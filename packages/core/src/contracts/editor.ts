@@ -339,6 +339,14 @@ export interface Editor {
   getDocumentFonts(): readonly string[];
 
   /**
+   * Every font family the editor can offer: the configured catalog (the default face,
+   * the Word-name families the substitution map stands in for, and host-registered
+   * source families) merged with {@link getDocumentFonts}. Never empty — a brand-new
+   * document offers the configured catalog rather than a dead picker.
+   */
+  getAvailableFonts(): readonly string[];
+
+  /**
    * The document theme's ten picker colours (`a:clrScheme`) in Word's column order
    * (Background 1, Text 1, Background 2, Text 2, Accent 1-6), each a six-digit hex
    * without '#'. Empty when the document has no complete scheme — the picker then
@@ -425,11 +433,13 @@ export interface Editor {
   /** Plain-text note preview for hover chrome. */
   getNotePreviewText(scopeId: string): string | null;
 
-  /** Tracked changes in the document, for the review sidebar. */
+  /** Tracked changes in the document — body AND header/footer stories. */
   getTrackedChanges(): readonly {
     readonly id: string;
     readonly kind: string;
     readonly author?: string;
+    /** Which story holds the change, so a consumer can group or filter by region. */
+    readonly story?: 'body' | 'header' | 'footer';
   }[];
 
   /**
@@ -1024,7 +1034,9 @@ export interface EditorCommands
   };
 
   setWatermark: { watermark: Watermark | null };
-  refreshToc: { tocId?: string };
+  /** Insert a generated, hyperlink-enabled TOC for heading levels 1–3 at the selection. */
+  insertToc: Record<never, never>;
+  refreshToc: { tocId?: string; mode?: 'entire' | 'pageNumbers' };
 
   undo: Record<never, never>;
   redo: Record<never, never>;
@@ -1215,6 +1227,15 @@ export interface EditorSnapshot {
   readonly selectionCollapsed: boolean;
   readonly formatting: RunFormatting | null;
   readonly table: TableContext | null;
+  /**
+   * The table of contents the last right-click landed on, or null.
+   *
+   * NOT caret context, unlike `table`: a right-click leaves the selection where it was, and
+   * a generated TOC refuses the caret outright, so a host's context menu could otherwise
+   * never tell which table of contents it was opened over. Cleared by a right-click
+   * anywhere else.
+   */
+  readonly tocContext: { readonly id: string } | null;
   readonly image: ImageContext | null;
   readonly page: { readonly current: number; readonly total: number };
   /**
@@ -1255,6 +1276,14 @@ export interface EditorSnapshot {
    * the editor had simply stopped responding.
    */
   readonly lastRejection?: string | null;
+  /**
+   * Document font families rendering in a substitute face: declared by the document but
+   * not resolvable on this platform, not embedded in the file, and not supplied by the
+   * app's font configuration. Chrome shows a compatibility notice from this the way Word
+   * does. Optional and additive like `canUndo`: absent means the implementation has not
+   * derived it; empty means every family resolved (or no document is loaded).
+   */
+  readonly fontSubstitutions?: readonly string[];
 }
 
 /**

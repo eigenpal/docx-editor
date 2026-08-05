@@ -43,6 +43,10 @@ export {
   DocxEditorPageSetupDialog,
   type DocxEditorPageSetupDialogProps,
 } from './editor/DocxEditorPageSetup';
+export {
+  DocxEditorFontNotice,
+  type DocxEditorFontNoticeProps,
+} from './editor/DocxEditorFontNotice';
 // The review rail (also reachable as `DocxEditor.Review`) and its headless hook. The parts
 // live on the namespace statics; a host that wants a different surface takes the hook, which
 // is where the queue, the anchors and the accept/reject/reply actions actually live.

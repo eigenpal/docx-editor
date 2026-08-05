@@ -624,3 +624,48 @@ describe('the offset model has ONE authority', () => {
     expect(item.ranges[0]!.end.offset).toBe(5);
   });
 });
+
+describe('furniture stories join the queue', () => {
+  function headerStory(body: string): OoxmlPart {
+    const result = readOoxmlPart(`<w:hdr xmlns:w="${W}" xmlns:w14="${W14}">${body}</w:hdr>`, {
+      name: '/word/header1.xml',
+      contentType: 'app/xml',
+    });
+    if (!result.ok) throw new Error(result.reason);
+    return result.part;
+  }
+
+  test('a header revision is listed beside body items, its ranges naming the header part', () => {
+    const body = story(`<w:p>${run('keep ')}${ins('1', run('body add'))}</w:p>`);
+    const header = headerStory(`<w:p>${run('title ')}${ins('9', run('hdr add'), 'HF')}</w:p>`);
+    const items = revisionsOf(collectReviewItems({ storyPart: body, furnitureParts: [header] }));
+    expect(items).toHaveLength(2);
+    const fromHeader = items.find((item) => item.author === 'HF')!;
+    expect(fromHeader.ranges[0]!.partName).toBe('/word/header1.xml');
+    // Body items rank first: furniture paragraphs join the merged order AFTER the body's.
+    expect(items[0]!.author).toBe('QA');
+  });
+
+  test('the same part passed twice contributes its cards once', () => {
+    const body = story(`<w:p>${run('keep')}</w:p>`);
+    const header = headerStory(`<w:p>${ins('9', run('shared'), 'HF')}</w:p>`);
+    const items = collectReviewItems({ storyPart: body, furnitureParts: [header, header] });
+    expect(items).toHaveLength(1);
+  });
+
+  test('a comment anchored in a header stops being an orphan', () => {
+    const body = story(`<w:p>${run('body')}</w:p>`);
+    const header = headerStory(`<w:p>${cStart('1')}${run('marked')}${cEnd('1')}</w:p>`);
+    const comments = commentsPart(comment('1', 'about the header'));
+    const without = collectReviewItems({ storyPart: body, commentsPart: comments });
+    expect(without.some((item) => item.kind === 'comment' && item.orphaned)).toBe(true);
+    const withHeader = collectReviewItems({
+      storyPart: body,
+      furnitureParts: [header],
+      commentsPart: comments,
+    });
+    const card = withHeader.find((item) => item.kind === 'comment');
+    expect(card && card.kind === 'comment' && card.orphaned).toBe(false);
+    expect(card && card.kind === 'comment' && card.range?.partName).toBe('/word/header1.xml');
+  });
+});
