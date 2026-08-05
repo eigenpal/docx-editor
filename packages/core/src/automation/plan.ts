@@ -84,6 +84,14 @@ import {
 } from './spans.ts';
 import { BODY_STORY, storyKey, type AutomationStoryId } from './stories.ts';
 import { isStoryId } from './stories.ts';
+import { findNode } from '../store/package/ooxml-edit.ts';
+import {
+  bookmarkIn,
+  bookmarkReads,
+  linkTarget,
+  linksInParagraph,
+  type AutomationLinkRead,
+} from './links.ts';
 import {
   listReads,
   membershipIn,
@@ -146,6 +154,15 @@ export interface BatchPlannerHost {
   readonly capabilities: AutomationCapabilities;
   /** Moves a reader's caret. Only called when `capabilities.selection` is true. */
   readonly select?: (range: ResolvedRange, mode: AutomationSelectionMode) => void;
+  /**
+   * Mint (or reuse) the relationship for an external hyperlink target, or refuse the URL.
+   *
+   * Called DURING planning, before any transaction: a relationship is a package fact the tree op
+   * then names, and the engine's own hyperlink lane does it in the same order. A null answer is a
+   * refusal — the planner turns it into a typed error and no op is staged, so a rejected URL
+   * cannot leave a link pointing at an id nothing declares.
+   */
+  readonly ensureExternalTarget: (url: string, scope: StoryScope) => string | null;
 }
 
 export interface BatchPlanner {
@@ -1173,6 +1190,122 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     return planInsertParagraph(plan, anchor, where === 'start' ? 'before' : 'after', text);
   };
 
+  /**
+   * The one link that covers a whole span, or null.
+   *
+   * "Covers" is strict: a span reaching outside the link is not the link's span. A span crossing a
+   * paragraph mark is never one link's either — a `w:hyperlink` lives inside one `w:p`.
+   */
+  const linkCovering = (
+    reads: AutomationStoryReads,
+    range: ResolvedRange
+  ): AutomationLinkRead | null => {
+    if (range.start.paragraphId !== range.end.paragraphId) return null;
+    for (const link of linksInParagraph(reads, range.start.paragraphId)) {
+      if (link.start <= range.start.offset && link.end >= range.end.offset) return link;
+    }
+    return null;
+  };
+
+  const planSetHyperlink = (
+    plan: StoryPlan,
+    range: ResolvedRange,
+    target: string
+  ): PlannedOperation => {
+    if (typeof target !== 'string')
+      return refuse('unsupported-content', 'a hyperlink target is a string', 'target');
+    const reads = plan.reads;
+    const existing = linkCovering(reads, range);
+    const collapsed =
+      range.start.paragraphId === range.end.paragraphId &&
+      range.start.offset === range.end.offset;
+
+    // UNLINK. The element goes, the runs stay: their text, their formatting and their order are
+    // not the link's, it only wrapped them.
+    if (target.length === 0) {
+      if (!existing)
+        return refuse('unsupported-content', 'that text is not a link', 'no-link');
+      const pin = pinWrite(plan);
+      if (pin) return pin;
+      const conflict = touch(plan, existing.paragraphId);
+      if (conflict) return conflict;
+      return {
+        ok: true,
+        kind: 'command',
+        ops: [{ op: 'removeHyperlink', linkId: existing.id }],
+        story: reads.story,
+        answer: () => APPLIED,
+      };
+    }
+
+    // An anchor names a bookmark in THIS document, so it is resolved against the story rather
+    // than trusted: a jump to a name nothing declares lands nowhere, and writing it would put
+    // that dead end in the file.
+    let aimed: { readonly relationshipId?: string; readonly anchor?: string };
+    if (target.startsWith('#')) {
+      const name = target.slice(1);
+      if (name.length === 0 || !bookmarkIn(reads, name))
+        return refuse('unsupported-content', 'this document declares no such bookmark', target);
+      aimed = { anchor: name };
+    } else {
+      const minted = host.ensureExternalTarget(target, reads.scope);
+      // NULL IS THE SECURITY ANSWER as much as the validity one: a refused scheme, a target that
+      // is not an absolute URI, a string too long to be one. Refused before a single op is staged.
+      if (minted === null)
+        return refuse('unsupported-content', 'this engine will not author that target', 'target');
+      aimed = { relationshipId: minted };
+    }
+
+    const pin = pinWrite(plan);
+    if (pin) return pin;
+
+    // RETARGET rather than wrap, when the span is already inside a link: replacing the element
+    // would throw away its authored `w:history` and `w:tgtFrame` and its identity, and wrapping
+    // it again would nest one link inside another — markup Word does not write.
+    if (existing) {
+      const conflict = touch(plan, existing.paragraphId);
+      if (conflict) return conflict;
+      return {
+        ok: true,
+        kind: 'command',
+        ops: [{ op: 'setHyperlinkTarget', linkId: existing.id, ...aimed }],
+        story: reads.story,
+        answer: () => APPLIED,
+      };
+    }
+
+    if (collapsed)
+      return refuse('unsupported-content', 'a link with no text has nothing to click', 'collapsed');
+    if (range.start.paragraphId !== range.end.paragraphId) {
+      return refuse(
+        'unsupported-content',
+        'a link lives inside one paragraph',
+        'crosses-paragraph-mark'
+      );
+    }
+    const conflict = touch(plan, range.start.paragraphId);
+    if (conflict) return conflict;
+    // `Hyperlink` is marked on the runs only when the document DEFINES it: a `w:rStyle` naming a
+    // style that is not there paints nothing and reads back as a style the document lacks.
+    const styleId = reads.styles().idOf('hyperlink');
+    return {
+      ok: true,
+      kind: 'command',
+      ops: [
+        {
+          op: 'insertHyperlink',
+          paragraphId: range.start.paragraphId,
+          start: range.start.offset,
+          end: range.end.offset,
+          ...aimed,
+          ...(styleId === null ? {} : { styleId }),
+        },
+      ],
+      story: reads.story,
+      answer: () => APPLIED,
+    };
+  };
+
   const planSelect = (
     plan: StoryPlan,
     range: ResolvedRange,
@@ -1632,6 +1765,92 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const found = listOf(operation.list);
         if (!('list' in found)) return found;
         return planInsertListParagraph(found.plan, found.list, operation.where, operation.text);
+      }
+
+      case 'getHyperlink': {
+        const resolved = resolveSpanRef(operation.span, handles, packageReads);
+        if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
+        const story = storyOfSpanRef(operation.span, handles, packageReads);
+        if (!story.ok) return refuse(story.code, 'that span is not a place', story.detail);
+        const pkg = packageReads.package;
+        if (!pkg || !resolved.value) return query({ kind: 'text', text: '' });
+        const link = linkCovering(story.value, resolved.value);
+        if (!link) return query({ kind: 'text', text: '' });
+        const node = findNode(story.value.part, link.id);
+        const target = node ? linkTarget(pkg, story.value.part.name, node) : null;
+        return query({ kind: 'text', text: target ?? '' });
+      }
+
+      case 'setHyperlink': {
+        const resolved = resolveSpanRef(operation.span, handles, packageReads);
+        if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
+        if (!resolved.value)
+          return refuse('invalid-offset', 'that story holds no text to link', 'empty-story');
+        const story = storyReadsOf(resolved.value);
+        if (!story) return refuse('invalid-handle', 'that story is not in this document');
+        return planSetHyperlink(planFor(story), resolved.value, operation.target);
+      }
+
+      case 'getBookmarks': {
+        const resolved = resolveSpanRef(operation.scope, handles, packageReads);
+        if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
+        const story = storyOfSpanRef(operation.scope, handles, packageReads);
+        if (!story.ok) return refuse(story.code, 'that span is not a place', story.detail);
+        const reads = story.value;
+        const scope = resolved.value;
+        const covered = scope === null ? null : new Set(spanParagraphIds(scope, reads));
+        const overlapping = bookmarkReads(reads).filter((bookmark) => {
+          if (!covered) return false;
+          // Overlap, not containment: a range that starts inside a bookmark and ends past it has
+          // that bookmark, which is what Word's own range collection answers.
+          if (!covered.has(bookmark.start.paragraphId) && !covered.has(bookmark.end.paragraphId))
+            return false;
+          if (scope === null) return false;
+          const startsAfter =
+            bookmark.start.paragraphId === scope.end.paragraphId &&
+            bookmark.start.offset > scope.end.offset;
+          const endsBefore =
+            bookmark.end.paragraphId === scope.start.paragraphId &&
+            bookmark.end.offset < scope.start.offset;
+          return !startsAfter && !endsBefore;
+        });
+        return query({
+          kind: 'handles',
+          handles: overlapping.map((bookmark) => handles.bookmark(bookmark.name, reads.story)),
+        });
+      }
+
+      case 'getBookmarkName': {
+        const target = handles.resolve(operation.bookmark, 'bookmark');
+        if (!target || target.kind !== 'bookmark')
+          return refuse('invalid-handle', 'that handle does not name a bookmark', 'bookmark');
+        return query({ kind: 'text', text: target.name });
+      }
+
+      case 'getBookmarkRange': {
+        const target = handles.resolve(operation.bookmark, 'bookmark');
+        if (!target || target.kind !== 'bookmark')
+          return refuse('invalid-handle', 'that handle does not name a bookmark', 'bookmark');
+        const reads = packageReads.story(target.story);
+        if (!reads) return refuse('invalid-handle', 'that story is not in this document');
+        const bookmark = bookmarkIn(reads, target.name);
+        // GONE MEANS GONE. The markers left with the text that held them, and a range derived from
+        // where they used to be would point at whatever moved in.
+        if (!bookmark)
+          return refuse('invalid-handle', 'this document no longer declares that bookmark', target.name);
+        const start: ResolvedPoint = {
+          story: reads.story,
+          paragraphId: bookmark.start.paragraphId,
+          index: reads.indexOf(bookmark.start.paragraphId),
+          offset: bookmark.start.offset,
+        };
+        const end: ResolvedPoint = {
+          story: reads.story,
+          paragraphId: bookmark.end.paragraphId,
+          index: reads.indexOf(bookmark.end.paragraphId),
+          offset: bookmark.end.offset,
+        };
+        return query({ kind: 'span', span: spanOf({ start, end }) });
       }
 
       case 'selectSpan': {

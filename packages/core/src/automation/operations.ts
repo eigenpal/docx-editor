@@ -318,6 +318,45 @@ export type AutomationOperation =
       readonly text: string;
     }
   /**
+   * Where a span points: an absolute URL, `#anchor`, or empty for text in no link.
+   *
+   * Empty rather than an error, because "this text is not a link" is an ordinary fact about a
+   * document. Also empty when no SINGLE link covers the whole span — a span half in and half out
+   * of a link is not that link's, and answering its target would tell a caller the words they
+   * measured are all linked when some of them are not.
+   *
+   * The answer is the SANITIZED target. A file may carry `javascript:`; nothing reads it back out
+   * of this protocol as a target, because a caller handed one would put it in front of a reader.
+   */
+  | { readonly op: 'getHyperlink'; readonly span: AutomationSpanRef }
+  /**
+   * Make a span a link, re-aim the link it already is, or unlink it.
+   *
+   * `''` unlinks: the `w:hyperlink` element goes and its runs stay exactly as they were, which is
+   * what Word's Remove Hyperlink does. `#name` points at a bookmark THIS document declares — an
+   * anchor nothing declares is refused rather than written as a jump to nowhere. Anything else is
+   * an external address, and it is authored only if the engine would open it: a refused scheme
+   * never reaches the package, and nothing is written at all.
+   */
+  | { readonly op: 'setHyperlink'; readonly span: AutomationSpanRef; readonly target: string }
+  /**
+   * The bookmarks a scope holds, in document order.
+   *
+   * `{ body }` is a whole story; a narrower span answers the ones it OVERLAPS, which is what
+   * "the bookmarks of this range" means. Word's own scratch names (`_GoBack` and the rest of the
+   * underscore-prefixed ones) are not answered, matching Word's default.
+   */
+  | { readonly op: 'getBookmarks'; readonly scope: AutomationSpanRef }
+  /** The name a bookmark is declared with. */
+  | { readonly op: 'getBookmarkName'; readonly bookmark: AutomationHandle }
+  /**
+   * The range a bookmark's two markers enclose.
+   *
+   * Refused once the document no longer declares the name: the markers are gone with the text
+   * that held them, and a stale range would point a caller at whatever moved into their place.
+   */
+  | { readonly op: 'getBookmarkRange'; readonly bookmark: AutomationHandle }
+  /**
    * Put the reader's selection on a span. Requires the `selection` capability, so a headless
    * host refuses it rather than pretending to have a caret.
    */
@@ -353,6 +392,10 @@ export const AUTOMATION_QUERY_OPERATIONS = [
   'getListParagraphs',
   'getParagraphList',
   'getListLevel',
+  'getHyperlink',
+  'getBookmarks',
+  'getBookmarkName',
+  'getBookmarkRange',
 ] as const satisfies readonly AutomationOperationKind[];
 
 /** Operations that write. Every one of these goes through the single transaction path. */
@@ -370,6 +413,7 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
   'deleteNote',
   'setListLevel',
   'insertListParagraph',
+  'setHyperlink',
 ] as const satisfies readonly AutomationOperationKind[];
 
 /**

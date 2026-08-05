@@ -126,6 +126,12 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       if (result.rejected) return { ok: false, reason: String(result.reason ?? 'refused') };
       return { ok: true, changed: result.committed };
     },
+    ensureExternalTarget(url: string, scope: StoryScope): string | null {
+      // The SESSION's minting, which is the same `ensureHyperlinkRelationship` the headless host
+      // reaches and the same one Ctrl+K in the editor uses: one relationship per target per
+      // owner part, refused for a scheme this engine would not open.
+      return sync()?.ensureHyperlinkRelationship(url, scope) ?? null;
+    },
     save: () => sync()?.save() ?? null,
     // The one genuinely browser-only operation, and the reason the port declares it optional:
     // a headless host has no caret. Positions arrive as canonical paragraph ids and model

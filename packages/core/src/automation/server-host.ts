@@ -25,6 +25,7 @@ import {
   type OoxmlPackageLimits,
   type OoxmlPackageRejection,
 } from '../store/package/ooxml-package.ts';
+import { ensureHyperlinkRelationship } from '../store/package/hyperlink-part.ts';
 import { normalizeParagraphIdentity } from '../store/package/para-id.ts';
 import { TreePackageStore, type StoryScope } from '../store/store/tree-package-store.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
@@ -138,6 +139,18 @@ function packageStorePort(store: TreePackageStore): AutomationDocumentPort {
         };
       }
       return { ok: true, changed: result.change !== null };
+    },
+    ensureExternalTarget(url: string, scope: StoryScope): string | null {
+      if (!live) return null;
+      const owner = store.partFor(scope);
+      if (!owner) return null;
+      const minted = ensureHyperlinkRelationship(store.currentPackage(), url, owner.name);
+      if (!minted) return null;
+      // The shell, not a story transaction: the relationship lives beside the trees, and the
+      // store keeps it across lifecycle snapshots so an undo cannot orphan the `r:id` a
+      // committed link names.
+      store.replacePackageShell(minted.pkg);
+      return minted.relationshipId;
     },
     save: () => (live ? writeOoxmlPackage(store.currentPackage()) : null),
     subscribe: (listener) => store.subscribe(() => listener()),

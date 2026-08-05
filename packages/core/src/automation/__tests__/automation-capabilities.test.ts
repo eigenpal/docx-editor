@@ -71,6 +71,7 @@ function fixture(
       state.applied += 1;
       return { ok: true, changed: true };
     },
+    ensureExternalTarget: () => 'rId99',
     save: () => new Uint8Array([1]),
     subscribe: (listener) => {
       listeners.add(listener);
@@ -196,6 +197,7 @@ describe('the operation vocabulary declares which operations write', () => {
       'deleteNote',
       'setListLevel',
       'insertListParagraph',
+      'setHyperlink',
     ]);
     // And the ones that commit as a PACKAGE transaction, which is why they travel alone.
     expect([...AUTOMATION_SOLITARY_OPERATIONS]).toEqual(['deleteNote']);

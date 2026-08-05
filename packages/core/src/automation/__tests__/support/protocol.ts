@@ -18,12 +18,20 @@ const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
 const STYLES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
 const STYLES_CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml';
 
+/** Extra markup a fixture needs beside the body. */
+export interface DocxExtras {
+  /** Raw `<Relationship .../>` elements for `word/_rels/document.xml.rels`. */
+  readonly rels?: string;
+}
+
 /** A package, optionally with a real `styles.xml` — the `w:style` children go in `styles`. */
-export function docx(body: string, styles?: string): Uint8Array {
+export function docx(body: string, styles?: string, extras: DocxExtras = {}): Uint8Array {
+  const extraRels = extras.rels ?? '';
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
@@ -36,17 +44,20 @@ export function docx(body: string, styles?: string): Uint8Array {
     '_rels/.rels': strToU8(
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
     ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}">` +
+        (styles === undefined
+          ? ''
+          : `<Relationship Id="rId2" Type="${STYLES_REL}" Target="styles.xml"/>`) +
+        extraRels +
+        `</Relationships>`
+    ),
     ...(styles === undefined
       ? {}
-      : {
-          'word/_rels/document.xml.rels': strToU8(
-            `<Relationships xmlns="${REL}">` +
-              `<Relationship Id="rId2" Type="${STYLES_REL}" Target="styles.xml"/></Relationships>`
-          ),
-          'word/styles.xml': strToU8(`<w:styles xmlns:w="${W}">${styles}</w:styles>`),
-        }),
+      : { 'word/styles.xml': strToU8(`<w:styles xmlns:w="${W}">${styles}</w:styles>`) }),
     'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}" xmlns:w14="${W14}"><w:body>${body}</w:body></w:document>`
+      `<w:document xmlns:w="${W}" xmlns:w14="${W14}" xmlns:r="${R}">` +
+        `<w:body>${body}</w:body></w:document>`
     ),
   });
 }

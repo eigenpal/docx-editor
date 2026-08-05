@@ -139,6 +139,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       handles,
       reads: readsOf(pkg),
       capabilities,
+      ensureExternalTarget: (url, scope) => port.ensureExternalTarget(url, scope),
       ...(port.select ? { select: port.select.bind(port) } : {}),
     });
 

@@ -53,6 +53,20 @@ export interface AutomationDocumentPort {
    * holds exactly this one command and atomicity still means what it says.
    */
   applyLifecycle(op: TreeDocOp): AutomationPortApplyResult;
+  /**
+   * The relationship id for an external hyperlink target on one story's part, minting it if the
+   * package does not already declare it — or null when the URL is not one this engine will write.
+   *
+   * BEFORE the transaction and outside it, which is where the engine already puts this: a
+   * relationship is a package fact, not a tree op, and it carries nothing but its target. So an
+   * unreferenced one is inert markup that Word writes too, while a MISSING one is a link that
+   * resolves to nothing. A refusal here happens before any op is staged, so a rejected URL leaves
+   * no half-applied edit behind.
+   *
+   * The URL is gated by the same allowlist a file-derived target is read through — a scheme this
+   * engine would refuse to open is a scheme it must not author.
+   */
+  ensureExternalTarget(url: string, scope: StoryScope): string | null;
   /** DOCX bytes through the normalizing serializer, or null when there is no document. */
   save(): Uint8Array | null;
   /**
