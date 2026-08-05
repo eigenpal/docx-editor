@@ -24,7 +24,6 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "build:types": "tsc -p tsconfig.types.json",
     "license:check": "license-check-and-add check -f license-check.json",
     "license:add": "license-check-and-add add -f license-check.json"
   },

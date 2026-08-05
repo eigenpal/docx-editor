@@ -36,7 +36,6 @@
     }
   },
   "devDependencies": {
-    "@docx-editor.dev/core": "workspace:*",
     "fflate": "^0.8.2"
   },
   "keywords": [

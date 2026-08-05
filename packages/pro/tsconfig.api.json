@@ -1,17 +1,15 @@
 {
   // API Extractor's view of this package — see `packages/core/tsconfig.api.json` for why the
   // `paths` redirect exists. Pro imports core by package name, and those specifiers resolve to
-  // core's `.ts` source unless they are pointed at its emitted declarations.
-  "extends": "./tsconfig.types.json",
+  // core's `.ts` source unless they are pointed at its built declarations.
+  "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
-    "emitDeclarationOnly": false,
     "paths": {
-      "@docx-editor.dev/core": ["../core/dist-types/index.d.ts"],
-      "@docx-editor.dev/core/types": ["../core/dist-types/contracts/types-barrel.d.ts"],
-      "@docx-editor.dev/core/contracts/types": ["../core/dist-types/contracts/types-barrel.d.ts"],
-      "@docx-editor.dev/core/contracts/*": ["../core/dist-types/contracts/*.d.ts"],
-      "@docx-editor.dev/core/*": ["../core/dist-types/*/index.d.ts"]
+      "@docx-editor.dev/core": ["../core/dist/index.d.ts"],
+      "@docx-editor.dev/core/contracts/types": ["../core/dist/contracts/types.d.ts"],
+      "@docx-editor.dev/core/contracts/*": ["../core/dist/contracts/*.d.ts"],
+      "@docx-editor.dev/core/*": ["../core/dist/*.d.ts"]
     }
   }
 }

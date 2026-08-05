@@ -79,8 +79,7 @@
   },
   "scripts": {
     "build": "tsup && node ../../scripts/copy-core-styles.mjs",
-    "typecheck": "tsc --noEmit",
-    "build:types": "tsc -p tsconfig.types.json"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "typescript": "^5.3.3"
