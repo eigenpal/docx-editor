@@ -11,6 +11,7 @@ import { resolve } from 'node:path';
 import {
   readOoxmlPackage,
   readOoxmlPart,
+  findNode,
   type OoxmlPart,
 } from '@docx-editor.dev/core-contract/store';
 import {
@@ -23,6 +24,7 @@ import {
   reviewItemGeometry,
   reviewItemsAt,
   revisionItemsOf,
+  revisionItemsOfParagraph,
   type ReviewItem,
   type ReviewRevisionItem,
 } from '../review-model.ts';
@@ -81,6 +83,23 @@ describe('the queue is a property of the document, not of the view', () => {
   const part = story(
     `<w:p>${run('keep ')}${ins('1', run('new '))}${del('2', delRun('old'))}</w:p>`
   );
+
+  test('revisionItemsOfParagraph walks a paragraph-root view, not the full story', () => {
+    const part = story(
+      `<w:p>${ins('1', run('one'))}</w:p><w:p>${ins('2', run('two'))}</w:p>`
+    );
+    const order = paragraphOrderOfPart(part);
+    const firstParagraphId = [...order.keys()][0]!;
+    const paragraph = findNode(part, firstParagraphId)!;
+    expect(paragraph.kind).toBe('paragraph');
+    expect(paragraph).not.toBe(part.root);
+
+    const localItems = revisionItemsOf({ ...part, root: paragraph });
+    const scopedItems = revisionItemsOfParagraph(part, firstParagraphId);
+    expect(scopedItems).toEqual(localItems);
+    expect(scopedItems).toHaveLength(1);
+    expect(scopedItems[0]!.text).toBe('one');
+  });
 
   test('both an insertion and a deletion are listed', () => {
     const kinds = revisionsOf(collectReviewItems({ storyPart: part })).map(

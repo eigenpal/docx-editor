@@ -63,6 +63,7 @@ import { ReactNode } from 'react';
 import { Ref } from 'react';
 import { RefAttributes } from 'react';
 import { ReviewItemPlacement } from '@docx-editor.dev/core-contract/contracts/editor';
+import { ReviewItemQuery } from '@docx-editor.dev/core-contract/contracts/editor';
 import { RulerIndent } from '@docx-editor.dev/core-contract/editor';
 import { rulerPageBox } from '@docx-editor.dev/core-contract/editor';
 import { RulerTick } from '@docx-editor.dev/core-contract/editor';
@@ -1854,10 +1855,10 @@ export interface UseParagraphStyleResult {
 }
 
 // @public
-export function useReview(): UseReviewReturn;
+export function useReview(query?: ReviewItemQuery): UseReviewReturn;
 
 // @public
-export function useReviewOf(editor: Editor | null): UseReviewReturn;
+export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): UseReviewReturn;
 
 // @public (undocumented)
 export interface UseReviewReturn {

@@ -424,7 +424,7 @@ export interface Editor {
    * `anchorY` comes from layout records. A surface must not measure painted DOM for it — that
    * is a repaint behind the document and fails outright during pagination.
    */
-  getReviewItems(): readonly ReviewItemPlacement[];
+  getReviewItems(query?: ReviewItemQuery): readonly ReviewItemPlacement[];
 
   /**
    * How edits are written: directly, as suggestions, or not at all.
@@ -604,6 +604,12 @@ type EditorCommandShape<T> = {
  * written twice, once per framework. {@link item} stays for a host that wants more.
  */
 export type { ReviewItem, ReviewRevisionKind };
+
+export interface ReviewItemQuery {
+  readonly excludeRevisionKinds?: readonly ReviewRevisionKind[];
+  /** When false, skip layout geometry; metadata is unchanged and anchors are null. Default true. */
+  readonly placement?: boolean;
+}
 
 export interface ReviewItemPlacement {
   /** Stable and unique per DECISION — a revision with three ranges is one entry. */

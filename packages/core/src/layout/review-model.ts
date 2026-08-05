@@ -11,6 +11,7 @@
 import {
   WML_NAMESPACE_URI,
   collectRevisionSites,
+  findNode,
   paragraphOffsetIndex,
   type OoxmlElement,
   type OoxmlNode,
@@ -327,6 +328,34 @@ const CONTENT_KINDS: Readonly<Record<string, ReviewRevisionKind>> = {
  */
 export function revisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
   const located = locateSites(part);
+  const items = revisionItemsFromSites(part, collectRevisionSites(part), located);
+  return pairReplacements(items, paragraphOrderOfPart(part));
+}
+
+/**
+ * Revisions wholly inside one paragraph — for a conservative local review patch after a
+ * text-local edit. Walks a paragraph-root part view, not the full story.
+ */
+export function revisionItemsOfParagraph(
+  part: OoxmlPart,
+  paragraphId: string
+): ReviewRevisionItem[] {
+  const paragraph = findNode(part, paragraphId);
+  if (!paragraph || paragraph.kind !== 'paragraph') return [];
+  const localPart: OoxmlPart = {
+    id: part.id,
+    name: part.name,
+    contentType: part.contentType,
+    root: paragraph,
+  };
+  return revisionItemsOf(localPart);
+}
+
+function revisionItemsFromSites(
+  part: OoxmlPart,
+  sites: ReturnType<typeof collectRevisionSites>,
+  located: ReadonlyMap<string, SiteLocation>
+): ReviewRevisionItem[] {
   const byAddress = new Map<
     string,
     {
@@ -342,7 +371,7 @@ export function revisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
     }
   >();
 
-  for (const site of collectRevisionSites(part)) {
+  for (const site of sites) {
     const id = wmlAttribute(site.node, 'id');
     if (id === undefined) continue;
     // `@w:author` is REQUIRED by `CT_TrackChange`, and files from other generators omit it
@@ -429,7 +458,7 @@ export function revisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
     });
   }
 
-  const items = [...byAddress.values()].map(
+  return [...byAddress.values()].map(
     (entry): ReviewRevisionItem => ({
       kind: 'revision' as const,
       id: `${entry.revisionKind}-${addressKey(entry.address)}`,
@@ -446,7 +475,6 @@ export function revisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
       readOnly: entry.readOnly,
     })
   );
-  return pairReplacements(items, paragraphOrderOfPart(part));
 }
 
 /**
@@ -744,6 +772,21 @@ function positionRank(item: ReviewItem, order: ReadonlyMap<string, number>): num
   const paragraph = order.get(range.start.paragraphId);
   if (paragraph === undefined) return Number.MAX_SAFE_INTEGER;
   return paragraph * 1_000_000 + Math.min(range.start.offset, 999_999);
+}
+
+/**
+ * Document-order sort for the conservative local review patch.
+ *
+ * `revisionItemsOfParagraph` walks sites in tree order; the full collector sorts by
+ * {@link positionRank}. Only the freshly derived local batch is sorted here — not the
+ * cached queue.
+ */
+export function sortReviewRevisionsByDocumentOrder(
+  revisions: readonly ReviewRevisionItem[],
+  order: ReadonlyMap<string, number>
+): ReviewRevisionItem[] {
+  if (revisions.length < 2) return [...revisions];
+  return [...revisions].sort((a, b) => positionRank(a, order) - positionRank(b, order));
 }
 
 /** Width of one range in document-order units, for the innermost-wins tie-break. */

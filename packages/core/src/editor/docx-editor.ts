@@ -63,7 +63,7 @@ import {
   type SemanticLayout,
   type SemanticPosition,
 } from '../layout/index.ts';
-import type { DocumentEditingMode, ReviewItemPlacement } from '../contracts/editor.ts';
+import type { DocumentEditingMode, ReviewItemPlacement, ReviewItemQuery } from '../contracts/editor.ts';
 import {
   NO_TRACKING_SETTINGS,
   type DocumentTrackingSettings,
@@ -929,12 +929,21 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * queue itself per revision.
    */
 
-  function reviewPlacements(): readonly ReviewItemPlacement[] {
-    const items = surface?.session.reviewItems() ?? [];
-    // The PUBLISHED layout, never `layout()`: that one flushes pending work, and a rail
-    // asking for it on every keystroke turned each one into a synchronous full pass.
-    const layout = surface?.publishedLayout() ?? null;
-    const anchors = layout ? anchorIndexOf(layout) : null;
+  function reviewPlacements(query?: ReviewItemQuery): readonly ReviewItemPlacement[] {
+    let items = surface?.session.reviewItems() ?? [];
+    const excluded = query?.excludeRevisionKinds;
+    if (excluded && excluded.length > 0) {
+      const excludedKinds = new Set(excluded);
+      items = items.filter(
+        (item) => item.kind === 'comment' || !excludedKinds.has(item.revisionKind)
+      );
+    }
+    const withPlacement = query?.placement !== false;
+    let anchors: Map<string, ReviewParagraphAnchor> | null = null;
+    if (withPlacement && items.length > 0) {
+      const layout = surface?.publishedLayout() ?? null;
+      if (layout) anchors = anchorIndexOf(layout);
+    }
     const activeReviewKey = activeReviewKeyNow();
     return items.map((item) => {
       const key = reviewItemKey(item);
@@ -1379,7 +1388,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           ...(item.kind === 'revision' && item.author ? { author: item.author } : {}),
         })),
 
-    getReviewItems: () => reviewPlacements(),
+    getReviewItems: (query?: ReviewItemQuery) => reviewPlacements(query),
 
     addComment(text: string, author?: string): ExecResult {
       const range = commentTargetRange();

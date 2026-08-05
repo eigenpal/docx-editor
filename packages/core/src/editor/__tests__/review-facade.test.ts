@@ -863,3 +863,61 @@ describe('activating a card', () => {
     expect(editor.getReviewItems()[0]!.isActive).toBe(false);
   });
 });
+
+const FORMAT_AND_INSERT =
+  `<w:p><w:r><w:rPr>` +
+  `<w:rPrChange w:id="3" w:author="Ada Lovelace" w:date="2026-01-02T03:04:05Z"><w:b/></w:rPrChange>` +
+  `<w:b/></w:rPr><w:t>bold</w:t></w:r></w:p>` +
+  INSERTION;
+
+describe('getReviewItems query filtering', () => {
+  test('excludeRevisionKinds omits excluded revision cards', () => {
+    const editor = mount({ body: FORMAT_AND_INSERT });
+    const all = editor.getReviewItems();
+    const filtered = editor.getReviewItems({
+      excludeRevisionKinds: ['format', 'structural'],
+    });
+    expect(all.some((item) => item.revisionKind === 'format')).toBe(true);
+    expect(all.some((item) => item.revisionKind === 'insert')).toBe(true);
+    expect(filtered.some((item) => item.revisionKind === 'format')).toBe(false);
+    expect(filtered.some((item) => item.revisionKind === 'structural')).toBe(false);
+    expect(filtered.some((item) => item.revisionKind === 'insert')).toBe(true);
+  });
+
+  test('placement:false returns same metadata with null anchors', () => {
+    const editor = mount({ body: FORMAT_AND_INSERT });
+    const unplaced = editor.getReviewItems({ placement: false });
+    const placed = editor.getReviewItems();
+    expect(unplaced).toHaveLength(placed.length);
+    expect(unplaced.every((item) => item.anchorY === null && item.pageIndex === null)).toBe(
+      true
+    );
+    expect(unplaced.map((item) => item.key)).toEqual(placed.map((item) => item.key));
+    expect(unplaced.map((item) => item.text)).toEqual(placed.map((item) => item.text));
+    expect(unplaced.map((item) => item.author)).toEqual(placed.map((item) => item.author));
+  });
+
+  test('filtering out every revision kind returns an empty list', () => {
+    const editor = mount({ body: FORMAT_AND_INSERT });
+    const empty = editor.getReviewItems({
+      excludeRevisionKinds: [
+        'insert',
+        'delete',
+        'replace',
+        'moveFrom',
+        'moveTo',
+        'format',
+        'paragraphMark',
+        'structural',
+      ],
+    });
+    expect(empty).toHaveLength(0);
+  });
+
+  test('omitted query returns every placement with geometry', () => {
+    const editor = mount({ body: FORMAT_AND_INSERT });
+    const items = editor.getReviewItems();
+    expect(items).toHaveLength(2);
+    expect(items.every((item) => item.anchorY !== null)).toBe(true);
+  });
+});

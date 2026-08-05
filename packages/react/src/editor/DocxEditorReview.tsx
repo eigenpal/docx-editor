@@ -40,7 +40,7 @@ import {
   useState,
 } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { ReviewRevisionKind } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { ReviewItemQuery, ReviewRevisionKind } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../i18n';
 import { ReviewRailContext, useDocxEditor } from './context';
@@ -113,6 +113,9 @@ const COLLAPSED_CARD_HEIGHT = 54;
  * further, a full card reads as annotating whatever happens to be beside it.
  */
 const COLLAPSE_DISPLACEMENT_PX = 480;
+
+/** Stable query for the balloon's unplaced queue read — never allocate per render. */
+const NO_PLACEMENT_REVIEW_QUERY = Object.freeze({ placement: false }) satisfies ReviewItemQuery;
 
 /** Keeps the caret: a mousedown that bubbles to the editor moves it. Inputs are exempt. */
 function guardMousedown(event: React.MouseEvent): void {
@@ -236,7 +239,20 @@ function ReviewRoot({
   formatting = false,
 }: ReviewProps) {
   const editor = useDocxEditor();
-  const review = useReview();
+  const excludeRevisionKinds = useMemo((): readonly ReviewRevisionKind[] | undefined => {
+    const excluded: ReviewRevisionKind[] = [];
+    if (!structural) excluded.push('structural');
+    if (!formatting) excluded.push('format');
+    return excluded.length > 0 ? excluded : undefined;
+  }, [structural, formatting]);
+
+  const railQuery = useMemo(
+    () => (excludeRevisionKinds ? { excludeRevisionKinds } : undefined),
+    [excludeRevisionKinds]
+  );
+
+  const allReview = useReview(NO_PLACEMENT_REVIEW_QUERY);
+  const review = useReview(railQuery);
   const setReviewPaneOpen = review.setPaneOpen;
   const { t } = useTranslation();
   const railRef = useRef<HTMLElement | null>(null);
@@ -249,13 +265,8 @@ function ReviewRoot({
   const open = review.paneOpen;
 
   const items = useMemo(() => {
-    const shown = review.items.filter(
-      (entry) =>
-        (structural || entry.revisionKind !== 'structural') &&
-        (formatting || entry.revisionKind !== 'format')
-    );
-    return filter ? shown.filter((entry) => filter(entry)) : shown;
-  }, [review.items, filter, structural, formatting]);
+    return filter ? review.items.filter((entry) => filter(entry)) : review.items;
+  }, [review.items, filter]);
 
   // Word's rule: a colour per author by ORDER OF FIRST APPEARANCE. A hash of the name is
   // stable but collides, and two reviewers drawn in one colour tells the reader the wrong
@@ -520,14 +531,14 @@ function ReviewRoot({
   const value = useMemo<ReviewRailValue>(
     () => ({
       review: { ...review, items },
-      allItems: review.items,
+      allItems: allReview.items,
       authorSlots,
       byId,
       measure: observeSlot,
       beginDraft,
       endDraft,
     }),
-    [review, items, authorSlots, byId, observeSlot, beginDraft, endDraft]
+    [review, allReview.items, items, authorSlots, byId, observeSlot, beginDraft, endDraft]
   );
 
   if (hidden) return null;
