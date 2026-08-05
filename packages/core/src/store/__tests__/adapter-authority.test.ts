@@ -34,7 +34,6 @@ const FORBIDDEN_PACKAGE_ROOTS = [
 
 /** Workspace dependencies that keep adapters thin without granting private engine authority. */
 const ALLOWED_ENGINE_DEPS = new Set([
-  '@docx-editor.dev/agents',
   '@docx-editor.dev/core-contract',
   '@docx-editor.dev/core-contract/editor',
   // A leaf string catalogue, not an engine lane: no document model, geometry, or editing

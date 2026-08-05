@@ -333,6 +333,104 @@ export function runsUnder(child: OoxmlNode, depth = 0): OoxmlNode[] {
   return [];
 }
 
+/**
+ * Where an insertion at a UTF-16 offset actually puts its content.
+ *
+ * THE OFFSET IS NOT THE ANSWER ON ITS OWN. A boundary belongs to the run that starts there, an
+ * offset past everything in scope appends to the last run in scope, and a scope holding no run
+ * at all needs one minted INTO A PARTICULAR NODE. Validation has to resolve the same site the
+ * applier writes at, or a refusal is reasoning about a different place than the write — which is
+ * how a named insertion into an unlocked outer control ended up landing inside a locked nested
+ * one, first through the run it joined and then through the paragraph it minted a run in.
+ */
+export type InsertionSite =
+  /** Inside a text value: it splits and the content goes between the halves. */
+  | { readonly kind: 'withinValue'; readonly segment: Segment }
+  /** At a run boundary: the content goes into that run, before the segment's own node. */
+  | { readonly kind: 'atBoundary'; readonly segment: Segment }
+  /** Past every segment in scope: the content is appended to this run. */
+  | { readonly kind: 'appendToRun'; readonly run: OoxmlElement }
+  /** No run in scope holds the offset: a run is minted as this node's last child. */
+  | { readonly kind: 'newRun'; readonly holder: OoxmlElement };
+
+/**
+ * Resolve {@link InsertionSite} for an offset, optionally narrowed to one owner's own content.
+ *
+ * `owner` is the content control a caller NAMED as the destination. Narrowing to it is what
+ * makes a control's trailing edge mean "the end of the field" rather than "the run after it";
+ * without one the paragraph is the scope and only its direct runs can be appended to.
+ */
+export function insertionSite(
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  owner: OoxmlNode | null
+): InsertionSite {
+  const all = segmentsOf(paragraph);
+  const segments =
+    owner === null ? all : all.filter((segment) => containsNode(owner, segment.node.id));
+
+  for (const segment of segments) {
+    if (segment.node.kind !== 'textValue') continue;
+    if (offset <= segment.start || offset >= segment.end) continue;
+    return { kind: 'withinValue', segment };
+  }
+  const boundary = segments.find((segment) => segment.start === offset);
+  if (boundary) return { kind: 'atBoundary', segment: boundary };
+
+  const runs =
+    owner === null
+      ? paragraph.children.filter((child) => child.kind === 'run')
+      : paragraph.children
+          .flatMap((child) => runsUnder(child))
+          .filter((run) => containsNode(owner, run.id));
+  const last = runs[runs.length - 1];
+  if (last && last.kind !== 'textValue') return { kind: 'appendToRun', run: last };
+  // Nothing to join, so the run is minted — and WHICH NODE it is minted into is the whole of
+  // which controls receive it. A named owner that HOLDS this paragraph gets the run in the
+  // paragraph, which is inside every control between the owner and it; an inline owner gets it
+  // as the last child of its own content, beside anything nested there rather than inside it.
+  const holder =
+    owner === null || owner.kind === 'textValue' || containsNode(owner, paragraph.id)
+      ? paragraph
+      : contentHolder(owner);
+  return { kind: 'newRun', holder };
+}
+
+/** Where a run goes inside a control: its content element, or the control itself. */
+function contentHolder(control: OoxmlElement): OoxmlElement {
+  for (const child of control.children) {
+    if (child.kind === 'textValue') continue;
+    if (child.kind === 'contentControlContent') return child;
+    if (child.kind === 'generic' && child.localName === 'sdtContent') return child;
+  }
+  return control;
+}
+
+/**
+ * The node whose enclosing controls receive an insertion.
+ *
+ * The run the content joins, or — when there is none to join — the node a run is minted in. The
+ * second case is not "nowhere": a control holding an empty paragraph receives the minted run just
+ * as surely as one holding a run receives appended text, and answering `null` for it is what let
+ * a named write into an unlocked outer control fill a locked inner one's empty paragraph.
+ */
+export function insertionLandingNodeId(
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  owner: OoxmlNode | null
+): string {
+  const site = insertionSite(paragraph, offset, owner);
+  if (site.kind === 'withinValue' || site.kind === 'atBoundary') return site.segment.runId;
+  if (site.kind === 'appendToRun') return site.run.id;
+  return site.holder.id;
+}
+
+function containsNode(node: OoxmlNode, id: string): boolean {
+  if (node.id === id) return true;
+  if (node.kind === 'textValue') return false;
+  return node.children.some((child) => containsNode(child, id));
+}
+
 /** UTF-16 length of a paragraph under the shared segment model. */
 export function paragraphLength(paragraph: OoxmlParagraphNode): number {
   const segments = segmentsOf(paragraph);

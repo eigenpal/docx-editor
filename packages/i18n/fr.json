@@ -969,20 +969,6 @@
   "loading": {
     "label": "Chargement"
   },
-  "agentPanel": {
-    "defaultTitle": "Assistant",
-    "toggle": "Ouvrir l'assistant",
-    "close": "Fermer",
-    "resizeHandle": "Redimensionner",
-    "thinking": "L'assistant réfléchit...",
-    "composerPlaceholder": "Demander à l'assistant…",
-    "send": "Envoyer",
-    "timeline": {
-      "working": "Traitement… {count, plural, one {# étape} other {# étapes}}",
-      "summary": "{count, plural, one {# étape} other {# étapes}}",
-      "earlier": "+ {count, plural, one {# étape précédente} other {# étapes précédentes}}"
-    }
-  },
   "revisions": {
     "cellDeleted": null,
     "cellInserted": null,

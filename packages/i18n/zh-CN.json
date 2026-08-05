@@ -949,20 +949,6 @@
   "loading": {
     "label": "正在加载"
   },
-  "agentPanel": {
-    "defaultTitle": "助手",
-    "toggle": "打开助手",
-    "close": "关闭面板",
-    "resizeHandle": "调整助手面板大小",
-    "thinking": "助手正在思考",
-    "composerPlaceholder": "向助手提问…",
-    "send": "发送",
-    "timeline": {
-      "working": "处理中… {count, plural, one {# 步} other {# 步}}",
-      "summary": "{count, plural, one {# 步} other {# 步}}",
-      "earlier": "+ {count, plural, one {# 个历史步骤} other {# 个历史步骤}}"
-    }
-  },
   "viewer": {
     "pageIndicator": "第 {current} 页，共 {total} 页"
   },

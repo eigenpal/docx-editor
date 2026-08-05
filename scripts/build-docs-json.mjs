@@ -27,6 +27,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runApiExtractor } from './lib/api-extractor-runner.mjs';
 import { buildSourceIndex } from './lib/source-index.mjs';
+import { matchHeadDocBlock } from './lib/head-doc-block.mjs';
 import { transformApiPackageJson } from './lib/docs-model.mjs';
 import { PACKAGES, buildHintFor, reportDirFor } from './lib/packages.mjs';
 
@@ -103,7 +104,7 @@ function buildSubpathSrcIndex(packageRoot, packageName) {
   const headerRx = new RegExp(`\\*\\s+(${escapeRegex(packageName)}(?:\\/[\\w/-]+)?)`);
   walkTs(srcRoot, (filePath) => {
     const content = fs.readFileSync(filePath, 'utf8');
-    const block = /^\s*\/\*\*([\s\S]*?)\*\//.exec(content);
+    const block = matchHeadDocBlock(content);
     if (!block) return;
     if (!block[0].includes('@packageDocumentation')) return;
     const header = headerRx.exec(block[0]);
@@ -134,7 +135,7 @@ function walkTs(dir, fn) {
 function readEntryDocBlock(srcPath) {
   if (!srcPath || !fs.existsSync(srcPath)) return '';
   const content = fs.readFileSync(srcPath, 'utf8');
-  const m = /^\s*\/\*\*([\s\S]*?)\*\//.exec(content);
+  const m = matchHeadDocBlock(content);
   if (!m) return '';
   if (!m[0].includes('@packageDocumentation')) return '';
   return m[0];

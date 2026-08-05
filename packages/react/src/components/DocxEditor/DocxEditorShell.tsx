@@ -13,11 +13,9 @@ import {
 } from '../DocumentOutline';
 import { OutlineToggleButton } from './OutlineToggleButton';
 import { PageIndicator } from './PageIndicator';
-import { LocalizedAgentPanel } from './LocalizedAgentPanel';
 import { SIDEBAR_DOCUMENT_SHIFT } from '../sidebar/constants';
 import { Z_INDEX } from '../../styles/zIndex';
 import type { OutlineHeading } from '../DocumentOutline';
-import type { AgentPanelOptions } from './types';
 
 /** One tracked change as the engine reports it (`Editor.getTrackedChanges()`). */
 type TrackedChangeSummary = ReturnType<Editor['getTrackedChanges']>[number];
@@ -60,8 +58,8 @@ interface OutlineProps {
  * Outer chrome of the editor: i18n + error provider wrappers, the
  * scroll container with its background-click handler, horizontal and
  * vertical rulers, the floating page indicator, document outline panel
- * + toggle button, agent panel mount, plus slots for the toolbar,
- * paged-area body, overlays, dialogs, and hidden file inputs.
+ * + toggle button, plus slots for the toolbar, paged-area body,
+ * overlays, dialogs, and hidden file inputs.
  *
  * The expanded-sidebar-item highlight styles are computed here from
  * `expandedSidebarItem` + `trackedChanges` because they need to live
@@ -96,9 +94,6 @@ export function DocxEditorShell({
   outlineProps,
   onToggleOutline,
   scrollPageInfo,
-  agentPanel,
-  agentPanelOpen,
-  onAgentPanelClose,
   toolbar,
   pagedArea,
   overlays,
@@ -133,9 +128,6 @@ export function DocxEditorShell({
   outlineProps: OutlineProps;
   onToggleOutline: () => void;
   scrollPageInfo: ScrollPageInfo;
-  agentPanel: AgentPanelOptions | undefined;
-  agentPanelOpen: boolean;
-  onAgentPanelClose: () => void;
   toolbar: ReactNode;
   pagedArea: ReactNode;
   overlays: ReactNode;
@@ -283,17 +275,6 @@ export function DocxEditorShell({
                   />
                 )}
               </div>
-
-              {/* Agent panel (right-side dock) — always mounted when the prop
-                  is set so chat state survives close/reopen. `closed={!agentPanelOpen}`
-                  drives the slide / fade. */}
-              {agentPanel && (
-                <LocalizedAgentPanel
-                  agentPanel={agentPanel}
-                  closed={!agentPanelOpen}
-                  onClose={onAgentPanelClose}
-                />
-              )}
             </div>
 
             {overlays}

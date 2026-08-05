@@ -19,14 +19,14 @@ typechecked before an implementation exists. This package is that contract.
 
 ## Shape
 
-| Entry                            | For                      | Status                         |
-| -------------------------------- | ------------------------ | ------------------------------ |
-| `@docx-editor.dev/core`          | agents, headless, server | stable                         |
-| `@docx-editor.dev/core/editor`   | React / Vue adapters     | stable                         |
-| `@docx-editor.dev/core/geometry` | adapter internals        | `@experimental`, semver-exempt |
-| `@docx-editor.dev/core/plugin`   | extension authors        | stable                         |
-| `@docx-editor.dev/core/mcp`      | MCP hosts                | stable                         |
-| `@docx-editor.dev/core/types`    | everyone                 | type-only, zero runtime        |
+| Entry                            | For                          | Status                         |
+| -------------------------------- | ---------------------------- | ------------------------------ |
+| `@docx-editor.dev/core`          | editor-api, headless, server | stable                         |
+| `@docx-editor.dev/core/editor`   | React / Vue adapters         | stable                         |
+| `@docx-editor.dev/core/geometry` | adapter internals            | `@experimental`, semver-exempt |
+| `@docx-editor.dev/core/plugin`   | extension authors            | stable                         |
+| `@docx-editor.dev/core/mcp`      | MCP hosts                    | stable                         |
+| `@docx-editor.dev/core/types`    | everyone                     | type-only, zero runtime        |
 
 Entries are split by audience. A headless consumer wants a document and never a
 DOM type; an adapter wants an editor; an extension author wants neither, only a

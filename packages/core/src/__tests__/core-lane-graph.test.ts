@@ -225,9 +225,14 @@ describe('every lane has somewhere to be imported from (task 10.1)', () => {
   test('a moved lane keeps a compatibility alias, and an unmoved one has none', () => {
     // The alias is what task 10.5 permits while a lane is in flight; task 10.6 deletes it.
     // Asserting BOTH directions so the field cannot quietly become permanent decoration.
+    //
+    // A lane declared straight into `packages/core` is the third case: it reads as "moved"
+    // because it has no package of its own, but there is no importer to keep compatible
+    // with, so an alias would be decoration rather than a migration aid.
     for (const lane of laneNames) {
       const hasAlias = CORE_LANES[lane].alias !== undefined;
-      expect({ lane, hasAlias }).toEqual({ lane, hasAlias: laneHasMoved(lane) });
+      const wantsAlias = laneHasMoved(lane) && CORE_LANES[lane].nativeToCore !== true;
+      expect({ lane, hasAlias }).toEqual({ lane, hasAlias: wantsAlias });
     }
   });
 
@@ -249,7 +254,7 @@ describe('the per-lane environment boundary is structurally enforced (task 10.1)
   //
   // `contracts` is excluded on purpose: it is declaration-only and its public API names
   // HTMLElement for host-element accessors, which is a type reference, not a runtime need.
-  const NEUTRAL_WITH_PROJECT = ['store', 'layout'] as const;
+  const NEUTRAL_WITH_PROJECT = ['store', 'layout', 'automation'] as const;
 
   test('every runtime-neutral lane in core has its own DOM-free project', () => {
     for (const lane of NEUTRAL_WITH_PROJECT) {
@@ -286,5 +291,58 @@ describe('the per-lane environment boundary is structurally enforced (task 10.1)
     // A guard nothing runs is not a guard.
     const root = JSON.parse(readFileSync(join(PACKAGES, '..', 'package.json'), 'utf8'));
     expect(typeof root.scripts?.['check:lane-boundaries']).toBe('string');
+  });
+
+  test('every neutral lane with a project is compiled by the boundary script', () => {
+    // The tsconfig existing proves nothing on its own — the script has to name the lane, or
+    // the DOM-free `lib` is a file nobody compiles.
+    const script = readFileSync(
+      join(PACKAGES, '..', 'scripts', 'check-lane-boundaries.mjs'),
+      'utf8'
+    );
+    const declared = /NEUTRAL_LANES\s*=\s*\[([^\]]*)\]/.exec(script)?.[1] ?? '';
+    const named = [...declared.matchAll(/'([^']+)'/g)].map((match) => match[1]);
+    expect([...named].sort()).toEqual([...NEUTRAL_WITH_PROJECT].sort());
+  });
+});
+
+describe('the automation lane is a neutral host port (Office-compatible automation)', () => {
+  test('it is declared neutral, in its own directory, at its own subpath', () => {
+    const lane = CORE_LANES.automation;
+    expect({
+      directory: lane.directory,
+      environment: lane.environment,
+      subpath: lane.subpath,
+    }).toEqual({ directory: 'src/automation', environment: 'neutral', subpath: './automation' });
+  });
+
+  test('it may reach the store lane and nothing that assumes a browser', () => {
+    // The whole point of the lane: one document-operation implementation that a server can
+    // run. A dependency on binding, output or editor would put a DOM in the server host.
+    expect([...CORE_LANES.automation.mayImport].sort()).toEqual(['store']);
+    for (const forbidden of ['binding', 'output', 'editor'] as LaneName[]) {
+      expect(CORE_LANES.automation.mayImport).not.toContain(forbidden);
+    }
+  });
+
+  test('the browser editor lane is the one that reaches IN to it', () => {
+    // Direction matters. The browser host adapter is built on top of the neutral protocol,
+    // so the edge runs editor -> automation and never back.
+    expect(CORE_LANES.editor.mayImport).toContain('automation');
+    expect(reachableLanes('editor').has('automation')).toBe(true);
+    expect(BROWSER_REACHABLE).toContain('automation');
+  });
+
+  test('it was declared straight into core, so it carries no compatibility alias', () => {
+    expect(CORE_LANES.automation.package).toBeNull();
+    expect(CORE_LANES.automation.alias).toBeUndefined();
+    expect(CORE_LANES.automation.nativeToCore).toBe(true);
+  });
+
+  test('a consumer can import it, and it is not the store lane wearing a new name', () => {
+    const manifest = JSON.parse(readFileSync(join(PACKAGES, 'core', 'package.json'), 'utf8'));
+    const entry = manifest.exports?.['./automation'];
+    expect(entry?.types).toBe('./src/automation/index.ts');
+    expect(entry?.import).toBe('./src/automation/index.ts');
   });
 });

@@ -1,0 +1,445 @@
+{
+  "schemaVersion": 1,
+  "$comment": "Allowlisted subset of the Microsoft Word JavaScript API (Word.* namespace) that DocxEditor's public surface is measured against for source/shape compatibility. This file selects the upstream UIDs used as *reference-only conformance input*; it is not a dependency declaration and DocxEditor does not vendor, copy, or generate its own declarations from Microsoft's. See README.md in this directory for the full policy.",
+  "categories": {
+    "core": ["RequestContext", "ClientObject", "Document", "Body", "Range", "Paragraph"],
+    "collectionsAndSearch": ["ParagraphCollection", "RangeCollection", "SearchOptions"],
+    "fontAndParagraphFormatting": ["Font"],
+    "contentControls": ["ContentControl", "ContentControlCollection"],
+    "listsAndNumbering": ["List", "ListCollection", "ListItem"],
+    "bookmarks": ["Bookmark", "BookmarkCollection"],
+    "sectionsAndStories": [
+      "Section",
+      "SectionCollection",
+      "PageSetup",
+      "NoteItem",
+      "NoteItemCollection"
+    ],
+    "commentsAndRevisions": [
+      "Comment",
+      "CommentCollection",
+      "CommentReply",
+      "CommentReplyCollection",
+      "Revision",
+      "RevisionCollection"
+    ]
+  },
+  "symbols": {
+    "run": {
+      "isFunction": true,
+      "members": []
+    },
+    "RequestContext": {
+      "members": ["document"]
+    },
+    "ClientObject": {
+      "namespace": "OfficeExtension",
+      "members": ["context", "isNullObject"]
+    },
+    "Document": {
+      "members": ["body", "comments", "contentControls", "paragraphs", "sections", "revisions"]
+    },
+    "Body": {
+      "members": [
+        "paragraphs",
+        "contentControls",
+        "font",
+        "lists",
+        "style",
+        "text",
+        "clear",
+        "getComments",
+        "insertParagraph",
+        "insertText",
+        "search"
+      ]
+    },
+    "Range": {
+      "members": [
+        "text",
+        "font",
+        "paragraphs",
+        "contentControls",
+        "bookmarks",
+        "hyperlink",
+        "style",
+        "insertText",
+        "insertParagraph",
+        "search",
+        "select"
+      ]
+    },
+    "Paragraph": {
+      "members": [
+        "font",
+        "contentControls",
+        "alignment",
+        "firstLineIndent",
+        "leftIndent",
+        "rightIndent",
+        "lineSpacing",
+        "spaceBefore",
+        "spaceAfter",
+        "list",
+        "listItem",
+        "style",
+        "text",
+        "clear",
+        "delete",
+        "insertParagraph",
+        "insertText",
+        "split"
+      ]
+    },
+    "ParagraphCollection": {
+      "members": ["items", "getFirst", "getLast"]
+    },
+    "RangeCollection": {
+      "members": ["items", "getFirst"]
+    },
+    "SearchOptions": {
+      "members": ["ignorePunct", "ignoreSpace", "matchCase", "matchWholeWord", "matchWildcards"]
+    },
+    "Font": {
+      "members": ["bold", "italic", "color", "name", "size"]
+    },
+    "ContentControl": {
+      "members": [
+        "tag",
+        "title",
+        "cannotEdit",
+        "cannotDelete",
+        "text",
+        "paragraphs",
+        "contentControls",
+        "delete",
+        "getRange",
+        "insertText"
+      ]
+    },
+    "ContentControlCollection": {
+      "members": ["items", "getById"]
+    },
+    "List": {
+      "members": ["id", "paragraphs", "getLevelParagraphs", "insertParagraph"]
+    },
+    "ListCollection": {
+      "members": ["items", "getById", "getFirst"]
+    },
+    "ListItem": {
+      "members": ["level"]
+    },
+    "Bookmark": {
+      "members": ["name", "range", "select"]
+    },
+    "BookmarkCollection": {
+      "members": ["items"]
+    },
+    "Section": {
+      "members": ["body", "pageSetup", "getHeader", "getFooter", "getNext"]
+    },
+    "SectionCollection": {
+      "members": ["items", "getFirst"]
+    },
+    "PageSetup": {
+      "members": [
+        "pageWidth",
+        "pageHeight",
+        "orientation",
+        "topMargin",
+        "bottomMargin",
+        "leftMargin",
+        "rightMargin"
+      ]
+    },
+    "NoteItem": {
+      "members": ["body", "type", "delete", "getNext"]
+    },
+    "Comment": {
+      "members": ["authorName", "creationDate", "id", "replies", "resolved", "getRange", "reply"]
+    },
+    "CommentCollection": {
+      "members": ["items", "getFirst"]
+    },
+    "CommentReply": {
+      "members": ["authorName", "creationDate", "id"]
+    },
+    "CommentReplyCollection": {
+      "members": ["items", "getFirst"]
+    },
+    "Revision": {
+      "members": ["author", "date", "range", "type", "accept", "reject"]
+    },
+    "RevisionCollection": {
+      "members": ["items", "acceptAll", "rejectAll"]
+    },
+    "NoteItemCollection": {
+      "members": ["items", "getFirst"]
+    }
+  },
+  "omissions": [
+    {
+      "uid": "Word.ContentControl#id",
+      "reason": "The control's file id IS implemented and readable, as a string. Not selected because it cannot match upstream's `number`: `w:id` is optional and the schema lets a document repeat it, so a number has no value for \"the file wrote none\" and would invite a caller to key a map on something ambiguous. The control's identity is its handle; the file id is metadata beside it."
+    },
+    {
+      "uid": "Word.ContentControl#subtype",
+      "reason": "The control's type IS implemented and readable, in the schema's own vocabulary (`plainText`, `dropDownList`, `checkbox`, `date`, ...). Not selected because upstream's enum is Word's UI wording and mixes in the two control kinds this lane defers (`Picture`, `RepeatingSection`), so answering it would mean naming types no read can produce."
+    },
+    {
+      "uid": "Word.ContentControl#appearance",
+      "reason": "A `w15` extension property describing how Word DRAWS the control's boundary. The engine paints its own furniture from the control's properties, so there is no stored chrome value to answer and nothing would consume one."
+    },
+    {
+      "uid": "Word.ContentControl#color",
+      "reason": "A `w15` extension property, omitted with `appearance` for the same reason."
+    },
+    {
+      "uid": "Word.ContentControl#placeholderText",
+      "reason": "Upstream answers the glossary entry's text. Placeholder STATE is implemented (the prompt is replaced on the first write and restored when the value is cleared) but the glossary part is preserved rather than read, and a zero-click load of a document part to answer a property is exactly what the file-safety rules forbid."
+    },
+    {
+      "uid": "Word.Table",
+      "reason": "Tables are omitted from the published subset until the table engine lane lands. Not represented as a working stub anywhere in DocxEditor's declarations."
+    },
+    {
+      "uid": "Word.TableCollection",
+      "reason": "Depends on Word.Table; omitted for the same reason."
+    },
+    {
+      "uid": "Word.TableCell",
+      "reason": "Depends on Word.Table; omitted for the same reason."
+    },
+    {
+      "uid": "Word.InlinePicture",
+      "reason": "Images are omitted from the published subset until the image engine lane lands. Not represented as a working stub anywhere in DocxEditor's declarations."
+    },
+    {
+      "uid": "Word.InlinePictureCollection",
+      "reason": "Depends on Word.InlinePicture; omitted for the same reason."
+    },
+    {
+      "uid": "Word.Shape",
+      "reason": "Floating shapes/canvases are out of scope for the published subset; no engine lane targets them yet."
+    },
+    {
+      "uid": "Word.Body#getHtml",
+      "reason": "Returns OfficeExtension.ClientResult<string>. The ClientResult/RequestContext queuing wrapper is proxy-runtime plumbing (Task 3), not part of this contract-freeze task."
+    },
+    {
+      "uid": "Word.Body#getOoxml",
+      "reason": "Returns OfficeExtension.ClientResult<string>; see Word.Body#getHtml."
+    },
+    {
+      "uid": "Word.Paragraph#getText",
+      "reason": "Returns OfficeExtension.ClientResult<string>; see Word.Body#getHtml. Word.Paragraph#text is selected instead for the already-loaded case."
+    },
+    {
+      "uid": "Word.BookmarkCollection#exists",
+      "reason": "Returns OfficeExtension.ClientResult<boolean>; see Word.Body#getHtml."
+    },
+    {
+      "uid": "Word.List#getLevelPicture",
+      "reason": "Returns OfficeExtension.ClientResult<string> and is picture-related; omitted per both the ClientResult and image-omission reasons."
+    },
+    {
+      "uid": "Word.List#getLevelString",
+      "reason": "Returns OfficeExtension.ClientResult<string>; see Word.Body#getHtml."
+    },
+    {
+      "uid": "Word.Hyperlink",
+      "reason": "The standalone Hyperlink/HyperlinkCollection object model (WordApiDesktop 1.3) is deferred; Word.Range#hyperlink (get/set of the range's primary hyperlink, WordApi 1.3) covers this slice's hyperlink read/write needs."
+    },
+    {
+      "uid": "Word.HyperlinkCollection",
+      "reason": "Depends on Word.Hyperlink; omitted for the same reason."
+    },
+    {
+      "uid": "Word.Font#underline",
+      "reason": "Upstream type is Word.UnderlineType | <21 string literals>. Deferred pending a deliberate decision on modeling the full UnderlineType union; bold/italic/color/highlightColor/name/size cover this slice's font-formatting needs."
+    },
+    {
+      "uid": "Word.Style",
+      "reason": "The named-style object model (Word.Style, Word.StyleCollection) is deferred. Word.Body/Range/Paragraph/ContentControl#style (apply a style by name, WordApi 1.1) and Word.ParagraphFormat (formatting values themselves) cover this slice's styling needs without it."
+    },
+    {
+      "uid": "Word.ContentControl#checkboxContentControl",
+      "reason": "Typed content-control subtypes (checkbox/dropdown/combo-box/date/picture/repeating-section/group/building-block-gallery) are explicitly out of scope for this task; see typed-content-controls OpenSpec change. Common ContentControl members only."
+    },
+    {
+      "uid": "Word.ContentControl#comboBoxContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl."
+    },
+    {
+      "uid": "Word.ContentControl#datePickerContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl."
+    },
+    {
+      "uid": "Word.ContentControl#dropDownListContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl."
+    },
+    {
+      "uid": "Word.ContentControl#pictureContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl; also image-omission applies."
+    },
+    {
+      "uid": "Word.ContentControl#repeatingSectionContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl."
+    },
+    {
+      "uid": "Word.ContentControl#groupContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl."
+    },
+    {
+      "uid": "Word.ContentControl#buildingBlockGalleryContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl."
+    },
+    {
+      "uid": "Word.ContentControl#xmlMapping",
+      "reason": "Custom-XML-bound content control writes are refused until XML mapping is a separate supported lane (per the redesign plan); the mapping object itself is out of scope here."
+    },
+    {
+      "uid": "Word.Range#start",
+      "reason": "De-selected deliberately, and not implementable in DocxEditor's addressing model: upstream's start/end are DOCUMENT-WIDE character offsets, a coordinate space no part of this engine maintains. DocxEditor addresses every position as a stable paragraph identity plus a UTF-16 offset in that paragraph \u2014 the vocabulary the tree ops validate against, the selection uses and the layout reports \u2014 so an offset a caller reads is an offset it can write at. A document-wide counter would change under every edit above it and would have to be recomputed by walking the whole story per access; publishing one anyway would mean handing back numbers that go stale silently. A range's endpoints are reachable through range.paragraphs and the paragraph's own text instead."
+    },
+    {
+      "uid": "Word.Range#end",
+      "reason": "See Word.Range#start: the same document-wide character coordinate space, de-selected for the same reason."
+    },
+    {
+      "uid": "Word.RangeCollection#getLast",
+      "reason": "Implemented by DocxEditor's object model as an extension, not a conformance claim: the pieces a Paragraph#split answers are a range collection whose LAST member is the one a caller most often wants (\"what did this paragraph end up as\"), and finding it by counting items means loading them all. The pinned reference fixture is pruned to the selected subset, so it cannot say offline whether upstream declares this member; it is therefore recorded here as DocxEditor's own rather than measured, and the authored declarations do not declare it."
+    },
+    {
+      "uid": "Word.Paragraph#uniqueLocalId",
+      "reason": "Implemented by DocxEditor's object model (a paragraph's identity, from w14:paraId where the file wrote one) but deliberately NOT selected for exact conformance against the reference: the identity a DocxEditor session hands back is the canonical tree's, and pinning its shape to upstream's session-scoped string would freeze an engine detail into the compatibility contract. Recorded here so the divergence is a decision rather than an accident."
+    },
+    {
+      "uid": "Word.ParagraphCollection#getFirstOrNullObject",
+      "reason": "Implemented by DocxEditor's object model \u2014 the null-object half of the proxy lifecycle needs one, and code that expects an empty document wants it \u2014 but not selected for exact conformance: the collection accessors selected for this subset are items/getFirst/getLast, and adding a member to the manifest requires re-extracting the reference fixture, which is the one network step CI never takes. The authored declarations therefore do not declare it, and the conformance assertions do not measure it."
+    },
+    {
+      "uid": "Word.ParagraphCollection#getLastOrNullObject",
+      "reason": "See Word.ParagraphCollection#getFirstOrNullObject."
+    },
+    {
+      "uid": "Word.RangeCollection#getFirstOrNullObject",
+      "reason": "See Word.ParagraphCollection#getFirstOrNullObject."
+    },
+    {
+      "uid": "OfficeExtension.ClientRequestContext#sync",
+      "reason": "The batched request-context sync/flush call's real proxying/queuing behavior is the proxy runtime's own mechanism (Task 3), not part of this contract-freeze task. Word.RequestContext inherits the member from OfficeExtension.ClientRequestContext rather than redeclaring it, so it never appears as a Word.RequestContext member in this manifest. Upstream's actual signature is generic and pass-through (`sync<T>(passThroughValue?: T): Promise<T>`); rather than selecting and exactly matching that shape here, DocxEditor.ClientRequestContext independently authors a deliberately simplified, declaration-only `sync(): Promise<void>` \u2014 the zero-argument call shape every real Office.js sample actually uses \u2014 purely so representative source-compat fixtures in compat/fixtures/ can end a batch with `await context.sync()`, same as real Office.js samples do. This declaration has no runtime behavior and is not asserted against the upstream reference for exact conformance."
+    },
+    {
+      "uid": "Word.ParagraphFormat",
+      "reason": "The formatting VALUES are implemented; the wrapper object around them is not, because in the selected subset nothing owns one. Upstream reaches a ParagraphFormat through Table/TableRow/TableCell/ContentControl#paragraphFormat, and tables are omitted here, while Paragraph declares the same eight values as its own members \u2014 which is the form this implementation backs (Paragraph#alignment, the indents, lineSpacing, spaceBefore/spaceAfter, and style). A selected class no object model member returns would be reachable only by a caller writing the type name, so it is de-selected rather than declared and left unreachable. `widowControl` leaves the subset with it: it is the one value Paragraph does not also declare."
+    },
+    {
+      "uid": "Word.Font#highlightColor",
+      "reason": "De-selected because it cannot be answered honestly at this engine's property boundary. Upstream's type is a `#RRGGBB` string, and Word writes an arbitrary highlight as run shading (`w:shd`); the property this engine authors is `w:highlight`, whose value is one of a fixed set of NAMES (`yellow`, `cyan`, ...). So a selected `highlightColor` would either accept a hex value and drop it, or answer a name where a caller's own code expects a hex string. The other five Font members are implemented."
+    },
+    {
+      "uid": "Word.ListItem#listString",
+      "reason": "The marker a reader SEES ('1.', 'a)', a bullet glyph) rather than anything the file states: the layout engine computes it while painting, from numbering.xml's abstract-numbering indirection and a running counter per level. Answering it from the automation lane would mean a second implementation of that counter, free to disagree with the one on the page \u2014 and a list marker that disagrees with the page is worse than no list marker. Word.List#getLevelString is omitted for the same reason (and for its ClientResult return)."
+    },
+    {
+      "uid": "Word.ListItem#siblingIndex",
+      "reason": "A position within a numbering sequence, which is the same counter as listString and is de-selected for the same reason. A caller who needs the position of a paragraph among a list's items can index Word.List#getLevelParagraphs, which is a question about the file rather than about the paint."
+    },
+    {
+      "uid": "Word.Bookmark#start",
+      "reason": "A document-wide character offset \u2014 the coordinate space already de-selected on Word.Range#start for the same reason: DocxEditor addresses every position as a paragraph identity plus a UTF-16 offset in that paragraph, and maintains no document-wide counter. Word.Bookmark#range answers the same question in the vocabulary this engine validates."
+    },
+    {
+      "uid": "Word.Bookmark#end",
+      "reason": "See Word.Bookmark#start."
+    },
+    {
+      "uid": "Word.Bookmark#delete",
+      "reason": "Removing a bookmark means deleting its marker PAIR (w:bookmarkStart plus the w:bookmarkEnd carrying the same w:id) as one transaction, and the canonical op vocabulary has no operation that removes a bookmark marker. Authoring one is store-lane work; a delete() that removed one half would leave the document with an unclosed bookmark, which Word treats as running to the end of the story."
+    },
+    {
+      "uid": "Word.Comment#authorEmail",
+      "reason": "An address is not in comments.xml \u2014 Word keeps it in word/people.xml, keyed by author name, and this subset does not read that part. The canonical comment record therefore has no email to answer, and a name-derived guess would be a fabricated identity attached to a real person's comment."
+    },
+    {
+      "uid": "Word.Comment#content",
+      "reason": "Assignable upstream: writing it REPLACES a comment's body. A comment's body is a story of its own in comments.xml, and this subset transacts one story per batch \u2014 the story the comment is anchored in \u2014 so replacing the body is a write the canonical path does not yet express. Reading a body stays available as DocxEditor's own read-only Comment#text (recorded below), so a script that reports on comments is unaffected; only rewriting somebody else's comment is."
+    },
+    {
+      "uid": "Word.Comment#delete",
+      "reason": "Deleting a comment means removing its entry from comments.xml, its w15:commentEx entry, and the w:commentRangeStart/End plus w:commentReference in the story \u2014 as one transaction. `addComment` exists in the store lane and its inverse does not, so this would be a partial delete or a second write path. Resolving a thread (Word.Comment#resolved, implemented) is the operation that hides it from a reviewer without losing what was said."
+    },
+    {
+      "uid": "Word.CommentReply#content",
+      "reason": "See Word.Comment#content."
+    },
+    {
+      "uid": "Word.CommentReply#delete",
+      "reason": "See Word.Comment#delete."
+    },
+    {
+      "uid": "Word.CommentReply#authorEmail",
+      "reason": "See Word.Comment#authorEmail."
+    },
+    {
+      "uid": "Word.Comment#text",
+      "reason": "Implemented by DocxEditor's object model as a read-only way to reach a comment's body \u2014 the half of Word.Comment#content that IS backed \u2014 but not selected for exact conformance, because upstream has no such member and adding one to the reference is impossible. Recorded so the extra member is a decision rather than drift."
+    },
+    {
+      "uid": "Word.CommentReply#text",
+      "reason": "See Word.Comment#text."
+    },
+    {
+      "uid": "Word.Body#revisions",
+      "reason": "See Word.Document#revisions."
+    },
+    {
+      "uid": "Word.Body#footnotes",
+      "reason": "Upstream hangs a story's notes off the story. A footnote is not IN a story \u2014 it is a part of the package (word/footnotes.xml) that a story REFERENCES, and only the main story may reference one (Word refuses a note in a header, a footer or another note). So this subset answers the notes on the document, where the statement is true, as DocxEditor's own Document#footnotes/#endnotes; the NoteItem and NoteItemCollection they answer are both selected and measured. Selecting Body#footnotes would mean answering the document's notes for a header body, which is a false answer to a question a caller is entitled to ask."
+    },
+    {
+      "uid": "Word.Body#endnotes",
+      "reason": "See Word.Body#footnotes."
+    },
+    {
+      "uid": "Word.Document#footnotes",
+      "reason": "Implemented by DocxEditor's object model as the reachable accessor for the selected NoteItem/NoteItemCollection (see Word.Body#footnotes for why it is on the document), but not itself selected for exact conformance: upstream declares the member on Body, not on Document, so there is no reference shape to measure this one against. Recorded so the extra member is a decision rather than drift."
+    },
+    {
+      "uid": "Word.Document#endnotes",
+      "reason": "See Word.Document#footnotes."
+    },
+    {
+      "uid": "Word.Body#revisions",
+      "reason": "Implemented by DocxEditor's object model \u2014 a header or a footnote can carry tracked changes of its own, and a review pass over one story is the natural way to reach them \u2014 but not selected for exact conformance: upstream declares revisions on Document (selected here), not on Body, so there is no reference shape for the story-scoped accessor. Recorded so the extra member is a decision rather than drift."
+    }
+  ],
+  "divergences": [
+    {
+      "uid": "Word.Revision#type",
+      "note": "The type union is declared in full and seven of its members occur: Insert, Delete, Replace, Property, ParagraphProperty, MovedFrom and MovedTo. A change to a table row, a cell, the grid or a section's properties is STRUCTURAL, and the canonical accept/reject ops refuse it \u2014 so reporting it would list a change with an accept() and a reject() that both fail. Such revisions are therefore not reported at all rather than reported and un-actionable; the document's own markup is untouched either way, and a save round-trips it."
+    },
+    {
+      "uid": "Word.List#insertParagraph",
+      "note": "All four locations are accepted, and Before/After land INSIDE the list at its first and last position \u2014 the same places Start and End name. A list is a set of paragraphs sharing a w:numId rather than a contiguous region of the story, so 'before the list' is a position in the story, not in the list, and Word.Paragraph#insertParagraph is the member that addresses it. A refusal on two of the four locations would fail scripts written against the shape; a silent unnumbered insert outside the list would answer a paragraph the list does not contain."
+    },
+    {
+      "uid": "Word.ContentControl#getRange",
+      "note": "All six locations are accepted. Whole and Content answer the same stretch, and Before/After answer the content's own edges, because a control's boundary marks occupy no offset in the text this API addresses \u2014 there is no position between a mark and the first character for a range to start at. Refusing four of the six would fail scripts written against the shape; answering an invented offset would be worse."
+    },
+    {
+      "uid": "Word.ContentControl#insertText",
+      "note": "All three locations are accepted and the answer is the range of the text that was written. Replace goes through the control's own value path, so the prompt a control was showing is replaced whole and a w:temporary wrapper is removed \u2014 upstream's own behaviour, reached through the one write path the keyboard also takes, which is why a locked or custom-XML-bound control refuses this call with the same named reason a keystroke gets."
+    },
+    {
+      "uid": "Word.ContentControlCollection",
+      "note": "getByTag, getByTitle, getFirst, getFirstOrNullObject and ContentControl#setValue are implemented and are NOT in this list's frozen reference fixture, so they are published as DocxEditor's own additions rather than as conformance-checked members. setValue exists because a control's value is not its characters: a dropdown takes a declared item, a date an ISO instant, a checkbox a state, and upstream spreads those over five sibling objects this subset does not ship."
+    },
+    {
+      "uid": "Word.Section#getHeader / #getFooter",
+      "note": "A section that declares no header of its own INHERITS the previous section's, which is what Word paints, and this is what these members answer. Upstream's own behaviour additionally MINTS an empty header part when none exists anywhere; this subset refuses instead (ItemNotFound), because a read that adds a part to the package is a write, and a getter that writes cannot be batched with reads under one transaction. Shape conformance is unaffected; the divergence is behavioural and recorded here."
+    }
+  ],
+  "$divergencesComment": "Members that ARE selected and DO conform in shape, but whose behaviour differs from upstream in a way a caller can observe. Kept apart from \"omissions\" on purpose: an omission is a member this subset does not publish, and one of these is a member it publishes and answers differently. Nothing in the tooling reads this list; it is the record that each difference was decided."
+}

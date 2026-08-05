@@ -4,7 +4,7 @@ import vueParser from 'vue-eslint-parser';
 import reactPlugin from 'eslint-plugin-react';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
 
-// Framework-isolation: keep core/react/vue/agents packages from cross-importing
+// Framework-isolation: keep core/react/vue/editor-api packages from cross-importing
 // each other's UI framework. Spec:
 //   openspec/changes/vue-editor-robust-implementation/specs/framework-isolation-lint/spec.md
 
@@ -96,7 +96,13 @@ const commonRules = {
 
 export default [
   {
-    ignores: ['dist/**', 'node_modules/**', '*.config.js', '*.config.ts'],
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      '*.config.js',
+      '*.config.ts',
+      'packages/editor-api/compat/generated/**',
+    ],
   },
 
   // Vue SFC files: parse with vue-eslint-parser, delegate <script lang="ts"> to tsparser.
@@ -156,30 +162,6 @@ export default [
   },
   // React adapter: no Vue imports.
   { files: ['packages/react/src/**/*.{ts,tsx}'], rules: restrictVue },
-
-  // Agent-use UI subpaths mirror the editor adapters.
-  { files: ['packages/agents/src/vue/**/*.{ts,tsx,vue}'], rules: restrictReact },
-  { files: ['packages/agents/src/react/**/*.{ts,tsx}'], rules: restrictVue },
-
-  // Top-level adapter entries: vue.ts can import Vue but not React; symmetric
-  // for react.ts. Mirrors how packages/{vue,react}/src/index.ts work.
-  // The two top-level React hooks (useAgentChat, useDocxAgentTools) are
-  // React-only — they import React legitimately, and `restrictVue` bans
-  // them from also importing Vue. Without this rule a future Vue
-  // import in either file would lint clean (gap caught by §10.3 audit).
-  {
-    files: ['packages/agents/src/vue.ts', 'packages/agents/src/ai-sdk/vue.ts'],
-    rules: restrictReact,
-  },
-  {
-    files: [
-      'packages/agents/src/react.ts',
-      'packages/agents/src/ai-sdk/react.ts',
-      'packages/agents/src/useAgentChat.ts',
-      'packages/agents/src/useDocxAgentTools.ts',
-    ],
-    rules: restrictVue,
-  },
 
   // The DocxEditor entry components (React and Vue twins) have a relaxed
   // 2000-line cap while the extraction effort (tracked in MEMORY.md)
@@ -274,23 +256,11 @@ export default [
     },
   },
 
-  // Agent-use framework-agnostic surface — top-level utilities + tools/,
-  // ai-sdk/ (excluding the per-framework entry files), i18n/, __tests__/.
-  // TODO: drop the `ignores` list once task §9 migrates the React hooks
-  // into src/react/.
+  // The document automation package is framework-neutral end to end. There is no per-framework
+  // entry to carve out any more: the two published entries differ by whether they reach a live
+  // editor, not by which UI library the host chose.
   {
-    files: [
-      'packages/agents/src/*.{ts,tsx}',
-      'packages/agents/src/{tools,ai-sdk,i18n,__tests__}/**/*.{ts,tsx}',
-    ],
-    ignores: [
-      'packages/agents/src/react.ts',
-      'packages/agents/src/vue.ts',
-      'packages/agents/src/useAgentChat.ts',
-      'packages/agents/src/useDocxAgentTools.ts',
-      'packages/agents/src/ai-sdk/react.ts',
-      'packages/agents/src/ai-sdk/vue.ts',
-    ],
+    files: ['packages/editor-api/src/**/*.ts'],
     rules: restrictBoth,
   },
 ];

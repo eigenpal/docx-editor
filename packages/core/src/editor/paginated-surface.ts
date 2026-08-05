@@ -17,6 +17,7 @@ import {
   type DetectedToc,
   type OoxmlElement,
   type OoxmlNode,
+  type StoryScope,
   type TreeDocOp,
 } from '@docx-editor.dev/core-contract/store';
 import {
@@ -645,6 +646,10 @@ export function mountPaginatedSurface(
   });
   const hyperlinks = createHyperlinkOps({
     session: gatedSession,
+    // Asked BEFORE the relationship is minted. The gated session refuses the ops in viewing mode
+    // either way, but the mint is a package write that the refusal does not roll back — Ctrl+K in a
+    // document open for reading left its target declared in `.rels`.
+    refusesWrite: () => writeRefusal(true) !== null,
     storyScope,
     selection: () => selection,
     orderedRange: () => orderedRange(),
@@ -1677,6 +1682,10 @@ export function mountPaginatedSurface(
   let materializedSet: ReadonlySet<number> | undefined;
   /** Sizing the last paint used, so scroll can re-centre when the visible width band moves. */
   let materializedExtent: SurfaceExtent | undefined;
+  /** Last body page occupied by the focused collapsed caret. */
+  let lastCaretPageIndex: number | null = null;
+  /** An edit may move the caret within the same page without going through `setSelection`. */
+  let caretFollowPending = false;
   /**
    * The scroller whose SIZE is being watched, and the observer watching it.
    *
@@ -1757,6 +1766,8 @@ export function mountPaginatedSurface(
     // re-resolves its target here rather than trusting what existed at mount.
     watchScrollerSize();
     selectionSync.mirrorToDom();
+    followCaretIntoView(caretFollowPending);
+    caretFollowPending = false;
     // A scroll reports nothing — nothing about the document or the selection moved. Taking up
     // a pending gesture DID move the selection, so that pass has to report after all.
     if (notifyChange || adopted) options.onChange?.(currentState());
@@ -1783,7 +1794,63 @@ export function mountPaginatedSurface(
     render(false);
   }
 
+  /**
+   * Keep the focused body caret inside the viewport without snapping an already-visible line.
+   *
+   * Geometry comes from layout because the destination page may still be virtualized. A
+   * plain scroll repaint must not pull the reader back to an unchanged caret, so an ordinary
+   * render follows only when layout moved the caret to another page; selection/edit paths can
+   * force the same nearest-edge check for movement within one page.
+   */
+  function followCaretIntoView(force = false): void {
+    if (hfScope?.getActive() || noteOps?.activeNoteScope()) return;
+    if (
+      selection.anchor.paragraphId !== selection.head.paragraphId ||
+      selection.anchor.offset !== selection.head.offset
+    ) {
+      return;
+    }
+    const active = document.activeElement;
+    if (active !== pagesLayer && (!active || !pagesLayer.contains(active))) return;
+
+    const geometry = caretAt(currentLayout, selection.head, { measurer });
+    if (!geometry) return;
+    const changedPage = lastCaretPageIndex !== null && lastCaretPageIndex !== geometry.pageIndex;
+    lastCaretPageIndex = geometry.pageIndex;
+    if (!force && !changedPage) return;
+
+    const page = currentLayout.pages[geometry.pageIndex];
+    const scroller = surfaceScroller(container);
+    if (!page || !scroller || scroller.clientHeight <= 0) return;
+
+    const padding = 24;
+    const contentTop = page.contentBox.y - page.box.y;
+    const top = (page.box.y + contentTop + geometry.y) * scale + container.offsetTop;
+    const bottom = top + geometry.height * scale;
+    const viewportTop = scroller.scrollTop;
+    const viewportBottom = viewportTop + scroller.clientHeight;
+    let target = viewportTop;
+    if (top < viewportTop + padding) {
+      target = top - padding;
+    } else if (bottom > viewportBottom - padding) {
+      target = bottom + padding - scroller.clientHeight;
+    } else {
+      return;
+    }
+
+    const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    const next = Math.max(0, Math.min(target, maxScroll));
+    if (Math.abs(next - scroller.scrollTop) < 0.5) return;
+    scroller.scrollTop = next;
+    // The destination may have been only a shell. Build it in the next frame rather than
+    // recursively repainting from inside the paint that detected the movement.
+    scheduleRematerialize();
+  }
+
   let editingMode: SurfaceEditingMode = options.editingMode ?? 'edit';
+
+  /** The main story. Named once so the automation entry cannot drift from the session default. */
+  const BODY_STORY: StoryScope = Object.freeze({ kind: 'body' as const });
 
   /**
    * Commit ops, attributing them when the surface is suggesting.
@@ -1796,26 +1863,48 @@ export function mountPaginatedSurface(
   function applyOps(
     ops: readonly TreeDocOp[],
     selectionBefore?: Parameters<TreeDocxSession['applyTreeOps']>[1],
-    selectionAfter?: Parameters<TreeDocxSession['applyTreeOps']>[2]
+    selectionAfter?: Parameters<TreeDocxSession['applyTreeOps']>[2],
+    // Defaulted, and therefore evaluated per call: every input path wants the story the
+    // reader is in. Only a caller that ALREADY knows which story its ops address — an
+    // automation handle names one — passes this, and then the reader's position is irrelevant.
+    scope: StoryScope = storyScope(),
+    checkSelection = true
   ): ReturnType<TreeDocxSession['applyTreeOps']> {
+    const refusal = writeRefusal(ops.some(isDocumentEdit), ops, checkSelection);
+    if (refusal !== null) return { committed: false, rejected: true, opCount: 0, reason: refusal };
+
+    // The scope resolves to `storyScope()` unless the caller named one, so an edit inside a
+    // header, a footer or a note is applied to that story rather than to the body.
+    const attributed = trackedOps(ops);
+    const result = session.applyTreeOps(attributed, selectionBefore, selectionAfter, scope);
+    if (result.committed && editingMode === 'suggest' && attributed.some(isTrackedEdit)) {
+      runtimeOptions.onTrackedChange?.();
+    }
+    return result;
+  }
+
+  /**
+   * Why a write would be refused right now, or null when it would be allowed.
+   *
+   * ONE statement of the mode rules, asked by `applyOps` for every lane and asked once more by the
+   * automation path — which has to know the answer BEFORE it builds its ops, because building them
+   * can mint a hyperlink relationship, and a relationship survives a refusal. `edits` says whether
+   * the write changes the document, which is the only thing the second rule needs from the ops.
+   */
+  function writeRefusal(
+    edits: boolean,
+    ops: readonly TreeDocOp[] = [],
+    checkSelection = true
+  ): string | null {
     // VIEWING refuses every write here rather than only at the facade. The keymap and
     // `beforeinput` are wired to this surface, not to `Editor.exec`, so a facade-only gate
     // left the document fully typeable while the toolbar reported it read-only.
-    if (editingMode === 'view') {
-      return {
-        committed: false,
-        rejected: true,
-        opCount: 0,
-        reason: 'the document is open for viewing',
-      };
-    }
-    if (ops.some(isDocumentEdit) && (selectionTouchesToc() || ops.some((op) => opTouchesToc(op)))) {
-      return {
-        committed: false,
-        rejected: true,
-        opCount: 0,
-        reason: TOC_READ_ONLY_REFUSAL,
-      };
+    if (editingMode === 'view') return VIEWING_REFUSAL;
+    if (
+      edits &&
+      ((checkSelection && selectionTouchesToc()) || ops.some((op) => opTouchesToc(op)))
+    ) {
+      return TOC_READ_ONLY_REFUSAL;
     }
     // SUGGESTING with no author cannot write `CT_TrackChange`, and the fallback of writing
     // an untracked edit is only tolerable when nothing is destroyed. A deletion in that
@@ -1823,23 +1912,10 @@ export function mountPaginatedSurface(
     // EVERY edit, not just the destructive ones. Letting insertions through wrote permanent
     // changes to someone else's document while the pill said Suggesting and the review pane
     // stayed empty — half the keyboard proposing and half editing outright.
-    if (editingMode === 'suggest' && !options.author?.trim() && ops.some(isDocumentEdit)) {
-      return {
-        committed: false,
-        rejected: true,
-        opCount: 0,
-        reason: 'suggesting needs an author before it can propose a change',
-      };
+    if (editingMode === 'suggest' && !options.author?.trim() && edits) {
+      return 'suggesting needs an author before it can propose a change';
     }
-
-    // `storyScope()` so an edit inside a header, a footer or a note is applied to that story
-    // rather than to the body.
-    const attributed = trackedOps(ops);
-    const result = session.applyTreeOps(attributed, selectionBefore, selectionAfter, storyScope());
-    if (result.committed && editingMode === 'suggest' && attributed.some(isTrackedEdit)) {
-      runtimeOptions.onTrackedChange?.();
-    }
-    return result;
+    return null;
   }
 
   /** Ops that change the DOCUMENT, as opposed to reading or resolving it. */
@@ -1964,6 +2040,7 @@ export function mountPaginatedSurface(
       if (next) {
         selection = next;
         desiredX = null;
+        caretFollowPending = true;
       }
       // Re-anchor AFTER the post-edit caret is installed, so the armed format follows the
       // edit (Backspace moves it one left, Enter moves it into the new paragraph). Only a
@@ -2037,6 +2114,7 @@ export function mountPaginatedSurface(
     // `undo` on an empty history left it up and disarmed the NEXT repaint, whenever it came.
     selectionSync.noteSelectionSettled();
     selectionSync.mirrorToDom();
+    followCaretIntoView(true);
     renderOverlay();
     // A dismissal is dismissed for where the caret WAS; any move re-asks the question, which
     // is how the reader reopens an item — by clicking back into its text.
@@ -2075,6 +2153,7 @@ export function mountPaginatedSurface(
       releaseRetainedIfEscaped(next);
       selection = next;
       desiredX = null;
+      caretFollowPending = true;
     },
     commit: (run) => commit(run),
     render: () => render(),
@@ -3120,6 +3199,74 @@ export function mountPaginatedSurface(
           return clampedToDocument(currentLayout, session.paragraphIds(), selection);
         }
       ),
+
+    applyAutomationOps: (staged, scope) => {
+      // THE SAME PATH A KEYSTROKE TAKES, minus the keystroke. `applyOps` is where viewing
+      // refuses and where suggesting turns an edit into a proposal, and `commit` is where the
+      // refusal is recorded, the caret is re-clamped and the pages are repainted. A host that
+      // reached `session.applyTreeOps` instead — as this one did — typed into a document open
+      // for viewing and wrote permanent text while the chrome said Suggesting.
+      //
+      // The scope comes from the CALLER, because the handle named a story. It defaults to the
+      // body rather than to the reader's story: the input path follows the reader into a
+      // header, and a scripted edit must not, or an object model holding a body paragraph
+      // would write into whatever furniture happened to be open.
+      let result: ReturnType<TreeDocxSession['applyTreeOps']> = {
+        committed: false,
+        rejected: false,
+        opCount: 0,
+      };
+      const story = scope ?? BODY_STORY;
+      commit(
+        () => {
+          // THE GATE BEFORE THE OPS EXIST. Building them mints the relationship an external
+          // hyperlink names, which changes the PACKAGE — outside the transaction, outside the undo
+          // stack, and left behind by a refusal. Viewing is asked first, so a document open for
+          // reading comes out of this byte-identical; `edits: false` keeps the question to the rule
+          // that holds for every op, because a batch of tracked-change DECISIONS is not an edit and
+          // `applyOps` below judges it on its own ops.
+          const viewing = writeRefusal(false);
+          if (viewing !== null) {
+            return (result = { committed: false, rejected: true, opCount: 0, reason: viewing });
+          }
+          // The mint carries the edit rule with it: it IS an edit, so a mode that would refuse one
+          // must refuse it, and refusing here means the relationship is never written.
+          let refused: string | null = null;
+          const ops = staged((url) => {
+            const refusal = writeRefusal(true, [], false);
+            if (refusal === null) return session.ensureHyperlinkRelationship(url, story);
+            refused = refusal;
+            return null;
+          });
+          if (ops === null) {
+            return (result = {
+              committed: false,
+              rejected: true,
+              opCount: 0,
+              reason: refused ?? 'this engine will not author that hyperlink target',
+            });
+          }
+          return (result = applyOps(ops, undefined, undefined, story, false));
+        },
+        () => {
+          // Flushed before the clamp for the same reason `commitReviewOps` does it: the clamp
+          // needs post-edit lengths, and this thunk runs before the repaint.
+          flushLayout();
+          selectionSync.noteModelMoved();
+          // Clamped within the story the READER is in, which is not necessarily the story that
+          // was just written. Clamping against the body's paragraphs while a header or a
+          // footnote was open moved the caret into the document while the scope stayed on the
+          // furniture, and the next keystroke — applied to the furniture story with a body
+          // paragraph id — was refused as `unknown-paragraph`: the reader typed and nothing
+          // happened. An empty order means the story is not painted yet; leaving the caret
+          // alone is right there, because a clamp with nothing to clamp to is a caret reset.
+          const order = paragraphOrder();
+          if (order.length === 0) return null;
+          return clampedToDocument(currentLayout, order, selection);
+        }
+      );
+      return result;
+    },
 
     editingMode: () => editingMode,
     setEditingMode: (mode) => {

@@ -969,20 +969,6 @@
   "loading": {
     "label": "लोड हो रहा है"
   },
-  "agentPanel": {
-    "defaultTitle": "सहायक",
-    "toggle": "सहायक खोलें",
-    "close": "पैनल बंद करें",
-    "resizeHandle": "सहायक पैनल का आकार बदलें",
-    "thinking": "सहायक सोच रहा है...",
-    "composerPlaceholder": "सहायक से पूछें…",
-    "send": "भेजें",
-    "timeline": {
-      "working": "काम चल रहा है… {count, plural, one {# चरण} other {# चरण}}",
-      "summary": "{count, plural, one {# चरण} other {# चरण}}",
-      "earlier": "+ {count, plural, one {# पूर्व चरण} other {# पूर्व चरण}}"
-    }
-  },
   "revisions": {
     "cellDeleted": null,
     "cellInserted": null,

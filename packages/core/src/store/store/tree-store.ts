@@ -18,7 +18,9 @@
 import { validateOoxmlPartDelta, type OoxmlPart } from '../package/ooxml-tree.ts';
 import { withPart, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { validatePackageInvariants } from '../package/package-edit.ts';
+import { settingsPartOf } from '../package/note-properties.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
+import { formsProtectionRefusal } from './tree-op-content-controls.ts';
 import { applyTreeOp, type ImpactClass, type TreeDocOp, type TreeOpRejection } from './tree-ops.ts';
 
 /** A selection the caller wants restored when an entry is undone or redone. */
@@ -381,6 +383,14 @@ export class TreeDocumentStore {
       const target = working.parts.get(partName);
       if (!target) {
         failure = { reason: 'unknown-part', detail: partName };
+        return false;
+      }
+      // Forms protection lives in `settings.xml`, one part up from the op, so it is resolved
+      // HERE rather than in the per-part applier: a part alone cannot see whether the document
+      // it belongs to is protected.
+      const protection = formsProtectionRefusal(target, settingsPartOf(working), op);
+      if (protection) {
+        failure = { reason: protection };
         return false;
       }
       // Validation of the whole part is DEFERRED to the commit below: per-op it made a

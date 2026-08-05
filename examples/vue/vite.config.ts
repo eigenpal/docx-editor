@@ -33,7 +33,7 @@ function fidelityFixturePlugin(): Plugin {
 }
 
 // USE_PUBLISHED_PACKAGES=true is set by the parity build; in that mode we
-// resolve `@docx-editor.dev/vue` + `/agents/*` through node_modules
+// resolve `@docx-editor.dev/vue` through node_modules
 // (the workspace's published dist/) so the deployment shows the real
 // consumer experience.
 //
@@ -77,19 +77,6 @@ export default defineConfig({
           {
             find: '@docx-editor.dev/i18n',
             replacement: path.join(monorepoRoot, 'packages/i18n/src/index.ts'),
-          },
-          {
-            find: '@docx-editor.dev/agents/vue',
-            replacement: path.join(monorepoRoot, 'packages/agents/src/vue.ts'),
-          },
-          {
-            find: '@docx-editor.dev/agents/bridge',
-            replacement: path.join(monorepoRoot, 'packages/agents/src/bridge.ts'),
-          },
-          // Bare @docx-editor.dev/agents (e.g. for type re-exports)
-          {
-            find: /^@docx-editor\.dev\/agents$/,
-            replacement: path.join(monorepoRoot, 'packages/agents/src/index.ts'),
           },
         ],
   },

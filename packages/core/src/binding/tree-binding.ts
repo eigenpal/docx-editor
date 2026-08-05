@@ -12,18 +12,17 @@
 
 import { Node as PMNode } from 'prosemirror-model';
 import {
+  collectStoryParagraphs,
   findNode,
   isPageBreakNode,
   PAGE_BREAK_CHAR,
+  storyRootsOf,
   type OoxmlNode,
   type OoxmlPart,
   type OoxmlProperty,
   type TreeDocOp,
 } from '@docx-editor.dev/core-contract/store';
-import {
-  walkAllStoryParagraphs,
-  walkParagraphInline,
-} from '../store/package/content-control-walk.ts';
+import { walkParagraphInline } from '../store/package/content-control-walk.ts';
 import { runPropsOf, treeSchema } from './tree-schema.ts';
 
 export type TreeBindingRejection =
@@ -170,27 +169,15 @@ export function bodyParagraphs(part: OoxmlPart): OoxmlNode[] {
  * select-all all need the full set.
  */
 export function allParagraphs(part: OoxmlPart): OoxmlNode[] {
+  // The walk itself lives in the store lane (`story-blocks.ts`) because the automation lane
+  // asks the same question and the two must not answer it differently — a paragraph inside a
+  // nested table or a content control has to be in the story for both, or an offset computed
+  // through one and applied through the other lands in a different paragraph.
   const paragraphs: OoxmlNode[] = [];
-  const walk = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') return;
-    // Body, header, footer, and typed note bodies are the story roots that hold editable
-    // block content. Notes parts nest notes under footnotes/endnotes; each note is a story.
-    // Flatten block SDTs / tables the same way layout and the store index do.
-    if (node.kind === 'body' || node.localName === 'hdr' || node.localName === 'ftr') {
-      walkAllStoryParagraphs(node.children, 0, (paragraph) => paragraphs.push(paragraph));
-      return;
-    }
-    if (node.kind === 'note') {
-      walkAllStoryParagraphs(node.children, 0, (paragraph) => paragraphs.push(paragraph));
-      return;
-    }
-    if (node.kind === 'footnotes' || node.kind === 'endnotes') {
-      for (const child of node.children) walk(child);
-      return;
-    }
-    for (const child of node.children) walk(child);
-  };
-  walk(part.root);
+  for (const story of storyRootsOf(part)) {
+    if (story.root.kind === 'textValue') continue;
+    collectStoryParagraphs(story.root.children, paragraphs, 0);
+  }
   return paragraphs;
 }
 

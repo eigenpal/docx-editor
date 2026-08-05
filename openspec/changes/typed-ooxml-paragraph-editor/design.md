@@ -197,7 +197,7 @@ Alternative rejected: treating requestAnimationFrame deferral, post-layout bridg
 
 ### D13: Production engine source and publication converge on one core package
 
-All production `packages/engine-*` source moves physically into `packages/core/src/` under enforced internal lanes: `contracts`, `store`, `binding`, `layout`, `output`, `editor`, `sync`, `server`, and `clients`. The repository publishes one engine package, `@docx-editor.dev/core`; React, Vue, Nuxt, agents, and i18n remain separate adapter/product packages.
+All production `packages/engine-*` source moves physically into `packages/core/src/` under enforced internal lanes: `contracts`, `store`, `binding`, `layout`, `output`, `editor`, `sync`, `server`, and `clients`. The repository publishes one engine package, `@docx-editor.dev/core`; React, Vue, Nuxt, the `@docx-editor.dev/editor-api` product package, and i18n remain separate adapter/product packages.
 
 The physical merge does not create one unrestricted barrel. Intentional subpath exports expose environment-specific entry points such as `.`, `/editor`, `/layout`, `/sync`, and `/server`. The default semantic-core graph remains DOM-free, ProseMirror-free, Yjs-free, transport-neutral, and PDF-free. Lane-specific TypeScript projects, import-graph tests, conditional exports, and bundle-graph checks prevent browser entry points from pulling server code or optional runtime dependencies. React and Vue import the PM-free `/editor` composition boundary.
 

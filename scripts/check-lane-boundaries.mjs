@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 const CORE = join(dirname(fileURLToPath(import.meta.url)), '..', 'packages', 'core');
 
 /** Lanes whose RUNTIME must not assume a DOM. Kept in step with the lane DAG. */
-const NEUTRAL_LANES = ['store', 'layout'];
+const NEUTRAL_LANES = ['store', 'layout', 'automation'];
 
 let failed = 0;
 for (const lane of NEUTRAL_LANES) {

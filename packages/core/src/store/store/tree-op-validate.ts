@@ -10,6 +10,12 @@ import { findNode } from '../package/ooxml-edit.ts';
 import { isValidXmlText } from '../package/sinks.ts';
 import { validateDeleteBlock } from './tree-op-blocks.ts';
 import {
+  INSERTABLE_CONTENT_CONTROL_TYPES,
+  contentControlBindingRefusal,
+  contentControlLockRefusal,
+  isWritableContentControlMetadata,
+} from './tree-op-content-controls.ts';
+import {
   contentControlAncestorsOf,
   contentControlValueTypeOf,
   declaredLockOf,
@@ -44,7 +50,13 @@ import {
 } from './tree-op-section-address.ts';
 import { rangePartiallyOverlapsDrawingAtom } from '../package/drawing-projection.ts';
 import { isDrawingTreeDocOp, validateDrawingOp } from './tree-op-drawings.ts';
-import { isParagraph, paragraphLength, segmentsOf, splitsSurrogate } from './tree-op-segments.ts';
+import {
+  isParagraph,
+  paragraphLength,
+  paragraphOffsetIndex,
+  segmentsOf,
+  splitsSurrogate,
+} from './tree-op-segments.ts';
 import {
   validateInsertToc,
   validateReplaceTocResult,
@@ -60,6 +72,12 @@ import {
 } from './tree-op-types.ts';
 
 const RUN_PROPERTY_SET: ReadonlySet<string> = new Set(ACCEPTED_RUN_PROPERTIES);
+const CONTENT_CONTROL_LOCKS: ReadonlySet<string> = new Set([
+  'unlocked',
+  'sdtLocked',
+  'contentLocked',
+  'sdtContentLocked',
+]);
 const PARAGRAPH_PROPERTY_SET: ReadonlySet<string> = new Set(ACCEPTED_PARAGRAPH_PROPERTIES);
 
 function validateProperties(
@@ -133,6 +151,45 @@ function validateHyperlinkTarget(op: {
 }
 
 /**
+ * Whether the control an insertion names is one it could actually be writing into.
+ *
+ * Three things have to hold, and each of them is a way in if it does not. The name must resolve
+ * to a TYPED content control — a paragraph, a run, or a `w:sdt` the read demoted is not something
+ * this engine can address as a field. The control and the addressed paragraph must be on one
+ * ancestor line: a block control holds the paragraph, an inline control sits in it, and a control
+ * somewhere else in the document is not the owner of this write however sincerely it is named.
+ * And the offset must fall in the span the control covers IN THAT PARAGRAPH, so the write lands
+ * where the name claims.
+ *
+ * The two kinds of control are constrained by the same rule rather than by two: a block control
+ * covers the whole of a paragraph it holds, an inline one covers its own offsets, and "any offset
+ * in an enclosed paragraph is fine" was a rule only one of them was ever checked against.
+ */
+function namedOwnerRefusal(
+  part: OoxmlPart,
+  paragraphId: string,
+  offset: number,
+  inside: string
+): TreeOpRejection | null {
+  if (typeof inside !== 'string' || inside.length === 0) return 'invalidArgs';
+  const owner = findNode(part, inside);
+  if (!owner) return 'unknown-content-control';
+  if (owner.kind !== 'contentControl') return 'not-a-content-control';
+  const paragraph = findNode(part, paragraphId);
+  if (!paragraph || !isParagraph(paragraph)) return null;
+  const span = holds(owner, paragraphId)
+    ? { start: 0, end: paragraphLength(paragraph) }
+    : holds(paragraph, inside)
+      ? paragraphOffsetIndex(paragraph).spanOf(owner)
+      : null;
+  if (!span) return 'unknown-content-control';
+  if (!Number.isInteger(offset) || offset < span.start || offset > span.end) {
+    return 'offset-out-of-range';
+  }
+  return null;
+}
+
+/**
  * The content control that owns a caret/range in a paragraph — innermost ancestor of the
  * run under the caret. At a boundary, a `showingPlcHdr` control on either side wins so a
  * first keystroke replaces the prompt rather than appending beside it.
@@ -157,7 +214,10 @@ export function contentControlAtCaret(
   const beforeControl = before ? innermostContentControlAround(part, before.runId) : null;
   if (afterControl && isShowingPlaceholder(afterControl)) return afterControl;
   if (beforeControl && isShowingPlaceholder(beforeControl)) return beforeControl;
-  return afterControl ?? beforeControl ?? innermostContentControlAround(part, paragraph.id);
+  // At an inline-control boundary, the run starting at the caret owns the insertion.
+  // A missing/ordinary `after` therefore means the caret is outside the inline control.
+  if (after) return afterControl;
+  return innermostContentControlAround(part, paragraph.id);
 }
 
 /**
@@ -207,6 +267,12 @@ function rangeTouchesContentRestriction(
     }
   }
   return null;
+}
+
+function holds(node: OoxmlNode, id: string): boolean {
+  if (node.id === id) return true;
+  if (node.kind === 'textValue') return false;
+  return node.children.some((child) => holds(child, id));
 }
 
 /** Refuse a content-bearing edit that would rewrite a locked or bound region. */
@@ -340,6 +406,58 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
   if (!TREE_DOC_OP_KINDS.includes(op.op)) return 'unknown-op';
   if (isDrawingTreeDocOp(op)) return validateDrawingOp(part, op);
 
+  // A NAMED OWNER IS AN ASSERTION ABOUT THE DOCUMENT, so it is checked before anything acts on
+  // it. `inside` decides where the text goes AND what the refusals are resolved against — a name
+  // that is not a control the write lands in would classify the op as filling in a field, which
+  // is the one thing forms protection lets through.
+  if (op.op === 'insertText' && op.inside !== undefined) {
+    const owner = namedOwnerRefusal(part, op.paragraphId, op.offset, op.inside);
+    if (owner) return owner;
+  }
+
+  if (op.op !== 'deleteBlock') {
+    const lockRefusal = contentControlLockRefusal(part, op);
+    if (lockRefusal) return lockRefusal;
+  }
+
+  // A binding is the same shape of refusal from the other direction: not "you may not change
+  // this" but "this engine cannot change it without desyncing the part it mirrors". Checked here
+  // so every content mutation meets it, not only the value write that names the control.
+  const bindingRefusal = contentControlBindingRefusal(part, op);
+  if (bindingRefusal) return bindingRefusal;
+
+  if (
+    op.op === 'setContentControlProperties' ||
+    (op.op === 'setContentControlValue' && typeof op.value !== 'string') ||
+    (op.op === 'removeContentControl' && op.keepContent !== undefined)
+  ) {
+    const control = findNode(part, op.controlId);
+    if (!control) return 'unknown-content-control';
+    if (control.kind !== 'contentControl') return 'not-a-content-control';
+    if (op.op === 'setContentControlProperties') {
+      if (op.tag === undefined && op.alias === undefined && op.lock === undefined) {
+        return 'invalidArgs';
+      }
+      for (const value of [op.tag, op.alias]) {
+        if (!isWritableContentControlMetadata(value)) return 'invalid-property-value';
+      }
+      if (op.lock !== undefined && !CONTENT_CONTROL_LOCKS.has(op.lock)) return 'invalidArgs';
+    }
+    return null;
+  }
+  if (op.op === 'insertContentControl') {
+    if (!INSERTABLE_CONTENT_CONTROL_TYPES.includes(op.type)) return 'invalidArgs';
+    for (const value of [op.tag, op.alias]) {
+      if (!isWritableContentControlMetadata(value)) return 'invalid-property-value';
+    }
+    if (op.lock !== undefined && !CONTENT_CONTROL_LOCKS.has(op.lock)) return 'invalidArgs';
+    if (!Number.isInteger(op.start) || !Number.isInteger(op.end)) return 'invalid-range';
+    const paragraph = findNode(part, op.paragraphId);
+    if (!paragraph) return 'unknown-paragraph';
+    if (!isParagraph(paragraph)) return 'not-a-paragraph';
+    return null;
+  }
+
   // Package-level furniture ops cannot run against a single part. Shape-check here so
   // applyTreeOp refuses them; TreePackageStore.applyLifecycleOp is the commit path.
   if (
@@ -389,6 +507,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
   }
 
   if (op.op === 'setContentControlValue') {
+    if (typeof op.value !== 'string') return 'typeMismatch';
     return validateSetContentControlValue(part, op.controlId, op.value);
   }
 
@@ -576,6 +695,9 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (typeof op.text !== 'string' || !isValidXmlText(op.text)) return 'invalid-text';
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
       if (op.bias !== undefined && op.bias !== 'left' && op.bias !== 'right') return 'invalidArgs';
+      // A named automation insertion was already resolved against that owner's exact landing
+      // site above. Re-resolving the raw caret with editor boundary bias can select a sibling.
+      if (op.inside !== undefined) return null;
       return rejectContentEdit(part, paragraph, op.offset, op.offset);
     }
     case 'setListLevel': {
@@ -653,7 +775,9 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (rangePartiallyOverlapsDrawing(paragraph, op.offset, op.offset + 1)) {
         return 'invalid-range';
       }
-      return rejectContentEdit(part, paragraph, op.offset, op.offset);
+      // The reach classifier above distinguishes a split beside an inline control from one
+      // inside it; reclassifying the zero-width point as text would move that boundary.
+      return null;
     }
     case 'splitParagraphMany': {
       if (!Array.isArray(op.offsets) || op.offsets.length === 0) return 'invalid-range';

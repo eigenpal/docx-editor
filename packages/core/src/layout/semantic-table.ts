@@ -15,7 +15,11 @@
 // column means looking at every cell that covers it across every row rather than at any one
 // node this walk visits.
 
-import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core-contract/store';
+import {
+  flattenContentControls,
+  type OoxmlElement,
+  type OoxmlNode,
+} from '@docx-editor.dev/core-contract/store';
 import { shadingFillFromElement } from './ooxml-shading.ts';
 import { revisionRemovesParagraph } from './revision-visibility.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';
@@ -769,6 +773,8 @@ export function readTableStructure(
   // pile onto the last column instead of extending the grid.
   interface RowPlan {
     readonly node: OoxmlElement;
+    /** The row's cells with any `CT_SdtCell` wrapper unwrapped, so both passes see one list. */
+    readonly cells: readonly OoxmlNode[];
     readonly properties: OoxmlElement | undefined;
     readonly starts: readonly number[];
     readonly spans: readonly number[];
@@ -778,7 +784,11 @@ export function readTableStructure(
   const plans: RowPlan[] = [];
   const claims: CellWidthClaim[] = [];
   let derivedColumns = 1;
-  for (const rowNode of table.children) {
+  // A content control may sit between the table and its rows (`CT_SdtRow`) or between a row and
+  // its cells (`CT_SdtCell`). It is a label on that row or cell, not a box around it, so it is
+  // unwrapped HERE — before the kind filter — and the grid pass, the cell pass and pagination all
+  // see the same row and cell lists they would see in a table that carried no controls at all.
+  for (const rowNode of flattenContentControls(table.children)) {
     if (rowNode.kind !== 'tableRow') continue;
     const properties = childNamed(rowNode, 'trPr');
     const starts: number[] = [];
@@ -797,7 +807,8 @@ export function readTableStructure(
       });
     }
     let cursor = gridBefore;
-    for (const cellNode of rowNode.children) {
+    const rowCells = flattenContentControls(rowNode.children);
+    for (const cellNode of rowCells) {
       if (cellNode.kind !== 'tableCell') continue;
       const cellPr = childNamed(cellNode, 'tcPr');
       const start = Math.min(cursor, LAST_GRID_COLUMN);
@@ -823,7 +834,15 @@ export function readTableStructure(
       });
     }
     if (gridColumns > derivedColumns) derivedColumns = gridColumns;
-    plans.push({ node: rowNode, properties, starts, spans, preferred, gridColumns });
+    plans.push({
+      node: rowNode,
+      cells: rowCells,
+      properties,
+      starts,
+      spans,
+      preferred,
+      gridColumns,
+    });
   }
 
   const gridCols = gridColumnElements(table);
@@ -837,7 +856,7 @@ export function readTableStructure(
     const rowProperties = plan.properties;
     let cellIndex = 0;
     const cells: SemanticTableCell[] = [];
-    for (const cellNode of rowNode.children) {
+    for (const cellNode of plan.cells) {
       if (cellNode.kind !== 'tableCell') continue;
       const cellProperties = childNamed(cellNode, 'tcPr');
       const gridColumn = plan.starts[cellIndex]!;

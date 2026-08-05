@@ -2,7 +2,7 @@
  * `@docx-editor.dev/core` — the document layer.
  *
  * No DOM, no framework, no editor. Parse a .docx, query it, edit it, write it
- * back. This is the entry `packages/agents` uses and the entry any headless or
+ * back. This is the entry `packages/editor-api` uses and the entry any headless or
  * server-side consumer needs.
  *
  * CONTRACT ONLY. Every function here throws.

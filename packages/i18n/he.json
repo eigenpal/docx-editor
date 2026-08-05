@@ -949,20 +949,6 @@
   "loading": {
     "label": "טוען"
   },
-  "agentPanel": {
-    "defaultTitle": "עוזר",
-    "toggle": "פתח עוזר",
-    "close": "סגור חלונית",
-    "resizeHandle": "שנה גודל חלונית העוזר",
-    "thinking": "העוזר מעבד...",
-    "composerPlaceholder": "שאל את העוזר…",
-    "send": "שלח",
-    "timeline": {
-      "working": "{count, plural, one {עובד על # שלב} other {עובד על # שלבים}}",
-      "summary": "{count, plural, one {# שלב} other {# שלבים}}",
-      "earlier": "{count, plural, one {+ # שלב קודם} other {+ # שלבים קודמים}}"
-    }
-  },
   "viewer": {
     "pageIndicator": "{current} מתוך {total}"
   },

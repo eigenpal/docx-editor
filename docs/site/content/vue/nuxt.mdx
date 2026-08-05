@@ -1,13 +1,13 @@
 ---
-title: "@docx-editor.dev/nuxt"
-description: "Official Nuxt 3 and 4 module. Auto-imports an SSR-safe <DocxEditor>, injects the stylesheet, no <ClientOnly> boilerplate."
-category: "Vue"
+title: '@docx-editor.dev/nuxt'
+description: 'Official Nuxt 3 and 4 module. Auto-imports an SSR-safe <DocxEditor>, injects the stylesheet, no <ClientOnly> boilerplate.'
+category: 'Vue'
 order: 43
 ---
 
 <PackageStats name="@docx-editor.dev/nuxt" />
 
-`@docx-editor.dev/nuxt` is the official Nuxt module. It wraps [`@docx-editor.dev/vue`](/docs/1.x/vue) and registers an SSR-safe `<DocxEditor>` as an auto-imported component, so a Nuxt app needs no manual import, no `<ClientOnly>` wrapper, and no Vite config. It supports Nuxt 3 and Nuxt 4.
+`@docx-editor.dev/nuxt` is the official Nuxt module. It wraps [`@docx-editor.dev/vue`](/docs/1.x/vue) and registers an SSR-safe `<DocxEditor>` as an auto-imported component, so a Nuxt app needs no manual import and no `<ClientOnly>` wrapper. It supports Nuxt 3 and Nuxt 4.
 
 For a step-by-step walkthrough with loading, saving, tracked changes, and collaboration, see the [Nuxt DOCX editor guide](/blog/nuxt-docx-editor).
 
@@ -17,7 +17,7 @@ For a step-by-step walkthrough with loading, saving, tracked changes, and collab
 npm install @docx-editor.dev/nuxt
 ```
 
-Pulls in `@docx-editor.dev/vue`, and transitively `@docx-editor.dev/core` and `@docx-editor.dev/i18n`.
+Pulls in `@docx-editor.dev/vue`, and transitively `@docx-editor.dev/core-contract` and `@docx-editor.dev/i18n`.
 
 ## Register the module
 
@@ -28,7 +28,7 @@ export default defineNuxtConfig({
 });
 ```
 
-That is the whole setup. The module registers `<DocxEditor>` as a client-only component and pushes the editor stylesheet into Nuxt's CSS pipeline.
+That is the whole setup. The module registers `<DocxEditor>` as a client-only component.
 
 ## Use the component
 
@@ -40,34 +40,32 @@ const buf = ref<ArrayBuffer | null>(null);
 </script>
 
 <template>
-  <DocxEditor :document-buffer="buf" />
+  <DocxEditor :document="buf ? new Uint8Array(buf) : undefined" />
 </template>
 ```
 
-No import, no `<ClientOnly>`. `<DocxEditor>` is the Vue adapter's component, registered unchanged: the same props (`document-buffer`, `mode`, `show-toolbar`, `external-plugins`, and the rest), events, and `DocxEditorRef` methods as [`@docx-editor.dev/vue`](/docs/1.x/vue). The full prop list is on [Vue props](/docs/1.x/vue/props). It renders in the browser only (ProseMirror measures DOM geometry at mount), so Nuxt shows a placeholder during SSR and hydrates the editor on the client.
+No import, no `<ClientOnly>`. `<DocxEditor>` is the same root component exported by [`@docx-editor.dev/vue`](/docs/1.x/vue). The full prop list is on [Vue props](/docs/1.x/vue/props).
 
 ## Load a document
 
-`document-buffer` accepts the `DocxInput` union (`File`, `Blob`, `ArrayBuffer`, or `Uint8Array`). A `null` value mounts an empty document. Here is a file picker that binds the `File` directly, with `@error` wired for unreadable input:
+Pass DOCX bytes through the `document` prop:
 
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue';
 
-const file = ref<File | null>(null);
+const doc = ref<Uint8Array>();
 
-function onFile(e: Event) {
-  file.value = (e.target as HTMLInputElement).files?.[0] ?? null;
+async function load(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  doc.value = new Uint8Array(await file.arrayBuffer());
 }
 </script>
 
 <template>
-  <input type="file" accept=".docx" @change="onFile" />
-  <DocxEditor
-    v-if="file"
-    :document-buffer="file"
-    @error="(err) => console.error(err)"
-  />
+  <input type="file" accept=".docx" @change="load" />
+  <DocxEditor v-if="doc" :document="doc" />
 </template>
 ```
 
@@ -85,23 +83,19 @@ export default defineNuxtConfig({
 });
 ```
 
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `prefix` | `string` | `''` | Component name prefix. `Ep` registers `<EpDocxEditor>`. |
-| `injectStyles` | `boolean` | `true` | Pushes `@docx-editor.dev/vue/styles.css` into `nuxt.options.css`. Set `false` to import the stylesheet yourself. |
+| Option         | Type      | Default | Description                                                                      |
+| -------------- | --------- | ------- | -------------------------------------------------------------------------------- |
+| `prefix`       | `string`  | `''`    | Component name prefix. `Ep` registers `<EpDocxEditor>`.                          |
+| `injectStyles` | `boolean` | `true`  | Controls whether the module wires the editor stylesheet into `nuxt.options.css`. |
 
-## Composables
+## What the module re-exports
 
-Every composable from `@docx-editor.dev/vue/composables` (`useDocxEditor`, `useTrackedChanges`, `useFindReplace`, `useAutoSave`, and the rest) is auto-imported. Use them in any page or component with no import.
-
-## What the module does not re-export
-
-The module re-exports the `<DocxEditor>` component and the composables, not the whole adapter. These come from `@docx-editor.dev/vue` directly:
+The module gives you the auto-imported `<DocxEditor>` component. When you need the rest of the Vue adapter surface, import it from `@docx-editor.dev/vue` directly:
 
 - the `DocxEditorProps` and `DocxEditorRef` types
-- paginated host helpers (`PaginatedDocxEditor`, …) and deferred React-first chrome
+- root-level helpers like `DocxEditorShell`, `DocxEditorToolbar`, `DocxEditorSidebar`, `HorizontalRuler`, and `PageIndicator`
 
-If you use any of them, add the adapter to your own `dependencies` so the import is explicit:
+If you use those exports, add the adapter to your own `dependencies` so the import is explicit:
 
 ```bash
 npm install @docx-editor.dev/vue
@@ -109,7 +103,7 @@ npm install @docx-editor.dev/vue
 
 ## Next steps
 
-- [Nuxt DOCX editor guide](/blog/nuxt-docx-editor): full walkthrough with loading, saving, collaboration, and agents
+- [Nuxt DOCX editor guide](/blog/nuxt-docx-editor): full walkthrough with loading and saving
 - [Vue package overview](/docs/1.x/vue): the adapter the module wraps
 - [Vue API reference](/docs/1.x/api/vue): auto-generated from the d.ts
 - [Nuxt example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/nuxt)

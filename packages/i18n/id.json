@@ -985,20 +985,6 @@
   "loading": {
     "label": "Memuat"
   },
-  "agentPanel": {
-    "defaultTitle": "Asisten",
-    "toggle": "Buka asisten",
-    "close": "Tutup panel",
-    "resizeHandle": "Ubah ukuran panel asisten",
-    "thinking": "Sedang berpikir",
-    "composerPlaceholder": "Tanyakan sesuatu...",
-    "send": "Kirim",
-    "timeline": {
-      "working": "Sedang memproses... {count, plural, one {# langkah} other {# langkah}}",
-      "summary": "{count, plural, one {# langkah} other {# langkah}}",
-      "earlier": "+ {count, plural, one {# langkah sebelumnya} other {# langkah sebelumnya}}"
-    }
-  },
   "toc": {
     "updatePrompt": null,
     "refresh": "Perbarui seluruh tabel",

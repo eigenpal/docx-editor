@@ -1,0 +1,118 @@
+name: Office.js compatibility drift check
+
+# Scheduled-only: fetches the current stable @types/office-js release into
+# a temporary directory, verifies its integrity, and regenerates the
+# normalized reference fixture (packages/editor-api/compat/reference/word.reference.json)
+# to see whether it differs from what's checked in. This is the ONLY
+# workflow in this repository that needs network access to Microsoft-derived
+# material; normal CI (ci.yml) never fetches it and never depends on it.
+#
+# On drift, opens (or updates) a single tracking issue summarizing what
+# changed — a maintainer reviews the diff and, if it should be adopted,
+# runs `bun run compat:fetch-reference` locally and opens a normal PR.
+# This workflow itself never pushes a commit or opens a PR with upstream
+# content, so a compromised/renamed upstream release can't land Microsoft's
+# declaration text in the repository unattended.
+
+on:
+  schedule:
+    # Weekly, Monday 09:00 UTC.
+    - cron: '0 9 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-drift:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/editor-api
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: .
+        run: bun install --frozen-lockfile
+
+      - name: Check for upstream @types/office-js drift
+        id: drift
+        run: |
+          set +e
+          bun run compat:check-drift > drift-output.txt 2>&1
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          cat drift-output.txt
+
+      - name: Upload regenerated reference (drift only)
+        if: steps.drift.outputs.exit_code != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: office-compat-drift-regenerated
+          path: /tmp/office-compat-drift-*/
+          if-no-files-found: ignore
+
+      - name: Open or update a tracking issue
+        if: steps.drift.outputs.exit_code != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('packages/editor-api/drift-output.txt', 'utf8');
+            const title = 'Office.js compatibility reference drift detected';
+            const body = [
+              'The scheduled drift check found that the current stable `@types/office-js` release',
+              'no longer matches `packages/editor-api/compat/reference/word.reference.json`.',
+              '',
+              'This issue is informational — nothing in this repository was changed automatically.',
+              'To review and adopt the new reference:',
+              '',
+              '```bash',
+              'cd packages/editor-api',
+              'bun run compat:fetch-reference',
+              'bun run compat:generate',
+              'bun test',
+              '```',
+              '',
+              'Then open a normal PR with the resulting diff.',
+              '',
+              '<details><summary>Drift check output</summary>',
+              '',
+              '```',
+              output,
+              '```',
+              '</details>',
+              '',
+              `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            ].join('\n');
+
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'office-compat-drift',
+            });
+
+            if (existing.data.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data[0].number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['office-compat-drift'],
+              });
+            }

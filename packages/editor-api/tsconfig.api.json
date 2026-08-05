@@ -1,0 +1,9 @@
+{
+  // API Extractor reads the BUILT `dist/*.d.ts`, not the sources. Stripping the dev-time `paths`
+  // keeps it from following `@docx-editor.dev/...` back into workspace source, so what it reports
+  // is what a consumer installing the tarball would see. Same reason `packages/react` has one.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {}
+  }
+}
