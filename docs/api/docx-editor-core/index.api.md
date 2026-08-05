@@ -1203,12 +1203,6 @@ export type ExecResult = {
 };
 
 // @public
-export interface Extension {
-    // (undocumented)
-    readonly name: string;
-}
-
-// @public
 export interface Extent {
     // (undocumented)
     readonly heightEmu: number;
@@ -1323,9 +1317,6 @@ export interface IndentFormatting {
     };
     readonly right: number;
 }
-
-// @public
-export type JSONSchema = Readonly<Record<string, unknown>>;
 
 // @public
 export function loadFonts(request: LoadFontsRequest): Promise<LoadFontsResult>;

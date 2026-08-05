@@ -758,7 +758,7 @@ export type EditorScope = {
 };
 
 // @public
-export type EditorSelection = DocRange | SemanticSelection | {
+export type EditorSelection = DocRange | {
     from: EditorPosition;
     to: EditorPosition;
 } | SemanticTarget;
@@ -814,12 +814,6 @@ export type ExecResult = {
     reason: string;
     target?: DocTarget;
 };
-
-// @public
-export interface Extension {
-    // (undocumented)
-    readonly name: string;
-}
 
 // @public
 export interface Extent {
@@ -972,28 +966,17 @@ export interface IndentFormatting {
 export type InteractionAffinity = 'upstream' | 'downstream';
 
 // @public
-export interface InteractionFrameId {
-    // (undocumented)
-    readonly value: number;
-}
-
-// @public
 export type InteractionOutcome<T> = {
     readonly ok: true;
     readonly value: T;
-    readonly frameId: InteractionFrameId;
 } | {
     readonly ok: false;
     readonly code: InteractionOutcomeCode;
     readonly reason: string;
-    readonly frameId?: InteractionFrameId;
 };
 
 // @public
-export type InteractionOutcomeCode = 'staleFrame' | 'pendingLayout' | 'pendingSelection' | 'readOnly' | 'invalidTarget' | 'unsupported';
-
-// @public
-export type JSONSchema = Readonly<Record<string, unknown>>;
+export type InteractionOutcomeCode = 'pendingLayout' | 'pendingSelection' | 'readOnly' | 'invalidTarget' | 'unsupported';
 
 // @public
 export type NoteKind = 'footnote' | 'endnote';
@@ -1323,18 +1306,6 @@ export interface SemanticIdentity {
     readonly blockId: string;
     // (undocumented)
     readonly storyId: string;
-}
-
-// @public
-export interface SemanticSelection {
-    // (undocumented)
-    readonly anchor: SemanticTarget;
-    // (undocumented)
-    readonly frameId: InteractionFrameId;
-    // (undocumented)
-    readonly head: SemanticTarget;
-    // (undocumented)
-    readonly scope: ViewScope;
 }
 
 // @public

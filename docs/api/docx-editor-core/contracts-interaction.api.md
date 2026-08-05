@@ -8,25 +8,17 @@
 export type InteractionAffinity = 'upstream' | 'downstream';
 
 // @public
-export interface InteractionFrameId {
-    // (undocumented)
-    readonly value: number;
-}
-
-// @public
 export type InteractionOutcome<T> = {
     readonly ok: true;
     readonly value: T;
-    readonly frameId: InteractionFrameId;
 } | {
     readonly ok: false;
     readonly code: InteractionOutcomeCode;
     readonly reason: string;
-    readonly frameId?: InteractionFrameId;
 };
 
 // @public
-export type InteractionOutcomeCode = 'staleFrame' | 'pendingLayout' | 'pendingSelection' | 'readOnly' | 'invalidTarget' | 'unsupported';
+export type InteractionOutcomeCode = 'pendingLayout' | 'pendingSelection' | 'readOnly' | 'invalidTarget' | 'unsupported';
 
 // @public
 export interface SemanticIdentity {
@@ -34,18 +26,6 @@ export interface SemanticIdentity {
     readonly blockId: string;
     // (undocumented)
     readonly storyId: string;
-}
-
-// @public
-export interface SemanticSelection {
-    // (undocumented)
-    readonly anchor: SemanticTarget;
-    // (undocumented)
-    readonly frameId: InteractionFrameId;
-    // (undocumented)
-    readonly head: SemanticTarget;
-    // (undocumented)
-    readonly scope: ViewScope;
 }
 
 // @public

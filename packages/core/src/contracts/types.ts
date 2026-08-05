@@ -501,20 +501,5 @@ export interface Point {
   readonly y: number;
 }
 
-/**
- * A JSON Schema document, held opaquely.
- *
- * Not modelled further on purpose: this contract passes schemas through to MCP tool definitions
- * and never interprets them, so narrowing the type would constrain callers without buying
- * validation anywhere.
- */
-export type JSONSchema = Readonly<Record<string, unknown>>;
-
-/** An editor extension. Declared here so `core/editor` can type its config
- * without importing `core/plugin`, which imports `core/editor`. */
-export interface Extension {
-  readonly name: string;
-}
-
 /** What every subscription returns. Calling it twice is safe. */
 export type Unsubscribe = () => void;

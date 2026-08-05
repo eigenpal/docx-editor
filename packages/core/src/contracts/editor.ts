@@ -21,7 +21,7 @@ import type {
   ReviewRevisionItem,
   ReviewRevisionKind,
 } from '../layout/review-support.ts';
-import type { InteractionOutcome, SemanticSelection, SemanticTarget } from './interaction';
+import type { InteractionOutcome, SemanticTarget } from './interaction';
 import type {
   ColorValue,
   ContentControlFilter,
@@ -215,7 +215,6 @@ export type EditorPosition = DocAnchor | DocLocation | SemanticTarget;
 /** A selection expressed with any accepted position form. */
 export type EditorSelection =
   | DocRange
-  | SemanticSelection
   | { from: EditorPosition; to: EditorPosition }
   | SemanticTarget;
 

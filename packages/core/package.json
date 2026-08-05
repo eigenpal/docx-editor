@@ -34,20 +34,10 @@
       "import": "./dist/contracts/interaction.js",
       "require": "./dist/contracts/interaction.cjs"
     },
-    "./contracts/mcp": {
-      "types": "./dist/contracts/mcp.d.ts",
-      "import": "./dist/contracts/mcp.js",
-      "require": "./dist/contracts/mcp.cjs"
-    },
     "./contracts/modules": {
       "types": "./dist/contracts/modules.d.ts",
       "import": "./dist/contracts/modules.js",
       "require": "./dist/contracts/modules.cjs"
-    },
-    "./contracts/plugin": {
-      "types": "./dist/contracts/plugin.d.ts",
-      "import": "./dist/contracts/plugin.js",
-      "require": "./dist/contracts/plugin.cjs"
     },
     "./contracts/types": {
       "types": "./dist/contracts/types.d.ts",
