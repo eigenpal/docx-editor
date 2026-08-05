@@ -38,6 +38,26 @@ export interface EnsuredHyperlinkRelationship {
   readonly relationshipId: string;
 }
 
+/**
+ * The target this engine would write for `url`, or null when it would write none.
+ *
+ * The VALIDATION half of {@link ensureHyperlinkRelationship}, exported so a caller that must decide
+ * "would this be authored?" before it is allowed to change the package can ask without changing it.
+ * A relationship outlives a refusal — it lives beside the trees, outside the undo stack — so a
+ * caller planning a batch that may yet be refused has to ask this and mint later.
+ *
+ * Same rules, one implementation: `sanitizeHref`'s allowlist, a bound on the length, XML-writable
+ * text, and the absolute-URI gate the READ side applies. There is no legitimate reason for this
+ * engine to author a scheme it would refuse to open.
+ */
+export function authorableHyperlinkTarget(url: string): string | null {
+  if (typeof url !== 'string' || url.length === 0 || url.length > MAX_TARGET_LENGTH) return null;
+  if (!isValidXmlText(url)) return null;
+  const projection = sanitizeHref(url);
+  if (!projection.ok || projection.href.length === 0) return null;
+  return validateExternalTarget(projection.href).ok ? projection.href : null;
+}
+
 /** `/word/document.xml` -> `/word/_rels/document.xml.rels`. */
 function relsPartNameFor(partName: string): string {
   const slash = partName.lastIndexOf('/');
@@ -98,16 +118,12 @@ export function ensureHyperlinkRelationship(
   url: string,
   ownerPart: string = pkg.mainDocumentPart
 ): EnsuredHyperlinkRelationship | null {
-  if (typeof url !== 'string' || url.length === 0 || url.length > MAX_TARGET_LENGTH) return null;
-  if (!isValidXmlText(url)) return null;
-  const projection = sanitizeHref(url);
-  if (!projection.ok || projection.href.length === 0) return null;
-  const target = projection.href;
-  // The same gate the READ side applies, applied on the way in: an authored external
-  // relationship must be an absolute URI. Writing `/admin/delete-account` as
-  // `TargetMode="External"` is not a shape Word produces, and it would hand the next
-  // reader a target that resolves against whatever origin opens the file.
-  if (!validateExternalTarget(target).ok) return null;
+  // The same gate the READ side applies, applied on the way in: an authored external relationship
+  // must be an absolute URI. Writing `/admin/delete-account` as `TargetMode="External"` is not a
+  // shape Word produces, and it would hand the next reader a target that resolves against whatever
+  // origin opens the file.
+  const target = authorableHyperlinkTarget(url);
+  if (target === null) return null;
 
   const owner = ownerPart;
   if (typeof owner !== 'string' || owner.length === 0) return null;

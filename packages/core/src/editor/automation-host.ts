@@ -25,6 +25,7 @@ import type {
   AutomationCommentWriteResult,
   AutomationDocumentPort,
   AutomationPortApplyResult,
+  AutomationStagedOps,
 } from '../automation/document-port.ts';
 import { createAutomationHost } from '../automation/host.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
@@ -101,7 +102,7 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       return base + seen;
     },
     currentPackage: (): OoxmlPackage | null => sync()?.currentPackage() ?? null,
-    apply(ops: readonly TreeDocOp[], scope: StoryScope): AutomationPortApplyResult {
+    apply(staged: AutomationStagedOps, scope: StoryScope): AutomationPortApplyResult {
       sync();
       const surface = editor.surface;
       if (!surface) return { ok: false, reason: 'no-document' };
@@ -112,7 +113,11 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       // first version of this adapter — wrote into a document open for viewing and turned a
       // proposal into a permanent edit. A refusal anywhere leaves the session, its history and
       // the painted pages untouched, which is what makes the batch atomic.
-      const result = surface.applyAutomationOps(ops, scope);
+      //
+      // The ops are STAGED, so the relationship an external hyperlink needs is minted inside that
+      // gate — see `applyAutomationOps`. Minting it out here would put a target in the `.rels` of a
+      // document the very next line refuses to write to.
+      const result = surface.applyAutomationOps(staged, scope);
       if (result.rejected) return { ok: false, reason: String(result.reason ?? 'refused') };
       return { ok: true, changed: result.committed };
     },
@@ -123,7 +128,7 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       // THE SAME SURFACE PATH. `applyTreeOps` routes a solitary lifecycle op to the package
       // store's own transaction, so this goes through the mode gates and the repaint like every
       // other write rather than reaching around them.
-      const result = surface.applyAutomationOps([op]);
+      const result = surface.applyAutomationOps(() => [op]);
       if (result.rejected) return { ok: false, reason: String(result.reason ?? 'refused') };
       return { ok: true, changed: result.committed };
     },
@@ -159,12 +164,6 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
         return { committed: created !== null };
       });
       return outcome;
-    },
-    ensureExternalTarget(url: string, scope: StoryScope): string | null {
-      // The SESSION's minting, which is the same `ensureHyperlinkRelationship` the headless host
-      // reaches and the same one Ctrl+K in the editor uses: one relationship per target per
-      // owner part, refused for a scheme this engine would not open.
-      return sync()?.ensureHyperlinkRelationship(url, scope) ?? null;
     },
     save: () => sync()?.save() ?? null,
     // The one genuinely browser-only operation, and the reason the port declares it optional:

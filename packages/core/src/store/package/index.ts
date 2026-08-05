@@ -237,6 +237,7 @@ export {
 export { ensureListDefinition, ensureNumberingLevel, type ListKind } from './numbering-part.ts';
 export { buildBookmarkIndex, type BookmarkAnchor, type BookmarkIndex } from './bookmarks.ts';
 export {
+  authorableHyperlinkTarget,
   ensureHyperlinkRelationship,
   relationshipTargetIn,
   type EnsuredHyperlinkRelationship,

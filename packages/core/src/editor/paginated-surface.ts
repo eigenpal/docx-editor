@@ -518,6 +518,10 @@ export function mountPaginatedSurface(
   });
   const hyperlinks = createHyperlinkOps({
     session: gatedSession,
+    // Asked BEFORE the relationship is minted. The gated session refuses the ops in viewing mode
+    // either way, but the mint is a package write that the refusal does not roll back — Ctrl+K in a
+    // document open for reading left its target declared in `.rels`.
+    refusesWrite: () => writeRefusal(true) !== null,
     storyScope,
     selection: () => selection,
     orderedRange: () => orderedRange(),
@@ -770,35 +774,37 @@ export function mountPaginatedSurface(
     // automation handle names one — passes this, and then the reader's position is irrelevant.
     scope: StoryScope = storyScope()
   ): ReturnType<TreeDocxSession['applyTreeOps']> {
+    const refusal = writeRefusal(ops.some(isDocumentEdit));
+    if (refusal !== null) return { committed: false, rejected: true, opCount: 0, reason: refusal };
+
+    // The scope resolves to `storyScope()` unless the caller named one, so an edit inside a
+    // header, a footer or a note is applied to that story rather than to the body.
+    return session.applyTreeOps(trackedOps(ops), selectionBefore, selectionAfter, scope);
+  }
+
+  /**
+   * Why a write would be refused right now, or null when it would be allowed.
+   *
+   * ONE statement of the mode rules, asked by `applyOps` for every lane and asked once more by the
+   * automation path — which has to know the answer BEFORE it builds its ops, because building them
+   * can mint a hyperlink relationship, and a relationship survives a refusal. `edits` says whether
+   * the write changes the document, which is the only thing the second rule needs from the ops.
+   */
+  function writeRefusal(edits: boolean): string | null {
     // VIEWING refuses every write here rather than only at the facade. The keymap and
     // `beforeinput` are wired to this surface, not to `Editor.exec`, so a facade-only gate
     // left the document fully typeable while the toolbar reported it read-only.
-    if (editingMode === 'view') {
-      return {
-        committed: false,
-        rejected: true,
-        opCount: 0,
-        reason: 'the document is open for viewing',
-      };
-    }
+    if (editingMode === 'view') return VIEWING_REFUSAL;
     // SUGGESTING with no author cannot write `CT_TrackChange`, and the fallback of writing
     // an untracked edit is only tolerable when nothing is destroyed. A deletion in that
     // state removes text the reviewer was promised they could get back.
     // EVERY edit, not just the destructive ones. Letting insertions through wrote permanent
     // changes to someone else's document while the pill said Suggesting and the review pane
     // stayed empty — half the keyboard proposing and half editing outright.
-    if (editingMode === 'suggest' && !options.author?.trim() && ops.some(isDocumentEdit)) {
-      return {
-        committed: false,
-        rejected: true,
-        opCount: 0,
-        reason: 'suggesting needs an author before it can propose a change',
-      };
+    if (editingMode === 'suggest' && !options.author?.trim() && edits) {
+      return 'suggesting needs an author before it can propose a change';
     }
-
-    // The scope resolves to `storyScope()` unless the caller named one, so an edit inside a
-    // header, a footer or a note is applied to that story rather than to the body.
-    return session.applyTreeOps(trackedOps(ops), selectionBefore, selectionAfter, scope);
+    return null;
   }
 
   /** Ops that change the DOCUMENT, as opposed to reading or resolving it. */
@@ -1672,7 +1678,7 @@ export function mountPaginatedSurface(
         }
       ),
 
-    applyAutomationOps: (ops, scope) => {
+    applyAutomationOps: (staged, scope) => {
       // THE SAME PATH A KEYSTROKE TAKES, minus the keystroke. `applyOps` is where viewing
       // refuses and where suggesting turns an edit into a proposal, and `commit` is where the
       // refusal is recorded, the caret is re-clamped and the pages are repainted. A host that
@@ -1688,8 +1694,38 @@ export function mountPaginatedSurface(
         rejected: false,
         opCount: 0,
       };
+      const story = scope ?? BODY_STORY;
       commit(
-        () => (result = applyOps(ops, undefined, undefined, scope ?? BODY_STORY)),
+        () => {
+          // THE GATE BEFORE THE OPS EXIST. Building them mints the relationship an external
+          // hyperlink names, which changes the PACKAGE — outside the transaction, outside the undo
+          // stack, and left behind by a refusal. Viewing is asked first, so a document open for
+          // reading comes out of this byte-identical; `edits: false` keeps the question to the rule
+          // that holds for every op, because a batch of tracked-change DECISIONS is not an edit and
+          // `applyOps` below judges it on its own ops.
+          const viewing = writeRefusal(false);
+          if (viewing !== null) {
+            return (result = { committed: false, rejected: true, opCount: 0, reason: viewing });
+          }
+          // The mint carries the edit rule with it: it IS an edit, so a mode that would refuse one
+          // must refuse it, and refusing here means the relationship is never written.
+          let refused: string | null = null;
+          const ops = staged((url) => {
+            const refusal = writeRefusal(true);
+            if (refusal === null) return session.ensureHyperlinkRelationship(url, story);
+            refused = refusal;
+            return null;
+          });
+          if (ops === null) {
+            return (result = {
+              committed: false,
+              rejected: true,
+              opCount: 0,
+              reason: refused ?? 'this engine will not author that hyperlink target',
+            });
+          }
+          return (result = applyOps(ops, undefined, undefined, story));
+        },
         () => {
           // Flushed before the clamp for the same reason `commitReviewOps` does it: the clamp
           // needs post-edit lengths, and this thunk runs before the repaint.

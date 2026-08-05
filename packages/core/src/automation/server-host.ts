@@ -34,6 +34,7 @@ import type {
   AutomationCommentWriteResult,
   AutomationDocumentPort,
   AutomationPortApplyResult,
+  AutomationStagedOps,
 } from './document-port.ts';
 import { createAutomationHost } from './host.ts';
 import type { AutomationCapabilities, AutomationHost } from './protocol.ts';
@@ -107,6 +108,28 @@ export function createServerAutomationHost(
 }
 
 /**
+ * The relationship id for an external hyperlink target on the addressed story's part, or null.
+ *
+ * The shell, not a story transaction: the relationship lives beside the trees, and the store keeps it
+ * across lifecycle snapshots so an undo cannot orphan the `r:id` a committed link names. An
+ * unreferenced hyperlink relationship is inert markup Word writes too, so this order — relationship
+ * first, then the op that names it — is the engine's own; the reverse would publish a link pointing
+ * at an id nothing declares.
+ */
+function mintExternalTarget(
+  store: TreePackageStore,
+  url: string,
+  scope: StoryScope
+): string | null {
+  const owner = store.partFor(scope);
+  if (!owner) return null;
+  const minted = ensureHyperlinkRelationship(store.currentPackage(), url, owner.name);
+  if (!minted) return null;
+  store.replacePackageShell(minted.pkg);
+  return minted.relationshipId;
+}
+
+/**
  * The port over a store this host owns.
  *
  * `apply` is one `transact` call for the whole batch — that is where atomicity comes from,
@@ -118,8 +141,13 @@ function packageStorePort(store: TreePackageStore): AutomationDocumentPort {
   return {
     revision: () => store.packageRevision,
     currentPackage: (): OoxmlPackage | null => (live ? store.currentPackage() : null),
-    apply(ops: readonly TreeDocOp[], scope: StoryScope = BODY): AutomationPortApplyResult {
+    apply(staged: AutomationStagedOps, scope: StoryScope = BODY): AutomationPortApplyResult {
       if (!live) return { ok: false, reason: 'disposed' };
+      // BUILT HERE, not by the planner: minting the relationship an external link names changes the
+      // package, and this host has no mode to refuse a write, so "here" is as late as it gets — a
+      // batch that was refused while planning has already left without touching anything.
+      const ops = staged((url) => mintExternalTarget(store, url, scope));
+      if (ops === null) return { ok: false, reason: 'unsupported-target' };
       const result = store.transact(scope, (ctx) => {
         for (const op of ops) ctx.apply(op);
       });
@@ -144,18 +172,6 @@ function packageStorePort(store: TreePackageStore): AutomationDocumentPort {
         };
       }
       return { ok: true, changed: result.change !== null };
-    },
-    ensureExternalTarget(url: string, scope: StoryScope): string | null {
-      if (!live) return null;
-      const owner = store.partFor(scope);
-      if (!owner) return null;
-      const minted = ensureHyperlinkRelationship(store.currentPackage(), url, owner.name);
-      if (!minted) return null;
-      // The shell, not a story transaction: the relationship lives beside the trees, and the
-      // store keeps it across lifecycle snapshots so an undo cannot orphan the `r:id` a
-      // committed link names.
-      store.replacePackageShell(minted.pkg);
-      return minted.relationshipId;
     },
     applyCommentWrite(write, scope): AutomationCommentWriteResult {
       if (!live) return { ok: false, reason: 'disposed' };

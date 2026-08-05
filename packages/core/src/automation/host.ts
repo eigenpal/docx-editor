@@ -140,14 +140,21 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       handles,
       reads: readsOf(pkg),
       capabilities,
-      ensureExternalTarget: (url, scope) => port.ensureExternalTarget(url, scope),
       ...(port.select ? { select: port.select.bind(port) } : {}),
     });
 
     // PLAN EVERYTHING FIRST. A query's answer is final here; a command's is a closure, because
     // a paragraph a command creates has no identity until the transaction lands.
     const planned: Extract<PlannedOperation, { readonly ok: true }>[] = [];
-    const ops: TreeDocOp[] = [];
+    /**
+     * The batch's ops, in planned order, as thunks.
+     *
+     * Thunks because of the hyperlink: a command naming an external target has no ops until the
+     * relationship exists, and the relationship must not exist until the owner's write gate has let
+     * the batch through. Holding a thunk per command keeps the ops in the order they were planned —
+     * appending the late ones at the end would reorder a batch against itself.
+     */
+    const stages: ((relate: (url: string) => string | null) => readonly TreeDocOp[] | null)[] = [];
     /** The one package-level op a batch may hold, which travels alone. See the planner. */
     let lifecycle: TreeDocOp | null = null;
     /** The one comment write a batch may hold, likewise solitary and likewise its own commit. */
@@ -162,7 +169,16 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       if (step.kind === 'command') {
         if (firstCommand < 0) firstCommand = index;
         if (step.lifecycle) lifecycle = step.ops[0] ?? null;
-        else ops.push(...step.ops);
+        else if (step.relate) {
+          const pending = step.relate;
+          stages.push((relate) => {
+            const relationshipId = relate(pending.url);
+            return relationshipId === null ? null : pending.ops(relationshipId);
+          });
+        } else {
+          const { ops } = step;
+          stages.push(() => ops);
+        }
       } else if (step.kind === 'commentWrite') {
         if (firstCommand < 0) firstCommand = index;
         commentWrite = { write: step.write, scope: planner.writeScope ?? { kind: 'body' } };
@@ -203,11 +219,26 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       }
       changed = applied.changed;
     }
-    if (ops.length > 0) {
+    if (stages.length > 0) {
       // THE STORY THE BATCH PINNED. One transaction against one story, named by the planner
       // rather than assumed to be the body — a header edit committed against the body scope
       // would refuse ids the body does not hold.
-      const applied = port.apply(ops, planner.writeScope ?? { kind: 'body' });
+      //
+      // The ops are built by the OWNER, once it has decided the batch may write: see
+      // `AutomationStagedOps`. Everything the planner could decide is already decided; what is left
+      // is the relationship a link needs, which cannot be minted before the gate.
+      const applied = port.apply(
+        (relate) => {
+          const built: TreeDocOp[] = [];
+          for (const stage of stages) {
+            const ops = stage(relate);
+            if (ops === null) return null;
+            built.push(...ops);
+          }
+          return built;
+        },
+        planner.writeScope ?? { kind: 'body' }
+      );
       if (!applied.ok) {
         return refuse(
           operations,

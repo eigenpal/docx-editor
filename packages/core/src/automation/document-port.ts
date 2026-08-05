@@ -39,6 +39,22 @@ export type AutomationPortApplyResult =
   | { readonly ok: true; readonly changed: boolean }
   | { readonly ok: false; readonly reason: string };
 
+/**
+ * A batch's ops, built at the moment the owner is about to commit them.
+ *
+ * A FUNCTION rather than an array because of one op: an external hyperlink names a relationship, and
+ * a relationship is a package fact that outlives a refusal — it sits beside the trees, outside the
+ * undo stack. Minting one while planning left a `Relationship` behind for a link the batch never
+ * got, including on a document open for reading. So the planner validates the target and the owner
+ * calls this AFTER its write gate has passed: `relate` mints (or reuses) the relationship for a
+ * target, answering null for one the engine will not author.
+ *
+ * Answering null means "these ops cannot be built" and must leave the document untouched.
+ */
+export type AutomationStagedOps = (
+  relate: (url: string) => string | null
+) => readonly TreeDocOp[] | null;
+
 export interface AutomationDocumentPort {
   /**
    * Monotonic document revision. One committed batch moves it exactly once.
@@ -63,8 +79,11 @@ export interface AutomationDocumentPort {
    * batch addressed. A port that assumed the body would silently refuse every header and note
    * op — the ids are not in the body's index — and a port that guessed from the ops would be a
    * second story resolver disagreeing with the reads.
+   *
+   * The ops arrive as {@link AutomationStagedOps} so the relationship an external hyperlink needs is
+   * minted here, INSIDE the owner's write gate, rather than while the batch was still being planned.
    */
-  apply(ops: readonly TreeDocOp[], scope: StoryScope): AutomationPortApplyResult;
+  apply(staged: AutomationStagedOps, scope: StoryScope): AutomationPortApplyResult;
   /**
    * Commit ONE package-level op — a note or furniture lifecycle — as its own transaction.
    *
@@ -74,20 +93,6 @@ export interface AutomationDocumentPort {
    * holds exactly this one command and atomicity still means what it says.
    */
   applyLifecycle(op: TreeDocOp): AutomationPortApplyResult;
-  /**
-   * The relationship id for an external hyperlink target on one story's part, minting it if the
-   * package does not already declare it — or null when the URL is not one this engine will write.
-   *
-   * BEFORE the transaction and outside it, which is where the engine already puts this: a
-   * relationship is a package fact, not a tree op, and it carries nothing but its target. So an
-   * unreferenced one is inert markup that Word writes too, while a MISSING one is a link that
-   * resolves to nothing. A refusal here happens before any op is staged, so a rejected URL leaves
-   * no half-applied edit behind.
-   *
-   * The URL is gated by the same allowlist a file-derived target is read through — a scheme this
-   * engine would refuse to open is a scheme it must not author.
-   */
-  ensureExternalTarget(url: string, scope: StoryScope): string | null;
   /**
    * Commit ONE comment write — a reply, or a thread's resolved state — as its own transaction.
    *

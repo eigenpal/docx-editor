@@ -94,6 +94,19 @@ export function savedMainXml(host: AutomationHost): string {
   return strFromU8(unzipSync(saved.bytes)['word/document.xml'] as Uint8Array);
 }
 
+/**
+ * The saved bytes of ONE part, for the differential assertions a refusal has to satisfy.
+ *
+ * Bytes rather than a parsed shape: "this refusal changed nothing" is a claim about the file, and
+ * a comparison of two derived pictures can agree while the markup between them differs.
+ */
+export function savedPartBytes(host: AutomationHost, name: string): string {
+  const saved = host.save();
+  if (!saved.ok) throw new Error(`save refused: ${saved.error.code}`);
+  const part = unzipSync(saved.bytes)[name];
+  return part === undefined ? '' : strFromU8(part);
+}
+
 export function open(bytes: Uint8Array): AutomationHost {
   const opened = createServerAutomationHost(bytes);
   if (!opened.ok) throw new Error(`fixture host did not open: ${opened.reason}`);

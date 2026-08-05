@@ -20,6 +20,7 @@ import {
   reopen,
   roots,
   savedMainXml,
+  savedPartBytes,
   spanAt,
   storyText,
   textAt,
@@ -133,6 +134,30 @@ describe('a link is authored, and only a target this engine will open', () => {
     }
     // Not "written and then rendered inert": the document is byte-for-byte what it was.
     expect(savedMainXml(host)).toBe(before);
+  });
+
+  test('a batch refused after the link is planned leaves the relationships alone', () => {
+    const host = withLinks();
+    const { body } = roots(host);
+    const before = savedPartBytes(host, 'word/_rels/document.xml.rels');
+    const forged = { kind: 'bookmark', ref: 'bookmark:forged:1' } as unknown as AutomationHandle;
+    // A LATER operation fails, so the batch is refused as a whole. The relationship the link
+    // would have needed is a package fact that outlives a refusal: minting it while planning
+    // left a `Relationship` behind for a link the document never got, and nothing in the
+    // protocol could tell the caller their refused batch had still changed the file.
+    const response = host.execute({
+      operations: [
+        {
+          op: 'setHyperlink',
+          span: spanOfWords(host, body, 'see'),
+          target: 'https://example.com/never',
+        },
+        { op: 'getBookmarkName', bookmark: forged },
+      ],
+    });
+    expect(response.ok).toBe(false);
+    expect(savedPartBytes(host, 'word/_rels/document.xml.rels')).toBe(before);
+    expect(savedPartBytes(host, 'word/_rels/document.xml.rels')).not.toContain('example.com/never');
   });
 
   test('an anchor links to a bookmark in this document', () => {

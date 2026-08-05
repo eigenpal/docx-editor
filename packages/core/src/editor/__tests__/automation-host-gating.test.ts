@@ -89,6 +89,29 @@ function noteDocx(): Uint8Array {
   });
 }
 
+/** A document carrying one tracked insertion, so a DECISION has something to decide. */
+function revisedDocx(): Uint8Array {
+  const body =
+    `<w:p><w:r><w:t>alpha</w:t></w:r>` +
+    `<w:ins w:id="7" w:author="Ada" w:date="2024-01-01T00:00:00Z">` +
+    `<w:r><w:t xml:space="preserve"> proposed</w:t></w:r></w:ins></w:p>`;
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(`<Relationships xmlns="${REL}"/>`),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}<w:sectPr/></w:body></w:document>`
+    ),
+  });
+}
+
 function mount(options: { author?: string; header?: string; bytes?: Uint8Array } = {}): {
   editor: DocxEditorInstance;
   container: HTMLElement;
@@ -105,13 +128,24 @@ function mount(options: { author?: string; header?: string; bytes?: Uint8Array }
   return { editor, container, host: createBrowserAutomationHost(editor) };
 }
 
-function paragraphsOf(host: AutomationHost): readonly AutomationHandle[] {
+function bodyOf(host: AutomationHost): AutomationHandle {
   const document = handleAt(host.execute({ operations: [{ op: 'getDocument' }] }), 0);
-  const body = handleAt(host.execute({ operations: [{ op: 'getBody', document }] }), 0);
-  const listed = host.execute({ operations: [{ op: 'getParagraphs', body }] });
-  const result = listed.results[0];
+  return handleAt(host.execute({ operations: [{ op: 'getBody', document }] }), 0);
+}
+
+function paragraphsOf(host: AutomationHost): readonly AutomationHandle[] {
+  return handlesAt(host.execute({ operations: [{ op: 'getParagraphs', body: bodyOf(host) }] }), 0);
+}
+
+function handlesAt(
+  response: { readonly results: readonly { readonly status: string }[] },
+  index: number
+): readonly AutomationHandle[] {
+  const result = response.results[index] as
+    | { status: 'ok'; value: { kind: string; handles: readonly AutomationHandle[] } }
+    | undefined;
   if (result?.status !== 'ok' || result.value.kind !== 'handles') {
-    throw new Error('expected paragraph handles');
+    throw new Error(`expected handles at ${index}`);
   }
   return result.value.handles;
 }
@@ -145,6 +179,14 @@ function errorAt(
     | undefined;
   if (result?.status !== 'error') throw new Error(`expected an error at ${index}`);
   return result.error;
+}
+
+/** One part of a saved package, as text. Empty when the package does not hold it. */
+function savedPart(host: AutomationHost, name: string): string {
+  const saved = host.save();
+  if (!saved.ok) throw new Error(`save failed: ${saved.error.code}`);
+  const part = unzipSync(saved.bytes)[name];
+  return part === undefined ? '' : new TextDecoder().decode(part);
 }
 
 /** The main document part of a saved package, as text — where `w:ins` is visible. */
@@ -223,6 +265,76 @@ describe('a scripted write obeys the editing mode', () => {
     expect(errorAt(response, 0).code).toBe('transaction-refused');
     expect(errorAt(response, 0).detail).toContain('author');
     expect(textOf(host, paragraphs[0]!)).toBe('alpha');
+    expect(savedDocumentXml(host)).not.toContain('w:ins');
+  });
+
+  test('viewing refuses a link, and the relationships are the file’s own', () => {
+    const { host, editor } = mount();
+    const paragraphs = paragraphsOf(host);
+    editor.surface!.setEditingMode('view');
+    const before = savedPart(host, 'word/_rels/document.xml.rels');
+
+    const response = host.execute({
+      operations: [
+        {
+          op: 'setHyperlink',
+          span: {
+            start: { paragraph: paragraphs[0]!, offset: 0 },
+            end: { paragraph: paragraphs[0]!, offset: 5 },
+          },
+          target: 'https://example.com/viewing',
+        },
+      ],
+    });
+
+    expect(response.ok).toBe(false);
+    expect(errorAt(response, 0).detail).toContain('viewing');
+    // A relationship is minted on the PACKAGE, outside the undo stack and outside the mode gate
+    // it was once minted before. A document open for reading must come out of a refused batch
+    // byte-identical, or a reader has an external target in their file that they never authored.
+    expect(savedPart(host, 'word/_rels/document.xml.rels')).toBe(before);
+    expect(savedPart(host, 'word/_rels/document.xml.rels')).not.toContain('example.com/viewing');
+  });
+
+  test('suggesting with no author refuses a link, and mints nothing for it', () => {
+    // The mint asks the mode the same question an edit asks, because it IS one: a relationship the
+    // batch that needed it never got is a change to a document nobody was allowed to change.
+    const { host, editor } = mount();
+    const paragraphs = paragraphsOf(host);
+    editor.surface!.setEditingMode('suggest');
+    const before = savedPart(host, 'word/_rels/document.xml.rels');
+
+    const response = host.execute({
+      operations: [
+        {
+          op: 'setHyperlink',
+          span: {
+            start: { paragraph: paragraphs[0]!, offset: 0 },
+            end: { paragraph: paragraphs[0]!, offset: 5 },
+          },
+          target: 'https://example.com/unattributed',
+        },
+      ],
+    });
+
+    expect(response.ok).toBe(false);
+    expect(errorAt(response, 0).detail).toContain('author');
+    expect(savedPart(host, 'word/_rels/document.xml.rels')).toBe(before);
+  });
+
+  test('a tracked-change decision still lands where an edit would be refused', () => {
+    // Deciding an existing change is not authoring one, so it needs no author — and the gate the
+    // link's mint added must not have quietly turned every automation batch into an edit.
+    const { host, editor } = mount({ bytes: revisedDocx() });
+    const paragraphs = paragraphsOf(host);
+    editor.surface!.setEditingMode('suggest');
+    const listed = host.execute({ operations: [{ op: 'getRevisions', body: bodyOf(host) }] });
+    const revision = handlesAt(listed, 0)[0]!;
+
+    const response = host.execute({ operations: [{ op: 'acceptRevision', revision }] });
+
+    expect(response.ok).toBe(true);
+    expect(textOf(host, paragraphs[0]!)).toBe('alpha proposed');
     expect(savedDocumentXml(host)).not.toContain('w:ins');
   });
 

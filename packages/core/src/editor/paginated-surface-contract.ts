@@ -458,10 +458,20 @@ export interface PaginatedSurface {
    * change with no proposal and no author. Here, viewing refuses, suggesting attributes, the
    * refusal reason is reported like any other, and the pages repaint from the commit.
    *
-   * The ops address the BODY, whatever story the reader is in: the caller identified its target
-   * before calling, so following the caret into a header would write somewhere else entirely.
+   * The ops address the story the CALLER named, whatever story the reader is in: the caller
+   * identified its target before calling, so following the caret into a header would write
+   * somewhere else entirely. They default to the body rather than to the reader's story.
+   *
+   * They arrive as a BUILDER, given a way to mint the relationship an external hyperlink names.
+   * That mint changes the package outside the transaction and outside the undo stack, so it must not
+   * happen until the mode has allowed the write — a link minted while the batch was still being
+   * planned left its target in a read-only document's `.rels`. A builder answering null means the
+   * target is one this engine will not author, and the write is refused having changed nothing.
    */
-  applyAutomationOps(ops: readonly TreeDocOp[], scope?: StoryScope): TreeApplyResult;
+  applyAutomationOps(
+    staged: (relate: (url: string) => string | null) => readonly TreeDocOp[] | null,
+    scope?: StoryScope
+  ): TreeApplyResult;
   /**
    * Commit review ops — accept, reject, a new comment — through the SAME path a keystroke
    * takes: layout, paint, and a caret clamped to what the document now holds.

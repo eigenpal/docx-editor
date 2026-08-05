@@ -81,6 +81,7 @@ import {
 import { BODY_STORY, storyKey, type AutomationStoryId } from './stories.ts';
 import { isStoryId } from './stories.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
+import { authorableHyperlinkTarget } from '../store/package/hyperlink-part.ts';
 import {
   bookmarkIn,
   bookmarkReads,
@@ -132,6 +133,21 @@ export type PlannedOperation =
        * refused it any company — one commit per batch, or the batch is not one transaction.
        */
       readonly lifecycle?: boolean;
+      /**
+       * A relationship these ops need, and the ops once the package declares it.
+       *
+       * Present only for an external hyperlink target, and then `ops` is EMPTY: a relationship is a
+       * package fact that outlives a refusal — it lives beside the trees, outside the undo stack —
+       * so minting one while planning left a `Relationship` in `.rels` for a link a later refusal
+       * meant the document never got, on a document that may not even have been writable. Planning
+       * validates the target (see `authorableHyperlinkTarget`, the same gate the mint applies) and
+       * schedules it; the application path mints it after the mode gate has passed and builds the
+       * ops from the id it got back.
+       */
+      readonly relate?: {
+        readonly url: string;
+        readonly ops: (relationshipId: string) => readonly TreeDocOp[];
+      };
       /** Computed after the commit, so a created paragraph can be named. */
       readonly answer: (post: AutomationPackageReads) => AutomationValue;
     }
@@ -172,15 +188,6 @@ export interface BatchPlannerHost {
   readonly capabilities: AutomationCapabilities;
   /** Moves a reader's caret. Only called when `capabilities.selection` is true. */
   readonly select?: (range: ResolvedRange, mode: AutomationSelectionMode) => void;
-  /**
-   * Mint (or reuse) the relationship for an external hyperlink target, or refuse the URL.
-   *
-   * Called DURING planning, before any transaction: a relationship is a package fact the tree op
-   * then names, and the engine's own hyperlink lane does it in the same order. A null answer is a
-   * refusal — the planner turns it into a typed error and no op is staged, so a rejected URL
-   * cannot leave a link pointing at an id nothing declares.
-   */
-  readonly ensureExternalTarget: (url: string, scope: StoryScope) => string | null;
 }
 
 export interface BatchPlanner {
@@ -1353,23 +1360,49 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     // An anchor names a bookmark in THIS document, so it is resolved against the story rather
     // than trusted: a jump to a name nothing declares lands nowhere, and writing it would put
     // that dead end in the file.
-    let aimed: { readonly relationshipId?: string; readonly anchor?: string };
+    let aimed: { readonly anchor?: string } = {};
+    /** The external target to mint for, once the batch is allowed to write. */
+    let external: string | null = null;
     if (target.startsWith('#')) {
       const name = target.slice(1);
       if (name.length === 0 || !bookmarkIn(reads, name))
         return refuse('unsupported-content', 'this document declares no such bookmark', target);
       aimed = { anchor: name };
     } else {
-      const minted = host.ensureExternalTarget(target, reads.scope);
       // NULL IS THE SECURITY ANSWER as much as the validity one: a refused scheme, a target that
-      // is not an absolute URI, a string too long to be one. Refused before a single op is staged.
-      if (minted === null)
+      // is not an absolute URI, a string too long to be one. Refused here, while planning, so no op
+      // is staged and — because this only READS the rules — nothing about the package moves either.
+      if (authorableHyperlinkTarget(target) === null)
         return refuse('unsupported-content', 'this engine will not author that target', 'target');
-      aimed = { relationshipId: minted };
+      external = target;
     }
 
     const pin = pinWrite(plan);
     if (pin) return pin;
+
+    /** A command whose ops are ready, or scheduled behind the relationship they name. */
+    const staged = (
+      build: (aim: { readonly relationshipId?: string; readonly anchor?: string }) => TreeDocOp
+    ): PlannedOperation =>
+      external === null
+        ? {
+            ok: true,
+            kind: 'command',
+            ops: [build(aimed)],
+            story: reads.story,
+            answer: () => APPLIED,
+          }
+        : {
+            ok: true,
+            kind: 'command',
+            ops: [],
+            relate: {
+              url: external,
+              ops: (relationshipId: string) => [build({ relationshipId })],
+            },
+            story: reads.story,
+            answer: () => APPLIED,
+          };
 
     // RETARGET rather than wrap, when the span is already inside a link: replacing the element
     // would throw away its authored `w:history` and `w:tgtFrame` and its identity, and wrapping
@@ -1377,13 +1410,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     if (existing) {
       const conflict = touch(plan, existing.paragraphId);
       if (conflict) return conflict;
-      return {
-        ok: true,
-        kind: 'command',
-        ops: [{ op: 'setHyperlinkTarget', linkId: existing.id, ...aimed }],
-        story: reads.story,
-        answer: () => APPLIED,
-      };
+      return staged((aim) => ({ op: 'setHyperlinkTarget', linkId: existing.id, ...aim }));
     }
 
     if (collapsed)
@@ -1400,22 +1427,14 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     // `Hyperlink` is marked on the runs only when the document DEFINES it: a `w:rStyle` naming a
     // style that is not there paints nothing and reads back as a style the document lacks.
     const styleId = reads.styles().idOf('hyperlink');
-    return {
-      ok: true,
-      kind: 'command',
-      ops: [
-        {
-          op: 'insertHyperlink',
-          paragraphId: range.start.paragraphId,
-          start: range.start.offset,
-          end: range.end.offset,
-          ...aimed,
-          ...(styleId === null ? {} : { styleId }),
-        },
-      ],
-      story: reads.story,
-      answer: () => APPLIED,
-    };
+    return staged((aim) => ({
+      op: 'insertHyperlink',
+      paragraphId: range.start.paragraphId,
+      start: range.start.offset,
+      end: range.end.offset,
+      ...aim,
+      ...(styleId === null ? {} : { styleId }),
+    }));
   };
 
   const planSelect = (

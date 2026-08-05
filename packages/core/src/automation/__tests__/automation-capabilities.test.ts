@@ -75,7 +75,6 @@ function fixture(
       state.applied += 1;
       return { ok: true, changed: true };
     },
-    ensureExternalTarget: () => 'rId99',
     applyCommentWrite: () => {
       state.applied += 1;
       return { ok: true, changed: true, commentId: '1' };
