@@ -1,78 +1,88 @@
-# `@docx-editor.dev/core`
+<p align="center">
+  <a href="https://www.docx-editor.dev/">
+    <img src="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/header.png" alt="DOCX Editor — .docx in, .docx out. Open source, client-side." width="500" />
+  </a>
+</p>
 
-**This package's exported surface contains no implementation.** It declares the
-public API that `@docx-editor.dev/core` must satisfy. The published package is
-installed from npm.
+<p align="center">
+  <a href="https://www.npmjs.com/package/@docx-editor.dev/core"><img src="https://img.shields.io/npm/v/@docx-editor.dev/core.svg?style=flat-square&color=3B5BDB" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@docx-editor.dev/core"><img src="https://img.shields.io/npm/dm/@docx-editor.dev/core.svg?style=flat-square&color=3B5BDB" alt="npm downloads" /></a>
+  <a href="https://github.com/eigenpal/docx-editor/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache_2.0-blue.svg?style=flat-square&color=3B5BDB" alt="license" /></a>
+  <a href="https://www.docx-editor.dev/docs"><img src="https://img.shields.io/badge/Docs-3B5BDB?style=flat-square&logo=readthedocs&logoColor=white" alt="Documentation" /></a>
+</p>
 
-It is deliberately named `@docx-editor.dev/core`, not
-`@docx-editor.dev/core`. Sharing the name would make the workspace resolve every
-consumer to this package instead of the published one, silently, since a
-workspace member outranks the registry. It is also `"private": true`, and every
-entry is types-only: there is no `default` condition, so a runtime import fails
-loudly rather than resolving to functions that throw.
+# @docx-editor.dev/core
 
-## Why it exists
+The engine behind [docx-editor.dev](https://docx-editor.dev). It reads a `.docx` into a
+canonical document tree, lays that tree out into pages, paints them, and writes the tree back
+to OOXML. No framework dependency and no UI.
 
-A published API needs a written contract: something that says what core owes its
-consumers, distinguishes an intentional export from an incidental one, and can be
-typechecked before an implementation exists. This package is that contract.
+Most apps never install this directly — [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)
+carries it. Reach for it when you are writing your own adapter, or when you need the contract
+types to write a function signature.
 
-## Shape
+```bash
+npm install @docx-editor.dev/core
+```
 
-| Entry                            | For                          | Status                         |
-| -------------------------------- | ---------------------------- | ------------------------------ |
-| `@docx-editor.dev/core`          | editor-api, headless, server | stable                         |
-| `@docx-editor.dev/core/editor`   | React / Vue adapters         | stable                         |
-| `@docx-editor.dev/core/geometry` | adapter internals            | `@experimental`, semver-exempt |
-| `@docx-editor.dev/core/plugin`   | extension authors            | stable                         |
-| `@docx-editor.dev/core/mcp`      | MCP hosts                    | stable                         |
-| `@docx-editor.dev/core/types`    | everyone                     | type-only, zero runtime        |
+## The root is the 80% path
 
-Entries are split by audience. A headless consumer wants a document and never a
-DOM type; an adapter wants an editor; an extension author wants neither, only a
-stable way to contribute commands.
+```ts
+import { createDocxEditor, loadFonts, WORD_DEFAULT_FONT } from '@docx-editor.dev/core';
+import type { Editor, EditorSnapshot } from '@docx-editor.dev/core';
+```
 
-### Decisions worth knowing
+Create an editor, the `Editor` contract it implements, fonts, the chrome registry, and the
+document model types. Subpaths are the escape hatch, not the entry fee.
 
-**Addressing is `{ paraId, search }`, not a character offset.** An agent can
-quote text it has seen but cannot compute an offset for text it has not, and
-offsets do not survive a concurrent edit. `search` must match exactly once;
-ambiguity is an error rather than first-match-wins, because silently editing the
-wrong occurrence of a phrase is worse than refusing.
+| Subpath                | What's there                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------- |
+| `.`                    | Create an editor, the contract, fonts, the chrome registry, the document model. |
+| `./editor`             | Everything the root re-exports, plus the paginated surface and ruler geometry.  |
+| `./contracts/editor`   | `Editor`, `EditorCommand`, `EditorQuery`, `EditorSnapshot`, `PageSetup`.        |
+| `./contracts/document` | The document-level edit and query vocabulary.                                   |
+| `./contracts/types`    | Document model types.                                                           |
+| `./contracts/modules`  | `EditorModule` — the shape `@docx-editor.dev/pro` implements.                   |
+| `./store`              | The canonical tree and its transactional store.                                 |
+| `./layout`             | The DOM-free layout pass.                                                       |
+| `./output`             | Serialization.                                                                  |
+| `./automation`         | The object model behind `@docx-editor.dev/editor-api`.                          |
+| `./styles/editor.css`  | The one editor stylesheet, shared by packaged and custom chrome.                |
 
-**Commands are open, not a sealed union.** `DocEdits` and `EditorCommands` are
-interfaces widened by declaration merging, so an extension can contribute a
-command without a core release. Runtime JSON Schemas ship alongside, since types
-do not exist at runtime and MCP tool enumeration needs real schemas.
+## One pipeline
 
-**Writes return `ExecResult`, not `boolean`.** A boolean cannot separate
-"applied, nothing changed" from "target not found" from "target is locked", and
-callers need that distinction for undo grouping, error reporting, and retries.
+```
+bytes → bounded OPC/XML read → canonical OOXML tree → layout → painted pages → serialize
+```
 
-**`EditorSnapshot`, not `EditorState`.** `EditorState` is already a widely used
-export in `prosemirror-state`, which adapters import alongside this package.
+No shadow document and no second representation to keep in sync. The painted pages _are_ the
+editable surface: they are `contenteditable`, but the DOM is a picture — browser mutations are
+prevented and re-expressed as tree operations.
 
-**`EditorHost` carries DOM handles, two-phase scheduling, and measurement.** The
-engine paints the document and the adapter renders chrome around it, so the
-engine needs handles. They are getters because they are null until first render
-and can change identity afterwards. Scheduling is two-phase because the engine
-coalescing its work and the adapter flushing its render are different moments.
+Nodes are **typed** where layout needs them and **generic** everywhere else, preserving the
+element verbatim. So content the engine does not model is carried rather than dropped, and a
+document full of unknown extensions still opens, edits, and saves.
 
-**Scopes are explicit.** The editor manages one editing surface per header and
-footer alongside the body, so an unscoped command would apply to the body while
-a header has focus.
+On save, modeled parts are re-emitted normalized; everything else — custom XML, embedded fonts,
+media — is repacked from the original file untouched. Two oracles gate that in CI: a canonical
+fingerprint over the tree, and a save-and-reopen semantic digest.
 
-**`core/geometry` is a compatibility shelf, not a design.** It is marked
-semver-exempt and is a retirement target as the shared engine absorbs its
-members. Cache-invalidation functions are deliberately absent: they mutate
-shared state, which breaks multiple editors on one page. Callers use
-`editor.relayout({ sync: true })`.
+## Untrusted input
 
-## Status
+A `.docx` is a zip of XML that whoever sent it controls end to end. The engine sanitizes at the
+parse boundary — URL allowlisting, entity and zip-bomb limits, recursion and element caps, no
+zero-click external fetches, escaping on the way back out.
 
-The adapters do not compile against this contract yet. Adding this package does
-not by itself make the repository typecheck; this bare declaration package is
-migration inventory, not the target API authority. Current paragraph-engine and
-adapter work is governed by
-`openspec/changes/typed-ooxml-paragraph-editor/tasks.md`; superseded active
-proposals have been removed.
+Anything you render from document data (a font name, a hyperlink target, a comment body) is
+still attacker-controlled at your boundary. Render it as text; do not build markup or URLs
+from it.
+
+## Documentation
+
+- [Core overview](https://www.docx-editor.dev/docs/2.x/core)
+- [Architecture](https://www.docx-editor.dev/docs/2.x/core/architecture)
+- [Word fidelity](https://www.docx-editor.dev/docs/2.x/word-fidelity)
+
+## License
+
+Apache-2.0

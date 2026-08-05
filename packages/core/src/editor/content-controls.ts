@@ -13,7 +13,8 @@ import type {
   ExecErrorCode,
   ExecResult,
 } from '@docx-editor.dev/core/contracts/editor';
-import type { ContentControlFilter, ContentControlSummary, ContentControlType } from '../index.ts';
+import type { ContentControlFilter, ContentControlType } from '../contracts/types.ts';
+import type { ContentControlSummary } from '../contracts/document.ts';
 import type { DocAnchor, DocLocation, DocRange } from '../contracts/types.ts';
 import {
   WML_NAMESPACE_URI,

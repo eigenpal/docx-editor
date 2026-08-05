@@ -4,7 +4,7 @@
  * CONTRACT ONLY.
  */
 
-import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from '../index';
+import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './document.ts';
 // Type-only, so the adapters reach the review vocabulary through THIS contract rather than
 // naming the layout lane, which they are not allowed to import.
 import type {

@@ -16,7 +16,8 @@ import type {
   RunFormatting,
   TableContext,
 } from '../contracts/editor.ts';
-import type { ContainerRef, ParagraphSummary } from '../index.ts';
+import type { ContainerRef } from '../contracts/types.ts';
+import type { ParagraphSummary } from '../contracts/document.ts';
 import { classifyCommand } from './docx-editor-support.ts';
 import { gateImageCommand } from './docx-editor-images.ts';
 
