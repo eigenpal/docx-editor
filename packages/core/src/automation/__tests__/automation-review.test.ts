@@ -584,3 +584,87 @@ describe('two notes share one part, and neither reviews the other', () => {
     expect(flagOf(host, commentsOf(host, second)[0]!)).toBe(false);
   });
 });
+
+describe('a file with a great many comments is read once, not once per comment', () => {
+  /**
+   * Entries COPIED into maps while `run` executes.
+   *
+   * A count of work rather than of time: a wall-clock threshold on a machine under load is a
+   * flaky test, and the failure being pinned here is not slowness but shape — an index rebuilt
+   * per item copies the whole set per item, so the count squares while the file only doubles.
+   * `new Map(entries)` is where a rebuild is visible; a map filled by `set` in a loop is linear
+   * by construction and is deliberately not counted.
+   */
+  function copiedIntoMaps(run: () => void): number {
+    const real = globalThis.Map;
+    let copied = 0;
+    class CountingMap<K, V> extends real<K, V> {
+      constructor(entries?: Iterable<readonly [K, V]> | null) {
+        super(entries as never);
+        copied += this.size;
+      }
+    }
+    globalThis.Map = CountingMap as unknown as MapConstructor;
+    try {
+      run();
+    } finally {
+      globalThis.Map = real;
+    }
+    return copied;
+  }
+
+  /** `count` commented paragraphs, each with its own comment: the file an attacker writes. */
+  function manyComments(count: number): AutomationHost {
+    const ids = Array.from({ length: count }, (_, index) => index + 1);
+    return open(
+      richDocx({
+        body: ids
+          .map(
+            (id) =>
+              `<w:p><w:commentRangeStart w:id="${id}"/><w:r><w:t>t${id}</w:t></w:r>` +
+              `<w:commentRangeEnd w:id="${id}"/><w:r><w:commentReference w:id="${id}"/></w:r></w:p>`
+          )
+          .join(''),
+        rels: [{ id: 'rId5', type: REL_TYPES.comments, target: 'comments.xml' }],
+        parts: [
+          commentsPart(
+            ids
+              .map(
+                (id) =>
+                  `<w:comment w:id="${id}" w:author="Ada" w:initials="A" ` +
+                  `w:date="2026-01-01T10:00:00Z"><w:p w14:paraId="${id.toString(16).padStart(8, '0').toUpperCase()}">` +
+                  `<w:r><w:t>remark ${id}</w:t></w:r></w:p></w:comment>`
+              )
+              .join('')
+          ),
+        ],
+      })
+    );
+  }
+
+  function readAll(count: number): { copied: number; comments: number } {
+    const host = manyComments(count);
+    const { body } = roots(host);
+    let comments = 0;
+    // The host is built OUTSIDE the measurement: parsing a bigger file is linearly more work and
+    // would dilute the ratio the assertion depends on. Only the derivation is measured.
+    const copied = copiedIntoMaps(() => {
+      comments = commentsOf(host, body).length;
+    });
+    return { copied, comments };
+  }
+
+  test('the thread index is built once per read, not once per comment', () => {
+    // Eight times the comments, and the derivation was doing sixty-four times the work: the
+    // anchoring filter rebuilt an id-to-comment map for every comment it judged. A comments part
+    // is attacker-controlled — it is XML inside a zip anyone can hand a server — so a read whose
+    // cost squares with its size is a way to take that server down with one upload.
+    const small = readAll(40);
+    const large = readAll(320);
+    expect({ small: small.comments, large: large.comments }).toEqual({ small: 40, large: 320 });
+    expect(small.copied).toBeGreaterThan(0);
+    // Linear work over an eight-fold file is an eight-fold count; quadratic is sixty-four-fold.
+    // Halfway between the two is a bound neither a fixture detail nor a machine can move.
+    expect(large.copied).toBeLessThan(small.copied * 24);
+  });
+});

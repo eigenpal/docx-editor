@@ -135,9 +135,15 @@ export interface AutomationCommentReads {
  * the range to the comment it answers, which is also how Word writes one. So a reply's story is its
  * thread's story, and a thread whose head is anchored somewhere else — another note, the body — is
  * not this story's however many replies it has.
+ *
+ * The index is the CALLER's, built once for the whole derivation. Building it here read like a
+ * detail and was a denial of service: a `comments.xml` is XML inside a zip anyone can hand a
+ * server, and an index rebuilt per comment made the cost of reading one square with its size.
  */
-function rootIsAnchored(item: ReviewCommentItem, all: readonly ReviewCommentItem[]): boolean {
-  const byId = new Map(all.map((each) => [each.id, each]));
+function rootIsAnchored(
+  item: ReviewCommentItem,
+  byId: ReadonlyMap<string, ReviewCommentItem>
+): boolean {
   let walk: ReviewCommentItem | undefined = item;
   // Bounded: `commentItemsOf` has already broken any cycle the file described, and the cap is here
   // so a future reader of that guarantee cannot turn a file into a hang.
@@ -182,7 +188,8 @@ export function commentReads(
     reads.has(anchor.start.paragraphId)
   );
   const threaded = commentItemsOf(records, anchors, threadState);
-  const items = threaded.filter((item) => rootIsAnchored(item, threaded));
+  const threadedById = new Map(threaded.map((item) => [item.id, item]));
+  const items = threaded.filter((item) => rootIsAnchored(item, threadedById));
   const byId = new Map(items.map((item) => [item.id, item]));
   return Object.freeze({
     items: Object.freeze(items),
