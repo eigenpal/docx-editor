@@ -21,6 +21,14 @@
 @tailwind utilities;
 
 .igloo-shell {
+  /* How far below the scroll container's top the first page starts.
+   *
+   * ONE constant, because three things have to agree with it or they describe a page they
+   * are not level with: the stage's own top padding (which creates the gap), the vertical
+   * ruler's zero, and the review rail's core log. It was written out twice before the rail
+   * had furniture, and the third copy is what turned a shared value into a variable. */
+  --igloo-stage-top: 120px;
+
   /* Surfaces: pale ice, and OPAQUE.
    *
    * `--doc-surface` is what every dropdown, menu panel and popover paints on. Translucent,
@@ -222,6 +230,34 @@
   flex: 1;
 }
 
+/* WHAT THE PRODUCT ADDED, on its own plate.
+ *
+ * A hand-ordered bar loses the one signal the packaged arrangement gives for free: which
+ * controls came from the engine's chrome registry and which this app bolted on. Everything
+ * else in this toolbar is a chrome slot; these two are not, and on a demo about that
+ * distinction it should not be something a reader has to work out. Dashed rather than solid,
+ * so it reads as an annotation rather than as another kind of control. */
+.igloo-own {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 4px;
+  padding: 2px 4px;
+  border: 1px dashed rgba(120, 180, 210, 0.75);
+  border-radius: 10px;
+  background: rgba(190, 234, 250, 0.35);
+}
+
+/* The editing-mode pill. Restyled, not reimplemented: the modes, the radio semantics, the
+   keyboard menu and the engine's refusal on a read-only document are all the library's. */
+.igloo-mode {
+  margin-right: 4px;
+}
+
+.igloo-mode [data-mode='suggesting'] {
+  color: #10788f;
+}
+
 /* The ruler sizes ITSELF to the page width and follows an open navigation pane on its own,
  * so this row only has to centre it over the page column. Without the centring the ruler
  * sits at the row's left edge and its inch marks line up with nothing. */
@@ -264,15 +300,15 @@
 
 /* The vertical ruler's rail: the editing area's left edge, where Word puts it.
  *
- * `top` must match `.igloo-stage`'s top padding — the ruler measures from the page's top
- * edge, and this is what keeps its zero level with it. Light tokens because it hangs over
- * the water: the packaged ruler draws in `--doc-text-muted`/`--doc-text-subtle`, which are
- * deep-water blues in this theme and vanish against the sea. */
+ * `top` is `--igloo-stage-top` — the ruler measures from the page's top edge, and sharing
+ * the stage's own offset is what keeps its zero level with it. Light tokens because it hangs
+ * over the water: the packaged ruler draws in `--doc-text-muted`/`--doc-text-subtle`, which
+ * are deep-water blues in this theme and vanish against the sea. */
 .igloo-vrulerbar {
   --doc-text-muted: rgba(240, 252, 255, 0.85);
   --doc-text-subtle: rgba(240, 252, 255, 0.55);
   position: absolute;
-  top: 120px;
+  top: var(--igloo-stage-top);
   left: 8px;
   z-index: 2;
   pointer-events: none;
@@ -283,7 +319,7 @@
   position: relative;
   width: fit-content;
   margin: 0 auto;
-  padding: 120px 0 160px;
+  padding: var(--igloo-stage-top) 0 160px;
 }
 
 /* The berg is FIXED, not stretched behind the page.
@@ -307,6 +343,27 @@
 /* The page rides ON it. */
 .igloo-stage > .igloo-page {
   z-index: 1;
+}
+
+/* Tracked changes ARE themed here, and they are the ONE thing on the canvas that is.
+ *
+ * The rule everywhere else in this file is that painter output stays Word-faithful — a page
+ * that looked like ice would be a lie about what the file contains. Revision marks are the
+ * exception because they are not the document: they are the reviewer's chrome drawn over it,
+ * the same layer Word lets a reader recolour per author. Every mark reads its colour from
+ * `--doc-revision-*`, so restating those on the page wrapper reaches the painted insertions,
+ * deletions, format washes and change bars — and nothing else, because nothing else on the
+ * canvas reads them. Insertions go glacier; deletions go meltwater grey, not red. */
+.igloo-page {
+  --doc-revision-insertion: #0f6f95;
+  --doc-revision-deletion: #7d93a6;
+  --doc-revision-insertion-tint: rgba(15, 111, 149, 0.13);
+  --doc-revision-deletion-tint: rgba(125, 147, 166, 0.13);
+  --doc-revision-insertion-wash: rgba(15, 111, 149, 0.06);
+  --doc-revision-deletion-wash: rgba(125, 147, 166, 0.06);
+  --doc-revision-format: #4a7c98;
+  --doc-revision-format-wash: rgba(74, 124, 152, 0.1);
+  --doc-review-change-bar: #6fbfe0;
 }
 
 /* The stage does the centring, so the surface's own margin goes.
@@ -390,6 +447,21 @@
   --doc-border: rgba(120, 180, 210, 0.5);
 }
 
+/* Section headings inside the product's own menu.
+ *
+ * The menu parts are rows, separators and submenus — there is no group or heading among
+ * them — so this is the demo's own element, rendered verbatim as an unrecognized child. It
+ * exists to answer one question at a glance: which of these rows did the product add, and
+ * which is the editor's own capability under a themed name. */
+.igloo-menu__heading {
+  padding: 8px 12px 4px;
+  color: var(--doc-text-subtle);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 /* ── The link popover as an ice shard ─────────────────────────────────────────────── */
 
 .igloo-shard {
@@ -460,4 +532,439 @@
 
 .igloo-picker {
   border-radius: 8px;
+}
+
+/* ── The review rail: the ice core ────────────────────────────────────────────────────
+ *
+ * Same argument as the navigation pane, one layer deeper. The pro rail's cards are built on
+ * the `--doc-*` palette, so restating that palette ON THE RAIL re-skins every card — comment,
+ * tracked change and specimen alike — plus the avatars, the accept/reject buttons, the reply
+ * box and the hairline between a comment and its thread. Custom properties inherit, so the
+ * scope IS the override.
+ *
+ * Everything past the tokens is a class this demo owns: the parts that take a `className`
+ * (avatar, actions, summary) and the elements it appends itself (the core log, the specimen
+ * panel, the fringe). No `docx-*` selector, no `!important`, exactly as elsewhere here. */
+.igloo-rail {
+  /* Near-opaque, not glassy. The cards float over open water that runs from pale ice at the
+     horizon to near black at the bottom, and a translucent card read as grey against the
+     dark half — the only place in this theme where the frosted look costs more than it
+     gives, exactly as for the menu panels above. */
+  --doc-surface: rgba(246, 253, 255, 0.96);
+  --doc-card: rgba(246, 253, 255, 0.96);
+  --doc-text: #0d3149;
+  --doc-text-muted: #4a7c98;
+  --doc-text-subtle: #7ba4bb;
+  --doc-border: rgba(255, 255, 255, 0.75);
+  --doc-border-strong: rgba(255, 255, 255, 0.95);
+  --doc-surface-hover: rgba(150, 214, 240, 0.4);
+  --doc-bg-input: rgba(255, 255, 255, 0.72);
+
+  /* The author ramp, restated in cold hues.
+   *
+   * Restated rather than dropped: the slot per author is Word's own rule (order of first
+   * appearance) and the library keeps it as a variable precisely so a theme can recolour it
+   * without re-deriving who is who. Eight, because the ramp has eight and then repeats. */
+  --doc-review-author-0: #0f6f95;
+  --doc-review-author-1: #3f9fd0;
+  --doc-review-author-2: #5b6fb8;
+  --doc-review-author-3: #1f8f86;
+  --doc-review-author-4: #7a6fb0;
+  --doc-review-author-5: #2c5f8f;
+  --doc-review-author-6: #4fa3a3;
+  --doc-review-author-7: #6b7f9c;
+}
+
+/* The core log, above the cards. `furniture` is plain flow content, so this is the demo's
+   own box with nothing library about it but its position. */
+.igloo-core {
+  /* LEVEL WITH THE PAGE. The rail is pinned to the scroll container's top, but the first
+     page starts one `--igloo-stage-top` below it, so furniture at the rail's own top floated
+     above the sheet and read as a second, higher header. Sharing the stage's offset lands its
+     top edge exactly on the page's. */
+  margin: var(--igloo-stage-top) 12px 10px 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  background: rgba(226, 246, 255, 0.32);
+  backdrop-filter: blur(8px);
+}
+
+.igloo-core__title {
+  margin-bottom: 8px;
+  color: #f2fcff;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 3px rgba(3, 26, 42, 0.8);
+}
+
+.igloo-core__strata {
+  display: flex;
+  gap: 6px;
+  list-style: none;
+}
+
+/* One stratum per kind, drilled out of the same queue the cards come from. */
+.igloo-core__stratum {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #f2fcff;
+  text-shadow: 0 1px 3px rgba(3, 26, 42, 0.75);
+}
+
+.igloo-core__stratum[data-empty] {
+  opacity: 0.45;
+}
+
+.igloo-core__count {
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.1;
+}
+
+.igloo-core__label {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+/* The avatar wears a rime ring: a white halo on the author colour the library still picks. */
+.igloo-rail__avatar {
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.85),
+    0 2px 6px rgba(6, 42, 66, 0.3);
+}
+
+/* Accept and reject, rounder and colder than the packaged square hover. */
+.igloo-rail__action {
+  border-radius: 50%;
+  color: #2b7096;
+}
+
+.igloo-rail__action:hover:not(:disabled) {
+  background: rgba(150, 214, 240, 0.5);
+  color: #0d3149;
+}
+
+/* The card body sits under a hairline of frost. */
+.igloo-rail__summary {
+  padding-top: 8px;
+  border-top: 1px solid rgba(150, 214, 240, 0.45);
+}
+
+/* A body with nothing in it draws no rule. The hairline belongs to the summary, so a card
+   whose body resolved to nothing would otherwise show a head, a line, and a gap — which
+   reads as broken rather than as empty. */
+.igloo-rail__summary:empty {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.igloo-rail__label {
+  color: #2b7096;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* The theme's own vocabulary keeps the change's own colour: what froze in is glacier, what
+   calved off is meltwater grey-blue. Same idea as the packaged label — one statement with
+   the document rather than a grey badge over coloured text. */
+.igloo-rail__label[data-kind='insert'],
+.igloo-rail__label[data-kind='moveTo'] {
+  color: #10788f;
+}
+
+.igloo-rail__label[data-kind='delete'],
+.igloo-rail__label[data-kind='moveFrom'] {
+  color: #7d93a6;
+}
+
+.igloo-rail__text {
+  overflow-wrap: anywhere;
+}
+
+.igloo-rail__gone {
+  color: #7d93a6;
+  text-decoration: line-through;
+}
+
+.igloo-rail__new {
+  color: #10788f;
+}
+
+.igloo-rail__arrow {
+  color: #8fb4c7;
+}
+
+/* The fringe: icicles along the bottom of every card.
+ *
+ * In FLOW, as the card's last child, rather than absolutely positioned against it — the card
+ * is a flex column this demo does not own, and hanging decoration off a box whose positioning
+ * belongs to somebody else is how a theme breaks on their next release. A negative bottom
+ * margin pulls it into the card's own padding, which is the only trick involved. */
+.igloo-rail__fringe {
+  height: 9px;
+  margin-bottom: -11px;
+  /* A downward fade, combed into teeth by the mask. Two gradients rather than a repeated
+     shape: the card's width is whatever the rail is, and a fixed polygon would either
+     stretch or run out. */
+  background: linear-gradient(180deg, rgba(130, 200, 232, 0.95), rgba(130, 200, 232, 0));
+  mask-image: repeating-linear-gradient(90deg, #000 0 2px, transparent 2px 9px);
+  -webkit-mask-image: repeating-linear-gradient(90deg, #000 0 2px, transparent 2px 9px);
+}
+
+/* ── Specimens: the demo's own nodes, in the demo's own card content ──────────────────
+ *
+ * A custom node's card is titled by its definition's `reviewCard` hook, so its WORDS are
+ * already the demo's. This panel is the element appended inside that card — read off the
+ * node's typed attrs, drawn by the demo, stacked and anchored by the library. */
+.igloo-specimen {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid rgba(150, 214, 240, 0.5);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(214, 240, 252, 0.55));
+}
+
+/* A berg's card goes deep-water below its waterline; an igloo's stays bright. */
+.igloo-specimen[data-specimen='iceberg'] {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.8) 26%, rgba(24, 92, 132, 0.28) 26%);
+}
+
+.igloo-specimen__art {
+  width: 54px;
+  height: 45px;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 2px 4px rgba(6, 42, 66, 0.25));
+}
+
+/* The two-number readout, shared by the card panel and the chip popover. */
+.igloo-stats {
+  display: flex;
+  flex: 1;
+  gap: 14px;
+}
+
+.igloo-stats dt {
+  color: #4a7c98;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.igloo-stats dd {
+  color: #0d3149;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+/* ── The chip popover ─────────────────────────────────────────────────────────────────
+ *
+ * Anchored on `ActivatedCustomNode.rect`, which is a VIEWPORT rect — hence `fixed`. */
+.igloo-probe {
+  position: fixed;
+  z-index: 60;
+  width: 260px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 4px 16px 4px 16px;
+  background: rgba(243, 253, 255, 0.96);
+  box-shadow: 0 16px 34px rgba(4, 32, 52, 0.45);
+  color: var(--doc-text);
+}
+
+.igloo-probe__title {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.igloo-probe__art {
+  display: block;
+  width: 100%;
+  height: 92px;
+  margin-bottom: 10px;
+}
+
+/* ── Carving a specimen ───────────────────────────────────────────────────────────── */
+
+.igloo-dialog__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  background: rgba(6, 34, 54, 0.5);
+  place-items: center;
+  backdrop-filter: blur(3px);
+}
+
+.igloo-dialog {
+  width: 360px;
+  padding: 18px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 6px 20px 6px 20px;
+  background: linear-gradient(180deg, #f8feff, #e6f6ff);
+  box-shadow: 0 26px 56px rgba(4, 32, 52, 0.55);
+  color: var(--doc-text);
+}
+
+.igloo-dialog__title {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.igloo-dialog__lede {
+  margin-top: 4px;
+  color: var(--doc-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.igloo-dialog__kinds {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.igloo-dialog__legend {
+  margin-bottom: 4px;
+  color: var(--doc-text-muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.igloo-dialog__kind {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--doc-border-input);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.igloo-dialog__kind[data-checked] {
+  border-color: var(--doc-primary);
+  background: rgba(140, 214, 240, 0.35);
+  font-weight: 600;
+}
+
+.igloo-dialog__kinds:disabled .igloo-dialog__kind {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.igloo-dialog__field {
+  display: block;
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+.igloo-dialog__field > span {
+  color: var(--doc-text-muted);
+}
+
+.igloo-dialog__field input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 7px 9px;
+  border: 1px solid var(--doc-border-input);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--doc-text);
+  font-size: 13px;
+}
+
+.igloo-dialog__field small {
+  display: block;
+  margin-top: 3px;
+  color: var(--doc-text-subtle);
+  font-size: 11px;
+}
+
+.igloo-dialog__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.igloo-dialog__spacer {
+  flex: 1;
+}
+
+.igloo-dialog__ghost,
+.igloo-dialog__commit {
+  padding: 7px 14px;
+  border: 1px solid var(--doc-border-input);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--doc-text);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.igloo-dialog__commit {
+  border-color: transparent;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+  font-weight: 600;
+}
+
+.igloo-dialog__commit:hover {
+  background: var(--doc-primary-hover);
+}
+
+/* ── The notice ───────────────────────────────────────────────────────────────────────
+ *
+ * Where the ENGINE's own refusal shows up. `insertCustomNode` and `updateCustomNode` return
+ * a typed result — a tag over Word's 64-character cap, a locked control, an offset out of
+ * range — and repeating that reason verbatim beats a host inventing one. */
+.igloo-notice {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  z-index: 80;
+  padding: 9px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 999px;
+  background: rgba(243, 253, 255, 0.95);
+  box-shadow: 0 12px 28px rgba(4, 32, 52, 0.45);
+  color: var(--doc-text);
+  font-size: 13px;
+  transform: translateX(-50%);
+  animation: igloo-notice 3.4s ease-out forwards;
+}
+
+@keyframes igloo-notice {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  10%,
+  80% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 0);
+  }
 }

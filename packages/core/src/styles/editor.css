@@ -4679,9 +4679,10 @@ a.docx-hyperlink:focus-visible {
   box-shadow: 0 6px 20px rgb(0 0 0 / 18%);
 }
 
+/* Same rule as the list, for the same reason: markers carry anchors too. */
 .docx-review__markers {
-  position: relative;
-  height: 100%;
+  position: absolute;
+  inset: 0;
 }
 
 .docx-review__marker {
@@ -5024,9 +5025,25 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text, #1f2328);
 }
 
-.docx-review__list {
+/* Host furniture: flow content at the top of the rail.
+ *
+ * It needs its pointer events back — the rail itself is transparent to the pointer so a
+ * click on the grey canvas beside the page still reaches the document — and it must not
+ * become the cards' positioning origin, which is why the list below is absolute. Furniture
+ * that pushed the list down moved every card by the furniture's own height, and a rail with
+ * a legend on top annotated the wrong lines by exactly that much. */
+.docx-review__furniture {
   position: relative;
-  height: 100%;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+/* ABSOLUTE, not relative-plus-full-height. A slot's inline `top` is its anchor in the rail's
+   own coordinates, so the box those tops resolve against has to be the rail — not wherever
+   the preceding flow content happened to end. */
+.docx-review__list {
+  position: absolute;
+  inset: 0;
 }
 
 .docx-review__slot {
@@ -5384,10 +5401,15 @@ a.docx-hyperlink:focus-visible {
   display: inline-flex;
 }
 
+/* RIGHT-aligned to the pill, not left.
+   The mode control belongs at the end of a toolbar — that is where the registry's `review`
+   group puts it and where both Word and Docs put theirs — so a 260px menu hung off its left
+   edge runs past the window and clips its own options. Aligned to the trigger's right edge
+   it opens inward from wherever the pill sits. */
 .docx-toolbar__mode-menu {
   position: absolute;
   top: calc(100% + 4px);
-  left: 0;
+  right: 0;
   z-index: 40;
   display: flex;
   min-width: 260px;
@@ -5807,10 +5829,14 @@ a.docx-hyperlink:focus-visible {
 
 /* Custom-node section (pro CustomNodeContextMenu): the pointed-at node's card data,
    rendered above the packaged rows. Strings inside are file-derived — text only. */
+/* BOUNDED, and wrapping. `title` and `detail` come from a definition's `reviewCard` hook and
+   are commonly a sentence; with no width to push back, that sentence set the width of the
+   whole menu and every packaged row stretched with it. A menu sizes to its rows. */
 .docx-contextmenu__custom-info {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  max-width: 280px;
   padding: 6px 12px 8px;
 }
 
@@ -5819,12 +5845,14 @@ a.docx-hyperlink:focus-visible {
   font-size: 13px;
   font-weight: 600;
   line-height: 18px;
+  overflow-wrap: anywhere;
 }
 
 .docx-contextmenu__custom-detail {
   color: var(--doc-text-muted);
   font-size: 12px;
   line-height: 16px;
+  overflow-wrap: anywhere;
 }
 
 /* ── Image chrome (Task 15) ─────────────────────────────────────────────────────────── */

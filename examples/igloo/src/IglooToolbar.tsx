@@ -20,6 +20,7 @@ import {
   IceBold,
   IceBullets,
   IceClear,
+  IceCoreRail,
   IceFontColor,
   IceFreeze,
   IceHighlight,
@@ -96,20 +97,44 @@ export function IglooToolbar({ blizzard, onBlizzard }: IglooActionsProps) {
       <DocxEditor.Toolbar.ClearFormatting icon={IceClear} />
       <DocxEditor.Toolbar.Separator />
 
-      {/* Two host actions with nothing else in common, which is why they are here together:
+      {/* The rail toggle. A PACKAGED part on the `review.comments` slot, so its pressed state
+          is the engine's answer to "is the pane open" rather than a flag this file keeps —
+          which matters because the pane is also opened by clicking a marker and by starting
+          a comment, and a host-held boolean would be a third opinion about it. Only the
+          glyph is the demo's; `data-active` is what the theme styles. */}
+      <DocxEditor.Toolbar.Comments icon={IceCoreRail} />
+      <DocxEditor.Toolbar.Separator />
+
+      {/* THE DEMO'S OWN, and marked as such.
+          Two host actions with nothing else in common, which is why they are here together:
           one reaches into the engine, one never touches it. Both render as first-class
           toolbar controls, with the same hover, pressed and caret-guard behaviour as the
           packaged buttons — which is the reason `Action` exists rather than a documented
-          class name. */}
-      <FreezeAction />
-      <DocxEditor.Toolbar.Action
-        label="Blizzard"
-        icon={IceBlizzard}
-        active={blizzard}
-        onSelect={onBlizzard}
-      />
+          class name.
+
+          The tinted plate around them is this file's own element, not a library one: with a
+          hand-ordered bar there is nothing to tell a reader which buttons came from the
+          engine's chrome registry and which the product added, and on a demo about exactly
+          that distinction it should not be a guess. A plain `div` composes here because
+          `preset={false}` renders these children verbatim into a flex row. */}
+      <div className="igloo-own" role="group" aria-label="Added by Igloo Editor">
+        <FreezeAction />
+        <DocxEditor.Toolbar.Action
+          label="Blizzard"
+          icon={IceBlizzard}
+          active={blizzard}
+          onSelect={onBlizzard}
+        />
+      </div>
 
       <div className="igloo-toolbar__spacer" />
+
+      {/* Editing / Suggesting / Viewing — the PACKAGED pill, not a demo reimplementation.
+          Suggesting is what makes this theme's tracked-change colours appear at all: typing
+          writes `w:ins`, deleting writes `w:del`, and every edit lands in the review rail as
+          a proposal. Restyled by class; the modes, the radio semantics, the keyboard menu
+          and the engine's refusal on a read-only document are all the library's. */}
+      <DocxEditor.Toolbar.EditingMode className="igloo-mode" />
       <DocxEditor.Toolbar.Zoom />
     </DocxEditor.Toolbar>
   );

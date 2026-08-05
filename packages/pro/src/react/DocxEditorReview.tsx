@@ -361,6 +361,15 @@ function ReviewRoot({
   // a rail pinned to the right edge floats away from the page it annotates; it belongs one
   // gutter to the right of the sheet, and it moves with the sheet when the window resizes or
   // the zoom changes.
+  //
+  // MEASURED THROUGH CLIENT RECTS, not through `offsetLeft`/`offsetTop`. Those are relative
+  // to each element's OWN `offsetParent`, and the surface's is whichever ancestor the host
+  // happened to position — a themed page wrapper with `position: relative` is enough to make
+  // the surface report `offsetLeft: 0` while the rail measures from the scroll container, and
+  // the rail then lands a page-width to the left, on top of the document it annotates. Rects
+  // are in one coordinate space no matter what the host nested; `scrollTop`/`scrollLeft` puts
+  // them back into the scrolled content's space, and `clientTop`/`clientLeft` discounts the
+  // container's own border, which is exactly what the offset properties used to do.
   const [metrics, setMetrics] = useState<RailMetrics>(INITIAL_METRICS);
   useEffect(() => {
     const rail = railRef.current;
@@ -369,12 +378,18 @@ function ReviewRoot({
     const surface = parent?.querySelector<HTMLElement>('.docx-paginated-surface') ?? null;
     const sync = (): void => {
       setMetrics((previous) => {
+        const box = surface && parent ? surface.getBoundingClientRect() : null;
+        const frame = box && parent ? parent.getBoundingClientRect() : null;
         const next: RailMetrics = {
           // The engine's own points-to-pixels factor, zoom included. Deriving it here from
           // `getZoom()` alone dropped the 96/72 and put every card at three quarters height.
           scale: editor.getRenderScale(),
-          top: surface ? surface.offsetTop : 0,
-          left: surface ? surface.offsetLeft + surface.offsetWidth + RAIL_GUTTER : null,
+          top:
+            box && frame && parent ? box.top - frame.top - parent.clientTop + parent.scrollTop : 0,
+          left:
+            box && frame && parent
+              ? box.right - frame.left - parent.clientLeft + parent.scrollLeft + RAIL_GUTTER
+              : null,
         };
         return previous.scale === next.scale &&
           previous.top === next.top &&
