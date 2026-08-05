@@ -93,9 +93,31 @@ Layout SHALL emit, for each control, a record carrying its identity, tag, alias,
 - **THEN** it is refused with `locked`, even though the paragraph named by the operation is outside the control
 - **AND** the same operation addressing offsets beside the control is allowed
 
+### Requirement: A control's leading edge belongs to the control and its trailing edge does not
+
+An offset at a boundary is owned by the run that STARTS there, which is what an insertion applied at that offset actually does. Validation SHALL resolve a control's reach the same way: a point operation that WRITES content at a control's leading edge SHALL be treated as reaching inside the control, and the same operation at its trailing edge SHALL NOT. A point operation that writes no content into the run it names — a comment marker, a paragraph split — SHALL be treated as beside the control at either edge. A caller that must write into a control regardless of what sits at the offset SHALL name that control on the operation, and the write SHALL then land in the control's own runs.
+
+#### Scenario: Typing at a locked field's leading edge
+
+- **WHEN** text, a tab or a break is inserted at the offset where a `sdtContentLocked` inline control begins
+- **THEN** it is refused with `locked`, because that is where the content would be written
+
+#### Scenario: Typing at a locked field's trailing edge
+
+- **WHEN** text is inserted at the offset where the same control ends
+- **THEN** it is allowed, and the control's content is unchanged
+
+#### Scenario: A caller that names the control it writes into
+
+- **WHEN** an insertion names a content control as the owner of the text
+- **THEN** the text is written into that control's own runs at either edge, keeping the formatting of the run it joins
+- **AND** the control's lock and `w:dataBinding` are resolved against that control
+
 ### Requirement: Every mutating operation meets the lock, and an unclassified one fails closed
 
-Lock and forms-protection enforcement SHALL be resolved from what an operation would CHANGE, not from a list of operation names. Each `TreeDocOp` kind SHALL declare its reach — the nodes, character ranges, tracked changes, or the whole part — exhaustively over the operation union, so an operation added without a declared reach does not compile. An operation whose reach cannot be resolved SHALL be treated as reaching the whole part and refused wherever protected or locked content would change. Read and part-lifecycle operations SHALL NOT be treated as content mutations.
+Lock and forms-protection enforcement SHALL be resolved from what an operation would CHANGE, not from a list of operation names. Each `TreeDocOp` kind SHALL declare its reach — the nodes, character ranges, tracked changes, the document's own properties, or the whole part — exhaustively over the operation union, so an operation added without a declared reach does not compile. An operation whose reach cannot be resolved SHALL be treated as reaching the whole part and refused wherever protected or locked content would change. Read and part-lifecycle operations SHALL NOT be treated as content mutations.
+
+A `w:lock` protects a control and the characters it holds, and SHALL NOT refuse a change to the DOCUMENT's own properties — page setup, section furniture options, note numbering — which are neither. Forms protection SHALL still refuse those, because a protected document is read-only except for filling in fields.
 
 #### Scenario: A tracked-change decision inside a locked control
 
@@ -107,15 +129,41 @@ Lock and forms-protection enforcement SHALL be resolved from what an operation w
 - **WHEN** retargeting or unlinking a hyperlink that sits inside a control forbidding content edits
 - **THEN** it is refused with `locked`, because the link's owning control is resolved from the link node
 
-#### Scenario: A document-wide operation under protection
+#### Scenario: A document-wide content rewrite under a lock
 
-- **WHEN** a document-scoped write (page setup, note settings, accept-all) would change content that a lock or forms protection protects
-- **THEN** it is refused with `locked`
+- **WHEN** an operation that could rewrite content anywhere (accept-all, deleting or converting a note) runs in a document holding a control that forbids content edits
+- **THEN** it is refused with `locked`, because nothing narrows where it lands
+
+#### Scenario: Page setup beside a locked field
+
+- **WHEN** page setup, section furniture options or note numbering are written in a document holding a `contentLocked` control
+- **THEN** the operation is not refused on account of that lock
+- **AND** the same operation IS refused with `locked` while forms protection is enforced
 
 #### Scenario: Furniture lifecycle is not a content mutation
 
 - **WHEN** a header or footer is created, deleted or relinked in a document that holds a locked control
 - **THEN** the operation is not refused on account of that lock
+
+### Requirement: Forms protection exempts what an operation addresses, not the node it names
+
+Under `w:documentProtection @w:edit="forms"` the document is read-only EXCEPT inside content controls. The exemption SHALL be resolved from the character range or point an operation addresses, using the same edge rule locks use, rather than from whether the named node sits inside a control — an inline field's paragraph is outside the field, so resolving from the named node alone would refuse every write into every inline form field in every protected document. A range that leaves the control it starts in SHALL NOT be exempt, and an operation addressing a whole node rather than a range SHALL NOT be exempt. A control's own `w:lock` SHALL still refuse independently.
+
+#### Scenario: Filling in an inline field
+
+- **WHEN** text is inserted at an offset inside — or at the leading edge of — an unlocked inline control in a protected document
+- **THEN** it is allowed
+- **AND** the same insertion at the control's trailing edge, or beside it, is refused with `locked`
+
+#### Scenario: An edit that leaves the field
+
+- **WHEN** a deletion starts inside an unlocked inline control and ends outside it
+- **THEN** it is refused with `locked`
+
+#### Scenario: The paragraph around the field is still protected
+
+- **WHEN** a paragraph-property write names the paragraph that holds an unlocked inline control
+- **THEN** it is refused with `locked`, because changing the paragraph is not filling in the field
 
 ### Requirement: A bound control refuses every content mutation, and removal takes the binding with it
 

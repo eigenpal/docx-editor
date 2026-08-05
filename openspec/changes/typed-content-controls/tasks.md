@@ -40,6 +40,9 @@
 - [x] 4.4 Refuse a value operation on a `w:dataBinding` control with `bound`
 - [x] 4.7 Classify every `TreeDocOp` kind's reach exhaustively and fail closed for an unclassified one, so revision decisions, hyperlink writes and document-scoped writes meet the lock and forms protection instead of bypassing an op-name allowlist
 - [x] 4.8 Refuse every content mutation targeting or intersecting a bound control with `bound`, not only the value write; allow wrapper removal, which takes the binding with it
+- [x] 4.9 Own a control's LEADING edge and not its trailing one, matching where an insertion applied at a boundary offset actually lands, and let a caller name the control it writes into when the offset cannot say
+- [x] 4.10 Keep a `w:lock` to content: page setup, section furniture and note numbering are the document's own properties and are not refused by a locked control, while forms protection still refuses them
+- [x] 4.11 Resolve the forms-protection exemption from the range an operation addresses, so an unlocked INLINE field can be filled in while the paragraph holding it stays protected
 - [x] 4.5 Prove enforcement from a path that never touches the surface, so the claim is about the store and not the widget
 - [ ] 4.6 Surface the lock as a disabled control with the engine's own reason before the user types
 
