@@ -281,6 +281,13 @@ export type AutomationOperation =
   /** A list's `w:numId`, as the number the file states. */
   | { readonly op: 'getListId'; readonly list: AutomationHandle }
   /**
+   * One story's list by the `w:numId` its paragraphs share, refused where none does.
+   *
+   * Refused rather than answered for an unused number: a `w:numId` with no paragraph names a
+   * numbering DEFINITION, and a list handle for it would answer no paragraphs forever.
+   */
+  | { readonly op: 'getListById'; readonly body: AutomationHandle; readonly id: number }
+  /**
    * A list's paragraphs in reading order, or only the ones at one level.
    *
    * `level` is `w:ilvl` — 0-8. A level the list has no paragraphs at answers none, which is not an
@@ -365,6 +372,8 @@ export type AutomationOperation =
   | { readonly op: 'getComments'; readonly scope: AutomationSpanRef }
   /** Replies to one comment, in document order. */
   | { readonly op: 'getCommentReplies'; readonly comment: AutomationHandle }
+  /** The `w:id` the comments part holds a comment under. */
+  | { readonly op: 'getCommentId'; readonly comment: AutomationHandle }
   /** Who wrote a comment. `CT_TrackChange` requires it, so a comment always has one. */
   | { readonly op: 'getCommentAuthor'; readonly comment: AutomationHandle }
   /** `@w:date` verbatim, or empty where the file wrote none. Never invented. */
@@ -391,6 +400,10 @@ export type AutomationOperation =
    *
    * `author` is required and must not be blank: `CT_TrackChange` makes `@w:author` mandatory, so a
    * reply without one is invalid XML rather than an anonymous remark.
+   *
+   * Answers the NEW comment, because its `w:id` is minted inside the package transaction and a
+   * caller that had to re-read the thread to find its own reply would be reading a document that
+   * another writer may have changed in between.
    */
   | {
       readonly op: 'replyToComment';
@@ -459,6 +472,7 @@ export const AUTOMATION_QUERY_OPERATIONS = [
   'getNoteKind',
   'getLists',
   'getListId',
+  'getListById',
   'getListParagraphs',
   'getParagraphList',
   'getListLevel',
@@ -468,6 +482,7 @@ export const AUTOMATION_QUERY_OPERATIONS = [
   'getBookmarkRange',
   'getComments',
   'getCommentReplies',
+  'getCommentId',
   'getCommentAuthor',
   'getCommentDate',
   'getCommentText',

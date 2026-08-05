@@ -64,6 +64,15 @@ export interface CreateRuntimeOptions {
    * this is true and the host reports the capability false, `save()` answers `NotSupported`.
    */
   readonly save: boolean;
+  /**
+   * Who a comment this runtime writes is recorded as.
+   *
+   * There is no signed-in user behind this API — a server has none, and the editor does not publish
+   * one — and `CT_TrackChange` makes `@w:author` mandatory, so a reply written without one is
+   * invalid XML rather than an anonymous remark. A runtime given no author refuses to write comments
+   * (`NotSupported`) instead of inventing a name that would end up in the file.
+   */
+  readonly author?: string;
 }
 
 export function createRuntime(
@@ -73,6 +82,10 @@ export function createRuntime(options: CreateRuntimeOptions): DocxEditorRuntime;
 export function createRuntime(options: CreateRuntimeOptions): DocxEditorServerRuntime {
   const host = options.host;
   const capabilities = host.capabilities;
+  const author =
+    typeof options.author === 'string' && options.author.trim().length > 0
+      ? options.author
+      : undefined;
   let disposed = false;
   let roots: RootHandles | null = null;
 
@@ -102,6 +115,7 @@ export function createRuntime(options: CreateRuntimeOptions): DocxEditorServerRu
   const session: RuntimeSession = {
     host,
     capabilities,
+    ...(author === undefined ? {} : { author }),
     id: {},
     roots: resolveRoots,
     assertLive,

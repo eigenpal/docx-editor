@@ -20,6 +20,7 @@ import {
   ObjectPath,
   fail,
   hydratedApplied,
+  hydratedHandle,
   hydratedParagraphFormat,
   hydratedSpan,
   type AutomationAlignment,
@@ -29,6 +30,7 @@ import {
   type ResolvedLoadOptions,
 } from '../runtime/model-support.ts';
 import { RangeCollection, type PromisedItem } from './collections.ts';
+import { List, ListItem } from './lists.ts';
 import { requireStyleName } from './addressing.ts';
 import { Font } from './font.ts';
 import { besideLocation, insertableText, paragraphTextLocation } from './locations.ts';
@@ -40,6 +42,8 @@ const MAX_DELIMITERS = 16;
 
 export class Paragraph extends ModelObject implements PromisedItem {
   #font: Font | undefined;
+  #list: List | undefined;
+  #listItem: ListItem | undefined;
   #format: Record<string, unknown> | undefined;
 
   /** @internal A paragraph a read has already named. */
@@ -173,6 +177,24 @@ export class Paragraph extends ModelObject implements PromisedItem {
 
   set spaceAfter(value: number) {
     this.#authorFormat('spaceAfter', requirePoints(value, `${this.path.label}.spaceAfter`));
+  }
+
+  /**
+   * The list this paragraph is in.
+   *
+   * A paragraph in NO list refuses the batch (`InvalidArgument`), the way upstream's own accessor
+   * throws: a list a paragraph is not in has no members to answer, and a null object here would
+   * make "not numbered" indistinguishable from "numbered by a list this document has lost".
+   */
+  get list(): List {
+    this.#list ??= this.#listAt(`${this.path.label}.list`);
+    return this.#list;
+  }
+
+  /** Where this paragraph sits in its list. Reading `level` on a paragraph in none refuses. */
+  get listItem(): ListItem {
+    this.#listItem ??= ListItem.of(this.context, `${this.path.label}.listItem`, this.path);
+    return this.#listItem;
   }
 
   /** Empty this paragraph's text, leaving the paragraph itself where it is. */
@@ -322,6 +344,19 @@ export class Paragraph extends ModelObject implements PromisedItem {
         hydratedApplied(answer, label);
       }
     );
+  }
+
+  #listAt(label: string): List {
+    const handle = this.#handle();
+    const found = List.promised(this.context, label, false);
+    this.read(
+      label,
+      () => ({ op: 'getParagraphList', paragraph: handle }),
+      (value) => {
+        found.hydrateAddress({ kind: 'handle', handle: hydratedHandle(value, label) });
+      }
+    );
+    return found;
   }
 
   #handle(): AutomationHandle {

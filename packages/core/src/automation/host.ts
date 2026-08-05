@@ -155,6 +155,8 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     let lifecycle: TreeDocOp | null = null;
     /** The one comment write a batch may hold, likewise solitary and likewise its own commit. */
     let commentWrite: { write: AutomationCommentWrite; scope: StoryScope } | null = null;
+    /** The id the comment write minted, which only the port can say. */
+    let mintedComment: string | undefined;
     let firstCommand = -1;
     for (let index = 0; index < operations.length; index += 1) {
       const step = planner.plan(operations[index]!);
@@ -186,6 +188,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
         );
       }
       changed = applied.changed;
+      mintedComment = applied.commentId;
     }
     if (lifecycle) {
       const applied = port.applyLifecycle(lifecycle);
@@ -250,7 +253,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
 
     const results: AutomationOperationResult[] = planned.map((step) => ({
       status: 'ok',
-      value: step.kind === 'query' ? step.value : step.answer(post),
+      value: step.kind === 'query' ? step.value : step.answer(post, mintedComment),
     }));
     return { ok: true, results, revision: port.revision(), changed };
   };

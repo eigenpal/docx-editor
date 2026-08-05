@@ -270,4 +270,19 @@ describe('a list takes a new item', () => {
     expect(response.ok).toBe(false);
     expect(refusal(response)).toBe('conflicting-operations');
   });
+
+  test('a list is reachable by the number the document gives it, and an unused number is not', () => {
+    const host = withLists();
+    const { body } = roots(host);
+    const [first] = listsOf(host, body) as [AutomationHandle];
+    const id = numberAt(host, first);
+    // THE SAME OBJECT, because a handle is minted once per list: asking by number and asking by
+    // position are two ways of naming one list, not two lists.
+    const byId = host.execute({ operations: [{ op: 'getListById', body, id }] });
+    expect(handleAt(byId, 0)).toEqual(first);
+    // A `w:numId` no paragraph uses names a numbering definition, not a list.
+    expect(refusal(host.execute({ operations: [{ op: 'getListById', body, id: 4242 }] }))).toBe(
+      'invalid-handle'
+    );
+  });
 });

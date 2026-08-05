@@ -41,6 +41,8 @@ import { TrackedObjects } from './tracked-objects.ts';
 export interface RuntimeSession {
   readonly host: AutomationHost;
   readonly capabilities: AutomationCapabilities;
+  /** Who a comment this runtime writes is recorded as, or absent when it may not write one. */
+  readonly author?: string;
   /** Identity for adoption checks. The session object itself. */
   readonly id: object;
   roots(): RootHandles;
@@ -72,6 +74,7 @@ export class RequestContext {
     this.#internals = {
       host: session.host,
       capabilities: session.capabilities,
+      ...(session.author === undefined ? {} : { author: session.author }),
       queue: this.#queue,
       session: session.id,
       roots: () => session.roots(),

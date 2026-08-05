@@ -153,7 +153,6 @@ export interface AutomationPackageReads {
   styles(): AutomationStyleIndex;
 }
 
-const NONE: readonly string[] = Object.freeze([]);
 /** What a host with no document declares about styles: nothing. */
 const NO_STYLE_INDEX: AutomationStyleIndex = Object.freeze({
   nameOf: () => null,

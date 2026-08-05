@@ -28,6 +28,14 @@ export interface CreateServerOptions {
    * want smaller limits than the defaults. Omitted means the engine's own defaults.
    */
   readonly limits?: ServerAutomationHostOptions['limits'];
+  /**
+   * Who comments this runtime writes are recorded as.
+   *
+   * Required to write one at all: `CT_TrackChange` makes `@w:author` mandatory and a server has no
+   * signed-in user, so a runtime opened without this refuses comment writes rather than putting a
+   * placeholder name into someone's document.
+   */
+  readonly author?: string;
 }
 
 export async function createServer(
@@ -38,5 +46,9 @@ export async function createServer(
     ...(options.limits === undefined ? {} : { limits: options.limits }),
   });
   if (!opened.ok) fail({ code: 'InvalidArgument', target: 'createServer' });
-  return createRuntime({ host: opened.host, save: true });
+  return createRuntime({
+    host: opened.host,
+    save: true,
+    ...(options.author === undefined ? {} : { author: options.author }),
+  });
 }

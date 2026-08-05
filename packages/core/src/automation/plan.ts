@@ -156,7 +156,17 @@ export type PlannedOperation =
       readonly kind: 'commentWrite';
       readonly write: AutomationCommentWrite;
       readonly story: AutomationStoryId;
-      readonly answer: (post: AutomationPackageReads) => AutomationValue;
+      /**
+       * The answer, given the committed state and the id the write minted.
+       *
+       * The id is carried separately because it does not exist until the package transaction runs:
+       * a reply's `w:id` is chosen while writing `comments.xml`, and nothing in the post-commit
+       * reads says which of the part's comments the caller just added.
+       */
+      readonly answer: (
+        post: AutomationPackageReads,
+        commentId: string | undefined
+      ) => AutomationValue;
     }
   | { readonly ok: false; readonly error: AutomationError };
 
@@ -1816,6 +1826,18 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         return query({ kind: 'number', value: Number(found.list.numId) });
       }
 
+      case 'getListById': {
+        const story = storyOfHandle(operation.body, 'body', handles, packageReads);
+        if (!story.ok) return refuse(story.code, 'that handle does not name a body', story.detail);
+        if (!Number.isInteger(operation.id) || operation.id <= 0)
+          return refuse('unsupported-content', 'a list is numbered from one', String(operation.id));
+        const wanted = String(operation.id);
+        const found = listReads(story.value).find((list) => list.numId === wanted);
+        if (!found)
+          return refuse('invalid-handle', 'no list in that story carries that number', wanted);
+        return query({ kind: 'handle', handle: handles.list(found.numId, story.value.story) });
+      }
+
       case 'getListParagraphs': {
         const found = listOf(operation.list);
         if (!('list' in found)) return found;
@@ -2017,6 +2039,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         });
       }
 
+      case 'getCommentId': {
+        const found = commentAt(operation.comment);
+        if (!found.ok) return found.planned;
+        return query({ kind: 'text', text: found.item.id });
+      }
+
       case 'getCommentAuthor': {
         const found = commentAt(operation.comment);
         if (!found.ok) return found.planned;
@@ -2087,6 +2115,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           return refuse('invalid-handle', 'that comment has no range to reply over');
         const conflict = pinWrite(planFor(found.reads));
         if (conflict) return conflict;
+        const story = found.reads.story;
         return {
           ok: true,
           kind: 'commentWrite',
@@ -2106,7 +2135,10 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             ...(typeof operation.date === 'string' ? { date: operation.date } : {}),
           },
           story: found.reads.story,
-          answer: () => APPLIED,
+          answer: (_post, commentId) =>
+            commentId === undefined
+              ? APPLIED
+              : { kind: 'handle', handle: handles.comment(commentId, story) },
         };
       }
 

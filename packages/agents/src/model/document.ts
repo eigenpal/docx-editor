@@ -19,10 +19,18 @@ import {
 import { Body } from './body.ts';
 import type { ParagraphCollection } from './collections.ts';
 import { ModelObject } from './model-object.ts';
+import { NoteItemCollection } from './notes.ts';
+import { CommentCollection, RevisionCollection } from './review.ts';
+import { SectionCollection } from './sections.ts';
 
 export class Document extends ModelObject {
   #body: Body | undefined;
   #paragraphs: ParagraphCollection | undefined;
+  #sections: SectionCollection | undefined;
+  #comments: CommentCollection | undefined;
+  #revisions: RevisionCollection | undefined;
+  #footnotes: NoteItemCollection | undefined;
+  #endnotes: NoteItemCollection | undefined;
 
   /** @internal One per request context; the context memoizes it. */
   static open(context: RequestContext): Document {
@@ -49,6 +57,73 @@ export class Document extends ModelObject {
   get paragraphs(): ParagraphCollection {
     this.#paragraphs ??= this.body.paragraphsUnder('document.paragraphs');
     return this.#paragraphs;
+  }
+
+  /** The document's sections, in document order. */
+  get sections(): SectionCollection {
+    const document = this.path.handle();
+    this.#sections ??= SectionCollection.of(this.context, 'document.sections', this.path, () => ({
+      op: 'getSections',
+      document,
+    }));
+    return this.#sections;
+  }
+
+  /** The comments anchored in the main story, in document order. */
+  get comments(): CommentCollection {
+    this.#comments ??= CommentCollection.of(this.context, 'document.comments', this.path, () => ({
+      op: 'getComments',
+      scope: { body: this.internals.roots().body },
+    }));
+    return this.#comments;
+  }
+
+  /**
+   * The tracked changes of the main story that the engine can resolve.
+   *
+   * Structural changes — a row, a cell, a section, the table grid — are not in it: they are ones the
+   * engine refuses to accept or reject, and an item whose two verbs both refuse would stall code
+   * walking the collection. `acceptAll`/`rejectAll` refuse outright where the document holds one,
+   * rather than reporting a document as reviewed while pending changes remain.
+   */
+  get revisions(): RevisionCollection {
+    this.#revisions ??= RevisionCollection.of(
+      this.context,
+      'document.revisions',
+      this.path,
+      this.internals.roots().body,
+      this.path.handle()
+    );
+    return this.#revisions;
+  }
+
+  /**
+   * The document's footnotes, in the order its notes part writes them.
+   *
+   * DocxEditor's own accessor: upstream reaches notes through `Body#footnotes`, whose collection type
+   * the pinned reference fixture does not carry — see `compat/manifest.json`. Without an accessor a
+   * note would be unreachable, so it is published here and recorded as unmeasured.
+   */
+  get footnotes(): NoteItemCollection {
+    const document = this.path.handle();
+    this.#footnotes ??= NoteItemCollection.of(
+      this.context,
+      'document.footnotes',
+      this.path,
+      () => ({ op: 'getNotes', document, noteKind: 'footnote' })
+    );
+    return this.#footnotes;
+  }
+
+  /** The document's endnotes, in the order its notes part writes them. */
+  get endnotes(): NoteItemCollection {
+    const document = this.path.handle();
+    this.#endnotes ??= NoteItemCollection.of(this.context, 'document.endnotes', this.path, () => ({
+      op: 'getNotes',
+      document,
+      noteKind: 'endnote',
+    }));
+    return this.#endnotes;
   }
 
   protected override onLoad(request: ResolvedLoadOptions): void {

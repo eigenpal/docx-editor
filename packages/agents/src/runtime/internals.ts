@@ -34,6 +34,13 @@ export interface RootHandles {
 export interface ContextInternals {
   readonly host: AutomationHost;
   readonly capabilities: AutomationCapabilities;
+  /**
+   * Who a comment written through this context is recorded as, or absent when none was given.
+   *
+   * `CT_TrackChange` makes `@w:author` mandatory, and this API has no signed-in user, so a comment
+   * write refuses (`NotSupported`) rather than putting a made-up name in the file.
+   */
+  readonly author?: string;
   readonly queue: ActionQueue;
   /**
    * Identity of the runtime session behind this context.

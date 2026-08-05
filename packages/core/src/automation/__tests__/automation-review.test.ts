@@ -12,7 +12,16 @@
 
 import { describe, expect, test } from 'bun:test';
 import { CONTENT_TYPES, REL_TYPES, richDocx, type SidePart } from './support/furniture.ts';
-import { handlesAt, open, refusal, reopen, roots, spanAt, textAt } from './support/protocol.ts';
+import {
+  handleAt,
+  handlesAt,
+  open,
+  refusal,
+  reopen,
+  roots,
+  spanAt,
+  textAt,
+} from './support/protocol.ts';
 import type { AutomationHandle, AutomationHost } from '../protocol.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -193,6 +202,24 @@ describe('a document holds its comments, and a script reads the same ones the ra
       )
     );
     expect(texts).toContain('agreed');
+  });
+
+  test('a comment answers the id the document holds it under, and a reply answers as an object', () => {
+    const host = reviewed();
+    const { body } = roots(host);
+    const [first] = commentsOf(host, body) as [AutomationHandle];
+    expect(textAt(host.execute({ operations: [{ op: 'getCommentId', comment: first }] }), 0)).toBe(
+      '1'
+    );
+    // The reply's id is minted inside the package transaction, so the write answers the new comment
+    // rather than only that it committed — otherwise a caller has to re-read the thread to find it.
+    const written = host.execute({
+      operations: [{ op: 'replyToComment', comment: first, text: 'noted', author: 'Linus' }],
+    });
+    const reply = handleAt(written, 0);
+    expect(textAt(host.execute({ operations: [{ op: 'getCommentText', comment: reply }] }), 0)).toBe(
+      'noted'
+    );
   });
 
   test('a reply with no author is refused, because a comment without one is invalid XML', () => {

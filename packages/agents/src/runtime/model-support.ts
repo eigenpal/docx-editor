@@ -14,9 +14,12 @@ export { ClientResult, clientResult } from './client-result.ts';
 export { DocxEditorError, fail, type DocxEditorErrorCode } from './errors.ts';
 export {
   hydratedApplied,
+  hydratedFlag,
   hydratedFont,
   hydratedHandle,
   hydratedHandles,
+  hydratedNumber,
+  hydratedPageSetup,
   hydratedParagraphFormat,
   hydratedSpan,
   hydratedSpans,
@@ -40,6 +43,9 @@ export type {
   AutomationFontWrite,
   AutomationHandle,
   AutomationOperation,
+  AutomationPageOrientation,
+  AutomationPageSetupRead,
+  AutomationPageSetupWrite,
   AutomationParagraphFormatRead,
   AutomationParagraphFormatWrite,
   AutomationPoint,

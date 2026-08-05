@@ -9,6 +9,7 @@
 import type {
   AutomationFontRead,
   AutomationHandle,
+  AutomationPageSetupRead,
   AutomationParagraphFormatRead,
   AutomationSpan,
   AutomationValue,
@@ -64,6 +65,27 @@ export function hydratedParagraphFormat(
 export function hydratedStyle(value: AutomationValue, target: string): string | null {
   if (value.kind !== 'style') throw wrongShape(target);
   return value.name;
+}
+
+/** A number the document states: a list's id, a list item's level, a page dimension. */
+export function hydratedNumber(value: AutomationValue, target: string): number {
+  if (value.kind !== 'number') throw wrongShape(target);
+  return value.value;
+}
+
+/** A yes-or-no the document states: whether a comment thread is resolved. */
+export function hydratedFlag(value: AutomationValue, target: string): boolean {
+  if (value.kind !== 'flag') throw wrongShape(target);
+  return value.value;
+}
+
+/** One section's page geometry, in points. */
+export function hydratedPageSetup(
+  value: AutomationValue,
+  target: string
+): AutomationPageSetupRead {
+  if (value.kind !== 'pageSetup') throw wrongShape(target);
+  return value.setup;
 }
 
 /** A command's answer. There is nothing in it: the effect is the batch having committed. */

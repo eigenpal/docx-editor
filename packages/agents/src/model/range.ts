@@ -28,6 +28,7 @@ import {
   type ResolvedLoadOptions,
 } from '../runtime/model-support.ts';
 import { ParagraphCollection, RangeCollection, type PromisedItem } from './collections.ts';
+import { BookmarkCollection } from './bookmarks.ts';
 import { requireStyleName, spanRefOf } from './addressing.ts';
 import { Font } from './font.ts';
 import {
@@ -43,6 +44,7 @@ import { searchOptions, type SearchOptions } from './search-options.ts';
 export class Range extends ModelObject implements PromisedItem {
   #paragraphs: ParagraphCollection | undefined;
   #font: Font | undefined;
+  #bookmarks: BookmarkCollection | undefined;
 
   /** @internal A range a read already found. */
   static at(context: RequestContext, label: string, address: ObjectAddress): Range {
@@ -113,6 +115,39 @@ export class Range extends ModelObject implements PromisedItem {
     const name = requireStyleName(value, target);
     this.requireAddressable();
     this.command('style', () => ({ op: 'setStyle', span: spanRefOf(this.path, 'span'), name }));
+  }
+
+  /**
+   * The hyperlink over these characters: an absolute URL, or `#anchor` for a place in the document.
+   *
+   * `''` where the range is not in a link, and where it straddles two — a stretch covering parts of
+   * two different links has no one target, and answering either would be a guess.
+   *
+   * WRITING IT AUTHORS A LINK over exactly these characters, and `''` removes one. A URL whose
+   * scheme this engine would refuse to OPEN is refused here too, by the same allowlist: a document
+   * this API writes must not be one it would then decline to follow.
+   */
+  get hyperlink(): string {
+    return this.loadedProperty<string>('hyperlink');
+  }
+
+  set hyperlink(value: string) {
+    const target = `${this.path.label}.hyperlink`;
+    if (typeof value !== 'string' || value.length > 2048) fail({ code: 'InvalidArgument', target });
+    const span = this.#span();
+    this.command('hyperlink', () => ({ op: 'setHyperlink', span, target: value }));
+  }
+
+  /** The bookmarks whose text this range overlaps, in document order. */
+  get bookmarks(): BookmarkCollection {
+    const span = this.#span();
+    this.#bookmarks ??= BookmarkCollection.of(
+      this.context,
+      `${this.path.label}.bookmarks`,
+      this.path,
+      () => ({ op: 'getBookmarks', scope: { start: span.start, end: span.end } })
+    );
+    return this.#bookmarks;
   }
 
   /** Every occurrence of `searchText` inside this range, as ranges. */
@@ -209,7 +244,11 @@ export class Range extends ModelObject implements PromisedItem {
   }
 
   protected override onLoad(request: ResolvedLoadOptions): void {
-    const selected = this.selection(request, ['text', 'style']);
+    const selected = this.selection(request, ['text', 'style', 'hyperlink']);
+    if (selected.includes('hyperlink')) {
+      const span = this.#span();
+      this.loadTextInto('hyperlink', () => ({ op: 'getHyperlink', span }));
+    }
     if (selected.includes('text')) {
       const span = this.#span();
       const label = `${this.path.label}.text`;

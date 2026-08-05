@@ -6,9 +6,28 @@
 // build one, which is why every constructor is private.
 
 export { Body } from './body.ts';
+export { Bookmark, BookmarkCollection } from './bookmarks.ts';
 export { ParagraphCollection, RangeCollection } from './collections.ts';
 export { Document } from './document.ts';
 export { Font } from './font.ts';
+export { List, ListCollection, ListItem } from './lists.ts';
+export { NoteItem, NoteItemCollection, type NoteItemType } from './notes.ts';
+export {
+  Comment,
+  CommentCollection,
+  CommentReply,
+  CommentReplyCollection,
+  Revision,
+  RevisionCollection,
+  type RevisionType,
+} from './review.ts';
+export {
+  PageSetup,
+  Section,
+  SectionCollection,
+  type HeaderFooterType,
+  type PageOrientation,
+} from './sections.ts';
 export type {
   BesideLocation,
   BodyInsertParagraphLocation,

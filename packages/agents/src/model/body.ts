@@ -18,10 +18,13 @@ import {
   hydratedStyle,
   internalsOf,
   type AutomationHandle,
+  type ObjectAddress,
   type RequestContext,
   type ResolvedLoadOptions,
 } from '../runtime/model-support.ts';
 import { ParagraphCollection, RangeCollection } from './collections.ts';
+import { ListCollection } from './lists.ts';
+import { CommentCollection, RevisionCollection } from './review.ts';
 import { requireStyleName, spanRefOf } from './addressing.ts';
 import { Font } from './font.ts';
 import { bodyParagraphLocation, bodyTextLocation, insertableText } from './locations.ts';
@@ -33,10 +36,29 @@ import { searchOptions, type SearchOptions } from './search-options.ts';
 export class Body extends ModelObject {
   #paragraphs: ParagraphCollection | undefined;
   #font: Font | undefined;
+  #lists: ListCollection | undefined;
+  #revisions: RevisionCollection | undefined;
 
   /** @internal The main story of the document this context is running against. */
   static main(context: RequestContext, label: string): Body {
     return new Body(context, ObjectPath.of(label, internalsOf(context).roots().body));
+  }
+
+  /**
+   * @internal A story a read will name: a header or footer variant, or a note's body.
+   *
+   * The OWNER queues that read — a section, a note — because a pending object cannot address the
+   * document yet, and it is the owner that can. Like every object a batch produces in this runtime,
+   * the story is addressable from the next batch on.
+   */
+  static promisedStory(context: RequestContext, label: string): Body {
+    return new Body(context, ObjectPath.pending(label));
+  }
+
+  /** @internal Bind this story to the handle the owner's read answered. */
+  hydrateAddress(address: ObjectAddress): void {
+    if (address.kind === 'handle') this.path.resolveTo(address.handle);
+    else this.path.resolveNull();
   }
 
   private constructor(context: RequestContext, path: ObjectPath) {
@@ -92,6 +114,45 @@ export class Body extends ModelObject {
     const name = requireStyleName(value, target);
     this.requireAddressable();
     this.command('style', () => ({ op: 'setStyle', span: spanRefOf(this.path, 'body'), name }));
+  }
+
+  /** Every list this story holds, in the order their numbers first appear. */
+  get lists(): ListCollection {
+    this.#lists ??= ListCollection.of(
+      this.context,
+      `${this.path.label}.lists`,
+      this.path,
+      this.#handle()
+    );
+    return this.#lists;
+  }
+
+  /** The comments anchored in this story, in document order. Replies hang off the comment. */
+  getComments(): CommentCollection {
+    const target = `${this.path.label}.getComments`;
+    const handle = this.#handle();
+    return CommentCollection.of(this.context, target, this.path, () => ({
+      op: 'getComments',
+      scope: { body: handle },
+    }));
+  }
+
+  /**
+   * The tracked changes in this story that the engine can resolve, in document order.
+   *
+   * DocxEditor's own accessor: upstream reaches revisions from the document, and this story-scoped
+   * one is what makes a header's or a note's changes reachable at all. Recorded in
+   * `compat/manifest.json`.
+   */
+  get revisions(): RevisionCollection {
+    this.#revisions ??= RevisionCollection.of(
+      this.context,
+      `${this.path.label}.revisions`,
+      this.path,
+      this.#handle(),
+      this.internals.roots().document
+    );
+    return this.#revisions;
   }
 
   /** Every occurrence of `searchText` in this story, as ranges, in reading order. */
