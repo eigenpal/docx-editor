@@ -629,12 +629,12 @@ export interface DocxEditorReviewNamespace {
     readonly Author: typeof ReviewAuthor;
     // (undocumented)
     readonly Avatar: typeof ReviewAvatar;
+    readonly Balloon: typeof ReviewBalloon;
     // (undocumented)
     readonly Card: typeof ReviewCard;
     readonly Draft: typeof ReviewDraft;
     // (undocumented)
     readonly Empty: typeof ReviewEmpty;
-    readonly Hover: typeof ReviewHover;
     // (undocumented)
     readonly List: typeof ReviewList;
     readonly Markers: typeof ReviewMarkers;
@@ -1380,6 +1380,7 @@ export interface ReviewPartProps {
 // @public
 export interface ReviewProps extends ReviewPartProps {
     filter?: (item: ReviewItemView) => boolean;
+    formatting?: boolean;
     gap?: number;
     preset?: boolean;
     stack?: boolean;

@@ -340,10 +340,12 @@ describe('the review sidebar', () => {
     expect(kindsOf(shown.container)).toContain('structural');
   });
 
-  test('hovering a tracked change raises its balloon — including a structural row whose rail card is hidden', async () => {
+  test('clicking a format or structural change opens its balloon; content changes stay rail-only', async () => {
     const TRACKED = docx(
       '<w:p><w:r><w:t>base </w:t></w:r>' +
-        '<w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:t>added</w:t></w:r></w:ins></w:p>' +
+        '<w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:t>added</w:t></w:r></w:ins>' +
+        '<w:r><w:rPr><w:b/><w:rPrChange w:id="3" w:author="A" w:date="2026-01-01T00:00:00Z"><w:rPr/></w:rPrChange></w:rPr>' +
+        '<w:t>restyled</w:t></w:r></w:p>' +
         '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>' +
         '<w:tr><w:tc><w:tcPr/><w:p><w:r><w:t>a</w:t></w:r></w:p></w:tc></w:tr>' +
         '<w:tr><w:trPr><w:ins w:id="2" w:author="A" w:date="2026-01-01T00:00:00Z"/></w:trPr>' +
@@ -358,58 +360,53 @@ describe('the review sidebar', () => {
         </DocxEditorViewport>
       </DocxEditorRoot>
     );
-    const hoverAndWait = async (element: Element) => {
-      await act(async () => {
-        fireEvent.mouseOver(element);
-        // Past the balloon's deliberate-hover delay.
-        await new Promise((resolve) => setTimeout(resolve, 320));
-      });
-    };
-
-    // A revision SPAN: the balloon carries the decision's card, actions included.
-    const span = view.container.querySelector(
-      '.docx-paginated-surface [data-revision-id][data-revision-kind="insert"]'
+    // FORMAT cards are out of the rail by default, like structural ones; the balloon —
+    // not a hover — is where their decision lives.
+    const railKinds = [...view.container.querySelectorAll('[data-testid="review-card"]')].map(
+      (card) => (card as HTMLElement).dataset.kind
     );
-    expect(span).not.toBeNull();
-    await hoverAndWait(span!);
-    expect((view.getByTestId('review-hover-card') as HTMLElement).dataset.kind).toBe('insert');
-    expect(view.getByTestId('review-hover').textContent).toContain('added');
+    expect(railKinds).toContain('insert');
+    expect(railKinds).not.toContain('format');
+    expect(railKinds).not.toContain('structural');
 
-    // A tracked ROW: its rail card is hidden by default, so the balloon is the only way
-    // to read the decision — the painted row carries the attribution to find it.
+    // Clicking the format-marked text opens its balloon, actions included, and it STAYS.
+    const formatSpan = view.container.querySelector(
+      '.docx-paginated-surface [data-revision-kind="format"]'
+    )!;
+    await act(async () => {
+      fireEvent.mouseDown(formatSpan);
+    });
+    const balloon = view.getByTestId('review-balloon-card') as HTMLElement;
+    expect(balloon.dataset.kind).toBe('format');
+    expect(view.getByTestId('review-balloon').querySelector('[data-testid="review-accept"]'))
+      .not.toBeNull();
+
+    // A CONTENT change opens no balloon — its card is beside the page — and the press
+    // closes whatever balloon was up.
+    await act(async () => {
+      fireEvent.mouseDown(
+        view.container.querySelector(
+          '.docx-paginated-surface [data-revision-id][data-revision-kind="insert"]'
+        )!
+      );
+    });
+    expect(view.queryByTestId('review-balloon')).toBeNull();
+
+    // A tracked ROW is a structural site: its balloon opens on click, with actions.
     const row = view.container.querySelector('.docx-table-row--revision') as HTMLElement;
     expect(row.dataset.revisionId).toBe('2');
-    expect(row.dataset.revisionAuthor).toBe('A');
-    await hoverAndWait(row);
-    expect((view.getByTestId('review-hover-card') as HTMLElement).dataset.kind).toBe(
+    await act(async () => {
+      fireEvent.mouseDown(row);
+    });
+    expect((view.getByTestId('review-balloon-card') as HTMLElement).dataset.kind).toBe(
       'structural'
     );
 
-    // Leaving the page puts the balloon away.
-    await act(async () => {
-      fireEvent.mouseOver(view.container.querySelector('.docx-editor__scroll-container')!);
-      await new Promise((resolve) => setTimeout(resolve, 260));
-    });
-    expect(view.queryByTestId('review-hover')).toBeNull();
-
-    // CLICKING a change pins its balloon: it opens at once, ignores the pointer moving to
-    // other changes, and lets go when a press lands outside any tracked change.
-    const pinSpan = view.container.querySelector(
-      '.docx-paginated-surface [data-revision-id][data-revision-kind="insert"]'
-    )!;
-    await act(async () => {
-      fireEvent.mouseDown(pinSpan);
-    });
-    expect((view.getByTestId('review-hover-card') as HTMLElement).dataset.kind).toBe('insert');
-    await act(async () => {
-      fireEvent.mouseOver(view.container.querySelector('.docx-table-row--revision')!);
-      await new Promise((resolve) => setTimeout(resolve, 320));
-    });
-    expect((view.getByTestId('review-hover-card') as HTMLElement).dataset.kind).toBe('insert');
+    // A press outside any tracked change lets go.
     await act(async () => {
       fireEvent.mouseDown(view.container.querySelector('.docx-editor__scroll-container')!);
     });
-    expect(view.queryByTestId('review-hover')).toBeNull();
+    expect(view.queryByTestId('review-balloon')).toBeNull();
   });
 });
 
