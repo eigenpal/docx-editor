@@ -681,10 +681,11 @@ function placeCellParagraph(
       isLastLine,
       alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined
     );
+    // Empty lines align too — see the body-flow twin in `semantic-layout.ts`.
     const alignOffset =
       placedSpans.length > 0 && alignedSpans.length > 0
         ? alignedSpans[0]!.box.x - placedSpans[0]!.box.x
-        : pendingLine.drawings.length > 0 && alignment !== 'left' && alignment !== 'both'
+        : alignment !== 'left' && alignment !== 'both'
           ? (() => {
               const slack = lineAvailableWidth - pendingLine.width;
               if (slack <= 0) return 0;
@@ -734,6 +735,7 @@ function placeCellParagraph(
         width: available,
         height: pendingLine.height,
       },
+      contentX: alignedSpans[0]?.box.x ?? lineIndent + alignOffset,
       baseline: pendingLine.baseline,
       leading: pendingLine.leading,
       ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),

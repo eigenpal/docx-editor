@@ -88,6 +88,72 @@ describe('a click beside a line', () => {
     const layout = lay('<w:p/>');
     expect(hit(layout, 300, 5)!.position).toEqual({ paragraphId: P0, offset: 0 });
   });
+
+  test('an EMPTY centred paragraph puts its caret in the middle, not at the margin', () => {
+    // The line has no spans to carry the alignment offset, so the caret used to be drawn at
+    // the left edge of the column and only jumped to the centre once a character was typed.
+    const empty = lay('<w:p><w:pPr><w:jc w:val="center"/></w:pPr></w:p>');
+    const emptyLine = paragraphFragmentsOf(empty.pages[0]!)[0]!.lines[0]!;
+    const middle = emptyLine.box.x + emptyLine.box.width / 2;
+    expect(emptyLine.spans).toHaveLength(0);
+    expect(caretBoxOnLine(emptyLine, 0, measurer).x).toBeCloseTo(middle, 5);
+
+    // ...and the first keystroke barely moves it — half a glyph, not half a page.
+    const typed = lay(`<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>a</w:t></w:r></w:p>`);
+    const typedLine = paragraphFragmentsOf(typed.pages[0]!)[0]!.lines[0]!;
+    expect(Math.abs(caretBoxOnLine(typedLine, 0, measurer).x - middle)).toBeLessThan(6);
+  });
+
+  test('an EMPTY right-aligned paragraph puts its caret at the right edge', () => {
+    const layout = lay('<w:p><w:pPr><w:jc w:val="right"/></w:pPr></w:p>');
+    const line = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!;
+    expect(caretBoxOnLine(line, 0, measurer).x).toBeCloseTo(line.box.x + line.box.width, 5);
+  });
+
+  test('a click anywhere on an empty centred line lands on the aligned caret x', () => {
+    // The band still spans the whole column — a click in the left margin belongs to this
+    // paragraph — but the position it resolves to is the centred one.
+    const layout = lay('<w:p><w:pPr><w:jc w:val="center"/></w:pPr></w:p>');
+    const line = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!;
+    const found = hit(layout, 20, 5)!;
+    expect(found.position).toEqual({ paragraphId: P0, offset: 0 });
+    expect(caretAt(layout, found.position, { measurer })!.x).toBeCloseTo(
+      line.box.x + line.box.width / 2,
+      5
+    );
+  });
+
+  test('an empty JUSTIFIED paragraph stays flush left', () => {
+    // `w:jc both` sets its last line flush left, and an empty paragraph is all last line.
+    const layout = lay('<w:p><w:pPr><w:jc w:val="both"/></w:pPr></w:p>');
+    const line = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!;
+    expect(caretBoxOnLine(line, 0, measurer).x).toBeCloseTo(line.box.x, 5);
+  });
+
+  test('an empty paragraph takes its FIRST-LINE indent, the way a filled one does', () => {
+    // `box.x` is the column edge and does not carry `w:firstLine`, so reading it put the
+    // caret a whole indent left of where the first character would land.
+    const ind = (attr: string) =>
+      paragraphFragmentsOf(lay(`<w:p><w:pPr><w:ind ${attr}/></w:pPr></w:p>`).pages[0]!)[0]!
+        .lines[0]!;
+    const withText = paragraphFragmentsOf(
+      lay(`<w:p><w:pPr><w:ind w:firstLine="720"/></w:pPr><w:r><w:t>a</w:t></w:r></w:p>`).pages[0]!
+    )[0]!.lines[0]!;
+    expect(caretBoxOnLine(ind('w:firstLine="720"'), 0, measurer).x).toBeCloseTo(36, 5);
+    expect(caretBoxOnLine(withText, 0, measurer).x).toBeCloseTo(36, 5);
+    // A hanging indent is the same rule with the opposite sign: the first line pulls back.
+    expect(caretBoxOnLine(ind('w:left="720" w:hanging="720"'), 0, measurer).x).toBeCloseTo(0, 5);
+  });
+
+  test('an empty centred paragraph in a TABLE CELL centres in the cell', () => {
+    // Table layout carries its own copy of the alignment maths; it drifts silently otherwise.
+    const layout = lay(
+      `<w:tbl>${tr(tc('<w:p><w:pPr><w:jc w:val="center"/></w:pPr></w:p>'))}</w:tbl>`
+    );
+    const line = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!;
+    expect(line.spans).toHaveLength(0);
+    expect(caretBoxOnLine(line, 0, measurer).x).toBeCloseTo(line.box.x + line.box.width / 2, 5);
+  });
 });
 
 describe('a click above or below the lines', () => {

@@ -2227,6 +2227,12 @@ function layoutBlocksPass(
                 width: available,
                 height: brokenLine.height,
               },
+              // Synthetic frame geometry only — these lines are never aligned, painted or
+              // caret-tested, so the content origin is just where their spans were placed.
+              contentX:
+                brokenLine.spans.length > 0
+                  ? brokenLine.spans[0]!.box.x + origin.columnX
+                  : origin.columnX + indent.left,
               baseline: brokenLine.baseline,
               leading: brokenLine.leading,
               spans: brokenLine.spans.map((span) => ({
@@ -2370,10 +2376,12 @@ function layoutBlocksPass(
         isLastLine,
         alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined
       );
+      // A line with no spans still aligns: an empty centred paragraph puts its (zero width)
+      // content — and so the caret — at the middle of the measure, not at the left edge.
       const alignOffset =
         placedSpans.length > 0 && alignedSpans.length > 0
           ? alignedSpans[0]!.box.x - placedSpans[0]!.box.x
-          : pendingLine.drawings.length > 0 && alignment !== 'left' && alignment !== 'both'
+          : alignment !== 'left' && alignment !== 'both'
             ? (() => {
                 const slack = lineAvailableWidth - pendingLine.width;
                 if (slack <= 0) return 0;
@@ -2418,6 +2426,7 @@ function layoutBlocksPass(
           width: available,
           height: pendingLine.height,
         },
+        contentX: alignedSpans[0]?.box.x ?? lineIndent + alignOffset,
         baseline: pendingLine.baseline,
         leading: pendingLine.leading,
         ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),

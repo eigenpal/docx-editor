@@ -49,7 +49,16 @@ export function fragmentSignature(fragment: BlockFragmentRecord): string {
           fragment.shading,
           fragment.shadingBox,
           fragment.marker,
-          fragment.lines.map((line) => [line.id, line.box, line.baseline, line.spans]),
+          // `contentX` as well as `box`, because it is published geometry and everything
+          // published participates. It is the ONLY field carrying alignment on a span-less
+          // line, and nothing here guarantees a mover of it also moves `box` or `spans`.
+          fragment.lines.map((line) => [
+            line.id,
+            line.box,
+            line.contentX,
+            line.baseline,
+            line.spans,
+          ]),
         ]);
   signatures.set(fragment, signature);
   return signature;
