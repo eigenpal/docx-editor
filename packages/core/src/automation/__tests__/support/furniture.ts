@@ -68,9 +68,7 @@ export function richDocx(input: RichDocx): Uint8Array {
     'word/_rels/document.xml.rels': strToU8(
       `<Relationships xmlns="${REL}">` +
         rels
-          .map(
-            (rel) => `<Relationship Id="${rel.id}" Type="${rel.type}" Target="${rel.target}"/>`
-          )
+          .map((rel) => `<Relationship Id="${rel.id}" Type="${rel.type}" Target="${rel.target}"/>`)
           .join('') +
         `</Relationships>`
     ),

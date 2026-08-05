@@ -131,8 +131,7 @@ describe('page setup', () => {
     const host = open(
       richDocx({
         body:
-          p('wide') +
-          `<w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="portrait"/></w:sectPr>`,
+          p('wide') + `<w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="portrait"/></w:sectPr>`,
       })
     );
     const [section] = sectionsOf(host) as [AutomationHandle];
@@ -363,8 +362,8 @@ describe('a footnote is a story too', () => {
       0
     );
     expect(notes).toHaveLength(2);
-    const bodies = notes.map(
-      (note) => handleAt(host.execute({ operations: [{ op: 'getNoteBody', note }] }), 0)
+    const bodies = notes.map((note) =>
+      handleAt(host.execute({ operations: [{ op: 'getNoteBody', note }] }), 0)
     );
     expect(bodies.map((body) => paragraphTexts(host, body))).toEqual([
       ['the first note'],
@@ -436,7 +435,10 @@ describe('a footnote is a story too', () => {
       }),
       0
     ) as [AutomationHandle];
-    const body2 = handleAt(reopened.execute({ operations: [{ op: 'getNoteBody', note: again }] }), 0);
+    const body2 = handleAt(
+      reopened.execute({ operations: [{ op: 'getNoteBody', note: again }] }),
+      0
+    );
     expect(paragraphTexts(reopened, body2)).toEqual(['edited the first note']);
   });
 
@@ -531,8 +533,8 @@ describe('a footnote is a story too', () => {
       0
     );
     host.execute({ operations: [{ op: 'deleteNote', note: notes[0]! }] });
-    expect(
-      errorAt(host.execute({ operations: [{ op: 'getNoteBody', note: notes[0]! }] }), 0)
-    ).toBe('invalid-handle');
+    expect(errorAt(host.execute({ operations: [{ op: 'getNoteBody', note: notes[0]! }] }), 0)).toBe(
+      'invalid-handle'
+    );
   });
 });

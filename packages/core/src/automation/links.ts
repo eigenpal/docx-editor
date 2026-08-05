@@ -156,7 +156,8 @@ export function linksInParagraph(
     if (node.kind === 'textValue' || depth > 32) return;
     if (isHyperlinkNode(node)) {
       const span = offsets.spanOf(node);
-      if (span) found.push(Object.freeze({ id: node.id, paragraphId, start: span.start, end: span.end }));
+      if (span)
+        found.push(Object.freeze({ id: node.id, paragraphId, start: span.start, end: span.end }));
       return;
     }
     for (const child of node.children) walk(child, depth + 1);

@@ -80,10 +80,7 @@ export function hydratedFlag(value: AutomationValue, target: string): boolean {
 }
 
 /** One section's page geometry, in points. */
-export function hydratedPageSetup(
-  value: AutomationValue,
-  target: string
-): AutomationPageSetupRead {
+export function hydratedPageSetup(value: AutomationValue, target: string): AutomationPageSetupRead {
   if (value.kind !== 'pageSetup') throw wrongShape(target);
   return value.setup;
 }

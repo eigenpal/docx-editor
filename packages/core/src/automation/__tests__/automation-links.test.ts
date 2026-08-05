@@ -102,7 +102,11 @@ describe('a link is authored, and only a target this engine will open', () => {
     const { body } = roots(host);
     const response = host.execute({
       operations: [
-        { op: 'setHyperlink', span: spanOfWords(host, body, 'see'), target: 'https://example.com/b' },
+        {
+          op: 'setHyperlink',
+          span: spanOfWords(host, body, 'see'),
+          target: 'https://example.com/b',
+        },
       ],
     });
     expect(response.ok).toBe(true);
@@ -135,9 +139,7 @@ describe('a link is authored, and only a target this engine will open', () => {
     const host = withLinks();
     const { body } = roots(host);
     const response = host.execute({
-      operations: [
-        { op: 'setHyperlink', span: spanOfWords(host, body, 'see'), target: '#target' },
-      ],
+      operations: [{ op: 'setHyperlink', span: spanOfWords(host, body, 'see'), target: '#target' }],
     });
     expect(response.ok).toBe(true);
     const next = reopen(host);
@@ -161,9 +163,7 @@ describe('a link is authored, and only a target this engine will open', () => {
     const { body } = roots(host);
     const before = storyText(host, body);
     const response = host.execute({
-      operations: [
-        { op: 'setHyperlink', span: spanOfWords(host, body, 'the site'), target: '' },
-      ],
+      operations: [{ op: 'setHyperlink', span: spanOfWords(host, body, 'the site'), target: '' }],
     });
     expect(response.ok).toBe(true);
 
@@ -221,9 +221,9 @@ describe('a bookmark is a name over a range', () => {
       'target'
     );
     const span = spanAt(host.execute({ operations: [{ op: 'getBookmarkRange', bookmark }] }), 0);
-    expect(
-      textAt(host.execute({ operations: [{ op: 'getSpanText', span }] }), 0)
-    ).toBe('the place');
+    expect(textAt(host.execute({ operations: [{ op: 'getSpanText', span }] }), 0)).toBe(
+      'the place'
+    );
   });
 
   test('a bookmark with no end marker is not answered, because it has no range', () => {
@@ -260,9 +260,9 @@ describe('a bookmark is a name over a range', () => {
       0
     );
     expect(found.length).toBe(1);
-    expect(textAt(host.execute({ operations: [{ op: 'getBookmarkName', bookmark: found[0]! }] }), 0)).toBe(
-      'two'
-    );
+    expect(
+      textAt(host.execute({ operations: [{ op: 'getBookmarkName', bookmark: found[0]! }] }), 0)
+    ).toBe('two');
   });
 
   test('two asks for one bookmark are one handle, and a name in a header is not the body’s', () => {

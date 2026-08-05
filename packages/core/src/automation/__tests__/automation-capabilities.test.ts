@@ -9,7 +9,11 @@
 import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { readOoxmlPackage, type OoxmlPackage } from '../../store/package/ooxml-package.ts';
-import { AUTOMATION_COMMAND_OPERATIONS, AUTOMATION_SOLITARY_OPERATIONS, isAutomationCommand } from '../operations.ts';
+import {
+  AUTOMATION_COMMAND_OPERATIONS,
+  AUTOMATION_SOLITARY_OPERATIONS,
+  isAutomationCommand,
+} from '../operations.ts';
 import { createAutomationHost } from '../host.ts';
 import type { AutomationDocumentPort } from '../document-port.ts';
 import type { AutomationCapabilities, AutomationHandle, AutomationHost } from '../protocol.ts';

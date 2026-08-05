@@ -285,8 +285,10 @@ const listItemsAreLists: Satisfies<
   [ListCollection['items'], ReturnType<ListCollection['getFirst']>],
   [readonly List[], List]
 > = true;
-const listItemLevelMatches: Satisfies<Pick<ListItem, 'level'>, Pick<Declared.ListItem, 'level'>> =
-  true;
+const listItemLevelMatches: Satisfies<
+  Pick<ListItem, 'level'>,
+  Pick<Declared.ListItem, 'level'>
+> = true;
 
 // A paragraph says which list it is in and where in it — the two accessors upstream declares.
 const paragraphReachesItsList: Satisfies<
@@ -334,8 +336,10 @@ const sectionItemsAreSections: Satisfies<
 const documentReachesItsSections: Satisfies<Document['sections'], SectionCollection> = true;
 
 // A note is a story of its own, and it says which kind of note it is.
-const noteMatchesTheDeclaredNote: Satisfies<Pick<NoteItem, 'type'>, Pick<Declared.NoteItem, 'type'>> =
-  true;
+const noteMatchesTheDeclaredNote: Satisfies<
+  Pick<NoteItem, 'type'>,
+  Pick<Declared.NoteItem, 'type'>
+> = true;
 const noteDeletes: Satisfies<Pick<NoteItem, 'delete'>, Pick<Declared.NoteItem, 'delete'>> = true;
 const noteAnswersItsOwnObjects: Satisfies<
   [NoteItem['body'], ReturnType<NoteItem['getNext']>],

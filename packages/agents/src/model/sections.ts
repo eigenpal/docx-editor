@@ -322,11 +322,7 @@ export class SectionCollection extends HandleCollection<Section> {
     return new SectionCollection(context, ObjectPath.derived(label, owner), plan);
   }
 
-  private constructor(
-    context: RequestContext,
-    path: ObjectPath,
-    plan: () => AutomationOperation
-  ) {
+  private constructor(context: RequestContext, path: ObjectPath, plan: () => AutomationOperation) {
     super(context, path);
     this.#plan = plan;
   }

@@ -47,10 +47,7 @@ export type {
 } from './sections.ts';
 
 // Which story a handle names: the body, a header or footer variant, or one note.
-export {
-  HEADER_FOOTER_VARIANTS,
-  type AutomationStoryId,
-} from './stories.ts';
+export { HEADER_FOOTER_VARIANTS, type AutomationStoryId } from './stories.ts';
 
 // Formatting: what a span agrees about its characters, and what a write may author.
 export type {

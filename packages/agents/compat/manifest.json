@@ -2,35 +2,12 @@
   "schemaVersion": 1,
   "$comment": "Allowlisted subset of the Microsoft Word JavaScript API (Word.* namespace) that DocxEditor's public surface is measured against for source/shape compatibility. This file selects the upstream UIDs used as *reference-only conformance input*; it is not a dependency declaration and DocxEditor does not vendor, copy, or generate its own declarations from Microsoft's. See README.md in this directory for the full policy.",
   "categories": {
-    "core": [
-      "RequestContext",
-      "ClientObject",
-      "Document",
-      "Body",
-      "Range",
-      "Paragraph"
-    ],
-    "collectionsAndSearch": [
-      "ParagraphCollection",
-      "RangeCollection",
-      "SearchOptions"
-    ],
-    "fontAndParagraphFormatting": [
-      "Font"
-    ],
-    "contentControls": [
-      "ContentControl",
-      "ContentControlCollection"
-    ],
-    "listsAndNumbering": [
-      "List",
-      "ListCollection",
-      "ListItem"
-    ],
-    "bookmarks": [
-      "Bookmark",
-      "BookmarkCollection"
-    ],
+    "core": ["RequestContext", "ClientObject", "Document", "Body", "Range", "Paragraph"],
+    "collectionsAndSearch": ["ParagraphCollection", "RangeCollection", "SearchOptions"],
+    "fontAndParagraphFormatting": ["Font"],
+    "contentControls": ["ContentControl", "ContentControlCollection"],
+    "listsAndNumbering": ["List", "ListCollection", "ListItem"],
+    "bookmarks": ["Bookmark", "BookmarkCollection"],
     "sectionsAndStories": [
       "Section",
       "SectionCollection",
@@ -53,26 +30,14 @@
       "members": []
     },
     "RequestContext": {
-      "members": [
-        "document"
-      ]
+      "members": ["document"]
     },
     "ClientObject": {
       "namespace": "OfficeExtension",
-      "members": [
-        "context",
-        "isNullObject"
-      ]
+      "members": ["context", "isNullObject"]
     },
     "Document": {
-      "members": [
-        "body",
-        "comments",
-        "contentControls",
-        "paragraphs",
-        "sections",
-        "revisions"
-      ]
+      "members": ["body", "comments", "contentControls", "paragraphs", "sections", "revisions"]
     },
     "Body": {
       "members": [
@@ -127,35 +92,16 @@
       ]
     },
     "ParagraphCollection": {
-      "members": [
-        "items",
-        "getFirst",
-        "getLast"
-      ]
+      "members": ["items", "getFirst", "getLast"]
     },
     "RangeCollection": {
-      "members": [
-        "items",
-        "getFirst"
-      ]
+      "members": ["items", "getFirst"]
     },
     "SearchOptions": {
-      "members": [
-        "ignorePunct",
-        "ignoreSpace",
-        "matchCase",
-        "matchWholeWord",
-        "matchWildcards"
-      ]
+      "members": ["ignorePunct", "ignoreSpace", "matchCase", "matchWholeWord", "matchWildcards"]
     },
     "Font": {
-      "members": [
-        "bold",
-        "italic",
-        "color",
-        "name",
-        "size"
-      ]
+      "members": ["bold", "italic", "color", "name", "size"]
     },
     "ContentControl": {
       "members": [
@@ -177,57 +123,28 @@
       ]
     },
     "ContentControlCollection": {
-      "members": [
-        "items",
-        "getById"
-      ]
+      "members": ["items", "getById"]
     },
     "List": {
-      "members": [
-        "id",
-        "paragraphs",
-        "getLevelParagraphs",
-        "insertParagraph"
-      ]
+      "members": ["id", "paragraphs", "getLevelParagraphs", "insertParagraph"]
     },
     "ListCollection": {
-      "members": [
-        "items",
-        "getById",
-        "getFirst"
-      ]
+      "members": ["items", "getById", "getFirst"]
     },
     "ListItem": {
-      "members": [
-        "level"
-      ]
+      "members": ["level"]
     },
     "Bookmark": {
-      "members": [
-        "name",
-        "range",
-        "select"
-      ]
+      "members": ["name", "range", "select"]
     },
     "BookmarkCollection": {
-      "members": [
-        "items"
-      ]
+      "members": ["items"]
     },
     "Section": {
-      "members": [
-        "body",
-        "pageSetup",
-        "getHeader",
-        "getFooter",
-        "getNext"
-      ]
+      "members": ["body", "pageSetup", "getHeader", "getFooter", "getNext"]
     },
     "SectionCollection": {
-      "members": [
-        "items",
-        "getFirst"
-      ]
+      "members": ["items", "getFirst"]
     },
     "PageSetup": {
       "members": [
@@ -241,65 +158,28 @@
       ]
     },
     "NoteItem": {
-      "members": [
-        "body",
-        "type",
-        "delete",
-        "getNext"
-      ]
+      "members": ["body", "type", "delete", "getNext"]
     },
     "Comment": {
-      "members": [
-        "authorName",
-        "creationDate",
-        "id",
-        "replies",
-        "resolved",
-        "getRange",
-        "reply"
-      ]
+      "members": ["authorName", "creationDate", "id", "replies", "resolved", "getRange", "reply"]
     },
     "CommentCollection": {
-      "members": [
-        "items",
-        "getFirst"
-      ]
+      "members": ["items", "getFirst"]
     },
     "CommentReply": {
-      "members": [
-        "authorName",
-        "creationDate",
-        "id"
-      ]
+      "members": ["authorName", "creationDate", "id"]
     },
     "CommentReplyCollection": {
-      "members": [
-        "items",
-        "getFirst"
-      ]
+      "members": ["items", "getFirst"]
     },
     "Revision": {
-      "members": [
-        "author",
-        "date",
-        "range",
-        "type",
-        "accept",
-        "reject"
-      ]
+      "members": ["author", "date", "range", "type", "accept", "reject"]
     },
     "RevisionCollection": {
-      "members": [
-        "items",
-        "acceptAll",
-        "rejectAll"
-      ]
+      "members": ["items", "acceptAll", "rejectAll"]
     },
     "NoteItemCollection": {
-      "members": [
-        "items",
-        "getFirst"
-      ]
+      "members": ["items", "getFirst"]
     }
   },
   "omissions": [

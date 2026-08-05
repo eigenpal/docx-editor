@@ -57,7 +57,13 @@ export function storyKey(story: AutomationStoryId): string {
 /** Whether a value is a story id this lane will act on, checked as untrusted input. */
 export function isStoryId(value: unknown): value is AutomationStoryId {
   if (typeof value !== 'object' || value === null) return false;
-  const candidate = value as { kind?: unknown; sectionIndex?: unknown; variant?: unknown; noteKind?: unknown; noteId?: unknown };
+  const candidate = value as {
+    kind?: unknown;
+    sectionIndex?: unknown;
+    variant?: unknown;
+    noteKind?: unknown;
+    noteId?: unknown;
+  };
   if (candidate.kind === 'body') return true;
   if (candidate.kind === 'note') {
     return (

@@ -27,10 +27,7 @@ import {
   type ReviewCommentItem,
   type ReviewRevisionItem,
 } from '../store/store/review-reads.ts';
-import {
-  commentPartNameOf,
-  commentsExtendedPartNameOf,
-} from '../store/store/comment-writes.ts';
+import { commentPartNameOf, commentsExtendedPartNameOf } from '../store/store/comment-writes.ts';
 import type { AutomationStoryReads } from './reads.ts';
 
 /**

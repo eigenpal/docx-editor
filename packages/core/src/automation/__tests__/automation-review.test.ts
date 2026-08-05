@@ -138,7 +138,10 @@ describe('a document holds its comments, and a script reads the same ones the ra
     const host = reviewed();
     const { body } = roots(host);
     const [first] = commentsOf(host, body) as [AutomationHandle];
-    const span = spanAt(host.execute({ operations: [{ op: 'getCommentRange', comment: first }] }), 0);
+    const span = spanAt(
+      host.execute({ operations: [{ op: 'getCommentRange', comment: first }] }),
+      0
+    );
     expect(textAt(host.execute({ operations: [{ op: 'getSpanText', span }] }), 0)).toBe('reviewed');
   });
 
@@ -170,10 +173,17 @@ describe('a document holds its comments, and a script reads the same ones the ra
     const host = reviewed();
     const { body } = roots(host);
     const [first] = commentsOf(host, body) as [AutomationHandle];
-    expect(host.execute({ operations: [{ op: 'setCommentResolved', comment: first, resolved: true }] }).ok).toBe(true);
+    expect(
+      host.execute({ operations: [{ op: 'setCommentResolved', comment: first, resolved: true }] })
+        .ok
+    ).toBe(true);
     const mid = reopen(host);
     const [again] = commentsOf(mid.host, mid.body) as [AutomationHandle];
-    expect(mid.host.execute({ operations: [{ op: 'setCommentResolved', comment: again, resolved: false }] }).ok).toBe(true);
+    expect(
+      mid.host.execute({
+        operations: [{ op: 'setCommentResolved', comment: again, resolved: false }],
+      }).ok
+    ).toBe(true);
     const next = reopen(mid.host);
     expect(flagOf(next.host, commentsOf(next.host, next.body)[0]!)).toBe(false);
   });
@@ -217,9 +227,49 @@ describe('a document holds its comments, and a script reads the same ones the ra
       operations: [{ op: 'replyToComment', comment: first, text: 'noted', author: 'Linus' }],
     });
     const reply = handleAt(written, 0);
-    expect(textAt(host.execute({ operations: [{ op: 'getCommentText', comment: reply }] }), 0)).toBe(
-      'noted'
+    expect(
+      textAt(host.execute({ operations: [{ op: 'getCommentText', comment: reply }] }), 0)
+    ).toBe('noted');
+  });
+
+  test('a reply lands even where the file wrote a paraId Word would not have written', () => {
+    // `BBBBBBBB` is 8 hex digits and out of range: MS-DOCX puts `w14:paraId` below 0x80000000, so
+    // the reader treats this one as absent. What must NOT follow is a second `w14:paraId` beside it
+    // — a duplicate expanded attribute, which fails the part's invariants and takes the whole reply
+    // down with it. An out-of-range id is REPLACED, so a file another editor wrote is repaired by
+    // the edit rather than made unrepliable by it.
+    const host = open(
+      richDocx({
+        body:
+          `<w:p><w:commentRangeStart w:id="1"/><w:r><w:t>reviewed</w:t></w:r>` +
+          `<w:commentRangeEnd w:id="1"/><w:r><w:commentReference w:id="1"/></w:r></w:p>`,
+        rels: [{ id: 'rId5', type: REL_TYPES.comments, target: 'comments.xml' }],
+        parts: [commentsPart(comment('1', 'Ada', 'BBBBBBBB', 'the remark'))],
+      })
     );
+    const { body } = roots(host);
+    const [first] = commentsOf(host, body) as [AutomationHandle];
+    const written = host.execute({
+      operations: [{ op: 'replyToComment', comment: first, text: 'agreed', author: 'Linus' }],
+    });
+    expect(written.ok).toBe(true);
+
+    const next = reopen(host);
+    const [reopened] = commentsOf(next.host, next.body) as [AutomationHandle];
+    const replies = handlesAt(
+      next.host.execute({ operations: [{ op: 'getCommentReplies', comment: reopened }] }),
+      0
+    );
+    expect(
+      replies.map((reply, index) =>
+        textAt(
+          next.host.execute({
+            operations: replies.map((each) => ({ op: 'getCommentText' as const, comment: each })),
+          }),
+          index
+        )
+      )
+    ).toEqual(['agreed']);
   });
 
   test('a reply with no author is refused, because a comment without one is invalid XML', () => {
@@ -242,9 +292,7 @@ describe('a document holds its comments, and a script reads the same ones the ra
   });
 
   test('a document with no comment part answers no comments rather than refusing', () => {
-    const host = open(
-      richDocx({ body: `<w:p><w:r><w:t>plain</w:t></w:r></w:p>` })
-    );
+    const host = open(richDocx({ body: `<w:p><w:r><w:t>plain</w:t></w:r></w:p>` }));
     expect(commentsOf(host, roots(host).body)).toEqual([]);
   });
 });
@@ -316,7 +364,10 @@ describe('a tracked change is a decision, and the ones offered are the ones the 
     expect(response.ok).toBe(true);
     const next = reopen(host);
     expect(revisionsOf(next.host, next.body)).toEqual([]);
-    const text = textAt(next.host.execute({ operations: [{ op: 'getText', target: next.body }] }), 0);
+    const text = textAt(
+      next.host.execute({ operations: [{ op: 'getText', target: next.body }] }),
+      0
+    );
     expect(text).toContain('added');
     expect(text).not.toContain('gone');
     void body;
@@ -328,7 +379,10 @@ describe('a tracked change is a decision, and the ones offered are the ones the 
     expect(host.execute({ operations: [{ op: 'rejectAllRevisions', document }] }).ok).toBe(true);
     const next = reopen(host);
     expect(revisionsOf(next.host, next.body)).toEqual([]);
-    const text = textAt(next.host.execute({ operations: [{ op: 'getText', target: next.body }] }), 0);
+    const text = textAt(
+      next.host.execute({ operations: [{ op: 'getText', target: next.body }] }),
+      0
+    );
     expect(text).not.toContain('added');
     expect(text).toContain('gone');
   });

@@ -210,4 +210,3 @@ export abstract class HandleCollection<
     return handle ? { kind: 'handle', handle } : undefined;
   }
 }
-

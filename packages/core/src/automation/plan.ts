@@ -62,11 +62,7 @@ import type {
   AutomationSpan,
   AutomationValue,
 } from './protocol.ts';
-import {
-  PARAGRAPH_MARK,
-  type AutomationPackageReads,
-  type AutomationStoryReads,
-} from './reads.ts';
+import { PARAGRAPH_MARK, type AutomationPackageReads, type AutomationStoryReads } from './reads.ts';
 import {
   resolveParagraphHandle,
   resolveParagraphRef,
@@ -92,12 +88,7 @@ import {
   linksInParagraph,
   type AutomationLinkRead,
 } from './links.ts';
-import {
-  listReads,
-  membershipIn,
-  MAX_LIST_LEVEL,
-  type AutomationListRead,
-} from './lists.ts';
+import { listReads, membershipIn, MAX_LIST_LEVEL, type AutomationListRead } from './lists.ts';
 import { pageSetupProperties, type AutomationSectionRead } from './sections.ts';
 import type { NoteKind } from '../store/package/note-nodes.ts';
 import { paragraphStyleName, styleIdFor } from './styles.ts';
@@ -482,7 +473,10 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
   /** A review range as a protocol span, clamped to what the story still holds. */
   const spanOfReviewRange = (
     reads: AutomationStoryReads,
-    range: { readonly start: { paragraphId: string; offset: number }; readonly end: { paragraphId: string; offset: number } }
+    range: {
+      readonly start: { paragraphId: string; offset: number };
+      readonly end: { paragraphId: string; offset: number };
+    }
   ): AutomationSpan | null => {
     const startText = reads.paragraphText(range.start.paragraphId);
     const endText = reads.paragraphText(range.end.paragraphId);
@@ -652,11 +646,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     return query({ kind: 'spans', spans });
   };
 
-  const planInsertText = (
-    plan: StoryPlan,
-    at: ResolvedPoint,
-    text: string
-  ): PlannedOperation => {
+  const planInsertText = (plan: StoryPlan, at: ResolvedPoint, text: string): PlannedOperation => {
     if (typeof text !== 'string')
       return refuse('unsupported-content', 'insertText needs text', 'text');
     if (PARAGRAPH_BREAKING.test(text)) {
@@ -1103,11 +1093,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
    * the reason a style change does not delete a paragraph's indents and numbering. The style is
    * resolved ONCE for the whole span: it is a property of the document, not of a paragraph.
    */
-  const planSetStyle = (
-    plan: StoryPlan,
-    range: ResolvedRange,
-    name: string
-  ): PlannedOperation => {
+  const planSetStyle = (plan: StoryPlan, range: ResolvedRange, name: string): PlannedOperation => {
     const reads = plan.reads;
     const part = reads.part;
     const pin = pinWrite(plan);
@@ -1185,10 +1171,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
    * resolves "the section governing this paragraph" from — or, for the final section that no mark
    * closes, the story's last paragraph.
    */
-  const planSetPageSetup = (
-    index: number,
-    request: unknown
-  ): PlannedOperation => {
+  const planSetPageSetup = (index: number, request: unknown): PlannedOperation => {
     const body = packageReads.body;
     if (!body) return refuse('document-unavailable', 'this host holds no document right now');
     const sections = packageReads.sections();
@@ -1222,10 +1205,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
   };
 
   /** Delete a note: package-level, so it travels alone. */
-  const planDeleteNote = (
-    noteKind: NoteKind,
-    noteId: number
-  ): PlannedOperation => ({
+  const planDeleteNote = (noteKind: NoteKind, noteId: number): PlannedOperation => ({
     ok: true,
     kind: 'command',
     ops: [{ op: 'deleteNote', noteKind, noteId }],
@@ -1351,14 +1331,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     const reads = plan.reads;
     const existing = linkCovering(reads, range);
     const collapsed =
-      range.start.paragraphId === range.end.paragraphId &&
-      range.start.offset === range.end.offset;
+      range.start.paragraphId === range.end.paragraphId && range.start.offset === range.end.offset;
 
     // UNLINK. The element goes, the runs stay: their text, their formatting and their order are
     // not the link's, it only wrapped them.
     if (target.length === 0) {
-      if (!existing)
-        return refuse('unsupported-content', 'that text is not a link', 'no-link');
+      if (!existing) return refuse('unsupported-content', 'that text is not a link', 'no-link');
       const pin = pinWrite(plan);
       if (pin) return pin;
       const conflict = touch(plan, existing.paragraphId);
@@ -1487,13 +1465,10 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
 
       case 'getParagraphs': {
         const story = storyOfHandle(operation.body, 'body', handles, packageReads);
-        if (!story.ok)
-          return refuse(story.code, 'that handle does not name a body', story.detail);
+        if (!story.ok) return refuse(story.code, 'that handle does not name a body', story.detail);
         return query({
           kind: 'handles',
-          handles: story.value.paragraphIds.map((id) =>
-            handles.paragraph(id, story.value.story)
-          ),
+          handles: story.value.paragraphIds.map((id) => handles.paragraph(id, story.value.story)),
         });
       }
 
@@ -1514,7 +1489,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const body = handles.resolve(operation.target, 'body');
         if (body) {
           const story = storyOfHandle(operation.target, 'body', handles, packageReads);
-          if (!story.ok) return refuse(story.code, 'that handle does not name a body', story.detail);
+          if (!story.ok)
+            return refuse(story.code, 'that handle does not name a body', story.detail);
           return query({ kind: 'text', text: story.value.text() });
         }
         const paragraph = resolveParagraphHandle(operation.target, handles, packageReads);
@@ -1606,12 +1582,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           );
         const story = packageReads.story(anchor.value.story);
         if (!story) return refuse('invalid-handle', 'that story is not in this document');
-        return planInsertParagraph(
-          planFor(story),
-          anchor.value,
-          operation.where,
-          operation.text
-        );
+        return planInsertParagraph(planFor(story), anchor.value, operation.where, operation.text);
       }
 
       case 'splitParagraph': {
@@ -1685,11 +1656,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           return refuse(paragraph.code, 'that is not a paragraph', paragraph.detail);
         const story = packageReads.story(paragraph.value.story);
         if (!story) return refuse('document-unavailable', 'this host holds no document right now');
-        const format = paragraphFormatRead(
-          story.part,
-          paragraph.value.paragraphId,
-          story.styles()
-        );
+        const format = paragraphFormatRead(story.part, paragraph.value.paragraphId, story.styles());
         if (!format) return refuse('invalid-handle', 'that handle does not name a paragraph');
         return query({ kind: 'paragraphFormat', format });
       }
@@ -1717,9 +1684,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           return refuse('invalid-handle', 'that handle does not name a document', 'document');
         return query({
           kind: 'handles',
-          handles: packageReads
-            .sections()
-            .map((section) => handles.section(section.index)),
+          handles: packageReads.sections().map((section) => handles.section(section.index)),
         });
       }
 
@@ -1753,7 +1718,11 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         // Validated as untrusted input BEFORE it is used to look a story up: `variant` arrives
         // from a caller, and a story id this lane will not act on must not become a handle.
         if (!isStoryId(story))
-          return refuse('unknown-operation', 'that is not a furniture variant', String(operation.variant));
+          return refuse(
+            'unknown-operation',
+            'that is not a furniture variant',
+            String(operation.variant)
+          );
         if (!packageReads.story(story))
           return refuse(
             'invalid-handle',
@@ -1767,7 +1736,11 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         if (!handles.resolve(operation.document, 'document'))
           return refuse('invalid-handle', 'that handle does not name a document', 'document');
         if (operation.noteKind !== 'footnote' && operation.noteKind !== 'endnote')
-          return refuse('unknown-operation', 'that is not a kind of note', String(operation.noteKind));
+          return refuse(
+            'unknown-operation',
+            'that is not a kind of note',
+            String(operation.noteKind)
+          );
         const kind = operation.noteKind;
         return query({
           kind: 'handles',
@@ -1983,7 +1956,11 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         // GONE MEANS GONE. The markers left with the text that held them, and a range derived from
         // where they used to be would point at whatever moved in.
         if (!bookmark)
-          return refuse('invalid-handle', 'this document no longer declares that bookmark', target.name);
+          return refuse(
+            'invalid-handle',
+            'this document no longer declares that bookmark',
+            target.name
+          );
         const start: ResolvedPoint = {
           story: reads.story,
           paragraphId: bookmark.start.paragraphId,
@@ -2020,7 +1997,9 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           const high = reads.indexOf(covering.end.paragraphId);
           if (to < low || from > high) return false;
           if (to === low && from === low && high === low) {
-            return range.end.offset > covering.start.offset && range.start.offset < covering.end.offset;
+            return (
+              range.end.offset > covering.start.offset && range.start.offset < covering.end.offset
+            );
           }
           return true;
         });
@@ -2073,7 +2052,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         if (!range || found.item.orphaned)
           return refuse('invalid-handle', 'that comment has no range in this document');
         const span = spanOfReviewRange(found.reads, range);
-        if (!span) return refuse('invalid-handle', 'that comment’s range is no longer in the story');
+        if (!span)
+          return refuse('invalid-handle', 'that comment’s range is no longer in the story');
         return query({ kind: 'span', span });
       }
 
@@ -2087,7 +2067,11 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const found = commentAt(operation.comment);
         if (!found.ok) return found.planned;
         if (typeof operation.resolved !== 'boolean')
-          return refuse('unsupported-content', 'resolved is a yes or a no', String(operation.resolved));
+          return refuse(
+            'unsupported-content',
+            'resolved is a yes or a no',
+            String(operation.resolved)
+          );
         const conflict = pinWrite(planFor(found.reads));
         if (conflict) return conflict;
         return {
@@ -2283,7 +2267,10 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       if (pinned) {
         const after = post.story(pinned.reads.story);
         if (!after) {
-          return { ok: false, detail: `the story this batch wrote is gone: ${storyKey(pinned.reads.story)}` };
+          return {
+            ok: false,
+            detail: `the story this batch wrote is gone: ${storyKey(pinned.reads.story)}`,
+          };
         }
         const before = new Set(pinned.reads.paragraphIds);
         const fresh = after.paragraphIds.filter((id) => !before.has(id));

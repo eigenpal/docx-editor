@@ -39,18 +39,17 @@ import { resolveNotesPart } from '../store/package/note-references.ts';
 import { paraIdOf } from '../store/package/para-id.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
-import { bodyStoryRoot, collectStoryParagraphs, storyParagraphs } from '../store/package/story-blocks.ts';
+import {
+  bodyStoryRoot,
+  collectStoryParagraphs,
+  storyParagraphs,
+} from '../store/package/story-blocks.ts';
 import { namedChild, paragraphPropertiesNodeOf } from '../store/store/tree-op-nodes.ts';
 import { paragraphTextOf } from '../store/store/tree-ops.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 import { sectionReads, type AutomationSectionRead } from './sections.ts';
 import { styleIndex, type AutomationStyleIndex } from './styles.ts';
-import {
-  BODY_STORY,
-  HEADER_FOOTER_VARIANTS,
-  storyKey,
-  type AutomationStoryId,
-} from './stories.ts';
+import { BODY_STORY, HEADER_FOOTER_VARIANTS, storyKey, type AutomationStoryId } from './stories.ts';
 
 /** The separator Word's own text properties put at a paragraph mark. */
 export const PARAGRAPH_MARK = '\r';
@@ -304,7 +303,13 @@ export function documentReads(pkg: OoxmlPackage): AutomationPackageReads {
     const slot = slotOf(story);
     if (!slot) return null;
     // The part's ROOT is the story: `w:hdr` and `w:ftr` hold blocks directly.
-    return storyReadsOver(story, slot.part, { kind: 'headerFooter', rId: slot.rId }, slot.part.root, stylesOf);
+    return storyReadsOver(
+      story,
+      slot.part,
+      { kind: 'headerFooter', rId: slot.rId },
+      slot.part.root,
+      stylesOf
+    );
   };
 
   const story = (id: AutomationStoryId): AutomationStoryReads | null => {

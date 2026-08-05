@@ -150,10 +150,15 @@ describe('a paragraph knows which list it is in', () => {
 
   test('a level with no `w:ilvl` is level zero, which is what the file means', () => {
     const host = open(
-      docx(`<w:p><w:pPr><w:numPr><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>a</w:t></w:r></w:p>`)
+      docx(
+        `<w:p><w:pPr><w:numPr><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>a</w:t></w:r></w:p>`
+      )
     );
     const { body } = roots(host);
-    const paragraph = handlesAt(host.execute({ operations: [{ op: 'getParagraphs', body }] }), 0)[0];
+    const paragraph = handlesAt(
+      host.execute({ operations: [{ op: 'getParagraphs', body }] }),
+      0
+    )[0];
     expect(levelOf(host, paragraph as AutomationHandle)).toBe(0);
   });
 });

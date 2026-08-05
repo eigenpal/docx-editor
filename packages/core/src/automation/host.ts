@@ -34,10 +34,7 @@ import type {
   AutomationSaveResult,
   AutomationUnsubscribe,
 } from './protocol.ts';
-import type {
-  AutomationCommentWrite,
-  AutomationDocumentPort,
-} from './document-port.ts';
+import type { AutomationCommentWrite, AutomationDocumentPort } from './document-port.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 
 export interface AutomationHostComposition {

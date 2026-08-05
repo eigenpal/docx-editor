@@ -448,7 +448,14 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
             target.prefix ?? 'w',
             target.localName,
             [
-              ...target.attributes,
+              // Any `w14:paraId` already on the paragraph goes: it is here only because the reader
+              // refused it (out of MS-DOCX's range, or not 8 hex digits), and ADDING beside it would
+              // make the element carry the same expanded name twice — which fails the part's
+              // invariants and takes the whole reply with it. Replacing repairs the file instead.
+              ...target.attributes.filter(
+                (entry) =>
+                  !(entry.namespaceUri === W14_NAMESPACE_URI && entry.localName === 'paraId')
+              ),
               {
                 kind: 'genericExtension' as const,
                 namespaceUri: W14_NAMESPACE_URI,
@@ -657,8 +664,7 @@ export function setCommentResolved(
   // The thread: this comment, plus every comment whose recorded parent is it.
   const ownParaId = paraIdOfComment(commentsPart, commentId);
   const used = paraIdsInPackage(pkg);
-  const mintedOwn =
-    ownParaId ?? mintParaId(`${commentsName}#done-${commentId}`, used);
+  const mintedOwn = ownParaId ?? mintParaId(`${commentsName}#done-${commentId}`, used);
   const entries = extendedEntries(pkg.parts.get(extendedName));
   const replies: string[] = [];
   for (const [paraId, entry] of entries) {
