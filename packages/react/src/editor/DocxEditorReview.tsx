@@ -45,7 +45,7 @@ import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../i18n';
 import { ReviewRailContext, useDocxEditor } from './context';
 import { Slot } from './toolbar/Slot';
-import { useReview, useStackedReviewPositions, type ReviewItemView } from './useReview';
+import { useReview, type ReviewItemView } from './useReview';
 
 /** The rail's data, provided once by the Root so a card never re-subscribes. */
 const ReviewContext = createContext<ReviewRailValue | null>(null);
@@ -102,6 +102,17 @@ const RAIL_OVERSCAN = 600;
 
 /** How many author slots the token ramp defines; past it, colours repeat. */
 const AUTHOR_SLOTS = 8;
+
+/** What an unmeasured, uncollapsed card reserves in the stacking run, in CSS px. */
+const DEFAULT_CARD_HEIGHT = 72;
+/** A collapsed card: the head row and its padding, in CSS px. */
+const COLLAPSED_CARD_HEIGHT = 54;
+/**
+ * How far (CSS px) a card may be pushed below its own text before it collapses to a
+ * header. Roughly half a viewport: nearer than that the eye still connects card to text;
+ * further, a full card reads as annotating whatever happens to be beside it.
+ */
+const COLLAPSE_DISPLACEMENT_PX = 480;
 
 /** Keeps the caret: a mousedown that bubbles to the editor moves it. Inputs are exempt. */
 function guardMousedown(event: React.MouseEvent): void {
@@ -470,12 +481,37 @@ function ReviewRoot({
     return merged;
   }, [heights, roots]);
 
-  const stacked = useStackedReviewPositions(stackInput, estimatedHeights, {
-    gap,
-    scale: metrics.scale,
-    // The compose box, the one stacked key that is not a root card.
-    defaultHeight: 72,
-  });
+  // Stacking with CROWDING COLLAPSE, one deterministic pass. Push-down stacking cannot be
+  // cheated: a cluster of tall cards needs more room than its text region has, and the
+  // overflow used to spill page after page — the reader at the bottom of the document saw
+  // full cards whose text lived pages earlier. A card pushed further than the threshold
+  // from its own text renders COLLAPSED (header only), which both bounds how misleading a
+  // displaced card can be and shrinks the pressure that displaces everything after it.
+  // The ACTIVE card and the compose box never collapse. Collapse decisions feed the cursor
+  // with the collapsed height, so the pass is stable: each decision depends only on the
+  // cards before it.
+  const { stacked, collapsedKeys } = useMemo(() => {
+    const scale = metrics.scale;
+    const positions = new Map<string, number>();
+    const collapsed = new Set<string>();
+    let cursor = Number.NEGATIVE_INFINITY;
+    for (const entry of stackInput) {
+      if (entry.anchorY === null) continue;
+      const top = Math.max(entry.anchorY, cursor);
+      positions.set(entry.key, top);
+      const displacedPx = (top - entry.anchorY) * scale;
+      const isActive = 'isActive' in entry && entry.isActive;
+      const collapse =
+        displacedPx > COLLAPSE_DISPLACEMENT_PX && !isActive && entry.key !== COMPOSE_KEY;
+      if (collapse) collapsed.add(entry.key);
+      const height = collapse
+        ? COLLAPSED_CARD_HEIGHT
+        : (estimatedHeights.get(entry.key) ?? DEFAULT_CARD_HEIGHT);
+      // Pixels to points before they meet an anchor.
+      cursor = top + (height + gap) / scale;
+    }
+    return { stacked: positions, collapsedKeys: collapsed };
+  }, [stackInput, estimatedHeights, gap, metrics.scale]);
   const composeTop =
     composeAnchorY === null
       ? null
@@ -539,6 +575,7 @@ function ReviewRoot({
           <ReviewList
             stack={stack}
             positions={stacked}
+            collapsed={collapsedKeys}
             scale={metrics.scale}
             offset={metrics.top}
             window={window_}
@@ -570,6 +607,7 @@ function ReviewRoot({
               <ReviewList
                 stack={stack}
                 positions={stacked}
+                collapsed={collapsedKeys}
                 scale={metrics.scale}
                 offset={metrics.top}
                 window={window_}
@@ -591,6 +629,8 @@ function ReviewRoot({
 interface ReviewListProps {
   stack?: boolean;
   positions?: ReadonlyMap<string, number>;
+  /** Cards the stacking pass collapsed to a header — pushed too far from their text. */
+  collapsed?: ReadonlySet<string>;
   scale?: number;
   offset?: number;
   /** Visible band of the scroller; cards outside it are not mounted. Null renders all. */
@@ -615,6 +655,7 @@ interface ReviewListProps {
 function ReviewList({
   stack = true,
   positions,
+  collapsed,
   scale = 1,
   offset = 0,
   window: visible = null,
@@ -647,6 +688,10 @@ function ReviewList({
             <div
               className="docx-review__slot"
               style={style}
+              // Header-only, because the card sits far from the text it annotates and a
+              // full summary there reads as annotating the wrong text. Clicking it makes
+              // the item active, and the active card always renders in full.
+              {...(collapsed?.has(entry.key) ? { 'data-collapsed': '' } : {})}
               ref={(node) => {
                 measure(node, entry.key);
               }}
