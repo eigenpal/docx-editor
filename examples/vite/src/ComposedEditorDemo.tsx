@@ -28,6 +28,7 @@ import {
 // disable with the engine's own "requires the pro review module" reason.
 import {
   customNodesModule,
+  decodeCustomNodeTag,
   defineCustomNode,
   insertCustomNode,
   reviewModule,
@@ -188,6 +189,77 @@ const PERF_TIPS = {
  * and the collapsed chip neither polls nor re-renders. Collapsed it is a small
  * circular document chip on the outline toggle's disc recipe.
  */
+/**
+ * Click a citation chip → a card, the custom-node `onClick` DX. Delegated on
+ * the document: the chip's boundary layer opted back into pointer events (see
+ * styles.css), its chrome layer carries the node's `w:tag`, and decoding that
+ * tag is the whole lookup — attrs come straight from the document.
+ */
+function CitationPopover() {
+  const [card, setCard] = useState<{
+    x: number;
+    y: number;
+    attrs: Readonly<Record<string, string>>;
+  } | null>(null);
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const boundary = target?.closest?.('.docx-content-control-boundary');
+      const tag = boundary
+        ?.closest('.docx-content-control-chrome[data-tag^="docx:citation"]')
+        ?.getAttribute('data-tag');
+      const decoded = tag ? decodeCustomNodeTag(tag) : null;
+      if (!boundary || !decoded) {
+        setCard(null);
+        return;
+      }
+      const rect = boundary.getBoundingClientRect();
+      setCard({ x: rect.left, y: rect.bottom + 8, attrs: decoded.attrs });
+    };
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
+  }, []);
+  if (!card) return null;
+  return (
+    <div
+      role="dialog"
+      aria-label="Citation details"
+      style={{
+        position: 'fixed',
+        left: card.x,
+        top: card.y,
+        zIndex: 60,
+        minWidth: 260,
+        background: '#fff',
+        border: '1px solid #e2e8f0',
+        borderRadius: 12,
+        boxShadow: '0 12px 32px rgba(15, 23, 42, 0.18)',
+        padding: '12px 14px',
+        font: '13px/1.5 system-ui, sans-serif',
+        color: '#0f172a',
+      }}
+    >
+      <div style={{ fontWeight: 600, marginBottom: 6 }}>📖 {card.attrs['label'] ?? 'Citation'}</div>
+      <div style={{ color: '#475569' }}>
+        <div>
+          Source: <code>{card.attrs['sourceId'] ?? '—'}</code>
+        </div>
+        <div>Locator: {card.attrs['locator'] ?? '—'}</div>
+      </div>
+      <button
+        type="button"
+        style={{ ...DEMO_PRIMARY_BUTTON, marginTop: 10 }}
+        onClick={() => {
+          window.alert(`A real app opens source ${card.attrs['sourceId']} here.`);
+          setCard(null);
+        }}
+      >
+        Open source
+      </button>
+    </div>
+  );
+}
+
 function PerfHud() {
   const editor = useDocxEditor();
   const [open, setOpen] = useState(false);
@@ -684,6 +756,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
             <DocxEditor.PageNumber />
             {/* Floating diagnostics chrome, above the overlay panels. */}
             <PerfHud />
+            <CitationPopover />
           </div>
         </DocxEditor.Root>
       ) : loadError ? (
