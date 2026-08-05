@@ -3019,7 +3019,8 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-pages .docx-hf--placeholder:hover {
-  background: var(--doc-bg-hover);
+  background: var(--doc-primary-light);
+  border-radius: 4px;
 }
 
 .docx-pages .docx-hf--placeholder:hover::after {
@@ -3029,7 +3030,7 @@ a.docx-hyperlink:focus-visible {
     -apple-system,
     sans-serif;
   font-size: 12px;
-  color: var(--doc-text-subtle);
+  color: var(--doc-primary);
   user-select: none;
   -webkit-user-select: none;
 }
@@ -3038,9 +3039,58 @@ a.docx-hyperlink:focus-visible {
   content: 'Double-click to add footer';
 }
 
+/* Hovering an EXISTING inactive band tints it and floats an edit invitation beside it —
+ * without this the enterable header answered a hover with nothing at all. The pill is a
+ * sibling because the band clips its own overflow. */
+.docx-pages .docx-hf:not([data-docx-hf-active]):not(.docx-hf--placeholder):hover {
+  background: var(--doc-primary-light);
+  border-radius: 4px;
+}
+
+.docx-pages .docx-hf-edit-hint {
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.docx-pages .docx-hf:not([data-docx-hf-active]):hover + .docx-hf-edit-hint {
+  opacity: 1;
+}
+
+.docx-pages .docx-hf-edit-hint::after {
+  content: 'Double-click to edit header';
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--doc-primary);
+  background: var(--doc-primary-light);
+  border-radius: 10px;
+  padding: 0 10px;
+  margin-top: 4px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.docx-pages .docx-hf-edit-hint[data-docx-hf-hint='footer'] {
+  align-items: flex-end;
+}
+
+.docx-pages .docx-hf-edit-hint[data-docx-hf-hint='footer']::after {
+  content: 'Double-click to edit footer';
+  margin-top: 0;
+  margin-bottom: 4px;
+}
+
 /* No affordance while another furniture scope is open, in view mode, or in print. */
 .docx-pages--hf-editing .docx-hf--placeholder:hover,
-.docx-paginated-surface--viewing .docx-hf--placeholder:hover {
+.docx-paginated-surface--viewing .docx-hf--placeholder:hover,
+.docx-pages--hf-editing .docx-hf:not([data-docx-hf-active]):hover,
+.docx-paginated-surface--viewing .docx-hf:not([data-docx-hf-active]):hover {
   background: none;
 }
 
@@ -3049,8 +3099,14 @@ a.docx-hyperlink:focus-visible {
   content: none;
 }
 
+.docx-pages--hf-editing .docx-hf-edit-hint,
+.docx-paginated-surface--viewing .docx-hf-edit-hint {
+  display: none;
+}
+
 @media print {
-  .docx-hf--placeholder {
+  .docx-hf--placeholder,
+  .docx-hf-edit-hint {
     display: none !important;
   }
 }

@@ -1342,12 +1342,20 @@ function paintPage(
     band.className = 'docx-hf docx-hf--placeholder';
     band.dataset.docxHf = kind;
     band.setAttribute('contenteditable', 'false');
-    const top = kind === 'header' ? 0 : page.contentBox.y + page.contentBox.height - page.box.y;
-    const height =
+    // A SLIM strip beside the content edge, not the whole margin: a section with a deep
+    // top margin painted an invitation taller than the heading under it. Word's header
+    // area is a couple of lines; the pointer still accepts the full margin band, so the
+    // visual can stay modest without shrinking the target.
+    const marginHeight =
       kind === 'header'
         ? page.contentBox.y - page.box.y
         : page.box.y + page.box.height - (page.contentBox.y + page.contentBox.height);
+    const height = Math.min(marginHeight, PLACEHOLDER_BAND_PT);
     if (height <= 0) continue;
+    const top =
+      kind === 'header'
+        ? page.contentBox.y - page.box.y - height
+        : page.contentBox.y + page.contentBox.height - page.box.y;
     band.style.position = 'absolute';
     band.style.left = `${(page.contentBox.x - page.box.x) * options.scale}px`;
     band.style.top = `${top * options.scale}px`;
@@ -1393,11 +1401,31 @@ function paintPage(
       );
     }
     element.append(container);
+    // Hover invitation for an EXISTING band: a pill just outside the story box, shown by
+    // CSS only while the adjacent band is hovered (`.docx-hf:hover + .docx-hf-edit-hint`).
+    // Outside the band because the band clips (`overflow: hidden`) and its content would
+    // sit under the pill. Adjacency is load-bearing — keep this append right here.
+    const hint = document.createElement('div');
+    hint.className = 'docx-hf-edit-hint';
+    hint.dataset.docxHfHint = story.kind;
+    hint.setAttribute('contenteditable', 'false');
+    hint.style.position = 'absolute';
+    hint.style.left = container.style.left;
+    hint.style.width = container.style.width;
+    hint.style.top =
+      story.kind === 'header'
+        ? `${(story.box.y + story.box.height - page.box.y) * options.scale}px`
+        : `${(story.box.y - page.box.y) * options.scale}px`;
+    if (story.kind === 'footer') hint.style.transform = 'translateY(-100%)';
+    element.append(hint);
   }
 
   paintContentControlChrome(document, element, page, options);
   return element;
 }
+
+/** Height of the blank header/footer invitation band, in points (~two text lines). */
+const PLACEHOLDER_BAND_PT = 30;
 
 /** Widget kinds the painted surface can activate without adapter chrome. */
 const WIDGET_TYPES = new Set<ContentControlMappedType>([
