@@ -136,6 +136,38 @@ const rightEdgeTargetMissingRepeat: TableRightEdgeResizeTarget = {
 declare const target: SemanticTarget;
 void target;
 
+// Every form `can()` says it accepts must be CONSTRUCTIBLE without a cast, and nothing else
+// should be. Both adapter call sites and the facade's own test used to write
+// `{ anchor, head } as never` against a union that named a `SemanticTarget` the engine
+// refuses and omitted the paragraph-id form it honours — the cast was load-bearing, which is
+// how the contract stayed wrong. These four lines are the gate in
+// `editor/docx-editor-support.ts`, spelled as types.
+const semanticCaret: EditorCommand = {
+  type: 'setSelection',
+  range: { anchor: { paragraphId: 'p1', offset: 0 }, head: { paragraphId: 'p1', offset: 0 } },
+};
+const semanticRange: EditorCommand = {
+  type: 'setSelection',
+  range: { anchor: { paragraphId: 'p1', offset: 1 }, head: { paragraphId: 'p2', offset: 4 } },
+};
+const anchorRange: EditorCommand = {
+  type: 'setSelection',
+  range: { from: { paraId: 'A1B2C3D4' }, to: { paraId: 'E5F6A7B8' } },
+};
+const collapsedAnchor: EditorCommand = { type: 'setSelection', anchor: { paraId: 'A1B2C3D4' } };
+
+const mixedEndpoints: EditorCommand = {
+  type: 'setSelection',
+  // @ts-expect-error the two endpoint vocabularies do not mix; `can()` refuses this pair
+  range: { from: { paraId: 'A1B2C3D4' }, to: { paragraphId: 'p2', offset: 0 } },
+};
+
+void semanticCaret;
+void semanticRange;
+void anchorRange;
+void collapsedAnchor;
+void mixedEndpoints;
+
 export function exercise(editor: Editor, doc: DocxDocument): void {
   // Writes return a result that narrows.
   const result = editor.exec(boldCmd);

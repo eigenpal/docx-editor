@@ -54,13 +54,12 @@ export function DocxEditorDocumentOutline(props: DocxEditorDocumentOutlineProps)
       if (!editor) return;
       // Focus first, so the surface owns the selection it is about to paint.
       editor.focus();
+      // Anchor and head equal is what a caret is, so this collapses the selection at the
+      // start of the heading rather than selecting it.
       const position = { paragraphId: blockId, offset: 0 };
-      // The paragraph-id/offset endpoints are the ONE selection form the tree surface
-      // honours; the declared `EditorSelection` union does not spell it yet, so this
-      // casts exactly the way the facade's own setSelection test does.
       editor.exec({
         type: 'setSelection',
-        range: { anchor: position, head: position } as never,
+        range: { anchor: position, head: position },
       });
       // Moving the caret does not move the VIEWPORT — a heading twenty pages down was
       // selected where the user could not see it. The engine knows which page the block

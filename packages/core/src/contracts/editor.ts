@@ -21,12 +21,15 @@ import type {
   ReviewRevisionItem,
   ReviewRevisionKind,
 } from '../layout/review-support.ts';
-import type { InteractionOutcome, SemanticTarget } from './interaction';
+import type { InteractionOutcome } from './interaction';
+// The selection vocabulary the painted surface actually speaks. Type-only, and re-exported
+// below for the same reason the review types are: an adapter is not allowed to import the
+// layout lane, so a form it must construct has to be nameable from this contract.
+import type { SemanticPosition, SemanticSelection } from '../layout/semantic-interaction.ts';
 import type {
   ColorValue,
   ContentControlFilter,
   DocAnchor,
-  DocLocation,
   DocRange,
   Rect,
   Revision,
@@ -70,6 +73,7 @@ export type {
   ReviewRevisionItem,
 } from '../layout/review-support.ts';
 export type { RevisionAddress } from '@docx-editor.dev/core/store';
+export type { SemanticPosition, SemanticSelection } from '../layout/semantic-interaction.ts';
 export type {
   DrawingHorizontalReferenceFrame,
   DrawingKind,
@@ -244,17 +248,28 @@ export type EditorScope =
 export type ViewScope = Exclude<EditorScope, { kind: 'all' }>;
 
 /**
- * A position the engine can resolve. Kept deliberately open: any accepted address form,
- * including a {@link SemanticTarget}. New forms may be added without breaking callers, so do
- * not treat this as a closed set.
+ * A selection endpoint, in either vocabulary the engine resolves.
+ *
+ * {@link DocAnchor} addresses a paragraph by its `w14:paraId`, which is what an LLM or an
+ * automation script can name in a payload. {@link SemanticPosition} addresses it by the
+ * paragraph id the painted surface and the ops already use, with a UTF-16 offset inside it.
+ *
+ * Neither subsumes the other. A paraId survives being written to a file and read back, so it
+ * is the one an out-of-process caller can hold; but it is OPTIONAL in the document, and
+ * `ParagraphSummary.paraId` says so — a paragraph the file gave no `w14:paraId` cannot be
+ * reached by a `DocAnchor` at all. The paragraph id reaches every paragraph.
  */
-export type EditorPosition = DocAnchor | DocLocation | SemanticTarget;
+export type EditorPosition = DocAnchor | SemanticPosition;
 
-/** A selection expressed with any accepted position form. */
-export type EditorSelection =
-  | DocRange
-  | { from: EditorPosition; to: EditorPosition }
-  | SemanticTarget;
+/**
+ * A selection, in one endpoint vocabulary or the other.
+ *
+ * The two do NOT mix: a range is a pair of paraId anchors, or a semantic anchor/head pair,
+ * and `can()` refuses anything else with the engine's own reason. Spelled as two arms rather
+ * than `{ from: EditorPosition; to: EditorPosition }` for exactly that reason — the looser
+ * shape would type a mixed pair the engine rejects at runtime.
+ */
+export type EditorSelection = SemanticSelection | { from: DocAnchor; to: DocAnchor };
 
 /**
  * Whether a command would be accepted, and why not when it would not.
@@ -1153,7 +1168,15 @@ export interface EditorCommands
 
   undo: Record<never, never>;
   redo: Record<never, never>;
-  setSelection: { anchor: EditorPosition } | { range: EditorSelection };
+  /**
+   * Move the selection. Three accepted forms, and `can()` names all three when it refuses:
+   * a collapsed paraId anchor, a range of two paraId anchors, or a semantic anchor/head pair.
+   *
+   * `{ anchor }` takes a {@link DocAnchor} rather than an {@link EditorPosition} because a
+   * collapsed SEMANTIC position is spelled as a range whose anchor and head are equal, which
+   * is what a caret already is.
+   */
+  setSelection: { anchor: DocAnchor } | { range: EditorSelection };
 
   // ── Selection and clipboard ─────────────────────────────────────────────────────────
   //
