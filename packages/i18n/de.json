@@ -657,7 +657,9 @@
       "makeCasual": "Lockerer formulieren",
       "custom": "Benutzerdefiniert"
     },
-    "updateTableOfContents": "Inhaltsverzeichnis aktualisieren"
+    "updateTableOfContents": "Inhaltsverzeichnis aktualisieren",
+    "editCustomNode": null,
+    "removeCustomNode": null
   },
   "documentOutline": {
     "ariaLabel": "Dokumentgliederung",

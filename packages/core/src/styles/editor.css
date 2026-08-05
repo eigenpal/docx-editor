@@ -5805,6 +5805,28 @@ a.docx-hyperlink:focus-visible {
   outline-offset: 1px;
 }
 
+/* Custom-node section (pro CustomNodeContextMenu): the pointed-at node's card data,
+   rendered above the packaged rows. Strings inside are file-derived — text only. */
+.docx-contextmenu__custom-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 12px 8px;
+}
+
+.docx-contextmenu__custom-title {
+  color: var(--doc-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.docx-contextmenu__custom-detail {
+  color: var(--doc-text-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
 /* ── Image chrome (Task 15) ─────────────────────────────────────────────────────────── */
 
 .docx-image-insert__input {

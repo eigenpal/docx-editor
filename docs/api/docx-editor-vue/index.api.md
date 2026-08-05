@@ -487,6 +487,7 @@ export interface Editor {
         readonly resolved: boolean;
     }[];
     getCurrentPage(mode?: 'viewport' | 'caret'): number;
+    getCustomNodeDefinitions(): readonly unknown[];
     getDocumentFonts(): readonly string[];
     getDocumentHandle(): DocumentHandle;
     getDocumentStyles(): readonly {

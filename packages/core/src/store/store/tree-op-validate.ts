@@ -30,6 +30,7 @@ import {
   isRepeatingSectionControl,
   isShowingPlaceholder,
   isTemporaryControl,
+  leavesInlineContainer,
   listItemsOf,
   parseCheckboxValue,
   paragraphPropertiesNodeOf,
@@ -198,7 +199,8 @@ export function contentControlAtCaret(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
   start: number,
-  end: number
+  end: number,
+  bias?: 'left' | 'right'
 ): ReturnType<typeof findContentControl> {
   const segments = segmentsOf(paragraph);
   const overlapping = segments.filter((segment) => segment.start < end && segment.end > start);
@@ -214,9 +216,34 @@ export function contentControlAtCaret(
   const beforeControl = before ? innermostContentControlAround(part, before.runId) : null;
   if (afterControl && isShowingPlaceholder(afterControl)) return afterControl;
   if (beforeControl && isShowingPlaceholder(beforeControl)) return beforeControl;
-  // At an inline-control boundary, the run starting at the caret owns the insertion.
-  // A missing/ordinary `after` therefore means the caret is outside the inline control.
-  if (after) return afterControl;
+  // A `w:temporary` control at either side of the caret is claimed EAGERLY, like a
+  // placeholder: its contract is unwrap-on-first-edit, and a keystroke at its boundary is
+  // that edit (pinned by the temporary-unwrap tests).
+  if (afterControl && isTemporaryControl(afterControl)) return afterControl;
+  if (beforeControl && isTemporaryControl(beforeControl)) return beforeControl;
+  // Otherwise attribute the caret to the control the APPLY side would type into, under
+  // apply's EXACT conditions — bias left, an intact (non-deleted) before segment, no
+  // control-membership change across the boundary, and not leaving a link/field.
+  // Mirroring only part of the rule is how a `bias: 'right'` insert validated against
+  // the outside run while apply wrote inside a locked chip.
+  if (
+    bias !== 'right' &&
+    before &&
+    before.removeNodeIds === undefined &&
+    beforeControl?.id === afterControl?.id &&
+    !leavesInlineContainer(paragraph, before, after)
+  ) {
+    return beforeControl ?? innermostContentControlAround(part, paragraph.id);
+  }
+  // At an inline-control boundary the run STARTING at the caret owns the insertion —
+  // typing at a control's leading edge enters it, as in Word.
+  if (after) return afterControl ?? innermostContentControlAround(part, paragraph.id);
+  if (beforeControl) {
+    // Outer edge with nothing beyond: only controls ABOVE the one being left still own
+    // the caret (a run inside a control with no after segment always leaves it).
+    const ancestors = contentControlAncestorsOf(part, beforeControl.id);
+    return ancestors[ancestors.length - 1] ?? null;
+  }
   return innermostContentControlAround(part, paragraph.id);
 }
 
@@ -232,25 +259,39 @@ function rangeTouchesContentRestriction(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
   start: number,
-  end: number
+  end: number,
+  bias?: 'left' | 'right'
 ): TreeOpRejection | null {
   const segments = segmentsOf(paragraph);
   const overlappingRunIds = new Set(
     segments.filter((segment) => segment.start < end && segment.end > start).map((s) => s.runId)
   );
-  // A collapsed insert at `start` (end === start) still sits at a caret: the run that
-  // owns the character after the caret, or the one before when at the end.
+  // A collapsed insert at `start` (end === start) still sits at a caret. The run checked
+  // is the run the APPLY side would type into, under apply's EXACT conditions (bias left,
+  // an intact before segment, not leaving a container) — mirroring only part of the rule
+  // is how a `bias: 'right'` insert validated against the outside run while apply wrote
+  // inside a locked chip. At a container's outer edge with nothing beyond, the insert
+  // lands BESIDE it and the control check below owns ancestor locks.
   if (overlappingRunIds.size === 0 && start === end) {
-    const at =
-      segments.find((segment) => segment.start === start) ??
-      [...segments].reverse().find((segment) => segment.end === start);
+    const after = segments.find((segment) => segment.start === start);
+    const before = [...segments].reverse().find((segment) => segment.end === start);
+    const leftWins =
+      bias !== 'right' &&
+      before !== undefined &&
+      before.removeNodeIds === undefined &&
+      // The same control-membership guard apply's `crossesContentControlBoundary` applies:
+      // at a control boundary the run STARTING at the caret owns the insertion.
+      innermostContentControlAround(part, before.runId)?.id ===
+        (after ? innermostContentControlAround(part, after.runId)?.id : undefined) &&
+      !leavesInlineContainer(paragraph, before, after);
+    const at = leftWins ? before : after;
     if (at) overlappingRunIds.add(at.runId);
   }
   for (const runId of overlappingRunIds) {
     if (isBoundAt(part, runId)) return 'bound';
     if (effectiveContentLockAt(part, runId).content) return 'locked';
   }
-  const control = contentControlAtCaret(part, paragraph, start, end);
+  const control = contentControlAtCaret(part, paragraph, start, end, bias);
   if (control) {
     if (
       isBoundContentControl(control) ||
@@ -280,9 +321,10 @@ function rejectContentEdit(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
   start: number,
-  end: number
+  end: number,
+  bias?: 'left' | 'right'
 ): TreeOpRejection | null {
-  return rangeTouchesContentRestriction(part, paragraph, start, end);
+  return rangeTouchesContentRestriction(part, paragraph, start, end, bias);
 }
 
 /**
@@ -698,7 +740,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       // A named automation insertion was already resolved against that owner's exact landing
       // site above. Re-resolving the raw caret with editor boundary bias can select a sibling.
       if (op.inside !== undefined) return null;
-      return rejectContentEdit(part, paragraph, op.offset, op.offset);
+      return rejectContentEdit(part, paragraph, op.offset, op.offset, op.bias);
     }
     case 'setListLevel': {
       if (!Number.isInteger(op.level) || op.level < 0 || op.level > 8) return 'invalid-range';
@@ -906,10 +948,13 @@ export {
   type TreeOpResult,
 } from './tree-op-types.ts';
 export {
+  inlineControlEndingAt,
+  inlineControlStartingAt,
   isParagraph,
   paragraphOffsetIndex,
   runsUnder,
   segmentsOf,
+  type InlineControlSpan,
   type OffsetSpan,
   type ParagraphOffsetIndex,
   type Segment,

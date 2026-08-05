@@ -322,6 +322,16 @@ second row vocabulary.
 - `ContextMenuCommandProps`
 - `ContextMenuItemProps`
 - `ContextMenuAnchor` — where the panel opened, in client coordinates.
+- `useContextMenuTarget` — the element the opening right-click landed on, captured at open
+  time like the TOC context. What lets a capability package (pro custom nodes) render a
+  contextual section only when the press landed on its own painted chrome, without a second
+  `contextmenu` listener. Follows the panel to Vue when the panel does.
+  Two documented conventions ride with it: a child component carrying the static
+  `docxRowPlacement: 'start'` renders ABOVE the packaged rows (the shape a "you
+  right-clicked one of MINE" section wants; note the static lives on the component TYPE, so
+  wrapping such a component in another loses the placement); and a keyboard-invoked menu
+  (Shift+F10) carries no pointer target, so target-keyed sections cannot appear for it —
+  a caret-based fallback is a tracked follow-up.
 
 ### Table contextual chrome (React only, for now)
 

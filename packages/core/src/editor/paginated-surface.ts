@@ -9,6 +9,8 @@ import {
   detectBodyTocs,
   findNode,
   hyperlinkTargetOf,
+  inlineControlEndingAt,
+  inlineControlStartingAt,
   isContentControl,
   parseTocInstruction,
   planTocEntries,
@@ -2336,11 +2338,14 @@ export function mountPaginatedSurface(
       // Revisions are measured in the SAME pass and drawn only when active: tracked text
       // already carries an underline, a strike and a margin bar, so banding all of it would
       // repeat what the decoration says and leave a page of edits as one solid wash.
+      // Custom-node cards take the same treatment — the chip tint already marks the node
+      // persistently, so its band appears only while its card is open.
       const key = reviewItemKey(item);
-      for (const [index, range] of item.ranges.entries()) {
+      const itemRanges = item.kind === 'revision' ? item.ranges : item.range ? [item.range] : [];
+      for (const [index, range] of itemRanges.entries()) {
         if (!onScreen(range.start.paragraphId, range.end.paragraphId)) continue;
         ranges.push({
-          key: item.ranges.length === 1 ? key : `${key}${RANGE_SUFFIX}${index}`,
+          key: itemRanges.length === 1 ? key : `${key}${RANGE_SUFFIX}${index}`,
           from: { paragraphId: range.start.paragraphId, offset: range.start.offset },
           to: { paragraphId: range.end.paragraphId, offset: range.end.offset },
         });
@@ -2418,6 +2423,11 @@ export function mountPaginatedSurface(
     const isActive = active !== null && decision === reviewItemKey(active);
     if (key.startsWith('comment-')) {
       return isActive ? 'docx-comment-band docx-comment-band--active' : 'docx-comment-band';
+    }
+    // A custom node's band only while its card is open: the chip tint already marks the
+    // node persistently, and the comment band is the right weight for "this is the one".
+    if (key.startsWith('custom-')) {
+      return isActive ? 'docx-comment-band docx-comment-band--active' : null;
     }
     const item = byKey.get(decision);
     if (!item || item.kind !== 'revision') return null;
@@ -2895,6 +2905,22 @@ export function mountPaginatedSurface(
         );
         return;
       }
+      // Backspace at a chip's outer edge takes the WHOLE node — see `inlineControlBeside`.
+      // A wrapper-locked control refuses the op and the key does nothing, which is the
+      // lock doing its job rather than a bug.
+      const chip = inlineControlBeside(position, 'before');
+      if (chip) {
+        commit(
+          () =>
+            applyOps(
+              [{ op: 'removeContentControl', controlId: chip.controlId, keepContent: false }],
+              selectionMark()
+            ),
+          () => collapsedAt({ paragraphId: position.paragraphId, offset: chip.start }),
+          { rearmPending: armed }
+        );
+        return;
+      }
       commit(
         () =>
           applyOps(
@@ -3061,6 +3087,21 @@ export function mountPaginatedSurface(
       const position = selection.head;
       const text = textOf(position.paragraphId);
       if (position.offset < text.length) {
+        // Delete at a chip's leading edge takes the WHOLE node — the forward mirror of
+        // the Backspace rule above.
+        const chip = inlineControlBeside(position, 'after');
+        if (chip) {
+          commit(
+            () =>
+              applyOps(
+                [{ op: 'removeContentControl', controlId: chip.controlId, keepContent: false }],
+                selectionMark()
+              ),
+            () => collapsedAt(position),
+            { rearmPending: armed }
+          );
+          return;
+        }
         commit(
           () =>
             applyOps(
@@ -3566,6 +3607,25 @@ export function mountPaginatedSurface(
   /** Model text of a paragraph, read back from the layout records. */
   function textOf(paragraphId: string): string {
     return paragraphTextFromLayout(currentLayout, paragraphId);
+  }
+
+  /**
+   * The inline content control whose content ends (Backspace) or starts (Delete) exactly
+   * at the caret, in the ACTIVE story part. Consulted so the key takes the node as ONE
+   * unit (pro-review-and-custom-nodes 4.6): deleting into a chip character-by-character
+   * would either strip letters from a content-locked label — refused, a dead key — or
+   * leave a half-deleted node whose tag still claims the full payload.
+   */
+  function inlineControlBeside(
+    position: { readonly paragraphId: string; readonly offset: number },
+    side: 'before' | 'after'
+  ): { readonly controlId: string; readonly start: number; readonly end: number } | null {
+    const part = session.partFor(storyScope()) ?? session.part();
+    const paragraph = findNode(part, position.paragraphId);
+    if (!paragraph || paragraph.kind !== 'paragraph') return null;
+    return side === 'before'
+      ? inlineControlEndingAt(paragraph, position.offset)
+      : inlineControlStartingAt(paragraph, position.offset);
   }
 
   /**

@@ -167,7 +167,35 @@ export interface ReviewCommentItem {
   readonly orphaned: boolean;
 }
 
-export type ReviewItem = ReviewRevisionItem | ReviewCommentItem;
+/**
+ * A card contributed by a recognized custom node (`defineCustomNode` with a `reviewCard`
+ * hook), anchored at the node's range.
+ *
+ * Informational, never resolvable: there is nothing to accept or reject, so the engine
+ * refuses those verbs on it. `title` and `detail` are HOST-authored (the definition's hook
+ * produced them), but `attrs` and `text` originate in a file an attacker controls — a
+ * surface renders every one of these as text, never markup.
+ */
+export interface ReviewCustomItem {
+  readonly kind: 'custom';
+  /** The SDT node's stable id in the canonical tree. */
+  readonly id: string;
+  /** The definition's `name`. */
+  readonly name: string;
+  /** The raw `w:tag` the node was recognized from. Untrusted input. */
+  readonly tag: string;
+  /** Attrs decoded from the tag, after the definition's recognition hook. Untrusted input. */
+  readonly attrs: Readonly<Record<string, string>>;
+  /** The SDT's literal content text. Untrusted input. */
+  readonly text: string;
+  /** Card title, from the definition's `reviewCard` hook. */
+  readonly title: string;
+  /** Card body, from the definition's `reviewCard` hook. */
+  readonly detail?: string;
+  readonly range: ReviewRange | null;
+}
+
+export type ReviewItem = ReviewRevisionItem | ReviewCommentItem | ReviewCustomItem;
 
 /** What the review queue derivation reads: one story part plus its comment parts. */
 export interface ReviewModelInput {
@@ -183,13 +211,21 @@ export interface ReviewModelInput {
   readonly commentsPart?: OoxmlPart | undefined;
   /** `word/commentsExtended.xml`, absent when the package has none. */
   readonly commentsExtendedPart?: OoxmlPart | undefined;
+  /**
+   * Custom node definitions from the module registry, forwarded OPAQUELY.
+   *
+   * Core carries them the way the registry does — as unknowns — so the definition shape
+   * stays a capability-package concern. The pro derivation narrows them and contributes
+   * `kind: 'custom'` cards for definitions that opted in.
+   */
+  readonly customNodes?: readonly unknown[] | undefined;
 }
 
 // ── Pure helpers over the vocabulary ───────────────────────────────────────────
 
 /** The stable key a surface uses for the active item and for a React list. */
 export function reviewItemKey(item: ReviewItem): string {
-  return item.kind === 'comment' ? `comment-${item.id}` : `revision-${item.id}`;
+  return `${item.kind}-${item.id}`;
 }
 
 /** Plain text of a comment's body, so a card never re-implements the run walk. */
@@ -234,8 +270,8 @@ export function paragraphOrderOfPart(part: OoxmlPart): Map<string, number> {
 
 /** Every range a decision touches. One card can cover several, in different paragraphs. */
 export function reviewItemRanges(item: ReviewItem): readonly ReviewRange[] {
-  if (item.kind === 'comment') return item.range ? [item.range] : [];
-  return item.ranges;
+  if (item.kind === 'revision') return item.ranges;
+  return item.range ? [item.range] : [];
 }
 
 /** The first range of an item, in authored order, or null when it has none. */
@@ -310,6 +346,13 @@ function coveringWidth(
   return best;
 }
 
+/** Tie-break order between kinds covering the same caret at equal range width. */
+const REVIEW_KIND_RANK: Readonly<Record<ReviewItem['kind'], number>> = {
+  comment: 0,
+  custom: 1,
+  revision: 2,
+};
+
 /**
  * Every item covering a position, innermost first.
  *
@@ -330,9 +373,13 @@ export function reviewItemsAt(
   return covering
     .sort((a, b) => {
       if (a.width !== b.width) return a.width - b.width;
-      // At equal width a comment outranks a revision: it is a question waiting on the reader,
-      // while the revision is also reachable from the toolbar.
-      if (a.item.kind !== b.item.kind) return a.item.kind === 'comment' ? -1 : 1;
+      // At equal width a comment outranks everything (it is a question waiting on the
+      // reader), and a custom node outranks a revision (it is the more specific thing
+      // under the caret). A total order — the old two-way comparison was not antisymmetric
+      // once a third kind existed, leaving custom-vs-revision ties implementation-defined.
+      if (a.item.kind !== b.item.kind) {
+        return REVIEW_KIND_RANK[a.item.kind] - REVIEW_KIND_RANK[b.item.kind];
+      }
       return 0;
     })
     .map((entry) => entry.item);

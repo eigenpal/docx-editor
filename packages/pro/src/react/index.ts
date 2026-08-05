@@ -15,12 +15,23 @@ export { reviewModule, type ReviewModuleOptions } from '../review/review-module.
 export { type ProLicenseOptions } from '../license.ts';
 export {
   DocxEditorReview,
+  useReviewItem,
   type DocxEditorReviewNamespace,
   type ReviewActionProps,
   type ReviewPartProps,
   type ReviewProps,
 } from './DocxEditorReview';
 export { CustomNodeChrome, type CustomNodeChromeProps } from './CustomNodeChrome.tsx';
+export {
+  CustomNodeContextMenu,
+  type CustomNodeContextMenuProps,
+} from './CustomNodeContextMenu.tsx';
+export {
+  activatedCustomNodeOf,
+  resolveCustomNodeActivation,
+  useCustomNodeDefinitions,
+  type ResolvedCustomNodeActivation,
+} from './custom-node-activation.ts';
 export {
   useReview,
   useReviewOf,

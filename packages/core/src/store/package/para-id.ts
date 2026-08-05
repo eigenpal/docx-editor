@@ -42,7 +42,8 @@ export function paraIdOf(node: OoxmlNode): string | null {
   return null;
 }
 
-function fnv1a32(value: string): number {
+/** FNV-1a over UTF-16 code units — the deterministic mint every id derivation shares. */
+export function fnv1a32(value: string): number {
   let hash = 0x811c9dc5;
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index);

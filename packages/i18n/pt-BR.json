@@ -657,7 +657,9 @@
       "makeCasual": "Tornar informal",
       "custom": "Personalizado"
     },
-    "updateTableOfContents": "Atualizar sumário"
+    "updateTableOfContents": "Atualizar sumário",
+    "editCustomNode": null,
+    "removeCustomNode": null
   },
   "documentOutline": {
     "ariaLabel": "Estrutura do documento",

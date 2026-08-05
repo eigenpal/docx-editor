@@ -657,7 +657,9 @@
       "makeCasual": "Rendre informel",
       "custom": "Personnalisé"
     },
-    "updateTableOfContents": "Mettre à jour la table des matières"
+    "updateTableOfContents": "Mettre à jour la table des matières",
+    "editCustomNode": null,
+    "removeCustomNode": null
   },
   "documentOutline": {
     "ariaLabel": "Plan du document",

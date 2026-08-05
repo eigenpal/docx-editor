@@ -678,7 +678,9 @@
       "makeFormal": "Make Formal",
       "makeCasual": "Make Casual",
       "custom": "Custom"
-    }
+    },
+    "editCustomNode": "Edit {label}",
+    "removeCustomNode": "Remove {label}"
   },
   "documentOutline": {
     "ariaLabel": "Document outline",

@@ -131,6 +131,7 @@ export {
   ContextMenuInsertColumnRight,
   ContextMenuInsertRowAbove,
   ContextMenuInsertRowBelow,
+  useContextMenuTarget,
   type ContextMenuAnchor,
   type ContextMenuCommandProps,
   type ContextMenuItemProps,

@@ -198,7 +198,7 @@ interface SiteLocation {
  * instruction text the wrong lengths, so every card in a paragraph holding one reported a
  * range the caret and the ops disagreed with.
  */
-function locateSites(part: OoxmlPart): Map<string, SiteLocation> {
+export function locateSites(part: OoxmlPart): Map<string, SiteLocation> {
   const located = new Map<string, SiteLocation>();
   const walkParagraph = (paragraph: OoxmlParagraphNode): void => {
     // Paragraph-local by construction: every offset here is measured inside this paragraph,

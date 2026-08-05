@@ -1738,6 +1738,9 @@ export interface UseContentControlResult {
 }
 
 // @public
+export function useContextMenuTarget(): HTMLElement | null;
+
+// @public
 export function useDocumentOutline(): UseDocumentOutlineResult;
 
 // @public

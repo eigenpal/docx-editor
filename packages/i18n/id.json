@@ -673,7 +673,9 @@
       "makeCasual": "Jadikan Santai",
       "custom": "Kustom"
     },
-    "updateTableOfContents": "Perbarui daftar isi"
+    "updateTableOfContents": "Perbarui daftar isi",
+    "editCustomNode": null,
+    "removeCustomNode": null
   },
   "documentOutline": {
     "ariaLabel": "Struktur dokumen",

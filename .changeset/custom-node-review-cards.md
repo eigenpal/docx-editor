@@ -1,0 +1,5 @@
+---
+'@docx-editor.dev/react': minor
+---
+
+Custom nodes can now contribute cards to the review sidebar and a section at the top of the right-click menu. `defineCustomNode` accepts `reviewCard` (card title and detail, anchored at the node's text), `onEdit` (the "Edit" action the context menu offers, with a component-level `onEditNode` twin), and `label`. Chrome components (`CustomNodeChrome`, the new `CustomNodeContextMenu`) default to the definitions registered on the editor, so a host registers them once, and every activation carries the same post-recognition attrs plus the node's id and text when resolvable. Host content placed inside the review rail renders in every card and reads the current item with the new `useReviewItem` hook; `getReviewItems` placements are now a discriminated union on `kind`. Inserted custom nodes are content-locked by default — there is no in-place update call yet, so editing is re-authoring until schema-driven forms land. `customNodeXml` builds the same locked, tagged markup as a plain string for server-side authoring. The context menu exposes `useContextMenuTarget` for contextual sections.

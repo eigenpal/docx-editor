@@ -64,8 +64,12 @@ import {
   type SemanticLayout,
   type SemanticPosition,
 } from '../layout/index.ts';
-import type { DocumentEditingMode, ReviewItemPlacement, ReviewItemQuery } from '../contracts/editor.ts';
-import { resolveEditorModules } from '../contracts/modules.ts';
+import type {
+  DocumentEditingMode,
+  ReviewItemPlacement,
+  ReviewItemQuery,
+} from '../contracts/editor.ts';
+import { resolveEditorModules, type ReviewModelInput } from '../contracts/modules.ts';
 import {
   NO_TRACKING_SETTINGS,
   type DocumentTrackingSettings,
@@ -442,8 +446,22 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // default (`all-markup`), which is what the review rail annotates.
       ...(reviewEnabled ? {} : { revisionDisplayMode: 'proposed' as const }),
       // The module's derivation reaches the session through the surface: the session
-      // owns the per-revision memo, the module owns the algorithm.
-      ...(modules.review ? { reviewModel: modules.review } : {}),
+      // owns the per-revision memo, the module owns the algorithm. Registered custom-node
+      // definitions ride along OPAQUELY so the derivation can contribute `custom` cards;
+      // core never looks inside them.
+      ...(modules.review
+        ? {
+            reviewModel: {
+              ...modules.review,
+              collectReviewItems: (input: ReviewModelInput) =>
+                modules.review!.collectReviewItems(
+                  modules.customNodes.length > 0
+                    ? { ...input, customNodes: modules.customNodes }
+                    : input
+                ),
+            },
+          }
+        : {}),
       ...(shapedMeasurer
         ? { measurer: shapedMeasurer, ...(shapedProducer ? { producer: shapedProducer } : {}) }
         : {}),
@@ -1005,8 +1023,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    */
 
   function firstReviewRange(item: ReviewItem): ReviewRange | null {
-    if (item.kind === 'comment') return item.range;
-    return item.ranges[0] ?? null;
+    if (item.kind === 'revision') return item.ranges[0] ?? null;
+    return item.range;
   }
 
   /**
@@ -1137,7 +1155,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     if (excluded && excluded.length > 0) {
       const excludedKinds = new Set(excluded);
       items = items.filter(
-        (item) => item.kind === 'comment' || !excludedKinds.has(item.revisionKind)
+        (item) => item.kind !== 'revision' || !excludedKinds.has(item.revisionKind)
       );
     }
     const withPlacement = query?.placement !== false;
@@ -1170,31 +1188,54 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (a.group !== b.group) return a.group - b.group;
       return a.position - b.position;
     });
-    return ranked.map(({ item }) => {
+    return ranked.map(({ item }): ReviewItemPlacement => {
       const key = reviewItemKey(item);
       const geometry = anchors ? reviewItemGeometry(item, anchors) : null;
-      const comment = item.kind === 'comment' ? item.comment : null;
-      return {
+      const shared = {
         key,
         id: item.id,
-        kind: item.kind,
-        ...(item.kind === 'revision' ? { revisionKind: item.revisionKind } : {}),
-        author: comment ? comment.author : item.kind === 'revision' ? item.author : '',
-        initials: comment ? commentInitials(comment) : initialsOfAuthor(authorOfItem(item)),
         ...(dateOfItem(item) !== undefined ? { date: dateOfItem(item)! } : {}),
-        text: comment ? commentBodyText(comment) : item.kind === 'revision' ? item.text : '',
-        ...(item.kind === 'revision' && item.replacedText
-          ? { replacedText: item.replacedText }
-          : {}),
-        ...(item.kind === 'comment' ? { resolved: item.resolved } : {}),
-        ...(item.kind === 'comment' && item.parentId !== undefined
-          ? { parentId: item.parentId }
-          : {}),
-        replyIds: item.kind === 'comment' ? item.replyIds : [],
-        readOnly: item.kind === 'revision' ? item.readOnly : false,
         anchorY: geometry?.y ?? null,
         pageIndex: geometry?.pageIndex ?? null,
         isActive: key === activeReviewKey,
+      };
+      if (item.kind === 'comment') {
+        return {
+          ...shared,
+          kind: 'comment',
+          author: item.comment.author,
+          initials: commentInitials(item.comment),
+          text: commentBodyText(item.comment),
+          resolved: item.resolved,
+          ...(item.parentId !== undefined ? { parentId: item.parentId } : {}),
+          replyIds: item.replyIds,
+          readOnly: false,
+          item,
+        };
+      }
+      if (item.kind === 'revision') {
+        return {
+          ...shared,
+          kind: 'revision',
+          revisionKind: item.revisionKind,
+          author: item.author,
+          initials: initialsOfAuthor(item.author),
+          text: item.text,
+          ...(item.replacedText ? { replacedText: item.replacedText } : {}),
+          replyIds: [],
+          readOnly: item.readOnly,
+          item,
+        };
+      }
+      // A custom card is informational: nothing to accept, reject, or reply to.
+      return {
+        ...shared,
+        kind: 'custom',
+        author: '',
+        initials: '',
+        text: item.detail ?? item.text,
+        replyIds: [],
+        readOnly: true,
         item,
       };
     });
@@ -1254,12 +1295,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     };
   }
 
-  function authorOfItem(item: ReviewItem): string {
-    return item.kind === 'comment' ? item.comment.author : item.author;
-  }
-
   function dateOfItem(item: ReviewItem): string | undefined {
-    return item.kind === 'comment' ? item.comment.date : item.date;
+    if (item.kind === 'comment') return item.comment.date;
+    return item.kind === 'revision' ? item.date : undefined;
   }
 
   /** Initials from a name, for a revision — `CT_TrackChange` carries no `@w:initials`. */
@@ -1686,6 +1724,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         }),
 
     getReviewItems: (query?: ReviewItemQuery) => reviewPlacements(query),
+    getCustomNodeDefinitions: () => modules.customNodes,
 
     addComment(text: string, author?: string): ExecResult {
       // Comment AUTHORING is the review module's capability, like every other
@@ -1798,6 +1837,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const writer = (author ?? config.author ?? '').trim();
       if (writer.length === 0 || text.trim().length === 0) {
         return { ok: false, code: 'invalidArgs', reason: 'a reply needs both an author and text' };
+      }
+      // A custom node's card is informational — a reply would write a comment nothing in
+      // the definition asked for, so it is refused rather than silently anchored.
+      if (item.kind === 'custom') {
+        return { ok: false, code: 'unsupported', reason: 'a custom node card takes no replies' };
       }
       // Against a REVISION this is a comment over that revision's range: OOXML gives `w:ins`
       // and `w:del` no body and no thread, so there is nowhere else for the text to live.

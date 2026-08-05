@@ -58,6 +58,19 @@ const ReviewContext = createContext<ReviewRailValue | null>(null);
 /** The card being rendered, so every part inside it reads one item. */
 const ReviewItemContext = createContext<ReviewItemView | null>(null);
 
+/**
+ * The review item the surrounding card (or balloon) renders, or null outside one.
+ *
+ * The hook a host's own card content is built from: children passed into the rail's cards
+ * — extra actions, a custom body — read the CURRENT item here rather than receiving props,
+ * exactly the way the packaged parts do.
+ *
+ * @public
+ */
+export function useReviewItem(): ReviewItemView | null {
+  return useContext(ReviewItemContext);
+}
+
 interface ReviewRailValue {
   readonly review: ReturnType<typeof useReview>;
   /**
@@ -502,7 +515,8 @@ function ReviewRoot({
     const merged = new Map(heights);
     for (const entry of roots) {
       if (merged.has(entry.key)) continue;
-      const textLength = entry.text.length + (entry.replacedText?.length ?? 0);
+      const textLength =
+        entry.text.length + (entry.kind === 'revision' ? (entry.replacedText?.length ?? 0) : 0);
       const lines = Math.min(6, Math.max(1, Math.ceil(textLength / 36)));
       merged.set(entry.key, 64 + lines * 20);
     }
@@ -779,13 +793,14 @@ function ReviewMarkers({
             type="button"
             className="docx-review__marker"
             data-testid="review-marker"
-            data-kind={entry.kind === 'comment' ? 'comment' : (entry.revisionKind ?? 'revision')}
+            data-kind={entry.kind === 'revision' ? entry.revisionKind : entry.kind}
             style={{ position: 'absolute', top }}
-            title={`${entry.author}: ${entry.text}`}
+            // A custom card has no author; leading its tooltip with ": " read as a glitch.
+            title={entry.author ? `${entry.author}: ${entry.text}` : entry.text}
             // The author and the words, not a generic "show pane" — with the label the same
             // on every marker a screen reader heard N identical buttons and never learned
             // who said what.
-            aria-label={`${t('review.showPane')}: ${entry.author}. ${entry.text}`}
+            aria-label={`${t('review.showPane')}: ${entry.author ? `${entry.author}. ` : ''}${entry.text}`}
             onMouseDown={guardMousedown}
             onClick={() => {
               // Open the pane AND put the caret in this item's text, so the card the reader
@@ -1286,9 +1301,9 @@ function ReviewCard({ className, asChild, hidden, children }: ReviewPartProps) {
     className: `docx-review__card${className ? ` ${className}` : ''}`,
     'data-testid': 'review-card',
     'aria-labelledby': `${cardId}-author ${cardId}-summary`,
-    'data-kind': entry.kind === 'comment' ? 'comment' : (entry.revisionKind ?? 'revision'),
+    'data-kind': entry.kind === 'revision' ? (entry.revisionKind ?? 'revision') : entry.kind,
     ...(entry.isActive ? { 'data-active': '' } : {}),
-    ...(entry.resolved ? { 'data-resolved': '' } : {}),
+    ...(entry.kind === 'comment' && entry.resolved ? { 'data-resolved': '' } : {}),
     // The author colour is a CSS variable rather than a class, so a host restyling the card
     // keeps the per-author identity without re-deriving the slot order.
     style: {
@@ -1339,6 +1354,34 @@ function ReviewCardPreset({ children }: { children?: ReactNode }) {
   const take = (key: string, fallback: ReactNode): ReactNode =>
     key in overrides ? overrides[key] : fallback;
   if (!entry) return null;
+
+  // A custom-node card is the definition's own: its `reviewCard` hook titled it, and it
+  // has no author, no thread and nothing to resolve. Every string renders as TEXT — the
+  // attrs and label originate in the file.
+  if (entry.kind === 'custom' && entry.item.kind === 'custom') {
+    const item = entry.item;
+    return (
+      <>
+        <div className="docx-review__head">
+          <div className="docx-review__meta">
+            <span className="docx-review__author" data-testid="review-custom-title">
+              {item.title}
+            </span>
+          </div>
+        </div>
+        {item.detail ? (
+          <div
+            className="docx-review__summary"
+            data-testid="review-summary"
+            data-review-selectable=""
+          >
+            <span className="docx-review__text">{item.detail}</span>
+          </div>
+        ) : null}
+        {overrides.__extra}
+      </>
+    );
+  }
   const resolvable = entry.kind === 'revision' && !entry.readOnly;
 
   return (
@@ -1476,10 +1519,7 @@ function ReviewSummary({ className, asChild, hidden, children }: ReviewPartProps
   const { t } = useTranslation();
   if (hidden || !entry) return null;
   const text = entry.text;
-  const label =
-    entry.kind === 'comment' || !entry.revisionKind
-      ? null
-      : t(revisionLabelKey(entry.revisionKind));
+  const label = entry.kind !== 'revision' ? null : t(revisionLabelKey(entry.revisionKind));
   // A replacement reads as one sentence, not as a label over a quote: what went, and what
   // took its place. Both quoted, both in their own colour, the way Word words it.
   const replaced = entry.kind === 'revision' && entry.revisionKind === 'replace';
@@ -1505,7 +1545,10 @@ function ReviewSummary({ className, asChild, hidden, children }: ReviewPartProps
                 already wears reads as one statement with the document, where a grey label
                 over green text reads as two. */}
             {label ? (
-              <span className="docx-review__label" data-kind={entry.revisionKind ?? 'revision'}>
+              <span
+                className="docx-review__label"
+                data-kind={entry.kind === 'revision' ? entry.revisionKind : 'revision'}
+              >
                 {label}
               </span>
             ) : null}

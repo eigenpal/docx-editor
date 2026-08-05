@@ -243,6 +243,55 @@ export function hasGlossaryPlaceholderRef(control: OoxmlNode): boolean {
   );
 }
 
+/**
+ * The innermost inline CONTAINER (hyperlink, field, content control) holding a run, within
+ * one paragraph. Null for an ordinary top-level run.
+ */
+export function inlineContainerOf(
+  paragraph: { readonly children: readonly OoxmlNode[] },
+  runId: string
+): OoxmlNode | null {
+  let held: OoxmlNode | null = null;
+  const visit = (node: OoxmlNode, inside: OoxmlNode | null): void => {
+    if (node.kind === 'textValue' || held) return;
+    if (node.id === runId) {
+      held = inside;
+      return;
+    }
+    const nested =
+      node.kind === 'hyperlink' ||
+      node.kind === 'fldSimple' ||
+      // A content control is a container the same way a link is: typing at its OUTER edge
+      // must not join the run inside and grow the control (pro-review-and-custom-nodes 4.6).
+      node.kind === 'contentControl' ||
+      (node.kind === 'generic' && node.localName === 'fldSimple')
+        ? node
+        : inside;
+    for (const child of node.children) visit(child, nested);
+  };
+  for (const child of paragraph.children) visit(child, null);
+  return held;
+}
+
+/**
+ * Whether typing into `before`'s run would carry the text INTO a container the caret is
+ * leaving — a hyperlink, a field, or a content control whose last character this is, with
+ * ordinary paragraph content (or nothing at all) on the other side of the boundary.
+ *
+ * Shared between apply (which picks the target run) and validate (which attributes the
+ * caret's lock check): the two answering differently is how a caret at a locked chip's
+ * outer edge refused a keystroke the apply side would have placed BESIDE the chip.
+ */
+export function leavesInlineContainer(
+  paragraph: { readonly children: readonly OoxmlNode[] },
+  before: { readonly runId: string },
+  after: { readonly runId: string } | undefined
+): boolean {
+  const held = inlineContainerOf(paragraph, before.runId);
+  if (held === null) return false;
+  return after === undefined || inlineContainerOf(paragraph, after.runId) !== held;
+}
+
 /** Innermost content-control ancestor of a node (the node itself when it is one). */
 export function innermostContentControlAround(
   part: OoxmlPart,

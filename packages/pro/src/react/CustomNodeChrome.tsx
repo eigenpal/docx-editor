@@ -13,31 +13,62 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // (createElement + textContent — never HTML-from-strings) and delegates
 // click/hover on the boundary layers, decoding the tag back into attrs.
 //
-// KNOWN LIMIT (ledger 4.5): a control that wraps across lines currently gets
-// ONE union boundary rect from layout, so an oversized chip can cover
-// neighboring words. The default styling is therefore a soft borderless tint;
-// per-line fragments are the engine follow-up.
+// Layout publishes one boundary rect per LINE at the text's vertical extent,
+// so a wrapped control tints exactly its own words and clicks land on the
+// rect that was painted.
 
 import { useEffect } from 'react';
+import { useDocxEditor } from '@docx-editor.dev/react';
 import {
+  CUSTOM_NODE_IDENTITY_PATTERN,
   type ActivatedCustomNode,
   type CustomNodeDefinition,
 } from '../custom-nodes/define-custom-node.ts';
-import { decodeCustomNodeTag } from '../custom-nodes/tag-codec.ts';
+import {
+  activatedCustomNodeOf,
+  resolveCustomNodeActivation,
+  useCustomNodeDefinitions,
+} from './custom-node-activation.ts';
 
 export interface CustomNodeChromeProps {
-  readonly nodes: readonly CustomNodeDefinition[];
+  /** Definitions to style and dispatch on. Defaults to the ones registered on the editor. */
+  readonly nodes?: readonly CustomNodeDefinition[];
   /** Component-level activation hook — where host UI state (popovers) belongs. */
   readonly onNodeClick?: (node: ActivatedCustomNode) => void;
   readonly onNodeHover?: (node: ActivatedCustomNode) => void;
 }
 
 const BOUNDARY = '.docx-content-control-boundary';
-const layerSelector = (definition: CustomNodeDefinition): string =>
-  `.docx-content-control-chrome[data-tag^="${definition.tagPrefix}:${definition.name}"]`;
+
+/**
+ * The chrome-layer selectors for one definition, or none when its identity fails the
+ * charset.
+ *
+ * Two guards in one place. The charset check is defense in depth: registration paths that
+ * skip `defineCustomNode` (a raw object handed to `customNodesModule`) could carry
+ * selector-hostile characters, and this string lands in a page-global `<style>` element.
+ * The match is EXACT-or-query-prefixed, never bare `^=`: a prefix match also claimed
+ * `acme:citationXX`, so a hostile document could dress an unrecognized SDT in this
+ * definition's trusted chip styling.
+ */
+const layerSelectors = (definition: CustomNodeDefinition): readonly string[] => {
+  if (
+    !CUSTOM_NODE_IDENTITY_PATTERN.test(definition.tagPrefix) ||
+    !CUSTOM_NODE_IDENTITY_PATTERN.test(definition.name)
+  ) {
+    return [];
+  }
+  const identity = `${definition.tagPrefix}:${definition.name}`;
+  return [
+    `.docx-content-control-chrome[data-tag="${identity}"]`,
+    `.docx-content-control-chrome[data-tag^="${identity}?"]`,
+  ];
+};
 
 export function CustomNodeChrome(props: CustomNodeChromeProps): null {
-  const { nodes, onNodeClick, onNodeHover } = props;
+  const { onNodeClick, onNodeHover } = props;
+  const editor = useDocxEditor();
+  const nodes = useCustomNodeDefinitions(props.nodes);
 
   // Per-definition chip styles. Colors are HOST-authored; validated anyway so a
   // typo cannot produce a broken rule.
@@ -45,16 +76,17 @@ export function CustomNodeChrome(props: CustomNodeChromeProps): null {
     const style = document.createElement('style');
     const rules: string[] = [];
     for (const definition of nodes) {
+      const selectors = layerSelectors(definition);
+      if (selectors.length === 0) continue;
       const color =
         definition.chrome?.color !== undefined && CSS.supports('color', definition.chrome.color)
           ? definition.chrome.color
           : '#2563eb';
       rules.push(
-        `${layerSelector(definition)} ${BOUNDARY} {`,
+        `${selectors.map((selector) => `${selector} ${BOUNDARY}`).join(', ')} {`,
         '  pointer-events: auto !important;',
         '  opacity: 1;',
-        // Borderless by design: a soft tint reads as a chip without amplifying
-        // the union-rect geometry limit noted above.
+        // Borderless by design: a soft tint reads as a chip.
         '  border: none;',
         `  background: color-mix(in srgb, ${color} 12%, transparent);`,
         '  border-radius: 6px;',
@@ -67,53 +99,26 @@ export function CustomNodeChrome(props: CustomNodeChromeProps): null {
     return () => style.remove();
   }, [nodes]);
 
-  // Delegated activation: boundary → chrome layer → tag → definition.
+  // Delegated activation: boundary → chrome layer → tag → definition → ENRICHED node
+  // (post-`fromDocx` attrs; text/nodeId when the review module can resolve them), so a
+  // hook written against the review rail's attrs shape sees the same shape from the chip.
   useEffect(() => {
-    const activationOf = (target: EventTarget | null): ActivatedCustomNode | null => {
-      const boundary = (target as HTMLElement | null)?.closest?.(BOUNDARY);
-      const tag = boundary?.closest('.docx-content-control-chrome')?.getAttribute('data-tag');
-      const decoded = tag ? decodeCustomNodeTag(tag) : null;
-      if (!boundary || !decoded || !tag) return null;
-      const definition = nodes.find(
-        (node) => node.tagPrefix === decoded.prefix && node.name === decoded.name
-      );
-      if (!definition) return null;
-      return { name: decoded.name, attrs: decoded.attrs, tag, rect: boundary.getBoundingClientRect() };
-    };
-    const definitionOf = (node: ActivatedCustomNode) =>
-      nodes.find((entry) => entry.name === node.name)!;
     const onClick = (event: MouseEvent) => {
-      let node = activationOf(event.target);
-      if (!node) {
-        // Geometry fallback (ledger 4.5a): with non-single line spacing the
-        // boundary rect can sit on the LEADING above the text, so the text the
-        // user actually clicks is just below it. Hit-test every chip rect
-        // expanded one rect-height downward before giving up.
-        for (const boundary of document.querySelectorAll(BOUNDARY)) {
-          const candidate = activationOf(boundary);
-          if (!candidate) continue;
-          const rect = candidate.rect;
-          if (
-            event.clientX >= rect.left &&
-            event.clientX <= rect.right &&
-            event.clientY >= rect.top &&
-            event.clientY <= rect.bottom + rect.height
-          ) {
-            node = candidate;
-            break;
-          }
-        }
-      }
+      const resolved = resolveCustomNodeActivation(event.target, nodes);
+      if (!resolved) return;
+      const node = activatedCustomNodeOf(resolved, editor);
       if (!node) return;
-      definitionOf(node).onClick?.(node);
+      resolved.definition.onClick?.(node);
       onNodeClick?.(node);
     };
     const onOver = (event: MouseEvent) => {
-      const node = activationOf(event.target);
-      if (!node) return;
+      const resolved = resolveCustomNodeActivation(event.target, nodes);
+      if (!resolved) return;
       const related = (event.relatedTarget as HTMLElement | null)?.closest?.(BOUNDARY);
       if (related === (event.target as HTMLElement).closest(BOUNDARY)) return;
-      definitionOf(node).onHover?.(node);
+      const node = activatedCustomNodeOf(resolved, editor);
+      if (!node) return;
+      resolved.definition.onHover?.(node);
       onNodeHover?.(node);
     };
     document.addEventListener('click', onClick);
@@ -122,7 +127,7 @@ export function CustomNodeChrome(props: CustomNodeChromeProps): null {
       document.removeEventListener('click', onClick);
       document.removeEventListener('mouseover', onOver);
     };
-  }, [nodes, onNodeClick, onNodeHover]);
+  }, [nodes, editor, onNodeClick, onNodeHover]);
 
   return null;
 }

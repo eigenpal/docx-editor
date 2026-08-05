@@ -7,7 +7,13 @@
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from '../index';
 // Type-only, so the adapters reach the review vocabulary through THIS contract rather than
 // naming the layout lane, which they are not allowed to import.
-import type { ReviewItem, ReviewRevisionKind } from '../layout/review-support.ts';
+import type {
+  ReviewCommentItem,
+  ReviewCustomItem,
+  ReviewItem,
+  ReviewRevisionItem,
+  ReviewRevisionKind,
+} from '../layout/review-support.ts';
 import type { InteractionOutcome, SemanticSelection, SemanticTarget } from './interaction';
 import type {
   ColorValue,
@@ -455,6 +461,16 @@ export interface Editor {
   getReviewItems(query?: ReviewItemQuery): readonly ReviewItemPlacement[];
 
   /**
+   * Custom-node definitions registered through `createDocxEditor({ modules })`, in
+   * registration order.
+   *
+   * OPAQUE to the engine — the capability package that defined them narrows them back.
+   * Published so chrome components can default to the registered definitions instead of
+   * every surface taking the same `nodes` array and drifting.
+   */
+  getCustomNodeDefinitions(): readonly unknown[];
+
+  /**
    * How edits are written: directly, as suggestions, or not at all.
    *
    * Runtime state, unlike the construction-time `EditorConfig.mode` — a reader who switches
@@ -639,39 +655,24 @@ export interface ReviewItemQuery {
   readonly placement?: boolean;
 }
 
-export interface ReviewItemPlacement {
+export interface ReviewItemPlacementBase {
   /** Stable and unique per DECISION — a revision with three ranges is one entry. */
   readonly key: string;
-  /** The engine's own id for the comment or the revision. */
+  /** The engine's own id for the comment, the revision, or the custom node. */
   readonly id: string;
-  readonly kind: 'comment' | 'revision';
-  /** Which decision this is, when {@link kind} is `'revision'`. */
-  readonly revisionKind?: ReviewRevisionKind;
   readonly author: string;
   /** Initials for an avatar: `@w:initials` when the file carries one, else from the name. */
   readonly initials: string;
   /** `@w:date`, absent when the file omits it — Word does when date stamping is off. */
   readonly date?: string;
   /**
-   * The words a REPLACEMENT removes, when {@link revisionKind} is `'replace'`.
-   *
-   * Paired with {@link text}, which holds the words it puts in their place, so a card can
-   * say `Replaced "x" with "y"` — one decision, the way Word presents it.
-   */
-  readonly replacedText?: string;
-
-  /**
-   * The comment's body, or the words the revision covers.
+   * The comment's body, the words the revision covers, or the custom card's detail.
    *
    * PLAIN TEXT, and it must be rendered as text: a `.docx` is a zip of XML an attacker
    * controls end to end, so this string is untrusted and never markup.
    */
   readonly text: string;
-  /** Comments only: whether `w15:commentsEx` marks the thread done. */
-  readonly resolved?: boolean;
-  /** Comments only: the comment this replies to, absent at the top of a thread. */
-  readonly parentId?: string;
-  /** Comments only: replies to this comment, in document order. */
+  /** Replies to this item, in document order. Empty except for comments. */
   readonly replyIds: readonly string[];
   /**
    * True when the engine cannot resolve this kind structurally, so accept and reject must
@@ -683,9 +684,49 @@ export interface ReviewItemPlacement {
   readonly anchorY: number | null;
   readonly pageIndex: number | null;
   readonly isActive: boolean;
-  /** The engine's `ReviewItem`, for a host that wants past the card fields. */
-  readonly item: ReviewItem;
 }
+
+/** A comment thread's card. @public */
+export interface ReviewCommentPlacement extends ReviewItemPlacementBase {
+  readonly kind: 'comment';
+  /** Whether `w15:commentsEx` marks the thread done. */
+  readonly resolved: boolean;
+  /** The comment this replies to, absent at the top of a thread. */
+  readonly parentId?: string;
+  readonly item: ReviewCommentItem;
+}
+
+/** A tracked change's card. @public */
+export interface ReviewRevisionPlacement extends ReviewItemPlacementBase {
+  readonly kind: 'revision';
+  /** Which decision this is. */
+  readonly revisionKind: ReviewRevisionKind;
+  /**
+   * The words a REPLACEMENT removes, when {@link revisionKind} is `'replace'`.
+   *
+   * Paired with {@link ReviewItemPlacementBase.text}, which holds the words it puts in
+   * their place, so a card can say `Replaced "x" with "y"` — one decision, the way Word
+   * presents it.
+   */
+  readonly replacedText?: string;
+  readonly item: ReviewRevisionItem;
+}
+
+/** A custom node's card (`defineCustomNode` with a `reviewCard` hook). @public */
+export interface ReviewCustomPlacement extends ReviewItemPlacementBase {
+  readonly kind: 'custom';
+  readonly item: ReviewCustomItem;
+}
+
+/**
+ * A DISCRIMINATED union on {@link ReviewItemPlacementBase.kind}: narrowing the kind
+ * narrows `item` and the kind-specific fields with it, so a consumer never writes the
+ * `placement.kind === 'custom' && placement.item.kind === 'custom'` double check.
+ */
+export type ReviewItemPlacement =
+  | ReviewCommentPlacement
+  | ReviewRevisionPlacement
+  | ReviewCustomPlacement;
 
 /**
  * How a keystroke reaches the document.

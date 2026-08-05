@@ -365,6 +365,7 @@ export {
   reviewItemRanges,
   reviewItemsAt,
   type ReviewCommentItem,
+  type ReviewCustomItem,
   type ReviewItem,
   type ReviewModelInput,
   type ReviewParagraphAnchor,

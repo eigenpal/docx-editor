@@ -297,6 +297,7 @@ export {
 } from './ooxml-digest.ts';
 export {
   isValidParaId,
+  fnv1a32,
   mintParaId,
   mintedParagraphIdentityAttributes,
   normalizeParagraphIdentity,

@@ -2898,6 +2898,18 @@ interface PlacedSpanBox {
   readonly paragraphId: string;
   readonly start: number;
   readonly end: number;
+  /**
+   * Document-order ordinal of the line this span sits on, so inline-control fragments can
+   * union per LINE. Uniting per page gave a wrapped control one rectangle covering
+   * everything between its first and last line, including neighbouring words.
+   */
+  readonly line: number;
+  /**
+   * The span's TEXT extent: the raw span box dropped by the line's leading. Span boxes sit
+   * at the line-box top, but non-single `w:spacing` puts the whole leading ABOVE the glyphs,
+   * so a boundary built from raw boxes tints the gap over the text and misses the text
+   * itself.
+   */
   readonly box: LayoutBox;
 }
 
@@ -2939,17 +2951,27 @@ function placedGeometryOf(
     if (entries) entries.push(entry);
     else spansByParagraph.set(entry.paragraphId, [entry]);
   };
+  let lineOrdinal = 0;
   const visit = (pageIndex: number, fragment: BlockFragmentRecord): void => {
     if (fragment.kind === 'paragraph') {
       addBlock({ pageIndex, blockId: fragment.paragraphId, box: fragment.box });
       for (const line of fragment.lines) {
+        const lineKey = lineOrdinal;
+        lineOrdinal += 1;
+        const textHeight = Math.max(0, line.box.height - line.leading);
         for (const span of line.spans) {
           addSpan({
             pageIndex,
             paragraphId: span.range.paragraphId,
             start: span.range.start,
             end: span.range.end,
-            box: span.box,
+            line: lineKey,
+            box: {
+              x: span.box.x,
+              y: span.box.y + line.leading,
+              width: span.box.width,
+              height: textHeight,
+            },
           });
         }
       }
@@ -3003,7 +3025,9 @@ function fragmentsForInlineControl(
 ): ContentControlGeometryFragment[] {
   work && (work.paragraphLookups += 1);
   const placed = geometry.spansByParagraph.get(paragraphId) ?? [];
-  const byPage = new Map<number, LayoutBox[]>();
+  // Grouped per LINE, not per page: a wrapped control publishes one fragment per line it
+  // touches, so chrome never paints a union rectangle over the words beside it.
+  const byLine = new Map<number, { pageIndex: number; boxes: LayoutBox[] }>();
   // Paragraph spans are emitted in source-range order. Binary search skips all spans ending
   // before this control, so sibling controls do not repeatedly scan the paragraph prefix.
   let low = 0;
@@ -3023,13 +3047,13 @@ function fragmentsForInlineControl(
     work && (work.spanCandidates += 1);
     if (span.end <= range.start) continue;
     if (span.start >= range.end) break;
-    const list = byPage.get(span.pageIndex);
-    if (list) list.push(span.box);
-    else byPage.set(span.pageIndex, [span.box]);
+    const group = byLine.get(span.line);
+    if (group) group.boxes.push(span.box);
+    else byLine.set(span.line, { pageIndex: span.pageIndex, boxes: [span.box] });
   }
   // Empty range (empty control): fall back to a zero-width box at the caret when a span
   // touches the insertion point, otherwise leave fragments empty.
-  if (byPage.size === 0 && range.start === range.end) {
+  if (byLine.size === 0 && range.start === range.end) {
     for (let index = low; index < placed.length; index += 1) {
       const span = placed[index]!;
       work && (work.spanCandidates += 1);
@@ -3045,11 +3069,12 @@ function fragmentsForInlineControl(
       ];
     }
   }
-  return [...byPage.entries()]
+  // Line ordinals are assigned in document order, so sorting by line also sorts by page.
+  return [...byLine.entries()]
     .sort(([a], [b]) => a - b)
-    .flatMap(([pageIndex, boxes]) => {
-      const box = unionLayoutBoxes(boxes);
-      return box ? [{ pageIndex, box }] : [];
+    .flatMap(([, group]) => {
+      const box = unionLayoutBoxes(group.boxes);
+      return box ? [{ pageIndex: group.pageIndex, box }] : [];
     });
 }
 

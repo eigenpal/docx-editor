@@ -23,4 +23,4 @@ export {
   type ContextMenuItemProps,
   type ContextMenuTableRowProps,
 } from './parts';
-export type { ContextMenuAnchor } from './contextmenu-context';
+export { useContextMenuTarget, type ContextMenuAnchor } from './contextmenu-context';

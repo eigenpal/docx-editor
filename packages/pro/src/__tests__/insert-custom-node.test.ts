@@ -76,7 +76,7 @@ describe('insertCustomNode', () => {
     expect(editor.surface!.session.bodyText()).toContain('(Smith 2024, p. 42)');
   });
 
-  test('writes sdtLocked by default and survives save/reopen', async () => {
+  test('writes contentLocked by default and survives save/reopen', async () => {
     const editor = mount('<w:p><w:r><w:t>text</w:t></w:r></w:p>');
     insertCustomNode(editor, citation, { sourceId: 's1' }, 'label', {
       at: { paragraphId: firstParagraphId(editor), offset: 4 },
@@ -85,8 +85,11 @@ describe('insertCustomNode', () => {
     const xml = strFromU8(unzipSync(saved)['word/document.xml']!);
     expect(xml).toContain('<w:sdt>');
     expect(xml).toContain('w:lock');
-    expect(xml).toContain('sdtLocked');
+    expect(xml).toContain('w:lock w:val="contentLocked"');
     expect(xml).toContain('acme:citation?sourceId=s1');
+    // Word writes `w:id` on every control; Word Online DROPS an id-less control on
+    // resave, so the id is part of surviving a cloud round-trip.
+    expect(xml).toMatch(/<w:id w:val="\d+"\/><w:lock/);
 
     const reopened = createDocxEditor({
       container: document.createElement('div'),
@@ -124,15 +127,97 @@ describe('insertCustomNode', () => {
     expect(node?.text).toBe('LABEL');
   });
 
+  test('typing after a locked chip that ENDS the paragraph lands beside it', () => {
+    const editor = mount('<w:p><w:r><w:t>before </w:t></w:r></w:p>');
+    insertCustomNode(editor, citation, { sourceId: 's1' }, 'LABEL', {
+      at: { paragraphId: firstParagraphId(editor), offset: 7 },
+    });
+    // "before LABEL" — the chip is the LAST thing in the paragraph. The caret at its
+    // outer edge must type BESIDE the locked chip, not be refused for a write that was
+    // never going into it.
+    editor.surface!.setSelection({
+      anchor: { paragraphId: firstParagraphId(editor), offset: 12 },
+      head: { paragraphId: firstParagraphId(editor), offset: 12 },
+    });
+    editor.surface!.type('x');
+    const [node] = recognizeCustomNodes(editor.surface!.session.part(), [citation]);
+    expect(node?.text).toBe('LABEL');
+    expect(editor.surface!.session.bodyText()).toContain('LABELx');
+  });
+
+  test('typing at the chip LEFT edge is refused — the caret would enter the locked label', () => {
+    // Word's rule: at a control's leading edge the insertion enters the control, and the
+    // content lock refuses it. One caret-step left types normally.
+    const editor = mount('<w:p><w:r><w:t>before </w:t></w:r></w:p>');
+    insertCustomNode(editor, citation, { sourceId: 's1' }, 'LABEL', {
+      at: { paragraphId: firstParagraphId(editor), offset: 7 },
+    });
+    editor.surface!.setSelection({
+      anchor: { paragraphId: firstParagraphId(editor), offset: 7 },
+      head: { paragraphId: firstParagraphId(editor), offset: 7 },
+    });
+    editor.surface!.type('x');
+    const [node] = recognizeCustomNodes(editor.surface!.session.part(), [citation]);
+    expect(node?.text).toBe('LABEL');
+    expect(editor.surface!.session.bodyText()).toBe('before LABEL');
+  });
+
+  test('Backspace after the chip deletes the WHOLE node', () => {
+    const editor = mount('<w:p><w:r><w:t>before after</w:t></w:r></w:p>');
+    insertCustomNode(editor, citation, { sourceId: 's1' }, 'LABEL', {
+      at: { paragraphId: firstParagraphId(editor), offset: 7 },
+    });
+    // Caret at the chip's outer right edge — the atomic half of ledger 4.6: the key takes
+    // the node as one unit, not one letter of a locked label.
+    editor.surface!.setSelection({
+      anchor: { paragraphId: firstParagraphId(editor), offset: 12 },
+      head: { paragraphId: firstParagraphId(editor), offset: 12 },
+    });
+    editor.surface!.deleteBackward();
+    expect(recognizeCustomNodes(editor.surface!.session.part(), [citation])).toEqual([]);
+    expect(editor.surface!.session.bodyText()).toBe('before after');
+    // The caret lands where the node began.
+    expect(editor.surface!.state().selection.head.offset).toBe(7);
+    // One undo brings the whole node back.
+    expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+    expect(recognizeCustomNodes(editor.surface!.session.part(), [citation])).toHaveLength(1);
+  });
+
+  test('Delete before the chip removes the whole node too', () => {
+    const editor = mount('<w:p><w:r><w:t>before after</w:t></w:r></w:p>');
+    insertCustomNode(editor, citation, { sourceId: 's1' }, 'LABEL', {
+      at: { paragraphId: firstParagraphId(editor), offset: 7 },
+    });
+    editor.surface!.setSelection({
+      anchor: { paragraphId: firstParagraphId(editor), offset: 7 },
+      head: { paragraphId: firstParagraphId(editor), offset: 7 },
+    });
+    editor.surface!.deleteForward();
+    expect(recognizeCustomNodes(editor.surface!.session.part(), [citation])).toEqual([]);
+    expect(editor.surface!.session.bodyText()).toBe('before after');
+  });
+
+  test('typing INSIDE the node is refused — the label only changes through the edit flow', () => {
+    const editor = mount('<w:p><w:r><w:t>before after</w:t></w:r></w:p>');
+    insertCustomNode(editor, citation, { sourceId: 's1' }, 'LABEL', {
+      at: { paragraphId: firstParagraphId(editor), offset: 7 },
+    });
+    // Caret in the middle of the label: `contentLocked` refuses the edit, so the
+    // label cannot drift out of sync with the attrs by inline typing.
+    editor.surface!.setSelection({
+      anchor: { paragraphId: firstParagraphId(editor), offset: 9 },
+      head: { paragraphId: firstParagraphId(editor), offset: 9 },
+    });
+    editor.surface!.type('x');
+    const [node] = recognizeCustomNodes(editor.surface!.session.part(), [citation]);
+    expect(node?.text).toBe('LABEL');
+  });
+
   test('a tag past the Word cap is refused with the data-part hint', () => {
     const editor = mount('<w:p><w:r><w:t>text</w:t></w:r></w:p>');
-    const result = insertCustomNode(
-      editor,
-      citation,
-      { payload: 'x'.repeat(80) },
-      'label',
-      { at: { paragraphId: firstParagraphId(editor), offset: 0 } }
-    );
+    const result = insertCustomNode(editor, citation, { payload: 'x'.repeat(80) }, 'label', {
+      at: { paragraphId: firstParagraphId(editor), offset: 0 },
+    });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toContain('64');
   });

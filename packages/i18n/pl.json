@@ -657,7 +657,9 @@
       "makeCasual": "Zmień na potoczny",
       "custom": "Własne"
     },
-    "updateTableOfContents": "Zaktualizuj spis treści"
+    "updateTableOfContents": "Zaktualizuj spis treści",
+    "editCustomNode": null,
+    "removeCustomNode": null
   },
   "documentOutline": {
     "ariaLabel": "Konspekt dokumentu",
