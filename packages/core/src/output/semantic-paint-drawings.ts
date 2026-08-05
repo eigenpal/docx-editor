@@ -5,7 +5,7 @@
 // or fixed tokens — never raw authored markup or unescaped file-derived CSS.
 
 import type {
-  SupportedImageMime,
+  RenderableImageMime,
   ValidatedImageBytesHandle,
 } from '../store/package/image-resources.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
@@ -21,7 +21,7 @@ import { paintLayerOf } from '../layout/drawing-exclusion.ts';
 
 /** Host port for safe blob URLs — only called for {@link ImageResourceState.kind} `ready`. */
 export interface PaintImageUrlPort {
-  create(handle: ValidatedImageBytesHandle, mime: SupportedImageMime): string;
+  create(handle: ValidatedImageBytesHandle, mime: RenderableImageMime): string;
   revoke(url: string): void;
 }
 
@@ -63,7 +63,7 @@ const MIME_FORMAT_LABEL: Readonly<Record<string, string>> = Object.freeze({
 interface UrlRegistry {
   readonly urlForReady: (
     handle: ValidatedImageBytesHandle,
-    mime: SupportedImageMime
+    mime: RenderableImageMime
   ) => string | null;
   /** Stable `<img>` per (paint instance, drawing, resource) — reuse keeps the decode. */
   readonly imageFor?: (
@@ -104,7 +104,7 @@ export function drawingUrlRegistryFor(
     }
   >();
   registry = Object.freeze({
-    urlForReady(handle: ValidatedImageBytesHandle, mime: SupportedImageMime): string | null {
+    urlForReady(handle: ValidatedImageBytesHandle, mime: RenderableImageMime): string | null {
       const existing = urlsByKey.get(handle.resourceKey);
       if (existing) return existing;
       const url = port.create(handle, mime);
@@ -579,7 +579,7 @@ export function paintDrawingRecord(
         ?.imageForPending?.(drawingElementKey(drawing, ctx))
         ?.closest<HTMLElement>('.docx-drawing-ready');
     if (retained) {
-        readyImagePaintSignatures.delete(retained);
+      readyImagePaintSignatures.delete(retained);
       retained.dataset.drawingNodeId = drawing.drawingNodeId;
       positionedBox(retained, drawing.paintBounds, ctx.scale, origin);
       return retained;

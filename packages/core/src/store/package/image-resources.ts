@@ -23,8 +23,18 @@ import {
   type ImageResourceLimits,
 } from '../runtime/limits.ts';
 
+/** Raster media the decode port measures and any authoring path may write. */
 export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif';
-export type PreservedImageMime = 'image/svg+xml' | 'image/tiff' | 'image/x-emf' | 'image/x-wmf';
+/**
+ * Vector media painted straight from validated bytes. An `<img>` renders SVG in the
+ * browser's secure static mode — no script, no external subresource loads — so there is
+ * no decode step and no raster buffer sized by a file-supplied number.
+ */
+export type VectorImageMime = 'image/svg+xml';
+/** Every mime the painter can hand to an `<img>`. */
+export type RenderableImageMime = SupportedImageMime | VectorImageMime;
+/** Media kept in the package byte-for-byte but painted as a labelled placeholder. */
+export type PreservedImageMime = 'image/tiff' | 'image/x-emf' | 'image/x-wmf';
 export type MetafileImageMime = 'image/x-emf' | 'image/x-wmf';
 
 export type { ImageResourceLimits };
@@ -41,7 +51,7 @@ export type ImageResourceState =
       readonly contentId: string;
       readonly resourceKey: string;
       readonly validatedHandle: ValidatedImageBytesHandle;
-      readonly mime: SupportedImageMime;
+      readonly mime: RenderableImageMime;
       readonly pixelWidth: number;
       readonly pixelHeight: number;
       readonly dpiX: number;
@@ -50,7 +60,7 @@ export type ImageResourceState =
   | {
       readonly kind: 'unrenderable';
       readonly partName: string | null;
-      readonly mime: SupportedImageMime | PreservedImageMime | 'unknown';
+      readonly mime: RenderableImageMime | PreservedImageMime | 'unknown';
       readonly reason:
         | 'unsupported-format'
         | 'non-picture-graphic'
@@ -101,8 +111,13 @@ const DEFAULT_DPI = 96;
 const MAX_JPEG_MARKER_SCAN = 65_536;
 /** Maximum prefix inspected for SVG root detection (exported for bounded-scan tests). */
 export const MAX_SVG_SNIFF_BYTES = 512;
+/** Maximum prefix inspected for the SVG root element's sizing attributes. */
+export const MAX_SVG_ROOT_SCAN_BYTES = 8192;
+/** CSS default size of a replaced element with no intrinsic dimensions. */
+const DEFAULT_SVG_INTRINSIC_WIDTH = 300;
+const DEFAULT_SVG_INTRINSIC_HEIGHT = 150;
 
-const CONTENT_TYPE_TO_MIME: Readonly<Record<string, SupportedImageMime | PreservedImageMime>> =
+const CONTENT_TYPE_TO_MIME: Readonly<Record<string, RenderableImageMime | PreservedImageMime>> =
   Object.freeze({
     'image/png': 'image/png',
     'image/jpeg': 'image/jpeg',
@@ -168,18 +183,13 @@ function isRasterSupportedMime(mime: string): mime is SupportedImageMime {
 }
 
 function isPreservedMime(mime: string): mime is PreservedImageMime {
-  return (
-    mime === 'image/svg+xml' ||
-    mime === 'image/tiff' ||
-    mime === 'image/x-emf' ||
-    mime === 'image/x-wmf'
-  );
+  return mime === 'image/tiff' || mime === 'image/x-emf' || mime === 'image/x-wmf';
 }
 
 /** Signature sniffing — authoritative over declared content type. */
 export function sniffImageMime(
   bytes: Uint8Array
-): SupportedImageMime | PreservedImageMime | 'unknown' {
+): RenderableImageMime | PreservedImageMime | 'unknown' {
   if (bytesStartWith(bytes, PNG_SIGNATURE)) return 'image/png';
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
     return 'image/jpeg';
@@ -340,6 +350,167 @@ export function validateJpegHeader(bytes: Uint8Array): ValidatedRasterHeader | n
   return null;
 }
 
+/** CSS absolute length units, in CSS pixels. Percentages are not intrinsic and are refused. */
+const CSS_ABSOLUTE_UNIT_PX: Readonly<Record<string, number>> = Object.freeze({
+  '': 1,
+  px: 1,
+  pt: 96 / 72,
+  pc: 16,
+  in: 96,
+  cm: 96 / 2.54,
+  mm: 96 / 25.4,
+  q: 96 / 101.6,
+});
+
+/** A CSS absolute length in px, or null for a percentage, a bad unit, or a non-number. */
+function parseCssAbsoluteLength(raw: string): number | null {
+  const value = raw.trim();
+  if (value === '') return null;
+  const number = Number.parseFloat(value);
+  if (!Number.isFinite(number) || number <= 0) return null;
+  let index = 0;
+  // parseFloat consumed a leading numeric run; step past exactly that run to find the unit.
+  if (value[index] === '+' || value[index] === '-') index += 1;
+  while (index < value.length && value[index]! >= '0' && value[index]! <= '9') index += 1;
+  if (value[index] === '.') {
+    index += 1;
+    while (index < value.length && value[index]! >= '0' && value[index]! <= '9') index += 1;
+  }
+  if (value[index] === 'e' || value[index] === 'E') {
+    let scan = index + 1;
+    if (value[scan] === '+' || value[scan] === '-') scan += 1;
+    let digits = 0;
+    while (scan < value.length && value[scan]! >= '0' && value[scan]! <= '9') {
+      scan += 1;
+      digits += 1;
+    }
+    if (digits > 0) index = scan;
+  }
+  const scale = CSS_ABSOLUTE_UNIT_PX[value.slice(index).trim().toLowerCase()];
+  if (scale === undefined) return null;
+  const px = number * scale;
+  return Number.isFinite(px) && px > 0 ? px : null;
+}
+
+/** `viewBox` width/height, or null when the list is not four finite numbers with positive extent. */
+function parseSvgViewBox(raw: string): Readonly<{ width: number; height: number }> | null {
+  const parts: number[] = [];
+  let token = '';
+  for (const char of `${raw} `) {
+    if (char === ' ' || char === ',' || char === '\t' || char === '\n' || char === '\r') {
+      if (token !== '') {
+        parts.push(Number.parseFloat(token));
+        token = '';
+        if (parts.length > 4) return null;
+      }
+      continue;
+    }
+    token += char;
+    if (token.length > 64) return null;
+  }
+  if (parts.length !== 4 || !parts.every((part) => Number.isFinite(part))) return null;
+  const [, , width, height] = parts as [number, number, number, number];
+  return width > 0 && height > 0 ? Object.freeze({ width, height }) : null;
+}
+
+/**
+ * Sizing attributes off the root `<svg>` element, read by a bounded character scan rather
+ * than a full XML parse — the bytes are attacker-controlled and only three attributes matter.
+ */
+function readSvgRootSizingAttributes(
+  bytes: Uint8Array
+): Readonly<{ width: string; height: string; viewBox: string }> | null {
+  const prefix = bytes.subarray(0, Math.min(bytes.length, MAX_SVG_ROOT_SCAN_BYTES));
+  const text = new TextDecoder('utf-8', { fatal: false }).decode(prefix);
+  const rootStart = text.indexOf('<svg');
+  if (rootStart === -1) return null;
+  let index = rootStart + 4;
+  const attributes: Record<string, string> = { width: '', height: '', viewBox: '' };
+  while (index < text.length) {
+    const char = text[index]!;
+    if (char === '>' || char === '/') break;
+    if (char === ' ' || char === '\t' || char === '\n' || char === '\r') {
+      index += 1;
+      continue;
+    }
+    let name = '';
+    while (index < text.length && !' \t\n\r=>/'.includes(text[index]!)) {
+      name += text[index]!;
+      index += 1;
+    }
+    while (index < text.length && ' \t\n\r'.includes(text[index]!)) index += 1;
+    if (text[index] !== '=') continue;
+    index += 1;
+    while (index < text.length && ' \t\n\r'.includes(text[index]!)) index += 1;
+    const quote = text[index];
+    let value = '';
+    if (quote === '"' || quote === "'") {
+      index += 1;
+      while (index < text.length && text[index] !== quote) {
+        value += text[index]!;
+        index += 1;
+      }
+      // An unterminated quote means the root element ran past the scan window.
+      if (index >= text.length) return null;
+      index += 1;
+    } else {
+      while (index < text.length && !' \t\n\r>/'.includes(text[index]!)) {
+        value += text[index]!;
+        index += 1;
+      }
+    }
+    if (name in attributes) attributes[name] = value;
+  }
+  // Running out of text before the root tag closed means the scan window was too small.
+  if (index >= text.length) return null;
+  return Object.freeze(attributes as { width: string; height: string; viewBox: string });
+}
+
+/**
+ * Intrinsic size of an SVG, resolved the way a browser sizes one: absolute `width`/`height`
+ * first, then `viewBox` for the missing axis or ratio, then the CSS 300x150 default.
+ *
+ * This is metadata for insert and reset-to-natural-size only. Layout uses the authored
+ * `wp:extent` and the browser rasterizes into that box, so nothing here sizes an allocation
+ * and an out-of-range value is clamped rather than refused.
+ */
+export function resolveSvgIntrinsicSize(
+  bytes: Uint8Array,
+  limits: ImageResourceLimits
+): ValidatedRasterHeader | null {
+  const attributes = readSvgRootSizingAttributes(bytes);
+  if (attributes === null) return null;
+  const width = parseCssAbsoluteLength(attributes.width);
+  const height = parseCssAbsoluteLength(attributes.height);
+  const viewBox = parseSvgViewBox(attributes.viewBox);
+
+  let pixelWidth: number;
+  let pixelHeight: number;
+  if (width !== null && height !== null) {
+    pixelWidth = width;
+    pixelHeight = height;
+  } else if (viewBox !== null) {
+    const ratio = viewBox.width / viewBox.height;
+    if (width !== null) {
+      pixelWidth = width;
+      pixelHeight = width / ratio;
+    } else if (height !== null) {
+      pixelWidth = height * ratio;
+      pixelHeight = height;
+    } else {
+      pixelWidth = viewBox.width;
+      pixelHeight = viewBox.height;
+    }
+  } else {
+    pixelWidth = width ?? DEFAULT_SVG_INTRINSIC_WIDTH;
+    pixelHeight = height ?? DEFAULT_SVG_INTRINSIC_HEIGHT;
+  }
+
+  const clamp = (value: number): number =>
+    Math.min(Math.max(Math.round(value), 1), limits.maxDimension);
+  return { pixelWidth: clamp(pixelWidth), pixelHeight: clamp(pixelHeight) };
+}
+
 export function validateRasterHeader(
   bytes: Uint8Array,
   mime: SupportedImageMime
@@ -359,7 +530,7 @@ export function validateRasterHeader(
 function claimedMimeForPart(
   pkg: OoxmlPackage,
   partName: string
-): SupportedImageMime | PreservedImageMime | 'unknown' {
+): RenderableImageMime | PreservedImageMime | 'unknown' {
   const resolved = resolveContentType(pkg.contentTypes, partName);
   if (!resolved.ok) return 'unknown';
   return CONTENT_TYPE_TO_MIME[resolved.contentType.toLowerCase()] ?? 'unknown';
@@ -383,7 +554,7 @@ function freezeState(state: ImageResourceState): ImageResourceState {
 
 function unrenderable(
   partName: string | null,
-  mime: SupportedImageMime | PreservedImageMime | 'unknown',
+  mime: RenderableImageMime | PreservedImageMime | 'unknown',
   reason: Extract<ImageResourceState, { kind: 'unrenderable' }>['reason']
 ): ImageResourceState {
   return freezeState({ kind: 'unrenderable', partName, mime, reason });
@@ -408,20 +579,23 @@ function checkedDecodedRgbaBytes(pixelCount: number, limits: ImageResourceLimits
   return pixelCount * 4 <= limits.maxDecodedBytes;
 }
 
+function imageMimeClass(
+  mime: RenderableImageMime | PreservedImageMime
+): 'raster' | 'vector' | 'preserved' {
+  if (isRasterSupportedMime(mime)) return 'raster';
+  if (isPreservedMime(mime)) return 'preserved';
+  return 'vector';
+}
+
 function mimeClassesMismatch(
-  claimed: SupportedImageMime | PreservedImageMime | 'unknown',
-  sniffed: SupportedImageMime | PreservedImageMime | 'unknown'
+  claimed: RenderableImageMime | PreservedImageMime | 'unknown',
+  sniffed: RenderableImageMime | PreservedImageMime | 'unknown'
 ): boolean {
   if (claimed === 'unknown' || sniffed === 'unknown') return false;
-  const claimedRaster = isRasterSupportedMime(claimed);
-  const sniffedRaster = isRasterSupportedMime(sniffed);
-  const claimedPreserved = isPreservedMime(claimed);
-  const sniffedPreserved = isPreservedMime(sniffed);
-  if (claimedRaster && sniffedPreserved) return true;
-  if (claimedPreserved && sniffedRaster) return true;
-  if (claimedRaster && sniffedRaster && claimed !== sniffed) return true;
-  if (claimedPreserved && sniffedPreserved && claimed !== sniffed) return true;
-  return false;
+  // A declared type that disagrees with the signature is a spoof, whether it crosses
+  // classes (TIFF claimed, SVG on the wire) or stays inside one (PNG claimed, GIF).
+  if (imageMimeClass(claimed) !== imageMimeClass(sniffed)) return true;
+  return claimed !== sniffed;
 }
 
 function relationshipFingerprint(
@@ -749,6 +923,37 @@ function createImageResourceCacheInternal(
       });
       inFlightByContent.set(flightKey, flight);
       return flight;
+    }
+
+    if (sniffed === 'image/svg+xml') {
+      // Vector media needs no decode: the painter hands these bytes to an `<img>`, where
+      // the browser renders SVG in secure static mode — scripts inert, external
+      // subresources never fetched — and rasterizes into the authored `wp:extent` box.
+      // There is no decode port round trip and no buffer sized by a file-supplied number.
+      const intrinsic = resolveSvgIntrinsicSize(snapshotted, limits);
+      if (intrinsic === null) {
+        return unrenderable(resolvedPartName, sniffed, 'decode-failed');
+      }
+      const svgContentId = contentIdOf(snapshotted);
+      const svgResourceKey = resourceKeyOf(ownerPartName, resolvedPartName, svgContentId);
+      const svgHandle = validatedBytesRegistry.acquire(
+        svgResourceKey,
+        svgContentId,
+        snapshotBytes(snapshotted)
+      );
+      validatedBytesRegistry.retain(svgHandle);
+      return freezeState({
+        kind: 'ready',
+        partName: resolvedPartName,
+        contentId: svgContentId,
+        resourceKey: svgResourceKey,
+        validatedHandle: svgHandle,
+        mime: sniffed,
+        pixelWidth: intrinsic.pixelWidth,
+        pixelHeight: intrinsic.pixelHeight,
+        dpiX: DEFAULT_DPI,
+        dpiY: DEFAULT_DPI,
+      });
     }
 
     if (isPreservedMime(sniffed)) {

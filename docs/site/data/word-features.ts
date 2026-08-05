@@ -445,6 +445,18 @@ export const wordFeatures: WordFeature[] = [
       'Nine wrap choices, exclusion reflow, z-order, and anchored drag/resize in React. Vue wrap/alt/properties chrome deferred; engine setImageWrapType and toolbarCommandState are shared.',
   },
   {
+    id: 'images.svg',
+    name: 'SVG images',
+    category: 'images',
+    editing: 'none',
+    rendering: 'full',
+    roundTrip: 'full',
+    tier: 'community',
+    docsLink: '/docs/1.x/guides/images',
+    notes:
+      'Embedded SVG paints at the authored size. Rendered in the browser secure static mode, so scripts and external references inside the file stay inert. Inserting a new SVG is not supported yet.',
+  },
+  {
     id: 'images.wmf',
     name: 'WMF / EMF legacy vector images',
     category: 'images',

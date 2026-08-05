@@ -31,6 +31,14 @@ describe('word-features — images lane honesty', () => {
     expect(wmf.notes?.toLowerCase()).toMatch(/placeholder|converter/);
   });
 
+  test('SVG renders but is not claimed as insertable', () => {
+    const svg = feature('images.svg');
+    expect(svg.rendering).toBe('full');
+    expect(svg.roundTrip).toBe('full');
+    expect(svg.editing).toBe('none');
+    expect(svg.notes?.toLowerCase()).toContain('insert');
+  });
+
   test('unsupported non-picture payloads are preserved inertly, not claimed as supported', () => {
     for (const id of ['images.charts', 'images.smartart', 'images.shapes', 'images.textboxes'] as const) {
       const row = feature(id);

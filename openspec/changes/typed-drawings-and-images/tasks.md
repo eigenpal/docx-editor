@@ -1351,7 +1351,7 @@ See `openspec/changes/word-fidelity-review-findings.md`.
 
 **Delivered**
 
-- **`docs/site/data/word-features.ts`** + **`word-features.test.ts`** — inline/anchored editing `partial` (React-only note); raster rendering `full`; WMF/SVG/TIFF/EMF placeholders; charts/SmartArt/shapes/textboxes `preserved`+placeholder; tracked images not claimed.
+- **`docs/site/data/word-features.ts`** + **`word-features.test.ts`** — inline/anchored editing `partial` (React-only note); raster rendering `full`; SVG rendering `full` with no insert; WMF/TIFF/EMF placeholders; charts/SmartArt/shapes/textboxes `preserved`+placeholder; tracked images not claimed.
 - **`docs/site/content/guides/images.mdx`** — formats, `SelectedImageState`, React symbols (`ImageInsert*`, `ImageWrap`, `useEditorValueCommand`, `normalizeImageBytes`, properties dialog), wrap/security/unsupported scope; registered in both meta files.
 - **API Extractor fixes** — explicit `ImageWrapTarget` union (no `(typeof const)[number]`); `ImageWrapPartComponent`/`ImageAltTextPartComponent` without `typeof Toolbar*`; `NormalizedImagePayload.reasonKey` as public `string`; `@public` on `useEditorValueCommand` overloads.
 - **`intentional-export-divergence.md`** — documents twelve React-only image authoring exports.

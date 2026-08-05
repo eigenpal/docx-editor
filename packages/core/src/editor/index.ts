@@ -208,10 +208,13 @@ export {
   type ImageCropPermille,
 } from '../store/package/image-crop-units.ts';
 export {
+  resolveSvgIntrinsicSize,
   sniffImageMime,
   validateRasterHeader,
   type ImageDecodePort,
+  type RenderableImageMime,
   type SupportedImageMime,
+  type VectorImageMime,
 } from '../store/package/image-resources.ts';
 export {
   DEFAULT_IMAGE_RESOURCE_LIMITS,
