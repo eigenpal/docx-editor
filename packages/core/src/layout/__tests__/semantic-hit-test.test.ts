@@ -592,6 +592,66 @@ describe('the caret sits at a glyph edge', () => {
   });
 });
 
+describe('a w:caps run is measured as it is DRAWN', () => {
+  // `w:caps` paints uppercase glyphs while the model keeps the source text. Line breaking
+  // always measured the drawn form, so the span box was right — but the caret edges were
+  // taken from the source, so the caret drifted further left with every letter and a click
+  // resolved to an earlier offset than the one under the pointer.
+  /** Uppercase is wider than lowercase, as it is in any proportional face. */
+  const cased: TextMeasurer = {
+    measure: (text) => [...text].reduce((sum, ch) => sum + (ch === ch.toUpperCase() ? 10 : 6), 0),
+    lineMetrics: () => ({ height: 14, baseline: 11 }),
+  };
+  const caps = (text: string) => `<w:p><w:r><w:rPr><w:caps/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
+
+  test('caret edges follow the uppercase glyphs, not the source text', () => {
+    const layout = lay(caps('abcdef'), cased);
+    const span = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!.spans[0]!;
+    // Drawn as "ABCDEF": six wide glyphs, and the reserved advance already said so.
+    expect(span.box.width).toBe(60);
+    // Measuring the source "abc" would publish 18 here and disagree with that box.
+    expect(span.caretEdges?.[3]).toBe(30);
+    expect(spanOffsetX(span, 3, cased)).toBe(span.box.x + 30);
+  });
+
+  test('so a click lands on the letter it was aimed at', () => {
+    const layout = lay(caps('abcdef'), cased);
+    const caret = caretAt(layout, { paragraphId: P0, offset: 3 }, cased)!;
+    expect(caret.x).toBe(30);
+    // Clicking where the caret is drawn resolves back to the offset it was drawn for.
+    expect(hit(layout, caret.x, 5, cased)!.position.offset).toBe(3);
+    // A point inside the fifth glyph is offset 4, not the earlier offset source-text
+    // metrics would have interpolated it to.
+    expect(hit(layout, 44, 5, cased)!.position.offset).toBe(4);
+  });
+
+  test('a JUSTIFIED caps line is not over-stretched by phantom trailing whitespace', () => {
+    // `alignSpans` prices a line's trailing whitespace as `box.width - measure(visible)`.
+    // The box was reserved from the DRAWN text, so measuring the visible part from the
+    // SOURCE made almost the whole span look like whitespace, inflating the slack justify
+    // then distributes. Centre and right pass `lineUsedWidth` and never read it; a
+    // justified NON-LAST line is the only path that does — hence enough words to wrap.
+    const words = Array.from({ length: 40 }, (_, index) => `w${index}`).join(' ');
+    const layout = lay(
+      `<w:p><w:pPr><w:jc w:val="both"/></w:pPr>` +
+        `<w:r><w:rPr><w:caps/></w:rPr><w:t>${words}</w:t></w:r></w:p>`,
+      cased
+    );
+    const fragment = paragraphFragmentsOf(layout.pages[0]!)[0]!;
+    expect(fragment.lines.length).toBeGreaterThan(1); // or the rule is untested
+    const line = fragment.lines[0]!;
+    const last = line.spans[line.spans.length - 1]!;
+    expect(last.text.endsWith(' ')).toBe(true);
+    // Only the trailing space may hang into the margin. The GLYPHS must stop at the column
+    // edge; measuring the source text pushed them past it.
+    const visible = last.text.replace(/\s+$/, '');
+    const drawnVisible = cased.measure(visible.toUpperCase(), last.style);
+    expect(last.box.x + drawnVisible).toBeLessThanOrEqual(
+      layout.pages[0]!.contentBox.width + 0.001
+    );
+  });
+});
+
 describe('the caret is as tall as the run it sits in', () => {
   // A line is as tall as its LARGEST run, so a caret in small text on a line that also
   // carries large text was drawn several times the height of the text it was in.

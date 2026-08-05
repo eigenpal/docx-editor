@@ -71,16 +71,22 @@ function themeFamilyOf(value: string | undefined, themeFonts: DocumentThemeFonts
 }
 
 /**
- * The family an `w:rFonts` element names: `ascii ?? hAnsi` (the spelling the engine
- * reads back), then the theme attributes through the font scheme.
+ * The family an `w:rFonts` element names: the theme attributes through the font scheme,
+ * then `ascii ?? hAnsi` (the spelling the engine reads back).
+ *
+ * Theme first, matching §17.3.2.26 and `resolveRunStyle` in the layout lane: Word writes
+ * both, the concrete name only so readers that cannot resolve a theme have something to
+ * use. Reading it in preference would make this answer a different font from the one the
+ * document is painted in, which is what the font box would then display.
  */
 function familyFromRFonts(rFonts: OoxmlElement, themeFonts: DocumentThemeFonts): string | null {
-  const direct = attributeValue(rFonts, 'ascii') ?? attributeValue(rFonts, 'hAnsi');
-  if (direct !== undefined) return FONT_NAME.test(direct) ? direct : null;
-  return (
+  const themed =
     themeFamilyOf(attributeValue(rFonts, 'asciiTheme'), themeFonts) ??
-    themeFamilyOf(attributeValue(rFonts, 'hAnsiTheme'), themeFonts)
-  );
+    themeFamilyOf(attributeValue(rFonts, 'hAnsiTheme'), themeFonts);
+  if (themed !== null) return themed;
+  const direct = attributeValue(rFonts, 'ascii') ?? attributeValue(rFonts, 'hAnsi');
+  if (direct === undefined) return null;
+  return FONT_NAME.test(direct) ? direct : null;
 }
 
 /** What one `w:rPr` container contributes: validated family and size, or nulls. */
@@ -163,8 +169,8 @@ export function createRunDefaultsResolver(
 
   return (styleId, runProperties) => {
     const chain = chainOf(styleId);
-    // A run-level `w:rFonts` that names only THEME slots resolves through the font
-    // scheme here — the layout's direct resolution leaves it null (deferred lane).
+    // A run-level `w:rFonts` naming a THEME slot outranks the whole style chain, the same
+    // precedence `familyFromRFonts` applies within one element.
     const rFonts = runProperties?.find((property) => property.localName === 'rFonts');
     const runTheme = rFonts
       ? (themeFamilyOf(rFonts.attributes?.asciiTheme, themeFonts) ??

@@ -75,6 +75,7 @@ import {
   collectDocumentThemeColors,
   collectDocumentThemeFonts,
   type DocumentThemeColorEntry,
+  type DocumentThemeFonts,
 } from './document-theme.ts';
 import {
   createRunDefaultsResolver,
@@ -218,6 +219,14 @@ export interface TreeDocxSession {
    * for the session.
    */
   stylesRoot(): OoxmlElement | null;
+  /**
+   * The theme part's Latin typefaces, for resolving `w:rFonts` theme references in layout.
+   *
+   * Memoized once: theme editing is a later slice. A document with no theme part answers
+   * `{ major: null, minor: null }`, which leaves every theme reference on the explicit
+   * font name beside it.
+   */
+  documentThemeFonts(): DocumentThemeFonts;
   /**
    * Root of the numbering part tree (`w:numbering`), for list layout. Memoized once;
    * `null` when the package has no numbering part. Numbering editing is a later slice.
@@ -630,6 +639,7 @@ export function openTreeSession(
   let fontsCache: { readonly revision: number; readonly fonts: readonly string[] } | null = null;
   let stylesCache: readonly DocumentStyleEntry[] | null = null;
   let themeColorsCache: readonly DocumentThemeColorEntry[] | null = null;
+  let themeFontsCache: DocumentThemeFonts | null = null;
   let runDefaultsResolver:
     | ((styleId: string | null, runProperties?: readonly RunPropertyLike[]) => StyleRunDefaults)
     | null = null;
@@ -853,6 +863,11 @@ export function openTreeSession(
       },
 
       stylesRoot: () => resolveStylesRoot(),
+
+      documentThemeFonts() {
+        themeFontsCache ??= collectDocumentThemeFonts(resolveThemeRoot());
+        return themeFontsCache;
+      },
 
       numberingRoot: () => resolveNumberingRoot(),
 

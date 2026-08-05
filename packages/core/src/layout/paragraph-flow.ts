@@ -42,8 +42,10 @@ import {
 import {
   DEFAULT_RUN_STYLE,
   displayText,
+  measureDisplayText,
   resolveRunStyle,
   type ResolvedRunStyle,
+  type ThemeFonts,
 } from './run-style.ts';
 import type { LayoutBox, StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import {
@@ -144,6 +146,18 @@ export interface ParagraphFlowOptions {
    * layout does not reserve the caret placeholder row ordinary empty paragraphs need.
    */
   readonly suppressEmptyPlaceholderLine?: boolean;
+  /**
+   * The theme's Latin typefaces, resolving `w:rFonts` theme references.
+   *
+   * A different theme measures every `+Body`/`+Headings` run in a different face, so it
+   * belongs in the caller's cache key. The BODY lane has that: `semantic-layout` folds
+   * `StyleCascadeTable.cacheToken` into its producer. The header/footer and note lanes pass
+   * the raw surface producer instead, so their keys carry the cascaded `w:rFonts` property
+   * but not the theme it resolves through. That is safe only because the theme is memoized
+   * per session and every reload rebuilds the surface with a fresh cache — a live retheme
+   * would need `cacheToken` folded into those producers too.
+   */
+  readonly themeFonts?: ThemeFonts;
 }
 
 /** One measurable piece of a paragraph: text carrying one property set. */
@@ -469,7 +483,10 @@ function caretEdgesForSpan(span: StyleSpanRecord, measurer: TextMeasurer): reado
   }
   const edges: number[] = [0];
   for (let index = 1; index <= span.text.length; index += 1) {
-    edges.push(measurer.measure(span.text.slice(0, index), span.style));
+    // Measured as DRAWN, exactly as `breakParagraph` reserved the advance: `w:caps` paints
+    // uppercase glyphs, which are wider, so edges taken from the source text put the caret
+    // progressively further left of the glyphs the reader is clicking on.
+    edges.push(measureDisplayText(span.text.slice(0, index), span.style, measurer));
   }
   return Object.freeze(edges);
 }
@@ -507,8 +524,14 @@ export function alignSpans(
   // is what Word does and what stops a line ending in a space from looking misaligned.
   const last = spans[spans.length - 1]!;
   const visible = last.text.replace(/\s+$/, '');
+  // `box.width` was reserved from the DRAWN text, so the visible part has to be measured the
+  // same way: the difference is what the trailing whitespace measures, and mixing a drawn
+  // total with a source-measured visible part reports nearly the whole span as whitespace.
+  // Centre and right pass `lineUsedWidth` and never read this; the path that does is a
+  // JUSTIFIED non-last line, where an over-reported `trailing` inflates `slack` and
+  // over-stretches the line.
   const trailing =
-    visible === last.text ? 0 : last.box.width - measurer.measure(visible, last.style);
+    visible === last.text ? 0 : last.box.width - measureDisplayText(visible, last.style, measurer);
   const used = lineUsedWidth ?? last.box.x - indentLeft + last.box.width - trailing;
   const slack = available - used;
   if (slack <= 0) return withCaretEdges(spans, measurer);
@@ -595,7 +618,8 @@ export function breakParagraph(
     flow?.noteMarks,
     flow?.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
     deletedRanges,
-    flow?.inlineDrawingLayout
+    flow?.inlineDrawingLayout,
+    flow?.themeFonts
   );
   const startOffset = Math.max(0, flow?.startOffset ?? 0);
   const pieces = allPieces.flatMap((piece): FieldAwarePiece[] => {
@@ -619,7 +643,7 @@ export function breakParagraph(
   const emptyStyle =
     inheritedRunProperties.length === 0
       ? DEFAULT_RUN_STYLE
-      : resolveRunStyle(inheritedRunProperties);
+      : resolveRunStyle(inheritedRunProperties, flow?.themeFonts);
   const rightEdge = indentLeft + available;
   const contentLeft = flow?.contentLeft ?? indentLeft;
   const contentRight = flow?.contentRight ?? rightEdge;

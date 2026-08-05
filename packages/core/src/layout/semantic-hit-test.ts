@@ -881,6 +881,8 @@ function prefixWidth(span: StyleSpanRecord, utf16: number, measurer: TextMeasure
   }
   const cached = widths.get(utf16);
   if (cached !== undefined) return cached;
+  // As DRAWN, matching `caretEdges` and the advance `breakParagraph` reserved: a `w:caps`
+  // run paints uppercase, and measuring the source text would disagree with both.
   const width =
     utf16 <= 0 ? 0 : measureDisplayText(span.text.slice(0, utf16), span.style, measurer);
   widths.set(utf16, width);

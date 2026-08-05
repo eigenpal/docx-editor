@@ -14,7 +14,7 @@ describe('every D8 run property resolves', () => {
   test('font family from ascii, falling back to hAnsi', () => {
     expect(resolve('rFonts', { ascii: 'Calibri' }).fontFamily).toBe('Calibri');
     expect(resolve('rFonts', { hAnsi: 'Georgia' }).fontFamily).toBe('Georgia');
-    // A theme-only reference resolves through the theme part, a deferred lane.
+    // Without a theme there is nothing to resolve a theme-only reference against.
     expect(resolve('rFonts', { asciiTheme: 'minorHAnsi' }).fontFamily).toBeNull();
   });
 
@@ -114,6 +114,41 @@ describe('every D8 run property resolves', () => {
       { localName: 'sz', attributes: { val: '44' } },
     ]);
     expect(style.fontSizePt).toBe(22);
+  });
+});
+
+describe('a w:rFonts theme reference resolves against the theme part', () => {
+  // Word writes the body font as `w:asciiTheme="minorHAnsi"`, usually in `w:docDefaults`,
+  // so in a themed document EVERY run reaches here with no explicit family. Leaving those
+  // unresolved put the whole document on the surface's fallback face.
+  const theme = { major: 'Aharoni', minor: 'Grandview' };
+  const themed = (attributes: Record<string, string>) =>
+    resolveRunStyle([{ localName: 'rFonts', attributes }], theme).fontFamily;
+
+  test('minor is body text, major is headings', () => {
+    expect(themed({ asciiTheme: 'minorHAnsi' })).toBe('Grandview');
+    expect(themed({ asciiTheme: 'majorHAnsi' })).toBe('Aharoni');
+    // The `*Ascii` spellings name the same two slots.
+    expect(themed({ asciiTheme: 'minorAscii' })).toBe('Grandview');
+    expect(themed({ hAnsiTheme: 'majorAscii' })).toBe('Aharoni');
+  });
+
+  test('the theme attribute overrides the explicit name beside it', () => {
+    // Word writes both: the concrete name is there for readers that cannot resolve a
+    // theme, and following it would ignore a retheme the author can see (§17.3.2.26).
+    expect(themed({ ascii: 'Calibri', asciiTheme: 'minorHAnsi' })).toBe('Grandview');
+  });
+
+  test('an unresolvable slot falls back to the explicit name, not to nothing', () => {
+    // `minorBidi` / `minorEastAsia` name the `a:cs` / `a:ea` faces this lane does not read.
+    expect(themed({ ascii: 'Calibri', asciiTheme: 'minorBidi' })).toBe('Calibri');
+    // A theme whose slot is empty leaves the run inheriting rather than naming null.
+    expect(
+      resolveRunStyle([{ localName: 'rFonts', attributes: { asciiTheme: 'minorHAnsi' } }], {
+        major: null,
+        minor: null,
+      }).fontFamily
+    ).toBeNull();
   });
 });
 

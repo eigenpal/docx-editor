@@ -285,7 +285,7 @@ export function createSurfaceStyleDeps(session: TreeDocxSession): {
   let root: OoxmlElement | null | undefined;
   let index: NumberingIndex | undefined;
   return {
-    styleCascade: buildStyleCascadeTable(session.stylesRoot()),
+    styleCascade: buildStyleCascadeTable(session.stylesRoot(), session.documentThemeFonts()),
     defaultTabStopPt: defaultTabIntervalFromSettings(session.settingsRoot()),
     numberingIndex() {
       const current = session.numberingRoot();

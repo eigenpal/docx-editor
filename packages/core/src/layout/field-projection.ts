@@ -74,7 +74,7 @@ import {
   type RevisionAttribution,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
-import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
+import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
 import type {
   HeaderFooterStoryRecord,
   SemanticLayout,
@@ -382,7 +382,8 @@ export function piecesOfParagraph(
   noteMarks?: NoteMarkContext,
   displayMode: RevisionDisplayMode = DEFAULT_REVISION_DISPLAY_MODE,
   deletedRanges?: MutableModelRange[],
-  inlineDrawingLayout?: InlineDrawingLayoutContext
+  inlineDrawingLayout?: InlineDrawingLayoutContext,
+  themeFonts?: ThemeFonts
 ): FieldAwarePiece[] {
   if (paragraph.kind === 'textValue') return [];
   if (paragraph.kind !== 'paragraph') return [];
@@ -646,7 +647,7 @@ export function piecesOfParagraph(
   const processRun = (run: OoxmlNode, runDepth: number): void => {
     if (run.kind !== 'run') return;
     const props = runPropertiesOf(run, inheritedRunProperties, cascadeRuns);
-    const style = resolveRunStyle(props);
+    const style = resolveRunStyle(props, themeFonts);
 
     for (const grand of run.children) {
       if (!consumeScanNode(budget)) {

@@ -41,6 +41,7 @@ import {
   tabStopsFingerprint,
   type ResolvedTabStops,
 } from './paragraph-tabs.ts';
+import type { ThemeFonts } from './run-style.ts';
 
 /** Soft ceiling on `basedOn` chain length — enough for real templates, refuses hostile graphs. */
 export const MAX_STYLE_BASED_ON_DEPTH = 32;
@@ -85,8 +86,18 @@ export interface StyleCascadeTable {
   readonly defaultParagraphStyleId: string | null;
   /** `w:style[@w:default='1'][@w:type='character']` — last wins among defaults of that type. */
   readonly defaultCharacterStyleId: string | null;
+  /**
+   * The theme part's Latin typefaces, for `w:rFonts` theme references.
+   *
+   * Lives on the cascade because it is document-level style material with the same
+   * lifetime, and because every site that resolves run properties already holds this table.
+   */
+  readonly themeFonts: ThemeFonts;
   readonly styles: ReadonlyMap<string, StyleDefinition>;
 }
+
+/** A document with no theme part: every theme reference falls back to its explicit name. */
+export const NO_THEME_FONTS: ThemeFonts = { major: null, minor: null };
 
 export interface CascadedParagraphFormatting {
   /** Flat paragraph properties in cascade order (defaults → bases → style → direct). */
@@ -373,16 +384,22 @@ export function tableCellStyleFormatting(
  * `styleId` values keep the last definition, matching Word's reader for this fixture class.
  * Default paragraph/character style ids track `w:default="1"` with the same last-wins rule.
  */
-export function buildStyleCascadeTable(stylesRoot: OoxmlElement | null): StyleCascadeTable {
+export function buildStyleCascadeTable(
+  stylesRoot: OoxmlElement | null,
+  themeFonts: ThemeFonts = NO_THEME_FONTS
+): StyleCascadeTable {
   const styles = new Map<string, StyleDefinition>();
   if (!stylesRoot) {
     return {
-      cacheToken: stableHash({ empty: true }),
+      // Still keyed on the theme: a document with no styles part can carry a theme, and
+      // its runs resolve `+Body` through it.
+      cacheToken: stableHash({ empty: true, theme: themeFonts }),
       docDefaultsRun: [],
       docDefaultsParagraph: [],
       docDefaultsParagraphNode: undefined,
       defaultParagraphStyleId: null,
       defaultCharacterStyleId: null,
+      themeFonts,
       styles,
     };
   }
@@ -415,6 +432,9 @@ export function buildStyleCascadeTable(stylesRoot: OoxmlElement | null): StyleCa
     dP: propertiesFingerprint(defaults.paragraph),
     defP: defaultParagraphStyleId,
     defC: defaultCharacterStyleId,
+    // Retheming changes the face every theme-fonted run measures in while no style
+    // material moves, so a break cached under the old theme must not be reused.
+    theme: themeFonts,
     styles: [...styles.values()].map((style) => ({
       id: style.styleId,
       type: style.type,
@@ -431,6 +451,7 @@ export function buildStyleCascadeTable(stylesRoot: OoxmlElement | null): StyleCa
     docDefaultsParagraphNode: defaults.paragraphNode,
     defaultParagraphStyleId,
     defaultCharacterStyleId,
+    themeFonts,
     styles,
   };
 }
