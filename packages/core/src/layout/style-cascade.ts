@@ -666,7 +666,12 @@ export function resolveParagraphLayoutInputs(
     ? cascadeParagraphFormatting(styleCascade, pPr, tableCellStyle)
     : null;
   const props = cascaded ? [...cascaded.paragraphProperties] : propertiesOf(pPr);
-  const inheritedRunProperties = cascaded?.runProperties ?? [];
+  // Direct `w:pPr/w:rPr` (paragraph mark) must reach empty-line / last-line metrics even
+  // when there is no styles part — cascadeParagraphFormatting already folds it in when a
+  // table is present.
+  const inheritedRunProperties = cascaded
+    ? cascaded.runProperties
+    : propertiesOf(findRunProperties(pPr && isElement(pPr) ? pPr : undefined));
   const baseIndent = paragraphIndent(props);
   let hanging = 0;
   let firstLine = 0;

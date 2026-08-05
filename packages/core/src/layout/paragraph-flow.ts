@@ -1098,11 +1098,18 @@ export function breakParagraph(
     }
   };
 
-  const closeLine = (): void => {
+  const closeLine = (options?: { readonly includeParagraphMark?: boolean }): void => {
     const metrics = measurer.lineMetrics(emptyStyle);
     if (line.height === 0) {
       line.height = metrics.height;
       line.baseline = metrics.baseline;
+    } else if (options?.includeParagraphMark) {
+      // The paragraph mark (`w:pPr/w:rPr`, CT_PPr / ECMA-376 17.3.1.29) sits on the LAST
+      // line and participates in its metrics. Cover-page party names often author a larger
+      // mark `w:sz` than the visible runs; without the mark the line collapses to the run
+      // size and the title block packs tighter than Word.
+      line.height = Math.max(line.height, metrics.height);
+      line.baseline = Math.max(line.baseline, metrics.baseline);
     }
     finalizeDrawingGeometry();
     // Line spacing applies to the finished box, once, so a paragraph's rule governs every
@@ -1513,8 +1520,11 @@ export function breakParagraph(
   // there was and left nothing after it — the caret fell back to the end of the line the
   // break had just terminated, sitting a break's width to the right of the last glyph,
   // and the new line only appeared once something was typed into it.
+  //
+  // Only this final close includes the paragraph mark: intermediate wraps must not inherit
+  // a tall mark size onto every line of a multi-line paragraph.
   if (line.spans.length > 0 || line.drawings.length > 0 || lines.length === 0 || trailingLineBreak)
-    closeLine();
+    closeLine({ includeParagraphMark: true });
   if (cacheKey !== null && cache) cache.set(cacheKey, lines.map(frozenLine));
   return lines;
 }
