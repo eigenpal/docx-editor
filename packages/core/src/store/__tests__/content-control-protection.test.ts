@@ -366,6 +366,36 @@ describe('forms protection over an inline field', () => {
       );
       expect(typeNaming(pkg, span(pkg).end)).toBeNull();
     });
+
+    // AND WHEN THE WRITE HAS NO RUN TO JOIN. The forms exemption is resolved at the package gate,
+    // before validation, so the empty-paragraph landing has to be resolved there as well or a
+    // protected document hands the nested lock the same exemption the outer name bought.
+    const emptyNestedBody = (innerProperties: string) =>
+      `<w:sdt><w:sdtPr><w:tag w:val="outer"/></w:sdtPr><w:sdtContent>` +
+      `<w:sdt><w:sdtPr><w:tag w:val="inner"/>${innerProperties}</w:sdtPr>` +
+      `<w:sdtContent><w:p/></w:sdtContent></w:sdt>` +
+      `</w:sdtContent></w:sdt>`;
+
+    test('a locked control holding the empty paragraph refuses the minted run', () => {
+      const pkg = build(
+        `${emptyNestedBody('<w:lock w:val="sdtContentLocked"/>')}<w:sectPr/>`,
+        FORMS
+      );
+      expect(typeNaming(pkg, 0)).toBe('locked');
+    });
+
+    test('a bound one holding it refuses as bound', () => {
+      const pkg = build(
+        `${emptyNestedBody('<w:dataBinding w:xpath="/a/b" w:storeItemID="{FEED}"/>')}<w:sectPr/>`,
+        FORMS
+      );
+      expect(typeNaming(pkg, 0)).toBe('bound');
+    });
+
+    test('an unlocked one holding it is still fillable under protection', () => {
+      const pkg = build(`${emptyNestedBody('')}<w:sectPr/>`, FORMS);
+      expect(typeNaming(pkg, 0)).toBeNull();
+    });
   });
 
   test('a paragraph-wide property write is still refused: that is not filling in a field', () => {

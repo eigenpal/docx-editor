@@ -11,7 +11,6 @@ import { fieldAtomText } from '../package/field-nodes.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlAttribute,
-  type OoxmlElement,
   type OoxmlNode,
   type OoxmlParagraphNode,
   type OoxmlPart,
@@ -440,23 +439,13 @@ function applyInsertContent(
     const last = site.run;
     return fromEdit(insertChildren(part, last.id, last.children.length, nodes, options), effect);
   }
-  // Nothing to append to: the content needs a run to live in. A control holding no run of its own
-  // in this paragraph gets one in its `w:sdtContent`; anything else puts it in the paragraph.
-  const holder = owner === null || contains(owner, paragraph.id) ? paragraph : contentHolder(owner);
+  // Nothing to append to: the content needs a run to live in, and the site says which node holds
+  // it — the addressed paragraph, or a named inline control's own `w:sdtContent`.
+  const { holder } = site;
   return fromEdit(
     insertChildren(part, holder.id, holder.children.length, [runElement(nextId, nodes)], options),
     effect
   );
-}
-
-/** Where a run goes inside a control: its content element, or the control itself. */
-function contentHolder(control: OoxmlElement): OoxmlElement {
-  for (const child of control.children) {
-    if (child.kind === 'textValue') continue;
-    if (child.kind === 'contentControlContent') return child;
-    if (child.kind === 'generic' && child.localName === 'sdtContent') return child;
-  }
-  return control;
 }
 
 function contains(node: OoxmlNode, id: string): boolean {

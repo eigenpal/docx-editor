@@ -47,6 +47,7 @@
 - [x] 4.13 Refuse a bound control's content for a value-reaching insertion in validation, not only in the value applier, so the insert-text command cannot desync a `w:dataBinding` control
 - [x] 4.14 Resolve a positioned value write against the controls it would LAND in — the named control, its ancestors and any control nested inside it that receives the content — through the same rule the applier writes by, so naming an unlocked outer control cannot write into a locked or bound nested one
 - [x] 4.15 Constrain a named insertion's offset by the span the control covers in the addressed paragraph for block and inline controls alike, and keep the offset walk and the run walk to one nesting bound
+- [x] 4.16 Report the node a write with no run to join would MINT its run in — the addressed paragraph, or a named inline control's own content — from the same resolution the applier writes by, and resolve the lock, binding and forms rules against the controls holding it, so a nested control's empty paragraph is not a hole at either command location
 - [x] 4.5 Prove enforcement from a path that never touches the surface, so the claim is about the store and not the widget
 - [ ] 4.6 Surface the lock as a disabled control with the engine's own reason before the user types
 

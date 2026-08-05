@@ -385,6 +385,108 @@ describe('a range crossing into a nested control is refused whole', () => {
   });
 });
 
+// MINTING A RUN IS A LANDING TOO.
+//
+// When the offset finds no run to join — an empty or run-less paragraph — the applier mints one.
+// A named BLOCK owner mints it into the ADDRESSED PARAGRAPH, and that paragraph can sit inside a
+// nested block control the owner merely encloses. The validation asked no control at all in this
+// case, because it resolved the landing through the run id and there was no run.
+//
+// The command's `start` and `end` both resolve to offset 0 of such a paragraph, so both locations
+// wrote into a locked or bound inner control and answered `ok`.
+describe('a write with no run to join is resolved against where the run is minted', () => {
+  /** A block outer over a block inner whose only paragraph is empty. */
+  const overEmptyBlock = (innerProperties: string): OoxmlPart =>
+    parseDoc(
+      `<w:sdt><w:sdtPr><w:tag w:val="outer"/></w:sdtPr><w:sdtContent>` +
+        `<w:sdt><w:sdtPr><w:tag w:val="inner"/>${innerProperties}</w:sdtPr>` +
+        `<w:sdtContent><w:p/></w:sdtContent></w:sdt>` +
+        `</w:sdtContent></w:sdt>`
+    );
+
+  /** The outer's own text first, then a nested control holding a BLANK paragraph: `end` lands there. */
+  const overBlankLastBlock = (innerProperties: string): OoxmlPart =>
+    parseDoc(
+      `<w:sdt><w:sdtPr><w:tag w:val="outer"/></w:sdtPr><w:sdtContent>` +
+        `<w:p><w:r><w:t>abc</w:t></w:r></w:p>` +
+        `<w:sdt><w:sdtPr><w:tag w:val="inner"/>${innerProperties}</w:sdtPr>` +
+        `<w:sdtContent><w:p><w:pPr><w:jc w:val="center"/></w:pPr></w:p></w:sdtContent></w:sdt>` +
+        `</w:sdtContent></w:sdt>`
+    );
+
+  test('the empty only paragraph is inside the locked inner, at both command locations', () => {
+    const part = overEmptyBlock(CONTENT_LOCKED);
+    // An empty paragraph is one offset wide, so the command's `start` and `end` are one place.
+    expect(commandEdges(part)).toEqual({ start: 0, end: 0 });
+    const attempt = nameAndWrite(part, 0);
+    expect(attempt.reason).toBe('locked');
+    expect(attempt.fileHoldsWrite).toBe(false);
+  });
+
+  test('contentLocked answers there too', () => {
+    const attempt = nameAndWrite(overEmptyBlock(EDIT_LOCKED), 0);
+    expect(attempt.reason).toBe('locked');
+    expect(attempt.fileHoldsWrite).toBe(false);
+  });
+
+  test('a bound empty inner control refuses with bound', () => {
+    const attempt = nameAndWrite(overEmptyBlock(BINDING), 0);
+    expect(attempt.reason).toBe('bound');
+    expect(attempt.fileHoldsWrite).toBe(false);
+  });
+
+  test('the blank LAST paragraph is where the trailing location lands, and it is locked', () => {
+    const attempt = nameAndWrite(overBlankLastBlock(CONTENT_LOCKED), 0, 1);
+    expect(attempt.reason).toBe('locked');
+    expect(attempt.fileHoldsWrite).toBe(false);
+  });
+
+  test('and a bound one refuses it as bound', () => {
+    const attempt = nameAndWrite(overBlankLastBlock(BINDING), 0, 1);
+    expect(attempt.reason).toBe('bound');
+    expect(attempt.fileHoldsWrite).toBe(false);
+  });
+
+  test('the leading location, which is the outer control own text, still writes', () => {
+    const part = overBlankLastBlock(CONTENT_LOCKED);
+    const attempt = nameAndWrite(part, 0, 0);
+    expect(attempt.reason).toBeNull();
+    expect(attempt.fileHoldsWrite).toBe(true);
+  });
+
+  test('an unlocked, unbound empty inner control still takes the text', () => {
+    const part = overEmptyBlock('');
+    const attempt = nameAndWrite(part, 0);
+    expect(attempt.reason).toBeNull();
+    expect(attempt.innerText).toBe('PWNED');
+  });
+
+  test('an empty paragraph the named control holds itself is written to', () => {
+    const part = parseDoc(
+      `<w:sdt><w:sdtPr><w:tag w:val="outer"/></w:sdtPr><w:sdtContent><w:p/></w:sdtContent></w:sdt>` +
+        `<w:p><w:sdt><w:sdtPr><w:tag w:val="inner"/>${CONTENT_LOCKED}</w:sdtPr>` +
+        `<w:sdtContent><w:r><w:t>MID</w:t></w:r></w:sdtContent></w:sdt></w:p>`
+    );
+    const attempt = nameAndWrite(part, 0, 0);
+    expect(attempt.reason).toBeNull();
+    expect(attempt.innerText).toBe('MID');
+  });
+
+  // THE INLINE OWNER MINTS INTO ITS OWN CONTENT, not into anything nested there: the run becomes
+  // the last child of the owner's `w:sdtContent`, AFTER the nested control rather than in it.
+  test('an inline owner with nothing to join writes beside the nested control, not into it', () => {
+    const part = parseDoc(
+      `<w:p><w:r><w:t>abc</w:t></w:r>` +
+        `<w:sdt><w:sdtPr><w:tag w:val="outer"/></w:sdtPr><w:sdtContent>` +
+        `<w:sdt><w:sdtPr><w:tag w:val="inner"/>${CONTENT_LOCKED}</w:sdtPr>` +
+        `<w:sdtContent/></w:sdt></w:sdtContent></w:sdt></w:p>`
+    );
+    const attempt = nameAndWrite(part, 3);
+    expect(attempt.reason).toBeNull();
+    expect(attempt.innerText).toBe('');
+  });
+});
+
 // NESTING DEPTH. Two bounded walks decide where a named write goes: the offset model, which
 // stops descending at the shared nesting cap, and the run walk the append path uses. They must
 // not disagree about a run — a run one walk can reach and the other cannot is a run a write can

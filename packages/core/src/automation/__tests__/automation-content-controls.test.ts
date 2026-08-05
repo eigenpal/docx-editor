@@ -709,6 +709,66 @@ describe('a nested control is refused at the locations this command writes at', 
     expect(written.answer).toBe('ok');
     expect(written.saved).toContain('PWNED');
   });
+
+  // AND WHEN THERE IS NO RUN TO JOIN. A nested control holding an empty paragraph gives the
+  // command the same offset for `start` and for `end`, and the write mints a run in that
+  // paragraph — inside the nested control, which is where a lock or a binding lives.
+  const overEmptyBlock = (properties: string): Uint8Array =>
+    docx(
+      `<w:sdt><w:sdtPr><w:tag w:val="outer"/></w:sdtPr><w:sdtContent>` +
+        `<w:sdt><w:sdtPr><w:tag w:val="inner"/>${properties}</w:sdtPr>` +
+        `<w:sdtContent><w:p/></w:sdtContent></w:sdt>` +
+        `</w:sdtContent></w:sdt>`
+    );
+
+  const overBlankLastBlock = (properties: string): Uint8Array =>
+    docx(
+      `<w:sdt><w:sdtPr><w:tag w:val="outer"/></w:sdtPr><w:sdtContent>` +
+        `<w:p><w:r><w:t>abc</w:t></w:r></w:p>` +
+        `<w:sdt><w:sdtPr><w:tag w:val="inner"/>${properties}</w:sdtPr>` +
+        `<w:sdtContent><w:p><w:pPr><w:jc w:val="center"/></w:pPr></w:p></w:sdtContent></w:sdt>` +
+        `</w:sdtContent></w:sdt>`
+    );
+
+  test('a nested control holding an empty paragraph refuses both locations', () => {
+    for (const at of ['start', 'end'] as const) {
+      const written = writeNaming(overEmptyBlock(LOCKED), at);
+      expect(written.answer).toBe('transaction-refused/locked');
+      expect(written.saved).not.toContain('PWNED');
+    }
+  });
+
+  test('and a bound one holding an empty paragraph refuses them with bound', () => {
+    for (const at of ['start', 'end'] as const) {
+      const written = writeNaming(overEmptyBlock(BOUND), at);
+      expect(written.answer).toBe('transaction-refused/bound');
+      expect(written.saved).not.toContain('PWNED');
+    }
+  });
+
+  test('a blank last paragraph inside a locked nested control refuses the end location', () => {
+    const written = writeNaming(overBlankLastBlock(LOCKED), 'end');
+    expect(written.answer).toBe('transaction-refused/locked');
+    expect(written.saved).not.toContain('PWNED');
+  });
+
+  test('and a bound one refuses that location too', () => {
+    const written = writeNaming(overBlankLastBlock(BOUND), 'end');
+    expect(written.answer).toBe('transaction-refused/bound');
+    expect(written.saved).not.toContain('PWNED');
+  });
+
+  test('the start location there is the outer control own paragraph, so it writes', () => {
+    const written = writeNaming(overBlankLastBlock(LOCKED), 'start');
+    expect(written.answer).toBe('ok');
+    expect(written.saved).toContain('PWNED');
+  });
+
+  test('an unlocked nested control holding an empty paragraph still takes the text', () => {
+    const written = writeNaming(overEmptyBlock(''), 'end');
+    expect(written.answer).toBe('ok');
+    expect(written.saved).toContain('PWNED');
+  });
 });
 
 function spanOf(response: ReturnType<AutomationHost['execute']>) {

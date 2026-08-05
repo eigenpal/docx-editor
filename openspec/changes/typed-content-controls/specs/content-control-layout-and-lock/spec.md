@@ -129,7 +129,9 @@ Naming a control on an insertion decides where the text is written AND what the 
 
 ### Requirement: A value write is resolved against the controls it lands in, not only the one it names
 
-A write addressed AT a control at a POSITION SHALL be resolved against every control between the part root and the place the content would actually go: the named control, the controls enclosing it, and any control nested inside it that the write would land in. The landing place SHALL be resolved by the same rule the applier writes by — the text value the offset falls inside, otherwise the run the offset starts, otherwise the last run the named control owns in that paragraph — so a refusal and a write never reason about two different places. Where the write would mint a run of its own inside the named control, no nested control is reached and only the named control's own line applies.
+A write addressed AT a control at a POSITION SHALL be resolved against every control between the part root and the place the content would actually go: the named control, the controls enclosing it, and any control nested inside it that the write would land in. The landing place SHALL be resolved by the same rule the applier writes by — the text value the offset falls inside, otherwise the run the offset starts, otherwise the last run the named control owns in that paragraph, otherwise the node a run would be MINTED in — so a refusal and a write never reason about two different places.
+
+A write with no run to join SHALL be resolved against the node that receives the minted run: the addressed paragraph when the named control holds that paragraph, and the named control's own content when the control sits inline within it. An empty or otherwise run-less paragraph is therefore not "nowhere" — a control holding it receives the minted run and its lock or `w:dataBinding` SHALL answer, and an inline owner's own content receives the run beside anything nested there rather than inside it.
 
 This SHALL hold for a block control and an inline control alike, at any nesting depth the shared bound admits, and both halves of the resolution SHALL stop at that same bound: a run one bounded walk can reach and another cannot is a run a write can land in at an offset nobody can address.
 
@@ -143,10 +145,20 @@ This SHALL hold for a block control and an inline control alike, at any nesting 
 - **WHEN** the same insertion would land in a nested control declaring `w:dataBinding`
 - **THEN** it is refused with `bound`, for block and inline nesting alike
 
+#### Scenario: A nested control holding an empty paragraph
+
+- **WHEN** a script inserts text at the start or the end of an unlocked, unbound control whose content is, or ends with, a locked or bound control holding an empty or blank paragraph
+- **THEN** it is refused with `locked` or `bound`, because the run the write mints lands in that paragraph, and the saved file holds no part of the write
+
 #### Scenario: A write into the named control's own content
 
 - **WHEN** the insertion lands in the named control's own characters rather than in anything nested there
 - **THEN** it is allowed, and a nested locked or bound control elsewhere in that control does not refuse it
+
+#### Scenario: An inline control with nothing to join
+
+- **WHEN** an insertion names an inline control that holds no run of its own, and the control's content begins with a locked nested control
+- **THEN** it is allowed, because the minted run becomes the named control's own content beside the nested one rather than inside it
 
 ### Requirement: Every mutating operation meets the lock, and an unclassified one fails closed
 

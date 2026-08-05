@@ -41,7 +41,7 @@ import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.t
 import { TEXT_DEPS, fromEdit, parentOf, runPropertiesNodeOf } from './tree-op-nodes.ts';
 import { splitRunsAt } from './tree-op-apply.ts';
 import {
-  insertionRunId,
+  insertionLandingNodeId,
   paragraphLength,
   paragraphOffsetIndex,
   splitsSurrogate,
@@ -461,12 +461,12 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
 }
 
 /**
- * The controls enclosing the run a NAMED insertion would actually join, outermost first.
+ * The controls enclosing where a NAMED insertion would actually go, outermost first.
  *
- * Resolved through {@link insertionRunId}, the same rule the applier writes by, so validation
- * and application are asking about one place. When the write would mint its own run there is no
- * landing run to ask about: the content goes into the named control's own container, and the
- * named control's chain is the whole answer.
+ * Resolved through {@link insertionLandingNodeId}, the same rule the applier writes by, so
+ * validation and application are asking about one place. That includes the case where no run
+ * exists to join: the run is minted into a NODE — the addressed paragraph, or a named inline
+ * control's own content — and every control holding that node receives it.
  */
 function landingControls(
   part: OoxmlPart,
@@ -475,9 +475,7 @@ function landingControls(
 ): readonly OoxmlNode[] {
   const paragraph = findNode(part, at.paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return [];
-  const runId = insertionRunId(paragraph, at.offset, own);
-  if (runId === null) return [];
-  return enclosingContentControls(part, runId);
+  return enclosingContentControls(part, insertionLandingNodeId(paragraph, at.offset, own));
 }
 
 /** Both chains, outermost first, each control once. Fails wide when the two disagree. */
