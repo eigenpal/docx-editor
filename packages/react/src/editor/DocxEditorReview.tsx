@@ -957,7 +957,11 @@ function ReviewHover({ className, hidden }: ReviewPartProps) {
           () => show(element, false),
           openRef.current ? HOVER_RETARGET_MS : HOVER_SHOW_MS
         );
-      } else {
+      } else if (openRef.current || current !== null) {
+        // Only when there is something to put away. This branch is the one ordinary mouse
+        // movement lands in — every element crossing on a page with no balloon up — and
+        // unconditionally cancelling and re-arming a timer per crossing is allocation at
+        // pointer frequency for nothing.
         current = null;
         window.clearTimeout(showTimer);
         window.clearTimeout(hideTimer);
@@ -965,7 +969,7 @@ function ReviewHover({ className, hidden }: ReviewPartProps) {
       }
     };
     const onLeave = (): void => {
-      if (pinnedRef.current) return;
+      if (pinnedRef.current || (!openRef.current && current === null)) return;
       current = null;
       window.clearTimeout(showTimer);
       window.clearTimeout(hideTimer);
@@ -1011,44 +1015,33 @@ function ReviewHover({ className, hidden }: ReviewPartProps) {
   // the match RELAXES in steps, taking the strictest interpretation with a single answer:
   // the full triple, then `(id, author)`, then the id alone — and never a guess between
   // two candidates.
+  // ONE allocation-free pass, not one filter per rung: this re-derives on every review
+  // tick while a balloon is up, and the queue behind a heavy redline runs to thousands.
+  // The exact triple returns the FIRST hit immediately (Word reuses ids across an editing
+  // burst, and reading order picks the right one); the relaxed rungs each keep a single
+  // candidate and disqualify themselves on a second distinct hit.
   const entry = useMemo(() => {
     if (!anchor) return null;
-    const revisions = allItems.filter(
-      (candidate) => candidate.kind === 'revision' && candidate.item.kind === 'revision'
-    );
-    const only = (matches: readonly ReviewItemView[]): ReviewItemView | null =>
-      matches.length === 1 ? matches[0]! : null;
-    const byTriple = revisions.filter(
-      (candidate) =>
-        candidate.item.kind === 'revision' &&
-        candidate.item.addresses.some(
-          (address) =>
-            address.id === anchor.revisionId &&
-            address.author === anchor.author &&
-            address.date === anchor.date
-        )
-    );
-    // The exact triple may legitimately match SEVERAL decisions (Word reuses ids across
-    // an editing burst); reading order put the right one first often enough before, so
-    // the first stays the answer at this rung.
-    if (byTriple.length > 0) return byTriple[0]!;
-    const byAuthor = revisions.filter(
-      (candidate) =>
-        candidate.item.kind === 'revision' &&
-        candidate.item.addresses.some(
-          (address) => address.id === anchor.revisionId && address.author === anchor.author
-        )
-    );
-    return (
-      only(byAuthor) ??
-      only(
-        revisions.filter(
-          (candidate) =>
-            candidate.item.kind === 'revision' &&
-            candidate.item.addresses.some((address) => address.id === anchor.revisionId)
-        )
-      )
-    );
+    let byAuthor: ReviewItemView | null = null;
+    let byAuthorAmbiguous = false;
+    let byId: ReviewItemView | null = null;
+    let byIdAmbiguous = false;
+    for (const candidate of allItems) {
+      if (candidate.kind !== 'revision' || candidate.item.kind !== 'revision') continue;
+      for (const address of candidate.item.addresses) {
+        if (address.id !== anchor.revisionId) continue;
+        if (address.author === anchor.author) {
+          if (address.date === anchor.date) return candidate;
+          if (byAuthor === null) byAuthor = candidate;
+          else if (byAuthor !== candidate) byAuthorAmbiguous = true;
+        }
+        if (byId === null) byId = candidate;
+        else if (byId !== candidate) byIdAmbiguous = true;
+      }
+    }
+    if (byAuthor !== null && !byAuthorAmbiguous) return byAuthor;
+    if (byId !== null && !byIdAmbiguous) return byId;
+    return null;
   }, [allItems, anchor]);
 
   // Resolving the decision removes it from the queue; the balloon it was resolved from
