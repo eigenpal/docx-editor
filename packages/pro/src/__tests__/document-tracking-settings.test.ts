@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // `settings.xml` states the tracking the DOCUMENT asks for, and the editor honours it.
 //
 // The failure this exists to prevent: a package carrying `w:trackRevisions` opening as an
@@ -14,9 +19,9 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
-import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
-import { readOoxmlPart } from '@docx-editor.dev/core-contract/store';
-import { readTrackingSettings } from '../../store/package/tracking-settings.ts';
+import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
+import { readOoxmlPart, readTrackingSettings } from '@docx-editor.dev/core-contract/store';
+import { reviewModule as testReviewModule } from '../review/review-module.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -63,6 +68,7 @@ function mount(settings: string | null, author: string | null = 'Grace Hopper') 
   const editor: DocxEditorInstance = createDocxEditor({
     container,
     document: docx(settings),
+    modules: [testReviewModule()],
     ...(author === null ? {} : { author }),
   });
   if (!editor.surface) throw new Error('surface failed to mount');
@@ -161,6 +167,7 @@ describe('honouring what the document asks for', () => {
       document: docx('<w:trackRevisions/>'),
       author: 'Grace Hopper',
       mode: 'view',
+      modules: [testReviewModule()],
     });
     expect(editor.getEditingMode()).toBe('viewing');
   });

@@ -22,6 +22,7 @@ import type {
   FontConfiguration,
 } from '@docx-editor.dev/core-contract/contracts/editor';
 import { createDocxEditor, defaultTableLabel } from '@docx-editor.dev/core-contract/editor';
+import type { EditorModule } from '@docx-editor.dev/core-contract/editor';
 import type {
   DocxEditorInstance,
   FontConfigurationFragment,
@@ -61,6 +62,12 @@ export interface DocxEditorRootProps {
   locale?: string;
   /** Drawing refusal labels for painted placeholders; defaults to the active locale catalogue. */
   translate?: (key: string, params?: Record<string, string | number>) => string;
+  /**
+   * Capability modules to register (`@docx-editor.dev/pro`'s review module,
+   * custom nodes). Sampled at mount only, like `mode`: module registration is
+   * construction-time in the engine.
+   */
+  modules?: readonly EditorModule[];
   /** `'edit'` (default) or `'view'` (read-only). Sampled at mount only. */
   mode?: 'edit' | 'view';
   zoom?: number;
@@ -115,6 +122,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       ...(p.locale !== undefined ? { locale: p.locale } : {}),
       translate,
       ...(p.mode !== undefined ? { mode: p.mode } : {}),
+      ...(p.modules !== undefined ? { modules: p.modules } : {}),
       ...(p.zoom !== undefined ? { zoom: p.zoom } : {}),
       ...(p.tableInteractionLabel ? { tableInteractionLabel: p.tableInteractionLabel } : {}),
       ...(p.imageDecodePort ? { imageDecodePort: p.imageDecodePort } : {}),

@@ -639,14 +639,13 @@ function applyRevisionPresentation(
     return;
   }
 
-  // A tracked FORMAT change gets its provenance and NO inline decoration.
-  //
-  // Marking it inline reads as noise rather than signal at the density real documents carry:
-  // this fixture has 18,284 of them, so a rule under each one drew a dotted line beneath
-  // nearly every line on the page, competing with the insertions and deletions that are the
-  // decisions a reviewer actually has to make. The attributes stay, so the review surface can
-  // still list the change and highlight its range on demand — which is where Word puts it too,
-  // as a "Formatted:" note rather than a mark on the words.
+  // A tracked FORMAT change gets its provenance and NO inline decoration — its marking
+  // (a grey wash and a faint dotted rule) comes from the STYLESHEET's
+  // `.docx-revision-format`, not from style written here. The split is deliberate: an
+  // authored underline or strike is painted as inline style and so outranks the stylesheet,
+  // keeping the author's own decoration intact, and a host that finds even the quiet grey
+  // too loud at its documents' density (a real fixture carries 18,284 of these) can silence
+  // it with one CSS override instead of forking the painter.
   element.classList.add('docx-revision', 'docx-revision-format');
   element.dataset.revisionKind = 'format';
   element.dataset.revisionId = format!.id;
@@ -1400,6 +1399,10 @@ function paintParagraphShading(
  * Size, colour and position come from the record — never from computed style or
  * getBoundingClientRect. Colour is re-validated at the sink like every other file-derived
  * style value, and `side` is a closed union so it can safely reach a class name.
+ *
+ * `ST_Border` mapping (ECMA-376): common line styles get a CSS approximation; decorative
+ * art borders fall through to a solid rule. Compound styles (`double`, …) rely on layout
+ * having published the inflated band — paint must not re-derive mins.
  */
 function paintParagraphBorder(
   document: Document,
@@ -1412,12 +1415,13 @@ function paintParagraphBorder(
   rule.setAttribute('aria-hidden', 'true');
   const publishedLeft = (stroke.box.x - fragment.box.x) * scale;
   const publishedTop = (stroke.box.y - fragment.box.y) * scale;
-  // Preserve layout geometry, but snap a very thin rule to a visible screen hairline. Word's
-  // 1/4pt header rules otherwise become 0.33 CSS px at 96dpi and effectively disappear. Keep
-  // closing edges inside the published box so a header ending at that edge does not clip them.
+  // Preserve layout geometry, but snap a very thin SINGLE rule to a visible screen hairline.
+  // Word's 1/4pt header rules otherwise become 0.33 CSS px at 96dpi and effectively disappear.
+  // Compound styles already inflate in layout, so they keep the published thickness.
   const vertical = stroke.side === 'left' || stroke.side === 'right' || stroke.side === 'bar';
   const publishedThickness = (vertical ? stroke.box.width : stroke.box.height) * scale;
-  const paintedThickness = Math.max(1, publishedThickness);
+  const compound = isCompoundParagraphBorder(stroke.edge.val);
+  const paintedThickness = compound ? publishedThickness : Math.max(1, publishedThickness);
   rule.style.left = `${
     stroke.side === 'right'
       ? publishedLeft - (paintedThickness - publishedThickness)
@@ -1434,41 +1438,121 @@ function paintParagraphBorder(
   const color = stroke.edge.color && HEX.test(stroke.edge.color) ? stroke.edge.color : '000000';
   rule.style.backgroundColor = `#${color}`;
   // A side rule is a tall thin box, so its dash/double pattern runs down it rather than across.
-  // `val` selects a CSS approximation; unknown styles fall back to a solid rule so a
+  // `val` selects a CSS approximation; unknown / art styles fall back to a solid rule so a
   // recognised thickness is never silently dropped.
-  switch (stroke.edge.val) {
+  applyParagraphBorderStyle(rule, stroke.edge.val, color, vertical, paintedThickness, scale);
+  return rule;
+}
+
+/** Compound `ST_Border` values that layout already inflated — do not hairline-snap. */
+function isCompoundParagraphBorder(val: string): boolean {
+  return (
+    val === 'double' ||
+    val === 'triple' ||
+    val === 'doubleWave' ||
+    val.startsWith('thinThick') ||
+    val.startsWith('thickThin')
+  );
+}
+
+/**
+ * Map authored `ST_Border` onto the painted rule.
+ *
+ * CSS gives `double` / `dashed` / `dotted` / `groove` / `ridge` / `inset` / `outset` almost
+ * for free. Decorative art borders (apples, bats, …) stay solid — a deliberate approximation.
+ */
+function applyParagraphBorderStyle(
+  rule: HTMLElement,
+  val: string,
+  color: string,
+  vertical: boolean,
+  thicknessPx: number,
+  scale: number
+): void {
+  switch (val) {
     case 'dashed':
-    case 'dashSmallGap': {
+    case 'dashSmallGap':
+    case 'dotDash':
+    case 'dotDotDash':
+    case 'dashDotStroked': {
       const period = Math.max(4, 4 * scale);
       rule.style.backgroundImage = `linear-gradient(to ${vertical ? 'bottom' : 'right'}, #${color} 60%, transparent 60%)`;
       rule.style.backgroundSize = vertical ? `100% ${period}px` : `${period}px 100%`;
-      break;
+      return;
     }
     case 'dotted': {
       const period = Math.max(3, 3 * scale);
       rule.style.backgroundImage = `linear-gradient(to ${vertical ? 'bottom' : 'right'}, #${color} 35%, transparent 35%)`;
       rule.style.backgroundSize = vertical ? `100% ${period}px` : `${period}px 100%`;
-      break;
+      return;
     }
-    case 'double': {
-      // Two hairlines inside the published box thickness — still layout-owned geometry.
-      const thickness = (vertical ? stroke.box.width : stroke.box.height) * scale;
-      const half = Math.max(1, thickness / 3);
+    case 'double':
+    case 'doubleWave':
+    case 'triple':
+    case 'thinThickSmallGap':
+    case 'thickThinSmallGap':
+    case 'thinThickThinSmallGap':
+    case 'thinThickMediumGap':
+    case 'thickThinMediumGap':
+    case 'thinThickThinMediumGap':
+    case 'thinThickLargeGap':
+    case 'thickThinLargeGap':
+    case 'thinThickThinLargeGap': {
+      // Two hairlines inside the published box — layout owns the band (incl. thin-double floor).
+      // Triple and thinThick* compound vals approximate as double; decorative art stays solid.
+      const line = Math.max(1, thicknessPx / 3);
       rule.style.backgroundColor = 'transparent';
       if (vertical) {
-        rule.style.borderLeft = `${half}px solid #${color}`;
-        rule.style.borderRight = `${half}px solid #${color}`;
+        rule.style.borderLeft = `${line}px solid #${color}`;
+        rule.style.borderRight = `${line}px solid #${color}`;
       } else {
-        rule.style.borderTop = `${half}px solid #${color}`;
-        rule.style.borderBottom = `${half}px solid #${color}`;
+        rule.style.borderTop = `${line}px solid #${color}`;
+        rule.style.borderBottom = `${line}px solid #${color}`;
       }
       rule.style.boxSizing = 'border-box';
-      break;
+      return;
     }
+    case 'threeDEmboss':
+    case 'ridge': {
+      rule.style.backgroundColor = 'transparent';
+      const side = vertical ? 'borderLeft' : 'borderTop';
+      rule.style[side] = `${Math.max(1, thicknessPx)}px ridge #${color}`;
+      if (vertical) rule.style.width = '0px';
+      else rule.style.height = '0px';
+      return;
+    }
+    case 'threeDEngrave':
+    case 'groove': {
+      rule.style.backgroundColor = 'transparent';
+      const side = vertical ? 'borderLeft' : 'borderTop';
+      rule.style[side] = `${Math.max(1, thicknessPx)}px groove #${color}`;
+      if (vertical) rule.style.width = '0px';
+      else rule.style.height = '0px';
+      return;
+    }
+    case 'inset': {
+      rule.style.backgroundColor = 'transparent';
+      const side = vertical ? 'borderLeft' : 'borderTop';
+      rule.style[side] = `${Math.max(1, thicknessPx)}px inset #${color}`;
+      if (vertical) rule.style.width = '0px';
+      else rule.style.height = '0px';
+      return;
+    }
+    case 'outset': {
+      rule.style.backgroundColor = 'transparent';
+      const side = vertical ? 'borderLeft' : 'borderTop';
+      rule.style[side] = `${Math.max(1, thicknessPx)}px outset #${color}`;
+      if (vertical) rule.style.width = '0px';
+      else rule.style.height = '0px';
+      return;
+    }
+    case 'single':
+    case 'thick':
+    case 'wave':
     default:
-      break;
+      // Solid fill already set. Art borders and unrecognised vals stay solid.
+      return;
   }
-  return rule;
 }
 
 import { applyCellBorders } from './semantic-paint-table-borders.ts';
@@ -1547,6 +1631,13 @@ function paintTableFragment(
         'docx-table-row--revision',
         row.revisionKind === 'insert' ? 'layout-revision-ins' : 'layout-revision-del'
       );
+      // The same attribution datasets revision SPANS carry, so chrome that maps a hovered
+      // element to its review decision treats a tracked row like any other tracked change.
+      // Dataset assignment escapes; the values are attacker-controlled and never markup.
+      rowElement.dataset.revisionKind = row.revisionKind;
+      if (row.revisionId !== undefined) rowElement.dataset.revisionId = row.revisionId;
+      if (row.revisionAuthor !== undefined) rowElement.dataset.revisionAuthor = row.revisionAuthor;
+      if (row.revisionDate !== undefined) rowElement.dataset.revisionDate = row.revisionDate;
     }
     rowElement.dataset.rowId = row.id;
     if (row.isHeaderRepeat) rowElement.dataset.headerRepeat = 'true';

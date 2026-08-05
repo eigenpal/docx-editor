@@ -65,6 +65,7 @@ import {
   type SemanticPosition,
 } from '../layout/index.ts';
 import type { DocumentEditingMode, ReviewItemPlacement } from '../contracts/editor.ts';
+import { resolveEditorModules } from '../contracts/modules.ts';
 import {
   NO_TRACKING_SETTINGS,
   type DocumentTrackingSettings,
@@ -212,6 +213,15 @@ const SCOPE_BODY: EditorScope = Object.freeze({ kind: 'body' as const });
 /** One frozen empty answer, so "nothing substituted" never mints a new reference. */
 const EMPTY_FONT_SUBSTITUTIONS: readonly string[] = Object.freeze([]);
 
+/**
+ * The refusal every review write gets when no review module is registered.
+ *
+ * One string, quoted verbatim by `toolbarCommandState` as the disabled tooltip — the
+ * same "the engine's own reason" channel every other unavailable control uses.
+ */
+const PRO_REVIEW_REASON =
+  'comments and tracked changes require the pro review module (@docx-editor.dev/pro)';
+
 export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const localeCode =
     config.locale && config.locale in locales ? (config.locale as LocaleCode) : ('en' as const);
@@ -221,6 +231,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   );
   const tocLabels = { title: t('toolbar.tableOfContents') };
   let container: HTMLElement | null = config.container ?? null;
+  /**
+   * The capability registry, resolved once — module registration is
+   * construction-time and immutable for the instance's lifetime.
+   */
+  const modules = resolveEditorModules(config.modules);
+  const reviewEnabled = modules.review !== null;
   /** Document bytes waiting for a container — set when constructed or loaded detached. */
   let pendingBytes: Uint8Array | null = null;
   /**
@@ -420,6 +436,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       ...(config.author ? { author: config.author } : {}),
       editingMode:
         editingMode === 'suggesting' ? 'suggest' : editingMode === 'viewing' ? 'view' : 'edit',
+      // The free engine renders the FINAL-STATE projection (Word's "No Markup"):
+      // insertions applied, deletions hidden, lossless on save. Markup rendering is a
+      // review-module display mode; with one registered the surface keeps the layout
+      // default (`all-markup`), which is what the review rail annotates.
+      ...(reviewEnabled ? {} : { revisionDisplayMode: 'proposed' as const }),
+      // The module's derivation reaches the session through the surface: the session
+      // owns the per-revision memo, the module owns the algorithm.
+      ...(modules.review ? { collectReviewItems: modules.review.collectReviewItems } : {}),
       ...(shapedMeasurer
         ? { measurer: shapedMeasurer, ...(shapedProducer ? { producer: shapedProducer } : {}) }
         : {}),
@@ -844,6 +868,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       canRedo: state?.canRedo ?? false,
       pageSetup: pageSetupOf(surface),
       reviewPaneOpen,
+      hasReviewContent: surface?.session.hasReviewContent() ?? false,
       editingMode,
       // The facade's own refusal wins while it stands: the surface never saw the request.
       // A document that ASKS for tracked changes and cannot get them — no author configured
@@ -1106,6 +1131,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    */
 
   function reviewPlacements(): readonly ReviewItemPlacement[] {
+    // No review module, no queue. The derivation lives in the module; the free
+    // engine reports the typed empty value (the `isActive` precedent), never a
+    // partial answer.
+    if (!reviewEnabled) return [];
     const items = surface?.session.reviewItems() ?? [];
     // The PUBLISHED layout, never `layout()`: that one flushes pending work, and a rail
     // asking for it on every keystroke turned each one into a synchronous full pass.
@@ -1184,6 +1213,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * request being dropped in silence.
    */
   function adoptDocumentTracking(): void {
+    // Suggesting writes `w:ins`/`w:del` — authoring tracked changes, which is the
+    // review module's capability. Without one the document still opens and edits
+    // normally; the edits are simply untracked, exactly as `can(setEditingMode:
+    // 'suggesting')` reports.
+    if (!reviewEnabled) return;
     if (mode === 'view' || editingMode !== 'editing' || readerChoseMode) return;
     if (!documentTracking().trackRevisions) return;
     if (!config.author) {
@@ -1233,6 +1267,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   }
 
   function resolveReviewItem(key: string, action: 'accept' | 'reject'): ExecResult {
+    if (!reviewEnabled) {
+      return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
+    }
     const placement = reviewPlacements().find((entry) => entry.key === key);
     const item = placement?.item as ReviewItem | undefined;
     if (!item || item.kind !== 'revision') {
@@ -1379,6 +1416,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         if (mode === 'view' && command.mode !== 'viewing') {
           return { ok: false, code: 'locked', reason: 'this document was opened for viewing' };
         }
+        if (command.mode === 'suggesting' && !reviewEnabled) {
+          return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
+        }
         const restriction = modeRestriction(command.mode);
         if (restriction) return restriction;
         readerChoseMode = true;
@@ -1397,6 +1437,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return { ok: true, changed: false };
       }
       if (command.type === 'toggleReviewPane') {
+        if (!reviewEnabled) {
+          return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
+        }
         reviewPaneOpen = !reviewPaneOpen;
         bump();
         emitSelectionChange();
@@ -1456,10 +1499,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // `notFound` rather than a new code: a destroyed editor answers the same way for
         // every command, and the established contract for "there is nothing here" is this.
         if (destroyed) return { ok: false, code: 'notFound', reason: 'the editor was destroyed' };
+        if (command.type === 'toggleReviewPane' && !reviewEnabled) {
+          return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
+        }
         if (command.type === 'setEditingMode' && mode === 'view' && command.mode !== 'viewing') {
           return { ok: false, code: 'locked', reason: 'this document was opened for viewing' };
         }
         if (command.type === 'setEditingMode') {
+          if (command.mode === 'suggesting' && !reviewEnabled) {
+            return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
+          }
           const restriction = modeRestriction(command.mode);
           if (restriction) return restriction;
         }
@@ -1633,6 +1682,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getReviewItems: () => reviewPlacements(),
 
     addComment(text: string, author?: string): ExecResult {
+      // Comment AUTHORING is the review module's capability, like every other
+      // review write above. Missed in the first gating pass — caught by review.
+      if (!reviewEnabled) {
+        return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
+      }
       const range = commentTargetRange();
       if (!range || !surface) {
         return { ok: false, code: 'invalidArgs', reason: 'a comment needs a selected range' };
@@ -1723,6 +1777,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     rejectReviewItem: (key: string) => resolveReviewItem(key, 'reject'),
 
     replyToReviewItem(key: string, text: string, author?: string): ExecResult {
+      if (!reviewEnabled) {
+        return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
+      }
       const placement = reviewPlacements().find((entry) => entry.key === key);
       const item = placement?.item as ReviewItem | undefined;
       if (!item || !surface) {

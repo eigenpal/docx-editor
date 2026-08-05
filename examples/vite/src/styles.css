@@ -334,3 +334,6 @@
     display: none;
   }
 }
+
+/* PRO custom-node chip styling now comes from `CustomNodeChrome`
+   (@docx-editor.dev/pro/react) — definition-driven, injected at runtime. */

@@ -12,7 +12,8 @@
 // collapse to a single honest statement of what the part contains.
 
 import type { Node as PMNode } from 'prosemirror-model';
-import { collectReviewItems, type ReviewItem } from '../layout/review-model.ts';
+import type { ReviewItem } from '../layout/review-support.ts';
+import type { CollectReviewItems } from '../contracts/modules.ts';
 import {
   addComment,
   commentPartNameOf,
@@ -37,12 +38,14 @@ import {
   isNoteLifecycleOp,
   normalizeParagraphIdentity,
   paragraphTextOf,
+  collectRevisionSites,
   type BookmarkIndex,
   type EmbeddedFont,
   type ListKind,
   type HeaderFooterParts,
   type HeaderFooterSectionResolution,
   type OoxmlElement,
+  type OoxmlNode,
   type OoxmlPackage,
   type OoxmlPackageRejection,
   type OoxmlPart,
@@ -268,6 +271,14 @@ export interface TreeDocxSession {
    */
   reviewItems(): readonly ReviewItem[];
 
+  /**
+   * Whether the document carries review content — tracked changes or comment
+   * anchors — regardless of any review module. Derived from store vocabulary
+   * only (never the review model), memoized per revision: it is the free
+   * tier's honest "this document has more than you are seeing" signal.
+   */
+  hasReviewContent(): boolean;
+
   /** Reply to a comment, or add one over a revision's range. Returns the new comment's id. */
   replyToComment(
     parentCommentId: string | null,
@@ -408,7 +419,23 @@ export type OpenTreeSessionResult =
  * FILE, and a host needs to tell "this is not a package" from "this package is malicious"
  * from "this document has no body".
  */
-export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
+/** One frozen empty queue, so a module-less `reviewItems()` is reference-stable. */
+const EMPTY_REVIEW_ITEMS: readonly ReviewItem[] = Object.freeze([]);
+
+export interface OpenTreeSessionOptions {
+  /**
+   * The review queue derivation, contributed by the pro review module through
+   * the editor's `EditorModule` seam. Absent — the free engine — the session's
+   * `reviewItems()` reports the typed empty queue; parse, preservation, and
+   * `hasReviewContent` are unaffected.
+   */
+  readonly reviewModel?: CollectReviewItems;
+}
+
+export function openTreeSession(
+  bytes: Uint8Array,
+  options: OpenTreeSessionOptions = {}
+): OpenTreeSessionResult {
   const loaded = readOoxmlPackage(bytes);
   if (!loaded.ok) {
     return {
@@ -437,6 +464,8 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
   } | null = null;
   /** Memoized per package revision: the queue only changes when the document does. */
   let reviewCache: { revision: string; items: readonly ReviewItem[] } | null = null;
+  /** Memoized per body revision, like `reviewCache` — see `hasReviewContent`. */
+  let reviewContentCache: { revision: number; present: boolean } | null = null;
   let lastChange: TreeModelChange | null = null;
   packageStore.subscribe((change) => {
     lastChange = change;
@@ -908,6 +937,10 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       },
 
       reviewItems() {
+        // The derivation is the review MODULE's: without one the queue is the typed
+        // empty value, never a partial answer derived in-engine.
+        const derive = options.reviewModel;
+        if (!derive) return EMPTY_REVIEW_ITEMS;
         const store = bodyStore();
         // Keyed on BOTH revisions. The body store's alone missed a tracked change typed
         // into a header (only the package revision moves); the package revision alone
@@ -936,7 +969,7 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
           // the comment was written and then never read back.
           reviewCache = {
             revision: revisionKey,
-            items: collectReviewItems({
+            items: derive({
               storyPart: store.part,
               furnitureParts,
               commentsPart: pkg.parts.get(commentPartNameOf(pkg, store.part.name)),
@@ -945,6 +978,19 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
           };
         }
         return reviewCache.items;
+      },
+
+      hasReviewContent() {
+        const store = bodyStore();
+        if (!reviewContentCache || reviewContentCache.revision !== store.revision) {
+          reviewContentCache = {
+            revision: store.revision,
+            present:
+              collectRevisionSites(store.part).length > 0 ||
+              storyCarriesCommentAnchor(store.part.root),
+          };
+        }
+        return reviewContentCache.present;
       },
 
       replyToComment(parentCommentId, anchor, text, author, date) {
@@ -1044,6 +1090,43 @@ function projectedText(part: OoxmlPart): string {
   return bodyParagraphs(part)
     .map((paragraph) => paragraphTextOf(part, paragraph.id) ?? '')
     .join('\n');
+}
+
+/**
+ * Whether the story contains a comment anchor (`w:commentRangeStart` /
+ * `w:commentReference`), from STORE vocabulary alone.
+ *
+ * Deliberately not `commentAnchorsOfStory`: that is review-model derivation and
+ * lives with the review module. This answers presence only, for
+ * `hasReviewContent`, and must keep answering with no module registered.
+ *
+ * Memoized per immutable node, because `snapshot()` reads `hasReviewContent`
+ * every tick: without the memo a comment-less document paid a full-tree walk
+ * per keystroke (the answer only early-exits when an anchor IS found). An edit
+ * replaces only the nodes on its path, so every untouched subtree answers from
+ * the cache. Depth-capped like the sibling walks — nesting is the cheapest
+ * unbounded axis in an attacker-controlled file.
+ */
+const commentAnchorPresenceCache = new WeakMap<OoxmlElement, boolean>();
+
+function storyCarriesCommentAnchor(node: OoxmlElement, depth = 0): boolean {
+  if (depth > 64) return false;
+  const cached = commentAnchorPresenceCache.get(node);
+  if (cached !== undefined) return cached;
+  let present = false;
+  for (const child of node.children as readonly OoxmlNode[]) {
+    if (child.kind === 'textValue') continue;
+    if (
+      child.kind === 'commentRangeStart' ||
+      child.kind === 'commentReference' ||
+      storyCarriesCommentAnchor(child, depth + 1)
+    ) {
+      present = true;
+      break;
+    }
+  }
+  commentAnchorPresenceCache.set(node, present);
+  return present;
 }
 
 /** The origin a host should use when committing a reconciliation rather than a user edit. */

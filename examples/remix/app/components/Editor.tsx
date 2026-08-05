@@ -1,212 +1,61 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
-import { createEmptyDocument, type Document } from '@docx-editor.dev/core';
+// docx-editor + @docx-editor.dev/pro in Remix.
+//
+// The tier-2 sugar `<DocxEditor>` renders the full packaged chrome — title bar,
+// menu, toolbar, navigation pane. Prefer the composition tree
+// (`DocxEditor.Root` / `.Toolbar` / `.Viewport` / `.Content`, see examples/vite
+// and examples/igloo) when you want to own the layout; the sugar is the
+// drop-in. Two lines make it pro: `modules` registers the review capability
+// (comments, tracked changes, suggesting mode), and the review pane from
+// `@docx-editor.dev/pro/react` mounts as a viewport child. Remove both and the
+// same document still opens — revisions render in their final state and the
+// review controls disable with the engine's own reason.
+
+import { useMemo, useState } from 'react';
+import { DocxEditor } from '@docx-editor.dev/react';
+import { reviewModule } from '@docx-editor.dev/pro';
+import { DocxEditorReview } from '@docx-editor.dev/pro/react';
+import { emptyDocx } from '../../../shared/demoDocument';
 import { ExampleSwitcher } from '../../../shared/ExampleSwitcher';
 import { GitHubBadge } from '../../../shared/GitHubBadge';
 
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100vh',
-    overflow: 'hidden',
-    background: '#f8fafc',
-  },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    padding: '12px 20px',
-    background: '#fff',
-    borderBottom: '1px solid #e2e8f0',
-  },
-  headerLeft: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-  },
-  headerCenter: {
-    flex: 1,
-    display: 'flex',
-    justifyContent: 'center',
-  },
-  headerRight: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-
-  fileName: {
-    fontSize: '13px',
-    color: '#64748b',
-    padding: '4px 10px',
-    background: '#f1f5f9',
-    borderRadius: '6px',
-  },
-  fileInputLabel: {
-    padding: '8px 14px',
-    background: '#0f172a',
-    color: '#fff',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: 500,
-    transition: 'background 0.15s',
-  },
-  fileInputHidden: {
-    display: 'none',
-  },
-  button: {
-    padding: '8px 14px',
-    background: '#fff',
-    border: '1px solid #e2e8f0',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: 500,
-    color: '#334155',
-    transition: 'all 0.15s',
-  },
-  newButton: {
-    padding: '8px 14px',
-    background: '#f1f5f9',
-    color: '#334155',
-    border: '1px solid #e2e8f0',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: 500,
-    transition: 'all 0.15s',
-  },
-  status: {
-    fontSize: '12px',
-    color: '#64748b',
-    padding: '4px 8px',
-    background: '#f1f5f9',
-    borderRadius: '4px',
-  },
-  main: {
-    flex: 1,
-    display: 'flex',
-    overflow: 'hidden',
-  },
-};
+// One stable array: module registration is construction-time, like `author`.
+const PRO_MODULES = [reviewModule()];
 
 export function Editor() {
-  const editorRef = useRef<DocxEditorRef>(null);
-  const [currentDocument, setCurrentDocument] = useState<Document | null>(null);
-  const [documentBuffer, setDocumentBuffer] = useState<ArrayBuffer | null>(null);
-  const [fileName, setFileName] = useState<string>('sample.docx');
-  const [status, setStatus] = useState<string>('');
-
-  useEffect(() => {
-    fetch('/sample.docx')
-      .then((res) => res.arrayBuffer())
-      .then((buffer) => {
-        setDocumentBuffer(buffer);
-        setFileName('sample.docx');
-      })
-      .catch(() => {
-        setCurrentDocument(createEmptyDocument());
-        setFileName('Untitled.docx');
-      });
-  }, []);
-
-  const handleNewDocument = useCallback(() => {
-    setCurrentDocument(createEmptyDocument());
-    setDocumentBuffer(null);
-    setFileName('Untitled.docx');
-    setStatus('');
-  }, []);
-
-  const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setStatus('Loading...');
-      const buffer = await file.arrayBuffer();
-      setCurrentDocument(null);
-      setDocumentBuffer(buffer);
-      setFileName(file.name);
-      setStatus('');
-    } catch {
-      setStatus('Error loading file');
-    }
-  }, []);
-
-  const handleSave = useCallback(async () => {
-    if (!editorRef.current) return;
-
-    try {
-      setStatus('Saving...');
-      const buffer = await editorRef.current.save();
-      if (buffer) {
-        const blob = new Blob([buffer], {
-          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName || 'document.docx';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        setStatus('Saved!');
-        setTimeout(() => setStatus(''), 2000);
-      }
-    } catch {
-      setStatus('Save failed');
-    }
-  }, [fileName]);
-
+  const [title, setTitle] = useState('Untitled document');
+  const documentBytes = useMemo(() => emptyDocx(), []);
   return (
-    <div style={styles.container}>
-      <header style={styles.header}>
-        <div style={styles.headerLeft}>
-          <GitHubBadge />
-          <ExampleSwitcher current="Remix" />
-        </div>
-        <div style={styles.headerCenter}>
-          {fileName && <span style={styles.fileName}>{fileName}</span>}
-        </div>
-        <div style={styles.headerRight}>
-          <label style={styles.fileInputLabel}>
-            <input
-              type="file"
-              accept=".docx"
-              onChange={handleFileSelect}
-              style={styles.fileInputHidden}
-            />
-            Open DOCX
-          </label>
-          <button style={styles.newButton} onClick={handleNewDocument}>
-            New
-          </button>
-          <button style={styles.button} onClick={handleSave}>
-            Save
-          </button>
-          {status && <span style={styles.status}>{status}</span>}
-        </div>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* Host chrome stays HOST composition — nothing threads through the editor. */}
+      <header
+        style={{
+          display: 'flex',
+          justifyContent: 'flex-end',
+          alignItems: 'center',
+          gap: 8,
+          padding: '6px 12px',
+        }}
+      >
+        <GitHubBadge />
+        <ExampleSwitcher current="Remix" />
       </header>
-
-      <main style={styles.main}>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <DocxEditor
-          ref={editorRef}
-          document={documentBuffer ? undefined : currentDocument}
-          documentBuffer={documentBuffer}
-          onChange={() => {}}
-          onError={(error: Error) => {
-            console.error('Editor error:', error);
-            setStatus(`Error: ${error.message}`);
+          document={documentBytes}
+          author="Demo Reviewer"
+          modules={PRO_MODULES}
+          title={title}
+          onTitleChange={setTitle}
+          onReady={(editor) => {
+            // The editor arrives MOUNTED: `onReady` fires after the pages have
+            // painted, so commands and reads work right here — no second
+            // "view ready" callback to wait for.
+            console.info('[docx-editor] pages painted:', editor.snapshot().page.total);
           }}
-          onFontsLoaded={() => console.log('Fonts loaded')}
-          showToolbar={true}
-          showRuler={true}
-          showZoomControl={true}
-          initialZoom={1.0}
-        />
-      </main>
+        >
+          <DocxEditorReview />
+        </DocxEditor>
+      </div>
     </div>
   );
 }

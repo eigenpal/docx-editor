@@ -30,6 +30,11 @@
       "import": "./src/contracts/mcp.ts",
       "default": "./src/contracts/mcp.ts"
     },
+    "./contracts/modules": {
+      "types": "./src/contracts/modules.ts",
+      "import": "./src/contracts/modules.ts",
+      "default": "./src/contracts/modules.ts"
+    },
     "./contracts/plugin": {
       "types": "./src/contracts/plugin.ts",
       "import": "./src/contracts/plugin.ts",

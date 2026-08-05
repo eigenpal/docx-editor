@@ -343,6 +343,11 @@ export function planRangeDeletion(
   /**
    * Paragraph ids that become direct children of `host` after planned table deletes and
    * control unwraps — the sequence joins actually see.
+   *
+   * Inert body-level siblings (a misplaced `w:pBdr`, a leftover bookmark marker, …) are
+   * recorded as barriers, not skipped. Skipping them made two paragraphs look adjacent here
+   * while `joinParagraphs` still requires true child-index adjacency, which vetoed the whole
+   * atomic delete (`not-adjacent-siblings`) and left every table standing.
    */
   const eventualParagraphsUnder = (host: OoxmlElement): string[] => {
     const ids: string[] = [];
@@ -359,8 +364,9 @@ export function planRangeDeletion(
           ids.push(child.id);
           continue;
         }
-        // A non-removed wrapper (locked / partial control, cell, …) is opaque: its paragraphs
-        // do not become siblings of `host`'s other children.
+        // Opaque sibling or wrapper: do not bridge joins across it, and do not lift its
+        // nested paragraphs into `host`'s sibling sequence.
+        ids.push(`\0barrier:${child.id}`);
       }
     };
     visit(host.children);

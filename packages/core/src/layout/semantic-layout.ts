@@ -39,6 +39,7 @@ import {
 import {
   appliedSpaceBefore,
   paragraphBorderExtentPt,
+  paragraphBorderStrokeWidthPt,
   collapsedSpaceBefore,
   paragraphBordersFingerprint,
   paragraphBreaksBefore,
@@ -1962,36 +1963,42 @@ function layoutBlocksPass(
       // frame reads as two horizontal rules with two detached vertical bars beside it —
       // which is what a callout looked like. Word closes the rectangle, so the horizontal
       // rules span from the left rule's outer edge to the right rule's.
+      // Stroke thickness uses the inflated compound band for `double`/etc. so thin authored
+      // doubles still publish a box paint can draw as two lines (shared with table borders).
+      const leftStroke = borders.left ? paragraphBorderStrokeWidthPt(borders.left) : 0;
+      const rightStroke = borders.right ? paragraphBorderStrokeWidthPt(borders.right) : 0;
       const boxLeft = borders.left
-        ? regionX + indent.left - borders.left.spacePt - borders.left.widthPt
+        ? regionX + indent.left - borders.left.spacePt - leftStroke
         : regionX + indent.left;
       const boxRight = borders.right
-        ? regionX + indent.left + available + borders.right.spacePt + borders.right.widthPt
+        ? regionX + indent.left + available + borders.right.spacePt + rightStroke
         : regionX + indent.left + available;
       const boxWidth = Math.max(boxRight - boxLeft, 0);
       if (fragmentTopExtent > 0 && topEdge) {
-        const ruleY = linesTop - topEdge.spacePt - topEdge.widthPt;
+        const topStroke = paragraphBorderStrokeWidthPt(topEdge);
+        const ruleY = linesTop - topEdge.spacePt - topStroke;
         strokes.push({
           side: 'top',
           edge: topEdge,
-          box: { x: boxLeft, y: ruleY, width: boxWidth, height: topEdge.widthPt },
+          box: { x: boxLeft, y: ruleY, width: boxWidth, height: topStroke },
         });
         contentTop = ruleY;
       }
       if (isLast && closingEdge) {
+        const closeStroke = paragraphBorderStrokeWidthPt(closingEdge);
         const ruleY = linesBottom + closingEdge.spacePt;
         const box = {
           x: boxLeft,
           y: ruleY,
           width: boxWidth,
-          height: closingEdge.widthPt,
+          height: closeStroke,
         };
         strokes.push({ side: continuesBelow ? 'between' : 'bottom', edge: closingEdge, box });
         // `bottomBorder` stays the BOTTOM rule alone: a `between` rule closing a grouped
         // paragraph is a different edge, and a consumer reading it as the box's bottom would
         // draw the block's frame at every interior boundary.
         if (!continuesBelow) bottomBorderRecord = { edge: closingEdge, box };
-        contentBottom = ruleY + closingEdge.widthPt;
+        contentBottom = ruleY + closeStroke;
       }
       if (isLast) cursorY = Math.max(cursorY, contentBottom + appliedAfter);
       const height = Math.max(contentBottom + appliedAfter - top, 0);
@@ -2005,9 +2012,9 @@ function layoutBlocksPass(
           side: 'left',
           edge: borders.left,
           box: {
-            x: regionX + indent.left - borders.left.spacePt - borders.left.widthPt,
+            x: regionX + indent.left - borders.left.spacePt - leftStroke,
             y: sideTop,
-            width: borders.left.widthPt,
+            width: leftStroke,
             height: sideHeight,
           },
         });
@@ -2019,7 +2026,7 @@ function layoutBlocksPass(
           box: {
             x: regionX + indent.left + available + borders.right.spacePt,
             y: sideTop,
-            width: borders.right.widthPt,
+            width: rightStroke,
             height: sideHeight,
           },
         });
@@ -2027,13 +2034,14 @@ function layoutBlocksPass(
       // `w:bar` is the change-bar rule beside the paragraph. It belongs to the paragraph, not
       // to the block, so it neither opens nor closes with the group.
       if (borders.bar) {
+        const barStroke = paragraphBorderStrokeWidthPt(borders.bar);
         strokes.push({
           side: 'bar',
           edge: borders.bar,
           box: {
-            x: regionX + indent.left - borders.bar.spacePt - borders.bar.widthPt,
+            x: regionX + indent.left - borders.bar.spacePt - barStroke,
             y: linesTop,
-            width: borders.bar.widthPt,
+            width: barStroke,
             height: Math.max(linesBottom - linesTop, 0),
           },
         });

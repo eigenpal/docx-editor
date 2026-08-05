@@ -11,7 +11,9 @@
     "@docx-editor.dev/core": "^0.0.1",
     "@docx-editor.dev/nuxt": "workspace:*",
     "@docx-editor.dev/vue": "workspace:*",
-    "vue": "^3.5.0"
+    "vue": "^3.5.0",
+    "@docx-editor.dev/pro": "workspace:*",
+    "fflate": "^0.8.2"
   },
   "devDependencies": {
     "nuxt": "^4.4.6",

@@ -169,7 +169,11 @@ describe('line breaking and pagination (task 7.3)', () => {
     const layout = lay(part, { ...SMALL, height: 1000 });
     expect(layout.pages).toHaveLength(2);
     expect(layout.pages[0]!.fragments[0]!.lines[0]!.spans[0]!.text).toBe('\f');
+    // Unlike a column break, a page break does NOT publish an empty remainder on the page
+    // it opens — the following block starts flush at the top (Word Online / fixture parity).
+    expect(layout.pages[1]!.fragments).toHaveLength(1);
     expect(layout.pages[1]!.fragments[0]!.lines[0]!.spans[0]!.text).toBe('after');
+    expect(layout.pages[1]!.fragments[0]!.box.y).toBe(0);
   });
 
   test('an ordinary w:br remains a line break', () => {

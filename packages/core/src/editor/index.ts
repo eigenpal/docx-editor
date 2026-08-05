@@ -126,6 +126,16 @@ export {
   type DocxEditorConfig,
   type HyperlinkChromeHandlers,
 } from './docx-editor.ts';
+// The capability seam: what `createDocxEditor({ modules })` accepts and what a
+// capability package (the pro review module) implements.
+export {
+  resolveEditorModules,
+  type CollectReviewItems,
+  type EditorModule,
+  type EditorModuleRegistry,
+  type ReviewModelInput,
+  type ReviewModuleContribution,
+} from '../contracts/modules.ts';
 export {
   applyThemeShade,
   applyThemeTint,

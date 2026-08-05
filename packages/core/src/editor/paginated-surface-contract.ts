@@ -8,6 +8,8 @@ import type { IndentFormatting } from '../contracts/types.ts';
 import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
 import type { BookmarkIndex } from '@docx-editor.dev/core-contract/store';
 import type { ViewScope } from '../contracts/editor.ts';
+import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
+import type { CollectReviewItems } from '../contracts/modules.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
 import type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
 import type {
@@ -91,6 +93,19 @@ export interface PaginatedSurfaceOptions {
   readonly fontAlias?: (family: string) => string | undefined;
   /** Points to CSS pixels. */
   readonly scale?: number;
+  /**
+   * How revisions project into layout and paint. Omitted keeps the layout default
+   * (`all-markup`). The editor facade passes `proposed` when no review module is
+   * registered — the free tier's final-state rendering; the machinery below this
+   * option is shared either way.
+   */
+  readonly revisionDisplayMode?: RevisionDisplayMode;
+  /**
+   * The review queue derivation for this surface's session, from the registered
+   * review module. Absent, `session.reviewItems()` is the typed empty queue and
+   * every review affordance built on it stays inert.
+   */
+  readonly collectReviewItems?: CollectReviewItems;
   /**
    * The family a run with no authored font is reported as by `formatting()` AND painted
    * in — the face the measurer falls back to. Absent, such a run reports

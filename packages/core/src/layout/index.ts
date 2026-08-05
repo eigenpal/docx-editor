@@ -174,6 +174,7 @@ export {
   appliedSpaceBefore,
   applyLineSpacing,
   paragraphBorderExtentPt,
+  paragraphBorderStrokeWidthPt,
   bottomBorderExtentPt,
   cascadedParagraphBorders,
   collapsedSpaceBefore,
@@ -333,27 +334,28 @@ export {
   isContentControlContent,
 } from '../store/package/content-control-walk.ts';
 export {
-  commentAnchorsOfStory,
-  commentsOfPart,
-  threadStateOfPart,
   W15_NAMESPACE_URI,
   type CommentAnchor,
   type CommentPosition,
   type CommentRecord,
   type CommentThreadState,
-} from './comment-anchors.ts';
+} from './review-support.ts';
+// The review queue DERIVATION (`collectReviewItems` and its readers) is the pro
+// review module's implementation and is deliberately NOT in this package — the
+// engine receives it through the `EditorModule` seam. What remains public here
+// is the vocabulary and its pure helpers.
 export {
   activeReviewItem,
-  collectReviewItems,
   commentBodyText,
   commentInitials,
-  commentItemsOf,
+  firstReviewRange,
   paragraphOrderOfPart,
   reviewAnchorIndex,
   reviewItemGeometry,
   reviewItemKey,
+  reviewItemPositionRank,
+  reviewItemRanges,
   reviewItemsAt,
-  revisionItemsOf,
   type ReviewCommentItem,
   type ReviewItem,
   type ReviewModelInput,
@@ -362,7 +364,7 @@ export {
   type ReviewRange,
   type ReviewRevisionItem,
   type ReviewRevisionKind,
-} from './review-model.ts';
+} from './review-support.ts';
 export {
   DEFAULT_REVISION_DISPLAY_MODE,
   formatRevisionOf,

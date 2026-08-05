@@ -181,7 +181,10 @@ export function mountPaginatedSurface(
   const runtimeOptions = options as PaginatedSurfaceOptions & {
     readonly onTrackedChange?: () => void;
   };
-  const opened = openTreeSession(bytes);
+  const opened = openTreeSession(
+    bytes,
+    options.collectReviewItems ? { reviewModel: options.collectReviewItems } : {}
+  );
   if (!opened.ok) {
     return {
       ok: false,
@@ -695,6 +698,9 @@ export function mountPaginatedSurface(
       drawingTokenForParagraph: (paragraph) =>
         drawingBundle.drawingTokenForParagraph(paragraph, session.part().name),
       ...(notes ? { notes } : {}),
+      // The layout context key already folds the mode in (`|rev:<mode>`), so a surface
+      // constructed `proposed` never shares cached pages with an `all-markup` one.
+      ...(options.revisionDisplayMode ? { displayMode: options.revisionDisplayMode } : {}),
     });
   }
 

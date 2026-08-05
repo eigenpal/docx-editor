@@ -1098,7 +1098,13 @@ export function breakParagraph(
       line.end = piece.end;
       closeLine();
       lines[lines.length - 1]!.columnBreakAfter = true;
-      trailingLineBreak = false;
+      // Like a trailing hard break, NOT like a page break: Word still lays out the
+      // paragraph's remainder after the column advance. The common authoring form
+      // `<w:p><w:r><w:br w:type="column"/></w:r></w:p>` therefore opens one empty line
+      // at the top of the next column before the following block — the paragraph mark
+      // after the break. Suppressing that remainder put "After Column Break" flush with
+      // the prior column's first line.
+      trailingLineBreak = true;
       continue;
     }
     if (piece.projected && !piece.inlineDrawing && piece.text === '\uFFFC') {
@@ -1149,12 +1155,13 @@ export function breakParagraph(
       line.end = piece.end;
       closeLine();
       lines[lines.length - 1]!.pageBreakAfter = true;
-      // NOT `trailingLineBreak`, unlike the hard break below. An empty remainder publishes
-      // no line on the page the break opened: Word Online puts the following block flush at
-      // the top of that page, which `paragraph-spacing-borders` and `section-aware-
-      // pagination` pin against the comprehensive fixture. The caret after such a break
-      // therefore has nowhere to go on the new page, which is why the click that lands in
-      // the blank space beside the mark resolves BEFORE it — see `hitTestSemantic`.
+      // NOT `trailingLineBreak`, unlike the hard break / column break above. An empty
+      // remainder publishes no line on the page the break opened: Word Online puts the
+      // following block flush at the top of that page, which `paragraph-spacing-borders`
+      // and `section-aware-pagination` pin against the comprehensive fixture. The caret
+      // after such a break therefore has nowhere to go on the new page, which is why the
+      // click that lands in the blank space beside the mark resolves BEFORE it — see
+      // `hitTestSemantic`.
       trailingLineBreak = false;
       continue;
     }

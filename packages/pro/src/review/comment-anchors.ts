@@ -1,4 +1,14 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // Comment anchors, comment bodies, and the sibling parts that hold thread state.
+//
+// Lifted from the engine (pro-review-and-custom-nodes): the free engine keeps the
+// comment VOCABULARY (`CommentRecord`, `CommentAnchor`, thread state types — see
+// core's `review-support`) and this module keeps the READERS that derive them
+// from a document.
 //
 // An anchor is a RANGE over stable node identities plus UTF-16 offsets, in the same offset
 // space layout and tree ops use. `w:commentRangeStart` / `w:commentRangeEnd` are empty elements
@@ -21,16 +31,21 @@
 
 import {
   WML_NAMESPACE_URI,
+  isContentRevisionKind,
+  paragraphOffsetIndex,
   type OoxmlElement,
   type OoxmlNode,
   type OoxmlParagraphNode,
   type OoxmlPart,
 } from '@docx-editor.dev/core-contract/store';
-import { isContentRevisionKind, paragraphOffsetIndex } from '@docx-editor.dev/core-contract/store';
-import { storyBlocks } from './story-roots.ts';
+import { storyBlocks, W15_NAMESPACE_URI } from '@docx-editor.dev/core-contract/layout';
+import type {
+  CommentAnchor,
+  CommentPosition,
+  CommentRecord,
+  CommentThreadState,
+} from '@docx-editor.dev/core-contract/layout';
 
-/** The `w15` namespace: `commentsExtended.xml` — thread parent and resolved state. */
-export const W15_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2012/wordml';
 /** The `w14` namespace, where `paraId` lives. */
 const W14_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordml';
 /**
@@ -40,50 +55,6 @@ const W14_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordml'
  * is exactly the contract that lets this reader use it when present and ignore it when not.
  */
 const W16CID_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2016/wordml/cid';
-
-/** A position in one story: a paragraph node id plus a UTF-16 offset inside it. */
-export interface CommentPosition {
-  readonly paragraphId: string;
-  readonly offset: number;
-}
-
-/**
- * Where a comment is anchored, as a range.
- *
- * `orphaned` records that the file did not give this comment a usable range — a reference with
- * no range markers, or a start with no end. The comment is still listed, marked orphaned,
- * rather than dropped: a reviewer's remark disappearing silently is worse than one that says
- * it lost its text.
- */
-export interface CommentAnchor {
-  readonly commentId: string;
-  /** Canonical name of the part the range lives in, so a header comment is attributable. */
-  readonly partName: string;
-  readonly start: CommentPosition;
-  readonly end: CommentPosition;
-  readonly orphaned: boolean;
-}
-
-/** One comment as authored in `word/comments.xml`. */
-export interface CommentRecord {
-  readonly id: string;
-  readonly author: string;
-  readonly initials?: string;
-  readonly date?: string;
-  /** Body paragraphs, as tree nodes, so the surface renders measured text rather than a string. */
-  readonly blocks: readonly OoxmlElement[];
-  /** `w14:paraId` of the first body paragraph — the key thread state is stored under. */
-  readonly paraId?: string;
-  /** `@w16cid:parentId` — the `w:id` of the comment this replies to, when the file names it. */
-  readonly parentCommentId?: string;
-}
-
-/** Thread state for one comment, read from `commentsExtended.xml`. */
-export interface CommentThreadState {
-  /** `@w15:paraIdParent` — the comment this one replies to, absent for a top-level comment. */
-  readonly parentParaId?: string;
-  readonly done: boolean;
-}
 
 function attribute(
   node: OoxmlElement,

@@ -4,550 +4,111 @@
 
 ```ts
 
+import { CHROME_GROUPS } from '@docx-editor.dev/core-contract/editor';
+import { CHROME_MENUS } from '@docx-editor.dev/core-contract/editor';
+import { ChromeMenu } from '@docx-editor.dev/core-contract/editor';
+import { ChromeMenuEntry } from '@docx-editor.dev/core-contract/editor';
+import { ChromeMenuId } from '@docx-editor.dev/core-contract/editor';
+import { ChromeMenuItemEntry } from '@docx-editor.dev/core-contract/editor';
+import { ChromeMenuSeparatorEntry } from '@docx-editor.dev/core-contract/editor';
+import { chromeMenuSlots } from '@docx-editor.dev/core-contract/editor';
+import { ChromeMenuSubmenuEntry } from '@docx-editor.dev/core-contract/editor';
+import { ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
+import { ColorValue } from '@docx-editor.dev/core-contract/contracts/editor';
+import { commandForSlot } from '@docx-editor.dev/core-contract/editor';
+import { composeFontConfiguration } from '@docx-editor.dev/core-contract/editor';
+import { ContentControlSummary } from '@docx-editor.dev/core-contract';
+import { ContentControlType } from '@docx-editor.dev/core-contract';
+import { createFontSource } from '@docx-editor.dev/core-contract/editor';
 import { CSSProperties } from 'react';
+import { DocumentChange } from '@docx-editor.dev/core-contract/contracts/editor';
+import { DocumentHandle } from '@docx-editor.dev/core-contract/contracts/editor';
+import { DocumentSource } from '@docx-editor.dev/core-contract/contracts/editor';
+import { DocxDocument } from '@docx-editor.dev/core-contract/contracts/types';
+import { DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
+import { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorCommand } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorEvents } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorFontErrorCode } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorModule } from '@docx-editor.dev/core-contract/editor';
+import { EditorQuery } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorScope } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
+import { ExecResult } from '@docx-editor.dev/core-contract/contracts/editor';
+import { FontConfiguration } from '@docx-editor.dev/core-contract/contracts/editor';
+import { FontConfigurationBase } from '@docx-editor.dev/core-contract/editor';
+import { FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
+import { FontFaceRequest } from '@docx-editor.dev/core-contract/contracts/editor';
+import { FontLoadFailure } from '@docx-editor.dev/core-contract/editor';
+import { FontLoadFailureReason } from '@docx-editor.dev/core-contract/editor';
+import { FontSource } from '@docx-editor.dev/core-contract/contracts/editor';
+import { FontSourceSubstitution } from '@docx-editor.dev/core-contract/contracts/editor';
+import { FontUrlSource } from '@docx-editor.dev/core-contract/editor';
 import { ForwardRefExoticComponent } from 'react';
+import { generateRulerTicks } from '@docx-editor.dev/core-contract/editor';
+import { HTMLAttributes } from 'react';
+import { ImageDecodePort } from '@docx-editor.dev/core-contract/editor';
+import { ImageWrapTarget } from '@docx-editor.dev/core-contract/editor';
+import { IndentFormatting } from '@docx-editor.dev/core-contract/contracts/editor';
+import { loadFonts } from '@docx-editor.dev/core-contract/editor';
+import { LoadFontsRequest } from '@docx-editor.dev/core-contract/editor';
+import { LoadFontsResult } from '@docx-editor.dev/core-contract/editor';
+import { NavigationCommand } from '@docx-editor.dev/core-contract/editor';
+import { PageSetup } from '@docx-editor.dev/core-contract/contracts/editor';
+import { PaginatedSurfaceState } from '@docx-editor.dev/core-contract/editor';
+import { PX_PER_CM } from '@docx-editor.dev/core-contract/editor';
+import { PX_PER_INCH } from '@docx-editor.dev/core-contract/editor';
 import * as react from 'react';
 import react__default from 'react';
 import { ReactElement } from 'react';
 import { ReactNode } from 'react';
 import { Ref } from 'react';
 import { RefAttributes } from 'react';
+import { RulerIndent } from '@docx-editor.dev/core-contract/editor';
+import { rulerPageBox } from '@docx-editor.dev/core-contract/editor';
+import { RulerTick } from '@docx-editor.dev/core-contract/editor';
+import { RulerUnit } from '@docx-editor.dev/core-contract/editor';
+import { runToolbarCommand } from '@docx-editor.dev/core-contract/editor';
+import { SectionProperties } from '@docx-editor.dev/core-contract/editor';
+import { SupportedImageMime } from '@docx-editor.dev/core-contract/editor';
+import { SurfaceFormatting } from '@docx-editor.dev/core-contract/editor';
+import { SurfaceHyperlink } from '@docx-editor.dev/core-contract/editor';
+import { TableChromeSlotId } from '@docx-editor.dev/core-contract/editor';
+import { TextMatch } from '@docx-editor.dev/core-contract/contracts/editor';
+import { TextMeasurer } from '@docx-editor.dev/core-contract/editor';
+import { TFunction } from '@docx-editor.dev/i18n';
+import { Theme } from '@docx-editor.dev/core-contract/contracts/editor';
+import { ToolbarCommandState } from '@docx-editor.dev/core-contract/editor';
+import { toolbarCommandState } from '@docx-editor.dev/core-contract/editor';
 import { Translations } from '@docx-editor.dev/i18n';
+import { ViewScope } from '@docx-editor.dev/core-contract/contracts/editor';
+import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core-contract/editor';
 
-// @public
-export const CHROME_GROUPS: readonly [{
-    readonly id: "history";
-    readonly labelKey: "formattingBar.groups.history";
-    readonly controls: readonly [{
-        readonly id: "undo";
-        readonly labelKey: "formattingBar.undoShortcut";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "redo";
-        readonly labelKey: "formattingBar.redoShortcut";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }];
-}, {
-    readonly id: "zoom";
-    readonly labelKey: "formattingBar.groups.zoom";
-    readonly controls: readonly [{
-        readonly id: "level";
-        readonly shape: "stepper";
-        readonly valueText: "100%";
-        readonly labelKey: "formattingBar.groups.zoom";
-        readonly paths: null;
-        readonly valueKey: "zoom.zoomLevel";
-        readonly state: {
-            readonly kind: "command";
-        };
-    }];
-}, {
-    readonly id: "styles";
-    readonly labelKey: "formattingBar.groups.styles";
-    readonly controls: readonly [{
-        readonly id: "style";
-        readonly shape: "dropdown";
-        readonly labelKey: "styles.selectAriaLabel";
-        readonly paths: null;
-        readonly valueKey: "styles.normalText";
-        readonly state: {
-            readonly kind: "value";
-        };
-    }];
-}, {
-    readonly id: "font";
-    readonly labelKey: "formattingBar.groups.font";
-    readonly controls: readonly [{
-        readonly id: "family";
-        readonly shape: "dropdown";
-        readonly labelKey: "font.selectAriaLabel";
-        readonly paths: null;
-        readonly valueKey: "font.sansSerif";
-        readonly state: {
-            readonly kind: "value";
-        };
-    }, {
-        readonly id: "size";
-        readonly shape: "stepper";
-        readonly valueText: "11";
-        readonly labelKey: "fontSize.listLabel";
-        readonly paths: null;
-        readonly valueKey: "fontSize.label";
-        readonly state: {
-            readonly kind: "value";
-        };
-    }];
-}, {
-    readonly id: "text";
-    readonly labelKey: "formattingBar.groups.textFormatting";
-    readonly controls: readonly [{
-        readonly id: "bold";
-        readonly labelKey: "formattingBar.boldShortcut";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "italic";
-        readonly labelKey: "formattingBar.italicShortcut";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "underline";
-        readonly labelKey: "formattingBar.underlineShortcut";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "strike";
-        readonly labelKey: "formattingBar.strikethrough";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "color";
-        readonly shape: "colorSplit";
-        readonly swatch: "#ff0000";
-        readonly labelKey: "formattingBar.fontColor";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "value";
-        };
-    }, {
-        readonly id: "highlight";
-        readonly shape: "colorSplit";
-        readonly swatch: "#ffff00";
-        readonly labelKey: "formattingBar.highlightColor";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "value";
-        };
-    }, {
-        readonly id: "link";
-        readonly labelKey: "formattingBar.insertLinkShortcut";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }];
-}, {
-    readonly id: "script";
-    readonly labelKey: "formattingBar.groups.script";
-    readonly controls: readonly [{
-        readonly id: "super";
-        readonly labelKey: "formattingBar.superscript";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "sub";
-        readonly labelKey: "formattingBar.subscript";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }];
-}, {
-    readonly id: "alignment";
-    readonly labelKey: "formattingBar.groups.alignment";
-    readonly controls: readonly [{
-        readonly id: "left";
-        readonly labelKey: "alignment.alignLeft";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "center";
-        readonly labelKey: "alignment.center";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "right";
-        readonly labelKey: "alignment.alignRight";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "justify";
-        readonly labelKey: "alignment.justify";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }];
-}, {
-    readonly id: "list";
-    readonly labelKey: "formattingBar.groups.listFormatting";
-    readonly controls: readonly [{
-        readonly id: "bullet";
-        readonly labelKey: "lists.bulletList";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "numbered";
-        readonly labelKey: "lists.numberedList";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "outdent";
-        readonly labelKey: "lists.decreaseIndent";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "indent";
-        readonly labelKey: "lists.increaseIndent";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "lineSpacing";
-        readonly shape: "dropdown";
-        readonly labelKey: "lineSpacing.label";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }];
-}, {
-    readonly id: "format";
-    readonly labelKey: "formattingBar.clearFormatting";
-    readonly controls: readonly [{
-        readonly id: "clear";
-        readonly labelKey: "formattingBar.clearFormatting";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }];
-}, {
-    readonly id: "review";
-    readonly labelKey: "formattingBar.commentsAndChanges";
-    readonly controls: readonly [{
-        readonly id: "comments";
-        readonly shape: "icon";
-        readonly labelKey: "formattingBar.commentsAndChanges";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "editingMode";
-        readonly shape: "dropdown";
-        readonly labelKey: "editingMode.label";
-        readonly valueKey: "editingMode.editing";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }];
-}, {
-    readonly id: "contentControl";
-    readonly labelKey: "contentControl.group";
-    readonly contextual: true;
-    readonly controls: readonly [{
-        readonly id: "showAll";
-        readonly labelKey: "contentControl.showAll";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "formFill";
-        readonly labelKey: "contentControl.formFill";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "inspector";
-        readonly labelKey: "contentControl.inspector";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "remove";
-        readonly labelKey: "contentControl.remove";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }];
-}, {
-    readonly id: "image";
-    readonly labelKey: "formattingBar.groups.image";
-    readonly contextual: true;
-    readonly controls: readonly [{
-        readonly id: "insert";
-        readonly labelKey: "toolbar.image";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "properties";
-        readonly labelKey: "formattingBar.imagePropertiesShortcut";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "wrap";
-        readonly shape: "dropdown";
-        readonly labelKey: "formattingBar.imageWrap";
-        readonly paths: readonly string[];
-        readonly valueKey: "imageWrap.inline";
-        readonly state: {
-            readonly kind: "value";
-        };
-    }, {
-        readonly id: "altText";
-        readonly shape: "dropdown";
-        readonly labelKey: "formattingBar.altText";
-        readonly paths: null;
-        readonly valueKey: "imageProperties.altText";
-        readonly state: {
-            readonly kind: "value";
-        };
-    }];
-}, {
-    readonly id: "table";
-    readonly labelKey: "formattingBar.groups.table";
-    readonly contextual: true;
-    readonly controls: readonly [{
-        readonly id: "insert";
-        readonly labelKey: "toolbar.table";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "borderTarget";
-        readonly shape: "dropdown";
-        readonly labelKey: "table.borders.tooltip";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "value";
-        };
-    }, {
-        readonly id: "borderColor";
-        readonly shape: "colorSplit";
-        readonly swatch: "#000000";
-        readonly labelKey: "table.borderColor";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "value";
-        };
-    }, {
-        readonly id: "borderStyle";
-        readonly shape: "dropdown";
-        readonly labelKey: "table.borders.styleAriaLabel";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "value";
-        };
-    }, {
-        readonly id: "borderWidth";
-        readonly shape: "dropdown";
-        readonly labelKey: "table.borderWidth";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "value";
-        };
-    }, {
-        readonly id: "cellFill";
-        readonly shape: "colorSplit";
-        readonly swatch: "#ffffff";
-        readonly labelKey: "table.cellFillColor";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "value";
-        };
-    }];
-}, {
-    readonly id: "file";
-    readonly labelKey: "toolbar.file";
-    readonly contextual: true;
-    readonly controls: readonly [{
-        readonly id: "open";
-        readonly labelKey: "toolbar.open";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "load";
-        };
-    }, {
-        readonly id: "save";
-        readonly labelKey: "toolbar.saveShortcut";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "save";
-        };
-    }, {
-        readonly id: "pageSetup";
-        readonly labelKey: "toolbar.pageSetup";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }];
-}, {
-    readonly id: "insert";
-    readonly labelKey: "toolbar.insert";
-    readonly contextual: true;
-    readonly controls: readonly [{
-        readonly id: "footnote";
-        readonly labelKey: "toolbar.insertFootnote";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "endnote";
-        readonly labelKey: "toolbar.insertEndnote";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "pageNumber";
-        readonly labelKey: "headerFooter.insertPageNumber";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "totalPages";
-        readonly labelKey: "headerFooter.insertTotalPages";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "sectionPages";
-        readonly labelKey: "headerFooter.insertSectionPages";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "pageXofY";
-        readonly labelKey: "headerFooter.insertPageXofY";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "pageBreak";
-        readonly labelKey: "toolbar.pageBreak";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "sectionBreakNextPage";
-        readonly labelKey: "toolbar.sectionBreakNextPage";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "sectionBreakContinuous";
-        readonly labelKey: "toolbar.sectionBreakContinuous";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }, {
-        readonly id: "toc";
-        readonly labelKey: "toolbar.tableOfContents";
-        readonly paths: readonly string[];
-        readonly state: {
-            readonly kind: "command";
-        };
-    }];
-}];
+export { CHROME_GROUPS }
 
-// @public
-export const CHROME_MENUS: readonly ChromeMenu[];
+export { CHROME_MENUS }
 
-// @public
-export interface ChromeMenu {
-    // (undocumented)
-    readonly entries: readonly ChromeMenuEntry[];
-    // (undocumented)
-    readonly id: ChromeMenuId;
-    // (undocumented)
-    readonly labelKey: string;
-}
+export { ChromeMenu }
 
-// @public
-export type ChromeMenuEntry = ChromeMenuItemEntry | ChromeMenuSubmenuEntry | ChromeMenuSeparatorEntry;
+export { ChromeMenuEntry }
 
-// @public
-export type ChromeMenuId = 'file' | 'format' | 'insert' | 'help';
+export { ChromeMenuId }
 
-// @public
-export interface ChromeMenuItemEntry {
-    // (undocumented)
-    readonly kind: 'item';
-    readonly labelKey?: string;
-    readonly picker?: 'tableGrid';
-    readonly shortcutKey?: string;
-    // (undocumented)
-    readonly slot: ChromeSlotId;
-}
+export { ChromeMenuItemEntry }
 
-// @public
-export interface ChromeMenuSeparatorEntry {
-    // (undocumented)
-    readonly kind: 'separator';
-}
+export { ChromeMenuSeparatorEntry }
 
-// @public
-export function chromeMenuSlots(): readonly ChromeSlotId[];
+export { chromeMenuSlots }
 
-// @public
-export interface ChromeMenuSubmenuEntry {
-    // (undocumented)
-    readonly items: readonly ChromeMenuEntry[];
-    // (undocumented)
-    readonly kind: 'submenu';
-    // (undocumented)
-    readonly labelKey: string;
-    // (undocumented)
-    readonly paths: readonly string[] | null;
-}
+export { ChromeMenuSubmenuEntry }
 
-// @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.clear' | 'review.comments' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
+export { ChromeSlotId }
 
-// @public
-export function commandForSlot(slotId: ChromeSlotId): EditorCommand | null;
+export { commandForSlot }
 
-// @public
-export function composeFontConfiguration(base: FontConfigurationBase, ...fragments: readonly FontConfigurationFragment[]): FontConfiguration;
+export { composeFontConfiguration }
 
 // @public
 export const CONTENT_CONTROL_SLOTS: {
@@ -570,7 +131,7 @@ export interface ContentControlInspectorState {
     // (undocumented)
     readonly bound: boolean;
     // (undocumented)
-    readonly controlType: ContentControlType_2;
+    readonly controlType: ContentControlType;
     // (undocumented)
     readonly effectiveLock: ContentControlLock | null;
     // (undocumented)
@@ -582,6 +143,9 @@ export interface ContentControlInspectorState {
     // (undocumented)
     readonly tag: string | null;
 }
+
+// @public
+export type ContentControlLock = 'unlocked' | 'sdtLocked' | 'contentLocked' | 'sdtContentLocked';
 
 // @public
 export interface ContentControlPartProps {
@@ -718,34 +282,12 @@ export interface ContextMenuTableRowProps extends ContextMenuCommandProps {
     destructive?: boolean;
 }
 
-// @public
-export function createFontSource(bytes: Uint8Array, request: FontFaceRequest & {
-    readonly faceIndex?: number;
-}, options?: {
-    readonly id?: string;
-    readonly maxFontBytes?: number;
-}): {
-    readonly source: FontSource;
-} | {
-    readonly failure: FontLoadFailure;
-};
+export { createFontSource }
 
 // @public (undocumented)
 export function DocumentName(input: DocumentNameProps): react__default.JSX.Element;
 
-// @public
-export interface DocxDocument {
-    // (undocumented)
-    readonly body: DocumentBody;
-    // (undocumented)
-    readonly comments: readonly DocComment[];
-    // (undocumented)
-    readonly revisions: readonly Revision[];
-    // (undocumented)
-    readonly styles: StyleDefinitions;
-    // (undocumented)
-    readonly theme?: Theme;
-}
+export { DocxDocument }
 
 // @public (undocumented)
 export const DocxEditor: DocxEditorNamespace;
@@ -805,6 +347,10 @@ export interface DocxEditorContextMenuNamespace {
     readonly Item: typeof ContextMenuItem;
     // (undocumented)
     readonly Paste: typeof ContextMenuPaste;
+    // (undocumented)
+    readonly RefreshToc: typeof ContextMenuRefreshToc;
+    // (undocumented)
+    readonly RefreshTocPageNumbers: typeof ContextMenuRefreshTocPageNumbers;
     readonly Row: typeof MenuRow;
     // (undocumented)
     readonly SelectAll: typeof ContextMenuSelectAll;
@@ -834,6 +380,16 @@ export interface DocxEditorDocumentOutlineProps {
     leftOffset?: number;
     onClose?: () => void;
     topOffset?: number;
+}
+
+// @public
+export function DocxEditorFontNotice(input: DocxEditorFontNoticeProps): react.JSX.Element | null;
+
+// @public
+export interface DocxEditorFontNoticeProps {
+    className?: string;
+    style?: CSSProperties;
+    t?: TFunction;
 }
 
 // @public
@@ -953,6 +509,7 @@ export interface DocxEditorMenuProps {
     className?: string;
     fileName?: string;
     onOpen?: () => void;
+    onOpenFile?: (file: File) => void;
     onPageSetup?: () => void;
     onReportIssue?: () => void;
     onSave?: () => void;
@@ -968,6 +525,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly ContentControl: typeof DocxEditorContentControl;
     readonly ContextMenu: typeof ContextMenu;
     readonly DocumentOutline: typeof DocxEditorDocumentOutline;
+    readonly FontNotice: typeof DocxEditorFontNotice;
     readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
     readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
     readonly HyperLink: typeof DocxEditorHyperLink;
@@ -978,7 +536,6 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly NotesChrome: typeof DocxEditorNotesChrome;
     readonly PageNumber: typeof DocxEditorPageNumber;
     readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
-    readonly Review: typeof DocxEditorReview;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
     // (undocumented)
@@ -1048,6 +605,7 @@ export interface DocxEditorPageSetupDialogProps {
 export interface DocxEditorProps {
     // (undocumented)
     author?: string;
+    children?: ReactNode;
     chrome?: boolean;
     // (undocumented)
     className?: string;
@@ -1060,6 +618,7 @@ export interface DocxEditorProps {
     locale?: string;
     menu?: boolean | DocxEditorMenuProps;
     mode?: EditorMode;
+    modules?: readonly EditorModule[];
     navigation?: boolean;
     onChange?: (change: DocumentChange) => void;
     onFontError?: (error: EditorFontError) => void;
@@ -1092,40 +651,6 @@ export interface DocxEditorRef {
     }): EditorSnapshot;
 }
 
-// @public (undocumented)
-export const DocxEditorReview: DocxEditorReviewNamespace;
-
-// @public
-export interface DocxEditorReviewNamespace {
-    // (undocumented)
-    (props: ReviewProps): ReturnType<typeof ReviewRoot>;
-    // (undocumented)
-    readonly Accept: typeof ReviewAccept;
-    readonly AddComment: typeof ReviewAddComment;
-    // (undocumented)
-    readonly Author: typeof ReviewAuthor;
-    // (undocumented)
-    readonly Avatar: typeof ReviewAvatar;
-    // (undocumented)
-    readonly Card: typeof ReviewCard;
-    readonly Draft: typeof ReviewDraft;
-    // (undocumented)
-    readonly Empty: typeof ReviewEmpty;
-    // (undocumented)
-    readonly List: typeof ReviewList;
-    readonly Markers: typeof ReviewMarkers;
-    // (undocumented)
-    readonly Reject: typeof ReviewReject;
-    // (undocumented)
-    readonly Replies: typeof ReviewReplies;
-    // (undocumented)
-    readonly Reply: typeof ReviewReply;
-    // (undocumented)
-    readonly Summary: typeof ReviewSummary;
-    // (undocumented)
-    readonly Time: typeof ReviewTime;
-}
-
 // @public
 export function DocxEditorRoot(props: DocxEditorRootProps): react.JSX.Element;
 
@@ -1141,6 +666,7 @@ export interface DocxEditorRootProps {
     // (undocumented)
     locale?: string;
     mode?: 'edit' | 'view';
+    modules?: readonly EditorModule[];
     onChange?: (change: DocumentChange) => void;
     onFontError?: (error: EditorFontError) => void;
     onReady?: (editor: Editor) => void;
@@ -1329,168 +855,9 @@ export type DocxFontsSource = DocxFontsInput | Promise<DocxFontsInput> | (() => 
 // @public
 export type DocxSource = string | URL | Uint8Array | ArrayBuffer;
 
-// @public (undocumented)
-export interface Editor {
-    acceptReviewItem(key: string): ExecResult;
-    addComment(text: string, author?: string): ExecResult;
-    can(command: EditorCommand, options?: {
-        scope?: EditorScope;
-    }): CanResult;
-    canExecuteImageCommand(command: Extract<EditorCommand, {
-        type: 'insertImage' | 'replaceImage';
-    }>, options?: {
-        scope?: EditorScope;
-    }): CanResult;
-    // (undocumented)
-    destroy(): void;
-    // (undocumented)
-    exec(command: EditorCommand, options?: {
-        scope?: EditorScope;
-    }): ExecResult;
-    executeImageCommand(command: Extract<EditorCommand, {
-        type: 'insertImage' | 'replaceImage';
-    }>): Promise<ExecResult>;
-    findMatches(query: string, options?: {
-        readonly matchCase?: boolean;
-        readonly wholeWord?: boolean;
-    }): readonly TextMatch[];
-    // (undocumented)
-    focus(scope?: EditorScope): InteractionOutcome<void>;
-    // (undocumented)
-    getActiveScope(): ViewScope;
-    getComments(): readonly {
-        readonly id: string;
-        readonly text: string;
-        readonly resolved: boolean;
-    }[];
-    getCurrentPage(mode?: 'viewport' | 'caret'): number;
-    getDocumentFonts(): readonly string[];
-    getDocumentHandle(): DocumentHandle;
-    getDocumentStyles(): readonly {
-        readonly styleId: string;
-        readonly name: string;
-        readonly type: string;
-        readonly preview: {
-            readonly fontFamily: string | null;
-            readonly fontSizePt: number | null;
-            readonly bold: boolean;
-            readonly italic: boolean;
-            readonly color: string | null;
-        };
-    }[];
-    getDocumentThemeColors(): readonly {
-        readonly slot: string;
-        readonly hex: string;
-    }[];
-    getEditingMode(): DocumentEditingMode;
-    getHeaderFooterState(): HeaderFooterState | null;
-    getNotePreviewText(scopeId: string): string | null;
-    getNotePropertiesState(): NotePropertiesState | null;
-    getOutline(): readonly {
-        readonly text: string;
-        readonly level: number;
-        readonly blockId: string;
-    }[];
-    getPageGeometry(): readonly {
-        index: number;
-        box: Rect;
-        contentBox: Rect;
-    }[];
-    getPageSetup(): PageSetup | null;
-    getRenderScale(): number;
-    getReviewItems(): readonly ReviewItemPlacement[];
-    getReviewRevision(): number;
-    getSelectedImage(): SelectedImageState | null;
-    getSelectedTable(): {
-        readonly blockId: string;
-        readonly rowCount: number;
-        readonly columnCount: number;
-        readonly cell: {
-            readonly row: number;
-            readonly column: number;
-        } | null;
-    } | null;
-    getSelectionFormatting(): {
-        readonly fontFamily?: string;
-        readonly fontSizeHalfPoints?: number;
-        readonly styleId?: string;
-        readonly alignment?: string;
-        readonly bold?: boolean;
-        readonly italic?: boolean;
-        readonly underline?: boolean;
-    } | null;
-    getSelectionPlacement(): {
-        readonly anchorY: number;
-        readonly pageIndex: number;
-    } | null;
-    getTableCellSelection(): {
-        readonly tableId: string;
-        readonly rows: {
-            readonly from: number;
-            readonly to: number;
-        };
-        readonly columns: {
-            readonly from: number;
-            readonly to: number;
-        };
-        readonly cellIds: readonly string[];
-    } | null;
-    // (undocumented)
-    getTotalPages(): number;
-    getTrackedChanges(): readonly {
-        readonly id: string;
-        readonly kind: string;
-        readonly author?: string;
-    }[];
-    getWatermark(): {
-        readonly kind: 'text' | 'image';
-        readonly text?: string;
-    } | null;
-    // (undocumented)
-    getZoom(): number;
-    isActive(command: EditorCommand, options?: {
-        scope?: EditorScope;
-    }): boolean;
-    isReviewPaneOpen(): boolean;
-    load(document: DocumentSource): void;
-    // (undocumented)
-    on<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): Unsubscribe;
-    // (undocumented)
-    query<K extends keyof EditorQueries>(query: {
-        type: K;
-    } & EditorQueries[K], options?: {
-        scope?: EditorScope;
-    }): EditorQueryResults[K];
-    // (undocumented)
-    rejectReviewItem(key: string): ExecResult;
-    relayout(options?: {
-        sync?: boolean;
-    }): void;
-    replyToReviewItem(key: string, text: string, author?: string): ExecResult;
-    save(): Promise<ArrayBuffer>;
-    // (undocumented)
-    scrollToBlock(blockId: string): boolean;
-    scrollToPage(pageNumber: number): boolean;
-    selectMatch(match: TextMatch): ExecResult;
-    setActiveReviewItem(key: string | null): void;
-    // (undocumented)
-    setActiveScope(scope: ViewScope): void;
-    // (undocumented)
-    setEditingMode(mode: DocumentEditingMode): ExecResult;
-    setTableInteractionLabel(resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string): void;
-    setZoom(zoom: number): ExecResult;
-    // (undocumented)
-    snapshot(options?: {
-        scope?: EditorScope;
-    }): EditorSnapshot;
-}
+export { Editor }
 
-// @public (undocumented)
-export type EditorCommand = {
-    [K in keyof EditorCommands]: {
-        type: K;
-    } & EditorCommands[K];
-}[keyof EditorCommands];
+export { EditorCommand }
 
 // @public
 export interface EditorCommandState {
@@ -1500,113 +867,20 @@ export interface EditorCommandState {
     readonly isEnabled: boolean;
 }
 
-// @public
-export class EditorFontError extends Error {
-    constructor(code: EditorFontErrorCode, message: string, details?: {
-        readonly request?: FontFaceRequest;
-        readonly diagnostic?: string;
-        readonly cause?: unknown;
-    });
-    // (undocumented)
-    readonly code: EditorFontErrorCode;
-    // (undocumented)
-    readonly diagnostic?: string;
-    // (undocumented)
-    readonly name: string;
-    // (undocumented)
-    readonly request?: FontFaceRequest;
-}
+export { EditorFontError }
 
-// @public (undocumented)
-export type EditorFontErrorCode = 'initializationFailed' | 'missing' | 'forbidden' | 'overLimit' | 'malformed' | 'hashMismatch' | 'metadataMismatch' | 'fontFaceLoadFailed' | 'unsupportedFaceIndex' | 'missingFont' | 'hashInvalid' | 'fontMismatch' | 'unsupportedFace' | 'loadFailed';
+export { EditorFontErrorCode }
 
-// @public
-export interface EditorHost {
-    afterCommit?(callback: () => void): void;
-    // (undocumented)
-    getBodyHostEl(): HTMLElement | null;
-    // (undocumented)
-    getHfHostEl(rId: string): HTMLElement | null;
-    // (undocumented)
-    getPagesContainer(): HTMLElement | null;
-    getScrollContainer(): HTMLElement | null;
-    // (undocumented)
-    onSelectionChange?(snapshot: EditorSnapshot): void;
-    // (undocumented)
-    onTotalPages?(total: number): void;
-    scheduleFrame(callback: () => void): () => void;
-}
+export { EditorHost }
 
 // @public (undocumented)
 export type EditorMode = 'edit' | 'view';
 
-// @public (undocumented)
-export type EditorQuery = {
-    [K in keyof EditorQueries]: {
-        type: K;
-    } & EditorQueries[K];
-}[keyof EditorQueries];
+export { EditorQuery }
 
-// @public
-export type EditorScope = {
-    kind: 'body';
-} | {
-    kind: 'headerFooter';
-    rId: string;
-}
-/**
-* A footnote/endnote region.
-*
-* `id` encodes kind + signed note id as `footnote:<id>` or `endnote:<id>`
-* (e.g. `footnote:2`). Use `formatNoteScopeId` / `parseNoteScopeId` from the
-* store package. Do not invent a parallel `{ noteKind, noteId }` scope arm.
-*/
-| {
-    kind: 'note';
-    id: string;
-}
-/** A text box or floating frame with its own content, addressed by id. */
-| {
-    kind: 'frame';
-    id: string;
-}
-/** Read-only aggregate across every view. Valid for queries, not for writes. */
-| {
-    kind: 'all';
-};
+export { EditorScope }
 
-// @public
-export interface EditorSnapshot {
-    // (undocumented)
-    readonly canRedo?: boolean;
-    readonly canUndo?: boolean;
-    readonly editable: boolean;
-    readonly editingMode?: DocumentEditingMode;
-    // (undocumented)
-    readonly formatting: RunFormatting | null;
-    // (undocumented)
-    readonly image: ImageContext | null;
-    readonly isLoading: boolean;
-    readonly lastRejection?: string | null;
-    // (undocumented)
-    readonly page: {
-        readonly current: number;
-        readonly total: number;
-    };
-    readonly pageSetup?: PageSetup | null;
-    // (undocumented)
-    readonly parseError: string | null;
-    readonly reviewPaneOpen?: boolean;
-    // (undocumented)
-    readonly scope: EditorScope;
-    // (undocumented)
-    readonly selection: DocRange | null;
-    readonly selectionCollapsed: boolean;
-    // (undocumented)
-    readonly table: TableContext | null;
-    // (undocumented)
-    readonly zoom: number;
-}
+export { EditorSnapshot }
 
 // @public
 export interface EditorValueCommandState<T extends string | number> {
@@ -1622,50 +896,13 @@ export interface EditorValueCommandState<T extends string | number> {
     readonly value: T | null;
 }
 
-// @public
-export interface FontConfiguration {
-    // (undocumented)
-    readonly defaultFont: {
-        readonly family: string;
-        readonly sizeHalfPoints: number;
-    };
-    // (undocumented)
-    readonly epoch: number;
-    // (undocumented)
-    readonly language?: string;
-    // (undocumented)
-    readonly maxFontBytes: number;
-    // (undocumented)
-    readonly sources: readonly FontSource[];
-    // (undocumented)
-    readonly substitutions?: readonly FontSourceSubstitution[];
-}
+export { FontConfiguration }
 
-// @public
-export interface FontConfigurationBase extends FontConfigurationFragment {
-    readonly defaultFont?: FontConfiguration['defaultFont'];
-    readonly epoch?: number;
-    readonly language?: string;
-    readonly maxFontBytes?: number;
-}
+export { FontConfigurationBase }
 
-// @public
-export interface FontConfigurationFragment {
-    // (undocumented)
-    readonly sources?: readonly FontSource[];
-    // (undocumented)
-    readonly substitutions?: readonly FontSourceSubstitution[];
-}
+export { FontConfigurationFragment }
 
-// @public
-export interface FontFaceRequest {
-    // (undocumented)
-    readonly family: string;
-    // (undocumented)
-    readonly style: 'normal' | 'italic';
-    // (undocumented)
-    readonly weight: number;
-}
+export { FontFaceRequest }
 
 // @public
 export interface FontFamilyItemProps extends FontFamilyPartProps {
@@ -1701,71 +938,20 @@ export interface FontFamilyProps extends FontFamilyPartProps {
     hidden?: boolean;
 }
 
-// @public (undocumented)
-export interface FontLoadFailure {
-    // (undocumented)
-    readonly actualHash?: string;
-    // (undocumented)
-    readonly diagnostic?: string;
-    // (undocumented)
-    readonly expectedHash?: string;
-    // (undocumented)
-    readonly reason: FontLoadFailureReason;
-    // (undocumented)
-    readonly request: FontFaceRequest;
-    readonly status?: number;
-    // (undocumented)
-    readonly url: string;
-}
+export { FontLoadFailure }
 
-// @public (undocumented)
-export type FontLoadFailureReason = 'networkError' | 'httpError' | 'hashMismatch' | 'overLimit' | 'emptyResponse'
-/** The declared face itself is unusable (empty family, out-of-range weight); nothing was fetched. */
-| 'invalidRequest'
-/** The bytes are not a font at all — most often an HTML error page served with 200. */
-| 'malformed';
+export { FontLoadFailureReason }
+
+export { FontSource }
+
+export { FontSourceSubstitution }
+
+export { FontUrlSource }
+
+export { generateRulerTicks }
 
 // @public
-export interface FontSource {
-    // (undocumented)
-    readonly availability?: 'available' | 'forbidden';
-    // (undocumented)
-    readonly bytes: Uint8Array;
-    // (undocumented)
-    readonly faceIndex: number;
-    // (undocumented)
-    readonly hash: string;
-    // (undocumented)
-    readonly id: string;
-    // (undocumented)
-    readonly request: FontFaceRequest;
-}
-
-// @public
-export interface FontSourceSubstitution {
-    // (undocumented)
-    readonly from: FontFaceRequest;
-    // (undocumented)
-    readonly to: FontFaceRequest;
-}
-
-// @public
-export interface FontUrlSource {
-    // (undocumented)
-    readonly faceIndex?: number;
-    // (undocumented)
-    readonly family: string;
-    readonly hash?: string;
-    // (undocumented)
-    readonly style: 'normal' | 'italic';
-    // (undocumented)
-    readonly url: string;
-    // (undocumented)
-    readonly weight: number;
-}
-
-// @public
-export function generateRulerTicks(lengthPx: number, unit: RulerUnit): RulerTick[];
+export type HeaderFooterState = Exclude<ReturnType<Editor['getHeaderFooterState']>, null>;
 
 // @public (undocumented)
 export function HorizontalRuler(input: HorizontalRulerProps): react__default.ReactElement;
@@ -1888,8 +1074,7 @@ export namespace ImageWrap {
     docxSlot: "image.wrap";
 }
 
-// @public
-export type ImageWrapTarget = 'inline' | 'square' | 'squareLeft' | 'squareRight' | 'tight' | 'through' | 'topAndBottom' | 'behind' | 'inFront';
+export { ImageWrapTarget }
 
 // @public
 export interface IndentUpdate {
@@ -1901,25 +1086,14 @@ export interface IndentUpdate {
     readonly right?: number | null;
 }
 
-// @public
-export function loadFonts(request: LoadFontsRequest): Promise<LoadFontsResult>;
+export { loadFonts }
+
+export { LoadFontsRequest }
+
+export { LoadFontsResult }
 
 // @public (undocumented)
-export interface LoadFontsRequest {
-    readonly cacheName?: string;
-    readonly fetcher?: typeof fetch;
-    readonly maxFontBytes?: number;
-    // (undocumented)
-    readonly sources: readonly FontUrlSource[];
-}
-
-// @public (undocumented)
-export interface LoadFontsResult extends FontConfigurationFragment {
-    // (undocumented)
-    readonly failures: readonly FontLoadFailure[];
-    // (undocumented)
-    readonly sources: readonly FontSource[];
-}
+export function LocaleProvider(input: LocaleProviderProps): react.JSX.Element;
 
 // @public (undocumented)
 export function Logo(input: LogoProps): react__default.JSX.Element;
@@ -2099,6 +1273,9 @@ export type NormalizedImagePayload = {
 // @public
 export function normalizeImageBytes(bytes: Uint8Array): NormalizedImagePayload;
 
+// @public (undocumented)
+export type NotePropertiesState = Exclude<ReturnType<Editor['getNotePropertiesState']>, null>;
+
 // @public
 export type OutlineHeading = ReturnType<Editor['getOutline']>[number];
 
@@ -2116,23 +1293,7 @@ export function PageIndicator(input: {
     visible: boolean;
 }): react.JSX.Element;
 
-// @public
-export interface PageSetup {
-    readonly gutterTwips?: number;
-    // (undocumented)
-    readonly marginsTwips: {
-        readonly top: number;
-        readonly right: number;
-        readonly bottom: number;
-        readonly left: number;
-    };
-    // (undocumented)
-    readonly orientation: 'portrait' | 'landscape';
-    // (undocumented)
-    readonly pageHeightTwips: number;
-    // (undocumented)
-    readonly pageWidthTwips: number;
-}
+export { PageSetup }
 
 // @public
 export interface PageSetupUpdate {
@@ -2167,7 +1328,7 @@ interface PaginatedDocxEditorHandle {
     // (undocumented)
     redo(): void;
     save(): Uint8Array | null;
-    sectionProperties(): SectionProperties_2 | null;
+    sectionProperties(): SectionProperties | null;
     // (undocumented)
     selectAll(): void;
     // (undocumented)
@@ -2275,73 +1436,47 @@ export interface ParagraphStyleProps extends ParagraphStylePartProps {
     hidden?: boolean;
 }
 
+export { PX_PER_CM }
+
+export { PX_PER_INCH }
+
 // @public (undocumented)
-export const PX_PER_CM: number;
+export const ReviewRailContext: react.Context<ReviewRailRegistry | null>;
 
 // @public
-export const PX_PER_INCH = 96;
-
-// @public
-export interface ReviewActionProps extends ReviewPartProps {
-    icon?: ReactNode;
-}
-
-// @public
-export type ReviewItemView = ReviewItemPlacement;
-
-// @public
-export interface ReviewPartProps {
-    asChild?: boolean;
+export interface ReviewRailRegistry {
     // (undocumented)
-    children?: ReactNode;
+    readonly mounted: number;
     // (undocumented)
-    className?: string;
-    hidden?: boolean;
-}
-
-// @public
-export interface ReviewProps extends ReviewPartProps {
-    filter?: (item: ReviewItemView) => boolean;
-    gap?: number;
-    preset?: boolean;
-    stack?: boolean;
+    readonly register: () => () => void;
 }
 
 // @public (undocumented)
 export const RULER_WIDTH = 20;
 
-// @public
-export function rulerPageBox(pages: readonly {
-    readonly index: number;
-    readonly box: {
-        width: number;
-        height: number;
-    };
-}[]): {
-    width: number;
-    height: number;
-} | null;
+export { rulerPageBox }
 
-// @public (undocumented)
-export interface RulerTick {
-    // (undocumented)
-    readonly height: number;
-    readonly label?: string;
-    readonly position: number;
-}
+export { RulerTick }
 
-// @public (undocumented)
-export type RulerUnit = 'inch' | 'cm';
+export { RulerUnit }
 
-// @public
-export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId,
-value?: unknown): ExecResult;
+export { runToolbarCommand }
 
 // @public
 export const SEARCH_DEBOUNCE_MS = 150;
 
 // @public
 export const SEARCH_MATCH_LIMIT = 2000;
+
+// @public
+export function Slot(input: SlotProps): ReactElement<unknown, string | react.JSXElementConstructor<any>> | null;
+
+// @public (undocumented)
+export interface SlotProps extends HTMLAttributes<HTMLElement> {
+    // (undocumented)
+    children?: ReactNode;
+    ref?: Ref<unknown>;
+}
 
 // @public
 export interface TableBorderColorNamespace extends TableChromePartComponent {
@@ -2455,19 +1590,9 @@ export interface ToolbarButtonProps {
     slot: ChromeSlotId;
 }
 
-// @public
-export interface ToolbarCommandState {
-    readonly active: boolean;
-    readonly disabledReason: string | null;
-    // (undocumented)
-    readonly enabled: boolean;
-    // (undocumented)
-    readonly id: ChromeSlotId;
-    readonly value?: string;
-}
+export { ToolbarCommandState }
 
-// @public
-export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): ToolbarCommandState;
+export { toolbarCommandState }
 
 // @public
 export function ToolbarGroup(input: ToolbarGroupProps): react__default.JSX.Element;
@@ -2593,7 +1718,7 @@ export interface UseContentControlResult {
     // (undocumented)
     readonly closeInspector: () => void;
     readonly control: ContentControlInspectorState | null;
-    readonly controls: readonly ContentControlSummary_2[];
+    readonly controls: readonly ContentControlSummary[];
     readonly formFill: boolean;
     readonly inspectorOpen: boolean;
     // (undocumented)
@@ -2809,37 +1934,12 @@ export interface UseParagraphStyleResult {
 }
 
 // @public
-export function useReview(): UseReviewReturn;
-
-// @public
-export function useReviewOf(editor: Editor | null): UseReviewReturn;
+export function useTableBorderTargetLabel(): string;
 
 // @public (undocumented)
-export interface UseReviewReturn {
-    readonly accept: (item: ReviewItemView) => void;
-    readonly activeKey: string | null;
-    readonly comment: (text: string, author?: string) => boolean;
-    readonly items: readonly ReviewItemView[];
-    readonly paneOpen: boolean;
-    readonly ready: boolean;
-    readonly reject: (item: ReviewItemView) => void;
-    readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
-    readonly selectionAnchorY: number | null;
-    readonly setActive: (key: string | null) => void;
-    readonly setPaneOpen: (open: boolean) => void;
-}
-
-// @public
-export function useStackedReviewPositions(items: readonly {
-    readonly key: string;
-    readonly anchorY: number | null;
-}[], heights: ReadonlyMap<string, number>, options?: {
-    readonly gap?: number;
-    readonly scale?: number;
-}): ReadonlyMap<string, number>;
-
-// @public
-export function useTableBorderTargetLabel(): string;
+export function useTranslation(): {
+    t: TFunction;
+};
 
 // @public
 export const VERSION = "0.0.2";
@@ -2860,7 +1960,8 @@ export interface VerticalRulerProps {
     zoom?: number;
 }
 
-// @public
-export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'];
+export { WORD_DEFAULT_FONT }
+
+// (No @packageDocumentation comment for this package)
 
 ```

@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // The review queue as the FACADE publishes it — the six members a sidebar is built on.
 //
 // What these pin down: the queue is presentation-ready without the host deriving anything
@@ -10,8 +15,9 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
-import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
-import { paragraphTextOf } from '../../store/store/tree-ops.ts';
+import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
+import { paragraphTextOf } from '@docx-editor.dev/core-contract/store';
+import { reviewModule as testReviewModule } from '../review/review-module.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const W15 = 'http://schemas.microsoft.com/office/word/2012/wordml';
@@ -83,7 +89,12 @@ function bodyTextOf(editor: DocxEditorInstance): string {
 
 function mount(parts: DocxParts): DocxEditorInstance {
   const container = document.createElement('div');
-  const editor = createDocxEditor({ container, document: docx(parts), author: 'Grace Hopper' });
+  const editor = createDocxEditor({
+    container,
+    document: docx(parts),
+    author: 'Grace Hopper',
+    modules: [testReviewModule()],
+  });
   if (!editor.surface) throw new Error('surface failed to mount');
   return editor;
 }
@@ -307,6 +318,7 @@ describe('comments in the queue', () => {
     const reopened = createDocxEditor({
       container: document.createElement('div'),
       document: saved,
+      modules: [testReviewModule()],
     });
     const reply = reopened.getReviewItems().find((item) => item.parentId !== undefined);
     expect(reply?.text).toBe(written);
@@ -334,6 +346,7 @@ describe('comments in the queue', () => {
     const editor = createDocxEditor({
       container,
       document: docx({ body: COMMENTED_BODY, comments: COMMENTS }),
+      modules: [testReviewModule()],
     });
     const [card] = editor.getReviewItems();
     const result = editor.replyToReviewItem(card!.key, 'anonymous');
@@ -730,7 +743,11 @@ describe('suggesting mode', () => {
 
   test('suggesting with no author refuses to DELETE rather than destroying text', () => {
     const container = document.createElement('div');
-    const editor = createDocxEditor({ container, document: docx({ body: PLAIN }) });
+    const editor = createDocxEditor({
+      container,
+      document: docx({ body: PLAIN }),
+      modules: [testReviewModule()],
+    });
     editor.setEditingMode('suggesting');
     editor.surface!.setSelection({
       anchor: { paragraphId: paragraphIdOf(editor), offset: 0 },

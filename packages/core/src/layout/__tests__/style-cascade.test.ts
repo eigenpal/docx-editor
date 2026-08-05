@@ -12,6 +12,7 @@ import {
   isValidStyleId,
 } from '../style-cascade.ts';
 import { resolveRunStyle } from '../run-style.ts';
+import { formatRevisionOf } from '../revision-projection.ts';
 import { paragraphSpacing } from '../paragraph-style.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { linesOf } from '../semantic-records.ts';
@@ -76,6 +77,41 @@ describe('isValidStyleId guards attacker-controlled ids', () => {
     expect(isValidStyleId('__proto__')).toBe(false);
     expect(isValidStyleId('constructor')).toBe(false);
     expect(isValidStyleId('Heading1')).toBe(true);
+  });
+});
+
+describe('a restyled STYLE definition is not a format change on every span', () => {
+  test("the style's rPrChange record stays out of the cascade; a run's own survives", () => {
+    // Editing a style with tracking on writes `w:rPrChange` INSIDE the style's `rPr`.
+    // Cascaded into span property lists it read as "this text's formatting is a pending
+    // decision" on every span of every paragraph using the style — a whole document marked
+    // grey over one style edit. The record is about the STYLE; only the formatting flows.
+    const table = buildStyleCascadeTable(
+      loadStyles(
+        `<w:style w:type="paragraph" w:styleId="Normal" w:default="1">` +
+          `<w:name w:val="Normal"/>` +
+          `<w:rPr><w:b/><w:rPrChange w:id="0" w:author="Author" ` +
+          `w:date="2026-07-07T20:18:00Z"><w:rPr/></w:rPrChange></w:rPr></w:style>`
+      )
+    );
+    const part = loadDocument(
+      `<w:p><w:r><w:t xml:space="preserve">plain </w:t></w:r>` +
+        `<w:r><w:rPr><w:i/><w:rPrChange w:id="77" w:author="Author" ` +
+        `w:date="2026-07-07T20:18:00Z"><w:rPr/></w:rPrChange></w:rPr>` +
+        `<w:t>changed</w:t></w:r></w:p>`
+    );
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+      styleCascade: table,
+    });
+    const spans = linesOf(layout).flatMap((line) => line.spans);
+    const marks = spans.map((span) => formatRevisionOf(span.props));
+    // The plain run inherits the style but is NOT a tracked format change…
+    expect(marks[0]).toBeNull();
+    // …while the style's actual FORMATTING still cascades.
+    expect(spans[0]!.style.bold).toBe(true);
+    // A run's own rPrChange keeps its own attribution, not the style's.
+    expect(marks[1]?.id).toBe('77');
   });
 });
 

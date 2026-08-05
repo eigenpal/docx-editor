@@ -11,6 +11,7 @@ import type {
   FontConfiguration,
   Unsubscribe,
 } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { EditorModule } from '../contracts/modules.ts';
 import type { FontConfigurationFragment } from './font-composition.ts';
 import type { PaginatedSurface } from './paginated-surface.ts';
 import type { HyperlinkActivation } from './surface-navigation.ts';
@@ -45,6 +46,13 @@ export interface DocxEditorConfig {
   locale?: string;
   /** Localized drawing refusal labels; defaults to English when omitted. */
   translate?: (key: string, params?: Record<string, string | number>) => string;
+  /**
+   * Capability modules to register — the seam `@docx-editor.dev/pro` plugs in
+   * through. Omitted, the editor runs the free tier: lossless round-trip,
+   * final-state revision rendering, review chrome disabled with the engine's
+   * reason. See {@link EditorModule}.
+   */
+  modules?: readonly EditorModule[];
   /** `'view'` refuses every mutating command through the facade; default `'edit'`. */
   mode?: 'edit' | 'view';
   /** Override raster decode for insert/replace image commands; defaults to browser/headless. */

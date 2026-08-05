@@ -16,7 +16,6 @@ import { Navigation as DocxEditorNavigationCompound } from '../editor/navigation
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
 import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
-import { DocxEditorReview } from '../editor/DocxEditorReview';
 import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
 import { DocxEditorNotesChrome } from '../editor/DocxEditorNotes';
@@ -150,6 +149,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
     author,
     locale,
     mode,
+    modules,
     zoom,
     onReady,
     onChange,
@@ -215,6 +215,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
         />
       )}
       <DocxEditorContentControl />
+      {props.children}
     </DocxEditorViewport>
   );
 
@@ -312,6 +313,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
       {...(locale !== undefined ? { locale } : {})}
       translate={translate}
       {...(mode !== undefined ? { mode } : {})}
+      {...(modules !== undefined ? { modules } : {})}
       {...(zoom !== undefined ? { zoom } : {})}
       tableInteractionLabel={tableInteractionLabel}
       {...(onReady ? { onReady } : {})}
@@ -373,11 +375,6 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
    */
   readonly HyperLink: typeof DocxEditorHyperLink;
   /**
-   * The review rail — tracked changes and comments as cards beside the page, with accept,
-   * reject and reply. Place it inside the Viewport, beside `DocxEditor.Content`.
-   */
-  readonly Review: typeof DocxEditorReview;
-  /**
    * The right-click menu over the painted document, with its rows as statics (`.Cut`,
    * `.Copy`, `.Paste`, `.Delete`, `.SelectAll`, `.Item`, `.Slot`, `.Submenu`, …). Mounted
    * by default inside the viewport; `contextMenu={false}` removes it and lets the
@@ -409,7 +406,6 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   HeaderFooterChrome: DocxEditorHeaderFooterChrome,
   NotesChrome: DocxEditorNotesChrome,
   HyperLink: DocxEditorHyperLink,
-  Review: DocxEditorReview,
   ContextMenu: DocxEditorContextMenuCompound,
   ContentControl: DocxEditorContentControl,
 });

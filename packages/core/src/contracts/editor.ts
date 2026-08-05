@@ -7,7 +7,7 @@
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from '../index';
 // Type-only, so the adapters reach the review vocabulary through THIS contract rather than
 // naming the layout lane, which they are not allowed to import.
-import type { ReviewItem, ReviewRevisionKind } from '../layout/review-model.ts';
+import type { ReviewItem, ReviewRevisionKind } from '../layout/review-support.ts';
 import type { InteractionOutcome, SemanticSelection, SemanticTarget } from './interaction';
 import type {
   ColorValue,
@@ -1260,6 +1260,17 @@ export interface EditorSnapshot {
    * value-equal snapshot correctly refuses to re-render.
    */
   readonly reviewPaneOpen?: boolean;
+  /**
+   * Whether the document carries review content — tracked changes or comment
+   * anchors — independent of any registered review module.
+   *
+   * The free tier's honest signal: revisions render in their final-state
+   * projection there, so without this a host cannot tell its user "this
+   * document has tracked changes" — the one fact the upsell hint needs.
+   * Optional and additive like `canUndo`; derived cheaply from store
+   * vocabulary and memoized per revision.
+   */
+  readonly hasReviewContent?: boolean;
   /**
    * How edits are written right now.
    *
