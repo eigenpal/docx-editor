@@ -13,6 +13,7 @@
 /* eslint-disable max-lines -- paint seam; note areas live in semantic-paint-notes.ts */
 
 import { baselineShiftPtOf, TAB_LEADER_GLYPH } from '@docx-editor.dev/core-contract/layout';
+import { DEFAULT_CANVAS_FONT_STACK } from '../layout/canvas-measurer.ts';
 import { authorSlotsOf, revisionPresentationOf } from './revision-presentation.ts';
 import { formatRevisionOf, type RevisionAttribution } from '@docx-editor.dev/core-contract/layout';
 import type {
@@ -272,7 +273,11 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: P
     // meaning for the declared name. `FONT_NAME` gates the declared family; the alias is
     // engine-minted, never file-derived.
     const alias = ctx.fontAlias?.(style.fontFamily);
-    css.fontFamily = alias ? `"${alias}", "${style.fontFamily}"` : `"${style.fontFamily}"`;
+    // The measurer's fallback stack trails the declared family so an unresolvable name
+    // falls back to the SAME face measurement fell back to — not to the inherited font.
+    css.fontFamily = alias
+      ? `"${alias}", "${style.fontFamily}", ${DEFAULT_CANVAS_FONT_STACK}`
+      : `"${style.fontFamily}", ${DEFAULT_CANVAS_FONT_STACK}`;
   }
   if (style.color && HEX.test(style.color)) css.color = `#${style.color}`;
   const highlight = style.highlight ? HIGHLIGHT.get(style.highlight) : undefined;
@@ -1281,6 +1286,11 @@ function paintPage(
   // token names and only `.docx-page-content` below is inverted, so the theme and print
   // rules name that class instead.
   element.className = 'docx-page';
+  // The measurer's own fallback stack, so an unstyled run — or one whose declared family
+  // the platform cannot resolve — RENDERS in the same face it was MEASURED in. Left to
+  // inherit, the page picked up the host UI font, and every measured overlay (caret,
+  // selection, revision bands, strikes) drifted along the line against the painted glyphs.
+  element.style.fontFamily = DEFAULT_CANVAS_FONT_STACK;
   element.dataset.pageIndex = String(page.index);
   if (options.ariaHidden) {
     // The painted page is a PICTURE of the document; the editable projection is what

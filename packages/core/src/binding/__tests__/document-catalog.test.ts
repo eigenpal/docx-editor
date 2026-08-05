@@ -7,6 +7,8 @@
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
+import { readOoxmlPart } from '../../store/package/ooxml-tree.ts';
+import { collectDocumentFonts } from '../document-catalog.ts';
 import { openTreeSession, type TreeDocxSession } from '../tree-session.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -103,6 +105,23 @@ describe('documentFonts', () => {
       'Impact',
       'MS Mincho',
     ]);
+  });
+
+  test('theme font references surface the theme faces', () => {
+    // A template styled entirely through the theme (`w:asciiTheme="minorHAnsi"`) names no
+    // family literally; the answer must still include the face every run renders in.
+    const result = readOoxmlPart(
+      `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:rPr>` +
+        '<w:rFonts w:asciiTheme="minorHAnsi" w:hAnsiTheme="minorHAnsi" w:cstheme="minorBidi"/>' +
+        '</w:rPr></w:pPr></w:p></w:body></w:document>',
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!result.ok) throw new Error(result.reason);
+    expect(
+      collectDocumentFonts([result.part.root], { major: 'Aptos Display', minor: 'Aptos' })
+    ).toEqual(['Aptos']);
+    // Without the theme faces the reference contributes nothing (the pre-theme answer).
+    expect(collectDocumentFonts([result.part.root])).toEqual([]);
   });
 
   test('header fonts require the header to be referenced by the section', () => {
