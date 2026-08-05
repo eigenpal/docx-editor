@@ -92,6 +92,12 @@ export interface PaginatedSurfaceOptions {
   /** Points to CSS pixels. */
   readonly scale?: number;
   /**
+   * The family a run with no authored font is reported as by `formatting()` — the face
+   * the measurer falls back to. Absent, such a run reports `fontFamily: null` and a
+   * font box shows its placeholder even though the text renders in a real face.
+   */
+  readonly defaultFontFamily?: string;
+  /**
    * Who resolves a pointer to a caret.
    *
    * `'engine'` (the default) answers from the layout records, which is what makes a click in

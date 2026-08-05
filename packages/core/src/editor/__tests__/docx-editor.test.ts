@@ -872,6 +872,32 @@ describe('setMarkAttr (value-typed run formatting)', () => {
     expect(editor.snapshot().formatting?.fontSizePt).toBe(11);
   });
 
+  test('a blank document still reports the default face, and offers a catalog', () => {
+    // No styles part, no theme, no rFonts anywhere: the document derivation is empty,
+    // but the run is measured in the configured default face — the font box must say
+    // so, and the picker must offer something to change it to.
+    const { editor } = mount(p('hello'));
+    editor.surface!.selectAll();
+    expect(editor.getDocumentFonts()).toEqual([]);
+    expect(editor.snapshot().formatting?.fontFamily).toBe('Calibri');
+    expect(editor.getAvailableFonts()).toEqual(['Calibri']);
+    // Declaring a font in the document joins the catalog without displacing it.
+    editor.exec({ type: 'setMarkAttr', mark: 'fontFamily', attr: 'family', value: 'Georgia' });
+    expect(editor.getDocumentFonts()).toEqual(['Georgia']);
+    expect(editor.getAvailableFonts()).toEqual(['Calibri', 'Georgia']);
+  });
+
+  test('a mixed-font selection still reports no agreed family', () => {
+    // The default-face fallback is per span; it must not launder a real disagreement
+    // into the default font.
+    const { editor } = mount(
+      '<w:p><w:r><w:rPr><w:rFonts w:ascii="Georgia"/></w:rPr><w:t>serif</w:t></w:r>' +
+        '<w:r><w:t>plain</w:t></w:r></w:p>'
+    );
+    editor.surface!.selectAll();
+    expect(editor.snapshot().formatting?.fontFamily).toBeUndefined();
+  });
+
   test('invalid values are refused as invalidArgs before touching the document', () => {
     const { editor } = mount(p('hello'));
     editor.surface!.selectAll();

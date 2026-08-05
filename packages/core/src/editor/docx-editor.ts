@@ -145,6 +145,7 @@ import {
   toEditorFontError,
 } from './font-configuration.ts';
 import { composeFontConfiguration } from './font-composition.ts';
+import { availableFontFamilies, configuredDefaultFontFamily } from './font-catalog.ts';
 import { embeddedFontSources } from './embedded-font-sources.ts';
 import { createLocalFontProbe, detectFontSubstitutions } from './font-availability.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
@@ -392,6 +393,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     teardownSurface();
     const result = mountPaginatedSurface(container, bytes, {
       scale: scaleOf(),
+      // What a run with no authored font is REPORTED as, matching what it is measured
+      // as (`resolveFont`'s fallback below) — so a blank document's font box reads
+      // "Calibri", not an em-dash.
+      defaultFontFamily: configuredDefaultFontFamily(config.fonts),
       // Suggesting needs both: an author to attribute a proposal to, and the mode itself,
       // which survives a document reload because the reader chose it, not the file.
       ...(config.author ? { author: config.author } : {}),
@@ -1464,6 +1469,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // Real derivations from the canonical trees (session-memoized), no longer stubs.
     getDocumentStyles: () => surface?.session.documentStyles() ?? [],
     getDocumentFonts: () => surface?.session.documentFonts() ?? [],
+    // The picker's list: the configured catalog is offerable with no document at all,
+    // and the document's declared families join it once one is mounted.
+    getAvailableFonts: () =>
+      availableFontFamilies(config.fonts, surface?.session.documentFonts() ?? []),
     getDocumentThemeColors: () => surface?.session.documentThemeColors() ?? [],
     getOutline: () => surface?.session.documentOutline() ?? [],
     getComments: () => [],

@@ -553,6 +553,7 @@ export function mountPaginatedSurface(
     textOf: (paragraphId) => textOf(paragraphId),
     selectedCells: () => cellSelection?.cellIds,
     defaultParagraphStyleId: () => styleCascade?.defaultParagraphStyleId ?? null,
+    defaultFontFamily: () => options.defaultFontFamily ?? null,
     pendingFormats: () => pendingAtCaret(),
     setPendingFormats: (next) => {
       if (next === null || next.length === 0) {

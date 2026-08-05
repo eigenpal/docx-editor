@@ -84,10 +84,11 @@ function downloadDocx(buffer: ArrayBuffer, name: string): void {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Custom items for the FontFamily popup: each document font as a single-line row
+ * Custom items for the FontFamily popup: each offerable font as a single-line row
  * rendered in its own typeface, reference-picker style (the selected row gets the
- * library's right-aligned check). Options come from `useFontFamily()`, i.e. from
- * the DOCUMENT's font catalog — the list follows edits.
+ * library's right-aligned check). Options come from `useFontFamily()` — the editor's
+ * configured catalog merged with the document's declared fonts, so a brand-new
+ * document still lists real choices; the list follows edits.
  */
 function FontPreviewItems() {
   const { options } = useFontFamily();
