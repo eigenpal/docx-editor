@@ -2,4 +2,4 @@
 '@docx-editor.dev/react': patch
 ---
 
-The paragraph mark's font size now contributes to the last line's ascent and published leading, so cover-page party names that author a taller mark than their visible text get Word's gap above the glyphs instead of packing tight underneath the previous line.
+Auto and at-least line spacing now grow the line box below the glyphs, matching Word, so cover-page connectors like "between" no longer open a large gap above themselves while sitting tight on the next line. A taller paragraph mark still deepens the last line without shifting the text baseline.

@@ -205,16 +205,14 @@ export interface LineRecord {
   /** Distance from the line box top to the text baseline. */
   readonly baseline: number;
   /**
-   * How much of the box is line-spacing leading rather than glyphs, and therefore how far
-   * below the box top the text sits: `w:line` above single puts the WHOLE leading above the
-   * text, so the glyphs are bottom-anchored in the box and {@link baseline} already carries
-   * it.
+   * Space ABOVE the glyph band inside {@link box} (exact centering, not auto/atLeast).
    *
-   * Published by the spacing rule rather than recovered by paint. Subtracting the tallest
-   * span height from the box gives the same answer only while the rule is the multiplying
-   * one — it is already wrong for an `exact` box clipped below its glyphs — and three paint
-   * sites each deriving it separately is how they came to disagree about where a line's
-   * text sits.
+   * `auto` / `atLeast` extras grow the box BELOW the glyphs — paint puts that depth in
+   * padding-bottom. {@link baseline} is measured from the line top and already includes
+   * this above-band when present.
+   *
+   * Published by layout rather than recovered by paint: three paint sites each deriving it
+   * separately is how they came to disagree about where a line's text sits.
    */
   readonly leading: number;
   /**

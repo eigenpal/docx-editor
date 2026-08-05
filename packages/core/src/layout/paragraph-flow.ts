@@ -1100,36 +1100,26 @@ export function breakParagraph(
 
   const closeLine = (options?: { readonly includeParagraphMark?: boolean }): void => {
     const metrics = measurer.lineMetrics(emptyStyle);
-    // Glyph band before the paragraph mark joins the line. Paint pads `leading` above this
-    // band; if mark growth only raises `height`/`baseline` and leaves `leading` at 0, the
-    // extra space lands BELOW the text (cover-page "between"/"MERIDIAN" clump).
+    // Baseline of the visible glyph band before mark / spacing. Paint's padding-top is
+    // `spaced.baseline - glyphBaseline` (space above); auto extras grow BELOW instead.
     let glyphBaseline = line.baseline;
     if (line.height === 0) {
       line.height = metrics.height;
       line.baseline = metrics.baseline;
       glyphBaseline = metrics.baseline;
     } else if (options?.includeParagraphMark) {
-      // The paragraph mark (`w:pPr/w:rPr`, CT_PPr / ECMA-376 17.3.1.29) sits on the LAST
-      // line and participates in max-ascent / max-descent, like Word: a taller mark pushes
-      // the baseline down so the gap appears ABOVE the visible runs.
-      const glyphAscent = line.baseline;
-      const glyphDescent = Math.max(0, line.height - line.baseline);
-      const markAscent = metrics.baseline;
-      const markDescent = Math.max(0, metrics.height - metrics.baseline);
-      const ascent = Math.max(glyphAscent, markAscent);
-      const descent = Math.max(glyphDescent, markDescent);
-      line.height = ascent + descent;
-      line.baseline = ascent;
+      // Paragraph mark `w:sz` (CT_PPr/rPr) can be taller than the visible runs. Grow the
+      // line box to the mark height but keep the glyph baseline — the spare depth sits
+      // below the text, matching Word's cover-page party-name rhythm. Pushing the baseline
+      // down (max-ascent) made "between"/"MERIDIAN" clump while inflating other gaps.
+      line.height = Math.max(line.height, metrics.height);
     }
     finalizeDrawingGeometry();
     // Line spacing applies to the finished box, once, so a paragraph's rule governs every
     // line it produced regardless of which run happened to be tallest.
     const spaced = applyLineSpacing(lineSpacing, line.height, line.baseline);
     line.baseline = spaced.baseline;
-    // Leading is space ABOVE the glyph band (mark growth + `w:line` extras). Paint reads
-    // this as padding-top; deriving it from `spaced.height - natural` after folding the
-    // mark into `natural` hid mark growth from paint and inverted the title-page gaps.
-    // Never negative: an `exact` box clipped below its glyphs adds no leading.
+    // Space ABOVE the glyph band only (exact centering, not auto/atLeast). Never negative.
     line.leading = Math.max(0, spaced.baseline - glyphBaseline);
     line.height = spaced.height;
     // Baseline shifts from line spacing must move inline drawings too, or authored distT/distB
