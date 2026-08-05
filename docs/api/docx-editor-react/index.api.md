@@ -343,6 +343,10 @@ export interface DocxEditorContextMenuNamespace {
     readonly Item: typeof ContextMenuItem;
     // (undocumented)
     readonly Paste: typeof ContextMenuPaste;
+    // (undocumented)
+    readonly RefreshToc: typeof ContextMenuRefreshToc;
+    // (undocumented)
+    readonly RefreshTocPageNumbers: typeof ContextMenuRefreshTocPageNumbers;
     readonly Row: typeof MenuRow;
     // (undocumented)
     readonly SelectAll: typeof ContextMenuSelectAll;

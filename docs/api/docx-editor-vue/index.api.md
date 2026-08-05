@@ -682,6 +682,7 @@ export interface EditorSnapshot {
     readonly selectionCollapsed: boolean;
     // (undocumented)
     readonly table: TableContext | null;
+    readonly tocContext: { readonly id: string } | null;
     // (undocumented)
     readonly zoom: number;
 }

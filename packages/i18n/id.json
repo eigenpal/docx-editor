@@ -963,7 +963,9 @@
     }
   },
   "toc": {
-    "updatePrompt": null
+    "updatePrompt": null,
+    "refresh": "Perbarui seluruh tabel",
+    "refreshPageNumbers": "Perbarui nomor halaman saja"
   },
   "app": {
     "name": null,

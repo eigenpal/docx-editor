@@ -83,6 +83,27 @@ describe('a word split across runs stays whole', () => {
     const lines = linesOf(`<w:p>${run('bbbbbbbbbb')}${run('cccccccccc')}</w:p>`);
     expect(lines.join('')).toBe('bbbbbbbbbbcccccccccc');
   });
+
+  test('a tab in its own run is a break opportunity for the text after it', () => {
+    // A tab's advance is measured to reach its stop FROM WHERE THE TAB SITS, so a tab must
+    // never be carried onto another line as part of a word: the carried copy keeps the
+    // advance it was given and stops reaching anything. Text after a tab therefore has to be
+    // allowed to open a line — and when the tab has a run to itself, as a generated
+    // table-of-contents row does, it is the tab that decides that, not the word before it.
+    const body = `<w:p>${run('aa bb')}${run('\t')}${run('ccccc')}</w:p>`;
+    expect(linesOf(body)).toEqual(['aa bb\t', 'ccccc']);
+
+    const spans = breakParagraph(paragraph(body), 'p', 0, 60, measurer, undefined, null)[0]!.spans;
+    const tabIndex = spans.findIndex((span) => span.text === '\t');
+    const before = spans[tabIndex - 1]!;
+    const tab = spans[tabIndex]!;
+    // The tab begins where the text before it ends and advances to the first stop on the
+    // default 36pt grid. Both are read from the run rather than written as point values: the
+    // text's width is whatever the measurer and the inherited size make it, while the claim
+    // under test — that the advance is measured FROM WHERE THE TAB SITS — is not.
+    expect(tab.box.x).toBeCloseTo(before.box.x + before.box.width, 5);
+    expect(tab.box.x + tab.box.width).toBe(36);
+  });
 });
 
 describe('a dash is a break opportunity', () => {

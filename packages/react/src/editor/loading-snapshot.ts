@@ -20,6 +20,7 @@ export const LOADING_SNAPSHOT: EditorSnapshot = Object.freeze({
   selectionCollapsed: true,
   formatting: null,
   table: null,
+  tocContext: null,
   image: null,
   page: Object.freeze({ current: 0, total: 0 }),
   canUndo: false,

@@ -121,6 +121,15 @@ export interface PaginatedSurfaceOptions {
   readonly tableInteractionLabel?: (
     key: 'table.insertRowBelow' | 'table.insertColumnRight'
   ) => string;
+  /**
+   * Localized name for a generated TOC, written as the control's `w:alias` on insert.
+   *
+   * The update ACTIONS are not here: they are rows in the host's context menu, which owns
+   * its own labels. The engine paints no menu of its own.
+   */
+  readonly tocLabels?: {
+    readonly title: string;
+  };
 }
 
 /**
@@ -240,6 +249,14 @@ export interface PaginatedSurfaceState {
    * selection moves — hosts must not maintain a parallel channel.
    */
   readonly contentControls: ContentControlSurfaceState;
+  /**
+   * The TOC the last right-click landed on, or null.
+   *
+   * A right-click deliberately does not move the caret, and a TOC refuses the caret
+   * entirely, so `selection` can never say which table of contents the user is pointing at.
+   * This is how a host's context menu learns it. Surface chrome, not document state.
+   */
+  readonly contextTocId: string | null;
   /** Timing and reuse counters for the last pass. Diagnostics, not document state. */
   readonly perf: PaginatedSurfacePerf;
 }
@@ -495,6 +512,16 @@ export interface PaginatedSurface {
    * Show-all and form-fill are surface chrome and never reflow layout.
    */
   readonly contentControls: ContentControlOps;
+  /** Whether the addressed (or caret-local) body TOC can be refreshed. */
+  canRefreshToc(tocId?: string): boolean;
+  /** Whether a generated body TOC can be inserted before the caret paragraph. */
+  canInsertToc(): boolean;
+  /** Insert and populate a generated body TOC before the caret paragraph. */
+  insertToc(): boolean;
+  /** Refresh cached TOC entries and/or page numbers through the two-pass layout pipeline. */
+  refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
+  /** Whether a body paragraph belongs to a detected TOC boundary or cached result. */
+  isInsideToc(paragraphId: string): boolean;
   /**
    * Bookmark jumps and the ONE external-activation gate. A host's popover "open" action
    * calls `openExternal`; nothing else in the engine may call `window.open`.

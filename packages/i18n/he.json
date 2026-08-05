@@ -963,7 +963,9 @@
     "runPropertiesChanged": null
   },
   "toc": {
-    "updatePrompt": null
+    "updatePrompt": null,
+    "refresh": "עדכון הטבלה כולה",
+    "refreshPageNumbers": "עדכון מספרי עמודים בלבד"
   },
   "app": {
     "name": null,

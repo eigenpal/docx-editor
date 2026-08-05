@@ -963,7 +963,9 @@
     "runPropertiesChanged": null
   },
   "toc": {
-    "updatePrompt": null
+    "updatePrompt": null,
+    "refresh": "Mettre à jour toute la table",
+    "refreshPageNumbers": "Mettre à jour uniquement les numéros de page"
   },
   "app": {
     "name": null,

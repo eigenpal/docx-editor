@@ -39,6 +39,13 @@ import { paintPageNoteAreas } from './semantic-paint-notes.ts';
  */
 export interface PaintContext {
   readonly scale: number;
+  /** Generated paragraphs that paint as non-editable navigation surfaces. */
+  readonly readOnlyParagraphIds?: ReadonlySet<string>;
+  /**
+   * Empty-TOC begin paragraphs that paint subtle identifiable furniture. Paint-only — never
+   * serialised into the document.
+   */
+  readonly emptyTocPlaceholderIds?: ReadonlySet<string>;
   /**
    * Maps a document-declared family to the alias the host registered its bytes under, or
    * `undefined` when that family has no aliased face. Engine-minted values only.
@@ -79,6 +86,13 @@ function aliasIdentity(alias: (family: string) => string | undefined): string {
 export interface PaintOptions {
   /** Points to CSS pixels. 96/72 renders a point as a CSS point at 100% zoom. */
   readonly scale?: number;
+  /** Generated paragraphs that paint as non-editable navigation surfaces. */
+  readonly readOnlyParagraphIds?: ReadonlySet<string>;
+  /**
+   * Empty-TOC begin paragraphs that paint subtle identifiable furniture. Paint-only — never
+   * serialised into the document.
+   */
+  readonly emptyTocPlaceholderIds?: ReadonlySet<string>;
   /** Marks painted pages as presentational, so assistive tech reads the editable projection. */
   readonly ariaHidden?: boolean;
   /**
@@ -120,8 +134,30 @@ export interface PaintOptions {
     readonly showAll?: boolean;
     /** Control ids whose boundaries are visible because the caret is inside them. */
     readonly activeIds?: ReadonlySet<string>;
+    /**
+     * Control ids whose boundaries are visible because the pointer is over them.
+     * Used for TOC hover chrome without projecting a persistent caret-active state.
+     *
+     * Deliberately OUTSIDE the paint-reuse key: hover must never rebuild a page. The
+     * surface toggles `data-hover` / `data-boundary-visible` on the painted chrome it
+     * already has, and this set only tells a page that rebuilds for some OTHER reason
+     * which of its controls is currently under the pointer.
+     */
+    readonly hoverIds?: ReadonlySet<string>;
+    /**
+     * Control ids whose boundary furniture is painted by something else.
+     *
+     * An empty TOC paints its own placeholder box on the begin paragraph, so drawing the
+     * control boundary as well left two rounded rectangles (of different heights) plus a
+     * label chip stacked over one empty region.
+     */
+    readonly suppressedIds?: ReadonlySet<string>;
     /** Checkbox control ids whose canonical `w14:checked` state is on. */
     readonly checkedIds?: ReadonlySet<string>;
+    /** Non-SDT structured regions that intentionally reuse content-control chrome. */
+    readonly additionalBoundaries?: readonly ContentControlBoundaryRecord[];
+    /** Control ids that represent TOC regions (hover-only chrome; never caret-sticky). */
+    readonly tocControlIds?: ReadonlySet<string>;
   };
 }
 
@@ -850,6 +886,16 @@ function paintFragment(
   element.className = 'docx-paragraph-fragment layout-paragraph';
   element.dataset.paragraphId = fragment.paragraphId;
   element.dataset.fragmentIndex = String(fragment.fragmentIndex);
+  if (ctx.readOnlyParagraphIds?.has(fragment.paragraphId)) {
+    element.classList.add('docx-generated-region');
+    element.dataset.docxReadOnly = '';
+    element.setAttribute('contenteditable', 'false');
+    element.setAttribute('aria-readonly', 'true');
+  }
+  if (ctx.emptyTocPlaceholderIds?.has(fragment.paragraphId)) {
+    element.classList.add('docx-toc-empty-placeholder');
+    element.dataset.docxTocEmpty = '';
+  }
   // Fragment box remains the flow/hit region (includes before/after spacing). Paragraph
   // shading paints from the published line-area box — never the outer fragment background.
   if (fragment.shading && HEX.test(fragment.shading) && fragment.shadingBox) {
@@ -1410,12 +1456,27 @@ function paintContentControlChrome(
   }
 ): void {
   const chrome = options.contentControlChrome;
-  const controls = page.contentControls ?? [];
+  const suppressed = chrome?.suppressedIds;
+  const pageControls = (page.contentControls ?? []).filter(
+    (control) => suppressed?.has(control.id) !== true
+  );
+  const controls = [
+    ...pageControls,
+    ...(chrome?.additionalBoundaries ?? []).filter(
+      (candidate) =>
+        suppressed?.has(candidate.id) !== true &&
+        !pageControls.some((control) => control.id === candidate.id)
+    ),
+  ];
   if (controls.length === 0) return;
   const showAll = chrome?.showAll === true;
   const activeIds = chrome?.activeIds;
+  const hoverIds = chrome?.hoverIds;
+  const tocControlIds = chrome?.tocControlIds;
   for (const control of controls) {
-    const active = activeIds?.has(control.id) === true;
+    const isToc = tocControlIds?.has(control.id) === true;
+    const active = !isToc && activeIds?.has(control.id) === true;
+    const hovered = hoverIds?.has(control.id) === true;
     pageElement.append(
       paintContentControlBoundary(
         document,
@@ -1423,8 +1484,10 @@ function paintContentControlChrome(
         control,
         options.scale,
         active,
-        showAll || active,
-        chrome?.checkedIds?.has(control.id)
+        hovered,
+        showAll || active || (isToc && hovered),
+        chrome?.checkedIds?.has(control.id),
+        isToc
       )
     );
   }
@@ -1436,8 +1499,10 @@ function paintContentControlBoundary(
   control: ContentControlBoundaryRecord,
   scale: number,
   active: boolean,
+  hovered: boolean,
   boundaryVisible: boolean,
-  checked: boolean | undefined
+  checked: boolean | undefined,
+  isToc: boolean
 ): HTMLElement {
   const layer = document.createElement('div');
   layer.className = 'docx-content-control-chrome';
@@ -1447,7 +1512,9 @@ function paintContentControlBoundary(
   layer.dataset.lock = control.effectiveLock;
   if (control.bound) layer.dataset.bound = '';
   if (control.placeholder) layer.dataset.placeholder = '';
+  if (isToc) layer.dataset.docxToc = '';
   if (active) layer.dataset.active = '';
+  if (hovered) layer.dataset.hover = '';
   if (boundaryVisible) layer.dataset.boundaryVisible = '';
   layer.setAttribute('contenteditable', 'false');
   layer.setAttribute('role', 'group');
@@ -1578,13 +1645,37 @@ export function paintSemanticLayout(
   options: PaintOptions = {}
 ): void {
   const chrome = options.contentControlChrome;
+  // `hoverIds` is absent ON PURPOSE — see its doc comment. Including it made a pointer
+  // entering a TOC rebuild every page, which detached the node the gesture started on.
   const chromeKey = chrome
-    ? `${chrome.showAll === true ? '1' : '0'}:${chrome.activeIds ? [...chrome.activeIds].sort().join(',') : ''}:${chrome.checkedIds ? [...chrome.checkedIds].sort().join(',') : ''}`
+    ? `${chrome.showAll === true ? '1' : '0'}:${chrome.activeIds ? [...chrome.activeIds].sort().join(',') : ''}:${chrome.checkedIds ? [...chrome.checkedIds].sort().join(',') : ''}:${chrome.tocControlIds ? [...chrome.tocControlIds].sort().join(',') : ''}:${chrome.suppressedIds ? [...chrome.suppressedIds].sort().join(',') : ''}`
     : '';
+  const additionalKey = chrome?.additionalBoundaries
+    ? chrome.additionalBoundaries
+        .flatMap((boundary) =>
+          boundary.fragments.map(
+            (fragment) =>
+              `${boundary.id}:${fragment.pageIndex}:${fragment.box.x}:${fragment.box.y}:${fragment.box.width}:${fragment.box.height}`
+          )
+        )
+        .sort()
+        .join(',')
+    : '';
+  const readOnlyKey = options.readOnlyParagraphIds
+    ? [...options.readOnlyParagraphIds].sort().join(',')
+    : '';
+  const emptyTocKey = options.emptyTocPlaceholderIds
+    ? [...options.emptyTocPlaceholderIds].sort().join(',')
+    : '';
+  const tocKey = chrome?.tocControlIds ? [...chrome.tocControlIds].sort().join(',') : '';
   const resolved = {
     scale: options.scale ?? 96 / 72,
     ariaHidden: options.ariaHidden ?? true,
     ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+    ...(options.readOnlyParagraphIds ? { readOnlyParagraphIds: options.readOnlyParagraphIds } : {}),
+    ...(options.emptyTocPlaceholderIds
+      ? { emptyTocPlaceholderIds: options.emptyTocPlaceholderIds }
+      : {}),
     authorSlots: authorSlotsOf(layout),
     ...(options.activeHeaderFooterRId
       ? { activeHeaderFooterRId: options.activeHeaderFooterRId }
@@ -1599,8 +1690,9 @@ export function paintSemanticLayout(
   // registered must not be reused verbatim afterwards. Occurrence page is included so
   // moving the caret host across shared furniture copies rebuilds active markers.
   // Content-control chrome is furniture only, but toggling it must rebuild painted pages
-  // so show-all / caret chrome appear.
-  const parameters = `${resolved.scale}|${resolved.ariaHidden}|${resolved.fontAlias ? aliasIdentity(resolved.fontAlias) : ''}|${resolved.activeHeaderFooterRId ?? ''}|${resolved.activeHeaderFooterPageIndex ?? ''}|cc:${chromeKey}`;
+  // so show-all / caret chrome appear. Hover is the one exception: it is applied to the
+  // painted nodes in place, because a pointer crossing a region may not move it.
+  const parameters = `${resolved.scale}|${resolved.ariaHidden}|${resolved.fontAlias ? aliasIdentity(resolved.fontAlias) : ''}|${resolved.activeHeaderFooterRId ?? ''}|${resolved.activeHeaderFooterPageIndex ?? ''}|cc:${chromeKey}:${additionalKey}|toc:${tocKey}|ro:${readOnlyKey}|tocEmpty:${emptyTocKey}`;
   const previous = retainedPaints.get(container);
   const reusable =
     previous && previous.parameters === parameters

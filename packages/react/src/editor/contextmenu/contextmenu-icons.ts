@@ -1,12 +1,12 @@
-// Icon path data for the context menu's five command rows.
+// Icon path data for the context menu's own command rows.
 //
 // PATHS, not components, because that is the vocabulary the menu rows already speak:
 // `MenuRow` takes rendered icon content and every packaged row feeds it `chromeIcon(paths)`
 // from the chrome registry. Matching that keeps one icon shape across both panels.
 //
-// They live here rather than in the registry because none of these five is a chrome slot —
-// the registry describes toolbar and menu-bar controls, and adding entries for rows nothing
-// renders in either would put five dead controls in the default arrangement. They live here
+// They live here rather than in the registry because none of these is a chrome slot — the
+// registry describes toolbar and menu-bar controls, and adding entries for rows nothing
+// renders in either would put dead controls in the default arrangement. They live here
 // rather than in `components/ui/Icons.tsx` because that file is at its 1000-line cap and
 // exports React components, which is the other vocabulary.
 //
@@ -31,6 +31,16 @@ export const PASTE_PATHS: readonly string[] = [
 /** `delete` — the same glyph the registry's `delete` carries, kept beside its siblings. */
 export const DELETE_PATHS: readonly string[] = [
   'M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z',
+];
+
+/** `toc` — the same glyph the Insert menu's table-of-contents slot carries. */
+export const REFRESH_TOC_PATHS: readonly string[] = [
+  'M120-240v-80h240v80H120Zm0-200v-80h480v80H120Zm0-200v-80h720v80H120Z',
+];
+
+/** `format_list_numbered` — numbers beside rows, which is what this row refreshes. */
+export const REFRESH_TOC_PAGE_NUMBERS_PATHS: readonly string[] = [
+  'M120-80v-60h100v-30h-60v-60h60v-30H120v-60h120q17 0 28.5 11.5T280-280v40q0 17-11.5 28.5T240-200q17 0 28.5 11.5T280-160v40q0 17-11.5 28.5T240-80H120Zm0-280v-110q0-17 11.5-28.5T160-510h60v-30H120v-60h120q17 0 28.5 11.5T280-560v70q0 17-11.5 28.5T240-450h-60v30h100v60H120Zm60-280v-180h-60v-60h120v240h-60Zm180 440v-80h480v80H360Zm0-240v-80h480v80H360Zm0-240v-80h480v80H360Z',
 ];
 
 /** `select_all` */

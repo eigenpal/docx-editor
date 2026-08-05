@@ -963,7 +963,9 @@
     "runPropertiesChanged": null
   },
   "toc": {
-    "updatePrompt": null
+    "updatePrompt": null,
+    "refresh": "Gesamtes Verzeichnis aktualisieren",
+    "refreshPageNumbers": "Nur Seitenzahlen aktualisieren"
   },
   "app": {
     "name": null,

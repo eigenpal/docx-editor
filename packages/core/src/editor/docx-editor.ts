@@ -109,6 +109,14 @@ import {
   selectionsMatch,
   snapshotsEqual,
 } from './docx-editor-support.ts';
+import {
+  createT,
+  deepMerge,
+  en,
+  locales,
+  type LocaleCode,
+  type LocaleStrings,
+} from '@docx-editor.dev/i18n';
 import { execEditorCommand } from './docx-editor-exec.ts';
 import {
   currentPage as currentPageOf,
@@ -191,6 +199,13 @@ const SCOPE_BODY: EditorScope = Object.freeze({ kind: 'body' as const });
 const EMPTY_FONT_SUBSTITUTIONS: readonly string[] = Object.freeze([]);
 
 export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
+  const localeCode =
+    config.locale && config.locale in locales ? (config.locale as LocaleCode) : ('en' as const);
+  const t = createT(
+    deepMerge(en, localeCode === 'en' ? undefined : locales[localeCode]) as LocaleStrings,
+    localeCode
+  );
+  const tocLabels = { title: t('toolbar.tableOfContents') };
   let container: HTMLElement | null = config.container ?? null;
   /** Document bytes waiting for a container — set when constructed or loaded detached. */
   let pendingBytes: Uint8Array | null = null;
@@ -399,6 +414,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         bump();
         emitSelectionChange();
       },
+      tocLabels,
       onChange: (state) => {
         // The mount-time render reports before `surface` is assigned; nothing observable
         // has changed at that point, so it is not a selection change.
@@ -719,6 +735,20 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }
   }
 
+  /**
+   * The right-click TOC context, reference-stable while the id holds.
+   *
+   * A fresh object per derivation would make `snapshotsEqual` report every tick as a change
+   * and hand every subscriber a new snapshot, which is the opposite of what the cache is
+   * for. The id is the only value, so one object per id is enough.
+   */
+  let cachedTocContext: { readonly id: string } | null = null;
+  function tocContextOf(id: string | null): { readonly id: string } | null {
+    if (id === null) cachedTocContext = null;
+    else if (cachedTocContext?.id !== id) cachedTocContext = Object.freeze({ id });
+    return cachedTocContext;
+  }
+
   function deriveSnapshot(): EditorSnapshot {
     const state = surface?.state() ?? null;
     const scope = surface?.activeScope?.() ?? SCOPE_BODY;
@@ -759,6 +789,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           state.selection.anchor.offset === state.selection.head.offset),
       formatting: runFormattingOf(surface),
       table: tableContextOf(surface),
+      tocContext: tocContextOf(state?.contextTocId ?? null),
       image: null,
       page: { current: currentPageOf(surface), total: totalPagesOf(surface) },
       canUndo: state?.canUndo ?? false,
@@ -1578,7 +1609,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
             (query as { container?: ContainerRef }).container
           ) as unknown as EditorQueryResults[K];
         case 'isInsideToc':
-          return false as EditorQueryResults[K];
+          return (
+            surface ? surface.isInsideToc(surface.state().selection.head.paragraphId) : false
+          ) as EditorQueryResults[K];
         case 'hyperlinkAt':
           return hyperlinkAtOf(surface) as EditorQueryResults[K];
         case 'contentControls':

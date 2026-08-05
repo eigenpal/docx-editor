@@ -48,6 +48,18 @@ import {
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 
 /**
+ * How far past the line's right edge a span may reach before it counts as overflow.
+ *
+ * A right/centre/decimal tab computes its advance in ABSOLUTE x — `destination - currentX -
+ * segmentWidth` — while wrapping is decided in line-local width. Converting between the two
+ * subtracts and re-adds the paragraph origin, so a segment the tab placed to end EXACTLY at
+ * the edge lands a fraction of an ulp beyond it. Without a tolerance that hairline decides a
+ * line break, and a right-aligned tab is built to reach the edge exactly. A thousandth of a
+ * point is far below one device pixel, so nothing a reader could see wraps because of this.
+ */
+const OVERFLOW_TOLERANCE_PT = 0.001;
+
+/**
  * Per-paragraph geometry the BREAK depends on, beyond width.
  *
  * Both change where lines start and how tall they are, so both belong in the caller's
@@ -86,6 +98,12 @@ export interface ParagraphFlowOptions {
   readonly displayMode?: RevisionDisplayMode;
   /** Derived footnote/endnote marks for noteReference / noteRef projection. */
   readonly noteMarks?: import('./note-projection.ts').NoteMarkContext;
+  /**
+   * Cross-paragraph TOC field begin/end paragraphs carry only `w:fldChar` / `w:instrText`
+   * chrome with no measurable text. When set, an otherwise empty break returns no lines so
+   * layout does not reserve the caret placeholder row ordinary empty paragraphs need.
+   */
+  readonly suppressEmptyPlaceholderLine?: boolean;
 }
 
 /** One measurable piece of a paragraph: text carrying one property set. */
@@ -450,6 +468,9 @@ export function breakParagraph(
       },
     ];
   });
+  if (pieces.length === 0 && flow?.suppressEmptyPlaceholderLine) {
+    return [];
+  }
   /** Carried onto every span so paint and the review surface read one attribution. */
   const revisionsOf = (piece: FieldAwarePiece): { revisions?: readonly RevisionAttribution[] } =>
     piece.revisions === undefined ? {} : { revisions: piece.revisions };
@@ -677,6 +698,13 @@ export function breakParagraph(
         line.height = Math.max(line.height, metrics.height);
         line.baseline = Math.max(line.baseline, metrics.baseline);
         line.end = layoutOwned ? piece.end : piece.start + boundary;
+        // A tab is a break opportunity, so whatever follows it may open a line. Leaving the
+        // previous word recorded here made the following text a CONTINUATION of it, and an
+        // overflow then took the mid-word path: the word before the tab was carried onto the
+        // next line together with the tab, whose advance was re-laid unchanged and no longer
+        // reached its stop — a heading split mid-phrase with its page number stranded in the
+        // middle of the line.
+        lastEmitted = '\t';
         consumed = boundary;
         continue;
       }
@@ -704,7 +732,7 @@ export function breakParagraph(
         wordStartWidth = line.width;
         wordStartEnd = line.end;
       }
-      if (line.width + width > lineAvailable() && line.spans.length > 0) {
+      if (line.width + width > lineAvailable() + OVERFLOW_TOLERANCE_PT && line.spans.length > 0) {
         if (opensWord || wordStartSpan <= 0) {
           closeLine();
         } else {

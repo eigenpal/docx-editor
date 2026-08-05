@@ -50,7 +50,9 @@
     "reportIssue": "Report issue"
   },
   "toc": {
-    "updatePrompt": "This document contains a table of contents that's out of date. Regenerate it now?"
+    "updatePrompt": "This document contains a table of contents that's out of date. Regenerate it now?",
+    "refresh": "Refresh table of contents",
+    "refreshPageNumbers": "Refresh page numbers"
   },
   "formattingBar": {
     "groups": {

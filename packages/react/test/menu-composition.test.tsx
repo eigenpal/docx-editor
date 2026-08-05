@@ -195,33 +195,25 @@ describe('rows carry the engine, not a paraphrase', () => {
     expect(view.container.querySelectorAll('[role="menu"]').length).toBe(0);
   });
 
-  test('an UNWIRED row is present, disabled, and quotes the ENGINE', async () => {
+  test('the table of contents row is enabled and inserts through the engine', async () => {
     const { view } = mountMenu(<DocxEditorMenu />);
     await act(async () => {
       await Promise.resolve();
     });
     openMenu(view, 'toolbar.insert');
 
-    // Table of contents has no command in the tree editor yet. Present — dropping it would
-    // understate the gap — and disabled via `aria-disabled`, NOT the native attribute, so
-    // it stays focusable and its reason stays announceable.
     const toc = row(view, 'insert.toc');
     expect(toc.disabled).toBe(false);
-    expect(toc.getAttribute('aria-disabled')).toBe('true');
-    // No command SHAPE to probe with, so chrome answers — and says which case it is.
-    expect(toc.getAttribute('title')).toBe('not wired to an editor command');
-    // The reason is DESCRIBED, not just hovered: a tooltip on a row a pointer may never
-    // touch reaches nobody.
-    const describedBy = toc.getAttribute('aria-describedby');
-    expect(describedBy).toBeTruthy();
-    expect(view.container.querySelector(`#${CSS.escape(describedBy!)}`)?.textContent).toBe(
-      'not wired to an editor command'
-    );
-    // The label is still the registry's, so the row reads as itself.
+    expect(toc.getAttribute('aria-disabled')).toBeNull();
     expect(toc.textContent).toContain('toolbar.tableOfContents');
+    act(() => {
+      fireEvent.click(toc);
+    });
+    expect(view.container.querySelectorAll('[role="menu"]').length).toBe(0);
 
     // Same treatment inside the submenu: the continuous section break is a real Word
     // choice the engine cannot express, so it is shown and refused rather than dropped.
+    openMenu(view, 'toolbar.insert');
     openSubmenu(view, 'toolbar.break');
     expect(row(view, 'insert.sectionBreakContinuous').getAttribute('aria-disabled')).toBe('true');
     expect(row(view, 'insert.sectionBreakNextPage').getAttribute('aria-disabled')).toBeNull();
@@ -435,7 +427,9 @@ describe('chrome contracts', () => {
     const { view } = mountMenu(<DocxEditorMenu onReportIssue={() => (reported += 1)} />);
     openMenu(view, 'toolbar.help');
     act(() => {
-      fireEvent.click(view.container.querySelector<HTMLButtonElement>('[data-slot="help.reportIssue"]')!);
+      fireEvent.click(
+        view.container.querySelector<HTMLButtonElement>('[data-slot="help.reportIssue"]')!
+      );
     });
     expect(reported).toBe(1);
   });
@@ -524,7 +518,7 @@ describe('chrome contracts', () => {
   test('a disabled row is still focusable, so its reason is reachable', () => {
     const { view } = mountMenu(<DocxEditorMenu />);
     openMenu(view, 'toolbar.insert');
-    const toc = row(view, 'insert.toc');
+    const toc = row(view, 'image.insert');
     act(() => {
       toc.focus();
     });
@@ -596,7 +590,9 @@ describe('chrome contracts', () => {
     const panel = view.container.querySelector<HTMLElement>('[role="menu"]')!;
     for (const child of panel.children) {
       const role = child.getAttribute('role');
-      expect(['menuitem', 'menuitemcheckbox', 'menuitemradio', 'separator', 'none']).toContain(role);
+      expect(['menuitem', 'menuitemcheckbox', 'menuitemradio', 'separator', 'none']).toContain(
+        role
+      );
     }
   });
 
