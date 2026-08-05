@@ -45,7 +45,10 @@ import {
   useState,
 } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { ReviewItemQuery, ReviewRevisionKind } from '@docx-editor.dev/core-contract/contracts/editor';
+import type {
+  ReviewItemQuery,
+  ReviewRevisionKind,
+} from '@docx-editor.dev/core-contract/contracts/editor';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { ReviewRailContext, Slot, useDocxEditor, useTranslation } from '@docx-editor.dev/react';
 import { useReview, type ReviewItemView } from './useReview';
@@ -109,7 +112,7 @@ const AUTHOR_SLOTS = 8;
 /** What an unmeasured, uncollapsed card reserves in the stacking run, in CSS px. */
 const DEFAULT_CARD_HEIGHT = 72;
 /** A collapsed card: the head row and its padding, in CSS px. */
-const COLLAPSED_CARD_HEIGHT = 54;
+const COLLAPSED_CARD_HEIGHT = 64;
 /**
  * How far (CSS px) a card may be pushed below its own text before it collapses to a
  * header. Roughly half a viewport: nearer than that the eye still connects card to text;
@@ -512,10 +515,19 @@ function ReviewRoot({
     const collapsed = new Set<string>();
     let cursor = Number.NEGATIVE_INFINITY;
     for (const entry of stackInput) {
-      if (entry.anchorY === null) continue;
-      const top = Math.max(entry.anchorY, cursor);
+      // Geometry can be unavailable for an otherwise valid review item (for example while
+      // its distant page has not produced a placement). Leaving that slot without `top`
+      // puts it back into normal flow at the start of this relative container, underneath
+      // the absolutely positioned cards. Keep it in the same column after the preceding
+      // card instead; when geometry arrives a later pass can move it to its true anchor.
+      const top =
+        entry.anchorY === null
+          ? Number.isFinite(cursor)
+            ? cursor
+            : 0
+          : Math.max(entry.anchorY, cursor);
       positions.set(entry.key, top);
-      const displacedPx = (top - entry.anchorY) * scale;
+      const displacedPx = entry.anchorY === null ? 0 : (top - entry.anchorY) * scale;
       const isActive = 'isActive' in entry && entry.isActive;
       const collapse =
         displacedPx > COLLAPSE_DISPLACEMENT_PX && !isActive && entry.key !== COMPOSE_KEY;
