@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useState } from 'react';
 import type { CSSProperties, RefCallback } from 'react';
+import { absolutePointInScroller } from './scroller-geometry.ts';
 
 type AnchorPlacement = 'before' | 'after' | 'story-label';
 
@@ -49,24 +50,19 @@ export function useScopedChromeAnchor(
         return;
       }
 
-      const viewportRect = viewport.getBoundingClientRect();
       const anchorRect = anchor.getBoundingClientRect();
       const chromeHeight =
         placement === 'story-label' ? Math.max(chrome.offsetHeight, 28) : chrome.offsetHeight;
       const clearance = placement === 'story-label' ? 6 : 4;
       const attachedInsideViewport = containingViewport === viewport;
-      const documentLeft = attachedInsideViewport
-        ? anchorRect.left - viewportRect.left + viewport.scrollLeft
-        : anchorRect.left;
-      const documentTop = attachedInsideViewport
-        ? (placement === 'after'
-            ? anchorRect.bottom + 6
-            : anchorRect.top - chromeHeight - clearance) -
-          viewportRect.top +
-          viewport.scrollTop
-        : placement === 'after'
-          ? anchorRect.bottom + 6
-          : anchorRect.top - chromeHeight - clearance;
+      // Header/footer AND footnote/endnote chrome both use this hook (`story-label`).
+      const anchorTop =
+        placement === 'after' ? anchorRect.bottom + 6 : anchorRect.top - chromeHeight - clearance;
+      const documentPoint = attachedInsideViewport
+        ? absolutePointInScroller(viewport, anchorRect.left, anchorTop)
+        : { left: anchorRect.left, top: anchorTop };
+      const documentLeft = documentPoint.left;
+      const documentTop = documentPoint.top;
       const viewportEdge = attachedInsideViewport ? viewport.scrollLeft + 8 : 8;
 
       setStyle({

@@ -31,6 +31,7 @@ import {
 } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { useTranslation } from '../i18n';
+import { absolutePointInScroller } from './scroller-geometry.ts';
 import { HyperlinkPopupContext, type UseHyperlinkPopupResult } from './useHyperlinkPopup';
 import { Slot } from './toolbar/Slot';
 
@@ -141,9 +142,9 @@ function HyperLinkRoot({ className, asChild, hidden, children, preset = true }: 
       setPlacement(null);
       return;
     }
-    const box = container.getBoundingClientRect();
-    const left = anchor.left - box.left + container.scrollLeft;
-    const top = anchor.top - box.top + container.scrollTop;
+    // Same padding-edge correction as scoped story chrome: the popover is absolute inside
+    // the scroller, and `scrollbar-gutter: stable both-edges` inflates `clientLeft`.
+    const { left, top } = absolutePointInScroller(container, anchor.left, anchor.top);
     // Clamped horizontally so a link near the right edge does not push the panel off it.
     const maxLeft = Math.max(0, container.scrollWidth - panel.offsetWidth);
     setPlacement({ left: Math.max(0, Math.min(left, maxLeft)), top });
