@@ -24,8 +24,12 @@ import {
   type ParagraphFragmentRecord,
 } from '../semantic-records.ts';
 import { paintSemanticLayout } from '../../output/semantic-paint.ts';
+import { storyBlocks } from '../story-roots.ts';
+import { readFileSync } from 'node:fs';
+import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const COMPREHENSIVE = `${import.meta.dir}/../../../../../e2e/fixtures/comprehensive-word-element-test.docx`;
 
 function load(body: string): OoxmlPart {
   const result = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
@@ -540,5 +544,135 @@ describe('a shaded box is filled across the frame, not just the text band', () =
       width: fragment.box.width,
       height: line.box.height,
     });
+  });
+});
+
+describe('misplaced body-level w:pBdr is not a thematic break', () => {
+  // ECMA-376 §17.3.1.24 / wml.xsd CT_PPr: `w:pBdr` is a child of paragraph properties, not of
+  // `w:body`. A bare `<w:pBdr>` between paragraphs is invalid placement; Word ignores it and
+  // paints no rule. The reader keeps it as a lossless `generic` sibling — it must not become
+  // an empty bordered paragraph or publish strokes.
+
+  test('an orphaned body-level pBdr invents no paragraph and paints no rule', () => {
+    const body =
+      paragraph('above') +
+      '<w:pBdr><w:bottom w:val="single" w:color="auto" w:sz="6" w:space="1"/></w:pBdr>' +
+      paragraph('below');
+    const part = load(body);
+    const docBody = part.root.children.find((child) => child.kind === 'body');
+    expect(docBody?.kind).toBe('body');
+    if (!docBody || docBody.kind === 'textValue') return;
+
+    const kids = docBody.children.map((child) =>
+      child.kind === 'textValue'
+        ? { kind: child.kind }
+        : { kind: child.kind, localName: child.localName }
+    );
+    expect(kids).toEqual([
+      { kind: 'paragraph', localName: 'p' },
+      { kind: 'generic', localName: 'pBdr' },
+      { kind: 'paragraph', localName: 'p' },
+    ]);
+    expect(storyBlocks(part)).toHaveLength(2);
+
+    const fragments = paragraphsOf(lay(body));
+    expect(fragments).toHaveLength(2);
+    expect(fragments.every((fragment) => fragment.borders === undefined)).toBe(true);
+    expect(fragments.every((fragment) => fragment.bottomBorder === undefined)).toBe(true);
+
+    const container = document.createElement('div');
+    paintSemanticLayout(container, lay(body), { scale: 1 });
+    expect(container.querySelectorAll('.docx-paragraph-border')).toHaveLength(0);
+  });
+
+  test('a legitimate empty paragraph bottom border still paints', () => {
+    // Guard against over-correcting: Word's AutoFormat "---" line IS an empty paragraph with
+    // `w:pPr/w:pBdr/w:bottom`, and that rule must keep rendering (border-overlay demo, callouts).
+    const body =
+      paragraph('above') +
+      paragraph(
+        '',
+        '<w:pBdr><w:bottom w:val="single" w:sz="16" w:space="2" w:color="FF0000"/></w:pBdr>'
+      ) +
+      paragraph('below');
+    const fragments = paragraphsOf(lay(body));
+    expect(fragments).toHaveLength(3);
+    expect(fragments[1]!.bottomBorder).toBeDefined();
+    expect(sides(fragments[1]!)).toEqual(['bottom']);
+
+    const container = document.createElement('div');
+    paintSemanticLayout(container, lay(body), { scale: 1 });
+    expect(container.querySelectorAll('.docx-paragraph-border-bottom')).toHaveLength(1);
+  });
+
+  test('comprehensive fixture section 11.3 keeps the orphaned pBdr and paints no rule', () => {
+    const loaded = readOoxmlPackage(new Uint8Array(readFileSync(COMPREHENSIVE)));
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const part = [...loaded.package.parts.values()].find((entry) =>
+      entry.name.endsWith('document.xml')
+    );
+    expect(part).toBeDefined();
+    if (!part) return;
+
+    const textOf = (node: {
+      kind: string;
+      text?: string;
+      value?: string;
+      children?: readonly unknown[];
+    }): string => {
+      if (node.kind === 'textValue') return String(node.value ?? node.text ?? '');
+      return ((node.children ?? []) as { kind: string }[])
+        .map((child) => textOf(child as never))
+        .join('');
+    };
+    const body = (() => {
+      const find = (node: { kind: string; children?: readonly unknown[] }): unknown => {
+        if (node.kind === 'body') return node;
+        for (const child of node.children ?? []) {
+          const found = find(child as never);
+          if (found) return found;
+        }
+        return undefined;
+      };
+      return find(part.root) as {
+        children: readonly { kind: string; localName?: string; children?: readonly unknown[] }[];
+      };
+    })();
+    const heading = body.children.findIndex(
+      (child, index) =>
+        child.kind === 'paragraph' &&
+        textOf(child as never).includes('11.3 Thematic Break') &&
+        body.children[index + 1]?.kind === 'generic' &&
+        body.children[index + 1]?.localName === 'pBdr'
+    );
+    expect(heading).toBeGreaterThanOrEqual(0);
+    const around = body.children.slice(heading, heading + 3);
+    expect(around.map((child) => child.kind)).toEqual(['paragraph', 'generic', 'paragraph']);
+    expect(around[1]!.localName).toBe('pBdr');
+    expect(textOf(around[2] as never)).toContain('Content after thematic break');
+
+    const layout = layoutSemanticDocument(part, 1, { measurer });
+    const frags = layout.pages.flatMap((page) =>
+      page.fragments.filter((fragment) => fragment.kind === 'paragraph')
+    );
+    const h = frags.findIndex(
+      (fragment) =>
+        fragment.kind === 'paragraph' &&
+        fragment.lines.some((line) => line.spans.some((span) => span.text.includes('11.3')))
+    );
+    expect(h).toBeGreaterThanOrEqual(0);
+    const next = frags[h + 1]!;
+    expect(next.kind).toBe('paragraph');
+    if (next.kind !== 'paragraph') return;
+    expect(next.lines.flatMap((line) => line.spans.map((span) => span.text)).join('')).toContain(
+      'Content after thematic break'
+    );
+    expect(next.bottomBorder).toBeUndefined();
+    const headingFrag = frags[h]!;
+    expect(headingFrag.kind).toBe('paragraph');
+    if (headingFrag.kind !== 'paragraph') return;
+    expect(headingFrag.borders).toBeUndefined();
+    expect(headingFrag.bottomBorder).toBeUndefined();
   });
 });
