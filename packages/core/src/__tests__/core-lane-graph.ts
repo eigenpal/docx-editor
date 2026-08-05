@@ -11,7 +11,14 @@
 // environment it is allowed to assume. A lane that acquires a new dependency has to declare
 // it here, in a diff a reviewer sees.
 
-export type LaneName = 'contracts' | 'store' | 'binding' | 'layout' | 'output' | 'editor';
+export type LaneName =
+  | 'contracts'
+  | 'store'
+  | 'binding'
+  | 'layout'
+  | 'output'
+  | 'automation'
+  | 'editor';
 
 export type LaneEnvironment = 'neutral' | 'browser' | 'node';
 
@@ -35,6 +42,14 @@ export interface Lane {
    * been migrated yet, and task 10.6 deletes it along with the shim package.
    */
   readonly alias?: string;
+  /**
+   * Declared straight into `packages/core`, never a standalone package.
+   *
+   * `package: null` reads as "moved" for every path-resolving caller, which is what a lane
+   * that was born here wants — but there is no legacy importer to keep resolving, so it has
+   * no compatibility alias and never gets one.
+   */
+  readonly nativeToCore?: boolean;
   /** Lanes this one may import. Anything else is a violation. */
   readonly mayImport: readonly LaneName[];
   /**
@@ -106,12 +121,25 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
     environment: 'browser',
     subpath: './output',
   },
+  automation: {
+    directory: 'src/automation',
+    // Born in `packages/core`: there is no `engine-automation` package and never was, so
+    // no compatibility alias exists to keep resolving.
+    package: null,
+    nativeToCore: true,
+    // The store lane and nothing else. This lane is the transport-neutral host port an
+    // automation object model programs against, and a server has to be able to run it —
+    // reaching into binding, output or editor would put a DOM in the headless host.
+    mayImport: ['store'],
+    environment: 'neutral',
+    subpath: './automation',
+  },
   editor: {
     directory: 'src/editor',
     // MOVED (task 10.3); alias kept per task 10.5, removed by task 10.6.
     package: null,
     alias: '@docx-editor.dev/engine-editor',
-    mayImport: ['contracts', 'store', 'binding', 'layout', 'output'],
+    mayImport: ['contracts', 'store', 'binding', 'layout', 'output', 'automation'],
     environment: 'browser',
     subpath: './editor',
   },
@@ -130,6 +158,7 @@ export const BROWSER_REACHABLE: readonly LaneName[] = [
   'binding',
   'layout',
   'output',
+  'automation',
   'editor',
 ];
 

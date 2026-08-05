@@ -32,20 +32,65 @@ export const PACKAGES = [
     tsconfigPath: 'packages/vue/tsconfig.api.json',
   },
   {
-    name: '@docx-editor.dev/agents',
-    root: 'packages/agents',
-    pkgSlug: 'docx-editor-agents',
-    // Excludes Vue source files because the Vue adapter for agents
-    // builds with a separate Vite pass.
-    tsconfigPath: 'packages/agents/tsconfig.tsup.json',
-    // Cannot build against the current engine: `src/bridge.ts` imports
-    // `@docx-editor.dev/core/headless`, which the greenfield migration removed. The
-    // package's own `typecheck` script already skips for exactly this reason. Without
-    // this flag `api:check` failed on the missing `dist` for every other package too, so
-    // one legacy package took the whole API gate down and no snapshot drift anywhere
-    // could be detected. Clear it when the agent bridge is rebuilt over engine-core.
-    disconnected:
-      'legacy package pending rebuild over engine-core; @docx-editor.dev/core/headless imports were removed in the greenfield migration',
+    name: '@docx-editor.dev/editor-api',
+    root: 'packages/editor-api',
+    pkgSlug: 'docx-editor-editor-api',
+    // Strips dev-time `paths` for the same reason the React entry does: Extractor should
+    // read the built `dist/*.d.ts` as a consumer would, not follow `@docx-editor.dev/...`
+    // back into workspace source.
+    tsconfigPath: 'packages/editor-api/tsconfig.api.json',
+    // The one package whose entries are ROLLED UP into a single `.d.ts` each, so a
+    // "forgotten export" here means what it says: a name a public signature hands a consumer
+    // that the consumer cannot import to write the signature down. The blanket silence exists
+    // for the barrel-and-per-file adapters, where the same message is mostly noise.
+    forgottenExports: {
+      logLevel: 'warning',
+      protectedExportFiles: ['src/runtime/public.ts', 'src/model/index.ts'],
+      allowlist: {
+        index: [
+          'AutomationHandle',
+          'AutomationOperation',
+          'AutomationValue',
+          'CommentBase',
+          'ContentControlScope',
+          'ContextInternals',
+          'HandleCollection',
+          'ItemCollection',
+          'ModelObject',
+          'ObjectAddress',
+          'ObjectPath',
+          'PromisedItem',
+          'QueuedAction',
+          'ResolvedLoadOptions',
+          'RuntimeManagedObject',
+          'RuntimeSession',
+          'SpanOwner',
+        ],
+        browser: [
+          // The engine's own editor instance — the thing `createBrowser` borrows. A consumer
+          // that has one already imports its type from the engine package, so this package
+          // re-exporting it would be a second name for one type rather than a missing one.
+          'DocxEditorInstance',
+          'AutomationHandle',
+          'AutomationOperation',
+          'AutomationValue',
+          'CommentBase',
+          'ContentControlScope',
+          'ContextInternals',
+          'HandleCollection',
+          'ItemCollection',
+          'ModelObject',
+          'ObjectAddress',
+          'ObjectPath',
+          'PromisedItem',
+          'QueuedAction',
+          'ResolvedLoadOptions',
+          'RuntimeManagedObject',
+          'RuntimeSession',
+          'SpanOwner',
+        ],
+      },
+    },
   },
 ];
 

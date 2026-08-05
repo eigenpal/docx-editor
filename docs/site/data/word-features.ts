@@ -8,7 +8,7 @@
  * everything ships in `community`.
  *
  * Status axes:
- * - editing:   can the user (or an agent) change it in the editor?
+ * - editing:   can the user (or code driving the editor) change it in the editor?
  * - rendering: does it display like Microsoft Word renders it?
  * - roundTrip: does it survive open -> save unchanged?
  *
@@ -339,7 +339,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Core store and React paginated editor: hover row/column insertion, adjacent divider and outer-right resize, and seven table context-menu structural actions. Vue toolbar and context-menu value UI remain deferred; Vue inherits shared command types only. Agent-API table mutation is read-only for now.',
+      'Core store and React paginated editor: hover row/column insertion, adjacent divider and outer-right resize, and seven table context-menu structural actions. Vue toolbar and context-menu value UI remain deferred; Vue inherits shared command types only. Tables remain read-only in the automation object model.',
   },
   {
     id: 'tables.borders-shading',
@@ -721,7 +721,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Per-change and bulk accept/reject in the sidebar; headless acceptChangeById/rejectChangeById. Deliberately not exposed as agent tools: humans decide.',
+      'Per-change and bulk accept/reject in the sidebar; headless acceptChangeById/rejectChangeById, and revision.accept()/reject() through the automation object model.',
     docsLink: '/docs/1.x/guides/tracked-changes',
   },
   {
@@ -736,15 +736,15 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'review.ai-redlining',
-    name: 'AI redlining (agent-proposed tracked changes)',
+    name: 'Programmatic redlining (code-proposed tracked changes)',
     category: 'review',
     editing: 'full',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Agents propose Word-native tracked changes via suggest_change; live in the editor, headless via DocxReviewer, or over MCP.',
-    docsLink: '/docs/1.x/agents/redlining',
+      'Word-native tracked changes written through the automation object model, against DOCX bytes on a server or an editor open in a page.',
+    docsLink: '/docs/1.x/editor-api',
   },
   {
     id: 'review.moves',
@@ -848,7 +848,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Discover, create, fill, and remove by tag/id/alias from the headless API and the editor (inline controls in table cells, headers and footers included). Content is editable; control properties (tag, alias, lock) are not UI-editable, and a block control inside a table cell or text box is not modeled.',
+      'Block, inline, row and cell controls are typed and addressable in every story (table cells, headers, footers and note bodies included); a control around a table row or cell lays out as that row or cell, keeping its grid column, span and row semantics. Discover, create, fill and remove them by tag, title or file id from the document object model; content is editable, and tag, title and lock are writable through the API but have no toolbar chrome. All four `w:lock` modes are enforced against what an edit would actually change — including the characters inside an inline control, a tracked-change decision, and a hyperlink write — an enclosing control’s lock wins over an inner one, and text typed at a control’s leading edge counts as inside it, because that is where Word puts it. A write addressed at one control is resolved against every control it would actually land in, so filling in an outer control cannot put text inside a locked or bound control nested at its edge — including an empty paragraph such a control holds, where the write has to create the run it lands in. Replacing a control’s whole value, or deleting a control together with its content, is refused when it would destroy a locked or bound control nested inside it; removing the wrapper while keeping the content leaves those controls untouched and is allowed. A control’s lock protects the control and its content, not the document: page setup, section furniture and note numbering stay editable beside a locked field. Under `w:documentProtection w:edit="forms"` only control content is editable, resolved from what an edit addresses — so an inline field can be filled in while the sentence around it stays read-only. Picture and repeating-section controls, custom-XML-bound controls and docPart galleries are preserved as they were rather than typed; every edit inside a bound control is refused instead of desynchronising it from its part, while removing the control is allowed and takes the binding with it.',
     docsLink: '/docs/1.x/guides/content-controls',
   },
   {
@@ -859,7 +859,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'Add and remove items from the editor; the section configuration itself is read-only.',
+    notes:
+      'Add and remove items from the editor; the section configuration itself is read-only. A repeating section is not typed as a content control in the document object model — it is preserved as authored, so a script reaches the controls inside it rather than the section itself.',
     docsLink: '/docs/1.x/guides/content-controls',
   },
   {
@@ -870,6 +871,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Each control takes the value its own type accepts: a dropdown must name an item it declares, a combo box also takes free text, a date validates an ISO instant and writes both `w:fullDate` and the formatted text, and a checkbox writes its declared glyph and state together. A literal prompt is replaced whole on the first write; without a durable prompt source, clearing the value later leaves the control empty. A `w:temporary` control removes its own wrapper on the first edit and leaves the content.',
     docsLink: '/docs/1.x/guides/content-controls',
   },
   {
@@ -907,12 +910,12 @@ export const wordFeatures: WordFeature[] = [
     id: 'structure.protection',
     name: 'Document protection & editing restrictions',
     category: 'structure',
-    editing: 'none',
+    editing: 'partial',
     rendering: 'none',
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'Protection settings round-trip but are not enforced; inline permission ranges may be dropped.',
+      'Protection settings round-trip. Forms protection is enforced: only addressed content-control content remains editable, while the surrounding document stays read-only. Other protection modes are not enforced, and inline permission ranges may be dropped.',
   },
 
   // --- Collaboration, i18n & editing UX ---------------------------------------
@@ -967,14 +970,15 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'collab.agent-tools',
-    name: 'AI agent toolkit (14 tools, 3 transports)',
+    name: 'Document automation object model',
     category: 'collaboration',
     editing: 'full',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'Live editor bridge, headless DocxReviewer, MCP server; Word-JS-API-shaped.',
-    docsLink: '/docs/1.x/agents',
+    notes:
+      'Batching object model shaped after a documented subset of the Word JavaScript API; server entry over bytes, browser entry over an open editor. No model integration, tool catalog or MCP transport ships with it.',
+    docsLink: '/docs/1.x/editor-api',
   },
 ];
 

@@ -79,15 +79,14 @@ function hasExport(node) {
 }
 
 function resolveRelative(fromDir, spec) {
-  // Try .ts, .tsx, /index.ts, /index.tsx in order. Skip .vue (handled separately).
+  // The specifier as written comes first: this repo imports with explicit `.ts`/`.tsx`
+  // extensions, and a resolver that only appended one turned `./public.ts` into
+  // `./public.ts.ts`, gave up, and reported the re-export as opaque — which reads as a whole
+  // documented surface having gone missing. Then the extensionless candidates, for the files
+  // that are written that way. Skip .vue (handled separately).
   const base = resolve(fromDir, spec);
-  for (const cand of [
-    `${base}.ts`,
-    `${base}.tsx`,
-    `${base}/index.ts`,
-    `${base}/index.tsx`,
-  ]) {
-    if (existsSync(cand)) return cand;
+  for (const cand of [base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`, `${base}/index.tsx`]) {
+    if (existsSync(cand) && /\.tsx?$/.test(cand)) return cand;
   }
   return null;
 }

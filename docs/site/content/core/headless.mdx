@@ -10,17 +10,17 @@ This page groups the surface by task. Full signatures for every export are in th
 
 ## Parse and serialize
 
-| Export | Signature | Notes |
-|---|---|---|
-| `parseDocx` | `(input: DocxInput, options?) => Promise<Document>` | `DocxInput` is `ArrayBuffer \| Uint8Array \| Blob \| File` |
-| `repackDocx` | `(doc, options?) => Promise<ArrayBuffer>` | Round-trips against the original buffer; untouched parts pass through verbatim |
-| `createDocx` | `(doc) => Promise<ArrayBuffer>` | Builds a package from scratch; for documents created in code |
-| `serializeDocx` | `(doc) => string` | Returns `document.xml` markup only, not a `.docx` file |
+| Export                 | Signature                                                        | Notes                                                                                    |
+| ---------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `parseDocx`            | `(input: DocxInput, options?) => Promise<Document>`              | `DocxInput` is `ArrayBuffer \| Uint8Array \| Blob \| File`                               |
+| `repackDocx`           | `(doc, options?) => Promise<ArrayBuffer>`                        | Round-trips against the original buffer; untouched parts pass through verbatim           |
+| `createDocx`           | `(doc) => Promise<ArrayBuffer>`                                  | Builds a package from scratch; for documents created in code                             |
+| `serializeDocx`        | `(doc) => string`                                                | Returns `document.xml` markup only, not a `.docx` file                                   |
 | `attemptSelectiveSave` | `(doc, originalBuffer, options) => Promise<ArrayBuffer \| null>` | Patches only changed paragraphs into the original XML; `null` when not safely applicable |
-| `updateMultipleFiles` | `(originalBuffer, updates, options?) => Promise<ArrayBuffer>` | Low-level: replace named parts inside an existing package |
+| `updateMultipleFiles`  | `(originalBuffer, updates, options?) => Promise<ArrayBuffer>`    | Low-level: replace named parts inside an existing package                                |
 
 ```ts
-import { parseDocx, repackDocx } from "@docx-editor.dev/core/headless";
+import { parseDocx, repackDocx } from '@docx-editor.dev/core/headless';
 
 const doc = await parseDocx(buffer);
 // ...mutate...
@@ -31,9 +31,9 @@ The parsed `Document` holds a `DocxPackage`: `package.document` (the body), `hea
 
 ## Create documents
 
-| Export | Notes |
-|---|---|
-| `createEmptyDocument(options?)` | Blank `Document` with default section setup |
+| Export                                   | Notes                                          |
+| ---------------------------------------- | ---------------------------------------------- |
+| `createEmptyDocument(options?)`          | Blank `Document` with default section setup    |
 | `createDocumentWithText(text, options?)` | Blank document seeded with a paragraph of text |
 
 ## Read text and structure
@@ -41,7 +41,7 @@ The parsed `Document` holds a `DocxPackage`: `package.document` (the body), `hea
 Helpers over the body so you do not hand-walk the tree: `getBodyText`, `getParagraphs`, `getParagraphAtIndex`, `getParagraphText`, `getRunText`, `getHyperlinkText`, `getTableText`, `countWords`, `countCharacters`, `getBodyWordCount`, `getBodyCharacterCount`, `getTextBefore`, `getTextAfter`, `getFormattingAtPosition`, `hasImages`, `hasHyperlinks`, `hasTables`, `isHeadingStyle`, `parseHeadingLevel`.
 
 ```ts
-import { getParagraphs, getParagraphText } from "@docx-editor.dev/core/headless";
+import { getParagraphs, getParagraphText } from '@docx-editor.dev/core/headless';
 
 for (const para of getParagraphs(doc.package.document)) {
   console.log(para.paraId, getParagraphText(para));
@@ -52,27 +52,27 @@ for (const para of getParagraphs(doc.package.document)) {
 
 Find and edit Word content controls by `tag`, `alias`, `id`, or `type`. All mutators are pure (return a new `Document`) and respect Word's lock semantics. The full behavior contract is in the [content controls guide](/docs/1.x/guides/content-controls).
 
-| Export | Purpose |
-|---|---|
-| `findContentControls(doc, filter?)` | List matching controls as `ContentControlInfo[]` |
-| `findContentControl(doc, filter)` | First match or `undefined` |
-| `getContentControlText(control)` | Plain text of a control |
-| `createContentControl(doc, target, props?)` | Wrap a text span in a new control; returns `{ doc, control }` |
-| `setContentControlContent(doc, filter, replacement, options?)` | Fill a rich/plain-text control with a string or `BlockContent[]` (`{ all: true }` fills every match) |
-| `setContentControlValue(doc, filter, value, options?)` | Set a typed value: `{ kind: 'dropdown' \| 'checkbox' \| 'date', ... }` (`{ all: true }` sets every match) |
-| `removeContentControl(doc, filter, options?)` | Delete a control, or unwrap with `keepContent: true` (`{ all: true }` removes every match) |
-| `addRepeatingSectionItem(doc, filter, options?)` | Clone a repeating-section item with fresh ids |
-| `removeRepeatingSectionItem(doc, filter, index)` | Drop one repeating-section item |
-| `formatSdtDate(iso, pattern?)` | Format an ISO date with a `w:dateFormat` pattern |
+| Export                                                         | Purpose                                                                                                   |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `findContentControls(doc, filter?)`                            | List matching controls as `ContentControlInfo[]`                                                          |
+| `findContentControl(doc, filter)`                              | First match or `undefined`                                                                                |
+| `getContentControlText(control)`                               | Plain text of a control                                                                                   |
+| `createContentControl(doc, target, props?)`                    | Wrap a text span in a new control; returns `{ doc, control }`                                             |
+| `setContentControlContent(doc, filter, replacement, options?)` | Fill a rich/plain-text control with a string or `BlockContent[]` (`{ all: true }` fills every match)      |
+| `setContentControlValue(doc, filter, value, options?)`         | Set a typed value: `{ kind: 'dropdown' \| 'checkbox' \| 'date', ... }` (`{ all: true }` sets every match) |
+| `removeContentControl(doc, filter, options?)`                  | Delete a control, or unwrap with `keepContent: true` (`{ all: true }` removes every match)                |
+| `addRepeatingSectionItem(doc, filter, options?)`               | Clone a repeating-section item with fresh ids                                                             |
+| `removeRepeatingSectionItem(doc, filter, index)`               | Drop one repeating-section item                                                                           |
+| `formatSdtDate(iso, pattern?)`                                 | Format an ISO date with a `w:dateFormat` pattern                                                          |
 
 Errors are typed: `ContentControlNotFoundError`, `ContentControlLockedError`, `ContentControlTypeError`, `ContentControlBoundError`, `ContentControlKindError`, `ContentControlValueError`, `ContentControlCreateError`, `RepeatingSectionError`.
 
 ## Watermarks
 
-| Export | Purpose |
-|---|---|
-| `getDocumentWatermark(doc)` | Current `Watermark` (`TextWatermark \| PictureWatermark`) or `undefined` |
-| `setDocumentWatermark(doc, watermark \| null)` | Apply or remove a watermark across the document's headers |
+| Export                                         | Purpose                                                                  |
+| ---------------------------------------------- | ------------------------------------------------------------------------ |
+| `getDocumentWatermark(doc)`                    | Current `Watermark` (`TextWatermark \| PictureWatermark`) or `undefined` |
+| `setDocumentWatermark(doc, watermark \| null)` | Apply or remove a watermark across the document's headers                |
 
 ## Templates and variables
 
@@ -81,9 +81,9 @@ A docxtemplater-backed pipeline for `{{variable}}` templates: `processTemplate`,
 Variable detection over a parsed `Document`: `detectVariables`, `detectVariablesDetailed`, `hasTemplateVariables`, `replaceVariables`, `removeVariables`, and related string helpers.
 
 ```ts
-import { processTemplate } from "@docx-editor.dev/core/headless";
+import { processTemplate } from '@docx-editor.dev/core/headless';
 
-const out = processTemplate(buffer, { customer_name: "Acme GmbH" }); // ArrayBuffer
+const out = processTemplate(buffer, { customer_name: 'Acme GmbH' }); // ArrayBuffer
 ```
 
 ## DocumentAgent
@@ -96,7 +96,7 @@ Usage walkthrough: [Headless processing](/docs/1.x/guides/headless-processing).
 
 - Unit conversion: `twipsToPixels`, `pixelsToTwips`, `emuToPixels`, `pixelsToEmu`, `emuToTwips`, `twipsToEmu`, `pointsToPixels`, `pointsToHalfPoints`, `halfPointsToPixels`, `formatPx`.
 - Color resolution against the document theme: `resolveColor`, `resolveHighlightColor`, `resolveShadingColor`, `parseColorString`, `createThemeColor`, `createRgbColor`, `darkenColor`, `lightenColor`, `blendColors`, `getContrastingColor`.
-- Plugin system: `pluginRegistry`, `registerPlugins`, `createPluginRegistrar`, plus the `CorePlugin` / command / MCP tool types shared with the [plugin contract](/docs/1.x/plugins).
+- Plugin system: `pluginRegistry`, `registerPlugins`, and `createPluginRegistrar`.
 
 ## Types
 

@@ -3,7 +3,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
-const packageDirs = ['react', 'vue', 'agents', 'i18n', 'nuxt'];
+const packageDirs = ['react', 'vue', 'editor-api', 'i18n', 'nuxt'];
 const errors = [];
 
 function filesBelow(directory) {

@@ -1,0 +1,24 @@
+{
+  // Compiles `mismatch.ts`, which must NOT compile. Same settings as the project it controls for,
+  // so a failure here is about the assertion and not about the compiler options.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": [],
+    "baseUrl": ".",
+    "paths": {
+      "@docx-editor.dev/core-contract/automation": ["../../../../../core/src/automation/index.ts"],
+      "@docx-editor.dev/core-contract/editor": ["../../../../../core/src/editor/index.ts"]
+    }
+  },
+  "include": ["mismatch.ts"],
+  "exclude": ["node_modules"]
+}

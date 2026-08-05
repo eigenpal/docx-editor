@@ -952,20 +952,6 @@
   "loading": {
     "label": "Yükleniyor"
   },
-  "agentPanel": {
-    "defaultTitle": "Asistan",
-    "toggle": "Asistanı aç",
-    "close": "Paneli kapat",
-    "resizeHandle": "Asistan panelini yeniden boyutlandır",
-    "thinking": "Asistan düşünüyor",
-    "composerPlaceholder": "Asistana sor…",
-    "send": "Gönder",
-    "timeline": {
-      "working": "Çalışıyor… {count, plural, one {# adım} other {# adım}}",
-      "summary": "{count, plural, one {# adım} other {# adım}}",
-      "earlier": "+ {count, plural, one {# önceki adım} other {# önceki adım}}"
-    }
-  },
   "imageOverlay": {
     "deleteImage": "Görseli sil",
     "imageProperties": "Görsel özellikleri",

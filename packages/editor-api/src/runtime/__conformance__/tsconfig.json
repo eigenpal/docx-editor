@@ -1,0 +1,29 @@
+{
+  // Compiles `declared-lifecycle.ts`: the runtime measured against the authored declarations.
+  //
+  // Its own project because it is the only place in this slice that reads `compat/`, and because
+  // the negative fixture beside it must be compiled separately, expecting failure.
+  //
+  // Strictness matches `packages/core/tsconfig.json` for the reason given in
+  // `../tsconfig.neutral.json`: the program necessarily contains core's sources.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": [],
+    "baseUrl": ".",
+    "paths": {
+      "@docx-editor.dev/core-contract/automation": ["../../../../core/src/automation/index.ts"],
+      "@docx-editor.dev/core-contract/editor": ["../../../../core/src/editor/index.ts"]
+    }
+  },
+  "include": ["declared-lifecycle.ts"],
+  "exclude": ["node_modules", "__negative__"]
+}

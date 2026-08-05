@@ -16,6 +16,7 @@ import type { ReviewItem } from '../layout/review-support.ts';
 import type { CollectReviewItems } from '../contracts/modules.ts';
 import {
   addComment,
+  setCommentResolved,
   commentPartNameOf,
   commentsExtendedPartNameOf,
 } from '../store/store/comment-writes.ts';
@@ -288,6 +289,14 @@ export interface TreeDocxSession {
     /** ISO-8601. Omitted writes no `@w:date`, because inventing one is a content change. */
     date?: string
   ): string | null;
+  /**
+   * Resolve a comment thread, or reopen it. False when the document holds no such comment.
+   *
+   * The same package transaction shape as a reply, and for the same reason: `@w15:done` lives in
+   * `commentsExtended.xml`, a part a document with no thread does not have, so the state and the
+   * part that records it commit together.
+   */
+  setCommentResolved(commentId: string, resolved: boolean): boolean;
   /**
    * Every occurrence of `query` in the BODY story, in document order, addressed in the
    * same offset vocabulary the tree ops and the surface selection use — so a match can be
@@ -1028,6 +1037,18 @@ export function openTreeSession(
         // reply reads back as never written.
         packageStore.replacePackageShell(store.package);
         return result.commentId;
+      },
+
+      setCommentResolved(commentId, resolved) {
+        const store = bodyStore();
+        // Grafted and republished for the same reason a reply is: the story store's package does
+        // not carry the coordinator's package-level writes, and publishing back over them would
+        // drop a minted relationship or a numbering graft an unrelated edit had made.
+        store.graftPackage(() => packageStore.currentPackage());
+        const result = setCommentResolved(store, commentId, resolved);
+        if (!result.ok) return false;
+        packageStore.replacePackageShell(store.package);
+        return true;
       },
 
       ensureListDefinition(kind) {

@@ -5,7 +5,7 @@
   "fixed": [
     [
       "@docx-editor.dev/react",
-      "@docx-editor.dev/agents",
+      "@docx-editor.dev/editor-api",
       "@docx-editor.dev/vue",
       "@docx-editor.dev/nuxt",
       "@docx-editor.dev/i18n",

@@ -1,3 +1,0 @@
-/* Import editor styles (CSS variables, toolbar layout, etc.)
-   In standalone usage: @import '@docx-editor.dev/react/styles.css'; */
-@import '../../../packages/react/src/styles/editor.css';

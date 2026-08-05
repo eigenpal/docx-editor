@@ -46,6 +46,8 @@ export interface StyleIndexEntry {
   readonly nodeId: string;
   readonly name: string | null;
   readonly basedOn: string | null;
+  /** Whether the part marks this the default style for its type (`w:default="1"`). */
+  readonly isDefault: boolean;
 }
 
 export interface OoxmlIndexes {
@@ -139,7 +141,7 @@ function indexStory(part: OoxmlPart): StoryIndexEntry | null {
 }
 
 /** Style definitions, read out of the generic `w:styles` tree. */
-function indexStyles(part: OoxmlPart | undefined): Map<string, StyleIndexEntry> {
+export function indexStyles(part: OoxmlPart | undefined): Map<string, StyleIndexEntry> {
   const styles = new Map<string, StyleIndexEntry>();
   if (!part) return styles;
   const walk = (node: OoxmlNode): void => {
@@ -162,6 +164,7 @@ function indexStyles(part: OoxmlPart | undefined): Map<string, StyleIndexEntry> 
             nodeId: node.id,
             name,
             basedOn,
+            isDefault: (attr(node, 'default') ?? '') === '1',
           });
         }
       }
@@ -173,6 +176,11 @@ function indexStyles(part: OoxmlPart | undefined): Map<string, StyleIndexEntry> 
 }
 
 const STYLES_PART_RE = /\/styles\.xml$/i;
+
+/** The package's style definitions part, if it has one. */
+export function stylesPartOf(pkg: OoxmlPackage): OoxmlPart | undefined {
+  return [...pkg.parts.values()].find((part) => STYLES_PART_RE.test(part.name));
+}
 
 /**
  * Derive every index from one canonical package revision.
@@ -197,7 +205,7 @@ export function deriveOoxmlIndexes(pkg: OoxmlPackage, revision: number): OoxmlIn
     for (const paragraph of story.paragraphs) paragraphs.set(paragraph.nodeId, paragraph);
   }
 
-  const stylesPart = [...pkg.parts.values()].find((part) => STYLES_PART_RE.test(part.name));
+  const stylesPart = stylesPartOf(pkg);
 
   return Object.freeze({
     revision,

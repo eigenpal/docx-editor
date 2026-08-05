@@ -1,6 +1,6 @@
 ---
 title: 'Loading & saving'
-description: 'Load DOCX files into the editor from a File, ArrayBuffer, or URL, then save them back with selective OOXML repack, autosave, and read-only rendering.'
+description: 'Load DOCX bytes into the current root component, swap documents through the shared ref, and save them back out on demand.'
 category: 'Guides'
 seoTitle: 'Loading and saving DOCX documents'
 ---
@@ -9,65 +9,60 @@ The editor takes a `.docx` file in and gives a `.docx` file back. Everything hap
 
 ## Input formats
 
-`documentBuffer` accepts a `DocxInput`: `ArrayBuffer`, `Uint8Array`, `Blob`, or `File`. Pass whichever you already have; there is no preferred form.
+The current adapters take the document through the `document` prop. The most common value is `Uint8Array` DOCX bytes:
 
 ```tsx
-<DocxEditor documentBuffer={buf} />
+<DocxEditor document={bytes} />
 ```
-
-Three sentinel states matter:
-
-- A buffer mounts that document.
-- `null` mounts an empty document immediately (useful when collecting input from scratch).
-- `undefined` defers the mount until the buffer arrives, which skips the empty-state flash while a fetch is in flight.
-
-If you already hold a parsed `Document` tree from `@docx-editor.dev/core`, pass it through the `document` prop instead and skip the parser.
 
 ### From a URL
 
 ```tsx
 import { useEffect, useState } from 'react';
 import { DocxEditor } from '@docx-editor.dev/react';
-import '@docx-editor.dev/react/styles.css';
 
 export function Editor({ url }: { url: string }) {
-  const [buf, setBuf] = useState<ArrayBuffer | null>(null);
+  const [doc, setDoc] = useState<Uint8Array>();
 
   useEffect(() => {
     let cancelled = false; // ignore stale responses if url changes
     fetch(url)
       .then((r) => r.arrayBuffer())
-      .then((b) => {
-        if (!cancelled) setBuf(b);
+      .then((buffer) => {
+        if (!cancelled) setDoc(new Uint8Array(buffer));
       });
     return () => {
       cancelled = true;
     };
   }, [url]);
 
-  return <DocxEditor documentBuffer={buf} />;
+  return <DocxEditor document={doc} />;
 }
 ```
 
 ### From a file input
 
-`File` is a valid `DocxInput`, so you can hand the picker result straight over:
+Read the selected file into bytes, then pass those bytes through `document`:
 
 ```tsx
 import { useState } from 'react';
 import { DocxEditor } from '@docx-editor.dev/react';
 
 export function FileEditor() {
-  const [file, setFile] = useState<File | null>(null);
+  const [doc, setDoc] = useState<Uint8Array>();
 
   return (
     <>
       <input
         type="file"
         accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          setDoc(new Uint8Array(await file.arrayBuffer()));
+        }}
       />
-      {file && <DocxEditor documentBuffer={file} />}
+      {doc && <DocxEditor document={doc} />}
     </>
   );
 }
@@ -80,33 +75,18 @@ To replace the document without remounting the component, use the ref:
 ```tsx
 const ref = useRef<DocxEditorRef>(null);
 
-await ref.current?.loadDocumentBuffer(nextBuffer); // parse and load a new buffer
-ref.current?.loadDocument(parsedDocument);          // load a pre-parsed Document
+ref.current?.load(nextBytes);
 ```
-
-Parse and render errors surface through the `onError` prop; attach it and forward to your error tracker.
 
 ## Saving
 
-Two paths produce a `.docx` buffer:
+Two paths matter:
 
-- `ref.save()` returns `Promise<ArrayBuffer | null>`. Call it whenever you want bytes (autosave, your own save button).
-- The `onSave` prop fires with an `ArrayBuffer` when the user invokes Save through the built-in toolbar UI (Ctrl/Cmd+S or the File menu).
+- `ref.save()` returns `Promise<ArrayBuffer | null>`
+- `onSave` lets you override the packaged File → Save action
 
 ```tsx
-<DocxEditor
-  ref={ref}
-  documentBuffer={buf}
-  onSave={async (out) => {
-    await fetch(`/api/documents/${docId}`, { method: 'PUT', body: out });
-  }}
-/>
-```
-
-By default, `save()` performs a selective save: it patches only the XML parts your edits touched and carries the rest of the original package through byte-for-byte. That preserves everything the editor does not model. Pass `{ selective: false }` to force a full repack:
-
-```ts
-const out = await ref.current?.save({ selective: false });
+<DocxEditor ref={ref} document={bytes} onSave={() => void persist()} />
 ```
 
 `save()` resolves `null` when there is no document to serialize, so guard the result.
@@ -133,7 +113,7 @@ async function downloadDocx(ref: DocxEditorRef, fileName: string) {
 
 ## Autosave
 
-`onChange` fires on every document mutation with the parsed `Document`. Use it as the trigger, debounce it, and serialize through the ref:
+Debounce `ref.save()` when `onChange` fires:
 
 ```tsx
 import { useRef } from 'react';
@@ -143,7 +123,6 @@ export function AutosaveEditor({ docId }: { docId: string }) {
   const ref = useRef<DocxEditorRef>(null);
   const timer = useRef<number | null>(null);
 
-  // Plain debounce: reset the timer on every change, save when typing pauses.
   const onChange = () => {
     if (timer.current) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(async () => {
@@ -153,28 +132,14 @@ export function AutosaveEditor({ docId }: { docId: string }) {
     }, 1500);
   };
 
-  return <DocxEditor ref={ref} documentBuffer={null} onChange={onChange} />;
+  return <DocxEditor ref={ref} document={bytes} onChange={onChange} />;
 }
 ```
 
 Pick a debounce window that matches your backend's write tolerance. 1 to 2 seconds is a reasonable default.
 
-For local crash recovery rather than server persistence, the React adapter ships `useAutoSave` in `@docx-editor.dev/react/hooks`: it persists the parsed `Document` to localStorage on an interval and exposes recovery data (`hasRecoveryData`, `acceptRecovery`) after a reload.
-
-## Read-only rendering
-
-`readOnly` disables every input affordance (typing, toolbar buttons, dialogs) while keeping the full paged rendering, including headers, footers, and comments display. Pair it with `showToolbar={false}` for a pure viewer:
-
-```tsx
-<DocxEditor documentBuffer={buf} readOnly showToolbar={false} showZoomControl={false} />
-```
-
-<ReadOnlyDemo />
-
-`readOnly` is independent of `mode`. If you want users to read but still add suggestions, use `mode="suggesting"` instead; see [Tracked changes](/docs/1.x/guides/tracked-changes).
-
 ## Next steps
 
-- [Props reference](/docs/1.x/react/props) for `documentBuffer`, `onSave`, `onChange`, and `readOnly` details
+- [Props reference](/docs/1.x/react/props) for `document`, `onSave`, and the shared ref
 - [Headless processing](/docs/1.x/guides/headless-processing) to parse and serialize without mounting an editor
 - [React examples](/docs/1.x/react/examples) for more loading, saving, and editor state patterns

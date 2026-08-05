@@ -4,6 +4,7 @@
 // accepted property boundaries, and the effect/rejection contracts. Validation lives in
 // tree-op-validate.ts; application lives in tree-op-apply.ts; both re-export via tree-ops.ts.
 
+import type { ContentControlLock } from '../package/content-control-nodes.ts';
 import type { OoxmlDrawingNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import type {
   DrawingLocksInput,
@@ -11,6 +12,10 @@ import type {
   ImageWrapTarget,
   SourceCrop,
 } from '../package/drawing-projection.ts';
+import type {
+  ContentControlValueInput,
+  InsertableContentControlType,
+} from './tree-op-content-controls.ts';
 import type { TableBorderStyle } from '../table-border-style.ts';
 
 /** JSON-safe color input carried on table cell property ops. Theme/auto require a validated literal. */
@@ -166,6 +171,16 @@ export type TreeDocOp =
        * depend on state the op does not carry.
        */
       readonly revision?: RevisionAttributionInput;
+      /**
+       * When set, the text belongs INSIDE this content control, whatever sits at the offset.
+       *
+       * A boundary offset is owned by the run that starts there, which at a control's trailing
+       * edge is the run after the control — so an offset alone cannot say "append to this field",
+       * the way it cannot say which run of a field result to format (see `targetRunIds`). A
+       * caller that names the control gets the text in the control; one that does not gets the
+       * plain offset rule, which is what a keystroke beside a field means.
+       */
+      readonly inside?: string;
       /**
        * Which side of a run BOUNDARY the text joins. Default `'left'` — Word's typing rule:
        * the next character takes the formatting of the character before the caret.
@@ -424,29 +439,6 @@ export type TreeDocOp =
     }
   | {
       /**
-       * Set a content control's value by control identity.
-       *
-       * The public edit is a string (`DocEdits.setContentControlValue`); interpretation is
-       * per control type — dropdown item value, combo free text, checkbox true/false,
-       * ISO date, or plain/rich text replacement. Property and content changes commit as
-       * one effect.
-       */
-      readonly op: 'setContentControlValue';
-      readonly controlId: string;
-      readonly value: string;
-    }
-  | {
-      /**
-       * Remove a content control wrapper while keeping its content in place.
-       *
-       * Same unwrap shape as `removeHyperlink`: children of `w:sdtContent` (and any other
-       * non-property children) splice into the parent where the control sat.
-       */
-      readonly op: 'removeContentControl';
-      readonly controlId: string;
-    }
-  | {
-      /**
        * Insert a NEW run-level content control at a text offset: `w:sdt` with a
        * `w:sdtPr` carrying the given tag (and alias/lock) and a `w:sdtContent`
        * holding one run of `text`.
@@ -669,6 +661,60 @@ export type TreeDocOp =
     }
   | {
       /**
+       * Write a content control's VALUE, in the vocabulary its own type accepts.
+       *
+       * One transaction for the whole transition: the content, `w:showingPlcHdr`, and the
+       * type's own record of the value (`@w:lastValue`, `@w:fullDate`, `w14:checked`) move
+       * together, because a control whose glyph says checked and whose flag says unchecked is
+       * a document Word and this engine read differently.
+       */
+      readonly op: 'setContentControlValue';
+      readonly controlId: string;
+      /** String is the editor-facing v2 form; structured input is the automation form. */
+      readonly value: string | ContentControlValueInput;
+    }
+  | {
+      /**
+       * Author the metadata a control carries: its tag, its title, its lock.
+       *
+       * `null` removes the property. Everything else in `CT_SdtPr` — the type payload, a data
+       * binding, an extension this vocabulary does not model — survives in schema order.
+       */
+      readonly op: 'setContentControlProperties';
+      readonly controlId: string;
+      readonly tag?: string | null;
+      readonly alias?: string | null;
+      readonly lock?: ContentControlLock;
+    }
+  | {
+      /**
+       * Remove a control. `keepContent` splices its content into its place — Word's own
+       * "Remove content control" — and false takes the content with it.
+       */
+      readonly op: 'removeContentControl';
+      readonly controlId: string;
+      /** Defaults to true for the editor-facing v2 operation. */
+      readonly keepContent?: boolean;
+    }
+  | {
+      /**
+       * Wrap `[start, end)` of a paragraph in a new control of the named type.
+       *
+       * A control is a SIBLING of runs, never a thing inside one, so a range ending mid-run
+       * splits that run at both edges first. The characters and their formatting are the ones
+       * that were there; only the run boundaries move.
+       */
+      readonly op: 'insertContentControl';
+      readonly paragraphId: string;
+      readonly start: number;
+      readonly end: number;
+      readonly type: InsertableContentControlType;
+      readonly tag?: string;
+      readonly alias?: string;
+      readonly lock?: ContentControlLock;
+    }
+  | {
+      /**
        * Author `w:footnotePr` / `w:endnotePr` at document (settings) or section scope.
        * Refuse endnote `pageBottom`. Package-level; does not invent props on unedited saves.
        */
@@ -844,6 +890,8 @@ export const TREE_DOC_OP_KINDS = [
   'convertNote',
   'convertAllNotes',
   'setNoteProperties',
+  'setContentControlProperties',
+  'insertContentControl',
   'insertDrawing',
   'replaceDrawingResource',
   'deleteDrawing',
@@ -926,10 +974,23 @@ export type TreeOpRejection =
    */
   | 'unsupported-revision'
   | 'tree-invariant'
-  | 'unknown-control'
+  /** No content control in this part carries the addressed node id. */
+  | 'unknown-content-control'
+  /** The addressed node exists and is not a `w:sdt`. */
+  | 'not-a-content-control'
+  /**
+   * A content control's `w:lock` — or one an enclosing control imposes — forbids this.
+   *
+   * The same code for an edit inside `contentLocked` content and for the removal of an
+   * `sdtLocked` control: both are "the document says no", and the two halves are already
+   * distinguished by which operation was refused.
+   */
   | 'locked'
+  /** The control declares `w:dataBinding`; its value belongs to a custom XML part. */
   | 'bound'
+  /** The value offered is not one this control's type accepts. */
   | 'typeMismatch'
+  | 'unknown-control'
   | 'unsupported'
   /** Malformed lifecycle args / first-section link — mirrors Editor `invalidArgs`. */
   | 'invalidArgs'

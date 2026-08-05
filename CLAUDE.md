@@ -12,7 +12,8 @@ This repo contains contracts, production engine packages, and adapters.
 - `packages/engine-*` contains the in-tree engine. Package responsibilities and
   dependency rules live in `docs/architecture/production-engine-packages.md`.
 - Adapters live in `packages/react`, `packages/vue`, and `packages/nuxt`.
-  `packages/agents` and `packages/i18n` provide the agent bridge and strings.
+  `packages/editor-api` provides the public `DocxEditor` object model, and
+  `packages/i18n` provides shared strings.
 
 The sole active production authority is
 `openspec/changes/typed-ooxml-paragraph-editor/`. Superseded active proposals
@@ -32,8 +33,8 @@ Decisions:
   vocabulary); everything else is a lossless `generic` node. Invalid/misplaced
   known elements demote to generic. Unknown content never locks editing.
 - **Fidelity**: structural, gated by the D9 oracles (`canonicalOoxmlFingerprint`
-  + save/reopen `semanticDigest`). Modeled XML parts re-emit normalized;
-  byte identity applies to non-XML parts only.
+  - save/reopen `semanticDigest`). Modeled XML parts re-emit normalized;
+    byte identity applies to non-XML parts only.
 - **Mutation**: `TreeDocumentStore.transact` over `TreeDocOp`s (node id +
   UTF-16 offset) is the only write path; the node index makes cell/nested
   paragraphs ordinary. Cross-cell joins refused (`not-adjacent-siblings`).
@@ -93,7 +94,7 @@ All chrome — ours and consumers' — is hook consumers:
 - `useDocxEditor()`, `useEditorState(selector, isEqual?)` (one multiplexed
   subscription, slice memoization — a page selector must NOT re-render on a
   bold toggle), `useEditorCommand(slotId)` → `{execute, isActive, isEnabled,
-  disabledReason}`, `useEditorEvent`, `useFontFamily`.
+disabledReason}`, `useEditorEvent`, `useFontFamily`.
 - `DocxEditor.Toolbar`: default arrangement derives FROM `CHROME_GROUPS` (never
   hand-listed). Customization ladder: `className`/`data-active` CSS → `icon`
   prop → `asChild` (in-tree Slot merges wiring onto the consumer's element) →

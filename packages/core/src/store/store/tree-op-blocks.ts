@@ -11,6 +11,7 @@
 
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { findNode, parentNodeOf } from '../package/ooxml-edit.ts';
+import { flattenContentControls } from '../package/content-control-nodes.ts';
 import { namedChild, paragraphPropertiesNodeOf } from './tree-op-nodes.ts';
 import type { TreeOpRejection } from './tree-op-validate.ts';
 
@@ -33,7 +34,12 @@ export function paragraphIdsWithin(node: OoxmlNode): string[] {
 function paragraphIdsInDocumentOrder(part: OoxmlPart): string[] {
   const ids: string[] = [];
   const walkBlocks = (children: readonly OoxmlNode[]): void => {
-    for (const child of children) {
+    // A block content control is not a block of its own — the paragraphs it wraps are the
+    // story's, and the caret sits in them like any other. Without flattening, this walk and
+    // `paragraphSurvivesRemoval` disagree about where the paragraphs are: the validator sees
+    // one inside a `w:sdt` and allows the removal, then the applier finds no caret to recover
+    // to and refuses the same edit as `block-required`.
+    for (const child of flattenContentControls(children)) {
       if (child.kind === 'paragraph') {
         ids.push(child.id);
       } else if (child.kind === 'table') {

@@ -199,6 +199,21 @@ describe('editing a hyperlink through the editor', () => {
     expect(mounted.editor.surface!.session.bodyText()).toBe('Visit example today');
   });
 
+  test('a document open for viewing takes no link, and no relationship either', () => {
+    // The ops were always refused here — the lane writes through the gated session. The
+    // RELATIONSHIP was not: it is minted on the package before the transaction and a refusal does
+    // not take it back, so a reader ended up with an external target in their file's `.rels`.
+    const mounted = mount(p('Visit example today'));
+    mounted.editor.surface!.setEditingMode('view');
+    select(mounted, 0, 6, 13);
+
+    expect(
+      mounted.editor.surface!.hyperlinks.applyHyperlink({ url: 'https://example.com/unwanted' })
+    ).toBe(false);
+    expect(mounted.editor.surface!.hyperlinks.linksInCaretParagraph()).toEqual([]);
+    expect(mounted.editor.surface!.session.currentPackage().externalTargets).toEqual([]);
+  });
+
   test('retargeting an existing link keeps its identity and its text', () => {
     const mounted = mount(p('Visit example today'));
     select(mounted, 0, 6, 13);

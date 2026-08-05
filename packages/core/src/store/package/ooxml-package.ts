@@ -65,6 +65,26 @@ type XmlBytesResult =
   | { readonly ok: false; readonly reason: XmlRejection };
 
 /**
+ * A UTF-16 decoder for one of the WHATWG labels, typed for a build with no DOM.
+ *
+ * `TextDecoder` is a global in every runtime this ships to, but the neutral lanes compile with
+ * the DOM lib deliberately omitted, and there its type comes from Node — whose `Encoding` union
+ * is Buffer's (`utf16le`) rather than the WHATWG label set (`utf-16le`, `utf-16be`). The two
+ * labels below are the ones an XML processor is required to recognize and the ones both runtimes
+ * accept, so what is narrow is the TYPE, not the platform. Nothing about the decode changes:
+ * same labels, same `fatal`, same call.
+ */
+type Utf16Label = 'utf-16le' | 'utf-16be';
+type Utf16DecoderCtor = new (
+  label: Utf16Label,
+  options: { readonly fatal: true }
+) => { decode(bytes: Uint8Array): string };
+
+function utf16Decoder(label: Utf16Label): { decode(bytes: Uint8Array): string } {
+  return new (TextDecoder as unknown as Utf16DecoderCtor)(label, { fatal: true });
+}
+
+/**
  * Decode the encodings XML processors are required to recognize without an encoding hint.
  * The raw-byte ceiling is checked before decoding so UTF-16 input cannot allocate past the
  * package reader's configured XML budget.
@@ -80,22 +100,16 @@ function decodeXmlBytes(bytes: Uint8Array, limits?: XmlLimits): XmlBytesResult {
 
   try {
     if (bytes[0] === 0xff && bytes[1] === 0xfe) {
-      return {
-        ok: true,
-        xml: new TextDecoder('utf-16le', { fatal: true }).decode(bytes.subarray(2)),
-      };
+      return { ok: true, xml: utf16Decoder('utf-16le').decode(bytes.subarray(2)) };
     }
     if (bytes[0] === 0xfe && bytes[1] === 0xff) {
-      return {
-        ok: true,
-        xml: new TextDecoder('utf-16be', { fatal: true }).decode(bytes.subarray(2)),
-      };
+      return { ok: true, xml: utf16Decoder('utf-16be').decode(bytes.subarray(2)) };
     }
     if (bytes[0] === 0x3c && bytes[1] === 0x00 && bytes[2] === 0x3f && bytes[3] === 0x00) {
-      return { ok: true, xml: new TextDecoder('utf-16le', { fatal: true }).decode(bytes) };
+      return { ok: true, xml: utf16Decoder('utf-16le').decode(bytes) };
     }
     if (bytes[0] === 0x00 && bytes[1] === 0x3c && bytes[2] === 0x00 && bytes[3] === 0x3f) {
-      return { ok: true, xml: new TextDecoder('utf-16be', { fatal: true }).decode(bytes) };
+      return { ok: true, xml: utf16Decoder('utf-16be').decode(bytes) };
     }
     const offset = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf ? 3 : 0;
     return { ok: true, xml: strFromU8(bytes.subarray(offset)) };

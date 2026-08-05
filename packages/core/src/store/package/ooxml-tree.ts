@@ -1020,18 +1020,7 @@ export interface OoxmlContentControlEndPropertiesNode extends OoxmlElementBase<
  * inline content is runs/hyperlinks; row/cell content is rows/cells. Nested controls stay typed.
  */
 export interface OoxmlContentControlContentNode extends OoxmlElementBase<
-  readonly (
-    | OoxmlParagraphNode
-    | OoxmlTableNode
-    | OoxmlRunNode
-    | OoxmlTableRowNode
-    | OoxmlTableCellNode
-    | OoxmlContentControlNode
-    | OoxmlHyperlinkNode
-    | OoxmlBookmarkStartNode
-    | OoxmlBookmarkEndNode
-    | OoxmlGenericElementNode
-  )[],
+  readonly OoxmlNode[],
   readonly OoxmlKnownNodeAttribute[]
 > {
   readonly kind: 'contentControlContent';
@@ -1398,6 +1387,35 @@ const KNOWN_WML_ELEMENTS: Readonly<Record<string, KnownKind>> = {
   commentReference: 'commentReference',
   comments: 'comments',
   comment: 'comment',
+  sdt: 'contentControl',
+};
+
+/**
+ * The three `w:sdt` members that are only themselves INSIDE a `w:sdt`.
+ *
+ * Typed by parent for the same reason the revision wrappers are: a stray `w:sdtContent`
+ * elsewhere in a document is not a control's content, and typing it there would demote
+ * whatever container held it — a body with one misplaced element would stop reporting
+ * its own paragraphs.
+ */
+const CONTENT_CONTROL_INVALID_PARENTS: ReadonlySet<string> = new Set([
+  'r',
+  'rPr',
+  'pPr',
+  'trPr',
+  'tcPr',
+  'tblPr',
+  'tblPrEx',
+  'numPr',
+  'sectPr',
+  'sdtPr',
+  'sdtEndPr',
+]);
+
+const SDT_MEMBER_KINDS: Readonly<Record<string, KnownKind>> = {
+  sdtPr: 'contentControlProperties',
+  sdtEndPr: 'contentControlEndProperties',
+  sdtContent: 'contentControlContent',
 };
 
 function resolveElementKind(
@@ -1471,6 +1489,16 @@ function wmlKindFor(localName: string, parentLocalName: string | undefined): Kno
     return parentLocalName !== undefined && PROPERTY_REVISION_PARENTS.has(parentLocalName)
       ? 'generic'
       : revision;
+  }
+  const sdtMember = SDT_MEMBER_KINDS[localName];
+  if (sdtMember !== undefined) return parentLocalName === 'sdt' ? sdtMember : 'generic';
+  // A `w:sdt` reaches every CONTENT position WML has, but never a run's or a property
+  // container's inside. Typed there it would demote the run that holds it, and a demoted
+  // run takes its own text out of the addressable flow — the control stays generic.
+  if (localName === 'sdt') {
+    return parentLocalName !== undefined && CONTENT_CONTROL_INVALID_PARENTS.has(parentLocalName)
+      ? 'generic'
+      : 'contentControl';
   }
   return KNOWN_WML_ELEMENTS[localName] ?? 'generic';
 }
@@ -1659,7 +1687,15 @@ function convertElement(
   const isWml = name.namespaceUri === WML_NAMESPACE_URI;
   // SDT vocabulary first (parent-contextual `w:lid` / checkbox states / run-misplaced
   // `w:sdt`), then WML known kinds including parent-gated content revisions.
-  const sdtKind = candidateSdtKind(name.namespaceUri, name.localName, parentCandidate);
+  const contextualSdtMember =
+    name.namespaceUri === WML_NAMESPACE_URI &&
+    (name.localName === 'sdtPr' ||
+      name.localName === 'sdtEndPr' ||
+      name.localName === 'sdtContent');
+  const sdtKind =
+    contextualSdtMember && parentCandidate !== 'contentControl'
+      ? undefined
+      : candidateSdtKind(name.namespaceUri, name.localName, parentCandidate);
   const wmlKind: KnownKind | 'generic' =
     sdtKind !== undefined
       ? (sdtKind as KnownKind)

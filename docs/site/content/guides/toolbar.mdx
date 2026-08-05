@@ -1,142 +1,75 @@
 ---
 title: 'Toolbar'
-description: 'Customize the DOCX editor toolbar: packaged chrome, slot overrides, and composition from DocxEditorToolbar parts.'
+description: 'Customize the current React root chrome: keep the packaged toolbar, drop to provider primitives, or compose with DocxEditor.Toolbar and friends from the package root.'
 category: 'Guides'
 seoTitle: 'Toolbar customization'
 ---
 
-The greenfield adapter ships packaged chrome — title bar, menu bar, and `DocxEditor.Toolbar` — from the root `@docx-editor.dev/react` export. Hide it with `chrome={false}` and compose your own from `DocxEditorToolbar`, `Toolbar`, and hooks, or override individual slots in place.
+The packaged React host has two levels of chrome: a title bar (`title`, `renderTitleBarLeft`, `renderTitleBarRight`, `menu`) and a formatting bar (`DocxEditor.Toolbar`). Both the packaged host and the lower-level compounds live on the React package root.
 
 <ToolbarLayoutDiagram />
 
-## Show and hide toolbar UI
+## Use the packaged chrome
 
-| Prop | Default | Controls |
-|---|---|---|
-| `showToolbar` | `true` | The entire toolbar (title bar + formatting bar) |
-| `showZoomControl` | `true` | Bottom-right zoom widget |
-| `showRuler` | `false` | Page ruler (`rulerUnit`: `"inch"` or `"cm"`) |
-| `showOutline` | `false` | Document outline drawer |
-| `showOutlineButton` | `true` | Outline toggle button in the toolbar |
-| `showMarginGuides` | `false` | Faint guides at page margins (`marginGuideColor` sets the color) |
-| `initialZoom` | `1.0` | Starting zoom level |
+The fastest path is still `<DocxEditor />`:
 
 ```tsx
-// Bare document surface; bring your own toolbar UI.
-<DocxEditor documentBuffer={buf} showToolbar={false} showZoomControl={false} />
+<DocxEditor document={bytes} title="Proposal.docx" renderTitleBarRight={() => <SaveIndicator />} />
 ```
 
-<UIControlsDemo />
+Use these root props to steer the packaged frame:
 
-## Title bar via props
+| Prop                                         | Type                                    | Description                                        |
+| -------------------------------------------- | --------------------------------------- | -------------------------------------------------- |
+| `title`                                      | `string`                                | Document name shown in the title bar.              |
+| `onTitleChange`                              | `(title: string) => void`               | Makes the title editable.                          |
+| `renderTitleBarLeft` / `renderTitleBarRight` | `() => ReactNode`                       | Host-owned title bar slots.                        |
+| `menu`                                       | `boolean \| DocxEditorMenuProps`        | Toggle or customize the packaged menu row.         |
+| `chrome`                                     | `boolean`                               | Set `false` to remove the packaged frame entirely. |
+| `navigation`                                 | `boolean`                               | Toggle the packaged navigation pane.               |
+| `hyperlinkPopup`                             | `boolean`                               | Toggle the packaged link popover.                  |
+| `contextMenu`                                | `boolean \| DocxEditorContextMenuProps` | Toggle or customize the packaged context menu.     |
 
-The fastest path: keep the built-in toolbar and override its slots.
+## Drop to the provider primitives
+
+When you want your own frame, use the same provider primitives the packaged host uses internally:
 
 ```tsx
-import { useState } from 'react';
 import { DocxEditor } from '@docx-editor.dev/react';
 
-function App({ buf }: { buf: ArrayBuffer }) {
-  const [fileName, setFileName] = useState('Untitled.docx');
-
+function MyChrome({ bytes }: { bytes: Uint8Array }) {
   return (
-    <DocxEditor
-      documentBuffer={buf}
-      renderLogo={() => <img src="/logo.svg" alt="Logo" width={24} height={24} />}
-      documentName={fileName}
-      onDocumentNameChange={setFileName}
-      documentNameEditable
-      renderTitleBarRight={() => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12, color: '#666' }}>Saved</span>
-          <button onClick={handleShare}>Share</button>
-        </div>
-      )}
-    />
+    <DocxEditor.Root document={bytes}>
+      <DocxEditor.Toolbar />
+      <DocxEditor.Viewport>
+        <DocxEditor.Navigation />
+        <DocxEditor.Content />
+        <DocxEditor.HyperLink />
+        <DocxEditor.ContextMenu />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
   );
 }
 ```
 
-| Prop | Type | Description |
-|---|---|---|
-| `renderLogo` | `() => ReactNode` | Left slot in the title bar |
-| `documentName` | `string` | Display name; editable in place by default |
-| `onDocumentNameChange` | `(name: string) => void` | Fires when the user edits the name |
-| `documentNameEditable` | `boolean` | Default `true`; `false` locks the title |
-| `renderTitleBarRight` | `() => ReactNode` | Right slot: save status, share, avatars |
-| `toolbarExtra` | `ReactNode` | Extra items appended to the formatting bar |
+`DocxEditor.Root` owns the editor instance, `DocxEditor.Viewport` is the scroll container, and `DocxEditor.Content` is the painted page surface. The other compounds layer on top of that same provider.
 
-### Appending formatting-bar items
+## Add root-level command buttons
 
-`toolbarExtra` adds controls at the end of the formatting bar without replacing anything:
+For small custom controls, reach the shared command hooks from the root package:
 
 ```tsx
-<DocxEditor
-  documentBuffer={buf}
-  toolbarExtra={
-    <>
-      <button onClick={handleWordCount}>Word count</button>
-    </>
-  }
-/>
-```
+import { useEditorCommand } from '@docx-editor.dev/react';
 
-## Compound components
-
-For full structural control, hide the built-in toolbar and compose `EditorToolbar` from `@docx-editor.dev/react/ui`:
-
-```tsx
-import { EditorToolbar, type EditorToolbarProps } from '@docx-editor.dev/react/ui';
-
-function MyChrome({ toolbarProps }: { toolbarProps: EditorToolbarProps }) {
+function BoldButton() {
+  const bold = useEditorCommand('text.bold');
   return (
-    <EditorToolbar {...toolbarProps}>
-      <EditorToolbar.TitleBar>
-        <EditorToolbar.Logo>
-          <img src="/logo.svg" alt="My App" />
-        </EditorToolbar.Logo>
-        <EditorToolbar.DocumentName value={fileName} onChange={setFileName} placeholder="Untitled" />
-        <EditorToolbar.MenuBar />
-        <EditorToolbar.TitleBarRight>
-          <button onClick={handleSave}>Save</button>
-          <button onClick={handleShare}>Share</button>
-        </EditorToolbar.TitleBarRight>
-      </EditorToolbar.TitleBar>
-      <EditorToolbar.Toolbar />
-    </EditorToolbar>
+    <button onClick={() => bold.execute()} disabled={!bold.isEnabled}>
+      Bold
+    </button>
   );
 }
 ```
-
-The pieces:
-
-- `EditorToolbar` is the root; it provides toolbar context to the sub-components.
-- `EditorToolbar.TitleBar` lays out the three columns: Logo left, DocumentName over MenuBar in the center, TitleBarRight on the right.
-- `EditorToolbar.MenuBar` renders the File, Format, and Insert menus, wired to the context automatically.
-- `EditorToolbar.Toolbar` is the formatting-button strip; children are appended at the end, and `inline` renders it with `display: contents` for embedding in your own flex row.
-
-For lower-level assembly, `/ui` also exports `Toolbar` (the formatting strip standalone), `ResponsiveToolbar` (adapts to width), and presentational controls such as `ToolbarButton`, `ToolbarGroup`, and `ToolbarSeparator`. `ToolbarButton` takes `active`, `disabled`, `title`, `ariaLabel`, and `onClick`, and renders its children. Wire them to the same callbacks the standalone `Toolbar` uses: `currentFormatting` (a `SelectionFormatting`) for state and `onFormat` (takes a `FormattingAction`) for dispatch.
-
-```tsx
-import { ToolbarButton, ToolbarGroup, ToolbarSeparator } from '@docx-editor.dev/react/ui';
-
-<ToolbarGroup label="Text formatting">
-  <ToolbarButton title="Bold" ariaLabel="Bold" active={currentFormatting?.bold} onClick={() => onFormat('bold')}>
-    B
-  </ToolbarButton>
-  <ToolbarButton title="Italic" ariaLabel="Italic" active={currentFormatting?.italic} onClick={() => onFormat('italic')}>
-    I
-  </ToolbarButton>
-  <ToolbarSeparator />
-  <ToolbarButton title="Clear formatting" ariaLabel="Clear formatting" onClick={() => onFormat('clearFormatting')}>
-    Tx
-  </ToolbarButton>
-</ToolbarGroup>;
-```
-
-<ToolbarCustomDemo />
-
-Naming note for 0.x upgraders: the formatting strip was `FormattingBar`, now `Toolbar`; the old composite `Toolbar` is now `EditorToolbar`.
 
 ## Table editing (React)
 
@@ -150,6 +83,6 @@ These controls target the **innermost** nested table under the pointer or select
 
 ## Next steps
 
-- [Props reference](/docs/1.x/react/props) for the full toolbar prop group
-- [React examples](/docs/1.x/react/examples) for a complete custom-toolbar build
-- [i18n](/docs/1.x/i18n) to localize the built-in toolbar strings
+- [React package overview](/docs/1.x/react)
+- [React props](/docs/1.x/react/props)
+- [React examples](/docs/1.x/react/examples)

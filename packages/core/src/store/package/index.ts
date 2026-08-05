@@ -279,6 +279,8 @@ export {
 export { resolveTocRowHeadings } from './toc-rows.ts';
 export {
   deriveOoxmlIndexes,
+  indexStyles,
+  stylesPartOf,
   type OoxmlIndexes,
   type ParagraphIndexEntry,
   type StoryIndexEntry,
@@ -305,9 +307,7 @@ export {
 export { ensureListDefinition, ensureNumberingLevel, type ListKind } from './numbering-part.ts';
 export { buildBookmarkIndex, type BookmarkAnchor, type BookmarkIndex } from './bookmarks.ts';
 export {
-  MAX_CONTENT_CONTROL_NESTING,
   collectFlowBlocks,
-  contentControlContentChildren,
   contentControlContentOf,
   isContentControl,
   isContentControlContent,
@@ -316,6 +316,7 @@ export {
   walkStoryBlocks,
 } from './content-control-walk.ts';
 export {
+  authorableHyperlinkTarget,
   ensureHyperlinkRelationship,
   relationshipTargetIn,
   type EnsuredHyperlinkRelationship,
@@ -425,3 +426,47 @@ export {
   readTrackingSettings,
   type DocumentTrackingSettings,
 } from './tracking-settings.ts';
+export {
+  CONTENT_CONTROL_ID_MAX,
+  CONTENT_CONTROL_PROPERTY_ORDER,
+  MAX_CONTENT_CONTROLS_PER_PART,
+  MAX_CONTENT_CONTROL_NESTING,
+  allocateContentControlId,
+  contentControlContentChildren,
+  contentControlContentNodeOf,
+  contentControlEndPropertiesNodeOf,
+  contentControlLevelOf,
+  contentControlPropertiesNodeOf,
+  contentControlPropertiesOf,
+  contentControlTextOf,
+  contentControlsIn,
+  findContentControl,
+  flattenContentControls,
+  isContentControlContentNode,
+  isContentControlNode,
+  isContentControlWrapper,
+  lockForbidsEdit,
+  lockForbidsRemoval,
+  orderedContentControlProperties,
+  parseContentControlId,
+  resolveContentControlLock,
+  type ContentControlCheckbox,
+  type ContentControlCheckboxState,
+  type ContentControlDataBinding,
+  type ContentControlDateFormat,
+  type ContentControlEntry,
+  type ContentControlKind,
+  type ContentControlLevel,
+  type ContentControlListItem,
+  type ContentControlLock,
+  type ContentControlProperties,
+} from './content-control-nodes.ts';
+export {
+  MAX_STORY_SDT_NESTING,
+  bodyStoryRoot,
+  collectStoryParagraphs,
+  storyParagraphs,
+  storyRootsOf,
+  type OoxmlStoryKind,
+  type OoxmlStoryRoot,
+} from './story-blocks.ts';

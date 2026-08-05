@@ -333,6 +333,14 @@ export {
   isContentControl,
   isContentControlContent,
 } from '../store/package/content-control-walk.ts';
+// The boundary RECORD this barrel publishes is the one layout itself paints and hit-tests
+// (`semantic-records.ts`). This module derives the same question for a part that is not the
+// laid-out story, and its own record type stays module-local so `ContentControlBoundaryRecord`
+// names one shape everywhere — `paginated-surface-contract.ts` imports it from here.
+export {
+  contentControlBoundaries,
+  type ContentControlFragmentRecord,
+} from './content-control-boundaries.ts';
 export {
   W15_NAMESPACE_URI,
   type CommentAnchor,

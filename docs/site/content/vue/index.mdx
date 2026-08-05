@@ -1,7 +1,7 @@
 ---
-title: "@docx-editor.dev/vue"
-description: "The Vue 3 adapter for docx-editor. It exposes DocxEditor, composables, and shared chrome from the root barrel."
-category: "Packages"
+title: '@docx-editor.dev/vue'
+description: 'Vue 3 adapter with a root component plus shell, title bar, toolbar, sidebar, and ruler components from the package root.'
+category: 'Packages'
 order: 40
 ---
 
@@ -26,7 +26,7 @@ Pulls in `@docx-editor.dev/core-contract` and `@docx-editor.dev/i18n`.
 import { ref } from 'vue';
 import { DocxEditor } from '@docx-editor.dev/vue';
 
-const doc = ref<ArrayBuffer | undefined>(undefined);
+const doc = ref<Uint8Array>();
 </script>
 
 <template>
@@ -47,32 +47,40 @@ export default defineNuxtConfig({
 
 See [Nuxt](/docs/1.x/vue/nuxt) for the module options and what to import from the adapter directly.
 
-## Subpaths
+## Root surface
 
-- `@docx-editor.dev/vue`: `<DocxEditor>`, `DocxEditorProps`, `DocxEditorRef`, `EditorMode`, `DocxEditorToolbar`, rulers, title bar, and shared engine helpers (`toolbarCommandState`, `commandForSlot`, …)
+- `DocxEditor`: the packaged Vue host component
+- `DocxEditorShell`, `DocxEditorTitleBar`, `DocxEditorToolbar`, `DocxEditorSidebar`: root-level chrome components
+- `HorizontalRuler`, `VerticalRuler`, `PageIndicator`: shared chrome pieces exported from the package root
+- the shared font helpers and command utilities are also exported from the root package
 
-Every export is in the [Vue API reference](/docs/1.x/api/vue).
+There are no separate `/ui`, `/composables`, `/dialogs`, or `/plugin-api` package exports in v2.
 
 ## Parity with React
 
 `scripts/parity/parity.contract.json` lists every public prop and ref member shipped under either adapter, grouped as paired, deferred-in-Vue, or adapter-specific. CI parses both packages' API snapshots and fails when the contract changes without an update.
 
-## Agent integration
+## Automating the document
 
-Same toolkit, Vue subpath:
+`@docx-editor.dev/editor-api` drives a document through an object model. In Vue, the stable path today is the server entry over DOCX bytes:
 
 ```ts
-import { useAgentBridge } from '@docx-editor.dev/agents/vue';
+import { DocxEditor } from '@docx-editor.dev/editor-api';
 
-const { executeToolCall, toolSchemas } = useAgentBridge({
-  editorRef,
-  author: 'Assistant',
+const runtime = await DocxEditor.createServer(bytes, { author: 'Assistant' });
+const text = await runtime.run(async (context) => {
+  const body = context.document.body;
+  body.load('text');
+  await context.sync();
+  return body.text;
 });
+runtime.dispose();
 ```
 
-The live bridge is pending rebuild over the greenfield engine. Render agent UI components next to the editor (see [Vue examples](/docs/1.x/vue/examples)).
+Save the result with `runtime.save()` and hand the bytes back to the editor with `ref.load(...)`. The object model and its rules are in [DocxEditor API](/docs/1.x/editor-api).
 
 ## Next steps
 
 - [Vue API reference](/docs/1.x/api/vue)
-- [Agents](/docs/1.x/agents)
+- [Vue props](/docs/1.x/vue/props)
+- [Vue examples](/docs/1.x/vue/examples)

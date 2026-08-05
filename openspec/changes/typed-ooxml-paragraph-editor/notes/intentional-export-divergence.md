@@ -347,6 +347,12 @@ Task 10 landed five contextual toolbar parts and seven fixed table context-menu 
 - `ContextMenuDeleteTable`
 - `ContextMenuCellVerticalAlignment`
 
+The font-substitution notice is React-first chrome over the shared engine font
+availability state; Vue does not yet expose an equivalent part.
+
+- `DocxEditorFontNotice`
+- `DocxEditorFontNoticeProps`
+
 ### Opening a document
 
 `useDocxSource` is a React hook, and its Vue twin is a composable — the same capability in

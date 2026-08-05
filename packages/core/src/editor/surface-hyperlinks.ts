@@ -191,6 +191,14 @@ export function hyperlinkAtPosition(
 
 export interface HyperlinkOpsDeps {
   readonly session: TreeDocxSession;
+  /**
+   * Whether a write would be refused right now — viewing, or suggesting with no author.
+   *
+   * The session this lane holds is already gated, so the OPS cannot slip through. The relationship
+   * can: it is minted on the package before the transaction, outside the undo stack, and a refused
+   * commit does not take it back. Asking first is what keeps a read-only document byte-identical.
+   */
+  readonly refusesWrite: () => boolean;
   /** Active story for reads/writes — body, header/footer, or notes part. */
   storyScope(): StoryScope;
   readonly selection: () => SemanticSelection;
@@ -272,9 +280,11 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
       if (wantsExternal === wantsInternal) return false;
 
       // Refuse before minting when the active story cannot be resolved: a scoped insert that
-      // fell back to the body would leave a stray main-document relationship behind.
+      // fell back to the body would leave a stray main-document relationship behind. And refuse
+      // before minting when the MODE would refuse the edit, for the same reason: the relationship
+      // outlives the refusal that the ops do not survive.
       const active = scope();
-      if (!storyPart()) return false;
+      if (!storyPart() || deps.refusesWrite()) return false;
 
       // The relationship is minted BEFORE the transaction: it lives on the package, outside
       // the undo stack, and a refused URL must not leave a half-applied edit behind.

@@ -88,11 +88,26 @@ import {
 } from './tree-op-section.ts';
 import { pageFieldContentBuilders } from './tree-op-fields.ts';
 import {
+  applyInsertContentControl as applyAutomationInsertContentControl,
+  applyRemoveContentControl as applyAutomationRemoveContentControl,
+  applySetContentControlProperties as applyAutomationSetContentControlProperties,
+  applySetContentControlValue as applyAutomationSetContentControlValue,
+  clearPlaceholder,
+  placeholderControlForInsertion,
+} from './tree-op-content-controls.ts';
+import {
+  insertionSite,
+  isParagraph,
+  paragraphLength,
+  runsUnder,
+  segmentsOf,
+  type Segment,
+} from './tree-op-segments.ts';
+import {
   applyInsertToc,
   applyReplaceTocResult,
   applyRewriteTocPageNumbers,
 } from './tree-op-toc.ts';
-import { isParagraph, runsUnder, segmentsOf, type Segment } from './tree-op-segments.ts';
 import type {
   OoxmlProperty,
   TreeDocOp,
@@ -154,6 +169,19 @@ function simpleElement(
   } as unknown as OoxmlNode;
 }
 
+/**
+ * Where the caller's characters go once a prompt has been emptied.
+ *
+ * The prompt's own characters are gone, so the offset the caller planned against them cannot
+ * be honoured — Word puts the text where the prompt started, and clamping keeps the op inside
+ * a paragraph that is now shorter than it was.
+ */
+function promptInsertionOffset(part: OoxmlPart, paragraphId: string, planned: number): number {
+  const paragraph = findNode(part, paragraphId);
+  if (!paragraph || paragraph.kind !== 'paragraph') return planned;
+  return Math.min(planned, paragraphLength(paragraph));
+}
+
 function runElement(nextId: () => string, children: readonly OoxmlNode[]): OoxmlNode {
   return {
     id: nextId(),
@@ -181,6 +209,35 @@ function runElement(nextId: () => string, children: readonly OoxmlNode[]): Ooxml
 export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOptions): TreeOpResult {
   const rejection = validateTreeOp(part, op);
   if (rejection) return { ok: false, reason: rejection };
+
+  if (op.op === 'setContentControlValue' && typeof op.value !== 'string') {
+    return applyAutomationSetContentControlValue(part, op, options);
+  }
+  if (op.op === 'setContentControlProperties') {
+    return applyAutomationSetContentControlProperties(part, op, options);
+  }
+  if (op.op === 'removeContentControl' && op.keepContent !== undefined) {
+    return applyAutomationRemoveContentControl(part, op, options);
+  }
+  if (op.op === 'insertContentControl') {
+    return applyAutomationInsertContentControl(part, op, options);
+  }
+  // Typing into a prompt REPLACES it. The transition belongs here rather than beside the
+  // caret: an automation call and a paste insert text too, and a prompt that survived them
+  // would leave the typed characters appended to "Click here to enter text.".
+  if (op.op === 'insertText' && !op.revision) {
+    const prompt = placeholderControlForInsertion(part, op.paragraphId, op.offset);
+    if (prompt) {
+      const emptied = clearPlaceholder(part, prompt.control.id, options);
+      if (emptied) {
+        return applyTreeOp(
+          emptied,
+          { ...op, offset: promptInsertionOffset(emptied, op.paragraphId, prompt.offset) },
+          options
+        );
+      }
+    }
+  }
 
   if (op.op === 'insertTableRow' || op.op === 'deleteTableRow')
     return applyTableRowOp(part, op, options);
@@ -238,6 +295,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   if (op.op === 'removeContentControl')
     return applyRemoveContentControl(part, op.controlId, options);
   if (op.op === 'setContentControlValue') {
+    if (typeof op.value !== 'string') return { ok: false, reason: 'typeMismatch' };
     return applySetContentControlValue(part, op.controlId, op.value, options);
   }
   if (op.op === 'setSectionProperties') return applySetSectionProperties(part, op, options);
@@ -276,6 +334,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
         op.offset,
         [(mint) => textElement(mint, op.text)],
         options,
+        op.inside,
         op.bias
       );
     case 'insertTab':
@@ -401,6 +460,8 @@ function applyInsertContent(
   offset: number,
   builders: readonly ((mint: () => string) => OoxmlNode)[],
   options?: EditOptions,
+  /** The content control the caller says this content belongs to, if it named one. */
+  inside?: string,
   bias: 'left' | 'right' = 'left'
 ): TreeOpResult {
   const control = contentControlAtCaret(part, paragraph, offset, offset);
@@ -410,6 +471,7 @@ function applyInsertContent(
 
   const nextId = createNodeIdAllocator(part);
   const nodes = builders.map((build) => build(nextId));
+  const segments = segmentsOf(paragraph);
   const effect: TreeOpEffect = {
     dirty: [paragraph.id],
     created: [],
@@ -417,13 +479,22 @@ function applyInsertContent(
     dependencyKeys: TEXT_DEPS,
     impact: 'text-local',
   };
-  const segments = segmentsOf(paragraph);
+  // A named owner narrows the offset to that control's OWN characters. Without it the trailing
+  // edge resolves to the run after the control, which is beside the field rather than in it.
+  const found = inside === undefined ? null : findNode(part, inside);
+  if (inside !== undefined && (found === null || found.kind === 'textValue')) {
+    return { ok: false, reason: 'unknown-content-control' };
+  }
+  const owner = found?.kind === 'textValue' ? null : found;
+  // ONE resolution of where this lands, shared with the validation that refuses it. Two copies
+  // of this rule is how a lock came to be resolved against a different place than the write.
+  const site = insertionSite(paragraph, offset, owner);
 
   let inserted: TreeOpResult;
   // Inside a text value: split it and place the new content between the halves.
-  for (const segment of segments) {
-    if (segment.node.kind !== 'textValue') continue;
-    if (offset <= segment.start || offset >= segment.end) continue;
+  if (site.kind === 'withinValue') {
+    const segment = site.segment;
+    if (segment.node.kind !== 'textValue') return { ok: false, reason: 'tree-invariant' };
     const local = offset - segment.start;
     const value = segment.node.value;
     const textNode = findTextParent(paragraph, segment.node.id);
@@ -438,6 +509,43 @@ function applyInsertContent(
     );
     inserted = fromEdit(
       replaceChildren(part, run.id, rebuilt, deferOptions(options, control)),
+      effect
+    );
+    return finishContentEdit(inserted, control, options);
+  }
+
+  if (inside !== undefined) {
+    if (site.kind === 'atBoundary') {
+      const run = findNode(part, site.segment.runId);
+      if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
+      const index = run.children.findIndex((child) => contains(child, site.segment.node.id));
+      inserted = fromEdit(
+        insertChildren(part, run.id, Math.max(0, index), nodes, deferOptions(options, control)),
+        effect
+      );
+      return finishContentEdit(inserted, control, options);
+    }
+    if (site.kind === 'appendToRun') {
+      inserted = fromEdit(
+        insertChildren(
+          part,
+          site.run.id,
+          site.run.children.length,
+          nodes,
+          deferOptions(options, control)
+        ),
+        effect
+      );
+      return finishContentEdit(inserted, control, options);
+    }
+    inserted = fromEdit(
+      insertChildren(
+        part,
+        site.holder.id,
+        site.holder.children.length,
+        [runElement(nextId, nodes)],
+        deferOptions(options, control)
+      ),
       effect
     );
     return finishContentEdit(inserted, control, options);
@@ -463,6 +571,7 @@ function applyInsertContent(
     bias === 'left' &&
     before &&
     before.removeNodeIds === undefined &&
+    !crossesContentControlBoundary(part, before, after) &&
     !leavesContainer(paragraph, before, after)
   ) {
     const run = findNode(part, before.runId);
@@ -610,6 +719,17 @@ function findLast<T>(items: readonly T[], predicate: (item: T) => boolean): T | 
     if (predicate(item)) return item;
   }
   return undefined;
+}
+
+/** Inline-control edges stay right-biased even though ordinary run boundaries inherit left. */
+function crossesContentControlBoundary(
+  part: OoxmlPart,
+  before: { readonly runId: string },
+  after: { readonly runId: string } | undefined
+): boolean {
+  const beforeControl = innermostContentControlAround(part, before.runId)?.id;
+  const afterControl = after ? innermostContentControlAround(part, after.runId)?.id : undefined;
+  return beforeControl !== afterControl;
 }
 
 /**

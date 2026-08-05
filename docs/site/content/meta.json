@@ -23,21 +23,14 @@
     "guides/dark-mode",
     "guides/headless-processing",
     "realtime-collaboration",
-    "---AI & Agents---",
-    "agents/index",
-    "agents/ai-editing",
-    "agents/redlining",
-    "agents/live-editor",
-    "agents/tools",
-    "agents/docx-reviewer",
-    "agents/mcp",
-    "agents/bring-your-own",
-    "agents/word-js-api",
+    "---DocxEditor API---",
+    "editor-api/index",
+    "editor-api/word-js-api",
+    "editor-api/migration",
     "---Reference---",
     "react",
     "vue",
     "core",
-    "i18n",
-    "plugins"
+    "i18n"
   ]
 }
