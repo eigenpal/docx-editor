@@ -29,7 +29,9 @@ function load(body: string): OoxmlPart {
   return result.part;
 }
 
-const run = (text: string) => `<w:r><w:t>${text}</w:t></w:r>`;
+// 22 half-points = 11pt, the size the fixed measurer's base advance describes, so exact
+// coordinate assertions stay whole numbers regardless of the engine's default font size.
+const run = (text: string) => `<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${text}</w:t></w:r>`;
 const paragraph = (content: string) => `<w:p>${content}</w:p>`;
 const control = (alias: string, content: string) =>
   `<w:sdt><w:sdtPr><w:alias w:val="${alias}"/></w:sdtPr>` +

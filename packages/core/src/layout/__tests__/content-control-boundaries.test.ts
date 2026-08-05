@@ -33,8 +33,11 @@ const GEOMETRY: PageGeometry = {
   margin: { top: 10, right: 10, bottom: 10, left: 10 },
 };
 
-const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
-const run = (text: string) => `<w:r><w:t>${text}</w:t></w:r>`;
+// 22 half-points = 11pt, the size the fixed measurer's base advance describes, so exact
+// coordinate assertions stay whole numbers regardless of the engine's default font size.
+const p = (text: string) =>
+  `<w:p><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
+const run = (text: string) => `<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${text}</w:t></w:r>`;
 const sdt = (pr: string, content: string) =>
   `<w:sdt><w:sdtPr>${pr}</w:sdtPr><w:sdtContent>${content}</w:sdtContent></w:sdt>`;
 
@@ -144,6 +147,51 @@ describe('block, inline, and nested boundaries', () => {
       sdt(`<w:alias w:val="Agree"/><w14:checkbox><w14:checked w14:val="0"/></w14:checkbox>`, p('☐'))
     );
     expect(layout.contentControls![0]!.controlType).toBe('checkbox');
+  });
+});
+
+describe('inline boundary fragments', () => {
+  test('a line-wrapped inline control publishes one fragment per line, not a union rect', () => {
+    // Content width 110pt at 6pt/char fits 18 characters: "xxxx yyyy yyyy" stays on line
+    // one and the control's trailing "yyyy" wraps onto line two.
+    const layout = lay(
+      `<w:p>${run('xxxx ')}${sdt('<w:tag w:val="wrap"/>', run('yyyy yyyy yyyy'))}</w:p>`,
+      1,
+      { width: 130, height: 300, margin: { top: 10, right: 10, bottom: 10, left: 10 } }
+    );
+    const paragraph = layout.pages[0]!.fragments[0]!;
+    if (paragraph.kind !== 'paragraph') throw new Error('expected a paragraph');
+    expect(paragraph.lines.length).toBe(2);
+    const control = layout.contentControls![0]!;
+    expect(control.fragments).toHaveLength(2);
+    const [first, second] = control.fragments;
+    // Line one's fragment starts after "xxxx ", so a single union rectangle would have
+    // claimed that prefix; line two's fragment starts at the margin.
+    expect(first!.box.x).toBe(30);
+    expect(second!.box.x).toBe(0);
+    expect(second!.box.y).toBeGreaterThan(first!.box.y);
+    // Each fragment covers one line's text, never the band between the lines.
+    for (const fragment of control.fragments) {
+      expect(fragment.box.height).toBeLessThanOrEqual(paragraph.lines[0]!.box.height);
+    }
+  });
+
+  test('non-single line spacing keeps the fragment on the text, not the leading above it', () => {
+    // Double spacing (w:line 480 auto) puts the whole extra leading ABOVE the glyphs; the
+    // boundary must sit where the text is, or the chip tints the gap and clicks miss.
+    const layout = lay(
+      `<w:p><w:pPr><w:spacing w:line="480" w:lineRule="auto"/></w:pPr>` +
+        `${run('aa')}${sdt('<w:tag w:val="spaced"/>', run('bb'))}${run('cc')}</w:p>`
+    );
+    const paragraph = layout.pages[0]!.fragments[0]!;
+    if (paragraph.kind !== 'paragraph') throw new Error('expected a paragraph');
+    const line = paragraph.lines[0]!;
+    expect(line.leading).toBeGreaterThan(0);
+    const control = layout.contentControls![0]!;
+    expect(control.fragments).toHaveLength(1);
+    const box = control.fragments[0]!.box;
+    expect(box.y).toBe(line.box.y + line.leading);
+    expect(box.height).toBe(line.box.height - line.leading);
   });
 });
 

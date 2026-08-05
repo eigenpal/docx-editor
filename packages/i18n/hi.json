@@ -657,7 +657,9 @@
       "makeCasual": "अनौपचारिक बनाएं",
       "custom": "कस्टम"
     },
-    "updateTableOfContents": "विषय-सूची अपडेट करें"
+    "updateTableOfContents": "विषय-सूची अपडेट करें",
+    "editCustomNode": null,
+    "removeCustomNode": null
   },
   "documentOutline": {
     "ariaLabel": "दस्तावेज़ की रूपरेखा",

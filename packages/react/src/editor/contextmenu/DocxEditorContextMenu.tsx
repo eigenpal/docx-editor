@@ -16,6 +16,7 @@
 // one thing fixed positioning cannot do is the one thing that never happens.
 
 import {
+  Children,
   isValidElement,
   useCallback,
   useEffect,
@@ -205,6 +206,20 @@ function rowOfChild(child: ReactNode): string | null {
 }
 
 /**
+ * Whether a child asked to render ABOVE the default set.
+ *
+ * A component carrying `docxRowPlacement: 'start'` (a static, like `docxRow`) renders
+ * before the packaged rows instead of appending after them — the shape a contextual
+ * section wants: "you right-clicked one of MINE" belongs at the top, where the pointer is.
+ */
+function startPlacedChild(child: ReactNode): boolean {
+  if (!isValidElement(child)) return false;
+  const type = child.type as { docxRowPlacement?: unknown };
+  if (typeof type !== 'function' && typeof type !== 'object') return false;
+  return type.docxRowPlacement === 'start';
+}
+
+/**
  * The element this menu listens on: the SCROLL CONTAINER, not the painted surface.
  *
  * The class is the one the engine itself keys on, so a page with two editors gives each
@@ -241,6 +256,8 @@ export function DocxEditorContextMenu({
   const [anchor, setAnchor] = useState<ContextMenuAnchor | null>(null);
   // Captured with the anchor, not subscribed to — see `tocId` on the context value.
   const [tocId, setTocId] = useState<string | null>(null);
+  // The element the opening press landed on, for contextual rows. Same capture rule.
+  const [target, setTarget] = useState<HTMLElement | null>(null);
   const defaultSet = useMemo(
     () => contextMenuDefaultSet(tableContextVisible, tocId !== null),
     [tableContextVisible, tocId]
@@ -263,6 +280,7 @@ export function DocxEditorContextMenu({
       setAnchor(null);
       setPlacement(null);
       setTocId(null);
+      setTarget(null);
       if (restoreFocus) editor?.focus();
     },
     [editor]
@@ -285,6 +303,7 @@ export function DocxEditorContextMenu({
       // The engine's own listener sits INSIDE this one and has already recorded which table
       // of contents the press landed on, so reading it here is reading it current.
       setTocId(editor?.snapshot().tocContext?.id ?? null);
+      setTarget(keyboard || !(event.target instanceof HTMLElement) ? null : event.target);
       setAnchor(
         keyboard ? { x: box.left + 16, y: box.top + 16 } : { x: event.clientX, y: event.clientY }
       );
@@ -399,8 +418,15 @@ export function DocxEditorContextMenu({
   // Root-owned, so it survives the panel unmounting when a row is selected.
   const [clipboardRefusal, setClipboardRefusal] = useState<string | null>(null);
   const contextMenuContext = useMemo(
-    () => ({ close, anchor, tocId, clipboardRefusal, reportClipboardRefusal: setClipboardRefusal }),
-    [close, anchor, tocId, clipboardRefusal]
+    () => ({
+      close,
+      anchor,
+      tocId,
+      target,
+      clipboardRefusal,
+      reportClipboardRefusal: setClipboardRefusal,
+    }),
+    [close, anchor, tocId, target, clipboardRefusal]
   );
 
   const style: CSSProperties = {
@@ -446,9 +472,10 @@ export function DocxEditorContextMenu({
                 }
               }}
             >
+              {Children.toArray(children).filter(startPlacedChild)}
               {mergeArrangement({
                 entries: defaultSet,
-                children,
+                children: Children.toArray(children).filter((child) => !startPlacedChild(child)),
                 preset,
                 keyOfEntry: (entry) => entry.id,
                 keyOfChild: rowOfChild,

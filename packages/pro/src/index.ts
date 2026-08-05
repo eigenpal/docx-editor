@@ -15,6 +15,7 @@ export { type ProLicenseOptions } from './license.ts';
 export {
   customNodesModule,
   defineCustomNode,
+  isCustomNodeDefinition,
   recognizeCustomNodes,
   type ActivatedCustomNode,
   type CustomNodeDefinition,
@@ -32,3 +33,13 @@ export {
   insertCustomNode,
   type InsertCustomNodeOptions,
 } from './custom-nodes/insert-custom-node.ts';
+export {
+  removeCustomNode,
+  updateCustomNode,
+  type UpdateCustomNodeOptions,
+} from './custom-nodes/update-custom-node.ts';
+export {
+  customNodeXml,
+  type CustomNodeXmlOptions,
+  type CustomNodeXmlResult,
+} from './custom-nodes/sdt-xml.ts';

@@ -571,11 +571,13 @@ export type ContentControlMappedType =
 export type ContentControlLevel = 'block' | 'inline' | 'row' | 'cell';
 
 /**
- * One page's worth of a control's content geometry.
+ * One piece of a control's content geometry.
  *
  * A block control that crosses a page break publishes one fragment per page rather than a
- * single rectangle covering the inter-page gap. Coordinates match fragment boxes (page-content
- * space).
+ * single rectangle covering the inter-page gap. An inline control publishes one fragment per
+ * LINE it touches, covering the text's vertical extent (line-spacing leading excluded), so a
+ * wrapped control never claims the words beside it. Coordinates match fragment boxes
+ * (page-content space).
  */
 export interface ContentControlGeometryFragment {
   readonly pageIndex: number;

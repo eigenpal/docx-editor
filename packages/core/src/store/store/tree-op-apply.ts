@@ -56,6 +56,7 @@ import {
   findContentControl,
   formatSdtDateDisplay,
   fromEdit,
+  inlineContainerOf,
   innermostContentControlAround,
   isContentControlNode,
   isParagraphPropertiesNode,
@@ -122,6 +123,7 @@ import {
   applyTableCellPropertyOp,
 } from './tree-op-tables.ts';
 import { contentControlAtCaret, validateTreeOp } from './tree-op-validate.ts';
+import { fnv1a32 } from '../package/para-id.ts';
 import { applyDrawingOp, isDrawingTreeDocOp } from './tree-op-drawings.ts';
 
 /**
@@ -464,7 +466,7 @@ function applyInsertContent(
   inside?: string,
   bias: 'left' | 'right' = 'left'
 ): TreeOpResult {
-  const control = contentControlAtCaret(part, paragraph, offset, offset);
+  const control = contentControlAtCaret(part, paragraph, offset, offset, bias);
   if (control && isShowingPlaceholder(control)) {
     return applyPlaceholderReplace(part, control, builders, options);
   }
@@ -598,6 +600,37 @@ function applyInsertContent(
       effect
     );
     return finishContentEdit(inserted, control, options);
+  }
+
+  // The caret sits at a CONTAINER's outer edge with nothing beyond it — a hyperlink or a
+  // locked chip ending the paragraph. The text lands in a fresh run BESIDE the container,
+  // immediately after it in the container's OWN parent: falling through to "the last run"
+  // instead put the keystroke into whatever run happened to precede the container,
+  // characters away from the caret — and for a content-locked chip the write was refused
+  // outright, so typing at the end of the paragraph did nothing at all. The container's
+  // parent, not the paragraph: a chip nested inside an outer control (or a link) is only
+  // being LEFT one level, and validation attributes the caret to that outer container.
+  if (before) {
+    const container = inlineContainerOf(paragraph, before.runId);
+    if (container) {
+      const parent = parentOf(part, container.id);
+      if (parent) {
+        const index = parent.children.findIndex((child) => child.id === container.id);
+        if (index >= 0) {
+          inserted = fromEdit(
+            insertChildren(
+              part,
+              parent.id,
+              index + 1,
+              [runElement(nextId, nodes)],
+              deferOptions(options, control)
+            ),
+            effect
+          );
+          return finishContentEdit(inserted, control, options);
+        }
+      }
+    }
   }
 
   const runs = paragraph.children.filter((child) => child.kind === 'run');
@@ -1301,8 +1334,16 @@ function inlineContentControlElement(
   // Property leaves stay GENERIC under a typed properties node — the same shape
   // the parser produces, so a document that round-trips through this op is
   // indistinguishable from one that was authored elsewhere.
+  const propertiesId = nextId();
+  // Word writes `w:id` on every control it authors — and Word Online DROPS an
+  // id-less control on resave, which silently deleted the chip on a cloud
+  // round-trip. Deterministic (FNV-1a over the minted node id + tag): same
+  // session state produces the same bytes, so the save/reopen digests stay
+  // stable. ST_DecimalNumber, positive, never zero. Emitted in CT_SdtPr's
+  // schema sequence (alias, tag, id, lock) — the deep validator enforces it.
+  const wordId = String(fnv1a32(`${propertiesId} ${op.tag}`) & 0x7fffffff || 1);
   const properties = {
-    id: nextId(),
+    id: propertiesId,
     kind: 'contentControlProperties',
     namespaceUri: WML_NAMESPACE_URI,
     localName: 'sdtPr',
@@ -1312,6 +1353,7 @@ function inlineContentControlElement(
     children: [
       ...(op.alias === undefined ? [] : [valued('alias', op.alias)]),
       valued('tag', op.tag),
+      valued('id', wordId),
       ...(op.lock === undefined ? [] : [valued('lock', op.lock)]),
     ],
   } as unknown as OoxmlNode;

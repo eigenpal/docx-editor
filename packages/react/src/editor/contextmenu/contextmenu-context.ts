@@ -37,6 +37,15 @@ export interface ContextMenuContextValue {
    */
   readonly tocId: string | null;
   /**
+   * The element the opening right-click landed on, captured AT OPEN TIME like {@link tocId}.
+   *
+   * What lets a contextual row decide it applies — a custom-node chip, a painted marker —
+   * without installing a second `contextmenu` listener that could disagree with the one
+   * that opened the panel. Null while closed, and for keyboard-invoked opens, which have
+   * no pointer target.
+   */
+  readonly target: HTMLElement | null;
+  /**
    * The browser's reason for refusing a clipboard READ, once one has actually been refused.
    *
    * Lives on the ROOT rather than in the Paste row because selecting that row closes the
@@ -53,10 +62,23 @@ export const ContextMenuContext = createContext<ContextMenuContextValue>({
   close: () => {},
   anchor: null,
   tocId: null,
+  target: null,
   clipboardRefusal: null,
   reportClipboardRefusal: () => {},
 });
 
 export function useContextMenuContext(): ContextMenuContextValue {
   return useContext(ContextMenuContext);
+}
+
+/**
+ * The element the opening right-click landed on, or null while the menu is closed.
+ *
+ * Public so capability packages can render contextual sections — a row that only exists
+ * when the press landed on their own painted chrome — without a second listener.
+ *
+ * @public
+ */
+export function useContextMenuTarget(): HTMLElement | null {
+  return useContext(ContextMenuContext).target;
 }

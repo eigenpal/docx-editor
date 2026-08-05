@@ -1538,8 +1538,10 @@ export function applyRemoveContentControl(
   if (typeof resolved === 'string') return { ok: false, reason: resolved };
   const { control, lock } = resolved;
   if (lockForbidsRemoval(lock)) return { ok: false, reason: 'locked' };
-  // Taking the content with the control is a content edit as well as a structural one.
-  if (!op.keepContent && lockForbidsEdit(lock)) return { ok: false, reason: 'locked' };
+  // Deleting the WHOLE control is an existence operation, governed by the wrapper axis
+  // alone — Word deletes a contentLocked control whole (only sdtLocked forbids deletion),
+  // and Backspace over a content-locked chip relies on it. The content lock guards the
+  // characters while the control exists, not the control's existence.
 
   const owner = parentOf(part, control.id);
   if (!owner) return { ok: false, reason: 'tree-invariant' };

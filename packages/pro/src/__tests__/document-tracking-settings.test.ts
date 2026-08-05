@@ -142,7 +142,7 @@ describe('honouring what the document asks for', () => {
     });
     editor.surface!.type('X');
     const [card] = editor.getReviewItems();
-    expect(card?.revisionKind).toBe('insert');
+    expect(card?.kind === 'revision' ? card.revisionKind : null).toBe('insert');
     expect(card?.author).toBe('Grace Hopper');
   });
 

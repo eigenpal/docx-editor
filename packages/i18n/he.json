@@ -657,7 +657,9 @@
       "makeCasual": "הפוך ללא רשמי",
       "custom": "מותאם אישית"
     },
-    "updateTableOfContents": "עדכן תוכן עניינים"
+    "updateTableOfContents": "עדכן תוכן עניינים",
+    "editCustomNode": null,
+    "removeCustomNode": null
   },
   "documentOutline": {
     "ariaLabel": "מתווה המסמך",

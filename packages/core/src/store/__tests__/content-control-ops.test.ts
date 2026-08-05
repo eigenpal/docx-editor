@@ -1365,3 +1365,102 @@ describe('w:temporary unwrap on first content edit', () => {
     expect(collectTextV2(next.root)).toContain('new');
   });
 });
+
+describe('removeContentControl keepContent: false', () => {
+  test('takes the wrapper AND its content as one unit', () => {
+    const part = loadV2(
+      '<w:p><w:r><w:t>aa</w:t></w:r>' +
+        '<w:sdt><w:sdtPr><w:tag w:val="t"/><w:lock w:val="contentLocked"/></w:sdtPr>' +
+        '<w:sdtContent><w:r><w:t>CHIP</w:t></w:r></w:sdtContent></w:sdt>' +
+        '<w:r><w:t>zz</w:t></w:r></w:p>'
+    );
+    const controlId = firstSdtV2(part).id;
+    const next = applyV2(part, { op: 'removeContentControl', controlId, keepContent: false });
+    expect(findContentControl(next, controlId)).toBeNull();
+    expect(paragraphTextOf(next, V2_PARAGRAPH)).toBe('aazz');
+  });
+
+  test('a wrapper-locked control refuses deletion; content lock alone does not', () => {
+    const locked = loadV2(
+      '<w:p><w:sdt><w:sdtPr><w:lock w:val="sdtContentLocked"/></w:sdtPr>' +
+        '<w:sdtContent><w:r><w:t>KEEP</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+    );
+    expect(
+      rejectV2(locked, {
+        op: 'removeContentControl',
+        controlId: firstSdtV2(locked).id,
+        keepContent: false,
+      })
+    ).toBe('locked');
+  });
+});
+
+describe('boundary carets beside locked controls', () => {
+  const LOCKED =
+    '<w:p><w:r><w:t>aa</w:t></w:r>' +
+    '<w:sdt><w:sdtPr><w:tag w:val="t"/><w:lock w:val="sdtContentLocked"/></w:sdtPr>' +
+    '<w:sdtContent><w:r><w:t>LOCK</w:t></w:r></w:sdtContent></w:sdt>' +
+    '<w:r><w:t>zz</w:t></w:r></w:p>';
+
+  test('bias-right insert at the locked chip LEFT edge is refused, matching apply', () => {
+    // Apply honors bias: 'right' by joining the run AFTER the caret — the chip's own run.
+    // Validation must attribute the caret the same way, or the keystroke lands INSIDE the
+    // locked control (the exact bypass the shared leavesInlineContainer rule exists to
+    // prevent).
+    const part = loadV2(LOCKED);
+    expect(
+      rejectV2(part, {
+        op: 'insertText',
+        paragraphId: V2_PARAGRAPH,
+        offset: 2,
+        text: 'X',
+        bias: 'right',
+      })
+    ).toBe('locked');
+  });
+
+  test('bias-left insert at the chip LEFT edge ENTERS the control, so a locked one refuses', () => {
+    // Word's rule: at a control's leading edge the run STARTING at the caret owns the
+    // insertion, so typing enters the control — and a content-locked chip refuses the
+    // keystroke rather than letting it in. Apply and validate agree.
+    const part = loadV2(LOCKED);
+    expect(
+      rejectV2(part, { op: 'insertText', paragraphId: V2_PARAGRAPH, offset: 2, text: 'X' })
+    ).toBe('locked');
+  });
+
+  test('typing after a locked chip NESTED in an outer control stays inside the outer one', () => {
+    // The caret leaves only the INNER container: the fresh run lands after the chip inside
+    // the outer control's content, not jumped out past the top-level host.
+    const part = loadV2(
+      '<w:p><w:r><w:t>aa</w:t></w:r>' +
+        '<w:sdt><w:sdtPr><w:alias w:val="outer"/></w:sdtPr><w:sdtContent>' +
+        '<w:sdt><w:sdtPr><w:tag w:val="t"/><w:lock w:val="sdtContentLocked"/></w:sdtPr>' +
+        '<w:sdtContent><w:r><w:t>LOCK</w:t></w:r></w:sdtContent></w:sdt>' +
+        '</w:sdtContent></w:sdt></w:p>'
+    );
+    const next = applyV2(part, {
+      op: 'insertText',
+      paragraphId: V2_PARAGRAPH,
+      offset: 6,
+      text: 'X',
+    });
+    expect(paragraphTextOf(next, V2_PARAGRAPH)).toBe('aaLOCKX');
+    const outer = firstSdtV2(next);
+    // The typed character is inside the OUTER control...
+    expect(collectTextV2(outer)).toBe('LOCKX');
+    // ...and the locked inner chip kept exactly its own text.
+    const findInner = (node: OoxmlNode): OoxmlNode | null => {
+      if (node.kind === 'textValue') return null;
+      for (const child of node.children) {
+        if (child.kind !== 'textValue' && child.localName === 'sdt') return child;
+        const found = findInner(child);
+        if (found) return found;
+      }
+      return null;
+    };
+    const inner = findInner(outer);
+    expect(inner).not.toBeNull();
+    expect(collectTextV2(inner!)).toBe('LOCK');
+  });
+});

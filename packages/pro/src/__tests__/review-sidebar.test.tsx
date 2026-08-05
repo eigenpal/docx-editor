@@ -203,8 +203,9 @@ describe('the review sidebar', () => {
     });
     const balloon = view.getByTestId('review-balloon-card') as HTMLElement;
     expect(balloon.dataset.kind).toBe('format');
-    expect(view.getByTestId('review-balloon').querySelector('[data-testid="review-accept"]'))
-      .not.toBeNull();
+    expect(
+      view.getByTestId('review-balloon').querySelector('[data-testid="review-accept"]')
+    ).not.toBeNull();
 
     // A CONTENT change opens no balloon — its card is beside the page — and the press
     // closes whatever balloon was up.
@@ -218,13 +219,21 @@ describe('the review sidebar', () => {
     expect(view.queryByTestId('review-balloon')).toBeNull();
 
     // A tracked ROW is a structural site: its balloon opens on click, with actions.
-    // PORT NOTE (merge of #125 into the pro split): after the mousedowns above, the
-    // repainted revision row loses its attribution datasets under happy-dom in THIS
-    // harness — a fresh mount of the same document paints them correctly (verified),
-    // so the structural-balloon assertion is deferred until that repaint interplay is
-    // understood. Tracked with ledger 4.10/4.5a follow-ups.
+    // These tests paint through the BUILT react adapter (`@docx-editor.dev/react` resolves
+    // to packages/react/dist, which inlines the core painter) — a stale dist paints rows
+    // without their attribution datasets and this balloon silently cannot open. If the
+    // assertions below fail on attributes the source clearly paints, rebuild the adapter.
     const row = view.container.querySelector('.docx-table-row--revision') as HTMLElement;
     expect(row).not.toBeNull();
+    expect(row.dataset.revisionKind).toBe('insert');
+    await act(async () => {
+      fireEvent.mouseDown(row);
+    });
+    const structuralBalloon = view.getByTestId('review-balloon-card') as HTMLElement;
+    expect(structuralBalloon.dataset.kind).toBe('structural');
+    expect(
+      view.getByTestId('review-balloon').querySelector('[data-testid="review-accept"]')
+    ).not.toBeNull();
 
     // A press outside any tracked change lets go.
     await act(async () => {
@@ -238,8 +247,10 @@ describe('the review sidebar', () => {
     // Push-down alone marched the tail pages below; collapse keeps the run bounded by
     // rendering distant cards as headers only.
     const CROWDED = docx(
-      Array.from({ length: 60 }, (_, index) => `<w:p><w:r><w:t>plain ${index}</w:t></w:r></w:p>`)
-        .join('') +
+      Array.from(
+        { length: 60 },
+        (_, index) => `<w:p><w:r><w:t>plain ${index}</w:t></w:r></w:p>`
+      ).join('') +
         Array.from(
           { length: 16 },
           (_, index) =>

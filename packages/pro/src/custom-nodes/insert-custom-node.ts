@@ -5,9 +5,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // The WRITE half of `defineCustomNode`: insert a recognized-by-construction
 // node — a run-level `w:sdt` whose `w:tag` carries the definition's identity
-// and attrs, `sdtLocked` by default so Word users cannot casually unwrap the
-// anchor, with the literal label text as its content (what Word and the free
-// tier render).
+// and attrs, `contentLocked` by default so neither Word users nor inline
+// typing can drift the label away from the attrs, with the literal label text
+// as its content (what Word and the free tier render).
 
 import type { Editor, ExecResult } from '@docx-editor.dev/core-contract/contracts/editor';
 import type { PaginatedSurface } from '@docx-editor.dev/core-contract/editor';
@@ -27,9 +27,11 @@ export interface InsertCustomNodeOptions {
    */
   readonly at?: { readonly paragraphId: string; readonly offset: number };
   /**
-   * The `w:lock` written on the control. Defaults to `sdtLocked` (the anchor
-   * survives casual Word editing, the label stays editable); `false` writes no
-   * lock.
+   * The `w:lock` written on the control. Defaults to `contentLocked` — the text
+   * is locked so the label cannot drift out of sync with the attrs by inline
+   * typing (editing goes through the `onEdit` flow), while the node itself stays
+   * DELETABLE as one unit, in the editor and in Word alike. `false` writes no
+   * lock; `sdtContentLocked` also forbids deleting the node.
    */
   readonly lock?: false | 'sdtLocked' | 'sdtContentLocked' | 'contentLocked';
   /**
@@ -67,7 +69,7 @@ export function insertCustomNode(
     };
   }
   const at = options.at ?? surface.state().selection.head;
-  const lock = options.lock === undefined ? 'sdtLocked' : options.lock;
+  const lock = options.lock === undefined ? 'contentLocked' : options.lock;
   const applied = surface.session.applyTreeOps([
     {
       op: 'insertInlineContentControl',

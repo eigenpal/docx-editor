@@ -126,13 +126,19 @@ function tableRowCount(editor: DocxEditorInstance): number {
   return tableRows(editor).length;
 }
 
+/** Narrow to the revision arm — the placement union needs the kind before its fields. */
+function rev(placement: { kind: string } | undefined) {
+  if (!placement || placement.kind !== 'revision') throw new Error('expected a revision card');
+  return placement as import('@docx-editor.dev/core-contract/contracts/editor').ReviewRevisionPlacement;
+}
+
 describe('the review queue the facade publishes', () => {
   test('a card arrives presentation-ready, so no host derives it from the tree', () => {
     const editor = mount({ body: INSERTION });
     const [card] = editor.getReviewItems();
     expect(card).toBeDefined();
     expect(card!.kind).toBe('revision');
-    expect(card!.revisionKind).toBe('insert');
+    expect(rev(card).revisionKind).toBe('insert');
     expect(card!.author).toBe('Ada Lovelace');
     // Initials come from the name for a revision: `CT_TrackChange` has no `@w:initials`.
     expect(card!.initials).toBe('AL');
@@ -163,7 +169,7 @@ describe('the review queue the facade publishes', () => {
   test('rejecting a deletion brings the struck text back as live content', () => {
     const editor = mount({ body: DELETION });
     const [card] = editor.getReviewItems();
-    expect(card!.revisionKind).toBe('delete');
+    expect(rev(card).revisionKind).toBe('delete');
     expect(editor.rejectReviewItem(card!.key)).toEqual({ ok: true, changed: true });
     expect(bodyTextOf(editor)).toContain('struck out');
   });
@@ -208,7 +214,7 @@ describe('tracked table rows', () => {
     const replacement = editor
       .getReviewItems()
       .find((item) => item.kind === 'revision' && item.revisionKind === 'replace');
-    expect(replacement?.replacedText).toBe('first');
+    expect(rev(replacement).replacedText).toBe('first');
     expect(replacement?.text).toBe('se');
   });
 
@@ -296,11 +302,11 @@ describe('comments in the queue', () => {
     });
 
     const items = editor.getReviewItems();
-    const roots = items.filter((item) => item.parentId === undefined);
+    const roots = items.filter((item) => item.kind === 'comment' && item.parentId === undefined);
     expect(roots).toHaveLength(1);
     expect(roots[0]!.replyIds).toHaveLength(1);
 
-    const reply = items.find((item) => item.parentId !== undefined);
+    const reply = items.find((item) => item.kind === 'comment' && item.parentId !== undefined);
     expect(reply?.text).toBe('Yes, checked against the schedule.');
     // The AMBIENT author, from `EditorConfig.author` — `CT_Comment` requires one.
     expect(reply?.author).toBe('Grace Hopper');
@@ -320,7 +326,9 @@ describe('comments in the queue', () => {
       document: saved,
       modules: [testReviewModule()],
     });
-    const reply = reopened.getReviewItems().find((item) => item.parentId !== undefined);
+    const reply = reopened
+      .getReviewItems()
+      .find((item) => item.kind === 'comment' && item.parentId !== undefined);
     expect(reply?.text).toBe(written);
   });
 
@@ -335,9 +343,13 @@ describe('comments in the queue', () => {
     // The reply is anchored over its parent's range, so both cover the caret and the reply —
     // being newer — wins the innermost test. It has no card of its own, so without resolving
     // to the thread root the reply box vanished from the comment that was just replied to.
-    const root = editor.getReviewItems().find((item) => item.parentId === undefined);
+    const root = editor
+      .getReviewItems()
+      .find((item) => item.kind === 'comment' && item.parentId === undefined);
     expect(root?.isActive).toBe(true);
-    const reply = editor.getReviewItems().find((item) => item.parentId !== undefined);
+    const reply = editor
+      .getReviewItems()
+      .find((item) => item.kind === 'comment' && item.parentId !== undefined);
     expect(reply?.isActive).toBe(false);
   });
 
@@ -485,7 +497,7 @@ describe('suggesting mode', () => {
 
     const [card] = editor.getReviewItems();
     expect(card?.kind).toBe('revision');
-    expect(card?.revisionKind).toBe('insert');
+    expect(rev(card).revisionKind).toBe('insert');
     expect(card?.author).toBe('Grace Hopper');
     expect(card?.text).toBe('X');
     // The words are in the document either way; what changed is that this one is a proposal.
@@ -502,7 +514,7 @@ describe('suggesting mode', () => {
     editor.surface!.deleteBackward();
 
     const [card] = editor.getReviewItems();
-    expect(card?.revisionKind).toBe('delete');
+    expect(rev(card).revisionKind).toBe('delete');
     expect(card?.text).toBe('alpha');
     // Rejecting the proposal has to put them back, which is only possible because the
     // deletion kept them.
@@ -522,7 +534,7 @@ describe('suggesting mode', () => {
     const cards = editor.getReviewItems();
     // One decision, not three: the ids coalesce, so one Accept resolves the run.
     expect(cards).toHaveLength(1);
-    expect(cards[0]!.revisionKind).toBe('delete');
+    expect(rev(cards[0]).revisionKind).toBe('delete');
     expect(cards[0]!.text).toBe('pha');
     // Nothing was actually removed — that is what makes rejecting possible.
     expect(bodyTextOf(editor)).toContain('alpha beta');
@@ -541,8 +553,8 @@ describe('suggesting mode', () => {
 
     const cards = editor.getReviewItems();
     expect(cards).toHaveLength(1);
-    expect(cards[0]!.revisionKind).toBe('replace');
-    expect(cards[0]!.replacedText).toBe('ha be');
+    expect(rev(cards[0]).revisionKind).toBe('replace');
+    expect(rev(cards[0]).replacedText).toBe('ha be');
     expect(cards[0]!.text).toBe('XX');
     // Struck words first, replacement after — the order the sentence reads in.
     const body = editor.surface!.session.bodyText();
@@ -570,11 +582,11 @@ describe('suggesting mode', () => {
 
     const cards = editor.getReviewItems();
     expect(cards).toHaveLength(1);
-    expect(cards[0]!.revisionKind).toBe('replace');
+    expect(rev(cards[0]).revisionKind).toBe('replace');
     // The reference measures ONE model unit, exactly as `segmentsOf` counts it, so [19, 39)
     // is "ence" + the reference + " and second end". Counting it as nothing shifted every
     // offset past it by one and struck a character the user had not selected.
-    expect(cards[0]!.replacedText).toBe('ence and second end');
+    expect(rev(cards[0]).replacedText).toBe('ence and second end');
     expect(cards[0]!.text).toBe('note');
   });
 
@@ -613,8 +625,8 @@ describe('suggesting mode', () => {
 
     const cards = editor.getReviewItems();
     expect(cards).toHaveLength(1);
-    expect(cards[0]!.revisionKind).toBe('replace');
-    expect(cards[0]!.replacedText).toBe('alpha');
+    expect(rev(cards[0]).revisionKind).toBe('replace');
+    expect(rev(cards[0]).replacedText).toBe('alpha');
     expect(cards[0]!.text).toBe('omega');
   });
 
@@ -663,7 +675,7 @@ describe('suggesting mode', () => {
     // struck and the paragraph mark carries `w:del`. Joining them outright made reject
     // restore the words and not the boundary — the original was unrecoverable.
     expect(editor.surface!.session.paragraphIds()).toHaveLength(2);
-    const kinds = editor.getReviewItems().map((item) => item.revisionKind);
+    const kinds = editor.getReviewItems().map((item) => rev(item).revisionKind);
     expect(kinds).toContain('delete');
     expect(kinds).toContain('paragraphMark');
 
@@ -685,7 +697,9 @@ describe('suggesting mode', () => {
     editor.surface!.splitParagraph();
 
     expect(editor.surface!.session.paragraphIds()).toHaveLength(2);
-    const mark = editor.getReviewItems().find((item) => item.revisionKind === 'paragraphMark');
+    const mark = editor
+      .getReviewItems()
+      .find((item) => item.kind === 'revision' && item.revisionKind === 'paragraphMark');
     expect(mark).toBeDefined();
     expect(mark!.author).toBe('Grace Hopper');
 
@@ -714,7 +728,7 @@ describe('suggesting mode', () => {
       head: { paragraphId: first, offset: 5 },
     });
     const active = editor.getReviewItems().find((item) => item.isActive);
-    expect(active?.revisionKind).toBe('paragraphMark');
+    expect(rev(active).revisionKind).toBe('paragraphMark');
   });
 
   test('a run of Enters is ONE decision, not one card per press', () => {
@@ -728,7 +742,9 @@ describe('suggesting mode', () => {
       });
       editor.surface!.splitParagraph();
     }
-    const marks = editor.getReviewItems().filter((item) => item.revisionKind === 'paragraphMark');
+    const marks = editor
+      .getReviewItems()
+      .filter((item) => item.kind === 'revision' && item.revisionKind === 'paragraphMark');
     expect(marks).toHaveLength(1);
   });
 
@@ -960,11 +976,13 @@ describe('getReviewItems query filtering', () => {
     const filtered = editor.getReviewItems({
       excludeRevisionKinds: ['format', 'structural'],
     });
-    expect(all.some((item) => item.revisionKind === 'format')).toBe(true);
-    expect(all.some((item) => item.revisionKind === 'insert')).toBe(true);
-    expect(filtered.some((item) => item.revisionKind === 'format')).toBe(false);
-    expect(filtered.some((item) => item.revisionKind === 'structural')).toBe(false);
-    expect(filtered.some((item) => item.revisionKind === 'insert')).toBe(true);
+    const kindsOf = (items: typeof all) =>
+      items.map((item) => (item.kind === 'revision' ? item.revisionKind : item.kind));
+    expect(kindsOf(all)).toContain('format');
+    expect(kindsOf(all)).toContain('insert');
+    expect(kindsOf(filtered)).not.toContain('format');
+    expect(kindsOf(filtered)).not.toContain('structural');
+    expect(kindsOf(filtered)).toContain('insert');
   });
 
   test('placement:false returns same metadata with null anchors', () => {
@@ -972,9 +990,7 @@ describe('getReviewItems query filtering', () => {
     const unplaced = editor.getReviewItems({ placement: false });
     const placed = editor.getReviewItems();
     expect(unplaced).toHaveLength(placed.length);
-    expect(unplaced.every((item) => item.anchorY === null && item.pageIndex === null)).toBe(
-      true
-    );
+    expect(unplaced.every((item) => item.anchorY === null && item.pageIndex === null)).toBe(true);
     expect(unplaced.map((item) => item.key)).toEqual(placed.map((item) => item.key));
     expect(unplaced.map((item) => item.text)).toEqual(placed.map((item) => item.text));
     expect(unplaced.map((item) => item.author)).toEqual(placed.map((item) => item.author));

@@ -1195,7 +1195,7 @@ function itemStartParagraphRank(
   item: ReviewItem,
   order: ReadonlyMap<string, number>
 ): number | null {
-  const range = item.kind === 'comment' ? item.range : (item.ranges[0] ?? null);
+  const range = item.kind === 'revision' ? (item.ranges[0] ?? null) : item.range;
   if (!range) return null;
   const rank = order.get(range.start.paragraphId);
   return rank === undefined ? null : rank;
@@ -1251,46 +1251,36 @@ function patchLocalReviewItems(
       localRevisions.length < 2
         ? [...localRevisions]
         : [...localRevisions].sort(
-            (a, b) => reviewItemPositionRank(a, paragraphOrder) - reviewItemPositionRank(b, paragraphOrder)
+            (a, b) =>
+              reviewItemPositionRank(a, paragraphOrder) - reviewItemPositionRank(b, paragraphOrder)
           );
     patched.splice(insertAt, 0, ...orderedLocalRevisions);
   }
   return patched;
 }
 
-function isRevisionWhollyInParagraph(
-  item: ReviewRevisionItem,
-  paragraphId: string
-): boolean {
+function isRevisionWhollyInParagraph(item: ReviewRevisionItem, paragraphId: string): boolean {
   return (
     item.ranges.length > 0 &&
     item.ranges.every(
-      (range) =>
-        range.start.paragraphId === paragraphId && range.end.paragraphId === paragraphId
+      (range) => range.start.paragraphId === paragraphId && range.end.paragraphId === paragraphId
     )
   );
 }
 
 function commentTouchesParagraph(item: ReviewCommentItem, paragraphId: string): boolean {
   if (!item.range) return false;
-  return (
-    item.range.start.paragraphId === paragraphId || item.range.end.paragraphId === paragraphId
-  );
+  return item.range.start.paragraphId === paragraphId || item.range.end.paragraphId === paragraphId;
 }
 
-function revisionCrossesParagraphBoundary(
-  item: ReviewRevisionItem,
-  paragraphId: string
-): boolean {
+function revisionCrossesParagraphBoundary(item: ReviewRevisionItem, paragraphId: string): boolean {
   if (item.ranges.length === 0) return false;
   const touches = item.ranges.some(
-    (range) =>
-      range.start.paragraphId === paragraphId || range.end.paragraphId === paragraphId
+    (range) => range.start.paragraphId === paragraphId || range.end.paragraphId === paragraphId
   );
   if (!touches) return false;
   return !item.ranges.every(
-    (range) =>
-      range.start.paragraphId === paragraphId && range.end.paragraphId === paragraphId
+    (range) => range.start.paragraphId === paragraphId && range.end.paragraphId === paragraphId
   );
 }
 
@@ -1329,6 +1319,12 @@ function localReviewPatchParagraphId(
   for (const item of items) {
     if (item.kind === 'comment') {
       if (commentTouchesParagraph(item, paragraphId)) return null;
+      continue;
+    }
+    // A custom node's item is refreshed by the FULL derivation only; a local revision
+    // patch on its paragraph could go stale, so refuse the fast path when one touches it.
+    if (item.kind === 'custom') {
+      if (item.range?.start.paragraphId === paragraphId) return null;
       continue;
     }
     if (revisionCrossesParagraphBoundary(item, paragraphId)) return null;

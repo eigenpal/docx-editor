@@ -657,7 +657,9 @@
       "makeCasual": "Samimi yap",
       "custom": "Özel"
     },
-    "updateTableOfContents": "İçindekiler tablosunu güncelle"
+    "updateTableOfContents": "İçindekiler tablosunu güncelle",
+    "editCustomNode": null,
+    "removeCustomNode": null
   },
   "documentOutline": {
     "ariaLabel": "Belge ana hattı",

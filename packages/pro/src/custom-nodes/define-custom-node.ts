@@ -60,23 +60,89 @@ export interface CustomNodeDefinition {
   readonly onClick?: (node: ActivatedCustomNode) => void;
   /** Pointer enters the painted chip. */
   readonly onHover?: (node: ActivatedCustomNode) => void;
+  /**
+   * Contribute a card to the review sidebar for every recognized node of this
+   * definition, anchored at the node's range. Return null to skip one node.
+   *
+   * `attrs` and `text` originate in the file — untrusted; the returned strings
+   * are rendered as TEXT by the pane, never markup. The context-menu section
+   * reuses this hook for its info block and may invoke it with `text: ''` when
+   * no review module is registered (the DOM decode alone cannot see the text).
+   */
+  readonly reviewCard?: (node: {
+    readonly attrs: Readonly<Record<string, string>>;
+    readonly text: string;
+  }) => { readonly title: string; readonly detail?: string } | null;
+  /**
+   * The "Edit {label}" row the context menu shows at the top when the
+   * right-click lands on the node's chip. The HOST owns the dialog.
+   *
+   * HONEST LIMIT: there is no in-place update call yet — re-authoring is
+   * `removeContentControl` + `insertCustomNode` at the node's range (the
+   * activation carries `nodeId` and, when a review module is registered, the
+   * current `text` to prefill a form). Schema-driven edit forms are the planned
+   * follow-up.
+   */
+  readonly onEdit?: (node: ActivatedCustomNode) => void;
+  /**
+   * Display name for chrome — the "Edit {label}" context-menu row. Defaults to
+   * `name`. Host-authored, never file data; provide a localized string.
+   */
+  readonly label?: string;
 }
 
-/** A chip activation: identity + attrs decoded from the document, plus where it sits. */
+/**
+ * A chip activation: identity + attrs, plus where it sits.
+ *
+ * `attrs` are the definition's OWN shape — the raw tag decode has already been
+ * through `fromDocx`, exactly as the review derivation runs it, so every
+ * surface (click, hover, edit, cards) sees one attrs vocabulary. `text` and
+ * `nodeId` are present when the surface could resolve them (a registered
+ * review module resolves both).
+ */
 export interface ActivatedCustomNode {
   readonly name: string;
   readonly attrs: Readonly<Record<string, string>>;
   readonly tag: string;
   /** Viewport-relative rect of the chip's boundary, for anchoring host UI. */
   readonly rect: DOMRect;
+  /** The SDT node's canonical id — the address `removeContentControl` takes. */
+  readonly nodeId?: string;
+  /** The node's literal content text, when resolvable. */
+  readonly text?: string;
 }
+
+/**
+ * Whether an opaque registry value is a custom-node definition.
+ *
+ * The engine carries registered definitions as unknowns (`getCustomNodeDefinitions`), so
+ * every pro surface that reads them back narrows through this ONE guard.
+ */
+export function isCustomNodeDefinition(candidate: unknown): candidate is CustomNodeDefinition {
+  return (
+    typeof candidate === 'object' &&
+    candidate !== null &&
+    typeof (candidate as { name?: unknown }).name === 'string' &&
+    typeof (candidate as { tagPrefix?: unknown }).tagPrefix === 'string'
+  );
+}
+
+/**
+ * The characters a definition identity may use.
+ *
+ * Conservative ON PURPOSE: `tagPrefix` and `name` travel into the `w:tag` codec (where `:`
+ * and `?` are structural), into CSS attribute selectors (`CustomNodeChrome`), and into XML
+ * attributes (`customNodeSdtXml`). A charset that can never need escaping in any of those
+ * places is cheaper than three escaping rules that must each be right.
+ */
+export const CUSTOM_NODE_IDENTITY_PATTERN = /^[A-Za-z0-9_.-]+$/;
 
 /** Validate and freeze a definition. Throws on a shape mistake — author error, not file input. */
 export function defineCustomNode(definition: CustomNodeDefinition): CustomNodeDefinition {
-  if (!definition.name || definition.name.includes(':') || definition.name.includes('?')) {
+  if (!CUSTOM_NODE_IDENTITY_PATTERN.test(definition.name ?? '')) {
     throw new Error(`defineCustomNode: invalid name ${JSON.stringify(definition.name)}`);
   }
-  if (!definition.tagPrefix || definition.tagPrefix.includes(':')) {
+  if (!CUSTOM_NODE_IDENTITY_PATTERN.test(definition.tagPrefix ?? '')) {
     throw new Error(`defineCustomNode: invalid tagPrefix ${JSON.stringify(definition.tagPrefix)}`);
   }
   return Object.freeze({ ...definition });

@@ -13,7 +13,7 @@
 // `docx-menubar` families); this demo styles only its own header.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { MouseEvent as ReactMouseEvent } from 'react';
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import {
   DocxEditor,
   useDocxEditor,
@@ -30,8 +30,14 @@ import {
   defineCustomNode,
   insertCustomNode,
   reviewModule,
+  updateCustomNode,
 } from '@docx-editor.dev/pro';
-import { CustomNodeChrome, DocxEditorReview } from '@docx-editor.dev/pro/react';
+import {
+  CustomNodeChrome,
+  CustomNodeContextMenu,
+  DocxEditorReview,
+  useReviewItem,
+} from '@docx-editor.dev/pro/react';
 import { blankDocumentBytes } from '@docx-editor.dev/core-contract/editor';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
@@ -58,11 +64,17 @@ import { DEMO_BUTTON, DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON } from './demoB
 const DEMO_CITATION = defineCustomNode({
   name: 'citation',
   tagPrefix: 'docx',
+  label: 'Citation',
   // HOST-authored chip appearance — CustomNodeChrome applies it.
   chrome: { color: '#7c3aed' },
   // Recognition hook: attrs decoded from the tag, text is the literal
   // SDT content (which a Word user may have edited — label drift).
   fromDocx: ({ attrs, text }) => ({ ...attrs, label: text }),
+  // Sidebar card: every recognized citation gets a review-rail card anchored at its text.
+  reviewCard: ({ attrs, text }) => ({
+    title: `Citation — ${attrs['sourceId'] ?? 'unknown source'}`,
+    detail: text || (attrs['label'] ?? ''),
+  }),
 });
 
 const PRO_MODULES = [reviewModule(), customNodesModule({ nodes: [DEMO_CITATION] })];
@@ -175,73 +187,243 @@ const PERF_TIPS = {
  * styles.css), its chrome layer carries the node's `w:tag`, and decoding that
  * tag is the whole lookup — attrs come straight from the document.
  */
-function CitationPopover() {
-  const [card, setCard] = useState<{
-    x: number;
-    y: number;
-    attrs: Readonly<Record<string, string>>;
-  } | null>(null);
+/** Where the citation card opens, and for which attrs — owned by the demo root. */
+export interface CitationCard {
+  readonly x: number;
+  readonly y: number;
+  readonly attrs: Readonly<Record<string, string>>;
+}
+
+/** One card position rule for every opener: chip click and the context menu's Edit row. */
+function citationCardAt(node: {
+  readonly rect: DOMRect;
+  readonly attrs: Readonly<Record<string, string>>;
+}): CitationCard {
+  return { x: node.rect.left, y: node.rect.bottom + 8, attrs: node.attrs };
+}
+
+function CitationPopover({
+  card,
+  onOpen,
+  onClose,
+}: {
+  card: CitationCard | null;
+  onOpen: (card: CitationCard) => void;
+  onClose: () => void;
+}) {
   // Close when a click lands outside the card (chip clicks reopen through the API).
   useEffect(() => {
     if (!card) return;
     const onClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
-      if (!target?.closest('[role="dialog"]') && !target?.closest('.docx-content-control-boundary')) {
-        setCard(null);
+      if (
+        !target?.closest('[role="dialog"]') &&
+        !target?.closest('.docx-content-control-boundary')
+      ) {
+        onClose();
       }
     };
     document.addEventListener('click', onClick);
     return () => document.removeEventListener('click', onClick);
-  }, [card]);
+  }, [card, onClose]);
   const chrome = (
-    <CustomNodeChrome
-      nodes={[DEMO_CITATION]}
-      onNodeClick={(node) =>
-        setCard({ x: node.rect.left, y: node.rect.bottom + 8, attrs: node.attrs })
-      }
-    />
+    // Definitions default to the ones registered on the Root — register once,
+    // every surface (chip styling, context menu, review cards) follows.
+    <CustomNodeChrome onNodeClick={(node) => onOpen(citationCardAt(node))} />
   );
   if (!card) return chrome;
   return (
     <>
       {chrome}
-    <div
-      role="dialog"
-      aria-label="Citation details"
-      style={{
-        position: 'fixed',
-        left: card.x,
-        top: card.y,
-        zIndex: 60,
-        minWidth: 260,
-        background: '#fff',
-        border: '1px solid #e2e8f0',
-        borderRadius: 12,
-        boxShadow: '0 12px 32px rgba(15, 23, 42, 0.18)',
-        padding: '12px 14px',
-        font: '13px/1.5 system-ui, sans-serif',
-        color: '#0f172a',
-      }}
-    >
-      <div style={{ fontWeight: 600, marginBottom: 6 }}>📖 {card.attrs['label'] ?? 'Citation'}</div>
-      <div style={{ color: '#475569' }}>
-        <div>
-          Source: <code>{card.attrs['sourceId'] ?? '—'}</code>
+      <div
+        role="dialog"
+        aria-label="Citation details"
+        style={{
+          position: 'fixed',
+          left: card.x,
+          top: card.y,
+          zIndex: 60,
+          minWidth: 260,
+          background: '#fff',
+          border: '1px solid #e2e8f0',
+          borderRadius: 12,
+          boxShadow: '0 12px 32px rgba(15, 23, 42, 0.18)',
+          padding: '12px 14px',
+          font: '13px/1.5 system-ui, sans-serif',
+          color: '#0f172a',
+        }}
+      >
+        <div style={{ fontWeight: 600, marginBottom: 6 }}>
+          📖 {card.attrs['label'] ?? 'Citation'}
         </div>
-        <div>Locator: {card.attrs['locator'] ?? '—'}</div>
+        <div style={{ color: '#475569' }}>
+          <div>
+            Source: <code>{card.attrs['sourceId'] ?? '—'}</code>
+          </div>
+          <div>Locator: {card.attrs['locator'] ?? '—'}</div>
+        </div>
+        <button
+          type="button"
+          style={{ ...DEMO_PRIMARY_BUTTON, marginTop: 10 }}
+          onClick={() => {
+            window.alert(`A real app opens source ${card.attrs['sourceId']} here.`);
+            onClose();
+          }}
+        >
+          Open source
+        </button>
       </div>
+    </>
+  );
+}
+
+/**
+ * Host-owned content INSIDE the packaged citation cards: children of
+ * `<DocxEditorReview>` render in every card, and `useReviewItem()` says which
+ * item the surrounding card is about — so this adds a button to citation cards
+ * and stays out of comments and tracked changes.
+ */
+function CitationCardActions() {
+  const item = useReviewItem();
+  if (!item || item.kind !== 'custom' || item.item.kind !== 'custom') return null;
+  // Collapsed until the card is ACTIVE — clicking a card activates it (and selects the
+  // chip's text); clicking another card or pressing elsewhere deactivates it. The state
+  // is already on the item, so active-only content is one condition, not new wiring.
+  if (!item.isActive) return null;
+  const attrs = item.item.attrs;
+  return (
+    <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
       <button
         type="button"
-        style={{ ...DEMO_PRIMARY_BUTTON, marginTop: 10 }}
-        onClick={() => {
-          window.alert(`A real app opens source ${card.attrs['sourceId']} here.`);
-          setCard(null);
-        }}
+        style={DEMO_PRIMARY_BUTTON}
+        onMouseDown={keepCaret}
+        onClick={() => window.alert(`A real app opens source ${attrs['sourceId']} here.`)}
       >
         Open source
       </button>
     </div>
-    </>
+  );
+}
+
+/**
+ * The insert form: what goes into the document before it goes in. A real app
+ * renders its reference picker here; the shape is the whole demo — collect the
+ * attrs, then ONE `insertCustomNode` call authors the locked, tagged chip at
+ * the caret the menu row captured.
+ */
+/** Insert at a captured caret, or edit an existing node by its id. */
+export type CitationFormState =
+  | { readonly mode: 'insert'; readonly at: { paragraphId: string; offset: number } | null }
+  | {
+      readonly mode: 'edit';
+      readonly nodeId: string;
+      readonly attrs: Readonly<Record<string, string>>;
+      readonly text: string;
+    };
+
+function CitationDialog({ form, onClose }: { form: CitationFormState; onClose: () => void }) {
+  const editor = useDocxEditor();
+  const editing = form.mode === 'edit';
+  const [sourceId, setSourceId] = useState(() =>
+    editing ? (form.attrs['sourceId'] ?? '') : `src_${Date.now().toString(36)}`
+  );
+  const [locator, setLocator] = useState(() => (editing ? (form.attrs['locator'] ?? '') : 'p.42'));
+  const [label, setLabel] = useState(() =>
+    editing ? form.text || (form.attrs['label'] ?? '') : '(Smith 2024, p. 42)'
+  );
+  const field: CSSProperties = {
+    display: 'block',
+    width: '100%',
+    marginTop: 4,
+    padding: '6px 8px',
+    border: '1px solid #cbd5e1',
+    borderRadius: 6,
+    font: '13px/1.4 system-ui, sans-serif',
+  };
+  const labelStyle: CSSProperties = {
+    display: 'block',
+    marginTop: 10,
+    font: '12px/1.4 system-ui, sans-serif',
+    color: '#475569',
+  };
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={editing ? 'Edit citation' : 'Insert citation'}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 70,
+        display: 'grid',
+        placeItems: 'center',
+        background: 'rgba(15, 23, 42, 0.35)',
+      }}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <form
+        style={{
+          width: 340,
+          background: '#fff',
+          borderRadius: 12,
+          boxShadow: '0 20px 48px rgba(15, 23, 42, 0.25)',
+          padding: '16px 18px',
+          color: '#0f172a',
+        }}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!editor) return;
+          // Chips are content-locked, so persistence goes through the node APIs: a fresh
+          // insert at the captured caret, or `updateCustomNode` — remove+reinsert at the
+          // node's own span, one undo step.
+          const result = editing
+            ? updateCustomNode(editor, DEMO_CITATION, form.nodeId, { sourceId, locator }, label, {
+                alias: 'Citation',
+              })
+            : insertCustomNode(editor, DEMO_CITATION, { sourceId, locator }, label, {
+                alias: 'Citation',
+                ...(form.at ? { at: form.at } : {}),
+              });
+          if (!result.ok) window.alert(`${editing ? 'Edit' : 'Insert'} refused: ${result.reason}`);
+          onClose();
+        }}
+      >
+        <div style={{ font: '600 15px/1.4 system-ui, sans-serif' }}>
+          {editing ? 'Edit citation' : 'Insert citation'}
+        </div>
+        <div style={{ marginTop: 4, font: '12px/1.5 system-ui, sans-serif', color: '#64748b' }}>
+          The label is what the document shows; source and locator ride in the chip&#39;s tag and
+          come back typed on click, hover, and the review card.
+        </div>
+        <label style={labelStyle}>
+          Label (document text)
+          <input style={field} value={label} onChange={(e) => setLabel(e.target.value)} required />
+        </label>
+        <label style={labelStyle}>
+          Source ID
+          <input
+            style={field}
+            value={sourceId}
+            onChange={(e) => setSourceId(e.target.value)}
+            required
+          />
+        </label>
+        <label style={labelStyle}>
+          Locator
+          <input style={field} value={locator} onChange={(e) => setLocator(e.target.value)} />
+        </label>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+          <button type="button" style={DEMO_SECONDARY_BUTTON} onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" style={DEMO_PRIMARY_BUTTON}>
+            {editing ? 'Save' : 'Insert'}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -443,11 +625,13 @@ function EditorChrome({
   onTitleChange,
   colorMode,
   onColorModeChange,
+  onInsertCitation,
 }: {
   title: string;
   onTitleChange: (next: string) => void;
   colorMode: 'light' | 'dark';
   onColorModeChange: (next: 'light' | 'dark') => void;
+  onInsertCitation: (at: { paragraphId: string; offset: number } | null) => void;
 }) {
   const editor = useDocxEditor();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -552,14 +736,9 @@ function EditorChrome({
               <DocxEditor.Menu.Row
                 onSelect={() => {
                   if (!editor) return;
-                  const result = insertCustomNode(
-                    editor,
-                    DEMO_CITATION,
-                    { sourceId: `src_${Date.now().toString(36)}`, locator: 'p.42' },
-                    '(Smith 2024, p. 42)',
-                    { alias: 'Citation' }
-                  );
-                  if (!result.ok) console.warn(`[custom-nodes] ${result.reason}`);
+                  // Capture the caret NOW: the dialog's inputs take focus, and inserting
+                  // at "wherever the selection is by then" lands the chip wrong.
+                  onInsertCitation(editor.surface?.state().selection.head ?? null);
                 }}
               >
                 Insert citation
@@ -660,9 +839,21 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
   const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
   // Named after the document it opens with, and after whichever file is opened later.
   const [title, setTitle] = useState(
-    () => fixtureUrl.split('/').pop()?.replace(/\.docx$/i, '') ?? 'Document'
+    () =>
+      fixtureUrl
+        .split('/')
+        .pop()
+        ?.replace(/\.docx$/i, '') ?? 'Document'
   );
   const [showOutline, setShowOutline] = useState(false);
+  // The citation details card, owned HERE so both openers share it: a click on the chip
+  // (`CustomNodeChrome.onNodeClick`) and the context menu's Edit row (`onEditNode`).
+  const [citationCard, setCitationCard] = useState<CitationCard | null>(null);
+  const closeCitationCard = useCallback(() => setCitationCard(null), []);
+  // The insert/edit FORM — My Menu inserts at the captured caret, the context menu's
+  // Edit row rewrites the node in place via `updateCustomNode`.
+  const [citationForm, setCitationForm] = useState<CitationFormState | null>(null);
+  const closeCitationForm = useCallback(() => setCitationForm(null), []);
 
   // The whole boot in ONE call: fetch the fixture, load Word's default substitute faces
   // (Carlito for Calibri, Liberation Serif for Times, …), register them for paint, compose
@@ -700,6 +891,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
             onTitleChange={setTitle}
             colorMode={colorMode}
             onColorModeChange={setColorMode}
+            onInsertCitation={(at) => setCitationForm({ mode: 'insert', at })}
           />
           <RulerRow />
           {/* The viewport stays FULL-WIDTH so the vertical ruler (an absolute
@@ -726,7 +918,23 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
               <DocxEditor.HeaderFooterChrome />
               <DocxEditor.NotesChrome />
               <DocxEditor.Content />
-              <DocxEditor.ContextMenu t={translate} />
+              {/* The right-click menu, with the PRO custom-node section on top: pointing
+                  at a citation chip shows its data and "Edit Citation" above the packaged
+                  rows. Chips are content-locked, so the menu is the editing entry point. */}
+              <DocxEditor.ContextMenu t={translate}>
+                <CustomNodeContextMenu
+                  onEditNode={(node) =>
+                    node.nodeId
+                      ? setCitationForm({
+                          mode: 'edit',
+                          nodeId: node.nodeId,
+                          attrs: node.attrs,
+                          text: node.text ?? '',
+                        })
+                      : setCitationCard(citationCardAt(node))
+                  }
+                />
+              </DocxEditor.ContextMenu>
               <DrawingsE2eBridge />
               {/* The link popover. Inside the viewport so it stays with the page while
                   scrolling. `<DocxEditor>` mounts it for you; a composition like this one
@@ -737,12 +945,23 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
                   `@docx-editor.dev/pro/react` and enabled by the `reviewModule()` on the
                   Root. Inside the viewport for the same reason as the popover — it
                   scrolls with the document rather than chasing it. */}
-              <DocxEditorReview />
+              <DocxEditorReview>
+                {/* Host content inside every card: `useReviewItem()` scopes it to
+                    citation cards, the packaged parts stay. */}
+                <CitationCardActions />
+              </DocxEditorReview>
             </DocxEditor.Viewport>
             <DocxEditor.PageNumber />
             {/* Floating diagnostics chrome, above the overlay panels. */}
             <PerfHud />
-            <CitationPopover />
+            <CitationPopover
+              card={citationCard}
+              onOpen={setCitationCard}
+              onClose={closeCitationCard}
+            />
+            {citationForm ? (
+              <CitationDialog form={citationForm} onClose={closeCitationForm} />
+            ) : null}
           </div>
         </DocxEditor.Root>
       ) : loadError ? (
