@@ -308,7 +308,7 @@ export function resolveStoryListItems(
       advanced.level.runProperties,
       styleCascade
     );
-    const markerStyle = resolveRunStyle(markerProps);
+    const markerStyle = resolveRunStyle(markerProps, styleCascade?.themeFonts);
     // Word writes a Symbol/Wingdings bullet as font-byte + 0xF000 (`` = U+F0B7 in
     // Symbol), which is a private-use codepoint no other font can draw. Mapping it here —
     // where the marker's FAMILY is finally known — keeps measurement and paint on the same

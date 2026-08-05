@@ -1331,6 +1331,7 @@ function layoutBlocksPass(
         paragraphStartY: cursorY,
         ...(pageZones.length > 0 ? { pageExclusionZones: pageZones } : {}),
         ...(suppressChrome ? { suppressEmptyPlaceholderLine: true } : {}),
+        ...(styleCascade ? { themeFonts: styleCascade.themeFonts } : {}),
       }
     );
   };
@@ -1874,7 +1875,7 @@ function layoutBlocksPass(
       const emptyStyle =
         inheritedRunProperties.length === 0
           ? DEFAULT_RUN_STYLE
-          : resolveRunStyle(inheritedRunProperties);
+          : resolveRunStyle(inheritedRunProperties, styleCascade?.themeFonts);
       const firstTail = lines.length <= 1 ? borderExtent + spacing.after : 0;
       const prospectiveFirstTop = cursorY + lead + topExtent;
       const firstZones = placementZonesForLine(

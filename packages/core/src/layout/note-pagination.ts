@@ -601,7 +601,7 @@ function effectiveNoteMarkStyle(
     [{ localName: 'rStyle', attributes: { val: styleId } }],
     styleCascade
   );
-  return resolveRunStyle(props);
+  return resolveRunStyle(props, styleCascade.themeFonts);
 }
 
 /**

@@ -619,6 +619,7 @@ function placeCellParagraph(
         height: Math.max(1, available),
       }),
       ...(pageZones.length > 0 ? { pageExclusionZones: pageZones } : {}),
+      ...(deps.styleCascade ? { themeFonts: deps.styleCascade.themeFonts } : {}),
     }
   );
 

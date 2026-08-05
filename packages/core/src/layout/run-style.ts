@@ -112,13 +112,46 @@ function hexColor(raw: string | undefined): string | null {
 }
 
 /**
+ * The theme part's two Latin typefaces, for resolving `w:rFonts` theme attributes.
+ *
+ * Structurally identical to the binding lane's `DocumentThemeFonts` and assignable from it.
+ * Declared here so this lane reads two validated strings rather than the theme tree.
+ */
+export interface ThemeFonts {
+  /** `a:majorFont` latin typeface — headings. */
+  readonly major: string | null;
+  /** `a:minorFont` latin typeface — body text. */
+  readonly minor: string | null;
+}
+
+/**
+ * A `w:rFonts` theme attribute resolved to a typeface.
+ *
+ * Only the LATIN slots resolve: `minorEastAsia`/`minorBidi` (and major) name the `a:ea`/
+ * `a:cs` faces this lane does not read, and an honest null — which falls back to the
+ * explicit attribute beside it — beats the wrong font.
+ */
+function themeFamilyOf(value: string | undefined, themeFonts: ThemeFonts): string | null {
+  if (value === 'minorAscii' || value === 'minorHAnsi') return themeFonts.minor;
+  if (value === 'majorAscii' || value === 'majorHAnsi') return themeFonts.major;
+  return null;
+}
+
+/**
  * Resolve one run's direct formatting.
  *
  * Unrecognised values are DROPPED rather than guessed: a `w:sz` of `"large"` leaves the
  * default size rather than inventing one, because a wrong measurement moves every glyph
  * after it and a missing one is visible immediately.
+ *
+ * `themeFonts` resolves `w:rFonts` theme references. Absent, a theme-only `rFonts` leaves
+ * the family inherited — which is what every run of a theme-fonted document does, so the
+ * whole document falls back to the surface default face.
  */
-export function resolveRunStyle(props: readonly OoxmlProperty[]): ResolvedRunStyle {
+export function resolveRunStyle(
+  props: readonly OoxmlProperty[],
+  themeFonts?: ThemeFonts
+): ResolvedRunStyle {
   const style: {
     -readonly [K in keyof ResolvedRunStyle]: ResolvedRunStyle[K];
   } = { ...DEFAULT_RUN_STYLE };
@@ -127,9 +160,17 @@ export function resolveRunStyle(props: readonly OoxmlProperty[]): ResolvedRunSty
     switch (property.localName) {
       case 'rFonts': {
         // `w:ascii` is the Latin face; `w:hAnsi` is the fallback this lane uses when it is
-        // the only one authored. Theme fonts resolve through the theme part, which is a
-        // deferred lane, so a theme-only rFonts leaves the family inherited.
-        const family = property.attributes?.ascii ?? property.attributes?.hAnsi;
+        // the only one authored. A theme attribute OVERRIDES the explicit one beside it
+        // (§17.3.2.26): Word writes both, the concrete name only so legacy readers have
+        // something to use, and following it would ignore a retheme the author can see.
+        // An unresolvable theme slot falls back to that explicit name rather than to
+        // nothing, because a stale face still beats no face at all.
+        const attributes = property.attributes;
+        const themed = themeFonts
+          ? (themeFamilyOf(attributes?.asciiTheme, themeFonts) ??
+            themeFamilyOf(attributes?.hAnsiTheme, themeFonts))
+          : null;
+        const family = themed ?? attributes?.ascii ?? attributes?.hAnsi;
         if (family && family.length <= 128) style.fontFamily = family;
         break;
       }
