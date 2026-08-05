@@ -1664,6 +1664,7 @@ export function mountPaginatedSurface(
       readOnlyParagraphIds: tocParagraphIds(),
       ...(emptyTocIds.size > 0 ? { emptyTocPlaceholderIds: emptyTocIds } : {}),
       ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+      ...(options.defaultFontFamily ? { defaultFontFamily: options.defaultFontFamily } : {}),
       materialize: materializedSet,
       ariaHidden: false,
       ...(activeHf

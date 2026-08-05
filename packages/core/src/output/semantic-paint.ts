@@ -52,6 +52,13 @@ export interface PaintContext {
    */
   readonly fontAlias?: (family: string) => string | undefined;
   /**
+   * The family painted for a run whose cascade authors no font — the SAME face the
+   * measurer falls back to. Without it such a run inherits the page's CSS font, and the
+   * browser draws one face over geometry measured for another: wrap points, caret and
+   * selection rectangles all drift from the visible glyphs.
+   */
+  readonly defaultFontFamily?: string;
+  /**
    * Paint hyperlinks without an `href` and out of the tab order.
    *
    * Set while painting page furniture: headers and footers are read-only in this slice, so
@@ -109,6 +116,8 @@ export interface PaintOptions {
    * family, so a file can never shadow a family name the host page uses.
    */
   readonly fontAlias?: (family: string) => string | undefined;
+  /** See {@link PaintContext.defaultFontFamily}. */
+  readonly defaultFontFamily?: string;
   /**
    * Relationship id of the header/footer story currently open for editing.
    *
@@ -301,19 +310,27 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: P
   if (style.bold) css.fontWeight = 'bold';
   if (style.italic) css.fontStyle = 'italic';
   // Re-validated here even though the resolver already checked: this is the sink, and a
-  // sink that trusts its caller is one refactor away from being the hole.
-  if (style.fontFamily && FONT_NAME.test(style.fontFamily)) {
+  // sink that trusts its caller is one refactor away from being the hole. A run with no
+  // resolved family paints in the surface's default face — the face it was MEASURED in —
+  // never in whatever font the page happens to inherit.
+  const family =
+    style.fontFamily && FONT_NAME.test(style.fontFamily)
+      ? style.fontFamily
+      : ctx.defaultFontFamily && FONT_NAME.test(ctx.defaultFontFamily)
+        ? ctx.defaultFontFamily
+        : null;
+  if (family) {
     // An alias names bytes the host registered for THIS document under a family a file
     // cannot collide with. It leads, with the declared family behind it: document text
     // gets the embedded glyphs while the page-global CSS font namespace keeps its own
     // meaning for the declared name. `FONT_NAME` gates the declared family; the alias is
     // engine-minted, never file-derived.
-    const alias = ctx.fontAlias?.(style.fontFamily);
-    // The measurer's fallback stack trails the declared family so an unresolvable name
-    // falls back to the SAME face measurement fell back to — not to the inherited font.
+    const alias = ctx.fontAlias?.(family);
+    // The measurer's fallback stack trails the family so an unresolvable name falls
+    // back to the SAME face measurement fell back to — not to the inherited font.
     css.fontFamily = alias
-      ? `"${alias}", "${style.fontFamily}", ${DEFAULT_CANVAS_FONT_STACK}`
-      : `"${style.fontFamily}", ${DEFAULT_CANVAS_FONT_STACK}`;
+      ? `"${alias}", "${family}", ${DEFAULT_CANVAS_FONT_STACK}`
+      : `"${family}", ${DEFAULT_CANVAS_FONT_STACK}`;
   }
   if (style.color && HEX.test(style.color)) css.color = `#${style.color}`;
   const highlight = style.highlight ? HIGHLIGHT.get(style.highlight) : undefined;
@@ -1731,6 +1748,7 @@ export function paintSemanticLayout(
     ...(options.emptyTocPlaceholderIds
       ? { emptyTocPlaceholderIds: options.emptyTocPlaceholderIds }
       : {}),
+    ...(options.defaultFontFamily ? { defaultFontFamily: options.defaultFontFamily } : {}),
     authorSlots: authorSlotsOf(layout),
     ...(options.activeHeaderFooterRId
       ? { activeHeaderFooterRId: options.activeHeaderFooterRId }
@@ -1747,7 +1765,7 @@ export function paintSemanticLayout(
   // Content-control chrome is furniture only, but toggling it must rebuild painted pages
   // so show-all / caret chrome appear. Hover is the one exception: it is applied to the
   // painted nodes in place, because a pointer crossing a region may not move it.
-  const parameters = `${resolved.scale}|${resolved.ariaHidden}|${resolved.fontAlias ? aliasIdentity(resolved.fontAlias) : ''}|${resolved.activeHeaderFooterRId ?? ''}|${resolved.activeHeaderFooterPageIndex ?? ''}|cc:${chromeKey}:${additionalKey}|toc:${tocKey}|ro:${readOnlyKey}|tocEmpty:${emptyTocKey}`;
+  const parameters = `${resolved.scale}|${resolved.ariaHidden}|${resolved.fontAlias ? aliasIdentity(resolved.fontAlias) : ''}|${resolved.defaultFontFamily ?? ''}|${resolved.activeHeaderFooterRId ?? ''}|${resolved.activeHeaderFooterPageIndex ?? ''}|cc:${chromeKey}:${additionalKey}|toc:${tocKey}|ro:${readOnlyKey}|tocEmpty:${emptyTocKey}`;
   const previous = retainedPaints.get(container);
   const reusable =
     previous && previous.parameters === parameters

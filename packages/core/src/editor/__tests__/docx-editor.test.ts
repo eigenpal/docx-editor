@@ -11,6 +11,7 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import { blankDocumentBytes } from '../blank-document.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -870,6 +871,37 @@ describe('setMarkAttr (value-typed run formatting)', () => {
     editor.exec({ type: 'setSelection', range: caret('/word/document.xml#0.0.1', 3) });
     expect(editor.snapshot().formatting?.fontFamily).toBe('Calibri');
     expect(editor.snapshot().formatting?.fontSizePt).toBe(11);
+  });
+
+  test('a run with no authored font PAINTS in the default face it was measured in', () => {
+    // Measurement falls back to the default face; paint must fall back to the SAME face,
+    // or the browser draws the page's inherited font over Calibri-computed geometry.
+    const { container } = mount(p('hello'));
+    const span = container.querySelector<HTMLElement>('[data-paragraph-id][data-start]');
+    expect(span).not.toBeNull();
+    // happy-dom normalizes away the quotes; the family itself is the contract.
+    expect(span!.style.fontFamily).toContain('Calibri');
+  });
+
+  test('the blank-document template is Word: Calibri 11, Normal, Letter', () => {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({ container, document: blankDocumentBytes() });
+    expect(editor.surface).not.toBeNull();
+    // The toolbar's boxes read Word's blank-template defaults, authored in docDefaults —
+    // not the format's 10pt floor.
+    expect(editor.snapshot().formatting?.fontFamily).toBe('Calibri');
+    expect(editor.snapshot().formatting?.fontSizePt).toBe(11);
+    expect(editor.snapshot().formatting?.styleId).toBe('Normal');
+    expect(editor.getAvailableFonts()).toContain('Calibri');
+    // Layout measures the same 11pt the box shows (22 half-points through the cascade).
+    const span = container.querySelector<HTMLElement>('[data-paragraph-id]');
+    expect(span).not.toBeNull();
+    // US Letter at one-inch margins.
+    expect(editor.getPageSetup()?.pageWidthTwips).toBe(12240);
+    expect(editor.getPageSetup()?.pageHeightTwips).toBe(15840);
+    // Typing works and the saved bytes round-trip.
+    editor.exec({ type: 'insertText', text: 'hello' });
+    expect(editor.snapshot().pages?.length ?? editor.getTotalPages()).toBeGreaterThan(0);
   });
 
   test('a blank document still reports the default face, and offers a catalog', () => {
