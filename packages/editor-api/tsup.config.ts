@@ -28,14 +28,13 @@ export default defineConfig({
   },
   minify: true,
   // Read by `scripts/generate-third-party-notices.mjs` — see the note in
-  // `packages/react/tsup.config.ts`. It matters most here: this package
-  // declares no runtime dependencies, so the ONLY record of what third-party
-  // code it redistributes is what esbuild inlined.
+  // `packages/react/tsup.config.ts`. The engine is external and declared, so what
+  // esbuild inlined is the record of the third-party code this package
+  // redistributes on its own account.
   metafile: true,
-  // `@docx-editor.dev/core` is private and never published, so both entries have to
-  // carry it: left external, the shipped bundles would import a package that does not exist on
-  // npm. Same treatment `packages/react` gives it.
-  noExternal: [/^@docx-editor\.dev\/core(?:\/|$)/],
+  // `@docx-editor.dev/core` stays external. It is a published package and a declared
+  // dependency, so the consumer resolves one copy of the engine. Inlining it here would
+  // give a page running this alongside the adapter two engines.
   // `harfbuzzjs` is external to get the build to RESOLVE, not because the output needs it.
   //
   // The browser entry reaches the editor lane, whose layout pass loads the font shaper through

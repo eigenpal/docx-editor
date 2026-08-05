@@ -6,5 +6,6 @@
   "file_type_method": "INCLUDE",
   "file_types": [".ts", ".tsx"],
   "insert_license": false,
-  "trailing_whitespace": "TRIM"
+  "trailing_whitespace": "TRIM",
+  "ignore": ["*.md", "*.txt", "tsup.config.ts", "dist-types/**", "scripts/**", "temp/**"]
 }

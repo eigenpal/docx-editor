@@ -4,21 +4,13 @@
 
 ```ts
 
-import { BookmarkIndex } from '@docx-editor.dev/core/store';
-import { CellSelection } from '@docx-editor.dev/core/layout';
-import { ContentControlBoundaryRecord } from '@docx-editor.dev/core/layout';
-import * as _docx_editor_dev_core_layout from '@docx-editor.dev/core/layout';
-import * as _docx_editor_dev_core_store from '@docx-editor.dev/core/store';
-import { Editor } from '@docx-editor.dev/core/contracts/editor';
-import { NavigationCommand } from '@docx-editor.dev/core/layout';
-import { SectionProperties } from '@docx-editor.dev/core/layout';
-import { SemanticLayout } from '@docx-editor.dev/core/layout';
-import { SemanticSelection } from '@docx-editor.dev/core/layout';
-import { StoryScope } from '@docx-editor.dev/core/store';
-import { TreeApplyResult } from '@docx-editor.dev/core/binding';
-import { TreeDocOp as TreeDocOp_2 } from '@docx-editor.dev/core/store';
-import { TreeDocxSession } from '@docx-editor.dev/core/binding';
-import { Unsubscribe } from '@docx-editor.dev/core/contracts/editor';
+import { AutomationCapabilities } from '@docx-editor.dev/core/automation';
+import { AutomationHandle } from '@docx-editor.dev/core/automation';
+import { AutomationHost } from '@docx-editor.dev/core/automation';
+import { AutomationOperation } from '@docx-editor.dev/core/automation';
+import { AutomationSpan } from '@docx-editor.dev/core/automation';
+import { AutomationValue } from '@docx-editor.dev/core/automation';
+import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 
 // @public
 export type BesideLocation = Extract<InsertLocation, 'Before' | 'After'>;

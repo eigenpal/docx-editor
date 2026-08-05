@@ -71,7 +71,6 @@ for (const pkg of targets) {
     isLocal,
     buildHint: buildHintFor(pkg),
     tsconfigPath: pkg.tsconfigPath ? path.join(repoRoot, pkg.tsconfigPath) : undefined,
-    sourceEntries: pkg.sourceEntries,
     forgottenExports: pkg.forgottenExports,
   });
 }

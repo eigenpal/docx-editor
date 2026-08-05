@@ -1,14 +1,14 @@
 ---
 title: 'Introduction'
-description: 'Open source WYSIWYG DOCX editor for React. Runs in the browser: .docx in, .docx out, with tracked changes, comments, and custom nodes.'
-category: 'Getting Started'
+description: "Open source WYSIWYG DOCX editor for React. Runs in the browser: .docx in, .docx out, with tracked changes, comments, content controls, and custom nodes."
+category: "Getting Started"
 order: 1
 seoTitle: 'DOCX Editor for React'
 ---
 
 `docx-editor` is an open-source WYSIWYG DOCX editor for React. It parses OOXML in the browser, paints real paginated pages, and serializes the current document back to `.docx`. You do not need an upload service or a conversion backend for normal browser editing.
 
-**It is lossless.** Everything you do not edit comes back byte for byte — including the parts the editor does not understand. Opening a document here cannot quietly destroy it.
+**It is lossless.** Everything you do not edit comes back byte for byte, including the parts the editor does not understand. Opening a document here cannot quietly destroy it.
 
 <Cards>
   <Card title="Get it running" href="/docs/2.x/quickstart">
@@ -30,7 +30,8 @@ seoTitle: 'DOCX Editor for React'
 | [`@docx-editor.dev/core`](/docs/2.x/core)             | Framework-agnostic engine: OOXML read/write, canonical document tree, layout, paint, `Editor` contract.                             |
 | [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) | Office.js-compatible editing API: a batching object model that edits a document from a server, or an editor already open in a page. |
 | [`@docx-editor.dev/pro`](/docs/2.x/pro)               | Tracked changes, comments, and custom nodes.                                                                                        |
-| [`@docx-editor.dev/i18n`](/docs/2.x/i18n)             | Locale data. Ships `en`, `de`, `fr`, `he`, `hi`, `pl`, `pt-BR`, `tr`, `zh-CN`.                                                      |
+| [`@docx-editor.dev/i18n`](/docs/2.x/i18n)             | Locale data. Ships `en`, `de`, `fr`, `he`, `hi`, `id`, `pl`, `pt-BR`, `tr`, `zh-CN`.                                                |
+| [`@docx-editor.dev/fonts`](/docs/2.x/guides/fonts)    | Metric-compatible substitutes for Word's default fonts, for documents that reference them without embedding them.                   |
 
 All packages release together in a fixed version group. Everything is Apache 2.0 except `@docx-editor.dev/editor-api` and `@docx-editor.dev/pro`, which are under the EigenPal Pro Evaluation License 1.0: free for internal, non-production evaluation, with production use requiring a commercial agreement ([licensing@eigenpal.com](mailto:licensing@eigenpal.com)).
 
@@ -77,8 +78,8 @@ editor has never heard of.
 
 The mechanism is the canonical tree. Parsing types a node only where layout needs it and keeps
 everything else generic, holding the original element verbatim. On save, typed parts
-re-serialize and the rest is repacked from the source file. An element the parser cannot type —
-unknown, or known but in an invalid position — becomes a generic node instead of being dropped,
+re-serialize and the rest is repacked from the source file. An element the parser cannot type
+(unknown, or known but in an invalid position) becomes a generic node instead of being dropped,
 so unrecognized markup never blocks editing.
 
 CI checks this on a corpus of real documents with two oracles: a canonical fingerprint over the

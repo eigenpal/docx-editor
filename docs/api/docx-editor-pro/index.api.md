@@ -150,4 +150,6 @@ export interface UpdateCustomNodeOptions {
     readonly lock?: false | 'sdtLocked' | 'sdtContentLocked' | 'contentLocked';
 }
 
+// (No @packageDocumentation comment for this package)
+
 ```

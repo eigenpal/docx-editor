@@ -60,4 +60,6 @@ export interface GoogleFontsOptions {
     readonly substitute?: Readonly<Record<string, string>>;
 }
 
+// (No @packageDocumentation comment for this package)
+
 ```

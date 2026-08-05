@@ -1,13 +1,13 @@
 ---
 title: 'Content controls'
-description: 'Find and fill Word content controls by tag or id. Set text, dropdown, checkbox, and date values, in the editor or from a server.'
-category: 'Guides'
+description: "Find and fill Word content controls by tag or id. Set text, dropdown, checkbox, and date values, from inside the editor or from a server-side script."
+category: "Guides"
 seoTitle: 'Content controls (SDTs)'
 ---
 
 Word content controls (`w:sdt`, Structured Document Tags) are labeled, bounded regions of a document. A control carries a stable `tag`, `title`, and `id`. That stability makes them the natural anchor for templates and programmatic filling: design the template in Word, tag the fillable regions, then fill them by tag from code.
 
-The editor parses controls into the canonical tree, keeps them editable, renders their boundary, and round-trips them losslessly on save — including properties it does not model, such as `w:dataBinding` and `w15:repeatingSection`.
+The editor parses controls into the canonical tree, keeps them editable, renders their boundary, and round-trips them losslessly on save, including properties it does not model, such as `w:dataBinding` and `w15:repeatingSection`.
 
 <Callout>
 Content controls are addressed by `tag`, `title`, or `id`. They are not `{{mustache}}` template variables; the two systems can coexist in one document.
@@ -60,7 +60,7 @@ try {
 
 ## Reading state before writing
 
-`placeholderShown` tells you the control still holds Word's boilerplate ("Click here to enter text") rather than real data — check it before treating `text` as entered content. `cannotEdit` and `cannotDelete` expose the control's locks, and are settable when you are producing a template rather than filling one.
+`placeholderShown` tells you the control still holds Word's boilerplate ("Click here to enter text") rather than real data. Check it before treating `text` as entered content. `cannotEdit` and `cannotDelete` expose the control's locks, and are settable when you are producing a template rather than filling one.
 
 ```ts
 controls.load();

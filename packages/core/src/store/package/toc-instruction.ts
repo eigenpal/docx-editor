@@ -43,7 +43,7 @@ export function parseTocInstruction(raw: string): TocInstruction | null {
   if (keyword !== 'TOC') return null;
 
   let hyperlink = /\\h\b/i.test(trimmed);
-  let omitPageNumbers = /\\n\b/i.test(trimmed);
+  const omitPageNumbers = /\\n\b/i.test(trimmed);
   let outlineStart = 1;
   let outlineEnd = 9;
 

@@ -4,8 +4,8 @@
 
 ```ts
 
-import { JSX } from 'react';
-import type { ReactNode } from 'react';
+import * as react from 'react';
+import { ReactNode } from 'react';
 import { ToolbarTranslate } from '@docx-editor.dev/react';
 
 // @public
@@ -23,7 +23,7 @@ export interface CustomNodeChromeProps {
 }
 
 // @public
-export function CustomNodeContextMenu(props: CustomNodeContextMenuProps): JSX.Element | null;
+export function CustomNodeContextMenu(props: CustomNodeContextMenuProps): react.JSX.Element | null;
 
 // @public (undocumented)
 export namespace CustomNodeContextMenu {
@@ -168,5 +168,7 @@ export function useStackedReviewPositions(items: readonly {
     readonly scale?: number;
     readonly defaultHeight?: number;
 }): ReadonlyMap<string, number>;
+
+// (No @packageDocumentation comment for this package)
 
 ```

@@ -263,4 +263,179 @@ export default [
     files: ['packages/editor-api/src/**/*.ts'],
     rules: restrictBoth,
   },
+
+  // TODO: split these files and delete this block.
+  //
+  // 39 files sit over the 1000-line cap. Left as plain errors they make a red
+  // lint the normal state of the repo, which is how a real error goes unread.
+  // Each cap below is the file's current length plus a little headroom, so
+  // nothing here can grow while the splits are pending, and a file that does
+  // get split drops back under the global cap and comes off this list.
+
+  {
+    files: [
+      'packages/core/src/editor/chrome-controls.ts',
+      'packages/core/src/layout/semantic-table.ts',
+      'packages/core/src/store/__tests__/table-resize-ops.test.ts',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 1100, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  {
+    files: [
+      'packages/core/src/editor/surface-pointer.ts',
+      'packages/core/src/store/__tests__/image-resources.test.ts',
+      'packages/core/src/store/package/ooxml-drawing-rules.ts',
+      'packages/core/src/store/store/tree-op-tracked.ts',
+      'packages/core/src/store/store/tree-op-types.ts',
+      'packages/react/src/editor/menu/parts.tsx',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 1200, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  {
+    files: [
+      'packages/core/src/editor/__tests__/docx-editor.test.ts',
+      'packages/core/src/editor/__tests__/table-command-plan.test.ts',
+      'packages/core/src/editor/docx-editor-images.ts',
+      'packages/core/src/store/__tests__/table-row-ops.test.ts',
+      'packages/core/src/store/package/image-resources.ts',
+      'packages/core/src/store/store/tree-package-store.ts',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 1300, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  {
+    files: [
+      'packages/core/src/layout/drawing-layout.ts',
+      'packages/core/src/layout/semantic-hit-test.ts',
+      'packages/pro/src/__tests__/review-facade.test.ts',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 1400, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  {
+    files: [
+      'packages/core/src/store/__tests__/table-column-ops.test.ts',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 1500, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  {
+    files: [
+      'packages/core/src/binding/tree-session.ts',
+      'packages/core/src/editor/__tests__/surface-table-interaction.test.ts',
+      'packages/core/src/layout/paragraph-flow.ts',
+      'packages/core/src/store/__tests__/content-control-ops.test.ts',
+      'packages/core/src/store/__tests__/drawing-package-edit.test.ts',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 1600, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  {
+    files: [
+      'packages/core/src/contracts/editor.ts',
+      'packages/core/src/store/store/tree-op-drawings.ts',
+      'packages/core/src/store/store/tree-op-table-cell-properties.ts',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 1700, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  {
+    files: [
+      'packages/core/src/store/__tests__/table-cell-properties.test.ts',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 1800, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  {
+    files: [
+      'packages/core/src/layout/semantic-table-layout.ts',
+      'packages/core/src/store/store/tree-op-content-controls.ts',
+      'packages/core/src/store/store/tree-op-tables.ts',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 1900, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  {
+    files: [
+      'packages/core/src/store/package/drawing-projection.ts',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 2000, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  {
+    files: [
+      'packages/core/src/store/package/ooxml-tree.ts',
+      'packages/pro/src/react/DocxEditorReview.tsx',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 2100, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  {
+    files: [
+      'packages/core/src/editor/docx-editor.ts',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 2300, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  {
+    files: [
+      'packages/core/src/store/__tests__/ooxml-tree.test.ts',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 2400, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  {
+    files: [
+      'packages/core/src/automation/plan.ts',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 2900, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  {
+    files: [
+      'packages/core/src/layout/semantic-layout.ts',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 3400, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  {
+    files: [
+      'packages/fonts/src/google-catalog.generated.ts',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 3500, skipBlankLines: false, skipComments: false }],
+    },
+  },
 ];

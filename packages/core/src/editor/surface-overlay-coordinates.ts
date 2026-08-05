@@ -203,8 +203,8 @@ export function computeImageResizeResult(options: {
   const widthScale = widthPt / startWidthPt;
   const heightScale = heightPt / startHeightPt;
 
-  let previewWidth = Math.max(1, options.startBounds.width * widthScale);
-  let previewHeight = Math.max(1, options.startBounds.height * heightScale);
+  const previewWidth = Math.max(1, options.startBounds.width * widthScale);
+  const previewHeight = Math.max(1, options.startBounds.height * heightScale);
   let previewX = options.startBounds.x;
   let previewY = options.startBounds.y;
   const screenHandle = options.handle;

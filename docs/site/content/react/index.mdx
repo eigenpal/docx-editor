@@ -1,7 +1,7 @@
 ---
 title: '@docx-editor.dev/react'
-description: 'React adapter: root component, provider primitives, shared hooks, and compound chrome from the package root.'
-category: 'Packages'
+description: "React adapter for the DOCX editor: the packaged root component, provider primitives, shared hooks, and compound chrome, all from the package root."
+category: "React"
 order: 30
 ---
 
@@ -37,7 +37,7 @@ export default function App() {
 
 The review module and sidebar are licensed surfaces in [`@docx-editor.dev/pro`](/docs/2.x/pro); they are not exports of the React adapter.
 
-There is one export path. Components, hooks, and the engine helpers all live on the package root — there are no `/ui`, `/hooks`, or `/dialogs` subpaths.
+There is one export path. Components, hooks, and the engine helpers all live on the package root. There are no `/ui`, `/hooks`, or `/dialogs` subpaths.
 
 ## Provider primitives
 
@@ -63,7 +63,7 @@ export function CustomFrame({ bytes }: { bytes: Uint8Array }) {
 
 ## Toolbar
 
-The main chrome compound is `DocxEditor.Toolbar`, exported from the package root and also attached as `DocxEditor.Toolbar`:
+The main chrome compound is exported from the package root as `DocxEditorToolbar`, and attached to the host as `DocxEditor.Toolbar`:
 
 ```tsx
 import { DocxEditor, useEditorCommand } from '@docx-editor.dev/react';

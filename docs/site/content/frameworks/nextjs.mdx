@@ -1,7 +1,7 @@
 ---
 title: 'Next.js'
 description: 'Set up a Next.js DOCX editor in the App Router. Dynamic import with ssr: false, the window is not defined fix, file upload, and saving back to .docx.'
-category: 'Frameworks'
+category: "Frameworks"
 seoTitle: 'Next.js DOCX editor setup'
 ---
 
@@ -87,7 +87,7 @@ Leaving `document` undefined mounts an empty editor until the user picks a file.
 
 The editor reads the DOM and measures text at mount, so it cannot run during server rendering. If you import `DocxEditor` directly in a route, `next build` fails during prerender with:
 
-```
+```text
 ReferenceError: window is not defined
 ```
 

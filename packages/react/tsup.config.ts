@@ -31,11 +31,12 @@ export default defineConfig({
   // learn which third-party packages esbuild actually inlined into the shipped
   // bundles, and emits the attribution file for exactly those. Deriving it from
   // the real build output rather than from `dependencies` is what keeps the
-  // notice honest when `noExternal`/`external` below change.
+  // notice honest when `external` below changes.
   metafile: true,
-  // The editor contract is a private, declaration-only package; bundle it so
-  // published JS carries no reference to a private path.
-  noExternal: [/^@docx-editor\.dev\/core(?:\/|$)/],
+  // The engine stays external. It is a published package, and `@docx-editor.dev/pro`
+  // imports it directly, so inlining a copy here would give a page running both
+  // packages two engines: pro's modules would register against one instance while
+  // the adapter painted from another.
   // emf-converter is lazily imported; external keeps the metafile rasterizer out of
   // the main bundle.
   external: ['react', 'react-dom', 'harfbuzzjs', 'emf-converter'],

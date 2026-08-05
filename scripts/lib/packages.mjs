@@ -53,9 +53,6 @@ export const PACKAGES = [
       protectedExportFiles: ['src/runtime/public.ts', 'src/model/index.ts'],
       allowlist: {
         index: [
-          'AutomationHandle',
-          'AutomationOperation',
-          'AutomationValue',
           'CommentBase',
           'ContentControlScope',
           'ContextInternals',
@@ -72,13 +69,6 @@ export const PACKAGES = [
           'SpanOwner',
         ],
         browser: [
-          // The engine's own editor instance — the thing `createBrowser` borrows. A consumer
-          // that has one already imports its type from the engine package, so this package
-          // re-exporting it would be a second name for one type rather than a missing one.
-          'DocxEditorInstance',
-          'AutomationHandle',
-          'AutomationOperation',
-          'AutomationValue',
           'CommentBase',
           'ContentControlScope',
           'ContextInternals',
@@ -97,52 +87,34 @@ export const PACKAGES = [
       },
     },
   },
-  // Source-published packages. These ship TypeScript rather than a bundled `dist`, so their
-  // `exports.types` point at `.ts` files that API Extractor cannot read. `sourceEntries` tells
-  // the docs pipeline to read the declaration tree `build:types` emits instead — see
-  // `declarationEntryFor`.
+  // Every package builds a `dist` and points `exports.types` at the `.d.ts` in it, so the
+  // reference below is extracted from the same declarations a consumer installs.
   {
     name: '@docx-editor.dev/core',
     root: 'packages/core',
     pkgSlug: 'docx-editor-core',
-    sourceEntries: true,
     tsconfigPath: 'packages/core/tsconfig.api.json',
   },
   {
     name: '@docx-editor.dev/pro',
     root: 'packages/pro',
     pkgSlug: 'docx-editor-pro',
-    sourceEntries: true,
     tsconfigPath: 'packages/pro/tsconfig.api.json',
   },
   {
     name: '@docx-editor.dev/fonts',
     root: 'packages/fonts',
     pkgSlug: 'docx-editor-fonts',
-    sourceEntries: true,
-    tsconfigPath: 'packages/fonts/tsconfig.types.json',
+    tsconfigPath: 'packages/fonts/tsconfig.api.json',
   },
 ];
 
-/**
- * Where a source-published package's declarations live for one exports entry.
- *
- * `./src/index.ts` -> `./dist-types/index.d.ts`, `./src/react/index.ts` ->
- * `./dist-types/react/index.d.ts`. Returns null for anything that is not a `src/*.ts` path, so a
- * package mixing source and dist entries keeps the dist ones untouched.
- */
-export function declarationEntryFor(typesPath) {
-  if (typeof typesPath !== 'string') return null;
-  const match = /^\.\/src\/(.+)\.tsx?$/.exec(typesPath);
-  if (!match) return null;
-  return `./dist-types/${match[1]}.d.ts`;
-}
 
 // Derived: build invocation hint shown in `api:check` drift error
 // output. Every package builds via the same `bun run --filter` shape,
 // so it's computed from `name` rather than duplicated per entry.
 export function buildHintFor(pkg) {
-  return `bun run --filter '${pkg.name}' ${pkg.sourceEntries ? 'build:types' : 'build'}`;
+  return `bun run --filter '${pkg.name}' build`;
 }
 
 // Derived: where API Extractor writes (and reads-for-drift-check) the

@@ -1,86 +1,85 @@
 {
   "name": "@docx-editor.dev/core",
   "version": "1.0.0",
-  "private": true,
   "description": "Framework-agnostic core for docx-editor.dev: OOXML parse/serialize, the canonical document tree, layout and paint, and the Editor contract the adapters render.",
   "type": "module",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts",
-      "default": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     },
     "./automation": {
-      "types": "./src/automation/index.ts",
-      "import": "./src/automation/index.ts",
-      "default": "./src/automation/index.ts"
+      "types": "./dist/automation.d.ts",
+      "import": "./dist/automation.js",
+      "require": "./dist/automation.cjs"
     },
     "./binding": {
-      "types": "./src/binding/index.ts",
-      "import": "./src/binding/index.ts",
-      "default": "./src/binding/index.ts"
+      "types": "./dist/binding.d.ts",
+      "import": "./dist/binding.js",
+      "require": "./dist/binding.cjs"
     },
     "./contracts/editor": {
-      "types": "./src/contracts/editor.ts",
-      "import": "./src/contracts/editor.ts",
-      "default": "./src/contracts/editor.ts"
+      "types": "./dist/contracts/editor.d.ts",
+      "import": "./dist/contracts/editor.js",
+      "require": "./dist/contracts/editor.cjs"
     },
     "./contracts/document": {
-      "types": "./src/contracts/document.ts",
-      "import": "./src/contracts/document.ts",
-      "default": "./src/contracts/document.ts"
+      "types": "./dist/contracts/document.d.ts",
+      "import": "./dist/contracts/document.js",
+      "require": "./dist/contracts/document.cjs"
     },
     "./contracts/interaction": {
-      "types": "./src/contracts/interaction.ts",
-      "import": "./src/contracts/interaction.ts",
-      "default": "./src/contracts/interaction.ts"
+      "types": "./dist/contracts/interaction.d.ts",
+      "import": "./dist/contracts/interaction.js",
+      "require": "./dist/contracts/interaction.cjs"
     },
     "./contracts/mcp": {
-      "types": "./src/contracts/mcp.ts",
-      "import": "./src/contracts/mcp.ts",
-      "default": "./src/contracts/mcp.ts"
+      "types": "./dist/contracts/mcp.d.ts",
+      "import": "./dist/contracts/mcp.js",
+      "require": "./dist/contracts/mcp.cjs"
     },
     "./contracts/modules": {
-      "types": "./src/contracts/modules.ts",
-      "import": "./src/contracts/modules.ts",
-      "default": "./src/contracts/modules.ts"
+      "types": "./dist/contracts/modules.d.ts",
+      "import": "./dist/contracts/modules.js",
+      "require": "./dist/contracts/modules.cjs"
     },
     "./contracts/plugin": {
-      "types": "./src/contracts/plugin.ts",
-      "import": "./src/contracts/plugin.ts",
-      "default": "./src/contracts/plugin.ts"
+      "types": "./dist/contracts/plugin.d.ts",
+      "import": "./dist/contracts/plugin.js",
+      "require": "./dist/contracts/plugin.cjs"
     },
     "./contracts/types": {
-      "types": "./src/contracts/types-barrel.ts",
-      "import": "./src/contracts/types-barrel.ts",
-      "default": "./src/contracts/types-barrel.ts"
+      "types": "./dist/contracts/types.d.ts",
+      "import": "./dist/contracts/types.js",
+      "require": "./dist/contracts/types.cjs"
     },
     "./layout": {
-      "types": "./src/layout/index.ts",
-      "import": "./src/layout/index.ts",
-      "default": "./src/layout/index.ts"
+      "types": "./dist/layout.d.ts",
+      "import": "./dist/layout.js",
+      "require": "./dist/layout.cjs"
     },
     "./output": {
-      "types": "./src/output/index.ts",
-      "import": "./src/output/index.ts",
-      "default": "./src/output/index.ts"
+      "types": "./dist/output.d.ts",
+      "import": "./dist/output.js",
+      "require": "./dist/output.cjs"
     },
     "./store": {
-      "types": "./src/store/index.ts",
-      "import": "./src/store/index.ts",
-      "default": "./src/store/index.ts"
+      "types": "./dist/store.d.ts",
+      "import": "./dist/store.js",
+      "require": "./dist/store.cjs"
     },
     "./editor": {
-      "types": "./src/editor/index.ts",
-      "import": "./src/editor/index.ts",
-      "default": "./src/editor/index.ts"
+      "types": "./dist/editor.d.ts",
+      "import": "./dist/editor.js",
+      "require": "./dist/editor.cjs"
     },
-    "./styles/editor.css": "./src/styles/editor.css",
+    "./styles/editor.css": "./dist/editor.css",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "build:types": "tsc -p tsconfig.types.json"
+    "build": "tsup && node ../../scripts/copy-core-styles.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "typescript": "^5.3.3"
@@ -110,5 +109,9 @@
     "yjs": {
       "optional": true
     }
-  }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }

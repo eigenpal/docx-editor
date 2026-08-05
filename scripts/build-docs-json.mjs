@@ -164,7 +164,6 @@ function processPackage(pkg) {
     tsconfigPath: pkg.tsconfigPath
       ? path.join(repoRoot, pkg.tsconfigPath)
       : undefined,
-    sourceEntries: pkg.sourceEntries,
     emitDocModel: true,
   });
 

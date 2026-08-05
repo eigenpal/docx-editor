@@ -1,7 +1,7 @@
 ---
 title: '@docx-editor.dev/core'
-description: 'The framework-agnostic engine: OOXML read and write, the canonical document tree, layout, paint, and the Editor contract adapters render.'
-category: 'Reference'
+description: "The framework-agnostic engine: OOXML read and write, the canonical document tree, layout, paint, and the Editor contract that adapters render."
+category: "Reference"
 order: 70
 ---
 
@@ -17,7 +17,7 @@ npm install @docx-editor.dev/core
 
 ## Entry points
 
-The root is the 80% path: create an editor over bytes, the contract it implements, fonts, and the chrome registry.
+The root is the entry point for most work: create an editor over bytes, the contract it implements, fonts, and the chrome registry.
 
 ```ts
 import { createDocxEditor, loadFonts, WORD_DEFAULT_FONT } from '@docx-editor.dev/core';
@@ -30,7 +30,7 @@ Reach for a subpath when you need the canonical tree, the layout pass, or the pa
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `.`                       | Create an editor, the `Editor` contract, fonts, the chrome registry, the document model types.                               |
 | `./editor`                | Everything the root re-exports, plus the paginated surface, ruler geometry, and module resolution.                           |
-| `./contracts/editor`      | `Editor`, `EditorCommand`, `EditorQuery`, `EditorSnapshot`, `DocumentSource`, `PageSetup` — the contract an adapter renders. |
+| `./contracts/editor`      | `Editor`, `EditorCommand`, `EditorQuery`, `EditorSnapshot`, `DocumentSource`, `PageSetup`, the contract an adapter renders. |
 | `./contracts/types`       | Document model types.                                                                                                        |
 | `./contracts/modules`     | `EditorModule`, the shape [`@docx-editor.dev/pro`](/docs/2.x/pro) implements.                                                |
 | `./contracts/plugin`      | The plugin contract.                                                                                                         |
@@ -54,23 +54,23 @@ function pageLabel(editor: Editor): string {
 }
 ```
 
-`snapshot()` is version-cached: it returns the same reference until state actually moves, and its sub-objects are reference-stable. That is what makes `useSyncExternalStore` — and therefore [`useEditorState`](/docs/2.x/react/hooks) — correct without a deep compare on every tick.
+`snapshot()` is version-cached: it returns the same reference until state actually moves, and its sub-objects are reference-stable. That is what makes `useSyncExternalStore` (and therefore [`useEditorState`](/docs/2.x/react/hooks)) correct without a deep compare on every tick.
 
 ## The pipeline
 
 One path, in one direction:
 
-```
+```text
 bytes → bounded OPC/XML read → canonical document tree → layout → painted pages → serialize
 ```
 
 The painted pages _are_ the editable surface. There is no shadow document model to keep in sync with what you see.
 
-Fidelity is structural. Parts the engine models are re-emitted normalized; parts it does not model are carried through byte-for-byte. Content it cannot type — an unknown element, or a known one in an invalid position — becomes a generic node rather than being dropped, so unknown content never blocks editing and never disappears on save.
+Fidelity is structural. Parts the engine models are re-emitted normalized; parts it does not model are carried through byte-for-byte. Content it cannot type (an unknown element, or a known one in an invalid position) becomes a generic node rather than being dropped, so unknown content never blocks editing and never disappears on save.
 
 ## Untrusted input
 
-A `.docx` is a zip of XML that whoever sent it controls end to end. The engine sanitizes at the parse boundary — URL allowlisting, entity and zip-bomb limits, recursion and element caps, no zero-click external fetches, escaping on the way back out — so everything downstream receives an already-sanitized projection.
+A `.docx` is a zip of XML that whoever sent it controls end to end. The engine sanitizes at the parse boundary (URL allowlisting, entity and zip-bomb limits, recursion and element caps, no zero-click external fetches, escaping on the way back out) so everything downstream receives an already-sanitized projection.
 
 Anything you then render from document data (a font name, a hyperlink target, a comment body, a custom node's attributes) is still attacker-controlled at your boundary. Render it as text; do not build markup or URLs from it.
 

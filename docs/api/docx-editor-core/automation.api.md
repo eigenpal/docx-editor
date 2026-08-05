@@ -1114,4 +1114,6 @@ export type ServerAutomationHostResult = {
     readonly detail?: string;
 };
 
+// (No @packageDocumentation comment for this package)
+
 ```

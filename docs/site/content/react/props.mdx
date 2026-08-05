@@ -1,7 +1,7 @@
 ---
 title: 'Props'
 description: 'Reference for the current React root props and ref: document source, chrome toggles, menu integration, callbacks, and the shared imperative handle.'
-category: 'React'
+category: "React"
 order: 31
 ---
 
@@ -25,6 +25,27 @@ const bytes = new Uint8Array(await fetch('/template.docx').then((r) => r.arrayBu
 
 <DocxEditor document={bytes} mode="edit" />;
 ```
+
+## Modules
+
+`modules` registers capability modules at construction. It is how [`@docx-editor.dev/pro`](/docs/2.x/pro) adds tracked changes, comments, and custom nodes.
+
+| Prop      | Type              | Description                                             |
+| --------- | ----------------- | ------------------------------------------------------- |
+| `modules` | `EditorModule[]`  | Capability modules, read once when the editor is built. |
+
+Registration happens at construction, like `mode`, so the array identity has to be stable. Build it outside the component or memoize it, or the editor rebuilds on every render:
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { reviewModule } from '@docx-editor.dev/pro/react';
+
+const MODULES = [reviewModule()];
+
+<DocxEditor document={bytes} modules={MODULES} author="Jess Lin" />;
+```
+
+Without a module the editor still opens a document that carries revisions and comments, renders them in their final state, and saves them back untouched. Registering the module is what makes them visible and actionable. See [Pro](/docs/2.x/pro).
 
 ## Chrome and layout
 
@@ -61,7 +82,7 @@ See the [Dark mode](/docs/2.x/guides/dark-mode) guide for how the canvas transfo
 
 `fonts` supplies the font bytes the engine measures with, so line wrap and page breaks
 match Word. Fonts embedded in the document wire in automatically. The font picker offers
-what the document declares merged with what you configure — read that list from
+what the document declares merged with what you configure. Read that list from
 `useFontFamily()` rather than a prop.
 
 | Prop          | Type                                                             | Default | Description                                                              |

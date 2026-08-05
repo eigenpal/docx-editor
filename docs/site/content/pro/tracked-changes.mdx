@@ -1,7 +1,7 @@
 ---
 title: 'Tracked changes'
-description: 'Suggesting mode records edits as Word revisions. Render them, accept and reject them, from the packaged sidebar or your own UI.'
-category: 'Pro'
+description: "Suggesting mode records every edit as a Word revision. Render them, accept and reject them, from the packaged review sidebar or from your own UI."
+category: "Pro"
 order: 61
 ---
 
@@ -51,7 +51,7 @@ export function Reviewer({ bytes }: { bytes: Uint8Array }) {
 
 The revision model covers more than inline text:
 
-- **Text** insertions and deletions, including replacements — one card, the way Word presents it.
+- **Text** insertions and deletions, including replacements: one card, the way Word presents it.
 - **Paragraph structure**: inserted and deleted paragraph marks, paragraph property changes.
 - **Tables**: row and cell insert and delete, plus row, cell, and table property changes.
 - **Formatting**: run and paragraph property changes, as their own cards.
@@ -101,7 +101,7 @@ The props on `DocxEditorReview` decide which decisions appear and how they stack
 | `structural` | `false` | Show "changed the document structure" cards.                                                           |
 | `formatting` | `false` | Show "changed text formatting" cards.                                                                  |
 | `stack`      | `true`  | Push overlapping cards down instead of letting them collide.                                           |
-| `gap`        | —       | Pixels between stacked cards. The only source of vertical spacing.                                     |
+| `gap`        | none    | Pixels between stacked cards. The only source of vertical spacing.                                     |
 | `furniture`  | none    | Host content above the cards: filters, a legend, a summary.                                            |
 | `preset`     | `true`  | `false` mounts the rail and its context only, so you lay the cards out yourself.                       |
 
@@ -176,13 +176,13 @@ function ChangeList() {
 
 Each item carries `key`, `id`, `author`, `initials`, `date`, `text`, `replyIds`, `readOnly`, `anchorY`, `pageIndex`, and `isActive`. Revision items add `kind: 'revision'`, a `revisionKind`, and `replacedText` for replacements, so a card can say _Replaced "x" with "y"_.
 
-`replyIds` is on revisions too, not only comments. OOXML gives `w:ins` and `w:del` no body, so replying to a tracked change writes a comment over that change's range — the reply belongs inside the change's card, and the comment carries `parentRevisionId` naming it. A surface listing top-level cards must skip a comment with either `parentId` or `parentRevisionId`, or it will draw the reply twice.
+`replyIds` is on revisions too, not only comments. OOXML gives `w:ins` and `w:del` no body, so replying to a tracked change writes a comment over that change's range. The reply belongs inside the change's card, and the comment carries `parentRevisionId` naming it. A surface listing top-level cards must skip a comment with either `parentId` or `parentRevisionId`, or it will draw the reply twice.
 
-Two things the hook gives you that you should not recompute. Items come from the document tree rather than from what is currently painted — a queue derived from the page would empty by half when the reader scrolls. And each item's `anchorY` comes from layout records rather than measured DOM, which would leave the sidebar a repaint behind the document and break outright during pagination.
+Two things the hook gives you that you should not recompute. Items come from the document tree rather than from what is currently painted. A queue derived from the page would empty by half when the reader scrolls. And each item's `anchorY` comes from layout records rather than measured DOM, which would leave the sidebar a repaint behind the document and break outright during pagination.
 
 `readOnly` marks a decision the engine cannot resolve structurally. Do not offer Accept and Reject on those: a card offering a button the engine will refuse is worse than one that explains why it cannot.
 
-`useReview(query)` narrows the set — `excludeRevisionKinds` drops kinds you do not want to show, and `placement: false` skips layout geometry when you only need the metadata. `useReviewOf(editor, query)` is the same hook against an editor you already hold.
+`useReview(query)` narrows the set. `excludeRevisionKinds` drops kinds you do not want to show, and `placement: false` skips layout geometry when you only need the metadata. `useReviewOf(editor, query)` is the same hook against an editor you already hold.
 
 ## Accept or reject in bulk
 
@@ -209,7 +209,7 @@ function AcceptAll() {
 const hasReview = useEditorState((s) => s.hasReviewContent ?? false);
 ```
 
-Without a review module the editor renders revisions in their final state and offers no review UI — but it still saves them back untouched.
+Without a review module the editor renders revisions in their final state and offers no review UI, but it still saves them back untouched.
 
 ## Interop with Word
 

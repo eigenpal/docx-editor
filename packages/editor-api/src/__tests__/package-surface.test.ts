@@ -115,17 +115,12 @@ describe('what the package depends on', () => {
     expect(declared.filter((name) => forbidden.includes(name))).toEqual([]);
   });
 
-  test('the engine is a build-time dependency only, never one a consumer installs', () => {
-    // `@docx-editor.dev/core` is inlined by tsup (`noExternal`), so the tarball carries the
-    // engine rather than resolving it. Declaring it as a runtime or peer dependency would make
-    // a consumer install a second copy — which is what this forbids. A devDependency is the
-    // build reading workspace source, and is correct.
-    const installed = Object.keys({
-      ...(manifest.dependencies ?? {}),
-      ...(manifest.peerDependencies ?? {}),
-    });
-    expect(installed).not.toContain('@docx-editor.dev/core');
-    expect(Object.keys(manifest.devDependencies ?? {})).toContain('@docx-editor.dev/core');
+  test('the engine is a runtime dependency, resolved rather than carried', () => {
+    // `@docx-editor.dev/core` is a published package and stays external in both outputs, so a
+    // consumer resolves one copy of the engine. Inlining it would put a second engine in this
+    // tarball, and a page running this next to the adapter would hold two instances.
+    expect(manifest.dependencies?.['@docx-editor.dev/core']).toBe('workspace:*');
+    expect(Object.keys(manifest.devDependencies ?? {})).not.toContain('@docx-editor.dev/core');
   });
 
   test('there are no peer dependencies left to be optional about', () => {
@@ -133,19 +128,13 @@ describe('what the package depends on', () => {
     expect(manifest.peerDependenciesMeta).toBeUndefined();
   });
 
-  test('there are no runtime dependencies at all', () => {
-    // Both entries bundle the private contract package and everything under it, and nothing
-    // survives into either output as a bare import, so a consumer installs nothing beyond this
-    // tarball. `harfbuzzjs` is listed as external in the tsup config, but only so the build can
-    // skip RESOLVING the shaper the layout pass loads dynamically — the emitted bundles do not
-    // mention it, which `scripts/pack-smoke.mjs` asserts against the tarball itself. A dependency
-    // declared here that no output imports would be install weight for nothing.
-    expect(manifest.dependencies).toBeUndefined();
-  });
-
-  test('the private contract package is a dev dependency, because the build inlines it', () => {
-    expect(manifest.devDependencies?.['@docx-editor.dev/core']).toBe('workspace:*');
-    expect(manifest.dependencies?.['@docx-editor.dev/core']).toBeUndefined();
+  test('the engine is the only runtime dependency', () => {
+    // Everything else either bundles or is external for a build reason rather than a consumer
+    // one. `harfbuzzjs` is listed as external in the tsup config only so the build can skip
+    // RESOLVING the shaper the layout pass loads dynamically — the emitted bundles do not
+    // mention it, which `scripts/pack-smoke.mjs` asserts against the tarball itself. A
+    // dependency declared here that no output imports would be install weight for nothing.
+    expect(Object.keys(manifest.dependencies ?? {})).toEqual(['@docx-editor.dev/core']);
   });
 });
 
