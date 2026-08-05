@@ -463,8 +463,11 @@ describe('paintSemanticLayout drawing integration', () => {
     ).not.toBeNull();
   });
 
-  test('a repaint reuses the same <img> element, so the decode survives a keystroke', () => {
-    const part = load(inlinePictureXml());
+  test('reserves inline flow width between text before and after a drawing', () => {
+    const xml = inlinePictureXml()
+      .replace('<w:body><w:p>', '<w:body><w:p><w:r><w:t>A</w:t></w:r>')
+      .replace('</w:p></w:body>', '<w:r><w:t>B</w:t></w:r></w:p></w:body>');
+    const part = load(xml);
     const layout = layoutSemanticDocument(part, 1, {
       measurer: createFixedMeasurer(6, 14),
       inlineDrawingLayout: {
@@ -479,6 +482,42 @@ describe('paintSemanticLayout drawing integration', () => {
     });
     const { port } = fakeUrlPort();
     const container = document.createElement('div');
+
+    paintSemanticLayout(container, layout, { scale: 1, imageUrlPort: port, ariaHidden: false });
+
+    const line = container.querySelector('.layout-line')!;
+    const flow = [...line.children].filter(
+      (element) =>
+        element.classList.contains('layout-run-text') ||
+        element.classList.contains('docx-inline-drawing-advance')
+    );
+    expect(flow.map((element) => element.className)).toEqual([
+      'layout-run layout-run-text',
+      'docx-inline-drawing-advance',
+      'layout-run layout-run-text',
+    ]);
+    expect((flow[1] as HTMLElement).style.width).toBe(`${emuToPoints(914400)}px`);
+    expect((line as HTMLElement).style.wordSpacing).toBe('');
+  });
+
+  test('a repaint reuses the same <img> element, so the decode survives a keystroke', () => {
+    const part = load(inlinePictureXml());
+    const layoutWith = (revision: number, resource: typeof READY_PNG | ImageResourceState) =>
+      layoutSemanticDocument(part, revision, {
+        measurer: createFixedMeasurer(6, 14),
+        inlineDrawingLayout: {
+          ownerPartName: OWNER,
+          project: (node) =>
+            projectDrawing(node, {
+              ownerPartName: OWNER,
+              limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
+            }),
+          resourceOf: () => resource,
+        },
+      });
+    const layout = layoutWith(1, READY_PNG);
+    const { port } = fakeUrlPort();
+    const container = document.createElement('div');
     paintSemanticLayout(container, layout, { scale: 1, imageUrlPort: port, ariaHidden: false });
     const first = container.querySelector('img.docx-drawing-image');
     expect(first).not.toBeNull();
@@ -487,6 +526,37 @@ describe('paintSemanticLayout drawing integration', () => {
     const second = container.querySelector('img.docx-drawing-image');
     expect(second).toBe(first as never);
     expect(second!.getAttribute('src')).toBe(firstSrc as never);
+  });
+
+  test('keeps the decoded image visible while a text revision revalidates its resource', () => {
+    const part = load(inlinePictureXml());
+    const layoutWith = (revision: number, resource: ImageResourceState) =>
+      layoutSemanticDocument(part, revision, {
+        measurer: createFixedMeasurer(6, 14),
+        inlineDrawingLayout: {
+          ownerPartName: OWNER,
+          project: (node) =>
+            projectDrawing(node, {
+              ownerPartName: OWNER,
+              limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
+            }),
+          resourceOf: () => resource,
+        },
+      });
+    const ready = layoutWith(1, READY_PNG);
+    const pending = layoutWith(
+      2,
+      Object.freeze({ kind: 'pending', resourceKey: 'revalidating-after-text-edit' })
+    );
+    const { port } = fakeUrlPort();
+    const container = document.createElement('div');
+    paintSemanticLayout(container, ready, { scale: 1, imageUrlPort: port, ariaHidden: false });
+    const decoded = container.querySelector('img.docx-drawing-image');
+
+    paintSemanticLayout(container, pending, { scale: 1, imageUrlPort: port, ariaHidden: false });
+
+    expect(container.querySelector('img.docx-drawing-image')).toBe(decoded as never);
+    expect(container.querySelector('.docx-drawing-placeholder')).toBeNull();
   });
 });
 

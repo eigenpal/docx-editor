@@ -35,6 +35,7 @@ import { paintPageNoteAreas } from './semantic-paint-notes.ts';
 import { anchoredDrawingsOf } from '../layout/semantic-records.ts';
 import type { AnchoredDrawingRecord } from '../layout/drawing-layout.ts';
 import {
+  collectUsedDrawingElementKeys,
   collectUsedDrawingResourceKeys,
   DEFAULT_DRAWING_PAINT_STRINGS,
   drawingPaintStringsCacheToken,
@@ -1020,7 +1021,34 @@ function paintLine(
   // only shape an absolutely-positioned line model can express.
   let anchor: HTMLElement | null = null;
   let anchorLinkId: string | null = null;
+  const inlineDrawings = [...(line.drawings ?? [])].sort((left, right) => left.start - right.start);
+  let nextInlineDrawing = 0;
+  const appendDrawingAdvancesBefore = (modelOffset: number): void => {
+    while (
+      nextInlineDrawing < inlineDrawings.length &&
+      inlineDrawings[nextInlineDrawing]!.start < modelOffset
+    ) {
+      const drawing = inlineDrawings[nextInlineDrawing]!;
+      const advance = Math.max(0, drawing.advanceEnd - drawing.advanceStart);
+      const spacer = document.createElement('span');
+      spacer.className = 'docx-inline-drawing-advance';
+      spacer.dataset.docxMarker = '';
+      spacer.setAttribute('contenteditable', 'false');
+      spacer.setAttribute('aria-hidden', 'true');
+      spacer.style.display = 'inline-block';
+      spacer.style.width = `${advance * scale}px`;
+      spacer.style.height = '0';
+      spacer.style.lineHeight = '0';
+      spacer.style.pointerEvents = 'none';
+      spacer.style.verticalAlign = 'baseline';
+      element.append(spacer);
+      nextInlineDrawing += 1;
+      anchor = null;
+      anchorLinkId = null;
+    }
+  };
   for (const span of line.spans) {
+    appendDrawingAdvancesBefore(span.range.start);
     const band = Math.min(span.box.height + leading, line.box.height);
     const painted = paintSpan(document, span, ctx, band, leading);
     const link = span.link;
@@ -1037,6 +1065,7 @@ function paintLine(
     }
     anchor.append(painted);
   }
+  appendDrawingAdvancesBefore(Number.POSITIVE_INFINITY);
   // A span-less line (empty paragraph) has no inline content, and a browser will not
   // draw a caret at a position with no inline box to measure. The <br> is the anchor;
   // sizing it to the line keeps the caret the paragraph's font height, not the div's
@@ -1078,7 +1107,12 @@ function interSpanGap(line: LineRecord): number {
   const gaps: number[] = [];
   for (let index = 1; index < line.spans.length; index += 1) {
     const previous = line.spans[index - 1]!;
-    const gap = line.spans[index]!.box.x - (previous.box.x + previous.box.width);
+    const current = line.spans[index]!;
+    const drawingOccupiesGap = line.drawings?.some(
+      (drawing) => drawing.start >= previous.range.end && drawing.start < current.range.start
+    );
+    if (drawingOccupiesGap) continue;
+    const gap = current.box.x - (previous.box.x + previous.box.width);
     if (gap > 0.25) gaps.push(gap);
   }
   if (gaps.length === 0) return 0;
@@ -2065,7 +2099,10 @@ export function paintSemanticLayout(
   container.dataset.revision = String(layout.revision);
 
   if (urlRegistry) {
-    urlRegistry.reconcile(collectUsedDrawingResourceKeys(layout));
+    urlRegistry.reconcile(
+      collectUsedDrawingResourceKeys(layout),
+      collectUsedDrawingElementKeys(layout)
+    );
   }
 
   // Keyed reconcile instead of `replaceChildren`: retained elements stay where they are —

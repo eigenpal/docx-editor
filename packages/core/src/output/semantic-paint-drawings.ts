@@ -71,7 +71,12 @@ interface UrlRegistry {
     resourceKey: string,
     document: Document
   ) => HTMLImageElement;
-  readonly reconcile: (usedKeys: ReadonlySet<string>) => void;
+  /** Previously decoded image to retain while a new package snapshot revalidates it. */
+  readonly imageForPending?: (elementKey: string) => HTMLImageElement | null;
+  readonly reconcile: (
+    usedResourceKeys: ReadonlySet<string>,
+    usedElementKeys: ReadonlySet<string>
+  ) => void;
   readonly revokeAll: () => void;
 }
 
@@ -108,14 +113,17 @@ export function drawingUrlRegistryFor(
       }
       return element;
     },
-    reconcile(usedKeys: ReadonlySet<string>): void {
+    imageForPending(elementKey: string): HTMLImageElement | null {
+      return imagesByElementKey.get(elementKey)?.element ?? null;
+    },
+    reconcile(usedResourceKeys: ReadonlySet<string>, usedElementKeys: ReadonlySet<string>): void {
       for (const [key, url] of urlsByKey) {
-        if (usedKeys.has(key)) continue;
+        if (usedResourceKeys.has(key)) continue;
         port.revoke(url);
         urlsByKey.delete(key);
       }
       for (const [key, entry] of imagesByElementKey) {
-        if (usedKeys.has(entry.resourceKey)) continue;
+        if (usedElementKeys.has(key)) continue;
         entry.element.removeAttribute('src');
         imagesByElementKey.delete(key);
       }
@@ -129,6 +137,13 @@ export function drawingUrlRegistryFor(
   });
   urlRegistries.set(container, registry);
   return registry;
+}
+
+function drawingElementKey(
+  drawing: InlineDrawingRecord | AnchoredDrawingRecord,
+  ctx: DrawingPaintContext
+): string {
+  return `${ctx.paintInstance ?? ''}|${drawing.drawingNodeId}`;
 }
 
 export function detachDrawingUrlRegistry(container: HTMLElement): void {
@@ -361,11 +376,8 @@ function paintReadyImage(
   cropViewport.style.overflow = 'hidden';
 
   const img =
-    urlRegistry?.imageFor?.(
-      `${ctx.paintInstance ?? ''}|${drawing.drawingNodeId}`,
-      resource.resourceKey,
-      document
-    ) ?? document.createElement('img');
+    urlRegistry?.imageFor?.(drawingElementKey(drawing, ctx), resource.resourceKey, document) ??
+    document.createElement('img');
   img.className = 'docx-drawing-image';
   img.setAttribute('draggable', 'false');
   // SAFE: `src` is a host-minted object URL from PaintImageUrlPort, never file-derived.
@@ -494,6 +506,14 @@ export function paintDrawingRecord(
   }
 
   if (resource.kind === 'pending') {
+    const retained = urlRegistry
+      ?.imageForPending?.(drawingElementKey(drawing, ctx))
+      ?.closest<HTMLElement>('.docx-drawing-ready');
+    if (retained) {
+      retained.dataset.drawingNodeId = drawing.drawingNodeId;
+      positionedBox(retained, drawing.paintBounds, ctx.scale, origin);
+      return retained;
+    }
     return paintPlaceholderCard(document, drawing, ctx, origin);
   }
 
@@ -564,6 +584,42 @@ export function collectUsedDrawingResourceKeys(layout: SemanticLayout): Readonly
       if (!story) continue;
       for (const drawing of story.anchoredDrawings ?? []) visitDrawing(drawing);
       for (const fragment of story.fragments) visitBlock(fragment);
+    }
+  }
+  return keys;
+}
+
+export function collectUsedDrawingElementKeys(layout: SemanticLayout): ReadonlySet<string> {
+  const keys = new Set<string>();
+  const visitDrawing = (
+    pageIndex: number,
+    drawing: InlineDrawingRecord | AnchoredDrawingRecord
+  ): void => {
+    keys.add(`p${pageIndex}|${drawing.drawingNodeId}`);
+  };
+  const visitBlock = (
+    pageIndex: number,
+    block: ParagraphFragmentRecord | TableFragmentRecord
+  ): void => {
+    if (block.kind === 'table') {
+      for (const row of block.rows) {
+        for (const cell of row.cells) {
+          for (const inner of cell.blocks) visitBlock(pageIndex, inner);
+        }
+      }
+      return;
+    }
+    for (const line of block.lines) {
+      for (const drawing of line.drawings ?? []) visitDrawing(pageIndex, drawing);
+    }
+  };
+  for (const page of layout.pages) {
+    for (const drawing of page.anchoredDrawings ?? []) visitDrawing(page.index, drawing);
+    for (const fragment of page.fragments) visitBlock(page.index, fragment);
+    for (const story of [page.header, page.footer]) {
+      if (!story) continue;
+      for (const drawing of story.anchoredDrawings ?? []) visitDrawing(page.index, drawing);
+      for (const fragment of story.fragments) visitBlock(page.index, fragment);
     }
   }
   return keys;
