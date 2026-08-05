@@ -5182,6 +5182,39 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-destructive);
 }
 
+/* Delete appears on the ONE node it deletes, when the pointer is on that node.
+   `visibility`, not `opacity` or `display`: hidden has to mean unclickable — an invisible
+   button that still takes a click is worse than a visible one — while the space stays
+   reserved, so the head row does not reflow as the pointer crosses it. */
+.docx-review__action[data-testid='review-delete'] {
+  visibility: hidden;
+}
+
+/* A reply reveals its OWN control. Scoped through the reply's head so a reply cannot reveal
+   the control belonging to the comment it answers. */
+.docx-review__reply:hover > .docx-review__head [data-testid='review-delete'],
+.docx-review__reply:focus-within > .docx-review__head [data-testid='review-delete'] {
+  visibility: visible;
+}
+
+/* And the card reveals its own — `>` for the card's own head, and the `:has()` guard so
+   hovering a nested reply does not light up its parent's control as well. Two identical
+   trash icons offered at once is how a reader deletes the wrong one. */
+.docx-review__card:hover:not(:has(.docx-review__reply:hover))
+  > .docx-review__head
+  [data-testid='review-delete'],
+.docx-review__card:focus-within:not(:has(.docx-review__reply:focus-within))
+  > .docx-review__head
+  [data-testid='review-delete'] {
+  visibility: visible;
+}
+
+/* Keyboard reach. A control revealed only by a pointer is a control a keyboard user cannot
+   operate, and this one carries an `aria-label` precisely because it is meant to be reachable. */
+.docx-review__action[data-testid='review-delete']:focus-visible {
+  visibility: visible;
+}
+
 .docx-review__summary {
   display: flex;
   flex-direction: column;

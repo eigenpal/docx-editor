@@ -87,7 +87,9 @@ Each card is a compound you can take apart:
 
 Every part takes `className`, `asChild`, and `hidden`. The action parts (`Accept`, `Reject`, `Delete`, `Reply`) also take `icon`.
 
-`Delete` is the destructive one, and it is on both kinds of card: on a comment it deletes the thread, and on a tracked change it discards the suggestion. It shows only on the OPEN card — a rail where every card offers to throw a remark away invites clicking one by mistake — and it is absent on a card with nothing to discard. `Replies` draws one per reply as well, so a single answer can be taken back without deleting the conversation it belongs to.
+`Delete` is the destructive one, and it is on both kinds of card: on a comment it deletes the thread, and on a tracked change it discards the suggestion. `Replies` draws one per reply as well, so a single answer can be taken back without deleting the conversation it belongs to. It is absent on a card with nothing to discard.
+
+The stylesheet reveals it on hover of the one node it deletes, and on keyboard focus — a rail where every card offers to throw a remark away invites clicking one by mistake, and a reply that lit up its parent's control at the same time is how a reader deletes the wrong one. Restyle it like any other part; if you want it always visible, `visibility: visible` on `[data-testid='review-delete']` is the whole override.
 
 ## Choosing what the sidebar shows
 

@@ -54,14 +54,6 @@ import { useReview, type ReviewItemView } from './useReview';
 const ReviewContext = createContext<ReviewRailValue | null>(null);
 /** The card being rendered, so every part inside it reads one item. */
 const ReviewItemContext = createContext<ReviewItemView | null>(null);
-/**
- * Whether the surrounding CARD is the open one.
- *
- * Separate from `entry.isActive`, because a nested reply is never the active item — the thread
- * it belongs to is — and its controls have to appear and disappear with the card it is drawn
- * in, not with itself. Read by anything that shows only while a card is open.
- */
-const ReviewCardOpenContext = createContext<boolean | null>(null);
 
 /**
  * The review item the surrounding card (or balloon) renders, or null outside one.
@@ -1372,19 +1364,11 @@ function ReviewCard({ className, asChild, hidden, children }: ReviewPartProps) {
     },
   };
 
-  if (asChild) {
-    return (
-      <ReviewCardOpenContext.Provider value={entry.isActive}>
-        <Slot {...shared}>{children}</Slot>
-      </ReviewCardOpenContext.Provider>
-    );
-  }
+  if (asChild) return <Slot {...shared}>{children}</Slot>;
   return (
-    <ReviewCardOpenContext.Provider value={entry.isActive}>
-      <div {...shared}>
-        <ReviewCardPreset>{children}</ReviewCardPreset>
-      </div>
-    </ReviewCardOpenContext.Provider>
+    <div {...shared}>
+      <ReviewCardPreset>{children}</ReviewCardPreset>
+    </div>
   );
 }
 ReviewCard.docxReviewPart = 'Card' as const;
@@ -1692,23 +1676,25 @@ ReviewReject.docxReviewPart = 'Reject' as const;
  * Absent, not disabled, on a card with nothing to discard — a custom node's, or a revision kind
  * the engine cannot resolve.
  *
- * Shown only on the OPEN card, unlike accept and reject. A rail of twenty cards each carrying a
- * standing invitation to delete somebody's remark reads as an invitation to click one by
- * mistake, and the reader has to open a card to be sure which words it is about anyway. Inside
- * a card the whole thread follows the card, replies included — a nested reply is never itself
- * the active item.
+ * Revealed on HOVER of the one thing it deletes, and on keyboard focus — the stylesheet owns
+ * that, not this component. A rail of twenty cards each carrying a standing invitation to
+ * delete somebody's remark reads as an invitation to click one by mistake; scoping it to the
+ * node under the pointer also means a reply and the comment it answers never offer two
+ * identical buttons at once, which is the state that makes a reader delete the wrong one.
+ *
+ * CSS rather than an `isActive` gate because a reply is never itself the active item, and
+ * because requiring the reader to open a card before they can be rid of it is a step with
+ * nothing behind it. `visibility`, not `opacity`: hidden must also mean unclickable, and the
+ * space stays reserved so the row does not jump as the pointer crosses it.
  *
  * @public
  */
 function ReviewDelete({ className, asChild, hidden, children, icon: glyph }: ReviewActionProps) {
   const { review } = useRail();
   const entry = useContext(ReviewItemContext);
-  const cardOpen = useContext(ReviewCardOpenContext);
   const { t } = useTranslation();
   if (hidden || !entry || entry.kind === 'custom') return null;
   if (entry.kind === 'revision' && entry.readOnly) return null;
-  // Outside a card entirely — a host rendering this on its own — falls back to the item.
-  if (!(cardOpen ?? entry.isActive)) return null;
   const label = entry.kind === 'comment' ? t('review.deleteComment') : t('review.discardChange');
   const shared = {
     type: 'button' as const,

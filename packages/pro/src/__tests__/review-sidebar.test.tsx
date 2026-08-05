@@ -153,7 +153,7 @@ describe('the review sidebar', () => {
     expect(replies[0]!.textContent).toContain('Grace Hopper');
   });
 
-  test('a reply inside an open card can be deleted on its own', async () => {
+  test('a reply can be deleted on its own, and its control is scoped to the reply', async () => {
     let instance: DocxEditorInstance | null = null;
     const view = render(
       <DocxEditorRoot
@@ -178,12 +178,22 @@ describe('the review sidebar', () => {
       editor.setActiveReviewItem(editor.getReviewItems().find((i) => i.kind === 'revision')!.key);
     });
 
-    // TWO controls in one open card: the change's own, and the reply's. A nested reply is
-    // never itself the active item, so its control follows the CARD — and without one the
-    // only way to take back a reply was to delete the whole thread it hangs off.
+    // TWO controls, one per node: the change's own and the reply's. Without the reply's, the
+    // only way to take back a single answer was to delete the whole thread it hangs off.
+    //
+    // Both are always RENDERED; which one the reader can see is the stylesheet's business —
+    // each is revealed by hovering the node it deletes, and the selectors that do it are
+    // anchored on this structure. So the structure is what this asserts: the reply's control
+    // lives inside the reply, and the change's inside the card's own head.
     expect(view.getAllByTestId('review-reply')).toHaveLength(1);
     const controls = view.getAllByTestId('review-delete');
     expect(controls).toHaveLength(2);
+    const reply = view.getAllByTestId('review-reply')[0]!;
+    expect(reply.contains(controls[1]!)).toBe(true);
+    expect(reply.contains(controls[0]!)).toBe(false);
+    expect(controls[0]!.closest('.docx-review__head')?.parentElement).toBe(
+      view.getAllByTestId('review-card')[0]!
+    );
 
     // And CLICKING the reply keeps the change open rather than closing it: the reply covers
     // exactly the change's characters, so it wins the innermost test at the caret, and
@@ -221,16 +231,10 @@ describe('the review sidebar', () => {
       </DocxEditorRoot>
     );
     const editor = instance!;
-    // CLOSED, so no delete control: a rail of cards each carrying a standing invitation to
-    // throw somebody's remark away reads as an invitation to click one by mistake.
-    expect(view.queryAllByTestId('review-delete')).toHaveLength(0);
-    expect(view.getAllByTestId('review-card')).toHaveLength(1);
-
-    await act(async () => {
-      editor.setActiveReviewItem(editor.getReviewItems()[0]!.key);
-    });
     // The rail had accept and reject for a change and nothing at all for a comment, so a
-    // remark could be resolved but never removed. One control now sits on both kinds.
+    // remark could be resolved but never removed. One control now sits on both kinds, without
+    // the reader having to open the card first.
+    expect(view.getAllByTestId('review-card')).toHaveLength(1);
     expect(view.getAllByTestId('review-delete')).toHaveLength(1);
 
     await act(async () => {
