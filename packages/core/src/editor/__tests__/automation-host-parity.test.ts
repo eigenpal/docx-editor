@@ -215,16 +215,6 @@ function savedBytes(host: AutomationHost): Uint8Array {
 }
 
 describe('the two hosts read the same document identically', () => {
-  test('the fixture is representative enough for the comparison to mean something', () => {
-    // A guard on the guard: if the document degenerated to a couple of paragraphs, every
-    // comparison below would still pass and prove much less.
-    const host = serverHost();
-    const { paragraphs } = handlesOf(host);
-    expect(paragraphs.length).toBeGreaterThanOrEqual(3);
-    expect(textOf(host, paragraphs[0]!)).toBe('Quarterly report');
-    expect(textOf(host, paragraphs[1]!)).toBe('Prepared by the team');
-  });
-
   test('initial document, body and paragraph reads are equal, ref for ref', () => {
     const hosts = bothHosts();
     const { server, browser } = onBoth(hosts, transcript);

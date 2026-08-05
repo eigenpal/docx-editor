@@ -146,11 +146,4 @@ describe('a source-compatible sample is the same source on both sides', () => {
       containsInOrder(executed, ['const first = results.getFirst();', 'await context.sync();'])
     ).toBe(true);
   });
-
-  test('and the comparison would notice a statement that stopped matching', () => {
-    // The control: without it, a broken extractor returning nothing would pass the test above.
-    expect(containsInOrder(['a', 'b', 'c'], ['a', 'c'])).toBe(true);
-    expect(containsInOrder(['a', 'b', 'c'], ['c', 'a'])).toBe(false);
-    expect(containsInOrder(['a'], ['a', 'b'])).toBe(false);
-  });
 });

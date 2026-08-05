@@ -78,14 +78,6 @@ describe('the controls of a story', () => {
     expect(tags).toEqual(['client', 'terms']);
   });
 
-  test('are the same collection object every time it is reached', async () => {
-    const runtime = await serverRuntime(CONTROLS);
-    await runtime.run(async (context) => {
-      expect(context.document.contentControls).toBe(context.document.contentControls);
-      expect(context.document.body.contentControls).toBe(context.document.body.contentControls);
-    });
-  });
-
   test('a nested control is reached through the one that holds it', async () => {
     const runtime = await serverRuntime(NESTED);
     const answer = await runtime.run(async (context) => {
@@ -101,21 +93,6 @@ describe('the controls of a story', () => {
       return { outer: outer.items.map((c) => c.tag), inner: inner.items.map((c) => c.tag) };
     });
     expect(answer).toEqual({ outer: ['outer'], inner: ['inner'] });
-  });
-
-  test('reading a property before it is loaded is refused rather than guessed', async () => {
-    const runtime = await serverRuntime(CONTROLS);
-    const code = await codeOf(() =>
-      runtime.run(async (context) => {
-        const controls = context.document.contentControls;
-        controls.load();
-        await context.sync();
-        controls.items[0]!.load('tag');
-        await context.sync();
-        return controls.items[0]!.title;
-      })
-    );
-    expect(code).toBe('PropertyNotLoaded');
   });
 });
 

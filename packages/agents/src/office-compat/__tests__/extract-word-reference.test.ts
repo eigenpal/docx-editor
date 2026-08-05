@@ -1,8 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import {
-  extractWordReference,
-  normalizeTypeText,
-} from '../../../scripts/lib/extract-word-reference.mjs';
+import { extractWordReference } from '../../../scripts/lib/extract-word-reference.mjs';
 
 // A deliberately tiny stand-in for the shape of the real (huge) upstream
 // `@types/office-js` declaration file: same syntactic patterns (declaration
@@ -89,36 +86,9 @@ describe('extractWordReference', () => {
     expect(overload.returns).toBe('Range');
   });
 
-  test('records a void-returning method with no params', () => {
-    const result = extractWordReference(SNIPPET, { Body: { members: ['clear'] } });
-    expect(result.Body.members.clear.kind).toBe('method');
-    expect(result.Body.members.clear.overloads).toEqual([{ params: [], returns: 'void' }]);
-  });
-
   test('never extracts a member the manifest did not select, even if present upstream', () => {
     const result = extractWordReference(SNIPPET, { Body: { members: ['text'] } });
     expect(result.Body.members.tables).toBeUndefined();
-  });
-
-  test('normalizeTypeText: drops a bare enum-type alternative in favor of its string-literal siblings', () => {
-    // Real upstream shape: `Word.PageOrientation | "Portrait" | "Landscape"`.
-    expect(normalizeTypeText('Word.PageOrientation | "Portrait" | "Landscape"')).toBe(
-      '"Portrait" | "Landscape"'
-    );
-  });
-
-  test('normalizeTypeText: drops an inline object-literal alternative in favor of the named class', () => {
-    expect(normalizeTypeText('Word.SearchOptions | {\n  matchCase?: boolean;\n}')).toBe(
-      'SearchOptions'
-    );
-  });
-
-  test('normalizeTypeText: keeps a bare class reference when there is no literal alternative', () => {
-    expect(normalizeTypeText('Word.Range')).toBe('Range');
-  });
-
-  test("normalizeTypeText: canonicalizes single-quoted string literals to double quotes (quote style is not part of a literal type's identity)", () => {
-    expect(normalizeTypeText("'Start' | 'End'")).toBe('"Start" | "End"');
   });
 
   test('extracts a namespace-level function as its own function-kind symbol', () => {

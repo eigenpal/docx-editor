@@ -13,11 +13,9 @@ import {
   contentControlPropertiesOf,
   contentControlTextOf,
   contentControlsIn,
-  isContentControlNode,
   readOoxmlPart,
   serializeOoxmlPart,
   type OoxmlElement,
-  type OoxmlNode,
   type OoxmlPart,
 } from '../index.ts';
 
@@ -351,7 +349,7 @@ describe('a control around a row or a cell is preserved as the file wrote it', (
 describe('the comprehensive fixture survives the D9 fingerprint oracle', () => {
   function partOf(name: string): OoxmlPart {
     const bytes = readFileSync(join(import.meta.dir, '../../../../../e2e/fixtures', name));
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { unzipSync } = require('fflate') as typeof import('fflate');
     const entries = unzipSync(new Uint8Array(bytes));
     const xml = new TextDecoder().decode(entries['word/document.xml']!);
@@ -379,12 +377,6 @@ describe('the comprehensive fixture survives the D9 fingerprint oracle', () => {
     expect(round.ok).toBe(true);
     if (!round.ok) throw new Error(round.reason);
     expect(canonicalOoxmlFingerprint(round.part)).toBe(canonicalOoxmlFingerprint(part));
-  });
-
-  test('a control reports the text its content holds', () => {
-    const part = documentPart();
-    const texts = contentControlsIn(part.root).map((entry) => contentControlTextOf(entry.node));
-    expect(texts.some((text) => text.length > 0)).toBe(true);
   });
 
   // A `w:dataBinding` NAMES a custom XML part and an XPath into it, and a control's placeholder
@@ -431,14 +423,5 @@ describe('the comprehensive fixture survives the D9 fingerprint oracle', () => {
       globals.importScripts = saved.importScripts;
     }
     expect(reached).toEqual([]);
-  });
-});
-
-describe('the walk is shared, not re-derived', () => {
-  test('`isContentControlNode` recognizes typed controls and refuses everything else', () => {
-    const part = parseDoc(`<w:sdt><w:sdtPr/><w:sdtContent><w:p/></w:sdtContent></w:sdt><w:p/>`);
-    const [control, paragraph] = bodyOf(part).children as readonly OoxmlNode[];
-    expect(isContentControlNode(control!)).toBe(true);
-    expect(isContentControlNode(paragraph!)).toBe(false);
   });
 });

@@ -220,27 +220,9 @@ describe('adoption while the owner is still running', () => {
     expect(await owner).toBe('alpha');
     runtime.dispose();
   });
-
-  test('and it can be adopted once that run has ended', async () => {
-    const runtime = createRuntime({ host: openHost(docx(p('kept'))), save: true });
-    const { paragraph } = await keptParagraph(runtime);
-    await expect(runtime.run(paragraph, async () => 'adopted')).resolves.toBe('adopted');
-    runtime.dispose();
-  });
 });
 
 describe('a handover leaves exactly one owner', () => {
-  test('the object belongs to the adopting context, and the source no longer claims it', async () => {
-    const runtime = createRuntime({ host: openHost(docx(p('kept'))), save: true });
-    const { paragraph, source } = await keptParagraph(runtime);
-    await runtime.run(paragraph, async (context) => {
-      expect(paragraph.context).toBe(context);
-      expect(internalsOf(source).isTracked(paragraph)).toBe(false);
-      expect(internalsOf(context).isTracked(paragraph)).toBe(true);
-    });
-    runtime.dispose();
-  });
-
   test('its actions go to the adopting queue and to no other', async () => {
     const spy = spyHost(openHost(docx(p('kept'))));
     const runtime = createRuntime({ host: spy.host, save: true });

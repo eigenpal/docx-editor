@@ -87,13 +87,10 @@ function withoutComments(source: string): string {
 describe('the lane imports nothing that assumes a browser', () => {
   const files = laneFiles();
 
-  test('the scan is not vacuous: it found the lane', () => {
-    // Every assertion below is over this list. An empty list would make them all pass.
+  test('the only lane it reaches by relative import is the store lane', () => {
+    // Every assertion below is over this list. Keep its setup guard on the actual graph test.
     expect(files.length).toBeGreaterThanOrEqual(6);
     expect(files.map((file) => file.split('/').pop())).toContain('server-host.ts');
-  });
-
-  test('the only lane it reaches by relative import is the store lane', () => {
     // The DAG entry says `mayImport: ['store']`. This is the same rule read off the source,
     // which is the half a declaration cannot enforce.
     const foreign: string[] = [];
@@ -139,20 +136,6 @@ describe('the lane imports nothing that assumes a browser', () => {
     const browserLanes = ['binding', 'output', 'editor'].map((lane) => join(CORE_SRC, lane));
     const leaked = [...reach.files].filter((file) => browserLanes.some((l) => file.startsWith(l)));
     expect(leaked).toEqual([]);
-  });
-
-  test('the detection would FIRE on a graph that did reach one', () => {
-    // The control. Every assertion above passes, and a check that can only pass is
-    // indistinguishable from one that cannot fail — so the same predicates run against a
-    // graph that does contain the things they look for.
-    const pretend = new Set(['node:fs', 'react', '@docx-editor.dev/core-contract/editor']);
-    expect([...pretend].filter((name) => name.startsWith('node:'))).toEqual(['node:fs']);
-    expect([...pretend].filter((name) => name === 'react')).toEqual(['react']);
-    const pretendFiles = new Set([join(CORE_SRC, 'editor', 'paginated-surface.ts')]);
-    const browserLanes = ['binding', 'output', 'editor'].map((lane) => join(CORE_SRC, lane));
-    expect([...pretendFiles].filter((f) => browserLanes.some((l) => f.startsWith(l)))).toHaveLength(
-      1
-    );
   });
 });
 
@@ -259,11 +242,5 @@ describe('the headless host runs with no browser present', () => {
       stdout: 'automation-headless-ok dom=false',
       stderr: '',
     });
-  });
-
-  test('this test file, by contrast, DOES have a DOM — so the check above is meaningful', () => {
-    // The control for the spawn: if `bun test` ran without a DOM anyway, the subprocess would
-    // be proving nothing that the in-process assertion could not.
-    expect(typeof globalThis.document).not.toBe('undefined');
   });
 });

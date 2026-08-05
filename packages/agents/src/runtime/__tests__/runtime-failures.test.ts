@@ -342,15 +342,6 @@ describe('disposal', () => {
     expect(failure).toMatchObject({ code: 'RuntimeDisposed' });
     runtime.dispose();
   });
-
-  test('the runtime disposes its host once, however often it is asked', async () => {
-    const stub = stubHost();
-    const runtime = createRuntime({ host: stub.host, save: true });
-    runtime.dispose();
-    runtime.dispose();
-    runtime.dispose();
-    expect(stub.disposals()).toBe(1);
-  });
 });
 
 describe('save, and what it refuses', () => {

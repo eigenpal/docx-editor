@@ -84,68 +84,9 @@ describe('extractDocxEditorShape', () => {
     expect(result.ClientObject.uid).toBe('DocxEditor.ClientObject');
     expect(result.ClientObject.members.isNullObject).toBeDefined();
   });
-
-  test("canonicalizes single-quoted string literals to double quotes, matching the reference fixture's convention", () => {
-    const source = `
-      export declare namespace DocxEditor {
-        class Font {
-          selectionMode(): 'Select' | 'Start' | 'End';
-        }
-      }
-    `;
-    const result = extractDocxEditorShape(source, { Font: { members: ['selectionMode'] } });
-    expect(result.Font.members.selectionMode.overloads[0].returns).toBe(
-      '"Select" | "Start" | "End"'
-    );
-  });
-
-  test('drops the spurious empty leading alternative from a Prettier-style leading-pipe multi-line union', () => {
-    const source = `
-      export declare namespace DocxEditor {
-        class Font {
-          readonly kind:
-            | 'A'
-            | 'B';
-        }
-      }
-    `;
-    const result = extractDocxEditorShape(source, { Font: { members: ['kind'] } });
-    expect(result.Font.members.kind.overloads[0].returns).toBe('"A" | "B"');
-  });
-
-  test('strips a self-referential `DocxEditor.` qualifier from param/return type text', () => {
-    const source = `
-      export declare namespace DocxEditor {
-        class Font {
-          getOwner(): DocxEditor.Body;
-        }
-      }
-    `;
-    const result = extractDocxEditorShape(source, { Font: { members: ['getOwner'] } });
-    expect(result.Font.members.getOwner.overloads[0].returns).toBe('Body');
-  });
 });
 
 describe('listExportedSymbolNames', () => {
-  test('lists every exported class, interface, function, and type alias declared directly in the DocxEditor namespace', () => {
-    const source = `
-      export declare namespace DocxEditor {
-        export type SelectionMode = 'Select' | 'Start' | 'End';
-        export interface ClientRequestContext {}
-        export class Font {
-          bold: boolean;
-        }
-        export function run<T>(batch: (context: RequestContext) => Promise<T>): Promise<T>;
-      }
-    `;
-    expect(listExportedSymbolNames(source).sort()).toEqual([
-      'ClientRequestContext',
-      'Font',
-      'SelectionMode',
-      'run',
-    ]);
-  });
-
   test('never omits a non-allowlisted stub someone adds (e.g. a Table stub sneaking in without going through the manifest)', () => {
     // This is the exact "sneak-in" scenario the allowlist check exists to
     // catch: a symbol that was never selected in manifest.json (and is

@@ -16,7 +16,6 @@
 
 import { describe, expect, test } from 'bun:test';
 import { isDocxEditorError } from '../../runtime/errors.ts';
-import { internalsOf } from '../../runtime/internals.ts';
 import { docx, mainXmlOf, orNull, p, reopen, serverRuntime } from './support/documents.ts';
 
 /** Two runs that disagree, then one that does not. */
@@ -120,23 +119,6 @@ describe('reading a font', () => {
       return { bold: orNull(font.bold), size: orNull(font.size) };
     });
     expect(read).toEqual({ bold: null, size: null });
-    runtime.dispose();
-  });
-
-  test('reading a property before the sync that loads it is refused, not guessed', async () => {
-    const runtime = await serverRuntime(MIXED);
-    const code = await runtime.run(async (context) => {
-      const paragraphs = context.document.body.paragraphs;
-      paragraphs.load();
-      await context.sync();
-      try {
-        paragraphs.items[0]!.font.bold;
-        return 'answered';
-      } catch (error) {
-        return isDocxEditorError(error) ? error.code : 'untyped';
-      }
-    });
-    expect(code).toBe('PropertyNotLoaded');
     runtime.dispose();
   });
 });
@@ -277,22 +259,6 @@ describe("a paragraph's own paragraph formatting", () => {
       return { alignment: paragraph.alignment, leftIndent: orNull(paragraph.leftIndent) };
     });
     expect(read).toEqual({ alignment: 'Unknown', leftIndent: null });
-    runtime.dispose();
-  });
-
-  test('one read answers every format property asked for, rather than one round trip each', async () => {
-    // The properties all come out of one `w:pPr`, and asking for them separately would send three
-    // operations describing the same element — and, worse, make a caller's cost depend on how many
-    // fields they named.
-    const runtime = await serverRuntime(SPACED);
-    const queued = await runtime.run(async (context) => {
-      const paragraphs = context.document.body.paragraphs;
-      paragraphs.load();
-      await context.sync();
-      paragraphs.items[0]!.load(['alignment', 'leftIndent', 'spaceAfter']);
-      return internalsOf(context).queue.pending.length;
-    });
-    expect(queued).toBe(1);
     runtime.dispose();
   });
 

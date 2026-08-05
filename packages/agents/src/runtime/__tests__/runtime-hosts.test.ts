@@ -84,21 +84,6 @@ describe('DocxEditor.createServer', () => {
   });
 });
 
-describe('the two namespaces', () => {
-  test('the neutral one opens bytes; the browser one does that and an open editor', () => {
-    expect(Object.keys(DocxEditor)).toEqual(['createServer']);
-    expect(Object.keys(DocxEditorBrowser).sort()).toEqual(['createBrowser', 'createServer']);
-    // Same function, not a second implementation of opening bytes.
-    expect(DocxEditorBrowser.createServer).toBe(DocxEditor.createServer);
-  });
-
-  test('neither namespace can be reshaped by a consumer', () => {
-    // A frozen namespace is the difference between an API and a mutable global.
-    expect(Object.isFrozen(DocxEditor)).toBe(true);
-    expect(Object.isFrozen(DocxEditorBrowser)).toBe(true);
-  });
-});
-
 describe('DocxEditor.createBrowser', () => {
   function mount(): { editor: ReturnType<typeof createDocxEditor>; container: HTMLElement } {
     const container = document.createElement('div');

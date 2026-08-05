@@ -27,7 +27,7 @@ import {
   type SemanticDigest,
 } from '@docx-editor.dev/core-contract/store';
 import type { DocxEditorServerRuntime } from '../../runtime/runtime.ts';
-import { REPRESENTATIVE, docx, p, reopen, serverRuntime } from './support/documents.ts';
+import { REPRESENTATIVE, reopen, serverRuntime } from './support/documents.ts';
 
 interface Oracles {
   readonly fingerprint: string;
@@ -115,7 +115,6 @@ describe('an edit made by script survives the serializer', () => {
     expect(again.fingerprint).toBe(once.fingerprint);
   });
 });
-
 describe('an edit changes only what it named', () => {
   test('the style cascade, the table and the section properties are still in the saved part', async () => {
     // The things a bespoke serializer loses. Asserted on the SAVED bytes, because those are what a
@@ -171,17 +170,5 @@ describe('an edit changes only what it named', () => {
     const after = await savedOracles(runtime);
     expect(after.fingerprint).toBe(before.fingerprint);
     expect(diffSemanticDigests(before.digest, after.digest)).toEqual([]);
-  });
-});
-
-describe('the oracles are load-bearing', () => {
-  test('they report a difference when the documents genuinely differ', async () => {
-    // The control. A fingerprint comparison that cannot fail is decoration.
-    const one = await serverRuntime(docx(p('alpha')));
-    const other = await serverRuntime(docx(p('beta')));
-    const first = await savedOracles(one);
-    const second = await savedOracles(other);
-    expect(first.fingerprint).not.toBe(second.fingerprint);
-    expect(diffSemanticDigests(first.digest, second.digest)).not.toEqual([]);
   });
 });

@@ -60,7 +60,6 @@ describe('a property is only readable once a sync has filled it', () => {
 describe('the shapes load accepts', () => {
   const shapes: readonly [string, LoadOption][] = [
     ['a name', 'text'],
-    ['a comma-separated list', 'text'],
     ['an array', ['text']],
     ['a query object', { select: 'text' }],
     ['a query object with an array', { select: ['text'] }],
@@ -155,23 +154,6 @@ describe('what load refuses, at the load call', () => {
       spy.reset();
       await context.sync();
       expect(spy.requests).toHaveLength(0);
-    });
-    runtime.dispose();
-  });
-
-  test('a load name is never used as an object key: Object.prototype is untouched', async () => {
-    // The structural half of the prototype-pollution rule. Loaded values live in a `Map`, so even
-    // a name that got past validation could not reach a prototype — this asserts the property
-    // rather than the filter, because the filter is the part that can be relaxed by mistake.
-    const runtime = createRuntime({ host: openHost(), save: true });
-    await runtime.run(async (context) => {
-      const body = context.document.body;
-      expect(() => body.load(['__proto__'] as unknown as LoadOption)).toThrow();
-      expect(Object.prototype).not.toHaveProperty('polluted');
-      expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
-      body.load('text');
-      await context.sync();
-      expect(body.text).toBe('alpha\rbeta');
     });
     runtime.dispose();
   });

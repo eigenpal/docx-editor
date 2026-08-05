@@ -60,6 +60,18 @@ describe('the root entry', () => {
     expect(expected.length).toBeGreaterThan(20);
   });
 
+  test('exports model classes as runtime values from both entries', () => {
+    const classes = Object.entries(model)
+      .filter(([, value]) => typeof value === 'function')
+      .map(([name]) => name);
+
+    expect(classes.length).toBeGreaterThan(20);
+    for (const name of classes) {
+      expect(typeof (root as Record<string, unknown>)[name]).toBe('function');
+      expect(typeof (browser as Record<string, unknown>)[name]).toBe('function');
+    }
+  });
+
   test('exports nothing that served a removed surface', () => {
     expect(REMOVED.filter((name) => name in root)).toEqual([]);
   });

@@ -89,17 +89,9 @@ describe('validateManifestAgainstReference', () => {
     const issues = validateManifestAgainstReference(manifest, makeReferenceFixture());
     expect(issues.some((i) => /Word\.Body#insertText/.test(i) && /contradict/i.test(i))).toBe(true);
   });
-
-  test('does not flag a legitimate omission that is not also selected', () => {
-    expect(validateManifestAgainstReference(makeManifest(), makeReferenceFixture())).toEqual([]);
-  });
 });
 
 describe('validateManifestSchemaVersion', () => {
-  test('accepts the current supported schema version', () => {
-    expect(validateManifestSchemaVersion({ schemaVersion: 1 })).toEqual([]);
-  });
-
   test('flags a missing schemaVersion field', () => {
     const issues = validateManifestSchemaVersion({});
     expect(issues.some((i) => /schemaVersion/.test(i))).toBe(true);

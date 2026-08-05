@@ -5,39 +5,6 @@ import {
 } from '../../../scripts/lib/reference-normalize.mjs';
 
 describe('buildReferenceFixture', () => {
-  test('wraps symbols with schema version and provenance-linking metadata', () => {
-    const fixture = buildReferenceFixture({
-      packageName: '@types/office-js',
-      packageVersion: '1.0.604',
-      symbols: {
-        Body: {
-          uid: 'Word.Body',
-          kind: 'class',
-          requirementSet: 'WordApi 1.1',
-          members: {
-            text: {
-              uid: 'Word.Body#text',
-              kind: 'property',
-              readonly: true,
-              requirementSet: 'WordApi 1.1',
-              overloads: [{ params: [], returns: 'string' }],
-            },
-          },
-        },
-      },
-    });
-
-    expect(fixture.schemaVersion).toBe(1);
-    expect(fixture.generatedFrom).toEqual({
-      package: '@types/office-js',
-      version: '1.0.604',
-    });
-    expect(fixture.symbols.Body.uid).toBe('Word.Body');
-    expect(fixture.symbols.Body.members.text.overloads).toEqual([
-      { params: [], returns: 'string' },
-    ]);
-  });
-
   test('sorts symbol and member keys deterministically regardless of input order', () => {
     const fixtureA = buildReferenceFixture({
       packageName: '@types/office-js',

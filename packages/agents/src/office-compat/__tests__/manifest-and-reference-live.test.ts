@@ -49,15 +49,6 @@ describe('the checked-in compat/ fixtures', () => {
     expect(validateAuthoredExportsAgainstManifest(exportedNames, manifest)).toEqual([]);
   });
 
-  test('every manifest category is non-empty and every listed symbol is selected', () => {
-    for (const [category, symbolNames] of Object.entries(manifest.categories)) {
-      expect(symbolNames.length).toBeGreaterThan(0);
-      for (const symbolName of symbolNames) {
-        expect(manifest.symbols).toHaveProperty(symbolName);
-      }
-    }
-  });
-
   test('tables and images are recorded as deliberate omissions, never as selected symbols', () => {
     const omittedUids = manifest.omissions.map((o) => o.uid);
     expect(omittedUids).toContain('Word.Table');

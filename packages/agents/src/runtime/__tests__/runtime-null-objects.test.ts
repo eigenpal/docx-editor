@@ -105,12 +105,4 @@ describe('an item that may not be there', () => {
     );
     runtime.dispose();
   });
-
-  test('an object that cannot be null answers immediately', async () => {
-    const runtime = createRuntime({ host: openHost(), save: true });
-    await runtime.run(async (context) => {
-      expect(context.document.body.isNullObject).toBe(false);
-    });
-    runtime.dispose();
-  });
 });

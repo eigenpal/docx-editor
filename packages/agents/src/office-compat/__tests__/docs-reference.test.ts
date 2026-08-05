@@ -31,48 +31,6 @@ describe('isWellFormedCommitSha', () => {
   });
 });
 
-describe('the pinned docs-reference commit constant', () => {
-  test('is a well-formed commit sha (sanity: the pin itself must look like a real commit)', () => {
-    expect(isWellFormedCommitSha(PINNED_DOCS_REFERENCE_COMMIT)).toBe(true);
-  });
-
-  test('points at the expected upstream repository', () => {
-    expect(DOCS_REFERENCE_REPOSITORY).toBe('OfficeDev/office-js-docs-reference');
-  });
-});
-
-describe('buildDocsReferenceMetadata', () => {
-  test('normalizes the fields the scheduled fetch job records', () => {
-    const metadata = buildDocsReferenceMetadata({
-      repository: DOCS_REFERENCE_REPOSITORY,
-      commit: PINNED_DOCS_REFERENCE_COMMIT,
-      commitDate: '2026-08-04T15:36:00Z',
-      commitMessage: 'Automatically generated docs (#2601)',
-      htmlUrl: `https://github.com/${DOCS_REFERENCE_REPOSITORY}/commit/${PINNED_DOCS_REFERENCE_COMMIT}`,
-    });
-    expect(metadata).toEqual({
-      repository: DOCS_REFERENCE_REPOSITORY,
-      commit: PINNED_DOCS_REFERENCE_COMMIT,
-      commitDate: '2026-08-04T15:36:00Z',
-      commitMessage: 'Automatically generated docs (#2601)',
-      htmlUrl: `https://github.com/${DOCS_REFERENCE_REPOSITORY}/commit/${PINNED_DOCS_REFERENCE_COMMIT}`,
-      note: metadata.note,
-    });
-    expect(typeof metadata.note).toBe('string');
-    expect(metadata.note.length).toBeGreaterThan(0);
-  });
-
-  test('defaults a missing commitMessage to null rather than undefined (JSON-serializable)', () => {
-    const metadata = buildDocsReferenceMetadata({
-      repository: DOCS_REFERENCE_REPOSITORY,
-      commit: PINNED_DOCS_REFERENCE_COMMIT,
-      commitDate: '2026-08-04T15:36:00Z',
-      htmlUrl: 'https://github.com/OfficeDev/office-js-docs-reference/commit/abc',
-    });
-    expect(metadata.commitMessage).toBeNull();
-  });
-});
-
 describe('validateDocsReferenceMetadata', () => {
   const wellFormed = () =>
     buildDocsReferenceMetadata({

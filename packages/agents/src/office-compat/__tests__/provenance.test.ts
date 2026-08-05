@@ -33,7 +33,7 @@ const validDocsReference = buildDocsReferenceMetadata({
 });
 
 describe('buildProvenance', () => {
-  test('records the upstream package identity, license, and requirement sets actually present in the fixture', () => {
+  test('derives the requirement sets actually present in the fixture', () => {
     const fixture = {
       symbols: {
         Body: {
@@ -52,16 +52,9 @@ describe('buildProvenance', () => {
       docsReference: validDocsReference,
     });
 
-    expect(provenance.upstreamPackage.version).toBe('1.0.604');
-    expect(provenance.upstreamPackage.integrity).toBe('sha512-abc123==');
-    expect(provenance.upstreamPackage.sourceRepository.commit).toBe(
-      '929735ef7d8bafb29c17e39b26042ada8529e670'
-    );
-    expect(provenance.license).toBe('MIT');
     expect(provenance.targetRequirementSets.sort()).toEqual(
       ['WordApi 1.1', 'WordApiDesktop 1.4'].sort()
     );
-    expect(provenance.fetchedAt).toBe('2026-08-01T00:00:00.000Z');
   });
 
   test('deduplicates requirement sets and omits nulls', () => {

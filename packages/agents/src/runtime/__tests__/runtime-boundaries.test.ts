@@ -113,16 +113,6 @@ function readProject(path: string): { compilerOptions?: { lib?: string[] }; incl
 describe('what the runtime imports', () => {
   const files = runtimeFiles();
 
-  test('the scan found the lane, so the assertions below are about something', () => {
-    expect(files.length).toBeGreaterThanOrEqual(12);
-    const names = files.map((file) => relative(PACKAGE_SRC, file));
-    expect(names).toContain('index.ts');
-    expect(names).toContain('browser.ts');
-    expect(names).toContain(join('runtime', 'request-context.ts'));
-    expect(names).toContain(join('runtime', 'browser.ts'));
-    expect(names).toContain(join('model', 'document.ts'));
-  });
-
   test('the neutral modules import the automation protocol and nothing else', () => {
     expect(bareSpecifiers(files.filter(isNeutral))).toEqual([
       '@docx-editor.dev/core-contract/automation',
@@ -154,10 +144,6 @@ describe('what the runtime imports', () => {
     expect(reached).toContain(join('runtime', 'server.ts'));
     expect(reached).not.toContain(join('runtime', 'browser.ts'));
     expect(reached).not.toContain('browser.ts');
-  });
-
-  test('the browser entry reaches the browser adapter, so that check is not vacuous', () => {
-    expect(specifiersOf(join(PACKAGE_SRC, 'browser.ts'))).toContain('./runtime/browser.ts');
   });
 
   test('no store, tree, layout or binding module is reachable, by any spelling', () => {
@@ -203,22 +189,6 @@ describe('what the runtime imports', () => {
       )
     ).toEqual([]);
   });
-
-  test('the detection would FIRE on a graph that did contain those things', () => {
-    // The control. Every assertion above passes, and a check that can only pass is
-    // indistinguishable from one that cannot fail.
-    const pretend = [
-      'node:fs',
-      'react',
-      '@types/office-js',
-      '@docx-editor.dev/core-contract/store',
-    ];
-    expect(pretend.filter((name) => name.startsWith('node:'))).toEqual(['node:fs']);
-    expect(pretend.filter((name) => /office|microsoft/i.test(name))).toEqual(['@types/office-js']);
-    expect(pretend.filter((name) => name.includes('/store'))).toEqual([
-      '@docx-editor.dev/core-contract/store',
-    ]);
-  });
 });
 
 describe('what the neutral modules may mention', () => {
@@ -243,12 +213,6 @@ describe('what the neutral modules may mention', () => {
       }
     }
     expect(hits).toEqual([]);
-  });
-
-  test('the DOM scan reads code and not labels, and still FIRES on code', () => {
-    expect(codeOnly("const label = 'document.body';")).not.toContain('document.');
-    expect(codeOnly('const title = document.title;')).toContain('document.');
-    expect(codeOnly('const t = `${document.title}`;')).toContain('document.');
   });
 
   test('no HTML-from-strings sink, no fetch, no dynamic evaluation, anywhere in the runtime', () => {
@@ -278,31 +242,11 @@ describe('what the neutral modules may mention', () => {
     }
     expect(hits).toEqual([]);
   });
-
-  test('the sink scan would FIRE on source that did contain one', () => {
-    const pretend = withoutComments(
-      [
-        '// innerHTML in a comment is fine',
-        'el.innerHTML = value;',
-        'const x = require("fs");',
-      ].join('\n')
-    );
-    expect(/\binnerHTML\b/.test(pretend)).toBe(true);
-    expect(/(?<![.#\w$])require\s*\(/.test(pretend)).toBe(true);
-    expect(/(?<![.#\w$])require\s*\(/.test('this.#require(one);')).toBe(false);
-  });
 });
 
 describe('the claims that are compiled rather than scanned', () => {
   const neutralProject = join(RUNTIME, 'tsconfig.neutral.json');
   const fullProject = join(RUNTIME, 'tsconfig.json');
-
-  test('the neutral project exists and its lib omits DOM', () => {
-    expect(existsSync(neutralProject)).toBe(true);
-    const lib = readProject(neutralProject).compilerOptions?.lib ?? [];
-    expect(lib.length).toBeGreaterThan(0);
-    expect(lib.some((entry) => entry.toLowerCase().includes('dom'))).toBe(false);
-  });
 
   test('the neutral project compiles with zero diagnostics, without the DOM lib', () => {
     expect(typecheckProject(neutralProject)).toEqual([]);

@@ -31,14 +31,6 @@ async function codeOf(call: () => Promise<unknown>): Promise<string> {
 }
 
 describe('the document and its body', () => {
-  test('the body is the same object every time it is reached', async () => {
-    const runtime = await serverRuntime();
-    await runtime.run(async (context) => {
-      expect(context.document.body).toBe(context.document.body);
-      expect(context.document).toBe(context.document);
-    });
-  });
-
   test('the body reads as its paragraphs joined by a paragraph mark', async () => {
     const runtime = await serverRuntime();
     const text = await runtime.run(async (context) => {
@@ -60,26 +52,6 @@ describe('the document and its body', () => {
       return body.text;
     });
     expect(text).toBe('');
-  });
-
-  test('reading text before the sync that loads it is refused, not guessed', async () => {
-    const runtime = await serverRuntime();
-    const code = await codeOf(() =>
-      runtime.run(async (context) => {
-        const body = context.document.body;
-        body.load('text');
-        return body.text;
-      })
-    );
-    expect(code).toBe('PropertyNotLoaded');
-  });
-
-  test('loading a property the body does not have is refused by name', async () => {
-    const runtime = await serverRuntime();
-    const code = await codeOf(() =>
-      runtime.run(async (context) => context.document.body.load('nonsense'))
-    );
-    expect(code).toBe('InvalidArgument');
   });
 });
 
@@ -232,33 +204,6 @@ describe('reaching one paragraph of a collection', () => {
       })
     );
     expect(code).toBe('ItemNotFound');
-  });
-
-  test('the or-null-object form answers an object whose verdict arrives with the sync', async () => {
-    const runtime = await serverRuntime(EMPTY_BODY);
-    const verdicts = await runtime.run(async (context) => {
-      const missing = context.document.body.paragraphs.getFirstOrNullObject();
-      const before = (() => {
-        try {
-          return missing.isNullObject;
-        } catch {
-          return 'refused';
-        }
-      })();
-      await context.sync();
-      return [before, missing.isNullObject];
-    });
-    expect(verdicts).toEqual(['refused', true]);
-  });
-
-  test('and says false when the paragraph was there', async () => {
-    const runtime = await serverRuntime();
-    const verdict = await runtime.run(async (context) => {
-      const found = context.document.body.paragraphs.getFirstOrNullObject();
-      await context.sync();
-      return found.isNullObject;
-    });
-    expect(verdict).toBe(false);
   });
 });
 

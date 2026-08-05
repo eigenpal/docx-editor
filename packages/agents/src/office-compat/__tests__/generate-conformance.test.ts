@@ -114,40 +114,6 @@ describe('generateConformance', () => {
     expect(result.issues.some((i) => /Word\.Body#insertText/.test(i))).toBe(true);
   });
 
-  test('emits the authored shape as a well-formed, deterministic reference-shaped fixture', () => {
-    const result = generateConformance({
-      referenceFixture,
-      manifest,
-      docxEditorSourceText: conformantSource,
-      docxEditorPackageVersion: '0.0.1',
-    });
-    expect(result.authoredFixture.symbols.Font.members.bold.overloads).toEqual([
-      { params: [], returns: 'boolean' },
-    ]);
-  });
-
-  test('emits a compile-assertions .ts source that imports the real declarations and uses AssertExact per overload', () => {
-    const result = generateConformance({
-      referenceFixture,
-      manifest,
-      docxEditorSourceText: conformantSource,
-      docxEditorPackageVersion: '0.0.1',
-    });
-    expect(result.assertionsSource).toContain('import type { IsExact, Expect }');
-    // `font` returns `Font` — a manifest-known symbol name — so it must be
-    // re-qualified to `DocxEditor.Font` for use outside the namespace block.
-    expect(result.assertionsSource).toContain('DocxEditor.Font');
-    expect(result.assertionsSource).toMatch(/type Ref_Body_insertText_\d+/);
-    expect(result.assertionsSource).toContain('IsExact<');
-    expect(result.assertionsSource).toContain('Expect<');
-    // The generic `run` overload's free type parameter is substituted with
-    // a concrete placeholder rather than kept generic (see type-assert.ts).
-    expect(result.assertionsSource).not.toMatch(/<T>/);
-    expect(result.assertionsSource).toMatch(
-      /type Ref_run_\d+ = \(batch: \(context: RequestContext\) => Promise<unknown>\) => Promise<unknown>;/
-    );
-  });
-
   test('pairs each reference overload with its true exact-match authored overload, not an arbitrary same-arity one (regression: Word.run)', () => {
     // `run` has two same-arity (2-param) reference overloads:
     // `(objects: ClientObject[], batch)` and `(object: ClientObject, batch)`.

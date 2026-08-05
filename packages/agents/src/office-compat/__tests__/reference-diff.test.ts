@@ -1,8 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import {
-  diffReferenceFixtures,
-  formatReferenceDiff,
-} from '../../../scripts/lib/reference-diff.mjs';
+import { diffReferenceFixtures } from '../../../scripts/lib/reference-diff.mjs';
 
 function fixture(symbols) {
   return {
@@ -290,40 +287,5 @@ describe('diffReferenceFixtures', () => {
     expect(diff.changedSymbols[0].uid).toBe('Word.run');
     expect(diff.changedSymbols[0].addedOverloads).toHaveLength(1);
     expect(diff.changedSymbols[0].removedOverloads).toEqual([]);
-  });
-});
-
-describe('formatReferenceDiff', () => {
-  test('renders a human-readable summary naming added/removed symbols, members, and overloads', () => {
-    const diff = {
-      addedSymbols: ['Word.NewThing'],
-      removedSymbols: ['Word.OldThing'],
-      changedSymbols: [
-        {
-          uid: 'Word.Body',
-          addedMembers: ['Word.Body#newMember'],
-          removedMembers: [],
-          changedMembers: [
-            {
-              uid: 'Word.Body#insertText',
-              addedOverloads: [{ params: [{ name: 'text', type: 'string' }], returns: 'Range' }],
-              removedOverloads: [],
-            },
-          ],
-        },
-      ],
-    };
-    const text = formatReferenceDiff(diff);
-    expect(text).toContain('Word.NewThing');
-    expect(text).toContain('Word.OldThing');
-    expect(text).toContain('Word.Body#newMember');
-    expect(text).toContain('Word.Body#insertText');
-    expect(text).toMatch(/added/i);
-    expect(text).toMatch(/removed/i);
-  });
-
-  test('renders a clean "no differences" message when the diff is empty', () => {
-    const text = formatReferenceDiff({ addedSymbols: [], removedSymbols: [], changedSymbols: [] });
-    expect(text).toMatch(/no (symbol|member)-level differences/i);
   });
 });

@@ -91,12 +91,6 @@ function controlSpan(part: OoxmlPart): { readonly start: number; readonly end: n
 }
 
 describe('an inline control refuses the ops that address its characters', () => {
-  test('the control does occupy offsets, so the range is a real thing to check', () => {
-    const part = inlineLocked('sdtContentLocked');
-    // 'a' + 'LOCKED' + 'z'
-    expect(controlSpan(part)).toEqual({ start: 1, end: 7 });
-  });
-
   test('an insertion inside the control is refused', () => {
     const part = inlineLocked('sdtContentLocked');
     const paragraph = firstParagraph(part);

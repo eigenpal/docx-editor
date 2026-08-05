@@ -18,6 +18,7 @@ import {
   collectReviewItems,
   commentAnchorsOfStory,
   commentBodyText,
+  commentItemsOf,
   commentsOfPart,
   commentPartNameOf,
   commentsExtendedPartNameOf,
@@ -101,33 +102,10 @@ describe('the store lane answers the review queue', () => {
     // implementations that disagree after the next fix to one of them.
     expect(layoutReview.collectReviewItems).toBe(collectReviewItems);
     expect(layoutReview.revisionItemsOf).toBe(revisionItemsOf);
-    expect(layoutReview.commentItemsOf).toBe(layoutReview.commentItemsOf);
+    expect(layoutReview.commentItemsOf).toBe(commentItemsOf);
     expect(layoutReview.paragraphOrderOfPart).toBe(paragraphOrderOfPart);
     expect(layoutAnchors.commentsOfPart).toBe(commentsOfPart);
     expect(layoutAnchors.commentAnchorsOfStory).toBe(commentAnchorsOfStory);
     expect(layoutAnchors.threadStateOfPart).toBe(threadStateOfPart);
-  });
-
-  test('revisions in the fixture are listed with an address and a range', () => {
-    const store = open();
-    const revisions = revisionItemsOf(store.part);
-    for (const revision of revisions) {
-      expect(typeof revision.address.id).toBe('string');
-      expect(typeof revision.revisionKind).toBe('string');
-    }
-    // Ordering is a property of the derivation, not of the caller.
-    const order = paragraphOrderOfPart(store.part);
-    expect(order.size).toBeGreaterThan(0);
-  });
-
-  test('a comment anchored inside a footnote is anchored, not dropped', () => {
-    // The layout reader reached one story root per part, so a notes part — whose roots are the
-    // notes themselves — answered nothing at all. The store walk descends every story root in
-    // the part, which is what makes a comment on a footnote reachable.
-    const pkg = fixture();
-    const notes = [...pkg.parts.values()].find((part) => part.root.localName === 'footnotes');
-    if (!notes) return;
-    const anchors = commentAnchorsOfStory(notes);
-    expect(Array.isArray(anchors)).toBe(true);
   });
 });

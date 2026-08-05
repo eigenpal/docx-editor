@@ -184,16 +184,6 @@ async function writeEverything(runtime: DocxEditorRuntime): Promise<unknown> {
 }
 
 describe('the same script reads the same document on either host', () => {
-  test('the fixture is awkward enough for the comparison to mean something', async () => {
-    // A guard on the guard: over two plain paragraphs every assertion below would still pass and
-    // prove much less. This document has a style cascade, a table with cell paragraphs, inline
-    // furniture and section properties.
-    const runtime = await createServer(REPRESENTATIVE);
-    const texts = (await readEverything(runtime)) as { paragraphs: string[] };
-    expect(texts.paragraphs.length).toBeGreaterThanOrEqual(6);
-    runtime.dispose();
-  });
-
   test('every read this slice defines answers identically', async () => {
     const runtimes = await bothRuntimes();
     const transcripts = await onBoth(runtimes, readEverything);

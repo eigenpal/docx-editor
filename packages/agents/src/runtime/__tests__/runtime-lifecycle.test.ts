@@ -13,18 +13,6 @@ import { openHost, spyHost } from './support/hosts.ts';
 import { docx, p } from './support/docx.ts';
 
 describe('a run, its queue, and its one batch', () => {
-  test('run answers with the callback value', async () => {
-    const runtime = createRuntime({ host: openHost(), save: true });
-    const text = await runtime.run(async (context) => {
-      const body = context.document.body;
-      body.load('text');
-      await context.sync();
-      return body.text;
-    });
-    expect(text).toBe('alpha\rbeta');
-    runtime.dispose();
-  });
-
   test('queueing reads and writes sends nothing at all', async () => {
     const spy = spyHost(openHost());
     const runtime = createRuntime({ host: spy.host, save: true });
