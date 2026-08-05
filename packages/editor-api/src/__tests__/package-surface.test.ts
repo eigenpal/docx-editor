@@ -182,6 +182,14 @@ describe('the licence this package ships under', () => {
     expect(text).not.toContain('packages/pro/');
   });
 
+  test('the repository Apache licence expressly excludes this package', () => {
+    const text = readFileSync(join(REPO, 'LICENSE'), 'utf8');
+    expect(text).toContain(
+      'The contents of packages/editor-api/ are not licensed under the Apache License.'
+    );
+    expect(text).toContain('packages/editor-api/LICENSE.md');
+  });
+
   test('every source file carries the header, and this is the check CI runs', () => {
     // `license:check` is reached through `check:parity`, which is a pre-commit hook rather than a
     // CI job, so on its own it is a gate that only fires on the machine that already knows. CI
