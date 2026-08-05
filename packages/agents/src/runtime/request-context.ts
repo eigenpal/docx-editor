@@ -27,6 +27,7 @@ import type { Document } from '../model/document.ts';
 import { batchFailure, planBatch, settleBatch } from './batch.ts';
 import type { ClientObject } from './client-object.ts';
 import { DocxEditorError, fail } from './errors.ts';
+import type { DocumentCapabilities } from './runtime.ts';
 import {
   INTERNALS,
   REBIND,
@@ -123,7 +124,7 @@ export class RequestContext {
   }
 
   /** What the document host behind this context can do. */
-  get capabilities(): AutomationCapabilities {
+  get capabilities(): DocumentCapabilities {
     return this.#session.capabilities;
   }
 

@@ -1,7 +1,7 @@
 ---
-title: "@docx-editor.dev/react"
-description: "React adapter: <DocxEditor>, hooks, dialogs, toolbar, plugin host. Works with Next.js, Vite, Remix, Astro."
-category: "Packages"
+title: '@docx-editor.dev/react'
+description: 'React adapter: root component, provider primitives, shared hooks, and compound chrome from the package root.'
+category: 'Packages'
 order: 30
 ---
 
@@ -19,65 +19,77 @@ Pulls in `@docx-editor.dev/core` and `@docx-editor.dev/i18n`. Add `@docx-editor.
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
-import '@docx-editor.dev/react/styles.css';
 
 export default function App() {
-  return <DocxEditor documentBuffer={null} />;
+  return <DocxEditor document={new Uint8Array()} />;
 }
 ```
 
-On Next.js App Router, render this inside a `"use client"` component. ProseMirror touches the DOM at mount, so there's nothing to SSR. The [Next.js DOCX editor guide](/blog/nextjs-docx-editor) walks through file uploads, saving to an API route, and the common errors.
+`<DocxEditor>` is the batteries-included host: title bar, menu, toolbar, navigation pane, hyperlink popover, context menu, and the painted editable document. On Next.js App Router, render it inside a `"use client"` component.
 
 <DemoPlayground />
 
-## Subpaths
+## Root surface
 
-- `@docx-editor.dev/react`: `<DocxEditor>`, `DocxEditorRef`, `DocxEditorProps`, `EditorMode`, `createEmptyDocument` (re-exported from `-core` in 1.0.1)
-- `@docx-editor.dev/react/ui`: `Toolbar`, `EditorToolbar`, `ResponsiveToolbar`, `TableToolbar`, `ToolbarButton`, `ToolbarGroup`, `ToolbarSeparator`, `ColorPicker`, font/color pickers
-- `@docx-editor.dev/react/hooks`: `useHistory`, `useFindReplace`, `useAutoSave`, `useClipboard`, `useTableSelection`, `useWheelZoom`, `useDragAutoScroll`
-- `@docx-editor.dev/react/dialogs`: hyperlink, find/replace, paste special, page setup, keyboard shortcuts
-- `@docx-editor.dev/react/plugin-api`: `PluginHost`, plugin registration types
-- `@docx-editor.dev/react/styles`: CSS
+- `DocxEditor`: the one-line host plus compound statics like `DocxEditor.Root`, `DocxEditor.Viewport`, `DocxEditor.Content`, `DocxEditor.Toolbar`, `DocxEditor.Menu`, `DocxEditor.Navigation`, `DocxEditor.Review`, `DocxEditor.HyperLink`, and `DocxEditor.ContextMenu`
+- hooks from the same root: `useDocxEditor`, `useEditorState`, `useEditorCommand`, `useEditorEvent`, `usePageSetup`, `useParagraphIndent`, `useFontFamily`
+- shared top-level pieces: `DocxEditorRoot`, `DocxEditorViewport`, `DocxEditorContent`, `DocxEditorToolbar`, `DocxEditorMenu`, `DocxEditorNavigation`, `DocxEditorReview`, `DocxEditorPageSetupDialog`
 
-Every export is in the [API reference](/docs/1.x/api/react).
+There are no separate `/ui`, `/hooks`, `/dialogs`, or `/plugin-api` package exports in v2. The documented React surface lives on the package root.
 
-## Loading a document
+## Provider primitives
 
-`documentBuffer` accepts the `DocxInput` union: `File`, `Blob`, `ArrayBuffer`, or `Uint8Array`. Pass a `File` from an `<input type="file" accept=".docx">` directly, or a fetched buffer. `null` mounts an empty document; `undefined` defers mount until the input arrives. Full patterns (URL, file input, saving) are in [Loading and saving](/docs/1.x/guides/loading-and-saving).
-
-## Ref methods
-
-`DocxEditorRef` exposes imperative methods through `forwardRef`:
-
-```tsx
-import { useRef } from 'react';
-import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
-
-const editorRef = useRef<DocxEditorRef>(null);
-
-editorRef.current?.addComment({ paraId: 'ABC12300', text: 'Tighten this.', author: 'Jess Lin' });
-editorRef.current?.scrollToParaId('DEF45600');
-```
-
-`paraId` is Word's `w14:paraId` attribute. It survives concurrent edits and round-trips through OOXML, which is why we use it instead of positional addressing. Every method signature is in the [API reference](/docs/1.x/api/react).
-
-The ref also reaches block-level content controls in the live document: `getContentControls` lists them (filtered by tag, alias, id, or type), `scrollToContentControl` brings one into view, and `setContentControlContent` / `setContentControlValue` / `removeContentControl` edit one by tag as normal undoable edits. Locked controls are refused unless forced. The Vue adapter pairs the same methods.
-
-## Toolbar
-
-`@docx-editor.dev/react/ui` exports the toolbar pieces. `EditorToolbar` is the full toolbar used by the default editor UI; `Toolbar` is the formatting-button strip on its own; `ResponsiveToolbar` wraps either with adaptive layout. Compose your own from `ToolbarButton`, `ToolbarGroup`, and `ToolbarSeparator`:
+When the packaged chrome is not enough, drop to the same primitives it uses internally:
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
-import {
-  EditorToolbar,
-  Toolbar,
-  ToolbarButton,
-  ToolbarGroup,
-} from '@docx-editor.dev/react/ui';
+
+export function CustomFrame({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <DocxEditor.Root document={bytes}>
+      <DocxEditor.Toolbar />
+      <DocxEditor.Viewport>
+        <DocxEditor.Navigation />
+        <DocxEditor.Content />
+        <DocxEditor.HyperLink />
+        <DocxEditor.ContextMenu />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  );
+}
 ```
 
-In 0.x the formatting buttons were called `FormattingBar` and the composite was `Toolbar`. In 1.x, the formatting buttons are `Toolbar` and the composite is `EditorToolbar`.
+## Toolbar
+
+The main chrome compound is `DocxEditor.Toolbar`, exported from the package root and also attached as `DocxEditor.Toolbar`:
+
+```tsx
+import { DocxEditor, useEditorCommand } from '@docx-editor.dev/react';
+
+function BoldButton() {
+  const bold = useEditorCommand('text.bold');
+  return (
+    <button onClick={() => bold.execute()} disabled={!bold.isEnabled}>
+      Bold
+    </button>
+  );
+}
+
+export function ToolbarOnly({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <DocxEditor.Root document={bytes}>
+      <DocxEditor.Toolbar>
+        <BoldButton />
+      </DocxEditor.Toolbar>
+      <DocxEditor.Viewport>
+        <DocxEditor.Content />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  );
+}
+```
+
+The lower-level helpers (`useEditorCommand`, `useEditorState`, `useFontFamily`) also come from the root package.
 
 ## Automation
 
@@ -96,6 +108,6 @@ The object model and its rules are in [Automation](/docs/1.x/agents).
 ## Next steps
 
 - [API reference](/docs/1.x/api/react)
-- [Next.js DOCX editor guide](/blog/nextjs-docx-editor)
-- [Plugins](/docs/1.x/plugins)
+- [React props](/docs/1.x/react/props)
+- [React examples](/docs/1.x/react/examples)
 - [Automation](/docs/1.x/agents)

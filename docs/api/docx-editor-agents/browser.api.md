@@ -4,19 +4,7 @@
 
 ```ts
 
-import { BookmarkIndex } from '@docx-editor.dev/core-contract/store';
-import { CellSelection } from '@docx-editor.dev/core-contract/layout';
-import * as _docx_editor_dev_core_contract_layout from '@docx-editor.dev/core-contract/layout';
 import { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
-import { NavigationCommand } from '@docx-editor.dev/core-contract/layout';
-import { SectionProperties } from '@docx-editor.dev/core-contract/layout';
-import { SemanticLayout } from '@docx-editor.dev/core-contract/layout';
-import { SemanticSelection } from '@docx-editor.dev/core-contract/layout';
-import { StoryScope } from '@docx-editor.dev/core-contract/store';
-import { TreeApplyResult } from '@docx-editor.dev/core-contract/binding';
-import { TreeDocOp } from '@docx-editor.dev/core-contract/store';
-import { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import { Unsubscribe } from '@docx-editor.dev/core-contract/contracts/editor';
 
 // @public
 export type BesideLocation = Extract<InsertLocation, 'Before' | 'After'>;
@@ -320,11 +308,8 @@ export interface DocumentZipLimits {
     readonly maxTotalBytes: number;
 }
 
-// @public
-export const DocxEditor: Readonly<{
-    createBrowser: typeof createBrowser;
-    createServer: typeof createServer;
-}>;
+// @public (undocumented)
+export const DocxEditor: DocxEditorNamespace;
 
 // @public (undocumented)
 export class DocxEditorError extends Error {
@@ -389,6 +374,14 @@ export interface DocxEditorErrorInit {
     readonly code: DocxEditorErrorCode;
     readonly expectedRevision?: number;
     readonly target?: string;
+}
+
+// @public
+export interface DocxEditorNamespace {
+    // (undocumented)
+    createBrowser(editor: Editor): DocxEditorRuntime;
+    // (undocumented)
+    createServer(bytes: Uint8Array, options?: CreateServerOptions): Promise<DocxEditorServerRuntime>;
 }
 
 // @public (undocumented)
@@ -672,7 +665,7 @@ export class RequestContext {
         adopt: (objects: readonly ClientObject[]) => void;
         finish: () => void;
     };
-    get capabilities(): AutomationCapabilities;
+    get capabilities(): DocumentCapabilities;
     get document(): Document_2;
     sync(): Promise<void>;
     // (undocumented)

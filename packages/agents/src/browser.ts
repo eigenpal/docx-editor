@@ -23,6 +23,12 @@
 
 import { createBrowser } from './runtime/browser.ts';
 import { createServer } from './runtime/server.ts';
+import type {
+  CreateServerOptions,
+  DocxEditorRuntime,
+  DocxEditorServerRuntime,
+} from './runtime/public.ts';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 
 export * from './runtime/public.ts';
 
@@ -31,7 +37,12 @@ export * from './runtime/public.ts';
  *
  * @public
  */
-export const DocxEditor = Object.freeze({
+export interface DocxEditorNamespace {
+  createBrowser(editor: Editor): DocxEditorRuntime;
+  createServer(bytes: Uint8Array, options?: CreateServerOptions): Promise<DocxEditorServerRuntime>;
+}
+
+export const DocxEditor: DocxEditorNamespace = Object.freeze({
   /** A runtime over an editor that is already open. The editor keeps its own lifetime. */
   createBrowser,
   /** A runtime over DOCX bytes. Additionally offers `save()`. */

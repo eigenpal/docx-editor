@@ -1,229 +1,78 @@
 ---
-title: "Vue examples"
-description: "Concrete patterns for embedding <DocxEditor> in Vue 3: load from URL or file input, autosave, comment persistence, custom fonts, read-only viewer, automation."
-category: "Vue"
+title: 'Vue examples'
+description: 'Concrete patterns for the current Vue root surface: mount bytes, save through the template ref, and automate through the server runtime.'
+category: 'Vue'
 order: 42
 ---
 
-Drop-in components for the common patterns. Each is self-contained; swap the data source for your own.
+Drop-in components for the current root-only Vue surface.
 
-## Load a document from a URL
+## Load DOCX bytes
 
 ```vue
 <script setup lang="ts">
 import { ref, watchEffect } from 'vue';
 import { DocxEditor } from '@docx-editor.dev/vue';
-import '@docx-editor.dev/vue/styles.css';
 
 const props = defineProps<{ url: string }>();
-const buf = ref<ArrayBuffer | null>(null);
+const doc = ref<Uint8Array>();
 
 watchEffect(async () => {
-  buf.value = await fetch(props.url).then((r) => r.arrayBuffer());
+  doc.value = new Uint8Array(await fetch(props.url).then((r) => r.arrayBuffer()));
 });
 </script>
 
 <template>
-  <DocxEditor :document-buffer="buf" />
+  <DocxEditor :document="doc" />
 </template>
 ```
 
-<DemoPlayground />
-
-## Load from a file input
-
-`document-buffer` accepts a `File` directly, so there is no `arrayBuffer()` step:
-
-```vue
-<script setup lang="ts">
-import { ref } from 'vue';
-import { DocxEditor } from '@docx-editor.dev/vue';
-
-const file = ref<File | null>(null);
-
-function onFile(e: Event) {
-  file.value = (e.target as HTMLInputElement).files?.[0] ?? null;
-}
-</script>
-
-<template>
-  <input type="file" accept=".docx" @change="onFile" />
-  <DocxEditor v-if="file" :document-buffer="file" />
-</template>
-```
-
-## Autosave on change
-
-Debounce `save()` on the template ref to persist to a server:
+## Save through the template ref
 
 ```vue
 <script setup lang="ts">
 import { useTemplateRef } from 'vue';
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
 
-const props = defineProps<{ docId: string }>();
+const props = defineProps<{ docId: string; bytes: Uint8Array }>();
 const editor = useTemplateRef<DocxEditorRef>('editor');
 
-let timer: number | undefined;
-function onChange() {
-  window.clearTimeout(timer);
-  timer = window.setTimeout(async () => {
-    const buf = await editor.value?.save(); // Promise<ArrayBuffer | null>
-    if (buf) await fetch(`/api/documents/${props.docId}`, { method: 'PUT', body: buf });
-  }, 1500);
-}
-</script>
-
-<template>
-  <DocxEditor ref="editor" :document-buffer="null" @change="onChange" />
-</template>
-```
-
-For localStorage autosave with crash recovery, use the `useAutoSave` composable from `@docx-editor.dev/vue/composables` instead.
-
-## Persisting comments
-
-The Vue adapter has no controlled `comments` prop (React-only; see [Vue props](/docs/1.x/vue/props#comments-and-collaboration)). Listen to `@comments-change` to persist comment state as it mutates:
-
-```vue
-<script setup lang="ts">
-import { DocxEditor } from '@docx-editor.dev/vue';
-import type { Comment } from '@docx-editor.dev/core';
-
-defineProps<{ buf: ArrayBuffer; author: string }>();
-
-async function persist(next: Comment[]) {
-  await fetch('/api/comments', {
-    method: 'PUT',
-    body: JSON.stringify(next),
-    headers: { 'content-type': 'application/json' },
-  });
-}
-</script>
-
-<template>
-  <DocxEditor :document-buffer="buf" :author="author" @comments-change="persist" />
-</template>
-```
-
-To create a comment from your own UI, call `editor.value?.addComment({ paraId, text, author })` on the template ref. Pushing an external comment array into the editor is not possible in Vue today.
-
-## Suggesting mode
-
-```vue
-<script setup lang="ts">
-import { DocxEditor } from '@docx-editor.dev/vue';
-
-defineProps<{ buf: ArrayBuffer; reviewer: string }>();
-</script>
-
-<template>
-  <DocxEditor :document-buffer="buf" :author="reviewer" mode="suggesting" />
-</template>
-```
-
-<ModeToggleDemo />
-
-Edits wrap in revision markup and round-trip to Word's `<w:ins>` / `<w:del>`; since 1.1.0 this covers paragraph, table, image, and list changes as well as inline text. See [Tracked changes](/docs/1.x/guides/tracked-changes).
-
-## Custom fonts
-
-`:fonts` registers self-hosted font faces and `:font-families` controls the picker; the full rules are under [React props → Fonts](/docs/1.x/react/props#fonts).
-
-```vue
-<script setup lang="ts">
-import { DocxEditor } from '@docx-editor.dev/vue';
-
-defineProps<{ buf: ArrayBuffer }>();
-
-// Declared once in setup so the array identity stays stable.
-const fonts = [
-  { family: 'Inter', src: '/fonts/Inter-Regular.woff2' },
-  { family: 'Inter', src: '/fonts/Inter-Bold.woff2', weight: 700 },
-  { family: 'JetBrains Mono', src: '/fonts/JetBrainsMono-Regular.woff2' },
-];
-const fontFamilies = ['Inter', 'JetBrains Mono', 'Arial', 'Times New Roman'];
-</script>
-
-<template>
-  <DocxEditor
-    :document-buffer="buf"
-    :fonts="fonts"
-    :font-families="fontFamilies"
-    @error="(err) => console.error('font or parse error', err)"
-  />
-</template>
-```
-
-The `/fonts/...` paths resolve against your site root (`public/` in Vite or a Nuxt app).
-
-## Read-only viewer
-
-```vue
-<script setup lang="ts">
-import { DocxEditor } from '@docx-editor.dev/vue';
-
-defineProps<{ buf: ArrayBuffer }>();
-</script>
-
-<template>
-  <DocxEditor
-    :document-buffer="buf"
-    read-only
-    :show-toolbar="false"
-    :show-zoom-control="false"
-  />
-</template>
-```
-
-<ReadOnlyDemo />
-
-## Realtime collaboration (Yjs)
-
-The Vue adapter ships `:external-plugins` for the y-prosemirror plugins, but the two other pieces of the collaboration setup are React-only today: the `externalContent` loader hand-off and the controlled `comments` prop (both listed as deferred in the parity contract). The full Yjs walkthrough on [Realtime collaboration](/docs/1.x/realtime-collaboration) is therefore written against the React adapter; follow it there if you need live multi-user editing now.
-
-## Automating a document beside the editor
-
-`@docx-editor.dev/agents` edits DOCX bytes through an object model. Its `/browser` entry needs the engine's editor instance, which the Vue adapter's ref does not expose yet, so the round trip goes through the server entry and back into the editor:
-
-```vue
-<script setup lang="ts">
-import { useTemplateRef } from 'vue';
-import { DocxEditor as Editor, type DocxEditorRef } from '@docx-editor.dev/vue';
-import { DocxEditor as Automation } from '@docx-editor.dev/agents';
-
-defineProps<{ buf: ArrayBuffer }>();
-const editor = useTemplateRef<DocxEditorRef>('editor');
-
-async function stampToday() {
-  const bytes = await editor.value?.save();
-  if (!bytes) return;
-
-  const runtime = await Automation.createServer(new Uint8Array(bytes), { author: 'Assistant' });
-  try {
-    await runtime.run(async (context) => {
-      context.document.body.insertParagraph(new Date().toDateString(), 'End');
-      await context.sync();
-    });
-    editor.value?.load(await runtime.save());
-  } finally {
-    runtime.dispose();
+async function save() {
+  const buf = await editor.value?.save();
+  if (buf) {
+    await fetch(`/api/documents/${props.docId}`, { method: 'PUT', body: buf });
   }
 }
 </script>
 
 <template>
-  <div class="layout">
-    <Editor ref="editor" :document-buffer="buf" />
-    <button @click="stampToday">Stamp today</button>
-  </div>
+  <button @click="save">Save</button>
+  <DocxEditor ref="editor" :document="props.bytes" />
 </template>
 ```
 
-Reloading resets the undo stack and the caret, so prefer this for batch work rather than for edits a reader is watching. The object model and its rules are in [Automation](/docs/1.x/agents).
+## Automate through the server runtime
+
+```ts
+import { DocxEditor } from '@docx-editor.dev/agents';
+
+export async function summarize(bytes: Uint8Array) {
+  const runtime = await DocxEditor.createServer(bytes, { author: 'Assistant' });
+  try {
+    return await runtime.run(async (context) => {
+      const body = context.document.body;
+      body.load('text');
+      await context.sync();
+      return body.text;
+    });
+  } finally {
+    runtime.dispose();
+  }
+}
+```
 
 ## Next steps
 
+- [Vue package overview](/docs/1.x/vue)
 - [Vue props](/docs/1.x/vue/props)
 - [Vue API reference](/docs/1.x/api/vue)
-- [React examples](/docs/1.x/react/examples), identical patterns for cross-reference

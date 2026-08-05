@@ -16,13 +16,16 @@ Every starter lives under [`examples/`](https://github.com/eigenpal/docx-editor/
     Plain Vite + React SPA. No SSR boundary; use this when you want a client-rendered starter.
   </Card>
   <Card title="Vue 3" href="https://github.com/eigenpal/docx-editor/tree/main/examples/vue">
-    Vue 3 + Vite SPA with the Vue adapter. Same editor surface as React, with Vue components and refs.
+    Vue 3 + Vite SPA with the Vue adapter. Same editor surface as React, with Vue components and
+    refs.
   </Card>
   <Card title="Next.js" href="https://github.com/eigenpal/docx-editor/tree/main/examples/nextjs">
-    App Router integration. One dynamic() import with ssr: false; the rest of the page stays server-rendered.
+    App Router integration. One dynamic() import with ssr: false; the rest of the page stays
+    server-rendered.
   </Card>
   <Card title="Nuxt" href="https://github.com/eigenpal/docx-editor/tree/main/examples/nuxt">
-    The @docx-editor.dev/nuxt module on Nuxt 3/4. Register the module; the SSR-safe component is auto-imported.
+    The @docx-editor.dev/nuxt module on Nuxt 3/4. Register the module; the SSR-safe component is
+    auto-imported.
   </Card>
   <Card title="Remix" href="https://github.com/eigenpal/docx-editor/tree/main/examples/remix">
     Remix (Vite) with the editor gated behind a mount check and a lazy() import.
@@ -30,19 +33,37 @@ Every starter lives under [`examples/`](https://github.com/eigenpal/docx-editor/
   <Card title="Astro" href="https://github.com/eigenpal/docx-editor/tree/main/examples/astro">
     The editor as a React island with client:only="react", skipping Astro's SSR for the component.
   </Card>
-  <Card title="Realtime collaboration" href="https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration">
-    Multi-user editing over Yjs, y-prosemirror, and y-webrtc. Peers sync browser-to-browser; no backend required.
+  <Card
+    title="Realtime collaboration"
+    href="https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration"
+  >
+    Multi-user editing over Yjs, y-prosemirror, and y-webrtc. Peers sync browser-to-browser; no
+    backend required.
   </Card>
-  <Card title="React/Vue parity" href="https://github.com/eigenpal/docx-editor/tree/main/examples/parity">
-    Both adapters served from the same deployment, resolved from the built package output used for npm releases.
+  <Card
+    title="React/Vue parity"
+    href="https://github.com/eigenpal/docx-editor/tree/main/examples/parity"
+  >
+    Both adapters served from the same deployment, resolved from the built package output used for
+    npm releases.
   </Card>
-  <Card title="Document automation" href="https://github.com/eigenpal/docx-editor/tree/main/examples/automation">
-    A script that fills a template with no browser and no framework, plus what the browser entry adds when an editor is already open.
+  <Card
+    title="Document automation"
+    href="https://github.com/eigenpal/docx-editor/tree/main/examples/automation"
+  >
+    A script that fills a template with no browser and no framework, plus what the browser entry
+    adds when an editor is already open.
   </Card>
-  <Card title="Plugin: hello world" href="https://github.com/eigenpal/docx-editor/tree/main/examples/plugins/hello-world">
+  <Card
+    title="Plugin: hello world"
+    href="https://github.com/eigenpal/docx-editor/tree/main/examples/plugins/hello-world"
+  >
     Minimal scaffold for the React adapter's plugin API. Start here for your first plugin.
   </Card>
-  <Card title="Plugin: docxtemplater" href="https://github.com/eigenpal/docx-editor/tree/main/examples/plugins/docxtemplater">
+  <Card
+    title="Plugin: docxtemplater"
+    href="https://github.com/eigenpal/docx-editor/tree/main/examples/plugins/docxtemplater"
+  >
     Plugin adding docxtemplater variable insertion with a live preview.
   </Card>
 </Cards>
@@ -88,4 +109,3 @@ Set the `author` prop to attribute comments and tracked changes to specific user
 - [Quickstart](/docs/1.x/quickstart): build the load → edit → save loop yourself
 - [Installation](/docs/1.x/installation): per-framework setup behind each starter
 - [Automation](/docs/1.x/agents): the object model behind the automation starter
-- [Plugins](/docs/1.x/plugins): the API behind the plugin starters

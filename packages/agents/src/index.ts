@@ -56,6 +56,7 @@
  */
 
 import { createServer } from './runtime/server.ts';
+import type { CreateServerOptions, DocxEditorServerRuntime } from './runtime/public.ts';
 
 export * from './runtime/public.ts';
 
@@ -70,7 +71,11 @@ export * from './runtime/public.ts';
  *
  * @public
  */
-export const DocxEditor = Object.freeze({
+export interface DocxEditorNamespace {
+  createServer(bytes: Uint8Array, options?: CreateServerOptions): Promise<DocxEditorServerRuntime>;
+}
+
+export const DocxEditor: DocxEditorNamespace = Object.freeze({
   /** A runtime over DOCX bytes. Additionally offers `save()`. */
   createServer,
 });

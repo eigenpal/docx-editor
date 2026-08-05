@@ -43,7 +43,50 @@ export const PACKAGES = [
     // "forgotten export" here means what it says: a name a public signature hands a consumer
     // that the consumer cannot import to write the signature down. The blanket silence exists
     // for the barrel-and-per-file adapters, where the same message is mostly noise.
-    forgottenExports: 'warning',
+    forgottenExports: {
+      logLevel: 'warning',
+      protectedExportFiles: ['src/runtime/public.ts', 'src/model/index.ts'],
+      allowlist: {
+        index: [
+          'AutomationHandle',
+          'AutomationOperation',
+          'AutomationValue',
+          'CommentBase',
+          'ContentControlScope',
+          'ContextInternals',
+          'HandleCollection',
+          'ItemCollection',
+          'ModelObject',
+          'ObjectAddress',
+          'ObjectPath',
+          'PromisedItem',
+          'QueuedAction',
+          'ResolvedLoadOptions',
+          'RuntimeManagedObject',
+          'RuntimeSession',
+          'SpanOwner',
+        ],
+        browser: [
+          'AutomationHandle',
+          'AutomationOperation',
+          'AutomationValue',
+          'CommentBase',
+          'ContentControlScope',
+          'ContextInternals',
+          'HandleCollection',
+          'ItemCollection',
+          'ModelObject',
+          'ObjectAddress',
+          'ObjectPath',
+          'PromisedItem',
+          'QueuedAction',
+          'ResolvedLoadOptions',
+          'RuntimeManagedObject',
+          'RuntimeSession',
+          'SpanOwner',
+        ],
+      },
+    },
   },
 ];
 

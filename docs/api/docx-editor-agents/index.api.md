@@ -306,10 +306,8 @@ export interface DocumentZipLimits {
     readonly maxTotalBytes: number;
 }
 
-// @public
-export const DocxEditor: Readonly<{
-    createServer: typeof createServer;
-}>;
+// @public (undocumented)
+export const DocxEditor: DocxEditorNamespace;
 
 // @public (undocumented)
 export class DocxEditorError extends Error {
@@ -374,6 +372,12 @@ export interface DocxEditorErrorInit {
     readonly code: DocxEditorErrorCode;
     readonly expectedRevision?: number;
     readonly target?: string;
+}
+
+// @public
+export interface DocxEditorNamespace {
+    // (undocumented)
+    createServer(bytes: Uint8Array, options?: CreateServerOptions): Promise<DocxEditorServerRuntime>;
 }
 
 // @public (undocumented)
@@ -657,7 +661,7 @@ export class RequestContext {
         adopt: (objects: readonly ClientObject[]) => void;
         finish: () => void;
     };
-    get capabilities(): AutomationCapabilities;
+    get capabilities(): DocumentCapabilities;
     get document(): Document_2;
     sync(): Promise<void>;
     // (undocumented)

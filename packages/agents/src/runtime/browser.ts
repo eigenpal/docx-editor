@@ -12,12 +12,10 @@
 // else — the queue, the context, the object lifetime, the errors — is neutral and compiles without
 // the DOM lib, which is what `__tests__/runtime-boundaries.test.ts` holds in place.
 
-import {
-  createBrowserAutomationHost,
-  type DocxEditorInstance,
-} from '@docx-editor.dev/core-contract/editor';
+import { createBrowserAutomationHost } from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 import { createRuntime, type DocxEditorRuntime } from './runtime.ts';
 
-export function createBrowser(editor: DocxEditorInstance): DocxEditorRuntime {
-  return createRuntime({ host: createBrowserAutomationHost(editor), save: false });
+export function createBrowser(editor: Editor): DocxEditorRuntime {
+  return createRuntime({ host: createBrowserAutomationHost(editor as never), save: false });
 }

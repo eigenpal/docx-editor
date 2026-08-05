@@ -10,6 +10,8 @@
 import { CompilerState, Extractor, ExtractorConfig } from '@microsoft/api-extractor';
 import fs from 'node:fs';
 import path from 'node:path';
+import { evaluateForgottenExportPolicy } from './api-extractor-forgotten-exports.mjs';
+import { collectNamedExports } from './named-exports.mjs';
 
 function slugForKey(key) {
   if (key === '.') return 'index';
@@ -55,7 +57,15 @@ function entriesFromExports(packageRoot, exportsMap) {
  *   buildHint: string,
  *   tsconfigPath?: string,
  *   emitDocModel?: boolean,
- *   forgottenExports?: 'none' | 'warning' | 'error',
+ *   forgottenExports?:
+ *     | 'none'
+ *     | 'warning'
+ *     | 'error'
+ *     | {
+ *         logLevel?: 'none' | 'warning' | 'error',
+ *         allowlist?: Record<string, string[]>,
+ *         protectedExportFiles?: string[],
+ *       },
  * }} options
  */
 export function runApiExtractor(options) {
@@ -68,6 +78,20 @@ export function runApiExtractor(options) {
     emitDocModel = false,
     forgottenExports = 'none',
   } = options;
+
+  const forgottenExportConfig =
+    typeof forgottenExports === 'string'
+      ? { logLevel: forgottenExports, allowlist: {}, protectedExportFiles: [] }
+      : {
+          logLevel: forgottenExports.logLevel ?? 'none',
+          allowlist: forgottenExports.allowlist ?? {},
+          protectedExportFiles: forgottenExports.protectedExportFiles ?? [],
+        };
+  const protectedForgottenSymbols = new Set(
+    forgottenExportConfig.protectedExportFiles.flatMap((relativePath) => [
+      ...collectNamedExports(path.join(packageRoot, relativePath)),
+    ])
+  );
 
   if (!reportDir) {
     // Explicit check — otherwise the failure is `fs.mkdirSync(undefined)`
@@ -101,7 +125,7 @@ export function runApiExtractor(options) {
   // `ae-missing-release-tag`: warning instead of the default error, so
   // undocumented `@public` exports increment warningCount but don't fail CI.
   const extractorMessageReporting = {
-    'ae-forgotten-export': { logLevel: forgottenExports },
+    'ae-forgotten-export': { logLevel: forgottenExportConfig.logLevel },
     'ae-missing-release-tag': { logLevel: 'warning' },
   };
 
@@ -158,9 +182,7 @@ export function runApiExtractor(options) {
   // Share one CompilerState across every invocation so we only parse tsconfig
   // and walk the dist tree once instead of N times.
   const firstConfig = buildConfig(present[0]);
-  const additionalEntryPoints = present
-    .slice(1)
-    .map((t) => path.resolve(packageRoot, t.dts));
+  const additionalEntryPoints = present.slice(1).map((t) => path.resolve(packageRoot, t.dts));
   const compilerState = CompilerState.create(firstConfig, {
     additionalEntryPoints,
   });
@@ -180,7 +202,10 @@ export function runApiExtractor(options) {
         // Counts alone are enough for the messages every package emits by the dozen. A package
         // that asked for forgotten-export reporting asked to READ it, so those are printed:
         // "warnings: 58" tells nobody which type a consumer cannot name.
-        if (forgottenExports !== 'none' && message.messageId === 'ae-forgotten-export') {
+        if (
+          forgottenExportConfig.logLevel !== 'none' &&
+          message.messageId === 'ae-forgotten-export'
+        ) {
           forgotten.push(`${target.slug}: ${message.text}`);
         }
         message.handled = true;
@@ -204,8 +229,48 @@ export function runApiExtractor(options) {
     for (const message of forgotten) console.log(`    ${message}`);
   }
 
+  if (forgottenExportConfig.logLevel !== 'none') {
+    const policy = evaluateForgottenExportPolicy({
+      packageName: pkg.name,
+      isLocal,
+      allowlist: forgottenExportConfig.allowlist,
+      messages: forgotten,
+      protectedSymbols: [...protectedForgottenSymbols],
+    });
+    if (
+      policy.unallowlisted.length > 0 ||
+      policy.staleAllowlist.length > 0 ||
+      policy.forbiddenAllowlist.length > 0
+    ) {
+      console.error(`\nForgotten export policy failure in ${pkg.name}:`);
+      if (policy.unallowlisted.length > 0) {
+        console.error(`  New or unallowlisted forgotten exports:`);
+        for (const item of policy.unallowlisted) {
+          console.error(`    - ${item.entry}: ${item.symbol}`);
+        }
+      }
+      if (policy.staleAllowlist.length > 0) {
+        console.error(`  Reviewed allowlist entries no longer reported:`);
+        for (const item of policy.staleAllowlist) {
+          console.error(`    - ${item.entry}: ${item.symbol}`);
+        }
+      }
+      if (policy.forbiddenAllowlist.length > 0) {
+        console.error(
+          `  Allowlist contains package-owned public exports that must be fixed instead:`
+        );
+        for (const item of policy.forbiddenAllowlist) {
+          console.error(`    - ${item.entry}: ${item.symbol}`);
+        }
+      }
+      process.exit(1);
+    }
+  }
+
   if (!isLocal && skipped.length > 0) {
-    console.error(`\nMissing dist files for ${skipped.length} entr${skipped.length === 1 ? 'y' : 'ies'}:`);
+    console.error(
+      `\nMissing dist files for ${skipped.length} entr${skipped.length === 1 ? 'y' : 'ies'}:`
+    );
     for (const t of skipped) console.error(`  - ${t.key} → ${t.dts}`);
     console.error(`\nFix: ${buildHint}`);
     process.exit(1);

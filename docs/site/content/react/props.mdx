@@ -1,120 +1,50 @@
 ---
-title: "Props"
-description: "A curated reference for DocxEditorProps, grouped by concern, with examples for the most common configuration patterns of the React component."
-category: "React"
+title: 'Props'
+description: 'Reference for the current React root props and ref: document source, chrome toggles, menu integration, callbacks, and the shared imperative handle.'
+category: 'React'
 order: 31
 ---
 
-`<DocxEditor>` is configured through props. Groups below match how you'd reach for them in practice. The full generated reference (every prop, every type signature) is at [/docs/1.x/api/react](/docs/1.x/api/react).
+`<DocxEditor>` is the packaged host over the v2 provider primitives. The full generated reference is at [/docs/1.x/api/react](/docs/1.x/api/react); this page groups the current root props by how you actually wire the editor.
 
-## Document input
+## Document and mount state
 
-How the editor receives the document. Use `documentBuffer` for raw bytes; use `document` when you've already parsed.
+Use `document` for the current document source and `fonts` for measurement fidelity.
 
-| Prop | Type | Description |
-|---|---|---|
-| `documentBuffer` | `DocxInput \| null` | `ArrayBuffer`, `Uint8Array`, `Blob`, or `File`. Most common entry. `null` mounts an empty document. |
-| `document` | `Document \| null` | Pre-parsed `-core` document tree. Skip the parser if you already have one. |
-
-```tsx
-// From a fetch
-const buf = await fetch('/template.docx').then((r) => r.arrayBuffer());
-<DocxEditor documentBuffer={buf} />;
-
-// From a file input (File is accepted directly, no arrayBuffer() needed)
-<input type="file" accept=".docx" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-<DocxEditor documentBuffer={file} />
-
-// Empty document (mounts with no content; useful when collecting input from scratch)
-<DocxEditor documentBuffer={null} />
-```
-
-## Mode and read-only
-
-Editing mode and the suggest/view/read-only states. Pair with `onModeChange` for controlled mode.
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `mode` | `EditorMode` | `'editing'` | `'editing'` \| `'suggesting'` \| `'viewing'`. For read-only, use the `readOnly` boolean below. |
-| `onModeChange` | `(mode) => void` | | Controlled mode handler. Without it, the editor manages mode internally. |
-| `readOnly` | `boolean` | `false` | Independent of `mode`. Disables every input affordance (typing, toolbar buttons, dialogs) regardless of which mode is active. |
+| Prop       | Type                                             | Description                                                               |
+| ---------- | ------------------------------------------------ | ------------------------------------------------------------------------- |
+| `document` | `DocumentSource`                                 | DOCX bytes or an existing `DocumentHandle`.                               |
+| `fonts`    | `FontConfiguration \| FontConfigurationFragment` | Font bytes used for Word-accurate shaping and pagination.                 |
+| `author`   | `string`                                         | Ambient author for authored commands such as comments and review actions. |
+| `locale`   | `string`                                         | Locale passed to the underlying editor instance.                          |
+| `mode`     | `'edit' \| 'view'`                               | Mount-time editing mode. Remount to change it.                            |
+| `zoom`     | `number`                                         | Mount-time zoom value.                                                    |
 
 ```tsx
-const [mode, setMode] = useState<EditorMode>('editing');
+const bytes = new Uint8Array(await fetch('/template.docx').then((r) => r.arrayBuffer()));
 
-<DocxEditor
-  documentBuffer={buf}
-  mode={mode}
-  onModeChange={setMode}
-/>;
+<DocxEditor document={bytes} mode="edit" />;
 ```
 
-`'suggesting'` wraps every edit as a tracked change. Use it for review flows.
+## Chrome and layout
 
-<ModeToggleDemo />
+These props control the packaged frame around the painted document.
 
-## Comments and collaboration
-
-Pull author identity in, push comment state back out.
-
-| Prop | Type | Description |
-|---|---|---|
-| `author` | `string` | Author name attached to new comments and tracked changes. |
-| `comments` | `Comment[]` | Controlled comments. Pair with `onCommentsChange`. |
-| `onCommentsChange` | `(comments) => void` | Fires on any comment mutation. Mirror into Y.Array for live sync. |
-| `onCommentAdd` / `onCommentResolve` / `onCommentDelete` / `onCommentReply` | callbacks | Granular events when you want to log or trigger side effects, not own state. |
-
-```tsx
-const [comments, setComments] = useState<Comment[]>([]);
-
-<DocxEditor
-  documentBuffer={buf}
-  author='Jess Lin'
-  comments={comments}
-  onCommentsChange={setComments}
-/>;
-```
-
-Controlled comments (`comments` + `onCommentsChange`) are React-only today; the Vue adapter exposes the callback events but not the `comments` prop (see [Vue props](/docs/1.x/vue/props#comments-and-collaboration)).
-
-<AuthorDemo />
-
-For Yjs-backed sync, see [Realtime collaboration](/docs/1.x/realtime-collaboration).
-
-## Toolbar UI
-
-Toggle the built-in UI on or off.
-
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `showToolbar` | `boolean` | `true` | Toolbar visibility. Pass `false` and compose your own from `/ui`. |
-| `showZoomControl` | `boolean` | `true` | Bottom-right zoom widget. |
-| `showRuler` | `boolean` | `false` | Page ruler above the document body. |
-| `rulerUnit` | `'inch' \| 'cm'` | `'inch'` | Ruler unit. |
-| `showMarginGuides` | `boolean` | `false` | Faint guides at page margins. |
-| `marginGuideColor` | `string` | `'#c0c0c0'` | CSS color for the guides above. |
-| `showOutline` | `boolean` | `false` | Document outline / table of contents drawer. |
-| `showOutlineButton` | `boolean` | `true` | Outline toggle button in the toolbar. |
-| `showFileOpen` | `boolean` | `true` | Show `File > Open` and enable Cmd/Ctrl+O. Set `false` when your app provides its own open action. |
-| `showHelpMenu` | `boolean` | `true` | Show the Help menu in the menu bar. Set `false` to hide it. |
-| `initialZoom` | `number` | `1.0` | Starting zoom (`1.0` = 100%). |
-
-The font picker and custom font registration have their own section below.
-
-```tsx
-// Editor without built-in toolbar UI.
-<DocxEditor documentBuffer={buf} showToolbar={false} showZoomControl={false} />
-```
-
-<UIControlsDemo />
+| Prop                                         | Type                                    | Description                                                                                     |
+| -------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `chrome`                                     | `boolean`                               | Render the packaged title bar, menu, toolbar, and navigation. Set `false` for the bare surface. |
+| `title`                                      | `string`                                | Document title shown in the title bar.                                                          |
+| `onTitleChange`                              | `(title) => void`                       | Makes the title editable.                                                                       |
+| `renderTitleBarLeft` / `renderTitleBarRight` | `() => ReactNode`                       | Host-owned title-bar slots.                                                                     |
+| `colorMode`                                  | `'light' \| 'dark' \| 'system'`         | Chrome-only theming mode.                                                                       |
+| `menu`                                       | `boolean \| DocxEditorMenuProps`        | Toggle or customize the packaged menu bar.                                                      |
+| `navigation`                                 | `boolean`                               | Toggle the packaged navigation pane.                                                            |
+| `hyperlinkPopup`                             | `boolean`                               | Toggle the packaged link popover.                                                               |
+| `contextMenu`                                | `boolean \| DocxEditorContextMenuProps` | Toggle or customize the packaged context menu.                                                  |
 
 ## Appearance (dark mode)
 
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `colorMode` | `'light' \| 'dark' \| 'system'` | `'light'` | Editor theme. `'system'` follows the OS `prefers-color-scheme`. |
-
-Dark mode is controlled entirely by this prop; there is no internal toggle. Drive it from your own UI by flipping the value:
+`colorMode` controls the editor chrome only; the document canvas stays Word-faithful. Drive it from your own UI:
 
 ```tsx
 const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
@@ -122,7 +52,7 @@ const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
 <button onClick={() => setColorMode((m) => (m === 'dark' ? 'light' : 'dark'))}>
   Toggle theme
 </button>
-<DocxEditor documentBuffer={buf} colorMode={colorMode} />
+<DocxEditor document={bytes} colorMode={colorMode} />
 ```
 
 See the [Dark mode](/docs/1.x/guides/dark-mode) guide for how the canvas transform works, what it does and doesn't change, and how to report issues.
@@ -134,11 +64,11 @@ font bytes the engine measures with, so line wrap and page breaks match Word. Th
 independent: list a family in `fontFamilies` to make it pickable, supply its bytes
 through `fonts` so it measures accurately.
 
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `fonts` | `FontConfiguration \| FontConfigurationFragment` | none | Font bytes for Word-accurate measurement. Fonts embedded in the document wire in automatically either way. |
-| `fontFamilies` | `ReadonlyArray<string \| FontOption>` | built-in 12 | Constrain the font picker to a specific list. |
-| `onFontError` | `(error: EditorFontError) => void` | none | Per-face failures (corrupt embedded face, 404, hash mismatch). |
+| Prop           | Type                                             | Default     | Description                                                                                                |
+| -------------- | ------------------------------------------------ | ----------- | ---------------------------------------------------------------------------------------------------------- |
+| `fonts`        | `FontConfiguration \| FontConfigurationFragment` | none        | Font bytes for Word-accurate measurement. Fonts embedded in the document wire in automatically either way. |
+| `fontFamilies` | `ReadonlyArray<string \| FontOption>`            | built-in 12 | Constrain the font picker to a specific list.                                                              |
+| `onFontError`  | `(error: EditorFontError) => void`               | none        | Per-face failures (corrupt embedded face, 404, hash mismatch).                                             |
 
 The usual value is what `loadDefaultFonts()` returns:
 
@@ -148,117 +78,60 @@ import { loadDefaultFonts } from '@docx-editor.dev/fonts';
 
 const fonts = await loadDefaultFonts();
 
-<DocxEditor documentBuffer={buf} fonts={fonts} onFontError={(e) => report(e.code)} />;
+<DocxEditor document={bytes} fonts={fonts} onFontError={(e) => report(e.code)} />;
 ```
 
-`fonts` is sampled at mount and its identity change remounts the editor, so pass a
-stable reference — resolve it once and hold it in state rather than building it inline.
+`fonts` is sampled at mount. Replace it by remounting the editor with a new configuration.
 
 See the [Fonts and measurement](/docs/1.x/guides/fonts) guide for the three font
 sources, how they compose, and how to supply your own faces with `loadFonts`.
-
-For host code that isn't using the React or Vue adapter, `@docx-editor.dev/core/utils` exports `loadFontFromUrl`, `loadFontDefinitions`, `onFontError`, and the `FontDefinition` type so you can drive the same registration directly.
 
 ## Title bar customization
 
 The header strip is fully overridable.
 
-| Prop | Type | Description |
-|---|---|---|
-| `documentName` | `string` | Display name in the title bar. |
-| `onDocumentNameChange` | `(name) => void` | Fires when the user edits the title in-place. |
-| `documentNameEditable` | `boolean` | Default `true`. Set `false` to lock the title. |
-| `renderLogo` | `() => ReactNode` | Left-side logo slot. Default renders the document icon. |
-| `renderTitleBarRight` | `() => ReactNode` | Right-side slot. Wire your save status, share button, avatars. |
-| `toolbarExtra` | `ReactNode` | Extra items appended to the toolbar. |
+| Prop                  | Type              | Description                     |
+| --------------------- | ----------------- | ------------------------------- |
+| `title`               | `string`          | Display name in the title bar.  |
+| `onTitleChange`       | `(name) => void`  | Enables in-place title editing. |
+| `renderTitleBarLeft`  | `() => ReactNode` | Left-side title bar slot.       |
+| `renderTitleBarRight` | `() => ReactNode` | Right-side title bar slot.      |
 
 ```tsx
 <DocxEditor
-  documentBuffer={buf}
-  documentName={file.name}
-  onDocumentNameChange={(name) => updateMetadata({ name })}
+  document={bytes}
+  title={file.name}
+  onTitleChange={(name) => updateMetadata({ name })}
   renderTitleBarRight={() => <SaveIndicator dirty={dirty} />}
-/>;
+/>
 ```
-
-The Vue adapter exposes the same areas as named slots (`#title-bar-left`, `#title-bar-right`, `#toolbar-extra`); see [Vue props](/docs/1.x/vue/props#title-bar-slots).
 
 ## Callbacks
 
 Lifecycle and integration hooks.
 
-| Prop | Type | Description |
-|---|---|---|
-| `onChange` | `(doc: Document) => void` | Fires on every document mutation. Throttle for autosave. |
-| `onSave` | `(buf: ArrayBuffer) => void` | Fires when the user invokes Save (Cmd+S or toolbar). |
-| `onOpen` | `(file: File) => void \| Promise<void>` | Replaces the built-in post-pick load for `File > Open` and Cmd/Ctrl+O. The native picker still opens; your callback receives the selected file. |
-| `onSelectionChange` | `(state: SelectionState \| null) => void` | Selection metadata for custom UI (active marks, paragraph style, etc.). |
-| `onError` | `(error: Error) => void` | Errors during parse or render. Send to your error tracker. |
-| `onFontsLoaded` | `() => void` | Fired once the font set is ready. Use to defer measurement-sensitive UI. |
-| `onPrint` / `onCopy` / `onCut` / `onPaste` | `() => void` | Notification hooks for clipboard and print events. |
+| Prop          | Type                               | Description                                                                    |
+| ------------- | ---------------------------------- | ------------------------------------------------------------------------------ |
+| `onReady`     | `(editor: Editor) => void`         | Fired after the editor instance is created.                                    |
+| `onChange`    | `(change: DocumentChange) => void` | Fired after document mutations; carries revision + identity deltas, not bytes. |
+| `onSave`      | `() => void`                       | Overrides the packaged File → Save behavior.                                   |
+| `onOpen`      | `() => void`                       | Overrides the packaged File → Open behavior.                                   |
+| `onFontError` | `(error: EditorFontError) => void` | Reports typed font-resolution failures.                                        |
 
 ```tsx
 <DocxEditor
-  documentBuffer={buf}
-  onChange={(doc) => debouncedAutosave(doc)}
-  onSave={async (buf) => {
-    await fetch('/api/documents/1', { method: 'PUT', body: buf });
-  }}
-  onOpen={async (file) => {
-    await importDocument(file);
-  }}
-  onError={(err) => reportError(err)}
-/>;
+  document={bytes}
+  onReady={(editor) => console.log(editor.snapshot())}
+  onChange={(change) => reportRevision(change.revision)}
+  onSave={() => void persist()}
+  onOpen={() => void openPicker()}
+  onFontError={(err) => reportError(err)}
+/>
 ```
-
-`onOpen` is useful when `externalContent` or collaborative bindings own the document state. Omit it to keep the built-in local load behavior. Pair it with `showFileOpen={false}` when you want to remove the built-in menu item and wire your own button.
-
-## Styling
-
-| Prop | Type | Description |
-|---|---|---|
-| `theme` | `Theme \| null` | OOXML document theme (`colorScheme`, `fontScheme`) used to resolve theme colors and theme fonts. Normally parsed from the file; pass one to override. Not UI styling tokens. |
-| `className` | `string` | Applied to the editor root element. |
-| `style` | `CSSProperties` | Inline styles on the root. |
-| `placeholder` | `ReactNode` | Rendered while there's no document content. |
-| `loadingIndicator` | `ReactNode` | Rendered while the buffer is being parsed. |
-| `printOptions` | `PrintOptions` | Margins, header/footer toggles for the print pipeline. |
-
-```tsx
-<DocxEditor
-  documentBuffer={buf}
-  className='rounded-lg shadow-md'
-  loadingIndicator={<Spinner label='Loading document' />}
-  placeholder={<EmptyState />}
-/>;
-```
-
-## i18n
-
-| Prop | Type | Description |
-|---|---|---|
-| `i18n` | `LocaleStrings \| PartialLocaleStrings` | Locale data from `@docx-editor.dev/i18n`. See [i18n page](/docs/1.x/i18n). |
-
-```tsx
-import pl from '@docx-editor.dev/i18n/pl';
-
-<DocxEditor documentBuffer={buf} i18n={pl} />;
-```
-
-## Plugins
-
-| Prop | Type | Description |
-|---|---|---|
-| `externalPlugins` | `Plugin[]` | ProseMirror plugins appended to the editor's plugin list. |
-| `pluginOverlays` | `ReactNode` | Absolutely-positioned overlay slot for plugin UI. |
-| `pluginSidebarItems` | `ReactSidebarItem[]` | Sidebar entries contributed by plugins. |
-| `pluginRenderedDomContext` | `RenderedDomContext \| null` | Hand-off when you need plugin code to read editor DOM measurements. |
-
-See [Plugins](/docs/1.x/plugins) for the full plugin contract.
 
 ## Ref methods
 
-Imperative API exposed through `forwardRef`. Capture a `DocxEditorRef` and call methods directly when you need to drive the editor from outside React state.
+Imperative API exposed through `forwardRef`. Capture a `DocxEditorRef` when you want to load, save, focus, or reach the full `Editor` facade.
 
 ```tsx
 import { useRef } from 'react';
@@ -266,30 +139,22 @@ import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
 
 const editorRef = useRef<DocxEditorRef>(null);
 
-editorRef.current?.addComment({
-  paraId: 'ABC12300',
-  text: 'Tighten this paragraph.',
-  author: 'Jess Lin',
-});
-editorRef.current?.scrollToParaId('DEF45600');
-// Scroll and briefly flash the paragraph so the user can spot it:
-editorRef.current?.scrollToParaId('DEF45600', {
-  highlight: { color: 'rgba(255, 235, 59, 0.55)', durationMs: 1200 },
-});
 const buf = await editorRef.current?.save(); // Promise<ArrayBuffer | null>
+const editor = editorRef.current?.getEditor();
+editorRef.current?.focus();
 ```
 
 Common methods:
 
-| Method | Returns | What it does |
-|---|---|---|
-| `save()` | `Promise<ArrayBuffer \| null>` | Serialize the current document to a `.docx` buffer. `null` if there is no document. |
-| `addComment({ paraId, text, author })` | `number \| null` | Add a comment anchored to a paragraph by `w14:paraId`. Returns the new comment id, or `null` if the paragraph wasn't found. |
-| `proposeChange({ paraId, search, replaceWith, author })` | `boolean` | Insert a tracked change. `false` if the search text wasn't found. |
-| `findInDocument(query, options?)` | `Array<{ paraId, match, before, after }>` | Search the document; each hit carries its paragraph id and surrounding context. |
-| `scrollToParaId(paraId, options?)` | `boolean` | Scroll to a paragraph by `w14:paraId`. Returns `false` if not found. Pass `{ highlight: { color?, durationMs? } }` to briefly flash the paragraph after scrolling. |
-| `scrollToPosition(pos)` | `void` | Scroll to a raw ProseMirror position. |
-| `getDocument()` | `Document \| null` | Snapshot of the parsed tree. `null` before a document is loaded. |
+| Method                    | Returns                        | What it does                                                                        |
+| ------------------------- | ------------------------------ | ----------------------------------------------------------------------------------- |
+| `save()`                  | `Promise<ArrayBuffer \| null>` | Serialize the current document to a `.docx` buffer. `null` if there is no document. |
+| `load(document)`          | `void`                         | Load DOCX bytes or an existing `DocumentHandle`.                                    |
+| `getDocumentHandle()`     | `DocumentHandle \| null`       | Current handle + revision.                                                          |
+| `getEditor()`             | `Editor \| null`               | Reach the full editor facade.                                                       |
+| `exec(command, options?)` | `ExecResult`                   | Run a typed command against the current scope.                                      |
+| `snapshot(options?)`      | `EditorSnapshot`               | Read the current facade snapshot.                                                   |
+| `focus()`                 | `void`                         | Focus the mounted editor surface.                                                   |
 
 The full method list with signatures is at [/docs/1.x/api/react](/docs/1.x/api/react).
 
