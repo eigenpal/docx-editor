@@ -27,11 +27,8 @@
     "license:check": "license-check-and-add check -f license-check.json",
     "license:add": "license-check-and-add add -f license-check.json"
   },
-  "dependencies": {
-    "@docx-editor.dev/core": "workspace:*",
-    "@docx-editor.dev/i18n": "workspace:*"
-  },
   "peerDependencies": {
+    "@docx-editor.dev/core": "workspace:*",
     "@docx-editor.dev/react": "workspace:*",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0"
@@ -48,6 +45,8 @@
     }
   },
   "devDependencies": {
+    "@docx-editor.dev/core": "workspace:*",
+    "@docx-editor.dev/i18n": "workspace:*",
     "@docx-editor.dev/react": "workspace:*",
     "@happy-dom/global-registrator": "^20.8.3",
     "@testing-library/react": "^16.0.0",
