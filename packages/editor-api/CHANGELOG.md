@@ -1,5 +1,17 @@
 # @docx-editor.dev/editor-api
 
+## 2.0.0
+
+### Patch Changes
+
+- 26095c6: Published packages now ship a `THIRD_PARTY_NOTICES.md` reproducing the license of every third-party package bundled into their release artifacts.
+- Updated dependencies [26095c6]
+- Updated dependencies [26095c6]
+- Updated dependencies [26095c6]
+- Updated dependencies [26095c6]
+- Updated dependencies [26095c6]
+  - @docx-editor.dev/core@2.0.0
+
 ## 1.10.0
 
 ## 1.9.0

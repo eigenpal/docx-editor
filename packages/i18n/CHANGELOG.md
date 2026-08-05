@@ -1,5 +1,11 @@
 # @docx-editor.dev/i18n
 
+## 2.0.0
+
+### Patch Changes
+
+- 26095c6: Published packages now ship a `THIRD_PARTY_NOTICES.md` reproducing the license of every third-party package bundled into their release artifacts.
+
 ## 1.10.0
 
 ## 1.9.0
