@@ -23,6 +23,7 @@ import type {
   TextMeasurer,
 } from './semantic-records.ts';
 import { contentControlsOfLayout, paragraphFragmentsOf } from './semantic-records.ts';
+import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
 
 /** A caret position in the model. */
 export interface SemanticPosition {
@@ -129,6 +130,10 @@ function xWithinLine(
   offset: number,
   measurer?: TextMeasurer | undefined
 ): number {
+  for (const drawing of line.drawings ?? []) {
+    if (offset === drawing.start) return drawing.advanceStart;
+    if (offset === drawing.start + 1) return drawing.advanceEnd;
+  }
   let x = line.box.x;
   for (const span of line.spans) {
     if (offset <= span.range.start) return span.box.x;
@@ -167,6 +172,19 @@ function laterLineOwns(layout: SemanticLayout, line: LineRecord, offset: number)
   return false;
 }
 
+/** The continuation line when a soft wrap opens on an inline drawing atom. */
+function laterLineWithDrawingAt(
+  layout: SemanticLayout,
+  paragraphId: string,
+  offset: number
+): LineRecord | null {
+  for (const { line } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
+    if (line.range.start !== offset) continue;
+    if (line.drawings?.some((drawing) => drawing.start === offset)) return line;
+  }
+  return null;
+}
+
 /**
  * True when this offset sits strictly INSIDE deleted content on the line.
  *
@@ -198,16 +216,24 @@ function isNonNavigableInterior(line: LineRecord, offset: number): boolean {
 }
 
 /**
- * Whether a hard line break is what ended this line.
+ * Whether an authored break is what ended this line.
  *
  * The break OCCUPIES a model offset and is published as a zero-width span, so a line that a
  * Shift+Enter terminated carries it as its last span. That is the one case where a position
  * shared by two lines is not ambiguous — see `caretAt`.
+ *
+ * A PAGE break counts for exactly the same reason, and leaving it out was worse than the
+ * hard-break case rather than milder: the line it opens is on the NEXT PAGE, so reporting
+ * the end of the line the break closed put the caret on a different page from the text that
+ * would be typed at it. Click below the last line, type, and the letters appear a page
+ * later. A column break already arrives here as `\n` — only `w:type="page"` projects its
+ * own character.
  */
 function endsWithLineBreak(line: {
   readonly spans: readonly { readonly text: string }[];
 }): boolean {
-  return line.spans[line.spans.length - 1]?.text === '\n';
+  const last = line.spans[line.spans.length - 1]?.text;
+  return last === '\n' || last === PAGE_BREAK_CHAR;
 }
 
 function pushLineCaretStops(
@@ -372,6 +398,13 @@ export function caretAt(
       // Remember it, but keep looking for the line that STARTS here. Falling back to it
       // keeps a caret placed rather than lost if no such line was laid out.
       afterBreak ??= { line, pageIndex };
+      continue;
+    }
+    if (
+      position.offset === line.range.end &&
+      position.offset > line.range.start &&
+      laterLineWithDrawingAt(layout, position.paragraphId, position.offset)
+    ) {
       continue;
     }
     const box = caretBoxOnLine(line, position.offset, options.measurer);
@@ -638,6 +671,16 @@ export function paragraphTextFromLayout(layout: SemanticLayout, paragraphId: str
       if (seen.has(key)) continue;
       seen.add(key);
       pieces.push({ start: span.range.start, text: span.text });
+    }
+    // Inline drawings occupy one UTF-16 unit each; they live on `line.drawings`, not in span
+    // text, but selection clamp, Select All, and surface ops read length from here.
+    for (const drawing of line.drawings ?? []) {
+      const start = drawing.start;
+      const end = start + 1;
+      const key = `${start}:${end}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      pieces.push({ start, text: '\uFFFC' });
     }
   }
   pieces.sort((a, b) => a.start - b.start);

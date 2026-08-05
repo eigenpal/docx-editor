@@ -18,12 +18,30 @@
 // paragraph fragments already live in. Cell paragraph breaks go through the shared
 // `breakParagraph`, so they hit the same cache with keys at the cell's content width.
 
-import type { OoxmlElement } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core-contract/store';
+import {
+  clipInlineDrawingRecordToRegion,
+  shiftInlineDrawingRecord,
+  publishAnchoredDrawingsForParagraph,
+  anchoredDrawingAtomsInParagraph,
+  type AnchoredDrawingRecord,
+  type DrawingAnchorFrameContext,
+} from './drawing-layout.ts';
+import {
+  exclusionLayoutToken,
+  filterExclusionZonesForParagraphOrder,
+  localizeExclusionZones,
+  topAndBottomSkipBeforeLine,
+} from './drawing-exclusion.ts';
 import type { FieldPageContext, HyperlinkProjector } from './field-projection.ts';
 import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
-import { alignSpans, breakParagraph, type PendingLine } from './paragraph-flow.ts';
+import { alignDrawings, alignSpans, breakParagraph, type PendingLine } from './paragraph-flow.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';
-import { collapsedSpaceBefore, paragraphBorderExtentPt } from './paragraph-style.ts';
+import {
+  collapsedSpaceBefore,
+  paragraphBorderExtentPt,
+  paragraphBorderStrokeWidthPt,
+} from './paragraph-style.ts';
 import { tabStopsFingerprint, withDefaultTabInterval } from './paragraph-tabs.ts';
 import { DEFAULT_RUN_STYLE } from './run-style.ts';
 import {
@@ -52,6 +70,7 @@ import type {
   TableFragmentRecord,
   TableRowFragmentRecord,
   TextMeasurer,
+  LayoutBox,
 } from './semantic-records.ts';
 import { firstLineShift, type ResolvedListItem } from './list-resolve.ts';
 import { publishListMarker } from './list-marker.ts';
@@ -76,6 +95,44 @@ export {
   MAX_BORDER_OWNERSHIP_INTERVALS,
 } from './table-borders.ts';
 
+/** Walk top-level prepared blocks and table cell paragraphs in document order. */
+export function paragraphDocumentOrderOf(
+  prepared: readonly {
+    readonly kind: 'paragraph' | 'table';
+    readonly paragraph?: OoxmlElement;
+    readonly table?: OoxmlElement;
+  }[],
+  contentWidth: number,
+  styleCascade: StyleCascadeTable | undefined,
+  displayMode: RevisionDisplayMode
+): ReadonlyMap<string, number> {
+  const order = new Map<string, number>();
+  let index = 0;
+  const walkTable = (table: OoxmlElement): void => {
+    const structure = readTableStructure(table, contentWidth, 0, styleCascade, displayMode);
+    if (!structure) return;
+    for (const row of structure.rows) {
+      for (const cell of row.cells) {
+        for (const block of cell.blocks) {
+          if (block.localName === 'p') {
+            order.set(block.id, index++);
+          } else if (block.localName === 'tbl') {
+            walkTable(block);
+          }
+        }
+      }
+    }
+  };
+  for (const block of prepared) {
+    if (block.kind === 'paragraph' && block.paragraph) {
+      order.set(block.paragraph.id, index++);
+    } else if (block.kind === 'table' && block.table) {
+      walkTable(block.table);
+    }
+  }
+  return order;
+}
+
 export {
   createTableVMergeResolveBudget,
   MAX_VMERGE_RESOLVE_CELLS,
@@ -91,9 +148,7 @@ export const MAX_TABLE_ROW_FRAGMENTS = 4096;
 const MIN_CELL_BOX_PT = 1;
 
 export type TablePaginationErrorCode =
-  | 'table-row-overheight'
-  | 'table-row-split-unsupported'
-  | 'table-row-fragment-limit';
+  'table-row-overheight' | 'table-row-split-unsupported' | 'table-row-fragment-limit';
 
 /**
  * Bounded table pagination failure. Prefer this over emitting a fragment that overflows
@@ -134,6 +189,11 @@ export interface TableFlowDeps {
    * table cell is an ordinary link; without this it would paint its text and be dead.
    */
   readonly projectLink?: HyperlinkProjector;
+  readonly inlineDrawingLayout?: import('./drawing-layout.ts').InlineDrawingLayoutContext;
+  /** Per-paragraph drawing projection/resource token for break cache keys. */
+  readonly drawingTokenForParagraph?: (paragraph: OoxmlNode) => string;
+  /** @deprecated Prefer {@link drawingTokenForParagraph}. */
+  readonly drawingLayoutToken?: string;
   /**
    * Shared sparse ownership-interval budget for border finalize across nested tables in
    * one layout pass. Created once per flow; omit only in isolated unit tests.
@@ -150,6 +210,36 @@ export interface TableFlowDeps {
    * around it showed the original.
    */
   readonly displayMode?: RevisionDisplayMode;
+  readonly anchorFrameBase?: () => Omit<
+    DrawingAnchorFrameContext,
+    'paragraphBox' | 'anchorLineBox' | 'anchorCharacterX' | 'columnBox' | 'cellBox' | 'layoutInCell'
+  >;
+  readonly pageContentClip?: () => import('./semantic-records.ts').LayoutBox;
+  readonly collectAnchoredDrawings?: (drawings: readonly AnchoredDrawingRecord[]) => void;
+  /** Root anchor sink — preserved when row defer strips {@link collectAnchoredDrawings}. */
+  readonly publishAnchoredDrawings?: (drawings: readonly AnchoredDrawingRecord[]) => void;
+  readonly columnBoxForParagraph?: (
+    paragraphBox: import('./semantic-records.ts').LayoutBox
+  ) => import('./semantic-records.ts').LayoutBox;
+  readonly deferAnchoredDrawings?: (pending: {
+    readonly paragraph: OoxmlNode;
+    readonly paragraphId: string;
+    readonly paragraphBox: LayoutBox;
+    readonly lines: readonly LineRecord[];
+    readonly cellOriginX: number;
+    readonly cellContentWidth: number;
+  }) => void;
+  readonly onAnchorShift?: (paragraphId: string, dy: number) => void;
+  readonly onAnchorRepublish?: (
+    paragraphId: string,
+    drawings: readonly AnchoredDrawingRecord[]
+  ) => void;
+  /** When true, row finalize forwards deferred anchors without publishing them. */
+  readonly anchorDeferOnly?: boolean;
+  /** Body-page wrap exclusion zones active while breaking cell paragraphs. */
+  readonly pageExclusionZones?: () => readonly import('./drawing-exclusion.ts').ExclusionZone[];
+  /** Document-order index for filtering wrap zones to earlier anchors only. */
+  readonly paragraphOrderIndex?: (paragraphId: string) => number | undefined;
 }
 
 /**
@@ -170,6 +260,159 @@ export function initialCellCursors(row: SemanticTableRow): CellPlaceCursor[] {
     previousSpaceAfter: 0,
     paragraphFragmentIndex: 0,
   }));
+}
+
+function anchorPublishSink(
+  deps: TableFlowDeps
+): ((drawings: readonly AnchoredDrawingRecord[]) => void) | undefined {
+  return deps.publishAnchoredDrawings ?? deps.collectAnchoredDrawings;
+}
+
+type DeferredRowAnchor = {
+  readonly paragraph: OoxmlNode;
+  readonly paragraphId: string;
+  readonly paragraphBox: LayoutBox;
+  readonly lines: readonly LineRecord[];
+  readonly cellOriginX: number;
+  readonly cellContentWidth: number;
+};
+
+function publishDeferredRowAnchors(
+  deferredRowAnchors: readonly DeferredRowAnchor[],
+  cells: readonly TableCellFragmentRecord[],
+  rowTop: number,
+  rowHeight: number,
+  deps: TableFlowDeps
+): void {
+  const publish = anchorPublishSink(deps);
+  if (
+    deferredRowAnchors.length === 0 ||
+    !publish ||
+    !deps.inlineDrawingLayout ||
+    !deps.anchorFrameBase ||
+    !deps.pageContentClip
+  ) {
+    return;
+  }
+  for (const pending of deferredRowAnchors) {
+    let paragraphBox: LayoutBox | null = null;
+    let cellFrameBox: LayoutBox | null = null;
+    let lines: readonly LineRecord[] = pending.lines;
+    for (const cell of cells) {
+      for (const block of cell.blocks) {
+        if (block.kind === 'paragraph' && block.paragraphId === pending.paragraphId) {
+          paragraphBox = block.box;
+          lines = block.lines;
+          cellFrameBox = cell.box;
+          break;
+        }
+      }
+      if (paragraphBox) break;
+    }
+    if (!paragraphBox) continue;
+    const cellBox =
+      cellFrameBox ??
+      Object.freeze({
+        x: pending.cellOriginX,
+        y: rowTop,
+        width: pending.cellContentWidth,
+        height: rowHeight,
+      });
+    publish(
+      publishAnchoredDrawingsForParagraph({
+        paragraph: pending.paragraph,
+        paragraphId: pending.paragraphId,
+        paragraphBox,
+        lines,
+        drawingLayout: deps.inlineDrawingLayout,
+        frameBase: deps.anchorFrameBase(),
+        columnBox: deps.columnBoxForParagraph?.(paragraphBox) ?? paragraphBox,
+        cellBox,
+        pageClip: deps.pageContentClip(),
+        measurer: deps.measurer,
+      })
+    );
+  }
+}
+
+function republishAnchoredParagraphsInBlocks(
+  blocks: readonly BlockFragmentRecord[],
+  authoredBlocks: readonly OoxmlElement[],
+  cellBox: LayoutBox,
+  deps: TableFlowDeps
+): void {
+  if (
+    !deps.onAnchorRepublish ||
+    !deps.inlineDrawingLayout ||
+    !deps.anchorFrameBase ||
+    !deps.pageContentClip
+  ) {
+    return;
+  }
+  for (const block of blocks) {
+    if (block.kind !== 'paragraph') continue;
+    const paragraph = authoredBlocks.find(
+      (candidate) => candidate.kind === 'paragraph' && candidate.id === block.paragraphId
+    );
+    if (!paragraph || paragraph.kind !== 'paragraph') continue;
+    const atoms = anchoredDrawingAtomsInParagraph(paragraph, deps.inlineDrawingLayout);
+    if (atoms.length === 0) continue;
+    deps.onAnchorRepublish(
+      block.paragraphId,
+      publishAnchoredDrawingsForParagraph({
+        paragraph,
+        paragraphId: block.paragraphId,
+        paragraphBox: block.box,
+        lines: block.lines,
+        drawingLayout: deps.inlineDrawingLayout,
+        frameBase: deps.anchorFrameBase(),
+        columnBox: deps.columnBoxForParagraph?.(block.box) ?? block.box,
+        cellBox,
+        pageClip: deps.pageContentClip(),
+        measurer: deps.measurer,
+      })
+    );
+  }
+}
+
+function rowDepsForAnchors(
+  deps: TableFlowDeps,
+  deferredRowAnchors: DeferredRowAnchor[]
+): {
+  readonly rowDeps: TableFlowDeps;
+  readonly flushDeferred: (
+    cells: readonly TableCellFragmentRecord[],
+    rowTop: number,
+    rowHeight: number
+  ) => void;
+} {
+  const publishAnchoredDrawings = anchorPublishSink(deps);
+  const parentDefer = deps.deferAnchoredDrawings;
+  if (!publishAnchoredDrawings && !parentDefer) {
+    return { rowDeps: deps, flushDeferred: () => {} };
+  }
+  const rowDeps: TableFlowDeps = {
+    ...deps,
+    publishAnchoredDrawings,
+    collectAnchoredDrawings: undefined,
+    deferAnchoredDrawings: (pending) => {
+      deferredRowAnchors.push(pending);
+    },
+  };
+  const flushDeferred = (
+    cells: readonly TableCellFragmentRecord[],
+    rowTop: number,
+    rowHeight: number
+  ): void => {
+    if (deferredRowAnchors.length === 0) return;
+    if (publishAnchoredDrawings && !deps.anchorDeferOnly) {
+      publishDeferredRowAnchors(deferredRowAnchors, cells, rowTop, rowHeight, deps);
+    } else if (parentDefer) {
+      for (const pending of deferredRowAnchors) parentDefer(pending);
+    }
+    deferredRowAnchors.length = 0;
+  };
+  return { rowDeps, flushDeferred };
 }
 
 function sumCols(cols: readonly number[], from: number, to: number): number {
@@ -235,6 +478,11 @@ function shiftBlocks(blocks: readonly BlockFragmentRecord[], dy: number): BlockF
           ...span,
           box: { ...span.box, y: span.box.y + dy },
         })),
+        ...(line.drawings
+          ? {
+              drawings: line.drawings.map((drawing) => shiftInlineDrawingRecord(drawing, 0, dy)),
+            }
+          : {}),
       })),
     };
   });
@@ -309,6 +557,18 @@ function placeCellParagraph(
   // places it at `left - hanging`, and Word's `w:suff` puts the text back at `left` — or
   // after the marker, or at the next tab stop past an overflowing one (§17.9.30).
   const firstLineOffset = firstLineShift(listItem, indent, deps.measurer, tabStops, available);
+  const rawZones = deps.pageExclusionZones?.() ?? Object.freeze([]);
+  const paragraphOrder = deps.paragraphOrderIndex?.(paragraphId) ?? Number.MAX_SAFE_INTEGER;
+  const filtered = deps.paragraphOrderIndex
+    ? filterExclusionZonesForParagraphOrder(rawZones, paragraphOrder, (id) =>
+        deps.paragraphOrderIndex?.(id)
+      )
+    : rawZones;
+  const pageZones = localizeExclusionZones(filtered, originX, 0, {
+    left: 0,
+    right: indent.left + available + indent.right,
+  });
+  const exclusionToken = exclusionLayoutToken(pageZones);
   const key = paragraphLayoutKey({
     paragraph,
     properties: [
@@ -319,6 +579,12 @@ function placeCellParagraph(
     ],
     width: available,
     producer: deps.producer,
+    ...(deps.drawingTokenForParagraph?.(paragraph)
+      ? { drawingToken: deps.drawingTokenForParagraph(paragraph) }
+      : deps.drawingLayoutToken
+        ? { drawingToken: deps.drawingLayoutToken }
+        : {}),
+    ...(exclusionToken ? { exclusionToken } : {}),
   });
   const lines = breakParagraph(
     paragraph,
@@ -342,6 +608,17 @@ function placeCellParagraph(
       ...(deps.projectLink ? { projectLink: deps.projectLink } : {}),
       displayMode: deps.displayMode,
       ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
+      ...(deps.inlineDrawingLayout ? { inlineDrawingLayout: deps.inlineDrawingLayout } : {}),
+      contentLeft: 0,
+      contentRight: indent.left + available + indent.right,
+      paragraphStartY: top,
+      anchorCellBox: Object.freeze({
+        x: 0,
+        y: 0,
+        width: indent.left + available + indent.right,
+        height: Math.max(1, available),
+      }),
+      ...(pageZones.length > 0 ? { pageExclusionZones: pageZones } : {}),
     }
   );
 
@@ -368,29 +645,80 @@ function placeCellParagraph(
     const pendingLine = lines[lineIndex]!;
     const isLastLine = lineIndex === lines.length - 1;
     const borderExtra =
-      isLastLine && includeBottomBorder && bottomBorder
-        ? bottomBorder.spacePt + bottomBorder.widthPt
-        : 0;
+      isLastLine && includeBottomBorder && bottomBorder ? paragraphBorderExtentPt(bottomBorder) : 0;
     const afterExtra = isLastLine && includeAfter ? spacing.after : 0;
-    const lineBottom = y + pendingLine.height + borderExtra + afterExtra;
+    const skipBefore =
+      pageZones.length > 0
+        ? topAndBottomSkipBeforeLine(y, pendingLine.height, pageZones)
+        : (pendingLine.exclusionSkipBefore ?? 0);
+    const lineBottom = y + skipBefore + pendingLine.height + borderExtra + afterExtra;
     if (lineBottom > maxBottom + 0.001) {
       break;
     }
+    y += skipBefore;
+    const lineIndent = originX + indent.left + (lineIndex === 0 ? firstLineOffset : 0);
+    const lineAvailableWidth = Math.max(1, available - (lineIndex === 0 ? firstLineOffset : 0));
+    const placedSpans = pendingLine.spans.map((span) => ({
+      ...span,
+      range: { ...span.range, paragraphId },
+      box: { ...span.box, x: span.box.x + originX, y },
+    }));
+    const alignedSpans = alignSpans(
+      placedSpans,
+      deps.measurer,
+      lineIndent,
+      lineAvailableWidth,
+      alignment,
+      isLastLine,
+      alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined
+    );
+    const alignOffset =
+      placedSpans.length > 0 && alignedSpans.length > 0
+        ? alignedSpans[0]!.box.x - placedSpans[0]!.box.x
+        : pendingLine.drawings.length > 0 && alignment !== 'left' && alignment !== 'both'
+          ? (() => {
+              const slack = lineAvailableWidth - pendingLine.width;
+              if (slack <= 0) return 0;
+              return alignment === 'center' ? slack / 2 : slack;
+            })()
+          : 0;
+    const cellClip = Object.freeze({
+      x: originX,
+      y: top,
+      width: cellContentWidth,
+      height: Math.max(0, maxBottom - top),
+    });
+    const alignedDrawings = alignDrawings(
+      pendingLine.drawings.map((drawing) =>
+        clipInlineDrawingRecordToRegion(
+          Object.freeze({
+            ...drawing,
+            paragraphId,
+            x: originX + drawing.x,
+            advanceStart: originX + drawing.advanceStart,
+            advanceEnd: originX + drawing.advanceEnd,
+            y: y + drawing.y,
+            paintBounds: Object.freeze({
+              ...drawing.paintBounds,
+              x: originX + drawing.paintBounds.x,
+              y: y + drawing.paintBounds.y,
+            }),
+            hitBounds: Object.freeze({
+              ...drawing.hitBounds,
+              x: originX + drawing.hitBounds.x,
+              y: y + drawing.hitBounds.y,
+            }),
+          }),
+          cellClip
+        )
+      ),
+      alignOffset
+    );
     records.push({
       id: deps.nextLineId(),
       range: { paragraphId, start: pendingLine.start, end: pendingLine.end },
-      spans: alignSpans(
-        pendingLine.spans.map((span) => ({
-          ...span,
-          range: { ...span.range, paragraphId },
-          box: { ...span.box, x: span.box.x + originX, y },
-        })),
-        deps.measurer,
-        originX + indent.left + (lineIndex === 0 ? firstLineOffset : 0),
-        Math.max(1, available - (lineIndex === 0 ? firstLineOffset : 0)),
-        alignment,
-        isLastLine
-      ),
+      spans: alignedSpans,
+      ...(alignedDrawings.length > 0 ? { drawings: alignedDrawings } : {}),
       box: {
         x: originX + indent.left,
         y,
@@ -434,33 +762,36 @@ function placeCellParagraph(
   // same here or one document paints the identical callout two ways depending on whether it
   // sits in a table cell or a header. The side rules stand outside the text column by their
   // own `w:space`, so horizontals drawn only across the column leave the frame open.
-  const boxLeft = borders.left
-    ? fragmentX - borders.left.spacePt - borders.left.widthPt
-    : fragmentX;
+  // Stroke thickness uses the inflated compound band for `double`/etc. (shared with body).
+  const leftStroke = borders.left ? paragraphBorderStrokeWidthPt(borders.left) : 0;
+  const rightStroke = borders.right ? paragraphBorderStrokeWidthPt(borders.right) : 0;
+  const boxLeft = borders.left ? fragmentX - borders.left.spacePt - leftStroke : fragmentX;
   const boxRight = borders.right
-    ? fragmentX + available + borders.right.spacePt + borders.right.widthPt
+    ? fragmentX + available + borders.right.spacePt + rightStroke
     : fragmentX + available;
   const boxWidth = Math.max(boxRight - boxLeft, 0);
   if (topExtent > 0 && borders.top) {
-    const ruleY = linesTop - borders.top.spacePt - borders.top.widthPt;
+    const topStroke = paragraphBorderStrokeWidthPt(borders.top);
+    const ruleY = linesTop - borders.top.spacePt - topStroke;
     strokes.push({
       side: 'top',
       edge: borders.top,
-      box: { x: boxLeft, y: ruleY, width: boxWidth, height: borders.top.widthPt },
+      box: { x: boxLeft, y: ruleY, width: boxWidth, height: topStroke },
     });
     contentTop = ruleY;
   }
   if (complete && includeBottomBorder && bottomBorder) {
+    const closeStroke = paragraphBorderStrokeWidthPt(bottomBorder);
     const ruleY = linesBottom + bottomBorder.spacePt;
     const box = {
       x: boxLeft,
       y: ruleY,
       width: boxWidth,
-      height: bottomBorder.widthPt,
+      height: closeStroke,
     };
     bottomBorderRecord = { edge: bottomBorder, box };
     strokes.push({ side: 'bottom', edge: bottomBorder, box });
-    contentBottom = ruleY + bottomBorder.widthPt;
+    contentBottom = ruleY + closeStroke;
   }
   // Side rules run corner to corner of THIS fragment's frame. Horizontally they are
   // publish-only: Word draws them outside the text column and never re-breaks the lines for
@@ -471,9 +802,9 @@ function placeCellParagraph(
       side: 'left',
       edge: borders.left,
       box: {
-        x: fragmentX - borders.left.spacePt - borders.left.widthPt,
+        x: fragmentX - borders.left.spacePt - leftStroke,
         y: contentTop,
-        width: borders.left.widthPt,
+        width: leftStroke,
         height: sideHeight,
       },
     });
@@ -485,7 +816,7 @@ function placeCellParagraph(
       box: {
         x: fragmentX + available + borders.right.spacePt,
         y: contentTop,
-        width: borders.right.widthPt,
+        width: rightStroke,
         height: sideHeight,
       },
     });
@@ -494,13 +825,14 @@ function placeCellParagraph(
   // text only and adds no flow height, so a barred cell paragraph is exactly as tall as a
   // bare one.
   if (borders.bar) {
+    const barStroke = paragraphBorderStrokeWidthPt(borders.bar);
     strokes.push({
       side: 'bar',
       edge: borders.bar,
       box: {
-        x: fragmentX - borders.bar.spacePt - borders.bar.widthPt,
+        x: fragmentX - borders.bar.spacePt - barStroke,
         y: linesTop,
-        width: borders.bar.widthPt,
+        width: barStroke,
         height: Math.max(linesBottom - linesTop, 0),
       },
     });
@@ -530,33 +862,73 @@ function placeCellParagraph(
         )
       : undefined;
 
-  return {
-    fragment: {
-      kind: 'paragraph',
-      id: `${paragraphId}#f${fragmentIndex}`,
+  const fragment = {
+    kind: 'paragraph' as const,
+    id: `${paragraphId}#f${fragmentIndex}`,
+    paragraphId,
+    fragmentIndex,
+    range: {
       paragraphId,
-      fragmentIndex,
-      range: {
-        paragraphId,
-        start: records[0]!.range.start,
-        end: records[records.length - 1]!.range.end,
-      },
-      props,
-      spacing: { before: appliedBefore, after: appliedAfter },
-      indent,
-      ...(bottomBorderRecord ? { bottomBorder: bottomBorderRecord } : {}),
-      ...(strokes.length > 0 ? { borders: strokes } : {}),
-      ...(shading === undefined ? {} : { shading }),
-      ...(shadingBox === undefined ? {} : { shadingBox }),
-      ...(marker ? { marker } : {}),
-      lines: records,
-      box: {
-        x: fragmentX,
-        y: top,
-        width: available,
-        height: bottom - top,
-      },
+      start: records[0]!.range.start,
+      end: records[records.length - 1]!.range.end,
     },
+    props,
+    spacing: { before: appliedBefore, after: appliedAfter },
+    indent,
+    ...(bottomBorderRecord ? { bottomBorder: bottomBorderRecord } : {}),
+    ...(strokes.length > 0 ? { borders: strokes } : {}),
+    ...(shading === undefined ? {} : { shading }),
+    ...(shadingBox === undefined ? {} : { shadingBox }),
+    ...(marker ? { marker } : {}),
+    lines: records,
+    box: {
+      x: fragmentX,
+      y: top,
+      width: available,
+      height: bottom - top,
+    },
+  };
+
+  if (deps.inlineDrawingLayout && deps.anchorFrameBase && deps.pageContentClip) {
+    const cellBox = Object.freeze({
+      x: originX,
+      y: top,
+      width: cellContentWidth,
+      height: Math.max(0, maxBottom - top),
+    });
+    const paragraphBox = fragment.box;
+    const publication = {
+      paragraph,
+      paragraphId,
+      paragraphBox,
+      lines: records,
+    };
+    if (deps.deferAnchoredDrawings) {
+      deps.deferAnchoredDrawings({
+        ...publication,
+        cellOriginX: originX,
+        cellContentWidth,
+      });
+    } else if (deps.collectAnchoredDrawings) {
+      deps.collectAnchoredDrawings(
+        publishAnchoredDrawingsForParagraph({
+          paragraph,
+          paragraphId,
+          paragraphBox,
+          lines: records,
+          drawingLayout: deps.inlineDrawingLayout,
+          frameBase: deps.anchorFrameBase(),
+          columnBox: deps.columnBoxForParagraph?.(paragraphBox) ?? paragraphBox,
+          cellBox,
+          pageClip: deps.pageContentClip(),
+          measurer: deps.measurer,
+        })
+      );
+    }
+  }
+
+  return {
+    fragment,
     bottom,
     spaceAfter: appliedAfter,
     nextLineIndex,
@@ -844,6 +1216,8 @@ export function layoutRowFragmentBounded(
   const heightRule = row.height;
   const exactHeightPt = heightRule.rule === 'exact' ? heightRule.valuePt : undefined;
   const atLeastHeightPt = heightRule.rule === 'atLeast' ? heightRule.valuePt : undefined;
+  const deferredRowAnchors: DeferredRowAnchor[] = [];
+  const { rowDeps, flushDeferred } = rowDepsForAnchors(deps, deferredRowAnchors);
   // Exact rows clip to their authored box; never flow past it even when the page allows more.
   const flowMaxBottom =
     exactHeightPt === undefined
@@ -916,7 +1290,7 @@ export function layoutRowFragmentBounded(
           contentTop,
           contentMaxBottom,
           depth,
-          deps,
+          rowDeps,
           cursor,
           cell.styleFormatting
         );
@@ -1029,6 +1403,8 @@ export function layoutRowFragmentBounded(
       : flowed.map((entry) => entry.nextCursor);
   const complete = clipExact || flowed.every((entry) => entry.complete);
 
+  flushDeferred(cells, rowTop, rowHeight);
+
   return {
     record: {
       id: row.id,
@@ -1053,6 +1429,18 @@ export function layoutRowFragmentBounded(
  * Measure the natural height of a full (unsplit) row without allocating line ids.
  * Used for whole-row preflight before committing placement.
  */
+function stripAnchorSinksForProbe(deps: TableFlowDeps): TableFlowDeps {
+  return {
+    ...deps,
+    collectAnchoredDrawings: undefined,
+    publishAnchoredDrawings: undefined,
+    deferAnchoredDrawings: undefined,
+    onAnchorRepublish: undefined,
+    onAnchorShift: undefined,
+    anchorDeferOnly: true,
+  };
+}
+
 export function measureRowHeight(
   row: SemanticTableRow,
   cols: readonly number[],
@@ -1063,7 +1451,7 @@ export function measureRowHeight(
 ): number {
   let lineCounter = 0;
   const probeDeps: TableFlowDeps = {
-    ...deps,
+    ...stripAnchorSinksForProbe(deps),
     nextLineId: () => `probe-${lineCounter++}`,
   };
   const placed = layoutRowFragment(row, cols, left, 0, false, depth, probeDeps, cellSpacingPt);
@@ -1080,7 +1468,9 @@ export function finalizeTableRows(
   sourceRows: readonly SemanticTableRow[],
   ownershipBudget?: TableBorderOwnershipBudget,
   vMergeBudget?: TableVMergeResolveBudget,
-  vMergeWork?: TableVMergeResolveWork
+  vMergeWork?: TableVMergeResolveWork,
+  onAnchorShift?: (paragraphId: string, dy: number) => void,
+  anchorDeps?: TableFlowDeps
 ): TableRowFragmentRecord[] {
   if (rows.length === 0) return [];
 
@@ -1134,8 +1524,26 @@ export function finalizeTableRows(
             insets.top +
             (available > 0 ? (authored.vAlign === 'center' ? available / 2 : available) : 0);
           const dy = desiredTop - contentTop;
-          if (Math.abs(dy) > 0.001) blocks = shiftBlocks(blocks, dy);
+          if (Math.abs(dy) > 0.001) {
+            blocks = shiftBlocks(blocks, dy);
+            for (const block of blocks) {
+              if (block.kind === 'paragraph') onAnchorShift?.(block.paragraphId, dy);
+            }
+          }
         }
+      }
+      const finalizedCellBox = Object.freeze({
+        x: cell.box.x,
+        y: cell.box.y,
+        width: cell.box.width,
+        height,
+      });
+      if (
+        authored &&
+        anchorDeps &&
+        (span > 1 || (authored.vAlign !== 'top' && blocks.length > 0))
+      ) {
+        republishAnchoredParagraphsInBlocks(blocks, authored.blocks, finalizedCellBox, anchorDeps);
       }
       return {
         ...cell,
@@ -1220,6 +1628,16 @@ function emitNestedTable(
     deps.displayMode
   );
   if (!structure || structure.rows.length === 0) return null;
+  const nestedDeferred: DeferredRowAnchor[] = [];
+  const nestedFlowDeps: TableFlowDeps = {
+    ...deps,
+    publishAnchoredDrawings: undefined,
+    collectAnchoredDrawings: undefined,
+    anchorDeferOnly: true,
+    deferAnchoredDrawings: (pending) => {
+      nestedDeferred.push(pending);
+    },
+  };
   // A nested table is placed inside its CELL's content box by the same rules a top-level one
   // is placed inside the text column.
   const tableLeft = left + tableOriginX(structure, containerWidth);
@@ -1233,7 +1651,7 @@ function emitNestedTable(
       y,
       false,
       depth,
-      deps,
+      nestedFlowDeps,
       structure.cellSpacingPt
     );
     rawRows.push(placed.record);
@@ -1244,8 +1662,23 @@ function emitNestedTable(
     structure,
     structure.rows,
     deps.borderOwnershipBudget,
-    deps.vMergeResolveBudget
+    deps.vMergeResolveBudget,
+    undefined,
+    undefined,
+    undefined
   );
+  for (const pending of nestedDeferred) {
+    for (const row of rows) {
+      const hostsParagraph = row.cells.some((cell) =>
+        cell.blocks.some(
+          (block) => block.kind === 'paragraph' && block.paragraphId === pending.paragraphId
+        )
+      );
+      if (!hostsParagraph) continue;
+      publishDeferredRowAnchors([pending], row.cells, row.box.y, row.box.height, deps);
+      break;
+    }
+  }
   const width = sumCols(structure.columnWidthsPt, 0, structure.columnWidthsPt.length);
   const rowOrdinals = new Map<string, number>();
   return {

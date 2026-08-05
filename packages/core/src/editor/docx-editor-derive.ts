@@ -18,6 +18,7 @@ import type {
 } from '../contracts/editor.ts';
 import type { ContainerRef, ParagraphSummary } from '../index.ts';
 import { classifyCommand } from './docx-editor-support.ts';
+import { gateImageCommand } from './docx-editor-images.ts';
 
 /** Whether a command may run, and the engine's own refusal when it may not. */
 export type CommandGate =
@@ -351,6 +352,26 @@ export function gateCommand(
       refusal: { ok: false, code: 'unsupported', reason: 'nothing to redo' },
     };
   }
+  if (command.type === 'insertToc' && !surface.canInsertToc()) {
+    return {
+      ok: false,
+      refusal: {
+        ok: false,
+        code: 'unsupported',
+        reason: 'a table of contents can only be inserted in the editable document body',
+      },
+    };
+  }
+  if (command.type === 'refreshToc' && !surface.canRefreshToc(command.tocId)) {
+    return {
+      ok: false,
+      refusal: {
+        ok: false,
+        code: 'notFound',
+        reason: 'there is no refreshable table of contents at the selection',
+      },
+    };
+  }
   if (command.type === 'insertPageField') {
     const active = surface.activeScope?.() ?? { kind: 'body' as const };
     if (active.kind !== 'headerFooter') {
@@ -395,6 +416,10 @@ export function gateCommand(
     const tableGate = gateTableCommand(command, surface);
     if (!tableGate.ok) return tableGate;
     return { ok: true, tablePlan: tableGate.tablePlan };
+  }
+  const imageGate = gateImageCommand(command, surface);
+  if (imageGate && !imageGate.ok) {
+    return { ok: false, refusal: imageGate };
   }
   return { ok: true };
 }

@@ -17,6 +17,7 @@ import {
   validContentControlPropertiesChildren,
   validEmptySdtPayload,
 } from './ooxml-sdt.ts';
+import { isDrawingKnownKind, validDrawingKnownKind } from './ooxml-drawing-rules.ts';
 import type { OoxmlAttribute, OoxmlElement, OoxmlNode, OoxmlReadRejection } from './ooxml-tree.ts';
 
 export { knownKindAllowsWmlVal } from './ooxml-sdt.ts';
@@ -35,6 +36,14 @@ export const MC_NAMESPACE_URI = 'http://schemas.openxmlformats.org/markup-compat
 export const XSI_NAMESPACE_URI = 'http://www.w3.org/2001/XMLSchema-instance';
 /** The `w14` wordml-2010 extension namespace — `w14:paraId`/`w14:textId` live here. */
 export const W14_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordml';
+export const DRAWINGML_MAIN_NAMESPACE_URI = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+export const WP_NAMESPACE_URI =
+  'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+export const PIC_NAMESPACE_URI = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+export const RELATIONSHIPS_NAMESPACE_URI =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+/** `a:graphicData/@uri` for a DrawingML picture payload. */
+export const PIC_GRAPHIC_DATA_URI = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
 export const MC_QNAME_LIST_ATTRIBUTES = new Set([
   'ProcessContent',
   'PreserveElements',
@@ -219,6 +228,7 @@ function isPreservedChild(child: OoxmlNode): boolean {
 }
 
 export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]): boolean {
+  if (isDrawingKnownKind(kind)) return validDrawingKnownKind(kind, children);
   switch (kind) {
     case 'document':
       return (
@@ -259,7 +269,10 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
       // ordinary, so a `w:ins` here must not demote the link.
       return children.every(
         (child) =>
-          child.kind === 'run' || isContentRevisionKind(child.kind) || isPreservedChild(child)
+          child.kind === 'run' ||
+          child.kind === 'drawing' ||
+          isContentRevisionKind(child.kind) ||
+          isPreservedChild(child)
       );
     case 'bookmarkStart':
     case 'bookmarkEnd':
@@ -283,6 +296,7 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
             child.kind === 'noteRef' ||
             child.kind === 'separator' ||
             child.kind === 'continuationSeparator' ||
+            child.kind === 'drawing' ||
             child.kind === 'generic'
         ) &&
         (properties < 0 || properties === 0) &&
@@ -298,7 +312,10 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
     case 'revisionMoveTo':
       return children.every(
         (child) =>
-          child.kind === 'run' || isContentRevisionKind(child.kind) || isPreservedChild(child)
+          child.kind === 'run' ||
+          child.kind === 'drawing' ||
+          isContentRevisionKind(child.kind) ||
+          isPreservedChild(child)
       );
     // Range markers and the comment reference are empty elements. Any child means this is
     // not the element the schema describes, so it demotes rather than being trusted.
@@ -421,6 +438,8 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
     case 'contentControlCheckedState':
     case 'contentControlUncheckedState':
       return validEmptySdtPayload(children);
+    default:
+      return false;
   }
 }
 

@@ -27,6 +27,7 @@ import {
   execSetNoteProperties,
 } from './docx-editor-notes.ts';
 import { isTableEditorCommand, planTableCommand } from './table-command-plan.ts';
+import { execImageCommand, isImageCommand } from './docx-editor-images.ts';
 
 /**
  * Run one admitted command against the surface.
@@ -38,7 +39,13 @@ import { isTableEditorCommand, planTableCommand } from './table-command-plan.ts'
 export function execEditorCommand(
   mounted: PaginatedSurface,
   command: EditorCommand,
-  options?: { readonly admittedTablePlan?: import('./table-command-plan.ts').TableCommandPlan }
+  options?: {
+    readonly admittedTablePlan?: import('./table-command-plan.ts').TableCommandPlan;
+    readonly editor?: Pick<
+      import('./docx-editor-types.ts').DocxEditorInstance,
+      'surface' | 'mountGeneration'
+    >;
+  }
 ): ExecResult | null {
   switch (command.type) {
     case 'toggleMark': {
@@ -241,6 +248,24 @@ export function execEditorCommand(
     case 'redo':
       mounted.redo();
       break;
+    case 'insertToc':
+      if (!mounted.insertToc()) {
+        return {
+          ok: false,
+          code: 'unsupported',
+          reason: mounted.state().lastRejection ?? 'the table of contents could not be inserted',
+        };
+      }
+      break;
+    case 'refreshToc':
+      if (!mounted.refreshToc(command.tocId, command.mode)) {
+        return {
+          ok: false,
+          code: 'unsupported',
+          reason: mounted.state().lastRejection ?? 'the table of contents could not be refreshed',
+        };
+      }
+      break;
     case 'editHeaderFooter':
       return execEditHeaderFooter(mounted, command);
     case 'exitHeaderFooter': {
@@ -345,6 +370,9 @@ export function execEditorCommand(
       return { ok: true, changed: false };
     }
     default:
+      if (isImageCommand(command)) {
+        return execImageCommand(mounted, command, options?.editor);
+      }
       // Unreachable: `classifyCommand` refused everything else. Typed for the compiler.
       return { ok: false, code: 'unsupported', reason: 'unsupported command' };
   }

@@ -5,10 +5,12 @@
 // different picker UI takes the hook and ignores the compound parts. The compound
 // `FontFamily` (Trigger / Content / Item) is that hook plus open-state plumbing.
 //
-// Every option string comes from `Editor.getDocumentFonts()`, which validates font
-// names at the derivation boundary (length-bounded, control characters dropped), so
-// rendering an option in its own typeface via a React `style` object is styling an
-// already-sanitized name — and a style OBJECT, never a CSS string sink.
+// Every option string comes from `Editor.getAvailableFonts()` — the configured font
+// catalog merged with the document's declared families, so a brand-new document still
+// offers a real list. The derivation validates font names at its boundary
+// (length-bounded, control characters dropped), so rendering an option in its own
+// typeface via a React `style` object is styling an already-sanitized name — and a
+// style OBJECT, never a CSS string sink.
 
 import {
   createContext,
@@ -39,7 +41,10 @@ export interface UseFontFamilyResult {
   readonly value: string | null;
   /** Apply a family through the can-before-exec path; a refusal is a safe no-op. */
   readonly setValue: (family: string) => void;
-  /** The document's font catalog (validated, deduplicated, sorted). */
+  /**
+   * The offerable font catalog (validated, deduplicated, sorted): the editor's
+   * configured families merged with the document's declared ones.
+   */
   readonly options: readonly string[];
   /** Whether the engine would honour a font change right now. */
   readonly isEnabled: boolean;
@@ -56,14 +61,14 @@ export function useFontFamily(): UseFontFamilyResult {
   // OPTIONS SUBSCRIPTION: the options list must follow edits (typing a run with a new
   // `w:rFonts`, undo, load), and the change signal for ALL document state is the
   // version-cached snapshot's IDENTITY. So this selects the snapshot itself — a new
-  // reference exactly when observable state moved — and re-reads `getDocumentFonts()`
-  // keyed on it. The read is cheap: the session memoizes the derivation per revision,
-  // so an unchanged document answers from cache. The cost accepted here is a re-render
-  // of the consuming component on every state move, which for a single toolbar picker
-  // is the right trade against a bespoke second subscription channel.
+  // reference exactly when observable state moved — and re-reads `getAvailableFonts()`
+  // keyed on it. The read is cheap: the session memoizes the document half per
+  // revision, so an unchanged document answers from cache. The cost accepted here is a
+  // re-render of the consuming component on every state move, which for a single
+  // toolbar picker is the right trade against a bespoke second subscription channel.
   const snapshot = useEditorState(selectSnapshot);
   const options = useMemo(
-    () => (editor && !snapshot.isLoading ? editor.getDocumentFonts() : EMPTY_FONTS),
+    () => (editor && !snapshot.isLoading ? editor.getAvailableFonts() : EMPTY_FONTS),
     [editor, snapshot]
   );
   const { isEnabled } = useEditorCommand('font.family');

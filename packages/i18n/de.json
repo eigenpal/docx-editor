@@ -89,7 +89,9 @@
     "commentsAndChanges": "Kommentare & Änderungen",
     "moreItems": "{count, plural, one {# weiteres Element} other {# weitere Elemente}}",
     "unavailableInPreview": null,
-    "more": null
+    "more": null,
+    "altText": null,
+    "imageWrap": null
   },
   "alignment": {
     "alignLeft": "Linksbündig",
@@ -814,7 +816,21 @@
       "inLineWithText": "Bild fließt als Glyphe in der Zeile",
       "squareLeft": "Bild links, Text fließt rechts",
       "squareRight": "Bild rechts, Text fließt links"
-    }
+    },
+    "square": null,
+    "targets": {
+      "behind": null,
+      "inFront": null,
+      "inline": null,
+      "square": null,
+      "squareLeft": null,
+      "squareRight": null,
+      "through": null,
+      "tight": null,
+      "topAndBottom": null
+    },
+    "through": null,
+    "tight": null
   },
   "responsePreview": {
     "loading": "{action}...",
@@ -842,7 +858,8 @@
     "failedToParse": "Dokument konnte nicht verarbeitet werden",
     "linkRemoved": "Link entfernt",
     "linkCopied": "Link in Zwischenablage kopiert",
-    "failedToSave": "Dokument konnte nicht gespeichert werden"
+    "failedToSave": "Dokument konnte nicht gespeichert werden",
+    "fontSubstitutionNotice": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Anzuzeigender Text",
@@ -857,7 +874,8 @@
     "inertTarget": null,
     "insertTitle": null,
     "openLink": null,
-    "refused": null
+    "refused": null,
+    "urlLabel": null
   },
   "headerFooter": {
     "header": "Kopfzeile",
@@ -893,7 +911,16 @@
   "image": {
     "placeholder": "Bildplatzhalter",
     "placeholderText": "[Grafik]",
-    "editableAriaLabel": "Bearbeitbares Bild"
+    "editableAriaLabel": "Bearbeitbares Bild",
+    "contentMismatch": null,
+    "decodeFailed": null,
+    "externalResource": null,
+    "invalidResource": null,
+    "missingResource": null,
+    "nonPictureGraphic": null,
+    "pendingResource": null,
+    "resourceLimit": null,
+    "unsupportedFormat": null
   },
   "ruler": {
     "horizontal": "Horizontales Lineal",
@@ -943,7 +970,18 @@
     "deleteImage": "Bild löschen",
     "imageProperties": "Bildeigenschaften",
     "rotate": "Drehen",
-    "replaceImage": "Bild ersetzen…"
+    "replaceImage": "Bild ersetzen…",
+    "handle": {
+      "e": null,
+      "n": null,
+      "ne": null,
+      "nw": null,
+      "s": null,
+      "se": null,
+      "sw": null,
+      "w": null
+    },
+    "selection": null
   },
   "revisions": {
     "cellDeleted": null,
@@ -962,7 +1000,9 @@
     "runPropertiesChanged": null
   },
   "toc": {
-    "updatePrompt": null
+    "updatePrompt": null,
+    "refresh": "Gesamtes Verzeichnis aktualisieren",
+    "refreshPageNumbers": "Nur Seitenzahlen aktualisieren"
   },
   "app": {
     "name": null,
@@ -1084,5 +1124,45 @@
     "replyRefused": null,
     "showPane": null,
     "structural": null
+  },
+  "imageAltText": {
+    "description": null,
+    "panelTitle": null,
+    "title": null
+  },
+  "imageInsert": {
+    "errors": {
+      "emptyFile": null,
+      "invalidSignature": null,
+      "oversize": null,
+      "refused": null,
+      "unsupportedFormat": null
+    }
+  },
+  "imageProperties": {
+    "crop": null,
+    "cropBottom": null,
+    "cropLeft": null,
+    "cropRight": null,
+    "cropTop": null,
+    "errors": {
+      "invalidCrop": null,
+      "invalidDimensions": null,
+      "refused": null,
+      "invalidPosition": null
+    },
+    "hyperlink": null,
+    "nonPictureHint": null,
+    "resetNaturalSize": null,
+    "units": {
+      "points": null
+    },
+    "horizontalOffset": null,
+    "position": null,
+    "positionLocked": null,
+    "positionUnavailable": null,
+    "relativeToHorizontal": null,
+    "relativeToVertical": null,
+    "verticalOffset": null
   }
 }

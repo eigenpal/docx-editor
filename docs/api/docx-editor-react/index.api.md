@@ -32,6 +32,7 @@ import { EditorEvents } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorFontErrorCode } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
+import { EditorModule } from '@docx-editor.dev/core-contract/editor';
 import { EditorQuery } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorScope } from '@docx-editor.dev/core-contract/contracts/editor';
 import { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
@@ -47,6 +48,9 @@ import { FontSourceSubstitution } from '@docx-editor.dev/core-contract/contracts
 import { FontUrlSource } from '@docx-editor.dev/core-contract/editor';
 import { ForwardRefExoticComponent } from 'react';
 import { generateRulerTicks } from '@docx-editor.dev/core-contract/editor';
+import { HTMLAttributes } from 'react';
+import { ImageDecodePort } from '@docx-editor.dev/core-contract/editor';
+import { ImageWrapTarget } from '@docx-editor.dev/core-contract/editor';
 import { IndentFormatting } from '@docx-editor.dev/core-contract/contracts/editor';
 import { loadFonts } from '@docx-editor.dev/core-contract/editor';
 import { LoadFontsRequest } from '@docx-editor.dev/core-contract/editor';
@@ -62,19 +66,19 @@ import { ReactElement } from 'react';
 import { ReactNode } from 'react';
 import { Ref } from 'react';
 import { RefAttributes } from 'react';
-import { ReviewItemPlacement } from '@docx-editor.dev/core-contract/contracts/editor';
-import { ReviewItemQuery } from '@docx-editor.dev/core-contract/contracts/editor';
 import { RulerIndent } from '@docx-editor.dev/core-contract/editor';
 import { rulerPageBox } from '@docx-editor.dev/core-contract/editor';
 import { RulerTick } from '@docx-editor.dev/core-contract/editor';
 import { RulerUnit } from '@docx-editor.dev/core-contract/editor';
 import { runToolbarCommand } from '@docx-editor.dev/core-contract/editor';
 import { SectionProperties } from '@docx-editor.dev/core-contract/editor';
+import { SupportedImageMime } from '@docx-editor.dev/core-contract/editor';
 import { SurfaceFormatting } from '@docx-editor.dev/core-contract/editor';
 import { SurfaceHyperlink } from '@docx-editor.dev/core-contract/editor';
 import { TableChromeSlotId } from '@docx-editor.dev/core-contract/editor';
 import { TextMatch } from '@docx-editor.dev/core-contract/contracts/editor';
 import { TextMeasurer } from '@docx-editor.dev/core-contract/editor';
+import { TFunction } from '@docx-editor.dev/i18n';
 import { Theme } from '@docx-editor.dev/core-contract/contracts/editor';
 import { ToolbarCommandState } from '@docx-editor.dev/core-contract/editor';
 import { toolbarCommandState } from '@docx-editor.dev/core-contract/editor';
@@ -343,6 +347,10 @@ export interface DocxEditorContextMenuNamespace {
     readonly Item: typeof ContextMenuItem;
     // (undocumented)
     readonly Paste: typeof ContextMenuPaste;
+    // (undocumented)
+    readonly RefreshToc: typeof ContextMenuRefreshToc;
+    // (undocumented)
+    readonly RefreshTocPageNumbers: typeof ContextMenuRefreshTocPageNumbers;
     readonly Row: typeof MenuRow;
     // (undocumented)
     readonly SelectAll: typeof ContextMenuSelectAll;
@@ -372,6 +380,16 @@ export interface DocxEditorDocumentOutlineProps {
     leftOffset?: number;
     onClose?: () => void;
     topOffset?: number;
+}
+
+// @public
+export function DocxEditorFontNotice(input: DocxEditorFontNoticeProps): react.JSX.Element | null;
+
+// @public
+export interface DocxEditorFontNoticeProps {
+    className?: string;
+    style?: CSSProperties;
+    t?: TFunction;
 }
 
 // @public
@@ -409,6 +427,21 @@ export interface DocxEditorHyperLinkNamespace {
     readonly Unlink: typeof HyperLinkUnlink;
     // (undocumented)
     readonly Url: typeof HyperLinkUrl;
+}
+
+// @public
+export function DocxEditorImagePropertiesDialog(input: DocxEditorImagePropertiesDialogProps): react.JSX.Element | null;
+
+// @public
+export interface DocxEditorImagePropertiesDialogProps {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    onClose: () => void;
+    // (undocumented)
+    open: boolean;
+    // (undocumented)
+    triggerRef?: React.RefObject<HTMLElement | null>;
 }
 
 // @public
@@ -492,6 +525,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly ContentControl: typeof DocxEditorContentControl;
     readonly ContextMenu: typeof ContextMenu;
     readonly DocumentOutline: typeof DocxEditorDocumentOutline;
+    readonly FontNotice: typeof DocxEditorFontNotice;
     readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
     readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
     readonly HyperLink: typeof DocxEditorHyperLink;
@@ -502,7 +536,6 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly NotesChrome: typeof DocxEditorNotesChrome;
     readonly PageNumber: typeof DocxEditorPageNumber;
     readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
-    readonly Review: typeof DocxEditorReview;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
     // (undocumented)
@@ -572,6 +605,7 @@ export interface DocxEditorPageSetupDialogProps {
 export interface DocxEditorProps {
     // (undocumented)
     author?: string;
+    children?: ReactNode;
     chrome?: boolean;
     // (undocumented)
     className?: string;
@@ -584,6 +618,7 @@ export interface DocxEditorProps {
     locale?: string;
     menu?: boolean | DocxEditorMenuProps;
     mode?: EditorMode;
+    modules?: readonly EditorModule[];
     navigation?: boolean;
     onChange?: (change: DocumentChange) => void;
     onFontError?: (error: EditorFontError) => void;
@@ -616,41 +651,6 @@ export interface DocxEditorRef {
     }): EditorSnapshot;
 }
 
-// @public (undocumented)
-export const DocxEditorReview: DocxEditorReviewNamespace;
-
-// @public
-export interface DocxEditorReviewNamespace {
-    // (undocumented)
-    (props: ReviewProps): ReturnType<typeof ReviewRoot>;
-    // (undocumented)
-    readonly Accept: typeof ReviewAccept;
-    readonly AddComment: typeof ReviewAddComment;
-    // (undocumented)
-    readonly Author: typeof ReviewAuthor;
-    // (undocumented)
-    readonly Avatar: typeof ReviewAvatar;
-    readonly Balloon: typeof ReviewBalloon;
-    // (undocumented)
-    readonly Card: typeof ReviewCard;
-    readonly Draft: typeof ReviewDraft;
-    // (undocumented)
-    readonly Empty: typeof ReviewEmpty;
-    // (undocumented)
-    readonly List: typeof ReviewList;
-    readonly Markers: typeof ReviewMarkers;
-    // (undocumented)
-    readonly Reject: typeof ReviewReject;
-    // (undocumented)
-    readonly Replies: typeof ReviewReplies;
-    // (undocumented)
-    readonly Reply: typeof ReviewReply;
-    // (undocumented)
-    readonly Summary: typeof ReviewSummary;
-    // (undocumented)
-    readonly Time: typeof ReviewTime;
-}
-
 // @public
 export function DocxEditorRoot(props: DocxEditorRootProps): react.JSX.Element;
 
@@ -662,13 +662,16 @@ export interface DocxEditorRootProps {
     children?: ReactNode;
     document?: DocumentSource;
     fonts?: FontConfiguration | FontConfigurationFragment;
+    imageDecodePort?: ImageDecodePort;
     // (undocumented)
     locale?: string;
     mode?: 'edit' | 'view';
+    modules?: readonly EditorModule[];
     onChange?: (change: DocumentChange) => void;
     onFontError?: (error: EditorFontError) => void;
     onReady?: (editor: Editor) => void;
     tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
+    translate?: (key: string, params?: Record<string, string | number>) => string;
     // (undocumented)
     zoom?: number;
 }
@@ -769,9 +772,13 @@ export interface DocxEditorToolbarNamespace {
     // (undocumented)
     readonly Highlight: ToolbarColorSplitComponent;
     // (undocumented)
+    readonly ImageAltText: ImageAltTextPartComponent;
+    // (undocumented)
     readonly ImageInsert: ToolbarPartComponent;
     // (undocumented)
     readonly ImageProperties: ToolbarPartComponent;
+    // (undocumented)
+    readonly ImageWrap: ImageWrapPartComponent;
     // (undocumented)
     readonly Indent: ToolbarPartComponent;
     // (undocumented)
@@ -874,6 +881,20 @@ export { EditorQuery }
 export { EditorScope }
 
 export { EditorSnapshot }
+
+// @public
+export interface EditorValueCommandState<T extends string | number> {
+    // (undocumented)
+    readonly disabledReason: string | null;
+    // (undocumented)
+    readonly execute: (value: T) => void;
+    // (undocumented)
+    readonly isEnabled: boolean;
+    // (undocumented)
+    readonly options: readonly T[];
+    // (undocumented)
+    readonly value: T | null;
+}
 
 export { FontConfiguration }
 
@@ -1015,6 +1036,47 @@ export interface HyperLinkProps extends HyperLinkPartProps {
 }
 
 // @public
+export function ImageAltText(input: ImageAltTextProps): react.JSX.Element | null;
+
+// @public (undocumented)
+export namespace ImageAltText {
+    var // (undocumented)
+    docxSlot: "image.altText";
+}
+
+// @public (undocumented)
+export function ImageInsertProvider(input: ImageInsertProviderProps): react.JSX.Element;
+
+// @public
+export function ImageInsertTrigger(input: ImageInsertTriggerProps): react.JSX.Element | null;
+
+// @public (undocumented)
+export namespace ImageInsertTrigger {
+    var // (undocumented)
+    docxSlot: "image.insert";
+}
+
+// @public
+export function ImagePropertiesTrigger(input: ImagePropertiesTriggerProps): react.JSX.Element | null;
+
+// @public (undocumented)
+export namespace ImagePropertiesTrigger {
+    var // (undocumented)
+    docxSlot: "image.properties";
+}
+
+// @public
+export function ImageWrap(input: ImageWrapProps): react.JSX.Element | null;
+
+// @public (undocumented)
+export namespace ImageWrap {
+    var // (undocumented)
+    docxSlot: "image.wrap";
+}
+
+export { ImageWrapTarget }
+
+// @public
 export interface IndentUpdate {
     // (undocumented)
     readonly firstLine?: number | null;
@@ -1029,6 +1091,9 @@ export { loadFonts }
 export { LoadFontsRequest }
 
 export { LoadFontsResult }
+
+// @public (undocumented)
+export function LocaleProvider(input: LocaleProviderProps): react.JSX.Element;
 
 // @public (undocumented)
 export function Logo(input: LogoProps): react__default.JSX.Element;
@@ -1192,6 +1257,21 @@ export function NavigationTitle(input: NavigationPartProps): ReactElement;
 
 // @public
 export function NavigationToggle(input: NavigationPartProps): ReactElement;
+
+// @public (undocumented)
+export type NormalizedImagePayload = {
+    readonly ok: true;
+    readonly bytes: Uint8Array;
+    readonly mime: SupportedImageMime;
+    readonly widthPoints: number;
+    readonly heightPoints: number;
+} | {
+    readonly ok: false;
+    readonly reasonKey: string;
+};
+
+// @public
+export function normalizeImageBytes(bytes: Uint8Array): NormalizedImagePayload;
 
 // @public (undocumented)
 export type NotePropertiesState = Exclude<ReturnType<Editor['getNotePropertiesState']>, null>;
@@ -1360,32 +1440,15 @@ export { PX_PER_CM }
 
 export { PX_PER_INCH }
 
-// @public
-export interface ReviewActionProps extends ReviewPartProps {
-    icon?: ReactNode;
-}
+// @public (undocumented)
+export const ReviewRailContext: react.Context<ReviewRailRegistry | null>;
 
 // @public
-export type ReviewItemView = ReviewItemPlacement;
-
-// @public
-export interface ReviewPartProps {
-    asChild?: boolean;
+export interface ReviewRailRegistry {
     // (undocumented)
-    children?: ReactNode;
+    readonly mounted: number;
     // (undocumented)
-    className?: string;
-    hidden?: boolean;
-}
-
-// @public
-export interface ReviewProps extends ReviewPartProps {
-    filter?: (item: ReviewItemView) => boolean;
-    formatting?: boolean;
-    gap?: number;
-    preset?: boolean;
-    stack?: boolean;
-    structural?: boolean;
+    readonly register: () => () => void;
 }
 
 // @public (undocumented)
@@ -1404,6 +1467,16 @@ export const SEARCH_DEBOUNCE_MS = 150;
 
 // @public
 export const SEARCH_MATCH_LIMIT = 2000;
+
+// @public
+export function Slot(input: SlotProps): ReactElement<unknown, string | react.JSXElementConstructor<any>> | null;
+
+// @public (undocumented)
+export interface SlotProps extends HTMLAttributes<HTMLElement> {
+    // (undocumented)
+    children?: ReactNode;
+    ref?: Ref<unknown>;
+}
 
 // @public
 export interface TableBorderColorNamespace extends TableChromePartComponent {
@@ -1741,6 +1814,12 @@ export function useEditorSnapshot(editor: Editor | null): number;
 export function useEditorState<T>(selector: (snapshot: EditorSnapshot) => T, isEqual?: (a: T, b: T) => boolean, options?: UseEditorStateOptions): T;
 
 // @public
+export function useEditorValueCommand(slotId: 'image.wrap'): EditorValueCommandState<ImageWrapTarget>;
+
+// @public (undocumented)
+export function useEditorValueCommand(slotId: 'image.altText'): EditorValueCommandState<string>;
+
+// @public
 export function useFontFamily(): UseFontFamilyResult;
 
 // @public
@@ -1855,38 +1934,12 @@ export interface UseParagraphStyleResult {
 }
 
 // @public
-export function useReview(query?: ReviewItemQuery): UseReviewReturn;
-
-// @public
-export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): UseReviewReturn;
+export function useTableBorderTargetLabel(): string;
 
 // @public (undocumented)
-export interface UseReviewReturn {
-    readonly accept: (item: ReviewItemView) => void;
-    readonly activeKey: string | null;
-    readonly comment: (text: string, author?: string) => boolean;
-    readonly items: readonly ReviewItemView[];
-    readonly paneOpen: boolean;
-    readonly ready: boolean;
-    readonly reject: (item: ReviewItemView) => void;
-    readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
-    readonly selectionAnchorY: number | null;
-    readonly setActive: (key: string | null) => void;
-    readonly setPaneOpen: (open: boolean) => void;
-}
-
-// @public
-export function useStackedReviewPositions(items: readonly {
-    readonly key: string;
-    readonly anchorY: number | null;
-}[], heights: ReadonlyMap<string, number>, options?: {
-    readonly gap?: number;
-    readonly scale?: number;
-    readonly defaultHeight?: number;
-}): ReadonlyMap<string, number>;
-
-// @public
-export function useTableBorderTargetLabel(): string;
+export function useTranslation(): {
+    t: TFunction;
+};
 
 // @public
 export const VERSION = "0.0.2";

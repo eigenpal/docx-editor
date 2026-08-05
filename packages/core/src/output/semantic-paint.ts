@@ -13,6 +13,7 @@
 /* eslint-disable max-lines -- paint seam; note areas live in semantic-paint-notes.ts */
 
 import { baselineShiftPtOf, TAB_LEADER_GLYPH } from '@docx-editor.dev/core-contract/layout';
+import { DEFAULT_CANVAS_FONT_STACK } from '../layout/canvas-measurer.ts';
 import { authorSlotsOf, revisionPresentationOf } from './revision-presentation.ts';
 import { formatRevisionOf, type RevisionAttribution } from '@docx-editor.dev/core-contract/layout';
 import type {
@@ -22,6 +23,7 @@ import type {
   PageRecord,
   ParagraphBorderStrokeRecord,
   ParagraphFragmentRecord,
+  HeaderFooterStoryRecord,
   ResolvedRunStyle,
   SemanticLayout,
   SpanLinkRecord,
@@ -30,6 +32,20 @@ import type {
   TableFragmentRecord,
 } from '@docx-editor.dev/core-contract/layout';
 import { paintPageNoteAreas } from './semantic-paint-notes.ts';
+import { anchoredDrawingsOf } from '../layout/semantic-records.ts';
+import type { AnchoredDrawingRecord } from '../layout/drawing-layout.ts';
+import {
+  collectUsedDrawingElementKeys,
+  collectUsedDrawingResourceKeys,
+  DEFAULT_DRAWING_PAINT_STRINGS,
+  drawingPaintStringsCacheToken,
+  drawingUrlRegistryFor,
+  paintAnchoredDrawingsLayer,
+  paintInlineDrawingsOnLine,
+  type DrawingPaintContext,
+  type DrawingPaintStrings,
+  type PaintImageUrlPort,
+} from './semantic-paint-drawings.ts';
 
 /**
  * What the run painters need beyond the records: the pixel scale, and the optional
@@ -38,11 +54,25 @@ import { paintPageNoteAreas } from './semantic-paint-notes.ts';
  */
 export interface PaintContext {
   readonly scale: number;
+  /** Generated paragraphs that paint as non-editable navigation surfaces. */
+  readonly readOnlyParagraphIds?: ReadonlySet<string>;
+  /**
+   * Empty-TOC begin paragraphs that paint subtle identifiable furniture. Paint-only — never
+   * serialised into the document.
+   */
+  readonly emptyTocPlaceholderIds?: ReadonlySet<string>;
   /**
    * Maps a document-declared family to the alias the host registered its bytes under, or
    * `undefined` when that family has no aliased face. Engine-minted values only.
    */
   readonly fontAlias?: (family: string) => string | undefined;
+  /**
+   * The family painted for a run whose cascade authors no font — the SAME face the
+   * measurer falls back to. Without it such a run inherits the page's CSS font, and the
+   * browser draws one face over geometry measured for another: wrap points, caret and
+   * selection rectangles all drift from the visible glyphs.
+   */
+  readonly defaultFontFamily?: string;
   /**
    * Paint hyperlinks without an `href` and out of the tab order.
    *
@@ -57,6 +87,10 @@ export interface PaintContext {
    * deriving it per page would give the same author different colours on different sheets.
    */
   readonly authorSlots?: ReadonlyMap<string, number>;
+  /** Localized drawing refusal labels (defaults to English fallbacks). */
+  readonly drawingStrings?: DrawingPaintStrings;
+  /** Host port for ready-image blob URLs; omitted means ready images paint as placeholders. */
+  readonly imageUrlPort?: PaintImageUrlPort;
 }
 
 /**
@@ -78,6 +112,13 @@ function aliasIdentity(alias: (family: string) => string | undefined): string {
 export interface PaintOptions {
   /** Points to CSS pixels. 96/72 renders a point as a CSS point at 100% zoom. */
   readonly scale?: number;
+  /** Generated paragraphs that paint as non-editable navigation surfaces. */
+  readonly readOnlyParagraphIds?: ReadonlySet<string>;
+  /**
+   * Empty-TOC begin paragraphs that paint subtle identifiable furniture. Paint-only — never
+   * serialised into the document.
+   */
+  readonly emptyTocPlaceholderIds?: ReadonlySet<string>;
   /** Marks painted pages as presentational, so assistive tech reads the editable projection. */
   readonly ariaHidden?: boolean;
   /**
@@ -94,6 +135,8 @@ export interface PaintOptions {
    * family, so a file can never shadow a family name the host page uses.
    */
   readonly fontAlias?: (family: string) => string | undefined;
+  /** See {@link PaintContext.defaultFontFamily}. */
+  readonly defaultFontFamily?: string;
   /**
    * Relationship id of the header/footer story currently open for editing.
    *
@@ -119,9 +162,178 @@ export interface PaintOptions {
     readonly showAll?: boolean;
     /** Control ids whose boundaries are visible because the caret is inside them. */
     readonly activeIds?: ReadonlySet<string>;
+    /**
+     * Control ids whose boundaries are visible because the pointer is over them.
+     * Used for TOC hover chrome without projecting a persistent caret-active state.
+     *
+     * Deliberately OUTSIDE the paint-reuse key: hover must never rebuild a page. The
+     * surface toggles `data-hover` / `data-boundary-visible` on the painted chrome it
+     * already has, and this set only tells a page that rebuilds for some OTHER reason
+     * which of its controls is currently under the pointer.
+     */
+    readonly hoverIds?: ReadonlySet<string>;
+    /**
+     * Control ids whose boundary furniture is painted by something else.
+     *
+     * An empty TOC paints its own placeholder box on the begin paragraph, so drawing the
+     * control boundary as well left two rounded rectangles (of different heights) plus a
+     * label chip stacked over one empty region.
+     */
+    readonly suppressedIds?: ReadonlySet<string>;
     /** Checkbox control ids whose canonical `w14:checked` state is on. */
     readonly checkedIds?: ReadonlySet<string>;
+    /** Non-SDT structured regions that intentionally reuse content-control chrome. */
+    readonly additionalBoundaries?: readonly ContentControlBoundaryRecord[];
+    /** Control ids that represent TOC regions (hover-only chrome; never caret-sticky). */
+    readonly tocControlIds?: ReadonlySet<string>;
   };
+  readonly drawingStrings?: DrawingPaintStrings;
+  readonly imageUrlPort?: PaintImageUrlPort;
+}
+
+export type { DrawingPaintStrings, PaintImageUrlPort } from './semantic-paint-drawings.ts';
+
+type DrawingUrlRegistry = ReturnType<typeof drawingUrlRegistryFor>;
+
+type DrawingPaintHostContext = PaintContext & {
+  readonly drawingStrings?: DrawingPaintStrings;
+  readonly urlRegistry?: DrawingUrlRegistry | null;
+  /** Per-page discriminator for drawing element reuse (see DrawingPaintContext). */
+  readonly paintInstance?: string;
+};
+
+interface ResolvedPaintContext extends DrawingPaintHostContext {
+  readonly drawingStrings: DrawingPaintStrings;
+  readonly urlRegistry: DrawingUrlRegistry | null;
+}
+
+function asResolvedPaintContext(ctx: DrawingPaintHostContext): ResolvedPaintContext {
+  return {
+    ...ctx,
+    drawingStrings: ctx.drawingStrings ?? DEFAULT_DRAWING_PAINT_STRINGS,
+    urlRegistry: ctx.urlRegistry ?? null,
+  };
+}
+
+function resolvedDrawingPaint(ctx: ResolvedPaintContext): DrawingPaintContext {
+  return Object.freeze({
+    scale: ctx.scale,
+    strings: ctx.drawingStrings,
+    ...(ctx.imageUrlPort ? { imageUrlPort: ctx.imageUrlPort } : {}),
+    ...(ctx.inertLinks ? { inertLinks: true } : {}),
+    ...(ctx.paintInstance ? { paintInstance: ctx.paintInstance } : {}),
+  });
+}
+
+function drawingContextOf(ctx: ResolvedPaintContext): {
+  readonly ctx: DrawingPaintContext;
+  readonly urlRegistry: DrawingUrlRegistry | null;
+} {
+  return Object.freeze({
+    ctx: resolvedDrawingPaint(ctx),
+    urlRegistry: ctx.urlRegistry,
+  });
+}
+
+function appendAnchoredDrawingLayer(
+  document: Document,
+  parent: HTMLElement,
+  page: PageRecord,
+  ctx: ResolvedPaintContext,
+  pageOrigin: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  },
+  layer: 'behind' | 'inFront'
+): void {
+  appendAnchoredDrawingsForRecords(
+    document,
+    parent,
+    anchoredDrawingsOf(page),
+    ctx,
+    pageOrigin,
+    layer
+  );
+}
+
+function appendAnchoredDrawingsForRecords(
+  document: Document,
+  parent: HTMLElement,
+  drawings: readonly AnchoredDrawingRecord[],
+  ctx: ResolvedPaintContext,
+  origin: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  },
+  layer: 'behind' | 'inFront'
+): void {
+  if (drawings.length === 0) return;
+  const drawing = drawingContextOf(ctx);
+
+  const layerElement = document.createElement('div');
+  layerElement.className =
+    layer === 'behind'
+      ? 'docx-drawing-layer docx-drawing-layer-behind'
+      : 'docx-drawing-layer docx-drawing-layer-front';
+  layerElement.style.position = 'absolute';
+  layerElement.style.inset = '0';
+  layerElement.style.pointerEvents = 'none';
+  for (const element of paintAnchoredDrawingsLayer(
+    document,
+    drawings,
+    layer,
+    drawing.ctx,
+    drawing.urlRegistry,
+    origin
+  )) {
+    element.style.pointerEvents = 'auto';
+    layerElement.append(element);
+  }
+  if (layerElement.childElementCount > 0) parent.append(layerElement);
+}
+
+function isPageRelativeHfAnchor(drawing: AnchoredDrawingRecord): boolean {
+  return drawing.horizontalFrame === 'page' || drawing.verticalFrame === 'page';
+}
+
+function hfAnchorOnPageSheet(
+  story: HeaderFooterStoryRecord,
+  drawing: AnchoredDrawingRecord
+): AnchoredDrawingRecord {
+  const pb = drawing.paintBounds;
+  return Object.freeze({
+    ...drawing,
+    paintBounds: Object.freeze({
+      x: story.box.x + pb.x,
+      y: story.box.y + pb.y,
+      width: pb.width,
+      height: pb.height,
+    }),
+  });
+}
+
+function appendHfPageRelativeDrawingLayer(
+  document: Document,
+  pageElement: HTMLElement,
+  story: HeaderFooterStoryRecord,
+  drawings: readonly AnchoredDrawingRecord[],
+  ctx: ResolvedPaintContext,
+  pageOrigin: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  },
+  layer: 'behind' | 'inFront'
+): void {
+  const pageRelative = drawings
+    .filter(isPageRelativeHfAnchor)
+    .map((drawing) => hfAnchorOnPageSheet(story, drawing));
+  appendAnchoredDrawingsForRecords(document, pageElement, pageRelative, ctx, pageOrigin, layer);
 }
 
 const HEX = /^[0-9A-Fa-f]{6}$/;
@@ -264,15 +476,27 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: P
   if (style.bold) css.fontWeight = 'bold';
   if (style.italic) css.fontStyle = 'italic';
   // Re-validated here even though the resolver already checked: this is the sink, and a
-  // sink that trusts its caller is one refactor away from being the hole.
-  if (style.fontFamily && FONT_NAME.test(style.fontFamily)) {
+  // sink that trusts its caller is one refactor away from being the hole. A run with no
+  // resolved family paints in the surface's default face — the face it was MEASURED in —
+  // never in whatever font the page happens to inherit.
+  const family =
+    style.fontFamily && FONT_NAME.test(style.fontFamily)
+      ? style.fontFamily
+      : ctx.defaultFontFamily && FONT_NAME.test(ctx.defaultFontFamily)
+        ? ctx.defaultFontFamily
+        : null;
+  if (family) {
     // An alias names bytes the host registered for THIS document under a family a file
     // cannot collide with. It leads, with the declared family behind it: document text
     // gets the embedded glyphs while the page-global CSS font namespace keeps its own
     // meaning for the declared name. `FONT_NAME` gates the declared family; the alias is
     // engine-minted, never file-derived.
-    const alias = ctx.fontAlias?.(style.fontFamily);
-    css.fontFamily = alias ? `"${alias}", "${style.fontFamily}"` : `"${style.fontFamily}"`;
+    const alias = ctx.fontAlias?.(family);
+    // The measurer's fallback stack trails the family so an unresolvable name falls
+    // back to the SAME face measurement fell back to — not to the inherited font.
+    css.fontFamily = alias
+      ? `"${alias}", "${family}", ${DEFAULT_CANVAS_FONT_STACK}`
+      : `"${family}", ${DEFAULT_CANVAS_FONT_STACK}`;
   }
   if (style.color && HEX.test(style.color)) css.color = `#${style.color}`;
   const highlight = style.highlight ? HIGHLIGHT.get(style.highlight) : undefined;
@@ -739,7 +963,11 @@ function paintHyperlinkAnchor(
  * `white-space: pre` keeps the browser from re-wrapping a line layout already decided, so
  * a line that measured slightly wide overflows by a hair rather than becoming two lines.
  */
-function paintLine(document: Document, line: LineRecord, ctx: PaintContext): HTMLElement {
+function paintLine(
+  document: Document,
+  line: LineRecord,
+  ctx: DrawingPaintHostContext
+): HTMLElement {
   const scale = ctx.scale;
   const element = document.createElement('div');
   element.className = 'docx-line layout-line';
@@ -792,7 +1020,37 @@ function paintLine(document: Document, line: LineRecord, ctx: PaintContext): HTM
   // only shape an absolutely-positioned line model can express.
   let anchor: HTMLElement | null = null;
   let anchorLinkId: string | null = null;
+  const inlineDrawings = [...(line.drawings ?? [])].sort((left, right) => left.start - right.start);
+  let nextInlineDrawing = 0;
+  const appendDrawingAdvancesBefore = (modelOffset: number): void => {
+    while (
+      nextInlineDrawing < inlineDrawings.length &&
+      inlineDrawings[nextInlineDrawing]!.start < modelOffset
+    ) {
+      const drawing = inlineDrawings[nextInlineDrawing]!;
+      const advance = Math.max(0, drawing.advanceEnd - drawing.advanceStart);
+      const spacer = document.createElement('span');
+      spacer.className = 'docx-inline-drawing-advance';
+      spacer.dataset.docxMarker = '';
+      spacer.setAttribute('contenteditable', 'false');
+      spacer.setAttribute('aria-hidden', 'true');
+      spacer.style.display = 'inline-block';
+      spacer.style.width = `${advance * scale}px`;
+      // The image itself is absolutely painted, so this inert inline box must also publish
+      // its vertical advance. Otherwise CSS aligns text against a zero-height spacer while
+      // layout aligns the engine caret against the drawing baseline.
+      spacer.style.height = `${drawing.baselineOffset * scale}px`;
+      spacer.style.lineHeight = '0';
+      spacer.style.pointerEvents = 'none';
+      spacer.style.verticalAlign = 'baseline';
+      element.append(spacer);
+      nextInlineDrawing += 1;
+      anchor = null;
+      anchorLinkId = null;
+    }
+  };
   for (const span of line.spans) {
+    appendDrawingAdvancesBefore(span.range.start);
     const band = Math.min(span.box.height + leading, line.box.height);
     const painted = paintSpan(document, span, ctx, band, leading);
     const link = span.link;
@@ -809,6 +1067,7 @@ function paintLine(document: Document, line: LineRecord, ctx: PaintContext): HTM
     }
     anchor.append(painted);
   }
+  appendDrawingAdvancesBefore(Number.POSITIVE_INFINITY);
   // A span-less line (empty paragraph) has no inline content, and a browser will not
   // draw a caret at a position with no inline box to measure. The <br> is the anchor;
   // sizing it to the line keeps the caret the paragraph's font height, not the div's
@@ -818,32 +1077,70 @@ function paintLine(document: Document, line: LineRecord, ctx: PaintContext): HTM
     anchor.style.lineHeight = `${line.box.height * scale}px`;
     element.append(anchor);
   }
+
+  const lineOrigin = Object.freeze({
+    x: line.spans[0]?.box.x ?? line.box.x,
+    y: line.box.y,
+    width: line.box.width,
+    height: line.box.height,
+  });
+  const drawingCtx = drawingContextOf(asResolvedPaintContext(ctx));
+  if (line.drawings && line.drawings.length > 0) {
+    for (const painted of paintInlineDrawingsOnLine(
+      document,
+      line,
+      drawingCtx.ctx,
+      drawingCtx.urlRegistry,
+      lineOrigin
+    )) {
+      element.append(painted);
+    }
+  }
   return element;
 }
 
-/** The extra space layout put between spans, beyond their own advances. */
+/** The extra space layout put between word spans, beyond their own advances. */
 function interSpanGap(line: LineRecord): number {
   if (line.spans.length < 2) return 0;
-  let total = 0;
+  // Layout justifies only after expandable spaces, so many consecutive pairs (tab→word,
+  // run split without a space) have a zero gap. Averaging those zeros in diluted
+  // `word-spacing` below the real per-space step and every later glyph drifted left of
+  // its published box — caret mid-word included.
+  const gaps: number[] = [];
   for (let index = 1; index < line.spans.length; index += 1) {
     const previous = line.spans[index - 1]!;
-    total += line.spans[index]!.box.x - (previous.box.x + previous.box.width);
+    const current = line.spans[index]!;
+    const drawingOccupiesGap = line.drawings?.some(
+      (drawing) => drawing.start >= previous.range.end && drawing.start < current.range.start
+    );
+    if (drawingOccupiesGap) continue;
+    const gap = current.box.x - (previous.box.x + previous.box.width);
+    if (gap > 0.25) gaps.push(gap);
   }
-  const average = total / (line.spans.length - 1);
-  // Sub-pixel noise from measurement is not justification; only a real gap counts.
-  return average > 0.25 ? average : 0;
+  if (gaps.length === 0) return 0;
+  return gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length;
 }
 
 function paintFragment(
   document: Document,
   fragment: ParagraphFragmentRecord,
-  ctx: PaintContext
+  ctx: DrawingPaintHostContext
 ): HTMLElement {
   const scale = ctx.scale;
   const element = positioned(document, 'div', fragment.box, scale);
   element.className = 'docx-paragraph-fragment layout-paragraph';
   element.dataset.paragraphId = fragment.paragraphId;
   element.dataset.fragmentIndex = String(fragment.fragmentIndex);
+  if (ctx.readOnlyParagraphIds?.has(fragment.paragraphId)) {
+    element.classList.add('docx-generated-region');
+    element.dataset.docxReadOnly = '';
+    element.setAttribute('contenteditable', 'false');
+    element.setAttribute('aria-readonly', 'true');
+  }
+  if (ctx.emptyTocPlaceholderIds?.has(fragment.paragraphId)) {
+    element.classList.add('docx-toc-empty-placeholder');
+    element.dataset.docxTocEmpty = '';
+  }
   // Fragment box remains the flow/hit region (includes before/after spacing). Paragraph
   // shading paints from the published line-area box — never the outer fragment background.
   if (fragment.shading && HEX.test(fragment.shading) && fragment.shadingBox) {
@@ -1102,6 +1399,10 @@ function paintParagraphShading(
  * Size, colour and position come from the record — never from computed style or
  * getBoundingClientRect. Colour is re-validated at the sink like every other file-derived
  * style value, and `side` is a closed union so it can safely reach a class name.
+ *
+ * `ST_Border` mapping (ECMA-376): common line styles get a CSS approximation; decorative
+ * art borders fall through to a solid rule. Compound styles (`double`, …) rely on layout
+ * having published the inflated band — paint must not re-derive mins.
  */
 function paintParagraphBorder(
   document: Document,
@@ -1114,12 +1415,13 @@ function paintParagraphBorder(
   rule.setAttribute('aria-hidden', 'true');
   const publishedLeft = (stroke.box.x - fragment.box.x) * scale;
   const publishedTop = (stroke.box.y - fragment.box.y) * scale;
-  // Preserve layout geometry, but snap a very thin rule to a visible screen hairline. Word's
-  // 1/4pt header rules otherwise become 0.33 CSS px at 96dpi and effectively disappear. Keep
-  // closing edges inside the published box so a header ending at that edge does not clip them.
+  // Preserve layout geometry, but snap a very thin SINGLE rule to a visible screen hairline.
+  // Word's 1/4pt header rules otherwise become 0.33 CSS px at 96dpi and effectively disappear.
+  // Compound styles already inflate in layout, so they keep the published thickness.
   const vertical = stroke.side === 'left' || stroke.side === 'right' || stroke.side === 'bar';
   const publishedThickness = (vertical ? stroke.box.width : stroke.box.height) * scale;
-  const paintedThickness = Math.max(1, publishedThickness);
+  const compound = isCompoundParagraphBorder(stroke.edge.val);
+  const paintedThickness = compound ? publishedThickness : Math.max(1, publishedThickness);
   rule.style.left = `${
     stroke.side === 'right'
       ? publishedLeft - (paintedThickness - publishedThickness)
@@ -1136,41 +1438,121 @@ function paintParagraphBorder(
   const color = stroke.edge.color && HEX.test(stroke.edge.color) ? stroke.edge.color : '000000';
   rule.style.backgroundColor = `#${color}`;
   // A side rule is a tall thin box, so its dash/double pattern runs down it rather than across.
-  // `val` selects a CSS approximation; unknown styles fall back to a solid rule so a
+  // `val` selects a CSS approximation; unknown / art styles fall back to a solid rule so a
   // recognised thickness is never silently dropped.
-  switch (stroke.edge.val) {
+  applyParagraphBorderStyle(rule, stroke.edge.val, color, vertical, paintedThickness, scale);
+  return rule;
+}
+
+/** Compound `ST_Border` values that layout already inflated — do not hairline-snap. */
+function isCompoundParagraphBorder(val: string): boolean {
+  return (
+    val === 'double' ||
+    val === 'triple' ||
+    val === 'doubleWave' ||
+    val.startsWith('thinThick') ||
+    val.startsWith('thickThin')
+  );
+}
+
+/**
+ * Map authored `ST_Border` onto the painted rule.
+ *
+ * CSS gives `double` / `dashed` / `dotted` / `groove` / `ridge` / `inset` / `outset` almost
+ * for free. Decorative art borders (apples, bats, …) stay solid — a deliberate approximation.
+ */
+function applyParagraphBorderStyle(
+  rule: HTMLElement,
+  val: string,
+  color: string,
+  vertical: boolean,
+  thicknessPx: number,
+  scale: number
+): void {
+  switch (val) {
     case 'dashed':
-    case 'dashSmallGap': {
+    case 'dashSmallGap':
+    case 'dotDash':
+    case 'dotDotDash':
+    case 'dashDotStroked': {
       const period = Math.max(4, 4 * scale);
       rule.style.backgroundImage = `linear-gradient(to ${vertical ? 'bottom' : 'right'}, #${color} 60%, transparent 60%)`;
       rule.style.backgroundSize = vertical ? `100% ${period}px` : `${period}px 100%`;
-      break;
+      return;
     }
     case 'dotted': {
       const period = Math.max(3, 3 * scale);
       rule.style.backgroundImage = `linear-gradient(to ${vertical ? 'bottom' : 'right'}, #${color} 35%, transparent 35%)`;
       rule.style.backgroundSize = vertical ? `100% ${period}px` : `${period}px 100%`;
-      break;
+      return;
     }
-    case 'double': {
-      // Two hairlines inside the published box thickness — still layout-owned geometry.
-      const thickness = (vertical ? stroke.box.width : stroke.box.height) * scale;
-      const half = Math.max(1, thickness / 3);
+    case 'double':
+    case 'doubleWave':
+    case 'triple':
+    case 'thinThickSmallGap':
+    case 'thickThinSmallGap':
+    case 'thinThickThinSmallGap':
+    case 'thinThickMediumGap':
+    case 'thickThinMediumGap':
+    case 'thinThickThinMediumGap':
+    case 'thinThickLargeGap':
+    case 'thickThinLargeGap':
+    case 'thinThickThinLargeGap': {
+      // Two hairlines inside the published box — layout owns the band (incl. thin-double floor).
+      // Triple and thinThick* compound vals approximate as double; decorative art stays solid.
+      const line = Math.max(1, thicknessPx / 3);
       rule.style.backgroundColor = 'transparent';
       if (vertical) {
-        rule.style.borderLeft = `${half}px solid #${color}`;
-        rule.style.borderRight = `${half}px solid #${color}`;
+        rule.style.borderLeft = `${line}px solid #${color}`;
+        rule.style.borderRight = `${line}px solid #${color}`;
       } else {
-        rule.style.borderTop = `${half}px solid #${color}`;
-        rule.style.borderBottom = `${half}px solid #${color}`;
+        rule.style.borderTop = `${line}px solid #${color}`;
+        rule.style.borderBottom = `${line}px solid #${color}`;
       }
       rule.style.boxSizing = 'border-box';
-      break;
+      return;
     }
+    case 'threeDEmboss':
+    case 'ridge': {
+      rule.style.backgroundColor = 'transparent';
+      const side = vertical ? 'borderLeft' : 'borderTop';
+      rule.style[side] = `${Math.max(1, thicknessPx)}px ridge #${color}`;
+      if (vertical) rule.style.width = '0px';
+      else rule.style.height = '0px';
+      return;
+    }
+    case 'threeDEngrave':
+    case 'groove': {
+      rule.style.backgroundColor = 'transparent';
+      const side = vertical ? 'borderLeft' : 'borderTop';
+      rule.style[side] = `${Math.max(1, thicknessPx)}px groove #${color}`;
+      if (vertical) rule.style.width = '0px';
+      else rule.style.height = '0px';
+      return;
+    }
+    case 'inset': {
+      rule.style.backgroundColor = 'transparent';
+      const side = vertical ? 'borderLeft' : 'borderTop';
+      rule.style[side] = `${Math.max(1, thicknessPx)}px inset #${color}`;
+      if (vertical) rule.style.width = '0px';
+      else rule.style.height = '0px';
+      return;
+    }
+    case 'outset': {
+      rule.style.backgroundColor = 'transparent';
+      const side = vertical ? 'borderLeft' : 'borderTop';
+      rule.style[side] = `${Math.max(1, thicknessPx)}px outset #${color}`;
+      if (vertical) rule.style.width = '0px';
+      else rule.style.height = '0px';
+      return;
+    }
+    case 'single':
+    case 'thick':
+    case 'wave':
     default:
-      break;
+      // Solid fill already set. Art borders and unrecognised vals stay solid.
+      return;
   }
-  return rule;
 }
 
 import { applyCellBorders } from './semantic-paint-table-borders.ts';
@@ -1179,7 +1561,7 @@ function paintTableCell(
   document: Document,
   cell: TableCellFragmentRecord,
   rowBox: { readonly x: number; readonly y: number },
-  ctx: PaintContext
+  ctx: DrawingPaintHostContext
 ): HTMLElement {
   const scale = ctx.scale;
   const cellElement = positioned(document, 'div', cell.box, scale);
@@ -1233,7 +1615,7 @@ function paintTableCell(
 function paintTableFragment(
   document: Document,
   fragment: TableFragmentRecord,
-  ctx: PaintContext
+  ctx: DrawingPaintHostContext
 ): HTMLElement {
   const scale = ctx.scale;
   const element = positioned(document, 'div', fragment.box, scale);
@@ -1273,7 +1655,7 @@ function paintTableFragment(
 function paintPage(
   document: Document,
   page: PageRecord,
-  options: PaintContext & {
+  baseOptions: ResolvedPaintContext & {
     readonly ariaHidden: boolean;
     readonly activeHeaderFooterRId?: string;
     readonly activeHeaderFooterPageIndex?: number;
@@ -1281,12 +1663,21 @@ function paintPage(
   },
   materialize: boolean
 ): HTMLElement {
+  // Every drawing painted below carries this page's instance key, so a repaint of the
+  // page reuses its own already-decoded <img> elements (no per-keystroke flash) without
+  // ever stealing a repeated header image from a sibling page.
+  const options = { ...baseOptions, paintInstance: `p${page.index}` };
   const element = positioned(document, 'div', page.box, options.scale);
   // Deliberately NOT `layout-page`: that class carries the legacy lane's whole-frame
   // inversion, which would flip the paper itself. The sheet keeps the canvas colour its
   // token names and only `.docx-page-content` below is inverted, so the theme and print
   // rules name that class instead.
   element.className = 'docx-page';
+  // The measurer's own fallback stack, so an unstyled run — or one whose declared family
+  // the platform cannot resolve — RENDERS in the same face it was MEASURED in. Left to
+  // inherit, the page picked up the host UI font, and every measured overlay (caret,
+  // selection, revision bands, strikes) drifted along the line against the painted glyphs.
+  element.style.fontFamily = DEFAULT_CANVAS_FONT_STACK;
   element.dataset.pageIndex = String(page.index);
   if (options.ariaHidden) {
     // The painted page is a PICTURE of the document; the editable projection is what
@@ -1299,6 +1690,24 @@ function paintPage(
   // scrolling to a page reveals it rather than reflowing the document underneath.
   element.dataset.materialized = String(materialize);
   if (!materialize) return element;
+
+  const pageOrigin = Object.freeze({
+    x: page.box.x,
+    y: page.box.y,
+    width: page.box.width,
+    height: page.box.height,
+  });
+  // Body anchored records are per-page CONTENT-relative (a page-frame drawing at offset 0
+  // publishes paintBounds x/y = -margin). The layer lives on the page element, so the
+  // origin is the negated content inset — never page.box, which is absolute and would
+  // both drop the margins and displace every page after the first.
+  const bodyAnchorOrigin = Object.freeze({
+    x: -(page.contentBox.x - page.box.x),
+    y: -(page.contentBox.y - page.box.y),
+    width: page.box.width,
+    height: page.box.height,
+  });
+  appendAnchoredDrawingLayer(document, element, page, options, bodyAnchorOrigin, 'behind');
 
   const content = document.createElement('div');
   content.className = 'docx-page-content';
@@ -1332,14 +1741,59 @@ function paintPage(
   }
   element.append(content);
 
+  appendAnchoredDrawingLayer(document, element, page, options, bodyAnchorOrigin, 'inFront');
+
   // Footnotes / endnotes — editable stories inside the sheet (not [data-docx-hf] furniture).
   paintPageNoteAreas(document, element, page, options, paintFragment, paintTableFragment);
 
   // Page furniture (phase 2, read-only): painted inside the sheet but OUTSIDE the content
   // box, inert to editing. `data-docx-hf` is what dom-selection uses to refuse mapping a
   // browser caret inside the furniture back to a model position.
+  // Blank furniture affordance: a page with no header (or footer) paints an EMPTY band over
+  // that margin — `data-docx-hf` with no relationship id — so hover can invite and a double
+  // click can create the story. Geometry mirrors the pointer's activation band: the full
+  // margin strip at content width. Never printed (CSS hides it), never editable.
+  for (const kind of ['header', 'footer'] as const) {
+    if (page[kind]) continue;
+    const band = document.createElement('div');
+    band.className = 'docx-hf docx-hf--placeholder';
+    band.dataset.docxHf = kind;
+    band.setAttribute('contenteditable', 'false');
+    // A SLIM strip where a real header/footer would FLOW — the default furniture distance
+    // from the sheet edge — not the whole margin and not the content edge: anchored to
+    // content, a cover page with a deep top area drew the invitation halfway down the
+    // page, glued to its own heading. Word's header area is a couple of lines near the
+    // edge; the pointer still accepts the full margin band, so the visual stays modest
+    // without shrinking the target.
+    const marginHeight =
+      kind === 'header'
+        ? page.contentBox.y - page.box.y
+        : page.box.y + page.box.height - (page.contentBox.y + page.contentBox.height);
+    const height = Math.min(marginHeight, PLACEHOLDER_BAND_PT);
+    if (height <= 0) continue;
+    // Squeezed toward the content edge when the margin is too tight for distance + band.
+    const edgeOffset = Math.max(0, Math.min(PLACEHOLDER_DISTANCE_PT, marginHeight - height));
+    const top = kind === 'header' ? edgeOffset : page.box.height - edgeOffset - height;
+    band.style.position = 'absolute';
+    band.style.left = `${(page.contentBox.x - page.box.x) * options.scale}px`;
+    band.style.top = `${top * options.scale}px`;
+    band.style.width = `${page.contentBox.width * options.scale}px`;
+    band.style.height = `${height * options.scale}px`;
+    element.append(band);
+  }
+
   for (const story of [page.header, page.footer]) {
     if (!story) continue;
+    const anchored = story.anchoredDrawings ?? [];
+    appendHfPageRelativeDrawingLayer(
+      document,
+      element,
+      story,
+      anchored,
+      options,
+      pageOrigin,
+      'behind'
+    );
     const container = document.createElement('div');
     container.className = 'docx-hf';
     container.dataset.docxHf = story.kind;
@@ -1362,8 +1816,23 @@ function paintPage(
     container.style.width = `${story.box.width * options.scale}px`;
     container.style.height = `${story.box.height * options.scale}px`;
     container.style.overflow = 'hidden';
+    const storyOrigin = Object.freeze({
+      x: 0,
+      y: 0,
+      width: story.box.width,
+      height: story.box.height,
+    });
+    const storyRelative = anchored.filter((drawing) => !isPageRelativeHfAnchor(drawing));
+    appendAnchoredDrawingsForRecords(
+      document,
+      container,
+      storyRelative,
+      asResolvedPaintContext(options),
+      storyOrigin,
+      'behind'
+    );
     // Furniture links paint styled but inert — see `paintHyperlinkAnchor`.
-    const furnitureCtx: PaintContext & { readonly ariaHidden: boolean } = {
+    const furnitureCtx: ResolvedPaintContext = {
       ...options,
       inertLinks: true,
     };
@@ -1374,12 +1843,51 @@ function paintPage(
           : paintFragment(document, fragment, furnitureCtx)
       );
     }
+    appendAnchoredDrawingsForRecords(
+      document,
+      container,
+      storyRelative,
+      asResolvedPaintContext(options),
+      storyOrigin,
+      'inFront'
+    );
     element.append(container);
+    // Hover invitation for an EXISTING band: a pill just outside the story box, shown by
+    // CSS only while the adjacent band is hovered (`.docx-hf:hover + .docx-hf-edit-hint`).
+    // Outside the band because the band clips (`overflow: hidden`) and its content would
+    // sit under the pill. Adjacency is load-bearing — keep this append right here.
+    const hint = document.createElement('div');
+    hint.className = 'docx-hf-edit-hint';
+    hint.dataset.docxHfHint = story.kind;
+    hint.setAttribute('contenteditable', 'false');
+    hint.style.position = 'absolute';
+    hint.style.left = container.style.left;
+    hint.style.width = container.style.width;
+    hint.style.top =
+      story.kind === 'header'
+        ? `${(story.box.y + story.box.height - page.box.y) * options.scale}px`
+        : `${(story.box.y - page.box.y) * options.scale}px`;
+    if (story.kind === 'footer') hint.style.transform = 'translateY(-100%)';
+    element.append(hint);
+    appendHfPageRelativeDrawingLayer(
+      document,
+      element,
+      story,
+      anchored,
+      options,
+      pageOrigin,
+      'inFront'
+    );
   }
 
   paintContentControlChrome(document, element, page, options);
   return element;
 }
+
+/** Height of the blank header/footer invitation band, in points (~two text lines). */
+const PLACEHOLDER_BAND_PT = 30;
+/** Where the band starts from the sheet edge — `w:pgMar` header/footer default (720 twips). */
+const PLACEHOLDER_DISTANCE_PT = 36;
 
 /** Widget kinds the painted surface can activate without adapter chrome. */
 const WIDGET_TYPES = new Set<ContentControlMappedType>([
@@ -1406,12 +1914,27 @@ function paintContentControlChrome(
   }
 ): void {
   const chrome = options.contentControlChrome;
-  const controls = page.contentControls ?? [];
+  const suppressed = chrome?.suppressedIds;
+  const pageControls = (page.contentControls ?? []).filter(
+    (control) => suppressed?.has(control.id) !== true
+  );
+  const controls = [
+    ...pageControls,
+    ...(chrome?.additionalBoundaries ?? []).filter(
+      (candidate) =>
+        suppressed?.has(candidate.id) !== true &&
+        !pageControls.some((control) => control.id === candidate.id)
+    ),
+  ];
   if (controls.length === 0) return;
   const showAll = chrome?.showAll === true;
   const activeIds = chrome?.activeIds;
+  const hoverIds = chrome?.hoverIds;
+  const tocControlIds = chrome?.tocControlIds;
   for (const control of controls) {
-    const active = activeIds?.has(control.id) === true;
+    const isToc = tocControlIds?.has(control.id) === true;
+    const active = !isToc && activeIds?.has(control.id) === true;
+    const hovered = hoverIds?.has(control.id) === true;
     pageElement.append(
       paintContentControlBoundary(
         document,
@@ -1419,8 +1942,10 @@ function paintContentControlChrome(
         control,
         options.scale,
         active,
-        showAll || active,
-        chrome?.checkedIds?.has(control.id)
+        hovered,
+        showAll || active || (isToc && hovered),
+        chrome?.checkedIds?.has(control.id),
+        isToc
       )
     );
   }
@@ -1432,8 +1957,10 @@ function paintContentControlBoundary(
   control: ContentControlBoundaryRecord,
   scale: number,
   active: boolean,
+  hovered: boolean,
   boundaryVisible: boolean,
-  checked: boolean | undefined
+  checked: boolean | undefined,
+  isToc: boolean
 ): HTMLElement {
   const layer = document.createElement('div');
   layer.className = 'docx-content-control-chrome';
@@ -1443,7 +1970,9 @@ function paintContentControlBoundary(
   layer.dataset.lock = control.effectiveLock;
   if (control.bound) layer.dataset.bound = '';
   if (control.placeholder) layer.dataset.placeholder = '';
+  if (isToc) layer.dataset.docxToc = '';
   if (active) layer.dataset.active = '';
+  if (hovered) layer.dataset.hover = '';
   if (boundaryVisible) layer.dataset.boundaryVisible = '';
   layer.setAttribute('contenteditable', 'false');
   layer.setAttribute('role', 'group');
@@ -1561,6 +2090,33 @@ interface RetainedPaint {
 
 const retainedPaints = new WeakMap<HTMLElement, RetainedPaint>();
 
+function sameBox(left: PageRecord['box'], right: PageRecord['box']): boolean {
+  return (
+    left.x === right.x &&
+    left.y === right.y &&
+    left.width === right.width &&
+    left.height === right.height
+  );
+}
+
+function virtualPageShellMatches(
+  retained: RetainedPage,
+  page: PageRecord,
+  scale: number,
+  ariaHidden: boolean
+): boolean {
+  const element = retained.element;
+  return (
+    !retained.materialized &&
+    sameBox(retained.record.box, page.box) &&
+    element.style.left === `${page.box.x * scale}px` &&
+    element.style.top === `${page.box.y * scale}px` &&
+    element.style.width === `${page.box.width * scale}px` &&
+    element.style.height === `${page.box.height * scale}px` &&
+    element.getAttribute('aria-hidden') === (ariaHidden ? 'true' : null)
+  );
+}
+
 /**
  * Paint a whole layout into a container, reusing the pages that did not change.
  *
@@ -1574,14 +2130,47 @@ export function paintSemanticLayout(
   options: PaintOptions = {}
 ): void {
   const chrome = options.contentControlChrome;
+  // `hoverIds` is absent ON PURPOSE — see its doc comment. Including it made a pointer
+  // entering a TOC rebuild every page, which detached the node the gesture started on.
   const chromeKey = chrome
-    ? `${chrome.showAll === true ? '1' : '0'}:${chrome.activeIds ? [...chrome.activeIds].sort().join(',') : ''}:${chrome.checkedIds ? [...chrome.checkedIds].sort().join(',') : ''}`
+    ? `${chrome.showAll === true ? '1' : '0'}:${chrome.activeIds ? [...chrome.activeIds].sort().join(',') : ''}:${chrome.checkedIds ? [...chrome.checkedIds].sort().join(',') : ''}:${chrome.tocControlIds ? [...chrome.tocControlIds].sort().join(',') : ''}:${chrome.suppressedIds ? [...chrome.suppressedIds].sort().join(',') : ''}`
     : '';
+  const drawingStrings = options.drawingStrings ?? DEFAULT_DRAWING_PAINT_STRINGS;
+  const urlRegistry =
+    options.imageUrlPort !== undefined
+      ? drawingUrlRegistryFor(container, options.imageUrlPort)
+      : null;
+  const additionalKey = chrome?.additionalBoundaries
+    ? chrome.additionalBoundaries
+        .flatMap((boundary) =>
+          boundary.fragments.map(
+            (fragment) =>
+              `${boundary.id}:${fragment.pageIndex}:${fragment.box.x}:${fragment.box.y}:${fragment.box.width}:${fragment.box.height}`
+          )
+        )
+        .sort()
+        .join(',')
+    : '';
+  const readOnlyKey = options.readOnlyParagraphIds
+    ? [...options.readOnlyParagraphIds].sort().join(',')
+    : '';
+  const emptyTocKey = options.emptyTocPlaceholderIds
+    ? [...options.emptyTocPlaceholderIds].sort().join(',')
+    : '';
+  const tocKey = chrome?.tocControlIds ? [...chrome.tocControlIds].sort().join(',') : '';
   const resolved = {
     scale: options.scale ?? 96 / 72,
     ariaHidden: options.ariaHidden ?? true,
+    drawingStrings,
+    urlRegistry,
     ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+    ...(options.readOnlyParagraphIds ? { readOnlyParagraphIds: options.readOnlyParagraphIds } : {}),
+    ...(options.emptyTocPlaceholderIds
+      ? { emptyTocPlaceholderIds: options.emptyTocPlaceholderIds }
+      : {}),
+    ...(options.defaultFontFamily ? { defaultFontFamily: options.defaultFontFamily } : {}),
     authorSlots: authorSlotsOf(layout),
+    ...(options.imageUrlPort ? { imageUrlPort: options.imageUrlPort } : {}),
     ...(options.activeHeaderFooterRId
       ? { activeHeaderFooterRId: options.activeHeaderFooterRId }
       : {}),
@@ -1589,24 +2178,45 @@ export function paintSemanticLayout(
       ? { activeHeaderFooterPageIndex: options.activeHeaderFooterPageIndex }
       : {}),
     ...(chrome ? { contentControlChrome: chrome } : {}),
+  } satisfies ResolvedPaintContext & {
+    ariaHidden: boolean;
+    activeHeaderFooterRId?: string;
+    activeHeaderFooterPageIndex?: number;
   };
   const document = container.ownerDocument;
   // The alias lookup is part of the paint parameters: a page painted before fonts
   // registered must not be reused verbatim afterwards. Occurrence page is included so
   // moving the caret host across shared furniture copies rebuilds active markers.
   // Content-control chrome is furniture only, but toggling it must rebuild painted pages
-  // so show-all / caret chrome appear.
-  const parameters = `${resolved.scale}|${resolved.ariaHidden}|${resolved.fontAlias ? aliasIdentity(resolved.fontAlias) : ''}|${resolved.activeHeaderFooterRId ?? ''}|${resolved.activeHeaderFooterPageIndex ?? ''}|cc:${chromeKey}`;
+  // so show-all / caret chrome appear. Hover is the one exception: it is applied to the
+  // painted nodes in place, because a pointer crossing a region may not move it.
+  const parameters =
+    `${resolved.scale}|${resolved.ariaHidden}|` +
+    `${resolved.fontAlias ? aliasIdentity(resolved.fontAlias) : ''}|` +
+    `${resolved.defaultFontFamily ?? ''}|` +
+    `${resolved.activeHeaderFooterRId ?? ''}|` +
+    `${resolved.activeHeaderFooterPageIndex ?? ''}|` +
+    `cc:${chromeKey}:${additionalKey}|toc:${tocKey}|` +
+    `ro:${readOnlyKey}|tocEmpty:${emptyTocKey}|` +
+    `${options.imageUrlPort ? 'url' : ''}|` +
+    `${drawingPaintStringsCacheToken(drawingStrings)}`;
   const previous = retainedPaints.get(container);
-  const reusable =
-    previous && previous.parameters === parameters
-      ? new Map(previous.pages.map((entry) => [entry.record, entry]))
-      : null;
+  const parametersUnchanged = previous?.parameters === parameters;
+  const reusable = parametersUnchanged
+    ? new Map(previous.pages.map((entry) => [entry.record, entry]))
+    : null;
+  const previousByIndex = previous
+    ? new Map(previous.pages.map((entry) => [entry.record.index, entry]))
+    : null;
 
   const pages: RetainedPage[] = layout.pages.map((page) => {
     const materialized = options.materialize?.has(page.index) ?? true;
     const kept = reusable?.get(page);
     if (kept && kept.materialized === materialized) return kept;
+    const priorShell = materialized ? null : previousByIndex?.get(page.index);
+    if (priorShell && virtualPageShellMatches(priorShell, page, resolved.scale, resolved.ariaHidden)) {
+      return { record: page, materialized: false, element: priorShell.element };
+    }
     return {
       record: page,
       materialized,
@@ -1616,10 +2226,25 @@ export function paintSemanticLayout(
   retainedPaints.set(container, { parameters, pages });
   container.dataset.revision = String(layout.revision);
 
+  if (urlRegistry) {
+    urlRegistry.reconcile(
+      collectUsedDrawingResourceKeys(layout),
+      collectUsedDrawingElementKeys(layout)
+    );
+  }
+
   // Keyed reconcile instead of `replaceChildren`: retained elements stay where they are —
   // keeping the browser's style and layout for them, and the DOM selection anchored inside
   // them — while changed pages are placed in order and anything else is dropped.
   const kept = new Set<HTMLElement>(pages.map((entry) => entry.element));
+  let child = container.firstChild;
+  while (child) {
+    const next = child.nextSibling;
+    // Drop stale pages first. Leaving them in front of retained virtual shells makes the
+    // ordering pass move every shell out and back on each keystroke.
+    if (!kept.has(child as HTMLElement)) (child as ChildNode).remove();
+    child = next;
+  }
   let cursor = container.firstChild;
   for (const entry of pages) {
     if (entry.element === cursor) {
@@ -1627,13 +2252,5 @@ export function paintSemanticLayout(
       continue;
     }
     container.insertBefore(entry.element, cursor);
-  }
-  let child = container.firstChild;
-  while (child) {
-    const next = child.nextSibling;
-    // A membership test, not an `instanceof`: it treats a node from any realm — and any
-    // non-element node — the same way, and everything this pass did not paint goes.
-    if (!kept.has(child as HTMLElement)) (child as ChildNode).remove();
-    child = next;
   }
 }

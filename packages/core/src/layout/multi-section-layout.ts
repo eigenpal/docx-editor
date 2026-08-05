@@ -48,6 +48,7 @@ export type LayoutSectionFn = (
     readonly flowStartY?: number;
     readonly spaceBeforeCarry?: number;
     readonly pageIndexStart?: number;
+    readonly balanceColumns?: boolean;
   }
 ) => SectionLayoutResult;
 
@@ -202,13 +203,25 @@ function sameGeometry(a: PageGeometry, b: PageGeometry): boolean {
  * continued section contributes content to it, not chrome.
  */
 function withAppendedFragments(page: PageRecord, continued: PageRecord): PageRecord {
-  if (continued.fragments.length === 0 && !continued.columnSeparators?.length) return page;
+  if (
+    continued.fragments.length === 0 &&
+    !continued.columnSeparators?.length &&
+    !continued.anchoredDrawings?.length
+  ) {
+    return page;
+  }
+  const anchoredDrawings =
+    page.anchoredDrawings || continued.anchoredDrawings
+      ? Object.freeze([...(page.anchoredDrawings ?? []), ...(continued.anchoredDrawings ?? [])])
+      : undefined;
   return {
     ...page,
-    fragments: [...page.fragments, ...continued.fragments],
+    fragments:
+      continued.fragments.length > 0 ? [...page.fragments, ...continued.fragments] : page.fragments,
     ...((page.columnSeparators?.length || continued.columnSeparators?.length) && {
       columnSeparators: [...(page.columnSeparators ?? []), ...(continued.columnSeparators ?? [])],
     }),
+    ...(anchoredDrawings ? { anchoredDrawings } : {}),
   };
 }
 
@@ -301,7 +314,8 @@ export function layoutMultiSectionDocument(
     // change under it — same page box and margins, and the same furniture push-down, since
     // both fix the content column this section would be flowing into.
     const continues =
-      section.properties.breakType === 'continuous' &&
+      sectionIndex > 0 &&
+      sections[sectionIndex - 1]!.properties.breakType === 'continuous' &&
       pages.length > 0 &&
       // A trailing page break already ended the previous sheet. Word puts the continued
       // section after that break, not on top of the page it closed.
@@ -314,11 +328,19 @@ export function layoutMultiSectionDocument(
     // page under its own geometry and furniture (Word-compatible trailing section break).
     const sectionSession = multi?.sections[sectionIndex];
 
+    // A multi-column section that ends in a continuous section break balances its columns
+    // (ECMA-376 §17.6.4). The break that ENDS this section is the next section's `w:type`;
+    // the document's last section has no such break, so it keeps the fill-first shape.
+    const balanceColumns =
+      section.properties.columns.count > 1 &&
+      sections[sectionIndex + 1]?.properties.breakType === 'continuous';
+
     const laid = layoutSection(slice, revision, {
       ...rest,
       geometry,
       furniture,
       sectionColumns: section.properties.columns,
+      ...(balanceColumns ? { balanceColumns } : {}),
       lineCounterStart: lineCounter,
       // A continued section's local page 0 IS the host sheet, so its document page index
       // is one behind the stack; every other section starts a fresh sheet at `startIndex`.

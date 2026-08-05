@@ -104,6 +104,27 @@ function docxWithEmbeds(body: string, embeds: readonly EmbedEntry[]): Uint8Array
 const p = (text: string, family = 'DejaVu Sans') =>
   `<w:p><w:r><w:rPr><w:rFonts w:ascii="${family}" w:hAnsi="${family}"/></w:rPr><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 
+/** Controllable proportional browser metrics, deliberately unlike the fixed 6pt grid. */
+function mockCanvasContext(): CanvasRenderingContext2D {
+  let currentFont = '';
+  return {
+    get font() {
+      return currentFont;
+    },
+    set font(value: string) {
+      currentFont = value;
+    },
+    measureText(text: string) {
+      const match = /(\d+(?:\.\d+)?)px/.exec(currentFont);
+      const sizePx = match ? Number(match[1]) : 11;
+      return {
+        width: text.length * sizePx * 0.7,
+        fontBoundingBoxAscent: sizePx * 0.8,
+      };
+    },
+  } as CanvasRenderingContext2D;
+}
+
 /** Wait until shaped resolution lands (or the editor settles on fixed). */
 async function fontsSettled(editor: DocxEditorInstance): Promise<void> {
   for (let attempt = 0; attempt < 200; attempt += 1) {
@@ -135,6 +156,40 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
     expect(errors).toHaveLength(0);
     expect(container.textContent).toContain('shaped hello');
     editor.destroy();
+  });
+
+  test('an unresolved run keeps browser canvas metrics after shaped resolution', async () => {
+    const previous = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = (() => mockCanvasContext()) as typeof previous;
+    try {
+      const container = document.createElement('div');
+      const editor = createDocxEditor({
+        container,
+        // DejaVu activates HarfBuzz; Helvetica has no byte-backed source and must take the
+        // browser fallback that paints it, not the deterministic fixed-width test grid.
+        document: docxWithEmbeds(p('shaped') + p('fallback', 'Helvetica'), EMBED_BOTH),
+      });
+      await fontsSettled(editor);
+
+      expect(editor.fontMeasurement().measurer).toBe('shaped');
+      expect(editor.fontMeasurement().producer).toContain('fallback:canvas-measurer+embedded');
+      const fallbackSpan = editor
+        .surface!.layout()
+        .pages.flatMap((page) => page.fragments)
+        .flatMap((fragment) => (fragment.kind === 'paragraph' ? fragment.lines : []))
+        .flatMap((line) => line.spans)
+        .find((span) => span.text === 'fallback');
+      expect(fallbackSpan).toBeDefined();
+      // Font size × 0.7 per character from the canvas mock. The former fixed fallback was
+      // 6pt per character at 11pt, which is the accumulating caret drift regression.
+      expect(fallbackSpan!.box.width).toBeCloseTo(
+        'fallback'.length * fallbackSpan!.style.fontSizePt * 0.7,
+        5
+      );
+      editor.destroy();
+    } finally {
+      HTMLCanvasElement.prototype.getContext = previous;
+    }
   });
 
   test('exactly one shaped remount per load, and pre-resolution edits survive it', async () => {

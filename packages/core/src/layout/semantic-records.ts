@@ -21,9 +21,16 @@ import type {
 } from './paragraph-style.ts';
 import type { TabLeader } from './paragraph-tabs.ts';
 import type { ModelRange } from './field-projection.ts';
+import type { InlineDrawingRecord, AnchoredDrawingRecord } from './drawing-layout.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import type { ResolvedCellBorders } from './table-borders.ts';
+
+export type {
+  InlineDrawingRecord,
+  AnchoredDrawingRecord,
+  DrawingGeometry,
+} from './drawing-layout.ts';
 
 export type {
   ParagraphBorderEdge,
@@ -120,6 +127,15 @@ export interface StyleSpanRecord {
   readonly style: ResolvedRunStyle;
   readonly box: LayoutBox;
   /**
+   * Cumulative advances from {@link box}.x to each UTF-16 caret boundary in {@link text}.
+   *
+   * Length is `text.length + 1` (both endpoints). Layout publishes these so hit-testing and
+   * the caret read the same per-cluster edges the span was measured with, rather than
+   * re-measuring a prefix at interaction time or interpolating across {@link box}.width —
+   * OpenSpec task 13.5. Absent on older records; consumers fall back to the measurer.
+   */
+  readonly caretEdges?: readonly number[];
+  /**
    * `w:tab/@w:leader` of the stop a `\t` span advanced to (ECMA-376 §17.3.1.38).
    *
    * Only ever set on a tab span, and only for a non-`none` leader. Paint repeats the glyph
@@ -202,6 +218,13 @@ export interface LineRecord {
    * positions with no glyph.
    */
   readonly deletedRanges?: readonly ModelRange[];
+  /**
+   * Inline drawings on this line, absent when there are none.
+   *
+   * Each occupies one UTF-16 model unit at {@link InlineDrawingRecord.start}. Hidden drawings
+   * are omitted — they remain in the tree and projection but publish no geometry.
+   */
+  readonly drawings?: readonly InlineDrawingRecord[];
 }
 
 /**
@@ -445,6 +468,8 @@ export interface HeaderFooterStoryRecord {
   readonly rId?: string;
   readonly box: LayoutBox;
   readonly fragments: readonly BlockFragmentRecord[];
+  /** Anchored drawings owned by this story, in story-relative coordinates. */
+  readonly anchoredDrawings?: readonly AnchoredDrawingRecord[];
   /**
    * Transient projector used between furniture attach and document-level page-field
    * finalize. Absent on published layout records after finalize.
@@ -586,6 +611,8 @@ export interface PageRecord {
   readonly fragments: readonly BlockFragmentRecord[];
   /** Layout-owned vertical rules requested by `w:cols/@w:sep`, content-box relative. */
   readonly columnSeparators?: readonly LayoutBox[];
+  /** Page-content anchored drawings on this sheet, absent when there are none. */
+  readonly anchoredDrawings?: readonly AnchoredDrawingRecord[];
   /** Page furniture for this page's variant, absent when the document declares none. */
   readonly header?: HeaderFooterStoryRecord;
   readonly footer?: HeaderFooterStoryRecord;
@@ -684,9 +711,22 @@ export function paragraphFragmentsOf(
   page: PageRecord,
   includeHeaderRepeats = false
 ): ParagraphFragmentRecord[] {
+  return paragraphFragmentsOfBlocks(page.fragments, includeHeaderRepeats);
+}
+
+/**
+ * Depth-first paragraph fragments of one block list, in reading order.
+ *
+ * The same walk as {@link paragraphFragmentsOf} for fragment lists that do not sit on the
+ * page directly — a header/footer story's fragments, a note story's.
+ */
+export function paragraphFragmentsOfBlocks(
+  blocks: readonly BlockFragmentRecord[],
+  includeHeaderRepeats = false
+): ParagraphFragmentRecord[] {
   const found: ParagraphFragmentRecord[] = [];
-  const visitBlocks = (blocks: readonly BlockFragmentRecord[]): void => {
-    for (const block of blocks) {
+  const visitBlocks = (list: readonly BlockFragmentRecord[]): void => {
+    for (const block of list) {
       if (block.kind === 'paragraph') {
         found.push(block);
         continue;
@@ -697,7 +737,7 @@ export function paragraphFragmentsOf(
       }
     }
   };
-  visitBlocks(page.fragments);
+  visitBlocks(blocks);
   return found;
 }
 
@@ -708,6 +748,11 @@ export function linesOf(layout: SemanticLayout): LineRecord[] {
     for (const fragment of paragraphFragmentsOf(page)) lines.push(...fragment.lines);
   }
   return lines;
+}
+
+/** Anchored drawings on one body page (page-content coordinates). */
+export function anchoredDrawingsOf(page: PageRecord): readonly AnchoredDrawingRecord[] {
+  return page.anchoredDrawings ?? [];
 }
 
 /** Every fragment belonging to one paragraph, in order, across page boundaries. */

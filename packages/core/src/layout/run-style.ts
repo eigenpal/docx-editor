@@ -231,6 +231,15 @@ export function displayText(text: string, style: ResolvedRunStyle): string {
   return text;
 }
 
+/** Measure run text the way layout breaks lines and paints glyphs (caps/small-caps aware). */
+export function measureDisplayText(
+  text: string,
+  style: ResolvedRunStyle,
+  measurer: import('./semantic-records.ts').TextMeasurer
+): number {
+  return measurer.measure(displayText(text, style), style);
+}
+
 /** Whether two resolved styles are identical, for span merging and cache keys. */
 export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolean {
   return (

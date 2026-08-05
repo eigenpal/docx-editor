@@ -264,7 +264,7 @@ describe('no wired toggle is a lie of omission', () => {
     const state = toolbarCommandState(editor, 'file.save');
     expect(state.disabledReason).toBe('save is not a command; run it with runSave(editor)');
     // A genuinely unwired slot keeps the original wording.
-    expect(toolbarCommandState(editor, 'insert.toc').disabledReason).toBe(
+    expect(toolbarCommandState(editor, 'insert.sectionBreakContinuous').disabledReason).toBe(
       'not wired to an editor command'
     );
   });

@@ -74,3 +74,16 @@ export function sameFragments(
   }
   return true;
 }
+
+/** Pending anchored drawings on the open page — reference identity for incremental reuse. */
+export function sameAnchoredDrawings(
+  left: readonly import('./drawing-layout.ts').AnchoredDrawingRecord[],
+  right: readonly import('./drawing-layout.ts').AnchoredDrawingRecord[]
+): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] === right[index]) continue;
+    return false;
+  }
+  return true;
+}

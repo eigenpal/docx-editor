@@ -53,6 +53,7 @@ import {
 } from './ooxml-tree.ts';
 
 const CONTENT_TYPES_PART = '/[Content_Types].xml';
+const CONTENT_TYPES_NAMESPACE = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const OFFICE_DOCUMENT_REL_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
 
@@ -197,6 +198,73 @@ function attributeByLocalName(
   return undefined;
 }
 
+function parseXmlQName(name: string): { readonly prefix: string; readonly localName: string } {
+  const colon = name.indexOf(':');
+  return colon === -1
+    ? { prefix: '', localName: name }
+    : { prefix: name.slice(0, colon), localName: name.slice(colon + 1) };
+}
+
+function xmlnsBindingsOf(
+  attributes: Readonly<Record<string, string>>
+): ReadonlyMap<string, string> {
+  const bindings = new Map<string, string>();
+  for (const [name, value] of Object.entries(attributes)) {
+    if (name === 'xmlns') bindings.set('', value);
+    else if (name.startsWith('xmlns:')) bindings.set(name.slice(6), value);
+  }
+  return bindings;
+}
+
+function mergeNamespaceScope(
+  inherited: ReadonlyMap<string, string>,
+  element: Extract<XmlNode, { type: 'element' }>
+): ReadonlyMap<string, string> {
+  const local = xmlnsBindingsOf(element.attributes);
+  if (local.size === 0) return inherited;
+  return new Map([...inherited, ...local]);
+}
+
+function elementNamespaceUri(
+  element: Extract<XmlNode, { type: 'element' }>,
+  scope: ReadonlyMap<string, string>
+): string | undefined {
+  return scope.get(parseXmlQName(element.name).prefix);
+}
+
+/** An unqualified attribute value — prefixed lookalikes are ignored for indexing. */
+function unqualifiedXmlAttribute(
+  element: Extract<XmlNode, { type: 'element' }>,
+  localName: string
+): string | undefined {
+  for (const [name, value] of Object.entries(element.attributes)) {
+    if (name.indexOf(':') !== -1) continue;
+    if (name === localName) return value;
+  }
+  return undefined;
+}
+
+function collectContentTypeElements(
+  nodes: readonly XmlNode[],
+  localName: 'Default' | 'Override',
+  inherited: ReadonlyMap<string, string>,
+  out: Extract<XmlNode, { type: 'element' }>[] = []
+): Extract<XmlNode, { type: 'element' }>[] {
+  for (const node of nodes) {
+    if (!isElement(node)) continue;
+    const scope = mergeNamespaceScope(inherited, node);
+    const qname = parseXmlQName(node.name);
+    if (
+      qname.localName === localName &&
+      elementNamespaceUri(node, scope) === CONTENT_TYPES_NAMESPACE
+    ) {
+      out.push(node);
+    }
+    collectContentTypeElements(node.children, localName, scope, out);
+  }
+  return out;
+}
+
 /**
  * The part a `.rels` part describes relationships FOR.
  * `/word/_rels/document.xml.rels` -> `/word/document.xml`; `/_rels/.rels` -> `/`.
@@ -215,16 +283,17 @@ function readContentTypes(xml: string, limits?: XmlLimits): ContentTypeIndex | n
   const defaults: DefaultRecord[] = [];
   const overrides: OverrideRecord[] = [];
   let order = 0;
-  for (const element of collectElements(parsed.nodes, 'Default')) {
-    const extension = attributeByLocalName(element, 'Extension');
-    const contentType = attributeByLocalName(element, 'ContentType');
-    if (extension === undefined || contentType === undefined) return null;
+  const emptyScope = new Map<string, string>();
+  for (const element of collectContentTypeElements(parsed.nodes, 'Default', emptyScope)) {
+    const extension = unqualifiedXmlAttribute(element, 'Extension');
+    const contentType = unqualifiedXmlAttribute(element, 'ContentType');
+    if (extension === undefined || contentType === undefined) continue;
     defaults.push({ extension, contentType, order: order++ });
   }
-  for (const element of collectElements(parsed.nodes, 'Override')) {
-    const partName = attributeByLocalName(element, 'PartName');
-    const contentType = attributeByLocalName(element, 'ContentType');
-    if (partName === undefined || contentType === undefined) return null;
+  for (const element of collectContentTypeElements(parsed.nodes, 'Override', emptyScope)) {
+    const partName = unqualifiedXmlAttribute(element, 'PartName');
+    const contentType = unqualifiedXmlAttribute(element, 'ContentType');
+    if (partName === undefined || contentType === undefined) continue;
     overrides.push({ partName, contentType, order: order++ });
   }
   const index = buildContentTypeIndex({ defaults, overrides });
@@ -346,6 +415,8 @@ export function readOoxmlPackage(
   for (const [partName, data] of zip.entries) {
     if (partName === CONTENT_TYPES_PART) continue;
     const contentType = contentTypeFor(partName, contentTypes);
+    // Media SVG stays raw bytes — tree parsing would break D9 byte identity for parts.
+    if (contentType.toLowerCase() === 'image/svg+xml') continue;
     if (!XML_CONTENT_TYPE_RE.test(contentType)) continue;
     if (parts.size >= maxXmlParts) return { ok: false, reason: 'too-many-xml-parts' };
     // Re-normalize even though `readZip` already did: this is the name that becomes a node
@@ -406,3 +477,35 @@ export function writeOoxmlPackage(pkg: OoxmlPackage): Uint8Array {
 export function withPart(pkg: OoxmlPackage, part: OoxmlPart): OoxmlPackage {
   return Object.freeze({ ...pkg, parts: new Map([...pkg.parts, [part.name, part]]) });
 }
+
+export {
+  DEFAULT_DRAWING_PROJECTION_LIMITS,
+  DEFAULT_SUPPORTED_MC_REQUIRES,
+  drawingAccessibility,
+  projectDrawing,
+  projectDrawingsInPackage,
+  projectDrawingsInPart,
+  type DrawingAccessibility,
+  type DrawingDiagnostic,
+  type DrawingKind,
+  type DrawingProjection,
+  type DrawingProjectionLimits,
+  type ImageWrapTarget,
+} from './drawing-projection.ts';
+export {
+  createImageResourceCache,
+  imageResourceLookupFor,
+  liveDrawingReferenceCount,
+  sniffImageMime,
+  type ImageDecodePort,
+  type ImageResourceLookup,
+  type ImageResourceState,
+  type SupportedImageMime,
+} from './image-resources.ts';
+export {
+  allocateDrawingPropertyId,
+  withBinaryPart,
+  withEmbeddedImage,
+  withoutUnreferencedImagePart,
+  type DrawingPropertyIdResult,
+} from './drawing-package-edit.ts';

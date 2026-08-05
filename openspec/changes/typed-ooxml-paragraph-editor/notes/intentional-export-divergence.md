@@ -86,6 +86,9 @@ exemptions go when it lands.
   hand-copying its class name.
 - `DocxEditorLoadingSpinnerProps`
 - `DocxEditorLoadingComponent` — the part plus its `.Spinner` static.
+- `DocxEditorFontNotice` — context-fed warning for unavailable document fonts; Vue
+  exposes the substitution state through the shared snapshot but has no packaged notice yet.
+- `DocxEditorFontNoticeProps`
 - `DocxEditorHeaderFooterChrome` — React-only scoped HF chrome (region label, options,
   field inserts) over `useHeaderFooterState`; Vue twin deferred with notes/HF editing.
 - `DocxEditorHeaderFooterChromeProps`
@@ -184,26 +187,28 @@ does. Only the panel is React-only.
 - `HyperlinkPopupMode`
 - `HyperlinkPopupAnchor`
 
-### Review surface (React only, for now)
+### Pro integration points (React only, for now)
 
-The review rail and its hook. Vue has no twin yet, and the engine members behind them
-(`getReviewItems`, `acceptReviewItem`, `addComment`, …) are on the shared `Editor` contract,
-so a Vue host can already reach the capability — what is missing is the chrome.
+The review PANE moved to `@docx-editor.dev/pro/react` (pro-review-and-custom-nodes); what
+this package now exports are the seams the pro pane composes with. Vue has no review
+chrome and therefore no pro pane to feed — its twins land with the Vue review lane.
 
-One thing blocks a faithful Vue twin beyond the component work: the compose box pins the
-selection with `editor.surface.retainSelection()`, and `surface` is the escape hatch, not
-the contract. Publishing retain/release on `Editor` is the prerequisite.
+One thing still blocks a faithful Vue twin beyond the component work: the compose box pins
+the selection with `editor.surface.retainSelection()`, and `surface` is the escape hatch,
+not the contract. Publishing retain/release on `Editor` is the prerequisite.
 
-- `DocxEditorReview`
-- `DocxEditorReviewNamespace`
-- `ReviewActionProps`
-- `ReviewPartProps`
-- `ReviewProps`
-- `useReview`
-- `useReviewOf`
-- `useStackedReviewPositions`
-- `ReviewItemView`
-- `UseReviewReturn`
+- `ReviewRailContext`
+- `ReviewRailRegistry`
+- `Slot`
+- `SlotProps`
+- `LocaleProvider`
+- `useTranslation`
+
+The font-fallback notice is React chrome with no Vue twin yet, same lane as the
+rest of the notice/banner chrome:
+
+- `DocxEditorFontNotice`
+- `DocxEditorFontNoticeProps`
 The navigation pane rides the same provider/hooks layer: a compound plus three behavior
 hooks over the context-published editor, so its Vue twin is the composable form and lands
 with the rest of that layer. The ENGINE half is already adapter-neutral — the search
@@ -357,6 +362,28 @@ the fragment through the SHARED `composeFontConfiguration`, and cancels both on 
 - `DocxFontsInput`
 - `UseDocxSourceOptions`
 - `UseDocxSourceResult`
+
+### Image authoring (React only)
+
+DrawingML picture authoring landed React-first on the composition layer. The ENGINE half
+is adapter-neutral — `SelectedImageState`, `executeImageCommand`, `setImageWrapType`, wrap
+value state, and the contextual `image.*` chrome slots all live in core and Vue's toolbar
+already reads `toolbarCommandState` for those slots (disabled until value chrome lands).
+Only the insert picker, wrap menu, alt-text panel, properties dialog, selection overlay,
+and their hooks/parts defer to `vue-drawing-authoring-parity`.
+
+- `useEditorValueCommand` — value-typed chrome hook for `image.wrap` and `image.altText`.
+- `EditorValueCommandState` — the hook's return type.
+- `ImageWrapTarget` — re-export of the nine wrap choices from core chrome state.
+- `DocxEditorImagePropertiesDialog` — properties dialog part (`DocxEditor.ImagePropertiesDialog`).
+- `DocxEditorImagePropertiesDialogProps`
+- `ImageInsertProvider` — shared hidden file input + paste/drop dispatch for insert-image.
+- `ImageInsertTrigger` — toolbar/menu insert control.
+- `ImageWrap` — nine-choice wrap dropdown (`DocxEditorToolbar.ImageWrap`).
+- `ImageAltText` — alt-text editor panel (`DocxEditorToolbar.ImageAltText`).
+- `ImagePropertiesTrigger` — opens the properties dialog from the toolbar.
+- `normalizeImageBytes` — client-side PNG/JPEG/GIF preflight before `executeImageCommand`.
+- `NormalizedImagePayload` — preflight result type for insert/replace.
 
 ## Vue-only
 

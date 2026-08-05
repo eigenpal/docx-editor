@@ -8,7 +8,8 @@
 // place (and `hidden` removes it); `preset={false}` verbatim rendering; live Bold
 // state through a click; asChild prop merging; the wired font-size stepper, zoom
 // stepper, and colour split buttons; the undriven pickers rendering disabled; that
-// FontFamily's options come from the DOCUMENT'S fonts and selecting one applies it;
+// FontFamily's options are the editor's offerable catalog (configured families merged
+// with the document's) and selecting one applies it;
 // and the caret-preserving mousedown contract.
 
 // MUST be first: happy-dom registration happens on import.
@@ -27,6 +28,7 @@ import {
 } from '@docx-editor.dev/core-contract/editor';
 import { DocxEditor } from '../src/components/DocxEditor.tsx';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
+import { testReviewModule } from './review-test-module.ts';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorToolbar } from '../src/editor/toolbar/index.ts';
@@ -85,6 +87,7 @@ function mountToolbar(
   const view = render(
     <DocxEditorRoot
       document={source}
+      modules={[testReviewModule()]}
       onReady={(editor) => {
         instance = editor as DocxEditorInstance;
       }}
@@ -237,7 +240,7 @@ describe('live button state', () => {
     expect(editor().snapshot().formatting?.bold).toBe(true);
   });
 
-  test('a generic Button on an unwired slot is disabled, quoting the ENGINE', () => {
+  test('a generic Button on image.insert reflects engine probe state', () => {
     const { view } = mountToolbar(
       <DocxEditorToolbar preset={false}>
         <DocxEditorToolbar.Button slot="image.insert" />
@@ -246,14 +249,9 @@ describe('live button state', () => {
     const button = view.container.querySelector(
       '[aria-label="toolbar.image"]'
     ) as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
-    expect(button.hasAttribute('data-disabled')).toBe(true);
-    // `insertImage` IS in the edit vocabulary — it is simply not executed by this engine
-    // yet — so the slot carries a probe and the tooltip is the engine's own refusal.
-    // Chrome's "not wired to an editor command" would have been a guess about a question
-    // the engine can answer, and would have gone stale the day the engine wires it.
-    expect(button.title).toBe("command 'insertImage' is not supported by the tree editor");
-    // Not a toggle: no aria-pressed claim.
+    expect(button.disabled).toBe(false);
+    expect(button.hasAttribute('data-disabled')).toBe(false);
+    expect(button.title).not.toBe('not wired to an editor command');
     expect(button.hasAttribute('aria-pressed')).toBe(false);
   });
 
@@ -803,9 +801,12 @@ describe('the shaped parts', () => {
 });
 
 describe('the FontFamily compound', () => {
-  test('options come from the DOCUMENT fonts; selecting applies and closes', async () => {
+  test('options are the offerable catalog; selecting applies and closes', async () => {
     const { view, editor } = mountToolbar(<DocxEditorToolbar />, FONTED_SOURCE);
     expect(editor().getDocumentFonts()).toEqual(['Courier New', 'Georgia']);
+    // The catalog never collapses to the document alone: with no `fonts` configured,
+    // the default face is still offerable alongside the declared families.
+    expect(editor().getAvailableFonts()).toEqual(['Calibri', 'Courier New', 'Georgia']);
     await act(async () => {
       editor().surface!.selectAll();
     });
@@ -824,30 +825,35 @@ describe('the FontFamily compound', () => {
     // headings in the chrome spec's group order (serif before monospace), not one flat
     // alphabetical list.
     const options = [...listbox.querySelectorAll('[role="option"]')];
-    expect(options.map((option) => option.textContent)).toEqual(['Georgia', 'Courier New']);
+    expect(options.map((option) => option.textContent)).toEqual([
+      'Calibri',
+      'Georgia',
+      'Courier New',
+    ]);
     expect(
       [...listbox.querySelectorAll('.docx-toolbar__menu-label')].map((label) => label.textContent)
-    ).toEqual(['font.serif', 'font.monospace']);
+    ).toEqual(['font.sansSerif', 'font.serif', 'font.monospace']);
 
     await act(async () => {
-      (options[0] as HTMLButtonElement).click();
+      (options[1] as HTMLButtonElement).click();
     });
     // Applied through can-before-exec, popup closed, trigger shows the new value.
     expect(editor().snapshot().formatting?.fontFamily).toBe('Georgia');
     expect(view.container.querySelector('[role="listbox"]')).toBeNull();
     expect(trigger.textContent).toBe('Georgia');
     // Reopened, the OPTIONS FOLLOWED THE EDIT: applying Georgia to the whole selection
-    // rewrote both runs' rFonts, so Courier New left the document's font catalog — the
-    // list re-derives from the document, not from a mount-time snapshot. And the one
-    // remaining option is marked selected.
+    // rewrote both runs' rFonts, so Courier New left the document half of the catalog —
+    // the list re-derives from the document, not from a mount-time snapshot. The
+    // configured default face stays offerable, and the applied option is marked
+    // selected.
     await act(async () => {
       trigger.click();
     });
     const reopened = [...view.container.querySelectorAll('[role="option"]')];
     // The selected row carries the right-edge ✓ (part of its text content).
-    expect(reopened.map((option) => option.textContent)).toEqual(['Georgia✓']);
-    expect(reopened[0]!.hasAttribute('data-selected')).toBe(true);
-    expect(reopened[0]!.querySelector('.docx-toolbar__menu-check')).not.toBeNull();
+    expect(reopened.map((option) => option.textContent)).toEqual(['Calibri', 'Georgia✓']);
+    expect(reopened[1]!.hasAttribute('data-selected')).toBe(true);
+    expect(reopened[1]!.querySelector('.docx-toolbar__menu-check')).not.toBeNull();
   });
 
   test('custom Item children render inside a composed FontFamily', async () => {

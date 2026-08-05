@@ -50,7 +50,9 @@
     "reportIssue": "Report issue"
   },
   "toc": {
-    "updatePrompt": "This document contains a table of contents that's out of date. Regenerate it now?"
+    "updatePrompt": "This document contains a table of contents that's out of date. Regenerate it now?",
+    "refresh": "Refresh table of contents",
+    "refreshPageNumbers": "Refresh page numbers"
   },
   "formattingBar": {
     "groups": {
@@ -88,6 +90,8 @@
     "subscriptShortcut": "Subscript (Ctrl+=)",
     "imageProperties": "Image properties",
     "imagePropertiesShortcut": "Image properties (alt text, border)...",
+    "imageWrap": "Wrap text",
+    "altText": "Alt text",
     "clearFormatting": "Clear formatting",
     "commentsAndChanges": "Comments & Changes",
     "more": "More",
@@ -847,12 +851,26 @@
   },
   "imageWrap": {
     "inline": "In Line with Text",
+    "square": "Square",
+    "tight": "Tight",
+    "through": "Through",
     "floatLeft": "Square Left",
     "floatRight": "Square Right",
     "topAndBottom": "Top and Bottom",
     "behindText": "Behind Text",
     "inFrontOfText": "In Front of Text",
     "tooltipPrefix": "Wrap: {label}",
+    "targets": {
+      "inline": "In Line with Text",
+      "square": "Square",
+      "squareLeft": "Square Left",
+      "squareRight": "Square Right",
+      "tight": "Tight",
+      "through": "Through",
+      "topAndBottom": "Top and Bottom",
+      "behind": "Behind Text",
+      "inFront": "In Front of Text"
+    },
     "menu": {
       "inLineWithText": "In Line with Text",
       "squareLeft": "Square Left",
@@ -869,6 +887,46 @@
       "behindText": "Image paints behind body text",
       "inFrontOfText": "Image paints over body text"
     }
+  },
+  "imageInsert": {
+    "errors": {
+      "emptyFile": "The selected file is empty.",
+      "invalidSignature": "The file is not a supported PNG, JPEG, or GIF image.",
+      "unsupportedFormat": "This image format is not supported for insertion.",
+      "oversize": "The image exceeds the maximum allowed size.",
+      "refused": "The image could not be inserted."
+    }
+  },
+  "imageProperties": {
+    "units": {
+      "points": "pt"
+    },
+    "hyperlink": "Hyperlink",
+    "crop": "Crop",
+    "cropLeft": "Left (%)",
+    "cropTop": "Top (%)",
+    "cropRight": "Right (%)",
+    "cropBottom": "Bottom (%)",
+    "resetNaturalSize": "Reset to natural size",
+    "nonPictureHint": "Crop and natural-size reset are available only for pictures.",
+    "errors": {
+      "invalidDimensions": "Enter positive width and height values.",
+      "invalidCrop": "Crop values must be percentages from 0 to 100.",
+      "invalidPosition": "Enter valid horizontal and vertical position values.",
+      "refused": "These properties could not be applied."
+    },
+    "position": "Position",
+    "positionUnavailable": "Position is available only for floating images.",
+    "positionLocked": "This drawing cannot be moved.",
+    "horizontalOffset": "Horizontal offset",
+    "verticalOffset": "Vertical offset",
+    "relativeToHorizontal": "Relative to (horizontal)",
+    "relativeToVertical": "Relative to (vertical)"
+  },
+  "imageAltText": {
+    "panelTitle": "Alt text",
+    "title": "Title",
+    "description": "Description"
   },
   "responsePreview": {
     "loading": "{action}...",
@@ -896,11 +954,13 @@
     "failedToParse": "Failed to parse document",
     "linkRemoved": "Link removed",
     "linkCopied": "Link copied to clipboard",
-    "failedToSave": "Failed to save document"
+    "failedToSave": "Failed to save document",
+    "fontSubstitutionNotice": "Some fonts in this document aren't available, so substitutes are shown: {fonts}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Display text",
     "urlPlaceholder": "https://example.com",
+    "urlLabel": "URL",
     "copyLink": "Copy link",
     "editLink": "Edit link",
     "removeLink": "Remove link",
@@ -985,13 +1045,33 @@
   "image": {
     "placeholder": "Image placeholder",
     "placeholderText": "[Image]",
-    "editableAriaLabel": "Editable image"
+    "editableAriaLabel": "Editable image",
+    "unsupportedFormat": "Unsupported image format ({format})",
+    "nonPictureGraphic": "Unsupported graphic ({kind})",
+    "missingResource": "Image missing",
+    "externalResource": "External image not loaded",
+    "invalidResource": "Invalid image",
+    "contentMismatch": "Image content does not match its type",
+    "decodeFailed": "Image could not be decoded",
+    "resourceLimit": "Image exceeds size limits",
+    "pendingResource": "Loading image"
   },
   "imageOverlay": {
+    "selection": "Selected image",
     "rotate": "Rotate",
     "imageProperties": "Image properties",
     "deleteImage": "Delete image",
-    "replaceImage": "Replace image…"
+    "replaceImage": "Replace image…",
+    "handle": {
+      "n": "Resize top edge",
+      "ne": "Resize top-right corner",
+      "e": "Resize right edge",
+      "se": "Resize bottom-right corner",
+      "s": "Resize bottom edge",
+      "sw": "Resize bottom-left corner",
+      "w": "Resize left edge",
+      "nw": "Resize top-left corner"
+    }
   },
   "ruler": {
     "horizontal": "Horizontal ruler",

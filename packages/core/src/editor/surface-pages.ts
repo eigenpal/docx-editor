@@ -63,8 +63,27 @@ export function createFurnitureSource(env: {
    * page-number tab in a metric-locale footer lands where Word puts it.
    */
   readonly defaultTabStopPt?: number;
+  readonly inlineDrawingLayoutForPart?: (
+    partName: string
+  ) => import('../layout/drawing-layout.ts').InlineDrawingLayoutContext | undefined;
+  /** Per-part resource epoch — memo invalidates when pending resources settle. */
+  readonly drawingLayoutTokenForPart?: (partName: string) => string;
+  readonly drawingTokenForParagraphForPart?: (
+    partName: string,
+    paragraph: import('@docx-editor.dev/core-contract/store').OoxmlNode
+  ) => string;
 }): FurnitureSource {
-  const { session, measurer, producer, cache, styleCascade, defaultTabStopPt } = env;
+  const {
+    session,
+    measurer,
+    producer,
+    cache,
+    styleCascade,
+    defaultTabStopPt,
+    inlineDrawingLayoutForPart,
+    drawingLayoutTokenForPart,
+    drawingTokenForParagraphForPart,
+  } = env;
 
   /**
    * Header/footer stories, laid out once per distinct part object for baseline height.
@@ -77,7 +96,17 @@ export function createFurnitureSource(env: {
    */
   const hfStoryMemo = new WeakMap<
     object,
-    { width: number; producer: string; story: ReturnType<typeof layoutHeaderFooterStory> }
+    {
+      width: number;
+      pageHeight: number;
+      marginTop: number;
+      marginBottom: number;
+      marginLeft: number;
+      marginRight: number;
+      producer: string;
+      drawingLayoutToken: string;
+      story: ReturnType<typeof layoutHeaderFooterStory>;
+    }
   >();
 
   let rIdByPartName: Map<string, string> | null = null;
@@ -92,9 +121,32 @@ export function createFurnitureSource(env: {
     return rIdByPartName.get(partName);
   }
 
-  function storyOf(part: OoxmlPart, width: number): ReturnType<typeof layoutHeaderFooterStory> {
+  function storyOf(
+    part: OoxmlPart,
+    width: number,
+    sectionGeometry?: ReturnType<typeof geometryOfSection>
+  ): ReturnType<typeof layoutHeaderFooterStory> {
+    const partDrawingToken = drawingLayoutTokenForPart?.(part.name) ?? '';
+    const pageHeight = sectionGeometry?.height ?? 0;
+    const marginTop = sectionGeometry?.margin.top ?? 0;
+    const marginBottom = sectionGeometry?.margin.bottom ?? 0;
+    const marginLeft = sectionGeometry?.margin.left ?? 0;
+    const marginRight = sectionGeometry?.margin.right ?? 0;
     const memo = hfStoryMemo.get(part);
-    if (memo && memo.width === width && memo.producer === producer) return memo.story;
+    if (
+      memo &&
+      memo.width === width &&
+      memo.pageHeight === pageHeight &&
+      memo.marginTop === marginTop &&
+      memo.marginBottom === marginBottom &&
+      memo.marginLeft === marginLeft &&
+      memo.marginRight === marginRight &&
+      memo.producer === producer &&
+      memo.drawingLayoutToken === partDrawingToken
+    ) {
+      return memo.story;
+    }
+    const inlineDrawingLayout = inlineDrawingLayoutForPart?.(part.name);
     const baseline = layoutHeaderFooterStory(
       part,
       width,
@@ -104,20 +156,48 @@ export function createFurnitureSource(env: {
       styleCascade,
       undefined,
       undefined,
-      defaultTabStopPt
+      defaultTabStopPt,
+      undefined,
+      inlineDrawingLayout,
+      drawingTokenForParagraphForPart
+        ? (paragraph) => drawingTokenForParagraphForPart(part.name, paragraph)
+        : undefined,
+      undefined,
+      sectionGeometry
+        ? {
+            pageNumber: 1,
+            pageWidth: sectionGeometry.width,
+            pageHeight: sectionGeometry.height,
+            marginLeft: sectionGeometry.margin.left,
+            marginRight: sectionGeometry.margin.right,
+            marginTop: sectionGeometry.margin.top,
+            marginBottom: sectionGeometry.margin.bottom,
+          }
+        : undefined
     );
     const rId = rIdOfPart(part.name);
     const story = rId ? stampStoryRId(baseline, rId) : baseline;
-    hfStoryMemo.set(part, { width, producer, story });
+    hfStoryMemo.set(part, {
+      width,
+      pageHeight,
+      marginTop,
+      marginBottom,
+      marginLeft,
+      marginRight,
+      producer,
+      drawingLayoutToken: partDrawingToken,
+      story,
+    });
     return story;
   }
 
   function mapStories(
     source: ReadonlyMap<HeaderFooterVariantName, OoxmlPart>,
-    width: number
+    width: number,
+    sectionGeometry: ReturnType<typeof geometryOfSection>
   ): ReadonlyMap<HeaderFooterVariantName, ReturnType<typeof layoutHeaderFooterStory>> {
     const laid = new Map<HeaderFooterVariantName, ReturnType<typeof layoutHeaderFooterStory>>();
-    for (const [variant, part] of source) laid.set(variant, storyOf(part, width));
+    for (const [variant, part] of source) laid.set(variant, storyOf(part, width, sectionGeometry));
     return laid;
   }
 
@@ -132,8 +212,8 @@ export function createFurnitureSource(env: {
     return {
       titlePage: parts.titlePage,
       evenAndOddHeaders: parts.evenAndOddHeaders,
-      headers: mapStories(parts.headers, width),
-      footers: mapStories(parts.footers, width),
+      headers: mapStories(parts.headers, width, sectionGeometry),
+      footers: mapStories(parts.footers, width, sectionGeometry),
     };
   }
 

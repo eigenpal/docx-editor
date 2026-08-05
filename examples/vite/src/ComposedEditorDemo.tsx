@@ -14,7 +14,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import { zipSync, strToU8 } from 'fflate';
 import {
   DocxEditor,
   useDocxEditor,
@@ -22,17 +21,51 @@ import {
   useEditorEvent,
   useFontFamily,
 } from '@docx-editor.dev/react';
+// PRO: comments + tracked changes ship in @docx-editor.dev/pro. Register the
+// review module on the Root and mount the pane; without the module the same
+// document still opens (final-state view) and the review toolbar controls
+// disable with the engine's own "requires the pro review module" reason.
+import {
+  customNodesModule,
+  defineCustomNode,
+  insertCustomNode,
+  reviewModule,
+} from '@docx-editor.dev/pro';
+import { CustomNodeChrome, DocxEditorReview } from '@docx-editor.dev/pro/react';
+import { blankDocumentBytes } from '@docx-editor.dev/core-contract/editor';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
 import { BrandLogo } from '../../shared/BrandLogo';
 import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
 import { ExampleSwitcher } from '../../shared/ExampleSwitcher';
 import { ThemeToggle } from './ThemeToggle';
+import { DrawingsE2eBridge } from './DrawingsE2eBridge';
 import { DEMO_BUTTON, DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON } from './demoButtons';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared bits
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The pro capabilities this demo registers. One stable array — module
+ * registration is construction-time (like `mode`), so the identity must not
+ * change per render. `reviewModule()` enables markup rendering, suggesting
+ * mode, and the review pane; `customNodesModule` shows `defineCustomNode`:
+ * an inline content control tagged `docx:citation?...` is recognized as a
+ * typed node (open e2e/fixtures/sdt-custom-tag-original.docx to see one).
+ * Both accept `{ licenseKey }` — optional while licensing is honor-system.
+ */
+const DEMO_CITATION = defineCustomNode({
+  name: 'citation',
+  tagPrefix: 'docx',
+  // HOST-authored chip appearance — CustomNodeChrome applies it.
+  chrome: { color: '#7c3aed' },
+  // Recognition hook: attrs decoded from the tag, text is the literal
+  // SDT content (which a Word user may have edited — label drift).
+  fromDocx: ({ attrs, text }) => ({ ...attrs, label: text }),
+});
+
+const PRO_MODULES = [reviewModule(), customNodesModule({ nodes: [DEMO_CITATION] })];
 
 /** English labels for the library toolbar's i18n keys. Demos are apps: English is fine. */
 const tEnglish = createT(en);
@@ -41,29 +74,6 @@ const translate = (key: string): string => tEnglish(key as TranslationKey);
 /** Keep the caret: chrome mousedown must never move focus out of the document. */
 function keepCaret(event: ReactMouseEvent): void {
   event.preventDefault();
-}
-
-const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
-const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
-const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
-
-/** A minimal empty document, built the same way the adapter test suite builds one. */
-function emptyDocx(): Uint8Array {
-  return zipSync({
-    '[Content_Types].xml': strToU8(
-      `<Types xmlns="${CT}">` +
-        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-        '</Types>'
-    ),
-    '_rels/.rels': strToU8(
-      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
-    ),
-    'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t></w:t></w:r></w:p></w:body></w:document>`
-    ),
-  });
 }
 
 /** Hand DOCX bytes to the browser as a download. */
@@ -84,10 +94,11 @@ function downloadDocx(buffer: ArrayBuffer, name: string): void {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Custom items for the FontFamily popup: each document font as a single-line row
+ * Custom items for the FontFamily popup: each offerable font as a single-line row
  * rendered in its own typeface, reference-picker style (the selected row gets the
- * library's right-aligned check). Options come from `useFontFamily()`, i.e. from
- * the DOCUMENT's font catalog — the list follows edits.
+ * library's right-aligned check). Options come from `useFontFamily()` — the editor's
+ * configured catalog merged with the document's declared fonts, so a brand-new
+ * document still lists real choices; the list follows edits.
  */
 function FontPreviewItems() {
   const { options } = useFontFamily();
@@ -158,6 +169,82 @@ const PERF_TIPS = {
  * and the collapsed chip neither polls nor re-renders. Collapsed it is a small
  * circular document chip on the outline toggle's disc recipe.
  */
+/**
+ * Click a citation chip → a card, the custom-node `onClick` DX. Delegated on
+ * the document: the chip's boundary layer opted back into pointer events (see
+ * styles.css), its chrome layer carries the node's `w:tag`, and decoding that
+ * tag is the whole lookup — attrs come straight from the document.
+ */
+function CitationPopover() {
+  const [card, setCard] = useState<{
+    x: number;
+    y: number;
+    attrs: Readonly<Record<string, string>>;
+  } | null>(null);
+  // Close when a click lands outside the card (chip clicks reopen through the API).
+  useEffect(() => {
+    if (!card) return;
+    const onClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest('[role="dialog"]') && !target?.closest('.docx-content-control-boundary')) {
+        setCard(null);
+      }
+    };
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
+  }, [card]);
+  const chrome = (
+    <CustomNodeChrome
+      nodes={[DEMO_CITATION]}
+      onNodeClick={(node) =>
+        setCard({ x: node.rect.left, y: node.rect.bottom + 8, attrs: node.attrs })
+      }
+    />
+  );
+  if (!card) return chrome;
+  return (
+    <>
+      {chrome}
+    <div
+      role="dialog"
+      aria-label="Citation details"
+      style={{
+        position: 'fixed',
+        left: card.x,
+        top: card.y,
+        zIndex: 60,
+        minWidth: 260,
+        background: '#fff',
+        border: '1px solid #e2e8f0',
+        borderRadius: 12,
+        boxShadow: '0 12px 32px rgba(15, 23, 42, 0.18)',
+        padding: '12px 14px',
+        font: '13px/1.5 system-ui, sans-serif',
+        color: '#0f172a',
+      }}
+    >
+      <div style={{ fontWeight: 600, marginBottom: 6 }}>📖 {card.attrs['label'] ?? 'Citation'}</div>
+      <div style={{ color: '#475569' }}>
+        <div>
+          Source: <code>{card.attrs['sourceId'] ?? '—'}</code>
+        </div>
+        <div>Locator: {card.attrs['locator'] ?? '—'}</div>
+      </div>
+      <button
+        type="button"
+        style={{ ...DEMO_PRIMARY_BUTTON, marginTop: 10 }}
+        onClick={() => {
+          window.alert(`A real app opens source ${card.attrs['sourceId']} here.`);
+          setCard(null);
+        }}
+      >
+        Open source
+      </button>
+    </div>
+    </>
+  );
+}
+
 function PerfHud() {
   const editor = useDocxEditor();
   const [open, setOpen] = useState(false);
@@ -374,7 +461,7 @@ function EditorChrome({
       editor?.load(new Uint8Array(buffer));
     });
   };
-  const newDocument = () => editor?.load(emptyDocx());
+  const newDocument = () => editor?.load(blankDocumentBytes());
   const saveDocument = () => {
     void editor?.save().then((buffer) => {
       const base = title.trim() || 'document';
@@ -456,10 +543,26 @@ function EditorChrome({
                 <span className="docx-menubar__item-label">Documentation</span>
               </a>
             </DocxEditor.Menu.Help>
-            {/* A menu the library knows nothing about, with the host's own id and label. */}
-            <DocxEditor.Menu.Menu id="review" label="Review">
-              <DocxEditor.Menu.Row onSelect={() => window.alert('Sent for approval.')}>
-                Send for approval
+            {/* A menu the library knows nothing about, with the host's own id and
+                label — here it carries the PRO custom-node insert: one call authors
+                a tagged, sdtLocked content control at the caret. In this editor it
+                is a recognized citation chip; in Word it is a locked control
+                showing the literal label. */}
+            <DocxEditor.Menu.Menu id="my-menu" label="My Menu">
+              <DocxEditor.Menu.Row
+                onSelect={() => {
+                  if (!editor) return;
+                  const result = insertCustomNode(
+                    editor,
+                    DEMO_CITATION,
+                    { sourceId: `src_${Date.now().toString(36)}`, locator: 'p.42' },
+                    '(Smith 2024, p. 42)',
+                    { alias: 'Citation' }
+                  );
+                  if (!result.ok) console.warn(`[custom-nodes] ${result.reason}`);
+                }}
+              >
+                Insert citation
               </DocxEditor.Menu.Row>
             </DocxEditor.Menu.Menu>
           </DocxEditor.Menu>
@@ -524,6 +627,9 @@ function EditorChrome({
         </DocxEditor.Toolbar.FontFamily>
       </DocxEditor.Toolbar>
 
+      {/* Word-style compatibility bar when document fonts render in substitutes. */}
+      <DocxEditor.FontNotice t={translate} />
+
       {/* File > Page setup: the library dialog, applied as one undo step. */}
       <DocxEditor.PageSetupDialog open={showPageSetup} onClose={() => setShowPageSetup(false)} />
     </div>
@@ -585,6 +691,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
         <DocxEditor.Root
           document={bytes}
           author="Demo Reviewer"
+          modules={PRO_MODULES}
           {...(fonts ? { fonts } : {})}
           onFontError={(error) => console.warn(`[fonts] ${error.code}: ${error.message}`)}
         >
@@ -620,18 +727,22 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
               <DocxEditor.NotesChrome />
               <DocxEditor.Content />
               <DocxEditor.ContextMenu t={translate} />
+              <DrawingsE2eBridge />
               {/* The link popover. Inside the viewport so it stays with the page while
                   scrolling. `<DocxEditor>` mounts it for you; a composition like this one
                   places it by name, exactly like the rulers above. */}
               <DocxEditor.HyperLink />
-              {/* The review rail: tracked changes and comments as cards beside the page,
-                  with accept / reject / reply. Inside the viewport for the same reason as
-                  the popover — it scrolls with the document rather than chasing it. */}
-              <DocxEditor.Review />
+              {/* The review rail (PRO): tracked changes and comments as cards beside the
+                  page, with accept / reject / reply. Imported from
+                  `@docx-editor.dev/pro/react` and enabled by the `reviewModule()` on the
+                  Root. Inside the viewport for the same reason as the popover — it
+                  scrolls with the document rather than chasing it. */}
+              <DocxEditorReview />
             </DocxEditor.Viewport>
             <DocxEditor.PageNumber />
             {/* Floating diagnostics chrome, above the overlay panels. */}
             <PerfHud />
+            <CitationPopover />
           </div>
         </DocxEditor.Root>
       ) : loadError ? (

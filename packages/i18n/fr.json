@@ -89,7 +89,9 @@
     "commentsAndChanges": null,
     "moreItems": null,
     "unavailableInPreview": null,
-    "more": null
+    "more": null,
+    "altText": null,
+    "imageWrap": null
   },
   "alignment": {
     "alignLeft": "Aligner à gauche",
@@ -817,7 +819,21 @@
       "squareRight": "L'image est alignée à droite, le texte l'entoure à gauche",
       "behindText": "L'image s'affiche en arrière-plan derrière le texte",
       "inFrontOfText": "L'image s'affiche au premier plan par-dessus le texte"
-    }
+    },
+    "square": null,
+    "targets": {
+      "behind": null,
+      "inFront": null,
+      "inline": null,
+      "square": null,
+      "squareLeft": null,
+      "squareRight": null,
+      "through": null,
+      "tight": null,
+      "topAndBottom": null
+    },
+    "through": null,
+    "tight": null
   },
   "responsePreview": {
     "loading": "{action}...",
@@ -845,7 +861,8 @@
     "failedToParse": "Impossible d'analyser le document",
     "linkRemoved": "Lien supprimé",
     "linkCopied": "Lien copié dans le presse-papiers",
-    "failedToSave": "Échec de l'enregistrement du document"
+    "failedToSave": "Échec de l'enregistrement du document",
+    "fontSubstitutionNotice": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Texte à afficher",
@@ -860,7 +877,8 @@
     "inertTarget": null,
     "insertTitle": null,
     "openLink": null,
-    "refused": null
+    "refused": null,
+    "urlLabel": null
   },
   "headerFooter": {
     "header": "En-tête",
@@ -896,13 +914,33 @@
   "image": {
     "placeholder": "Insérer une image",
     "placeholderText": "[Image]",
-    "editableAriaLabel": "Éditer l'image"
+    "editableAriaLabel": "Éditer l'image",
+    "contentMismatch": null,
+    "decodeFailed": null,
+    "externalResource": null,
+    "invalidResource": null,
+    "missingResource": null,
+    "nonPictureGraphic": null,
+    "pendingResource": null,
+    "resourceLimit": null,
+    "unsupportedFormat": null
   },
   "imageOverlay": {
     "rotate": "Faire pivoter",
     "imageProperties": "Propriétés de l'image",
     "deleteImage": "Supprimer l'image",
-    "replaceImage": null
+    "replaceImage": null,
+    "handle": {
+      "e": null,
+      "n": null,
+      "ne": null,
+      "nw": null,
+      "s": null,
+      "se": null,
+      "sw": null,
+      "w": null
+    },
+    "selection": null
   },
   "ruler": {
     "horizontal": "Règle horizontale",
@@ -962,7 +1000,9 @@
     "runPropertiesChanged": null
   },
   "toc": {
-    "updatePrompt": null
+    "updatePrompt": null,
+    "refresh": "Mettre à jour toute la table",
+    "refreshPageNumbers": "Mettre à jour uniquement les numéros de page"
   },
   "app": {
     "name": null,
@@ -1084,5 +1124,45 @@
     "replyRefused": null,
     "showPane": null,
     "structural": null
+  },
+  "imageAltText": {
+    "description": null,
+    "panelTitle": null,
+    "title": null
+  },
+  "imageInsert": {
+    "errors": {
+      "emptyFile": null,
+      "invalidSignature": null,
+      "oversize": null,
+      "refused": null,
+      "unsupportedFormat": null
+    }
+  },
+  "imageProperties": {
+    "crop": null,
+    "cropBottom": null,
+    "cropLeft": null,
+    "cropRight": null,
+    "cropTop": null,
+    "errors": {
+      "invalidCrop": null,
+      "invalidDimensions": null,
+      "refused": null,
+      "invalidPosition": null
+    },
+    "hyperlink": null,
+    "nonPictureHint": null,
+    "resetNaturalSize": null,
+    "units": {
+      "points": null
+    },
+    "horizontalOffset": null,
+    "position": null,
+    "positionLocked": null,
+    "positionUnavailable": null,
+    "relativeToHorizontal": null,
+    "relativeToVertical": null,
+    "verticalOffset": null
   }
 }

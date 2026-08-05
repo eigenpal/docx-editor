@@ -33,6 +33,7 @@ import {
   type TableChromeDraft,
   type TableChromeSlotId,
 } from './table-chrome.ts';
+import { IMAGE_WRAP_TARGETS, type ImageWrapTarget } from '../store/package/drawing-projection.ts';
 
 /** Instance-only surface on the concrete facade — not part of the public `Editor` contract. */
 function surfaceOf(editor: Editor): PaginatedSurface | null {
@@ -78,14 +79,13 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'insert.pageXofY': { type: 'insertPageField', field: 'PAGE_X_OF_Y' },
   'insert.pageBreak': { type: 'insertBreak', kind: 'page' },
   'insert.sectionBreakNextPage': { type: 'insertBreak', kind: 'section' },
+  'insert.toc': { type: 'insertToc' },
   // Content-control remove maps to the public edit shape; the Editor facade resolves the
   // caret control. Show-all / form-fill / inspector are surface chrome, not commands — see
   // the special cases in `toolbarCommandState` / `runToolbarCommand`.
   'contentControl.remove': { type: 'removeContentControl' },
-  // `insert.sectionBreakContinuous` and `insert.toc` are deliberately absent: a continuous
-  // section break is not in the `insertBreak` vocabulary, and a table of contents is not an
-  // edit the tree editor executes. Neither has a command SHAPE to probe with either, so
-  // their disabled reason is this table's, not the engine's — see `toolbarCommandState`.
+  // `insert.sectionBreakContinuous` is deliberately absent: a continuous section break is
+  // not in the `insertBreak` vocabulary and has no command shape to probe.
 };
 
 /**
@@ -109,6 +109,13 @@ export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null {
   return CHROME_PROBES[slotId] ?? null;
 }
 
+const IMAGE_INSERT_PROBE_BYTES = Uint8Array.from(
+  atob(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+  ),
+  (c) => c.charCodeAt(0)
+);
+
 const CHROME_PROBES: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'text.link': { type: 'insertHyperlink', href: 'https://example.com' },
   // Insert image and insert table have a real command shape (`insertImage`/`insertTable`
@@ -117,7 +124,14 @@ const CHROME_PROBES: Partial<Record<ChromeSlotId, EditorCommand>> = {
   // guessing — and the day the engine wires them, `can` starts answering yes and the probe
   // stops being the reason they are disabled, with no registry edit needed. `data` and
   // `rows`/`cols` are shape-satisfying placeholders; the probe is never executed.
-  'image.insert': { type: 'insertImage', data: new Uint8Array(0) },
+  'image.insert': {
+    type: 'insertImage',
+    data: IMAGE_INSERT_PROBE_BYTES,
+    mime: 'image/png',
+    widthPoints: 72,
+    heightPoints: 72,
+  },
+  'image.properties': { type: 'setImageProperties', description: 'probe' },
   'table.insert': { type: 'insertTable', rows: 1, cols: 1 },
   // Page setup is the same shape: whether this document's sections can be rewritten is the
   // engine's question, but WHICH size, orientation and margins is the dialog's. The probe
@@ -162,6 +176,8 @@ const VALUE_SLOT_PROBES: Partial<Record<ChromeSlotId, unknown>> = {
   // Single spacing: the one pick every document can honour, so the probe answers the
   // editable gate and nothing narrower.
   'list.lineSpacing': 1,
+  'image.wrap': 'square' satisfies ImageWrapTarget,
+  'image.altText': 'probe alt text',
 };
 
 /** Default draft for table chrome probes when the host has not supplied one yet. */
@@ -213,6 +229,16 @@ export function commandForSlotValue(slotId: ChromeSlotId, value: unknown): Edito
   }
   if (isTableChromeSlot(slotId)) {
     return commandForTableChromeSlotValue(slotId, value, DEFAULT_TABLE_CHROME_DRAFT);
+  }
+  if (slotId === 'image.wrap') {
+    if (typeof value !== 'string' || !IMAGE_WRAP_TARGETS.includes(value as ImageWrapTarget)) {
+      return null;
+    }
+    return { type: 'setImageWrapType', target: value as ImageWrapTarget };
+  }
+  if (slotId === 'image.altText') {
+    if (typeof value !== 'string') return null;
+    return { type: 'setImageProperties', description: value };
   }
   const entry = VALUE_SLOT_MARKS[slotId];
   if (!entry) return null;
@@ -333,21 +359,66 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
     // pressed state.
     const probe = VALUE_SLOT_PROBES[id];
     if (probe !== undefined) {
-      const canApply: CanResult = editor.can(commandForSlotValue(id, probe)!);
+      const valueCommand = commandForSlotValue(id, probe);
+      if (!valueCommand) {
+        return {
+          id,
+          enabled: false,
+          disabledReason: 'not wired to an editor command',
+          active: false,
+        };
+      }
+      const canApply: CanResult = editor.can(valueCommand);
+      const selected = editor.getSelectedImage?.() ?? null;
+      const currentValue =
+        id === 'image.wrap'
+          ? selected?.wrap
+          : id === 'image.altText'
+            ? selected?.description
+            : undefined;
       return canApply.ok
-        ? { id, enabled: true, disabledReason: null, active: false }
-        : { id, enabled: false, disabledReason: canApply.reason, active: false };
+        ? {
+            id,
+            enabled: true,
+            disabledReason: null,
+            active: false,
+            ...(currentValue !== undefined ? { value: currentValue } : {}),
+          }
+        : {
+            id,
+            enabled: false,
+            disabledReason: canApply.reason,
+            active: false,
+            ...(currentValue !== undefined ? { value: currentValue } : {}),
+          };
     }
     // A slot with a PROBE has a command shape the engine can judge, even though no fixed
     // command can be dispatched from a bare click. When the engine REFUSES the probe, that
     // refusal is the honest reason and it is the engine's own words — quote it rather than
-    // inventing one. When the engine ALLOWS it, the gap is this chrome's, not the engine's,
-    // so the answer falls through below: the capability exists, this control cannot reach
-    // it. That asymmetry is deliberate — reporting "enabled" here would light up
-    // `text.link` in an adapter that has grown no link UI, which is the enabled-dead-button
-    // this table exists to avoid.
+    // inventing one. When the engine ALLOWS it, payload-aware image chrome is wired through
+    // the probe rather than a fixed `SLOT_COMMANDS` row; link chrome is the opposite case
+    // and keeps falling through below so an adapter without a popover stays honestly unwired.
     const shapeProbe = CHROME_PROBES[id];
     if (shapeProbe) {
+      if (id === 'image.insert' && shapeProbe.type === 'insertImage') {
+        const judged: CanResult =
+          editor.canExecuteImageCommand?.({
+            type: 'insertImage',
+            data: IMAGE_INSERT_PROBE_BYTES,
+            mime: 'image/png',
+            widthPoints: 72,
+            heightPoints: 72,
+          }) ?? editor.can(shapeProbe);
+        return judged.ok
+          ? { id, enabled: true, disabledReason: null, active: false }
+          : { id, enabled: false, disabledReason: judged.reason, active: false };
+      }
+      if (id === 'image.properties' && shapeProbe.type === 'setImageProperties') {
+        const judged: CanResult = editor.can(shapeProbe);
+        return judged.ok
+          ? { id, enabled: true, disabledReason: null, active: false }
+          : { id, enabled: false, disabledReason: judged.reason, active: false };
+      }
       const judged: CanResult = editor.can(shapeProbe);
       if (!judged.ok) {
         return { id, enabled: false, disabledReason: judged.reason, active: false };
@@ -503,6 +574,9 @@ export function runToolbarCommand(
       ? commandForSlot(id)
       : (commandForSlotValue(id, value) ?? commandForSlot(id));
   if (!command) {
+    if (value !== undefined) {
+      return { ok: false, code: 'unsupported', reason: 'invalid value for toolbar command' };
+    }
     if (id === 'file.save') {
       return {
         ok: false,

@@ -9,6 +9,11 @@
 
 import type { OoxmlElement } from '@docx-editor.dev/core-contract/store';
 import type { TableBorderStyle } from '@docx-editor.dev/core-contract/store';
+import {
+  COMPOUND_BORDER_MIN_GAP_PT,
+  computeDoubleBorderMetricsPt,
+  type CompoundBorderMetrics,
+} from './border-metrics.ts';
 import { MAX_BORDER_WIDTH_PT } from './paragraph-style.ts';
 import { resolveStrictHexFill } from './ooxml-shading.ts';
 import { effectiveBorderSide } from './table-border-cascade.ts';
@@ -26,6 +31,12 @@ export {
   createTableBorderOwnershipBudget,
   MAX_BORDER_OWNERSHIP_INTERVALS,
 } from './table-border-ownership.ts';
+export {
+  COMPOUND_BORDER_MIN_GAP_PT,
+  COMPOUND_BORDER_MIN_STROKE_PT,
+  computeDoubleBorderMetricsPt,
+  type CompoundBorderMetrics,
+} from './border-metrics.ts';
 
 export type TableBorderSideName = 'top' | 'right' | 'bottom' | 'left';
 
@@ -113,44 +124,8 @@ export interface ResolvedCellBorders {
   readonly strokes?: readonly TableBorderStrokeRecord[];
 }
 
-/**
- * Minimum compound stroke/gap in layout points.
- *
- * Chosen so that at paint scale `1` (1pt = 1 CSS px) the visible band matches the prior
- * 1px stroke + 1px gap heuristic. Paint must not re-derive mins.
- */
-export const COMPOUND_BORDER_MIN_STROKE_PT = 1;
-export const COMPOUND_BORDER_MIN_GAP_PT = 1;
-
 /** Soft cap on published stroke rectangles per cell (security / pathological spans). */
 export const MAX_TABLE_BORDER_STROKES = 256;
-
-export interface CompoundBorderMetrics {
-  readonly strokePt: number;
-  readonly gapPt: number;
-  readonly extentPt: number;
-  /** Centers the compound band on the authored width; negative extends outward. */
-  readonly insetPt: number;
-}
-
-/** Deterministic double stroke / gap / extent in layout points (scale-independent). */
-export function computeDoubleBorderMetricsPt(widthPt: number): CompoundBorderMetrics {
-  // Inflate sub-minimum authored widths to the configured minimum band so thin OOXML
-  // doubles still resolve to a visible 1+1+1 point compound at paint scale 1 — matching
-  // the prior paint-side `Math.max(1px, widthPx)` band without leaving that heuristic in paint.
-  const bandPt = Math.max(widthPt, COMPOUND_BORDER_MIN_STROKE_PT);
-  const minExtent = 2 * COMPOUND_BORDER_MIN_STROKE_PT + COMPOUND_BORDER_MIN_GAP_PT;
-  if (bandPt >= minExtent) {
-    const unit = bandPt / 3;
-    if (unit >= COMPOUND_BORDER_MIN_STROKE_PT) {
-      return { strokePt: unit, gapPt: unit, extentPt: bandPt, insetPt: 0 };
-    }
-  }
-  const strokePt = COMPOUND_BORDER_MIN_STROKE_PT;
-  const gapPt = COMPOUND_BORDER_MIN_GAP_PT;
-  const extentPt = Math.max(bandPt, minExtent);
-  return { strokePt, gapPt, extentPt, insetPt: (bandPt - extentPt) / 2 };
-}
 
 const OMITTED: TableBorderSide = { state: 'omitted' };
 const NONE: TableBorderSide = { state: 'none' };

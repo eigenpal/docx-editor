@@ -6,8 +6,6 @@ const root = resolve(import.meta.dirname, '..');
 const entries = {
   react: collectNamedExports(resolve(root, 'packages/react/src/index.ts')),
   vue: collectNamedExports(resolve(root, 'packages/vue/src/index.ts')),
-  reactUi: collectNamedExports(resolve(root, 'packages/react/src/ui.ts')),
-  reactPluginApi: collectNamedExports(resolve(root, 'packages/react/src/plugin-api/index.ts')),
   agentsReact: collectNamedExports(resolve(root, 'packages/agents/src/react.ts')),
   agentsVue: collectNamedExports(resolve(root, 'packages/agents/src/vue.ts')),
 };
@@ -15,44 +13,14 @@ const entries = {
 const required = {
   'shared adapter root contract': {
     entries: ['react', 'vue'],
-    names: [
-      'DocxEditor',
-      'DocxEditorProps',
-      'DocxEditorRef',
-      'DocxEditorHandle',
-      'EditorMode',
-      'RenderAsyncOptions',
-      'renderAsync',
-    ],
+    names: ['DocxEditor', 'DocxEditorProps', 'DocxEditorRef', 'EditorMode'],
   },
-  // Locale string types (LocaleStrings, Translations, PartialLocaleStrings,
-  // TranslationKey) live in `@docx-editor.dev/i18n` and are no longer
-  // re-exported from the React or Vue adapters. Consumers import them from
-  // the i18n package directly.
+  // Greenfield adapters export toolbar chrome from the root barrel (`DocxEditorToolbar`,
+  // `Toolbar`, …). The retired `@docx-editor.dev/react/ui` subpath and the old
+  // `EditorToolbar` / `ColorPicker` names are not re-shipped.
   'documented React toolbar/customization surface': {
-    entries: ['reactUi'],
-    names: [
-      'EditorToolbar',
-      'EditorToolbarProps',
-      'Toolbar',
-      'ToolbarProps',
-      'ColorPicker',
-      'ColorPickerProps',
-      'FontOption',
-    ],
-  },
-  'documented React plugin surface': {
-    entries: ['reactPluginApi'],
-    names: [
-      'PluginHost',
-      'EditorPlugin',
-      'PluginPanelProps',
-      'PluginHostRef',
-      'RenderedDomContext',
-      'PositionCoordinates',
-      'templatePlugin',
-      'createTemplatePlugin',
-    ],
+    entries: ['react'],
+    names: ['DocxEditorToolbar', 'DocxEditorToolbarProps', 'Toolbar', 'ToolbarProps'],
   },
   'agent UI kit canonical entries': {
     entries: ['agentsReact', 'agentsVue'],

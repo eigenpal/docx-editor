@@ -45,7 +45,39 @@ import {
   resolveRunStyle,
   type ResolvedRunStyle,
 } from './run-style.ts';
-import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
+import type { LayoutBox, StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
+import {
+  buildInlineDrawingRecord,
+  inlineDrawingVerticalLayout,
+  measureInlineDrawing,
+  repositionInlineDrawingsForBaseline,
+  shiftInlineDrawingRecord,
+  anchoredDrawingAtomsInParagraph,
+  drawingModelOffsetsInParagraph,
+  type InlineDrawingLayoutContext,
+  type InlineDrawingRecord,
+} from './drawing-layout.ts';
+import {
+  mergeAvailableIntervalsAtY,
+  remainingWidthAtX,
+  snapXToAvailableInterval,
+  synthesizeParagraphTopAndBottomZones,
+  synthesizeParagraphWrapExclusionZones,
+  topAndBottomSkipBeforeLine,
+  type ExclusionZone,
+} from './drawing-exclusion.ts';
+
+/**
+ * How far past the line's right edge a span may reach before it counts as overflow.
+ *
+ * A right/centre/decimal tab computes its advance in ABSOLUTE x — `destination - currentX -
+ * segmentWidth` — while wrapping is decided in line-local width. Converting between the two
+ * subtracts and re-adds the paragraph origin, so a segment the tab placed to end EXACTLY at
+ * the edge lands a fraction of an ulp beyond it. Without a tolerance that hairline decides a
+ * line break, and a right-aligned tab is built to reach the edge exactly. A thousandth of a
+ * point is far below one device pixel, so nothing a reader could see wraps because of this.
+ */
+const OVERFLOW_TOLERANCE_PT = 0.001;
 
 /**
  * Per-paragraph geometry the BREAK depends on, beyond width.
@@ -86,6 +118,32 @@ export interface ParagraphFlowOptions {
   readonly displayMode?: RevisionDisplayMode;
   /** Derived footnote/endnote marks for noteReference / noteRef projection. */
   readonly noteMarks?: import('./note-projection.ts').NoteMarkContext;
+  /** Inline drawing projection + resource lookup for typed `w:drawing` nodes. */
+  readonly inlineDrawingLayout?: InlineDrawingLayoutContext;
+  /**
+   * Left edge of the containing text column in paragraph-relative coordinates, for clipping
+   * oversized inline extents at the content box without scaling them.
+   */
+  readonly contentLeft?: number;
+  /** Right edge of the containing text column in paragraph-relative coordinates. */
+  readonly contentRight?: number;
+  /**
+   * Horizontal origin of the active column within page-content coordinates.
+   * Line x offsets are column-local; exclusion zones are page-wide.
+   */
+  readonly contentOriginX?: number;
+  /** Page-content Y where this paragraph starts — for anchored wrap exclusion at break time. */
+  readonly paragraphStartY?: number;
+  /** Active exclusion zones on the current page while breaking. */
+  readonly pageExclusionZones?: readonly ExclusionZone[];
+  /** When breaking inside a table cell, the cell content box for anchored frame resolution. */
+  readonly anchorCellBox?: LayoutBox | null;
+  /**
+   * Cross-paragraph TOC field begin/end paragraphs carry only `w:fldChar` / `w:instrText`
+   * chrome with no measurable text. When set, an otherwise empty break returns no lines so
+   * layout does not reserve the caret placeholder row ordinary empty paragraphs need.
+   */
+  readonly suppressEmptyPlaceholderLine?: boolean;
 }
 
 /** One measurable piece of a paragraph: text carrying one property set. */
@@ -110,6 +168,8 @@ interface Piece {
   readonly breakKind?: FieldAwarePiece['breakKind'];
   /** Sanitized hyperlink this piece belongs to. */
   readonly link?: import('./semantic-records.ts').SpanLinkRecord;
+  /** Typed inline drawing occupying one UTF-16 model unit. */
+  readonly inlineDrawing?: import('./drawing-layout.ts').InlineDrawingLayoutInput;
 }
 
 export function propertiesOf(container: OoxmlNode | undefined): OoxmlProperty[] {
@@ -117,8 +177,19 @@ export function propertiesOf(container: OoxmlNode | undefined): OoxmlProperty[] 
 }
 
 /**
- * Break points inside a piece: after each run of spaces (words stay whole), and with each
- * tab as its own atom so tab-stop geometry can size `\t` independently of neighbouring text.
+ * Dashes a line may break AFTER, the way Word wraps "ALPHA-PRIME" as "ALPHA-" / "PRIME":
+ * hyphen-minus, hyphen, en dash, em dash. U+2011 NON-BREAKING HYPHEN is deliberately
+ * absent — its whole meaning is "no wrap here".
+ */
+const BREAK_AFTER_DASH = new Set(['-', '‐', '–', '—']);
+
+/**
+ * Break points inside a piece: after each run of spaces (words stay whole), after a dash
+ * that sits between non-space text, and with each tab as its own atom so tab-stop
+ * geometry can size `\t` independently of neighbouring text.
+ *
+ * A dash run breaks only after its LAST dash, mirroring how a run of spaces is one
+ * boundary; a dash beside a space adds nothing the space boundary does not already give.
  */
 function wordBoundaries(text: string): number[] {
   const boundaries: number[] = [];
@@ -128,6 +199,15 @@ function wordBoundaries(text: string): number[] {
       if (index > 0 && boundaries[boundaries.length - 1] !== index) boundaries.push(index);
       boundaries.push(index + 1);
     } else if (ch === ' ') {
+      boundaries.push(index + 1);
+    } else if (
+      BREAK_AFTER_DASH.has(ch) &&
+      index > 0 &&
+      text[index - 1] !== ' ' &&
+      index + 1 < text.length &&
+      text[index + 1] !== ' ' &&
+      !BREAK_AFTER_DASH.has(text[index + 1]!)
+    ) {
       boundaries.push(index + 1);
     }
   }
@@ -216,6 +296,7 @@ function positionalTabDestination(
 
 export interface PendingLine {
   readonly spans: StyleSpanRecord[];
+  readonly drawings: InlineDrawingRecord[];
   readonly start: number;
   end: number;
   width: number;
@@ -238,6 +319,30 @@ export interface PendingLine {
   columnBreakAfter?: boolean;
   /** Model ranges on this line covering deleted content; see {@link LineRecord.deletedRanges}. */
   deletedRanges?: readonly ModelRange[];
+  /** Vertical gap inserted before this line to clear a topAndBottom exclusion band. */
+  exclusionSkipBefore?: number;
+}
+
+/** Vertical extent of a pending line for flow/pagination budget checks (skip + box + optional tail). */
+export function pendingLineFlowExtent(
+  line: Pick<PendingLine, 'height' | 'exclusionSkipBefore'>,
+  tail = 0
+): number {
+  return (line.exclusionSkipBefore ?? 0) + line.height + tail;
+}
+
+/** Recompute topAndBottom skip at placement time from live page zones and absolute line top. */
+export function pendingLineFlowExtentAtPlacement(
+  lineTopY: number,
+  line: Pick<PendingLine, 'height' | 'exclusionSkipBefore'>,
+  zones: readonly ExclusionZone[],
+  tail = 0
+): number {
+  const skip =
+    zones.length > 0
+      ? topAndBottomSkipBeforeLine(lineTopY, line.height, zones)
+      : (line.exclusionSkipBefore ?? 0);
+  return skip + line.height + tail;
 }
 
 /**
@@ -252,6 +357,13 @@ export function frozenLine(line: PendingLine): PendingLine {
     spans: line.spans.map((span) =>
       Object.freeze({ ...span, box: Object.freeze({ ...span.box }) })
     ),
+    drawings: line.drawings.map((drawing) =>
+      Object.freeze({
+        ...drawing,
+        paintBounds: Object.freeze({ ...drawing.paintBounds }),
+        hitBounds: Object.freeze({ ...drawing.hitBounds }),
+      })
+    ),
     start: line.start,
     end: line.end,
     width: line.width,
@@ -261,6 +373,7 @@ export function frozenLine(line: PendingLine): PendingLine {
     ...(line.pageBreakAfter ? { pageBreakAfter: true } : {}),
     ...(line.columnBreakAfter ? { columnBreakAfter: true } : {}),
     ...(line.deletedRanges ? { deletedRanges: Object.freeze(line.deletedRanges) } : {}),
+    ...(line.exclusionSkipBefore ? { exclusionSkipBefore: line.exclusionSkipBefore } : {}),
   }) as PendingLine;
 }
 
@@ -332,12 +445,51 @@ export function paragraphAlignment(props: readonly OoxmlProperty[]): Alignment {
 }
 
 /**
+ * True when this span's trailing U+0020 is an inter-word slot Word can stretch.
+ *
+ * Paint reapplies justification as CSS `word-spacing` on those same spaces. Inserting layout
+ * slack at every style-span boundary (tabs, run splits mid-phrase) put gaps where paint has
+ * none and shifted every later span — caret mid-word drifted by a multiple of the step while
+ * the highlight (DOM) stayed on the glyphs.
+ */
+function endsWithExpandableSpace(text: string): boolean {
+  return text.endsWith(' ');
+}
+
+/**
+ * Per-UTF-16 caret edges from the span origin, matching {@link TextMeasurer.measure} prefixes.
+ *
+ * Tabs and non-1:1 projections collapse to the published box endpoints — measuring `\t` or
+ * projected ink would disagree with breakParagraph's reserved advance.
+ */
+function caretEdgesForSpan(span: StyleSpanRecord, measurer: TextMeasurer): readonly number[] {
+  const length = span.range.end - span.range.start;
+  if (length <= 0 || span.text === '\t' || span.projected || span.text.length !== length) {
+    return Object.freeze([0, span.box.width]);
+  }
+  const edges: number[] = [0];
+  for (let index = 1; index <= span.text.length; index += 1) {
+    edges.push(measurer.measure(span.text.slice(0, index), span.style));
+  }
+  return Object.freeze(edges);
+}
+
+function withCaretEdges(
+  spans: readonly StyleSpanRecord[],
+  measurer: TextMeasurer
+): readonly StyleSpanRecord[] {
+  return spans.map((span) =>
+    span.caretEdges ? span : { ...span, caretEdges: caretEdgesForSpan(span, measurer) }
+  );
+}
+
+/**
  * Shift a line's spans to satisfy the paragraph alignment.
  *
- * Layout is the only geometry authority, so alignment has to move the published span boxes
- * rather than being left to CSS: the painter positions each span absolutely, and hit testing
- * and the caret read the same boxes. Delegating this to `text-align` would put the caret
- * where no glyph is.
+ * Layout is the only geometry authority: hit testing and the caret read published span boxes
+ * (and {@link StyleSpanRecord.caretEdges}). Paint starts the line at the first span's x and
+ * flows inline — justification slack must therefore land on the same inter-word spaces
+ * `word-spacing` expands, not on every style-span boundary.
  */
 export function alignSpans(
   spans: readonly StyleSpanRecord[],
@@ -345,9 +497,11 @@ export function alignSpans(
   indentLeft: number,
   available: number,
   alignment: Alignment,
-  isLastLine: boolean
+  isLastLine: boolean,
+  lineUsedWidth?: number
 ): readonly StyleSpanRecord[] {
-  if (spans.length === 0 || alignment === 'left') return spans;
+  if (spans.length === 0) return spans;
+  if (alignment === 'left') return withCaretEdges(spans, measurer);
 
   // Trailing whitespace hangs into the margin rather than pushing the text off-centre, which
   // is what Word does and what stops a line ending in a space from looking misaligned.
@@ -355,22 +509,47 @@ export function alignSpans(
   const visible = last.text.replace(/\s+$/, '');
   const trailing =
     visible === last.text ? 0 : last.box.width - measurer.measure(visible, last.style);
-  const used = last.box.x - indentLeft + last.box.width - trailing;
+  const used = lineUsedWidth ?? last.box.x - indentLeft + last.box.width - trailing;
   const slack = available - used;
-  if (slack <= 0) return spans;
+  if (slack <= 0) return withCaretEdges(spans, measurer);
 
   // The last line of a justified paragraph is set flush left, never stretched.
   if (alignment === 'both') {
-    const gaps = spans.length - 1;
-    if (isLastLine || gaps <= 0) return spans;
-    const step = slack / gaps;
-    return spans.map((span, index) =>
-      index === 0 ? span : { ...span, box: { ...span.box, x: span.box.x + step * index } }
+    if (isLastLine) return withCaretEdges(spans, measurer);
+    // Only boundaries after an expandable space receive slack — the same slots paint stretches
+    // with `word-spacing`. A uniform step across every span pair invented gaps before tabs and
+    // run splits and drifted every later caret by N×step.
+    const gapBefore: number[] = [];
+    for (let index = 1; index < spans.length; index += 1) {
+      if (endsWithExpandableSpace(spans[index - 1]!.text)) gapBefore.push(index);
+    }
+    if (gapBefore.length === 0) return withCaretEdges(spans, measurer);
+    const step = slack / gapBefore.length;
+    const gapSet = new Set(gapBefore);
+    let shift = 0;
+    return withCaretEdges(
+      spans.map((span, index) => {
+        if (gapSet.has(index)) shift += step;
+        return shift === 0 ? span : { ...span, box: { ...span.box, x: span.box.x + shift } };
+      }),
+      measurer
     );
   }
 
   const offset = alignment === 'center' ? slack / 2 : slack;
-  return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } }));
+  return withCaretEdges(
+    spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } })),
+    measurer
+  );
+}
+
+/** Shift inline drawing boxes for paragraph alignment the same way {@link alignSpans} does. */
+export function alignDrawings(
+  drawings: readonly InlineDrawingRecord[],
+  offset: number
+): readonly InlineDrawingRecord[] {
+  if (offset === 0 || drawings.length === 0) return drawings;
+  return drawings.map((drawing) => shiftInlineDrawingRecord(drawing, offset, 0));
 }
 
 /**
@@ -415,7 +594,8 @@ export function breakParagraph(
     flow?.projectLink,
     flow?.noteMarks,
     flow?.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
-    deletedRanges
+    deletedRanges,
+    flow?.inlineDrawingLayout
   );
   const startOffset = Math.max(0, flow?.startOffset ?? 0);
   const pieces = allPieces.flatMap((piece): FieldAwarePiece[] => {
@@ -430,6 +610,9 @@ export function breakParagraph(
       },
     ];
   });
+  if (pieces.length === 0 && flow?.suppressEmptyPlaceholderLine) {
+    return [];
+  }
   /** Carried onto every span so paint and the review surface read one attribution. */
   const revisionsOf = (piece: FieldAwarePiece): { revisions?: readonly RevisionAttribution[] } =>
     piece.revisions === undefined ? {} : { revisions: piece.revisions };
@@ -438,21 +621,332 @@ export function breakParagraph(
       ? DEFAULT_RUN_STYLE
       : resolveRunStyle(inheritedRunProperties);
   const rightEdge = indentLeft + available;
+  const contentLeft = flow?.contentLeft ?? indentLeft;
+  const contentRight = flow?.contentRight ?? rightEdge;
+  const contentOriginX = flow?.contentOriginX ?? 0;
   const lines: PendingLine[] = [];
   let line: PendingLine = {
     spans: [],
     start: startOffset,
     end: startOffset,
+    drawings: [],
     width: 0,
     height: 0,
     baseline: 0,
     leading: 0,
   };
+  let topAndBottomSkipApplied = false;
+  const anchorLineTopByModelStart = new Map<number, number>();
+
+  const topAndBottomAnchorStarts = (() => {
+    const starts = new Set<number>();
+    if (!flow?.inlineDrawingLayout) return starts;
+    const offsets = drawingModelOffsetsInParagraph(paragraph);
+    for (const atom of anchoredDrawingAtomsInParagraph(paragraph, flow.inlineDrawingLayout)) {
+      if (atom.projection.wrap !== 'topAndBottom') continue;
+      const modelStart = offsets.get(atom.atomId);
+      if (modelStart !== undefined) starts.add(modelStart);
+    }
+    return starts;
+  })();
+
+  const wrapAnchorStarts = (() => {
+    const starts = new Set<number>();
+    if (!flow?.inlineDrawingLayout) return starts;
+    const offsets = drawingModelOffsetsInParagraph(paragraph);
+    for (const atom of anchoredDrawingAtomsInParagraph(paragraph, flow.inlineDrawingLayout)) {
+      if (atom.projection.anchor?.behindDocument) continue;
+      if (
+        atom.projection.wrap === 'topAndBottom' ||
+        atom.projection.wrap === 'inline' ||
+        atom.projection.wrap === 'behind' ||
+        atom.projection.wrap === 'inFront'
+      ) {
+        continue;
+      }
+      const modelStart = offsets.get(atom.atomId);
+      if (modelStart !== undefined) starts.add(modelStart);
+    }
+    return starts;
+  })();
+
+  const sameParagraphAnchorStarts = [
+    ...(flow?.pageExclusionZones ?? [])
+      .filter((zone) => zone.anchorParagraphId === paragraphId)
+      .map((zone) => zone.anchorModelStart),
+    ...topAndBottomAnchorStarts,
+    ...wrapAnchorStarts,
+  ];
+
+  const anchorLineStartByOffset = (() => {
+    const out = new Map<number, number>();
+    if (sameParagraphAnchorStarts.length === 0) return out;
+    let probeLineStart = 0;
+    let probeWidth = 0;
+    let probeLineIndex = 0;
+    const probeLineOffset = (): number => (probeLineIndex === 0 ? firstLineOffset : 0);
+    const probeLineAvail = (): number => Math.max(1, available - probeLineOffset());
+    const closeProbeLine = (nextStart: number): void => {
+      probeLineStart = nextStart;
+      probeWidth = 0;
+      probeLineIndex += 1;
+    };
+    for (const piece of pieces) {
+      if (piece.inlineDrawing) {
+        const width = measureInlineDrawing(piece.inlineDrawing.projection).totalWidth;
+        if (probeWidth > 0 && probeWidth + width > probeLineAvail()) closeProbeLine(piece.start);
+        if (sameParagraphAnchorStarts.includes(piece.start)) out.set(piece.start, probeLineStart);
+        probeWidth += width;
+        continue;
+      }
+      if (piece.text === '\n' || piece.text === PAGE_BREAK_CHAR) {
+        closeProbeLine(piece.end);
+        continue;
+      }
+      let consumed = 0;
+      for (const boundary of wordBoundaries(piece.text)) {
+        const candidate = piece.text.slice(consumed, boundary);
+        if (candidate.length === 0) continue;
+        const style = piece.style;
+        const width = measurer.measure(candidate, style);
+        const modelStart = piece.start + consumed;
+        if (probeWidth > 0 && probeWidth + width > probeLineAvail()) closeProbeLine(modelStart);
+        if (sameParagraphAnchorStarts.includes(modelStart)) out.set(modelStart, probeLineStart);
+        if (sameParagraphAnchorStarts.includes(piece.start)) out.set(piece.start, probeLineStart);
+        probeWidth += width;
+        consumed = boundary;
+      }
+    }
+    for (const anchorStart of sameParagraphAnchorStarts) {
+      if (!out.has(anchorStart)) out.set(anchorStart, probeLineStart);
+    }
+    return out;
+  })();
+
+  for (const start of wrapAnchorStarts) {
+    const lineStart = anchorLineStartByOffset.get(start);
+    if (lineStart !== undefined) anchorLineTopByModelStart.set(start, lineStart);
+  }
+
+  const zoneApplies = (zone: ExclusionZone): boolean => {
+    if (zone.anchorParagraphId !== paragraphId) return true;
+    const anchorLineStart = anchorLineStartByOffset.get(zone.anchorModelStart);
+    if (anchorLineStart !== undefined && line.start >= anchorLineStart) return true;
+    if (line.end >= zone.anchorModelStart) return true;
+    return false;
+  };
+
+  const activeExclusionZones = (): readonly ExclusionZone[] => {
+    const pageZones =
+      flow?.pageExclusionZones?.filter((zone) => {
+        if (!zoneApplies(zone)) return false;
+        // Anchor paragraph uses break-time synthesis; page zones are for inherited bands only.
+        if (zone.anchorParagraphId === paragraphId) {
+          if (zone.input.mode === 'topAndBottom') return false;
+          if (flow?.anchorCellBox != null) return false;
+        }
+        return true;
+      }) ?? [];
+    const synthesizedWrap =
+      flow?.inlineDrawingLayout && flow.anchorCellBox != null && anchorLineTopByModelStart.size > 0
+        ? synthesizeParagraphWrapExclusionZones({
+            paragraph,
+            paragraphId,
+            drawingLayout: flow.inlineDrawingLayout,
+            contentLeft,
+            contentRight,
+            paragraphStartY: flow.paragraphStartY ?? 0,
+            anchorLineTopByModelStart,
+            anchorCellBox: flow.anchorCellBox,
+          })
+        : Object.freeze([]);
+    const synthesized =
+      flow?.inlineDrawingLayout && anchorLineTopByModelStart.size > 0
+        ? synthesizeParagraphTopAndBottomZones({
+            paragraph,
+            paragraphId,
+            drawingLayout: flow.inlineDrawingLayout,
+            contentLeft,
+            contentRight,
+            paragraphStartY: flow?.paragraphStartY ?? 0,
+            anchorLineTopByModelStart,
+          })
+        : Object.freeze([]);
+    return Object.freeze([...pageZones, ...synthesizedWrap, ...synthesized]);
+  };
 
   // Where the line being built starts, and how much room it has. Only the first differs.
   const lineOffset = (): number => (lines.length === 0 ? firstLineOffset : 0);
-  const lineOrigin = (): number => indentLeft + lineOffset();
-  const lineAvailable = (): number => Math.max(1, available - lineOffset());
+  const lineOrigin = (): number => contentOriginX + indentLeft + lineOffset();
+  const baseLineAvailable = (): number => Math.max(1, available - lineOffset());
+
+  const priorLineExtent = (): number =>
+    lines.reduce((sum, prior) => sum + prior.height + (prior.exclusionSkipBefore ?? 0), 0);
+
+  const currentLineTopY = (): number => (flow?.paragraphStartY ?? 0) + priorLineExtent();
+
+  const recordTopAndBottomAnchorLineTop = (modelStart: number): void => {
+    if (topAndBottomAnchorStarts.has(modelStart)) {
+      anchorLineTopByModelStart.set(modelStart, priorLineExtent());
+    }
+  };
+
+  const applyTopAndBottomSkipIfNeeded = (): void => {
+    if (topAndBottomSkipApplied) return;
+    const zones = activeExclusionZones();
+    if (zones.length === 0) return;
+    if (line.spans.length > 0 || line.drawings.length > 0) return;
+    const metrics = measurer.lineMetrics(emptyStyle);
+    const skip = topAndBottomSkipBeforeLine(
+      currentLineTopY(),
+      line.height > 0 ? line.height : metrics.height,
+      zones
+    );
+    if (skip > 0.001) {
+      topAndBottomSkipApplied = true;
+      line.exclusionSkipBefore = skip;
+    }
+  };
+
+  const exclusionProbeY = (): number => currentLineTopY() + 0.001;
+
+  const snapLineToAvailableInterval = (): boolean => {
+    const zones = activeExclusionZones();
+    if (zones.length === 0) return true;
+    applyTopAndBottomSkipIfNeeded();
+    const intervals = mergeAvailableIntervalsAtY(
+      exclusionProbeY(),
+      zones,
+      contentLeft,
+      contentRight
+    );
+    const currentX = lineOrigin() + line.width;
+    const snap = snapXToAvailableInterval(currentX, intervals);
+    if (!snap) return false;
+    if (snap.x > currentX + 0.001) {
+      line.width = snap.x - lineOrigin();
+    }
+    return true;
+  };
+
+  const lineAvailable = (): number => {
+    const base = baseLineAvailable();
+    const zones = activeExclusionZones();
+    if (zones.length === 0) return base;
+    applyTopAndBottomSkipIfNeeded();
+    if (!snapLineToAvailableInterval()) return 0;
+    const intervals = mergeAvailableIntervalsAtY(
+      exclusionProbeY(),
+      zones,
+      contentLeft,
+      contentRight
+    );
+    const origin = lineOrigin() + line.width;
+    const remaining = remainingWidthAtX(origin, intervals);
+    if (remaining <= 0.001) return 0;
+    return Math.min(base, remaining);
+  };
+
+  const tryAdvanceToNextPassage = (): boolean => {
+    const zones = activeExclusionZones();
+    if (zones.length === 0) return false;
+    const pastAnchorOnLine = zones.some(
+      (zone) => zone.anchorParagraphId === paragraphId && line.end > zone.anchorModelStart
+    );
+    if (!pastAnchorOnLine) return false;
+    const intervals = mergeAvailableIntervalsAtY(
+      exclusionProbeY(),
+      zones,
+      contentLeft,
+      contentRight
+    );
+    const currentX = lineOrigin() + line.width;
+    let foundCurrent = false;
+    for (const interval of intervals) {
+      if (!foundCurrent) {
+        if (currentX >= interval.start - 0.000_001 && currentX < interval.end - 0.000_001) {
+          foundCurrent = true;
+        }
+        continue;
+      }
+      if (interval.end - interval.start > 0.001) {
+        line.width = interval.start - lineOrigin();
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const advancePastAnchorExclusionForPlacement = (modelStart: number): void => {
+    if (
+      sameParagraphAnchorStarts.length === 0 ||
+      modelStart < Math.min(...sameParagraphAnchorStarts)
+    ) {
+      return;
+    }
+    const zones = activeExclusionZones().filter(
+      (zone) => zone.anchorParagraphId === paragraphId && modelStart >= zone.anchorModelStart
+    );
+    if (zones.length === 0) return;
+    applyTopAndBottomSkipIfNeeded();
+    const intervals = mergeAvailableIntervalsAtY(
+      exclusionProbeY(),
+      zones,
+      contentLeft,
+      contentRight
+    );
+    const currentX = lineOrigin() + line.width;
+    let containingIndex = -1;
+    for (let index = 0; index < intervals.length; index += 1) {
+      const interval = intervals[index]!;
+      if (currentX >= interval.start - 0.001 && currentX < interval.end - 0.001) {
+        containingIndex = index;
+        break;
+      }
+    }
+    if (containingIndex >= 0 && containingIndex + 1 < intervals.length) {
+      const next = intervals[containingIndex + 1]!;
+      line.width = next.start - lineOrigin();
+      return;
+    }
+    if (containingIndex >= 0) return;
+    const snap = snapXToAvailableInterval(currentX, intervals);
+    if (snap && snap.x > currentX + 0.001) {
+      line.width = snap.x - lineOrigin();
+    }
+  };
+
+  const closeForTopAndBottomAfterAnchor = (modelStart: number): void => {
+    const zones = activeExclusionZones().filter(
+      (zone) =>
+        zone.input.mode === 'topAndBottom' &&
+        zone.anchorParagraphId === paragraphId &&
+        modelStart >= zone.anchorModelStart
+    );
+    if (zones.length === 0) return;
+    if (line.spans.length > 0 || line.drawings.length > 0) closeLine();
+    applyTopAndBottomSkipIfNeeded();
+  };
+
+  const ensurePlacementWidth = (width: number, depth = 0): boolean => {
+    if (depth > 64) return lineAvailable() >= width;
+    applyTopAndBottomSkipIfNeeded();
+    if (!snapLineToAvailableInterval()) {
+      if (line.spans.length > 0 || line.drawings.length > 0) {
+        closeLine();
+        return ensurePlacementWidth(width, depth + 1);
+      }
+      return true;
+    }
+    if (width <= lineAvailable() + 0.001) return true;
+    if (line.spans.length > 0 || line.drawings.length > 0) {
+      if (tryAdvanceToNextPassage() && width <= lineAvailable() + 0.001) return true;
+      closeLine();
+      return ensurePlacementWidth(width, depth + 1);
+    }
+    // Empty line still too narrow — place anyway (overflow) rather than stacking blank lines.
+    return true;
+  };
 
   /** The deleted ranges overlapping one line, clipped to it. */
   const deletedWithin = (start: number, end: number): ModelRange[] =>
@@ -476,29 +970,103 @@ export function breakParagraph(
   /** The last character emitted, which decides whether the NEXT span may open a line. */
   let lastEmitted = '';
 
+  const growLineMetricsForDrawing = (
+    style: ResolvedRunStyle,
+    measure: ReturnType<typeof measureInlineDrawing>
+  ): { extentTopY: number } => {
+    const textMetrics = measurer.lineMetrics(style);
+    const layout = inlineDrawingVerticalLayout(
+      textMetrics.baseline,
+      line.height || textMetrics.height,
+      measure
+    );
+    if (line.height === 0) {
+      line.height = layout.lineHeight;
+      line.baseline = layout.baseline;
+    } else if (layout.lineHeight > line.height) {
+      line.height = layout.lineHeight;
+      line.baseline = Math.max(line.baseline, layout.baseline);
+    } else {
+      line.baseline = Math.max(line.baseline, layout.baseline);
+    }
+    return { extentTopY: layout.extentTopY };
+  };
+
+  const syncDrawingBaselinesBeforeSpacing = (): void => {
+    if (line.drawings.length === 0) return;
+    if (line.spans.length === 0) {
+      line.baseline = Math.max(
+        line.baseline,
+        ...line.drawings.map((drawing) => drawing.y + drawing.height)
+      );
+    }
+    const repositioned = repositionInlineDrawingsForBaseline(line.drawings, line.baseline);
+    (line.drawings as InlineDrawingRecord[]).splice(0, line.drawings.length, ...repositioned);
+    line.baseline = Math.max(
+      line.baseline,
+      ...line.drawings.map((drawing) => drawing.y + drawing.height)
+    );
+  };
+
+  const repositionDrawingsToFinalBaseline = (): void => {
+    if (line.drawings.length === 0) return;
+    const repositioned = repositionInlineDrawingsForBaseline(line.drawings, line.baseline);
+    (line.drawings as InlineDrawingRecord[]).splice(0, line.drawings.length, ...repositioned);
+  };
+
+  const growLineHeightForDrawingExtent = (): void => {
+    if (line.drawings.length === 0) return;
+    const drawingExtent = Math.max(
+      0,
+      ...line.drawings.map((drawing) => drawing.y + drawing.height + drawing.distB)
+    );
+    line.height = Math.max(line.height, drawingExtent);
+  };
+
+  const finalizeDrawingGeometry = (): void => {
+    syncDrawingBaselinesBeforeSpacing();
+    growLineHeightForDrawingExtent();
+  };
+
   const closeLine = (): void => {
     const metrics = measurer.lineMetrics(emptyStyle);
     if (line.height === 0) {
       line.height = metrics.height;
       line.baseline = metrics.baseline;
     }
+    finalizeDrawingGeometry();
     // Line spacing applies to the finished box, once, so a paragraph's rule governs every
     // line it produced regardless of which run happened to be tallest.
     const natural = line.height;
     const spaced = applyLineSpacing(lineSpacing, line.height, line.baseline);
-    line.height = spaced.height;
     line.baseline = spaced.baseline;
     // Never negative: an `exact` box clipped below its glyphs adds no leading, it removes
     // box. Paint keys its baseline correction off this, and a negative would push the text
     // the wrong way rather than leaving the clipped line alone.
     line.leading = Math.max(0, spaced.height - natural);
+    line.height = spaced.height;
+    // Baseline shifts from line spacing must move inline drawings too, or authored distT/distB
+    // and the text baseline drift apart. For `exact`, keep the authored box — tall drawings
+    // clip/overflow per content-clip policy; auto/atLeast still grow to contain distB.
+    repositionDrawingsToFinalBaseline();
+    if (lineSpacing.rule !== 'exact') growLineHeightForDrawingExtent();
+    const finalizeTopAndBottomClearance = (): void => {
+      const zones = activeExclusionZones();
+      if (zones.length === 0) return;
+      const skip = topAndBottomSkipBeforeLine(currentLineTopY(), line.height, zones);
+      if (skip > 0.001) line.exclusionSkipBefore = skip;
+      else delete (line as { exclusionSkipBefore?: number }).exclusionSkipBefore;
+    };
+    finalizeTopAndBottomClearance();
     const deleted = deletedWithin(line.start, line.end);
     if (deleted.length > 0) line.deletedRanges = deleted;
     lines.push(line);
     wordStartSpan = -1;
     wordStartWidth = 0;
+    topAndBottomSkipApplied = false;
     line = {
       spans: [],
+      drawings: [],
       start: line.end,
       end: line.end,
       width: 0,
@@ -506,6 +1074,7 @@ export function breakParagraph(
       baseline: 0,
       leading: 0,
     };
+    applyTopAndBottomSkipIfNeeded();
   };
 
   /** Whether the last thing placed was a line break, so the paragraph ends on a fresh line. */
@@ -529,7 +1098,45 @@ export function breakParagraph(
       line.end = piece.end;
       closeLine();
       lines[lines.length - 1]!.columnBreakAfter = true;
-      trailingLineBreak = false;
+      // Like a trailing hard break, NOT like a page break: Word still lays out the
+      // paragraph's remainder after the column advance. The common authoring form
+      // `<w:p><w:r><w:br w:type="column"/></w:r></w:p>` therefore opens one empty line
+      // at the top of the next column before the following block — the paragraph mark
+      // after the break. Suppressing that remainder put "After Column Break" flush with
+      // the prior column's first line.
+      trailingLineBreak = true;
+      continue;
+    }
+    if (piece.projected && !piece.inlineDrawing && piece.text === '\uFFFC') {
+      recordTopAndBottomAnchorLineTop(piece.start);
+      line.end = piece.end;
+      continue;
+    }
+    if (piece.inlineDrawing) {
+      recordTopAndBottomAnchorLineTop(piece.start);
+      const measure = measureInlineDrawing(piece.inlineDrawing.projection);
+      const atomWidth = measure.totalWidth;
+      const hasContent = line.spans.length > 0 || line.drawings.length > 0;
+      if (hasContent && line.width + atomWidth > lineAvailable()) closeLine();
+      if (!ensurePlacementWidth(atomWidth)) continue;
+      const { extentTopY } = growLineMetricsForDrawing(piece.style, measure);
+      const slotX = lineOrigin() + line.width;
+      line.drawings.push(
+        buildInlineDrawingRecord({
+          input: piece.inlineDrawing,
+          paragraphId,
+          start: piece.start,
+          slotX,
+          y: extentTopY,
+          baseline: line.baseline,
+          contentLeft,
+          contentRight,
+        })
+      );
+      line.width += atomWidth;
+      line.end = piece.end;
+      wordStartSpan = -1;
+      lastEmitted = '';
       continue;
     }
     if (piece.text === PAGE_BREAK_CHAR) {
@@ -548,6 +1155,13 @@ export function breakParagraph(
       line.end = piece.end;
       closeLine();
       lines[lines.length - 1]!.pageBreakAfter = true;
+      // NOT `trailingLineBreak`, unlike the hard break / column break above. An empty
+      // remainder publishes no line on the page the break opened: Word Online puts the
+      // following block flush at the top of that page, which `paragraph-spacing-borders`
+      // and `section-aware-pagination` pin against the comprehensive fixture. The caret
+      // after such a break therefore has nowhere to go on the new page, which is why the
+      // click that lands in the blank space beside the mark resolves BEFORE it — see
+      // `hitTestSemantic`.
       trailingLineBreak = false;
       continue;
     }
@@ -575,6 +1189,13 @@ export function breakParagraph(
       continue;
     }
     trailingLineBreak = false;
+    closeForTopAndBottomAfterAnchor(piece.start);
+    if (
+      sameParagraphAnchorStarts.length > 0 &&
+      piece.start >= Math.min(...sameParagraphAnchorStarts)
+    ) {
+      advancePastAnchorExclusionForPlacement(piece.start);
+    }
     const metrics = measurer.lineMetrics(piece.style);
     let consumed = 0;
     for (const boundary of wordBoundaries(piece.text)) {
@@ -598,7 +1219,8 @@ export function breakParagraph(
       if (candidate === '\t') {
         // A tab that cannot advance on this line wraps first, then reapplies — matching
         // Word's "tab past the right margin starts a new line" behaviour.
-        if (line.spans.length > 0 && line.width >= lineAvailable()) closeLine();
+        if ((line.spans.length > 0 || line.drawings.length > 0) && line.width >= lineAvailable())
+          closeLine();
         const currentX = lineOrigin() + line.width;
         const segment = measureFollowingTabSegment(pieces, pieceIndex, boundary, measurer);
         // A `w:ptab` states its own destination and leader, so it does NOT consult the
@@ -657,6 +1279,13 @@ export function breakParagraph(
         line.height = Math.max(line.height, metrics.height);
         line.baseline = Math.max(line.baseline, metrics.baseline);
         line.end = layoutOwned ? piece.end : piece.start + boundary;
+        // A tab is a break opportunity, so whatever follows it may open a line. Leaving the
+        // previous word recorded here made the following text a CONTINUATION of it, and an
+        // overflow then took the mid-word path: the word before the tab was carried onto the
+        // next line together with the tab, whose advance was re-laid unchanged and no longer
+        // reached its stop — a heading split mid-phrase with its page number stranded in the
+        // middle of the line.
+        lastEmitted = '\t';
         consumed = boundary;
         continue;
       }
@@ -667,22 +1296,35 @@ export function breakParagraph(
       const measureSource = piece.measureText ?? candidate;
       const width = measurer.measure(displayText(measureSource, piece.style), piece.style);
       // A candidate may open a line only at a real break opportunity. Within a piece,
-      // `wordBoundaries` cuts after spaces and tabs, so every candidate but the first is one.
-      // The FIRST candidate of a piece continues whatever the previous piece ended with, so it
-      // is a break opportunity only if that ended in whitespace.
+      // `wordBoundaries` cuts after spaces, dashes and tabs, so every candidate but the
+      // first is one. The FIRST candidate of a piece continues whatever the previous piece
+      // ended with, so it is a break opportunity only if that ended in whitespace \u2014 or in a
+      // dash, which stays a break opportunity across run boundaries (a tracked change can
+      // split "ALPHA-" and "PRIME" into different runs without gluing them).
       const opensWord =
         consumed > 0 ||
         lastEmitted === '' ||
         /[\s\u00a0]$/.test(lastEmitted) ||
-        /^[\s\u00a0]/.test(candidate);
+        /^[\s\u00a0]/.test(candidate) ||
+        (BREAK_AFTER_DASH.has(lastEmitted[lastEmitted.length - 1]!) &&
+          !BREAK_AFTER_DASH.has(candidate[0]!));
       if (opensWord) {
         wordStartSpan = line.spans.length;
         wordStartWidth = line.width;
         wordStartEnd = line.end;
       }
-      if (line.width + width > lineAvailable() && line.spans.length > 0) {
+      advancePastAnchorExclusionForPlacement(piece.start + consumed);
+      if (
+        line.width + width > lineAvailable() + OVERFLOW_TOLERANCE_PT &&
+        (line.spans.length > 0 || line.drawings.length > 0)
+      ) {
         if (opensWord || wordStartSpan <= 0) {
-          closeLine();
+          if (tryAdvanceToNextPassage() && line.width + width <= lineAvailable() + 0.001) {
+            // carry on in the next horizontal passage on this line
+          } else {
+            closeLine();
+            if (!ensurePlacementWidth(width)) continue;
+          }
         } else {
           // Mid-word overflow: carry the whole word to the next line rather than splitting it
           // at a run boundary. The spans already placed for it are lifted off this line, the
@@ -712,19 +1354,81 @@ export function breakParagraph(
           wordStartSpan = 0;
           wordStartWidth = 0;
         }
+      } else if (
+        line.spans.length === 0 &&
+        line.drawings.length === 0 &&
+        width > lineAvailable() + 0.001
+      ) {
+        if (!ensurePlacementWidth(width)) continue;
+      }
+      // A word wider than an EMPTY line has no boundary to wrap at, and Word breaks it at
+      // the margin rather than letting it run past the right edge — or, in a table cell,
+      // into the neighbouring cell. The longest fitting prefix closes each full line and
+      // the tail falls through to ordinary placement. Layout-owned pieces stay whole:
+      // every span they emit publishes the piece's model range, so cutting one would
+      // publish the same range twice; `measureText` pieces reserve a width their sliced
+      // text does not measure to.
+      let remaining = candidate;
+      let remainingStart = piece.start + consumed;
+      let remainingWidth = width;
+      if (!layoutOwned && piece.measureText === undefined) {
+        while (
+          line.spans.length === 0 &&
+          remaining.length > 1 &&
+          remainingWidth > lineAvailable()
+        ) {
+          let low = 1;
+          let high = remaining.length - 1;
+          let fitLength = 1;
+          while (low <= high) {
+            const mid = (low + high) >> 1;
+            const midWidth = measurer.measure(
+              displayText(remaining.slice(0, mid), piece.style),
+              piece.style
+            );
+            if (midWidth <= lineAvailable()) {
+              fitLength = mid;
+              low = mid + 1;
+            } else {
+              high = mid - 1;
+            }
+          }
+          const prefix = remaining.slice(0, fitLength);
+          const prefixWidth = measurer.measure(displayText(prefix, piece.style), piece.style);
+          line.spans.push({
+            range: { paragraphId, start: remainingStart, end: remainingStart + fitLength },
+            text: prefix,
+            props: piece.props,
+            style: piece.style,
+            box: { x: lineOrigin() + line.width, y: 0, width: prefixWidth, height: metrics.height },
+            ...(piece.link ? { link: piece.link } : {}),
+            ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
+            ...revisionsOf(piece),
+          });
+          line.width += prefixWidth;
+          line.height = Math.max(line.height, metrics.height);
+          line.baseline = Math.max(line.baseline, metrics.baseline);
+          line.end = remainingStart + fitLength;
+          closeLine();
+          remaining = remaining.slice(fitLength);
+          remainingStart += fitLength;
+          remainingWidth = measurer.measure(displayText(remaining, piece.style), piece.style);
+        }
       }
       line.spans.push({
-        range: spanRange,
-        text: candidate,
+        range: layoutOwned
+          ? spanRange
+          : { paragraphId, start: remainingStart, end: piece.start + boundary },
+        text: remaining,
         props: piece.props,
         style: piece.style,
-        box: { x: lineOrigin() + line.width, y: 0, width, height: metrics.height },
+        box: { x: lineOrigin() + line.width, y: 0, width: remainingWidth, height: metrics.height },
         ...(piece.link ? { link: piece.link } : {}),
         ...(layoutOwned && !piece.positionalTab ? { projected: true as const } : {}),
         ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
         ...revisionsOf(piece),
       });
-      line.width += width;
+      line.width += remainingWidth;
       line.height = Math.max(line.height, metrics.height);
       line.baseline = Math.max(line.baseline, metrics.baseline);
       line.end = layoutOwned ? piece.end : piece.start + boundary;
@@ -738,7 +1442,8 @@ export function breakParagraph(
   // there was and left nothing after it — the caret fell back to the end of the line the
   // break had just terminated, sitting a break's width to the right of the last glyph,
   // and the new line only appeared once something was typed into it.
-  if (line.spans.length > 0 || lines.length === 0 || trailingLineBreak) closeLine();
+  if (line.spans.length > 0 || line.drawings.length > 0 || lines.length === 0 || trailingLineBreak)
+    closeLine();
   if (cacheKey !== null && cache) cache.set(cacheKey, lines.map(frozenLine));
   return lines;
 }

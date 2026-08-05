@@ -135,6 +135,7 @@ export {
   lineAtPosition,
   linesOf,
   paragraphFragmentsOf,
+  paragraphFragmentsOfBlocks,
   unionLayoutBoxes,
   type BlockFragmentRecord,
   type ContentControlBoundaryRecord,
@@ -173,6 +174,7 @@ export {
   appliedSpaceBefore,
   applyLineSpacing,
   paragraphBorderExtentPt,
+  paragraphBorderStrokeWidthPt,
   bottomBorderExtentPt,
   cascadedParagraphBorders,
   collapsedSpaceBefore,
@@ -222,7 +224,7 @@ export {
   type PageFurniture,
   type SemanticLayoutOptions,
 } from './semantic-layout.ts';
-export type { HyperlinkProjector } from './field-projection.ts';
+export { formatPageNumber, type HyperlinkProjector } from './field-projection.ts';
 export {
   EMPTY_NUMBERING_INDEX,
   MAX_LVL_OVERRIDES,
@@ -321,33 +323,39 @@ export {
 export { noteMarkKey, projectedNoteMarkText, type NoteMarkContext } from './note-projection.ts';
 export { storyBlocks, noteStoryBlocks, MAX_SDT_NESTING } from './story-roots.ts';
 export {
+  emptyTocPlaceholderParagraphIds,
+  emptyTocSuppressedResultParagraphIds,
+  tocFieldChromeParagraphIds,
+} from './toc-layout.ts';
+export {
   collectFlowBlocks,
   contentControlContentChildren,
   isContentControl,
   isContentControlContent,
 } from '../store/package/content-control-walk.ts';
 export {
-  commentAnchorsOfStory,
-  commentsOfPart,
-  threadStateOfPart,
   W15_NAMESPACE_URI,
   type CommentAnchor,
   type CommentPosition,
   type CommentRecord,
   type CommentThreadState,
-} from './comment-anchors.ts';
+} from './review-support.ts';
+// The review queue DERIVATION (`collectReviewItems` and its readers) is the pro
+// review module's implementation and is deliberately NOT in this package — the
+// engine receives it through the `EditorModule` seam. What remains public here
+// is the vocabulary and its pure helpers.
 export {
   activeReviewItem,
-  collectReviewItems,
   commentBodyText,
   commentInitials,
-  commentItemsOf,
+  firstReviewRange,
   paragraphOrderOfPart,
   reviewAnchorIndex,
   reviewItemGeometry,
   reviewItemKey,
+  reviewItemPositionRank,
+  reviewItemRanges,
   reviewItemsAt,
-  revisionItemsOf,
   type ReviewCommentItem,
   type ReviewItem,
   type ReviewModelInput,
@@ -356,7 +364,7 @@ export {
   type ReviewRange,
   type ReviewRevisionItem,
   type ReviewRevisionKind,
-} from './review-model.ts';
+} from './review-support.ts';
 export {
   DEFAULT_REVISION_DISPLAY_MODE,
   formatRevisionOf,
@@ -410,6 +418,7 @@ export {
   DEFAULT_RUN_STYLE,
   baselineShiftPtOf,
   displayText,
+  measureDisplayText,
   resolveRunStyle,
   runStylesEqual,
   type ResolvedRunStyle,
@@ -446,6 +455,7 @@ export {
 export {
   DEFAULT_VERTICAL_WEIGHT,
   contentControlAtPoint,
+  findDrawingOverlayFrameInLayout,
   hitTestPage,
   hitTestSheet,
   isFurniturePoint,
@@ -453,9 +463,11 @@ export {
   caretBoxOnLine,
   pageAtY,
   spanOffsetX,
+  type DrawingOverlayFrame,
   type HitPoint,
   type HitTestOptions,
   type SemanticHit,
+  type SemanticHitDrawing,
   type TableCellAddress,
 } from './semantic-hit-test.ts';
 export {

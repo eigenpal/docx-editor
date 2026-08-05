@@ -15,7 +15,7 @@ import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
 import { Navigation as DocxEditorNavigationCompound } from '../editor/navigation';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
-import { DocxEditorReview } from '../editor/DocxEditorReview';
+import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
 import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
 import { DocxEditorNotesChrome } from '../editor/DocxEditorNotes';
@@ -149,6 +149,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
     author,
     locale,
     mode,
+    modules,
     zoom,
     onReady,
     onChange,
@@ -184,8 +185,11 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
   // union derived from `en.json`, while the prop takes a plain `string` so a host can
   // supply any resolver. Every key this component passes is a real catalogue key.
   const { t: catalogT } = useTranslation();
-  const fallbackT = useCallback((key: string) => catalogT(key as TranslationKey), [catalogT]);
-  const translate = t ?? fallbackT;
+  const translate = useCallback(
+    (key: string, params?: Record<string, string | number>) =>
+      t ? t(key) : catalogT(key as TranslationKey, params),
+    [t, catalogT]
+  );
 
   // The painted document: the primitive Viewport (scroll container, load-bearing
   // classes) around the primitive Content (the engine's mount point). Chrome-off
@@ -211,6 +215,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
         />
       )}
       <DocxEditorContentControl />
+      {props.children}
     </DocxEditorViewport>
   );
 
@@ -274,6 +279,9 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
           so `defaultChromeGroups()` filters it out and only explicit composition mounts it.
           The title bar above carries the save control instead. */}
       <DocxEditorToolbar t={translate} />
+      {/* Word's font compatibility bar: shown when the document's declared faces render
+          in substitutes, dismissible per set of missing families. */}
+      <DocxEditorFontNotice t={translate} />
       {/* The navigation pane is a SIBLING of the viewport inside a positioned row, not a
           column beside it: it floats over the gutter to the left of the centred page and
           leaves the page alone until the window is too narrow to hold both. Without a
@@ -303,7 +311,9 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
       {...(fonts ? { fonts } : {})}
       {...(author !== undefined ? { author } : {})}
       {...(locale !== undefined ? { locale } : {})}
+      translate={translate}
       {...(mode !== undefined ? { mode } : {})}
+      {...(modules !== undefined ? { modules } : {})}
       {...(zoom !== undefined ? { zoom } : {})}
       tableInteractionLabel={tableInteractionLabel}
       {...(onReady ? { onReady } : {})}
@@ -354,6 +364,8 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
   /** Floating localized page readout for the active viewport. */
   readonly PageNumber: typeof DocxEditorPageNumber;
+  /** Word-style notice when document fonts render in substitute faces. */
+  readonly FontNotice: typeof DocxEditorFontNotice;
   /** Header/footer scope chrome while editing page furniture. */
   readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
   readonly NotesChrome: typeof DocxEditorNotesChrome;
@@ -362,11 +374,6 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
    * default inside the viewport; `hyperlinkPopup={false}` removes it.
    */
   readonly HyperLink: typeof DocxEditorHyperLink;
-  /**
-   * The review rail — tracked changes and comments as cards beside the page, with accept,
-   * reject and reply. Place it inside the Viewport, beside `DocxEditor.Content`.
-   */
-  readonly Review: typeof DocxEditorReview;
   /**
    * The right-click menu over the painted document, with its rows as statics (`.Cut`,
    * `.Copy`, `.Paste`, `.Delete`, `.SelectAll`, `.Item`, `.Slot`, `.Submenu`, …). Mounted
@@ -395,10 +402,10 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   Navigation: DocxEditorNavigationCompound,
   PageSetupDialog: DocxEditorPageSetupDialog,
   PageNumber: DocxEditorPageNumber,
+  FontNotice: DocxEditorFontNotice,
   HeaderFooterChrome: DocxEditorHeaderFooterChrome,
   NotesChrome: DocxEditorNotesChrome,
   HyperLink: DocxEditorHyperLink,
-  Review: DocxEditorReview,
   ContextMenu: DocxEditorContextMenuCompound,
   ContentControl: DocxEditorContentControl,
 });

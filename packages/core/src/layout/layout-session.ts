@@ -3,6 +3,7 @@
 // Separate from the paragraph break cache: the cache stores how a paragraph BREAKS; this
 // stores where the flow WAS. One survives reflow, the other is invalidated by it.
 
+import type { AnchoredDrawingRecord } from './drawing-layout.ts';
 import type { PageRecord, SemanticLayout } from './semantic-records.ts';
 
 /** The flow state as it stood immediately before one block was placed. */
@@ -11,10 +12,14 @@ export interface FlowCheckpoint {
   readonly pageCount: number;
   /** Fragments already on the page being built. */
   readonly pageFragments: readonly import('./semantic-records.ts').BlockFragmentRecord[];
+  /** Anchored drawings already collected for the open page. */
+  readonly pendingAnchoredDrawings: readonly AnchoredDrawingRecord[];
   readonly cursorY: number;
   readonly lineCounter: number;
   /** Trailing paragraph spacing participating in adjacent-spacing collapse. */
   readonly previousSpaceAfter: number;
+  /** Active column index when the section uses multiple columns. */
+  readonly flowColumnIndex: number;
 }
 
 export interface LayoutSessionStats {
@@ -74,6 +79,15 @@ export interface LayoutSession {
   /** Whether the last page of that pass was still open (no trailing page break). */
   endsOpenPage: boolean;
   stats: LayoutSessionStats;
+  /**
+   * Column-height limit chosen by the last balanced multi-column pass, or null when the
+   * last pass did not balance.
+   *
+   * Lets the next pass try the remembered limit FIRST: an unchanged balanced section
+   * early-exits on that single attempt instead of re-running the natural pass and the
+   * whole balance search every time.
+   */
+  balanceLimit: number | null;
   /** Present when the last pass was multi-section; child sessions live here. */
   multi: MultiSectionLayoutState | null;
   /**
@@ -100,6 +114,7 @@ export function createLayoutSession(): LayoutSession {
     endSpaceAfter: 0,
     endsOpenPage: true,
     stats: { placed: 0, total: 0, reusedPages: 0, fullPasses: 0 },
+    balanceLimit: null,
     multi: null,
     notePageBottomReserves: null,
   };

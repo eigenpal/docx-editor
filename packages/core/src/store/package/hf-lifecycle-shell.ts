@@ -6,13 +6,13 @@ import { createNodeIdAllocator, insertChildren, removeNode } from './ooxml-edit.
 import { readOoxmlPart, type OoxmlNode } from './ooxml-tree.ts';
 import type { OoxmlExternalTarget, OoxmlPackage } from './ooxml-package.ts';
 import { partNameKey, resolveInternalTarget, validateExternalTarget } from './opc-names.ts';
+import { contentTypesPartBytes } from './package-edit.ts';
 import type { RelationshipRecord } from './relationships.ts';
 import { readXml, type XmlNode } from './xml-reader.ts';
 
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const RELS_CONTENT_TYPE = 'application/vnd.openxmlformats-package.relationships+xml';
 const CONTENT_TYPES_NS = 'http://schemas.openxmlformats.org/package/2006/content-types';
-const CONTENT_TYPES_PART = '/[Content_Types].xml';
 /** Cap on owned relationships cloned with an unlinked furniture part. */
 const MAX_OWNED_RELATIONSHIPS = 4_096;
 
@@ -320,9 +320,9 @@ export function withContentTypeOverride(
   if (declared === contentType) return pkg;
   if (declared !== undefined) return null;
 
-  const bytes = pkg.partBytes.get(CONTENT_TYPES_PART);
-  if (!bytes) return null;
-  const xml = strFromU8(bytes);
+  const contentTypesEntry = contentTypesPartBytes(pkg);
+  if (contentTypesEntry === null) return null;
+  const xml = strFromU8(contentTypesEntry.bytes);
   const before = contentTypesShape(xml);
   if (!before) return null;
 
@@ -342,7 +342,7 @@ export function withContentTypeOverride(
 
   return Object.freeze({
     ...pkg,
-    partBytes: new Map([...pkg.partBytes, [CONTENT_TYPES_PART, strToU8(patched)]]),
+    partBytes: new Map([...pkg.partBytes, [contentTypesEntry.storageKey, strToU8(patched)]]),
     contentTypes: Object.freeze({
       defaults: pkg.contentTypes.defaults,
       overrides: new Map([...pkg.contentTypes.overrides, [key, contentType]]),
@@ -357,9 +357,9 @@ export function withoutContentTypeOverride(
   const key = partNameKey(partName);
   if (!pkg.contentTypes.overrides.has(key)) return pkg;
 
-  const bytes = pkg.partBytes.get(CONTENT_TYPES_PART);
-  if (!bytes) return null;
-  const xml = strFromU8(bytes);
+  const contentTypesEntry = contentTypesPartBytes(pkg);
+  if (contentTypesEntry === null) return null;
+  const xml = strFromU8(contentTypesEntry.bytes);
   const before = contentTypesShape(xml);
   if (!before) return null;
 
@@ -404,7 +404,7 @@ export function withoutContentTypeOverride(
   overrides.delete(key);
   return Object.freeze({
     ...pkg,
-    partBytes: new Map([...pkg.partBytes, [CONTENT_TYPES_PART, strToU8(rebuilt)]]),
+    partBytes: new Map([...pkg.partBytes, [contentTypesEntry.storageKey, strToU8(rebuilt)]]),
     contentTypes: Object.freeze({
       defaults: pkg.contentTypes.defaults,
       overrides,

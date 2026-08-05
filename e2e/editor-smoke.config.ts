@@ -9,7 +9,13 @@ const VUE_PORT = 5274;
 
 export default defineConfig({
   testDir: '.',
-  testMatch: ['**/*.smoke.spec.ts', '**/*.gate.spec.ts', '**/*.interaction.spec.ts', '**/*.visual.spec.ts'],
+  testMatch: [
+    '**/*.smoke.spec.ts',
+    '**/*.gate.spec.ts',
+    '**/*.interaction.spec.ts',
+    '**/*.visual.spec.ts',
+    '**/editor-drawings.spec.ts',
+  ],
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

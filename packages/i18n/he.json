@@ -89,7 +89,9 @@
     "commentsAndChanges": null,
     "moreItems": null,
     "unavailableInPreview": null,
-    "more": null
+    "more": null,
+    "altText": null,
+    "imageWrap": null
   },
   "alignment": {
     "alignLeft": "יישור לשמאל",
@@ -814,7 +816,21 @@
       "inLineWithText": "התמונה זורמת בשורה כתו",
       "squareLeft": "תמונה משמאל, טקסט גולש מימין",
       "squareRight": "תמונה מימין, טקסט גולש משמאל"
-    }
+    },
+    "square": null,
+    "targets": {
+      "behind": null,
+      "inFront": null,
+      "inline": null,
+      "square": null,
+      "squareLeft": null,
+      "squareRight": null,
+      "through": null,
+      "tight": null,
+      "topAndBottom": null
+    },
+    "through": null,
+    "tight": null
   },
   "responsePreview": {
     "loading": "{action}...",
@@ -842,7 +858,8 @@
     "failedToParse": "שגיאה בפתיחת המסמך",
     "linkRemoved": "הקישור הוסר",
     "linkCopied": "הקישור הועתק ללוח",
-    "failedToSave": "שגיאה בשמירת המסמך"
+    "failedToSave": "שגיאה בשמירת המסמך",
+    "fontSubstitutionNotice": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "טקסט לתצוגה",
@@ -857,7 +874,8 @@
     "inertTarget": null,
     "insertTitle": null,
     "openLink": null,
-    "refused": null
+    "refused": null,
+    "urlLabel": null
   },
   "headerFooter": {
     "header": "כותרת עליונה",
@@ -893,7 +911,16 @@
   "image": {
     "placeholder": "מיקום תמונה",
     "placeholderText": "[תמונה]",
-    "editableAriaLabel": "תמונה הניתנת לעריכה"
+    "editableAriaLabel": "תמונה הניתנת לעריכה",
+    "contentMismatch": null,
+    "decodeFailed": null,
+    "externalResource": null,
+    "invalidResource": null,
+    "missingResource": null,
+    "nonPictureGraphic": null,
+    "pendingResource": null,
+    "resourceLimit": null,
+    "unsupportedFormat": null
   },
   "ruler": {
     "horizontal": "סרגל אופקי",
@@ -943,7 +970,18 @@
     "deleteImage": "מחק תמונה",
     "imageProperties": "מאפייני תמונה",
     "rotate": "סובב",
-    "replaceImage": null
+    "replaceImage": null,
+    "handle": {
+      "e": null,
+      "n": null,
+      "ne": null,
+      "nw": null,
+      "s": null,
+      "se": null,
+      "sw": null,
+      "w": null
+    },
+    "selection": null
   },
   "revisions": {
     "cellDeleted": null,
@@ -962,7 +1000,9 @@
     "runPropertiesChanged": null
   },
   "toc": {
-    "updatePrompt": null
+    "updatePrompt": null,
+    "refresh": "עדכון הטבלה כולה",
+    "refreshPageNumbers": "עדכון מספרי עמודים בלבד"
   },
   "app": {
     "name": null,
@@ -1084,5 +1124,45 @@
     "replyRefused": null,
     "showPane": null,
     "structural": null
+  },
+  "imageAltText": {
+    "description": null,
+    "panelTitle": null,
+    "title": null
+  },
+  "imageInsert": {
+    "errors": {
+      "emptyFile": null,
+      "invalidSignature": null,
+      "oversize": null,
+      "refused": null,
+      "unsupportedFormat": null
+    }
+  },
+  "imageProperties": {
+    "crop": null,
+    "cropBottom": null,
+    "cropLeft": null,
+    "cropRight": null,
+    "cropTop": null,
+    "errors": {
+      "invalidCrop": null,
+      "invalidDimensions": null,
+      "refused": null,
+      "invalidPosition": null
+    },
+    "hyperlink": null,
+    "nonPictureHint": null,
+    "resetNaturalSize": null,
+    "units": {
+      "points": null
+    },
+    "horizontalOffset": null,
+    "position": null,
+    "positionLocked": null,
+    "positionUnavailable": null,
+    "relativeToHorizontal": null,
+    "relativeToVertical": null,
+    "verticalOffset": null
   }
 }

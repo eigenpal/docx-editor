@@ -42,7 +42,14 @@ import {
   sectionChild,
   targetSectionNodes,
 } from './tree-op-section-address.ts';
+import { rangePartiallyOverlapsDrawingAtom } from '../package/drawing-projection.ts';
+import { isDrawingTreeDocOp, validateDrawingOp } from './tree-op-drawings.ts';
 import { isParagraph, paragraphLength, segmentsOf, splitsSurrogate } from './tree-op-segments.ts';
+import {
+  validateInsertToc,
+  validateReplaceTocResult,
+  validateRewriteTocPageNumbers,
+} from './tree-op-toc.ts';
 import {
   ACCEPTED_PARAGRAPH_PROPERTIES,
   ACCEPTED_RUN_PROPERTIES,
@@ -73,6 +80,14 @@ function validateProperties(
 
 /** Longest `r:id`, `w:anchor` or `w:tooltip` an op may write. */
 const MAX_HYPERLINK_ATTRIBUTE_LENGTH = 512;
+
+function rangePartiallyOverlapsDrawing(
+  paragraph: OoxmlParagraphNode,
+  start: number,
+  end: number
+): boolean {
+  return rangePartiallyOverlapsDrawingAtom(segmentsOf(paragraph), start, end);
+}
 
 /** Whether `[start, end)` overlaps any text already inside a `w:hyperlink`. */
 function rangeTouchesHyperlink(paragraph: OoxmlParagraphNode, start: number, end: number): boolean {
@@ -323,6 +338,7 @@ function validateRemoveContentControl(part: OoxmlPart, controlId: string): TreeO
 /** Structural validation, run before any tree work so a rejection changes nothing. */
 export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection | null {
   if (!TREE_DOC_OP_KINDS.includes(op.op)) return 'unknown-op';
+  if (isDrawingTreeDocOp(op)) return validateDrawingOp(part, op);
 
   // Package-level furniture ops cannot run against a single part. Shape-check here so
   // applyTreeOp refuses them; TreePackageStore.applyLifecycleOp is the commit path.
@@ -378,6 +394,16 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
 
   if (op.op === 'removeContentControl') {
     return validateRemoveContentControl(part, op.controlId);
+  }
+
+  if (op.op === 'insertToc') {
+    return validateInsertToc(part, op);
+  }
+  if (op.op === 'replaceTocResult') {
+    return validateReplaceTocResult(part, op);
+  }
+  if (op.op === 'rewriteTocPageNumbers') {
+    return validateRewriteTocPageNumbers(part, op);
   }
 
   if (op.op === 'setSectionProperties') {
@@ -624,6 +650,9 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
         return 'offset-out-of-range';
       }
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
+      if (rangePartiallyOverlapsDrawing(paragraph, op.offset, op.offset + 1)) {
+        return 'invalid-range';
+      }
       return rejectContentEdit(part, paragraph, op.offset, op.offset);
     }
     case 'splitParagraphMany': {
@@ -641,6 +670,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
         if (splitsSurrogate(paragraph, offset)) return 'splits-surrogate-pair';
         const restriction = rejectContentEdit(part, paragraph, offset, offset);
         if (restriction) return restriction;
+        if (rangePartiallyOverlapsDrawing(paragraph, offset, offset + 1)) return 'invalid-range';
       }
       return null;
     }
@@ -651,6 +681,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (splitsSurrogate(paragraph, op.start) || splitsSurrogate(paragraph, op.end)) {
         return 'splits-surrogate-pair';
       }
+      if (rangePartiallyOverlapsDrawing(paragraph, op.start, op.end)) return 'invalid-range';
       return rejectContentEdit(part, paragraph, op.start, op.end);
     }
     case 'setRunProperties': {
@@ -668,6 +699,23 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (propertiesRejection) return propertiesRejection;
       if (isBoundAt(part, op.paragraphId)) return 'bound';
       if (effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
+      return null;
+    }
+    case 'insertInlineContentControl': {
+      if (!Number.isInteger(op.offset)) return 'invalid-range';
+      if (op.offset < 0 || op.offset > length) return 'offset-out-of-range';
+      if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
+      // The tag is the node's IDENTITY and Word caps `w:tag` at 64 characters;
+      // writing a longer one authors a control Word will refuse to keep.
+      if (typeof op.tag !== 'string' || op.tag.length === 0 || op.tag.length > 64) {
+        return 'invalid-property-value';
+      }
+      if (typeof op.text !== 'string' || op.text.length === 0) return 'invalid-property-value';
+      // Inside another control's content the wrapper nests; inside a LINK it is
+      // not a shape Word writes — reuse the link-nesting refusal.
+      if (rangeTouchesHyperlink(paragraph, op.offset, op.offset)) {
+        return 'invalid-property-value';
+      }
       return null;
     }
     case 'insertHyperlink': {
@@ -728,6 +776,7 @@ export {
   type RevisionAttributionInput,
   type TreeDocOp,
   type TreeDocOpKind,
+  type DrawingTreeDocOp,
   type TreeOpEffect,
   type TreeOpRejection,
   type TreeOpResult,

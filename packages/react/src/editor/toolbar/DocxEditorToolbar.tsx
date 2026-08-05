@@ -34,9 +34,11 @@ import type { ReactElement, ReactNode } from 'react';
 import { unwrapFragment } from '../merge-arrangement';
 import {
   chromeSlotId,
-  defaultChromeGroups,
+  formattingBarChromeGroups,
   type ChromeSlotId,
 } from '@docx-editor.dev/core-contract/editor';
+import type { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
+import { useEditorState } from '../useEditorState';
 import { ToolbarContext, type ToolbarTranslate } from './toolbar-context';
 import { ToolbarButton, chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
 import {
@@ -48,6 +50,14 @@ import {
 import { collapseOrder, TOOLBAR_PINNED_GROUPS } from './toolbar-overflow';
 import { FIXED_ATTRIBUTE, GROUP_ATTRIBUTE, useToolbarOverflow } from './useToolbarOverflow';
 import {
+  type ImageAltTextPartComponent,
+  type ImageWrapPartComponent,
+  ToolbarImageInsert,
+  ToolbarImageProperties,
+  ToolbarImageWrap,
+  ToolbarImageAltText,
+} from '../images';
+import {
   ToolbarAlignCenter,
   ToolbarAlignJustify,
   ToolbarAlignLeft,
@@ -56,8 +66,6 @@ import {
   ToolbarBulletList,
   ToolbarClearFormatting,
   ToolbarComments,
-  ToolbarImageInsert,
-  ToolbarImageProperties,
   ToolbarIndent,
   ToolbarItalic,
   ToolbarLink,
@@ -163,6 +171,10 @@ const SHAPED_PARTS: Partial<Record<ChromeSlotId, PartLike>> = {
   'table.borderStyle': ToolbarTableBorderStyle,
   'table.borderWidth': ToolbarTableBorderWidth,
   'table.cellFill': ToolbarTableCellFill,
+  'image.insert': ToolbarImageInsert,
+  'image.properties': ToolbarImageProperties,
+  'image.wrap': ToolbarImageWrap,
+  'image.altText': ToolbarImageAltText,
 };
 
 /** Icon-button fallback parts, one per slot, created once. */
@@ -182,34 +194,27 @@ function iconPart(slot: ChromeSlotId): PartLike {
  * editing-mode picker (contextual slots stay available for composition) — with the
  * alignment group merged into ONE dropdown under the `'alignment'` key.
  */
-const DEFAULT_GROUPS: readonly DefaultGroup[] = defaultChromeGroups().map((group) => {
-  if (group.id === 'alignment') {
+function buildDefaultGroups(image: EditorSnapshot['image']): readonly DefaultGroup[] {
+  return formattingBarChromeGroups(image).map((group) => {
+    if (group.id === 'alignment') {
+      return {
+        id: group.id,
+        labelKey: group.labelKey,
+        entries: [{ slot: 'alignment' as ArrangementKey, Part: ToolbarAlignment }],
+      };
+    }
     return {
       id: group.id,
       labelKey: group.labelKey,
-      entries: [{ slot: 'alignment' as ArrangementKey, Part: ToolbarAlignment }],
+      entries: group.controls.map((control) => {
+        const slot = chromeSlotId(group, control);
+        return { slot: slot as ArrangementKey, Part: SHAPED_PARTS[slot] ?? iconPart(slot) };
+      }),
     };
-  }
-  return {
-    id: group.id,
-    labelKey: group.labelKey,
-    entries: group.controls.map((control) => {
-      const slot = chromeSlotId(group, control);
-      return { slot: slot as ArrangementKey, Part: SHAPED_PARTS[slot] ?? iconPart(slot) };
-    }),
-  };
-});
+  });
+}
 
-/** Every slot the default arrangement draws, for recognizing an override child. */
-const DEFAULT_SLOTS: ReadonlySet<ArrangementKey> = new Set(
-  DEFAULT_GROUPS.flatMap((group) => group.entries.map((entry) => entry.slot))
-);
-
-/** Collapsible group ids in bar order, and the order they collapse in. */
-const COLLAPSIBLE = DEFAULT_GROUPS.map((group) => group.id).filter(
-  (id) => !TOOLBAR_PINNED_GROUPS.has(id)
-);
-const COLLAPSE_ORDER = collapseOrder(COLLAPSIBLE);
+const selectToolbarImage = (snapshot: EditorSnapshot) => snapshot.image;
 
 /** Slots whose panel row is the CONTROL itself, because it shows a value. */
 function isValueSlot(slot: ArrangementKey): boolean {
@@ -277,12 +282,23 @@ function includesTableChromeParts(children: ReactNode, preset: boolean): boolean
 function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
   const { className, t, onSave, preset = true, overflow: overflowEnabled = true, children } = props;
   const context = useMemo(() => ({ t, onSave }), [t, onSave]);
+  const image = useEditorState(selectToolbarImage);
+  const defaultGroups = useMemo(() => buildDefaultGroups(image), [image]);
+  const defaultSlots = useMemo(
+    () => new Set(defaultGroups.flatMap((group) => group.entries.map((entry) => entry.slot))),
+    [defaultGroups]
+  );
+  const collapsible = useMemo(
+    () => defaultGroups.map((group) => group.id).filter((id) => !TOOLBAR_PINNED_GROUPS.has(id)),
+    [defaultGroups]
+  );
+  const collapseOrderIds = useMemo(() => collapseOrder(collapsible), [collapsible]);
 
   // Only the preset arrangement has groups to collapse; `preset={false}` is the host's own
   // markup, and moving pieces of it into a menu would be the library rearranging a bar it
   // does not own.
   const measuring = preset && overflowEnabled;
-  const { attach, overflow } = useToolbarOverflow(measuring, COLLAPSIBLE, COLLAPSE_ORDER);
+  const { attach, overflow } = useToolbarOverflow(measuring, collapsible, collapseOrderIds);
 
   let content: ReactNode;
   if (!preset) {
@@ -294,7 +310,7 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
     const appended: ReactNode[] = [];
     for (const child of kids) {
       const slot = slotOfChild(child);
-      if (slot && DEFAULT_SLOTS.has(slot)) {
+      if (slot && defaultSlots.has(slot)) {
         // Last override for a slot wins, matching how later props win in a spread.
         overrides.set(slot, child as ReactElement);
       } else if (slot && (TABLE_CHROME_SLOTS as readonly string[]).includes(slot)) {
@@ -315,7 +331,7 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
     const bar: ReactNode[] = [];
     const sections: ToolbarOverflowSection[] = [];
     let drawn = 0;
-    for (const group of DEFAULT_GROUPS) {
+    for (const group of defaultGroups) {
       if (overflow.has(group.id)) {
         const rows = group.entries.flatMap((entry) => {
           const row = overflowRow(entry, overrides, t, group.labelKey, render);
@@ -456,6 +472,8 @@ export interface DocxEditorToolbarNamespace {
   readonly Indent: ToolbarPartComponent;
   readonly ImageInsert: ToolbarPartComponent;
   readonly ImageProperties: ToolbarPartComponent;
+  readonly ImageWrap: ImageWrapPartComponent;
+  readonly ImageAltText: ImageAltTextPartComponent;
   readonly TableInsert: ToolbarPartComponent;
   /** Border-edge target picker compound for contextual table chrome. */
   readonly TableBorderTarget: TableBorderTargetNamespace;
@@ -514,6 +532,8 @@ export const DocxEditorToolbar: DocxEditorToolbarNamespace = Object.assign(DocxE
   Indent: ToolbarIndent,
   ImageInsert: ToolbarImageInsert,
   ImageProperties: ToolbarImageProperties,
+  ImageWrap: ToolbarImageWrap,
+  ImageAltText: ToolbarImageAltText,
   TableInsert: ToolbarTableInsert,
   TableBorderTarget: ToolbarTableBorderTarget,
   TableBorderColor: ToolbarTableBorderColor,

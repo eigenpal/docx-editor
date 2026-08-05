@@ -47,14 +47,15 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'list.indent': 'format_indent_increase',
   'image.insert': 'image',
   'image.properties': 'tune',
+  'image.wrap': 'wrap_text',
   'table.insert': 'table',
   'table.borderTarget': 'border_all',
   'table.borderColor': 'border_color',
   'table.borderStyle': 'border_horizontal',
   'table.borderWidth': 'line_weight',
   'table.cellFill': 'format_color_fill',
-  'insert.footnote': 'format_list_numbered',
-  'insert.endnote': 'format_list_numbered',
+  'insert.footnote': 'superscript',
+  'insert.endnote': 'edit_note',
   'insert.pageNumber': 'format_list_numbered',
   'insert.totalPages': 'format_list_numbered',
   'insert.sectionPages': 'format_list_numbered',
@@ -72,8 +73,10 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'insert.pageBreak': 'page_break',
   'insert.sectionBreakNextPage': 'horizontal_rule',
   'insert.sectionBreakContinuous': 'border_horizontal',
-  'insert.toc': 'format_list_numbered',
+  'insert.toc': 'toc',
 };
+
+const INSERT_NOTE_AND_TOC_SLOTS = ['insert.footnote', 'insert.endnote', 'insert.toc'] as const;
 
 const slotsWithControls = CHROME_GROUPS.flatMap((g) =>
   g.controls.map((c) => ({ slot: chromeSlotId(g, c), control: c }))
@@ -100,5 +103,21 @@ describe('legacy icon mapping (M6V.4)', () => {
   test('the mapping names no slot that does not exist', () => {
     const slots = new Set<string>(slotsWithControls.map(({ slot }) => slot));
     expect(Object.keys(ICON_FOR_SLOT).filter((slot) => !slots.has(slot))).toEqual([]);
+  });
+
+  test('insert footnote, endnote and table of contents resolve to distinct icons', () => {
+    const table = iconPaths as Record<string, readonly string[]>;
+    const pathsBySlot = Object.fromEntries(
+      INSERT_NOTE_AND_TOC_SLOTS.map((slot) => [slot, table[ICON_FOR_SLOT[slot]!]])
+    );
+    const serialized = INSERT_NOTE_AND_TOC_SLOTS.map((slot) => pathsBySlot[slot]!.join('|'));
+    expect(new Set(serialized).size).toBe(INSERT_NOTE_AND_TOC_SLOTS.length);
+
+    const registryPaths = INSERT_NOTE_AND_TOC_SLOTS.map((slot) => {
+      const entry = slotsWithControls.find(({ slot: s }) => s === slot);
+      expect(entry?.control.paths).toBeTruthy();
+      return entry!.control.paths!.join('|');
+    });
+    expect(new Set(registryPaths).size).toBe(INSERT_NOTE_AND_TOC_SLOTS.length);
   });
 });

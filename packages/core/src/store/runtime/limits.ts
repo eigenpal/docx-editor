@@ -73,3 +73,50 @@ export function resolveLimits(overrides?: Partial<ResourceLimits>): ResourceLimi
   }
   return Object.freeze(out) as ResourceLimits;
 }
+
+/** Bounded image decode limits (typed-drawings-and-images task 4). */
+export interface ImageResourceLimits {
+  readonly maxEncodedBytes: number;
+  readonly maxDecodedBytes: number;
+  readonly maxPixels: number;
+  readonly maxDimension: number;
+  readonly maxPolygonPoints: number;
+  readonly maxExternalRedirects: number;
+}
+
+export const IMAGE_RESOURCE_HARD_CEILINGS: ImageResourceLimits = Object.freeze({
+  maxEncodedBytes: 64 * 1024 * 1024,
+  maxDecodedBytes: 512 * 1024 * 1024,
+  maxPixels: 250_000_000,
+  maxDimension: 65_536,
+  maxPolygonPoints: 16_384,
+  maxExternalRedirects: 32,
+});
+
+export const DEFAULT_IMAGE_RESOURCE_LIMITS: ImageResourceLimits = Object.freeze({
+  maxEncodedBytes: 32 * 1024 * 1024,
+  maxDecodedBytes: 400 * 1024 * 1024,
+  maxPixels: 100_000_000,
+  maxDimension: 32_768,
+  maxPolygonPoints: 4096,
+  maxExternalRedirects: 8,
+});
+
+const IMAGE_LIMIT_KEYS = Object.keys(IMAGE_RESOURCE_HARD_CEILINGS) as (keyof ImageResourceLimits)[];
+
+/** Resolve caller overrides into frozen image limits; hard ceilings cannot be raised. */
+export function resolveImageResourceLimits(
+  overrides?: Partial<ImageResourceLimits>
+): ImageResourceLimits {
+  const out = {} as Record<keyof ImageResourceLimits, number>;
+  for (const key of IMAGE_LIMIT_KEYS) {
+    const ceiling = IMAGE_RESOURCE_HARD_CEILINGS[key];
+    const raw = overrides?.[key];
+    const chosen =
+      typeof raw === 'number' && Number.isFinite(raw) && raw > 0
+        ? raw
+        : DEFAULT_IMAGE_RESOURCE_LIMITS[key];
+    out[key] = Math.min(Math.floor(chosen), ceiling);
+  }
+  return Object.freeze(out) as ImageResourceLimits;
+}

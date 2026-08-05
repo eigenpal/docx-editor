@@ -13,14 +13,14 @@
 
 import type { Node as PMNode } from 'prosemirror-model';
 import {
-  collectReviewItems,
+  paragraphOrderOfPart,
   reviewItemKey,
-  revisionItemsOfParagraph,
-  sortReviewRevisionsByDocumentOrder,
+  reviewItemPositionRank,
   type ReviewCommentItem,
   type ReviewItem,
   type ReviewRevisionItem,
-} from '../layout/review-model.ts';
+} from '../layout/review-support.ts';
+import type { ReviewModuleContribution } from '../contracts/modules.ts';
 import {
   addComment,
   commentPartNameOf,
@@ -46,12 +46,14 @@ import {
   isNoteLifecycleOp,
   normalizeParagraphIdentity,
   paragraphTextOf,
+  collectRevisionSites,
   type BookmarkIndex,
   type EmbeddedFont,
   type ListKind,
   type HeaderFooterParts,
   type HeaderFooterSectionResolution,
   type OoxmlElement,
+  type OoxmlNode,
   type OoxmlPackage,
   type OoxmlPackageRejection,
   type OoxmlPart,
@@ -277,6 +279,14 @@ export interface TreeDocxSession {
    */
   reviewItems(): readonly ReviewItem[];
 
+  /**
+   * Whether the document carries review content — tracked changes or comment
+   * anchors — regardless of any review module. Derived from store vocabulary
+   * only (never the review model), memoized per revision: it is the free
+   * tier's honest "this document has more than you are seeing" signal.
+   */
+  hasReviewContent(): boolean;
+
   /** Reply to a comment, or add one over a revision's range. Returns the new comment's id. */
   replyToComment(
     parentCommentId: string | null,
@@ -368,6 +378,34 @@ export interface TreeDocxSession {
   paraIdOf(nodeId: string): string | null;
   /** Canonical node id for a `w14:paraId`, matched case-insensitively, or null. */
   nodeIdOf(paraId: string): string | null;
+
+  /** Insert a validated raster image as one package undo unit (task 12). */
+  insertImage(
+    scope: StoryScope,
+    input: import('../store/store/tree-package-images.ts').InsertImageInput
+  ): Promise<import('../store/store/tree-package-images.ts').ImageIntentResult>;
+
+  /** Replace a picture drawing's embedded media in one package undo unit. */
+  replaceImage(
+    scope: StoryScope,
+    drawingNodeId: string,
+    bytes: Uint8Array,
+    mime: import('../store/package/image-resources.ts').SupportedImageMime,
+    decodePort: import('../store/package/image-resources.ts').ImageDecodePort,
+    options: import('../store/store/tree-package-images.ts').ReplaceImageOptions
+  ): Promise<import('../store/store/tree-package-images.ts').ImageIntentResult>;
+
+  /** Delete a picture drawing and collect orphaned media in one package undo unit. */
+  deleteImage(
+    scope: StoryScope,
+    drawingNodeId: string
+  ): import('../store/store/tree-package-images.ts').ImageIntentResult;
+
+  /** Apply image property tree ops plus hyperlink relationship wiring atomically. */
+  applyImageProperties(
+    scope: StoryScope,
+    input: import('../store/store/tree-package-images.ts').ApplyImagePropertiesInput
+  ): import('../store/store/tree-package-images.ts').ImageIntentResult;
 }
 
 export type { DocumentStyleEntry } from './document-catalog.ts';
@@ -389,7 +427,23 @@ export type OpenTreeSessionResult =
  * FILE, and a host needs to tell "this is not a package" from "this package is malicious"
  * from "this document has no body".
  */
-export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
+/** One frozen empty queue, so a module-less `reviewItems()` is reference-stable. */
+const EMPTY_REVIEW_ITEMS: readonly ReviewItem[] = Object.freeze([]);
+
+export interface OpenTreeSessionOptions {
+  /**
+   * The review module's derivation hooks, contributed through the editor's
+   * `EditorModule` seam. Absent — the free engine — the session's
+   * `reviewItems()` reports the typed empty queue; parse, preservation, and
+   * `hasReviewContent` are unaffected.
+   */
+  readonly reviewModel?: ReviewModuleContribution;
+}
+
+export function openTreeSession(
+  bytes: Uint8Array,
+  options: OpenTreeSessionOptions = {}
+): OpenTreeSessionResult {
   const loaded = readOoxmlPackage(bytes);
   if (!loaded.ok) {
     return {
@@ -416,14 +470,19 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
     readonly parts: readonly HeaderFooterParts[];
     readonly resolution: readonly HeaderFooterSectionResolution[];
   } | null = null;
-  /** Memoized per package revision: the queue only changes when the document does. */
+  /** Memoized per package/body revision: the queue only changes when the document does. */
   let reviewCache: {
-    revision: number;
+    revisionKey: string;
+    bodyRevision: number;
+    /** Package revision when this queue was last fully derived or patched. */
+    packageRevision: number;
     items: readonly ReviewItem[];
     paragraphOrder: ReadonlyMap<string, number>;
     commentsPart: OoxmlPart | undefined;
     commentsExtendedPart: OoxmlPart | undefined;
   } | null = null;
+  /** Memoized per body revision, like `reviewCache` — see `hasReviewContent`. */
+  let reviewContentCache: { revision: number; present: boolean } | null = null;
   let lastChange: TreeModelChange | null = null;
   packageStore.subscribe((change) => {
     lastChange = change;
@@ -783,7 +842,7 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
         }
         fontsCache = {
           revision: packageStore.packageRevision,
-          fonts: collectDocumentFonts(roots),
+          fonts: collectDocumentFonts(roots, collectDocumentThemeFonts(resolveThemeRoot())),
         };
         return fontsCache.fonts;
       },
@@ -895,19 +954,31 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
       },
 
       reviewItems() {
+        const derive = options.reviewModel;
+        if (!derive) return EMPTY_REVIEW_ITEMS;
         const store = bodyStore();
-        if (reviewCache && reviewCache.revision === store.revision) {
+        const revisionKey = `${packageStore.packageRevision}:${store.revision}`;
+        if (reviewCache && reviewCache.revisionKey === revisionKey) {
           return reviewCache.items;
         }
+
         const pkg = currentPackage();
-        // Resolved through the story's own relationships, exactly as the WRITE side
-        // resolves them. Hardcoding `/word/comments.xml` here made the reader disagree
-        // with the writer for any package that names its comment part something else —
-        // the comment was written and then never read back.
         const commentsPart = pkg.parts.get(commentPartNameOf(pkg, store.part.name));
         const commentsExtendedPart = pkg.parts.get(
           commentsExtendedPartNameOf(pkg, store.part.name)
         );
+        const furnitureParts: OoxmlPart[] = [];
+        const seenFurniture = new Set<OoxmlPart>();
+        for (const section of resolvedHeaderFooterBySection().parts) {
+          for (const slots of [section.headers, section.footers]) {
+            for (const part of slots.values()) {
+              if (seenFurniture.has(part)) continue;
+              seenFurniture.add(part);
+              furnitureParts.push(part);
+            }
+          }
+        }
+
         const patchParagraphId =
           reviewCache && lastChange
             ? localReviewPatchParagraphId(
@@ -916,17 +987,16 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
                 reviewCache.items,
                 store.part,
                 commentsPart,
-                commentsExtendedPart
+                commentsExtendedPart,
+                packageStore.packageRevision
               )
             : null;
 
         let items: readonly ReviewItem[];
         let paragraphOrder: ReadonlyMap<string, number>;
         if (patchParagraphId && reviewCache) {
-          const localRevisions = revisionItemsOfParagraph(store.part, patchParagraphId);
-          if (
-            canApplyLocalReviewPatch(reviewCache.items, localRevisions, patchParagraphId)
-          ) {
+          const localRevisions = derive.revisionItemsOfParagraph(store.part, patchParagraphId);
+          if (canApplyLocalReviewPatch(reviewCache.items, localRevisions, patchParagraphId)) {
             items = patchLocalReviewItems(
               reviewCache.items,
               reviewCache.paragraphOrder,
@@ -935,30 +1005,47 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
             );
             paragraphOrder = reviewCache.paragraphOrder;
           } else {
-            paragraphOrder = buildParagraphOrder(store.part);
-            items = collectReviewItems({
+            paragraphOrder = paragraphOrderOfPart(store.part);
+            items = derive.collectReviewItems({
               storyPart: store.part,
+              furnitureParts,
               commentsPart,
               commentsExtendedPart,
             });
           }
         } else {
-          paragraphOrder = buildParagraphOrder(store.part);
-          items = collectReviewItems({
+          paragraphOrder = paragraphOrderOfPart(store.part);
+          items = derive.collectReviewItems({
             storyPart: store.part,
+            furnitureParts,
             commentsPart,
             commentsExtendedPart,
           });
         }
 
         reviewCache = {
-          revision: store.revision,
+          revisionKey,
+          bodyRevision: store.revision,
+          packageRevision: packageStore.packageRevision,
           items,
           paragraphOrder,
           commentsPart,
           commentsExtendedPart,
         };
         return reviewCache.items;
+      },
+
+      hasReviewContent() {
+        const store = bodyStore();
+        if (!reviewContentCache || reviewContentCache.revision !== store.revision) {
+          reviewContentCache = {
+            revision: store.revision,
+            present:
+              collectRevisionSites(store.part).length > 0 ||
+              storyCarriesCommentAnchor(store.part.root),
+          };
+        }
+        return reviewContentCache.present;
       },
 
       replyToComment(parentCommentId, anchor, text, author, date) {
@@ -1026,6 +1113,22 @@ export function openTreeSession(bytes: Uint8Array): OpenTreeSessionResult {
         }
         return true;
       },
+
+      insertImage(scope, input) {
+        return packageStore.insertImage(scope, input);
+      },
+
+      replaceImage(scope, drawingNodeId, bytes, mime, decodePort, options) {
+        return packageStore.replaceImage(scope, drawingNodeId, bytes, mime, decodePort, options);
+      },
+
+      deleteImage(scope, drawingNodeId) {
+        return packageStore.deleteImage(scope, drawingNodeId);
+      },
+
+      applyImageProperties(scope, input) {
+        return packageStore.applyImageProperties(scope, input);
+      },
     },
   };
 }
@@ -1042,15 +1145,6 @@ function projectedText(part: OoxmlPart): string {
   return bodyParagraphs(part)
     .map((paragraph) => paragraphTextOf(part, paragraph.id) ?? '')
     .join('\n');
-}
-
-function buildParagraphOrder(part: OoxmlPart): ReadonlyMap<string, number> {
-  const order = new Map<string, number>();
-  for (const [index, paragraph] of allParagraphs(part).entries()) {
-    if (paragraph.kind === 'textValue') continue;
-    order.set(paragraph.id, index);
-  }
-  return order;
 }
 
 function itemStartParagraphRank(
@@ -1109,10 +1203,12 @@ function patchLocalReviewItems(
 
   if (insertAt === null) insertAt = patched.length;
   if (localRevisions.length > 0) {
-    const orderedLocalRevisions = sortReviewRevisionsByDocumentOrder(
-      localRevisions,
-      paragraphOrder
-    );
+    const orderedLocalRevisions =
+      localRevisions.length < 2
+        ? [...localRevisions]
+        : [...localRevisions].sort(
+            (a, b) => reviewItemPositionRank(a, paragraphOrder) - reviewItemPositionRank(b, paragraphOrder)
+          );
     patched.splice(insertAt, 0, ...orderedLocalRevisions);
   }
   return patched;
@@ -1157,16 +1253,23 @@ function revisionCrossesParagraphBoundary(
 function localReviewPatchParagraphId(
   change: TreeModelChange,
   cache: {
-    revision: number;
+    bodyRevision: number;
+    packageRevision: number;
     commentsPart: OoxmlPart | undefined;
     commentsExtendedPart: OoxmlPart | undefined;
   },
   items: readonly ReviewItem[],
   part: OoxmlPart,
   commentsPart: OoxmlPart | undefined,
-  commentsExtendedPart: OoxmlPart | undefined
+  commentsExtendedPart: OoxmlPart | undefined,
+  currentPackageRevision: number
 ): string | null {
-  if (change.fromRevision !== cache.revision) return null;
+  if (change.fromRevision !== cache.bodyRevision) return null;
+  // Body text-local edits bump package revision by exactly one. A header/footer or package
+  // write can move package revision without moving the body revision — patching against a
+  // queue derived before that would keep stale furniture cards by reference.
+  if (currentPackageRevision !== cache.packageRevision + 1) return null;
+  if (change.story !== undefined && change.story.kind !== 'body') return null;
   if (change.impact !== 'text-local') return null;
   if (change.dirty.length !== 1) return null;
   if (change.created.length > 0 || change.deleted.length > 0 || change.splitJoin.length > 0) {
@@ -1187,6 +1290,43 @@ function localReviewPatchParagraphId(
     if (revisionCrossesParagraphBoundary(item, paragraphId)) return null;
   }
   return paragraphId;
+}
+
+/**
+ * Whether the story contains a comment anchor (`w:commentRangeStart` /
+ * `w:commentReference`), from STORE vocabulary alone.
+ *
+ * Deliberately not `commentAnchorsOfStory`: that is review-model derivation and
+ * lives with the review module. This answers presence only, for
+ * `hasReviewContent`, and must keep answering with no module registered.
+ *
+ * Memoized per immutable node, because `snapshot()` reads `hasReviewContent`
+ * every tick: without the memo a comment-less document paid a full-tree walk
+ * per keystroke (the answer only early-exits when an anchor IS found). An edit
+ * replaces only the nodes on its path, so every untouched subtree answers from
+ * the cache. Depth-capped like the sibling walks — nesting is the cheapest
+ * unbounded axis in an attacker-controlled file.
+ */
+const commentAnchorPresenceCache = new WeakMap<OoxmlElement, boolean>();
+
+function storyCarriesCommentAnchor(node: OoxmlElement, depth = 0): boolean {
+  if (depth > 64) return false;
+  const cached = commentAnchorPresenceCache.get(node);
+  if (cached !== undefined) return cached;
+  let present = false;
+  for (const child of node.children as readonly OoxmlNode[]) {
+    if (child.kind === 'textValue') continue;
+    if (
+      child.kind === 'commentRangeStart' ||
+      child.kind === 'commentReference' ||
+      storyCarriesCommentAnchor(child, depth + 1)
+    ) {
+      present = true;
+      break;
+    }
+  }
+  commentAnchorPresenceCache.set(node, present);
+  return present;
 }
 
 /** The origin a host should use when committing a reconciliation rather than a user edit. */

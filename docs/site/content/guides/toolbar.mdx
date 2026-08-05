@@ -1,11 +1,11 @@
 ---
 title: 'Toolbar'
-description: 'Customize the DOCX editor toolbar: hide the built-in toolbar, brand the title bar, append controls, or rebuild it from compound EditorToolbar parts.'
+description: 'Customize the DOCX editor toolbar: packaged chrome, slot overrides, and composition from DocxEditorToolbar parts.'
 category: 'Guides'
 seoTitle: 'Toolbar customization'
 ---
 
-The built-in toolbar has two levels: a title bar (logo, document name, File / Format / Insert menus, a right-side action slot) and a formatting bar (undo/redo, zoom, styles, fonts, formatting buttons). You can customize it with render props on `<DocxEditor>` or compound components from `/ui`.
+The greenfield adapter ships packaged chrome — title bar, menu bar, and `DocxEditor.Toolbar` — from the root `@docx-editor.dev/react` export. Hide it with `chrome={false}` and compose your own from `DocxEditorToolbar`, `Toolbar`, and hooks, or override individual slots in place.
 
 <ToolbarLayoutDiagram />
 
