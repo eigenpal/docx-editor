@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // What `load(...)` accepts, and what it refuses.
 //
 // Three call shapes, because that is what a batching object model is asked for in practice:

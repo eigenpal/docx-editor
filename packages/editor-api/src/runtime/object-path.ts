@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // How a proxy names the document object it stands for.
 //
 // The host addresses objects by opaque handles it minted, and a handle is DATA in a batch

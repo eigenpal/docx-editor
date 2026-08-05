@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // One paragraph: what it says, what it is, and the ways this slice changes it.
 //
 // IDENTITY IS THE DOCUMENT'S OWN. `uniqueLocalId` is the `w14:paraId` the part carries — the value

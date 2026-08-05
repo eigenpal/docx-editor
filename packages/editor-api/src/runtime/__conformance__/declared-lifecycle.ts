@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // The runtime and its object model, measured against `compat/docxeditor/declarations.ts`.
 //
 // Those declarations were authored by hand, from the published Word API surface, without deriving

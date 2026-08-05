@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // A story: the main body of a document, and everything in it in reading order.
 //
 // ITS PARAGRAPHS ARE THE DOCUMENT'S, NOT THE TOP LEVEL'S. A paragraph inside a table cell — or

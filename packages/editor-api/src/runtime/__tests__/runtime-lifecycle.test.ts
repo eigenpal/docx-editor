@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // The lifecycle the whole object model rests on: queue, one batch, hydrate.
 //
 // Everything a consumer does inside a `run` is a promise about the future — construct a proxy,

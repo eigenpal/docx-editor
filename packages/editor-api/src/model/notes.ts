@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // Footnotes and endnotes: text that belongs to the document but not to its flow.
 //
 // A NOTE IS A STORY. Its body is an ordinary body — paragraphs, formatting, styles, the same

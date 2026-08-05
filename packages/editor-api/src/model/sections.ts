@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // Sections, and the page a section is laid out on.
 //
 // A SECTION IS THE DOCUMENT'S LAYOUT, NOT ITS CONTENT. Everything a caller usually wants from one —

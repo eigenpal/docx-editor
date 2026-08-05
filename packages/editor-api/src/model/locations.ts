@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // The insert locations, and the argument checks every model call starts with.
 //
 // TWO REASONS THIS IS ITS OWN FILE. The first is that "where does this text go" is one vocabulary

@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // The ContentControl object model, as a consumer meets it.
 //
 // Two things are proven here that the protocol tests cannot. The first is that the PROXY behaves

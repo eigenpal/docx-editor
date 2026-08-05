@@ -17,6 +17,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { matchHeadDocBlock } from './head-doc-block.mjs';
 
 /**
  * Resolve the source file behind a subpath's dist `import` path.
@@ -47,7 +48,7 @@ function buildSubpathSrcIndex(packageRoot, packageName) {
   const headerRx = new RegExp(`\\*\\s+(${escapeRegex(packageName)}(?:\\/[\\w/-]+)?)`);
   walkTs(srcRoot, (filePath) => {
     const content = fs.readFileSync(filePath, 'utf8');
-    const block = /^\s*\/\*\*([\s\S]*?)\*\//.exec(content);
+    const block = matchHeadDocBlock(content);
     if (!block) return;
     if (!block[0].includes('@packageDocumentation')) return;
     const header = headerRx.exec(block[0]);
@@ -73,7 +74,7 @@ function walkTs(dir, fn) {
 function readEntryDocBlock(srcPath) {
   if (!srcPath || !fs.existsSync(srcPath)) return '';
   const content = fs.readFileSync(srcPath, 'utf8');
-  const m = /^\s*\/\*\*([\s\S]*?)\*\//.exec(content);
+  const m = matchHeadDocBlock(content);
   if (!m) return '';
   if (!m[0].includes('@packageDocumentation')) return '';
   return m[0];
@@ -87,7 +88,7 @@ function injectIntoDts(dtsAbsPath, block) {
   // tag elsewhere (e.g. inline locale data that tsup hoisted above it)
   // doesn't count, so we still need to prepend the block. Skip only when
   // the head doc-block already carries the tag.
-  const headBlock = /^\s*\/\*\*([\s\S]*?)\*\//.exec(content);
+  const headBlock = matchHeadDocBlock(content);
   if (headBlock && headBlock[0].includes('@packageDocumentation')) return false;
   fs.writeFileSync(dtsAbsPath, `${block}\n${content}`);
   return true;

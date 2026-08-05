@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // The paragraph and range collections: the two whose members are not simply handles.
 //
 // The rules every collection shares — how it addresses itself, what `items` means, how an edge

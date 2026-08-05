@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // The action queue: what a proxy call leaves behind instead of doing something.
 //
 // A queued action is a closure pair — how to say it to the host (`plan`), and what to do with

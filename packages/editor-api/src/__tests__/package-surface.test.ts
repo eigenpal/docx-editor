@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // What this package IS, from the outside.
 //
 // The package used to be four unrelated products sharing a name: a headless reviewer over
@@ -11,7 +16,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 const PACKAGE = join(import.meta.dir, '..', '..');
 const REPO = join(PACKAGE, '..', '..');
@@ -21,6 +26,8 @@ const LEGACY_NAME = '@docx-editor.dev/agents';
 
 interface Manifest {
   readonly name: string;
+  readonly license: string;
+  readonly files: readonly string[];
   readonly exports: Record<string, unknown>;
   readonly typesVersions: Record<string, Record<string, string[]>>;
   readonly scripts: Record<string, string>;
@@ -156,3 +163,45 @@ describe('how the package is built and checked', () => {
     expect(reports).toEqual(['browser.api.md', 'index.api.md']);
   });
 });
+
+describe('the licence this package ships under', () => {
+  test('the manifest names the evaluation licence and the tarball carries its text', () => {
+    // The rest of the repository is Apache 2.0. This package is not, so the manifest and the
+    // shipped file have to say the same thing: an SPDX id a consumer's audit tool reads, and the
+    // text it points at. Shipping `LICENSE` here would ship the terms this package left behind.
+    expect(manifest.license).toBe('LicenseRef-EigenPal-Pro-Evaluation-1.0');
+    expect(manifest.files).toContain('LICENSE.md');
+    expect(manifest.files).not.toContain('LICENSE');
+    expect(existsSync(join(PACKAGE, 'LICENSE.md'))).toBe(true);
+    expect(existsSync(join(PACKAGE, 'LICENSE'))).toBe(false);
+  });
+
+  test('the licence covers this directory, not the one its text was copied from', () => {
+    const text = readFileSync(join(PACKAGE, 'LICENSE.md'), 'utf8');
+    expect(text).toContain('“packages/editor-api/” directory');
+    expect(text).not.toContain('packages/pro/');
+  });
+
+  test('every source file carries the header, and this is the check CI runs', () => {
+    // `license:check` is reached through `check:parity`, which is a pre-commit hook rather than a
+    // CI job, so on its own it is a gate that only fires on the machine that already knows. CI
+    // runs `bun test`.
+    const header = readFileSync(join(PACKAGE, 'license-header.txt'), 'utf8').trim();
+    const banner = `/*\n${header}\n*/\n`;
+    const unlicensed = sourceFiles(join(PACKAGE, 'src'))
+      .filter((file) => !readFileSync(file, 'utf8').startsWith(banner))
+      .map((file) => relative(PACKAGE, file));
+    expect(unlicensed).toEqual([]);
+  });
+});
+
+/** Every `.ts`/`.tsx` file under `directory`, which is exactly the header tool's scope. */
+function sourceFiles(directory: string): string[] {
+  const found: string[] = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const absolute = join(directory, entry.name);
+    if (entry.isDirectory()) found.push(...sourceFiles(absolute));
+    else if (/\.tsx?$/.test(entry.name)) found.push(absolute);
+  }
+  return found;
+}

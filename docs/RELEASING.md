@@ -18,6 +18,8 @@ Releases follow the canonical [`changesets/action@v1`](https://github.com/change
 | `@docx-editor.dev/i18n`       | `packages/i18n`       | ✅ (shared locale JSONs) |
 | `@docx-editor.dev/nuxt`       | `packages/nuxt`       | ✅                       |
 
+Four of the five publish under Apache 2.0. `@docx-editor.dev/editor-api` publishes under the [EigenPal Pro Evaluation License 1.0](../packages/editor-api/LICENSE.md) (`LicenseRef-EigenPal-Pro-Evaluation-1.0` in its manifest, `LICENSE.md` in its tarball), so its releases carry commercial terms that the others do not.
+
 All five packages are in a **fixed group** in `.changeset/config.json` — they always ship the same version. A changeset only needs to declare the bump for one; the others follow automatically. `@docx-editor.dev/i18n` ships the locale JSONs that the React and Vue adapters both consume, so adding a new key to `en.json` only needs a changeset on `@docx-editor.dev/i18n` (the consumers pick it up at build time).
 
 ## Author flow (every contributor, every code PR)

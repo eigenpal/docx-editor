@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // What each published entry actually pulls in, followed the way a bundler follows it.
 //
 // `runtime/__tests__/runtime-boundaries.test.ts` scans this package's OWN lane. That is not the

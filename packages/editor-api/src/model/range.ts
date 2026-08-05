@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // A stretch of a story: two endpoints, each a paragraph and a UTF-16 offset.
 //
 // A RANGE IS A SNAPSHOT, NOT A TRACKED REGION. Its endpoints name the paragraphs they were found in

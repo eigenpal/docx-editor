@@ -51,6 +51,8 @@ See the [Nuxt quick start](#nuxt) below.
 | [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)             | Shared locale strings and types consumed by both adapters.                                                                                                                     | [Docs](https://www.docx-editor.dev/docs/1.x/i18n)       |
 | [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Document automation: a batching object model that drives a document from a server or from an editor already open in a page.                                                    | [Docs](https://www.docx-editor.dev/docs/1.x/editor-api) |
 
+Every package above is Apache 2.0 except `@docx-editor.dev/editor-api`, which is licensed under the [EigenPal Pro Evaluation License 1.0](packages/editor-api/LICENSE.md): free to evaluate, production use requires a commercial agreement — **[licensing@eigenpal.com](mailto:licensing@eigenpal.com)**.
+
 > **Forking the adapter?** Keep your fork thin. Depend on `@docx-editor.dev/core` directly so parser, serializer, and rendering fixes land in your build automatically, without backporting each upstream change by hand.
 
 ## React
@@ -159,6 +161,10 @@ Help translate the editor into your language! See the full **[i18n contribution 
 bun run i18n:new de      # scaffold German locale
 bun run i18n:status      # check translation coverage
 ```
+
+## License
+
+[Apache 2.0](LICENSE), except `packages/editor-api/`, which is licensed under the [EigenPal Pro Evaluation License 1.0](packages/editor-api/LICENSE.md). That licence permits internal, non-production evaluation; production use requires a written commercial agreement, available from **[licensing@eigenpal.com](mailto:licensing@eigenpal.com)**.
 
 ## Commercial Support
 

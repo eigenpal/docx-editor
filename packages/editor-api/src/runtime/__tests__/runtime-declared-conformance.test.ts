@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // The runtime against the declarations, and the generator against the runtime.
 //
 // Task 1 authored `compat/docxeditor/declarations.ts` by hand from the published Word API surface,

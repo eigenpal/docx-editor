@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // The two ways a consumer gets a runtime, over the real core hosts.
 //
 // Everything else in this directory drives `createRuntime` directly, which is right for pinning

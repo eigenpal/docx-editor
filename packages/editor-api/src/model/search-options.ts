@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // How a search is narrowed, and which of those narrowings this engine actually performs.
 //
 // EVERY FLAG IS HONOURED OR REFUSED. A search that accepted `matchWildcards` and quietly did a

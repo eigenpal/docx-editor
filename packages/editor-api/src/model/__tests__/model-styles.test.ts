@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // Paragraph styles through the object model.
 //
 // A STYLE IS NAMED THE WAY A READER NAMES IT. `heading 1` is what the styles gallery shows;

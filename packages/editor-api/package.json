@@ -29,15 +29,18 @@
   "devDependencies": {
     "@docx-editor.dev/core-contract": "workspace:*",
     "@microsoft/api-extractor": "^7.50.0",
-    "fflate": "^0.8.2"
+    "fflate": "^0.8.2",
+    "license-check-and-add": "^4.0.5"
   },
   "files": [
     "dist",
-    "LICENSE"
+    "LICENSE.md"
   ],
   "scripts": {
     "build": "tsup && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/editor-api",
     "typecheck": "tsc --noEmit",
+    "license:check": "license-check-and-add check -f license-check.json",
+    "license:add": "license-check-and-add add -f license-check.json",
     "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/editor-api --local",
     "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/editor-api",
     "pack:smoke": "node scripts/pack-smoke.mjs",
@@ -54,11 +57,11 @@
     "headless"
   ],
   "author": {
-    "name": "Jedr Blaszyk",
-    "email": "jedr@eigenpal.com",
-    "url": "https://github.com/jedrazb"
+    "name": "EigenPal, Inc.",
+    "email": "licensing@eigenpal.com",
+    "url": "https://eigenpal.com"
   },
-  "license": "Apache-2.0",
+  "license": "LicenseRef-EigenPal-Pro-Evaluation-1.0",
   "homepage": "https://docx-editor.dev/",
   "repository": {
     "type": "git",

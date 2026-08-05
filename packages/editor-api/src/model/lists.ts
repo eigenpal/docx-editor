@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // Lists: the numbers a document puts in front of paragraphs.
 //
 // A LIST IS NOT AN ELEMENT. OOXML has no list: it has paragraphs that each name a `w:numId`, and a

@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 /**
  * Orchestration tests for `fetch-office-reference.mjs`'s network-fetch ->
  * verify -> extract -> diff pipeline, with `fetch` injected so no real

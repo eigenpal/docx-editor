@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 // Documents the object-model tests run against, and the runtimes that open them.
 //
 // Real DOCX bytes and the real headless host, never a stub: what these tests are for is that

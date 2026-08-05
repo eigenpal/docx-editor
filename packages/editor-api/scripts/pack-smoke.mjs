@@ -130,7 +130,7 @@ try {
   };
   walk(root);
 
-  const allowed = /^(?:package\.json|LICENSE|README\.md|dist\/)/;
+  const allowed = /^(?:package\.json|LICENSE\.md|README\.md|dist\/)/;
   const strays = shipped.filter((file) => !allowed.test(file));
   check(strays.length === 0, `the tarball ships files it should not: ${strays.join(', ')}`);
   check(
@@ -140,6 +140,12 @@ try {
   check(
     !shipped.some((file) => /(?:^|\/)(?:__tests__|compat|src)\//.test(file)),
     'the tarball ships sources, tests or the compat corpus'
+  );
+  // The licence is a term of use, not a courtesy file: a tarball without it ships code a consumer
+  // has no stated right to run.
+  check(
+    shipped.includes('LICENSE.md'),
+    'the tarball is missing LICENSE.md, so it ships unlicensed to a consumer'
   );
   for (const expected of [
     'dist/index.mjs',
