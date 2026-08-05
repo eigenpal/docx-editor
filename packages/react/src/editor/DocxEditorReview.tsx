@@ -54,6 +54,12 @@ const ReviewItemContext = createContext<ReviewItemView | null>(null);
 
 interface ReviewRailValue {
   readonly review: ReturnType<typeof useReview>;
+  /**
+   * The UNFILTERED queue. The rail's cards render `review.items`, which the `structural`
+   * default and the host's `filter` have already narrowed — but the hover balloon exists
+   * precisely for the items those filters hide, so it matches against everything.
+   */
+  readonly allItems: readonly ReviewItemView[];
   /** Author colour slot per author, by order of first appearance — Word's own rule. */
   readonly authorSlots: ReadonlyMap<string, number>;
   /** Comment items by id, so a card can render its replies without walking the list. */
@@ -126,6 +132,7 @@ const INERT_RAIL: ReviewRailValue = {
     setPaneOpen: () => {},
     ready: false,
   },
+  allItems: [],
   authorSlots: new Map(),
   byId: new Map(),
   measure: () => {},
@@ -443,6 +450,7 @@ function ReviewRoot({
   const value = useMemo<ReviewRailValue>(
     () => ({
       review: { ...review, items },
+      allItems: review.items,
       authorSlots,
       byId,
       measure: observeSlot,
@@ -483,6 +491,9 @@ function ReviewRoot({
       {!open || draftAnchorY === null || composeTop === null
         ? null
         : takeRoot('Draft', <ReviewDraft top={composeTop} />)}
+      {/* Mounted open OR closed: the balloon is how a reader inspects a change whose rail
+          card is filtered away, and a closed pane filters ALL of them away. */}
+      {takeRoot('Hover', <ReviewHover />)}
     </>
   ) : null;
 
@@ -828,6 +839,254 @@ function ReviewDraft({ top, className, hidden }: ReviewPartProps & { top: number
   );
 }
 ReviewDraft.docxReviewPart = 'Draft' as const;
+
+/** What a hovered tracked change tells us before any item matching — straight off its DOM. */
+interface HoverAnchor {
+  readonly revisionId: string;
+  readonly author: string;
+  readonly date?: string;
+  readonly kind?: string;
+  /** Rail-relative CSS px of the hovered element's box. */
+  readonly left: number;
+  readonly top: number;
+  readonly bottom: number;
+  /** True when the balloon opens upward — the target sits low in the window. */
+  readonly above: boolean;
+}
+
+/** Word's own delays, near enough: deliberate hover opens, a passing pointer does not. */
+const HOVER_SHOW_MS = 250;
+const HOVER_HIDE_MS = 200;
+
+/**
+ * The hover balloon: pointing at a tracked change in the PAGE raises its decision card
+ * beside the text — author, what changed, when, and accept/reject where the engine can
+ * resolve it. This is how Word presents a change, and it is what makes hiding noisy card
+ * kinds from the rail safe: the information moves from a permanent column to a gesture.
+ *
+ * Matches the painted element's `data-revision-*` attribution against the UNFILTERED
+ * queue, so it answers for kinds the rail's `structural` default or a host `filter` hid.
+ * An element whose attribution matches nothing (mid-edit staleness) still shows what the
+ * DOM itself carries — author, kind, date — just without actions.
+ *
+ * @public
+ */
+function ReviewHover({ className, hidden }: ReviewPartProps) {
+  const { review, allItems, authorSlots } = useRail();
+  const { t } = useTranslation();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [anchor, setAnchor] = useState<HoverAnchor | null>(null);
+
+  useEffect(() => {
+    const host = rootRef.current;
+    const rail = host?.closest('.docx-review') as HTMLElement | null;
+    // The engine's own scroll-container class first: `offsetParent` needs layout, which a
+    // DOM without a renderer (happy-dom) does not do, and the viewport always carries it.
+    const scroller = (rail?.closest('.docx-editor__scroll-container') ??
+      rail?.offsetParent) as HTMLElement | null;
+    if (!host || !rail || !scroller) return undefined;
+    let showTimer = 0;
+    let hideTimer = 0;
+    let current: HTMLElement | null = null;
+
+    const show = (element: HTMLElement): void => {
+      const railRect = rail.getBoundingClientRect();
+      const rect = element.getBoundingClientRect();
+      const viewportBottom = element.ownerDocument.defaultView?.innerHeight ?? Infinity;
+      setAnchor({
+        revisionId: element.dataset.revisionId!,
+        author: element.dataset.revisionAuthor ?? '',
+        ...(element.dataset.revisionDate !== undefined
+          ? { date: element.dataset.revisionDate }
+          : {}),
+        ...(element.dataset.revisionKind !== undefined
+          ? { kind: element.dataset.revisionKind }
+          : {}),
+        left: rect.left - railRect.left,
+        top: rect.top - railRect.top,
+        bottom: rect.bottom - railRect.top,
+        // Opens upward when there is no room below — a change on the last visible line
+        // would otherwise push its balloon under the fold.
+        above: rect.bottom + 220 > viewportBottom,
+      });
+    };
+
+    const onOver = (event: MouseEvent): void => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      // Travelling INTO the balloon keeps it open — that is how its buttons get clicked.
+      if (host.contains(target)) {
+        window.clearTimeout(hideTimer);
+        return;
+      }
+      const element = target.closest('[data-revision-id]');
+      if (element instanceof HTMLElement && scroller.contains(element)) {
+        window.clearTimeout(hideTimer);
+        if (element === current) return;
+        current = element;
+        window.clearTimeout(showTimer);
+        showTimer = window.setTimeout(() => show(element), HOVER_SHOW_MS);
+      } else {
+        current = null;
+        window.clearTimeout(showTimer);
+        window.clearTimeout(hideTimer);
+        hideTimer = window.setTimeout(() => setAnchor(null), HOVER_HIDE_MS);
+      }
+    };
+    const onLeave = (): void => {
+      current = null;
+      window.clearTimeout(showTimer);
+      window.clearTimeout(hideTimer);
+      hideTimer = window.setTimeout(() => setAnchor(null), HOVER_HIDE_MS);
+    };
+    scroller.addEventListener('mouseover', onOver, true);
+    scroller.addEventListener('mouseleave', onLeave);
+    return () => {
+      window.clearTimeout(showTimer);
+      window.clearTimeout(hideTimer);
+      scroller.removeEventListener('mouseover', onOver, true);
+      scroller.removeEventListener('mouseleave', onLeave);
+    };
+  }, []);
+
+  // The decision the hovered SITE belongs to. Sites coalesce into decisions by the
+  // `(id, author, date)` triple, which is exactly what the painted element carries.
+  const entry = useMemo(() => {
+    if (!anchor) return null;
+    return (
+      allItems.find(
+        (candidate) =>
+          candidate.kind === 'revision' &&
+          candidate.item.kind === 'revision' &&
+          candidate.item.addresses.some(
+            (address) =>
+              address.id === anchor.revisionId &&
+              address.author === anchor.author &&
+              address.date === anchor.date
+          )
+      ) ?? null
+    );
+  }, [allItems, anchor]);
+
+  // Resolving the decision removes it from the queue; the balloon it was resolved from
+  // must not linger over the text the accept just changed.
+  const hadEntry = useRef(false);
+  useEffect(() => {
+    if (entry) {
+      hadEntry.current = true;
+      return;
+    }
+    if (hadEntry.current) {
+      hadEntry.current = false;
+      setAnchor(null);
+    }
+  }, [entry]);
+
+  if (hidden) return null;
+  const fallbackKind =
+    anchor?.kind === 'insert' ||
+    anchor?.kind === 'delete' ||
+    anchor?.kind === 'moveFrom' ||
+    anchor?.kind === 'moveTo' ||
+    anchor?.kind === 'format'
+      ? (anchor.kind as ReviewRevisionKind)
+      : ('structural' as const);
+
+  return (
+    // The wrapper always mounts — it is what the wiring effect climbs from — and carries
+    // no box of its own until there is a balloon to show.
+    <div ref={rootRef} className={`docx-review__hover-root${className ? ` ${className}` : ''}`}>
+      {anchor === null ? null : (
+        <div
+          className="docx-review__hover"
+          data-testid="review-hover"
+          style={{
+            left: anchor.left,
+            top: anchor.above ? anchor.top - 6 : anchor.bottom + 6,
+            transform: anchor.above ? 'translateY(-100%)' : undefined,
+          }}
+          onMouseDown={guardMousedown}
+        >
+          {entry ? (
+            <ReviewItemContext.Provider value={entry}>
+              <div
+                className="docx-review__card"
+                data-testid="review-hover-card"
+                data-kind={entry.revisionKind ?? 'revision'}
+                style={
+                  {
+                    '--doc-review-author': `var(--doc-review-author-${(authorSlots.get(entry.author) ?? 0) % AUTHOR_SLOTS})`,
+                  } as CSSProperties
+                }
+                onClick={() => review.setActive(entry.key)}
+              >
+                <div className="docx-review__head">
+                  <ReviewAvatar />
+                  <div className="docx-review__meta">
+                    <ReviewAuthor />
+                    <ReviewTime />
+                  </div>
+                  {entry.kind === 'revision' && !entry.readOnly ? (
+                    <div className="docx-review__actions">
+                      <ReviewAccept />
+                      <ReviewReject />
+                    </div>
+                  ) : null}
+                </div>
+                <ReviewSummary />
+              </div>
+            </ReviewItemContext.Provider>
+          ) : (
+            <div
+              className="docx-review__card"
+              data-testid="review-hover-card"
+              data-kind={fallbackKind}
+            >
+              <div className="docx-review__head">
+                <span className="docx-review__avatar" aria-hidden="true">
+                  {initialsOf(anchor.author)}
+                </span>
+                <div className="docx-review__meta">
+                  <span className="docx-review__author">
+                    {anchor.author || t('comments.unknown')}
+                  </span>
+                  {anchor.date ? <HoverTime raw={anchor.date} /> : null}
+                </div>
+              </div>
+              <div className="docx-review__summary">
+                <span className="docx-review__label" data-kind={fallbackKind}>
+                  {t(revisionLabelKey(fallbackKind))}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+ReviewHover.docxReviewPart = 'Hover' as const;
+
+/** Initials for the dataset-only fallback, matching the engine's own derivation. */
+function initialsOf(author: string): string {
+  const words = author.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '?';
+  return words
+    .slice(0, 2)
+    .map((word) => word[0]!.toUpperCase())
+    .join('');
+}
+
+/** `ReviewTime` for a raw dataset date, outside any item context. */
+function HoverTime({ raw }: { raw: string }) {
+  const when = new Date(raw);
+  if (Number.isNaN(when.getTime())) return null;
+  return (
+    <time className="docx-review__time" dateTime={raw} title={when.toLocaleString()}>
+      {REVIEW_DATE_FORMAT.format(when)}
+    </time>
+  );
+}
 
 /** Shown when nothing is pending. @public */
 function ReviewEmpty({ className, hidden, children }: ReviewPartProps) {
@@ -1314,6 +1573,8 @@ export interface DocxEditorReviewNamespace {
   readonly AddComment: typeof ReviewAddComment;
   /** The compose box a new comment is written in. */
   readonly Draft: typeof ReviewDraft;
+  /** The Word-style balloon raised by hovering a tracked change in the page. */
+  readonly Hover: typeof ReviewHover;
 }
 
 export const DocxEditorReview: DocxEditorReviewNamespace = Object.assign(ReviewRoot, {
@@ -1331,4 +1592,5 @@ export const DocxEditorReview: DocxEditorReviewNamespace = Object.assign(ReviewR
   Markers: ReviewMarkers,
   AddComment: ReviewAddComment,
   Draft: ReviewDraft,
+  Hover: ReviewHover,
 });

@@ -372,6 +372,13 @@ export interface TableRowFragmentRecord {
   readonly id: string;
   /** Pending tracked row insertion/deletion, when authored in `w:trPr`. */
   readonly revisionKind?: 'insert' | 'delete';
+  /**
+   * The `w:trPr/w:ins|w:del` attribution — the `(id, author, date)` triple the review model
+   * addresses this decision by, so painted rows can carry it the way revision spans do.
+   */
+  readonly revisionId?: string;
+  readonly revisionAuthor?: string;
+  readonly revisionDate?: string;
   /** Authored row ordinal within the table; repeats share the original row's index. */
   readonly rowIndex: number;
   /**
