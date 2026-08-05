@@ -84,11 +84,10 @@ export function useDocumentOutline(): UseDocumentOutlineResult {
       if (!editor || typeof blockId !== 'string' || blockId.length === 0) return;
       // Focus first, so the surface owns the selection it is about to paint.
       editor.focus();
+      // Anchor and head equal is what a caret is, so this collapses the selection at the
+      // start of the heading rather than selecting it.
       const position = { paragraphId: blockId, offset: 0 };
-      // The paragraph-id/offset endpoints are the ONE selection form the tree surface
-      // honours; the declared `EditorSelection` union does not spell it yet, so this casts
-      // exactly the way the facade's own setSelection test does.
-      editor.exec({ type: 'setSelection', range: { anchor: position, head: position } as never });
+      editor.exec({ type: 'setSelection', range: { anchor: position, head: position } });
       editor.scrollToBlock(blockId);
       setSelectedBlockId(blockId);
     },

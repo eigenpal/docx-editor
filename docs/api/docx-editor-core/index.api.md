@@ -1388,9 +1388,8 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         beforePt?: number | null;
         afterPt?: number | null;
     };
-    // (undocumented)
     setSelection: {
-        anchor: EditorPosition;
+        anchor: DocAnchor;
     } | {
         range: EditorSelection;
     };
@@ -1552,7 +1551,7 @@ export interface EditorNoteCommands {
 }
 
 // @public
-export type EditorPosition = DocAnchor | DocLocation | SemanticTarget;
+export type EditorPosition = DocAnchor | SemanticPosition;
 
 // @public
 export interface EditorQueries extends DocQueries {
@@ -1648,10 +1647,10 @@ export type EditorScope = {
 };
 
 // @public
-export type EditorSelection = DocRange | {
-    from: EditorPosition;
-    to: EditorPosition;
-} | SemanticTarget;
+export type EditorSelection = SemanticSelection | {
+    from: DocAnchor;
+    to: DocAnchor;
+};
 
 // @public
 export interface EditorSnapshot {
@@ -2458,6 +2457,22 @@ export interface SemanticIdentity {
     readonly blockId: string;
     // (undocumented)
     readonly storyId: string;
+}
+
+// @public
+export interface SemanticPosition {
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
+// @public
+export interface SemanticSelection {
+    // (undocumented)
+    readonly anchor: SemanticPosition;
+    // (undocumented)
+    readonly head: SemanticPosition;
 }
 
 // @public

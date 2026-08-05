@@ -267,11 +267,47 @@ describe('createDocxEditor', () => {
       range: {
         anchor: { paragraphId: id, offset: 1 },
         head: { paragraphId: id, offset: 4 },
-      } as never,
+      },
     });
     expect(result).toEqual({ ok: true, changed: false });
     expect(editor.query({ type: 'selectedText' })).toBe('ell');
     expect(editor.surface!.selectedText()).toBe('ell');
+  });
+
+  test('every setSelection form the contract types is a form can() accepts', () => {
+    // The contract used to type a `SemanticTarget` the gate refuses and omit the paragraph-id
+    // pair it honours, so both adapter call sites cast `as never` to reach the working form.
+    // A type that admits what the gate rejects is not checkable by the compiler alone; this
+    // is the runtime half, and `consumer.test-d.ts` is the compile-time half.
+    const { editor } = mount(p('hello'));
+    const [first] = editor.surface!.session.paragraphIds();
+    const paraId = (editor.snapshot().selection?.from as { paraId?: string } | undefined)?.paraId;
+    expect(paraId).toMatch(/^[0-9A-F]{8}$/);
+
+    expect(
+      editor.can({
+        type: 'setSelection',
+        range: {
+          anchor: { paragraphId: first!, offset: 0 },
+          head: { paragraphId: first!, offset: 2 },
+        },
+      })
+    ).toEqual({ ok: true });
+    expect(editor.can({ type: 'setSelection', anchor: { paraId: paraId! } })).toEqual({ ok: true });
+    expect(
+      editor.can({
+        type: 'setSelection',
+        range: { from: { paraId: paraId! }, to: { paraId: paraId! } },
+      })
+    ).toEqual({ ok: true });
+
+    // And the arms the contract dropped are still refused, so removing them narrowed the
+    // type to what was already true rather than removing capability.
+    const refused = editor.can({
+      type: 'setSelection',
+      range: { from: { path: [0] }, to: { path: [0] } },
+    } as never);
+    expect(refused.ok).toBe(false);
   });
 
   test('load() with new bytes replaces the document', () => {
