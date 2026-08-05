@@ -1111,7 +1111,9 @@
     "reply": null,
     "replyRefused": null,
     "showPane": null,
-    "structural": null
+    "structural": null,
+    "deleteComment": null,
+    "discardChange": null
   },
   "imageAltText": {
     "description": null,

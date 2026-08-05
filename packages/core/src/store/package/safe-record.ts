@@ -5,9 +5,16 @@
 // `constructor`) is rejected recursively — a file can never assign into a shared
 // prototype via an XML-attribute-name -> object-key path.
 
+/**
+ * Keys that must never be assigned from file data.
+ *
+ * XML attribute names become object keys, and a document controls those names — assigning
+ * `__proto__` into an ordinary object is the prototype-pollution hazard this engine audits for.
+ */
 export const DANGEROUS_KEYS: readonly string[] = ['__proto__', 'prototype', 'constructor'];
 const DANGEROUS = new Set(DANGEROUS_KEYS);
 
+/** A file-derived key that would pollute a prototype. Refused, never sanitized-and-accepted. */
 export class DangerousKeyError extends Error {
   constructor(
     readonly key: string,
@@ -18,6 +25,7 @@ export class DangerousKeyError extends Error {
   }
 }
 
+/** Whether a key is one of {@link DANGEROUS_KEYS}. */
 export function isDangerousKey(key: string): boolean {
   return DANGEROUS.has(key);
 }

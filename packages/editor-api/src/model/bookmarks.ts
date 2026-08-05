@@ -33,6 +33,20 @@ import { selectionMode, type SelectionMode } from './locations.ts';
 import { ModelObject } from './model-object.ts';
 import { Range } from './range.ts';
 
+/**
+ * A name a document gives to a stretch of itself.
+ *
+ * A bookmark IS its name. OOXML writes it as a pair of markers around the text, and the name is
+ * the only thing identifying it — so this object is a name plus the range those markers currently
+ * enclose. A bookmark whose markers left with the text they surrounded refuses rather than
+ * answering where they used to be.
+ *
+ * `start`, `end` and `delete` are absent by design: the first two are document-wide character
+ * offsets, the coordinate space this API does not maintain, and `delete` would have to remove a
+ * marker pair, which the canonical write path does not offer.
+ *
+ * @public
+ */
 export class Bookmark extends ModelObject implements PromisedItem {
   #range: Range | undefined;
 
@@ -51,13 +65,13 @@ export class Bookmark extends ModelObject implements PromisedItem {
     super(context, path, { nullable });
   }
 
-  /** @internal */
+  /** @internal Bind this object to the address the owning read answered. */
   hydrateAddress(address: ObjectAddress): void {
     if (address.kind === 'handle') this.path.resolveTo(address.handle);
     else this.path.resolveNull();
   }
 
-  /** @internal */
+  /** @internal Settle as the null object: the read found nothing to name. */
   hydrateNull(): void {
     this.path.resolveNull();
   }
@@ -99,6 +113,7 @@ export class Bookmark extends ModelObject implements PromisedItem {
     found.select(mode);
   }
 
+  /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     if (!this.selection(request, ['name']).includes('name')) return;
     const label = `${this.path.label}.name`;
@@ -131,6 +146,14 @@ export class Bookmark extends ModelObject implements PromisedItem {
   }
 }
 
+/**
+ * The bookmarks of a story or a range, as of the batch that loaded them.
+ *
+ * Like every collection here, `items` is the LOADED answer rather than a live view: bookmarks
+ * added after the load are not in it, and reaching them means loading again.
+ *
+ * @public
+ */
 export class BookmarkCollection extends HandleCollection<Bookmark> {
   readonly #plan: () => AutomationOperation;
 
@@ -149,14 +172,17 @@ export class BookmarkCollection extends HandleCollection<Bookmark> {
     this.#plan = plan;
   }
 
+  /** @internal The read that answers this collection's members. */
   protected listing(): AutomationOperation {
     return this.#plan();
   }
 
+  /** @internal Build one member from an address the listing answered. */
   protected itemAt(label: string, address: ObjectAddress): Bookmark {
     return Bookmark.at(this.context, label, address);
   }
 
+  /** @internal A member an edge accessor named before the sync that finds it. */
   protected promised(label: string, nullable: boolean): Bookmark & PromisedItem {
     return Bookmark.promised(this.context, label, nullable);
   }

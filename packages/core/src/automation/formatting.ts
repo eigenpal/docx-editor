@@ -98,6 +98,13 @@ export interface AutomationParagraphFormatRead {
   readonly widowControl: boolean | null;
 }
 
+/**
+ * A paragraph-property write. Every field optional; omitted means "leave alone".
+ *
+ * Deliberately ONE request covering style and spacing together, because both rewrite `w:pPr` —
+ * two ops naming the same paragraph in one batch are refused, since the second would carry
+ * properties the first had already replaced.
+ */
 export interface AutomationParagraphFormatWrite {
   readonly alignment?: AutomationAlignment;
   /**

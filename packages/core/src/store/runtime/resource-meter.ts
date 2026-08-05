@@ -9,9 +9,17 @@
 import { BoundedCounter } from './counter.ts';
 import { HARD_CEILINGS, DEFAULT_LIMITS, type ResourceLimits } from './limits.ts';
 
+/** What a limit counts. Typed so a byte cap and a depth cap cannot be compared by accident. */
 export type LimitUnit = 'bytes' | 'count' | 'depth' | 'ratio' | 'passes';
+/**
+ * Where a limit is enforced.
+ *
+ * Declared per limit so enforcement happens at the boundary that can still refuse cheaply — a zip
+ * cap checked during layout has already let the bomb decompress.
+ */
 export type EnforcementPhase = 'package-read' | 'xml-parse' | 'layout' | 'output';
 
+/** One limit's unit and enforcement phase — the metadata that makes limits testable uniformly. */
 export interface LimitSpec {
   readonly unit: LimitUnit;
   readonly phase: EnforcementPhase;
@@ -30,6 +38,7 @@ export const LIMIT_SPECS: Readonly<Record<keyof ResourceLimits, LimitSpec>> = Ob
   maxQueueDepth: { unit: 'count', phase: 'output' },
 });
 
+/** Every limit name, for iterating the specs and asserting each has a unit and phase. */
 export const LIMIT_KEYS = Object.keys(LIMIT_SPECS) as (keyof ResourceLimits)[];
 
 /** A phase-scoped overflow-safe counter for one limit. */

@@ -31,7 +31,7 @@ import { useDocxEditor } from '../context';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import { MenuContext, type MenuContextValue } from '../menu/menu-context';
 import { focusBy, focusEdge, panelItems } from '../menu/menu-keyboard';
-import { MenuItem, MenuRow, MenuSeparator, MenuSubmenu } from '../menu/parts';
+import { MenuGroup, MenuItem, MenuRow, MenuSeparator, MenuSubmenu } from '../menu/parts';
 import { ContextMenuContext, type ContextMenuAnchor } from './contextmenu-context';
 import {
   ContextMenuCopy,
@@ -518,6 +518,8 @@ export interface DocxEditorContextMenuNamespace {
   readonly Slot: typeof MenuItem;
   /** Bare row presentation, for a host building something the parts do not cover. */
   readonly Row: typeof MenuRow;
+  /** A named section of rows: a visible heading plus a real ARIA group. */
+  readonly Group: typeof MenuGroup;
   readonly Separator: typeof MenuSeparator;
   readonly Submenu: typeof MenuSubmenu;
 }
@@ -541,6 +543,7 @@ export const ContextMenu: DocxEditorContextMenuNamespace = Object.assign(DocxEdi
   Item: ContextMenuItem,
   Slot: MenuItem,
   Row: MenuRow,
+  Group: MenuGroup,
   Separator: MenuSeparator,
   Submenu: MenuSubmenu,
 });

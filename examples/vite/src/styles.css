@@ -337,3 +337,10 @@
 
 /* PRO custom-node chip styling now comes from `CustomNodeChrome`
    (@docx-editor.dev/pro/react) — definition-driven, injected at runtime. */
+
+/* The review CARD, through the rail's `card` prop — the box, not the column around it.
+   A custom node's card also carries `data-node-name`, so a definition's own cards can be
+   picked out without the host inspecting their children to work out which is which. */
+.demo-review-card[data-node-name='citation'] {
+  border-left: 3px solid #7c3aed;
+}

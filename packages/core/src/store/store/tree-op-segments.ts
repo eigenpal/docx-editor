@@ -118,6 +118,12 @@ export interface ParagraphOffsetIndex {
  */
 const offsetIndexCache = new WeakMap<OoxmlParagraphNode, ParagraphOffsetIndex>();
 
+/**
+ * THE paragraph offset authority: maps a paragraph's UTF-16 offsets to the nodes holding them.
+ *
+ * One authority on purpose. An atomic field spans many nodes but is ONE unit to an offset, and a
+ * second implementation that disagreed would place edits inside content that cannot be split.
+ */
 export function paragraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOffsetIndex {
   const cached = offsetIndexCache.get(paragraph);
   if (cached) return cached;

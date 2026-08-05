@@ -19,6 +19,12 @@ import type {
 import type { TableBorderStyle } from '../table-border-style.ts';
 
 /** JSON-safe color input carried on table cell property ops. Theme/auto require a validated literal. */
+/**
+ * A colour as an op carries it: a literal, a theme reference, or automatic.
+ *
+ * Theme references stay references so the document keeps following its theme; flattening one to
+ * hex at write time would freeze the resolved value into the file.
+ */
 export type TreeDocColorValue =
   | { readonly kind: 'hex'; readonly value: string }
   | {
@@ -31,6 +37,7 @@ export type TreeDocColorValue =
   | { readonly kind: 'auto'; readonly resolvedHex: string };
 
 /** Which cell edges a selected-cell border op targets. */
+/** Which edges a border op addresses — the four sides, the interiors, all, or clear. */
 export type TableBorderTarget =
   | 'all'
   | 'outside'
@@ -42,9 +49,11 @@ export type TableBorderTarget =
   | 'right';
 
 /** Concrete edge scopes that apply or clear a complete border spec. */
+/** A {@link TableBorderTarget} that draws something — everything except clear. */
 export type TableBorderEdgeTarget = Exclude<TableBorderTarget, 'none'>;
 
 /** Complete border spec for non-`none` selected-cell border scopes. Size is in eighths of a point. */
+/** A complete border spec: style, width and colour. Ops carry all three, never a partial edit. */
 export interface TableBorderSpecInput {
   readonly style: TableBorderStyle;
   readonly size: number;
@@ -109,6 +118,12 @@ export type AcceptedParagraphProperty = (typeof ACCEPTED_PARAGRAPH_PROPERTIES)[n
  * the tree holds, so an op maps to nodes without a lossy intermediate vocabulary. Attribute
  * VALUES are validated as XML text; their meaning is the resolver's business.
  */
+/**
+ * One property an op writes, as a name plus attributes.
+ *
+ * Deliberately structural rather than a typed union: the accepted property lists bound WHICH
+ * properties may be written, so the shape itself does not need to enumerate them.
+ */
 export interface OoxmlProperty {
   readonly localName: string;
   readonly attributes?: Readonly<Record<string, string>>;
@@ -121,6 +136,12 @@ export interface OoxmlProperty {
  * distinct revisions; and one logical revision — a tracked row insertion — is deliberately
  * many elements sharing an id, which a uniqueness rule could not express at all.
  */
+/**
+ * How a tracked change is addressed: its numeric id plus the PART it lives in.
+ *
+ * Both, always — `@w:id` is unique only within a part, so an id alone names two revisions in any
+ * package with a header or a comments part.
+ */
 export interface RevisionAddress {
   readonly id: string;
   readonly author: string;
@@ -129,12 +150,21 @@ export interface RevisionAddress {
 }
 
 /** Who a tracked edit is attributed to. `CT_TrackChange` requires an author. */
+/** The author and timestamp a tracked edit is recorded under. */
 export interface RevisionAttributionInput {
   readonly author: string;
   /** ISO-8601. Omitted writes no `@w:date`. */
   readonly date?: string;
 }
 
+/**
+ * Every mutation the store accepts, as one JSON-safe discriminated union.
+ *
+ * The ONLY write path into a document. Each op addresses nodes by id plus UTF-16 offset, which is
+ * what makes editing a paragraph inside a table cell no different from editing one at the top
+ * level. Declarative and serializable, so the same op crosses a worker or transport boundary
+ * unchanged.
+ */
 export type TreeDocOp =
   | {
       /**
@@ -852,8 +882,10 @@ export type DrawingTreeDocOp = Extract<
   }
 >;
 
+/** Just the `op` discriminants, for dispatch tables and validation. */
 export type TreeDocOpKind = TreeDocOp['op'];
 
+/** Every {@link TreeDocOpKind}, for validation and exhaustiveness checks. */
 export const TREE_DOC_OP_KINDS = [
   'insertText',
   'deleteText',
@@ -939,8 +971,19 @@ void _treeOpsExhaustive;
  * repaginate everything after it; `global` invalidates every page that shares the
  * edited story (header/footer parts attached to many sections/pages).
  */
+/**
+ * How far an op's effects reach — what layout must re-do after it.
+ *
+ * The knob incremental layout turns: a `text-local` edit re-breaks one paragraph, while a
+ * `global` one invalidates the document.
+ */
 export type ImpactClass = 'text-local' | 'paragraph-local' | 'flow-structural' | 'global';
 
+/**
+ * What one applied op changed: the ids dirtied, created and deleted.
+ *
+ * These ids are what let layout and paint re-do only what moved instead of the whole document.
+ */
 export interface TreeOpEffect {
   readonly dirty: readonly string[];
   readonly created: readonly string[];
@@ -960,6 +1003,12 @@ export interface TreeOpCaret {
   readonly paragraphId: string;
 }
 
+/**
+ * Why an op was refused.
+ *
+ * `not-adjacent-siblings` is the notable one: a join across table cells is refused rather than
+ * silently merging content out of the cell that owned it.
+ */
 export type TreeOpRejection =
   | 'unknown-op'
   | 'unknown-paragraph'
@@ -1043,6 +1092,7 @@ export type TreeOpRejection =
   /** Hyperlink target creation or change needs an OPC relationship in a package transaction. */
   | 'packageTransactionRequired';
 
+/** Whether an op applied, with the effect it produced or the reason it was refused. */
 export type TreeOpResult =
   | { readonly ok: true; readonly part: OoxmlPart; readonly effect: TreeOpEffect }
   | { readonly ok: false; readonly reason: TreeOpRejection; readonly detail?: string };

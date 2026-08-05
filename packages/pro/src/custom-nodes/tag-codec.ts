@@ -21,6 +21,15 @@ export const MAX_TAG_LENGTH = 64;
 
 const FORBIDDEN_ATTR_NAMES = new Set(['__proto__', 'constructor', 'prototype']);
 
+/**
+ * What {@link encodeCustomNodeTag} answers: the encoded tag, or a refusal.
+ *
+ * The only refusal is `tag-overflow`. Word stores at most {@link MAX_TAG_LENGTH} characters in
+ * `w:tag`, and truncating would silently change a node's IDENTITY, so an oversized payload is
+ * reported with its `length` rather than trimmed.
+ *
+ * @public
+ */
 export type EncodeTagResult =
   | { readonly ok: true; readonly tag: string }
   | { readonly ok: false; readonly reason: 'tag-overflow'; readonly length: number };
@@ -39,9 +48,21 @@ export function encodeCustomNodeTag(
   return { ok: true, tag };
 }
 
+/**
+ * A `w:tag` value parsed back into the identity it encodes.
+ *
+ * Everything here comes from a file an attacker fully controls. `attrs` is a null-prototype
+ * object and the decoder refuses the prototype-polluting names outright, but the VALUES are still
+ * untrusted: never build DOM, URLs or CSS from them without sanitizing.
+ *
+ * @public
+ */
 export interface DecodedCustomNodeTag {
+  /** The prefix segment — which definition claims this node. */
   readonly prefix: string;
+  /** The node type name, matching a {@link CustomNodeDefinition.name}. */
   readonly name: string;
+  /** Query-string attrs, on a null-prototype object. Untrusted file input. */
   readonly attrs: Readonly<Record<string, string>>;
 }
 

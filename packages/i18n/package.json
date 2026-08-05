@@ -66,7 +66,9 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "!dist/metafile-*.json",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
     "build": "tsup && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/i18n",

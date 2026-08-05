@@ -16,6 +16,15 @@ import type { FontConfigurationFragment, FontResolver } from './font-composition
 import type { PaginatedSurface } from './paginated-surface.ts';
 import type { HyperlinkActivation } from './surface-navigation.ts';
 
+/**
+ * Everything {@link createDocxEditor} accepts. Every field is optional.
+ *
+ * `container` is the one that changes the shape of the whole lifecycle: omitting it produces an
+ * instance that does no DOM work until `attach(el)`, which is what lets a provider own the editor
+ * before any component has rendered a mount point.
+ *
+ * @public
+ */
 export interface DocxEditorConfig {
   /**
    * The element the paginated surface mounts into. The surface owns this subtree.

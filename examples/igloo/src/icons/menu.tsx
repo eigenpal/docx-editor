@@ -57,6 +57,33 @@ export const IceCarve = (
   </Frost>
 );
 
+/** Iceberg: the tip above a dashed waterline, and the bulk under it. */
+export const IceBerg = (
+  <Frost>
+    <path d="M11 3 15 9H7z" />
+    <path d="M7 9h8l3 10H4z" />
+    <path d="M2 9h20" strokeDasharray="2.5 2" />
+  </Frost>
+);
+
+/** Igloo: the dome with its tunnel. */
+export const IceDome = (
+  <Frost>
+    <path d="M3 17a9 9 0 0 1 18 0z" />
+    <path d="M9.5 17v-3.5a2.5 2.5 0 0 1 5 0V17" />
+    <path d="M3 17h18M6 12h12" />
+  </Frost>
+);
+
+/** Whatever the water gives you: a die, thrown. */
+export const IceLottery = (
+  <Frost>
+    <path d="M5 6.5 12 3l7 3.5v9L12 19l-7-3.5z" />
+    <circle cx="9.5" cy="9.5" r="0.9" />
+    <circle cx="14.5" cy="12.5" r="0.9" />
+  </Frost>
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Menu-bar trigger icons
 // ─────────────────────────────────────────────────────────────────────────────
@@ -84,31 +111,35 @@ function Trigger({ children }: { children: ReactNode }) {
   );
 }
 
-/** Expedition (File): a flag planted on a summit. */
-export const IceExpedition = (
+// Named for the MENU each one sits on, not for a theme word. The bar keeps File, Format,
+// Insert and Help — a menu bar is navigation, and those four names are the one part of an
+// editor a user arrives already knowing. The glyph is where the theme goes.
+
+/** File: a flag planted on a summit. */
+export const IceFile = (
   <Trigger>
     <path d="M7 21V4l10 3-10 3" />
     <path d="M4 21h9" />
   </Trigger>
 );
 
-/** Sculpt (Format): a chisel edge over a shaped block. */
-export const IceSculpt = (
+/** Format: a chisel edge over a shaped block. */
+export const IceFormat = (
   <Trigger>
     <path d="m14 4 6 6-9 9H5v-6z" />
     <path d="M3 21h18" />
   </Trigger>
 );
 
-/** Deposit (Insert): something dropping into a layer. */
-export const IceDeposit = (
+/** Insert: something dropping into a layer. */
+export const IceInsert = (
   <Trigger>
     <path d="M12 3v10M8.5 9.5 12 13l3.5-3.5" />
     <path d="M4 17h16v4H4z" />
   </Trigger>
 );
 
-/** Survival guide (Help): a field manual. */
+/** Help: a field manual. */
 export const IceGuide = (
   <Trigger>
     <path d="M5 4h11a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2z" />

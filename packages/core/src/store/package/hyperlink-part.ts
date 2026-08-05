@@ -38,6 +38,7 @@ const RELS_CONTENT_TYPE = 'application/vnd.openxmlformats-package.relationships+
  */
 const MAX_TARGET_LENGTH = 2048;
 
+/** The package with a hyperlink relationship guaranteed present, and that relationship's id. */
 export interface EnsuredHyperlinkRelationship {
   readonly pkg: OoxmlPackage;
   readonly relationshipId: string;

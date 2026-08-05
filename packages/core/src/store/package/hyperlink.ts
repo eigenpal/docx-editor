@@ -52,6 +52,12 @@ export type RelationshipTargetResolver = (relationshipId: string) => {
   readonly sinkSafe?: boolean;
 } | null;
 
+/**
+ * What a hyperlink points at, which decides what activating it may do.
+ *
+ * The security-relevant split: an `external` link goes through `sanitizeHref` and opens only on
+ * explicit user action, while an anchor merely scrolls and never navigates.
+ */
 export type HyperlinkKind =
   /** `r:id` → a relationship with `TargetMode="External"`. Opens somewhere else. */
   | 'external'
@@ -65,6 +71,7 @@ export type HyperlinkKind =
    */
   | 'unresolved';
 
+/** A resolved hyperlink: its kind, its target, and the tooltip Word shows on hover. */
 export interface HyperlinkTarget {
   readonly kind: HyperlinkKind;
   /**

@@ -26,11 +26,19 @@ import type { Node as PMNode } from 'prosemirror-model';
 import { treeSchema } from './tree-schema.ts';
 import type { TreeDocxSession } from './tree-session.ts';
 
+/** How a tree surface is mounted. */
 export interface TreeSurfaceOptions {
   /** Called after every commit or refusal, so a host can show revision and rejection state. */
   readonly onChange?: (state: TreeSurfaceState) => void;
 }
 
+/**
+ * Everything observable about a mounted tree surface.
+ *
+ * `lastRejection` is part of the state rather than a thrown error because a refused edit is an
+ * ordinary outcome here — the binding refuses anything it cannot explain, and the host shows why
+ * instead of the edit vanishing.
+ */
 export interface TreeSurfaceState {
   readonly revision: number;
   readonly canUndo: boolean;
@@ -39,6 +47,13 @@ export interface TreeSurfaceState {
   readonly lastRejection: string | null;
 }
 
+/**
+ * A mounted ProseMirror view bound to a {@link TreeDocxSession}.
+ *
+ * Every committed transaction becomes tree ops through the binding; a transaction the binding
+ * cannot explain is refused and reported through {@link TreeSurfaceState.lastRejection}, leaving
+ * the tree untouched.
+ */
 export interface TreeSurface {
   readonly view: EditorView;
   state(): TreeSurfaceState;
@@ -60,6 +75,15 @@ function toggledProps(
   return [...without, attributes ? { localName, attributes } : { localName }];
 }
 
+/**
+ * Mount an editable ProseMirror view over a session's body story.
+ *
+ * The reference binding, not the production surface — `mountPaginatedSurface` is what the shipped
+ * editor uses. This one exists to exercise the tree↔ProseMirror contract directly, without
+ * pagination or painting in the way.
+ *
+ * Call {@link TreeSurface.destroy} to release the view.
+ */
 export function mountTreeSurface(
   mount: HTMLElement,
   session: TreeDocxSession,

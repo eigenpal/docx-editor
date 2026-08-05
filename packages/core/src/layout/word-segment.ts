@@ -3,12 +3,23 @@
 
 import { segmentGraphemes, utf16OffsetToGrapheme, type GraphemeSegment } from './grapheme.ts';
 
+/**
+ * One word-segmentation span. `wordLike` separates words from the whitespace and punctuation
+ * between them, which is what double-click selection needs to skip.
+ */
 export interface WordSegment {
   readonly utf16From: number;
   readonly utf16To: number;
   readonly wordLike: boolean;
 }
 
+/**
+ * The replaceable word-segmentation strategy.
+ *
+ * Falls back to a BOUNDED grapheme-safe splitter where `Intl.Segmenter` is absent — bounded
+ * because the input is file-derived, and grapheme-safe so a fallback never splits inside an
+ * emoji.
+ */
 export interface WordBoundary {
   segment(text: string): readonly WordSegment[];
 }
@@ -27,6 +38,7 @@ type IntlWordSegmenterCtor = new (
   options?: { granularity: 'word' }
 ) => { segment(input: string): Iterable<IntlWordSegment> };
 
+/** Whether this runtime provides word-granularity `Intl.Segmenter`. */
 export function isIntlWordSegmenterAvailable(): boolean {
   return typeof (Intl as unknown as { Segmenter?: IntlWordSegmenterCtor }).Segmenter === 'function';
 }
@@ -119,6 +131,7 @@ export function createBoundedFallbackWordBoundary(): WordBoundary {
   return { segment: boundedFallbackWordSegments };
 }
 
+/** Injection points for {@link createDefaultWordBoundary}, so tests can force either path. */
 export interface WordBoundaryResolverDeps {
   readonly isIntlAvailable?: () => boolean;
   readonly createIntlBoundary?: () => WordBoundary;
@@ -146,6 +159,7 @@ export function resolveDefaultWordBoundary(): WordBoundary {
   return resolvedProductionBoundary;
 }
 
+/** Split text into word segments through the given boundary, or the resolved default. */
 export function segmentWords(
   text: string,
   boundary: WordBoundary = resolveDefaultWordBoundary()
@@ -153,6 +167,12 @@ export function segmentWords(
   return boundary.segment(text);
 }
 
+/**
+ * A word span expressed in GRAPHEME offsets rather than UTF-16 ones.
+ *
+ * What selection actually uses: a range whose ends are UTF-16 offsets could land inside a
+ * grapheme, and selecting half an emoji is not a word.
+ */
 export interface GraphemeWordSegmentRecord {
   readonly graphemeFrom: number;
   readonly graphemeTo: number;

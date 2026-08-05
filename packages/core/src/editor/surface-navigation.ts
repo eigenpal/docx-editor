@@ -55,6 +55,13 @@ export interface NavigationDeps {
   readonly onPopover?: (activation: HyperlinkActivation) => void;
 }
 
+/**
+ * Moving the caret and the viewport: to a position, to a bookmark, or out to an external target.
+ *
+ * {@link SurfaceNavigation.openExternal} is THE external-activation call site, and it refuses
+ * anything but an already-sanitized href. Routing an authored target through some other path is
+ * how a document gets to choose where a click goes.
+ */
 export interface SurfaceNavigation {
   /** Snap to a semantic position using layout geometry, then place the caret there. */
   goToPosition(position: { paragraphId: string; offset: number }): boolean;

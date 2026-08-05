@@ -42,11 +42,19 @@ export interface CaretGeometry {
   readonly pageIndex: number;
 }
 
+/**
+ * A selection as two semantic positions — never as DOM nodes.
+ *
+ * `anchor` is where the selection started and `head` is where it currently ends, so `head` before
+ * `anchor` is an ordinary backwards selection rather than an error. Collapsed when the two are
+ * equal, which is what a caret is.
+ */
 export interface SemanticSelection {
   readonly anchor: SemanticPosition;
   readonly head: SemanticPosition;
 }
 
+/** One painted selection rectangle, in page-relative layout points. */
 export interface SelectionRect {
   readonly pageIndex: number;
   readonly x: number;
@@ -134,7 +142,7 @@ function xWithinLine(
     if (offset === drawing.start) return drawing.advanceStart;
     if (offset === drawing.start + 1) return drawing.advanceEnd;
   }
-  let x = line.box.x;
+  let x = line.contentX;
   for (const span of line.spans) {
     if (offset <= span.range.start) return span.box.x;
     if (offset >= span.range.end) {
@@ -347,6 +355,12 @@ export function caretStopsForBlocks(
   return stops;
 }
 
+/**
+ * How caret geometry is resolved.
+ *
+ * `preferPage` disambiguates a paragraph that paints on SEVERAL pages — a shared header appears
+ * once per page, and without a preference the caret could be placed on any of its copies.
+ */
 export interface CaretAtOptions {
   readonly measurer?: TextMeasurer;
   /**
@@ -632,6 +646,12 @@ function orderPositions(
   return { from: selection.head, to: selection.anchor };
 }
 
+/**
+ * One caret movement, in Word's own vocabulary.
+ *
+ * Visual rather than logical where the two differ: `left` means left on screen, which in
+ * right-to-left text is forward through the string.
+ */
 export type NavigationCommand =
   | 'left'
   | 'right'
@@ -721,6 +741,13 @@ export function wordBoundary(text: string, offset: number, direction: -1 | 1): n
   return index;
 }
 
+/**
+ * How a caret move resolves.
+ *
+ * Story-scoped stops are REQUIRED when navigating inside an open header or footer: the body's
+ * stops describe a different story, and moving through them would walk the caret out of the
+ * furniture the user is editing.
+ */
 export interface MoveCaretOptions {
   /**
    * Precomputed stops for the active story. Open header/footer navigation MUST pass

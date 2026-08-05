@@ -88,6 +88,23 @@ const LOCKS: ReadonlySet<string> = new Set([
 /** Longest tag or title this API writes, so a caller cannot ask for an unbounded attribute. */
 const MAX_METADATA = 4_096;
 
+/**
+ * A part of a document a template marked as a field.
+ *
+ * A control is NOT its `w:id`. The attribute is optional in OOXML and unique nowhere, so a
+ * document may hold one control with no id and two with the same one. This object is addressed by
+ * an opaque host-minted handle instead, and {@link ContentControl.id} is answered as METADATA — a
+ * label the file wrote, empty where it wrote none. `getById` still exists, because a template
+ * author knows their own numbering, and it answers the first match in document order rather than
+ * refusing.
+ *
+ * A control's contents are not its value. `text` reads the characters; `setValue` writes in the
+ * vocabulary the control's own type accepts — a declared item for a dropdown, an ISO date for a
+ * date picker, a state for a checkbox — because writing `"true"` into a checkbox's runs would
+ * produce a document whose glyph and whose `w14:checked` disagree.
+ *
+ * @public
+ */
 export class ContentControl extends ModelObject implements PromisedItem {
   readonly #range = new Map<AutomationContentControlRangeLocation, Range>();
   #paragraphs: ParagraphCollection | undefined;
@@ -108,13 +125,13 @@ export class ContentControl extends ModelObject implements PromisedItem {
     super(context, path, { nullable });
   }
 
-  /** @internal */
+  /** @internal Bind this object to the address the owning read answered. */
   hydrateAddress(address: ObjectAddress): void {
     if (address.kind === 'handle') this.path.resolveTo(address.handle);
     else this.path.resolveNull();
   }
 
-  /** @internal */
+  /** @internal Settle as the null object: the read found nothing to name. */
   hydrateNull(): void {
     this.path.resolveNull();
   }
@@ -299,6 +316,7 @@ export class ContentControl extends ModelObject implements PromisedItem {
     this.command('delete', () => ({ op: 'deleteContentControl', contentControl, keepContent }));
   }
 
+  /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     const selected = this.selection(request, [
       'id',
@@ -416,6 +434,14 @@ type ContentControlScope =
   | { readonly body: AutomationHandle }
   | { readonly contentControl: AutomationHandle };
 
+/**
+ * The content controls of a document, story or range, as of the batch that loaded them.
+ *
+ * `getById` answers the first match in document order, because `w:id` is optional in OOXML and
+ * unique nowhere — see {@link ContentControl} for why choosing predictably beats refusing.
+ *
+ * @public
+ */
 export class ContentControlCollection extends HandleCollection<ContentControl> {
   readonly #scope: ContentControlScope;
   readonly #plan: () => AutomationOperation;
@@ -503,14 +529,17 @@ export class ContentControlCollection extends HandleCollection<ContentControl> {
     );
   }
 
+  /** @internal The read that answers this collection's members. */
   protected listing(): AutomationOperation {
     return this.#plan();
   }
 
+  /** @internal Build one member from an address the listing answered. */
   protected itemAt(label: string, address: ObjectAddress): ContentControl {
     return ContentControl.at(this.context, label, address);
   }
 
+  /** @internal A member an edge accessor named before the sync that finds it. */
   protected promised(label: string, nullable: boolean): ContentControl & PromisedItem {
     return ContentControl.promised(this.context, label, nullable);
   }

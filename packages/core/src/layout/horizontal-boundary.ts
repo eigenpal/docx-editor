@@ -16,6 +16,13 @@ export function shapedHorizontalBoundaries(run: ShapedRun): readonly number[] {
   return [...grapheme].filter((offset) => clusters.has(offset)).sort((left, right) => left - right);
 }
 
+/**
+ * Whether an offset is a real caret position: both a grapheme boundary and a shaped cluster edge.
+ *
+ * Both conditions, because they disagree. A ligature is one cluster spanning two graphemes, and
+ * an offset inside it has no geometry the shaper can answer for — placing a caret there would
+ * mean inventing an x coordinate.
+ */
 export function isWholeGraphemeHorizontalBoundary(run: ShapedRun, utf16Offset: number): boolean {
   return shapedHorizontalBoundaries(run).includes(utf16Offset);
 }
@@ -25,6 +32,12 @@ export function isGeometryTrustedCaretOffset(run: ShapedRun, utf16Offset: number
   return isWholeGraphemeHorizontalBoundary(run, utf16Offset);
 }
 
+/**
+ * Whether the distance from a line's start to an offset can be trusted as exact.
+ *
+ * Requires BOTH ends to be shaped boundaries: accumulating advances across an offset the shaper
+ * cannot place would produce a caret x that drifts further along the line.
+ */
 export function isCumulativeGeometryTrustedFromLineOrigin(
   run: ShapedRun,
   lineStartUtf16Offset: number,

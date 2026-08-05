@@ -15,16 +15,29 @@
 // and the SVG sits behind at `z-index: 0` with no hit test of its own.
 
 import { DocxEditor, useDocxEditor } from '@docx-editor.dev/react';
+import { CustomNodeContextMenu } from '@docx-editor.dev/pro/react';
 import { BergPanel } from './art/Iceberg';
 import { useFrost } from './useFrost';
+import { useSpecimens } from './useSpecimens';
 import { iglooT } from './labels';
-import { IceCarve, IceCopy, IceCore, IceCut, IceFrost, IceThaw } from './icons/menu';
+import {
+  IceBerg,
+  IceCarve,
+  IceCopy,
+  IceCore,
+  IceCut,
+  IceDome,
+  IceFrost,
+  IceLottery,
+  IceThaw,
+} from './icons/menu';
 
 export function IglooContextMenu() {
   const editor = useDocxEditor();
   // The SAME hook the toolbar's Freeze action uses, so the two surfaces cannot disagree
   // about when the demo's own edit is available.
   const { freeze, thaw, enabled, disabledReason } = useFrost();
+  const { compose, dropRandom, edit, editable } = useSpecimens();
 
   return (
     <DocxEditor.ContextMenu className="igloo-menu" t={iglooT}>
@@ -32,6 +45,11 @@ export function IglooContextMenu() {
           this lands after the rows in DOM order and sits behind them on `z-index` instead —
           which is what keeps the library's own panel element, roles and keyboard intact. */}
       <BergPanel />
+
+      {/* Renders only when the right-click landed on a recognized chip; `docxRowPlacement:
+          'start'` puts it at the top without this file ordering it. The library resolves which
+          node was pressed, the product decides what editing one looks like. */}
+      <CustomNodeContextMenu onEditNode={edit} />
 
       {/* Packaged rows, re-iconed in place. Everything else about them is untouched:
           they still run the engine's `cut`/`copy` commands and still carry the engine's
@@ -66,7 +84,8 @@ export function IglooContextMenu() {
         }
       />
 
-      {/* A submenu of real insert commands, using the packaged submenu part. */}
+      {/* Two submenus, kept apart: engine commands the theme renamed, then the demo's own
+          document nodes. Same row type and gating in both; only the origin differs. */}
       <DocxEditor.ContextMenu.Submenu labelKey="igloo.carve" paths={null}>
         <DocxEditor.ContextMenu.Item
           label="Carve a page break"
@@ -77,6 +96,27 @@ export function IglooContextMenu() {
           label="Carve a 3×3 grid"
           icon={IceCarve}
           onSelect={() => editor?.exec({ type: 'insertTable', rows: 3, cols: 3 })}
+        />
+      </DocxEditor.ContextMenu.Submenu>
+
+      <DocxEditor.ContextMenu.Submenu labelKey="igloo.specimens" paths={null}>
+        <DocxEditor.ContextMenu.Item
+          label="Calve an iceberg…"
+          icon={IceBerg}
+          disabled={!editable}
+          onSelect={() => compose('iceberg')}
+        />
+        <DocxEditor.ContextMenu.Item
+          label="Build an igloo…"
+          icon={IceDome}
+          disabled={!editable}
+          onSelect={() => compose('igloo')}
+        />
+        <DocxEditor.ContextMenu.Item
+          label="Take whatever the water gives"
+          icon={IceLottery}
+          disabled={!editable}
+          onSelect={dropRandom}
         />
       </DocxEditor.ContextMenu.Submenu>
 

@@ -11,6 +11,7 @@ import type { OoxmlHardBreakNode, OoxmlNode } from './ooxml-tree.ts';
 /** UTF-16 placeholder for a page break in paragraph text projections. */
 export const PAGE_BREAK_CHAR = '\f';
 
+/** What a `w:br` breaks. `other` covers values this engine does not model, kept losslessly. */
 export type HardBreakKind = 'line' | 'page' | 'column' | 'other';
 
 /** Read the semantic break kind from a typed `w:br` node. */
@@ -31,6 +32,7 @@ export function hardBreakKind(node: OoxmlHardBreakNode): HardBreakKind {
   return 'line';
 }
 
+/** Whether a node is a `w:br` with `w:type="page"`. */
 export function isPageBreakNode(node: OoxmlNode): node is OoxmlHardBreakNode {
   return node.kind === 'hardBreak' && hardBreakKind(node) === 'page';
 }

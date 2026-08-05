@@ -22,6 +22,7 @@ export interface TableChromeDraft {
   readonly spec: TableBorderSpec;
 }
 
+/** The draft a table's border chrome starts from: a 1pt black single border on every edge. */
 export const DEFAULT_TABLE_CHROME_DRAFT: TableChromeDraft = {
   activeTarget: 'all',
   spec: {
@@ -31,6 +32,12 @@ export const DEFAULT_TABLE_CHROME_DRAFT: TableChromeDraft = {
   },
 };
 
+/**
+ * The chrome slots that only exist while the caret is inside a table.
+ *
+ * A subset of `ChromeSlotId`, so these names are public API on the same terms — renaming one is
+ * a breaking change.
+ */
 export type TableChromeSlotId =
   | 'table.borderTarget'
   | 'table.borderColor'
@@ -38,6 +45,7 @@ export type TableChromeSlotId =
   | 'table.borderWidth'
   | 'table.cellFill';
 
+/** Every {@link TableChromeSlotId}, for iteration and for {@link isTableChromeSlot}. */
 export const TABLE_CHROME_SLOT_IDS: readonly TableChromeSlotId[] = [
   'table.borderTarget',
   'table.borderColor',
@@ -49,10 +57,17 @@ export const TABLE_CHROME_SLOT_IDS: readonly TableChromeSlotId[] = [
 /** Furniture insertion controls (Task 8) share this label seam. */
 export type TableInteractionLabelKey = 'table.insertRowBelow' | 'table.insertColumnRight';
 
+/**
+ * The English label for a furniture-insertion control.
+ *
+ * The FALLBACK, for a host that has not wired its own translator — adapters pass their
+ * `useTranslation` result instead so the control follows the app's locale.
+ */
 export function defaultTableLabel(key: TableInteractionLabelKey): string {
   return createT(en)(key);
 }
 
+/** Whether a chrome slot is one of the table-only ones. Narrows the type. */
 export function isTableChromeSlot(slot: ChromeSlotId): slot is TableChromeSlotId {
   return (TABLE_CHROME_SLOT_IDS as readonly string[]).includes(slot);
 }
@@ -62,12 +77,15 @@ export function tableChromeVisible(table: TableContext | null | undefined): bool
   return table != null;
 }
 
+/** One entry in the border-target picker: which edges it addresses, its icon, and its label key. */
 export interface TableBorderTargetOption {
   readonly value: TableBorderTargetValue;
   readonly icon: keyof typeof GENERATED_ICON_PATHS;
+  /** i18n key, never a literal string — both adapters translate it themselves. */
   readonly labelKey: string;
 }
 
+/** The border-target picker's entries, in Word's own order, ending with clear. */
 export const TABLE_BORDER_TARGET_OPTIONS: readonly TableBorderTargetOption[] = [
   { value: 'all', icon: 'border_all', labelKey: 'table.borders.all' },
   { value: 'outside', icon: 'border_outer', labelKey: 'table.borders.outside' },
@@ -79,12 +97,15 @@ export const TABLE_BORDER_TARGET_OPTIONS: readonly TableBorderTargetOption[] = [
   { value: 'none', icon: 'border_clear', labelKey: 'table.borders.none' },
 ];
 
+/** One entry in the border-style picker, with the CSS class that draws its preview line. */
 export interface TableBorderStyleOption {
   readonly value: TableBorderStyle;
   readonly labelKey: string;
+  /** Class on the preview swatch. Defined in the core stylesheet, which both adapters import. */
   readonly previewClass: string;
 }
 
+/** The border-style picker's entries. */
 export const TABLE_BORDER_STYLE_OPTIONS: readonly TableBorderStyleOption[] = [
   {
     value: 'single',
@@ -114,9 +135,12 @@ export const TABLE_BORDER_STYLE_OPTIONS: readonly TableBorderStyleOption[] = [
   { value: 'thick', labelKey: 'table.borderStyles.thick', previewClass: 'docx-table-line--thick' },
 ];
 
+/** One entry in the border-width picker. */
 export interface TableBorderWidthOption {
+  /** `w:sz` — eighths of a point, as OOXML stores border widths. */
   readonly size: number;
   readonly labelKey: string;
+  /** Points, for drawing the preview swatch. `size / 8`. */
   readonly previewThickness: number;
 }
 
@@ -129,6 +153,13 @@ export const TABLE_BORDER_WIDTH_OPTIONS: readonly TableBorderWidthOption[] = [
   { size: 24, labelKey: 'table.borderWidths.threePt', previewThickness: 3 },
 ];
 
+/**
+ * What one table-chrome selection produced: the command to run, and the draft to remember.
+ *
+ * Both halves matter. A border picker is stateful — choosing "dashed" and then "outside" must
+ * apply a dashed outside border — so each pick returns the COMPLETE spec to execute alongside the
+ * draft the next pick builds on.
+ */
 export interface TableChromePick {
   readonly command: EditorCommand;
   readonly nextDraft: TableChromeDraft;
@@ -240,6 +271,12 @@ export function probeTableChromeCommand(
   }
 }
 
+/**
+ * The i18n key naming one border target, for a trigger that shows the active scope.
+ *
+ * Falls back to the "all" key rather than throwing: a label is chrome, and a missing one should
+ * not take the toolbar down.
+ */
 export function tableChromeLabelKeyForTarget(target: TableBorderEdgeTarget): string {
   const match = TABLE_BORDER_TARGET_OPTIONS.find((option) => option.value === target);
   return match?.labelKey ?? 'table.borders.all';

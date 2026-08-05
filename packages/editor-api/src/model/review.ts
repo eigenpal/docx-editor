@@ -88,13 +88,13 @@ function stamp(value: string): Date | null {
 
 /** What a comment and a reply both are: an author, a date, an id and a body. */
 abstract class CommentBase extends ModelObject implements PromisedItem {
-  /** @internal */
+  /** @internal Bind this object to the address the owning read answered. */
   hydrateAddress(address: ObjectAddress): void {
     if (address.kind === 'handle') this.path.resolveTo(address.handle);
     else this.path.resolveNull();
   }
 
-  /** @internal */
+  /** @internal Settle as the null object: the read found nothing to name. */
   hydrateNull(): void {
     this.path.resolveNull();
   }
@@ -170,6 +170,15 @@ abstract class CommentBase extends ModelObject implements PromisedItem {
   }
 }
 
+/**
+ * One answer in a comment thread.
+ *
+ * Authored over the parent comment's own range, because that is where the conversation is
+ * anchored and OOXML gives a reply no other place to be. Resolving is a property of the whole
+ * thread rather than of any one reply — see {@link Comment.resolved}.
+ *
+ * @public
+ */
 export class CommentReply extends CommentBase {
   /** @internal A reply a read has already named. */
   static at(context: RequestContext, label: string, address: ObjectAddress): CommentReply {
@@ -186,11 +195,17 @@ export class CommentReply extends CommentBase {
     super(context, path, { nullable });
   }
 
+  /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     this.loadCommentFields(request, []);
   }
 }
 
+/**
+ * The replies to one comment, in thread order, as of the batch that loaded them.
+ *
+ * @public
+ */
 export class CommentReplyCollection extends HandleCollection<CommentReply> {
   readonly #plan: () => AutomationOperation;
 
@@ -214,19 +229,36 @@ export class CommentReplyCollection extends HandleCollection<CommentReply> {
     return this.edge('first', 'getFirst', false);
   }
 
+  /** @internal The read that answers this collection's members. */
   protected listing(): AutomationOperation {
     return this.#plan();
   }
 
+  /** @internal Build one member from an address the listing answered. */
   protected itemAt(label: string, address: ObjectAddress): CommentReply {
     return CommentReply.at(this.context, label, address);
   }
 
+  /** @internal A member an edge accessor named before the sync that finds it. */
   protected promised(label: string, nullable: boolean): CommentReply & PromisedItem {
     return CommentReply.promised(this.context, label, nullable);
   }
 }
 
+/**
+ * A comment: a conversation about a stretch of the document, not a single remark.
+ *
+ * {@link Comment.replies} holds the answers, and resolving is a property of the whole thread —
+ * assigning `resolved` marks this comment and everything answering it, which is what Word's own
+ * pane does.
+ *
+ * `authorEmail`, a writable `content`, and `delete` are absent: `CT_Comment` records only an
+ * author and initials (Word's addresses live in `people.xml`, which this API does not read), and
+ * neither a body rewrite nor a marker-pair removal is an operation the canonical write path
+ * offers. The comment's text is published as `text`.
+ *
+ * @public
+ */
 export class Comment extends CommentBase {
   #replies: CommentReplyCollection | undefined;
 
@@ -325,11 +357,17 @@ export class Comment extends CommentBase {
     return created;
   }
 
+  /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     this.loadCommentFields(request, ['resolved']);
   }
 }
 
+/**
+ * The comments on a document, story or range, as of the batch that loaded them.
+ *
+ * @public
+ */
 export class CommentCollection extends HandleCollection<Comment> {
   readonly #plan: () => AutomationOperation;
 
@@ -353,19 +391,32 @@ export class CommentCollection extends HandleCollection<Comment> {
     return this.edge('first', 'getFirst', false);
   }
 
+  /** @internal The read that answers this collection's members. */
   protected listing(): AutomationOperation {
     return this.#plan();
   }
 
+  /** @internal Build one member from an address the listing answered. */
   protected itemAt(label: string, address: ObjectAddress): Comment {
     return Comment.at(this.context, label, address);
   }
 
+  /** @internal A member an edge accessor named before the sync that finds it. */
   protected promised(label: string, nullable: boolean): Comment & PromisedItem {
     return Comment.promised(this.context, label, nullable);
   }
 }
 
+/**
+ * One tracked change, and a decision the engine can act on.
+ *
+ * Only revisions the engine can actually resolve are answered as objects. Structural ones — a
+ * row, a cell, a section, the table grid — are omitted from the collection entirely rather than
+ * shipped as objects whose `accept` and `reject` both refuse: code walking the collection would
+ * stall on such an item with nothing to read that explains why.
+ *
+ * @public
+ */
 export class Revision extends ModelObject implements PromisedItem {
   /** @internal A change a read has already named. */
   static at(context: RequestContext, label: string, address: ObjectAddress): Revision {
@@ -382,13 +433,13 @@ export class Revision extends ModelObject implements PromisedItem {
     super(context, path, { nullable });
   }
 
-  /** @internal */
+  /** @internal Bind this object to the address the owning read answered. */
   hydrateAddress(address: ObjectAddress): void {
     if (address.kind === 'handle') this.path.resolveTo(address.handle);
     else this.path.resolveNull();
   }
 
-  /** @internal */
+  /** @internal Settle as the null object: the read found nothing to name. */
   hydrateNull(): void {
     this.path.resolveNull();
   }
@@ -435,6 +486,7 @@ export class Revision extends ModelObject implements PromisedItem {
     this.command('reject', () => ({ op: 'rejectRevision', revision }));
   }
 
+  /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     const selected = this.selection(request, ['author', 'date', 'type']);
     const revision = this.#handle();
@@ -461,6 +513,14 @@ export class Revision extends ModelObject implements PromisedItem {
   }
 }
 
+/**
+ * The tracked changes on a document, story or range, as of the batch that loaded them.
+ *
+ * Carries only the revisions the engine can resolve; see {@link Revision} for what is left out
+ * and why.
+ *
+ * @public
+ */
 export class RevisionCollection extends HandleCollection<Revision> {
   readonly #body: AutomationHandle;
   readonly #document: AutomationHandle;
@@ -507,14 +567,17 @@ export class RevisionCollection extends HandleCollection<Revision> {
     this.commandOn('rejectAll', () => ({ op: 'rejectAllRevisions', document }));
   }
 
+  /** @internal The read that answers this collection's members. */
   protected listing(): AutomationOperation {
     return { op: 'getRevisions', body: this.#body };
   }
 
+  /** @internal Build one member from an address the listing answered. */
   protected itemAt(label: string, address: ObjectAddress): Revision {
     return Revision.at(this.context, label, address);
   }
 
+  /** @internal A member an edge accessor named before the sync that finds it. */
   protected promised(label: string, nullable: boolean): Revision & PromisedItem {
     return Revision.promised(this.context, label, nullable);
   }

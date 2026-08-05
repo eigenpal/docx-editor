@@ -196,6 +196,12 @@ export interface PageFurniture {
   readonly footers: ReadonlyMap<HeaderFooterVariantName, HeaderFooterStoryLayout>;
 }
 
+/**
+ * Everything a layout pass needs beyond the document itself.
+ *
+ * `measurer` is the only required field — layout is DOM-free and measures through whatever is
+ * injected here, which is what lets the same code paginate on a server and in a browser.
+ */
 export interface SemanticLayoutOptions {
   readonly geometry?: PageGeometry;
   readonly measurer: TextMeasurer;
@@ -370,6 +376,16 @@ const drawingSourceOrderByContext = new WeakMap<
   ReadonlyMap<string, number>
 >();
 
+/**
+ * Lay one story part out into pages.
+ *
+ * The engine's layout entry point. Walks body, header, footer and note roots, flattens block
+ * SDTs, paginates tables with header-row repeats and vertical merges, and resolves every
+ * paragraph through the style cascade.
+ *
+ * Incremental when given a {@link LayoutSession}: per-block cache keys plus flow checkpoints mean
+ * a pass that changes nothing returns the previous pages by identity.
+ */
 export function layoutSemanticDocument(
   part: OoxmlPart,
   revision: number,
@@ -2227,9 +2243,15 @@ function layoutBlocksPass(
                 width: available,
                 height: brokenLine.height,
               },
+              // Synthetic frame geometry only — these lines are never aligned, painted or
+              // caret-tested, so the content origin is just where their spans were placed.
+              contentX:
+                brokenLine.spans.length > 0
+                  ? brokenLine.spans[0]!.box.x + origin.columnX
+                  : origin.columnX + indent.left,
               baseline: brokenLine.baseline,
               leading: brokenLine.leading,
-              glyphBand: brokenLine.glyphBand,
+              trailingSpacing: brokenLine.trailingSpacing,
               spans: brokenLine.spans.map((span) => ({
                 ...span,
                 box: { ...span.box, x: span.box.x + origin.columnX, y: syntheticY },
@@ -2302,7 +2324,11 @@ function layoutBlocksPass(
         pendingLine,
         appliedSkipByLineIndex
       );
-      const lineExtent = skipBefore + pendingLine.height + tail;
+      // Word can let auto/atLeast spacing below the glyph band cross the bottom text
+      // margin. The painted line keeps its full box; only the pagination budget drops that
+      // trailing external depth.
+      const lineExtent =
+        skipBefore + Math.max(0, pendingLine.height - pendingLine.trailingSpacing) + tail;
       const overflowsPage =
         cursorY + lineExtent > contentHeight() &&
         !holdsSheet() &&
@@ -2371,10 +2397,12 @@ function layoutBlocksPass(
         isLastLine,
         alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined
       );
+      // A line with no spans still aligns: an empty centred paragraph puts its (zero width)
+      // content — and so the caret — at the middle of the measure, not at the left edge.
       const alignOffset =
         placedSpans.length > 0 && alignedSpans.length > 0
           ? alignedSpans[0]!.box.x - placedSpans[0]!.box.x
-          : pendingLine.drawings.length > 0 && alignment !== 'left' && alignment !== 'both'
+          : alignment !== 'left' && alignment !== 'both'
             ? (() => {
                 const slack = lineAvailableWidth - pendingLine.width;
                 if (slack <= 0) return 0;
@@ -2419,9 +2447,10 @@ function layoutBlocksPass(
           width: available,
           height: pendingLine.height,
         },
+        contentX: alignedSpans[0]?.box.x ?? lineIndent + alignOffset,
         baseline: pendingLine.baseline,
         leading: pendingLine.leading,
-        glyphBand: pendingLine.glyphBand,
+        trailingSpacing: pendingLine.trailingSpacing,
         ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
         ...(alignedDrawings.length > 0 ? { drawings: alignedDrawings } : {}),
       };
@@ -3006,13 +3035,13 @@ function placedGeometryOf(
       for (const line of fragment.lines) {
         const lineKey = lineOrdinal;
         lineOrdinal += 1;
-        // The glyph band, READ rather than recovered: `box.height - leading` was the band
-        // only while every spacing rule put its extra ABOVE the text. `auto`/`atLeast` put
-        // it below and leave `leading` at zero, which handed a double-spaced line a boundary
-        // chip covering the whole doubled box instead of the glyphs in it.
+        // The glyph band: the box less the spacing on BOTH sides of it. Subtracting only
+        // `leading` was right while every rule put its extra above the text; `auto`/`atLeast`
+        // put it below and leave `leading` at zero, which handed a double-spaced line a
+        // boundary chip covering the whole doubled box instead of the glyphs in it.
         const textHeight = Math.max(
           0,
-          Math.min(line.glyphBand ?? line.box.height, line.box.height - line.leading)
+          line.box.height - line.leading - (line.trailingSpacing ?? 0)
         );
         for (const span of line.spans) {
           addSpan({

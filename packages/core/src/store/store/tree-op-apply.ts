@@ -8,7 +8,7 @@
 
 import { hardBreakAttributes, hardBreakText } from '../package/hard-break.ts';
 import { fieldAtomText } from '../package/field-nodes.ts';
-import { W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
+import { isContentRevisionKind, W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlAttribute,
@@ -934,6 +934,38 @@ function applyDeleteText(
               parent.id,
               parent.children.flatMap((sibling) =>
                 sibling.id === child.id ? [...link.children] : [sibling]
+              ),
+              editOptions
+            );
+            if (!spliced.ok) return fromEdit(spliced, effect);
+            current = spliced.part;
+          }
+          continue;
+        }
+        if (child.kind !== 'textValue' && isContentRevisionKind(child.kind)) {
+          const nested = sweep(child.children);
+          if (nested) return nested;
+          const wrapper = findNode(current, child.id);
+          if (wrapper && wrapper.kind !== 'textValue' && runsUnder(wrapper).length === 0) {
+            // A revision wrapper is a claim ABOUT content — "these words were inserted",
+            // "these were struck". Delete the words untracked and the claim has no subject
+            // left, but the empty `w:ins`/`w:del` used to stay: `collectRevisionSites` kept
+            // finding it, so the rail drew a card with an author, a date and no text, and
+            // Accept All still had a decision to make about nothing. The TRACKED delete
+            // path has always dropped a wrapper it emptied; this is the same rule for the
+            // untracked one.
+            //
+            // SPLICED like a hyperlink, not removed: `EG_ContentRunContent` lets a
+            // revision hold comment-range and bookmark markers, and taking the subtree
+            // would take those with it — a `commentRangeEnd` whose start is still in the
+            // paragraph. Only the wrapper goes.
+            const parent = parentOf(current, child.id);
+            if (!parent) return { ok: false, reason: 'tree-invariant' };
+            const spliced = replaceChildren(
+              current,
+              parent.id,
+              parent.children.flatMap((sibling) =>
+                sibling.id === child.id ? [...wrapper.children] : [sibling]
               ),
               editOptions
             );

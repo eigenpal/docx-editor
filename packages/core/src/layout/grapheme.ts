@@ -1,6 +1,12 @@
 // Unicode grapheme segmentation for semantic positions (interactive-paginated-editing 3.3).
 // Uses Intl.Segmenter through a small replaceable boundary — no hand-written splitter.
 
+/**
+ * One user-perceived character, and the UTF-16 range that encodes it.
+ *
+ * The unit a caret moves by. An emoji with a skin-tone modifier is ONE segment spanning several
+ * UTF-16 code units, so stepping by code unit would put the caret inside it.
+ */
 export interface GraphemeSegment {
   readonly index: number;
   readonly text: string;
@@ -8,6 +14,12 @@ export interface GraphemeSegment {
   readonly utf16To: number;
 }
 
+/**
+ * The replaceable segmentation strategy.
+ *
+ * An explicit seam rather than a direct `Intl.Segmenter` call, so tests can install a
+ * deterministic boundary and a runtime without `Intl.Segmenter` can be given one.
+ */
 export interface GraphemeBoundary {
   segment(text: string): readonly GraphemeSegment[];
 }
@@ -20,6 +32,7 @@ type IntlSegmenterCtor = new (
   options?: { granularity: 'grapheme' }
 ) => { segment(input: string): Iterable<{ segment: string; index: number }> };
 
+/** Whether this runtime provides `Intl.Segmenter`, which the default boundary requires. */
 export function isIntlSegmenterAvailable(): boolean {
   return typeof (Intl as unknown as { Segmenter?: IntlSegmenterCtor }).Segmenter === 'function';
 }
@@ -53,6 +66,12 @@ function createIntlBoundary(): GraphemeBoundary {
   };
 }
 
+/**
+ * The default boundary, over `Intl.Segmenter` at the invariant `und` locale.
+ *
+ * Locale-invariant on purpose: grapheme boundaries must not vary with the user's locale, or the
+ * same document would paginate differently for different readers.
+ */
 export const intlGraphemeBoundary: GraphemeBoundary = createIntlBoundary();
 
 let activeBoundary: GraphemeBoundary = intlGraphemeBoundary;
@@ -93,6 +112,12 @@ let memoSegments: readonly GraphemeSegment[] | null = null;
 let memoText2: string | null = null;
 let memoSegments2: readonly GraphemeSegment[] | null = null;
 
+/**
+ * Split text into graphemes through the active boundary.
+ *
+ * Memoized on the last texts seen, because paragraph layout asks about the same string
+ * repeatedly and a full segmentation pass per call made layout quadratic in paragraph length.
+ */
 export function segmentGraphemes(text: string): readonly GraphemeSegment[] {
   if (memoText === text && memoSegments) return memoSegments;
   if (memoText2 === text && memoSegments2) {
@@ -112,11 +137,18 @@ export function segmentGraphemes(text: string): readonly GraphemeSegment[] {
   return segments;
 }
 
+/**
+ * Install a different segmentation strategy, invalidating the memo.
+ *
+ * For tests and for runtimes lacking `Intl.Segmenter`. Call {@link resetGraphemeBoundary} to
+ * restore the default.
+ */
 export function setGraphemeBoundary(boundary: GraphemeBoundary): void {
   activeBoundary = boundary;
   clearGraphemeMemo();
 }
 
+/** Restore the default `Intl.Segmenter` boundary and clear the memo. */
 export function resetGraphemeBoundary(): void {
   activeBoundary = intlGraphemeBoundary;
   clearGraphemeMemo();
@@ -157,6 +189,7 @@ function clearGraphemeMemo(): void {
   indexedCount = 0;
 }
 
+/** How many user-perceived characters the text holds. */
 export function graphemeCount(text: string): number {
   return segmentGraphemes(text).length;
 }
@@ -200,12 +233,20 @@ function graphemeIndexFor(text: string): { offsets: Int32Array; count: number } 
   return { offsets, count: segments.length };
 }
 
+/**
+ * The grapheme index containing a UTF-16 offset. Clamps rather than throwing.
+ *
+ * Backed by a single-entry index cache: this runs once per character during paragraph layout, and
+ * re-segmenting per call is what made a 20,000-character paragraph take minutes to open. One
+ * entry rather than a map, because the keys are file-derived strings of unbounded size.
+ */
 export function utf16OffsetToGrapheme(text: string, utf16Offset: number): number {
   const clamped = Math.max(0, Math.min(utf16Offset, text.length));
   const { offsets } = graphemeIndexFor(text);
   return offsets[clamped]!;
 }
 
+/** The UTF-16 offset a grapheme index starts at. Clamps rather than throwing. */
 export function graphemeOffsetToUtf16(text: string, graphemeOffset: number): number {
   const segments = segmentGraphemes(text);
   if (segments.length === 0) return 0;

@@ -35,6 +35,12 @@ export type HeaderFooterVariant = 'default' | 'first' | 'even';
 /** Header vs footer region kind for chrome and lifecycle ops. */
 export type HeaderFooterKind = 'header' | 'footer';
 
+/**
+ * A section's resolved header and footer parts, by variant.
+ *
+ * The `even` variant is only honoured when `w:evenAndOddHeaders` is set in settings.xml —
+ * without it Word ignores an authored even header, and so does this.
+ */
 export interface HeaderFooterParts {
   readonly headers: ReadonlyMap<HeaderFooterVariant, OoxmlPart>;
   readonly footers: ReadonlyMap<HeaderFooterVariant, OoxmlPart>;

@@ -123,6 +123,22 @@ jobs:
         if: ${{ steps.pending.outputs.publishing == 'true' }}
         run: bun run parity:prepublish
 
+      # Emit `packages/<pkg>/THIRD_PARTY_NOTICES.md` from the build that is about
+      # to be packed. The published bundles inline third-party source (the
+      # private core package drags fast-xml-parser, fflate and prosemirror-* in
+      # with it), and MIT/Apache-2.0 both require the copyright and permission
+      # notice to travel with the copy — minified `dist/` carries neither.
+      #
+      # Must sit AFTER the last build step and BEFORE the changesets action:
+      # the generator reads `dist/metafile-*.json`, and the files it writes are
+      # gitignored, so they exist only for the duration of this job and are
+      # picked up by `changeset publish` through each package's `files` list.
+      # The step hard-fails on a bundled dependency with no license text, which
+      # aborts the job before anything reaches npm.
+      - name: Generate third-party notices
+        if: ${{ steps.pending.outputs.publishing == 'true' }}
+        run: bun run notices:generate
+
       # The single step that does both PR-management and publishing.
       # - If `.changeset/*.md` are pending: opens / updates a "chore: release X.Y.Z" PR
       #   that runs `version` (drains changesets, bumps versions, writes CHANGELOG).

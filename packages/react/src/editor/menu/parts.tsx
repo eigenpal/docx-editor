@@ -12,7 +12,7 @@
 // the menu context, which the root resolves once — host override, else the packaged
 // default — so the row itself holds no policy.
 
-import { isValidElement, useCallback, useId, useRef, useState } from 'react';
+import { isValidElement, useCallback, useId, useLayoutEffect, useRef, useState } from 'react';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import type { ReactNode } from 'react';
 import {
@@ -126,6 +126,57 @@ export function MenuRow(props: MenuRowProps) {
         </span>
       ) : null}
     </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Grouping
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Props for `DocxEditor.Menu.Group`: a titled section of rows. @public */
+export interface MenuGroupProps {
+  /** Literal heading, already resolved. Wins over {@link labelKey}. */
+  label?: string;
+  /** i18n key of the heading. */
+  labelKey?: string;
+  className?: string;
+  hidden?: boolean;
+  children?: ReactNode;
+}
+
+/**
+ * A named section inside a panel: a visible heading and the rows under it.
+ *
+ * A separator says rows are apart; a group says what they are, which is what a panel needs
+ * once a product adds rows beside the packaged ones. `role="group"` nests legally inside a
+ * menu, keeps its rows owned by it, and takes the heading as its accessible name — so the
+ * visible heading is decoration and is hidden from the tree.
+ *
+ * @public
+ */
+export function MenuGroup({
+  label: literal,
+  labelKey,
+  className,
+  hidden,
+  children,
+}: MenuGroupProps) {
+  const label = useMenuLabel();
+  if (hidden) return null;
+  const text = literal ?? (labelKey === undefined ? undefined : label(labelKey));
+  return (
+    <div
+      role="group"
+      className={`docx-menubar__group${className ? ` ${className}` : ''}`}
+      {...(text ? { 'aria-label': text } : {})}
+    >
+      {text ? (
+        <div className="docx-menubar__group-label" aria-hidden="true">
+          {text}
+        </div>
+      ) : null}
+      {children}
+    </div>
   );
 }
 
@@ -322,6 +373,9 @@ export const MenuImageInsert = Object.assign(MenuImageInsertImpl, {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Props for `DocxEditor.Menu.Submenu`. @public */
+/** How close a floating panel may come to the window edge, in px. */
+const EDGE_INSET = 8;
+
 export interface MenuSubmenuProps {
   /** i18n key of the parent row's label. */
   labelKey: string;
@@ -348,6 +402,36 @@ export function MenuSubmenu({ labelKey, paths, className, children }: MenuSubmen
   const panelRef = useRef<HTMLDivElement | null>(null);
   const panelId = useId();
   const text = label(labelKey);
+
+  // Placed in client space, not with `left: 100%`. The context menu is a scroller
+  // (`max-height` plus `overflow-y: auto`, which forces the other axis to `auto` with it), so
+  // a panel opening sideways was clipped at the parent's edge — the row highlighted, the panel
+  // mounted, and nothing appeared. Measuring also lets a panel near the right edge open
+  // leftward, which `left: 100%` could never do.
+  const [box, setBox] = useState<{ left: number; top: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!open) {
+      setBox(null);
+      return;
+    }
+    const row = parentRef.current;
+    const panel = panelRef.current;
+    const view = row?.ownerDocument.defaultView;
+    if (!row || !panel || !view) return;
+    const rect = row.getBoundingClientRect();
+    const width = panel.offsetWidth;
+    const height = panel.offsetHeight;
+    // Right first, Word's geometry; left when the panel would not fit there.
+    const flip = rect.right + width > view.innerWidth - EDGE_INSET;
+    setBox({
+      left: flip
+        ? Math.max(EDGE_INSET, rect.left - width)
+        : Math.min(rect.right, view.innerWidth - width - EDGE_INSET),
+      // Top-aligned with the row, then clamped so a submenu on the last row of a tall menu
+      // does not hang below the fold.
+      top: Math.max(EDGE_INSET, Math.min(rect.top - 4, view.innerHeight - height - EDGE_INSET)),
+    });
+  }, [open]);
   return (
     <div
       role="none"
@@ -412,6 +496,12 @@ export function MenuSubmenu({ labelKey, paths, className, children }: MenuSubmen
           className="docx-toolbar__menu docx-menubar__menu docx-menubar__submenu-panel"
           role="menu"
           aria-label={text}
+          // Hidden for the measuring pass: it must be in the DOM to have a size.
+          style={
+            box
+              ? { position: 'fixed', left: box.left, top: box.top }
+              : { position: 'fixed', visibility: 'hidden' }
+          }
           onKeyDown={(event) => {
             const panel = panelRef.current;
             if (!panel) return;

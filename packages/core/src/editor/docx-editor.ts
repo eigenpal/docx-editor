@@ -230,6 +230,25 @@ const EMPTY_FONT_SUBSTITUTIONS: readonly string[] = Object.freeze([]);
 const PRO_REVIEW_REASON =
   'comments and tracked changes require the pro review module (@docx-editor.dev/pro)';
 
+/**
+ * Build an editor: the full `Editor` contract over a paginated surface.
+ *
+ * Construction is separate from mounting. Pass a `container` and the document mounts
+ * immediately; omit it and nothing touches the DOM until `attach(el)` — the provider-first
+ * shape. `detach()` remounts from the saved bytes, which resets undo and the caret.
+ *
+ * `snapshot()` is version-cached: the same reference until state actually moves, with
+ * reference-stable sub-objects, so it is safe as a `useSyncExternalStore` source.
+ *
+ * @example
+ * ```ts
+ * const editor = createDocxEditor({ document: bytes, modules: [reviewModule()] });
+ * editor.attach(element);
+ * editor.on('change', () => setDirty(true));
+ * ```
+ *
+ * @public
+ */
 export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const localeCode =
     config.locale && config.locale in locales ? (config.locale as LocaleCode) : ('en' as const);
@@ -1233,6 +1252,22 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       items = items.filter(
         (item) => item.kind !== 'revision' || !excludedKinds.has(item.revisionKind)
       );
+      // A comment that answers a change this QUERY dropped is a top-level card again. The
+      // link is only a reason to render the comment inside the change's card, so publishing
+      // it beside a change the caller cannot see makes the comment unrenderable: the rail
+      // skips it as a reply and no card claims it. The rail hides `format` and `structural`
+      // by default, and a tracked formatting change anchors on exactly the run it decorates
+      // — the same span a reviewer's comment on that word covers — so this is the ordinary
+      // case, not a corner one.
+      const present = new Set(
+        items.filter((item) => item.kind === 'revision').map((item) => item.id)
+      );
+      items = items.map((item) => {
+        if (item.kind !== 'comment' || item.parentRevisionId === undefined) return item;
+        if (present.has(item.parentRevisionId)) return item;
+        const { parentRevisionId: _dropped, ...rest } = item;
+        return rest;
+      });
     }
     const withPlacement = query?.placement !== false;
     let anchors: Map<string, ReviewParagraphAnchor> | null = null;
@@ -1284,6 +1319,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           text: commentBodyText(item.comment),
           resolved: item.resolved,
           ...(item.parentId !== undefined ? { parentId: item.parentId } : {}),
+          ...(item.parentRevisionId !== undefined
+            ? { parentRevisionId: item.parentRevisionId }
+            : {}),
           replyIds: item.replyIds,
           readOnly: false,
           item,
@@ -1298,7 +1336,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           initials: initialsOfAuthor(item.author),
           text: item.text,
           ...(item.replacedText ? { replacedText: item.replacedText } : {}),
-          replyIds: [],
+          replyIds: item.replyIds,
           readOnly: item.readOnly,
           item,
         };
@@ -1892,10 +1930,53 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         anchor: { paragraphId: range.start.paragraphId, offset: range.start.offset },
         head: { paragraphId: range.start.paragraphId, offset: range.start.offset },
       });
+      // ANNOUNCED, exactly as dismissing is. Opening a card is observable state of its own,
+      // and the surface's `onChange` deliberately stays quiet when the caret did not move —
+      // which is precisely this case whenever the card is reopened after being DISMISSED:
+      // dismissing leaves the caret inside the range, so setting it back to the range start
+      // moves nothing, no `selectionChange` was emitted, and the rail never re-rendered. The
+      // engine considered the card open and the reader was looking at a closed one that would
+      // not respond to any number of further clicks.
+      bump();
+      emitSelectionChange();
     },
 
     acceptReviewItem: (key: string) => resolveReviewItem(key, 'accept'),
     rejectReviewItem: (key: string) => resolveReviewItem(key, 'reject'),
+
+    deleteReviewItem(key: string): ExecResult {
+      if (!reviewEnabled) {
+        return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
+      }
+      const placement = reviewPlacements().find((entry) => entry.key === key);
+      const item = placement?.item as ReviewItem | undefined;
+      if (!item || !surface) {
+        return { ok: false, code: 'notFound', reason: 'no review item with that key' };
+      }
+      // Discarding a suggestion IS rejecting it — same transaction, same undo step, and the
+      // refusal rules for an unresolvable kind already live there.
+      if (item.kind === 'revision') return resolveReviewItem(key, 'reject');
+      if (item.kind !== 'comment') {
+        return { ok: false, code: 'unsupported', reason: 'a custom node card cannot be deleted' };
+      }
+      // An active key naming an item the queue no longer holds leaves the rail with nothing to
+      // draw and a band painted over text that has no card, so the open card is dismissed
+      // first — but ONLY when it is this one. `dismissActiveReview` acts on whatever the caret
+      // is in, and the delete button keeps the caret exactly where it was, so deleting a
+      // comment further down the page closed the card the reader was replying in and threw
+      // the draft away with it.
+      if (activeReviewKeyNow() === key) surface.dismissActiveReview();
+      let deleted = false;
+      surface.commitReviewOps(() => {
+        deleted = surface!.session.deleteComment(item.id);
+        return { committed: deleted };
+      });
+      if (!deleted) {
+        return { ok: false, code: 'unsupported', reason: 'the comment could not be deleted' };
+      }
+      bump();
+      return { ok: true, changed: true };
+    },
 
     replyToReviewItem(key: string, text: string, author?: string): ExecResult {
       if (!reviewEnabled) {

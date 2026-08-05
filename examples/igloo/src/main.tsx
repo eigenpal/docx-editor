@@ -4,9 +4,11 @@ import { IglooEditor } from './IglooEditor';
 
 const base = import.meta.env.BASE_URL;
 
-// Served straight from `e2e/fixtures/` by a vite plugin, so the demo and the e2e suite read
-// the SAME bytes and a second copy cannot drift.
-const DEFAULT_FIXTURE = 'comprehensive-word-element-test.docx';
+// This demo's own copy of the sample, with an iceberg and an igloo already in it, so the
+// custom nodes and their rail cards are on screen before anyone touches a menu. It lives in
+// `public/` rather than behind the fixture plugin because nothing else reads it — the shared
+// `sample.docx` and the e2e fixtures still come through the plugin, under `?fixture=`.
+const DEFAULT_FIXTURE = 'sample-igloo.docx';
 
 // `?fixture=<name>.docx` picks which same-origin fixture loads. Sanitized to a bare `.docx`
 // basename, so the value can never become a path traversal or a cross-origin URL.

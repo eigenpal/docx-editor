@@ -9,13 +9,16 @@ import type { Plugin } from 'vite';
 const monorepoRoot = path.resolve(__dirname, '../..');
 
 /**
- * Serve the canonical fixture from ONE byte source, the way the Vite example does.
+ * Serve the SHARED documents from one byte source, the way the Vite example does.
  *
- * Copying a DOCX into `public/` would create a second copy that silently drifts from the
- * fixture the e2e suite asserts against. This maps the URL onto the real file instead.
+ * This demo's own default lives in `public/` (it has an iceberg and an igloo in it, and
+ * nothing else reads it). Everything reachable through `?fixture=` is somebody else's file —
+ * the Vite example's `sample.docx`, or an e2e fixture — so it is mapped onto the real path
+ * rather than copied here, where a second copy would silently drift.
  */
 function canonicalFixturePlugin(): Plugin {
   const fixtures = new Map([
+    ['/sample.docx', path.join(monorepoRoot, 'examples/vite/public/sample.docx')],
     [
       '/comprehensive-word-element-test.docx',
       path.join(monorepoRoot, 'e2e/fixtures/comprehensive-word-element-test.docx'),

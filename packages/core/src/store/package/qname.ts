@@ -7,6 +7,7 @@
 // NCName: a name with no ':' — starts with a letter/_ then name chars.
 const NCNAME = /^[A-Za-z_][A-Za-z0-9._-]*$/;
 
+/** Whether a string is a valid XML NCName — a name with no colon. */
 export function isValidNCName(name: string): boolean {
   return NCNAME.test(name);
 }
@@ -19,6 +20,12 @@ export function isValidQName(name: string): boolean {
   return false;
 }
 
+/**
+ * Validate a qualified name, throwing when it is malformed.
+ *
+ * Guards the serializer: an invalid QName written into XML produces a file Word cannot open, so
+ * it fails here rather than at save.
+ */
 export function assertValidQName(name: string): void {
   if (!isValidQName(name))
     throw new Error(`invalid QName for serialization: ${JSON.stringify(name)}`);

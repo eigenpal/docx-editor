@@ -194,7 +194,7 @@ describe('inline boundary fragments', () => {
     expect(box.y).toBe(line.box.y + line.leading);
     // The chip covers the glyphs, not the doubled box the spacing produced.
     expect(box.height).toBeLessThan(line.box.height);
-    expect(box.height).toBe(line.glyphBand);
+    expect(box.height).toBe(line.box.height - line.leading - (line.trailingSpacing ?? 0));
   });
 });
 

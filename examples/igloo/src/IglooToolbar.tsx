@@ -20,6 +20,7 @@ import {
   IceBold,
   IceBullets,
   IceClear,
+  IceCoreRail,
   IceFontColor,
   IceFreeze,
   IceHighlight,
@@ -96,20 +97,34 @@ export function IglooToolbar({ blizzard, onBlizzard }: IglooActionsProps) {
       <DocxEditor.Toolbar.ClearFormatting icon={IceClear} />
       <DocxEditor.Toolbar.Separator />
 
-      {/* Two host actions with nothing else in common, which is why they are here together:
-          one reaches into the engine, one never touches it. Both render as first-class
-          toolbar controls, with the same hover, pressed and caret-guard behaviour as the
-          packaged buttons — which is the reason `Action` exists rather than a documented
-          class name. */}
-      <FreezeAction />
-      <DocxEditor.Toolbar.Action
-        label="Blizzard"
-        icon={IceBlizzard}
-        active={blizzard}
-        onSelect={onBlizzard}
-      />
+      {/* The rail toggle: a packaged part on `review.comments`, so its pressed state is the
+          engine's answer. The pane also opens from a marker and from a new comment, and a
+          boolean kept here would be a third opinion about it. */}
+      <DocxEditor.Toolbar.Comments icon={IceCoreRail} />
+      <DocxEditor.Toolbar.Separator />
+
+      {/* The demo's own, marked as such. Two host actions — one reaches into the engine, one
+          never touches it — rendering as first-class controls, which is why `Action` exists
+          rather than a documented class name.
+
+          The tinted plate is this file's own element: a hand-ordered bar has nothing to say
+          which buttons are chrome slots and which the product added. A plain `div` composes
+          because `preset={false}` renders these children verbatim into a flex row. */}
+      <div className="igloo-own" role="group" aria-label="Added by Igloo Editor">
+        <FreezeAction />
+        <DocxEditor.Toolbar.Action
+          label="Blizzard"
+          icon={IceBlizzard}
+          active={blizzard}
+          onSelect={onBlizzard}
+        />
+      </div>
 
       <div className="igloo-toolbar__spacer" />
+
+      {/* The packaged Editing / Suggesting / Viewing pill, restyled by class. Suggesting is
+          what makes this theme's tracked-change colours appear at all. */}
+      <DocxEditor.Toolbar.EditingMode className="igloo-mode" />
       <DocxEditor.Toolbar.Zoom />
     </DocxEditor.Toolbar>
   );

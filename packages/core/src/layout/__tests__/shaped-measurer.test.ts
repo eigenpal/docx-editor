@@ -64,14 +64,37 @@ const style = (overrides: Partial<ResolvedRunStyle> = {}): ResolvedRunStyle => (
 });
 
 describe('line metrics come from the font, not from a multiplier (task 7.7)', () => {
-  test('the line height is ascent + descent + line gap', () => {
-    // Word's single-spacing formula. A host measurement cannot express it: canvas reports
-    // the font bounding box without the gap, so any line height built from one is short.
+  test('the line height is the face ascent plus descent', () => {
     const metrics = measurer().lineMetrics(style());
     expect(metrics.height).toBeGreaterThan(0);
     expect(metrics.baseline).toBeGreaterThan(0);
     // The baseline is the ascent, so it is strictly inside the line.
     expect(metrics.baseline).toBeLessThan(metrics.height);
+  });
+
+  test('hhea lineGap is external leading and does not inflate Word line boxes', () => {
+    const withExternalGap = createShapedMeasurer({
+      shaper: {
+        shape(input) {
+          return {
+            text: input.text,
+            direction: 'ltr',
+            bidiLevel: 0,
+            glyphs: [],
+            clusters: [],
+            fontSpans: [],
+            metrics: { ascent: 9_000, descent: 2_000, lineGap: 500 },
+          };
+        },
+      },
+      resolveFont: () => font,
+      fallback,
+      shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
+      unicodeDataVersion: '15.1',
+      fixedPointScale: 1_000,
+    });
+
+    expect(withExternalGap.lineMetrics(style())).toEqual({ height: 11, baseline: 9 });
   });
 
   test('it is NOT the flat multiplier the fallback uses, so the font is really being read', () => {

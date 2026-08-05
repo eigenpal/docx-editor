@@ -35,6 +35,11 @@ import { useDocxEditor } from '@docx-editor.dev/react';
  */
 export type ReviewItemView = ReviewItemPlacement;
 
+/**
+ * What {@link useReview} returns: the review rail's data and the four things a card can do.
+ *
+ * @public
+ */
 export interface UseReviewReturn {
   /** Every pending decision in the document, in reading order. */
   readonly items: readonly ReviewItemView[];
@@ -46,6 +51,14 @@ export interface UseReviewReturn {
   readonly accept: (item: ReviewItemView) => void;
   /** Reject a revision. A no-op on an item whose `readOnly` is true. */
   readonly reject: (item: ReviewItemView) => void;
+  /**
+   * Discard the item: delete a comment thread, or reject a tracked change.
+   *
+   * One verb for both, so a card can carry one "remove this" control whatever it holds.
+   * Reports whether it landed — a comment the engine refused to delete must not vanish from
+   * the caller's own state while the document still holds it.
+   */
+  readonly remove: (item: ReviewItemView) => boolean;
   /**
    * Reply to a comment, or to a revision — which OOXML records as a comment on its range.
    *
@@ -136,6 +149,18 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     [editor]
   );
 
+  const remove = useCallback(
+    (item: ReviewItemView): boolean => {
+      if (!editor) return false;
+      // A custom node's card is informational and the engine refuses it; asking anyway would
+      // put a refusal in the console for a button a surface should not have drawn.
+      if (item.kind === 'custom') return false;
+      if (item.kind === 'revision' && item.readOnly) return false;
+      return editor.deleteReviewItem(item.key).ok;
+    },
+    [editor]
+  );
+
   const reply = useCallback(
     (item: ReviewItemView, text: string, author?: string): boolean => {
       if (text.trim().length === 0 || !editor) return false;
@@ -184,6 +209,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       setActive,
       accept,
       reject,
+      remove,
       reply,
       selectionAnchorY,
       comment,
@@ -197,6 +223,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       setActive,
       accept,
       reject,
+      remove,
       reply,
       selectionAnchorY,
       comment,

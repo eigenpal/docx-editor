@@ -9,6 +9,12 @@ export const COMPOUND_BORDER_MIN_STROKE_PT = 1;
 /** Minimum gap between compound strokes, in points. */
 export const COMPOUND_BORDER_MIN_GAP_PT = 1;
 
+/**
+ * How a multi-line border style (double, triple) is drawn: stroke width, gap, and total extent.
+ *
+ * The band is CENTRED on the authored width, so a double border occupies the space Word gives it
+ * rather than growing the cell it surrounds.
+ */
 export interface CompoundBorderMetrics {
   readonly strokePt: number;
   readonly gapPt: number;

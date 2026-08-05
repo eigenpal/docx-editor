@@ -8,6 +8,13 @@
 // budgets ratified from baselines); they are the trust-boundary hard caps the
 // security model requires.
 
+/**
+ * The engine's trust-boundary caps: recursion depth, element counts, and the rest.
+ *
+ * A caller may LOWER any of these but never raise or disable one — an override of `Infinity`,
+ * zero, a negative or `NaN` clamps into `(0, ceiling]` rather than turning the limit off. These
+ * are security ceilings, not performance budgets.
+ */
 export interface ResourceLimits {
   /** Max nested-structure recursion (tables/shapes/SDT/groups). */
   readonly maxRecursionDepth: number;
@@ -75,6 +82,7 @@ export function resolveLimits(overrides?: Partial<ResourceLimits>): ResourceLimi
 }
 
 /** Bounded image decode limits (typed-drawings-and-images task 4). */
+/** Trust-boundary caps specific to image decoding and embedding. */
 export interface ImageResourceLimits {
   readonly maxEncodedBytes: number;
   readonly maxDecodedBytes: number;
@@ -84,6 +92,7 @@ export interface ImageResourceLimits {
   readonly maxExternalRedirects: number;
 }
 
+/** Image caps nothing can raise past. A caller's override clamps into these. */
 export const IMAGE_RESOURCE_HARD_CEILINGS: ImageResourceLimits = Object.freeze({
   maxEncodedBytes: 64 * 1024 * 1024,
   maxDecodedBytes: 512 * 1024 * 1024,
@@ -93,6 +102,7 @@ export const IMAGE_RESOURCE_HARD_CEILINGS: ImageResourceLimits = Object.freeze({
   maxExternalRedirects: 32,
 });
 
+/** The image caps in force when a host configures none. Conservative and finite. */
 export const DEFAULT_IMAGE_RESOURCE_LIMITS: ImageResourceLimits = Object.freeze({
   maxEncodedBytes: 32 * 1024 * 1024,
   maxDecodedBytes: 400 * 1024 * 1024,

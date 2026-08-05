@@ -77,6 +77,12 @@ reference/ecma-376/**/*.zip
 # API Extractor temp output (committed snapshots live in docs/api/<pkg-slug>/)
 packages/*/temp/
 
+# Attribution for the third-party source esbuild inlines into the published
+# bundles. Generated at release time from the build's metafile, so committing it
+# would only ever be a stale copy of the build output. Regenerate with
+# `bun run notices:generate` (needs `bun run build:packages` first).
+packages/*/THIRD_PARTY_NOTICES.md
+
 # Consumer-generated docs JSON. Regenerate with `bun run docs:json`.
 # Not committed — consumer (e.g. docs-editor-page) clones the repo and
 # runs the script itself. See CLAUDE.md → Docs JSON.
@@ -87,3 +93,4 @@ examples/vue/public/DC_Template_Descricao_Cargo_Controlado_Enterprise.docx
 .pr-checklist.json
 tmp-preview/
 openspec/changes/*/notes/feature-parity-report.json
+dist-types/

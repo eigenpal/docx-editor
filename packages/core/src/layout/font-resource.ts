@@ -1,9 +1,23 @@
+/**
+ * A face, as something asks for it: family plus the two axes this engine admits.
+ *
+ * Only static weights and slants. Variable-font axes are deliberately outside this vocabulary —
+ * the shaper refuses variation axes, and a variable file admitted here would render bold at
+ * regular weight.
+ */
 export interface FontRequest {
   readonly family: string;
   readonly weight: number;
   readonly style: 'normal' | 'italic';
 }
 
+/**
+ * A request that was answered by a DIFFERENT face than the one asked for.
+ *
+ * Recorded rather than silently applied, because a substitution changes measurement: it is part
+ * of the shaping fingerprint, so a cached run shaped against a substitute is never reused for the
+ * real face.
+ */
 export interface FontSubstitution {
   readonly requested: FontRequest;
   readonly resolved: FontRequest;
@@ -11,6 +25,13 @@ export interface FontSubstitution {
 
 const RESOLVED_FONT_BRAND: unique symbol = Symbol('validated-resolved-font');
 
+/**
+ * A face that passed admission: the bytes are present, within limits, hash-verified, and parse as
+ * a font.
+ *
+ * Branded, so a `ResolvedFont` cannot be constructed by an object literal. Holding one is proof
+ * the checks ran — which is what lets shaping skip re-validating on every call.
+ */
 export interface ResolvedFont {
   readonly [RESOLVED_FONT_BRAND]: true;
   readonly id: string;
@@ -25,10 +46,27 @@ export interface ResolvedFont {
   readonly substitution: FontSubstitution | null;
 }
 
+/**
+ * Largest single face this engine will ever admit, whatever a caller configures.
+ *
+ * A CEILING, not a default: a host may set a smaller `maxFontBytes`, but nothing can raise it
+ * past this. Font bytes come from files, and an unbounded face is a memory-exhaustion vector.
+ */
 export const HARD_MAX_FONT_BYTES = 64 * 1024 * 1024;
+
+/** Most faces one snapshot may hold, whatever a caller configures. */
 export const HARD_MAX_FONT_SOURCES = 256;
+
+/** Most bytes all admitted faces may total, whatever a caller configures. */
 export const HARD_MAX_AGGREGATE_FONT_BYTES = 128 * 1024 * 1024;
 
+/**
+ * Why a face was not admitted.
+ *
+ * `forbidden` and `hashMismatch` are adversarial signals rather than ordinary failures: the first
+ * is a face the host declared off-limits, the second is bytes that are not what their source
+ * claimed.
+ */
 export type FontResolutionErrorCode =
   | 'missing'
   | 'forbidden'
@@ -36,6 +74,13 @@ export type FontResolutionErrorCode =
   | 'malformed'
   | 'hashMismatch';
 
+/**
+ * A face that could not be admitted, carrying whatever evidence the refusal produced.
+ *
+ * RETURNED rather than thrown by `FontResourceSnapshot.resolve`, because a missing face is an
+ * ordinary condition — layout falls back and carries on. It extends `Error` so a caller that
+ * would rather throw can.
+ */
 export class FontResolutionError extends Error {
   readonly name = 'FontResolutionError';
   readonly request: FontRequest;
@@ -68,6 +113,13 @@ export class FontResolutionError extends Error {
   }
 }
 
+/**
+ * One face offered to a snapshot, before admission.
+ *
+ * `hash` is checked against the bytes, so a source cannot claim a face it did not supply. Setting
+ * `availability` to `forbidden` declares a face that exists but must not be used, which resolves
+ * as a typed refusal rather than as "missing".
+ */
 export interface FontResourceDefinition {
   readonly request: FontRequest;
   readonly id: string;
@@ -77,22 +129,49 @@ export interface FontResourceDefinition {
   readonly availability?: 'available' | 'forbidden';
 }
 
+/**
+ * A host-declared redirect: requests for `from` resolve to `to`.
+ *
+ * How a metric-compatible substitute is wired in — a document naming Calibri resolves to Carlito
+ * without the document being rewritten.
+ */
 export interface DeclaredFontSubstitution {
   readonly from: FontRequest;
   readonly to: FontRequest;
 }
 
+/** Whether bytes parse as a usable font, with a diagnostic when they do not. */
 export type FontValidationResult =
   | { readonly valid: true }
   | { readonly valid: false; readonly diagnostic: string };
 
+/**
+ * The injected check that bytes really are a font.
+ *
+ * Injected because it is the shaper that knows — HarfBuzz can open a face and read its tables,
+ * and this layer must not duplicate that judgement. Every byte reaching it is file input.
+ */
 export type FontByteValidator = (bytes: Uint8Array, faceIndex: number) => FontValidationResult;
 
+/**
+ * An immutable set of admitted faces, and the only way to reach one.
+ *
+ * `epoch` identifies the snapshot: fonts change by REPLACING it, never by mutation, so a layout
+ * pass holds one snapshot for its whole run and cannot observe a face appearing or vanishing
+ * midway.
+ */
 export interface FontResourceSnapshot {
   readonly epoch: number;
+  /** The admitted face, or a typed refusal. Never throws. */
   resolve(request: FontRequest): ResolvedFont | FontResolutionError;
 }
 
+/**
+ * How a snapshot is built: which faces, under what limits, validated how.
+ *
+ * `maxFontBytes` is clamped to {@link HARD_MAX_FONT_BYTES} — a caller may tighten the budget but
+ * never widen it past the engine's own ceiling.
+ */
 export interface FontResourceSnapshotOptions {
   readonly epoch: number;
   readonly maxFontBytes: number;
@@ -102,6 +181,13 @@ export interface FontResourceSnapshotOptions {
   readonly instrumentation?: FontResourceInstrumentation;
 }
 
+/**
+ * Optional counters for the operations font admission is expected to do RARELY.
+ *
+ * Exists so tests can assert the absence of work: hashing and byte-copying a 64 MB face on every
+ * resolve would not be visible in output, only in a stalled document, so the checks assert these
+ * fire once rather than per call.
+ */
 export interface FontResourceInstrumentation {
   readonly onOwnedByteCopy?: () => void;
   readonly onHash?: () => void;
@@ -131,6 +217,12 @@ const freezeRequest = (request: FontRequest): FontRequest => {
   return Object.freeze({ family: request.family, weight: request.weight, style: request.style });
 };
 
+/**
+ * The canonical string identifying one face request.
+ *
+ * Case- and whitespace-normalized, so `"Times New Roman"` and `"times new roman"` are one key —
+ * a document may name a family either way and both must reach the same face.
+ */
 export const fontRequestKey = (request: FontRequest): string => {
   assertRequest(request);
   return JSON.stringify([request.family, request.weight, request.style]);
@@ -435,6 +527,14 @@ const storeResource = (
   return stored;
 };
 
+/**
+ * Admit a set of faces and return the immutable snapshot layout resolves against.
+ *
+ * Admission is the trust boundary for font bytes: counts and sizes are checked against the hard
+ * ceilings, each face's hash is re-derived and compared, and the bytes are handed to the injected
+ * validator. A face failing any of these is recorded as a typed refusal rather than dropped, so
+ * `resolve` can explain itself instead of answering "missing".
+ */
 export const createFontResourceSnapshot = (
   options: FontResourceSnapshotOptions
 ): FontResourceSnapshot => {

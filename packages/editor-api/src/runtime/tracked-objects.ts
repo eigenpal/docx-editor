@@ -31,11 +31,21 @@ function each(
   visit(object as ClientObject);
 }
 
+/**
+ * The objects a context keeps addressable beyond the run that created them.
+ *
+ * An ordinary proxy stops being usable when its run ends. Tracking one keeps its address alive so
+ * a later `run(object, callback)` can adopt it, and untracking releases it — which matters for
+ * long-lived callers, since a tracked object is a document reference that will not be collected
+ * on its own.
+ *
+ * @public
+ */
 export class TrackedObjects {
   readonly #internals: ContextInternals;
   readonly #owns: (object: ClientObject) => boolean;
 
-  /** @internal */
+  /** @internal Built by the static factories above, never directly. */
   constructor(internals: ContextInternals, owns: (object: ClientObject) => boolean) {
     this.#internals = internals;
     this.#owns = owns;

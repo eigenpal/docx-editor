@@ -147,6 +147,12 @@ export const MAX_TABLE_ROW_FRAGMENTS = 4096;
 /** A cell box never narrows below this, however wide a `w:tblCellSpacing` gap is stated. */
 const MIN_CELL_BOX_PT = 1;
 
+/**
+ * Why a table could not be paginated as authored.
+ *
+ * Each is a bound: a row taller than a page, a row that cannot be split, or a row producing more
+ * fragments than the limit allows.
+ */
 export type TablePaginationErrorCode =
   | 'table-row-overheight'
   | 'table-row-split-unsupported'
@@ -681,10 +687,11 @@ function placeCellParagraph(
       isLastLine,
       alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined
     );
+    // Empty lines align too — see the body-flow twin in `semantic-layout.ts`.
     const alignOffset =
       placedSpans.length > 0 && alignedSpans.length > 0
         ? alignedSpans[0]!.box.x - placedSpans[0]!.box.x
-        : pendingLine.drawings.length > 0 && alignment !== 'left' && alignment !== 'both'
+        : alignment !== 'left' && alignment !== 'both'
           ? (() => {
               const slack = lineAvailableWidth - pendingLine.width;
               if (slack <= 0) return 0;
@@ -734,9 +741,10 @@ function placeCellParagraph(
         width: available,
         height: pendingLine.height,
       },
+      contentX: alignedSpans[0]?.box.x ?? lineIndent + alignOffset,
       baseline: pendingLine.baseline,
       leading: pendingLine.leading,
-      glyphBand: pendingLine.glyphBand,
+      trailingSpacing: pendingLine.trailingSpacing,
       ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
     });
     y += pendingLine.height;

@@ -55,6 +55,12 @@ export interface SourceRange {
   readonly end: number;
 }
 
+/**
+ * A rectangle in layout POINTS.
+ *
+ * Points everywhere in this layer — twips convert at property-read boundaries and CSS pixels at
+ * paint. A box carrying either of those would eventually be added to one carrying the other.
+ */
 export interface LayoutBox {
   readonly x: number;
   readonly y: number;
@@ -197,11 +203,31 @@ export interface StyleSpanRecord {
   };
 }
 
+/**
+ * One laid-out line: its geometry, its baseline, and the styled spans it renders.
+ *
+ * The unit hit-testing and caret placement resolve against. Geometry comes from HERE, never from
+ * the DOM, which is what lets an empty paragraph still get a caret.
+ */
 export interface LineRecord {
   readonly id: string;
   readonly range: SourceRange;
   readonly spans: readonly StyleSpanRecord[];
   readonly box: LayoutBox;
+  /**
+   * Where the line's content actually starts, after alignment and the first-line indent.
+   *
+   * {@link box} is the content BAND the line was broken against — its `x` is the indented
+   * column edge and its `width` the available measure, neither of which moves with
+   * `w:jc`. Alignment is otherwise expressed only as x offsets on the span boxes, so a line
+   * with no spans (an empty paragraph) had no aligned origin at all: paint, hit testing and
+   * the caret each fell back to `box.x` and drew a centred empty paragraph's caret hard
+   * against the left margin, where it stayed until the first character was typed.
+   *
+   * Equal to the first span's x whenever there is one, so it is the single origin every
+   * consumer can read without a spans-or-box fallback of its own.
+   */
+  readonly contentX: number;
   /** Distance from the line box top to the text baseline. */
   readonly baseline: number;
   /**
@@ -216,16 +242,21 @@ export interface LineRecord {
    */
   readonly leading: number;
   /**
-   * Depth of the glyph band inside {@link box}, before the spacing rule grew the box.
+   * Auto/atLeast line-spacing depth BELOW the glyph band, inside {@link box}.
    *
-   * A line WITH spans carries its band in the span heights. An empty paragraph carries
-   * nothing, so consumers that need a strut — the caret, and paint's `padding-bottom` —
-   * read this instead of taking {@link box} whole. Subtracting {@link leading} is not the
-   * same thing: `auto`/`atLeast` extras sit BELOW the band and leave `leading` at zero.
+   * The complement of {@link leading}: exact spacing centres the glyphs and moves the
+   * baseline down, while auto/atLeast leave the band at the top and grow the box beneath it.
+   * So the band a consumer needs is `box.height - trailingSpacing - leading`, and
+   * subtracting `leading` alone is right only under the exact rule.
    *
-   * Absent on lines published before this was measured; treat as {@link box} height.
+   * A line WITH spans carries its band in the span heights too. An empty paragraph carries
+   * nothing, which is why the caret, paint's `padding-bottom` and the content-control
+   * boundary all need this published rather than recovered from the box.
+   *
+   * Zero under the exact rule and on lines holding drawings, where the box is authored.
+   * Absent on lines published before this was measured; treat as zero.
    */
-  readonly glyphBand?: number;
+  readonly trailingSpacing?: number;
   /**
    * Model ranges on this line covering DELETED content, absent when there is none.
    *
@@ -400,6 +431,12 @@ export interface TableFragmentRecord {
   readonly box: LayoutBox;
 }
 
+/**
+ * One table row on one page.
+ *
+ * A FRAGMENT, not the row: a row split across a page break appears once per page it touches, and
+ * a repeated header row appears on every page of its table.
+ */
 export interface TableRowFragmentRecord {
   /** Canonical node id of the `w:tr`. */
   readonly id: string;
@@ -428,6 +465,13 @@ export interface TableRowFragmentRecord {
   readonly box: LayoutBox;
 }
 
+/**
+ * One table cell on one page, already resolved against the grid.
+ *
+ * `gridSpan` is clamped at read time, because it comes from a file and an unclamped span is a
+ * loop bound an attacker controls. A vertical-merge continuation paints its box but holds no
+ * blocks — its content belongs to the cell that started the merge.
+ */
 export interface TableCellFragmentRecord {
   /** Canonical node id of the `w:tc`. */
   readonly id: string;
@@ -622,6 +666,12 @@ export interface ContentControlBoundaryRecord {
   readonly fragments: readonly ContentControlGeometryFragment[];
 }
 
+/**
+ * One laid-out page: the sheet, the content area, and everything that landed on it.
+ *
+ * Page identity is REUSED across incremental passes — a pass that changes nothing returns the
+ * previous records by reference, which is what lets paint skip untouched pages entirely.
+ */
 export interface PageRecord {
   readonly id: string;
   readonly index: number;
@@ -666,6 +716,13 @@ export interface PageRecord {
   readonly contentControls?: readonly ContentControlBoundaryRecord[];
 }
 
+/**
+ * A complete layout pass: every page, plus the document-wide indexes derived alongside them.
+ *
+ * Stamped with the store `revision` it was laid out from, so anything holding geometry can tell
+ * whether the document has moved underneath it — which is how stale pointer gestures and
+ * overlays are refused rather than applied to coordinates that no longer describe anything.
+ */
 export interface SemanticLayout {
   /** The store revision these records were laid out from. */
   readonly revision: number;

@@ -50,6 +50,12 @@ exemptions go when it lands.
   (`DocxEditor.DocumentOutline`) over `Editor.getOutline()`; Vue twin lands with the
   composable layer.
 - `DocxEditorDocumentOutlineProps` — the outline part's props.
+- `useEditorCaret` — the caret as `{ paragraphId, offset }`, the shape the write APIs take
+  as their `at`. `snapshot.selection` cannot answer it (`DocRange` addresses paragraphs by
+  id and carries no offsets), so hosts were reaching into the instance-only `surface`
+  escape hatch to insert at a place. Reference-stable, so it can be captured in a handler
+  and used as a dependency. Vue's twin lands with the composable layer.
+- `EditorCaret` — that hook's return shape.
 - `useEditorState` — `useSyncExternalStore` selector hook over the version-cached
   snapshot; Vue twin is a reactivity-based composable, future task.
 - `useEditorCommand` — chrome-slot command binding hook; Vue twin is a composable,
@@ -276,6 +282,9 @@ React-only.
 - `MenuReportIssueProps` — Help's one packaged row, named so a host can drop it or point
   it at its own support channel rather than this project's tracker.
 - `MenuSeparatorProps`
+- `MenuGroupProps` — a named section of rows: a visible heading plus a real `role="group"`
+  taking it as the accessible name. A separator says "these are apart"; a group says what
+  they are, which is what a panel needs once a product adds rows beside the packaged ones.
 - `MenuSubmenuProps`
 - `MenuTableGridProps` — Word's 6×6 insert-table size picker.
 - `MenuPartComponent` — a menu pinned to one registry id.

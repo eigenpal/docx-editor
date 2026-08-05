@@ -73,6 +73,7 @@ export type ReviewRevisionKind =
   /** A row, cell, section or grid revision. Supported row revisions are resolvable. */
   | 'structural';
 
+/** One tracked change as the store derives it, keyed per decision rather than per site. */
 export interface ReviewRevisionItem {
   readonly kind: 'revision';
   /** Stable across renders and unique per DECISION, not per site. */
@@ -115,8 +116,19 @@ export interface ReviewRevisionItem {
   readonly readOnly: boolean;
   /** The other half of a move, or the other side of a delete/insert replacement. */
   readonly pairedWith?: string;
+  /**
+   * Comments answering this change, in document order.
+   *
+   * A reply to a tracked change IS a comment: `w:ins` and `w:del` carry `(@w:id, @w:author,
+   * @w:date)` and no body, so `replyToReviewItem` writes the text as a comment over the
+   * revision's own range. Nothing recorded the link, so the reply came back as a separate
+   * card — the reader saw their answer detach from the change it answered. The range is the
+   * link, and it is the same evidence `commentItemsOf` threads coincident comments on.
+   */
+  readonly replyIds: readonly string[];
 }
 
+/** One comment as the store derives it, with its thread links resolved. */
 export interface ReviewCommentItem {
   readonly kind: 'comment';
   readonly id: string;
@@ -125,12 +137,26 @@ export interface ReviewCommentItem {
   readonly resolved: boolean;
   /** The comment this replies to, absent for a top-level comment. */
   readonly parentId?: string;
+  /**
+   * The REVISION this comment answers, when it covers exactly that change's characters.
+   *
+   * Separate from {@link parentId} rather than folded into it: the two name different item
+   * kinds, and a surface resolving one id against the comment index would find nothing.
+   */
+  readonly parentRevisionId?: string;
   /** Replies to this comment, in document order. Empty for a reply or a childless comment. */
   readonly replyIds: readonly string[];
   /** True when the file gave this comment no usable range. */
   readonly orphaned: boolean;
 }
 
+/**
+ * One pending decision as the STORE derives it: a tracked change or a comment. Discriminate on
+ * `kind`.
+ *
+ * The layout layer's own `ReviewItem` widens this with the pro custom-node card, which has no
+ * store representation.
+ */
 export type ReviewItem = ReviewRevisionItem | ReviewCommentItem;
 
 /** The stable key a surface uses for the active item and for a React list. */
@@ -449,6 +475,8 @@ export function revisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
       replacedText: entry.revisionKind === 'replace' ? entry.deletedText : '',
       ranges: entry.ranges,
       readOnly: entry.readOnly,
+      // Filled by `collectReviewItems`, which is the only place that sees the comments too.
+      replyIds: [],
     })
   );
   return pairReplacements(items, paragraphOrderOfPart(part));
@@ -683,6 +711,7 @@ export function commentItemsOf(
   });
 }
 
+/** What review derivation reads: one story part plus its comment parts. */
 export interface ReviewModelInput {
   /** The story the ranges live in — the main document, a header, a note. */
   readonly storyPart: OoxmlPart;
@@ -737,8 +766,136 @@ export function collectReviewItems(input: ReviewModelInput): ReviewItem[] {
     }
   }
 
-  const items: ReviewItem[] = [...revisions, ...commentItemsOf(comments, anchors, threadState)];
+  const items: ReviewItem[] = linkRevisionReplies([
+    ...revisions,
+    ...commentItemsOf(comments, anchors, threadState),
+  ]);
   return items.sort((a, b) => positionRank(a, order) - positionRank(b, order));
+}
+
+/**
+ * The shape {@link linkRevisionReplies} needs, stated STRUCTURALLY.
+ *
+ * The store's queue is revisions and comments; the layout lane's adds a third kind for custom
+ * nodes, and neither union is assignable to the other. Both lanes have to run this pass — the
+ * store on the full derivation, the session on the locally patched list — so the pass is
+ * written against the fields it actually reads rather than against either union, and hands
+ * back the caller's own item type.
+ */
+export interface LinkableReviewItem {
+  readonly kind: string;
+  readonly id: string;
+  readonly ranges?: readonly ReviewRange[];
+  readonly range?: ReviewRange | null;
+  readonly parentId?: string;
+  readonly parentRevisionId?: string;
+  readonly replyIds?: readonly string[];
+  readonly orphaned?: boolean;
+}
+
+/** A range as a comparable key, so "exactly these characters" is one lookup. */
+function rangeKey(range: ReviewRange): string {
+  return (
+    `${range.partName} ${range.start.paragraphId}:${range.start.offset}` +
+    `|${range.end.paragraphId}:${range.end.offset}`
+  );
+}
+
+/**
+ * Attach each comment that answers a tracked change to the change it answers.
+ *
+ * The evidence is the RANGE, exactly as it is for a coincident comment thread: replying to a
+ * revision writes a comment over that revision's own characters, because OOXML gives `w:ins`
+ * and `w:del` nowhere else to put the text. Without this the reply came back as an independent
+ * card in the rail, sitting beside the change rather than inside it, and the reader had no way
+ * to see which change their answer belonged to.
+ *
+ * Three things keep it from over-claiming. A ZERO-WIDTH range is evidence of nothing — the same
+ * rule the comment threading uses, and a format or paragraph-mark revision decorates no
+ * characters at all. A comment already stated to be a REPLY to another comment is not claimed
+ * directly, because a stated link always beats an inferred one. And the FIRST revision on a span
+ * wins, so a card cannot claim a reply another card already holds.
+ *
+ * The WHOLE conversation moves, not its head. A change's card renders `replyIds` as a flat list,
+ * so linking only the top comment of a thread left every answer to that answer rendered by
+ * nobody: reply twice to one change and the second reply existed in `comments.xml` and appeared
+ * nowhere on screen. Descendants ride along, in the order they were authored.
+ *
+ * IDEMPOTENT, and that is load-bearing. The session re-runs this over a list whose comments are
+ * ALREADY linked, so a pass that only ever added links left a stale `parentRevisionId` behind
+ * when a keystroke shifted the revision's offsets out from under it — the rail filters such a
+ * comment out of its roots, and with no revision claiming it any more the card vanished until
+ * the next full re-derivation. Every link is rebuilt from the ranges on every pass.
+ */
+export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonly T[]): T[] {
+  const revisionBySpan = new Map<string, string>();
+  for (const item of items) {
+    if (item.kind !== 'revision') continue;
+    for (const range of item.ranges ?? []) {
+      if (
+        range.start.paragraphId === range.end.paragraphId &&
+        range.start.offset === range.end.offset
+      ) {
+        continue;
+      }
+      const key = rangeKey(range);
+      if (!revisionBySpan.has(key)) revisionBySpan.set(key, item.id);
+    }
+  }
+
+  // Comment threads as the derivation stated them, so a claimed head brings its answers.
+  const commentRepliesOf = new Map<string, readonly string[]>();
+  for (const item of items) {
+    if (item.kind === 'comment' && item.replyIds && item.replyIds.length > 0) {
+      commentRepliesOf.set(item.id, item.replyIds);
+    }
+  }
+  const descendantsOf = (rootId: string): string[] => {
+    const out: string[] = [];
+    const seen = new Set<string>([rootId]);
+    const queue = [...(commentRepliesOf.get(rootId) ?? [])];
+    while (queue.length > 0) {
+      const next = queue.shift()!;
+      if (seen.has(next)) continue;
+      seen.add(next);
+      out.push(next);
+      queue.push(...(commentRepliesOf.get(next) ?? []));
+    }
+    return out;
+  };
+
+  const repliesOf = new Map<string, string[]>();
+  const parentOf = new Map<string, string>();
+  for (const item of items) {
+    if (item.kind !== 'comment' || item.parentId !== undefined) continue;
+    if (item.orphaned || !item.range) continue;
+    const revisionId = revisionBySpan.get(rangeKey(item.range));
+    if (revisionId === undefined) continue;
+    const thread = [item.id, ...descendantsOf(item.id)];
+    for (const id of thread) parentOf.set(id, revisionId);
+    const bucket = repliesOf.get(revisionId);
+    if (bucket) bucket.push(...thread);
+    else repliesOf.set(revisionId, thread);
+  }
+
+  return items.map((item) => {
+    if (item.kind === 'revision') {
+      const replies = repliesOf.get(item.id) ?? [];
+      if (replies.length === 0 && (item.replyIds ?? []).length === 0) return item;
+      return { ...item, replyIds: replies };
+    }
+    if (item.kind === 'comment') {
+      const parent = parentOf.get(item.id);
+      if (parent === undefined) {
+        if (item.parentRevisionId === undefined) return item;
+        // Rebuilt, not patched: the key has to GO, and spreading cannot remove one.
+        const { parentRevisionId: _dropped, ...rest } = item;
+        return rest as T;
+      }
+      return item.parentRevisionId === parent ? item : { ...item, parentRevisionId: parent };
+    }
+    return item;
+  });
 }
 
 /** Paragraph node id → document position, from the TREE rather than from a layout. */

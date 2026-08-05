@@ -18,8 +18,16 @@ import { resolveInternalTarget } from './opc-names.ts';
 import type { OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 
+/** Which of a family's four faces an embedded font relationship supplies. */
 export type FontStyleKey = 'regular' | 'bold' | 'italic' | 'boldItalic';
 
+/**
+ * One font whose bytes travel inside the package.
+ *
+ * The family name is the DOCUMENT's and is not validated — it is attacker-controlled, so it is
+ * escaped into CSS and never registered globally on `document.fonts`, where it would shadow the
+ * host application's own fonts.
+ */
 export interface EmbeddedFont {
   /** The family as the document names it. Not validated against anything. */
   readonly family: string;
@@ -101,6 +109,7 @@ function targetOf(pkg: OoxmlPackage, ownerPart: string, relationshipId: string):
   return null;
 }
 
+/** Limits and instrumentation for reading embedded fonts out of a package. */
 export interface ReadEmbeddedFontsOptions {
   /** Refuse a font part larger than this. Defaults to 16 MB. */
   readonly maxFontBytes?: number;

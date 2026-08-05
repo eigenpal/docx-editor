@@ -77,9 +77,31 @@ export * from './runtime/public.ts';
  * @public
  */
 export interface DocxEditorNamespace {
+  /** A runtime over DOCX bytes. Additionally offers `save()`. */
   createServer(bytes: Uint8Array, options?: CreateServerOptions): Promise<DocxEditorServerRuntime>;
 }
 
+/**
+ * The entry point: open a document and get a runtime to work against.
+ *
+ * Import from `@docx-editor.dev/editor-api/browser` for the same namespace plus `createBrowser`,
+ * which borrows a live editor instead of owning bytes.
+ *
+ * @example
+ * ```ts
+ * import { DocxEditor } from '@docx-editor.dev/editor-api';
+ *
+ * const runtime = await DocxEditor.createServer(bytes, { author: 'Payroll bot' });
+ * await runtime.run(async (context) => {
+ *   const body = context.document.body;
+ *   body.load('text');
+ *   await context.sync();
+ * });
+ * const saved = await runtime.save();
+ * ```
+ *
+ * @public
+ */
 export const DocxEditor: DocxEditorNamespace = Object.freeze({
   /** A runtime over DOCX bytes. Additionally offers `save()`. */
   createServer,

@@ -47,7 +47,13 @@ import {
 import type { CSSProperties, ReactNode } from 'react';
 import type { ReviewItemQuery, ReviewRevisionKind } from '@docx-editor.dev/core/contracts/editor';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
-import { ReviewRailContext, Slot, useDocxEditor, useTranslation } from '@docx-editor.dev/react';
+import {
+  ReviewRailContext,
+  Slot,
+  useDocxEditor,
+  useTranslation,
+  type ToolbarTranslate,
+} from '@docx-editor.dev/react';
 import { useReview, type ReviewItemView } from './useReview';
 
 /** The rail's data, provided once by the Root so a card never re-subscribes. */
@@ -69,6 +75,10 @@ export function useReviewItem(): ReviewItemView | null {
 }
 
 interface ReviewRailValue {
+  /** The host's label resolver, when it passed one. Parts read through {@link useReviewLabel}. */
+  readonly t: ToolbarTranslate | undefined;
+  /** A card's className, from the rail's `card` prop. */
+  readonly cardClassName: string | undefined;
   readonly review: ReturnType<typeof useReview>;
   /**
    * The UNFILTERED queue. The rail's cards render `review.items`, which the structural and
@@ -133,6 +143,31 @@ const COLLAPSE_DISPLACEMENT_PX = 480;
 /** Stable query for the balloon's unplaced queue read — never allocate per render. */
 const NO_PLACEMENT_REVIEW_QUERY = Object.freeze({ placement: false }) satisfies ReviewItemQuery;
 
+/**
+ * Whether this entry renders INSIDE another card rather than as one of its own.
+ *
+ * Two kinds of reply, one rule. A threaded reply belongs in the comment it answers; a reply to
+ * a TRACKED CHANGE is also a comment — OOXML gives `w:ins` and `w:del` no body, so the text is
+ * written over the change's own range — and belongs in the change's card. Everywhere the rail
+ * lists roots asks this, because a filter that checked only `parentId` drew a reply to a
+ * revision twice: once inside the change and once beside it.
+ */
+function isThreadedReply(entry: ReviewItemView, present: ReadonlySet<string>): boolean {
+  if (entry.kind !== 'comment') return false;
+  // A parent this list does not hold is not a parent HERE. The engine already drops a link
+  // its own `excludeRevisionKinds` filter broke, but a consumer's `filter` prop can break one
+  // too, and a comment excluded as a reply to a card nobody draws is a comment that vanishes.
+  // Falling back to root is the only answer that always renders it somewhere.
+  if (entry.parentId !== undefined) return present.has(entry.parentId);
+  if (entry.parentRevisionId !== undefined) return present.has(entry.parentRevisionId);
+  return false;
+}
+
+/** Ids of everything the rail is working from, for the reply/root test above. */
+function idsOf(items: readonly ReviewItemView[]): ReadonlySet<string> {
+  return new Set(items.map((entry) => entry.id));
+}
+
 /** Keeps the caret: a mousedown that bubbles to the editor moves it. Inputs are exempt. */
 function guardMousedown(event: React.MouseEvent): void {
   const tag = (event.target as HTMLElement | null)?.tagName;
@@ -148,13 +183,28 @@ function useRail(): ReviewRailValue {
   return INERT_RAIL;
 }
 
+/**
+ * A part's strings: the host's `t`, else the bundled catalogue.
+ *
+ * The fallback is the packaged English, not the raw key — unlike the toolbar and menu bar,
+ * whose labels are registry keys a host is expected to resolve, every string here ships one.
+ */
+function useReviewLabel(): (key: TranslationKey) => string {
+  const { t: hostT } = useContext(ReviewContext) ?? {};
+  const { t } = useTranslation();
+  return useCallback((key: TranslationKey) => hostT?.(key) ?? t(key), [hostT, t]);
+}
+
 const INERT_RAIL: ReviewRailValue = {
+  t: undefined,
+  cardClassName: undefined,
   review: {
     items: [],
     activeKey: null,
     setActive: () => {},
     accept: () => {},
     reject: () => {},
+    remove: () => false,
     reply: () => false,
     selectionAnchorY: null,
     comment: () => false,
@@ -187,11 +237,31 @@ export interface ReviewActionProps extends ReviewPartProps {
 }
 
 /** Props for `DocxEditor.Review`. @public */
-export interface ReviewProps extends ReviewPartProps {
+export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
   /**
-   * Host furniture rendered at the top of the rail, above the cards — filters,
-   * legends, custom summaries (pro-review-and-custom-nodes task 4.11). Plain
-   * flow content; per-item custom CARDS (4.10 reviewCard) are the follow-up.
+   * Label resolver, as `DocxEditor.Toolbar`, `.Menu` and `.ContextMenu` take one. Unresolved
+   * keys fall back to the bundled catalogue rather than to the key.
+   */
+  t?: ToolbarTranslate;
+  /** Class for each card. The rail's own `className` styles the column; this the boxes in it. */
+  card?: { className?: string };
+  /**
+   * The cards, or a render prop that replaces the packaged card entirely while keeping the
+   * rail's subscription, anchoring, stacking and virtualization. Nodes are treated as part
+   * overrides for the packaged card instead.
+   *
+   * ```tsx
+   * <DocxEditor.Review>{(item) => <MyCard item={item} />}</DocxEditor.Review>
+   * ```
+   */
+  children?: ReactNode | ((item: ReviewItemView) => ReactNode);
+  /**
+   * Host content at the top of the rail, above the cards — filters, legends, summaries.
+   *
+   * Rendered only while the pane is OPEN. A closed rail gives up its width for a 32px strip
+   * of markers, and content laid out for the 300px column has nowhere to go in it; unmounting
+   * is the rail's own business, not something a host should have to subscribe to `paneOpen`
+   * to discover. Furniture that should outlive the toggle belongs outside the rail.
    */
   furniture?: ReactNode;
   /**
@@ -238,6 +308,16 @@ const COMMENT_ICON =
 const ACCEPT_ICON = 'M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z';
 const REJECT_ICON =
   'm256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z';
+/**
+ * A TRASH can, not the reject X.
+ *
+ * Deliberately a different glyph from {@link REJECT_ICON} even though both sit in the same
+ * actions row and both discard something. On a revision card the two would otherwise read as
+ * the same button drawn twice, and the destructive one — deleting a reviewer's remark outright
+ * — is the one that must not be reached for by mistake.
+ */
+const DELETE_ICON =
+  'M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z';
 
 /**
  * The review rail.
@@ -254,6 +334,8 @@ function ReviewRoot({
   asChild,
   hidden,
   children,
+  t: hostT,
+  card,
   preset = true,
   stack = true,
   gap = 8,
@@ -277,7 +359,9 @@ function ReviewRoot({
   const allReview = useReview(NO_PLACEMENT_REVIEW_QUERY);
   const review = useReview(railQuery);
   const setReviewPaneOpen = review.setPaneOpen;
-  const { t } = useTranslation();
+  // The root provides the context `useReviewLabel` reads, so it resolves from the prop.
+  const { t: bundled } = useTranslation();
+  const t = useCallback((key: TranslationKey) => hostT?.(key) ?? bundled(key), [hostT, bundled]);
   const railRef = useRef<HTMLElement | null>(null);
   // Claim the gutter. Without this the viewport reserved it for every consumer, mounted
   // rail or not, and the tier-2 `<DocxEditor>` sugar mounts none.
@@ -358,6 +442,11 @@ function ReviewRoot({
   // a rail pinned to the right edge floats away from the page it annotates; it belongs one
   // gutter to the right of the sheet, and it moves with the sheet when the window resizes or
   // the zoom changes.
+  //
+  // Client rects, not `offsetLeft`/`offsetTop`: those are relative to each element's own
+  // `offsetParent`, and a host that positions its page wrapper makes the surface report
+  // `offsetLeft: 0` — landing the rail a page-width left, on top of the document. `scrollTop`
+  // and `clientTop` put the rects back into the same space the offsets used to describe.
   const [metrics, setMetrics] = useState<RailMetrics>(INITIAL_METRICS);
   useEffect(() => {
     const rail = railRef.current;
@@ -366,12 +455,18 @@ function ReviewRoot({
     const surface = parent?.querySelector<HTMLElement>('.docx-paginated-surface') ?? null;
     const sync = (): void => {
       setMetrics((previous) => {
+        const box = surface && parent ? surface.getBoundingClientRect() : null;
+        const frame = box && parent ? parent.getBoundingClientRect() : null;
         const next: RailMetrics = {
           // The engine's own points-to-pixels factor, zoom included. Deriving it here from
           // `getZoom()` alone dropped the 96/72 and put every card at three quarters height.
           scale: editor.getRenderScale(),
-          top: surface ? surface.offsetTop : 0,
-          left: surface ? surface.offsetLeft + surface.offsetWidth + RAIL_GUTTER : null,
+          top:
+            box && frame && parent ? box.top - frame.top - parent.clientTop + parent.scrollTop : 0,
+          left:
+            box && frame && parent
+              ? box.right - frame.left - parent.clientLeft + parent.scrollLeft + RAIL_GUTTER
+              : null,
         };
         return previous.scale === next.scale &&
           previous.top === next.top &&
@@ -489,10 +584,10 @@ function ReviewRoot({
   // Only what the list RENDERS competes for the column: a threaded reply lives inside its
   // parent's card, and letting it into the run advanced the cursor once per reply, spacing
   // every card below a commented conversation by gaps nothing on screen accounted for.
-  const roots = useMemo(
-    () => items.filter((entry) => !(entry.kind === 'comment' && entry.parentId !== undefined)),
-    [items]
-  );
+  const roots = useMemo(() => {
+    const present = idsOf(items);
+    return items.filter((entry) => !isThreadedReply(entry, present));
+  }, [items]);
   const stackInput = useMemo(() => {
     if (draftAnchorY === null) return roots;
     // In document order, AFTER anything already at that height: the comments already there
@@ -555,8 +650,11 @@ function ReviewRoot({
       ? null
       : metrics.top + (stacked.get(COMPOSE_KEY) ?? composeAnchorY) * metrics.scale;
 
+  const cardClassName = card?.className;
   const value = useMemo<ReviewRailValue>(
     () => ({
+      t: hostT,
+      cardClassName,
       review: { ...review, items },
       allItems: allReview.items,
       authorSlots,
@@ -565,7 +663,18 @@ function ReviewRoot({
       beginDraft,
       endDraft,
     }),
-    [review, allReview.items, items, authorSlots, byId, observeSlot, beginDraft, endDraft]
+    [
+      hostT,
+      cardClassName,
+      review,
+      allReview.items,
+      items,
+      authorSlots,
+      byId,
+      observeSlot,
+      beginDraft,
+      endDraft,
+    ]
   );
 
   if (hidden) return null;
@@ -584,9 +693,9 @@ function ReviewRoot({
     style: metrics.left === null ? undefined : { left: metrics.left, right: 'auto' },
   };
 
-  // Root-level slots a child can replace in place. Collected but never consumed, six of the
-  // fourteen parts advertised the override rung and silently did nothing.
-  const rootParts = partOverrides(children);
+  // Root-level slots a child can replace in place. A render prop is not an override — it is
+  // the card itself, and travels down to `ReviewList` untouched.
+  const rootParts = typeof children === 'function' ? {} : partOverrides(children);
   const takeRoot = (key: string, fallback: ReactNode): ReactNode =>
     key in rootParts ? rootParts[key] : fallback;
 
@@ -605,8 +714,11 @@ function ReviewRoot({
     </>
   ) : null;
 
+  // `preset={false}` hands the panel over verbatim, but a render prop needs the list to run it.
   const body = !preset
-    ? children
+    ? typeof children === 'function'
+      ? null
+      : children
     : open
       ? takeRoot(
           'List',
@@ -656,7 +768,7 @@ function ReviewRoot({
         </Slot>
       ) : (
         <aside {...shared}>
-          {furniture !== undefined ? (
+          {open && furniture !== undefined ? (
             <div className="docx-review__furniture" data-testid="review-furniture">
               {furniture}
             </div>
@@ -706,12 +818,11 @@ function ReviewList({
   className,
   hidden,
 }: ReviewListProps) {
-  const { review, measure } = useRail();
+  const { review, measure, cardClassName } = useRail();
   if (hidden) return null;
 
-  const roots = review.items.filter(
-    (entry) => !(entry.kind === 'comment' && entry.parentId !== undefined)
-  );
+  const present = idsOf(review.items);
+  const roots = review.items.filter((entry) => !isThreadedReply(entry, present));
 
   if (roots.length === 0) {
     return typeof children === 'function' ? null : <ReviewEmpty />;
@@ -742,7 +853,9 @@ function ReviewList({
               {typeof children === 'function' ? (
                 children(entry)
               ) : (
-                <ReviewCard>{children}</ReviewCard>
+                <ReviewCard {...(cardClassName ? { className: cardClassName } : {})}>
+                  {children}
+                </ReviewCard>
               )}
             </div>
           </ReviewItemContext.Provider>
@@ -773,11 +886,10 @@ function ReviewMarkers({
   hidden?: boolean;
 }) {
   const { review } = useRail();
-  const { t } = useTranslation();
+  const t = useReviewLabel();
   if (hidden) return null;
-  const roots = review.items.filter(
-    (entry) => !(entry.kind === 'comment' && entry.parentId !== undefined)
-  );
+  const present = idsOf(review.items);
+  const roots = review.items.filter((entry) => !isThreadedReply(entry, present));
   return (
     <div className={`docx-review__markers${className ? ` ${className}` : ''}`}>
       {roots.map((entry) => {
@@ -831,7 +943,7 @@ function ReviewAddComment({
   children,
 }: ReviewPartProps & { top: number | null; drafting?: boolean }) {
   const { beginDraft } = useRail();
-  const { t } = useTranslation();
+  const t = useReviewLabel();
   // Offered for ANY range, including one inside an existing comment: overlapping comments
   // are ordinary in OOXML and ordinary in Word, and a reader picking out three words of a
   // commented sentence usually has something new to say about exactly those words. This used
@@ -865,7 +977,7 @@ ReviewAddComment.docxReviewPart = 'AddComment' as const;
  */
 function ReviewDraft({ top, className, hidden }: ReviewPartProps & { top: number }) {
   const { review, endDraft, measure } = useRail();
-  const { t } = useTranslation();
+  const t = useReviewLabel();
   const [text, setText] = useState('');
   const [refused, setRefused] = useState(false);
   const fieldRef = useRef<HTMLInputElement | null>(null);
@@ -1005,7 +1117,7 @@ interface BalloonAnchor {
  */
 function ReviewBalloon({ className, hidden }: ReviewPartProps) {
   const { review, allItems, authorSlots } = useRail();
-  const { t } = useTranslation();
+  const t = useReviewLabel();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [anchor, setAnchor] = useState<BalloonAnchor | null>(null);
   // Whether a balloon is up, readable from the listener without re-binding it.
@@ -1265,7 +1377,7 @@ function BalloonTime({ raw }: { raw: string }) {
 
 /** Shown when nothing is pending. @public */
 function ReviewEmpty({ className, hidden, children }: ReviewPartProps) {
-  const { t } = useTranslation();
+  const t = useReviewLabel();
   if (hidden) return null;
   return (
     <div
@@ -1299,6 +1411,11 @@ function ReviewCard({ className, asChild, hidden, children }: ReviewPartProps) {
     'data-testid': 'review-card',
     'aria-labelledby': `${cardId}-author ${cardId}-summary`,
     'data-kind': entry.kind === 'revision' ? (entry.revisionKind ?? 'revision') : entry.kind,
+    // Which custom node, not just that it is one: every custom card is `data-kind="custom"`,
+    // so a theme could otherwise never tell a citation card from a clause card.
+    ...(entry.kind === 'custom' && entry.item.kind === 'custom'
+      ? { 'data-node-name': entry.item.name }
+      : {}),
     ...(entry.isActive ? { 'data-active': '' } : {}),
     ...(entry.kind === 'comment' && entry.resolved ? { 'data-resolved': '' } : {}),
     // The author colour is a CSS variable rather than a class, so a host restyling the card
@@ -1357,24 +1474,33 @@ function ReviewCardPreset({ children }: { children?: ReactNode }) {
   // attrs and label originate in the file.
   if (entry.kind === 'custom' && entry.item.kind === 'custom') {
     const item = entry.item;
+    // Overridable like every other kind. `Author` carries the title because that is the slot
+    // it occupies in the packaged card.
     return (
       <>
         <div className="docx-review__head">
+          {take('Avatar', null)}
           <div className="docx-review__meta">
-            <span className="docx-review__author" data-testid="review-custom-title">
-              {item.title}
-            </span>
+            {take(
+              'Author',
+              <span className="docx-review__author" data-testid="review-custom-title">
+                {item.title}
+              </span>
+            )}
           </div>
         </div>
-        {item.detail ? (
-          <div
-            className="docx-review__summary"
-            data-testid="review-summary"
-            data-review-selectable=""
-          >
-            <span className="docx-review__text">{item.detail}</span>
-          </div>
-        ) : null}
+        {take(
+          'Summary',
+          item.detail ? (
+            <div
+              className="docx-review__summary"
+              data-testid="review-summary"
+              data-review-selectable=""
+            >
+              <span className="docx-review__text">{item.detail}</span>
+            </div>
+          ) : null
+        )}
         {overrides.__extra}
       </>
     );
@@ -1390,11 +1516,14 @@ function ReviewCardPreset({ children }: { children?: ReactNode }) {
           {take('Time', <ReviewTime />)}
         </div>
         {/* Accept and Reject are absent, not disabled, on a kind the engine cannot resolve:
-            a button that can never do anything is chrome pretending to be a capability. */}
-        {resolvable ? (
+            a button that can never do anything is chrome pretending to be a capability.
+            Delete follows the same rule and is on BOTH kinds, so every card a reader can
+            act on carries a way to be rid of it. */}
+        {resolvable || entry.kind === 'comment' ? (
           <div className="docx-review__actions">
             {take('Accept', <ReviewAccept />)}
             {take('Reject', <ReviewReject />)}
+            {take('Delete', <ReviewDelete />)}
           </div>
         ) : null}
       </div>
@@ -1439,6 +1568,9 @@ function partOverrides(children: ReactNode): Record<string, ReactNode> {
 function ReviewAvatar({ className, asChild, hidden, children }: ReviewPartProps) {
   const entry = useContext(ReviewItemContext);
   if (hidden || !entry) return null;
+  // Nothing to show is not an empty disc: a custom node's card has no author. Children win,
+  // because a host passing its own glyph means it whatever the item says.
+  if (children === undefined && !entry.initials) return null;
   const shared = {
     className: `docx-review__avatar${className ? ` ${className}` : ''}`,
     'data-testid': 'review-avatar',
@@ -1452,7 +1584,7 @@ ReviewAvatar.docxReviewPart = 'Avatar' as const;
 /** The author's name. @public */
 function ReviewAuthor({ className, asChild, hidden, children }: ReviewPartProps) {
   const entry = useContext(ReviewItemContext);
-  const { t } = useTranslation();
+  const t = useReviewLabel();
   if (hidden || !entry) return null;
   const author = entry.author || t('comments.unknown');
   const shared = {
@@ -1513,7 +1645,7 @@ const REVIEW_DATE_FORMAT = new Intl.DateTimeFormat(undefined, {
  */
 function ReviewSummary({ className, asChild, hidden, children }: ReviewPartProps) {
   const entry = useContext(ReviewItemContext);
-  const { t } = useTranslation();
+  const t = useReviewLabel();
   if (hidden || !entry) return null;
   const text = entry.text;
   const label = entry.kind !== 'revision' ? null : t(revisionLabelKey(entry.revisionKind));
@@ -1584,7 +1716,7 @@ function revisionLabelKey(kind: ReviewRevisionKind): TranslationKey {
 function ReviewAccept({ className, asChild, hidden, children, icon: glyph }: ReviewActionProps) {
   const { review } = useRail();
   const entry = useContext(ReviewItemContext);
-  const { t } = useTranslation();
+  const t = useReviewLabel();
   if (hidden || !entry || entry.kind !== 'revision' || entry.readOnly) return null;
   const label = t('review.accept');
   const shared = {
@@ -1608,7 +1740,7 @@ ReviewAccept.docxReviewPart = 'Accept' as const;
 function ReviewReject({ className, asChild, hidden, children, icon: glyph }: ReviewActionProps) {
   const { review } = useRail();
   const entry = useContext(ReviewItemContext);
-  const { t } = useTranslation();
+  const t = useReviewLabel();
   if (hidden || !entry || entry.kind !== 'revision' || entry.readOnly) return null;
   const label = t('review.reject');
   const shared = {
@@ -1628,11 +1760,64 @@ function ReviewReject({ className, asChild, hidden, children, icon: glyph }: Rev
 }
 ReviewReject.docxReviewPart = 'Reject' as const;
 
+/**
+ * Discard what the card holds: delete a comment thread, or reject a tracked change.
+ *
+ * The rail had accept and reject for a change and NOTHING for a comment, so a remark could be
+ * resolved but never removed — a reader who commented by mistake had to go back to the text and
+ * delete the words to be rid of it. One control on both kinds, because "remove this" is the same
+ * intent whichever the card holds; the engine's `deleteReviewItem` decides what it means.
+ *
+ * Absent, not disabled, on a card with nothing to discard — a custom node's, or a revision kind
+ * the engine cannot resolve.
+ *
+ * Revealed on HOVER of the one thing it deletes, and on keyboard focus — the stylesheet owns
+ * that, not this component. A rail of twenty cards each carrying a standing invitation to
+ * delete somebody's remark reads as an invitation to click one by mistake; scoping it to the
+ * node under the pointer also means a reply and the comment it answers never offer two
+ * identical buttons at once, which is the state that makes a reader delete the wrong one.
+ *
+ * CSS rather than an `isActive` gate because a reply is never itself the active item, and
+ * because requiring the reader to open a card before they can be rid of it is a step with
+ * nothing behind it. `visibility`, not `opacity`: hidden must also mean unclickable, and the
+ * space stays reserved so the row does not jump as the pointer crosses it.
+ *
+ * @public
+ */
+function ReviewDelete({ className, asChild, hidden, children, icon: glyph }: ReviewActionProps) {
+  const { review } = useRail();
+  const entry = useContext(ReviewItemContext);
+  const { t } = useTranslation();
+  if (hidden || !entry || entry.kind === 'custom') return null;
+  if (entry.kind === 'revision' && entry.readOnly) return null;
+  const label = entry.kind === 'comment' ? t('review.deleteComment') : t('review.discardChange');
+  const shared = {
+    type: 'button' as const,
+    className: `docx-review__action${className ? ` ${className}` : ''}`,
+    'data-testid': 'review-delete',
+    'aria-label': label,
+    title: label,
+    onMouseDown: guardMousedown,
+    onClick: (event: React.MouseEvent) => {
+      // The card is a `role="button"` that activates the item; without this the click both
+      // deleted the comment and asked the engine to open a card that no longer exists.
+      event.stopPropagation();
+      review.remove(entry);
+    },
+  };
+  if (asChild) return <Slot {...shared}>{children}</Slot>;
+  return <button {...shared}>{glyph ?? children ?? icon(DELETE_ICON)}</button>;
+}
+ReviewDelete.docxReviewPart = 'Delete' as const;
+
 /** The thread under a comment, in document order. @public */
 function ReviewReplies({ className, hidden }: ReviewPartProps) {
   const { byId } = useRail();
   const entry = useContext(ReviewItemContext);
-  if (hidden || !entry || entry.kind !== 'comment') return null;
+  // Comments AND revisions. A reply to a tracked change is a comment over that change's range,
+  // and refusing to draw it here is what put the reader's answer in a card of its own, floating
+  // beside the change instead of under it.
+  if (hidden || !entry || entry.kind === 'custom') return null;
   const replies = entry.replyIds
     .map((id) => byId.get(id))
     .filter((reply): reply is ReviewItemView => reply !== undefined);
@@ -1647,6 +1832,12 @@ function ReviewReplies({ className, hidden }: ReviewPartProps) {
               <div className="docx-review__meta">
                 <ReviewAuthor />
                 <ReviewTime />
+              </div>
+              {/* A reply is a comment like any other and can be deleted like one. Without
+                  this the only way to take back a reply was to delete the whole thread it
+                  hangs off — the parent's control is the only one that was drawn. */}
+              <div className="docx-review__actions">
+                <ReviewDelete />
               </div>
             </div>
             <ReviewSummary />
@@ -1672,7 +1863,7 @@ ReviewReplies.docxReviewPart = 'Replies' as const;
 function ReviewReply({ className, hidden, children }: ReviewPartProps) {
   const { review } = useRail();
   const entry = useContext(ReviewItemContext);
-  const { t } = useTranslation();
+  const t = useReviewLabel();
   const [draft, setDraft] = useState('');
   const [refused, setRefused] = useState(false);
   const fieldId = useId();
@@ -1769,6 +1960,8 @@ export interface DocxEditorReviewNamespace {
   readonly Summary: typeof ReviewSummary;
   readonly Accept: typeof ReviewAccept;
   readonly Reject: typeof ReviewReject;
+  /** Discard the card: delete a comment thread, or reject a tracked change. */
+  readonly Delete: typeof ReviewDelete;
   readonly Replies: typeof ReviewReplies;
   readonly Reply: typeof ReviewReply;
   /** The collapsed rail: one marker per item, shown when the pane is closed. */
@@ -1781,6 +1974,30 @@ export interface DocxEditorReviewNamespace {
   readonly Balloon: typeof ReviewBalloon;
 }
 
+/**
+ * The review rail: comments and tracked changes as a compound component.
+ *
+ * `DocxEditorReview` is itself the root; every part hangs off it, so a host arranges the pieces
+ * it wants rather than accepting one fixed layout. Requires the review module to be registered
+ * via `createDocxEditor({ modules: [reviewModule()] })` — without it there is nothing to derive
+ * cards from.
+ *
+ * @example
+ * ```tsx
+ * <DocxEditorReview>
+ *   <DocxEditorReview.List>
+ *     <DocxEditorReview.Card>
+ *       <DocxEditorReview.Author />
+ *       <DocxEditorReview.Summary />
+ *       <DocxEditorReview.Accept />
+ *       <DocxEditorReview.Reject />
+ *     </DocxEditorReview.Card>
+ *   </DocxEditorReview.List>
+ * </DocxEditorReview>
+ * ```
+ *
+ * @public
+ */
 export const DocxEditorReview: DocxEditorReviewNamespace = Object.assign(ReviewRoot, {
   List: ReviewList,
   Empty: ReviewEmpty,
@@ -1791,6 +2008,7 @@ export const DocxEditorReview: DocxEditorReviewNamespace = Object.assign(ReviewR
   Summary: ReviewSummary,
   Accept: ReviewAccept,
   Reject: ReviewReject,
+  Delete: ReviewDelete,
   Replies: ReviewReplies,
   Reply: ReviewReply,
   Markers: ReviewMarkers,

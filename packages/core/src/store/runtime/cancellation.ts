@@ -8,8 +8,16 @@
 // tracks the phase; cooperative work calls `checkpoint()` at declared intervals
 // to unwind promptly.
 
+/**
+ * Which side of the point of no return an operation is on.
+ *
+ * Canonical publication is that point. Cancelling BEFORE it rolls the whole operation back;
+ * cancelling after it leaves the commit standing and cancels only derived work — layout, export,
+ * caches.
+ */
 export type CancellationPhase = 'pre-publication' | 'post-publication';
 
+/** Thrown from a `checkpoint()` when the operation has been cancelled. */
 export class CancellationError extends Error {
   constructor(
     /** True when the commit is already published and only derived work is cancelled. */
@@ -21,6 +29,12 @@ export class CancellationError extends Error {
   }
 }
 
+/**
+ * The read side of cancellation, handed to cooperative work.
+ *
+ * Cooperative rather than pre-emptive: long work calls `checkpoint()` at declared intervals, which
+ * is what lets an operation unwind promptly without the engine having to interrupt it mid-mutation.
+ */
 export interface CancellationToken {
   readonly isCancelled: boolean;
   readonly phase: CancellationPhase;
@@ -30,6 +44,11 @@ export interface CancellationToken {
   checkpoint(): void;
 }
 
+/**
+ * The write side of cancellation, and the owner of the phase.
+ *
+ * Whoever starts an operation holds this; everything it calls gets only the token.
+ */
 export class CancellationController {
   private _cancelled = false;
   private _phase: CancellationPhase = 'pre-publication';

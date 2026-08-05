@@ -53,8 +53,22 @@ export {
 } from './ooxml-serialize.ts';
 export { validateOoxmlPart, validateOoxmlPartDelta } from './ooxml-validate.ts';
 
+/**
+ * A node's stable identity within its part.
+ *
+ * Minted deterministically from the structural path at parse, then RETAINED through structural
+ * sharing — the same bytes always produce the same ids, and an edit elsewhere in the document
+ * does not renumber untouched nodes. Every tree op addresses nodes by these.
+ */
 export type OoxmlNodeId = string;
 
+/**
+ * One `xmlns:` declaration carried on a node.
+ *
+ * Preserved rather than normalized away: a document that binds `w14` at the root and a document
+ * that binds it on a paragraph are different bytes, and re-emitting the wrong one is a fidelity
+ * loss even though the semantics match.
+ */
 export interface OoxmlNamespaceBinding {
   readonly prefix: string;
   readonly namespaceUri: string;
@@ -67,6 +81,7 @@ interface OoxmlAttributeBase {
   readonly value: string;
 }
 
+/** `xml:space`, which decides whether a run's leading and trailing whitespace survives. */
 export interface OoxmlXmlSpaceAttribute extends OoxmlAttributeBase {
   readonly kind: 'xmlSpace';
   readonly namespaceUri: typeof XML_NAMESPACE_URI;
@@ -75,21 +90,35 @@ export interface OoxmlXmlSpaceAttribute extends OoxmlAttributeBase {
   readonly value: 'default' | 'preserve';
 }
 
+/** `w:val` — the attribute nearly every WordprocessingML property carries its value in. */
 export interface OoxmlWmlValAttribute extends OoxmlAttributeBase {
   readonly kind: 'wmlVal';
   readonly namespaceUri: typeof WML_NAMESPACE_URI;
   readonly localName: 'val';
 }
 
+/**
+ * Any attribute outside the typed vocabulary, carried verbatim.
+ *
+ * Where losslessness actually happens: an attribute this engine has no model for is preserved
+ * exactly rather than dropped, so a save re-emits what the file said.
+ */
 export interface OoxmlGenericExtensionAttribute extends OoxmlAttributeBase {
   readonly kind: 'genericExtension';
 }
 
+/** Any attribute on any node: the two typed ones, plus the verbatim catch-all. */
 export type OoxmlAttribute =
   | OoxmlXmlSpaceAttribute
   | OoxmlWmlValAttribute
   | OoxmlGenericExtensionAttribute;
 
+/**
+ * Attributes a TYPED node may carry.
+ *
+ * Excludes `w:val` on purpose: a node the engine models keeps its value in typed fields, and
+ * allowing a stray `w:val` alongside them would create two sources of truth for one property.
+ */
 export type OoxmlKnownNodeAttribute = OoxmlXmlSpaceAttribute | OoxmlGenericExtensionAttribute;
 
 interface OoxmlElementBase<
@@ -107,6 +136,7 @@ interface OoxmlElementBase<
   readonly children: Children;
 }
 
+/** `w:document` — the root of a main document part. */
 export interface OoxmlDocumentNode extends OoxmlElementBase<
   readonly (OoxmlBodyNode | OoxmlGenericElementNode)[],
   readonly OoxmlKnownNodeAttribute[]
@@ -116,6 +146,7 @@ export interface OoxmlDocumentNode extends OoxmlElementBase<
   readonly localName: 'document';
 }
 
+/** `w:body` — the main story's block content. */
 export interface OoxmlBodyNode extends OoxmlElementBase<
   readonly (
     | OoxmlParagraphNode
@@ -188,6 +219,12 @@ export interface OoxmlTablePropertiesNode extends OoxmlElementBase<
   readonly localName: 'tblPr';
 }
 
+/**
+ * `w:p` — a paragraph, and the unit every offset in this engine is relative to.
+ *
+ * Positions are addressed as this node's id plus a UTF-16 offset, which is what makes a paragraph
+ * inside a table cell no different from one at the top level.
+ */
 export interface OoxmlParagraphNode extends OoxmlElementBase<
   readonly (
     | OoxmlParagraphPropertiesNode
@@ -390,6 +427,7 @@ export interface OoxmlCommentNode extends OoxmlElementBase<
   readonly localName: 'comment';
 }
 
+/** `w:r` — a run: text and atoms sharing one set of character properties. */
 export interface OoxmlRunNode extends OoxmlElementBase<
   readonly (
     | OoxmlRunPropertiesNode
@@ -783,6 +821,13 @@ export interface OoxmlDeletedTextNode extends OoxmlElementBase<
   readonly localName: 'delText';
 }
 
+/**
+ * `w:rPr` — a run's character properties, whose children stay GENERIC.
+ *
+ * Deliberately unmodelled below this point: the property vocabulary is large and mostly
+ * uninteresting to layout, so carrying it verbatim preserves everything without the engine having
+ * to know what each element means.
+ */
 export interface OoxmlRunPropertiesNode extends OoxmlElementBase<
   readonly OoxmlGenericElementNode[],
   readonly OoxmlKnownNodeAttribute[]
@@ -792,6 +837,7 @@ export interface OoxmlRunPropertiesNode extends OoxmlElementBase<
   readonly localName: 'rPr';
 }
 
+/** `w:t` — the element holding a run's literal characters. */
 export interface OoxmlTextElementNode extends OoxmlElementBase<
   readonly OoxmlTextNode[],
   readonly OoxmlKnownNodeAttribute[]
@@ -801,6 +847,7 @@ export interface OoxmlTextElementNode extends OoxmlElementBase<
   readonly localName: 't';
 }
 
+/** `w:pPr` — a paragraph's properties. Children stay generic, like `w:rPr`'s. */
 export interface OoxmlParagraphPropertiesNode extends OoxmlElementBase<
   readonly (OoxmlRunPropertiesNode | OoxmlGenericElementNode)[],
   readonly OoxmlKnownNodeAttribute[]
@@ -810,6 +857,7 @@ export interface OoxmlParagraphPropertiesNode extends OoxmlElementBase<
   readonly localName: 'pPr';
 }
 
+/** `w:tab` inside a run — one tab character as its own element. */
 export interface OoxmlTabNode extends OoxmlElementBase<
   readonly [],
   readonly OoxmlKnownNodeAttribute[]
@@ -819,6 +867,7 @@ export interface OoxmlTabNode extends OoxmlElementBase<
   readonly localName: 'tab';
 }
 
+/** `w:br` — a line, column or page break inside a run. */
 export interface OoxmlHardBreakNode extends OoxmlElementBase<
   readonly [],
   readonly OoxmlKnownNodeAttribute[]
@@ -1077,6 +1126,7 @@ export interface OoxmlContentControlDateNode extends OoxmlElementBase<
   readonly localName: 'date';
 }
 
+/** `w:dateFormat` — the picture string a date picker formats its value with. */
 export interface OoxmlContentControlDateFormatNode extends OoxmlElementBase<
   readonly [],
   readonly (OoxmlKnownNodeAttribute | OoxmlWmlValAttribute)[]
@@ -1086,6 +1136,7 @@ export interface OoxmlContentControlDateFormatNode extends OoxmlElementBase<
   readonly localName: 'dateFormat';
 }
 
+/** `w:lid` — the language id a date picker parses and formats under. */
 export interface OoxmlContentControlLidNode extends OoxmlElementBase<
   readonly [],
   readonly (OoxmlKnownNodeAttribute | OoxmlWmlValAttribute)[]
@@ -1095,6 +1146,7 @@ export interface OoxmlContentControlLidNode extends OoxmlElementBase<
   readonly localName: 'lid';
 }
 
+/** `w:storeMappedDataAs` — which representation a bound date is written to its XML part as. */
 export interface OoxmlContentControlStoreMappedDataAsNode extends OoxmlElementBase<
   readonly [],
   readonly (OoxmlKnownNodeAttribute | OoxmlWmlValAttribute)[]
@@ -1104,6 +1156,7 @@ export interface OoxmlContentControlStoreMappedDataAsNode extends OoxmlElementBa
   readonly localName: 'storeMappedDataAs';
 }
 
+/** `w:calendar` — which calendar system a date picker uses (Gregorian, Hijri, …). */
 export interface OoxmlContentControlCalendarNode extends OoxmlElementBase<
   readonly [],
   readonly (OoxmlKnownNodeAttribute | OoxmlWmlValAttribute)[]
@@ -1154,6 +1207,7 @@ export interface OoxmlContentControlCheckboxNode extends OoxmlElementBase<
   readonly localName: 'checkbox';
 }
 
+/** `w14:checked` — a checkbox's recorded state, independent of the glyph drawn for it. */
 export interface OoxmlContentControlCheckedNode extends OoxmlElementBase<
   readonly [],
   readonly OoxmlKnownNodeAttribute[]
@@ -1163,6 +1217,7 @@ export interface OoxmlContentControlCheckedNode extends OoxmlElementBase<
   readonly localName: 'checked';
 }
 
+/** `w14:checkedState` — the font and code point drawn when a checkbox is checked. */
 export interface OoxmlContentControlCheckedStateNode extends OoxmlElementBase<
   readonly [],
   readonly OoxmlKnownNodeAttribute[]
@@ -1172,6 +1227,7 @@ export interface OoxmlContentControlCheckedStateNode extends OoxmlElementBase<
   readonly localName: 'checkedState';
 }
 
+/** `w14:uncheckedState` — the font and code point drawn when a checkbox is not checked. */
 export interface OoxmlContentControlUncheckedStateNode extends OoxmlElementBase<
   readonly [],
   readonly OoxmlKnownNodeAttribute[]
@@ -1181,16 +1237,25 @@ export interface OoxmlContentControlUncheckedStateNode extends OoxmlElementBase<
   readonly localName: 'uncheckedState';
 }
 
+/**
+ * Any element the typed vocabulary does not cover — the other half of the preservation model.
+ *
+ * Also where a KNOWN element lands when it appears somewhere invalid: an element is demoted to
+ * generic rather than rejected, so malformed or unfamiliar content is carried losslessly and
+ * never locks editing.
+ */
 export interface OoxmlGenericElementNode extends OoxmlElementBase<readonly OoxmlNode[]> {
   readonly kind: 'generic';
 }
 
+/** A literal text value. The only node kind with no children and no attributes. */
 export interface OoxmlTextNode {
   readonly id: OoxmlNodeId;
   readonly kind: 'textValue';
   readonly value: string;
 }
 
+/** Every element node kind: the typed vocabulary plus the generic catch-all. */
 export type OoxmlElement =
   | OoxmlDocumentNode
   | OoxmlBodyNode
@@ -1279,20 +1344,35 @@ export type OoxmlElement =
   | OoxmlPicturePresetGeometryNode
   | OoxmlGenericElementNode;
 
+/**
+ * Any node in the canonical tree.
+ *
+ * Typed where layout needs structure, generic everywhere else — one tree carries a whole document
+ * whether or not the engine understands every part of it.
+ */
 export type OoxmlNode = OoxmlElement | OoxmlTextNode;
 
+/** One XML part of the package, parsed into a canonical tree. */
 export interface OoxmlPart {
   readonly id: string;
+  /** Canonical part name, e.g. `/word/document.xml`. */
   readonly name: string;
   readonly contentType: string;
   readonly root: OoxmlElement;
 }
 
+/** A part's identity without its tree — enough to enumerate a package cheaply. */
 export interface OoxmlPartMetadata {
   readonly name: string;
   readonly contentType: string;
 }
 
+/**
+ * Why a part could not be read into a tree.
+ *
+ * Widens the XML-level rejections with the tree-level ones. All of them describe the FILE, which
+ * is why reading returns a result rather than throwing.
+ */
 export type OoxmlReadRejection =
   | XmlRejection
   | 'missing-root'
@@ -1302,10 +1382,19 @@ export type OoxmlReadRejection =
   | 'undeclared-prefix'
   | 'duplicate-expanded-attribute';
 
+/** A parsed part, or a typed refusal. Never throws — the input is untrusted by definition. */
 export type OoxmlReadResult =
   | { readonly ok: true; readonly part: OoxmlPart }
   | { readonly ok: false; readonly reason: OoxmlReadRejection };
 
+/**
+ * The node-identity contract, written down as a type so it is checkable rather than merely
+ * documented.
+ *
+ * Ids are deterministic from a normalized parse, retained through structural sharing, explicit on
+ * replacement, and unique within a part. Everything that addresses nodes — ops, the caret, the
+ * paraId bimap — depends on all four holding.
+ */
 export interface OoxmlNodeIdentityRules {
   readonly initial: 'deterministic-structural-path-after-normalized-parse';
   readonly unchanged: 'retain-id-through-structural-sharing';
@@ -1324,6 +1413,7 @@ export const OOXML_NODE_IDENTITY_RULES: OoxmlNodeIdentityRules = Object.freeze({
   uniqueness: 'unique-within-part',
 });
 
+/** What a tree invariant walk found wrong. Each names a rule the canonical tree must satisfy. */
 export type OoxmlInvariantIssueCode =
   | 'invalid-id'
   | 'duplicate-id'
@@ -1334,12 +1424,14 @@ export type OoxmlInvariantIssueCode =
   | 'invalid-xml-value'
   | 'known-node-invariant';
 
+/** One invariant violation, located by structural path and node id. */
 export interface OoxmlInvariantIssue {
   readonly code: OoxmlInvariantIssueCode;
   readonly path: string;
   readonly nodeId?: string;
 }
 
+/** Whether a tree satisfies its invariants, listing every violation when it does not. */
 export type OoxmlInvariantResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly issues: readonly OoxmlInvariantIssue[] };

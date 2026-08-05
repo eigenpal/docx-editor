@@ -9,8 +9,11 @@ import type { OoxmlElement, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { resolveRelationship } from './relationships.ts';
 
+/** `w:pos` — where a section's footnotes are laid out. */
 export type FootnotePosition = 'pageBottom' | 'beneathText' | 'sectEnd' | 'docEnd';
+/** `w:pos` for endnotes — only the two document-level placements are legal. */
 export type EndnotePosition = 'sectEnd' | 'docEnd';
+/** `w:numRestart` — when note numbering starts over. `eachPage` needs the reference's page. */
 export type NoteNumRestart = 'continuous' | 'eachSect' | 'eachPage';
 
 /** Authored subset — only keys present in the file appear. */
@@ -37,6 +40,7 @@ export interface ResolvedEndnoteProperties {
   readonly numRestart: NoteNumRestart;
 }
 
+/** Word's own footnote defaults, applied where a section declares no `w:footnotePr`. */
 export const DEFAULT_FOOTNOTE_PROPERTIES: ResolvedFootnoteProperties = Object.freeze({
   pos: 'pageBottom',
   numFmt: 'decimal',
@@ -260,6 +264,7 @@ export function isLegalFootnotePosition(pos: string): pos is FootnotePosition {
   return FOOTNOTE_POS.has(pos);
 }
 
+/** Whether a file-supplied string is a legal `w:numRestart` value. Narrows the type. */
 export function isLegalNumRestart(value: string): value is NoteNumRestart {
   return NUM_RESTART.has(value);
 }

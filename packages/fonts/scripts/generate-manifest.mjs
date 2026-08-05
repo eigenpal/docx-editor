@@ -28,11 +28,25 @@ const banner =
 
 const body =
   banner +
-  '\nexport interface FontAssetManifestEntry {\n' +
+  '\n/**\n' +
+  ' * One packaged font asset, as measured at packaging time.\n' +
+  ' *\n' +
+  ' * `byteLength` and `hash` are baked here and CI-verified against the shipped files, so a\n' +
+  ' * fetched asset is content-checked without hashing at runtime.\n' +
+  ' */\n' +
+  'export interface FontAssetManifestEntry {\n' +
+  '  /** Asset filename under the package\'s `assets/` directory, e.g. `Carlito-Bold.ttf`. */\n' +
   '  readonly file: string;\n' +
+  '  /** Exact packaged size. A fetch returning any other length is rejected. */\n' +
   '  readonly byteLength: number;\n' +
+  '  /** `sha256:`-prefixed digest, re-derived and compared by the engine\'s admission path. */\n' +
   '  readonly hash: string;\n' +
   '}\n\n' +
+  '/**\n' +
+  ' * Every font asset this package ships, in generator order. Drives both\n' +
+  ' * `loadDefaultFonts` (which looks entries up by filename) and the packaging check that\n' +
+  ' * keeps the shipped bytes honest.\n' +
+  ' */\n' +
   'export const FONT_ASSET_MANIFEST: readonly FontAssetManifestEntry[] = [\n' +
   entries
     .map(
