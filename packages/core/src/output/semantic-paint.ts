@@ -1049,8 +1049,33 @@ function paintLine(
       anchorLinkId = null;
     }
   };
+  /**
+   * Reserve the horizontal jump a float's wrap zone forced, so the line resumes in the next
+   * passage instead of flowing straight across the picture.
+   */
+  const appendWrapAdvance = (span: StyleSpanRecord): void => {
+    const advance = span.wrapAdvanceBefore ?? 0;
+    if (advance <= 0.001) return;
+    const spacer = document.createElement('span');
+    spacer.className = 'docx-wrap-advance';
+    spacer.dataset.docxMarker = '';
+    spacer.setAttribute('contenteditable', 'false');
+    spacer.setAttribute('aria-hidden', 'true');
+    spacer.style.display = 'inline-block';
+    spacer.style.width = `${advance * scale}px`;
+    spacer.style.height = '0';
+    spacer.style.lineHeight = '0';
+    spacer.style.pointerEvents = 'none';
+    spacer.style.verticalAlign = 'baseline';
+    element.append(spacer);
+    // The gap is not part of any link's text, so an anchor cannot span it.
+    anchor = null;
+    anchorLinkId = null;
+  };
+
   for (const span of line.spans) {
     appendDrawingAdvancesBefore(span.range.start);
+    appendWrapAdvance(span);
     const band = Math.min(span.box.height + leading, line.box.height);
     const painted = paintSpan(document, span, ctx, band, leading);
     const link = span.link;
@@ -1114,7 +1139,10 @@ function interSpanGap(line: LineRecord): number {
       (drawing) => drawing.start >= previous.range.end && drawing.start < current.range.start
     );
     if (drawingOccupiesGap) continue;
-    const gap = current.box.x - (previous.box.x + previous.box.width);
+    // A float's wrap zone is an obstacle the line stepped over, not slack to redistribute.
+    // Averaging it in turned the picture's whole width into word spacing on every space.
+    const gap =
+      current.box.x - (previous.box.x + previous.box.width) - (current.wrapAdvanceBefore ?? 0);
     if (gap > 0.25) gaps.push(gap);
   }
   if (gaps.length === 0) return 0;
@@ -2214,7 +2242,10 @@ export function paintSemanticLayout(
     const kept = reusable?.get(page);
     if (kept && kept.materialized === materialized) return kept;
     const priorShell = materialized ? null : previousByIndex?.get(page.index);
-    if (priorShell && virtualPageShellMatches(priorShell, page, resolved.scale, resolved.ariaHidden)) {
+    if (
+      priorShell &&
+      virtualPageShellMatches(priorShell, page, resolved.scale, resolved.ariaHidden)
+    ) {
       return { record: page, materialized: false, element: priorShell.element };
     }
     return {

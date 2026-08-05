@@ -1281,21 +1281,22 @@ function layoutBlocksPass(
       options.drawingTokenForParagraph?.(entry.paragraph) ??
       options.drawingLayoutToken ??
       (options.inlineDrawingLayout ? 'drawing' : undefined);
-    const cacheKey = cache && !suppressChrome
-      ? exclusionToken || drawingKeyed
-        ? paragraphLayoutKey({
-            paragraph: entry.paragraph,
-            properties: entry.props,
-            width: available,
-            producer,
-            ...(drawingKeyed ? { drawingToken: drawingKeyed } : {}),
-            ...(exclusionToken ? { exclusionToken: `${flowColumnIndex}|${exclusionToken}` } : {}),
-            ...(startOffset > 0 ? { startOffset } : {}),
-          })
-        : startOffset === 0
-          ? entry.key
-          : `${entry.key}|from:${startOffset}`
-      : null;
+    const cacheKey =
+      cache && !suppressChrome
+        ? exclusionToken || drawingKeyed
+          ? paragraphLayoutKey({
+              paragraph: entry.paragraph,
+              properties: entry.props,
+              width: available,
+              producer,
+              ...(drawingKeyed ? { drawingToken: drawingKeyed } : {}),
+              ...(exclusionToken ? { exclusionToken: `${flowColumnIndex}|${exclusionToken}` } : {}),
+              ...(startOffset > 0 ? { startOffset } : {}),
+            })
+          : startOffset === 0
+            ? entry.key
+            : `${entry.key}|from:${startOffset}`
+        : null;
     const usePageColumnCoords = columnCount > 1;
     return breakParagraph(
       entry.paragraph,
@@ -1932,6 +1933,8 @@ function layoutBlocksPass(
     let fragmentTopExtent = topExtent;
     let endedWithPageBreak = false;
     let fragmentParagraphStartY = cursorY;
+    /** Clearance applied above the fragment's first placed line, for anchor framing. */
+    let fragmentFirstLineSkip = 0;
     const appliedSkipByLineIndex = new Map<number, number>();
     previousSpaceAfter = 0;
     const paragraphHasAnchors =
@@ -1945,6 +1948,28 @@ function layoutBlocksPass(
     }> | null = null;
 
     const markRevision = paragraphMarkRevisionOf(entry.paragraph);
+
+    /**
+     * How much of the first placed line's topAndBottom skip this paragraph's own anchor caused.
+     *
+     * The placement skip mixes two sources: bands inherited from earlier paragraphs, which
+     * genuinely move this paragraph down the page, and a band from an anchor inside it, which
+     * only moves its text away from a picture pinned to the paragraph origin. Re-running the
+     * clearance with the inherited zones alone isolates the second.
+     */
+    const ownTopAndBottomSkipOnFirstLine = (): number => {
+      const firstLine = pending[0];
+      if (!firstLine) return 0;
+      const applied = fragmentFirstLineSkip;
+      if (applied <= 0.001) return 0;
+      const inherited = topAndBottomSkipBeforeLine(
+        fragmentParagraphStartY,
+        firstLine.box.height,
+        pageExclusionZonesForEntry(entry, index)
+      );
+      return Math.max(0, applied - inherited);
+    };
+
     const flushFragment = (isLast: boolean): void => {
       if (pending.length === 0) return;
       const regionX = columnLeft();
@@ -2113,11 +2138,23 @@ function layoutBlocksPass(
         let publishParagraphBox: LayoutBox;
         let publishColumnBox: LayoutBox;
         if (pendingCoversAnchors) {
+          // A `wrapTopAndBottom` anchor pushed its OWN paragraph's lines down to clear the
+          // band. Framing the anchor against those lines chases the displacement it caused —
+          // the picture lands on the text it just moved. `positionV relativeFrom="paragraph"`
+          // means where the paragraph would begin without its own band, so that skip comes
+          // back off here. A band inherited from an earlier paragraph is NOT removed: it
+          // moved this paragraph for real, and the anchor travels with it.
+          const anchorTop = top - ownTopAndBottomSkipOnFirstLine();
           publishLines = pending;
-          publishParagraphBox = { x: columnX + indent.left, y: top, width: available, height };
+          publishParagraphBox = {
+            x: columnX + indent.left,
+            y: anchorTop,
+            width: available,
+            height,
+          };
           publishColumnBox = anchorColumnBox({
             x: columnX + indent.left,
-            y: top,
+            y: anchorTop,
             width: available,
             height,
           });
@@ -2334,6 +2371,7 @@ function layoutBlocksPass(
         ...(alignedDrawings.length > 0 ? { drawings: alignedDrawings } : {}),
       };
       lineCounter += 1;
+      if (pending.length === 0) fragmentFirstLineSkip = skipBefore;
       pending.push(record);
       cursorY += pendingLine.height;
       if (pendingLine.columnBreakAfter) {

@@ -31,6 +31,8 @@ const PIC_URI = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
 
 const measurer = createFixedMeasurer(6, 14);
 const OWNER = '/word/document.xml';
+/** Default US-Letter content column these fixtures lay out into. */
+const CONTENT_WIDTH_PT = 468;
 
 const READY: ImageResourceState = Object.freeze({
   kind: 'ready',
@@ -128,6 +130,74 @@ describe('square wrap reflow integration (OpenSpec 4.3)', () => {
       if (!lastSpan) continue;
       expect(lastSpan.box.x + lastSpan.box.width).toBeLessThanOrEqual(imageWidth + 468 + 1);
     }
+  });
+
+  test('a wrapped line still fills the column to its right edge', () => {
+    const part = load(squareAnchorAtLeft({ text: 'word '.repeat(80) }));
+    const ctx = layoutContext(part);
+    const layout = layoutSemanticDocument(part, 1, { measurer, inlineDrawingLayout: ctx });
+    const lines = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines;
+    const rightEdge = (line: (typeof lines)[number]): number => {
+      const last = line.spans[line.spans.length - 1];
+      return last ? last.box.x + last.box.width : 0;
+    };
+    // The float narrows where a line STARTS, never how far it may run. A line that stopped
+    // near the column's midpoint meant the width budget was being consumed twice.
+    const widest = Math.max(...lines.map(rightEdge));
+    expect(widest).toBeGreaterThan(CONTENT_WIDTH_PT * 0.9);
+    expect(widest).toBeLessThanOrEqual(CONTENT_WIDTH_PT + 1);
+  });
+
+  test('lines clear of the anchor return to the full column width', () => {
+    const part = load(squareAnchorAtLeft({ text: 'word '.repeat(200) }));
+    const ctx = layoutContext(part);
+    const layout = layoutSemanticDocument(part, 1, { measurer, inlineDrawingLayout: ctx });
+    const lines = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines;
+    const imageHeight = emuToPoints(914400);
+    const belowImage = lines.filter((line) => line.box.y >= imageHeight);
+    expect(belowImage.length).toBeGreaterThan(0);
+    for (const line of belowImage) {
+      expect(line.spans[0]!.box.x).toBeCloseTo(0, 3);
+    }
+    const widestBelow = Math.max(
+      ...belowImage.map((line) => {
+        const last = line.spans[line.spans.length - 1]!;
+        return last.box.x + last.box.width;
+      })
+    );
+    expect(widestBelow).toBeGreaterThan(CONTENT_WIDTH_PT * 0.9);
+  });
+});
+
+describe('topAndBottom anchored in the paragraph it displaces', () => {
+  test('the picture keeps the paragraph origin and the text clears below it', () => {
+    const part = load(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
+        '<w:body>' +
+        '<w:p><w:r><w:t>lead</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:drawing>' +
+        '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" behindDoc="0" locked="0" allowOverlap="1" layoutInCell="1" relativeHeight="1">' +
+        '<wp:simplePos x="0" y="0"/>' +
+        '<wp:positionH relativeFrom="column"><wp:align>center</wp:align></wp:positionH>' +
+        '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
+        '<wp:extent cx="914400" cy="914400"/>' +
+        '<wp:wrapTopAndBottom/>' +
+        '<wp:docPr id="1" name="band"/>' +
+        `<a:graphic><a:graphicData uri="${PIC_URI}"><pic:pic><pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+        '<pic:spPr><a:xfrm><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr></pic:pic></a:graphicData></a:graphic>' +
+        '</wp:anchor></w:drawing></w:r>' +
+        '<w:r><w:t>banded text</w:t></w:r></w:p>' +
+        '</w:body></w:document>'
+    );
+    const ctx = layoutContext(part);
+    const layout = layoutSemanticDocument(part, 1, { measurer, inlineDrawingLayout: ctx });
+    const page = layout.pages[0]!;
+    const anchored = page.anchoredDrawings![0]!;
+    const banded = paragraphFragmentsOf(page)[1]!;
+    const bandBottom = anchored.y + anchored.height;
+    // Framing the anchor against the lines it pushed down chased its own displacement and
+    // painted the picture over them.
+    expect(banded.lines[0]!.box.y).toBeGreaterThanOrEqual(bandBottom - 0.001);
   });
 });
 

@@ -161,6 +161,16 @@ export interface StyleSpanRecord {
    */
   readonly link?: SpanLinkRecord;
   /**
+   * Horizontal jump, in points, that a floating object's wrap zone forced before this span.
+   *
+   * A line that resumes on the far side of a float is still ONE line: its spans keep running
+   * model offsets and share a selection band. Only layout knows the jump is an obstacle
+   * rather than justification slack, so it publishes it here. Paint reserves it with an inert
+   * advance and excludes it from the word spacing it reconstructs — inferring the difference
+   * from the gap alone spread the float's whole width across every space on the line.
+   */
+  readonly wrapAdvanceBefore?: number;
+  /**
    * The revision wrappers this text sits inside, outermost first, absent when untracked.
    *
    * Carried on the span for the same reason `style` is: paint and the review surface must read
