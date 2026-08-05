@@ -963,8 +963,8 @@
   },
   "toc": {
     "updatePrompt": null,
-    "entireTable": "Atualizar tabela inteira",
-    "pageNumbersOnly": "Atualizar apenas números de página"
+    "refresh": "Atualizar tabela inteira",
+    "refreshPageNumbers": "Atualizar apenas números de página"
   },
   "app": {
     "name": null,

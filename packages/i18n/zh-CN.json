@@ -963,8 +963,8 @@
   },
   "toc": {
     "updatePrompt": null,
-    "entireTable": "更新整个目录",
-    "pageNumbersOnly": "仅更新页码"
+    "refresh": "更新整个目录",
+    "refreshPageNumbers": "仅更新页码"
   },
   "app": {
     "name": null,

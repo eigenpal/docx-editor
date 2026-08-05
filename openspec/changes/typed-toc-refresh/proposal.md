@@ -20,7 +20,7 @@ Existing Word TOC fields round-trip as inert cached results. `EditorCommands.ref
 
 - Wire `refreshToc` and `isInsideToc` honestly.
 - Wire `insert.toc` to insert an SDT-wrapped, hyperlink-enabled level 1–3 TOC before the caret paragraph and populate it through the same bounded pipeline.
-- Engine-owned right-click menu on detected TOC rows with localized “Update entire table” and “Update page numbers”; no duplicate trigger over shared SDT boundary chrome, no focus theft, and never auto-refresh.
+- Right-clicking a detected TOC publishes it as the editor’s TOC context, so the host’s own context menu carries localized “Refresh table of contents” and “Refresh page numbers” rows; the engine paints no menu of its own, no duplicate trigger over shared SDT boundary chrome, no focus theft, and never auto-refresh.
 - TOC paragraphs are generated read-only navigation rows: clicking snaps to the corresponding outline heading, including cached TOCs without authored hyperlinks, while caret placement and document edits are refused.
 
 **Locks and bounds**

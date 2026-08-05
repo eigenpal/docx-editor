@@ -800,27 +800,27 @@ describe('table context rows (Task 10)', () => {
     const slots = rows(view).map((row) => row.dataset.slot);
     // Appended, not substituted: the ordinary rows are still the same rows.
     expect(slots).toContain('edit.copy');
-    expect(slots.slice(-2)).toEqual(['toc.updateEntireTable', 'toc.updatePageNumbers']);
-    for (const slot of ['toc.updateEntireTable', 'toc.updatePageNumbers']) {
+    expect(slots.slice(-2)).toEqual(['toc.refresh', 'toc.refreshPageNumbers']);
+    for (const slot of ['toc.refresh', 'toc.refreshPageNumbers']) {
       expect(rowNamed(view, slot).querySelector('svg')).not.toBeNull();
     }
-    expect(rowNamed(view, 'toc.updateEntireTable').textContent).toContain('toc.entireTable');
-    expect(rowNamed(view, 'toc.updatePageNumbers').textContent).toContain('toc.pageNumbersOnly');
+    expect(rowNamed(view, 'toc.refresh').textContent).toContain('toc.refresh');
+    expect(rowNamed(view, 'toc.refreshPageNumbers').textContent).toContain('toc.refreshPageNumbers');
   });
 
   test('the update rows are absent from a menu opened over ordinary text', () => {
     const { view } = mountDocument(TOC_DOCUMENT);
     rightClick(view);
     const slots = rows(view).map((row) => row.dataset.slot);
-    expect(slots).not.toContain('toc.updateEntireTable');
-    expect(slots).not.toContain('toc.updatePageNumbers');
+    expect(slots).not.toContain('toc.refresh');
+    expect(slots).not.toContain('toc.refreshPageNumbers');
   });
 
   test('selecting the update row refreshes the pointed-at TOC and closes the panel', () => {
     const { view, editor } = mountDocument(TOC_DOCUMENT);
     rightClickOn(tocRow(view));
     act(() => {
-      fireEvent.click(rowNamed(view, 'toc.updateEntireTable'));
+      fireEvent.click(rowNamed(view, 'toc.refresh'));
     });
     expect(panel(view)).toBeNull();
     expect(

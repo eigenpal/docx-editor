@@ -963,8 +963,8 @@
   },
   "toc": {
     "updatePrompt": null,
-    "entireTable": "पूरी तालिका अपडेट करें",
-    "pageNumbersOnly": "केवल पृष्ठ संख्याएँ अपडेट करें"
+    "refresh": "पूरी तालिका अपडेट करें",
+    "refreshPageNumbers": "केवल पृष्ठ संख्याएँ अपडेट करें"
   },
   "app": {
     "name": null,

@@ -963,8 +963,8 @@
   },
   "toc": {
     "updatePrompt": null,
-    "entireTable": "Gesamtes Verzeichnis aktualisieren",
-    "pageNumbersOnly": "Nur Seitenzahlen aktualisieren"
+    "refresh": "Gesamtes Verzeichnis aktualisieren",
+    "refreshPageNumbers": "Nur Seitenzahlen aktualisieren"
   },
   "app": {
     "name": null,

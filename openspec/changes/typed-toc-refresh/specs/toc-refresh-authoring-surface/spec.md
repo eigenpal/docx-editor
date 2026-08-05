@@ -35,7 +35,7 @@ The shared Insert chrome SHALL expose an enabled Table of contents action when t
 
 ### Requirement: Contextual update actions
 
-A right-click on a detected TOC SHALL publish which table of contents it addressed, so the host's own context menu can offer Update entire table and Update page numbers rows for it. The engine SHALL NOT paint a menu of its own, and SHALL NOT paint a duplicate TOC-specific trigger over SDT boundary chrome.
+A right-click on a detected TOC SHALL publish which table of contents it addressed, so the host's own context menu can offer Refresh table of contents and Refresh page numbers rows for it. The engine SHALL NOT paint a menu of its own, and SHALL NOT paint a duplicate TOC-specific trigger over SDT boundary chrome.
 
 #### Scenario: The right-click target is published, not consumed
 

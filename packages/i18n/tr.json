@@ -963,8 +963,8 @@
   },
   "toc": {
     "updatePrompt": null,
-    "entireTable": "Tüm tabloyu güncelle",
-    "pageNumbersOnly": "Yalnızca sayfa numaralarını güncelle"
+    "refresh": "Tüm tabloyu güncelle",
+    "refreshPageNumbers": "Yalnızca sayfa numaralarını güncelle"
   },
   "app": {
     "name": null,

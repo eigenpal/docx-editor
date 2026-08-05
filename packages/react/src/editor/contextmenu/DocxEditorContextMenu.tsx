@@ -47,8 +47,8 @@ import {
   ContextMenuItem,
   ContextMenuPaste,
   ContextMenuSelectAll,
-  ContextMenuUpdateToc,
-  ContextMenuUpdateTocPageNumbers,
+  ContextMenuRefreshToc,
+  ContextMenuRefreshTocPageNumbers,
   useTableContextMenuVisible,
   useTocContextMenuVisible,
 } from './parts';
@@ -159,11 +159,11 @@ function tableContextEntries(): readonly DefaultEntry[] {
 function tocContextEntries(): readonly DefaultEntry[] {
   return [
     { kind: 'separator', id: 'sep.toc' },
-    { kind: 'row', id: ContextMenuUpdateToc.docxRow, render: () => <ContextMenuUpdateToc /> },
+    { kind: 'row', id: ContextMenuRefreshToc.docxRow, render: () => <ContextMenuRefreshToc /> },
     {
       kind: 'row',
-      id: ContextMenuUpdateTocPageNumbers.docxRow,
-      render: () => <ContextMenuUpdateTocPageNumbers />,
+      id: ContextMenuRefreshTocPageNumbers.docxRow,
+      render: () => <ContextMenuRefreshTocPageNumbers />,
     },
   ];
 }
@@ -479,8 +479,8 @@ export interface DocxEditorContextMenuNamespace {
   readonly DeleteTableColumn: typeof ContextMenuDeleteTableColumn;
   readonly DeleteTable: typeof ContextMenuDeleteTable;
   readonly CellVerticalAlignment: typeof ContextMenuCellVerticalAlignment;
-  readonly UpdateToc: typeof ContextMenuUpdateToc;
-  readonly UpdateTocPageNumbers: typeof ContextMenuUpdateTocPageNumbers;
+  readonly RefreshToc: typeof ContextMenuRefreshToc;
+  readonly RefreshTocPageNumbers: typeof ContextMenuRefreshTocPageNumbers;
   /** A host-owned row: no slot, no command, the host's own label and action. */
   readonly Item: typeof ContextMenuItem;
   /** Any chrome slot as a live row (`<ContextMenu.Slot slot="text.bold" />`). */
@@ -505,8 +505,8 @@ export const ContextMenu: DocxEditorContextMenuNamespace = Object.assign(DocxEdi
   DeleteTableColumn: ContextMenuDeleteTableColumn,
   DeleteTable: ContextMenuDeleteTable,
   CellVerticalAlignment: ContextMenuCellVerticalAlignment,
-  UpdateToc: ContextMenuUpdateToc,
-  UpdateTocPageNumbers: ContextMenuUpdateTocPageNumbers,
+  RefreshToc: ContextMenuRefreshToc,
+  RefreshTocPageNumbers: ContextMenuRefreshTocPageNumbers,
   Item: ContextMenuItem,
   Slot: MenuItem,
   Row: MenuRow,

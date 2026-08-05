@@ -963,8 +963,8 @@
   },
   "toc": {
     "updatePrompt": null,
-    "entireTable": "Aktualizuj cały spis",
-    "pageNumbersOnly": "Aktualizuj tylko numery stron"
+    "refresh": "Aktualizuj cały spis",
+    "refreshPageNumbers": "Aktualizuj tylko numery stron"
   },
   "app": {
     "name": null,

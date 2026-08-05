@@ -963,8 +963,8 @@
   },
   "toc": {
     "updatePrompt": null,
-    "entireTable": "עדכון הטבלה כולה",
-    "pageNumbersOnly": "עדכון מספרי עמודים בלבד"
+    "refresh": "עדכון הטבלה כולה",
+    "refreshPageNumbers": "עדכון מספרי עמודים בלבד"
   },
   "app": {
     "name": null,

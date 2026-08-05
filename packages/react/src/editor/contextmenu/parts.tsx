@@ -29,8 +29,8 @@ import {
   DELETE_PATHS,
   PASTE_PATHS,
   SELECT_ALL_PATHS,
-  UPDATE_TOC_PATHS,
-  UPDATE_TOC_PAGE_NUMBERS_PATHS,
+  REFRESH_TOC_PATHS,
+  REFRESH_TOC_PAGE_NUMBERS_PATHS,
 } from './contextmenu-icons';
 import { chromeIcon } from '../toolbar/ToolbarButton';
 
@@ -411,17 +411,17 @@ function defineTocCommandRow(
 }
 
 /** Rebuild the pointed-at table of contents from the document's headings. @public */
-export const ContextMenuUpdateToc = defineTocCommandRow(
-  'toc.updateEntireTable',
+export const ContextMenuRefreshToc = defineTocCommandRow(
+  'toc.refresh',
   { type: 'refreshToc', mode: 'entire' },
-  { labelKey: 'toc.entireTable', paths: UPDATE_TOC_PATHS }
+  { labelKey: 'toc.refresh', paths: REFRESH_TOC_PATHS }
 );
 
 /** Re-resolve only the page numbers of the pointed-at table of contents. @public */
-export const ContextMenuUpdateTocPageNumbers = defineTocCommandRow(
-  'toc.updatePageNumbers',
+export const ContextMenuRefreshTocPageNumbers = defineTocCommandRow(
+  'toc.refreshPageNumbers',
   { type: 'refreshToc', mode: 'pageNumbers' },
-  { labelKey: 'toc.pageNumbersOnly', paths: UPDATE_TOC_PAGE_NUMBERS_PATHS }
+  { labelKey: 'toc.refreshPageNumbers', paths: REFRESH_TOC_PAGE_NUMBERS_PATHS }
 );
 
 /** Whether table-of-contents rows should render for the last right-click. @internal */
@@ -433,7 +433,7 @@ export function useTocContextMenuVisible(): boolean {
 }
 
 /** Fixed table-of-contents context rows, in menu order. @internal */
-export const TOC_CONTEXT_ROWS = [ContextMenuUpdateToc, ContextMenuUpdateTocPageNumbers] as const;
+export const TOC_CONTEXT_ROWS = [ContextMenuRefreshToc, ContextMenuRefreshTocPageNumbers] as const;
 
 /** Whether table context rows should render for the current selection. @internal */
 export function useTableContextMenuVisible(): boolean {
