@@ -1,6 +1,7 @@
 {
   "name": "@docx-editor.dev/nuxt",
   "version": "0.0.1",
+  "private": true,
   "description": "Nuxt 3 & 4 module for the @docx-editor.dev/vue WYSIWYG DOCX editor — auto-imports an SSR-safe <DocxEditor> component.",
   "type": "module",
   "exports": {

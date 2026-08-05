@@ -1,6 +1,7 @@
 {
   "name": "@docx-editor.dev/vue",
   "version": "0.0.1",
+  "private": true,
   "author": {
     "name": "Jedr Blaszyk",
     "email": "jedr@eigenpal.com",

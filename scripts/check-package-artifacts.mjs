@@ -3,7 +3,9 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
-const packageDirs = ['react', 'vue', 'editor-api', 'i18n', 'nuxt'];
+// 'vue' and 'nuxt' are omitted while they are WIP and unpublished — they are off
+// `build:packages`, so they have no dist to check. Re-add both when they ship.
+const packageDirs = ['react', 'editor-api', 'i18n'];
 const errors = [];
 
 function filesBelow(directory) {

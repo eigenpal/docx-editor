@@ -7,7 +7,9 @@ import { spawnSync } from 'node:child_process';
 const ROOT = path.resolve(import.meta.dirname, '..');
 const tempRoot = mkdtempSync(path.join(tmpdir(), 'docx-editor-consumers-'));
 const packDir = path.join(tempRoot, 'packs');
-const appDir = path.join(tempRoot, 'app');
+// The Vue consumer app that used to sit alongside the React one is gone while
+// @docx-editor.dev/vue is WIP and unpublished — there is no tarball for a real
+// consumer to install. Restore it when the package ships again.
 const reactAppDir = path.join(tempRoot, 'react-app');
 
 function coreContractPaths(projectDir) {
@@ -63,119 +65,12 @@ try {
   }
 
   mkdirSync(packDir, { recursive: true });
-  mkdirSync(path.join(appDir, 'src'), { recursive: true });
 
   // `@docx-editor.dev/core` ships from a separate repo, so it is not packed
   // here — npm resolves it from the registry as a transitive dep, which is
   // what a real consumer gets.
   const sharedTarballs = [packPackage('packages/i18n'), packPackage('packages/editor-api')];
-  const vueTarballs = [...sharedTarballs, packPackage('packages/vue')];
   const reactTarballs = [...sharedTarballs, packPackage('packages/react')];
-
-  writeFileSync(
-    path.join(appDir, 'package.json'),
-    JSON.stringify(
-      {
-        private: true,
-        type: 'module',
-        scripts: {
-          typecheck: 'vue-tsc --noEmit',
-          build: 'npm run typecheck && vite build',
-        },
-        dependencies: {},
-        devDependencies: {},
-      },
-      null,
-      2
-    )
-  );
-
-  writeFileSync(
-    path.join(appDir, 'index.html'),
-    '<div id="app"></div><script type="module" src="/src/main.ts"></script>\n'
-  );
-  writeFileSync(
-    path.join(appDir, 'src/App.vue'),
-    `<script setup lang="ts">
-import { ref } from 'vue';
-import { DocxEditor } from '@docx-editor.dev/vue';
-import * as VueUi from '@docx-editor.dev/vue/ui';
-import * as VueDialogs from '@docx-editor.dev/vue/dialogs';
-import * as VueComposables from '@docx-editor.dev/vue/composables';
-import * as VuePluginApi from '@docx-editor.dev/vue/plugin-api';
-import '@docx-editor.dev/vue/styles.css';
-
-const buffer = ref<ArrayBuffer | null>(null);
-const exportedSurfaceChecks = [VueUi, VueDialogs, VueComposables, VuePluginApi];
-console.assert(exportedSurfaceChecks.every((entry) => typeof entry === 'object' && entry !== null));
-void exportedSurfaceChecks;
-
-async function loadFile(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0];
-  buffer.value = file ? await file.arrayBuffer() : null;
-}
-</script>
-
-<template>
-  <input type="file" accept=".docx" @change="loadFile" />
-  <DocxEditor :document-buffer="buffer" mode="editing" />
-</template>
-`
-  );
-  writeFileSync(
-    path.join(appDir, 'src/main.ts'),
-    `import { createApp } from 'vue';
-import App from './App.vue';
-
-createApp(App).mount('#app');
-`
-  );
-  writeFileSync(
-    path.join(appDir, 'vite.config.ts'),
-    `import { defineConfig } from 'vite';
-import vue from '@vitejs/plugin-vue';
-
-export default defineConfig({ plugins: [vue()] });
-`
-  );
-  writeFileSync(
-    path.join(appDir, 'tsconfig.json'),
-    JSON.stringify(
-      {
-        compilerOptions: {
-          baseUrl: '.',
-          strict: true,
-          target: 'ES2022',
-          module: 'ESNext',
-          moduleResolution: 'Bundler',
-          jsx: 'preserve',
-          skipLibCheck: true,
-          paths: coreContractPaths(appDir),
-        },
-        include: ['src/**/*.ts', 'src/**/*.vue'],
-      },
-      null,
-      2
-    )
-  );
-
-  run(
-    'npm',
-    [
-      'install',
-      '--ignore-scripts',
-      'vue',
-      'vue-tsc',
-      '@vitejs/plugin-vue',
-      'vite',
-      // vue-tsc currently requires TypeScript's 5.x compiler internals.
-      'typescript@5.9.3',
-      ...vueTarballs,
-    ],
-    { cwd: appDir }
-  );
-  run('npm', ['run', 'build'], { cwd: appDir });
-  console.log('Fresh Vue consumer install/build passed.');
 
   mkdirSync(path.join(reactAppDir, 'src'), { recursive: true });
   writeFileSync(
@@ -270,6 +165,6 @@ export default defineConfig({ plugins: [react()] });
   if (process.env.KEEP_CONSUMER_INSTALL_TEMP !== '1') {
     rmSync(tempRoot, { recursive: true, force: true });
   } else {
-    console.log(`Kept temp apps at ${appDir} and ${reactAppDir}`);
+    console.log(`Kept temp app at ${reactAppDir}`);
   }
 }
