@@ -41,6 +41,7 @@ import type {
 } from '../layout/semantic-records.ts';
 import { MAX_TABLE_NESTING } from '../layout/semantic-table.ts';
 import {
+  findEmptyFurnitureBandAtSheetPoint,
   findNoteAtSheetPoint,
   findStoryAtSheetPoint,
   hitTestStoryAtLocalPoint,
@@ -97,6 +98,13 @@ export interface PointerHost {
   activeNote?(): { readonly scopeId: string; readonly pageIndex: number | null } | null;
   /** Double-click enter on painted furniture. */
   enterHeaderFooter?(info: EnterHeaderFooterPointerRequest): void;
+  /**
+   * Double-click in the blank header/footer margin band of a page with no story there.
+   *
+   * The host decides what that means — typically create the part and open it for editing,
+   * refusing in view mode. The pointer only reports the gesture.
+   */
+  enterEmptyHeaderFooter?(kind: 'header' | 'footer', pageIndex: number): void;
   /** Enter a painted note story for scoped editing. */
   enterNote?(
     scopeId: string,
@@ -845,6 +853,17 @@ export function createPointerController(
         host.focus();
         return;
       } else {
+        // While a header is open, double-clicking the blank footer band (or vice versa)
+        // creates and opens that story — Word's behaviour — instead of swallowing the press.
+        const empty =
+          clicks() >= 2
+            ? findEmptyFurnitureBandAtSheetPoint(layout, sheet, host.pageOffsetX)
+            : null;
+        if (empty) {
+          event.preventDefault();
+          host.focus();
+          host.enterEmptyHeaderFooter?.(empty.kind, empty.pageIndex);
+        }
         return;
       }
     } else if (onFurniture && clicks() >= 2) {
@@ -863,25 +882,41 @@ export function createPointerController(
         const kindAttr = furnitureDom.dataset.docxHf;
         const pageAttr = furnitureDom.closest('[data-page-index]')?.getAttribute('data-page-index');
         const pageIndex = pageAttr != null ? Number(pageAttr) : NaN;
-        if (
-          rId &&
-          (kindAttr === 'header' || kindAttr === 'footer') &&
-          Number.isInteger(pageIndex)
-        ) {
-          const page = layout.pages[pageIndex];
-          const story = page?.[kindAttr];
-          event.preventDefault();
-          host.focus();
-          host.enterHeaderFooter?.({
-            rId,
-            pageIndex,
-            kind: kindAttr,
-            partName: story?.partName ?? '',
-            variant: story?.variant ?? 'default',
-          });
+        if ((kindAttr === 'header' || kindAttr === 'footer') && Number.isInteger(pageIndex)) {
+          if (rId) {
+            const page = layout.pages[pageIndex];
+            const story = page?.[kindAttr];
+            event.preventDefault();
+            host.focus();
+            host.enterHeaderFooter?.({
+              rId,
+              pageIndex,
+              kind: kindAttr,
+              partName: story?.partName ?? '',
+              variant: story?.variant ?? 'default',
+            });
+          } else if (!layout.pages[pageIndex]?.[kindAttr]) {
+            // The painted PLACEHOLDER band: `data-docx-hf` with no relationship id marks a
+            // page with no story of that kind — create and open it.
+            event.preventDefault();
+            host.focus();
+            host.enterEmptyHeaderFooter?.(kindAttr, pageIndex);
+          }
         }
       }
       return;
+    } else if (clicks() >= 2) {
+      // No painted furniture under the press: a double click in the blank header/footer
+      // margin band creates that story and opens it, matching Word. Single presses keep
+      // falling through to body hit-testing — a click in the top margin still just places
+      // the caret in the nearest body line.
+      const empty = findEmptyFurnitureBandAtSheetPoint(layout, sheet, host.pageOffsetX);
+      if (empty) {
+        event.preventDefault();
+        host.focus();
+        host.enterEmptyHeaderFooter?.(empty.kind, empty.pageIndex);
+        return;
+      }
     }
 
     const hit = resolve(event.clientX, event.clientY);

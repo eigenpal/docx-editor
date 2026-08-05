@@ -529,6 +529,7 @@ export interface Editor {
         readonly id: string;
         readonly kind: string;
         readonly author?: string;
+        readonly story?: 'body' | 'header' | 'footer';
     }[];
     getWatermark(): { readonly kind: 'text' | 'image'; readonly text?: string } | null;
     // (undocumented)
@@ -1080,8 +1081,8 @@ type: BooleanConstructor;
 default: boolean;
 };
 }>> & Readonly<{}>, {
-visible: boolean;
 editor: Editor | null;
+visible: boolean;
 }, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)

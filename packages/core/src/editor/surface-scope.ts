@@ -397,6 +397,38 @@ export function furnitureActivationBox(
   };
 }
 
+/**
+ * The header/footer margin band of a page that has NO story of that kind, or null.
+ *
+ * The counterpart of {@link findStoryAtSheetPoint} for blank furniture: Word lets a reader
+ * double-click the empty top margin to create and open a header, and the hit test has to
+ * answer from geometry because there is nothing painted to hit.
+ */
+export function findEmptyFurnitureBandAtSheetPoint(
+  layout: SemanticLayout,
+  sheet: { readonly x: number; readonly y: number },
+  pageOffsetX: (pageIndex: number) => number
+): { pageIndex: number; kind: 'header' | 'footer' } | null {
+  for (const page of layout.pages) {
+    const ox = pageOffsetX(page.index);
+    for (const kind of ['header', 'footer'] as const) {
+      if (page[kind]) continue;
+      const band = furnitureActivationBox(page, kind);
+      if (!band) continue;
+      const left = band.x + ox;
+      if (
+        sheet.x >= left &&
+        sheet.x < left + band.width &&
+        sheet.y >= band.y &&
+        sheet.y < band.y + band.height
+      ) {
+        return { pageIndex: page.index, kind };
+      }
+    }
+  }
+  return null;
+}
+
 export function findStoryAtSheetPoint(
   layout: SemanticLayout,
   sheet: { readonly x: number; readonly y: number },

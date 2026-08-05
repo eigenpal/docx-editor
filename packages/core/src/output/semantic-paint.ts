@@ -1332,6 +1332,30 @@ function paintPage(
   // Page furniture (phase 2, read-only): painted inside the sheet but OUTSIDE the content
   // box, inert to editing. `data-docx-hf` is what dom-selection uses to refuse mapping a
   // browser caret inside the furniture back to a model position.
+  // Blank furniture affordance: a page with no header (or footer) paints an EMPTY band over
+  // that margin — `data-docx-hf` with no relationship id — so hover can invite and a double
+  // click can create the story. Geometry mirrors the pointer's activation band: the full
+  // margin strip at content width. Never printed (CSS hides it), never editable.
+  for (const kind of ['header', 'footer'] as const) {
+    if (page[kind]) continue;
+    const band = document.createElement('div');
+    band.className = 'docx-hf docx-hf--placeholder';
+    band.dataset.docxHf = kind;
+    band.setAttribute('contenteditable', 'false');
+    const top = kind === 'header' ? 0 : page.contentBox.y + page.contentBox.height - page.box.y;
+    const height =
+      kind === 'header'
+        ? page.contentBox.y - page.box.y
+        : page.box.y + page.box.height - (page.contentBox.y + page.contentBox.height);
+    if (height <= 0) continue;
+    band.style.position = 'absolute';
+    band.style.left = `${(page.contentBox.x - page.box.x) * options.scale}px`;
+    band.style.top = `${top * options.scale}px`;
+    band.style.width = `${page.contentBox.width * options.scale}px`;
+    band.style.height = `${height * options.scale}px`;
+    element.append(band);
+  }
+
   for (const story of [page.header, page.footer]) {
     if (!story) continue;
     const container = document.createElement('div');

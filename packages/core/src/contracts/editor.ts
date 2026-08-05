@@ -407,11 +407,13 @@ export interface Editor {
   /** Plain-text note preview for hover chrome. */
   getNotePreviewText(scopeId: string): string | null;
 
-  /** Tracked changes in the document, for the review sidebar. */
+  /** Tracked changes in the document — body AND header/footer stories. */
   getTrackedChanges(): readonly {
     readonly id: string;
     readonly kind: string;
     readonly author?: string;
+    /** Which story holds the change, so a consumer can group or filter by region. */
+    readonly story?: 'body' | 'header' | 'footer';
   }[];
 
   /**

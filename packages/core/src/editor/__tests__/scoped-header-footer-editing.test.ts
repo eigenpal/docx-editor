@@ -749,6 +749,55 @@ describe('surface-root pointer delegation for HF / notes', () => {
     surface.destroy();
   });
 
+  test('root listener: double press in the BLANK header margin creates the header and opens it', () => {
+    const { surface, container } = mount(docx({ body: `${p('One')}${p('Two')}` }));
+    const pages = container.querySelector<HTMLElement>('.docx-pages')!;
+    stubPagesRect(pages);
+    pages.focus();
+
+    // No story, but the blank-band affordance is painted so hover can invite the press.
+    expect(container.querySelector('[data-docx-hf][data-docx-r-id]')).toBeNull();
+    expect(container.querySelector('.docx-hf--placeholder[data-docx-hf="header"]')).not.toBeNull();
+
+    const page = surface.layout().pages[0]!;
+    const clientX = page.contentBox.x + 8;
+    const clientY = page.box.y + 2;
+
+    // A single press stays a body gesture: margin clicks place the nearest body caret.
+    const first = pressAt(pages, pages, clientX, clientY);
+    expect(first.defaultPrevented).toBe(true);
+    expect(surface.activeScope()).toEqual({ kind: 'body' });
+    expect(surface.session.headerFooterResolutionBySection()[0]?.headers.size ?? 0).toBe(0);
+
+    const second = pressAt(pages, pages, clientX, clientY);
+    expect(second.defaultPrevented).toBe(true);
+    // The part was created — one committed package op — and its scope opened for editing.
+    const slot = surface.session.headerFooterResolutionBySection()[0]!.headers.get('default');
+    expect(slot).toBeDefined();
+    expect(surface.activeScope()).toEqual({ kind: 'headerFooter', rId: slot!.rId });
+    expect(surface.headerFooterState()?.editing).toBe('header');
+    expect(surface.session.canUndo()).toBe(true);
+    surface.destroy();
+  });
+
+  test('root listener: viewing mode refuses to create a header from the blank band', () => {
+    const { surface, container } = mount(docx({ body: p('Body') }));
+    const pages = container.querySelector<HTMLElement>('.docx-pages')!;
+    stubPagesRect(pages);
+    pages.focus();
+    surface.setEditingMode('view');
+
+    const page = surface.layout().pages[0]!;
+    const clientX = page.contentBox.x + 8;
+    const clientY = page.box.y + 2;
+    pressAt(pages, pages, clientX, clientY);
+    pressAt(pages, pages, clientX, clientY);
+
+    expect(surface.activeScope()).toEqual({ kind: 'body' });
+    expect(surface.session.headerFooterResolutionBySection()[0]?.headers.size ?? 0).toBe(0);
+    surface.destroy();
+  });
+
   test('root listener: DOM furniture hit without layout miss still enters via data-docx-r-id', () => {
     const { surface, container } = mount(docx({ header: p('HDR'), body: p('Body') }));
     const pages = container.querySelector<HTMLElement>('.docx-pages')!;

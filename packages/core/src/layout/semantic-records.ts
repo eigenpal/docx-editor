@@ -677,9 +677,22 @@ export function paragraphFragmentsOf(
   page: PageRecord,
   includeHeaderRepeats = false
 ): ParagraphFragmentRecord[] {
+  return paragraphFragmentsOfBlocks(page.fragments, includeHeaderRepeats);
+}
+
+/**
+ * Depth-first paragraph fragments of one block list, in reading order.
+ *
+ * The same walk as {@link paragraphFragmentsOf} for fragment lists that do not sit on the
+ * page directly — a header/footer story's fragments, a note story's.
+ */
+export function paragraphFragmentsOfBlocks(
+  blocks: readonly BlockFragmentRecord[],
+  includeHeaderRepeats = false
+): ParagraphFragmentRecord[] {
   const found: ParagraphFragmentRecord[] = [];
-  const visitBlocks = (blocks: readonly BlockFragmentRecord[]): void => {
-    for (const block of blocks) {
+  const visitBlocks = (list: readonly BlockFragmentRecord[]): void => {
+    for (const block of list) {
       if (block.kind === 'paragraph') {
         found.push(block);
         continue;
@@ -690,7 +703,7 @@ export function paragraphFragmentsOf(
       }
     }
   };
-  visitBlocks(page.fragments);
+  visitBlocks(blocks);
   return found;
 }
 
