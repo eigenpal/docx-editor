@@ -25,6 +25,9 @@ import {
 
 export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif';
 export type PreservedImageMime = 'image/svg+xml' | 'image/tiff' | 'image/x-emf' | 'image/x-wmf';
+/** What a `ready` resource can carry: decoded rasters, or host-converted metafile SVG. */
+export type RenderableImageMime = SupportedImageMime | 'image/svg+xml';
+export type MetafileImageMime = 'image/x-emf' | 'image/x-wmf';
 
 export type { ImageResourceLimits };
 
@@ -40,7 +43,7 @@ export type ImageResourceState =
       readonly contentId: string;
       readonly resourceKey: string;
       readonly validatedHandle: ValidatedImageBytesHandle;
-      readonly mime: SupportedImageMime;
+      readonly mime: RenderableImageMime;
       readonly pixelWidth: number;
       readonly pixelHeight: number;
       readonly dpiX: number;
@@ -71,6 +74,17 @@ export interface ImageDecodePort {
     mime: SupportedImageMime,
     limits: ImageResourceLimits
   ): Promise<Readonly<{ pixelWidth: number; pixelHeight: number; dpiX: number; dpiY: number }>>;
+  /**
+   * Optional metafile (EMF/WMF) → SVG conversion. The returned SVG is validated at this
+   * trust boundary (bounded `<svg` root, encoded-size and pixel caps) and only ever
+   * reaches the DOM through a blob-URL `<img>`, where scripts and external loads are
+   * inert. Absent (or throwing), the metafile keeps its labelled placeholder.
+   */
+  convertMetafile?(
+    bytes: Uint8Array,
+    mime: MetafileImageMime,
+    limits: ImageResourceLimits
+  ): Promise<Readonly<{ svgBytes: Uint8Array; pixelWidth: number; pixelHeight: number }> | null>;
 }
 
 export interface ImageResourceLookup {
@@ -623,6 +637,95 @@ function createImageResourceCacheInternal(
 
     if (sniffed === 'unknown') {
       return unrenderable(resolvedPartName, 'unknown', 'unsupported-format');
+    }
+
+    if (sniffed === 'image/x-emf' || sniffed === 'image/x-wmf') {
+      const convert = decodePort.convertMetafile?.bind(decodePort);
+      if (!convert) {
+        return unrenderable(resolvedPartName, sniffed, 'unsupported-format');
+      }
+      const metafileMime = sniffed;
+      const contentId = contentIdOf(snapshotted);
+      const flightKey = contentFlightKey(ownerPartName, resolvedPartName, contentId);
+      const existingFlight = inFlightByContent.get(flightKey);
+      if (existingFlight) return existingFlight;
+      const convertCopy = snapshotBytes(snapshotted);
+      let flight!: Promise<ImageResourceState>;
+      flight = new Promise<ImageResourceState>((resolve, reject) => {
+        void (async () => {
+          try {
+            let converted: Readonly<{
+              svgBytes: Uint8Array;
+              pixelWidth: number;
+              pixelHeight: number;
+            }> | null;
+            try {
+              converted = await convert(convertCopy, metafileMime, limits);
+            } catch {
+              resolve(unrenderable(resolvedPartName, metafileMime, 'decode-failed'));
+              return;
+            }
+            if (startGeneration !== generation || disposed) {
+              reject(new Error('ImageResourceLookup stale'));
+              return;
+            }
+            // A null return is the converter declining the format — the ordinary
+            // labelled placeholder, not a decode failure.
+            if (converted === null) {
+              resolve(unrenderable(resolvedPartName, metafileMime, 'unsupported-format'));
+              return;
+            }
+            // The converter runs on attacker-controlled bytes; its OUTPUT is untrusted
+            // too. Re-validate at this boundary before it can become a ready resource.
+            if (converted.svgBytes.length > limits.maxEncodedBytes) {
+              resolve(unrenderable(resolvedPartName, metafileMime, 'resource-limit'));
+              return;
+            }
+            if (!hasBoundedSvgRoot(converted.svgBytes)) {
+              resolve(unrenderable(resolvedPartName, metafileMime, 'decode-failed'));
+              return;
+            }
+            const pixelCount = checkedPixelCount(
+              converted.pixelWidth,
+              converted.pixelHeight,
+              limits
+            );
+            if (pixelCount === null || !checkedDecodedRgbaBytes(pixelCount, limits)) {
+              resolve(unrenderable(resolvedPartName, metafileMime, 'resource-limit'));
+              return;
+            }
+            const resourceKey = resourceKeyOf(ownerPartName, resolvedPartName, contentId);
+            const validatedHandle = validatedBytesRegistry.acquire(
+              resourceKey,
+              contentId,
+              snapshotBytes(converted.svgBytes)
+            );
+            validatedBytesRegistry.retain(validatedHandle);
+            resolve(
+              freezeState({
+                kind: 'ready',
+                partName: resolvedPartName,
+                contentId,
+                resourceKey,
+                validatedHandle,
+                mime: 'image/svg+xml',
+                pixelWidth: converted.pixelWidth,
+                pixelHeight: converted.pixelHeight,
+                dpiX: DEFAULT_DPI,
+                dpiY: DEFAULT_DPI,
+              })
+            );
+          } catch (error) {
+            reject(error);
+          } finally {
+            if (startGeneration === generation) {
+              inFlightByContent.delete(flightKey);
+            }
+          }
+        })();
+      });
+      inFlightByContent.set(flightKey, flight);
+      return flight;
     }
 
     if (isPreservedMime(sniffed)) {

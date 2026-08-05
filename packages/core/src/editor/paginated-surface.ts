@@ -694,8 +694,19 @@ export function mountPaginatedSurface(
     },
   });
 
+  // A settled image resource must reach the screen on its own — nothing else may ever
+  // touch the document (a letterhead the user only reads). The flush is queued, not
+  // immediate, so a burst of settles (every image of a page decoding) lays out once; after
+  // destroy the scheduler is cancelled and the queued flush finds nothing pending.
+  let resourceFlushQueued = false;
   onDrawingResourcesChanged = () => {
     scheduler.invalidateAll(session.packageRevision(), 'drawing-resources');
+    if (resourceFlushQueued) return;
+    resourceFlushQueued = true;
+    setTimeout(() => {
+      resourceFlushQueued = false;
+      flushLayout();
+    }, 0);
   };
 
   // Every committed transaction, whatever produced it — this surface, undo, or another

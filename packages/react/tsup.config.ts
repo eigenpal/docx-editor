@@ -30,5 +30,7 @@ export default defineConfig({
   // The editor contract is a private, declaration-only package; bundle it so
   // published JS carries no reference to a private path.
   noExternal: [/^@docx-editor\.dev\/core-contract(?:\/|$)/],
-  external: ['react', 'react-dom', 'harfbuzzjs'],
+  // rtf.js is deep-imported (`rtf.js/dist/EMFJS.bundle.js`) and lazily loaded; the
+  // subpath pattern keeps the metafile renderer out of the main bundle.
+  external: ['react', 'react-dom', 'harfbuzzjs', 'rtf.js', /^rtf\.js\//],
 });

@@ -49,7 +49,7 @@ export default defineConfig({
       cssFileName: 'docx-editor-vue',
     },
     rollupOptions: {
-      external: (id) => id === 'vue' || id === 'harfbuzzjs',
+      external: (id) => id === 'vue' || id === 'harfbuzzjs' || id === 'rtf.js' || id.startsWith('rtf.js/'),
     },
     emptyOutDir: true,
   },

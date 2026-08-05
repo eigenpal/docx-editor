@@ -54,6 +54,7 @@
   "types": "./dist/index.d.ts",
   "dependencies": {
     "@docx-editor.dev/i18n": "^0.0.1",
-    "harfbuzzjs": "1.4.0"
+    "harfbuzzjs": "1.4.0",
+    "rtf.js": "3.0.9"
   }
 }

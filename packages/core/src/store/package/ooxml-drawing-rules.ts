@@ -485,6 +485,21 @@ const ANCHOR_REQUIRED_CHILD_SEQUENCE = [
   'drawingExtent',
 ] as const;
 
+const WP14_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing';
+
+/**
+ * Word 2010 drawing-extension trailing children of `wp:anchor` (`wp14:sizeRelH` /
+ * `wp14:sizeRelV`). Word emits them on ordinary anchored pictures; they stay generic
+ * (preserved, ignored by layout) and must not demote the typed anchor.
+ */
+function anchorSizeRelKind(child: OoxmlNode): 'drawingSizeRelH' | 'drawingSizeRelV' | null {
+  if (child.kind !== 'generic') return null;
+  if (child.namespaceUri !== WP14_NAMESPACE_URI) return null;
+  if (child.localName === 'sizeRelH') return 'drawingSizeRelH';
+  if (child.localName === 'sizeRelV') return 'drawingSizeRelV';
+  return null;
+}
+
 function anchorChildKind(child: OoxmlNode): string | null {
   if (child.kind === 'drawingSimplePos') return 'drawingSimplePos';
   if (child.kind === 'drawingPositionH') return 'drawingPositionH';
@@ -537,7 +552,9 @@ function anchoredDrawingChildrenValid(children: readonly OoxmlNode[]): boolean {
 
   let wrapCount = 0;
   for (const child of children) {
-    if (!INLINE_ANCHOR_CHILD_KINDS.has(child.kind)) return false;
+    if (!INLINE_ANCHOR_CHILD_KINDS.has(child.kind) && anchorSizeRelKind(child) === null) {
+      return false;
+    }
     if (WRAP_KINDS.has(child.kind)) wrapCount += 1;
   }
   if (wrapCount !== 1) return false;
@@ -553,7 +570,7 @@ function anchoredDrawingChildrenValid(children: readonly OoxmlNode[]): boolean {
 
   const sequence: string[] = [];
   for (const child of children) {
-    const kind = anchorChildKind(child);
+    const kind = anchorSizeRelKind(child) ?? anchorChildKind(child);
     if (kind === null) return false;
     sequence.push(
       kind === 'drawingWrapSquare' ||
@@ -579,6 +596,9 @@ function anchoredDrawingChildrenValid(children: readonly OoxmlNode[]): boolean {
   if (sequence[index] === 'drawingGraphicFramePr') index += 1;
   if (sequence[index] !== 'drawingGraphic') return false;
   index += 1;
+  // CT_Anchor 2010 extensions: optional sizeRelH, then optional sizeRelV, both trailing.
+  if (sequence[index] === 'drawingSizeRelH') index += 1;
+  if (sequence[index] === 'drawingSizeRelV') index += 1;
   return index === sequence.length;
 }
 
@@ -895,10 +915,7 @@ export function validateDrawingNode(
     const link = relationshipAttributeValue(attributes, 'link');
     if (embed === undefined && link === undefined) return false;
     if (embed !== undefined && link !== undefined) return false;
-    return (
-      localName === 'blip' &&
-      children.every((child) => child.kind === 'generic')
-    );
+    return localName === 'blip' && children.every((child) => child.kind === 'generic');
   }
 
   if (kind === 'pictureSrcRect') {
