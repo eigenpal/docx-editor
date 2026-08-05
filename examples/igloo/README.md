@@ -174,6 +174,10 @@ Full reference: [`docs/CUSTOMIZING.md`](../../docs/CUSTOMIZING.md).
   unrecognized children. Visual grouping only: a bare `div` carrying a role inside
   `role="menu"` would break the ownership a screen reader derives its counts from.
 - The sea and the blizzard both honour `prefers-reduced-motion`.
+- The share card in `public/og/` is drawn from the same palette the theme is: `igloo-card.svg`
+  is the source and `igloo.png` the checked-in render, so a link preview shows this demo's ice
+  rather than the site's. Re-render with
+  `rsvg-convert -w 1200 -h 630 public/og/igloo-card.svg -o public/og/igloo.png`.
 - The default document is `public/sample-igloo.docx` — the shared sample with an iceberg and
   an igloo already saved into it, so the custom nodes and their rail cards are on screen
   before anyone touches a menu. `?fixture=<name>.docx` swaps in the Vite example's
