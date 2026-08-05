@@ -17,6 +17,7 @@ import { emuToPoints } from '../drawing-layout.ts';
 import type { InlineDrawingLayoutContext } from '../drawing-layout.ts';
 import { layoutHeaderFooterStory } from '../hf-layout.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
+import { createLayoutSession } from '../layout-session.ts';
 import { breakParagraph } from '../paragraph-flow.ts';
 import type { PendingLine } from '../paragraph-flow.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
@@ -235,6 +236,28 @@ describe('header page-relative anchor does not size HF box (OpenSpec 4.7)', () =
 });
 
 describe('full-vs-incremental differential over wrap reflow (OpenSpec 9.4)', () => {
+  test('reuses seeded exclusion zones without changing layout', () => {
+    const session = createLayoutSession();
+    const part = load(squareAnchorAtLeft({ text: 'tail '.repeat(30) }));
+    layoutSemanticDocument(part, 1, {
+      measurer,
+      inlineDrawingLayout: layoutContext(part),
+      session,
+    });
+
+    const incremental = layoutSemanticDocument(part, 2, {
+      measurer,
+      inlineDrawingLayout: layoutContext(part),
+      session,
+    });
+    const clean = layoutSemanticDocument(part, 2, {
+      measurer,
+      inlineDrawingLayout: layoutContext(part),
+    });
+
+    expect(incremental.pages).toEqual(clean.pages);
+  });
+
   test('wrap-mode change reflows tail pages and invalidates break cache', () => {
     const cache = createParagraphLayoutCache<readonly PendingLine[]>();
     const longBody =

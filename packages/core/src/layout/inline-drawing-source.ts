@@ -13,6 +13,7 @@ import type {
 } from '../store/package/ooxml-tree.ts';
 import {
   createDrawingRelationshipResolver,
+  DEFAULT_DRAWING_PROJECTION_LIMITS,
   indexInlineDrawingProjectionsInPart,
   isRunLevelMcAlternateContent,
   type DrawingProjection,
@@ -78,7 +79,36 @@ interface PartDrawingContextSlot {
   readonly context: InlineDrawingLayoutContext;
   readonly cacheTokenForPart: () => string;
   readonly drawingTokenForParagraph: (paragraph: OoxmlNode) => string;
+  readonly isCompatibleWith: (part: OoxmlPart, pkg: OoxmlPackage) => boolean;
   readonly dispose: () => void;
+}
+
+function drawingAtomIdentities(part: OoxmlPart): ReadonlyMap<string, OoxmlNode> | null {
+  const atoms = new Map<string, OoxmlNode>();
+  const stack: { readonly node: OoxmlNode; readonly depth: number }[] = [
+    { node: part.root, depth: 0 },
+  ];
+  let visited = 0;
+  while (stack.length > 0) {
+    const frame = stack.pop()!;
+    visited += 1;
+    if (
+      visited > DEFAULT_DRAWING_PROJECTION_LIMITS.maxVisitedElements ||
+      frame.depth > DEFAULT_DRAWING_PROJECTION_LIMITS.maxDrawingDepth
+    ) {
+      return null;
+    }
+    const { node } = frame;
+    if (node.kind === 'drawing' || isRunLevelMcAlternateContent(node)) {
+      atoms.set(node.id, node);
+      continue;
+    }
+    if (!('children' in node)) continue;
+    for (let index = node.children.length - 1; index >= 0; index -= 1) {
+      stack.push({ node: node.children[index]!, depth: frame.depth + 1 });
+    }
+  }
+  return atoms;
 }
 
 function drawingProjectionLayoutToken(projection: DrawingProjection): string {
@@ -114,6 +144,8 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           String(picture.transform.offsetEmu.y),
           String(picture.transform.extentEmu.cx),
           String(picture.transform.extentEmu.cy),
+          picture.embeddedRelationshipId ?? '',
+          picture.linkedRelationshipId ?? '',
           picture.presetGeometry ?? '',
         ].join(':')
       : '',
@@ -203,12 +235,17 @@ function createPartDrawingContextSlot(options: {
   const resourceByKey = new Map<string, ImageResourceState>();
   const inFlight = new Set<string>();
   const resourceEpochByKey = new Map<string, number>();
+  const drawingTokensByParagraph = new WeakMap<
+    OoxmlNode,
+    { readonly resourceEpoch: number; readonly token: string }
+  >();
   let resourceEpoch = 0;
 
   const resolveRelationshipTarget = createDrawingRelationshipResolver(pkg, ownerPartName);
   const atomProjections = indexInlineDrawingProjectionsInPart(part, {
     resolveRelationship: resolveRelationshipTarget,
   });
+  const atomIdentities = drawingAtomIdentities(part);
 
   const scheduleResolve = (projection: DrawingProjection, key: string): void => {
     if (disposed || inFlight.has(key)) return;
@@ -282,8 +319,13 @@ function createPartDrawingContextSlot(options: {
   });
 
   const drawingTokenForParagraph = (paragraph: OoxmlNode): string => {
+    const cached = drawingTokensByParagraph.get(paragraph);
+    if (cached?.resourceEpoch === resourceEpoch) return cached.token;
     const atoms = drawingAtomsInParagraph(paragraph);
-    if (atoms.length === 0) return '';
+    if (atoms.length === 0) {
+      drawingTokensByParagraph.set(paragraph, { resourceEpoch, token: '' });
+      return '';
+    }
     const tokens = atoms
       .map((atomId) => {
         const projection = atomProjections.get(atomId);
@@ -297,7 +339,9 @@ function createPartDrawingContextSlot(options: {
         ].join('|');
       })
       .sort();
-    return tokens.join(';');
+    const token = tokens.join(';');
+    drawingTokensByParagraph.set(paragraph, { resourceEpoch, token });
+    return token;
   };
 
   return {
@@ -305,6 +349,34 @@ function createPartDrawingContextSlot(options: {
     cacheTokenForPart: () =>
       `${ownerPartName}|${resourceEpoch}|${generation}|${atomProjections.size}`,
     drawingTokenForParagraph,
+    isCompatibleWith: (nextPart, nextPkg) => {
+      if (nextPart === part) return true;
+      const nextAtomIdentities = drawingAtomIdentities(nextPart);
+      if (atomIdentities && nextAtomIdentities && atomIdentities.size === nextAtomIdentities.size) {
+        let unchanged = true;
+        for (const [id, node] of atomIdentities) {
+          if (nextAtomIdentities.get(id) !== node) {
+            unchanged = false;
+            break;
+          }
+        }
+        if (unchanged) return true;
+      }
+      const nextProjections = indexInlineDrawingProjectionsInPart(nextPart, {
+        resolveRelationship: createDrawingRelationshipResolver(nextPkg, ownerPartName),
+      });
+      if (nextProjections.size !== atomProjections.size) return false;
+      for (const [atomId, projection] of atomProjections) {
+        const next = nextProjections.get(atomId);
+        if (
+          !next ||
+          drawingProjectionLayoutToken(next) !== drawingProjectionLayoutToken(projection)
+        ) {
+          return false;
+        }
+      }
+      return true;
+    },
     dispose: () => {
       disposed = true;
       generation += 1;
@@ -322,9 +394,10 @@ export function createInlineDrawingLayoutBundle(
   options: CreateInlineDrawingLayoutBundleOptions
 ): InlineDrawingLayoutBundle {
   let pkgRevision = options.session.packageRevision();
+  let pkgSnapshot = options.session.currentPackage();
   let lookup =
     options.resourceLookup ??
-    imageResourceLookupFor(options.session.currentPackage(), {
+    imageResourceLookupFor(pkgSnapshot, {
       decodePort: options.decodePort,
     });
   const slots = new Map<string, PartDrawingContextSlot>();
@@ -347,7 +420,7 @@ export function createInlineDrawingLayoutBundle(
 
   const resolvePart = (ownerPartName: string, reader: InlineDrawingPackageReader): OoxmlPart => {
     const pkg = reader.currentPackage();
-    const existing = partByName.get(ownerPartName) ?? pkg.parts.get(ownerPartName);
+    const existing = pkg.parts.get(ownerPartName) ?? partByName.get(ownerPartName);
     if (existing) return existing;
     if (ownerPartName === reader.part().name) return reader.part();
     throw new Error(`Missing inline drawing part ${ownerPartName}`);
@@ -375,6 +448,28 @@ export function createInlineDrawingLayoutBundle(
   };
 
   const resetPackage = (reader: InlineDrawingPackageReader): void => {
+    const nextPkg = reader.currentPackage();
+    const resourceSubstrateUnchanged =
+      nextPkg.partBytes === pkgSnapshot.partBytes &&
+      nextPkg.relationships === pkgSnapshot.relationships &&
+      nextPkg.contentTypes === pkgSnapshot.contentTypes;
+    if (resourceSubstrateUnchanged) {
+      for (const [ownerPartName, slot] of slots) {
+        const nextPart =
+          nextPkg.parts.get(ownerPartName) ??
+          (ownerPartName === reader.part().name ? reader.part() : undefined);
+        if (nextPart && slot.isCompatibleWith(nextPart, nextPkg)) {
+          partByName.set(ownerPartName, nextPart);
+          continue;
+        }
+        slot.dispose();
+        slots.delete(ownerPartName);
+        partByName.delete(ownerPartName);
+      }
+      pkgRevision = reader.packageRevision();
+      pkgSnapshot = nextPkg;
+      return;
+    }
     for (const slot of slots.values()) slot.dispose();
     slots.clear();
     partByName.clear();
@@ -383,9 +478,10 @@ export function createInlineDrawingLayoutBundle(
     handlesByKey.clear();
     if (!options.resourceLookup) lookup.dispose();
     pkgRevision = reader.packageRevision();
+    pkgSnapshot = nextPkg;
     lookup =
       options.resourceLookup ??
-      imageResourceLookupFor(reader.currentPackage(), {
+      imageResourceLookupFor(nextPkg, {
         decodePort: options.decodePort,
       });
   };

@@ -705,6 +705,14 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
   const rightEdge = last.box.x + last.box.width;
   if (x >= rightEdge) return endOfLine(line, rightEdge, context);
 
+  // Text owns its published box. Check every text box before looking at drawing gaps:
+  // otherwise a later inline image can claim text that lies between earlier images.
+  for (const span of spans) {
+    if (x >= span.box.x && x < span.box.x + span.box.width) {
+      return offsetWithinSpan(span, x, context);
+    }
+  }
+
   for (let index = 0; index < spans.length; index += 1) {
     const span = spans[index]!;
     for (const drawing of line.drawings ?? []) {
@@ -748,7 +756,6 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
         ? { offset: previous.range.end, x: previousRight, withinSpan: false }
         : { offset: span.range.start, x: span.box.x, withinSpan: false };
     }
-    if (x < span.box.x + span.box.width) return offsetWithinSpan(span, x, context);
   }
   return endOfLine(line, rightEdge, context);
 }

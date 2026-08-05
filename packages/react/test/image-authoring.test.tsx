@@ -642,6 +642,16 @@ describe('renders semantic image resize handles', () => {
     });
     expect(view.container.querySelector('.docx-image-selection-overlay')).toBeNull();
   });
+
+  test('does not steal focus when image context changes without an image pointer press', async () => {
+    const { editor, ready, selectDrawing } = mount(null, inlinePictureDocument());
+    await ready();
+    const focusedBefore = document.activeElement?.tagName;
+    await selectDrawing();
+
+    expect(editor().surface).not.toBeNull();
+    expect(document.activeElement?.tagName).toBe(focusedBefore);
+  });
 });
 
 describe('previews pointer gestures and commits once', () => {

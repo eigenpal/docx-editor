@@ -707,6 +707,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         context: container ? tryCreateBrowserCanvasContext(container.ownerDocument) : null,
         ...(embeddedFaces ? { fontAlias: embeddedFaces.alias } : {}),
       });
+      const resolvedFonts = new Map<
+        string,
+        Exclude<ReturnType<typeof shaping.fonts.resolve>, FontResolutionError> | null
+      >();
       shapedMeasurer = createShapedMeasurer({
         shaper: shaping.shaper,
         resolveFont: (style) => {
@@ -717,17 +721,23 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           // the remount and take the mounted document with it.
           const family = style.fontFamily ?? fonts.defaultFont.family;
           if (family.trim().length === 0) return null;
+          const request = {
+            family,
+            weight: style.bold ? 700 : 400,
+            style: style.italic ? ('italic' as const) : ('normal' as const),
+          };
+          const key = fontRequestKey(request);
+          if (resolvedFonts.has(key)) return resolvedFonts.get(key) ?? null;
           let resolved: ReturnType<typeof shaping.fonts.resolve>;
           try {
-            resolved = shaping.fonts.resolve({
-              family,
-              weight: style.bold ? 700 : 400,
-              style: style.italic ? 'italic' : 'normal',
-            });
+            resolved = shaping.fonts.resolve(request);
           } catch {
+            resolvedFonts.set(key, null);
             return null;
           }
-          return resolved instanceof FontResolutionError ? null : resolved;
+          const usable = resolved instanceof FontResolutionError ? null : resolved;
+          resolvedFonts.set(key, usable);
+          return usable;
         },
         fallback: fallbackResolution.measurer,
         shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,

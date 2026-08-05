@@ -1037,7 +1037,10 @@ function paintLine(
       spacer.setAttribute('aria-hidden', 'true');
       spacer.style.display = 'inline-block';
       spacer.style.width = `${advance * scale}px`;
-      spacer.style.height = '0';
+      // The image itself is absolutely painted, so this inert inline box must also publish
+      // its vertical advance. Otherwise CSS aligns text against a zero-height spacer while
+      // layout aligns the engine caret against the drawing baseline.
+      spacer.style.height = `${drawing.baselineOffset * scale}px`;
       spacer.style.lineHeight = '0';
       spacer.style.pointerEvents = 'none';
       spacer.style.verticalAlign = 'baseline';
@@ -1996,6 +1999,33 @@ interface RetainedPaint {
 
 const retainedPaints = new WeakMap<HTMLElement, RetainedPaint>();
 
+function sameBox(left: PageRecord['box'], right: PageRecord['box']): boolean {
+  return (
+    left.x === right.x &&
+    left.y === right.y &&
+    left.width === right.width &&
+    left.height === right.height
+  );
+}
+
+function virtualPageShellMatches(
+  retained: RetainedPage,
+  page: PageRecord,
+  scale: number,
+  ariaHidden: boolean
+): boolean {
+  const element = retained.element;
+  return (
+    !retained.materialized &&
+    sameBox(retained.record.box, page.box) &&
+    element.style.left === `${page.box.x * scale}px` &&
+    element.style.top === `${page.box.y * scale}px` &&
+    element.style.width === `${page.box.width * scale}px` &&
+    element.style.height === `${page.box.height * scale}px` &&
+    element.getAttribute('aria-hidden') === (ariaHidden ? 'true' : null)
+  );
+}
+
 /**
  * Paint a whole layout into a container, reusing the pages that did not change.
  *
@@ -2080,15 +2110,22 @@ export function paintSemanticLayout(
     `${options.imageUrlPort ? 'url' : ''}|` +
     `${drawingPaintStringsCacheToken(drawingStrings)}`;
   const previous = retainedPaints.get(container);
-  const reusable =
-    previous && previous.parameters === parameters
-      ? new Map(previous.pages.map((entry) => [entry.record, entry]))
-      : null;
+  const parametersUnchanged = previous?.parameters === parameters;
+  const reusable = parametersUnchanged
+    ? new Map(previous.pages.map((entry) => [entry.record, entry]))
+    : null;
+  const previousByIndex = previous
+    ? new Map(previous.pages.map((entry) => [entry.record.index, entry]))
+    : null;
 
   const pages: RetainedPage[] = layout.pages.map((page) => {
     const materialized = options.materialize?.has(page.index) ?? true;
     const kept = reusable?.get(page);
     if (kept && kept.materialized === materialized) return kept;
+    const priorShell = materialized ? null : previousByIndex?.get(page.index);
+    if (priorShell && virtualPageShellMatches(priorShell, page, resolved.scale, resolved.ariaHidden)) {
+      return { record: page, materialized: false, element: priorShell.element };
+    }
     return {
       record: page,
       materialized,
@@ -2109,6 +2146,14 @@ export function paintSemanticLayout(
   // keeping the browser's style and layout for them, and the DOM selection anchored inside
   // them — while changed pages are placed in order and anything else is dropped.
   const kept = new Set<HTMLElement>(pages.map((entry) => entry.element));
+  let child = container.firstChild;
+  while (child) {
+    const next = child.nextSibling;
+    // Drop stale pages first. Leaving them in front of retained virtual shells makes the
+    // ordering pass move every shell out and back on each keystroke.
+    if (!kept.has(child as HTMLElement)) (child as ChildNode).remove();
+    child = next;
+  }
   let cursor = container.firstChild;
   for (const entry of pages) {
     if (entry.element === cursor) {
@@ -2116,13 +2161,5 @@ export function paintSemanticLayout(
       continue;
     }
     container.insertBefore(entry.element, cursor);
-  }
-  let child = container.firstChild;
-  while (child) {
-    const next = child.nextSibling;
-    // A membership test, not an `instanceof`: it treats a node from any realm — and any
-    // non-element node — the same way, and everything this pass did not paint goes.
-    if (!kept.has(child as HTMLElement)) (child as ChildNode).remove();
-    child = next;
   }
 }

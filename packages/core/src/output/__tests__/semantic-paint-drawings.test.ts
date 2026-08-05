@@ -497,6 +497,7 @@ describe('paintSemanticLayout drawing integration', () => {
       'layout-run layout-run-text',
     ]);
     expect((flow[1] as HTMLElement).style.width).toBe(`${emuToPoints(914400)}px`);
+    expect((flow[1] as HTMLElement).style.height).toBe(`${emuToPoints(457200)}px`);
     expect((line as HTMLElement).style.wordSpacing).toBe('');
   });
 
@@ -520,12 +521,48 @@ describe('paintSemanticLayout drawing integration', () => {
     const container = document.createElement('div');
     paintSemanticLayout(container, layout, { scale: 1, imageUrlPort: port, ariaHidden: false });
     const first = container.querySelector('img.docx-drawing-image');
+    const firstReady = first?.closest('.docx-drawing-ready');
+    const firstFrame = first?.closest('.docx-drawing-image-frame');
     expect(first).not.toBeNull();
+    expect(firstReady).not.toBeNull();
+    expect(firstFrame).not.toBeNull();
     const firstSrc = first!.getAttribute('src');
-    paintSemanticLayout(container, layout, { scale: 1, imageUrlPort: port, ariaHidden: false });
+    paintSemanticLayout(container, layoutWith(2, READY_PNG), {
+      scale: 1,
+      imageUrlPort: port,
+      ariaHidden: false,
+    });
     const second = container.querySelector('img.docx-drawing-image');
+    const secondReady = second?.closest('.docx-drawing-ready');
     expect(second).toBe(first as never);
+    expect(secondReady).toBe(firstReady as never);
+    expect(second?.closest('.docx-drawing-image-frame')).toBe(firstFrame as never);
     expect(second!.getAttribute('src')).toBe(firstSrc as never);
+  });
+
+  test('an unchanged repaint leaves the decoded image subtree untouched', () => {
+    const part = load(inlinePictureXml());
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+      inlineDrawingLayout: {
+        ownerPartName: OWNER,
+        project: (node) =>
+          projectDrawing(node, {
+            ownerPartName: OWNER,
+            limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
+          }),
+        resourceOf: () => READY_PNG,
+      },
+    });
+    const { port } = fakeUrlPort();
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, { scale: 1, imageUrlPort: port, ariaHidden: false });
+    const firstFrame = container.querySelector('.docx-drawing-image-frame');
+    expect(firstFrame).not.toBeNull();
+
+    paintSemanticLayout(container, layout, { scale: 1, imageUrlPort: port, ariaHidden: false });
+
+    expect(container.querySelector('.docx-drawing-image-frame')).toBe(firstFrame as never);
   });
 
   test('keeps the decoded image visible while a text revision revalidates its resource', () => {

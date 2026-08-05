@@ -110,7 +110,25 @@ export function ImageSelectionOverlay({
   const pointerStartRef = useRef<{ readonly x: number; readonly y: number } | null>(null);
   const captureTargetRef = useRef<HTMLElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
+  const focusRequestedForDrawingRef = useRef<string | null>(null);
   const scrollPortRef = useRef<ImageOverlayScrollPort | null>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return undefined;
+    const onPointerDown = (event: PointerEvent): void => {
+      const element = event.target instanceof Element ? event.target : null;
+      const drawingId = element
+        ?.closest<HTMLElement>('[data-drawing-node-id]')
+        ?.getAttribute('data-drawing-node-id');
+      focusRequestedForDrawingRef.current = drawingId ?? null;
+      if (drawingId && drawingId === target?.id) {
+        queueMicrotask(() => overlayRef.current?.focus({ preventScroll: true }));
+      }
+    };
+    container.addEventListener('pointerdown', onPointerDown, { capture: true });
+    return () => container.removeEventListener('pointerdown', onPointerDown, { capture: true });
+  }, [containerRef, target?.id]);
 
   useEffect(() => {
     if (!editor) {
@@ -450,7 +468,9 @@ export function ImageSelectionOverlay({
   }, [clearPreview, commitSession, containerRef, editor, preview]);
 
   useEffect(() => {
-    if (target) overlayRef.current?.focus({ preventScroll: true });
+    if (!target || focusRequestedForDrawingRef.current !== target.id) return;
+    focusRequestedForDrawingRef.current = null;
+    overlayRef.current?.focus({ preventScroll: true });
   }, [target]);
 
   const active = preview?.bounds ?? target;

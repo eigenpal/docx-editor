@@ -73,6 +73,8 @@ interface UrlRegistry {
   ) => HTMLImageElement;
   /** Previously decoded image to retain while a new package snapshot revalidates it. */
   readonly imageForPending?: (elementKey: string) => HTMLImageElement | null;
+  readonly readyElementFor?: (elementKey: string) => HTMLElement | null;
+  readonly rememberReadyElement?: (elementKey: string, element: HTMLElement) => void;
   readonly reconcile: (
     usedResourceKeys: ReadonlySet<string>,
     usedElementKeys: ReadonlySet<string>
@@ -81,6 +83,7 @@ interface UrlRegistry {
 }
 
 const urlRegistries = new WeakMap<object, UrlRegistry>();
+const readyImagePaintSignatures = new WeakMap<HTMLElement, string>();
 
 /** Cached-element ceiling per registry — beyond it paint falls back to fresh elements. */
 const MAX_CACHED_DRAWING_IMAGES = 256;
@@ -94,7 +97,11 @@ export function drawingUrlRegistryFor(
   const urlsByKey = new Map<string, string>();
   const imagesByElementKey = new Map<
     string,
-    { readonly element: HTMLImageElement; readonly resourceKey: string }
+    {
+      readonly element: HTMLImageElement;
+      readonly resourceKey: string;
+      readonly readyElement?: HTMLElement;
+    }
   >();
   registry = Object.freeze({
     urlForReady(handle: ValidatedImageBytesHandle, mime: SupportedImageMime): string | null {
@@ -109,12 +116,24 @@ export function drawingUrlRegistryFor(
       if (cached && cached.resourceKey === resourceKey) return cached.element;
       const element = document.createElement('img');
       if (imagesByElementKey.size < MAX_CACHED_DRAWING_IMAGES) {
-        imagesByElementKey.set(elementKey, { element, resourceKey });
+        imagesByElementKey.set(elementKey, {
+          element,
+          resourceKey,
+          ...(cached?.readyElement ? { readyElement: cached.readyElement } : {}),
+        });
       }
       return element;
     },
     imageForPending(elementKey: string): HTMLImageElement | null {
       return imagesByElementKey.get(elementKey)?.element ?? null;
+    },
+    readyElementFor(elementKey: string): HTMLElement | null {
+      return imagesByElementKey.get(elementKey)?.readyElement ?? null;
+    },
+    rememberReadyElement(elementKey: string, element: HTMLElement): void {
+      const cached = imagesByElementKey.get(elementKey);
+      if (!cached) return;
+      imagesByElementKey.set(elementKey, { ...cached, readyElement: element });
     },
     reconcile(usedResourceKeys: ReadonlySet<string>, usedElementKeys: ReadonlySet<string>): void {
       for (const [key, url] of urlsByKey) {
@@ -291,6 +310,41 @@ function positionedBox(
   element.style.pointerEvents = 'auto';
 }
 
+function readyImagePaintSignature(
+  drawing: InlineDrawingRecord | AnchoredDrawingRecord,
+  resource: Extract<InlineDrawingRecord['resource'], { kind: 'ready' }>,
+  ctx: DrawingPaintContext,
+  url: string,
+  origin?: LayoutBox
+): string {
+  const paint = drawing.paintBounds;
+  const content = drawing.geometry.contentBounds;
+  const crop = cropImageStyles(drawing, resource);
+  return [
+    url,
+    ctx.scale,
+    origin?.x ?? 0,
+    origin?.y ?? 0,
+    paint.x,
+    paint.y,
+    paint.width,
+    paint.height,
+    content.x,
+    content.y,
+    content.width,
+    content.height,
+    cssClipPathFromPolygon(drawing.geometry.clipPolygon ?? [], paint) ?? '',
+    filterStyleOf(drawing) ?? '',
+    imagePaintTransformStyle(drawing) ?? '',
+    crop.width,
+    crop.height,
+    crop.left,
+    crop.top,
+    ctx.inertLinks ? '' : (drawing.hyperlinkHref ?? ''),
+    drawing.accessibility.label ?? '',
+  ].join('|');
+}
+
 function paintPlaceholderCard(
   document: Document,
   drawing: InlineDrawingRecord | AnchoredDrawingRecord,
@@ -335,9 +389,20 @@ function paintReadyImage(
     return paintPlaceholderCard(document, drawing, ctx, origin);
   }
 
-  const outer = document.createElement('div');
+  const elementKey = drawingElementKey(drawing, ctx);
+  const outer = urlRegistry?.readyElementFor?.(elementKey) ?? document.createElement('div');
+  const paintSignature = readyImagePaintSignature(drawing, resource, ctx, url, origin);
+  if (readyImagePaintSignatures.get(outer) === paintSignature) return outer;
   outer.className = 'docx-drawing docx-drawing-ready';
+  outer.style.cssText = '';
   outer.dataset.drawingNodeId = drawing.drawingNodeId;
+  delete outer.dataset.docxDrawingLink;
+  delete outer.dataset.docxDrawingLinkKind;
+  delete outer.dataset.docxDrawingLinkHref;
+  outer.removeAttribute('aria-hidden');
+  outer.removeAttribute('aria-label');
+  outer.removeAttribute('role');
+  outer.removeAttribute('tabindex');
   positionedBox(outer, drawing.paintBounds, ctx.scale, origin);
 
   // Preset clip in authoritative paint space — xfrm rotation is already in clipPolygon.
@@ -376,7 +441,7 @@ function paintReadyImage(
   cropViewport.style.overflow = 'hidden';
 
   const img =
-    urlRegistry?.imageFor?.(drawingElementKey(drawing, ctx), resource.resourceKey, document) ??
+    urlRegistry?.imageFor?.(elementKey, resource.resourceKey, document) ??
     document.createElement('img');
   img.className = 'docx-drawing-image';
   img.setAttribute('draggable', 'false');
@@ -397,7 +462,7 @@ function paintReadyImage(
   cropViewport.append(img);
   transformStage.append(cropViewport);
   inner.append(transformStage);
-  outer.append(inner);
+  outer.replaceChildren(inner);
 
   if (drawing.hyperlinkHref && !ctx.inertLinks) {
     outer.dataset.docxDrawingLink = drawing.drawingNodeId;
@@ -408,6 +473,8 @@ function paintReadyImage(
   } else {
     applyAccessibility(outer, drawing, false);
   }
+  urlRegistry?.rememberReadyElement?.(elementKey, outer);
+  readyImagePaintSignatures.set(outer, paintSignature);
   return outer;
 }
 
@@ -506,10 +573,13 @@ export function paintDrawingRecord(
   }
 
   if (resource.kind === 'pending') {
-    const retained = urlRegistry
-      ?.imageForPending?.(drawingElementKey(drawing, ctx))
-      ?.closest<HTMLElement>('.docx-drawing-ready');
+    const retained =
+      urlRegistry?.readyElementFor?.(drawingElementKey(drawing, ctx)) ??
+      urlRegistry
+        ?.imageForPending?.(drawingElementKey(drawing, ctx))
+        ?.closest<HTMLElement>('.docx-drawing-ready');
     if (retained) {
+        readyImagePaintSignatures.delete(retained);
       retained.dataset.drawingNodeId = drawing.drawingNodeId;
       positionedBox(retained, drawing.paintBounds, ctx.scale, origin);
       return retained;

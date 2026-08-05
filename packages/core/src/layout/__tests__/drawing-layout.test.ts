@@ -208,6 +208,25 @@ describe('lays out inline drawings', () => {
     expect(fragment.lines.some((line) => line.drawings?.length === 1)).toBe(true);
   });
 
+  test('wraps text typed after an inline image within the content width', () => {
+    const part = load(
+      inlinePictureXml({
+        before: run('A'),
+        after: run(' one two three four five six seven eight nine ten'),
+        inlineAttrs: 'distT="0" distB="0" distL="0" distR="0"',
+      })
+    );
+    const layout = lay(part, layoutContext(part), {
+      width: 120,
+      height: 800,
+      margin: { top: 10, right: 10, bottom: 10, left: 10 },
+    });
+    const fragment = paragraphFragmentsOf(layout.pages[0]!)[0]!;
+
+    expect(fragment.lines.length).toBeGreaterThan(1);
+    expect(fragment.lines.every((line) => line.box.width <= 100)).toBe(true);
+  });
+
   test('grows line height when the image is taller than text', () => {
     const part = load(inlinePictureXml({ extent: 'cx="152400" cy="914400"' }));
     const layout = lay(part, layoutContext(part));
@@ -313,6 +332,54 @@ describe('hit tests inline drawings', () => {
     );
     return lay(part, layoutContext(part));
   }
+
+  test('clicking inside text after a drawing stays inside that text', () => {
+    const part = load(
+      inlinePictureXml({
+        before: run('red '),
+        after: run('blue'),
+        inlineAttrs: 'distT="0" distB="0" distL="0" distR="0"',
+      })
+    );
+    const layout = lay(part, layoutContext(part));
+    const line = linesOf(layout)[0]!;
+    const blue = line.spans.find((span) => span.text === 'blue')!;
+
+    const hit = hitTestPage(layout, 0, {
+      x: blue.box.x + blue.box.width / 2,
+      y: line.box.y + line.box.height / 2,
+    })!;
+
+    expect(hit.position.offset).toBeGreaterThan(blue.range.start);
+    expect(hit.position.offset).toBeLessThan(blue.range.end);
+    expect(hit.drawing).toBeNull();
+  });
+
+  test('clicking inside text between two drawings stays inside that text', () => {
+    const drawingOnly = inlinePictureXml();
+    const drawingRun = drawingOnly.slice(
+      drawingOnly.indexOf('<w:r><w:drawing>'),
+      drawingOnly.indexOf('</w:p>')
+    );
+    const part = load(
+      inlinePictureXml({
+        before: run('Inline: ') + drawingRun + run('red '),
+        after: run('blue'),
+        inlineAttrs: 'distT="0" distB="0" distL="0" distR="0"',
+      })
+    );
+    const layout = lay(part, layoutContext(part));
+    const line = linesOf(layout)[0]!;
+    const red = line.spans.find((span) => span.text === 'red ')!;
+
+    const hit = hitTestPage(layout, 0, {
+      x: red.box.x + 6,
+      y: line.box.y + line.box.height / 2,
+    })!;
+
+    expect(hit.position.offset).toBe(red.range.start + 1);
+    expect(hit.drawing).toBeNull();
+  });
 
   test('inside the drawing maps to the atomic model offset', () => {
     const layout = layoutWithImage();

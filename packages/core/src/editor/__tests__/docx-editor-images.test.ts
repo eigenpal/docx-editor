@@ -7,8 +7,15 @@ import {
   IMAGE_WRAP_TARGETS,
   type ImageWrapTarget,
 } from '../../store/package/drawing-projection.ts';
-import { validateRasterHeader, type ImageDecodePort } from '../../store/package/image-resources.ts';
+import {
+  validateRasterHeader,
+  type ImageDecodePort,
+  type ImageResourceLookup,
+} from '../../store/package/image-resources.ts';
 import { resolveImageResourceLimits } from '../../store/runtime/limits.ts';
+import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
+import type { OoxmlDrawingNode, OoxmlElement } from '../../store/package/ooxml-tree.ts';
+import { createInlineDrawingLayoutBundle } from '../../layout/inline-drawing-source.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -146,6 +153,81 @@ async function settleDrawingResources(editor: DocxEditorInstance): Promise<void>
 }
 
 describe('docx-editor selected image context', () => {
+  test('text-only package revisions preserve settled drawing resources', async () => {
+    const loaded = readOoxmlPackage(inlinePictureDocument());
+    if (!loaded.ok) throw new Error(loaded.reason);
+    let pkg = loaded.package;
+    let revision = 0;
+    let resolves = 0;
+    const resourceLookup: ImageResourceLookup = {
+      async resolveEmbedded() {
+        resolves += 1;
+        return Object.freeze({ kind: 'missing' as const });
+      },
+      resolveLinked: () => Object.freeze({ kind: 'missing' as const }),
+      async resolveForProjection() {
+        resolves += 1;
+        return Object.freeze({ kind: 'missing' as const });
+      },
+      liveReferenceCount: () => 0,
+      dispose: () => {},
+    };
+    const session = {
+      packageRevision: () => revision,
+      currentPackage: () => pkg,
+      part: () => pkg.parts.get(pkg.mainDocumentPart)!,
+    };
+    const bundle = createInlineDrawingLayoutBundle({
+      session,
+      decodePort: createTestImageDecodePort(),
+      resourceLookup,
+      onResourcesChanged: () => {},
+    });
+    const drawing = (() => {
+      const stack: OoxmlElement[] = [session.part().root];
+      while (stack.length > 0) {
+        const node = stack.shift()!;
+        if (node.kind === 'drawing') return node as OoxmlDrawingNode;
+        for (const child of node.children) {
+          if (child.kind !== 'textValue') stack.push(child);
+        }
+      }
+      throw new Error('missing drawing');
+    })();
+    const firstProjection = bundle.bodyContext.project(drawing)!;
+    expect(bundle.bodyContext.resourceOf(firstProjection).kind).toBe('pending');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(bundle.bodyContext.resourceOf(firstProjection).kind).toBe('missing');
+    expect(resolves).toBe(1);
+
+    pkg = Object.freeze({ ...pkg, parts: new Map(pkg.parts) });
+    revision += 1;
+    bundle.sync(session);
+
+    const nextProjection = bundle.bodyContext.project(drawing)!;
+    expect(bundle.bodyContext.resourceOf(nextProjection).kind).toBe('missing');
+    expect(resolves).toBe(1);
+  });
+
+  test('text typed after an inline image reflows onto additional semantic lines', () => {
+    const editor = mountEditor(inlinePictureDocument());
+    const paragraphId = drawingParagraphId(editor);
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 12 },
+      head: { paragraphId, offset: 12 },
+    });
+
+    editor.exec({ type: 'insertText', text: ' word'.repeat(200) });
+
+    const fragment = editor
+      .surface!.layout()
+      .pages.flatMap((page) => page.fragments)
+      .find((candidate) => candidate.kind === 'paragraph' && candidate.paragraphId === paragraphId);
+    expect(fragment?.kind).toBe('paragraph');
+    if (!fragment || fragment.kind !== 'paragraph') throw new Error('missing paragraph fragment');
+    expect(fragment.lines.length).toBeGreaterThan(1);
+  });
+
   test('derives selected image context for inline picture with stable references', async () => {
     const editor = mountEditor(inlinePictureDocument());
     selectInlineDrawing(editor);

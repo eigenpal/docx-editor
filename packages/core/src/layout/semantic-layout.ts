@@ -363,6 +363,10 @@ interface PreparedBlockMemo {
 }
 
 const preparedBlocks = new WeakMap<OoxmlNode, PreparedBlockMemo>();
+const drawingSourceOrderByContext = new WeakMap<
+  InlineDrawingLayoutContext,
+  ReadonlyMap<string, number>
+>();
 
 export function layoutSemanticDocument(
   part: OoxmlPart,
@@ -389,15 +393,20 @@ export function layoutSemanticDocument(
       options.emptyTocSuppressedResultParagraphIds ?? emptyTocSuppressedResultParagraphIds(part),
   };
   // Full-body list resolve so counters continue across sections and table cells.
-  const drawingSourceOrder = options.inlineDrawingLayout
-    ? (() => {
+  let drawingSourceOrder = options.drawingSourceOrder;
+  if (!drawingSourceOrder && options.inlineDrawingLayout) {
+    drawingSourceOrder = drawingSourceOrderByContext.get(options.inlineDrawingLayout);
+    if (!drawingSourceOrder) {
+      drawingSourceOrder = (() => {
         const order = new Map<string, number>();
         projectDrawingsInPart(part).forEach((projection, index) => {
           order.set(projection.drawingNodeId, index);
         });
         return order;
-      })()
-    : undefined;
+      })();
+      drawingSourceOrderByContext.set(options.inlineDrawingLayout, drawingSourceOrder);
+    }
+  }
   const optionsWithLists = withResolvedListItems(
     drawingSourceOrder
       ? {
@@ -531,6 +540,31 @@ function layoutBlocksPass(
     let result: BlockLayoutResult | null = null;
     let converged = false;
     const seenZoneTokens = new Set<string>();
+    const previousPages = options.session?.previous?.pages;
+    if (previousPages) {
+      zonesByPage = collectExclusionZonesByPage(
+        previousPages,
+        options.inlineDrawingLayout,
+        contentWidthForReflow,
+        sourceOrderOf,
+        exclusionColumnLayout
+      );
+      result = layoutBlocksWithGeometry(bodies, revision, {
+        ...options,
+        drawingExclusionPass: 0,
+        drawingExclusionZonesByPage: zonesByPage,
+      });
+      const nextZones = collectExclusionZonesByPage(
+        result.pages,
+        options.inlineDrawingLayout,
+        contentWidthForReflow,
+        sourceOrderOf,
+        exclusionColumnLayout
+      );
+      if (exclusionMapsEqual(zonesByPage, nextZones)) return result;
+      zonesByPage = new Map(nextZones);
+      seenZoneTokens.add(exclusionMapsToken(nextZones));
+    }
     for (let pass = 0; pass < MAX_DRAWING_EXCLUSION_REFLOW_PASSES; pass += 1) {
       result = layoutBlocksWithGeometry(bodies, revision, {
         ...options,

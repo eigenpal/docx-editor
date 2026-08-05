@@ -448,6 +448,21 @@ describe('only the pages worth building are built (task 9.4)', () => {
     expect(pages[0]!.querySelectorAll('.docx-line').length).toBeGreaterThan(0);
   });
 
+  test('an unchanged virtual page shell survives a new layout revision', () => {
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layoutOf(long), { scale: 1, materialize: new Set([0]) });
+    const shell = container.querySelectorAll<HTMLElement>('.docx-page')[1]!;
+    expect(shell.dataset.materialized).toBe('false');
+    const mutations = new MutationObserver(() => {});
+    mutations.observe(container, { childList: true });
+
+    paintSemanticLayout(container, layoutOf(long), { scale: 1, materialize: new Set([0]) });
+
+    expect(container.querySelectorAll<HTMLElement>('.docx-page')[1]).toBe(shell as never);
+    expect(mutations.takeRecords()).toHaveLength(2);
+    mutations.disconnect();
+  });
+
   test('omitting the option builds everything, so the default cannot silently drop content', () => {
     const container = document.createElement('div');
     const layout = layoutOf(long);
