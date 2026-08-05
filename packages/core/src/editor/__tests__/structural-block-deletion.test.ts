@@ -64,6 +64,32 @@ function pasteInto(container: HTMLElement, text: string): void {
   pages.dispatchEvent(event);
 }
 
+describe('inert body-level siblings do not veto structural delete', () => {
+  // A misplaced `w:pBdr` between body paragraphs is preserved as generic. Join planning that
+  // treated it as transparent planned `joinParagraphs` the store refuses (`not-adjacent-
+  // siblings`), and one refused op vetoed the atomic transaction — Select All then Delete
+  // left every table standing. Barriers keep the joins honest so deleteBlock still lands.
+  test('Select All then Delete removes a table despite an orphaned body-level w:pBdr', () => {
+    const orphan =
+      '<w:pBdr><w:bottom w:val="single" w:color="auto" w:sz="6" w:space="1"/></w:pBdr>';
+    const { surface } = mount(p('above') + orphan + TABLE + orphan + p('below'));
+    const countTables = (): number => {
+      let tables = 0;
+      const walk = (node: OoxmlNode): void => {
+        if (node.kind === 'textValue') return;
+        if (node.kind === 'table') tables += 1;
+        for (const child of node.children) walk(child);
+      };
+      walk(surface.session.part().root);
+      return tables;
+    };
+    expect(countTables()).toBe(1);
+    surface.selectAll();
+    expect(surface.deleteSelection()).toBe(true);
+    expect(countTables()).toBe(0);
+  });
+});
+
 describe('a range that fully contains a table removes it', () => {
   test('Select All then Delete leaves one empty paragraph', () => {
     const { surface, container } = mount(p('intro') + TABLE + p('outro'));
