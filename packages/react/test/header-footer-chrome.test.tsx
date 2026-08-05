@@ -212,7 +212,7 @@ describe('DocxEditor.HeaderFooterChrome', () => {
     // Chromium reports clientLeft ≈ 15 when `scrollbar-gutter: stable both-edges` reserves
     // a left gutter. Absolute `left` is relative to that padding edge, not the border box
     // from getBoundingClientRect — without subtracting clientLeft the rail sits 15px right
-    // of the painted header/footer box (visible on Chrome, often invisible on Safari).
+    // of the painted story. Header/footer and footnote/endnote chrome share this hook.
     const view = render(<AnchorProbe active="first" clientLeft={15} clientTop={0} />);
     await act(async () => {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));

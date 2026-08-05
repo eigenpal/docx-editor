@@ -2,4 +2,4 @@
 '@docx-editor.dev/react': patch
 ---
 
-Align header, footer, and note editing chrome with the painted story when the scroller reserves a left scrollbar gutter.
+Align header, footer, footnote, endnote, and hyperlink chrome with the painted page when the scroller reserves a left scrollbar gutter.
