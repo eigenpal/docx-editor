@@ -1,6 +1,6 @@
 ---
 title: '@docx-editor.dev/core'
-description: "The framework-agnostic engine bundled into the React adapter: OOXML read and write, the canonical document tree, layout, paint, and the Editor contract."
+description: "The framework-agnostic engine: OOXML read and write, the canonical document tree, layout, paint, and the Editor contract that adapters render."
 category: "Reference"
 order: 70
 ---
@@ -9,19 +9,24 @@ order: 70
 
 The engine. It reads a `.docx` into a canonical document tree, lays that tree out into pages, paints them, and writes the tree back to OOXML. It has no framework dependency and no UI.
 
-You do not install this package. It is bundled into `@docx-editor.dev/react`, which re-exports the contract types you write signatures against:
+Most apps never import it directly: `@docx-editor.dev/react` carries it. Reach for it when you are writing your own adapter, or when you need the contract types to type a function signature.
 
-```ts
-import type { Editor, EditorCommand, EditorSnapshot, PageSetup } from '@docx-editor.dev/react';
+```bash
+npm install @docx-editor.dev/core
 ```
 
-This page describes what that engine does and how it is organized, so you can reason about fidelity, performance, and the security boundary.
+## Entry points
 
-## What the engine contains
+The root is the entry point for most work: create an editor over bytes, the contract it implements, fonts, and the chrome registry.
 
-The areas below are internal structure, not import paths.
+```ts
+import { createDocxEditor, loadFonts, WORD_DEFAULT_FONT } from '@docx-editor.dev/core';
+import type { Editor, EditorSnapshot } from '@docx-editor.dev/core';
+```
 
-| Area                      | What's there                                                                                                                 |
+Reach for a subpath when you need the canonical tree, the layout pass, or the paint step directly.
+
+| Subpath                   | What's there                                                                                                                 |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `.`                       | Create an editor, the `Editor` contract, fonts, the chrome registry, the document model types.                               |
 | `./editor`                | Everything the root re-exports, plus the paginated surface, ruler geometry, and module resolution.                           |
@@ -41,7 +46,7 @@ The areas below are internal structure, not import paths.
 `Editor` is the whole public surface an adapter talks to. Commands go in through `exec`, reads come out through `query` and `snapshot`:
 
 ```ts
-import type { Editor, EditorSnapshot } from '@docx-editor.dev/react';
+import type { Editor, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 
 function pageLabel(editor: Editor): string {
   const snapshot: EditorSnapshot = editor.snapshot();

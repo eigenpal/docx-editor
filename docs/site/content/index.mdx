@@ -27,12 +27,11 @@ seoTitle: 'DOCX Editor for React'
 | Package                                               | What's in it                                                                                                                        |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | [`@docx-editor.dev/react`](/docs/2.x/react)           | React adapter. `<DocxEditor>` for the packaged editor; `DocxEditor.Root` + hooks to build your own.                                 |
+| [`@docx-editor.dev/core`](/docs/2.x/core)             | Framework-agnostic engine: OOXML read/write, canonical document tree, layout, paint, `Editor` contract.                             |
 | [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) | Office.js-compatible editing API: a batching object model that edits a document from a server, or an editor already open in a page. |
 | [`@docx-editor.dev/pro`](/docs/2.x/pro)               | Tracked changes, comments, and custom nodes.                                                                                        |
 | [`@docx-editor.dev/i18n`](/docs/2.x/i18n)             | Locale data. Ships `en`, `de`, `fr`, `he`, `hi`, `id`, `pl`, `pt-BR`, `tr`, `zh-CN`.                                                |
 | [`@docx-editor.dev/fonts`](/docs/2.x/guides/fonts)    | Metric-compatible substitutes for Word's default fonts, for documents that reference them without embedding them.                   |
-
-The engine itself, [`@docx-editor.dev/core`](/docs/2.x/core), is bundled into the React adapter rather than installed on its own.
 
 All packages release together in a fixed version group. Everything is Apache 2.0 except `@docx-editor.dev/editor-api` and `@docx-editor.dev/pro`, which are under the EigenPal Pro Evaluation License 1.0: free for internal, non-production evaluation, with production use requiring a commercial agreement ([licensing@eigenpal.com](mailto:licensing@eigenpal.com)).
 
