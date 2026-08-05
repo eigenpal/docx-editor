@@ -54,6 +54,7 @@ import {
   commentInitials,
   documentOrder,
   paragraphFragmentsOf,
+  paragraphFragmentsOfBlocks,
   reviewAnchorIndex,
   reviewItemGeometry,
   reviewItemKey,
@@ -889,13 +890,18 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    */
   let reviewTick = 0;
   let reviewSurface: unknown = null;
-  let reviewSeenRevision = -1;
+  let reviewSeenRevision = '';
   let reviewSeenActive: string | null = null;
   let reviewSeenPaneOpen = true;
   let reviewSeenSelectionAnchor: number | null = null;
 
   function reviewRevision(): number {
-    const revision = surface?.session.revision() ?? -1;
+    // BOTH revisions, like the session's own queue cache: an accept inside a header moves
+    // only the package revision, and a tick watching the body alone left the rail frozen —
+    // undoing that accept put the tracked change back with no card beside it.
+    const revision = `${surface?.session.packageRevision() ?? -1}:${
+      surface?.session.revision() ?? -1
+    }`;
     const active = activeReviewKeyNow();
     // The selection is an input too: the "comment on this" affordance appears and moves with
     // it, and a counter blind to it left the button absent no matter what was selected.
@@ -941,8 +947,49 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const cached = anchorIndexCache.get(layout);
     if (cached) return cached;
     const index = reviewAnchorIndex(layout, (page) => paragraphFragmentsOf(page));
+    // Header/footer stories join the same index so their cards get real geometry. A story's
+    // box is sheet-absolute like a page's content box, and its fragments are story-relative
+    // like body fragments are content-relative — the same two-space sum `reviewItemGeometry`
+    // performs. FIRST page wins, matching the body rule: a shared part painted on every
+    // page anchors its card where the reader first meets it.
+    for (const page of layout.pages) {
+      for (const story of [page.header, page.footer]) {
+        if (!story) continue;
+        for (const fragment of paragraphFragmentsOfBlocks(story.fragments)) {
+          if (index.has(fragment.paragraphId)) continue;
+          index.set(fragment.paragraphId, {
+            pageIndex: page.index,
+            contentY: story.box.y,
+            fragmentY: fragment.box.y,
+            ...(fragment.lines ? { lines: fragment.lines } : {}),
+          });
+        }
+      }
+    }
     anchorIndexCache.set(layout, index);
     return index;
+  }
+
+  /**
+   * Which story a review item lives in, from the part name its ranges carry.
+   *
+   * `null` rId means the part is not a header/footer this document's sections resolve —
+   * i.e. the body (or an unknown part, which is treated as body rather than guessed at).
+   */
+  function furnitureHomeOf(
+    item: ReviewItem
+  ): { readonly kind: 'header' | 'footer'; readonly rId: string } | null {
+    const partName = firstReviewRange(item)?.partName;
+    if (!partName || !surface || partName === surface.session.part().name) return null;
+    for (const section of surface.session.headerFooterResolutionBySection()) {
+      for (const kind of ['header', 'footer'] as const) {
+        const slots = kind === 'header' ? section.headers : section.footers;
+        for (const slot of slots.values()) {
+          if (slot.partName === partName) return { kind, rId: slot.rId };
+        }
+      }
+    }
+    return null;
   }
 
   /** Word writes `@w:date` to the second; milliseconds group with nothing. */
@@ -1017,7 +1064,30 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const layout = surface?.publishedLayout() ?? null;
     const anchors = layout ? anchorIndexOf(layout) : null;
     const activeReviewKey = activeReviewKeyNow();
-    return items.map((item) => {
+    // The queue ranks furniture stories after the whole body (tree order), but the rail
+    // stacks cards top-down and never moves one UP past its anchor — a header card sorted
+    // after page 40's cards would render at the rail's bottom, pages away from the header
+    // it annotates. Reorder by the page a card sits beside; within a page, header cards
+    // first, then body cards in document order, then footer cards. The sort is stable, so
+    // body cards keep the tree order the queue promised.
+    const groupOf = (item: ReviewItem): number => {
+      const home = furnitureHomeOf(item);
+      return home === null ? 1 : home.kind === 'header' ? 0 : 2;
+    };
+    const ranked = items.map((item, position) => ({
+      item,
+      position,
+      pageIndex: anchors ? (reviewItemGeometry(item, anchors)?.pageIndex ?? null) : null,
+      group: groupOf(item),
+    }));
+    ranked.sort((a, b) => {
+      const aPage = a.pageIndex ?? Number.MAX_SAFE_INTEGER;
+      const bPage = b.pageIndex ?? Number.MAX_SAFE_INTEGER;
+      if (aPage !== bPage) return aPage - bPage;
+      if (a.group !== b.group) return a.group - b.group;
+      return a.position - b.position;
+    });
+    return ranked.map(({ item }) => {
       const key = reviewItemKey(item);
       const geometry = anchors ? reviewItemGeometry(item, anchors) : null;
       const comment = item.kind === 'comment' ? item.comment : null;
@@ -1132,13 +1202,20 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // accepted, the replacement text still pending — is a state nobody asked for and one
     // undo would not take back.
     let applied: { committed: boolean; reason?: unknown } | undefined;
+    // A revision in a header/footer resolves against ITS story store, not the body's. The
+    // default body scope simply failed to find the address, so an Accept on a header card
+    // reported "refused" over a change the queue itself had listed.
+    const home = furnitureHomeOf(item);
     surface?.commitReviewOps(() => {
       applied = surface!.session.applyTreeOps(
         item.addresses.map((revision) =>
           action === 'accept'
             ? ({ op: 'acceptRevision', revision } as const)
             : ({ op: 'rejectRevision', revision } as const)
-        )
+        ),
+        undefined,
+        undefined,
+        home === null ? undefined : { kind: 'headerFooter', rId: home.rId }
       );
       return applied;
     });
@@ -1458,11 +1535,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getTrackedChanges: () =>
       (surface?.session.reviewItems() ?? [])
         .filter((item) => item.kind === 'revision')
-        .map((item) => ({
-          id: item.id,
-          kind: item.kind === 'revision' ? item.revisionKind : 'revision',
-          ...(item.kind === 'revision' && item.author ? { author: item.author } : {}),
-        })),
+        .map((item) => {
+          const home = furnitureHomeOf(item);
+          return {
+            id: item.id,
+            kind: item.kind === 'revision' ? item.revisionKind : 'revision',
+            ...(item.kind === 'revision' && item.author ? { author: item.author } : {}),
+            story: home === null ? ('body' as const) : home.kind,
+          };
+        }),
 
     getReviewItems: () => reviewPlacements(),
 
@@ -1530,6 +1611,18 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const item = placement?.item;
       const range = item ? firstReviewRange(item) : null;
       if (!range || !surface) return;
+      // A card whose range lives in a header/footer opens that scope, exactly as Word does:
+      // the body selection cannot address a furniture paragraph, so setting it would only
+      // clamp the caret to some unrelated body position.
+      const home = item ? furnitureHomeOf(item) : null;
+      if (home !== null) {
+        surface.enterHeaderFooter?.({
+          rId: home.rId,
+          kind: home.kind,
+          position: { paragraphId: range.start.paragraphId, offset: range.start.offset },
+        });
+        return;
+      }
       // Card to document: put the CARET at the range's start. Selecting the whole range
       // instead turned the text grey and — because a range selection is what the "comment on
       // this" affordance keys on — offered to add a second comment on top of the one the

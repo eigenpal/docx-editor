@@ -1388,6 +1388,39 @@ function paintPage(
   // Page furniture (phase 2, read-only): painted inside the sheet but OUTSIDE the content
   // box, inert to editing. `data-docx-hf` is what dom-selection uses to refuse mapping a
   // browser caret inside the furniture back to a model position.
+  // Blank furniture affordance: a page with no header (or footer) paints an EMPTY band over
+  // that margin — `data-docx-hf` with no relationship id — so hover can invite and a double
+  // click can create the story. Geometry mirrors the pointer's activation band: the full
+  // margin strip at content width. Never printed (CSS hides it), never editable.
+  for (const kind of ['header', 'footer'] as const) {
+    if (page[kind]) continue;
+    const band = document.createElement('div');
+    band.className = 'docx-hf docx-hf--placeholder';
+    band.dataset.docxHf = kind;
+    band.setAttribute('contenteditable', 'false');
+    // A SLIM strip where a real header/footer would FLOW — the default furniture distance
+    // from the sheet edge — not the whole margin and not the content edge: anchored to
+    // content, a cover page with a deep top area drew the invitation halfway down the
+    // page, glued to its own heading. Word's header area is a couple of lines near the
+    // edge; the pointer still accepts the full margin band, so the visual stays modest
+    // without shrinking the target.
+    const marginHeight =
+      kind === 'header'
+        ? page.contentBox.y - page.box.y
+        : page.box.y + page.box.height - (page.contentBox.y + page.contentBox.height);
+    const height = Math.min(marginHeight, PLACEHOLDER_BAND_PT);
+    if (height <= 0) continue;
+    // Squeezed toward the content edge when the margin is too tight for distance + band.
+    const edgeOffset = Math.max(0, Math.min(PLACEHOLDER_DISTANCE_PT, marginHeight - height));
+    const top = kind === 'header' ? edgeOffset : page.box.height - edgeOffset - height;
+    band.style.position = 'absolute';
+    band.style.left = `${(page.contentBox.x - page.box.x) * options.scale}px`;
+    band.style.top = `${top * options.scale}px`;
+    band.style.width = `${page.contentBox.width * options.scale}px`;
+    band.style.height = `${height * options.scale}px`;
+    element.append(band);
+  }
+
   for (const story of [page.header, page.footer]) {
     if (!story) continue;
     const container = document.createElement('div');
@@ -1425,11 +1458,33 @@ function paintPage(
       );
     }
     element.append(container);
+    // Hover invitation for an EXISTING band: a pill just outside the story box, shown by
+    // CSS only while the adjacent band is hovered (`.docx-hf:hover + .docx-hf-edit-hint`).
+    // Outside the band because the band clips (`overflow: hidden`) and its content would
+    // sit under the pill. Adjacency is load-bearing — keep this append right here.
+    const hint = document.createElement('div');
+    hint.className = 'docx-hf-edit-hint';
+    hint.dataset.docxHfHint = story.kind;
+    hint.setAttribute('contenteditable', 'false');
+    hint.style.position = 'absolute';
+    hint.style.left = container.style.left;
+    hint.style.width = container.style.width;
+    hint.style.top =
+      story.kind === 'header'
+        ? `${(story.box.y + story.box.height - page.box.y) * options.scale}px`
+        : `${(story.box.y - page.box.y) * options.scale}px`;
+    if (story.kind === 'footer') hint.style.transform = 'translateY(-100%)';
+    element.append(hint);
   }
 
   paintContentControlChrome(document, element, page, options);
   return element;
 }
+
+/** Height of the blank header/footer invitation band, in points (~two text lines). */
+const PLACEHOLDER_BAND_PT = 30;
+/** Where the band starts from the sheet edge — `w:pgMar` header/footer default (720 twips). */
+const PLACEHOLDER_DISTANCE_PT = 36;
 
 /** Widget kinds the painted surface can activate without adapter chrome. */
 const WIDGET_TYPES = new Set<ContentControlMappedType>([

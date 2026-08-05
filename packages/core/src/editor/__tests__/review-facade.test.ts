@@ -24,29 +24,46 @@ const COMMENTS_CT = 'application/vnd.openxmlformats-officedocument.wordprocessin
 interface DocxParts {
   readonly body: string;
   readonly comments?: string;
+  /** Default-header content; wires the part, its relationship and the section reference. */
+  readonly header?: string;
 }
 
-function docx({ body, comments }: DocxParts): Uint8Array {
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+function docx({ body, comments, header }: DocxParts): Uint8Array {
   const files: Record<string, Uint8Array> = {
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
         `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>` +
         (comments ? `<Override PartName="/word/comments.xml" ContentType="${COMMENTS_CT}"/>` : '') +
+        (header
+          ? `<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>`
+          : '') +
         `</Types>`
     ),
     '_rels/.rels': strToU8(
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
     ),
     'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}" xmlns:w15="${W15}"><w:body>${body}</w:body></w:document>`
+      `<w:document xmlns:w="${W}" xmlns:w15="${W15}" xmlns:r="${R}"><w:body>${body}` +
+        (header ? `<w:sectPr><w:headerReference w:type="default" r:id="rIdH"/></w:sectPr>` : '') +
+        `</w:body></w:document>`
     ),
   };
+  const documentRels: string[] = [];
   if (comments) {
-    files['word/_rels/document.xml.rels'] = strToU8(
-      `<Relationships xmlns="${REL}"><Relationship Id="rIdC" Type="${COMMENTS_REL}" Target="comments.xml"/></Relationships>`
-    );
+    documentRels.push(`<Relationship Id="rIdC" Type="${COMMENTS_REL}" Target="comments.xml"/>`);
     files['word/comments.xml'] = strToU8(
       `<w:comments xmlns:w="${W}" xmlns:w15="${W15}">${comments}</w:comments>`
+    );
+  }
+  if (header) {
+    documentRels.push(`<Relationship Id="rIdH" Type="${R}/header" Target="header1.xml"/>`);
+    files['word/header1.xml'] = strToU8(`<w:hdr xmlns:w="${W}">${header}</w:hdr>`);
+  }
+  if (documentRels.length > 0) {
+    files['word/_rels/document.xml.rels'] = strToU8(
+      `<Relationships xmlns="${REL}">${documentRels.join('')}</Relationships>`
     );
   }
   return zipSync(files);
@@ -861,5 +878,88 @@ describe('activating a card', () => {
     expect(bodyTextOf(editor)).toContain('added text');
     editor.setActiveReviewItem(null);
     expect(editor.getReviewItems()[0]!.isActive).toBe(false);
+  });
+});
+
+// A tracked change in a header is a pending decision like any other: it must reach the
+// queue, carry real geometry, resolve against ITS story, and tell a programmatic consumer
+// which story holds it. A queue that only walked the body hid all of that.
+const HEADER_INSERTION =
+  `<w:p><w:r><w:t xml:space="preserve">Confidential </w:t></w:r>` +
+  `<w:ins w:id="7" w:author="Margaret Hamilton" w:date="2026-03-04T05:06:07Z">` +
+  `<w:r><w:t>draft</w:t></w:r></w:ins></w:p>`;
+
+describe('tracked changes in headers', () => {
+  test('a header revision gets a card, with geometry from the furniture layout', () => {
+    const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
+    const cards = editor.getReviewItems();
+    expect(cards).toHaveLength(2);
+    const header = cards.find((card) => card.author === 'Margaret Hamilton');
+    expect(header).toBeDefined();
+    expect(header!.text).toBe('draft');
+    expect(header!.readOnly).toBe(false);
+    expect(header!.pageIndex).toBe(0);
+    expect(header!.anchorY).not.toBeNull();
+    // The header sits ABOVE the body content on the sheet, and its card rides before the
+    // body's in the rail: the rail stacks top-down and never lifts a card past its anchor.
+    const body = cards.find((card) => card.author === 'Ada Lovelace')!;
+    expect(cards.indexOf(header!)).toBeLessThan(cards.indexOf(body));
+    expect(header!.anchorY!).toBeLessThan(body.anchorY!);
+  });
+
+  test('getTrackedChanges names the story each change lives in', () => {
+    const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
+    const stories = editor
+      .getTrackedChanges()
+      .map((change) => change.story)
+      .sort();
+    expect(stories).toEqual(['body', 'header']);
+  });
+
+  test('accepting a header revision resolves it inside the header story', () => {
+    const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
+    const header = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
+    expect(editor.acceptReviewItem(header.key)).toEqual({ ok: true, changed: true });
+    // The card is gone, the body's card is untouched, and the header kept the words.
+    const remaining = editor.getReviewItems();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.author).toBe('Ada Lovelace');
+    const storyText =
+      editor.surface!.session.storyText({ kind: 'headerFooter', rId: 'rIdH' }) ?? '';
+    expect(storyText).toContain('draft');
+  });
+
+  test('rejecting a header insertion removes its words from the header story', () => {
+    const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
+    const header = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
+    expect(editor.rejectReviewItem(header.key)).toEqual({ ok: true, changed: true });
+    const storyText =
+      editor.surface!.session.storyText({ kind: 'headerFooter', rId: 'rIdH' }) ?? '';
+    expect(storyText).not.toContain('draft');
+    expect(bodyTextOf(editor)).toContain('added text');
+  });
+
+  test('undoing a header accept brings the card back, with the tick moving each time', () => {
+    const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
+    const header = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
+    const before = editor.getReviewRevision();
+    expect(editor.acceptReviewItem(header.key)).toEqual({ ok: true, changed: true });
+    const afterAccept = editor.getReviewRevision();
+    // An accept inside a header moves only the PACKAGE revision; a tick watching the body
+    // alone froze the rail, so undoing the accept restored the change with no card beside it.
+    expect(afterAccept).not.toBe(before);
+    editor.surface!.undo();
+    expect(editor.getReviewRevision()).not.toBe(afterAccept);
+    expect(
+      editor.getReviewItems().filter((card) => card.author === 'Margaret Hamilton')
+    ).toHaveLength(1);
+  });
+
+  test('opening a header card enters the header scope, like Word', () => {
+    const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
+    const header = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
+    editor.setActiveReviewItem(header.key);
+    expect(editor.surface!.activeScope()).toEqual({ kind: 'headerFooter', rId: 'rIdH' });
+    expect(editor.getHeaderFooterState()?.editing).toBe('header');
   });
 });

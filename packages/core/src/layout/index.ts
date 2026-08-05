@@ -135,6 +135,7 @@ export {
   lineAtPosition,
   linesOf,
   paragraphFragmentsOf,
+  paragraphFragmentsOfBlocks,
   unionLayoutBoxes,
   type BlockFragmentRecord,
   type ContentControlBoundaryRecord,

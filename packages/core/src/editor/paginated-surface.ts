@@ -1674,6 +1674,9 @@ export function mountPaginatedSurface(
       ...(contentControlChrome ? { contentControlChrome } : {}),
     });
     setHeaderFooterEditingChrome(container, pagesLayer, activeHf != null);
+    // Viewing mode hides write affordances the painter cannot know about — today the
+    // blank header/footer "double-click to add" band.
+    container.classList.toggle('docx-paginated-surface--viewing', editingMode === 'view');
     // The pages are absolutely positioned, so the layer has no intrinsic size and the
     // surface would collapse to zero — pages then escape whatever centres or scrolls it.
     // Size it from the records, which is the only place the extent is known.
@@ -3581,6 +3584,55 @@ export function mountPaginatedSurface(
         noteOps?.exitNote(restoreBody);
       },
       exitHeaderFooter: () => hfScope?.exitHeaderFooter(),
+      enterEmptyHeaderFooter: (kind, pageIndex) => {
+        // Creating the part is a WRITE — viewing mode refuses it like every other lane.
+        if (editingMode === 'view') return;
+        // Which section owns the page, from the multi-section spans; a single-section
+        // document has no spans and every page belongs to section 0.
+        const spans = layoutSession.multi?.spans;
+        let sectionIndex = 0;
+        let sectionStart = 0;
+        if (spans && spans.length > 0) {
+          for (let index = 0; index < spans.length; index += 1) {
+            const span = spans[index]!;
+            sectionIndex = index;
+            sectionStart = span.startIndex;
+            if (pageIndex < span.startIndex + span.pageCount) break;
+          }
+        }
+        const bySection = session.headerFooterResolutionBySection();
+        const section = bySection[Math.min(sectionIndex, Math.max(0, bySection.length - 1))];
+        // The variant this page would DISPLAY, which is the one Word creates on a blank
+        // double-click: `even` on an even page only when the document separates them,
+        // `first` on a section's first page only when it declares a title page.
+        const pageNumber =
+          currentLayout.pages[pageIndex]?.pageFieldSource?.pageNumber ?? pageIndex + 1;
+        const variant: 'default' | 'first' | 'even' =
+          section?.evenAndOddHeaders && pageNumber % 2 === 0
+            ? 'even'
+            : section?.titlePage && pageIndex === sectionStart
+              ? 'first'
+              : 'default';
+        const slotsOf = (resolution: typeof bySection) => {
+          const target = resolution[Math.min(sectionIndex, Math.max(0, resolution.length - 1))];
+          return kind === 'header' ? target?.headers : target?.footers;
+        };
+        let rId = slotsOf(bySection)?.get(variant)?.rId;
+        if (!rId) {
+          const created = surface.applyHeaderFooterLifecycle?.({
+            op: 'createHeaderFooter',
+            sectionIndex,
+            kind,
+            variant,
+            ...(variant === 'first' ? { titlePage: true } : {}),
+            ...(variant === 'even' ? { evenAndOddHeaders: true } : {}),
+          });
+          if (!created?.ok) return;
+          rId = slotsOf(session.headerFooterResolutionBySection())?.get(variant)?.rId;
+        }
+        if (!rId) return;
+        hfScope?.enterHeaderFooter({ rId, pageIndex, sectionIndex, kind, variant });
+      },
       onContentControlWidget: (controlId, kind) => openContentControlWidget(controlId, kind),
       isReadOnlyParagraph: (paragraphId) => tocIdAtParagraph(paragraphId) !== null,
     },
