@@ -143,6 +143,31 @@ const COLLAPSE_DISPLACEMENT_PX = 480;
 /** Stable query for the balloon's unplaced queue read — never allocate per render. */
 const NO_PLACEMENT_REVIEW_QUERY = Object.freeze({ placement: false }) satisfies ReviewItemQuery;
 
+/**
+ * Whether this entry renders INSIDE another card rather than as one of its own.
+ *
+ * Two kinds of reply, one rule. A threaded reply belongs in the comment it answers; a reply to
+ * a TRACKED CHANGE is also a comment — OOXML gives `w:ins` and `w:del` no body, so the text is
+ * written over the change's own range — and belongs in the change's card. Everywhere the rail
+ * lists roots asks this, because a filter that checked only `parentId` drew a reply to a
+ * revision twice: once inside the change and once beside it.
+ */
+function isThreadedReply(entry: ReviewItemView, present: ReadonlySet<string>): boolean {
+  if (entry.kind !== 'comment') return false;
+  // A parent this list does not hold is not a parent HERE. The engine already drops a link
+  // its own `excludeRevisionKinds` filter broke, but a consumer's `filter` prop can break one
+  // too, and a comment excluded as a reply to a card nobody draws is a comment that vanishes.
+  // Falling back to root is the only answer that always renders it somewhere.
+  if (entry.parentId !== undefined) return present.has(entry.parentId);
+  if (entry.parentRevisionId !== undefined) return present.has(entry.parentRevisionId);
+  return false;
+}
+
+/** Ids of everything the rail is working from, for the reply/root test above. */
+function idsOf(items: readonly ReviewItemView[]): ReadonlySet<string> {
+  return new Set(items.map((entry) => entry.id));
+}
+
 /** Keeps the caret: a mousedown that bubbles to the editor moves it. Inputs are exempt. */
 function guardMousedown(event: React.MouseEvent): void {
   const tag = (event.target as HTMLElement | null)?.tagName;
@@ -179,6 +204,7 @@ const INERT_RAIL: ReviewRailValue = {
     setActive: () => {},
     accept: () => {},
     reject: () => {},
+    remove: () => false,
     reply: () => false,
     selectionAnchorY: null,
     comment: () => false,
@@ -282,6 +308,16 @@ const COMMENT_ICON =
 const ACCEPT_ICON = 'M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z';
 const REJECT_ICON =
   'm256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z';
+/**
+ * A TRASH can, not the reject X.
+ *
+ * Deliberately a different glyph from {@link REJECT_ICON} even though both sit in the same
+ * actions row and both discard something. On a revision card the two would otherwise read as
+ * the same button drawn twice, and the destructive one — deleting a reviewer's remark outright
+ * — is the one that must not be reached for by mistake.
+ */
+const DELETE_ICON =
+  'M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z';
 
 /**
  * The review rail.
@@ -548,10 +584,10 @@ function ReviewRoot({
   // Only what the list RENDERS competes for the column: a threaded reply lives inside its
   // parent's card, and letting it into the run advanced the cursor once per reply, spacing
   // every card below a commented conversation by gaps nothing on screen accounted for.
-  const roots = useMemo(
-    () => items.filter((entry) => !(entry.kind === 'comment' && entry.parentId !== undefined)),
-    [items]
-  );
+  const roots = useMemo(() => {
+    const present = idsOf(items);
+    return items.filter((entry) => !isThreadedReply(entry, present));
+  }, [items]);
   const stackInput = useMemo(() => {
     if (draftAnchorY === null) return roots;
     // In document order, AFTER anything already at that height: the comments already there
@@ -785,9 +821,8 @@ function ReviewList({
   const { review, measure, cardClassName } = useRail();
   if (hidden) return null;
 
-  const roots = review.items.filter(
-    (entry) => !(entry.kind === 'comment' && entry.parentId !== undefined)
-  );
+  const present = idsOf(review.items);
+  const roots = review.items.filter((entry) => !isThreadedReply(entry, present));
 
   if (roots.length === 0) {
     return typeof children === 'function' ? null : <ReviewEmpty />;
@@ -853,9 +888,8 @@ function ReviewMarkers({
   const { review } = useRail();
   const t = useReviewLabel();
   if (hidden) return null;
-  const roots = review.items.filter(
-    (entry) => !(entry.kind === 'comment' && entry.parentId !== undefined)
-  );
+  const present = idsOf(review.items);
+  const roots = review.items.filter((entry) => !isThreadedReply(entry, present));
   return (
     <div className={`docx-review__markers${className ? ` ${className}` : ''}`}>
       {roots.map((entry) => {
@@ -1482,11 +1516,14 @@ function ReviewCardPreset({ children }: { children?: ReactNode }) {
           {take('Time', <ReviewTime />)}
         </div>
         {/* Accept and Reject are absent, not disabled, on a kind the engine cannot resolve:
-            a button that can never do anything is chrome pretending to be a capability. */}
-        {resolvable ? (
+            a button that can never do anything is chrome pretending to be a capability.
+            Delete follows the same rule and is on BOTH kinds, so every card a reader can
+            act on carries a way to be rid of it. */}
+        {resolvable || entry.kind === 'comment' ? (
           <div className="docx-review__actions">
             {take('Accept', <ReviewAccept />)}
             {take('Reject', <ReviewReject />)}
+            {take('Delete', <ReviewDelete />)}
           </div>
         ) : null}
       </div>
@@ -1723,11 +1760,64 @@ function ReviewReject({ className, asChild, hidden, children, icon: glyph }: Rev
 }
 ReviewReject.docxReviewPart = 'Reject' as const;
 
+/**
+ * Discard what the card holds: delete a comment thread, or reject a tracked change.
+ *
+ * The rail had accept and reject for a change and NOTHING for a comment, so a remark could be
+ * resolved but never removed — a reader who commented by mistake had to go back to the text and
+ * delete the words to be rid of it. One control on both kinds, because "remove this" is the same
+ * intent whichever the card holds; the engine's `deleteReviewItem` decides what it means.
+ *
+ * Absent, not disabled, on a card with nothing to discard — a custom node's, or a revision kind
+ * the engine cannot resolve.
+ *
+ * Revealed on HOVER of the one thing it deletes, and on keyboard focus — the stylesheet owns
+ * that, not this component. A rail of twenty cards each carrying a standing invitation to
+ * delete somebody's remark reads as an invitation to click one by mistake; scoping it to the
+ * node under the pointer also means a reply and the comment it answers never offer two
+ * identical buttons at once, which is the state that makes a reader delete the wrong one.
+ *
+ * CSS rather than an `isActive` gate because a reply is never itself the active item, and
+ * because requiring the reader to open a card before they can be rid of it is a step with
+ * nothing behind it. `visibility`, not `opacity`: hidden must also mean unclickable, and the
+ * space stays reserved so the row does not jump as the pointer crosses it.
+ *
+ * @public
+ */
+function ReviewDelete({ className, asChild, hidden, children, icon: glyph }: ReviewActionProps) {
+  const { review } = useRail();
+  const entry = useContext(ReviewItemContext);
+  const { t } = useTranslation();
+  if (hidden || !entry || entry.kind === 'custom') return null;
+  if (entry.kind === 'revision' && entry.readOnly) return null;
+  const label = entry.kind === 'comment' ? t('review.deleteComment') : t('review.discardChange');
+  const shared = {
+    type: 'button' as const,
+    className: `docx-review__action${className ? ` ${className}` : ''}`,
+    'data-testid': 'review-delete',
+    'aria-label': label,
+    title: label,
+    onMouseDown: guardMousedown,
+    onClick: (event: React.MouseEvent) => {
+      // The card is a `role="button"` that activates the item; without this the click both
+      // deleted the comment and asked the engine to open a card that no longer exists.
+      event.stopPropagation();
+      review.remove(entry);
+    },
+  };
+  if (asChild) return <Slot {...shared}>{children}</Slot>;
+  return <button {...shared}>{glyph ?? children ?? icon(DELETE_ICON)}</button>;
+}
+ReviewDelete.docxReviewPart = 'Delete' as const;
+
 /** The thread under a comment, in document order. @public */
 function ReviewReplies({ className, hidden }: ReviewPartProps) {
   const { byId } = useRail();
   const entry = useContext(ReviewItemContext);
-  if (hidden || !entry || entry.kind !== 'comment') return null;
+  // Comments AND revisions. A reply to a tracked change is a comment over that change's range,
+  // and refusing to draw it here is what put the reader's answer in a card of its own, floating
+  // beside the change instead of under it.
+  if (hidden || !entry || entry.kind === 'custom') return null;
   const replies = entry.replyIds
     .map((id) => byId.get(id))
     .filter((reply): reply is ReviewItemView => reply !== undefined);
@@ -1742,6 +1832,12 @@ function ReviewReplies({ className, hidden }: ReviewPartProps) {
               <div className="docx-review__meta">
                 <ReviewAuthor />
                 <ReviewTime />
+              </div>
+              {/* A reply is a comment like any other and can be deleted like one. Without
+                  this the only way to take back a reply was to delete the whole thread it
+                  hangs off — the parent's control is the only one that was drawn. */}
+              <div className="docx-review__actions">
+                <ReviewDelete />
               </div>
             </div>
             <ReviewSummary />
@@ -1864,6 +1960,8 @@ export interface DocxEditorReviewNamespace {
   readonly Summary: typeof ReviewSummary;
   readonly Accept: typeof ReviewAccept;
   readonly Reject: typeof ReviewReject;
+  /** Discard the card: delete a comment thread, or reject a tracked change. */
+  readonly Delete: typeof ReviewDelete;
   readonly Replies: typeof ReviewReplies;
   readonly Reply: typeof ReviewReply;
   /** The collapsed rail: one marker per item, shown when the pane is closed. */
@@ -1910,6 +2008,7 @@ export const DocxEditorReview: DocxEditorReviewNamespace = Object.assign(ReviewR
   Summary: ReviewSummary,
   Accept: ReviewAccept,
   Reject: ReviewReject,
+  Delete: ReviewDelete,
   Replies: ReviewReplies,
   Reply: ReviewReply,
   Markers: ReviewMarkers,

@@ -1141,6 +1141,8 @@
     "empty": "No changes or comments",
     "accept": "Accept",
     "reject": "Reject",
+    "deleteComment": "Delete comment",
+    "discardChange": "Discard change",
     "reply": "Reply",
     "inserted": "Added",
     "deleted": "Deleted",

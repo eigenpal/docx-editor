@@ -2,6 +2,7 @@
 
 import { findNode } from '../package/ooxml-edit.ts';
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
+import { hasAnyComment } from '../package/comment-lifecycle.ts';
 import { resolveNotesPart } from '../package/note-references.ts';
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { segmentsOf } from './tree-op-segments.ts';
@@ -74,4 +75,57 @@ export function deleteBlockMayStrandNote(
     return false;
   };
   return walk(block, 0);
+}
+
+/** Whether a subtree holds a comment range marker, within the same budget the note gates use. */
+function subtreeHasCommentMarker(
+  node: OoxmlNode,
+  depth: number,
+  visited: { count: number }
+): boolean {
+  if (
+    visited.count >= MAX_DELETE_BLOCK_NOTE_GATE_NODES ||
+    depth > MAX_DELETE_BLOCK_NOTE_GATE_DEPTH
+  ) {
+    return true;
+  }
+  visited.count += 1;
+  if (node.kind === 'textValue') return false;
+  if (
+    node.kind === 'commentRangeStart' ||
+    node.kind === 'commentRangeEnd' ||
+    node.kind === 'commentReference'
+  ) {
+    return true;
+  }
+  for (const child of node.children) {
+    if (subtreeHasCommentMarker(child, depth + 1, visited)) return true;
+  }
+  return false;
+}
+
+/**
+ * Whether an op can empty a comment's range and therefore needs the package reap.
+ *
+ * MARKERS, not offsets. A `deleteText` that removes every character between a comment's start
+ * and end never touches the markers themselves — they occupy no offsets — so the only cheap
+ * question worth asking is whether the paragraph (or the block subtree) holds any marker at
+ * all. Documents with no comments answer no on the first line and pay nothing.
+ *
+ * Fails CLOSED: a paragraph the store cannot find, or a subtree past the budget, runs the reap
+ * rather than skipping it. The reap is itself a diff and does nothing when nothing was emptied.
+ */
+export function deleteMayEmptyCommentRange(
+  pkg: OoxmlPackage,
+  part: OoxmlPart,
+  op: Extract<TreeDocOp, { op: 'deleteText' | 'deleteBlock' }>,
+  seenTargets: Set<string>
+): boolean {
+  if (!hasAnyComment(pkg)) return false;
+  const targetId = op.op === 'deleteText' ? op.paragraphId : op.blockId;
+  if (seenTargets.has(targetId)) return true;
+  seenTargets.add(targetId);
+  const target = findNode(part, targetId);
+  if (!target || target.kind === 'textValue') return true;
+  return subtreeHasCommentMarker(target, 0, { count: 0 });
 }

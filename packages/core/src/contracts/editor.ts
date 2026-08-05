@@ -583,6 +583,23 @@ export interface Editor {
   rejectReviewItem(key: string): ExecResult;
 
   /**
+   * Discard the item behind a card: the destructive half of the review verbs.
+   *
+   * On a COMMENT it deletes the thread — the `w:comment` body, the `w15:commentEx` record and
+   * the story's range markers, in one transaction and therefore one undo step. Word deletes a
+   * conversation rather than one remark, and a reply whose parent is gone has nothing left to
+   * answer.
+   *
+   * On a REVISION it rejects the change, which is what discarding a suggestion means: the
+   * proposal goes away and the document reads as it did before. Deliberately the same verb, so
+   * a surface can put one "remove this" affordance on every card instead of branching.
+   *
+   * Refused on a custom node's card, which is informational, and on a revision kind the engine
+   * cannot resolve — the same rule {@link rejectReviewItem} follows.
+   */
+  deleteReviewItem(key: string): ExecResult;
+
+  /**
    * Reply to a review item.
    *
    * Against a comment this is a threaded reply. Against a REVISION it is a comment anchored
@@ -731,7 +748,13 @@ export interface ReviewItemPlacementBase {
    * controls end to end, so this string is untrusted and never markup.
    */
   readonly text: string;
-  /** Replies to this item, in document order. Empty except for comments. */
+  /**
+   * Replies to this item, in document order.
+   *
+   * Comments AND revisions carry them: OOXML gives `w:ins` and `w:del` no body, so replying
+   * to a tracked change writes a comment over the change's own range, and the reply belongs
+   * inside the card for the change rather than beside it.
+   */
   readonly replyIds: readonly string[];
   /**
    * True when the engine cannot resolve this kind structurally, so accept and reject must
@@ -752,6 +775,14 @@ export interface ReviewCommentPlacement extends ReviewItemPlacementBase {
   readonly resolved: boolean;
   /** The comment this replies to, absent at the top of a thread. */
   readonly parentId?: string;
+  /**
+   * The REVISION this comment answers, absent unless it does.
+   *
+   * A surface listing top-level cards must skip these as well as the ones with a
+   * {@link parentId}: the card is rendered inside the change it answers, and a rail that
+   * only checked `parentId` drew the reply twice.
+   */
+  readonly parentRevisionId?: string;
   readonly item: ReviewCommentItem;
 }
 
