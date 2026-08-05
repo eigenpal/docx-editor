@@ -201,7 +201,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Space before/after and line spacing (single, multiple, exactly, at least) all reach pagination, so a 1.5- or double-spaced document breaks pages where Word breaks them. Font external leading is excluded from line boxes to match Word’s vertical pagination. The paragraph mark’s w:sz participates in the last line’s metrics, matching Word when a cover-page mark is taller than the visible runs. Contextual spacing drops the gap between same-style neighbours, the way Word’s List Paragraph style intends.',
+      'Space before/after and line spacing (single, multiple, exactly, at least) all reach pagination, so a 1.5- or double-spaced document breaks pages where Word breaks them. Font external leading is excluded from line boxes, and trailing auto-spacing may cross the bottom text margin when the glyphs fit, matching Word’s vertical pagination. The paragraph mark’s w:sz participates in the last line’s metrics, matching Word when a cover-page mark is taller than the visible runs. Contextual spacing drops the gap between same-style neighbours, the way Word’s List Paragraph style intends.',
   },
   {
     id: 'paragraphs.indentation',
