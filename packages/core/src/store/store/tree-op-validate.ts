@@ -11,6 +11,7 @@ import { isValidXmlText } from '../package/sinks.ts';
 import { validateDeleteBlock } from './tree-op-blocks.ts';
 import {
   INSERTABLE_CONTENT_CONTROL_TYPES,
+  contentControlBindingRefusal,
   contentControlLockRefusal,
   isWritableContentControlMetadata,
 } from './tree-op-content-controls.ts';
@@ -113,6 +114,12 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
   // locks, because removal and editing are refused by different halves of `ST_Lock`.
   const lockRefusal = contentControlLockRefusal(part, op);
   if (lockRefusal) return lockRefusal;
+
+  // A binding is the same shape of refusal from the other direction: not "you may not change
+  // this" but "this engine cannot change it without desyncing the part it mirrors". Checked here
+  // so every content mutation meets it, not only the value write that names the control.
+  const bindingRefusal = contentControlBindingRefusal(part, op);
+  if (bindingRefusal) return bindingRefusal;
 
   if (
     op.op === 'setContentControlValue' ||

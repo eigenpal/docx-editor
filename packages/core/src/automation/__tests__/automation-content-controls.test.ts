@@ -16,6 +16,7 @@ import {
   handleAt,
   handlesAt,
   open,
+  paragraphsOf,
   refusal,
   reopen,
   roots,
@@ -466,6 +467,46 @@ describe('a script writes through the same refusals the keyboard meets', () => {
         )
       ).toBe('transaction-refused/locked');
     }
+  });
+
+  // A SCRIPT MEETS THE REFUSAL A KEYSTROKE MEETS, INCLUDING THE ONES THAT ARE NOT ADDRESSED AT A
+  // CONTROL. `insertText` names a paragraph and an offset; whether those offsets land inside a
+  // locked or bound control is resolved by the store, so the protocol needs no rule of its own.
+  test('typing at an offset inside an inline locked control is refused', () => {
+    const host = open(
+      docx(
+        `<w:p><w:r><w:t>a</w:t></w:r>` +
+          `<w:sdt><w:sdtPr><w:tag w:val="f"/><w:lock w:val="sdtContentLocked"/></w:sdtPr>` +
+          `<w:sdtContent><w:r><w:t>LOCKED</w:t></w:r></w:sdtContent></w:sdt>` +
+          `<w:r><w:t>z</w:t></w:r></w:p>`
+      )
+    );
+    const paragraph = paragraphsOf(host, roots(host).body)[0]!;
+    expect(
+      refusedBecause(
+        host.execute({
+          operations: [{ op: 'insertText', at: { paragraph, offset: 3 }, text: 'x' }],
+        })
+      )
+    ).toBe('transaction-refused/locked');
+  });
+
+  test('typing inside a bound control is refused for being bound', () => {
+    const host = open(
+      docx(
+        `<w:sdt><w:sdtPr><w:tag w:val="c"/>` +
+          `<w:dataBinding w:xpath="/root/a" w:storeItemID="{FEED}"/></w:sdtPr><w:sdtContent>` +
+          `<w:p><w:r><w:t>Acme</w:t></w:r></w:p></w:sdtContent></w:sdt>`
+      )
+    );
+    const paragraph = paragraphsOf(host, roots(host).body)[0]!;
+    expect(
+      refusedBecause(
+        host.execute({
+          operations: [{ op: 'insertText', at: { paragraph, offset: 0 }, text: 'x' }],
+        })
+      )
+    ).toBe('transaction-refused/bound');
   });
 
   test('a forged handle is refused', () => {

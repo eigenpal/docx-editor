@@ -40,8 +40,21 @@ import { isValidXmlText } from '../package/sinks.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { TEXT_DEPS, fromEdit, parentOf, runPropertiesNodeOf } from './tree-op-nodes.ts';
 import { splitRunsAt } from './tree-op-apply.ts';
-import { paragraphLength, paragraphOffsetIndex, splitsSurrogate } from './tree-op-segments.ts';
-import type { TreeDocOp, TreeOpEffect, TreeOpRejection, TreeOpResult } from './tree-op-types.ts';
+import {
+  paragraphLength,
+  paragraphOffsetIndex,
+  splitsSurrogate,
+  type OffsetSpan,
+  type ParagraphOffsetIndex,
+} from './tree-op-segments.ts';
+import type {
+  RevisionAddress,
+  TreeDocOp,
+  TreeDocOpKind,
+  TreeOpEffect,
+  TreeOpRejection,
+  TreeOpResult,
+} from './tree-op-types.ts';
 
 /** The value a control accepts, by what kind of control it is. */
 export type ContentControlValueInput =
@@ -123,62 +136,382 @@ export function contentControlLockAt(part: OoxmlPart, nodeId: string): ContentCo
   );
 }
 
-/** Ops whose effect is to CHANGE the content a control encloses. */
-const CONTENT_EDITING_OPS: ReadonlySet<string> = new Set([
-  'insertText',
-  'deleteText',
-  'insertTab',
-  'insertHardBreak',
-  'insertPageBreak',
-  'insertPageField',
-  'insertCommentMarker',
-  'splitParagraph',
-  'splitParagraphMany',
-  'joinParagraphs',
-  'setRunProperties',
-  'setParagraphProperties',
-  'setParagraphMarkProperties',
-  'setParagraphMarkRevision',
-  'proposeParagraphMerge',
-  'setListLevel',
-  'setListNumbering',
-  'insertHyperlink',
-  'setSectionMark',
-  'deleteBlock',
-]);
+// ---------------------------------------------------------------------------
+// Reach: what an op would change, classified once for every policy that refuses
+// ---------------------------------------------------------------------------
 
 /**
- * Whether an ordinary story op is refused by a lock, checked before any tree work.
+ * Where an op's effect lands, in terms a control can be asked about.
  *
- * Deliberately covers the whole editing vocabulary rather than the two text ops: a template
- * that locks a field means the field, and a caller that could still restyle it, renumber it or
- * split it in half has not been stopped by anything.
+ * `part` is the fail-closed answer: an op whose reach nobody has narrowed is treated as reaching
+ * everything, so a lock or a binding anywhere refuses it. That is the wrong side to be wrong on
+ * by design — an over-refused op is a bug report, an under-refused one is a document whose
+ * protection was decoration.
+ */
+export type TreeOpReach =
+  /** Changes no content a control could be holding (part lifecycle, furniture wiring). */
+  | { readonly kind: 'none' }
+  /** Could change anything in the part. */
+  | { readonly kind: 'part' }
+  /** Addressed AT a control; the control ops resolve their own halves of `ST_Lock`. */
+  | {
+      readonly kind: 'control';
+      readonly controlId: string;
+      /** `value` is what forms protection exists to allow; the others dismantle the form. */
+      readonly intent: 'value' | 'metadata' | 'removal';
+    }
+  /** Addressed at named nodes, optionally at a range of characters inside one. */
+  | { readonly kind: 'nodes'; readonly targets: readonly TreeOpTarget[] }
+  /** Addressed at tracked changes, resolved to the nodes carrying them. */
+  | { readonly kind: 'revisions'; readonly revision?: RevisionAddress };
+
+export interface TreeOpTarget {
+  readonly nodeId: string;
+  /** UTF-16 offsets inside the node this op addresses. Absent means the node itself. */
+  readonly range?: OffsetSpan;
+  /** The node's children are restructured, so a control inside it is affected. */
+  readonly structural?: boolean;
+  /** The node and everything under it goes away, so removal locks apply. */
+  readonly removes?: boolean;
+}
+
+const at = (nodeId: string, offset: number): TreeOpReach => ({
+  kind: 'nodes',
+  targets: [{ nodeId, range: { start: offset, end: offset } }],
+});
+const over = (nodeId: string, start: number, end: number): TreeOpReach => ({
+  kind: 'nodes',
+  targets: [{ nodeId, range: { start, end } }],
+});
+const whole = (nodeId: string): TreeOpReach => ({ kind: 'nodes', targets: [{ nodeId }] });
+
+/**
+ * How each op reaches, one entry per op kind.
+ *
+ * A mapped type over `TreeDocOpKind`, so a new op that nobody classifies does not compile. The
+ * runtime lookup then fails closed as well, for an op name that reached here from JavaScript.
+ */
+const TREE_OP_REACH: {
+  readonly [K in TreeDocOpKind]: (op: Extract<TreeDocOp, { readonly op: K }>) => TreeOpReach;
+} = {
+  insertText: (op) => at(op.paragraphId, op.offset),
+  deleteText: (op) => over(op.paragraphId, op.start, op.end),
+  insertTab: (op) => at(op.paragraphId, op.offset),
+  insertHardBreak: (op) => at(op.paragraphId, op.offset),
+  insertPageBreak: (op) => at(op.paragraphId, op.offset),
+  insertPageField: (op) => at(op.paragraphId, op.offset),
+  insertCommentMarker: (op) => at(op.paragraphId, op.offset),
+  insertNote: (op) => at(op.paragraphId, op.offset),
+  setRunProperties: (op) => over(op.paragraphId, op.start, op.end),
+  insertHyperlink: (op) => over(op.paragraphId, op.start, op.end),
+  insertContentControl: (op) => over(op.paragraphId, op.start, op.end),
+  splitParagraph: (op) => at(op.paragraphId, op.offset),
+  splitParagraphMany: (op) => ({
+    kind: 'nodes',
+    targets: op.offsets.map((offset) => ({
+      nodeId: op.paragraphId,
+      range: { start: offset, end: offset },
+    })),
+  }),
+  // A join restructures both paragraphs: whatever either one held ends up somewhere else.
+  joinParagraphs: (op) => ({
+    kind: 'nodes',
+    targets: [
+      { nodeId: op.firstId, structural: true },
+      { nodeId: op.secondId, structural: true },
+    ],
+  }),
+  setParagraphProperties: (op) => whole(op.paragraphId),
+  setParagraphMarkProperties: (op) => whole(op.paragraphId),
+  setParagraphMarkRevision: (op) => whole(op.paragraphId),
+  proposeParagraphMerge: (op) => whole(op.paragraphId),
+  setListLevel: (op) => whole(op.paragraphId),
+  setListNumbering: (op) => whole(op.paragraphId),
+  setSectionMark: (op) => whole(op.paragraphId),
+  deleteBlock: (op) => ({ kind: 'nodes', targets: [{ nodeId: op.blockId, removes: true }] }),
+  // A link is a node in a paragraph, so its OWNER is resolved the same way any node's is: the
+  // controls the walk passes through on its way down to the link.
+  setHyperlinkTarget: (op) => whole(op.linkId),
+  removeHyperlink: (op) => ({ kind: 'nodes', targets: [{ nodeId: op.linkId, structural: true }] }),
+  acceptRevision: (op) => ({ kind: 'revisions', revision: op.revision }),
+  rejectRevision: (op) => ({ kind: 'revisions', revision: op.revision }),
+  acceptAllRevisions: () => ({ kind: 'revisions' }),
+  rejectAllRevisions: () => ({ kind: 'revisions' }),
+  setContentControlValue: (op) => ({ kind: 'control', controlId: op.controlId, intent: 'value' }),
+  setContentControlProperties: (op) => ({
+    kind: 'control',
+    controlId: op.controlId,
+    intent: 'metadata',
+  }),
+  removeContentControl: (op) => ({ kind: 'control', controlId: op.controlId, intent: 'removal' }),
+  // Page setup and note settings are document-scoped: nothing narrows where they land.
+  setSectionProperties: () => ({ kind: 'part' }),
+  setSectionFurnitureOptions: () => ({ kind: 'part' }),
+  setNoteProperties: () => ({ kind: 'part' }),
+  // A note's own id is not a body address, and removing or converting one rewrites the run that
+  // referenced it — wherever that run happens to be.
+  deleteNote: () => ({ kind: 'part' }),
+  convertNote: () => ({ kind: 'part' }),
+  convertAllNotes: () => ({ kind: 'part' }),
+  // Furniture LIFECYCLE creates, deletes and rewires header/footer parts. It changes no body
+  // content, and classifying it as a write would refuse a header in any document that happens to
+  // hold a locked field. Edits to a header's own text are ordinary story ops in that part, and
+  // meet these refusals there.
+  createHeaderFooter: () => ({ kind: 'none' }),
+  deleteHeaderFooter: () => ({ kind: 'none' }),
+  linkToPrevious: () => ({ kind: 'none' }),
+  unlinkFromPrevious: () => ({ kind: 'none' }),
+};
+
+/** The op kinds the classification declares, for the test that proves it covers the vocabulary. */
+export const TREE_OP_REACH_CLASSIFIED: ReadonlySet<string> = new Set(Object.keys(TREE_OP_REACH));
+
+/** What an op would change. An op name nothing declares reaches the whole part. */
+export function treeOpReach(op: TreeDocOp): TreeOpReach {
+  const classify = TREE_OP_REACH[op.op] as ((one: TreeDocOp) => TreeOpReach) | undefined;
+  if (!classify) return { kind: 'part' };
+  return classify(op);
+}
+
+/** One control an op would affect, and how. */
+interface ControlTouch {
+  readonly control: OoxmlNode;
+  /** Every lock in force on it: its own and each of its ancestors'. */
+  readonly locks: readonly ContentControlLock[];
+  /** The control itself would be removed, not merely edited. */
+  readonly removed: boolean;
+}
+
+/** What an op reaches, resolved against the part: the controls, and the nodes it named. */
+interface ResolvedReach {
+  readonly touches: readonly ControlTouch[];
+  /** The nodes the op named that sit inside NO control — what forms protection asks about. */
+  readonly unprotected: readonly string[];
+}
+
+const NOTHING: ResolvedReach = { touches: [], unprotected: [] };
+
+function locksOf(chain: readonly OoxmlNode[]): readonly ContentControlLock[] {
+  return chain.map((control) => contentControlPropertiesOf(control).lock);
+}
+
+/**
+ * Every control an op would affect, and every node it named that no control protects.
+ *
+ * ONE resolution, three policies. A lock asks whether any touched control forbids the change, a
+ * `w:dataBinding` asks whether any touched control mirrors a part this engine does not evaluate,
+ * and forms protection asks the inverse question about the nodes outside every control. They used
+ * to answer from three different walks over three different op allowlists, which is how an inline
+ * control ended up unprotected in all three.
+ */
+function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
+  if (reach.kind === 'none') return NOTHING;
+  if (reach.kind === 'part') {
+    // Everything: each control, with its own chain, edited but not removed.
+    const touches = contentControlsIn(part.root).map((entry) => ({
+      control: entry.node,
+      locks: locksOf([...entry.ancestors, entry.node]),
+      removed: false,
+    }));
+    return { touches, unprotected: [part.root.id] };
+  }
+  if (reach.kind === 'control') {
+    const chain = enclosingContentControls(part, reach.controlId);
+    const own = chain[chain.length - 1];
+    if (!own) return NOTHING;
+    return {
+      touches: [{ control: own, locks: locksOf(chain), removed: reach.intent === 'removal' }],
+      // A write ADDRESSED to a control is what forms protection exists to allow; changing or
+      // removing the control ITSELF is not, unless the control is inside another one.
+      unprotected: reach.intent === 'value' || chain.length > 1 ? [] : [reach.controlId],
+    };
+  }
+  if (reach.kind === 'revisions') {
+    return resolveRevisionReach(part, reach.revision);
+  }
+  const touches: ControlTouch[] = [];
+  const unprotected: string[] = [];
+  for (const target of reach.targets) {
+    const chain = enclosingContentControls(part, target.nodeId);
+    const enclosing = chain.filter((node) => node.id !== target.nodeId);
+    for (let index = 0; index < enclosing.length; index += 1) {
+      touches.push({
+        control: enclosing[index]!,
+        locks: locksOf(enclosing.slice(0, index + 1)),
+        removed: false,
+      });
+    }
+    if (enclosing.length === 0) unprotected.push(target.nodeId);
+
+    const node = findNode(part, target.nodeId);
+    if (!node || node.kind === 'textValue') continue;
+    const inherited = locksOf(enclosing);
+
+    // Controls INSIDE the named node. A removal takes them with it; a restructuring moves them;
+    // and a range addresses the ones whose own characters it overlaps.
+    const inside = contentControlsIn(node);
+    if (inside.length === 0) continue;
+    // Built only for a paragraph that actually holds a control, because this runs on the path a
+    // keystroke takes and nearly every paragraph holds none.
+    let offsets: ParagraphOffsetIndex | null = null;
+    const spanOf = (control: OoxmlNode): OffsetSpan | null => {
+      if (node.kind !== 'paragraph') return null;
+      offsets ??= paragraphOffsetIndex(node);
+      return offsets.spanOf(control);
+    };
+    for (const entry of inside) {
+      const affected =
+        target.removes === true ||
+        target.structural === true ||
+        (target.range !== undefined && intersects(spanOf(entry.node), target.range));
+      if (!affected) continue;
+      touches.push({
+        control: entry.node,
+        locks: [...inherited, ...locksOf([...entry.ancestors, entry.node])],
+        removed: target.removes === true,
+      });
+    }
+  }
+  return { touches, unprotected };
+}
+
+/**
+ * Whether a control's own characters overlap the offsets an op addresses.
+ *
+ * An insertion is a POINT, and a point at either edge is beside the control rather than in it:
+ * that is where a reader types to add text next to a field, and Word lets them. A non-empty range
+ * that so much as touches the inside is refused WHOLE — a partial edit that clipped itself to the
+ * unlocked side would silently do something other than what was asked.
+ */
+function intersects(span: OffsetSpan | null, range: OffsetSpan): boolean {
+  if (span === null) return false;
+  if (range.end <= range.start) return range.start > span.start && range.start < span.end;
+  return range.start < span.end && range.end > span.start;
+}
+
+/** The nodes a revision decision would rewrite, and the controls holding them. */
+function resolveRevisionReach(
+  part: OoxmlPart,
+  revision: RevisionAddress | undefined
+): ResolvedReach {
+  const touches: ControlTouch[] = [];
+  const unprotected: string[] = [];
+  let seen = 0;
+  const walk = (node: OoxmlNode, controls: readonly OoxmlNode[]): void => {
+    if (node.kind === 'textValue' || seen > MAX_REVISION_NODES) return;
+    if (isRevisionNode(node, revision)) {
+      seen += 1;
+      if (controls.length === 0) unprotected.push(node.id);
+      for (let index = 0; index < controls.length; index += 1) {
+        touches.push({
+          control: controls[index]!,
+          locks: locksOf(controls.slice(0, index + 1)),
+          removed: false,
+        });
+      }
+      // A tracked deletion is resolved by REMOVING its content, which takes any control inside
+      // it with it — the same question `deleteBlock` asks.
+      for (const entry of contentControlsIn(node)) {
+        touches.push({
+          control: entry.node,
+          locks: [...locksOf(controls), ...locksOf([...entry.ancestors, entry.node])],
+          removed: true,
+        });
+      }
+      return;
+    }
+    for (const child of node.children) {
+      walk(child, child.kind === 'contentControl' ? [...controls, child] : controls);
+    }
+  };
+  walk(part.root, []);
+  return { touches, unprotected };
+}
+
+/** Bounds the revision scan the way every other file-driven walk in this module is bounded. */
+const MAX_REVISION_NODES = 50_000;
+
+/** Revision containers whose resolution rewrites the content they wrap. */
+const REVISION_LOCAL_NAMES: ReadonlySet<string> = new Set([
+  'ins',
+  'del',
+  'moveFrom',
+  'moveTo',
+  'rPrChange',
+  'pPrChange',
+  'tblPrChange',
+  'trPrChange',
+  'tcPrChange',
+  'sectPrChange',
+  'tblGridChange',
+  'cellIns',
+  'cellDel',
+  'cellMerge',
+]);
+
+function isRevisionNode(node: OoxmlNode, revision: RevisionAddress | undefined): boolean {
+  if (node.kind === 'textValue') return false;
+  if (node.namespaceUri !== WML_NAMESPACE_URI) return false;
+  if (!REVISION_LOCAL_NAMES.has(node.localName)) return false;
+  if (!revision) return true;
+  const attribute = (name: string): string | undefined =>
+    node.attributes.find(
+      (entry) => entry.localName === name && entry.namespaceUri === WML_NAMESPACE_URI
+    )?.value;
+  if (attribute('id') !== revision.id) return false;
+  if (attribute('author') !== revision.author) return false;
+  if (revision.date !== undefined && attribute('date') !== revision.date) return false;
+  return true;
+}
+
+/**
+ * Whether a lock refuses an op, checked before any tree work.
+ *
+ * Resolved from the op's REACH rather than from a list of op names: a template that locks a field
+ * means the field, and a caller who could still restyle it, renumber it, accept a tracked change
+ * inside it or retarget the link it holds has not been stopped by anything.
  */
 export function contentControlLockRefusal(part: OoxmlPart, op: TreeDocOp): TreeOpRejection | null {
-  if (!CONTENT_EDITING_OPS.has(op.op)) return null;
-  const targets: string[] = [];
-  if ('paragraphId' in op && typeof op.paragraphId === 'string') targets.push(op.paragraphId);
-  if (op.op === 'joinParagraphs') targets.push(op.firstId, op.secondId);
-  if (op.op === 'deleteBlock') targets.push(op.blockId);
-  for (const target of targets) {
-    if (lockForbidsEdit(contentControlLockAt(part, target))) return 'locked';
+  const reach = treeOpReach(op);
+  // The control ops resolve their own halves of `ST_Lock` in their appliers, because removal and
+  // editing are refused by different ones.
+  if (reach.kind === 'control') return null;
+  for (const touch of resolveReach(part, reach).touches) {
+    const resolved = resolveContentControlLock(touch.locks);
+    if (lockForbidsEdit(resolved)) return 'locked';
+    if (touch.removed && lockForbidsRemoval(resolved)) return 'locked';
   }
-  // Removing a block also removes any control inside it, which a removal lock forbids.
-  if (op.op === 'deleteBlock') {
-    const block = findNode(part, op.blockId);
-    if (block && block.kind !== 'textValue') {
-      for (const entry of contentControlsIn(block)) {
-        const chain = [
-          ...enclosingContentControls(part, op.blockId).map(
-            (control) => contentControlPropertiesOf(control).lock
-          ),
-          ...entry.ancestors.map((ancestor) => contentControlPropertiesOf(ancestor).lock),
-          contentControlPropertiesOf(entry.node).lock,
-        ];
-        const resolved = resolveContentControlLock(chain);
-        if (lockForbidsRemoval(resolved) || lockForbidsEdit(resolved)) return 'locked';
-      }
-    }
+  return null;
+}
+
+/**
+ * Whether `w:dataBinding` refuses an op.
+ *
+ * A bound control's content MIRRORS a node in a custom XML part. This engine preserves the
+ * binding without evaluating it, so it cannot keep the two sides in step: the only honest answer
+ * to a write is to refuse it and leave both sides as the file wrote them. `setContentControlValue`
+ * always answered this way; ordinary typing, formatting and deleting did not, which meant the
+ * value could be changed through the path a keystroke takes while the part still held the old one.
+ *
+ * Removing the control is NOT refused. The desync this prevents is content changing while
+ * something still claims to mirror a part; removing the control removes the claim, and refusing
+ * it instead would make a bound control indelible in an editor where Word deletes it.
+ */
+export function contentControlBindingRefusal(
+  part: OoxmlPart,
+  op: TreeDocOp
+): TreeOpRejection | null {
+  const reach = treeOpReach(op);
+  // Metadata and removal do not touch the bound value; a value write is refused by its applier
+  // with the same code, where the control is already resolved.
+  if (reach.kind === 'control') return null;
+  // A document-scoped op does not write the bound value either: page setup and note settings
+  // cannot desync a custom XML part, and refusing them would make a bound field freeze the
+  // document's own layout.
+  if (reach.kind === 'part') return null;
+  for (const touch of resolveReach(part, reach).touches) {
+    if (touch.removed) continue;
+    if (contentControlPropertiesOf(touch.control).dataBinding) return 'bound';
   }
   return null;
 }
@@ -231,40 +564,16 @@ export function formsProtectionRefusal(
   op: TreeDocOp
 ): TreeOpRejection | null {
   if (!enforcesFormsProtection(settings)) return null;
-  if (!PROTECTED_OPS.has(op.op)) return null;
-
-  // A write ADDRESSED to a control is the one thing forms protection exists to allow.
-  if (op.op === 'setContentControlValue') return null;
-
-  const targets: string[] = [];
-  if ('paragraphId' in op && typeof op.paragraphId === 'string') targets.push(op.paragraphId);
-  if ('controlId' in op && typeof op.controlId === 'string') targets.push(op.controlId);
-  if (op.op === 'joinParagraphs') targets.push(op.firstId, op.secondId);
-  if (op.op === 'deleteBlock') targets.push(op.blockId);
-  if (targets.length === 0) return 'locked';
-
-  for (const target of targets) {
-    // The control itself is protected even though its contents are not: forms protection
-    // permits FILLING a form, never dismantling it.
-    const enclosing = enclosingContentControls(part, target);
-    const inside =
-      op.op === 'removeContentControl' || op.op === 'setContentControlProperties'
-        ? enclosing.length > 1
-        : enclosing.length > 0;
-    if (inside) continue;
-    if (!sectionProtectsForms(part, target)) continue;
+  const reach = treeOpReach(op);
+  if (reach.kind === 'none') return null;
+  for (const node of resolveReach(part, reach).unprotected) {
+    // A section may switch form protection back off (`w:sectPr/w:formProt`), and the part root
+    // stands for a document-scoped op — which no section exempts.
+    if (node !== part.root.id && !sectionProtectsForms(part, node)) continue;
     return 'locked';
   }
   return null;
 }
-
-/** Ops forms protection refuses outside a control. Reads and note lifecycle are unaffected. */
-const PROTECTED_OPS: ReadonlySet<string> = new Set([
-  ...CONTENT_EDITING_OPS,
-  'insertContentControl',
-  'removeContentControl',
-  'setContentControlProperties',
-]);
 
 /**
  * Whether the section owning a node still has form protection on.
