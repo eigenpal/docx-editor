@@ -4964,6 +4964,25 @@ a.docx-hyperlink:focus-visible {
   transition: none;
 }
 
+/* An INACTIVE card keeps its summary to a few lines: the rail is a queue, not the reading
+   surface, and one long insertion was a full viewport of card pushing everything after it
+   pages below its text. The active card renders in full. */
+.docx-review__card:not([data-active]) .docx-review__summary {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+/* A card the stacking pass pushed too far from its own text collapses to its header —
+   a full summary there reads as annotating whatever text happens to be beside it.
+   Clicking still works, and the active card never collapses. */
+.docx-review__slot[data-collapsed] .docx-review__summary,
+.docx-review__slot[data-collapsed] .docx-review__replies,
+.docx-review__slot[data-collapsed] .docx-review__reply-box {
+  display: none;
+}
+
 .docx-review__card {
   display: flex;
   flex-direction: column;
