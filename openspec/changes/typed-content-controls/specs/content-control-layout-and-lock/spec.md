@@ -214,7 +214,7 @@ Under `w:documentProtection @w:edit="forms"` the document is read-only EXCEPT in
 
 ### Requirement: A bound control refuses every content mutation, and removal takes the binding with it
 
-A control declaring `w:dataBinding` names a custom XML part this engine preserves without evaluating. Every content mutation targeting or intersecting such a control SHALL be refused with `bound` — ordinary typing, deletion, formatting, structural splits, tracked-change decisions and an insertion that names the control as its owner, not only a value write — so the document's two answers cannot diverge. The refusal SHALL be resolved in validation for every one of those paths rather than delegated to the applier of any single operation. Removing the control SHALL be allowed: it removes the claim that the content mirrors a part, leaving both sides as the file wrote them. A lock SHALL still refuse the removal on its own terms.
+A control declaring `w:dataBinding` names a custom XML part this engine preserves without evaluating. Every content mutation targeting or intersecting such a control SHALL be refused with `bound` — ordinary typing, deletion, formatting, structural splits, tracked-change decisions and an insertion that names the control as its owner, not only a value write — so the document's two answers cannot diverge. The refusal SHALL be resolved in validation for every one of those paths rather than delegated to the applier of any single operation. Removing the control THE CALLER NAMED SHALL be allowed: it removes the claim that the content mirrors a part, leaving both sides as the file wrote them. A lock SHALL still refuse the removal on its own terms.
 
 #### Scenario: Typing inside a bound control
 
@@ -233,8 +233,48 @@ A control declaring `w:dataBinding` names a custom XML part this engine preserve
 
 #### Scenario: Removing a bound control
 
-- **WHEN** a bound control is removed, with or without its content
+- **WHEN** a bound control is removed BY NAME, with or without its content
 - **THEN** the removal is allowed and the binding leaves with the wrapper
+
+### Requirement: A write that replaces a control's whole content is resolved against everything in it
+
+Setting a control's value rebuilds its `w:sdtContent` from nothing, and removing a control without keeping its content deletes that content outright. Either operation SHALL be resolved against every control nested inside the named one, not only the named control and its ancestors: a control the caller never mentioned is otherwise deleted — its `ST_Lock`, its `w:dataBinding` and its text together — by an operation that asked permission only of the control that was already decided about.
+
+A nested control whose resolved lock forbids editing its content, or forbids removing the control, SHALL refuse the operation with `locked`. A nested control declaring `w:dataBinding` SHALL refuse it with `bound`, because a projection of a custom XML part is being discarded as the collateral of an operation about something else rather than by the decision to delete it; a caller that means to drop a bound field SHALL still be able to name it and remove it.
+
+The nested controls' own resolved locks SHALL decide this, WITHOUT re-applying the named control's chain: whether the named control permits the operation at all is a question its own lock has already answered, and asking it twice would make an enclosing `sdtLocked` — which forbids deleting that control and expressly permits editing its content — refuse a value write merely because something unlocked was nested in it.
+
+A removal that KEEPS the content SHALL reach none of them. The nested controls survive the operation intact, spliced into the parent exactly as they were, so nothing nested has anything to refuse; refusing it would make a wrapper around a locked or bound field permanent. Writing a control's tag or alias SHALL likewise reach nothing nested. The descent SHALL carry the same nesting and element bounds as every other file-driven walk.
+
+#### Scenario: A locked control inside the one whose value is set
+
+- **WHEN** a script sets the value of an unlocked control whose content holds a locked control, inline or block, at any depth the bound admits
+- **THEN** it is refused with `locked` and the saved part is byte-for-byte what it was
+
+#### Scenario: A nested control that may not itself be deleted
+
+- **WHEN** the nested control declares `sdtLocked`, which permits editing its content and forbids removing it
+- **THEN** the replacement is refused with `locked`, because the replacement removes it
+
+#### Scenario: A bound control inside the one whose value is set
+
+- **WHEN** the nested control declares `w:dataBinding`
+- **THEN** it is refused with `bound` through both the value command and the insert-text command's replace location
+
+#### Scenario: A removal that takes the content with it
+
+- **WHEN** a control is removed without keeping its content, and that content holds a locked or bound control
+- **THEN** it is refused with `locked` or `bound` and nothing is removed
+
+#### Scenario: A removal that keeps the content
+
+- **WHEN** the same control is removed while keeping its content
+- **THEN** it is allowed, the wrapper goes, and the nested locked or bound control is spliced into the parent unchanged
+
+#### Scenario: Nothing protected is nested there
+
+- **WHEN** the named control holds no nested control, or holds only unlocked and unbound ones
+- **THEN** the value write replaces the content exactly as it did before
 
 ### Requirement: Row- and cell-level controls are flattened where a walk filters on rows and cells
 

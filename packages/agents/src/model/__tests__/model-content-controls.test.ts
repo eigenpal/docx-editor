@@ -406,6 +406,68 @@ describe('a control is written through the document’s own write path', () => {
     expect(read).toEqual({ written: 'ACME', held });
   });
 
+  // A WHOLE-VALUE WRITE DELETES WHAT THE CONTROL HELD. Both of these locations rebuild
+  // `w:sdtContent`, so a nested control goes with it — lock, binding and text together. Naming the
+  // outer control is not consent to destroy the inner one.
+  const nested = (properties: string) =>
+    docx(
+      `<w:p><w:sdt><w:sdtPr><w:tag w:val="outer"/><w:richText/></w:sdtPr><w:sdtContent>` +
+        `<w:r><w:t>OUT</w:t></w:r>` +
+        `<w:sdt><w:sdtPr><w:tag w:val="inner"/>${properties}</w:sdtPr>` +
+        `<w:sdtContent><w:r><w:t>MID</w:t></w:r></w:sdtContent></w:sdt>` +
+        `</w:sdtContent></w:sdt></w:p>`
+    );
+
+  const NESTED_LOCKED = `<w:lock w:val="sdtContentLocked"/>`;
+  const NESTED_BOUND = `<w:dataBinding w:xpath="/root/a" w:storeItemID="{FEED}"/>`;
+
+  test.each([
+    ['a locked', NESTED_LOCKED],
+    ['a bound', NESTED_BOUND],
+  ])('setValue is refused by %s control nested in the one it names', async (_name, properties) => {
+    const runtime = await serverRuntime(nested(properties));
+    const before = await mainXmlOf(runtime);
+    const code = await codeOf(() =>
+      runtime.run(async (context) => {
+        const control = context.document.contentControls.getFirst();
+        await context.sync();
+        control.setValue({ kind: 'text', text: 'REPLACED' });
+        await context.sync();
+      })
+    );
+    expect(code).not.toBe('');
+    expect(await mainXmlOf(runtime)).toBe(before);
+  });
+
+  test.each([
+    ['a locked', NESTED_LOCKED],
+    ['a bound', NESTED_BOUND],
+  ])('insertText at Replace is refused by %s nested control too', async (_name, properties) => {
+    const runtime = await serverRuntime(nested(properties));
+    const before = await mainXmlOf(runtime);
+    const code = await codeOf(() =>
+      runtime.run(async (context) => {
+        const control = context.document.contentControls.getFirst();
+        await context.sync();
+        control.insertText('REPLACED', 'Replace');
+        await context.sync();
+      })
+    );
+    expect(code).not.toBe('');
+    expect(await mainXmlOf(runtime)).toBe(before);
+  });
+
+  test('an unlocked nested control is still replaced, so this is not a nesting rule', async () => {
+    const runtime = await serverRuntime(nested(''));
+    await runtime.run(async (context) => {
+      const control = context.document.contentControls.getFirst();
+      await context.sync();
+      control.setValue({ kind: 'text', text: 'REPLACED' });
+      await context.sync();
+    });
+    expect(await mainXmlOf(runtime)).toContain('REPLACED');
+  });
+
   test('a location no control has is refused before anything is sent', async () => {
     const runtime = await serverRuntime(CONTROLS);
     const code = await codeOf(() =>

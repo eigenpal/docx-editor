@@ -172,6 +172,16 @@ export type TreeOpReach =
       /** `value` is what forms protection exists to allow; the others dismantle the form. */
       readonly intent: 'value' | 'metadata' | 'removal';
       /**
+       * The op REPLACES the control's whole content rather than editing part of it.
+       *
+       * A value write rebuilds `w:sdtContent` from nothing, and a removal that does not keep the
+       * content deletes it outright. Either way every control nested in there goes — its lock,
+       * its `w:dataBinding` and its text — so the reach has to include them. Resolving this op
+       * from the named control alone asked permission of the one control the caller had already
+       * decided about, and none of the ones it was about to destroy.
+       */
+      readonly replacesContent?: boolean;
+      /**
        * Where in the story the write actually lands, when the caller addressed a position.
        *
        * NAMING A CONTROL SAYS WHOSE VALUE THIS IS. It does not say what the characters end up
@@ -288,13 +298,26 @@ const TREE_OP_REACH: {
   rejectRevision: (op) => ({ kind: 'revisions', revision: op.revision }),
   acceptAllRevisions: () => ({ kind: 'revisions' }),
   rejectAllRevisions: () => ({ kind: 'revisions' }),
-  setContentControlValue: (op) => ({ kind: 'control', controlId: op.controlId, intent: 'value' }),
+  // The value path rebuilds `w:sdtContent`; a tag or an alias leaves every child where it was.
+  setContentControlValue: (op) => ({
+    kind: 'control',
+    controlId: op.controlId,
+    intent: 'value',
+    replacesContent: true,
+  }),
   setContentControlProperties: (op) => ({
     kind: 'control',
     controlId: op.controlId,
     intent: 'metadata',
   }),
-  removeContentControl: (op) => ({ kind: 'control', controlId: op.controlId, intent: 'removal' }),
+  // Keeping the content splices it into the parent, so everything nested survives and nothing
+  // nested has a say. Taking the content is the same destruction a value write performs.
+  removeContentControl: (op) => ({
+    kind: 'control',
+    controlId: op.controlId,
+    intent: 'removal',
+    replacesContent: op.keepContent !== true,
+  }),
   // Page setup, section furniture and note numbering are properties OF the document. They change
   // no content, so no control's lock speaks to them; forms protection still does.
   setSectionProperties: () => ({ kind: 'documentProperties' }),
@@ -330,8 +353,18 @@ interface ControlTouch {
   readonly control: OoxmlNode;
   /** Every lock in force on it: its own and each of its ancestors'. */
   readonly locks: readonly ContentControlLock[];
-  /** The control itself would be removed, not merely edited. */
+  /** The control itself would be removed, not merely edited — and the caller ASKED for that. */
   readonly removed: boolean;
+  /**
+   * The control would be destroyed by an op addressed at something else.
+   *
+   * The difference from {@link removed} is consent, and only `w:dataBinding` cares. Deleting a
+   * bound control the caller NAMED is allowed, because it takes the claim to mirror a custom XML
+   * part away with it. Deleting one the caller never mentioned, as the collateral of setting some
+   * enclosing control's value, is not that decision being made — it is the projection being
+   * thrown away by an op that was about something else.
+   */
+  readonly discarded: boolean;
 }
 
 /** What an op reaches, resolved against the part: the controls, and the nodes it named. */
@@ -367,6 +400,7 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
       control: entry.node,
       locks: locksOf([...entry.ancestors, entry.node]),
       removed: false,
+      discarded: false,
     }));
     return { touches, unprotected: [part.root.id] };
   }
@@ -390,13 +424,17 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
         ? mergedLine(chain, landingControls(part, reach.at, own))
         : chain;
     return {
-      touches: line.map((control, index) => ({
-        control,
-        locks: locksOf(line.slice(0, index + 1)),
-        // Only the NAMED control goes away; the ones enclosing it and the ones it encloses are
-        // edited, not removed.
-        removed: reach.intent === 'removal' && control.id === own.id,
-      })),
+      touches: [
+        ...line.map((control, index) => ({
+          control,
+          locks: locksOf(line.slice(0, index + 1)),
+          // Only the NAMED control goes away; the ones enclosing it and the ones it encloses are
+          // edited, not removed.
+          removed: reach.intent === 'removal' && control.id === own.id,
+          discarded: false,
+        })),
+        ...discardedContentControls(own, reach.replacesContent === true),
+      ],
       // A write ADDRESSED to a control is what forms protection exists to allow; changing or
       // removing the control ITSELF is not, unless the control is inside another one.
       unprotected: reach.intent === 'value' || chain.length > 1 ? [] : [reach.controlId],
@@ -415,6 +453,7 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
         control: enclosing[index]!,
         locks: locksOf(enclosing.slice(0, index + 1)),
         removed: false,
+        discarded: false,
       });
     }
     const node = findNode(part, target.nodeId);
@@ -453,11 +492,34 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
         control: entry.node,
         locks: [...inherited, ...locksOf([...entry.ancestors, entry.node])],
         removed: target.removes === true,
+        discarded: false,
       });
     }
     if (enclosing.length === 0 && !filling) unprotected.push(target.nodeId);
   }
   return { touches, unprotected };
+}
+
+/**
+ * The controls a whole-content write would destroy: everything nested inside the named one.
+ *
+ * ONLY THEIR OWN LINE IS ASKED, not the named control's. Whether the named control permits this
+ * operation at all is a question its own lock already answered — for a value write in the touches
+ * above, for a removal in `applyRemoveContentControl`. Folding that answer in a second time would
+ * make an enclosing `sdtLocked`, which forbids deleting the ENCLOSING control and expressly allows
+ * editing its content, refuse a value write merely because something unlocked was nested in it.
+ *
+ * The walk is `contentControlsIn`, so it carries the same nesting and element bounds as every
+ * other file-driven descent in this module.
+ */
+function discardedContentControls(own: OoxmlNode, replacesContent: boolean): ControlTouch[] {
+  if (!replacesContent) return [];
+  return contentControlsIn(own).map((entry) => ({
+    control: entry.node,
+    locks: locksOf([...entry.ancestors, entry.node]),
+    removed: false,
+    discarded: true,
+  }));
 }
 
 /**
@@ -540,6 +602,7 @@ function resolveRevisionReach(
           control: controls[index]!,
           locks: locksOf(controls.slice(0, index + 1)),
           removed: false,
+          discarded: false,
         });
       }
       // A tracked deletion is resolved by REMOVING its content, which takes any control inside
@@ -549,6 +612,7 @@ function resolveRevisionReach(
           control: entry.node,
           locks: [...locksOf(controls), ...locksOf([...entry.ancestors, entry.node])],
           removed: true,
+          discarded: false,
         });
       }
       return;
@@ -611,11 +675,15 @@ export function contentControlLockRefusal(part: OoxmlPart, op: TreeDocOp): TreeO
   // the reverse — and each is resolved in the applier that already holds the control. A write
   // addressed at a control's VALUE is an ordinary content edit and is resolved here, because the
   // caller might have reached it through `insertText` naming the control it writes into.
-  if (reach.kind === 'control' && reach.intent !== 'value') return null;
+  //
+  // What NO applier resolves either way is a control the op was not addressed at and would
+  // destroy anyway, so those are asked here whatever the intent was.
+  const namedControlAnswersForItself = reach.kind === 'control' && reach.intent !== 'value';
   for (const touch of resolveReach(part, reach).touches) {
+    if (namedControlAnswersForItself && !touch.discarded) continue;
     const resolved = resolveContentControlLock(touch.locks);
     if (lockForbidsEdit(resolved)) return 'locked';
-    if (touch.removed && lockForbidsRemoval(resolved)) return 'locked';
+    if ((touch.removed || touch.discarded) && lockForbidsRemoval(resolved)) return 'locked';
   }
   return null;
 }
@@ -629,25 +697,33 @@ export function contentControlLockRefusal(part: OoxmlPart, op: TreeDocOp): TreeO
  * always answered this way; ordinary typing, formatting and deleting did not, which meant the
  * value could be changed through the path a keystroke takes while the part still held the old one.
  *
- * Removing the control is NOT refused. The desync this prevents is content changing while
- * something still claims to mirror a part; removing the control removes the claim, and refusing
- * it instead would make a bound control indelible in an editor where Word deletes it.
+ * Removing the control the caller NAMED is not refused. The desync this prevents is content
+ * changing while something still claims to mirror a part; removing that control removes the claim,
+ * and refusing it instead would make a bound control indelible in an editor where Word deletes it.
+ *
+ * A bound control the caller did NOT name is a different question, and it is refused. Setting an
+ * enclosing control's value rebuilds that content from nothing, so the binding, its `w:xpath` and
+ * the projection the file wrote all disappear — not as the decision the caller made, but as the
+ * collateral of one about something else. A script that means to drop a bound field can still name
+ * it and delete it.
  */
 export function contentControlBindingRefusal(
   part: OoxmlPart,
   op: TreeDocOp
 ): TreeOpRejection | null {
   const reach = treeOpReach(op);
-  // Metadata and removal do not touch the bound value. A VALUE write does, and is refused here
-  // rather than left to an applier: `setContentControlValue` has one that answers this, but an
-  // insertion that merely NAMES the control it writes into reaches the same content through the
-  // ordinary text path, where no applier was looking.
-  if (reach.kind === 'control' && reach.intent !== 'value') return null;
+  // Metadata and removal do not touch the NAMED control's bound value. A VALUE write does, and is
+  // refused here rather than left to an applier: `setContentControlValue` has one that answers
+  // this, but an insertion that merely NAMES the control it writes into reaches the same content
+  // through the ordinary text path, where no applier was looking. Either way, a bound control
+  // discarded along with the content is answered below whatever the intent was.
+  const namedControlAnswersForItself = reach.kind === 'control' && reach.intent !== 'value';
   // A document-scoped op does not write the bound value either: page setup and note settings
   // cannot desync a custom XML part, and refusing them would make a bound field freeze the
   // document's own layout.
   if (reach.kind === 'part' || reach.kind === 'documentProperties') return null;
   for (const touch of resolveReach(part, reach).touches) {
+    if (namedControlAnswersForItself && !touch.discarded) continue;
     if (touch.removed) continue;
     if (contentControlPropertiesOf(touch.control).dataBinding) return 'bound';
   }

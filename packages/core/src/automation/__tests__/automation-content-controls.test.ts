@@ -771,6 +771,145 @@ describe('a nested control is refused at the locations this command writes at', 
   });
 });
 
+// REPLACING A CONTROL'S VALUE THROWS AWAY EVERYTHING IT HELD.
+//
+// The two locations above write INTO the content. `replace` writes OVER it: the value path
+// rebuilds `w:sdtContent` from scratch, so a nested control is not typed into, it is deleted —
+// lock, `w:dataBinding` and text together. Both public paths a script has to a whole-value write
+// land on the same store op, so both are asserted here.
+describe('replacing a control value is refused by the controls it would delete', () => {
+  const LOCKED = `<w:lock w:val="sdtContentLocked"/>`;
+  const REMOVAL_LOCKED = `<w:lock w:val="sdtLocked"/>`;
+  const BOUND = `<w:dataBinding w:xpath="/root/a" w:storeItemID="{FEED}"/>`;
+
+  const inlineNested = (properties: string): Uint8Array =>
+    docx(
+      `<w:p><w:sdt><w:sdtPr><w:tag w:val="outer"/></w:sdtPr><w:sdtContent>` +
+        `<w:r><w:t>OUT</w:t></w:r>` +
+        `<w:sdt><w:sdtPr><w:tag w:val="inner"/>${properties}</w:sdtPr>` +
+        `<w:sdtContent><w:r><w:t>MID</w:t></w:r></w:sdtContent></w:sdt>` +
+        `</w:sdtContent></w:sdt></w:p>`
+    );
+
+  const blockNested = (properties: string): Uint8Array =>
+    docx(
+      `<w:sdt><w:sdtPr><w:tag w:val="outer"/></w:sdtPr><w:sdtContent>` +
+        `<w:p><w:r><w:t>OUT</w:t></w:r></w:p>` +
+        `<w:sdt><w:sdtPr><w:tag w:val="inner"/>${properties}</w:sdtPr><w:sdtContent>` +
+        `<w:p><w:r><w:t>MID</w:t></w:r></w:p></w:sdtContent></w:sdt>` +
+        `</w:sdtContent></w:sdt>`
+    );
+
+  /** The whole-value write, through each of the two commands that reach it. */
+  function replaceNaming(
+    bytes: Uint8Array,
+    via: 'setValue' | 'insertText'
+  ): { readonly answer: string; readonly saved: string } {
+    const host = open(bytes);
+    const control = controlsOf(host, roots(host).body)[0]!;
+    const response = host.execute({
+      operations: [
+        via === 'setValue'
+          ? {
+              op: 'setContentControlValue',
+              contentControl: control,
+              value: { kind: 'text', text: 'REPLACED' },
+            }
+          : {
+              op: 'insertContentControlText',
+              contentControl: control,
+              text: 'REPLACED',
+              at: 'replace',
+            },
+      ],
+    });
+    const failed = response.results.some((result) => result.status === 'error');
+    return { answer: failed ? refusedBecause(response) : 'ok', saved: savedMainXml(host) };
+  }
+
+  const BOTH = ['setValue', 'insertText'] as const;
+
+  test('a locked inline control inside the named one refuses both commands', () => {
+    for (const via of BOTH) {
+      const written = replaceNaming(inlineNested(LOCKED), via);
+      expect(written.answer).toBe('transaction-refused/locked');
+      expect(written.saved).toContain('MID');
+      expect(written.saved).toContain('sdtContentLocked');
+      expect(written.saved).not.toContain('REPLACED');
+    }
+  });
+
+  test('a nested control that may not be deleted refuses them too', () => {
+    for (const via of BOTH) {
+      const written = replaceNaming(inlineNested(REMOVAL_LOCKED), via);
+      expect(written.answer).toBe('transaction-refused/locked');
+      expect(written.saved).toContain('sdtLocked');
+      expect(written.saved).not.toContain('REPLACED');
+    }
+  });
+
+  test('a bound inline control inside the named one refuses them with bound', () => {
+    for (const via of BOTH) {
+      const written = replaceNaming(inlineNested(BOUND), via);
+      expect(written.answer).toBe('transaction-refused/bound');
+      expect(written.saved).toContain('w:dataBinding');
+      expect(written.saved).not.toContain('REPLACED');
+    }
+  });
+
+  test('a nested BLOCK control is reached the same way, locked or bound', () => {
+    for (const via of BOTH) {
+      expect(replaceNaming(blockNested(LOCKED), via).answer).toBe('transaction-refused/locked');
+      expect(replaceNaming(blockNested(BOUND), via).answer).toBe('transaction-refused/bound');
+    }
+  });
+
+  test('an unlocked, unbound nested control is still replaced', () => {
+    for (const via of BOTH) {
+      const written = replaceNaming(inlineNested(''), via);
+      expect(written.answer).toBe('ok');
+      expect(written.saved).toContain('REPLACED');
+    }
+  });
+
+  test('and a leaf control with nothing nested still takes its value', () => {
+    const leaf = docx(
+      `<w:p><w:sdt><w:sdtPr><w:tag w:val="outer"/></w:sdtPr>` +
+        `<w:sdtContent><w:r><w:t>OUT</w:t></w:r></w:sdtContent></w:sdt></w:p>`
+    );
+    for (const via of BOTH) {
+      const written = replaceNaming(leaf, via);
+      expect(written.answer).toBe('ok');
+      expect(written.saved).toContain('REPLACED');
+    }
+  });
+
+  test('deleting the wrapper while keeping its content is not refused', () => {
+    const host = open(inlineNested(LOCKED));
+    const control = controlsOf(host, roots(host).body)[0]!;
+    const response = host.execute({
+      operations: [{ op: 'deleteContentControl', contentControl: control, keepContent: true }],
+    });
+    expect(response.results.every((result) => result.status === 'ok')).toBe(true);
+    const saved = savedMainXml(host);
+    expect(saved).toContain('MID');
+    expect(saved).toContain('sdtContentLocked');
+  });
+
+  test('but deleting it AND its content is refused by the locked control inside', () => {
+    const host = open(inlineNested(LOCKED));
+    const control = controlsOf(host, roots(host).body)[0]!;
+    expect(
+      refusedBecause(
+        host.execute({
+          operations: [{ op: 'deleteContentControl', contentControl: control, keepContent: false }],
+        })
+      )
+    ).toBe('transaction-refused/locked');
+    expect(savedMainXml(host)).toContain('MID');
+  });
+});
+
 function spanOf(response: ReturnType<AutomationHost['execute']>) {
   const result = response.results[1];
   if (result?.status !== 'ok' || result.value.kind !== 'span') throw new Error('no span');
