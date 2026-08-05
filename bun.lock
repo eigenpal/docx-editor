@@ -312,6 +312,27 @@
         "vue": "^3.3.0",
       },
     },
+    "packages/pro": {
+      "name": "@docx-editor.dev/pro",
+      "version": "0.0.1",
+      "dependencies": {
+        "@docx-editor.dev/core-contract": "workspace:*",
+        "@docx-editor.dev/i18n": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/react": "^19.0.0",
+        "fflate": "^0.8.2",
+        "typescript": "^5.3.3",
+      },
+      "peerDependencies": {
+        "react": "^18.0.0 || ^19.0.0",
+        "react-dom": "^18.0.0 || ^19.0.0",
+      },
+      "optionalPeers": [
+        "react",
+        "react-dom",
+      ],
+    },
     "packages/react": {
       "name": "@docx-editor.dev/react",
       "version": "0.0.1",
@@ -510,6 +531,8 @@
     "@docx-editor.dev/i18n": ["@docx-editor.dev/i18n@workspace:packages/i18n"],
 
     "@docx-editor.dev/nuxt": ["@docx-editor.dev/nuxt@workspace:packages/nuxt"],
+
+    "@docx-editor.dev/pro": ["@docx-editor.dev/pro@workspace:packages/pro"],
 
     "@docx-editor.dev/react": ["@docx-editor.dev/react@workspace:packages/react"],
 

@@ -11,10 +11,10 @@
 
 ## 2. Pro package scaffolding
 
-- [ ] 2.1 Create `packages/pro` (`@docx-editor.dev/pro`): package.json (`SEE LICENSE IN LICENSE.md`, peer-deps core-contract + optional react entry), tsup/build config matching sibling packages
-- [ ] 2.2 Write commercial `LICENSE.md`; add package to the fixed changeset group and workspace tooling (typecheck, test, api:extract targets)
-- [ ] 2.3 Accept optional `licenseKey` on pro entry points (stored, unvalidated in v1 — honor system); no warning, no banner, never a network call
-- [ ] 2.4 Tests: module without key is fully functional and silent; no licensing network traffic
+- [x] 2.1 Create `packages/pro` (`@docx-editor.dev/pro`): package.json (`SEE LICENSE IN LICENSE.md`, peer-deps core-contract + optional react entry), tsup/build config matching sibling packages
+- [x] 2.2 Write commercial `LICENSE.md`; add package to the fixed changeset group and workspace tooling (typecheck, test, api:extract targets)
+- [x] 2.3 Accept optional `licenseKey` on pro entry points (stored, unvalidated in v1 — honor system); no warning, no banner, never a network call
+- [x] 2.4 Tests: module without key is fully functional and silent; no licensing network traffic
 
 ## 3. Review module lift
 
