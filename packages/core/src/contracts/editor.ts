@@ -1185,6 +1185,14 @@ export interface EditorSnapshot {
    * the editor had simply stopped responding.
    */
   readonly lastRejection?: string | null;
+  /**
+   * Document font families rendering in a substitute face: declared by the document but
+   * not resolvable on this platform, not embedded in the file, and not supplied by the
+   * app's font configuration. Chrome shows a compatibility notice from this the way Word
+   * does. Optional and additive like `canUndo`: absent means the implementation has not
+   * derived it; empty means every family resolved (or no document is loaded).
+   */
+  readonly fontSubstitutions?: readonly string[];
 }
 
 export interface ImageContext {

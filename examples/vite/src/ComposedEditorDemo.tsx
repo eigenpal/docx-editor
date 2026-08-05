@@ -521,6 +521,9 @@ function EditorChrome({
         </DocxEditor.Toolbar.FontFamily>
       </DocxEditor.Toolbar>
 
+      {/* Word-style compatibility bar when document fonts render in substitutes. */}
+      <DocxEditor.FontNotice t={translate} />
+
       {/* File > Page setup: the library dialog, applied as one undo step. */}
       <DocxEditor.PageSetupDialog open={showPageSetup} onClose={() => setShowPageSetup(false)} />
     </div>

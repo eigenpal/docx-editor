@@ -842,7 +842,8 @@
     "failedToParse": "Falha ao analisar documento",
     "linkRemoved": "Link removido",
     "linkCopied": "Link copiado para a área de transferência",
-    "failedToSave": "Falha ao salvar documento"
+    "failedToSave": "Falha ao salvar documento",
+    "fontSubstitutionNotice": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Texto de exibição",

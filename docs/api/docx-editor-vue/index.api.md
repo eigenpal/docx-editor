@@ -662,6 +662,7 @@ export interface EditorSnapshot {
     readonly canUndo?: boolean;
     readonly editable: boolean;
     readonly editingMode?: DocumentEditingMode;
+    readonly fontSubstitutions?: readonly string[];
     // (undocumented)
     readonly formatting: RunFormatting | null;
     // (undocumented)
@@ -1080,8 +1081,8 @@ type: BooleanConstructor;
 default: boolean;
 };
 }>> & Readonly<{}>, {
-visible: boolean;
 editor: Editor | null;
+visible: boolean;
 }, {}, {}, {}, string, ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)

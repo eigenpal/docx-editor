@@ -845,7 +845,8 @@
     "failedToParse": "Impossible d'analyser le document",
     "linkRemoved": "Lien supprimé",
     "linkCopied": "Lien copié dans le presse-papiers",
-    "failedToSave": "Échec de l'enregistrement du document"
+    "failedToSave": "Échec de l'enregistrement du document",
+    "fontSubstitutionNotice": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Texte à afficher",

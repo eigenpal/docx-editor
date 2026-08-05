@@ -842,7 +842,8 @@
     "failedToParse": "שגיאה בפתיחת המסמך",
     "linkRemoved": "הקישור הוסר",
     "linkCopied": "הקישור הועתק ללוח",
-    "failedToSave": "שגיאה בשמירת המסמך"
+    "failedToSave": "שגיאה בשמירת המסמך",
+    "fontSubstitutionNotice": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "טקסט לתצוגה",

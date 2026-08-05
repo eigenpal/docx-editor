@@ -842,7 +842,8 @@
     "failedToParse": "Nie udało się przetworzyć dokumentu",
     "linkRemoved": "Usunięto link",
     "linkCopied": "Skopiowano link do schowka",
-    "failedToSave": "Nie udało się zapisać dokumentu"
+    "failedToSave": "Nie udało się zapisać dokumentu",
+    "fontSubstitutionNotice": null
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Tekst wyświetlany",

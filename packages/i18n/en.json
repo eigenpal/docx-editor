@@ -896,7 +896,8 @@
     "failedToParse": "Failed to parse document",
     "linkRemoved": "Link removed",
     "linkCopied": "Link copied to clipboard",
-    "failedToSave": "Failed to save document"
+    "failedToSave": "Failed to save document",
+    "fontSubstitutionNotice": "Some fonts in this document aren't available, so substitutes are shown: {fonts}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Display text",

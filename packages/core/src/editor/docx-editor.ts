@@ -137,6 +137,8 @@ import {
 } from './font-configuration.ts';
 import { composeFontConfiguration } from './font-composition.ts';
 import { embeddedFontSources } from './embedded-font-sources.ts';
+import { createLocalFontProbe, detectFontSubstitutions } from './font-availability.ts';
+import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import {
   registerEmbeddedFontFaces,
   type EmbeddedFontFaceRegistration,
@@ -184,6 +186,8 @@ function toContentPixels(box: { x: number; y: number; width: number; height: num
 
 /** The one frozen scope object every snapshot shares, so scope stays reference-equal. */
 const SCOPE_BODY: EditorScope = Object.freeze({ kind: 'body' as const });
+/** One frozen empty answer, so "nothing substituted" never mints a new reference. */
+const EMPTY_FONT_SUBSTITUTIONS: readonly string[] = Object.freeze([]);
 
 export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let container: HTMLElement | null = config.container ?? null;
@@ -272,6 +276,44 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let fontKickSeq = -1;
   /** True from the moment a load starts font work until it lands (or fails). */
   let fontsResolving = false;
+
+  /**
+   * Local-resolution probe for the compatibility notice, created against the attached
+   * container's document and dropped with it — a probe answers for ONE platform's font
+   * set, and headless (no container) honestly reports nothing substituted.
+   */
+  let localFontProbe: ((family: string) => boolean) | null = null;
+  const probeLocalFont = (family: string): boolean => {
+    if (!localFontProbe) {
+      localFontProbe = createLocalFontProbe(
+        container ? tryCreateBrowserCanvasContext(container.ownerDocument) : null
+      );
+    }
+    return localFontProbe(family);
+  };
+  /** Families the app's font configuration supplies or substitutes, case-folded. */
+  const configCoveredFamilies = new Set<string>(
+    [
+      ...(config.fonts?.sources ?? []).map((source) => source.request.family),
+      ...(config.fonts?.substitutions ?? []).map((substitution) => substitution.from.family),
+    ]
+      .filter((family) => typeof family === 'string' && family.trim().length > 0)
+      .map((family) => family.toLowerCase())
+  );
+  const fontFamilyCovered = (family: string): boolean =>
+    configCoveredFamilies.has(family.toLowerCase()) || embeddedFaces?.alias(family) !== undefined;
+  /**
+   * While font work is still in flight the answer would flicker: embedded faces register
+   * at resolution, so a file whose own fonts are arriving must not flash a notice first.
+   */
+  const deriveFontSubstitutions = (): readonly string[] => {
+    if (!surface || fontsResolving) return EMPTY_FONT_SUBSTITUTIONS;
+    return detectFontSubstitutions(
+      surface.session.documentFonts(),
+      fontFamilyCovered,
+      probeLocalFont
+    );
+  };
 
   // ── State tick + cached snapshot ─────────────────────────────────────────────────────
   let stateVersion = 0;
@@ -715,6 +757,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // — is refused before any keystroke reaches the surface, so there is nothing in the
       // surface state to report it. Cleared the moment the surface refuses anything itself.
       lastRejection: state?.lastRejection ?? facadeRejection,
+      fontSubstitutions: deriveFontSubstitutions(),
     };
   }
 
@@ -745,7 +788,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const selection = docRangeEqual(fresh.selection, previous.selection)
         ? previous.selection
         : fresh.selection;
-      next = { ...fresh, formatting, page, pageSetup, selection };
+      const fontSubstitutions =
+        previous.fontSubstitutions !== undefined &&
+        fresh.fontSubstitutions !== undefined &&
+        previous.fontSubstitutions.length === fresh.fontSubstitutions.length &&
+        fresh.fontSubstitutions.every((family, i) => previous.fontSubstitutions![i] === family)
+          ? previous.fontSubstitutions
+          : fresh.fontSubstitutions;
+      next = { ...fresh, formatting, page, pageSetup, selection, fontSubstitutions };
       // Reuse the previous REFERENCE only when neither the caret NOR the document moved.
       //
       // The snapshot is a lossy projection: `selection` is paragraph-granular (a
@@ -1095,6 +1145,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         teardownSurface();
       }
       container = el;
+      // A probe answers for one document's font set; the new container may live in a
+      // different one (an iframe host), so it re-creates on the next derivation.
+      localFontProbe = null;
       const bytes = pendingBytes;
       pendingBytes = null;
       // A mount bumps the tick and emits change/selectionChange itself.
@@ -1109,6 +1162,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         teardownSurface();
       }
       container = null;
+      localFontProbe = null;
       bump();
     },
 
