@@ -397,6 +397,17 @@ export const wordFeatures: WordFeature[] = [
       'Table styles resolve through their basedOn chain: borders, cell margins, shading and the paragraph/run formatting a conditional format carries (so a header row comes out bold and centred) all come from styles.xml, gated by w:tblLook, with an explicit w:cnfStyle taking precedence. Conditional cell margins and switching table styles from the UI are not built yet.',
   },
   {
+    id: 'tables.floating',
+    name: 'Floating tables (tblpPr anchored position)',
+    category: 'tables',
+    editing: 'none',
+    rendering: 'partial',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'An anchored table lands where Word puts it across the page: tblpXSpec/tblpX against the text, margin or page box, plus a tblpY offset from the text anchor. Text does not yet wrap beside it, and page- or margin-anchored vertical positions keep their place in the flow.',
+  },
+  {
     id: 'tables.text-direction',
     name: 'Vertical cell text (textDirection)',
     category: 'tables',

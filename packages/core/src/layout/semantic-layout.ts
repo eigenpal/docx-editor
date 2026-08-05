@@ -67,7 +67,13 @@ import {
   type StyleCascadeTable,
 } from './style-cascade.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
-import { readTableStructure, tableOriginX, type SemanticTableRow } from './semantic-table.ts';
+import {
+  readTableStructure,
+  tableFloatOriginX,
+  tableOriginX,
+  type SemanticTableRow,
+  type TableAnchorFrames,
+} from './semantic-table.ts';
 import {
   createTableBorderOwnershipBudget,
   createTableVMergeResolveBudget,
@@ -837,6 +843,15 @@ function layoutBlocksWithGeometry(
   let regionFragmentStart = 0;
   const columnLeft = (): number => columns.lefts[columnIndex]!;
   const columnWidth = (): number => columns.widths[columnIndex]!;
+  /**
+   * The boxes `w:horzAnchor` can name, in the content-box coordinates every fragment box is
+   * reported in: x=0 is the left margin, so the sheet starts one left margin before it.
+   */
+  const anchorFrames = (): TableAnchorFrames => ({
+    text: { left: columnLeft(), width: columnWidth() },
+    margin: { left: 0, width: pageContentWidth },
+    page: { left: -geometry.margin.left, width: geometry.width },
+  });
   const regionHasFragments = (): boolean => pageFragments.length > regionFragmentStart;
   let pendingAnchoredDrawings: AnchoredDrawingRecord[] = [];
   let deferredAnchoredDrawings: AnchoredDrawingRecord[] = [];
@@ -1345,9 +1360,21 @@ function layoutBlocksWithGeometry(
     const regionWidth = columnWidth();
     const structure = readTableStructure(table, regionWidth, 0, styleCascade, displayMode);
     if (!structure || structure.rows.length === 0) return;
-    // `w:tblInd` / `w:jc` place the table inside the text column; every row and the fragment
-    // box share the one origin so cell geometry and the reported box cannot drift apart.
-    let tableLeft = columnLeft() + tableOriginX(structure, regionWidth);
+    // `w:tblInd` / `w:jc` place the table inside the text column, `w:tblpPr` against a wider
+    // anchor box; every row and the fragment box share the one origin so cell geometry and
+    // the reported box cannot drift apart.
+    const tableWidthPt = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
+    const originX = (): number =>
+      structure.float
+        ? tableFloatOriginX(structure.float, tableWidthPt, anchorFrames())
+        : columnLeft() + tableOriginX(structure, columnWidth());
+    let tableLeft = originX();
+    // `w:tblpY` against the text anchor is an offset from where the table would otherwise
+    // sit, so it moves the table within the flow. The page and margin anchors state an
+    // absolute position on the sheet, which this layout does not model — those stay in flow.
+    if (structure.float && structure.float.vertAnchor === 'text' && !structure.float.ySpec) {
+      cursorY = Math.max(0, Math.min(cursorY + structure.float.yPt, contentHeight()));
+    }
     const headerRows: SemanticTableRow[] = [];
     for (const row of structure.rows) {
       if (row.isHeader) headerRows.push(row);
@@ -1426,7 +1453,7 @@ function layoutBlocksWithGeometry(
       if (cursorY + groupHeight > contentHeight() + 0.001 && cursorY > 0) {
         closeTableFragment();
         advanceColumn();
-        tableLeft = columnLeft() + tableOriginX(structure, columnWidth());
+        tableLeft = originX();
         fragmentTop = 0;
       }
 
@@ -1456,7 +1483,7 @@ function layoutBlocksWithGeometry(
     const breakForContinuation = (emitHeaders: boolean): void => {
       closeTableFragment();
       advanceColumn();
-      tableLeft = columnLeft() + tableOriginX(structure, columnWidth());
+      tableLeft = originX();
       fragmentTop = 0;
       if (emitHeaders) placeHeaderGroup(true);
     };
