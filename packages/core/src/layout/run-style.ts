@@ -10,11 +10,13 @@
 // inheritance is a separate layer (the style resolver); this is the direct-formatting half,
 // which is what the D8 boundary covers.
 
-import type { OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import { resolveOoxmlShadingFill } from './ooxml-shading.ts';
 
+/** `w:vertAlign` — script position, which also scales the run's effective size. */
 export type VerticalAlign = 'baseline' | 'superscript' | 'subscript';
 
+/** A resolved underline: its variant, and its colour when it does not follow the text. */
 export interface ResolvedUnderline {
   /** The authored `ST_Underline` variant. */
   readonly variant: string;
@@ -22,6 +24,12 @@ export interface ResolvedUnderline {
   readonly color: string | null;
 }
 
+/**
+ * A run's character properties after the full cascade, in the units layout works in.
+ *
+ * Points rather than half-points, RRGGBB rather than theme references — everything already
+ * resolved, so measurement and paint never re-run the cascade per glyph.
+ */
 export interface ResolvedRunStyle {
   readonly fontFamily: string | null;
   /** Points. `w:sz` is half-points, so 22 becomes 11. */

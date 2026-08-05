@@ -18,7 +18,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // document and break outright during pagination.
 
 import { useCallback, useMemo, useSyncExternalStore } from 'react';
-import type { Editor, ReviewItemPlacement, ReviewItemQuery } from '@docx-editor.dev/core-contract/contracts/editor';
+import type {
+  Editor,
+  ReviewItemPlacement,
+  ReviewItemQuery,
+} from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from '@docx-editor.dev/react';
 
 /**
@@ -31,6 +35,11 @@ import { useDocxEditor } from '@docx-editor.dev/react';
  */
 export type ReviewItemView = ReviewItemPlacement;
 
+/**
+ * What {@link useReview} returns: the review rail's data and the four things a card can do.
+ *
+ * @public
+ */
 export interface UseReviewReturn {
   /** Every pending decision in the document, in reading order. */
   readonly items: readonly ReviewItemView[];

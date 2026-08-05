@@ -3,16 +3,13 @@
 // lands on validated Carlito bytes, marked as a substitution — and an explicit source
 // for the same face beats the substitute.
 //
-// core-contract is a devDependency here strictly FOR THIS TEST; the shipped module has
+// core is a devDependency here strictly FOR THIS TEST; the shipped module has
 // no engine dependency in either direction.
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import {
-  composeFontConfiguration,
-  createLayoutShaping,
-} from '@docx-editor.dev/core-contract/editor';
-import { FontResolutionError, sha256FontBytes } from '@docx-editor.dev/core-contract/layout';
+import { composeFontConfiguration, createLayoutShaping } from '@docx-editor.dev/core/editor';
+import { FontResolutionError, sha256FontBytes } from '@docx-editor.dev/core/layout';
 import { loadDefaultFonts } from '../index.ts';
 
 const assetsDir = new URL('../../assets/', import.meta.url);

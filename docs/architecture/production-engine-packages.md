@@ -11,7 +11,7 @@ rules enforced in CI.
 
 The production engine is implemented **in this monorepo** as new workspace
 packages under `packages/engine-*`. This supersedes the earlier "source is not in
-this tree" note. `packages/core` (`@docx-editor.dev/core-contract`) remains the
+this tree" note. `packages/core` (`@docx-editor.dev/core`) remains the
 private declaration-only contract — no production package imports its
 implementation. The old spike architecture that once sat under
 `packages/core/spike` has been removed now that the production lanes carry the

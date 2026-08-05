@@ -31,7 +31,7 @@
 // SLOT id, never the bare control id.
 
 import { GENERATED_ICON_PATHS } from './generated-icon-paths.ts';
-import type { ImageContext } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { ImageContext } from '@docx-editor.dev/core/contracts/editor';
 
 /**
  * HOW a control reaches the engine — never WHETHER it is enabled.
@@ -99,6 +99,16 @@ export type ChromeControlState =
  *  and can never exercise. */
 export type ChromeControlShape = 'icon' | 'stepper' | 'dropdown' | 'colorSplit';
 
+/**
+ * One toolbar control as the registry describes it — what it renders as, never whether it is
+ * enabled.
+ *
+ * Enabled state has exactly ONE source, `toolbarCommandState`, which asks the engine. A
+ * descriptor carrying its own disabled flag would be a second answer that goes stale the moment
+ * the engine wires the slot.
+ *
+ * @public
+ */
 export interface ChromeControl<Id extends string = string> {
   /** Stable control id, unique WITHIN its group. Public API; renames are breaking. */
   readonly id: Id;
@@ -117,6 +127,14 @@ export interface ChromeControl<Id extends string = string> {
   readonly state: ChromeControlState;
 }
 
+/**
+ * One toolbar group: the taxonomy both adapters derive their default arrangement FROM.
+ *
+ * Never hand-list controls in an adapter — a default toolbar is built by walking `CHROME_GROUPS`,
+ * so a slot added here appears in React and Vue without either being edited.
+ *
+ * @public
+ */
 export interface ChromeGroup<Id extends string = string, ControlId extends string = string> {
   /** Stable group id. Public API; renames are breaking. */
   readonly id: Id;
@@ -793,8 +811,9 @@ export function defaultChromeGroups(): readonly ChromeGroup[] {
 
 /**
  * The formatting-bar groups for one editor snapshot: the default bar, plus the
- * contextual `image` group when a drawing is selected. Insertion without a selection
- * remains available from the Insert menu via `image.insert`.
+ * contextual `image` group when a drawing is selected. Insertion without a selection is
+ * not in the packaged chrome at all — a host that wants it places `image.insert` itself,
+ * through `DocxEditor.Toolbar.ImageInsert` or `DocxEditor.Menu.ImageInsert`.
  *
  * @public
  */
@@ -934,8 +953,11 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
   {
     id: 'insert',
     labelKey: 'toolbar.insert',
+    // No `image.insert` row. Picture insertion is a host decision — it opens a file picker,
+    // and which pictures a product admits, from where, is the product's question, not the
+    // menu's. The slot, its toolbar control and `DocxEditor.Menu.ImageInsert` all remain, so
+    // placing the row back is one child element.
     entries: [
-      { kind: 'item', slot: 'image.insert' },
       { kind: 'item', slot: 'table.insert', picker: 'tableGrid' },
       { kind: 'separator' },
       { kind: 'item', slot: 'insert.footnote' },

@@ -18,31 +18,51 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // did not author gets "not a document this API can open", and a probe cannot use the error to
 // learn about the reader's limits.
 
-import { createServerAutomationHost } from '@docx-editor.dev/core-contract/automation';
+import { createServerAutomationHost } from '@docx-editor.dev/core/automation';
 import { fail } from './errors.ts';
 import { createRuntime, type DocxEditorServerRuntime } from './runtime.ts';
 
 /** Resource limits for the DOCX archive. */
 export interface DocumentZipLimits {
+  /** Most entries the archive may contain. */
   readonly maxEntries: number;
+  /** Most bytes the archive may decompress to in total. */
   readonly maxTotalBytes: number;
+  /** Highest tolerated decompression ratio — the zip-bomb guard. */
   readonly maxRatio?: number;
 }
 
 /** Resource limits for each parsed XML part. */
 export interface DocumentXmlLimits {
+  /** Most bytes any one XML part may be. */
   readonly maxBytes: number;
+  /** Most elements any one XML part may contain. */
   readonly maxElements?: number;
 }
 
 /** Optional tighter limits applied while opening untrusted DOCX bytes. */
 export interface DocumentLimits {
+  /** Archive-level caps. */
   readonly zip?: DocumentZipLimits;
+  /** Per-part XML caps. */
   readonly xml?: DocumentXmlLimits;
+  /** Most XML parts the package may hold. */
   readonly maxXmlParts?: number;
+  /** Most relationships the package may declare. */
   readonly maxRelationships?: number;
 }
 
+/**
+ * How `DocxEditor.createServer` opens a document.
+ *
+ * Opening DOCX bytes is a bounded parse: decompression-ratio and size caps, part and relationship
+ * path validation, DTD- and entity-free XML. A refusal comes back as `InvalidArgument` rather
+ * than as a throw from inside a zip decoder, and says nothing about WHY — a caller opening files
+ * they did not author gets "not a document this API can open", so a probe cannot use the error to
+ * learn the reader's limits.
+ *
+ * @public
+ */
 export interface CreateServerOptions {
   /**
    * Tighter budgets for the bounded reader — zip ratio, part count, XML depth.

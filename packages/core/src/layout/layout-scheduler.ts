@@ -24,7 +24,7 @@
 // is task 9.3, and the caches it consults are 9.2; both sit behind `run`, which is handed a
 // scope this module computed and is free to ignore it and lay out everything.
 
-import type { ImpactClass, TreeModelChange } from '@docx-editor.dev/core-contract/store';
+import type { ImpactClass, TreeModelChange } from '@docx-editor.dev/core/store';
 import type { SemanticLayout } from './semantic-records.ts';
 
 /**
@@ -62,6 +62,7 @@ function widen(a: ImpactClass, b: ImpactClass): ImpactClass {
   return IMPACT_ORDER.indexOf(b) > IMPACT_ORDER.indexOf(a) ? b : a;
 }
 
+/** How the scheduler produces layouts and when it publishes them. */
 export interface LayoutSchedulerOptions {
   /**
    * Produce a complete layout for the CURRENT model state.
@@ -104,6 +105,13 @@ export interface CooperativeRun {
   cancel(): void;
 }
 
+/**
+ * Coalesces commits into layout passes.
+ *
+ * A keystroke is one commit but must not be one full layout pass, so changes accumulate into a
+ * scope and are laid out together. Every published layout is tagged with the revision it actually
+ * read, which is what makes a stale result detectable rather than merely late.
+ */
 export interface LayoutScheduler {
   /** Record a commit. Coalesces with anything already pending. */
   notify(change: TreeModelChange): void;
@@ -142,6 +150,12 @@ function emptyScope(revision: number): {
   };
 }
 
+/**
+ * Build the scheduler that turns a stream of commits into coalesced layout passes.
+ *
+ * Keystrokes arrive faster than a document can be laid out, so changes accumulate into one scope
+ * and are laid out together rather than once per commit.
+ */
 export function createLayoutScheduler(options: LayoutSchedulerOptions): LayoutScheduler {
   const { run, currentRevision, publish, schedule } = options;
   let accumulator: ReturnType<typeof emptyScope> | null = null;

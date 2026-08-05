@@ -15,7 +15,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { afterEach, describe, expect, test } from 'bun:test';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
-import type { DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
+import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot, DocxEditorViewport, DocxEditorContent } from '@docx-editor.dev/react';
 import { DocxEditorReview } from '../react/index.ts';
 import { reviewModule } from '../index.ts';

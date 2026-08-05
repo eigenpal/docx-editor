@@ -409,6 +409,12 @@ and their hooks/parts defer to `vue-drawing-authoring-parity`.
 - `ImagePropertiesTrigger` — opens the properties dialog from the toolbar.
 - `normalizeImageBytes` — client-side PNG/JPEG/GIF preflight before `executeImageCommand`.
 - `NormalizedImagePayload` — preflight result type for insert/replace.
+- `useFonts` — stable-identity `fonts` prop out of any number of font origins. A hook, so
+  it belongs to the React provider layer; Vue has no twin of that layer yet. The engine
+  side it wraps (`FontResolver`, `FontResolutionRequest`, `MAX_RESOLVER_FAMILIES`) IS
+  exported from both adapters, so a Vue host can pass a resolver — it just memoizes the
+  identity itself.
+- `FontsInput` — the hook's accepted-origin type.
 
 ## Vue-only
 

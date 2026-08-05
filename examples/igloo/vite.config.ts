@@ -62,15 +62,15 @@ export default defineConfig({
         replacement: path.join(monorepoRoot, 'packages/react/src/index.ts'),
       },
       {
-        find: '@docx-editor.dev/core-contract/editor',
+        find: '@docx-editor.dev/core/editor',
         replacement: path.join(monorepoRoot, 'packages/core/src/editor/index.ts'),
       },
       {
-        find: /^@docx-editor\.dev\/core-contract\/(binding|layout|output|store|sync|clients|server)$/,
+        find: /^@docx-editor\.dev\/core\/(binding|layout|output|store|sync|clients|server)$/,
         replacement: path.join(monorepoRoot, 'packages/core/src/$1/index.ts'),
       },
       {
-        find: /^@docx-editor\.dev\/core-contract\/contracts\/(.+)$/,
+        find: /^@docx-editor\.dev\/core\/contracts\/(.+)$/,
         replacement: path.join(monorepoRoot, 'packages/core/src/contracts/$1.ts'),
       },
       {

@@ -6,7 +6,7 @@
 // reference gets.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { caretStops, moveCaret } from '../semantic-interaction.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import type { RevisionDisplayMode } from '../revision-projection.ts';

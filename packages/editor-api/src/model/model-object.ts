@@ -84,6 +84,7 @@ export abstract class ModelObject extends ClientObject {
     return selectedProperties(request, available, this.path.label);
   }
 
+  /** @internal Plan the read this object's `load(...)` asked for. */
   protected onLoad(request: ResolvedLoadOptions): void {
     this.selection(request, []);
   }

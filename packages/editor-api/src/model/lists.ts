@@ -37,6 +37,16 @@ import { Paragraph } from './paragraph.ts';
 /** Deepest level OOXML numbering has. Nine levels, counted from zero. */
 const MAX_LEVEL = 8;
 
+/**
+ * A list: the set of paragraphs sharing one numbering id.
+ *
+ * A list is not an ELEMENT. OOXML has no list — it has paragraphs that each name a `w:numId`, and
+ * a list is the set that name the same one. So {@link List.id} is that number,
+ * {@link List.paragraphs} is the set, and a list exists exactly as long as some paragraph is
+ * still in it.
+ *
+ * @public
+ */
 export class List extends ModelObject implements PromisedItem {
   #paragraphs: ParagraphCollection | undefined;
 
@@ -55,13 +65,13 @@ export class List extends ModelObject implements PromisedItem {
     super(context, path, { nullable });
   }
 
-  /** @internal */
+  /** @internal Bind this object to the address the owning read answered. */
   hydrateAddress(address: ObjectAddress): void {
     if (address.kind === 'handle') this.path.resolveTo(address.handle);
     else this.path.resolveNull();
   }
 
-  /** @internal */
+  /** @internal Settle as the null object: the read found nothing to name. */
   hydrateNull(): void {
     this.path.resolveNull();
   }
@@ -137,6 +147,7 @@ export class List extends ModelObject implements PromisedItem {
     return created;
   }
 
+  /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     if (!this.selection(request, ['id']).includes('id')) return;
     const label = `${this.path.label}.id`;
@@ -156,6 +167,11 @@ export class List extends ModelObject implements PromisedItem {
   }
 }
 
+/**
+ * The lists in a story, as of the batch that loaded them.
+ *
+ * @public
+ */
 export class ListCollection extends HandleCollection<List> {
   readonly #body: AutomationHandle;
 
@@ -204,19 +220,33 @@ export class ListCollection extends HandleCollection<List> {
     return found;
   }
 
+  /** @internal The read that answers this collection's members. */
   protected listing(): AutomationOperation {
     return { op: 'getLists', body: this.#body };
   }
 
+  /** @internal Build one member from an address the listing answered. */
   protected itemAt(label: string, address: ObjectAddress): List {
     return List.at(this.context, label, address);
   }
 
+  /** @internal A member an edge accessor named before the sync that finds it. */
   protected promised(label: string, nullable: boolean): List & PromisedItem {
     return List.promised(this.context, label, nullable);
   }
 }
 
+/**
+ * A paragraph's membership of a list: which list, and at what level.
+ *
+ * `listString` (the "3." or "iv)" a reader sees) and `siblingIndex` are absent because they are
+ * PAINTED, not authored — computed during layout by a counter that walks the story applying
+ * `numbering.xml`, its abstract-numbering indirection, restarts and overrides. Answering them
+ * here would mean a second counter that disagrees with the one on screen the first time a
+ * document overrides a level.
+ *
+ * @public
+ */
 export class ListItem extends ModelObject {
   /** @internal The list membership of the paragraph `owner` addresses. */
   static of(context: RequestContext, label: string, owner: ObjectPath): ListItem {
@@ -250,6 +280,7 @@ export class ListItem extends ModelObject {
     );
   }
 
+  /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     if (!this.selection(request, ['level']).includes('level')) return;
     const label = `${this.path.label}.level`;

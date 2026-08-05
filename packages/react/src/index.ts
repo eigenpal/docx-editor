@@ -157,6 +157,8 @@ export {
   type UseDocxSourceOptions,
   type UseDocxSourceResult,
 } from './editor/useDocxSource';
+// One stable `fonts` prop out of any number of origins, eager or on demand.
+export { useFonts, type FontsInput } from './editor/useFonts';
 export {
   useContentControl,
   useContentControlInstance,
@@ -280,7 +282,7 @@ export {
   type ChromeMenuSubmenuEntry,
   type ChromeSlotId,
   type ToolbarCommandState,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/editor';
 export { PaginatedDocxEditor } from './components/PaginatedDocxEditor';
 export { PaginatedDocxEditorShell } from './components/PaginatedDocxEditorShell';
 export type { PaginatedDocxEditorShellProps } from './components/PaginatedDocxEditorShell';
@@ -304,6 +306,7 @@ export type {
 // The font-composition surface, re-exported so the 80% path (fonts package + adapter)
 // never needs a core import.
 export {
+  MAX_RESOLVER_FAMILIES,
   WORD_DEFAULT_FONT,
   composeFontConfiguration,
   createFontSource,
@@ -312,10 +315,12 @@ export {
   type FontConfigurationFragment,
   type FontLoadFailure,
   type FontLoadFailureReason,
+  type FontResolutionRequest,
+  type FontResolver,
   type FontUrlSource,
   type LoadFontsRequest,
   type LoadFontsResult,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/editor';
 
 // Re-export the contract types a consumer needs to drive the editor.
 export type {
@@ -326,8 +331,8 @@ export type {
   EditorSnapshot,
   EditorScope,
   PageSetup,
-} from '@docx-editor.dev/core-contract/contracts/editor';
-export type { DocxDocument } from '@docx-editor.dev/core-contract/contracts/types';
+} from '@docx-editor.dev/core/contracts/editor';
+export type { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 export { DocxEditorShell } from './components/DocxEditor/DocxEditorShell';
 export { Toolbar, ToolbarButton, ToolbarGroup, type ToolbarProps } from './components/Toolbar';
 export { TitleBar, MenuBar, DocumentName, Logo, TitleBarRight } from './components/TitleBar';

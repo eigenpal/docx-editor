@@ -13,10 +13,16 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * than the free tier's final-state projection.
  */
 
-import type { EditorModule } from '@docx-editor.dev/core-contract/editor';
+import type { EditorModule } from '@docx-editor.dev/core/editor';
 import { collectReviewItems, revisionItemsOfParagraph } from './review-model.ts';
 import { rememberLicenseKey, type ProLicenseOptions } from '../license.ts';
 
+/**
+ * How {@link reviewModule} is configured. Carries only the licence key today, so
+ * `reviewModule()` with no argument is the ordinary call.
+ *
+ * @public
+ */
 export interface ReviewModuleOptions extends ProLicenseOptions {}
 
 /** Build the review module. Construction never validates the key and never touches the network. */

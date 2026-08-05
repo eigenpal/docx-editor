@@ -15,11 +15,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
-import {
-  readOoxmlPart,
-  type OoxmlElement,
-  type OoxmlNode,
-} from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlElement, type OoxmlNode } from '@docx-editor.dev/core/store';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import { directParagraphProperties } from '../surface-formatting.ts';
 

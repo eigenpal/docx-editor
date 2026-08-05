@@ -8,8 +8,8 @@ seoTitle: 'Fonts and text measurement'
 The editor measures text with a real shaping engine (HarfBuzz) whenever it has font
 bytes to measure with. With no fonts at all it still works — layout falls back to a
 fixed-width estimate — but wrap and page-break points are then approximations rather
-than Word's. This guide covers the three ways fonts reach the editor and how they
-combine.
+than Word's. This guide covers the three ways fonts reach the editor, the two ways of
+timing them, and how they combine.
 
 ## The three font sources
 
@@ -32,17 +32,17 @@ faces built to match their metrics — identical advance widths, so lines wrap w
 wraps them:
 
 <Callout>
-`@docx-editor.dev/fonts` is not published to npm yet — it ships with the v2 line. The
-API below is stable; the package is workspace-only until then.
+  `@docx-editor.dev/fonts` is not published to npm yet — it ships with the v2 line. The API below is
+  stable; the package is workspace-only until then.
 </Callout>
 
-| Word font | Substitute | License |
-|---|---|---|
-| Calibri | Carlito | SIL OFL |
-| Cambria | Caladea | SIL OFL |
+| Word font       | Substitute       | License |
+| --------------- | ---------------- | ------- |
+| Calibri         | Carlito          | SIL OFL |
+| Cambria         | Caladea          | SIL OFL |
 | Times New Roman | Liberation Serif | SIL OFL |
-| Arial | Liberation Sans | SIL OFL |
-| Courier New | Liberation Mono | SIL OFL |
+| Arial           | Liberation Sans  | SIL OFL |
+| Courier New     | Liberation Mono  | SIL OFL |
 
 ```tsx
 import { useEffect, useState } from 'react';
@@ -93,13 +93,19 @@ faces, `loadFonts` fetches URLs you specify and caches them locally. When you pi
 control:
 
 ```ts
-// Both re-exported by the adapters: '@docx-editor.dev/react' and '@docx-editor.dev/vue'.
+// Also re-exported by the adapter: '@docx-editor.dev/react'.
 import { loadFonts, composeFontConfiguration } from '@docx-editor.dev/react';
 
 const brand = await loadFonts({
   sources: [
     { url: '/fonts/AcmeSans-Regular.ttf', family: 'Acme Sans', weight: 400, style: 'normal' },
-    { url: '/fonts/AcmeSans-Bold.ttf', family: 'Acme Sans', weight: 700, style: 'normal', hash: 'sha256:…' },
+    {
+      url: '/fonts/AcmeSans-Bold.ttf',
+      family: 'Acme Sans',
+      weight: 700,
+      style: 'normal',
+      hash: 'sha256:…',
+    },
   ],
 });
 const fonts = composeFontConfiguration(brand, await loadDefaultFonts());
@@ -135,6 +141,69 @@ if ('source' in made) {
 }
 ```
 
+## Upfront, or on demand
+
+Every path above resolves fonts before a document opens. You pick the faces, load the
+bytes, and hand the editor a value. Keep this as your default: it is the only path that
+makes no network request on open.
+
+`fonts` also accepts a function. The editor calls it once per load, after parsing the
+file, with the families that file declares. A document then loads only the faces it uses,
+and one that names nothing you cover loads nothing:
+
+```tsx
+import { DocxEditor, useFonts } from '@docx-editor.dev/react';
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+
+function Editor({ bytes }: { bytes: Uint8Array }) {
+  const fonts = useFonts(googleFonts());
+  return <DocxEditor.Root document={bytes} fonts={fonts} />;
+}
+```
+
+`googleFonts()` serves those families from a generated catalog. Every face is pinned to
+one `google/fonts` commit and carries a baked `sha256:` that the editor re-derives before
+it admits the bytes. Use `allow` to narrow what it may ever fetch, and `substitute` to map
+your own document family names onto catalog ones:
+
+```ts
+googleFonts({ allow: ['Tinos', 'Carlito'], substitute: { Georgia: 'Tinos' } });
+```
+
+Write your own resolver when the bytes are yours. It takes the declared families and
+returns the same fragment shape as everything else:
+
+```ts
+// A Map, not an object: the families are file-derived, and `'constructor' in {}` is true.
+const myBrandFaces = new Map([['Acme Sans', '/fonts/AcmeSans-Regular.ttf']]);
+
+const fonts = useFonts(async ({ families, defaultFamily }) => {
+  const wanted = [defaultFamily, ...families].filter((family) => myBrandFaces.has(family));
+  return { sources: await loadMyFaces(wanted) };
+});
+```
+
+<Callout type="warn">
+  A resolver that fetches makes opening a document perform network requests, which the editor never
+  does on its own. The families come from the file, so treat them as lookup keys against a set you
+  shipped, and never build a URL out of one. Whoever serves the fonts also learns which families a
+  document uses. Stay on the upfront path if that matters. The editor caps how many families it
+  hands a resolver, and `googleFonts()` matches names only against its closed catalog.
+</Callout>
+
+`useFonts` exists because `DocxEditor.Root` rebuilds its instance when `fonts` changes
+identity. An inline `fonts={googleFonts()}` is a new function on every render, which would
+rebuild the editor forever. `useFonts` returns one resolver for the component's life. It
+also merges origins, so on-demand and upfront faces compose:
+
+```tsx
+const fonts = useFonts(googleFonts(), brandFragment);
+```
+
+Because the resolver keeps its identity, the editor re-reads its arguments per load rather
+than per render. Changing them mid-document resolves nothing new. Load a document or
+remount for new fonts to take effect.
+
 ## How sources combine
 
 `composeFontConfiguration(base, ...fragments)` merges any number of fragments into the
@@ -152,7 +221,9 @@ one immutable configuration the editor samples per mount. Precedence is simple:
 Fonts never block a document from opening. The document mounts immediately on the
 fixed measurer and swaps to shaped measurement in a single re-mount when fonts resolve.
 Edits made before fonts resolve survive that remount, but the undo stack and caret
-position do not — which is why the sample above waits for fonts before the first mount.
+position do not — which is why the upfront sample above waits for fonts before the first
+mount. A resolver skips that step. It runs after the document is parsed, so you have
+nothing to gate the first mount on.
 Every failure — a corrupt embedded face, a 404, a hash mismatch — degrades exactly one
 face, reports a typed `EditorFontError` through `onFontError`, and leaves the rest
 measuring accurately.
@@ -186,6 +257,7 @@ usable font source; `resolving: true` means shaped resolution is still in flight
 - **Metric-compatible is not identical.** Advance widths match, so wrap points match;
   rare kerning-pair differences can still move an edge case. Documents that must
   render the true faces should supply licensed bytes via `loadFonts`.
-- **The editor never fetches fonts on its own.** Opening a document performs no
-  network requests — `loadFonts` and `loadDefaultFonts` run only when your code calls
-  them. Embedded fonts come from inside the file itself.
+- **The editor never fetches fonts on its own.** `loadFonts`, `loadDefaultFonts` and any
+  resolver you pass run because your code asked for them. Embedded fonts come from inside
+  the file. Opening a document makes no network request unless you passed a resolver that
+  fetches, which is the one case where a font request happens on open.

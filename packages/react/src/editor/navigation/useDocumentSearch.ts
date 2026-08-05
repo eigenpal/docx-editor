@@ -13,7 +13,7 @@
 // reference equality rather than re-rendering the panel.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { EditorSnapshot, TextMatch } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { EditorSnapshot, TextMatch } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 

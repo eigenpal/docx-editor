@@ -63,6 +63,7 @@ import {
   validateReplaceTocResult,
   validateRewriteTocPageNumbers,
 } from './tree-op-toc.ts';
+import { validateInsertTable } from './tree-op-insert-table.ts';
 import {
   ACCEPTED_PARAGRAPH_PROPERTIES,
   ACCEPTED_RUN_PROPERTIES,
@@ -555,6 +556,10 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
 
   if (op.op === 'removeContentControl') {
     return validateRemoveContentControl(part, op.controlId);
+  }
+
+  if (op.op === 'insertTable') {
+    return validateInsertTable(part, op);
   }
 
   if (op.op === 'insertToc') {

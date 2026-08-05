@@ -12,10 +12,10 @@
 
 /* eslint-disable max-lines -- paint seam; note areas live in semantic-paint-notes.ts */
 
-import { baselineShiftPtOf, TAB_LEADER_GLYPH } from '@docx-editor.dev/core-contract/layout';
+import { baselineShiftPtOf, TAB_LEADER_GLYPH } from '@docx-editor.dev/core/layout';
 import { DEFAULT_CANVAS_FONT_STACK } from '../layout/canvas-measurer.ts';
 import { authorSlotsOf, revisionPresentationOf } from './revision-presentation.ts';
-import { formatRevisionOf, type RevisionAttribution } from '@docx-editor.dev/core-contract/layout';
+import { formatRevisionOf, type RevisionAttribution } from '@docx-editor.dev/core/layout';
 import type {
   ContentControlBoundaryRecord,
   ContentControlMappedType,
@@ -30,7 +30,7 @@ import type {
   StyleSpanRecord,
   TableCellFragmentRecord,
   TableFragmentRecord,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';
 import { paintPageNoteAreas } from './semantic-paint-notes.ts';
 import { anchoredDrawingsOf } from '../layout/semantic-records.ts';
 import type { AnchoredDrawingRecord } from '../layout/drawing-layout.ts';
@@ -109,6 +109,12 @@ function aliasIdentity(alias: (family: string) => string | undefined): string {
   return token;
 }
 
+/**
+ * How a layout is painted into DOM. Every field is optional.
+ *
+ * The painted pages ARE the editable surface, so everything here is presentation-only — nothing
+ * set through these options is ever serialised back into the document.
+ */
 export interface PaintOptions {
   /** Points to CSS pixels. 96/72 renders a point as a CSS point at 100% zoom. */
   readonly scale?: number;
@@ -963,10 +969,10 @@ function paintLine(
   element.dataset.paragraphId = line.range.paragraphId;
   element.style.position = 'absolute';
   element.style.top = `${line.box.y * scale}px`;
-  // Alignment is already baked into the span boxes, so the first span's x IS the line's
-  // left edge — centred and right-aligned lines start where layout put them.
-  const left = line.spans[0]?.box.x ?? line.box.x;
-  element.style.left = `${left * scale}px`;
+  // Alignment is baked into the geometry, not re-derived here: `contentX` IS the line's left
+  // edge, so centred and right-aligned lines start where layout put them — including an empty
+  // one, whose <br> caret anchor would otherwise sit at the margin.
+  element.style.left = `${line.contentX * scale}px`;
   element.style.height = `${line.box.height * scale}px`;
   // Each run keeps its OWN box, which is how a mixed-size line should highlight: an 8pt
   // run gets an 8pt band and a 36pt run a 36pt one, stepped, the way Word draws it.
@@ -1102,7 +1108,7 @@ function paintLine(
   }
 
   const lineOrigin = Object.freeze({
-    x: line.spans[0]?.box.x ?? line.box.x,
+    x: line.contentX,
     y: line.box.y,
     width: line.box.width,
     height: line.box.height,
@@ -1196,7 +1202,9 @@ function paintFragment(
       // At the end of the last line's text, which is where the mark itself sits.
       const end = last.spans[last.spans.length - 1];
       glyph.style.top = `${(last.box.y - fragment.box.y) * scale}px`;
-      glyph.style.left = `${((end ? end.box.x + end.box.width : last.box.x) - fragment.box.x) * scale}px`;
+      // No spans means an empty paragraph, whose mark sits at the ALIGNED origin — the same
+      // place the caret goes. Reading the line box drew a centred one against the margin.
+      glyph.style.left = `${((end ? end.box.x + end.box.width : last.contentX) - fragment.box.x) * scale}px`;
       element.append(glyph);
     }
   }
@@ -1206,8 +1214,7 @@ function paintFragment(
     // BOTH axes. The fragment box already carries the x origin (indent, or a table cell's
     // content edge), so an absolute left here would count that origin twice.
     painted.style.top = `${(line.box.y - fragment.box.y) * scale}px`;
-    const left = line.spans[0]?.box.x ?? line.box.x;
-    painted.style.left = `${(left - fragment.box.x) * scale}px`;
+    painted.style.left = `${(line.contentX - fragment.box.x) * scale}px`;
     element.append(painted);
   }
   // Layout owns border geometry. Side rules sit OUTSIDE the text column — Word draws them

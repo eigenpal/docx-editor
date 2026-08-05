@@ -20,8 +20,8 @@ import {
   useState,
 } from 'react';
 import type { ReactNode } from 'react';
-import type { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
-import { commandForSlotValue } from '@docx-editor.dev/core-contract/editor';
+import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+import { commandForSlotValue } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';

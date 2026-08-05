@@ -11,7 +11,7 @@
 // would otherwise measure nothing and settle a frame later, which reads as a flinch.
 
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { twipsToPixels } from '../../lib/units';
 import { ReviewRailContext } from '../context';
 import { useEditorState } from '../useEditorState';

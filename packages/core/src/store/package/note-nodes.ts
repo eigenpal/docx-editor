@@ -31,15 +31,24 @@ export const NOTE_ATOM_CHAR = '\uFFFC';
 
 /** Signed 32-bit Word-compatible note id range (positive allocation only). */
 export const NOTE_ID_MIN = 1;
+/** Largest note id Word accepts — signed 32-bit. */
 export const NOTE_ID_MAX = 0x7fffffff;
 
 /** Reserved separator / continuation ids — never allocated for normal notes. */
 export const NOTE_SEPARATOR_ID = -1;
+/** Reserved id of the continuation-separator entry. Never allocated to a real note. */
 export const NOTE_CONTINUATION_SEPARATOR_ID = 0;
 
+/** Which notes part a note lives in. Decides both placement and numbering rules. */
 export type NoteKind = 'footnote' | 'endnote';
 
 /** Authored `ST_FtnEdn` including explicit `normal`. Absent means Word default (normal). */
+/**
+ * What a note entry IS.
+ *
+ * Only `normal` is a note a reader sees. The others are the furniture Word stores in the same
+ * part — the rules and notices drawn around the note area — reached by reserved ids.
+ */
 export type NoteType = 'normal' | 'separator' | 'continuationSeparator' | 'continuationNotice';
 
 const NOTE_TYPES: ReadonlySet<string> = new Set([
@@ -103,30 +112,37 @@ export function parseNoteScopeId(
   return { noteKind: match[1] as NoteKind, noteId };
 }
 
+/** Whether a node is a `w:footnotes` part root. */
 export function isFootnotesNode(node: OoxmlNode): node is OoxmlFootnotesNode {
   return node.kind === 'footnotes';
 }
 
+/** Whether a node is a `w:endnotes` part root. */
 export function isEndnotesNode(node: OoxmlNode): node is OoxmlEndnotesNode {
   return node.kind === 'endnotes';
 }
 
+/** Whether a node is a `w:footnote` or `w:endnote` body. */
 export function isNoteNode(node: OoxmlNode): node is OoxmlNoteNode {
   return node.kind === 'note';
 }
 
+/** Whether a node is a body-side `w:footnoteReference` / `w:endnoteReference`. */
 export function isNoteReferenceNode(node: OoxmlNode): node is OoxmlNoteReferenceNode {
   return node.kind === 'noteReference';
 }
 
+/** Whether a node is the `w:footnoteRef` / `w:endnoteRef` mark inside a note's own body. */
 export function isNoteRefNode(node: OoxmlNode): node is OoxmlNoteRefNode {
   return node.kind === 'noteRef';
 }
 
+/** Whether a node is the `w:separator` rule drawn above the note area. */
 export function isSeparatorNode(node: OoxmlNode): node is OoxmlSeparatorNode {
   return node.kind === 'separator';
 }
 
+/** Whether a node is the `w:continuationSeparator` rule used on continuation pages. */
 export function isContinuationSeparatorNode(
   node: OoxmlNode
 ): node is OoxmlContinuationSeparatorNode {

@@ -74,7 +74,9 @@ export function Editor() {
         <input type="file" accept=".docx" onChange={onFileSelect} />
         <button onClick={onSave}>Save .docx</button>
       </div>
-      <DocxEditor ref={editorRef} documentBuffer={buffer} showToolbar />
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <DocxEditor ref={editorRef} document={buffer ?? undefined} />
+      </div>
     </div>
   );
 }
@@ -101,7 +103,7 @@ bun run dev:remix   # http://localhost:3001
 
 ## Next steps
 
-- [Quickstart](/docs/1.x/quickstart): the load, edit, save flow in detail
-- [Loading and saving](/docs/1.x/guides/loading-and-saving): URLs, autosave, upload to your API
+- [Quickstart](/docs/2.x/quickstart): the load, edit, save flow in detail
+- [Loading and saving](/docs/2.x/guides/loading-and-saving): URLs, autosave, upload to your API
 - [Remix DOCX editor guide](/blog/remix-docx-editor): the long-form walkthrough
 - [Remix example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/remix)

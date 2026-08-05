@@ -17,7 +17,7 @@ import {
   type SemanticLayout,
   type SemanticSelection,
   type StyleSpanRecord,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';
 import {
   AUTHORABLE_RUN_PROPERTIES,
   authoredProperties,
@@ -30,7 +30,7 @@ import {
   type OoxmlNode,
   type OoxmlPart,
   type RunPropertyEdit,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import { walkParagraphInline } from '../store/package/content-control-walk.ts';
 import type { SurfaceFormatting } from './paginated-surface-contract.ts';
 
@@ -138,7 +138,7 @@ export {
   propertyContainer,
   runAddressRanges,
   type RunPropertyEdit,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 
 /**
  * Surface range formatting uses the shared authored-property model while retaining v2's

@@ -20,14 +20,15 @@ import type {
   Editor,
   EditorFontError,
   FontConfiguration,
-} from '@docx-editor.dev/core-contract/contracts/editor';
-import { createDocxEditor, defaultTableLabel } from '@docx-editor.dev/core-contract/editor';
-import type { EditorModule } from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/contracts/editor';
+import { createDocxEditor, defaultTableLabel } from '@docx-editor.dev/core/editor';
+import type { EditorModule } from '@docx-editor.dev/core/editor';
 import type {
   DocxEditorInstance,
   FontConfigurationFragment,
+  FontResolver,
   ImageDecodePort,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/editor';
 import { useTranslation, type TranslationKey } from '../i18n';
 import { DocxEditorContext, ReviewRailContext, type ReviewRailRegistry } from './context';
 import { HyperlinkPopupContext, useHyperlinkPopupInstance } from './useHyperlinkPopup';
@@ -57,7 +58,7 @@ export interface DocxEditorRootProps {
    * with `composeFontConfiguration`. Sampled at mount; identity change remounts;
    * failures degrade to the fixed measurer and report through `onFontError`.
    */
-  fonts?: FontConfiguration | FontConfigurationFragment;
+  fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
   author?: string;
   locale?: string;
   /** Drawing refusal labels for painted placeholders; defaults to the active locale catalogue. */

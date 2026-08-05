@@ -1,6 +1,6 @@
 // Drawing hyperlink lookup from published layout records (typed-drawings-and-images task 10).
 
-import type { SemanticLayout } from '@docx-editor.dev/core-contract/layout';
+import type { SemanticLayout } from '@docx-editor.dev/core/layout';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import type { HeaderFooterStoryRecord, PageRecord } from '../layout/semantic-records.ts';
 import type { SurfaceHyperlink } from './surface-hyperlinks.ts';

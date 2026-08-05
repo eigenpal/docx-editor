@@ -71,7 +71,7 @@ export default defineConfig({
             replacement: path.join(monorepoRoot, 'packages/vue/src/index.ts'),
           },
           {
-            find: '@docx-editor.dev/core-contract/editor',
+            find: '@docx-editor.dev/core/editor',
             replacement: path.join(monorepoRoot, 'packages/core/src/editor/index.ts'),
           },
           {

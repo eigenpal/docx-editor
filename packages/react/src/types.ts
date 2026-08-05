@@ -10,18 +10,22 @@ import type {
   EditorSnapshot,
   ExecResult,
   FontConfiguration,
-} from '@docx-editor.dev/core-contract/contracts/editor';
-import type { EditorModule, FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/contracts/editor';
+import type {
+  EditorModule,
+  FontConfigurationFragment,
+  FontResolver,
+} from '@docx-editor.dev/core/editor';
 import type { DocxEditorMenuProps } from './editor/menu';
 import type { DocxEditorContextMenuProps } from './editor/contextmenu';
-export { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
+export { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 export type {
   EditorFontErrorCode,
   FontConfiguration,
   FontFaceRequest,
   FontSource,
   FontSourceSubstitution,
-} from '@docx-editor.dev/core-contract/contracts/editor';
+} from '@docx-editor.dev/core/contracts/editor';
 
 export type EditorMode = 'edit' | 'view';
 
@@ -41,7 +45,7 @@ export interface DocxEditorProps {
    * page looks right, but wrap points and pagination are estimated rather than
    * Word-accurate. Omit it to mount in one line; supply it when breaks must match Word.
    */
-  fonts?: FontConfiguration | FontConfigurationFragment;
+  fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
   /**
    * Title-bar slots. The host owns what goes here — brand lockup, switchers, theme
    * toggle, Open/New/Save controls — and passes them in; the editor renders them

@@ -1,0 +1,216 @@
+---
+title: 'Tracked changes'
+description: 'Suggesting mode records edits as Word revisions. Render them, accept and reject them, from the packaged sidebar or your own UI.'
+category: 'Pro'
+order: 61
+---
+
+In suggesting mode every edit becomes a revision instead of a direct change. Insertions render underlined, deletions struck through, and each revision carries its author and timestamp. Revisions serialize to Word's native `w:ins` / `w:del` markup, so a document reviewed here and one reviewed in Word are interchangeable.
+
+Requires the review module from [`@docx-editor.dev/pro`](/docs/2.x/pro).
+
+## Turn on suggesting
+
+Editing mode is engine state, not a mount-time prop. Move it with the `setEditingMode` command:
+
+```tsx
+import { DocxEditor, useEditorCommand, useEditorState } from '@docx-editor.dev/react';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
+
+const MODULES = [reviewModule()];
+
+function SuggestToggle() {
+  const mode = useEditorState((s) => s.editingMode);
+  const suggest = useEditorCommand({ type: 'setEditingMode', mode: 'suggesting' });
+  const edit = useEditorCommand({ type: 'setEditingMode', mode: 'editing' });
+  const on = mode === 'suggesting';
+
+  return (
+    <button onMouseDown={(e) => e.preventDefault()} onClick={() => (on ? edit : suggest).execute()}>
+      {on ? 'Suggesting' : 'Editing'}
+    </button>
+  );
+}
+
+export function Reviewer({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
+      <SuggestToggle />
+      <DocxEditor.Viewport>
+        <DocxEditor.Content />
+        <DocxEditorReview />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  );
+}
+```
+
+`DocumentEditingMode` is `'editing' | 'suggesting' | 'viewing'`. The packaged toolbar already ships this control as the `review.editingMode` slot, so `<DocxEditor.Toolbar />` gives you the same thing without writing the toggle.
+
+## What gets tracked
+
+The revision model covers more than inline text:
+
+- **Text** insertions and deletions, including replacements — one card, the way Word presents it.
+- **Paragraph structure**: inserted and deleted paragraph marks, paragraph property changes.
+- **Tables**: row and cell insert and delete, plus row, cell, and table property changes.
+- **Formatting**: run and paragraph property changes, as their own cards.
+
+All of these round-trip as real OOXML revisions, not editor-private state.
+
+## The review sidebar
+
+`<DocxEditorReview />` renders one card per pending decision beside the page, anchored at the change. Place it inside the viewport so it scrolls with the document rather than chasing it.
+
+Each card is a compound you can take apart:
+
+```tsx
+<DocxEditorReview>
+  <DocxEditorReview.List>
+    <DocxEditorReview.Card>
+      <DocxEditorReview.Avatar />
+      <DocxEditorReview.Author />
+      <DocxEditorReview.Time />
+      <DocxEditorReview.Summary />
+      <DocxEditorReview.Accept />
+      <DocxEditorReview.Reject />
+      <DocxEditorReview.Replies />
+      <DocxEditorReview.Reply />
+    </DocxEditorReview.Card>
+  </DocxEditorReview.List>
+  <DocxEditorReview.Empty>Nothing to review</DocxEditorReview.Empty>
+</DocxEditorReview>
+```
+
+`Markers` is the collapsed sidebar shown when the pane is closed; `Balloon` is the decision popover you get by clicking a format or structural change in the page; `AddComment` and `Draft` are the comment affordances.
+
+Every part takes `className`, `asChild`, and `hidden`. The action parts (`Accept`, `Reject`, `Reply`) also take `icon`.
+
+## Choosing what the sidebar shows
+
+The props on `DocxEditorReview` decide which decisions appear and how they stack:
+
+| Prop         | Default | What it does                                                                                           |
+| ------------ | ------- | ------------------------------------------------------------------------------------------------------ |
+| `filter`     | none    | Show a subset. `(item) => item.kind === 'comment'` puts comments in one rail and revisions in another. |
+| `structural` | `false` | Show "changed the document structure" cards.                                                           |
+| `formatting` | `false` | Show "changed text formatting" cards.                                                                  |
+| `stack`      | `true`  | Push overlapping cards down instead of letting them collide.                                           |
+| `gap`        | —       | Pixels between stacked cards. The only source of vertical spacing.                                     |
+| `furniture`  | none    | Host content above the cards: filters, a legend, a summary.                                            |
+| `preset`     | `true`  | `false` mounts the rail and its context only, so you lay the cards out yourself.                       |
+
+`structural` and `formatting` default to off because a heavily revised document mints one card per site, and together they crowd out the decisions a reviewer reads in order. Those revisions stay marked in the page, and clicking one opens its balloon.
+
+```tsx
+<DocxEditorReview filter={(item) => item.kind === 'comment'} gap={12} furniture={<MyFilters />} />
+```
+
+With `preset={false}` you keep the subscription and the anchoring and render the cards yourself. `useStackedReviewPositions(items, heights, { gap })` is the packaged stacking maths if you want the same behavior.
+
+## Host content inside a card
+
+`useReviewItem()` reads the card a child is rendered inside, so you can add a row to some cards and not others:
+
+```tsx
+import { DocxEditorReview, useReviewItem } from '@docx-editor.dev/pro/react';
+
+function AuditLink() {
+  const item = useReviewItem();
+  if (item?.kind !== 'revision') return null;
+  return <a href={`/audit/${item.id}`}>History</a>;
+}
+
+<DocxEditorReview>
+  <AuditLink />
+</DocxEditorReview>;
+```
+
+## useReview
+
+The sidebar is one rendering of this hook. Take the hook for your own list, your own card layout, or avatars from your own directory:
+
+```tsx
+import { useReview } from '@docx-editor.dev/pro/react';
+
+function ChangeList() {
+  const { items, activeKey, setActive, accept, reject, ready } = useReview();
+  if (!ready) return null;
+
+  return (
+    <ul>
+      {items.map((item) => (
+        <li key={item.key} data-active={item.key === activeKey || undefined}>
+          {/* `text` is file-derived. Render it as text, never as markup. */}
+          <button onClick={() => setActive(item.key)}>{item.text}</button>
+          <span>{item.author}</span>
+          {!item.readOnly && (
+            <>
+              <button onClick={() => accept(item)}>Accept</button>
+              <button onClick={() => reject(item)}>Reject</button>
+            </>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+| Member                          | What it does                                                             |
+| ------------------------------- | ------------------------------------------------------------------------ |
+| `items`                         | Every pending decision, in reading order.                                |
+| `activeKey` / `setActive`       | Which item the caret is in; setting selects its range and scrolls to it. |
+| `accept(item)` / `reject(item)` | Resolve a revision. No-ops on an item whose `readOnly` is true.          |
+| `reply(item, text, author?)`    | Reply to a change. Returns whether it landed.                            |
+| `comment(text, author?)`        | Comment on the current selection. Returns whether it landed.             |
+| `selectionAnchorY`              | Where a comment on the selection would sit, or `null`.                   |
+| `paneOpen` / `setPaneOpen`      | The same toggle the toolbar's comments button runs.                      |
+| `ready`                         | False while no document is loaded.                                       |
+
+Each item carries `key`, `id`, `author`, `initials`, `date`, `text`, `replyIds`, `readOnly`, `anchorY`, `pageIndex`, and `isActive`. Revision items add `kind: 'revision'`, a `revisionKind`, and `replacedText` for replacements, so a card can say _Replaced "x" with "y"_.
+
+Two things the hook gives you that you should not recompute. Items come from the document tree rather than from what is currently painted — a queue derived from the page would empty by half when the reader scrolls. And each item's `anchorY` comes from layout records rather than measured DOM, which would leave the sidebar a repaint behind the document and break outright during pagination.
+
+`readOnly` marks a decision the engine cannot resolve structurally. Do not offer Accept and Reject on those: a card offering a button the engine will refuse is worse than one that explains why it cannot.
+
+`useReview(query)` narrows the set — `excludeRevisionKinds` drops kinds you do not want to show, and `placement: false` skips layout geometry when you only need the metadata. `useReviewOf(editor, query)` is the same hook against an editor you already hold.
+
+## Accept or reject in bulk
+
+There is no accept-all command; resolve the queue through the same per-item calls the cards use. Each accept resolves every site carrying that revision's `(id, author, date)` triple in one transaction and one undo step, so a tracked row insertion never ends up half-resolved:
+
+```tsx
+function AcceptAll() {
+  const { items, accept } = useReview();
+  const actionable = items.filter((item) => !item.readOnly);
+
+  return (
+    <button disabled={actionable.length === 0} onClick={() => actionable.forEach(accept)}>
+      Accept all ({actionable.length})
+    </button>
+  );
+}
+```
+
+## Detecting review content without the module
+
+`hasReviewContent` on the snapshot reports whether a document carries revisions or comment anchors, and it works with no review module registered. That is the signal for telling a reader "this document has tracked changes" before you load the pro surface:
+
+```tsx
+const hasReview = useEditorState((s) => s.hasReviewContent ?? false);
+```
+
+Without a review module the editor renders revisions in their final state and offers no review UI — but it still saves them back untouched.
+
+## Interop with Word
+
+- Saving writes standard `w:ins` and `w:del`. Word lists them in its Review pane with the same author and date, and Word's Accept/Reject resolves them.
+- Opening a document containing Word revisions renders them inline and in the sidebar. Nothing is flattened on load.
+- Revisions in headers, footers, footnotes, and endnotes are tracked and reviewable in their own scope.
+
+## Next steps
+
+- [Comments](/docs/2.x/pro/comments): discussion threads alongside revisions
+- [Custom nodes](/docs/2.x/pro/custom-nodes)
+- [Hooks](/docs/2.x/react/hooks): `useEditorCommand` and `useEditorState`

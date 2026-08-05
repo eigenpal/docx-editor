@@ -53,6 +53,12 @@ export const EMPTY_NOTE_MARK_CONTEXT: NoteMarkContext = Object.freeze({
   marks: Object.freeze(new Map()) as ReadonlyMap<string, string | null>,
 });
 
+/**
+ * The key one note's mark is stored under — `footnote:N` / `endnote:N`.
+ *
+ * The same encoding `EditorScope` uses for note ids, so a mark context and a scope address name
+ * the same note without a translation step.
+ */
 export function noteMarkKey(noteKind: NoteKind, noteId: number): string {
   return formatNoteScopeId(noteKind, noteId);
 }

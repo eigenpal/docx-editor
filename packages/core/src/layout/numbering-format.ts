@@ -35,15 +35,22 @@ export function clampListValue(value: number): number {
   return n;
 }
 
+/** `decimal` (§17.18.59). Clamped, because the counter derives from file-declared restarts. */
 export function formatDecimal(value: number): string {
   return String(clampListValue(value));
 }
 
+/** `decimalZero` (§17.18.59): single digits zero-padded to two. */
 export function formatDecimalZero(value: number): string {
   const n = clampListValue(value);
   return n < 10 ? `0${n}` : String(n);
 }
 
+/**
+ * `upperRoman` (§17.18.59). Saturates at 3999, the largest value classical Roman numerals
+ * express — beyond it there is nothing correct to emit, so it stops rather than inventing
+ * notation.
+ */
 export function formatUpperRoman(value: number): string {
   let n = clampListValue(value);
   if (n > 3999) n = 3999;
@@ -58,6 +65,7 @@ export function formatUpperRoman(value: number): string {
   return out || 'I';
 }
 
+/** `lowerRoman` (§17.18.59). */
 export function formatLowerRoman(value: number): string {
   return formatUpperRoman(value).toLowerCase();
 }
@@ -77,6 +85,7 @@ export function formatUpperLetter(value: number): string {
   return out || 'A';
 }
 
+/** `lowerLetter` (§17.18.59): the {@link formatUpperLetter} sequence, lower-cased. */
 export function formatLowerLetter(value: number): string {
   return formatUpperLetter(value).toLowerCase();
 }

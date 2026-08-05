@@ -10,6 +10,7 @@ import { Budget } from './budget.ts';
 import { CancellationController } from './cancellation.ts';
 import type { PortRegistry } from './ports.ts';
 
+/** What one operation is started with. Only `ports` is required. */
 export interface OperationInit {
   readonly ports: PortRegistry;
   readonly limits?: Partial<ResourceLimits>;
@@ -20,6 +21,13 @@ export interface OperationInit {
   readonly id?: string;
 }
 
+/**
+ * The frozen environment of one operation: its limits, config, ports, root budget and
+ * cancellation controller.
+ *
+ * IMMUTABLE for the operation's lifetime, which is what lets cache reuse and replica agreement
+ * key on it. A new operation always gets a fresh snapshot rather than observing a mutated one.
+ */
 export interface OperationContext {
   readonly id: string;
   readonly limits: ResourceLimits;
@@ -29,6 +37,12 @@ export interface OperationContext {
   readonly cancellation: CancellationController;
 }
 
+/**
+ * Begin an operation, capturing its immutable environment snapshot.
+ *
+ * Resolves and freezes limits and configuration, carves the root budget, and creates the
+ * cancellation controller — everything downstream work needs, fixed for the operation's duration.
+ */
 export function beginOperation(init: OperationInit): OperationContext {
   const limits = resolveLimits(init.limits); // already frozen
   const config = Object.freeze({ ...(init.config ?? {}) });

@@ -7,7 +7,7 @@
 // while the rest of the paragraph sat where it belonged.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { paragraphFragmentsOf } from '../semantic-records.ts';

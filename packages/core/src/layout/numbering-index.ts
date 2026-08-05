@@ -3,8 +3,8 @@
 // Projection only — never mutation or serialization authority. Hostile values are dropped
 // or clamped; missing definitions resolve to "no list" rather than guessing.
 
-import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core-contract/store';
-import { WML_NAMESPACE_URI } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
+import { WML_NAMESPACE_URI } from '@docx-editor.dev/core/store';
 import { propertiesOfRunContainer } from './field-projection.ts';
 
 /** Soft ceiling on abstractNum / num entries read from one part. */
@@ -28,9 +28,17 @@ export const MAX_NUM_STYLE_LINK_HOPS = 8;
 /** Style ids are bounded strings; a link target longer than this is not one. */
 const MAX_STYLE_LINK_LENGTH = 128;
 
+/** `w:suff` — what separates a list marker from the text after it. */
 export type ListSuffix = 'tab' | 'space' | 'nothing';
+/** `w:lvlJc` — how a list marker aligns within its own indent. */
 export type ListMarkerAlign = 'left' | 'center' | 'right';
 
+/**
+ * One level's indent, plus which parts the level actually AUTHORED.
+ *
+ * The provenance matters: `w:ind` cascades per-attribute, so a level that authored only `left`
+ * must not overwrite an inherited `hanging` with a synthesized zero.
+ */
 export interface NumberingLevelIndent {
   readonly left: number;
   readonly right: number;
@@ -52,6 +60,7 @@ export interface NumberingLevelIndent {
   };
 }
 
+/** One `w:lvl`: how this depth numbers, what its marker looks like, and how it indents. */
 export interface NumberingLevel {
   readonly ilvl: number;
   readonly start: number;
@@ -76,12 +85,23 @@ export interface NumberingLevel {
   readonly vanish: boolean;
 }
 
+/**
+ * One `w:lvlOverride` on a `w:num`: a restart value, a replacement level, or both.
+ *
+ * How two lists share an abstract definition while numbering independently.
+ */
 export interface LevelOverride {
   readonly startOverride?: number;
   /** Full level replacement when `w:lvl` is present under the override. */
   readonly level?: NumberingLevel;
 }
 
+/**
+ * One `w:abstractNum` — the shape of a list, without being a list.
+ *
+ * Never referenced by a paragraph directly. Paragraphs name a {@link NumDefinition}, which names
+ * one of these, so several lists can share a definition and still count separately.
+ */
 export interface AbstractNumDefinition {
   readonly abstractNumId: string;
   readonly levels: ReadonlyMap<number, NumberingLevel>;
@@ -99,12 +119,23 @@ export interface AbstractNumDefinition {
   readonly styleLink?: string;
 }
 
+/**
+ * One `w:num` — the thing a paragraph's `w:numId` actually names.
+ *
+ * Points at an {@link AbstractNumDefinition} and may override any of its levels.
+ */
 export interface NumDefinition {
   readonly numId: string;
   readonly abstractNumId: string;
   readonly overrides: ReadonlyMap<number, LevelOverride>;
 }
 
+/**
+ * The bounded projection of `numbering.xml` that list layout resolves against.
+ *
+ * Projection ONLY — never a mutation or serialization authority. Hostile values are dropped or
+ * clamped, and a missing definition resolves to "no list" rather than a guess.
+ */
 export interface NumberingIndex {
   readonly abstractNums: ReadonlyMap<string, AbstractNumDefinition>;
   readonly nums: ReadonlyMap<string, NumDefinition>;
@@ -342,6 +373,13 @@ function parseNum(node: OoxmlElement): NumDefinition | null {
  *
  * Empty / missing roots yield an empty index. Duplicate ids keep the first definition.
  */
+/**
+ * Project `numbering.xml` into the bounded index.
+ *
+ * Every ceiling here exists because the input is file-derived: definition counts, override
+ * counts, indent magnitudes and style-link hop depth are all capped, and nothing from the file
+ * becomes a loop bound or an allocation size.
+ */
 export function buildNumberingIndex(root: OoxmlElement | null | undefined): NumberingIndex {
   const abstractNums = new Map<string, AbstractNumDefinition>();
   const nums = new Map<string, NumDefinition>();
@@ -436,6 +474,12 @@ export function resolveNumberingStyleLinks(
 }
 
 /** Resolve the effective level for a `numId` + `ilvl`, applying overrides. */
+/**
+ * The effective level for one paragraph's numbering reference, after overrides and style links.
+ *
+ * Answers null for a reference the index cannot resolve — a paragraph naming a definition the
+ * file never declared is an unnumbered paragraph, not an error.
+ */
 export function resolveNumberingLevel(
   index: NumberingIndex,
   numId: string,

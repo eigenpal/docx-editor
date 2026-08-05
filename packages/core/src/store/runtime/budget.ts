@@ -8,6 +8,7 @@
 
 import { BoundedCounter } from './counter.ts';
 
+/** A budget was misused: over-carved, over-reserved, or disposed with children outstanding. */
 export class BudgetError extends Error {
   constructor(message: string) {
     super(message);
@@ -15,12 +16,28 @@ export class BudgetError extends Error {
   }
 }
 
+/**
+ * Capacity claimed BEFORE it is allocated.
+ *
+ * Reserve-then-allocate rather than allocate-then-check: discovering the overrun after the
+ * allocation has already happened defeats the point of having a budget.
+ */
 export interface Reservation {
   readonly amount: number;
   readonly released: boolean;
   release(): void;
 }
 
+/**
+ * One node in the hierarchical resource budget tree.
+ *
+ * An operation owns a root budget; parsers, extensions, workers, layout, transport and output
+ * carve children from it, so no subsystem can consume more than the operation as a whole allows.
+ *
+ * `dispose()` REFUSES while children or reservations are outstanding, then runs registered
+ * cleanups LIFO — spill files, worker termination — even if one throws. A leaked child budget is a
+ * leaked worker, so the refusal is the diagnostic.
+ */
 export class Budget {
   private readonly used: BoundedCounter;
   private readonly children = new Set<Budget>();

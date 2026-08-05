@@ -79,6 +79,13 @@ export interface AutomationCapabilities {
   readonly layout: boolean;
 }
 
+/**
+ * Why an operation was refused, as a value to branch on.
+ *
+ * Deliberately distinguishable rather than one "failed": the object model above this protocol
+ * maps each code to a different consumer-facing error, and a caller that retries a
+ * `stale-revision` must not retry an `invalid-handle`.
+ */
 export type AutomationErrorCode =
   /** `expectedRevision` did not match the host's current revision; nothing was applied. */
   | 'stale-revision'
@@ -117,6 +124,13 @@ export type AutomationErrorCode =
    */
   | 'document-unavailable';
 
+/**
+ * One refused operation. Plain data, not an `Error` — it crosses transports.
+ *
+ * `code` is the stable part; `message` and `detail` are for logs. The object model above this
+ * protocol deliberately does NOT copy `detail` into what a consumer sees, because a store's
+ * rejection reason would become documented API the moment somebody matched on it.
+ */
 export interface AutomationError {
   readonly code: AutomationErrorCode;
   /** Human-readable, for a log or a thrown error in a layer above. Never parsed. */
@@ -200,6 +214,12 @@ export type AutomationOperationResult =
   | { readonly status: 'error'; readonly error: AutomationError }
   | { readonly status: 'skipped' };
 
+/**
+ * One ordered batch: what to run, and the revision it was planned against.
+ *
+ * Transport-shaped data, never references into the engine, so the same request crosses a worker
+ * port or an HTTP boundary unchanged.
+ */
 export interface AutomationBatchRequest {
   /** Queries and commands, in the order they are to be interpreted. */
   readonly operations: readonly AutomationOperation[];
@@ -213,6 +233,12 @@ export interface AutomationBatchRequest {
   readonly expectedRevision?: number;
 }
 
+/**
+ * What one batch produced: a verdict, one result per operation, and the revision afterwards.
+ *
+ * `results` is positionally aligned with the request, so a failed operation is identified by its
+ * index rather than by anything the caller has to correlate.
+ */
 export interface AutomationBatchResponse {
   /** True only when every operation succeeded and any commands committed. */
   readonly ok: boolean;
@@ -224,6 +250,13 @@ export interface AutomationBatchResponse {
   readonly changed: boolean;
 }
 
+/**
+ * DOCX bytes, or why they could not be produced.
+ *
+ * A browser host that borrows an editor refuses with `unsupported-capability`: it does not own
+ * the document and serializing one behind the editor's back would answer bytes the user's
+ * session never agreed to.
+ */
 export type AutomationSaveResult =
   | { readonly ok: true; readonly bytes: Uint8Array }
   | { readonly ok: false; readonly error: AutomationError };
@@ -233,8 +266,17 @@ export interface AutomationChangeEvent {
   readonly revision: number;
 }
 
+/** What an automation subscription returns. Calling it twice is safe. */
 export type AutomationUnsubscribe = () => void;
 
+/**
+ * The protocol both hosts implement: a headless one owning bytes it opened, and a browser one
+ * borrowing the live editor's session.
+ *
+ * Both answer the same operations identically, because the operations are implemented ONCE above
+ * this interface over a canonical package neither host may bypass. A batch is one revision, one
+ * undo unit, and one transaction.
+ */
 export interface AutomationHost {
   readonly capabilities: AutomationCapabilities;
   /** Monotonic revision of the document this host acts on. */

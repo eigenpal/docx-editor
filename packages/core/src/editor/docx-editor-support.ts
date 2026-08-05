@@ -14,11 +14,16 @@ import type {
   EditorSnapshot,
   PageSetup,
   RunFormatting,
-} from '@docx-editor.dev/core-contract/contracts/editor';
-import type { SemanticSelection as SurfaceSelection } from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/contracts/editor';
+import type { SemanticSelection as SurfaceSelection } from '@docx-editor.dev/core/layout';
 // Direct, not through the layout barrel: this is an internal bound the write shares with
 // the reader, not something the layout package publishes.
 import { MAX_PARAGRAPH_INDENT_TWIPS } from '../layout/paragraph-flow.ts';
+import {
+  MAX_INSERT_TABLE_CELLS,
+  MAX_INSERT_TABLE_COLUMNS,
+  MAX_INSERT_TABLE_ROWS,
+} from '../store/store/table-constraints.ts';
 import { isDocAnchor, isDocAnchorRange } from './anchor-resolution.ts';
 import { tableCommandCanSupport } from './table-command-plan.ts';
 
@@ -453,6 +458,22 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
     case 'undo':
     case 'redo':
       return { supported: true, mutating: true };
+    case 'insertTable':
+      // Shape gate only — WHERE the caret is, and whether that story admits a block, is the
+      // document's question and belongs to the surface's `canInsertTable`.
+      return Number.isInteger(command.rows) &&
+        Number.isInteger(command.cols) &&
+        command.rows >= 1 &&
+        command.cols >= 1 &&
+        command.rows <= MAX_INSERT_TABLE_ROWS &&
+        command.cols <= MAX_INSERT_TABLE_COLUMNS &&
+        command.rows * command.cols <= MAX_INSERT_TABLE_CELLS
+        ? { supported: true, mutating: true }
+        : {
+            supported: false,
+            code: 'invalidArgs',
+            reason: `insertTable needs whole rows and cols of at least 1, at most ${MAX_INSERT_TABLE_ROWS}×${MAX_INSERT_TABLE_COLUMNS}, and at most ${MAX_INSERT_TABLE_CELLS} cells`,
+          };
     case 'insertToc':
       return { supported: true, mutating: true };
     case 'refreshToc':

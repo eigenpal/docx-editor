@@ -63,7 +63,7 @@ import {
   type StoryTargetRejection,
   type TreeDocOp,
   type TreeModelChange,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import {
   collectDocumentFonts,
   collectDocumentStyles,
@@ -104,6 +104,12 @@ import {
   type DocumentTrackingSettings,
 } from '../store/package/tracking-settings.ts';
 
+/**
+ * What applying ops produced: whether it committed, and why not when it did not.
+ *
+ * `committed` and `rejected` are separate flags because they are not opposites — a batch of zero
+ * ops neither commits nor is rejected.
+ */
 export interface TreeApplyResult {
   readonly committed: boolean;
   readonly rejected: boolean;
@@ -112,6 +118,16 @@ export interface TreeApplyResult {
   readonly reason?: TreeBindingRejection | StoryTargetRejection | string;
 }
 
+/**
+ * One open document: the canonical tree, and the only write path into it.
+ *
+ * `applyTreeOps` is that path. Every mutation is a `TreeDocOp` addressed by node id plus UTF-16
+ * offset, applied in one transaction, which is what makes cell and nested paragraphs ordinary
+ * rather than special cases.
+ *
+ * Holds the whole package, not just the body — headers, footers, notes, comments and styles are
+ * all reachable through it, and parts the engine does not model are preserved verbatim.
+ */
 export interface TreeDocxSession {
   /** Whether the body holds at least one editable paragraph. */
   readonly editable: boolean;
@@ -430,21 +446,24 @@ export type { DocumentStyleEntry } from './document-catalog.ts';
 export type { DocumentThemeColorEntry, ThemeColorSlot } from './document-theme.ts';
 export type { DocumentOutlineEntry } from './document-outline.ts';
 export type { ParagraphAnchorIndex } from './paragraph-anchors.ts';
-export type { StoryScope, StoryTargetRejection } from '@docx-editor.dev/core-contract/store';
+export type { StoryScope, StoryTargetRejection } from '@docx-editor.dev/core/store';
 
+/**
+ * Why bytes could not be opened: any bounded-reader rejection, plus the package that parsed but
+ * carried no main document tree.
+ */
 export type TreeSessionRejection = OoxmlPackageRejection | 'no-main-document-tree';
 
+/**
+ * An open session, or a typed refusal.
+ *
+ * A result rather than a throw: every failure here is a property of the FILE, and a host needs to
+ * tell "this is not a package" from "this package is malicious" from "this document has no body".
+ */
 export type OpenTreeSessionResult =
   | { readonly ok: true; readonly session: TreeDocxSession }
   | { readonly ok: false; readonly reason: TreeSessionRejection; readonly detail?: string };
 
-/**
- * Open DOCX bytes into a tree-backed session.
- *
- * Returns a typed rejection rather than throwing: every failure here is a property of the
- * FILE, and a host needs to tell "this is not a package" from "this package is malicious"
- * from "this document has no body".
- */
 /** One frozen empty queue, so a module-less `reviewItems()` is reference-stable. */
 const EMPTY_REVIEW_ITEMS: readonly ReviewItem[] = Object.freeze([]);
 
@@ -458,6 +477,16 @@ export interface OpenTreeSessionOptions {
   readonly reviewModel?: ReviewModuleContribution;
 }
 
+/**
+ * Open DOCX bytes into a tree-backed session.
+ *
+ * Returns a typed rejection rather than throwing: every failure here is a property of the FILE,
+ * and a host needs to tell "this is not a package" from "this package is malicious" from "this
+ * document has no body".
+ *
+ * The read is BOUNDED — decompression ratio, part count, XML depth and element counts are all
+ * capped — because the bytes are untrusted by definition.
+ */
 export function openTreeSession(
   bytes: Uint8Array,
   options: OpenTreeSessionOptions = {}

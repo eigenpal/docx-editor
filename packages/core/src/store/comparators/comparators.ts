@@ -6,6 +6,12 @@
 
 import { canonicalize, stableHash } from './canonical.ts';
 
+/**
+ * How one artifact class is compared.
+ *
+ * Frozen per artifact: nothing here invents a tolerance for an artifact the spec requires to
+ * match exactly.
+ */
 export type ComparatorMode =
   // Byte-exact structural equality after canonicalization (keys sorted, ephemera dropped).
   | 'canonical-exact'
@@ -17,6 +23,7 @@ export type ComparatorMode =
   // treated as proof of update/delete-set application (Yjs state vectors).
   | 'sync-optimization-only';
 
+/** One artifact class's comparison mode and its declared ephemera — fields excluded from equality. */
 export interface ComparatorDescriptor {
   readonly id: string;
   readonly mode: ComparatorMode;
@@ -94,8 +101,10 @@ export const COMPARATORS = {
   },
 } as const satisfies Record<string, ComparatorDescriptor>;
 
+/** Which frozen comparator to use. */
 export type ComparatorName = keyof typeof COMPARATORS;
 
+/** Whether two artifacts matched, and where they diverged when they did not. */
 export interface ComparisonResult {
   readonly equal: boolean;
   /** Canonical forms when unequal (diagnostic). */

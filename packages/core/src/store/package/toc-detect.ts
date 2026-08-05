@@ -10,6 +10,7 @@ import {
   type TocInstruction,
 } from './toc-instruction.ts';
 
+/** A table of contents found in a document, whether wrapped in an SDT or a bare field. */
 export interface DetectedToc {
   /** Enclosing control id when it identifies one TOC, otherwise the begin fldChar id. */
   readonly id: string;
@@ -195,6 +196,7 @@ export function detectBodyTocs(part: OoxmlPart): readonly DetectedToc[] {
   return result;
 }
 
+/** Locate the table of contents containing a position, or null. */
 export function findDetectedToc(tocs: readonly DetectedToc[], tocId: string): DetectedToc | null {
   return tocs.find((toc) => toc.id === tocId) ?? null;
 }

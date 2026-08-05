@@ -1,24 +1,26 @@
 /**
- * `EditorModule` — the narrow seam capability packages register through.
+ * `@docx-editor.dev/core/contracts/modules` — the `EditorModule` seam.
+ *
+ * How a paid or optional capability contributes to the engine without the free tier importing
+ * it: the review module and custom nodes both arrive through here, and their absence leaves the
+ * corresponding chrome disabled with the engine's own reason.
  *
  * NOT a plugin system. The shape is closed: every contribution point is named
  * here, core iterates registered modules at its existing dispatch points, and
  * core never imports a capability package. A capability absent from this file
  * is not extendable from outside — deliberately, so the one-pipeline principle
  * survives the packaging boundary.
- *
  * The free engine behaves identically with an empty registry: documents
  * round-trip losslessly, revisions render in their final-state projection, and
  * the review chrome slots stay disabled with the engine's own reason.
+ *
+ * @packageDocumentation
+ * @public
  */
 
-import type { OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlPart } from '@docx-editor.dev/core/store';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
-import type {
-  ReviewItem,
-  ReviewModelInput,
-  ReviewRevisionItem,
-} from '../layout/review-support.ts';
+import type { ReviewItem, ReviewModelInput, ReviewRevisionItem } from '../layout/review-support.ts';
 
 export type { ReviewModelInput };
 

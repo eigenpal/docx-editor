@@ -26,7 +26,7 @@ const reactEditorSource = [
 describe('Vue tree-lane wiring (phase 3)', () => {
   test('the editor is created through the composition root facade', () => {
     expect(editorSource).toContain('createDocxEditor');
-    expect(editorSource).toContain("from '@docx-editor.dev/core-contract/editor'");
+    expect(editorSource).toContain("from '@docx-editor.dev/core/editor'");
     for (const forbidden of [
       'createEditor(',
       'attachAdapterEventBridge',

@@ -15,7 +15,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { createDocxEditor } from '@docx-editor.dev/core-contract/editor';
+import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { createBrowser } from '../../runtime/browser.ts';
 import { isDocxEditorError } from '../../runtime/errors.ts';
 import type { DocxEditorRuntime } from '../../runtime/runtime.ts';

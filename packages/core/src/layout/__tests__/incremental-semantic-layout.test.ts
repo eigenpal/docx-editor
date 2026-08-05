@@ -8,7 +8,7 @@
 // wall-clock timings, which measure the machine rather than the algorithm.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import {
   createFixedMeasurer,
   createLayoutSession,

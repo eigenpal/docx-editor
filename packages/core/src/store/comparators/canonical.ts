@@ -5,6 +5,7 @@
 // (no crypto/DOM dependency) — a convenience over the canonical bytes, never a
 // substitute for the byte comparison itself.
 
+/** Any JSON value. The domain canonicalization and stable hashing operate over. */
 export type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
 
 /**

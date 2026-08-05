@@ -7,7 +7,7 @@
 // not own, so unsupported controls are hidden, never faked.
 
 import { defineComponent, h, type PropType, type VNode } from 'vue';
-import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 
 /** A panel the sidebar can show. */
 export interface SidebarPanel {

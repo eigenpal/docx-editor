@@ -1,3 +1,14 @@
+/**
+ * `@docx-editor.dev/core/editor` — the editor facade and its chrome vocabulary.
+ *
+ * `createDocxEditor` implements the full `Editor` contract over a paginated surface, and the
+ * chrome registry (`CHROME_GROUPS`, `ChromeSlotId`) is the toolbar taxonomy both adapters derive
+ * their default arrangement from. Enabled state has exactly one source — `toolbarCommandState`,
+ * which asks the engine — so a control and the engine can never disagree.
+ *
+ * @packageDocumentation
+ * @public
+ */
 // @docx-editor.dev/engine-editor
 //
 // Browser editor composition root: the production tree-lane editor. Composes the typed
@@ -6,7 +17,7 @@
 // migration. Production placement: docs/architecture/production-engine-packages.md.
 
 /** Stable package identity used by the import-graph / package-authority checks. */
-export const ENGINE_EDITOR_PACKAGE = '@docx-editor.dev/core-contract/editor' as const;
+export const ENGINE_EDITOR_PACKAGE = '@docx-editor.dev/core/editor' as const;
 
 export {
   createLayoutShaping,
@@ -14,10 +25,13 @@ export {
   toEditorFontError,
 } from './font-configuration.ts';
 export {
+  MAX_RESOLVER_FAMILIES,
   WORD_DEFAULT_FONT,
   composeFontConfiguration,
   type FontConfigurationBase,
   type FontConfigurationFragment,
+  type FontResolutionRequest,
+  type FontResolver,
 } from './font-composition.ts';
 export { blankDocumentBytes } from './blank-document.ts';
 export {
@@ -236,4 +250,4 @@ export type {
   SemanticPosition,
   SemanticSelection,
   TextMeasurer,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';

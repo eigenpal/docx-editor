@@ -14,7 +14,7 @@ import type {
   OoxmlNode,
   OoxmlPart,
   OoxmlProperty,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import { WML_MAIN_DOCUMENT_PART } from '../store/package/opc-names.ts';
 import {
   finalizePageFieldProjection,
@@ -131,6 +131,7 @@ import {
   DEFAULT_SECTION_PROPERTIES,
   enumerateDocumentSections,
   geometryOfSection,
+  paragraphSectionNode,
   type SectionColumns,
 } from './section-properties.ts';
 import { resolveSectionColumns, type ResolvedSectionColumns } from './section-columns.ts';
@@ -195,6 +196,12 @@ export interface PageFurniture {
   readonly footers: ReadonlyMap<HeaderFooterVariantName, HeaderFooterStoryLayout>;
 }
 
+/**
+ * Everything a layout pass needs beyond the document itself.
+ *
+ * `measurer` is the only required field — layout is DOM-free and measures through whatever is
+ * injected here, which is what lets the same code paginate on a server and in a browser.
+ */
 export interface SemanticLayoutOptions {
   readonly geometry?: PageGeometry;
   readonly measurer: TextMeasurer;
@@ -369,6 +376,16 @@ const drawingSourceOrderByContext = new WeakMap<
   ReadonlyMap<string, number>
 >();
 
+/**
+ * Lay one story part out into pages.
+ *
+ * The engine's layout entry point. Walks body, header, footer and note roots, flattens block
+ * SDTs, paginates tables with header-row repeats and vertical merges, and resolves every
+ * paragraph through the style cascade.
+ *
+ * Incremental when given a {@link LayoutSession}: per-block cache keys plus flow checkpoints mean
+ * a pass that changes nothing returns the previous pages by identity.
+ */
 export function layoutSemanticDocument(
   part: OoxmlPart,
   revision: number,
@@ -1177,6 +1194,34 @@ function layoutBlocksPass(
     regionFragmentStart = 0;
   };
 
+  /**
+   * Whether a laid-out paragraph would put nothing on the sheet.
+   *
+   * Asked of a section break mark before letting it skip pagination, so the exemption covers
+   * only a mark with nothing to show: any glyph, marker, drawing, rule or shading makes the
+   * paragraph content, and content paginates.
+   */
+  const paintsNothing = (entry: PreparedBlock, lines: readonly PendingLine[]): boolean => {
+    if (entry.kind !== 'paragraph') return false;
+    if (entry.listItem !== undefined || entry.shading !== undefined) return false;
+    const { top, bottom, left, right, between } = entry.borders;
+    if (top ?? bottom ?? left ?? right ?? between) return false;
+    const drawingContext = options.inlineDrawingLayout;
+    if (
+      drawingContext &&
+      anchoredDrawingAtomsInParagraph(entry.paragraph, drawingContext).length > 0
+    ) {
+      return false;
+    }
+    return lines.every(
+      (line) =>
+        line.drawings.length === 0 &&
+        !line.pageBreakAfter &&
+        !line.columnBreakAfter &&
+        line.spans.every((span) => span.text.length === 0)
+    );
+  };
+
   const advanceColumn = (): void => {
     if (columnIndex + 1 < columns.count) {
       columnIndex += 1;
@@ -1864,6 +1909,22 @@ function layoutBlocksPass(
       // Cross-paragraph TOC field chrome: tree preserved, no painted row or flow height.
       continue;
     }
+    // A SECTION BREAK IS NOT CONTENT. The paragraph mark that carries a paragraph-level
+    // `w:sectPr` (ECMA-376 §17.6.18) IS the section break; `w:type` (§17.6.22) says where the
+    // NEXT section starts, never that the mark itself claims a sheet. So a mark that paints
+    // nothing may not OPEN A SHEET: it rides out the bottom of the page its section already
+    // ended on. Without this a mark missing the bottom margin by a point flushed a sheet, the
+    // following `nextPage` section started after it, and the document rendered a wholly blank
+    // page between two sections Word sets adjacent.
+    //
+    // Only the sheet. Moving into the next COLUMN of the same sheet manufactures nothing, and
+    // the mark is part of what a balanced multi-column section distributes (§17.6.4) — so a
+    // balance trial, which asks how short the region can be while still holding one sheet,
+    // has to see the mark's own demand for room or it converges on a band too tight for it.
+    const marksSectionBreak =
+      paragraphSectionNode(paragraph) !== undefined && paintsNothing(entry, lines);
+    const holdsSheet = (): boolean =>
+      marksSectionBreak && columnRegionBottom === undefined && columnIndex + 1 >= columns.count;
     const rebreakInCurrentColumn = (startOffset: number): void => {
       const next = prepareBlock(paragraph, columnWidth());
       if (next.kind !== 'paragraph') return;
@@ -1909,7 +1970,7 @@ function layoutBlocksPass(
           needed = Math.max(needed, group + topExtent);
         }
       }
-      if (cursorY + needed > contentHeight() && cursorY > 0) {
+      if (cursorY + needed > contentHeight() && cursorY > 0 && !holdsSheet()) {
         advanceColumn();
         previousSpaceAfter = 0;
         rebreakInCurrentColumn(0);
@@ -2182,6 +2243,12 @@ function layoutBlocksPass(
                 width: available,
                 height: brokenLine.height,
               },
+              // Synthetic frame geometry only — these lines are never aligned, painted or
+              // caret-tested, so the content origin is just where their spans were placed.
+              contentX:
+                brokenLine.spans.length > 0
+                  ? brokenLine.spans[0]!.box.x + origin.columnX
+                  : origin.columnX + indent.left,
               baseline: brokenLine.baseline,
               leading: brokenLine.leading,
               spans: brokenLine.spans.map((span) => ({
@@ -2259,6 +2326,7 @@ function layoutBlocksPass(
       const lineExtent = skipBefore + pendingLine.height + tail;
       const overflowsPage =
         cursorY + lineExtent > contentHeight() &&
+        !holdsSheet() &&
         (pending.length > 0 || pageFragments.length > 0 || pages.length > 0);
       if (overflowsPage) {
         // `w:widowControl` (§17.3.1.44) / `w:keepLines` (§17.3.1.16) change where a paragraph
@@ -2324,10 +2392,12 @@ function layoutBlocksPass(
         isLastLine,
         alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined
       );
+      // A line with no spans still aligns: an empty centred paragraph puts its (zero width)
+      // content — and so the caret — at the middle of the measure, not at the left edge.
       const alignOffset =
         placedSpans.length > 0 && alignedSpans.length > 0
           ? alignedSpans[0]!.box.x - placedSpans[0]!.box.x
-          : pendingLine.drawings.length > 0 && alignment !== 'left' && alignment !== 'both'
+          : alignment !== 'left' && alignment !== 'both'
             ? (() => {
                 const slack = lineAvailableWidth - pendingLine.width;
                 if (slack <= 0) return 0;
@@ -2372,6 +2442,7 @@ function layoutBlocksPass(
           width: available,
           height: pendingLine.height,
         },
+        contentX: alignedSpans[0]?.box.x ?? lineIndent + alignOffset,
         baseline: pendingLine.baseline,
         leading: pendingLine.leading,
         ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),

@@ -11,6 +11,11 @@
       "import": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./google": {
+      "types": "./src/google-fonts.ts",
+      "import": "./src/google-fonts.ts",
+      "default": "./src/google-fonts.ts"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -21,11 +26,15 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "build:types": "tsc -p tsconfig.types.json",
     "manifest": "node scripts/generate-manifest.mjs",
-    "manifest:check": "node scripts/generate-manifest.mjs --check"
+    "manifest:check": "node scripts/generate-manifest.mjs --check",
+    "google:catalog": "node scripts/generate-google-catalog.mjs",
+    "google:check": "node scripts/generate-google-catalog.mjs --check",
+    "google:verify": "node scripts/generate-google-catalog.mjs --verify"
   },
   "devDependencies": {
-    "@docx-editor.dev/core-contract": "workspace:*",
+    "@docx-editor.dev/core": "workspace:*",
     "typescript": "^5.3.3"
   },
   "keywords": [
@@ -41,7 +50,7 @@
     "email": "jedr@eigenpal.com",
     "url": "https://github.com/jedrazb"
   },
-  "license": "Apache-2.0",
+  "license": "Apache-2.0 AND OFL-1.1",
   "homepage": "https://docx-editor.dev/",
   "repository": {
     "type": "git",

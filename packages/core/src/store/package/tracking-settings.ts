@@ -44,6 +44,7 @@ export interface DocumentTrackingSettings {
   readonly doNotTrackFormatting: boolean;
 }
 
+/** The frozen "nothing is tracked" settings — what a document with no `w:trackChanges` gets. */
 export const NO_TRACKING_SETTINGS: DocumentTrackingSettings = Object.freeze({
   trackRevisions: false,
   restrictedToTrackedChanges: false,

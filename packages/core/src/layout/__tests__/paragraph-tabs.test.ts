@@ -19,7 +19,7 @@ import {
   readOoxmlPart,
   resolveHeaderFooterPartsBySection,
   type OoxmlPart,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import { cascadedTabStops, nextTabDestination, tabAdvanceWidth } from '../paragraph-tabs.ts';
 import { cascadeParagraphFormatting } from '../style-cascade.ts';
 

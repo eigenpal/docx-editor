@@ -12,7 +12,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
-import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
+import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import {
   customNodesModule,
   defineCustomNode,

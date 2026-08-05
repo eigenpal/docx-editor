@@ -41,7 +41,7 @@ const nonViewportSource = [...editorSources.entries()]
 describe('React tree-lane wiring (phase 3)', () => {
   test('the editor is created through the composition root facade', () => {
     expect(editorSource).toContain('createDocxEditor');
-    expect(editorSource).toContain("from '@docx-editor.dev/core-contract/editor'");
+    expect(editorSource).toContain("from '@docx-editor.dev/core/editor'");
     // The legacy engine constructor and its display pipeline must be gone.
     for (const forbidden of [
       'createEditor(',

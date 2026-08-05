@@ -55,6 +55,12 @@ export function contentTypesPartBytes(
   return contentTypesEntryOf(pkg.partBytes);
 }
 
+/**
+ * What a package-level invariant walk found wrong.
+ *
+ * Package invariants are cross-PART: a relationship pointing at a part that does not exist, or a
+ * part no content-type record covers. Neither is visible from inside a single part's tree.
+ */
 export type PackageInvariantCode =
   | 'dangling-relationship'
   | 'missing-content-type'
@@ -65,6 +71,7 @@ export type PackageInvariantCode =
   /** A part name the OPC screens refuse; `writeZip` would throw on save. */
   | 'unsafe-part-name';
 
+/** One package invariant violation, located by part name and relationship id. */
 export interface PackageInvariantIssue {
   readonly code: PackageInvariantCode;
   /** The part the issue is about: the missing target, or the part with no type. */
@@ -73,6 +80,7 @@ export interface PackageInvariantIssue {
   readonly ownerPart?: string;
 }
 
+/** Whether a package satisfies its cross-part invariants, listing every violation otherwise. */
 export type PackageInvariantResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly issues: readonly PackageInvariantIssue[] };
@@ -362,6 +370,7 @@ export function allocateOwnerRelationshipId(pkg: OoxmlPackage, ownerPart: string
   return `rId${next}`;
 }
 
+/** Add or replace one relationship on a part, returning a new package. */
 export function withRelationship(
   pkg: OoxmlPackage,
   ownerPart: string,

@@ -16,7 +16,7 @@
 //
 // Scope stays furniture-only; body field projection remains deferred.
 
-import type { OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlPart } from '@docx-editor.dev/core/store';
 import { stableHash } from '../store/comparators/canonical.ts';
 import { canonicalOoxmlFingerprint } from '../store/package/ooxml-tree.ts';
 import {
@@ -166,9 +166,7 @@ export function layoutHeaderFooterStory(
   defaultTabStopPt?: number,
   displayMode?: RevisionDisplayMode,
   inlineDrawingLayout?: import('./drawing-layout.ts').InlineDrawingLayoutContext,
-  drawingTokenForParagraph?: (
-    paragraph: import('@docx-editor.dev/core-contract/store').OoxmlNode
-  ) => string,
+  drawingTokenForParagraph?: (paragraph: import('@docx-editor.dev/core/store').OoxmlNode) => string,
   drawingLayoutToken?: string,
   hfPageContext?: HeaderFooterPageContext
 ): HeaderFooterStoryLayout {

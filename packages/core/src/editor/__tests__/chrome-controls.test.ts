@@ -321,8 +321,14 @@ describe('legacy chrome descriptor', () => {
     ]);
   });
 
-  test('Insert menu still exposes image.insert separately from the contextual group', () => {
-    expect(chromeMenuSlots()).toContain('image.insert');
+  test('no packaged chrome places image.insert — a host that wants it places it itself', () => {
+    // The slot and its parts stay public; what changed is that the packaged Insert menu no
+    // longer decides that every product wants a picture picker in it. Asserted here rather
+    // than left implicit so re-adding the row is a deliberate edit, not a drift.
+    expect(chromeMenuSlots()).not.toContain('image.insert');
+    // Still a registered slot, so `DocxEditor.Menu.ImageInsert` and the toolbar control keep
+    // their label, icon and enabled state.
+    expect(allSlots()).toContain('image.insert');
   });
 
   test('the menu region carries the chrome menus, in bar order', () => {

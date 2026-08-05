@@ -36,8 +36,8 @@ import {
   chromeSlotId,
   formattingBarChromeGroups,
   type ChromeSlotId,
-} from '@docx-editor.dev/core-contract/editor';
-import type { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
+} from '@docx-editor.dev/core/editor';
+import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useEditorState } from '../useEditorState';
 import { ToolbarContext, type ToolbarTranslate } from './toolbar-context';
 import { ToolbarButton, chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';

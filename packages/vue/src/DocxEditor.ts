@@ -6,9 +6,9 @@ import type {
   EditorFontError,
   EditorSnapshot,
   FontConfiguration,
-} from '@docx-editor.dev/core-contract/contracts/editor';
-import { createDocxEditor } from '@docx-editor.dev/core-contract/editor';
-import type { EditorModule, FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/contracts/editor';
+import { createDocxEditor } from '@docx-editor.dev/core/editor';
+import type { EditorModule, FontConfigurationFragment } from '@docx-editor.dev/core/editor';
 import { createT, deepMerge, en, locales, type LocaleCode } from '@docx-editor.dev/i18n';
 import type { DocxEditorRef, EditorMode } from './types';
 

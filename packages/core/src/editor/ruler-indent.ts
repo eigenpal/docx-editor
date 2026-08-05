@@ -12,7 +12,10 @@
 // tick cadence are the same grid, and two definitions could drift apart.
 import type { RulerUnit } from './ruler-ticks.ts';
 
+/** Twips per inch, as OOXML defines them. */
 export const TWIPS_PER_INCH = 1440;
+
+/** Twips per centimetre, as Word rounds them. */
 export const TWIPS_PER_CM = 567;
 
 /** Word snaps ruler drags to the eighth-inch grid its ticks already draw. */
@@ -44,7 +47,13 @@ export interface RulerPageMetrics {
   readonly rightMargin: number;
 }
 
+/**
+ * How a ruler drag resolves: which grid it snaps to, and whether it snaps at all.
+ *
+ * @public
+ */
 export interface RulerDragOptions {
+  /** Which snap grid applies. Defaults to inches. */
   readonly unit?: RulerUnit;
   /** Alt held: continuous, twip-precision drag, bypassing the snap grid — as in Word. */
   readonly precise?: boolean;

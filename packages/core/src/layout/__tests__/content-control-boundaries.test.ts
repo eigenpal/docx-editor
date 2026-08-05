@@ -2,7 +2,7 @@
 // fragments, and metadata-only invalidation of wrapper chrome without stale page reuse.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import {
   contentControlAtPoint,
   createFixedMeasurer,

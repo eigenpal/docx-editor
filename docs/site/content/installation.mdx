@@ -1,32 +1,26 @@
 ---
 title: 'Installation'
-description: 'Install the DOCX editor in React, Next.js, Vite, Remix, Astro, Vue 3, or Nuxt. Styles import, SSR setup, and peer dependency notes.'
+description: 'Install the DOCX editor in React, Next.js, Vite, Remix, or Astro. Styles import, SSR setup, and package choices.'
 category: 'Getting Started'
 order: 2
 ---
 
-**Requirements:** React `^18 || ^19` (React adapter) or Vue `^3.3` (Vue adapter).
+**Requirements:** React `^18 || ^19`.
 
 ## Pick a package
 
-The framework adapters pull `-core` and `-i18n` in transitively, so for most
-apps it's one install.
+The adapter carries the engine and the string catalogue, so for most apps it is one install.
 
 ```bash
-# React
+# React adapter — the editor
 npm install @docx-editor.dev/react
 
-# Vue 3
-npm install @docx-editor.dev/vue
-
-# Nuxt 3 & 4 (module wrapping the Vue adapter)
-npm install @docx-editor.dev/nuxt
-
-# Headless / server-side (no UI)
-npm install @docx-editor.dev/core
-
-# Document automation (a server on its own, or beside an adapter)
+# Tracked changes, comments, custom nodes
 # Commercially licensed — free to evaluate, production use needs an agreement
+npm install @docx-editor.dev/pro
+
+# Office.js-compatible editing API, on a server or beside an open editor
+# Commercially licensed — same terms
 npm install @docx-editor.dev/editor-api
 
 # Metric-compatible substitutes for Word's default fonts (optional)
@@ -35,91 +29,58 @@ npm install @docx-editor.dev/fonts
 
 ## Mount it
 
-Import the component and the stylesheet once. `documentBuffer` takes a
-`File`, `Blob`, `ArrayBuffer`, or `Uint8Array` (`null` mounts an empty
-document).
-
-<Tabs items={['React', 'Vue']}>
-
-<Tab value="React">
+Import the component and the stylesheet once. `document` takes an `ArrayBuffer`, a `Uint8Array`, or a `DocumentHandle`; omit it to mount an empty editor.
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
 import '@docx-editor.dev/react/styles.css';
 
 export default function App() {
-  return <DocxEditor documentBuffer={null} />;
+  return (
+    <div style={{ height: '100vh' }}>
+      <DocxEditor />
+    </div>
+  );
 }
 ```
 
-</Tab>
+Two things that catch people out:
 
-<Tab value="Vue">
-
-```vue
-<script setup lang="ts">
-import { DocxEditor } from '@docx-editor.dev/vue';
-import '@docx-editor.dev/vue/styles.css';
-</script>
-
-<template>
-  <DocxEditor :document-buffer="null" />
-</template>
-```
-
-</Tab>
-
-</Tabs>
-
-Without the stylesheet the editor works but the toolbar renders unstyled.
-Its styles are scoped under `.ep-root` and don't leak into your app.
+- Without the stylesheet the editor works but the chrome renders unstyled. The styles are scoped under `.ep-root` and do not leak into your app.
+- `<DocxEditor>` fills its parent. In a parent with no height it collapses and nothing appears.
 
 ## SSR frameworks
 
-The editor measures text in the DOM at mount, so it must render
-client-side. Client-rendered apps (Vite, plain Vue) need nothing special;
-SSR frameworks need one client-only boundary. Each guide is a complete
-walkthrough backed by a runnable example:
+The editor measures text in the DOM at mount, so it must render client-side. Client-rendered apps (Vite) need nothing special; SSR frameworks need one client-only boundary. Each guide is a complete walkthrough backed by a runnable example:
 
 <Cards>
-  <Card href="/docs/1.x/frameworks/nextjs" title="Next.js" description="dynamic() with ssr: false; fixes 'window is not defined'." />
-  <Card href="/docs/1.x/frameworks/vite" title="Vite" description="Client-rendered React setup with no SSR boundary." />
-  <Card href="/docs/1.x/frameworks/remix" title="Remix" description="Mount check + React.lazy." />
-  <Card href="/docs/1.x/frameworks/astro" title="Astro" description="React island with client:only." />
-  <Card href="/docs/1.x/frameworks/nuxt" title="Nuxt" description="Official module, SSR-safe by default." />
+  <Card href="/docs/2.x/frameworks/nextjs" title="Next.js" description="dynamic() with ssr: false; fixes 'window is not defined'." />
+  <Card href="/docs/2.x/frameworks/vite" title="Vite" description="Client-rendered React setup with no SSR boundary." />
+  <Card href="/docs/2.x/frameworks/remix" title="Remix" description="Mount check + React.lazy." />
+  <Card href="/docs/2.x/frameworks/astro" title="Astro" description="React island with client:only." />
 </Cards>
 
-## Peer dependencies
+## Fonts
 
-ProseMirror packages are `peerDependencies` to avoid duplicate editor state
-packages. npm 7+ installs them automatically; strict installers (pnpm with
-peer auto-install disabled, Yarn PnP) need them explicitly:
+The editor measures with real font bytes so line wrap and page breaks match Word. Embedded fonts in the document wire in automatically. For documents that reference Word's defaults without embedding them, `@docx-editor.dev/fonts` supplies metric-compatible substitutes:
 
-```bash
-npm i prosemirror-commands prosemirror-dropcursor prosemirror-history \
-      prosemirror-keymap prosemirror-model prosemirror-state \
-      prosemirror-tables prosemirror-transform prosemirror-view
+```tsx
+import { loadDefaultFonts } from '@docx-editor.dev/fonts';
+
+const fonts = await loadDefaultFonts();
+
+<DocxEditor document={bytes} fonts={fonts} />;
 ```
 
-## Headless / Node
+See [Fonts and measurement](/docs/2.x/guides/fonts) for how the sources compose.
 
-No editor on screen needed: `parseDocx` reads a `.docx` into the document
-model, and `repackDocx` writes it back, preserving every part it didn't
-change.
+## No UI
 
-```ts
-import { parseDocx, repackDocx } from '@docx-editor.dev/core';
-
-const doc = await parseDocx(buffer);
-// ...inspect or mutate the document model...
-const out = await repackDocx(doc);
-```
-
-To edit through an object model instead of the raw document model, see [DocxEditor API](/docs/1.x/editor-api).
+To read, edit, and write a `.docx` with no editor on screen — on a server, in a worker, in a script — use [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api). It opens bytes, edits them through an Office.js-compatible batching object model, and saves them back.
 
 ## Next steps
 
-- [Quickstart](/docs/1.x/quickstart): load, edit, and save a `.docx`
-- [Quickstart: AI](/docs/1.x/quickstart-ai): give a model tools that edit the document
-- [Word fidelity](/docs/1.x/word-fidelity): feature support and round-trip behavior
-- [React props](/docs/1.x/react/props) and the [API reference](/docs/1.x/api)
+- [Quickstart](/docs/2.x/quickstart): load, edit, and save a `.docx`
+- [Composition](/docs/2.x/react/composition): build your own chrome
+- [Word fidelity](/docs/2.x/word-fidelity): feature support and round-trip behavior
+- [Props](/docs/2.x/react/props) and the [API reference](/docs/2.x/api/react)

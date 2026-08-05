@@ -45,10 +45,7 @@ import {
   useState,
 } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type {
-  ReviewItemQuery,
-  ReviewRevisionKind,
-} from '@docx-editor.dev/core-contract/contracts/editor';
+import type { ReviewItemQuery, ReviewRevisionKind } from '@docx-editor.dev/core/contracts/editor';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import {
   ReviewRailContext,
@@ -1901,6 +1898,30 @@ export interface DocxEditorReviewNamespace {
   readonly Balloon: typeof ReviewBalloon;
 }
 
+/**
+ * The review rail: comments and tracked changes as a compound component.
+ *
+ * `DocxEditorReview` is itself the root; every part hangs off it, so a host arranges the pieces
+ * it wants rather than accepting one fixed layout. Requires the review module to be registered
+ * via `createDocxEditor({ modules: [reviewModule()] })` — without it there is nothing to derive
+ * cards from.
+ *
+ * @example
+ * ```tsx
+ * <DocxEditorReview>
+ *   <DocxEditorReview.List>
+ *     <DocxEditorReview.Card>
+ *       <DocxEditorReview.Author />
+ *       <DocxEditorReview.Summary />
+ *       <DocxEditorReview.Accept />
+ *       <DocxEditorReview.Reject />
+ *     </DocxEditorReview.Card>
+ *   </DocxEditorReview.List>
+ * </DocxEditorReview>
+ * ```
+ *
+ * @public
+ */
 export const DocxEditorReview: DocxEditorReviewNamespace = Object.assign(ReviewRoot, {
   List: ReviewList,
   Empty: ReviewEmpty,

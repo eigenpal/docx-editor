@@ -6,7 +6,7 @@
 // level resolves to nothing and the paragraph renders with no marker whatsoever.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { buildNumberingIndex, resolveNumberingStyleLinks } from '../numbering-index.ts';
 import { buildStyleCascadeTable, type StyleCascadeTable } from '../style-cascade.ts';

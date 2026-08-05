@@ -12,6 +12,16 @@ export const MAX_TABLE_COLUMN_WIDTH_TWIPS = 31_680;
 /** Maximum table width in twips for outer-right resize commits. */
 export const MAX_TABLE_WIDTH_TWIPS = 31_680;
 
+/**
+ * Bounds on a WHOLE-table insert, which is the one table gesture that allocates its
+ * topology from numbers rather than copying one that already exists. The row and column
+ * caps match Word's own Insert Table dialog; the cell cap is the allocation bound, and it
+ * binds first — 63 columns of 32767 rows is not a table anyone asked for.
+ */
+export const MAX_INSERT_TABLE_ROWS = 32_767;
+export const MAX_INSERT_TABLE_COLUMNS = 63;
+export const MAX_INSERT_TABLE_CELLS = 20_000;
+
 /** Minimum table border thickness in eighths of a point. */
 export const MIN_TABLE_BORDER_SIZE_EIGHTHS = 1;
 

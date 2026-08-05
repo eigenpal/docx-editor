@@ -10,7 +10,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { useMemo } from 'react';
 import { useDocxEditor } from '@docx-editor.dev/react';
-import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import {
   isCustomNodeDefinition,
   type ActivatedCustomNode,
@@ -37,6 +37,14 @@ export function useCustomNodeDefinitions(
 /** The painted boundary rect element the engine draws per line of a control. */
 export const CUSTOM_NODE_BOUNDARY = '.docx-content-control-boundary';
 
+/**
+ * What {@link resolveCustomNodeActivation} found under a pointer target.
+ *
+ * The RAW decode, before the definition's `fromDocx` has had its say — use
+ * `activatedCustomNodeOf` for the enriched form every host hook receives.
+ *
+ * @public
+ */
 export interface ResolvedCustomNodeActivation {
   /** RAW decode: attrs straight from the tag, `fromDocx` not yet applied. */
   readonly node: ActivatedCustomNode;
@@ -86,6 +94,18 @@ export function activatedCustomNodeOf(
   return { ...node, attrs, ...(controlId ? { nodeId: controlId } : {}) };
 }
 
+/**
+ * The recognized custom node a pointer target sits on, or null.
+ *
+ * Walks up from `target` to the painted control boundary, reads its `data-tag`, and matches the
+ * decoded identity against `nodes`. Returns null for anything that is not a recognized chip —
+ * ordinary text, an unclaimed SDT, a tag no definition owns.
+ *
+ * Every input is DOM the engine painted from FILE DATA. The tag is attacker-controlled and goes
+ * through the codec's guards; it never reaches markup.
+ *
+ * @public
+ */
 export function resolveCustomNodeActivation(
   target: EventTarget | null,
   nodes: readonly CustomNodeDefinition[]

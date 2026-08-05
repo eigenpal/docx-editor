@@ -16,7 +16,7 @@
 // style. Nothing here derives geometry, so the layout records remain the only answer to
 // where anything is; this only decides WHICH characters the user gestured over.
 
-import type { SemanticPosition, SemanticSelection } from '@docx-editor.dev/core-contract/layout';
+import type { SemanticPosition, SemanticSelection } from '@docx-editor.dev/core/layout';
 
 /** A painted span carries the source range it was laid out from. */
 interface SpanIdentity {

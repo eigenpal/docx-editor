@@ -15,8 +15,8 @@
 
 import { useMemo, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import type { EditorCommand } from '@docx-editor.dev/core-contract/contracts/editor';
-import { tableChromeIconPaths } from '@docx-editor.dev/core-contract/editor';
+import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
+import { tableChromeIconPaths } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
 import { useEditorState } from '../useEditorState';

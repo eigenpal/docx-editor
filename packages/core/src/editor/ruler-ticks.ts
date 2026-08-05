@@ -11,10 +11,13 @@
 
 /** The engine paints at 96 px per inch (twips / 15, 1440 twips per inch). */
 export const PX_PER_INCH = 96;
+/** Painted pixels per centimetre, derived from {@link PX_PER_INCH}. */
 export const PX_PER_CM = PX_PER_INCH / 2.54;
 
+/** Which measurement system the ruler shows. Drives both tick cadence and drag snapping. */
 export type RulerUnit = 'inch' | 'cm';
 
+/** One tick on the ruler: where it sits, how tall it is, and its label if it carries one. */
 export interface RulerTick {
   /** Offset along the ruler in content pixels. */
   readonly position: number;

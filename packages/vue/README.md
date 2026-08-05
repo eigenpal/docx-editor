@@ -9,7 +9,7 @@
 Vue 3 adapter for the docx-editor.dev editor.
 
 It is a thin renderer over the editor contract in
-`@docx-editor.dev/core-contract`: it supplies the DOM host, constructs the
+`@docx-editor.dev/core`: it supplies the DOM host, constructs the
 editor with `createEditor`, and paints the engine's positioned display list.
 All editing, querying, and geometry go through the `Editor` facade — the
 adapter holds no editing-engine state of its own.

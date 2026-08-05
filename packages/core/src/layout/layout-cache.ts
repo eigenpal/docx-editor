@@ -22,11 +22,12 @@
 // a paragraph whose content and context are unchanged lays out identically whatever the
 // document around it did.
 
-import type { OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
 
 /** A fingerprint over one paragraph's layout inputs. */
 export type ParagraphLayoutKey = string;
 
+/** Cache counters, for asserting that incremental layout is actually reusing work. */
 export interface LayoutCacheStats {
   readonly hits: number;
   readonly misses: number;
@@ -34,6 +35,13 @@ export interface LayoutCacheStats {
   readonly size: number;
 }
 
+/**
+ * The per-paragraph measurement cache.
+ *
+ * Caches the BREAK only — where a paragraph's lines fall at a given width — never its placement.
+ * An edit high in a document still repaginates everything below it, while paragraphs nobody
+ * touched are never measured again.
+ */
 export interface ParagraphLayoutCache<T> {
   get(key: ParagraphLayoutKey): T | undefined;
   set(key: ParagraphLayoutKey, value: T): void;
@@ -86,6 +94,13 @@ function nodeToken(node: OoxmlNode): string {
   return `(${parts.join('|')})`;
 }
 
+/**
+ * Everything that decides whether a cached paragraph break is still valid.
+ *
+ * `producer` is in the key because a font arriving after first paint changes every advance in the
+ * document while no content changes — without it the cache would serve the pre-font layout
+ * forever.
+ */
 export interface ParagraphKeyInputs {
   readonly paragraph: OoxmlNode;
   readonly properties: readonly OoxmlProperty[];
@@ -109,6 +124,12 @@ export interface ParagraphKeyInputs {
   readonly exclusionToken?: string;
 }
 
+/**
+ * The cache key for one paragraph's measured break.
+ *
+ * Folds in the content, the available width, and the measurement producer. Anything that changes
+ * where lines fall must be in here, or the cache serves a break taken under different conditions.
+ */
 export function paragraphLayoutKey(inputs: ParagraphKeyInputs): ParagraphLayoutKey {
   // Width is quantized to a thousandth of a point: a width that differs by less than that
   // cannot move a break, and keying on the raw float would miss on every scroll that
@@ -124,6 +145,7 @@ export function paragraphLayoutKey(inputs: ParagraphKeyInputs): ParagraphLayoutK
   ].join('\0');
 }
 
+/** How large the paragraph cache grows before least-recently-used eviction. */
 export interface ParagraphLayoutCacheOptions {
   /**
    * Entries retained before the least recently used are dropped.

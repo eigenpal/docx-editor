@@ -3,7 +3,7 @@
 
 /* eslint-disable max-lines -- composition root; seams live in surface-*.ts */
 
-import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
+import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core/binding';
 import {
   TOC_MAX_PAGE_PASSES,
   detectBodyTocs,
@@ -21,7 +21,7 @@ import {
   type OoxmlNode,
   type StoryScope,
   type TreeDocOp,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import {
   createLayoutScheduler,
   createLayoutSession,
@@ -55,12 +55,12 @@ import {
   type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';
 import {
   paintSelectionOverlay,
   paintSemanticLayout,
   type OverlayRect,
-} from '@docx-editor.dev/core-contract/output';
+} from '@docx-editor.dev/core/output';
 import {
   DEFAULT_DRAWING_PAINT_STRINGS,
   detachDrawingUrlRegistry,
@@ -122,6 +122,9 @@ import {
 import { createPointerController, type PointerController } from './surface-pointer.ts';
 import { createSurfaceSelectionSync } from './surface-selection-sync.ts';
 import { createSurfaceStructure } from './surface-structure.ts';
+// Deep import, not the store barrel: re-exporting a bound from there pulls the whole store
+// namespace into the published editor-api surface for one number.
+import { MIN_TABLE_COLUMN_WIDTH_TWIPS } from '../store/store/table-constraints.ts';
 import { createHyperlinkOps } from './surface-hyperlinks.ts';
 import { createSurfaceNavigation } from './surface-navigation.ts';
 import { drawingLinkByIdFromLayout } from './drawing-link-index.ts';
@@ -2596,6 +2599,79 @@ export function mountPaginatedSurface(
     );
   }
 
+  /**
+   * The op behind Insert › Table, or null when the size is not one this engine authors.
+   *
+   * Column width is the caret SECTION's content width divided evenly, not the document's:
+   * in a mixed-orientation document the table is about to live on the caret's page, and a
+   * grid sized for another section's width is a table that overhangs its own margin.
+   */
+  function insertTableOp(rows: number, cols: number) {
+    if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows < 1 || cols < 1) return null;
+    const section = structure.sectionPropertiesAt(selection.head.paragraphId);
+    const contentWidth =
+      section.pageSize.widthTwips -
+      section.margins.leftTwips -
+      section.margins.rightTwips -
+      section.margins.gutterTwips;
+    // A section whose margins swallow the page still gets a usable table rather than a
+    // refusal: the floor is the same minimum a column resize may drag to.
+    const columnWidthTwips = Math.max(
+      MIN_TABLE_COLUMN_WIDTH_TWIPS,
+      Math.floor(contentWidth / cols)
+    );
+    return {
+      op: 'insertTable' as const,
+      beforeParagraphId: selection.head.paragraphId,
+      rows,
+      cols,
+      columnWidthTwips,
+    };
+  }
+
+  function canInsertTable(rows: number, cols: number): boolean {
+    if (editingMode === 'view' || !session.editable) return false;
+    const op = insertTableOp(rows, cols);
+    return op !== null && validateTreeOp(session.part(), op) === null;
+  }
+
+  function insertTable(rows: number, cols: number): boolean {
+    if (!canInsertTable(rows, cols)) return false;
+    const op = insertTableOp(rows, cols);
+    if (!op) return false;
+    // The op publishes the first cell's paragraph as its caret hint, and that hint is the
+    // whole point of the gesture — Word leaves you typing in cell one. Adopting it needs the
+    // committed-caret subscription, the same way a table command plan does: without it the
+    // pre-edit selection mark is restored and the caret stays in the anchor paragraph
+    // BELOW the new table.
+    let committedCaret: { readonly paragraphId: string; readonly start: number } | null = null;
+    const unsubscribe = session.subscribe((change) => {
+      if (change.caret) committedCaret = change.caret;
+    });
+    let committed = false;
+    try {
+      commit(
+        () => {
+          const applied = applyOps([op], selectionMark());
+          if (!applied.committed) {
+            lastRejection = applied.reason ?? 'the table could not be inserted here';
+          }
+          committed = applied.committed;
+          return applied;
+        },
+        () => {
+          const caret = committedCaret;
+          return caret
+            ? collapsedAt({ paragraphId: caret.paragraphId, offset: caret.start })
+            : null;
+        }
+      );
+    } finally {
+      unsubscribe();
+    }
+    return committed;
+  }
+
   const INSERT_TOC_INSTRUCTION = 'TOC \\o "1-3" \\h';
 
   function insertTocOp() {
@@ -3178,6 +3254,8 @@ export function mountPaginatedSurface(
 
     hyperlinks,
     contentControls: contentControlsOps,
+    canInsertTable,
+    insertTable,
     canInsertToc,
     insertToc,
     canRefreshToc,

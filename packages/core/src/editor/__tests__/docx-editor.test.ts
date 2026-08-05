@@ -202,13 +202,6 @@ describe('createDocxEditor', () => {
 
   test('an unsupported command is refused, never silently dropped', () => {
     const { editor } = mount(p('hello'));
-    const result = editor.exec({ type: 'insertTable', rows: 2, cols: 2 });
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.code).toBe('unsupported');
-    expect(editor.can({ type: 'insertTable', rows: 2, cols: 2 })).toMatchObject({
-      ok: false,
-      code: 'unsupported',
-    });
     // Line, page and section breaks are wired; `column` needs the multi-column lane.
     expect(editor.can({ type: 'insertBreak', kind: 'line' })).toEqual({ ok: true });
     expect(editor.can({ type: 'insertBreak', kind: 'page' })).toEqual({ ok: true });
@@ -216,6 +209,54 @@ describe('createDocxEditor', () => {
       ok: false,
       code: 'unsupported',
     });
+    const result = editor.exec({ type: 'insertBreak', kind: 'column' });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('unsupported');
+  });
+
+  test('insertTable commits a table before the caret paragraph and paints it', async () => {
+    const { editor, container } = mount(p('after'));
+    expect(editor.can({ type: 'insertTable', rows: 3, cols: 2 })).toEqual({ ok: true });
+    expect(editor.exec({ type: 'insertTable', rows: 3, cols: 2 })).toMatchObject({ ok: true });
+
+    // Repaint after a commit is deferred; reading the layout flushes it.
+    expect(editor.surface!.layout().pages).toHaveLength(1);
+    expect(container.querySelectorAll('.docx-table-cell').length).toBe(6);
+
+    // The anchor paragraph survives AFTER the table — a `w:tbl` is not a legal last block —
+    // and reading order proves the table went BEFORE it, not after.
+    expect(editor.query({ type: 'paragraphs' }).map((paragraph) => paragraph.text)).toEqual([
+      ...Array<string>(6).fill(''),
+      'after',
+    ]);
+
+    // And it survives the round trip: reopened bytes hold the same six cells.
+    const bytes = new Uint8Array(await editor.save());
+    const reopened = mount(p('placeholder'));
+    reopened.editor.load(bytes);
+    expect(reopened.editor.query({ type: 'paragraphs' }).map((p2) => p2.text)).toEqual([
+      ...Array<string>(6).fill(''),
+      'after',
+    ]);
+  });
+
+  test('insertTable is refused with the shape reason for a size the engine will not author', () => {
+    const { editor } = mount(p('hello'));
+    expect(editor.can({ type: 'insertTable', rows: 0, cols: 2 })).toMatchObject({
+      ok: false,
+      code: 'invalidArgs',
+    });
+    expect(editor.can({ type: 'insertTable', rows: 2, cols: 200 })).toMatchObject({
+      ok: false,
+      code: 'invalidArgs',
+    });
+  });
+
+  test("mode: 'view' refuses insertTable, like every other mutating command", () => {
+    const { editor } = mount(p('hello'), { mode: 'view' });
+    expect(editor.can({ type: 'insertTable', rows: 2, cols: 2 })).toMatchObject({ ok: false });
+    expect(editor.exec({ type: 'insertTable', rows: 2, cols: 2 }).ok).toBe(false);
+    expect(editor.surface!.session.bodyText()).toBe('hello');
   });
 
   test('setSelection passes a semantic paragraph selection through to the surface', () => {

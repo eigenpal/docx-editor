@@ -12,7 +12,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // ProseMirror binding into a bundle a server imports, while every file in `packages/editor-api/src`
 // still looks neutral.
 //
-// So this walk crosses the workspace boundary. It resolves `@docx-editor.dev/core-contract/*`
+// So this walk crosses the workspace boundary. It resolves `@docx-editor.dev/core/*`
 // through core's own `exports` map rather than by guessing directory names, so a lane that moves
 // is still followed instead of silently ending the walk.
 
@@ -25,17 +25,23 @@ const CORE = join(PACKAGE_SRC, '..', '..', 'core');
 
 const CORE_EXPORTS = JSON.parse(readFileSync(join(CORE, 'package.json'), 'utf8')).exports as Record<
   string,
-  { import: string }
+  { import: string } | string
 >;
 
-/** Every importable core specifier, mapped to the source file it resolves to. */
+/**
+ * Every importable core specifier, mapped to the source file it resolves to.
+ *
+ * Conditional exports only. A subpath declared as a bare string is an asset rather than a
+ * module entry — the stylesheet and `./package.json` — and there is no import graph to walk
+ * from one, so it is not a specifier this test has anything to say about.
+ */
 const WORKSPACE = new Map<string, string>(
-  Object.entries(CORE_EXPORTS).map(([subpath, target]) => [
-    subpath === '.'
-      ? '@docx-editor.dev/core-contract'
-      : `@docx-editor.dev/core-contract${subpath.slice(1)}`,
-    resolve(CORE, target.import),
-  ])
+  Object.entries(CORE_EXPORTS)
+    .filter((entry): entry is [string, { import: string }] => typeof entry[1] === 'object')
+    .map(([subpath, target]) => [
+      subpath === '.' ? '@docx-editor.dev/core' : `@docx-editor.dev/core${subpath.slice(1)}`,
+      resolve(CORE, target.import),
+    ])
 );
 
 const IMPORT = /(?:^|\n)\s*(?:import|export)[\s\S]{0,400}?from\s*['"]([^'"]+)['"]/g;
@@ -91,7 +97,7 @@ function reachFrom(entry: string): Reach {
         continue;
       }
       // LONGEST match first: every lane specifier starts with the package's own name, and a
-      // shortest-match walk would resolve `.../core-contract/editor` to core's root barrel.
+      // shortest-match walk would resolve `.../core/editor` to core's root barrel.
       const lane = [...WORKSPACE.keys()]
         .sort((a, b) => b.length - a.length)
         .find((name) => specifier === name || specifier.startsWith(`${name}/`));
@@ -119,8 +125,8 @@ describe('the walk itself', () => {
     // Every assertion below is an absence. An absence over an empty graph is worth nothing.
     expect(server.files.size).toBeGreaterThan(20);
     expect(browser.files.size).toBeGreaterThan(server.files.size);
-    expect([...server.lanes]).toContain('@docx-editor.dev/core-contract/automation');
-    expect([...browser.lanes]).toContain('@docx-editor.dev/core-contract/editor');
+    expect([...server.lanes]).toContain('@docx-editor.dev/core/automation');
+    expect([...browser.lanes]).toContain('@docx-editor.dev/core/editor');
     expect([...server.files].some((file) => file.startsWith(CORE))).toBe(true);
   });
 
@@ -182,7 +188,7 @@ describe('the browser bundle', () => {
     // Stated as lanes and file count rather than as third-party names on purpose. The editor lane
     // is reached — that is what makes this entry different from the root — but WHICH third-party
     // names come with it is the engine's business and changes as the engine drops dependencies.
-    expect([...browser.lanes]).toContain('@docx-editor.dev/core-contract/editor');
+    expect([...browser.lanes]).toContain('@docx-editor.dev/core/editor');
     expect(browser.files.size).toBeGreaterThan(server.files.size);
     expect([...browser.files].filter((file) => !server.files.has(file)).length).toBeGreaterThan(5);
   });

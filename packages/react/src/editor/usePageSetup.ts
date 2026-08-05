@@ -3,7 +3,7 @@
 // dialog and any consumer chrome, so they can never disagree about the section.
 
 import { useCallback, useMemo } from 'react';
-import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 

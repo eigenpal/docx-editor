@@ -1,16 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import {
-  readOoxmlPackage,
-  readOoxmlPart,
-  type OoxmlPart,
-} from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPackage, readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { buildNumberingIndex } from '../numbering-index.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
 import { paragraphFragmentsOf } from '../semantic-records.ts';
-import { openTreeSession } from '@docx-editor.dev/core-contract/binding';
+import { openTreeSession } from '@docx-editor.dev/core/binding';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const FIXTURE = resolve(

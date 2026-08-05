@@ -5,8 +5,8 @@
 // paginated-surface.ts implements and re-exports them, so importers keep one entry point.
 
 import type { IndentFormatting } from '../contracts/types.ts';
-import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import type { BookmarkIndex, StoryScope, TreeDocOp } from '@docx-editor.dev/core-contract/store';
+import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { BookmarkIndex, StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import type { ViewScope } from '../contracts/editor.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
 import type { ReviewModuleContribution } from '../contracts/modules.ts';
@@ -20,7 +20,7 @@ import type {
   SemanticLayout,
   SemanticSelection,
   TextMeasurer,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';
 
 /**
  * How an edit is written.
@@ -72,6 +72,12 @@ export interface ContentControlOps {
   disabledReason(controlId: string, action: 'edit' | 'remove'): string | null;
 }
 
+/**
+ * How a paginated surface opens. Every field is optional.
+ *
+ * `measurer` is the injection seam that keeps layout DOM-free — supply one to lay a document out
+ * on a server, or leave it off in a browser to get the canvas measurer.
+ */
 export interface PaginatedSurfaceOptions {
   readonly measurer?: TextMeasurer;
   /** Ambient author for tracked edits. Required before suggesting can write anything. */
@@ -244,6 +250,12 @@ export interface RevealOptions {
   readonly behavior?: ScrollBehavior;
 }
 
+/**
+ * Everything observable about the surface right now, as one immutable value.
+ *
+ * `revision` is the change token: it moves whenever anything else here does, which is what lets
+ * `snapshot()` hand back the same reference until state actually changes.
+ */
 export interface PaginatedSurfaceState {
   readonly revision: number;
   readonly pageCount: number;
@@ -302,9 +314,19 @@ export interface ContentControlSurfaceState {
   readonly activeControlId: string | null;
 }
 
+/**
+ * The mounted, painted, editable document — the layer `createDocxEditor` builds its contract on.
+ *
+ * The painted pages ARE the editable surface: they are `contenteditable`, but the DOM is a
+ * picture. Browser mutations are prevented and re-expressed as tree ops, and selection maps only
+ * through `data-paragraph-id`/`data-start`, never through DOM node identity.
+ *
+ * Every write goes through the guarded mutation path on this object. Reaching past it into
+ * `session` to apply ops directly bypasses the layout invalidation and the caret bookkeeping.
+ */
 export interface PaginatedSurface {
   readonly session: TreeDocxSession;
-  storyScope(): import('@docx-editor.dev/core-contract/store').StoryScope;
+  storyScope(): import('@docx-editor.dev/core/store').StoryScope;
   imageDecodePort(): import('../store/package/image-resources.ts').ImageDecodePort;
   applyDrawingOps(
     ops: readonly import('../store/store/tree-op-types.ts').DrawingTreeDocOp[]
@@ -561,6 +583,13 @@ export interface PaginatedSurface {
    * Show-all and form-fill are surface chrome and never reflow layout.
    */
   readonly contentControls: ContentControlOps;
+  /** Whether a `rows`×`cols` table can be inserted at the caret. */
+  canInsertTable(rows: number, cols: number): boolean;
+  /**
+   * Insert an empty `rows`×`cols` table at the caret, columns evenly dividing the content
+   * width of the caret's section, and leave the caret in the first cell.
+   */
+  insertTable(rows: number, cols: number): boolean;
   /** Whether the addressed (or caret-local) body TOC can be refreshed. */
   canRefreshToc(tocId?: string): boolean;
   /** Whether a generated body TOC can be inserted before the caret paragraph. */
@@ -711,7 +740,7 @@ export interface PaginatedSurface {
     readonly sectionIndex?: number;
     readonly kind?: 'header' | 'footer';
     readonly variant?: 'default' | 'first' | 'even';
-    readonly position?: import('@docx-editor.dev/core-contract/layout').SemanticPosition;
+    readonly position?: import('@docx-editor.dev/core/layout').SemanticPosition;
   }): boolean;
   /** Leave furniture editing and restore the prior body selection. */
   exitHeaderFooter(): void;
@@ -782,6 +811,13 @@ export interface PaginatedSurface {
   ): import('../contracts/editor.ts').ExecResult;
 }
 
+/**
+ * What opening a document produced: a mounted surface, or a refusal.
+ *
+ * A result rather than a throw, because every refusal here comes from FILE input — a package the
+ * bounded reader rejected, a part that exceeded a limit — and a malformed upload should surface
+ * as a message the host can show rather than an exception it has to catch.
+ */
 export type OpenPaginatedResult =
   | { readonly ok: true; readonly surface: PaginatedSurface }
   | { readonly ok: false; readonly reason: string; readonly detail?: string };

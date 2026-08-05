@@ -22,6 +22,7 @@ export function tocLeftIndentTwips(level: number): number {
   return bounded * TOC_LEVEL_INDENT_TWIPS;
 }
 
+/** One planned TOC entry: its level, its text, and the heading it points at. */
 export interface TocEntryPlan {
   readonly level: number;
   readonly text: string;

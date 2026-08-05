@@ -51,6 +51,7 @@ const IMAGE_CONTENT_TYPES: ReadonlySet<string> = new Set([
   'image/x-wmf',
 ]);
 
+/** A freshly allocated drawing property id, or the reason one could not be minted. */
 export type DrawingPropertyIdResult =
   | { readonly ok: true; readonly id: number }
   | { readonly ok: false; readonly reason: 'invalidArgs' };
@@ -114,6 +115,12 @@ function highestValidDocPrId(pkg: OoxmlPackage): number {
   return max;
 }
 
+/**
+ * Mint a `wp:docPr` id unused anywhere in the package.
+ *
+ * Package-wide rather than per-part: Word treats these ids as document-global, and a collision
+ * makes it renumber on open.
+ */
 export function allocateDrawingPropertyId(pkg: OoxmlPackage): DrawingPropertyIdResult {
   const next = highestValidDocPrId(pkg) + 1;
   if (next <= 0 || next > MAX_UNSIGNED_INT) {
@@ -323,6 +330,12 @@ export function withBinaryPart(
   );
 }
 
+/**
+ * Add image bytes to the package: the media part, its content type, and the relationship.
+ *
+ * All three together — bytes with no relationship are unreachable, and a relationship with no
+ * content-type record makes the package invalid.
+ */
 export function withEmbeddedImage(
   pkg: OoxmlPackage,
   ownerPartName: string,

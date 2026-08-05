@@ -10,21 +10,48 @@ declare const FIXED_POINT: unique symbol;
 /** Fixed-point coordinates are safe integers in units declared by ShapingEnvironment.fixedPointScale. */
 export type FixedPoint = number & { readonly [FIXED_POINT]: true };
 
+/**
+ * Brand a safe integer as a {@link FixedPoint} coordinate.
+ *
+ * Fixed point rather than float throughout shaping so that two runs shaped identically compare
+ * EQUAL — float accumulation would make the same text measure differently depending on how it was
+ * split, and pagination is decided on those measurements.
+ *
+ * @throws RangeError when the value is not a safe integer.
+ */
 export const fixedPoint = (value: number): FixedPoint => {
   if (!Number.isSafeInteger(value))
     throw new RangeError('Fixed-point value must be a safe integer');
   return value as FixedPoint;
 };
 
+/** Which way a run reads. The parity projection of its bidi embedding level. */
 export type TextDirection = 'ltr' | 'rtl';
+
+/** How fixed-point conversion breaks ties. Part of the shaping fingerprint. */
 export type FixedPointRoundingMode = 'halfAwayFromZero' | 'halfToEven' | 'towardZero';
+
+/** Which Unicode normalization is applied before shaping, if any. */
 export type NormalizationPolicy = 'none' | 'NFC' | 'NFD' | 'NFKC' | 'NFKD';
 
+/**
+ * The shaping library and its exact version.
+ *
+ * Versioned because a library upgrade can change glyph positioning, and a cached measurement
+ * taken under the old one must not be reused under the new one.
+ */
 export interface VersionedShapingLibrary {
   readonly name: string;
   readonly version: string;
 }
 
+/**
+ * Everything that determines how text shapes — the complete input to a
+ * {@link ShapingEnvironment}.
+ *
+ * Exhaustive on purpose. Any field that could change a glyph's position belongs here, because the
+ * environment's fingerprint is what decides whether a cached shaped run may be reused.
+ */
 export interface ShapingEnvironmentInput {
   readonly font: ResolvedFont;
   readonly variationAxes: Readonly<Record<string, number>>;
@@ -40,8 +67,15 @@ export interface ShapingEnvironmentInput {
   readonly roundingMode: FixedPointRoundingMode;
 }
 
+/**
+ * A validated {@link ShapingEnvironmentInput} — build one with `createShapingEnvironment`.
+ *
+ * Structurally identical to its input, but the nominal distinction is the point: holding one
+ * means the tags, axes and fonts inside it have already been checked.
+ */
 export interface ShapingEnvironment extends ShapingEnvironmentInput {}
 
+/** One shaping call: the text, its size, its bidi level, and the environment to shape it in. */
 export interface ShapeInput {
   readonly text: string;
   readonly fontSizeHalfPoints: number;
@@ -50,6 +84,13 @@ export interface ShapeInput {
   readonly environment: ShapingEnvironment;
 }
 
+/**
+ * One positioned glyph.
+ *
+ * `id` is a glyph index in its FACE, not a character — a ligature is one glyph spanning several
+ * characters, and a single character may produce several glyphs. Use `cluster` to get back to
+ * text.
+ */
 export interface ShapedGlyph {
   readonly id: number;
   /** UTF-16 text offset identifying the cluster that produced this glyph. */
@@ -65,11 +106,20 @@ export interface ShapedGlyph {
   readonly outline: GlyphOutline;
 }
 
+/** A glyph's outline as SVG path data, in font design units. */
 export interface GlyphOutline {
   readonly path: string;
+  /** Design units per em — divide by this to scale the path to a point size. */
   readonly unitsPerEm: number;
 }
 
+/**
+ * One cluster: the smallest indivisible text-to-glyph correspondence.
+ *
+ * The unit the CARET moves by. A cluster may be several characters (a ligature) or several glyphs
+ * (a decomposed mark), so neither a character index nor a glyph index is a valid caret position —
+ * `caretEdges` is, and it includes both endpoints.
+ */
 export interface ShapedCluster {
   /** Half-open logical UTF-16 range in ShapedRun.text. */
   readonly textStart: number;
@@ -84,12 +134,20 @@ export interface ShapedCluster {
   readonly fontSpan: number;
 }
 
+/** A run's vertical metrics, from the face that shaped it. Drives line height and baseline. */
 export interface ShapedVerticalMetrics {
   readonly ascent: FixedPoint;
   readonly descent: FixedPoint;
   readonly lineGap: FixedPoint;
 }
 
+/**
+ * A stretch of glyphs that came from ONE face.
+ *
+ * A run whose text needed fallback has several of these. Recording the exact face per span is
+ * what lets a re-shape reproduce the same result rather than re-running fallback selection and
+ * possibly choosing differently.
+ */
 export interface ShapedFontSpan {
   readonly glyphStart: number;
   readonly glyphEnd: number;
@@ -98,6 +156,12 @@ export interface ShapedFontSpan {
   readonly fallbackIndex: number | null;
 }
 
+/**
+ * One shaped run: text turned into positioned glyphs, with everything needed to measure it, paint
+ * it, and put a caret in it.
+ *
+ * The engine's measurement unit. Layout never measures characters — it measures these.
+ */
 export interface ShapedRun {
   readonly text: string;
   readonly direction: TextDirection;
@@ -108,6 +172,14 @@ export interface ShapedRun {
   readonly metrics: ShapedVerticalMetrics;
 }
 
+/**
+ * A {@link ShapedRun} reduced to the fields two shaping results must agree on to be considered
+ * identical.
+ *
+ * Fonts appear as {@link FontFingerprintInputs} rather than whole `ResolvedFont` objects, so the
+ * comparison is over VALUES and does not depend on object identity — which is what makes it work
+ * across a reload or a worker boundary.
+ */
 export interface ShapedRunComparatorInputs {
   readonly text: string;
   readonly direction: TextDirection;
@@ -125,10 +197,24 @@ export interface ShapedRunComparatorInputs {
   readonly metrics: ShapedVerticalMetrics;
 }
 
+/**
+ * The one thing layout needs from a shaping backend.
+ *
+ * Injected rather than imported, which is what keeps layout DOM-free and testable: a fixed-metric
+ * shaper measures deterministically in a test, HarfBuzz measures for real in a browser, and
+ * layout cannot tell the difference.
+ */
 export interface TextShaper {
   shape(input: ShapeInput): ShapedRun;
 }
 
+/**
+ * A font reduced to the values that identify it for fingerprinting.
+ *
+ * Includes the content `hash` and `faceIndex`, so two faces with the same family name but
+ * different bytes fingerprint differently — which is what stops a cached measurement being reused
+ * against a substituted face.
+ */
 export interface FontFingerprintInputs {
   readonly identity: string;
   readonly id: string;
@@ -140,6 +226,13 @@ export interface FontFingerprintInputs {
   readonly substitution: FontSubstitution | null;
 }
 
+/**
+ * A {@link ShapingEnvironment} reduced to comparable values.
+ *
+ * Records and axis maps become SORTED entry arrays, because two environments differing only in
+ * key insertion order must fingerprint the same — otherwise a cache would miss on a difference
+ * that changes no glyph.
+ */
 export interface ShapingEnvironmentFingerprintInputs {
   readonly font: FontFingerprintInputs;
   readonly variationAxes: readonly (readonly [string, number])[];
@@ -235,6 +328,16 @@ const fontFingerprintInputs = (font: ResolvedFont): FontFingerprintInputs => {
   });
 };
 
+/**
+ * Validate and freeze a shaping environment.
+ *
+ * Checks every field that could silently corrupt a measurement: OpenType tags must be four ASCII
+ * bytes, script and language must be non-blank and control-character free, fonts must already be
+ * validated. Throws rather than coercing — a bad tag that shapes anyway produces a document that
+ * measures wrong everywhere and looks fine.
+ *
+ * @throws TypeError on a malformed tag, name, or axis value.
+ */
 export const createShapingEnvironment = (input: ShapingEnvironmentInput): ShapingEnvironment => {
   assertNonBlank(input.shapingLibrary.name, 'shaping library name');
   assertNonBlank(input.shapingLibrary.version, 'shaping library version');
@@ -291,6 +394,10 @@ export const createShapingEnvironment = (input: ShapingEnvironmentInput): Shapin
   });
 };
 
+/**
+ * Reduce an environment to its comparable form, with records sorted so key order cannot affect
+ * the result.
+ */
 export const shapingEnvironmentFingerprintInputs = (
   input: ShapingEnvironmentInput
 ): ShapingEnvironmentFingerprintInputs => {
@@ -356,6 +463,16 @@ const fontProvenanceKey = (font: ResolvedFont): string => {
   return key;
 };
 
+/**
+ * Validate and freeze a shaped run against the environment that produced it.
+ *
+ * Checks the internal consistency a shaper must satisfy: direction matches the environment,
+ * cluster ranges tile the text without gaps or overlap, glyph ranges stay in bounds, font spans
+ * cover every glyph, and caret edges are monotonic. A shaper that violates any of these produces
+ * a caret that lands in the wrong place, which is far harder to diagnose downstream than here.
+ *
+ * @throws TypeError when the run and environment disagree, or the run is internally inconsistent.
+ */
 export const createShapedRun = (
   input: ShapedRun,
   environmentInput: ShapingEnvironmentInput
@@ -477,6 +594,12 @@ export const createShapedRun = (
   });
 };
 
+/**
+ * Reduce a shaped run to its comparable form, validating it on the way through.
+ *
+ * What the D9 determinism oracles compare: two shaping runs of the same text in the same
+ * environment must produce byte-identical structures here.
+ */
 export const shapedRunComparatorInputs = (
   input: ShapedRun,
   environment: ShapingEnvironmentInput

@@ -14,7 +14,7 @@ import type {
   OoxmlNode,
   OoxmlPart,
   RevisionAddress,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 
 // ── Comment vocabulary (authored in `word/comments.xml` and its siblings) ──────
 
@@ -109,6 +109,12 @@ export type ReviewRevisionKind =
   /** A row, cell, section or grid revision. Supported row revisions are resolvable. */
   | 'structural';
 
+/**
+ * One tracked change as a review card.
+ *
+ * Keyed per DECISION rather than per site: a revision spanning three ranges is one card, because
+ * accepting it accepts all three.
+ */
 export interface ReviewRevisionItem {
   readonly kind: 'revision';
   /** Stable across renders and unique per DECISION, not per site. */
@@ -153,6 +159,10 @@ export interface ReviewRevisionItem {
   readonly pairedWith?: string;
 }
 
+/**
+ * One comment as a review card. A reply carries `parentId`; OOXML gives replies no separate
+ * element, so threads are reconstructed from that link.
+ */
 export interface ReviewCommentItem {
   readonly kind: 'comment';
   readonly id: string;
@@ -195,6 +205,10 @@ export interface ReviewCustomItem {
   readonly range: ReviewRange | null;
 }
 
+/**
+ * One pending decision in the review queue: a tracked change, a comment thread, or a pro
+ * custom-node card. Discriminate on `kind`.
+ */
 export type ReviewItem = ReviewRevisionItem | ReviewCommentItem | ReviewCustomItem;
 
 /** What the review queue derivation reads: one story part plus its comment parts. */

@@ -14,12 +14,12 @@
 // every admitted source plus a typed failure list, so the app can mount with partial
 // coverage (unresolved families measure via the fixed fallback) and report.
 
-import type { FontFaceRequest, FontSource } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { FontFaceRequest, FontSource } from '@docx-editor.dev/core/contracts/editor';
 import {
   HARD_MAX_FONT_BYTES,
   boundedStructuralFontValidator,
   sha256FontBytes,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';
 import type { FontConfigurationFragment } from './font-composition.ts';
 
 /** One URL to fetch and the face it claims to be. */
@@ -36,6 +36,12 @@ export interface FontUrlSource {
   readonly faceIndex?: number;
 }
 
+/**
+ * What to fetch, and under what limits.
+ *
+ * Only `sources` is required. Each carries its own expected hash, so bytes are trusted by
+ * CONTENT rather than by origin — a swapped asset fails admission even from a trusted host.
+ */
 export interface LoadFontsRequest {
   readonly sources: readonly FontUrlSource[];
   /** Cache API bucket name; default `docx-editor-fonts`. */
@@ -46,6 +52,13 @@ export interface LoadFontsRequest {
   readonly maxFontBytes?: number;
 }
 
+/**
+ * Why one font did not load.
+ *
+ * Distinguished rather than collapsed to "failed" because the responses differ: `networkError`
+ * and `httpError` are worth retrying, while `hashMismatch` and `malformed` mean the bytes were
+ * not what the source claimed and retrying will fetch the same wrong thing.
+ */
 export type FontLoadFailureReason =
   | 'networkError'
   | 'httpError'
@@ -57,6 +70,12 @@ export type FontLoadFailureReason =
   /** The bytes are not a font at all — most often an HTML error page served with 200. */
   | 'malformed';
 
+/**
+ * One face that did not load, with whatever evidence the failure produced.
+ *
+ * Non-fatal: {@link LoadFontsResult} still carries every source that succeeded, and the affected
+ * family falls back to the engine's fixed measurement.
+ */
 export interface FontLoadFailure {
   readonly url: string;
   readonly request: FontFaceRequest;
@@ -68,6 +87,13 @@ export interface FontLoadFailure {
   readonly diagnostic?: string;
 }
 
+/**
+ * What one `loadFonts` call produced: the faces that arrived, plus the ones that did not.
+ *
+ * A `FontConfigurationFragment`, so it composes straight into `composeFontConfiguration`
+ * alongside other font sources. Partial success is the normal case — compose it even with
+ * failures present.
+ */
 export interface LoadFontsResult extends FontConfigurationFragment {
   readonly sources: readonly FontSource[];
   readonly failures: readonly FontLoadFailure[];

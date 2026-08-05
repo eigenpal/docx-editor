@@ -9,7 +9,7 @@
 // convergence counter never moves because a note changed. Resource accounting is
 // bounded: hostile note counts and over-tall flows fail closed with named reasons.
 
-import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import {
   findNoteById,
   formatNoteScopeId,
@@ -45,6 +45,13 @@ export const DEFAULT_NOTE_SEPARATOR_HEIGHT_PT = 6;
 /** Default separator rule width as a fraction of content width. */
 export const DEFAULT_NOTE_SEPARATOR_WIDTH_RATIO = 1 / 3;
 
+/**
+ * Why note layout stopped short and fell back.
+ *
+ * Every one is a BOUND rather than a bug: note counts, fragment counts and heights all come from
+ * a file, and a document can ask for more note area than a page has. Falling back with a reason
+ * keeps the document open instead of failing to lay out.
+ */
 export type NoteLayoutFallbackReason =
   | 'note-count-limit'
   | 'note-fragment-limit'
@@ -55,6 +62,12 @@ export type NoteLayoutFallbackReason =
   | 'missing-note-body'
   | 'dangling-note-reference';
 
+/**
+ * One note's body laid out as its own story, in story-relative coordinates.
+ *
+ * Relative rather than page-absolute because a note moves between pages during pagination — the
+ * page it lands on is decided after its content is measured.
+ */
 export interface NoteStoryLayout {
   readonly noteKind: NoteKind;
   readonly noteId: number;
@@ -72,6 +85,12 @@ export interface NoteStoryLayout {
 /** Paint style for Word-default / marker-only separator rules (not CSS inventing content). */
 export type NoteSeparatorRuleStyle = 'single' | 'double';
 
+/**
+ * The rule between body text and the note area.
+ *
+ * Synthesized when the document declares none, because Word draws one regardless — a document
+ * without an authored separator still shows the line a reader expects.
+ */
 export interface NoteSeparatorLayout {
   readonly kind: 'separator' | 'continuationSeparator';
   readonly fragments: readonly BlockFragmentRecord[];

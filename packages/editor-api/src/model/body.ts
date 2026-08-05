@@ -39,6 +39,22 @@ import { Paragraph } from './paragraph.ts';
 import { Range } from './range.ts';
 import { searchOptions, type SearchOptions } from './search-options.ts';
 
+/**
+ * A story: the main body of a document, a header or footer variant, or a note's body — and
+ * everything in it in reading order.
+ *
+ * Its paragraphs are the DOCUMENT'S, not just the top level's. A paragraph inside a table cell,
+ * or inside a table inside a cell, or inside a block-level content control, is an ordinary
+ * editable paragraph and appears here, exactly as it does in Word's own paragraph collection. A
+ * collection listing only direct children would describe a smaller document than the one on
+ * screen.
+ *
+ * {@link Body.clear} leaves one empty paragraph, matching what Word produces when a reader
+ * selects everything and deletes. A body that already holds no paragraph reports
+ * `InvalidArgument` rather than inventing a block.
+ *
+ * @public
+ */
 export class Body extends ModelObject {
   #paragraphs: ParagraphCollection | undefined;
   #font: Font | undefined;
@@ -82,6 +98,7 @@ export class Body extends ModelObject {
     return this.loadedProperty<string>('text');
   }
 
+  /** Every paragraph in this story in reading order, at every depth. */
   get paragraphs(): ParagraphCollection {
     this.#paragraphs ??= this.paragraphsUnder(`${this.path.label}.paragraphs`);
     return this.#paragraphs;
@@ -249,6 +266,7 @@ export class Body extends ModelObject {
     return created;
   }
 
+  /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     const selected = this.selection(request, ['text', 'style']);
     if (selected.includes('text')) {

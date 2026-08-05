@@ -19,7 +19,7 @@
 // it just re-primes the memo each render.
 
 import { useCallback, useMemo, useSyncExternalStore } from 'react';
-import type { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
 import { LOADING_SNAPSHOT } from './loading-snapshot';
 

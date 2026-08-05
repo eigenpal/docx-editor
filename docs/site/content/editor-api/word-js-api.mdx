@@ -1,17 +1,17 @@
 ---
-title: 'Word JS API compatibility'
-description: 'What subset of the Word JavaScript object model DocxEditor implements, where the shape comes from, and what it deliberately omits.'
+title: 'Office.js compatibility'
+description: 'The Office.js-compatible subset: what of the Word JavaScript object model is implemented, how the shape is verified, and what it omits.'
 category: 'Editor API'
 order: 53
 ---
 
-`@docx-editor.dev/editor-api` exposes the DocxEditor API. Its shape lets code written against Word's JavaScript object model compile against it. `context.document.body.paragraphs`, `load()` then `sync()`, `search(text, options)`, `getFirstOrNullObject()` and `isNullObject` all mean here what they mean there.
+`@docx-editor.dev/editor-api` is Office.js-compatible: it implements the Word JavaScript object model, so `context.document.body.paragraphs`, `load()` then `sync()`, `search(text, options)`, `getFirstOrNullObject()` and `isNullObject` all mean here what they mean in an add-in. Word add-in code ports by changing how the batch is opened.
 
-That is a compatibility claim about **shape**, and it is worth being exact about what it is not:
+Being exact about the scope of that claim:
 
-- It is **not Office.js**. It does not run in an Office add-in host, there is no `Office.onReady`, and there is no `Word.run` — a batch is opened by a runtime you constructed, with `DocxEditor.createServer(bytes)` or `DocxEditor.createBrowser(editor)`.
-- It **depends on no Microsoft package**. Every type in the public surface is authored in this repository. Nothing is vendored, copied, or code-generated from Microsoft's declarations.
-- It is a **subset**, and the omissions below are the interesting part.
+- **Compatible, not hosted.** It does not run inside an Office add-in host, so there is no `Office.onReady` and no `Word.run` — a batch is opened by a runtime you construct, with `DocxEditor.createServer(bytes)` or `DocxEditor.createBrowser(editor)`. Everything inside the callback is the same code.
+- **No Microsoft dependency.** Every type in the public surface is authored in this repository. Nothing is vendored, copied, or code-generated from Microsoft's declarations.
+- **A subset**, and the omissions below are the interesting part.
 
 ## How the shape is kept honest
 
@@ -50,6 +50,5 @@ A few members are implemented but deliberately shaped differently from upstream 
 
 ## Next steps
 
-- [Overview](/docs/1.x/editor-api) — the object model, server and browser
-- [Migrating to the object model](/docs/1.x/editor-api/migration) — from this package's earlier surfaces
-- [API reference](/docs/1.x/api/docx-editor-editor-api)
+- [Overview](/docs/2.x/editor-api) — the object model, server and browser
+- [API reference](/docs/2.x/api/docx-editor-editor-api)

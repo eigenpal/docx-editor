@@ -27,7 +27,7 @@ import type {
   AutomationBatchRequest,
   AutomationCapabilities,
   AutomationHost,
-} from '@docx-editor.dev/core-contract/automation';
+} from '@docx-editor.dev/core/automation';
 import type { Document } from '../model/document.ts';
 import { batchFailure, planBatch, settleBatch } from './batch.ts';
 import type { ClientObject } from './client-object.ts';
@@ -63,6 +63,23 @@ export interface RuntimeSession {
   openDocument(context: RequestContext): Document;
 }
 
+/**
+ * What a `run` hands its callback: one queue, one document, one sync at a time.
+ *
+ * `sync()` is the only thing in this runtime that talks to the document, and it does so exactly
+ * once per call — plan the queued actions in order, send ONE batch, hydrate the answers. That is
+ * where atomicity comes from: the host commits a batch as one transaction, and the runtime never
+ * splits a consumer's `sync()` into several batches behind their back.
+ *
+ * Conditional writes come from the same place. A context that has READ from the document
+ * remembers the revision it read at, and a later batch that writes goes out conditional on it,
+ * failing `StaleDocument` if the document moved. That is what stops a decision made from a cached
+ * read being applied to a document that has since changed — the hazard the read-decide-write
+ * shape of any batching API invites. A context that has read nothing has nothing to be stale
+ * about, so its writes go out unconditionally.
+ *
+ * @public
+ */
 export class RequestContext {
   readonly #session: RuntimeSession;
   readonly #queue = new ActionQueue();
@@ -133,6 +150,7 @@ export class RequestContext {
     return this.#session.capabilities;
   }
 
+  /** Objects kept addressable past the run that created them. See {@link TrackedObjects}. */
   get trackedObjects(): TrackedObjects {
     return this.#trackedObjects;
   }

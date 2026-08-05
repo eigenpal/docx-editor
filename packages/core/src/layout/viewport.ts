@@ -17,12 +17,19 @@
 
 import type { SemanticLayout } from './semantic-records.ts';
 
+/** The visible band of the document, in layout units. */
 export interface ViewportWindow {
   /** Distance from the top of the document to the top of the visible area, in layout units. */
   readonly top: number;
   readonly height: number;
 }
 
+/**
+ * Which pages to build in detail.
+ *
+ * A page left out keeps its size and position but no content, so the document's height and page
+ * count are unchanged and scrolling to it reveals it rather than reflowing everything below.
+ */
 export interface MaterializationInput {
   readonly layout: SemanticLayout;
   /** Omitted means "no viewport": everything is materialized, which is the honest default. */

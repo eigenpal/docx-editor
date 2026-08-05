@@ -68,6 +68,7 @@ export interface SemanticHitDrawing {
   readonly start: number;
 }
 
+/** What a point landed on: a semantic position, its caret geometry, and where it sits. */
 export interface SemanticHit {
   readonly position: SemanticPosition;
   readonly caret: CaretGeometry;
@@ -93,6 +94,13 @@ export interface SemanticHit {
   readonly drawing: SemanticHitDrawing | null;
 }
 
+/**
+ * How precisely a hit resolves within a run.
+ *
+ * Without a measurer the offset is INTERPOLATED across the span's advance, which is exact only
+ * for monospaced text — supply one for proportional fonts, or a click lands a character or two
+ * away from the glyph under the pointer.
+ */
 export interface HitTestOptions {
   /**
    * Exact resolution of the character within a run.
@@ -660,7 +668,8 @@ function hitBoundsContainDrawing(
  *
  * SPAN boxes are the authority, never `line.box.x`: alignment is baked into the span boxes, so
  * a centred or right-aligned line starts well right of its line box and using the line box
- * would report every such click as "left of the line".
+ * would report every such click as "left of the line". With no spans to read, the aligned
+ * origin comes from {@link LineRecord.contentX}, which obeys the same rule.
  */
 function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContext): LineOffset {
   const spans = line.spans;
@@ -694,8 +703,9 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
     }
   }
   if (spans.length === 0) {
-    // An empty paragraph still has a position to click into.
-    return { offset: line.range.start, x: line.box.x, withinSpan: false };
+    // An empty paragraph still has a position to click into, and it is the line's ALIGNED
+    // origin: clicking a centred empty paragraph must not park the caret at the left margin.
+    return { offset: line.range.start, x: line.contentX, withinSpan: false };
   }
 
   const first = spans[0]!;
@@ -743,7 +753,7 @@ function offsetOnLine(line: LineRecord, x: number, y: number, context: HitContex
           drawing,
         };
       }
-      if (x < drawing.hitBounds.x && x >= (spans[index - 1]?.box.x ?? line.box.x)) {
+      if (x < drawing.hitBounds.x && x >= (spans[index - 1]?.box.x ?? line.contentX)) {
         return { offset: drawing.start, x: drawing.hitBounds.x, withinSpan: false, drawing };
       }
     }
@@ -971,7 +981,7 @@ export function caretBoxOnLine(
     // it sits at the bottom because that is where the text will appear.
     const leading = line.leading ?? 0;
     return {
-      x: line.box.x,
+      x: line.contentX,
       y: line.box.y + leading,
       height: Math.max(0, line.box.height - leading),
     };

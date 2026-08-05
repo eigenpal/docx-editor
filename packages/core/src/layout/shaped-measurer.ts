@@ -56,6 +56,12 @@ export interface LayoutShapingOptions {
   readonly operation: OperationSnapshot;
 }
 
+/**
+ * How the shaped measurer resolves fonts and bounds its work.
+ *
+ * Font resolution is the HOST's: returning null means "not available" and measurement falls back
+ * rather than throwing, because a document naming a font nobody has must still lay out.
+ */
 export interface ShapedMeasurerOptions {
   readonly shaper: TextShaper;
   /**
@@ -89,6 +95,13 @@ function halfPointsOf(style: ResolvedRunStyle): number {
   return Math.max(1, halfPoints);
 }
 
+/**
+ * A {@link TextMeasurer} that measures through the shaper rather than through a canvas.
+ *
+ * The accurate path: advances come from the same shaping run that will position the glyphs, so
+ * measurement and paint cannot disagree. Falls back per-run when a font is unavailable rather than
+ * throwing, because a document naming a font nobody has must still lay out.
+ */
 export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasurer {
   const {
     shaper,

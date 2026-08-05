@@ -5,7 +5,7 @@
 // the table.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import {
   cellSelectionBetween,
   cellSelectionRects,

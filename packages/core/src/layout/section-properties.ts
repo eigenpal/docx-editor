@@ -20,7 +20,7 @@ import {
   type OoxmlElement,
   type OoxmlNode,
   type OoxmlPart,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import { DEFAULT_PAGE_GEOMETRY, type PageGeometry } from './semantic-records.ts';
 import { storyBlocks } from './story-roots.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';
@@ -32,6 +32,7 @@ import type { RevisionDisplayMode } from './revision-projection.ts';
  */
 export const MAX_DOCUMENT_SECTIONS = 4_096;
 
+/** A section's margins in twips, including the header and footer reserve bands. */
 export interface SectionMargins {
   readonly topTwips: number;
   readonly rightTwips: number;
@@ -42,12 +43,19 @@ export interface SectionMargins {
   readonly gutterTwips: number;
 }
 
+/** One explicit `w:col`: its width and the gap after it. */
 export interface SectionColumnDefinition {
   readonly widthTwips: number;
   /** Space after this column; zero on the final column. */
   readonly gapTwips: number;
 }
 
+/**
+ * A section's column layout.
+ *
+ * Equal-width and explicit-width columns are one type because a file may declare `w:num` with no
+ * `w:col` children at all, and layout must handle both without branching at every use site.
+ */
 export interface SectionColumns {
   readonly count: number;
   /** Shared gap for equal-width columns and fallback gap for incomplete explicit definitions. */
@@ -91,6 +99,13 @@ export interface SectionPageNumbering {
   readonly chapSep?: string;
 }
 
+/**
+ * One section's resolved `w:sectPr`, as layout needs it.
+ *
+ * Resolved, not raw: defaults the file omitted are filled in here (an absent `w:type` is
+ * `nextPage`), so layout never has to know which attributes were authored and which were
+ * inherited.
+ */
 export interface SectionProperties {
   readonly pageSize: { readonly widthTwips: number; readonly heightTwips: number };
   readonly margins: SectionMargins;
@@ -415,6 +430,13 @@ export function enumerateDocumentSections(
   return enumerateDocumentSectionsBounded(part, displayMode).sections;
 }
 
+/**
+ * Every section in a document, with a flag saying whether the list was cut short.
+ *
+ * `truncated` is reported rather than silent: section count comes from a file, so a crafted
+ * document declaring thousands of paragraph-level `w:sectPr` marks is bounded, and a reader
+ * should be able to tell that happened.
+ */
 export interface DocumentSectionsEnumeration {
   readonly sections: DocumentSection[];
   /** True when paragraph-level sectPr marks beyond {@link MAX_DOCUMENT_SECTIONS} were dropped. */

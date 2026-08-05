@@ -21,7 +21,7 @@ import type {
   Editor,
   EditorCommand,
   ExecResult,
-} from '@docx-editor.dev/core-contract/contracts/editor';
+} from '@docx-editor.dev/core/contracts/editor';
 import type { ChromeSlotId } from './chrome-controls.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { tableCommandState } from './docx-editor-derive.ts';
@@ -118,12 +118,12 @@ const IMAGE_INSERT_PROBE_BYTES = Uint8Array.from(
 
 const CHROME_PROBES: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'text.link': { type: 'insertHyperlink', href: 'https://example.com' },
-  // Insert image and insert table have a real command shape (`insertImage`/`insertTable`
-  // are in the edit vocabulary), they are simply not executed by this engine yet. Probing
-  // means their disabled tooltip is the ENGINE saying so in its own words instead of chrome
-  // guessing — and the day the engine wires them, `can` starts answering yes and the probe
-  // stops being the reason they are disabled, with no registry edit needed. `data` and
-  // `rows`/`cols` are shape-satisfying placeholders; the probe is never executed.
+  // Both carry a real command whose ARGUMENTS come from chrome the registry does not own —
+  // bytes from a file picker, a size from the insert grid. The probe asks the engine whether
+  // a well-formed one would be honoured AT THE CARET, which is exactly the enabled question;
+  // the values below are the smallest well-formed pair and are never executed. Picking a real
+  // size still runs its own `can` first, so a 6×6 refused where a 1×1 was not cannot slip
+  // through.
   'image.insert': {
     type: 'insertImage',
     data: IMAGE_INSERT_PROBE_BYTES,
@@ -414,6 +414,16 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
           : { id, enabled: false, disabledReason: judged.reason, active: false };
       }
       if (id === 'image.properties' && shapeProbe.type === 'setImageProperties') {
+        const judged: CanResult = editor.can(shapeProbe);
+        return judged.ok
+          ? { id, enabled: true, disabledReason: null, active: false }
+          : { id, enabled: false, disabledReason: judged.reason, active: false };
+      }
+      // Insert-table is the same shape as image insert: the SIZE comes from the grid the
+      // chrome owns, so an allowed probe means the row can act, not that it is still
+      // unwired. Without this branch the row falls through to "not wired to an editor
+      // command" and stays grey the day the engine starts authoring tables.
+      if (id === 'table.insert' && shapeProbe.type === 'insertTable') {
         const judged: CanResult = editor.can(shapeProbe);
         return judged.ok
           ? { id, enabled: true, disabledReason: null, active: false }

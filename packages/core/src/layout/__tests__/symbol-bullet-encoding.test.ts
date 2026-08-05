@@ -2,7 +2,7 @@
 // private-use codepoints: any font that is not the symbol-encoded original draws a tofu box.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { buildNumberingIndex } from '../numbering-index.ts';
 import { resolveStoryListItems } from '../list-resolve.ts';

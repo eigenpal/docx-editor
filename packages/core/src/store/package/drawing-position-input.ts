@@ -22,6 +22,7 @@ export function validateDrawingSimpleCoordinate(value: number | undefined): bool
   return value >= ST_COORDINATE_MIN && value <= ST_COORDINATE_MAX;
 }
 
+/** Validate a position input, refusing offsets or bases outside what OOXML allows. */
 export function validateDrawingPositionInput(position: DrawingPositionInput): boolean {
   const mode = position.mode ?? 'frame';
   if (mode === 'simple') {
@@ -42,9 +43,12 @@ export function validateDrawingPositionInput(position: DrawingPositionInput): bo
   );
 }
 
+/** Legal `relativeFrom` bases for a horizontal offset (page, margin, column, character, …). */
 export const DRAWING_REL_FROM_H = Object.freeze([...REL_FROM_H_VALUES] as const);
+/** Legal `relativeFrom` bases for a vertical offset (page, margin, paragraph, line, …). */
 export const DRAWING_REL_FROM_V = Object.freeze([...REL_FROM_V_VALUES] as const);
 
+/** Whether an image-properties command carries any positioning fields at all. */
 export function propertiesCommandHasPositionFields(command: {
   readonly horizontalEmu?: number;
   readonly verticalEmu?: number;
@@ -59,6 +63,7 @@ export function propertiesCommandHasPositionFields(command: {
   );
 }
 
+/** Extract the position input from an image-properties command, or null when it carries none. */
 export function positionInputFromPropertiesCommand(
   command: {
     readonly horizontalEmu?: number;
@@ -88,6 +93,7 @@ export function positionInputFromPropertiesCommand(
   });
 }
 
+/** Validate a set-position command before it reaches the store. */
 export function validateSetImagePositionCommand(
   command: {
     readonly horizontalEmu?: number;

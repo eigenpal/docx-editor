@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
-import type { ImageWrapTarget } from '@docx-editor.dev/core-contract/editor';
+import type { ImageWrapTarget } from '@docx-editor.dev/core/editor';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 import { useEditorValueCommand } from '../useEditorValueCommand';

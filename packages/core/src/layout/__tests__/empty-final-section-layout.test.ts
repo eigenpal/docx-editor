@@ -5,7 +5,7 @@
 // geometry and furniture, and must not invent a page for continuous.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import {
   createFixedMeasurer,
   createLayoutSession,

@@ -22,7 +22,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // appears in an error, because a handle is the engine's name for the object, not the
 // consumer's.
 
-import type { AutomationHandle, AutomationSpan } from '@docx-editor.dev/core-contract/automation';
+import type { AutomationHandle, AutomationSpan } from '@docx-editor.dev/core/automation';
 import { fail } from './errors.ts';
 
 /**

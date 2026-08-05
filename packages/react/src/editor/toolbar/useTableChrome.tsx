@@ -14,18 +14,15 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type {
-  DocumentEditingMode,
-  EditorSnapshot,
-} from '@docx-editor.dev/core-contract/contracts/editor';
-import type { DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
+import type { DocumentEditingMode, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import {
   DEFAULT_TABLE_CHROME_DRAFT,
   runTableChromeCommand,
   tableChromeToolbarState,
   type TableChromeDraft,
   type TableChromeSlotId,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorEvent } from '../useEditorEvent';
 import { useEditorState } from '../useEditorState';

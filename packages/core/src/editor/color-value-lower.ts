@@ -3,7 +3,7 @@
 // Shared by table command planning and adapter chrome — tint/shade semantics follow
 // reference/quick-ref/themes-colors.md:110-133 (OOXML byte-quantized modifiers).
 
-import type { ColorValue } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { ColorValue } from '@docx-editor.dev/core/contracts/editor';
 import type { DocumentThemeColorEntry } from '../binding/document-theme.ts';
 import type { TreeDocColorValue } from '../store/store/tree-op-types.ts';
 
@@ -143,6 +143,13 @@ export function resolveThemeColorHex(
 
 export type ColorLowerRefusal = { readonly ok: false; readonly reason: string };
 
+/**
+ * A public colour lowered for a border or fill op, or the reason it could not be.
+ *
+ * Refusals happen because paint needs a literal: a theme colour the document's theme does not
+ * define has no hex to draw, and inventing one would show a border in a colour the file never
+ * named.
+ */
 export type ColorLowerResult =
   | { readonly ok: true; readonly color: TreeDocColorValue }
   | ColorLowerRefusal;

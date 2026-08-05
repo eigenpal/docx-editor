@@ -6,8 +6,15 @@
 import { unzipSync, zipSync, strToU8, strFromU8 } from 'fflate';
 import { normalizePartName, partNameKey } from './opc-names.ts';
 
+/**
+ * Why a zip was refused at the trust boundary.
+ *
+ * `too-large` and `too-many-entries` are the zip-bomb guards; `bad-name` catches path traversal —
+ * an entry with `..` or a leading `/` is rejected rather than normalized.
+ */
 export type ZipRejection = 'too-many-entries' | 'too-large' | 'bad-name' | 'inflate-error';
 
+/** Archive caps: entry count, total decompressed bytes, and the decompression ratio. */
 export interface ZipLimits {
   readonly maxEntries: number;
   /** Max total UNCOMPRESSED bytes across the archive. */
@@ -16,12 +23,14 @@ export interface ZipLimits {
   readonly maxRatio?: number;
 }
 
+/** The archive caps in force when a host configures none. Conservative and finite. */
 export const DEFAULT_ZIP_LIMITS: ZipLimits = {
   maxEntries: 10_000,
   maxTotalBytes: 512 * 1024 * 1024,
   maxRatio: 200,
 };
 
+/** The read entries, or the typed refusal. Never throws — the bytes are untrusted. */
 export type ZipReadResult =
   | { readonly ok: true; readonly entries: ReadonlyMap<string, Uint8Array> }
   | { readonly ok: false; readonly reason: ZipRejection; readonly detail?: string };

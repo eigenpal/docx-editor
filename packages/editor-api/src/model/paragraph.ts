@@ -47,6 +47,24 @@ const MAX_DELIMITERS = 16;
 /** Paragraph alignment values readable and writable through this object model. */
 export type ParagraphAlignment = 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
 
+/**
+ * One paragraph: what it says, what it is, and the ways it can be changed.
+ *
+ * Identity is the document's own. {@link Paragraph.uniqueLocalId} is the `w14:paraId` the file
+ * carries — the value Word writes, and the one `commentsExtended.xml` and coauthoring merges
+ * already anchor to — never a position in a collection. Deleting the paragraph above this one
+ * does not change it, which is the point: an agent that read a document, thought about it, and
+ * now wants to write to "the paragraph I was looking at" cannot express that with an index. A
+ * paragraph the file gave no id gets one deterministically at open, so the same bytes always
+ * answer the same identities and saving writes them back.
+ *
+ * A structural edit owns its paragraph for the batch: `delete()`, `split()` and
+ * `insertParagraph()` change what offsets mean, so a second call in the same `sync()` that also
+ * touches this paragraph is refused with `ConflictingChanges` rather than planned against
+ * coordinates that have stopped describing it. Two syncs get both edits, each exactly as asked.
+ *
+ * @public
+ */
 export class Paragraph extends ModelObject implements PromisedItem {
   #font: Font | undefined;
   #list: List | undefined;
@@ -68,13 +86,13 @@ export class Paragraph extends ModelObject implements PromisedItem {
     super(context, path, { nullable });
   }
 
-  /** @internal */
+  /** @internal Bind this object to the address the owning read answered. */
   hydrateAddress(address: ObjectAddress): void {
     if (address.kind === 'handle') this.path.resolveTo(address.handle);
     else this.path.resolveNull();
   }
 
-  /** @internal */
+  /** @internal Settle as the null object: the read found nothing to name. */
   hydrateNull(): void {
     this.path.resolveNull();
   }
@@ -298,6 +316,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
     return pieces;
   }
 
+  /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     const selected = this.selection(request, ['text', 'uniqueLocalId', ...FORMAT_FIELDS]);
     const handle = this.#handle();

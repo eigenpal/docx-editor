@@ -28,7 +28,7 @@ import {
   findOccurrences,
   isSearchableQuery,
   paragraphTextOf,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import {
   contentControlContentOf,
   isContentControl,

@@ -21,6 +21,7 @@ export interface ReplayOutcome {
   readonly authoredState?: unknown;
 }
 
+/** The interface a conformance runtime implements so one fixture can drive every backend. */
 export interface ReplayStore {
   /** Initialize from the fixture source; return the initial revision (0 for create). */
   init(fixture: ConformanceFixture): number;
@@ -28,6 +29,7 @@ export interface ReplayStore {
   applyStep(step: FixtureStep): ReplayOutcome;
 }
 
+/** What replaying a fixture produced: per-step outcomes and where they diverged. */
 export interface ReplayReport {
   readonly ok: boolean;
   readonly mismatches: readonly string[];
@@ -87,6 +89,7 @@ export function replayFixture(fixture: ConformanceFixture, store: ReplayStore): 
 // Re-export the canonical fingerprint under the authored-state ephemera policy so
 // fixtures and stores agree on the hash without importing comparators directly.
 import { fingerprint } from '../comparators/index.ts';
+/** Hash a store's authored state, so two runtimes replaying one fixture can be compared. */
 export function hashAuthored(authoredState: unknown): string {
   return fingerprint('authoredState', authoredState);
 }

@@ -1,77 +1,93 @@
 ---
 title: 'Introduction'
-description: 'Open source WYSIWYG DOCX editor for React and Vue. Runs in the browser: .docx in, .docx out, with tracked changes, comments, and AI tools.'
+description: 'Open source WYSIWYG DOCX editor for React. Runs in the browser: .docx in, .docx out, with tracked changes, comments, and custom nodes.'
 category: 'Getting Started'
 order: 1
-seoTitle: 'DOCX Editor for React and Vue'
+seoTitle: 'DOCX Editor for React'
 ---
 
-`docx-editor` is an open-source WYSIWYG DOCX editor for React and Vue. It parses OOXML in the browser, renders paginated pages, and serializes the current document back to `.docx`. You do not need an upload service or conversion backend for normal browser editing.
+`docx-editor` is an open-source WYSIWYG DOCX editor for React. It parses OOXML in the browser, paints real paginated pages, and serializes the current document back to `.docx`. You do not need an upload service or a conversion backend for normal browser editing.
+
+**It is lossless.** Everything you do not edit comes back byte for byte — including the parts the editor does not understand. Opening a document here cannot quietly destroy it.
 
 <Cards>
-  <Card title="Get it running" href="/docs/1.x/quickstart">
+  <Card title="Get it running" href="/docs/2.x/quickstart">
     Install the adapter, import the stylesheet, load a .docx from a file input, and save it back.
   </Card>
-  <Card title="Evaluate fidelity" href="/docs/1.x/word-fidelity">
-    Feature support, round-trip behavior, security model, API stability, and known limits.
+  <Card title="Build your own UI" href="/docs/2.x/react/composition">
+    Unstyled primitives and hooks. Every packaged control is a consumer of the same public API.
   </Card>
-  <Card title="Automate a document" href="/docs/1.x/editor-api">
-    Drive a DOCX from code: on a server over bytes, or against an editor already open.
+  <Card title="Evaluate fidelity" href="/docs/2.x/word-fidelity">
+    Feature support, round-trip behavior, security model, API stability, and known limits.
   </Card>
 </Cards>
 
 ## Packages
 
-| Package | What's in it |
-|---|---|
-| [`@docx-editor.dev/react`](/docs/1.x/react) | React adapter. `<DocxEditor>` with toolbar, dialogs, hooks (history, find/replace, autosave, clipboard), plugin host. |
-| [`@docx-editor.dev/vue`](/docs/1.x/vue) | Vue 3 adapter. Same `<DocxEditor>`, same props and ref methods; hooks become composables. |
-| [`@docx-editor.dev/nuxt`](/docs/1.x/vue/nuxt) | Nuxt 3 & 4 module wrapping the Vue adapter. Auto-imports an SSR-safe `<DocxEditor>`. |
-| [`@docx-editor.dev/core`](/docs/1.x/core) | Framework-agnostic core: OOXML parser/serializer, document model, ProseMirror schema, layout engine. |
-| [`@docx-editor.dev/editor-api`](/docs/1.x/editor-api) | Document automation: a batching object model that drives a document from a server or from an editor already open in a page. |
-| [`@docx-editor.dev/i18n`](/docs/1.x/i18n) | Locale data for both adapters. Ships `en`, `de`, `fr`, `he`, `hi`, `pl`, `pt-BR`, `tr`, `zh-CN`. |
+| Package                                               | What's in it                                                                                                                        |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| [`@docx-editor.dev/react`](/docs/2.x/react)           | React adapter. `<DocxEditor>` for the packaged editor; `DocxEditor.Root` + hooks to build your own.                                 |
+| [`@docx-editor.dev/core`](/docs/2.x/core)             | Framework-agnostic engine: OOXML read/write, canonical document tree, layout, paint, `Editor` contract.                             |
+| [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) | Office.js-compatible editing API: a batching object model that edits a document from a server, or an editor already open in a page. |
+| [`@docx-editor.dev/pro`](/docs/2.x/pro)               | Tracked changes, comments, and custom nodes.                                                                                        |
+| [`@docx-editor.dev/i18n`](/docs/2.x/i18n)             | Locale data. Ships `en`, `de`, `fr`, `he`, `hi`, `pl`, `pt-BR`, `tr`, `zh-CN`.                                                      |
 
-All packages are released together in a fixed version group. Every one of them is Apache 2.0 except `@docx-editor.dev/editor-api`, which is under the [EigenPal Pro Evaluation License 1.0](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/LICENSE.md): free for internal, non-production evaluation, with production use requiring a commercial agreement ([licensing@eigenpal.com](mailto:licensing@eigenpal.com)).
+All packages release together in a fixed version group. Everything is Apache 2.0 except `@docx-editor.dev/editor-api` and `@docx-editor.dev/pro`, which are under the EigenPal Pro Evaluation License 1.0: free for internal, non-production evaluation, with production use requiring a commercial agreement ([licensing@eigenpal.com](mailto:licensing@eigenpal.com)).
 
 ## Which package do I need?
 
-**React app.** Install `-react`. It pulls in `-core` and `-i18n`.
+**React app.** Install `-react`. It carries the engine and the string catalogue.
 
 ```bash
 npm install @docx-editor.dev/react
 ```
 
-**Vue 3 app.** Same shape, swap the adapter. On Nuxt, install `@docx-editor.dev/nuxt` instead.
+**Tracked changes, comments, or custom nodes.** Add `-pro` and register its modules.
 
 ```bash
-npm install @docx-editor.dev/vue
+npm install @docx-editor.dev/react @docx-editor.dev/pro
 ```
 
-**Server-side editing, no UI.** `-editor-api` opens DOCX bytes, edits them through its object model, and saves them back; `-core` if you want the document model directly.
+**Server-side editing, no UI.** `-editor-api` opens DOCX bytes, edits them through its Office.js-compatible object model, and saves them back.
 
 ```bash
 npm install @docx-editor.dev/editor-api
 ```
 
-**Automating an editor a reader has open.** Add `-editor-api` next to `-react` or `-vue` and use its `/browser` entry, which drives the editor instance the adapter already created.
+**Automating an editor a reader has open.** Add `-editor-api` next to `-react` and use its `/browser` entry, which drives the editor instance the adapter already created.
 
 ## What it handles
 
 The editor models common Word constructs and writes them back through OOXML:
 
-- Text formatting, fonts, theme colors, paragraph styles
-- Tables (including merged cells and page-spanning rows), lists and numbering
-- Headers, footers, sections, page layout
-- Tracked changes and suggesting mode, comments with replies
+- Text formatting, fonts, theme colors, paragraph and character styles
+- Tables (merged cells, page-spanning rows, repeated header rows), lists and numbering
+- Headers, footers, sections, columns, page layout
 - Images (inline and anchored), hyperlinks, bookmarks, fields
 - Footnotes, endnotes, content controls
-- Real-time collaboration over [Yjs](/docs/1.x/realtime-collaboration)
+- Tracked changes and comments, with [`@docx-editor.dev/pro`](/docs/2.x/pro)
 
-Feature-by-feature coverage and known limits: [Word fidelity](/docs/1.x/word-fidelity). You can also open one of your own documents in the [live demo](https://docx-editor.dev/editor).
+Feature-by-feature coverage and known limits: [Word fidelity](/docs/2.x/word-fidelity). You can also open one of your own documents in the [live demo](https://docx-editor.dev/editor).
+
+## Nothing is lost
+
+Open a document, edit one word, save it. Everything you did not touch comes back byte for
+byte: custom XML, embedded fonts, macros, media, VBA, Smart Tags, and markup from add-ins the
+editor has never heard of.
+
+The mechanism is the canonical tree. Parsing types a node only where layout needs it and keeps
+everything else generic, holding the original element verbatim. On save, typed parts
+re-serialize and the rest is repacked from the source file. An element the parser cannot type —
+unknown, or known but in an invalid position — becomes a generic node instead of being dropped,
+so unrecognized markup never blocks editing.
+
+CI checks this on a corpus of real documents with two oracles: a canonical fingerprint over the
+tree, and a semantic digest compared across save and reopen. A change that drops content fails
+the build.
 
 ## Next steps
 
-- [Quickstart](/docs/1.x/quickstart): load, edit, and save a `.docx`
-- [Installation](/docs/1.x/installation): Next.js, Vite, Remix, Astro, Vue, Nuxt
-- [Word fidelity](/docs/1.x/word-fidelity): feature support and round-trip behavior
-- [Examples](/docs/1.x/examples): runnable starters and live demos
+- [Quickstart](/docs/2.x/quickstart): load, edit, and save a `.docx`
+- [Installation](/docs/2.x/installation): Next.js, Vite, Remix, Astro
+- [Composition](/docs/2.x/react/composition): build your own chrome on the primitives
+- [Word fidelity](/docs/2.x/word-fidelity): feature support and round-trip behavior

@@ -499,6 +499,12 @@ export function canonicalOoxmlFingerprint(value: OoxmlPart | OoxmlNode): string 
   return canonicalOoxmlFingerprintWithBindings(value);
 }
 
+/**
+ * Structural equality of two canonical trees, ignoring node ids.
+ *
+ * Ids differ between two parses of the same bytes, so comparing them would report every reopen as
+ * a change. This compares what the document SAYS.
+ */
 export function ooxmlTreesEqual(
   left: OoxmlPart | OoxmlNode,
   right: OoxmlPart | OoxmlNode

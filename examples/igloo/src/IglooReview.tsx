@@ -22,7 +22,7 @@
 // demo's, and the panel below them is the appended child reading the node's typed attrs.
 
 import { DocxEditorReview, useReview, useReviewItem } from '@docx-editor.dev/pro/react';
-import type { ReviewRevisionKind } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { ReviewRevisionKind } from '@docx-editor.dev/core/contracts/editor';
 import { BergGlyph, DomeGlyph } from './art/Specimen';
 import { Stats } from './SpecimenPopover';
 import { iglooT } from './labels';
@@ -32,10 +32,11 @@ import { blocksOf, depthOf, insideTemperature, OUTSIDE, tipHeight } from './spec
 /**
  * What each kind of tracked change is called here.
  *
- * The packaged card says "Added" and "Deleted", from the bundled catalogue. The rail takes no
- * `t` prop, so a renamed vocabulary goes through the SUMMARY override rather than through
- * `labels.ts` — which is the honest way round: these are the theme's words for the same
- * decisions, not a translation of them.
+ * The packaged card says "Added" and "Deleted", from the bundled catalogue. `labels.ts` could
+ * rename those keys — the rail takes a `t` like every other compound — but these go through
+ * the SUMMARY override instead, which is the honest way round: a theme's word for a decision
+ * is not a translation of it, and `Recut` has to sit beside the quoted before-and-after that
+ * only a replaced revision has.
  */
 const FLOE_WORDS: Record<ReviewRevisionKind, string> = {
   insert: 'Frozen in',

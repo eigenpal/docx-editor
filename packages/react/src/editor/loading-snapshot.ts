@@ -3,7 +3,7 @@
 // pre-mount `snapshot()`. A single frozen constant so those answers can never drift,
 // and so `useSyncExternalStore` sees a stable reference across repeated reads.
 
-import type { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 
 /**
  * What `snapshot()` reports before an editor exists: loading, not editable, nothing

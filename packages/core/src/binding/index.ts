@@ -1,7 +1,17 @@
+/**
+ * `@docx-editor.dev/core/binding` — the canonical tree ↔ ProseMirror binding.
+ *
+ * Forward: project one revision of the tree into a ProseMirror doc. Reverse: explain an edited
+ * doc as the smallest set of tree ops, or REFUSE. The reverse direction never reconstructs the
+ * tree from the projection, so anything the projection does not model stays carried by the tree.
+ *
+ * @packageDocumentation
+ * @public
+ */
 // @docx-editor.dev/engine-binding
 
 /** Stable package identity used by the import-graph / package-authority checks. */
-export const ENGINE_BINDING_PACKAGE = '@docx-editor.dev/core-contract/binding' as const;
+export const ENGINE_BINDING_PACKAGE = '@docx-editor.dev/core/binding' as const;
 
 export { treeSchema, runPropsOf, type ParagraphAttrs } from './tree-schema.ts';
 export {
@@ -22,7 +32,7 @@ export {
   type TreeDocxSession,
   type TreeSessionRejection,
 } from './tree-session.ts';
-export type { StoryScope, StoryTargetRejection } from '@docx-editor.dev/core-contract/store';
+export type { StoryScope, StoryTargetRejection } from '@docx-editor.dev/core/store';
 export {
   mountTreeSurface,
   type TreeSurface,

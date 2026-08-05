@@ -12,7 +12,7 @@
 // rendered with.
 
 import { useCallback, useRef, useSyncExternalStore } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
 
 /**

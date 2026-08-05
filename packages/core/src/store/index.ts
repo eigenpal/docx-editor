@@ -1,3 +1,17 @@
+/**
+ * `@docx-editor.dev/core/store` — the canonical OOXML tree and the only write path into it.
+ *
+ * Bytes become a typed-where-layout-needs-it, generic-everywhere-else tree. Every mutation is a
+ * `TreeDocOp` addressed by node id plus UTF-16 offset, applied in one transaction, so a batch
+ * refused halfway leaves the document exactly as it was.
+ *
+ * This is also the trust boundary: zip and XML limits, entity-free parsing, OPC name validation,
+ * and inert executable content all live here, because everything downstream assumes a sanitized
+ * projection.
+ *
+ * @packageDocumentation
+ * @public
+ */
 // @docx-editor.dev/engine-core
 //
 // Semantic core: bounded OPC/OOXML trust boundary, the canonical ordered OOXML tree,
@@ -9,7 +23,7 @@
 // dependency rules: docs/architecture/production-engine-packages.md.
 
 /** Stable package identity used by the import-graph / package-authority checks. */
-export const ENGINE_CORE_PACKAGE = '@docx-editor.dev/core-contract/store' as const;
+export const ENGINE_CORE_PACKAGE = '@docx-editor.dev/core/store' as const;
 
 // Capability/runtime registry and frozen cross-cutting ids (task 0.1).
 export * from './registry/index.ts';

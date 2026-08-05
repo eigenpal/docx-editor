@@ -11,6 +11,13 @@ import {
 } from './numbering-index.ts';
 import { expandLvlText } from './numbering-format.ts';
 
+/**
+ * The result of counting ONE list paragraph: the level that applied, the counter vector after it,
+ * and the marker text a reader sees.
+ *
+ * Counters are a vector across all nine levels, not a single number, because a deeper level
+ * restarting resets the ones below it while leaving those above intact.
+ */
 export interface ListCounterAdvance {
   /** Effective abstract numbering template for this num instance. */
   readonly abstractNumId: string;
@@ -23,6 +30,13 @@ export interface ListCounterAdvance {
   readonly markerText: string;
 }
 
+/**
+ * The running counters for one layout pass over one story.
+ *
+ * Stateful and order-dependent by nature: a list number is a function of every numbered paragraph
+ * before it, which is why markers are computed during layout and cannot be read off a paragraph
+ * in isolation.
+ */
 export interface ListCounterState {
   /**
    * Advance counters for one list paragraph.

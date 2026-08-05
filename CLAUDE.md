@@ -8,7 +8,7 @@ layout.
 
 This repo contains contracts, production engine packages, and adapters.
 
-- `packages/core` is the private `@docx-editor.dev/core-contract`.
+- `packages/core` is the private `@docx-editor.dev/core`.
 - `packages/engine-*` contains the in-tree engine. Package responsibilities and
   dependency rules live in `docs/architecture/production-engine-packages.md`.
 - Adapters live in `packages/react`, `packages/vue`, and `packages/nuxt`.
@@ -262,6 +262,29 @@ commit it. Skip only for test/docs/CI-only PRs.
 
 Don't: push the `chore: release` commit by hand; delete `.changeset/*.md` outside
 `changeset version`; edit `CHANGELOG.md` or `package.json#version` by hand.
+
+### Third-party notices
+
+Every publishable package ships a `THIRD_PARTY_NOTICES.md` reproducing the
+license of each third-party package esbuild inlines into its bundles — the
+private core package pulls fast-xml-parser, fflate and prosemirror-\* in, and
+MIT/Apache-2.0 both require the notice to travel with the copy. The Release
+workflow generates it from `dist/metafile-*.json` right before publishing, and
+`bun run release` does the same for a manual publish. The file is gitignored:
+regenerate with `bun run build:packages && bun run notices:generate`.
+
+`notices:check` compares the files against the CURRENT `dist/` — it only means
+anything right after a build, and reports "missing" on a clean tree by design.
+
+The run is all-or-nothing. A tsup config that stops emitting `metafile: true`, a
+bundled dependency with no license text, or a `files` array that forgets
+`THIRD_PARTY_NOTICES.md` fails it — and a failure deletes the notices rather
+than leaving a stale or partial one for `changeset publish` to pack.
+
+Adding a publishable package that is not a tsup bundle (ships `src`, or builds
+with Vite) hits this deliberately: it has no metafile, so it fails until it gets
+an attribution path. Font/asset packages are the real case — `packages/fonts`
+carries OFL text in `licenses/`, which no metafile can see.
 
 ## PR style
 

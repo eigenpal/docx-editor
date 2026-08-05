@@ -10,15 +10,15 @@
 // comes BACK — for the popover to show, for a click to open — is always the sanitized
 // projection layout already resolved, never the authored string.
 
-import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
+import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
 import {
   hyperlinkTargetOf,
   type OoxmlNode,
   type OoxmlPart,
   type StoryScope,
   type TreeDocOp,
-} from '@docx-editor.dev/core-contract/store';
-import type { SemanticPosition, SemanticSelection } from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/store';
+import type { SemanticPosition, SemanticSelection } from '@docx-editor.dev/core/layout';
 
 /** Inline `w:sdt` nesting bound — matches `segmentsOf` and formatting walks. */
 const MAX_SDT_NESTING = 32;
@@ -211,6 +211,13 @@ export interface HyperlinkOpsDeps {
   ) => void;
 }
 
+/**
+ * Reading and writing hyperlinks on the surface.
+ *
+ * Every href that leaves here has already been through `sanitizeHref` — targets come from files,
+ * so `javascript:`, `data:` and `vbscript:` are dropped at the parse boundary rather than trusted
+ * to be filtered by whoever renders them.
+ */
 export interface HyperlinkOps {
   /** Every link in the paragraph the caret is in. */
   linksInCaretParagraph(): SurfaceHyperlink[];

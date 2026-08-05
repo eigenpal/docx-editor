@@ -28,7 +28,7 @@ import {
   useState,
 } from 'react';
 import type { ReactElement, ReactNode } from 'react';
-import { CHROME_MENUS, type ChromeMenuId } from '@docx-editor.dev/core-contract/editor';
+import { CHROME_MENUS, type ChromeMenuId } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { DocxEditorPageSetupDialog } from '../DocxEditorPageSetup';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';

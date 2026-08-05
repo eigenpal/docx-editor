@@ -1,8 +1,8 @@
 // Resolve paragraph `numPr` against a numbering index and produce per-paragraph list
 // layout inputs (marker text, effective indent, marker face) for one story walk.
 
-import { flattenContentControls } from '@docx-editor.dev/core-contract/store';
-import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import { flattenContentControls } from '@docx-editor.dev/core/store';
+import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
 import { createListCounterState } from './list-counters.ts';
 import {
   EMPTY_NUMBERING_INDEX,
@@ -27,6 +27,12 @@ import { paragraphIndent, propertiesOf } from './paragraph-flow.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 
+/**
+ * A paragraph's list membership fully resolved: definition, level, marker text and geometry.
+ *
+ * `markerText` is already expanded through the counter state, so it is the string a reader sees
+ * rather than the `w:lvlText` template.
+ */
 export interface ResolvedListItem {
   readonly numId: string;
   readonly ilvl: number;

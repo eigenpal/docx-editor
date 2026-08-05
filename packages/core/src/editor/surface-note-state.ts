@@ -1,6 +1,6 @@
 // Read-only note-property state for adapter chrome — no tree mutation.
 
-import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
+import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
 import { enumerateDocumentSections, paragraphSectionNode } from '../layout/section-properties.ts';
 import { storyBlocks } from '../layout/story-roots.ts';
 import {
@@ -24,7 +24,7 @@ import {
   type NoteKind,
 } from '../store/package/note-nodes.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
-import { paragraphTextOf } from '@docx-editor.dev/core-contract/store';
+import { paragraphTextOf } from '@docx-editor.dev/core/store';
 import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 

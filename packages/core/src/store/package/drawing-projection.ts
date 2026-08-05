@@ -48,6 +48,12 @@ import type { OoxmlPackage } from './ooxml-package.ts';
 
 export type { DrawingDiagnostic, DrawingProjectionLimits };
 
+/**
+ * Whether a drawing sits in the text flow or is positioned against a frame.
+ *
+ * The distinction that decides everything downstream: an inline drawing occupies a character
+ * position, while an anchored one has offsets relative to a page, margin or column.
+ */
 export type DrawingKind = 'inline' | 'anchored';
 
 /** Nine Word wrap menu targets (inline plus eight floating modes). @public */
@@ -62,6 +68,7 @@ export type ImageWrapTarget =
   | 'behind'
   | 'inFront';
 
+/** Every text-wrap mode a drawing may be set to, including `inline`. */
 export const IMAGE_WRAP_TARGETS: readonly ImageWrapTarget[] = [
   'inline',
   'square',
@@ -96,6 +103,7 @@ export type DrawingVerticalReferenceFrame =
   | 'paragraph'
   | 'topMargin';
 
+/** `a:srcRect` — how much of each edge of the source image is cropped away, as fractions. */
 export interface SourceCrop {
   readonly left: number;
   readonly top: number;
@@ -113,6 +121,12 @@ export interface DrawingTransform {
   readonly extentEmu: Readonly<{ cx: number; cy: number }>;
 }
 
+/**
+ * What a drawing refuses: selection, movement, resizing, aspect change.
+ *
+ * Read and honoured rather than advisory — chrome that offered a handle the store will refuse
+ * would promise an edit that cannot happen.
+ */
 export interface DrawingLocks {
   readonly select: boolean;
   readonly move: boolean;
@@ -127,6 +141,12 @@ export interface DrawingLocksInput {
   readonly changeAspect?: boolean;
 }
 
+/**
+ * An anchored drawing's position: offsets, and the frames they are relative to.
+ *
+ * The relative-to bases matter as much as the offsets. Writing an offset without preserving its
+ * base re-anchors the drawing against a different reference and moves it somewhere nobody asked.
+ */
 export interface DrawingPositionInput {
   /**
    * `'simple'` when `@simplePos="1"`: `horizontalEmu` / `verticalEmu` are authoritative
@@ -1563,6 +1583,13 @@ export function drawingAccessibility(projection: DrawingProjection): DrawingAcce
   });
 }
 
+/**
+ * Project one `w:drawing` into the resolved shape layout and chrome read.
+ *
+ * Bounded throughout: extents, crops and nesting all come from a file. Returns a projection that
+ * reports `hidden` and its locks rather than throwing, so an unusable drawing degrades to
+ * something the surface can skip.
+ */
 export function projectDrawing(
   drawing: OoxmlDrawingNode,
   context: Readonly<{

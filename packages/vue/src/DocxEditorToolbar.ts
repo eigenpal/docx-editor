@@ -14,7 +14,7 @@
 // handler was supplied, and it hardcoded English labels.
 
 import { defineComponent, h, ref, type PropType, type VNode } from 'vue';
-import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import {
   CHROME_UNAVAILABLE_KEY,
   chromeSlotId,
@@ -23,7 +23,7 @@ import {
   toolbarCommandState,
   type ChromeControl,
   type ChromeSlotId,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/editor';
 import { useEditorSnapshot } from './useEditorSnapshot';
 
 /**

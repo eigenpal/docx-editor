@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { openTreeSession } from '../../binding/tree-session.ts';
 import { paintSemanticLayout } from '../../output/semantic-paint.ts';
-import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import {
   createFixedMeasurer,
   layoutHeaderFooterStory,

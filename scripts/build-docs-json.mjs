@@ -142,6 +142,12 @@ function readEntryDocBlock(srcPath) {
 }
 
 function processPackage(pkg) {
+  // A disconnected package has no build to read; `api-extractor.mjs` skips it the same way.
+  // Skipped LOUDLY so the exemption stays visible rather than quietly shrinking the docs.
+  if (pkg.disconnected) {
+    console.warn(`  SKIPPED ${pkg.name}: ${pkg.disconnected}`);
+    return false;
+  }
   const pkgRoot = path.join(repoRoot, pkg.root);
   const pkgJson = readPackageJson(pkgRoot);
   const apiModelDir = path.join(pkgRoot, 'temp', 'api-model');
@@ -158,6 +164,7 @@ function processPackage(pkg) {
     tsconfigPath: pkg.tsconfigPath
       ? path.join(repoRoot, pkg.tsconfigPath)
       : undefined,
+    sourceEntries: pkg.sourceEntries,
     emitDocModel: true,
   });
 
@@ -221,15 +228,14 @@ function processPackage(pkg) {
   );
 
   console.log(`  ${pkg.name}: ${written} subpath docs written`);
+  return true;
 }
 
 function main() {
   console.log('Building docs JSON...');
   fs.mkdirSync(docsJsonDir, { recursive: true });
 
-  for (const pkg of PACKAGES) {
-    processPackage(pkg);
-  }
+  const documented = PACKAGES.filter((pkg) => processPackage(pkg));
 
   // Top-level packages index: lists every package + its subpaths-index path.
   // Lets a docs site fetch one root JSON, then drill into each package.
@@ -238,7 +244,7 @@ function main() {
   const root = {
     _schemaVersion: 1,
     github: GITHUB,
-    packages: PACKAGES.map((p) => ({
+    packages: documented.map((p) => ({
       name: p.name,
       pkgSlug: p.pkgSlug,
       indexPath: path.posix.join(p.pkgSlug, 'index.subpaths.json'),

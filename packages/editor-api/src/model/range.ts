@@ -46,6 +46,23 @@ import { ModelObject } from './model-object.ts';
 import { Paragraph } from './paragraph.ts';
 import { searchOptions, type SearchOptions } from './search-options.ts';
 
+/**
+ * A stretch of a story: two endpoints, each a paragraph and a UTF-16 offset.
+ *
+ * A range is a SNAPSHOT, not a tracked region. Its endpoints name the paragraphs they were found
+ * in and the offsets they were found at, so it stays meaningful across edits ELSEWHERE in the
+ * document and becomes an explicit `InvalidObjectPath` refusal once one of its paragraphs is
+ * gone. What it deliberately does not do is follow edits INSIDE itself: a range over `"alpha"`
+ * whose paragraph then gains a word at offset 0 still names offsets 0..5. Word's own ranges do
+ * move, by keeping a live region in the document; this API has none, and pretending otherwise
+ * would answer text from a place the caller was not looking at.
+ *
+ * That is also why `start` and `end` are absent rather than unimplemented — they are
+ * document-wide character positions, a different addressing scheme from this API's paragraph
+ * identity plus UTF-16 offset. Ask a range for its {@link Range.paragraphs} instead.
+ *
+ * @public
+ */
 export class Range extends ModelObject implements PromisedItem {
   #paragraphs: ParagraphCollection | undefined;
   #font: Font | undefined;
@@ -66,13 +83,13 @@ export class Range extends ModelObject implements PromisedItem {
     super(context, path, { nullable });
   }
 
-  /** @internal */
+  /** @internal Bind this object to the address the owning read answered. */
   hydrateAddress(address: ObjectAddress): void {
     if (address.kind === 'span') this.path.resolveToSpan(address.span);
     else this.path.resolveNull();
   }
 
-  /** @internal */
+  /** @internal Settle as the null object: the read found nothing to name. */
   hydrateNull(): void {
     this.path.resolveNull();
   }
@@ -248,6 +265,7 @@ export class Range extends ModelObject implements PromisedItem {
     }));
   }
 
+  /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     const selected = this.selection(request, ['text', 'style', 'hyperlink']);
     if (selected.includes('hyperlink')) {

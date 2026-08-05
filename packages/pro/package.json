@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/pro",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "private": true,
   "description": "Commercial capabilities for @docx-editor.dev: the review module (comments, tracked changes, markup rendering) and custom inline nodes over content controls.",
   "sideEffects": false,
@@ -24,11 +24,12 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "build:types": "tsc -p tsconfig.types.json",
     "license:check": "license-check-and-add check -f license-check.json",
     "license:add": "license-check-and-add add -f license-check.json"
   },
   "dependencies": {
-    "@docx-editor.dev/core-contract": "workspace:*",
+    "@docx-editor.dev/core": "workspace:*",
     "@docx-editor.dev/i18n": "workspace:*"
   },
   "peerDependencies": {

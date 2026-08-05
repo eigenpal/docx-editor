@@ -6,12 +6,8 @@
 // through, so they are omitted rather than rendered inert.
 
 import { computed, defineComponent, h, type PropType } from 'vue';
-import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
-import {
-  generateRulerTicks,
-  rulerPageBox,
-  type RulerUnit,
-} from '@docx-editor.dev/core-contract/editor';
+import type { Editor } from '@docx-editor.dev/core/contracts/editor';
+import { generateRulerTicks, rulerPageBox, type RulerUnit } from '@docx-editor.dev/core/editor';
 import { useEditorSnapshot } from './useEditorSnapshot';
 
 /** Matches React's `RULER_WIDTH` gutter. */

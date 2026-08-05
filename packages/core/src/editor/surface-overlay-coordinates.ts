@@ -16,19 +16,29 @@ export function surfacePaintScale(zoom: number): number {
   return zoom * (96 / 72);
 }
 
+/** Layout points to CSS pixels. Pair with {@link surfacePaintScale} for the current zoom. */
 export function layoutPointsToCssPixels(points: number, paintScale: number): number {
   return points * paintScale;
 }
 
+/** CSS pixels back to layout points — what a pointer event's coordinates must go through. */
 export function cssPixelsToLayoutPoints(pixels: number, paintScale: number): number {
   return pixels / paintScale;
 }
 
+/**
+ * What an overlay needs to place itself over the painted pages: the zoom scale, and where each
+ * page sits horizontally.
+ *
+ * Per-page X offsets rather than one origin, because pages are centred independently and a
+ * narrower page in a mixed-size document does not start where its neighbours do.
+ */
 export interface SurfaceOverlayCoordinates {
   readonly paintScale: number;
   readonly pageOffsetX: ReadonlyMap<number, number>;
 }
 
+/** A rectangle in one page's content frame, in layout points. */
 export interface OverlayFrameRect {
   readonly pageIndex: number;
   readonly x: number;
@@ -73,6 +83,12 @@ export function resizePreservesAspect(
 
 const HANDLE_ORDER: readonly ImageResizeHandle[] = ['e', 'se', 's', 'sw', 'w', 'nw', 'n', 'ne'];
 
+/**
+ * Where an anchored drawing's positioning frame begins, in layout points.
+ *
+ * An anchored drawing's offsets are relative to a base the file names (page, margin, column, …),
+ * so a move drag needs that base's origin to turn a pointer delta into a stored offset.
+ */
 export interface AnchorFrameOrigin {
   readonly x: number;
   readonly y: number;
@@ -110,6 +126,13 @@ function emuToPoints(emu: number): number {
   return emu / EMU_PER_POINT;
 }
 
+/**
+ * One resize frame: the extent to store, and the box to draw while the pointer is still down.
+ *
+ * Both, because they are different spaces — the extent is EMU for the file, the preview is
+ * points for the overlay — and computing them separately would let the handle drift from the
+ * rectangle it is dragging.
+ */
 export interface ImageResizeResult {
   readonly widthEmu: number;
   readonly heightEmu: number;
@@ -122,6 +145,13 @@ export interface ImageResizeResult {
   readonly position: DrawingPositionInput | null;
 }
 
+/**
+ * Resolve one resize frame from the pointer's current position.
+ *
+ * Handles rotation and flips by mapping the SCREEN-space handle back to the drawing's local axes
+ * first: dragging the visually-right handle of a 90°-rotated image must change its stored height,
+ * and a flipped image's handles move in the opposite direction from where they appear.
+ */
 export function computeImageResizeResult(options: {
   readonly handle: ImageResizeHandle;
   readonly startWidthEmu: number;
@@ -259,6 +289,13 @@ export function computeImageResizeResult(options: {
   });
 }
 
+/**
+ * An {@link ImageOverlayScrollPort} over a real scroll container.
+ *
+ * Reports the delta the element ACTUALLY scrolled, converted back to points — at the end of the
+ * document that is less than asked for, and the overlay must not move the image further than the
+ * page travelled.
+ */
 export function createImageOverlayScrollPort(
   scroller: HTMLElement,
   paintScale: number
@@ -273,6 +310,12 @@ export function createImageOverlayScrollPort(
   });
 }
 
+/**
+ * The committed result of a whole drag, recomputed from the release coordinates.
+ *
+ * Recomputed rather than accumulated from the per-frame previews, so rounding applied once per
+ * frame cannot add up into a final extent that differs from where the pointer actually stopped.
+ */
 export interface FinalizedImageOverlayInteraction extends ImageResizeResult {
   readonly position: DrawingPositionInput | null;
 }

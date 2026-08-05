@@ -118,6 +118,7 @@ function decodeXmlBytes(bytes: Uint8Array, limits?: XmlLimits): XmlBytesResult {
   }
 }
 
+/** Caps applied while loading a package: zip, XML, part count and relationship count. */
 export interface OoxmlPackageLimits {
   readonly zip?: ZipLimits;
   readonly xml?: XmlLimits;
@@ -127,6 +128,7 @@ export interface OoxmlPackageLimits {
   readonly maxRelationships?: number;
 }
 
+/** The limits in force when a host configures none. Conservative and finite. */
 export const DEFAULT_OOXML_PACKAGE_LIMITS: Required<
   Pick<OoxmlPackageLimits, 'maxXmlParts' | 'maxRelationships'>
 > = Object.freeze({ maxXmlParts: 512, maxRelationships: 10_000 });
@@ -144,6 +146,12 @@ export interface OoxmlExternalTarget {
   readonly sinkSafe: boolean;
 }
 
+/**
+ * A loaded package: every XML part as a canonical tree, plus the non-XML parts kept verbatim.
+ *
+ * The preservation model in one value. Modelled parts re-emit normalized; everything else is
+ * byte-identical, which is why an unrecognized part never costs a document anything.
+ */
 export interface OoxmlPackage {
   /** Canonical trees, keyed by canonical part name. Non-XML parts are absent by design. */
   readonly parts: ReadonlyMap<string, OoxmlPart>;
@@ -157,6 +165,7 @@ export interface OoxmlPackage {
   readonly mainDocumentPart: string;
 }
 
+/** Why a package could not be loaded. Every code describes the FILE, not the caller. */
 export type OoxmlPackageRejection =
   | ZipRejection
   | OoxmlReadRejection
@@ -168,6 +177,7 @@ export type OoxmlPackageRejection =
   | 'too-many-relationships'
   | 'too-many-xml-parts';
 
+/** A loaded package, or a typed refusal. Never throws. */
 export type OoxmlPackageResult =
   | { readonly ok: true; readonly package: OoxmlPackage }
   | { readonly ok: false; readonly reason: OoxmlPackageRejection; readonly detail?: string };
@@ -327,6 +337,13 @@ function contentTypeFor(partName: string, index: ContentTypeIndex): string {
  * relationship id, and XML rejection. An external relationship never causes a failure and
  * never causes a fetch: it is recorded with its sink-safety verdict for a later, explicitly
  * user-gated lane.
+ */
+/**
+ * Load DOCX bytes into canonical trees, bounded at every step.
+ *
+ * THE trust boundary for a document. Composes the hardened primitives — zip limits and OPC name
+ * normalization, content-type indexing, relationship validation, entity-free XML — into one
+ * loader, and returns a typed rejection rather than throwing from inside a decoder.
  */
 export function readOoxmlPackage(
   bytes: Uint8Array,

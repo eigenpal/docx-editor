@@ -13,7 +13,7 @@
 // case the legacy projection dropped entirely.
 
 import { Schema, type Node as PMNode } from 'prosemirror-model';
-import type { OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import { paragraphPropsToCss, runPropsToCss } from './tree-styles.ts';
 
 /** Attributes carried by a projected paragraph. */
@@ -24,6 +24,14 @@ export interface ParagraphAttrs {
   readonly props: readonly OoxmlProperty[];
 }
 
+/**
+ * The ProseMirror schema the canonical tree projects into.
+ *
+ * Deliberately minimal. It models only what an editing surface must manipulate directly —
+ * paragraphs, text, tabs, breaks, and run properties as marks — because everything it does NOT
+ * model stays on the tree and is preserved losslessly there. Widening this schema moves content
+ * out of the tree's custody, which is the opposite of what it is for.
+ */
 export const treeSchema = new Schema({
   nodes: {
     doc: { content: 'paragraph+' },

@@ -19,7 +19,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { afterEach, describe, expect, test } from 'bun:test';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { strToU8, zipSync } from 'fflate';
-import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
+import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import {
   DocxEditorContent,
   DocxEditorContextMenu,

@@ -4,87 +4,90 @@
 
 ```ts
 
-import { CHROME_GROUPS } from '@docx-editor.dev/core-contract/editor';
-import { CHROME_MENUS } from '@docx-editor.dev/core-contract/editor';
-import { ChromeMenu } from '@docx-editor.dev/core-contract/editor';
-import { ChromeMenuEntry } from '@docx-editor.dev/core-contract/editor';
-import { ChromeMenuId } from '@docx-editor.dev/core-contract/editor';
-import { ChromeMenuItemEntry } from '@docx-editor.dev/core-contract/editor';
-import { ChromeMenuSeparatorEntry } from '@docx-editor.dev/core-contract/editor';
-import { chromeMenuSlots } from '@docx-editor.dev/core-contract/editor';
-import { ChromeMenuSubmenuEntry } from '@docx-editor.dev/core-contract/editor';
-import { ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
-import { ColorValue } from '@docx-editor.dev/core-contract/contracts/editor';
-import { commandForSlot } from '@docx-editor.dev/core-contract/editor';
-import { composeFontConfiguration } from '@docx-editor.dev/core-contract/editor';
-import { ContentControlSummary } from '@docx-editor.dev/core-contract';
-import { ContentControlType } from '@docx-editor.dev/core-contract';
-import { createFontSource } from '@docx-editor.dev/core-contract/editor';
+import { CHROME_GROUPS } from '@docx-editor.dev/core/editor';
+import { CHROME_MENUS } from '@docx-editor.dev/core/editor';
+import { ChromeMenu } from '@docx-editor.dev/core/editor';
+import { ChromeMenuEntry } from '@docx-editor.dev/core/editor';
+import { ChromeMenuId } from '@docx-editor.dev/core/editor';
+import { ChromeMenuItemEntry } from '@docx-editor.dev/core/editor';
+import { ChromeMenuSeparatorEntry } from '@docx-editor.dev/core/editor';
+import { chromeMenuSlots } from '@docx-editor.dev/core/editor';
+import { ChromeMenuSubmenuEntry } from '@docx-editor.dev/core/editor';
+import { ChromeSlotId } from '@docx-editor.dev/core/editor';
+import { ColorValue } from '@docx-editor.dev/core/contracts/editor';
+import { commandForSlot } from '@docx-editor.dev/core/editor';
+import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
+import { ContentControlSummary } from '@docx-editor.dev/core';
+import { ContentControlType } from '@docx-editor.dev/core';
+import { createFontSource } from '@docx-editor.dev/core/editor';
 import { CSSProperties } from 'react';
-import { DocumentChange } from '@docx-editor.dev/core-contract/contracts/editor';
-import { DocumentHandle } from '@docx-editor.dev/core-contract/contracts/editor';
-import { DocumentSource } from '@docx-editor.dev/core-contract/contracts/editor';
-import { DocxDocument } from '@docx-editor.dev/core-contract/contracts/types';
-import { DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
-import { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
-import { EditorCommand } from '@docx-editor.dev/core-contract/contracts/editor';
-import { EditorEvents } from '@docx-editor.dev/core-contract/contracts/editor';
-import { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
-import { EditorFontErrorCode } from '@docx-editor.dev/core-contract/contracts/editor';
-import { EditorHost } from '@docx-editor.dev/core-contract/contracts/editor';
-import { EditorModule } from '@docx-editor.dev/core-contract/editor';
-import { EditorQuery } from '@docx-editor.dev/core-contract/contracts/editor';
-import { EditorScope } from '@docx-editor.dev/core-contract/contracts/editor';
-import { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
-import { ExecResult } from '@docx-editor.dev/core-contract/contracts/editor';
-import { FontConfiguration } from '@docx-editor.dev/core-contract/contracts/editor';
-import { FontConfigurationBase } from '@docx-editor.dev/core-contract/editor';
-import { FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
-import { FontFaceRequest } from '@docx-editor.dev/core-contract/contracts/editor';
-import { FontLoadFailure } from '@docx-editor.dev/core-contract/editor';
-import { FontLoadFailureReason } from '@docx-editor.dev/core-contract/editor';
-import { FontSource } from '@docx-editor.dev/core-contract/contracts/editor';
-import { FontSourceSubstitution } from '@docx-editor.dev/core-contract/contracts/editor';
-import { FontUrlSource } from '@docx-editor.dev/core-contract/editor';
+import { DocumentChange } from '@docx-editor.dev/core/contracts/editor';
+import { DocumentHandle } from '@docx-editor.dev/core/contracts/editor';
+import { DocumentSource } from '@docx-editor.dev/core/contracts/editor';
+import { DocxDocument } from '@docx-editor.dev/core/contracts/types';
+import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import { Editor } from '@docx-editor.dev/core/contracts/editor';
+import { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
+import { EditorEvents } from '@docx-editor.dev/core/contracts/editor';
+import { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
+import { EditorFontErrorCode } from '@docx-editor.dev/core/contracts/editor';
+import { EditorHost } from '@docx-editor.dev/core/contracts/editor';
+import { EditorModule } from '@docx-editor.dev/core/editor';
+import { EditorQuery } from '@docx-editor.dev/core/contracts/editor';
+import { EditorScope } from '@docx-editor.dev/core/contracts/editor';
+import { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+import { ExecResult } from '@docx-editor.dev/core/contracts/editor';
+import { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
+import { FontConfigurationBase } from '@docx-editor.dev/core/editor';
+import { FontConfigurationFragment } from '@docx-editor.dev/core/editor';
+import { FontFaceRequest } from '@docx-editor.dev/core/contracts/editor';
+import { FontLoadFailure } from '@docx-editor.dev/core/editor';
+import { FontLoadFailureReason } from '@docx-editor.dev/core/editor';
+import { FontResolutionRequest } from '@docx-editor.dev/core/editor';
+import { FontResolver } from '@docx-editor.dev/core/editor';
+import { FontSource } from '@docx-editor.dev/core/contracts/editor';
+import { FontSourceSubstitution } from '@docx-editor.dev/core/contracts/editor';
+import { FontUrlSource } from '@docx-editor.dev/core/editor';
 import { ForwardRefExoticComponent } from 'react';
-import { generateRulerTicks } from '@docx-editor.dev/core-contract/editor';
+import { generateRulerTicks } from '@docx-editor.dev/core/editor';
 import { HTMLAttributes } from 'react';
-import { ImageDecodePort } from '@docx-editor.dev/core-contract/editor';
-import { ImageWrapTarget } from '@docx-editor.dev/core-contract/editor';
-import { IndentFormatting } from '@docx-editor.dev/core-contract/contracts/editor';
-import { loadFonts } from '@docx-editor.dev/core-contract/editor';
-import { LoadFontsRequest } from '@docx-editor.dev/core-contract/editor';
-import { LoadFontsResult } from '@docx-editor.dev/core-contract/editor';
-import { NavigationCommand } from '@docx-editor.dev/core-contract/editor';
-import { PageSetup } from '@docx-editor.dev/core-contract/contracts/editor';
-import { PaginatedSurfaceState } from '@docx-editor.dev/core-contract/editor';
-import { PX_PER_CM } from '@docx-editor.dev/core-contract/editor';
-import { PX_PER_INCH } from '@docx-editor.dev/core-contract/editor';
+import { ImageDecodePort } from '@docx-editor.dev/core/editor';
+import { ImageWrapTarget } from '@docx-editor.dev/core/editor';
+import { IndentFormatting } from '@docx-editor.dev/core/contracts/editor';
+import { loadFonts } from '@docx-editor.dev/core/editor';
+import { LoadFontsRequest } from '@docx-editor.dev/core/editor';
+import { LoadFontsResult } from '@docx-editor.dev/core/editor';
+import { MAX_RESOLVER_FAMILIES } from '@docx-editor.dev/core/editor';
+import { NavigationCommand } from '@docx-editor.dev/core/editor';
+import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
+import { PaginatedSurfaceState } from '@docx-editor.dev/core/editor';
+import { PX_PER_CM } from '@docx-editor.dev/core/editor';
+import { PX_PER_INCH } from '@docx-editor.dev/core/editor';
 import * as react from 'react';
 import react__default from 'react';
 import { ReactElement } from 'react';
 import { ReactNode } from 'react';
 import { Ref } from 'react';
 import { RefAttributes } from 'react';
-import { RulerIndent } from '@docx-editor.dev/core-contract/editor';
-import { rulerPageBox } from '@docx-editor.dev/core-contract/editor';
-import { RulerTick } from '@docx-editor.dev/core-contract/editor';
-import { RulerUnit } from '@docx-editor.dev/core-contract/editor';
-import { runToolbarCommand } from '@docx-editor.dev/core-contract/editor';
-import { SectionProperties } from '@docx-editor.dev/core-contract/editor';
-import { SupportedImageMime } from '@docx-editor.dev/core-contract/editor';
-import { SurfaceFormatting } from '@docx-editor.dev/core-contract/editor';
-import { SurfaceHyperlink } from '@docx-editor.dev/core-contract/editor';
-import { TableChromeSlotId } from '@docx-editor.dev/core-contract/editor';
-import { TextMatch } from '@docx-editor.dev/core-contract/contracts/editor';
-import { TextMeasurer } from '@docx-editor.dev/core-contract/editor';
+import { RulerIndent } from '@docx-editor.dev/core/editor';
+import { rulerPageBox } from '@docx-editor.dev/core/editor';
+import { RulerTick } from '@docx-editor.dev/core/editor';
+import { RulerUnit } from '@docx-editor.dev/core/editor';
+import { runToolbarCommand } from '@docx-editor.dev/core/editor';
+import { SectionProperties } from '@docx-editor.dev/core/editor';
+import { SupportedImageMime } from '@docx-editor.dev/core/editor';
+import { SurfaceFormatting } from '@docx-editor.dev/core/editor';
+import { SurfaceHyperlink } from '@docx-editor.dev/core/editor';
+import { TableChromeSlotId } from '@docx-editor.dev/core/editor';
+import { TextMatch } from '@docx-editor.dev/core/contracts/editor';
+import { TextMeasurer } from '@docx-editor.dev/core/editor';
 import { TFunction } from '@docx-editor.dev/i18n';
-import { Theme } from '@docx-editor.dev/core-contract/contracts/editor';
-import { ToolbarCommandState } from '@docx-editor.dev/core-contract/editor';
-import { toolbarCommandState } from '@docx-editor.dev/core-contract/editor';
+import { Theme } from '@docx-editor.dev/core/contracts/editor';
+import { ToolbarCommandState } from '@docx-editor.dev/core/editor';
+import { toolbarCommandState } from '@docx-editor.dev/core/editor';
 import { Translations } from '@docx-editor.dev/i18n';
-import { ViewScope } from '@docx-editor.dev/core-contract/contracts/editor';
-import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core-contract/editor';
+import { ViewScope } from '@docx-editor.dev/core/contracts/editor';
+import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core/editor';
 
 export { CHROME_GROUPS }
 
@@ -614,7 +617,7 @@ export interface DocxEditorProps {
     readonly colorMode?: 'light' | 'dark' | 'system';
     contextMenu?: boolean | DocxEditorContextMenuProps;
     document?: DocumentSource;
-    fonts?: FontConfiguration | FontConfigurationFragment;
+    fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     hyperlinkPopup?: boolean;
     // (undocumented)
     locale?: string;
@@ -663,7 +666,7 @@ export interface DocxEditorRootProps {
     // (undocumented)
     children?: ReactNode;
     document?: DocumentSource;
-    fonts?: FontConfiguration | FontConfigurationFragment;
+    fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     imageDecodePort?: ImageDecodePort;
     // (undocumented)
     locale?: string;
@@ -949,6 +952,13 @@ export { FontLoadFailure }
 
 export { FontLoadFailureReason }
 
+export { FontResolutionRequest }
+
+export { FontResolver }
+
+// @public
+export type FontsInput = FontConfiguration | FontConfigurationFragment | FontResolver | Promise<FontConfiguration | FontConfigurationFragment | undefined> | undefined;
+
 export { FontSource }
 
 export { FontSourceSubstitution }
@@ -1104,6 +1114,8 @@ export function LocaleProvider(input: LocaleProviderProps): react.JSX.Element;
 
 // @public (undocumented)
 export function Logo(input: LogoProps): react__default.JSX.Element;
+
+export { MAX_RESOLVER_FAMILIES }
 
 // @public
 export interface MenuActionProps {
@@ -1854,6 +1866,9 @@ export interface UseFontFamilyResult {
     readonly setValue: (family: string) => void;
     readonly value: string | null;
 }
+
+// @public
+export function useFonts(source: FontsInput, ...fragments: readonly (FontConfigurationFragment | undefined)[]): FontResolver;
 
 // @public
 export function useHeaderFooterState(): HeaderFooterState | null;

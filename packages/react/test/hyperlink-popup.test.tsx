@@ -13,7 +13,7 @@ import './dom-setup.ts';
 import { afterEach, describe, expect, test } from 'bun:test';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
-import type { DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
+import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';

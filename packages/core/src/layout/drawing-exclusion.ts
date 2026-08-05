@@ -14,7 +14,7 @@ import {
   type InlineDrawingLayoutContext,
 } from './drawing-layout.ts';
 import { drawingGeometryFromProjection } from './drawing-geometry.ts';
-import type { OoxmlNode } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import type { DrawingGeometry } from './drawing-geometry.ts';
 import {
   availableTextIntervalsOnScanline,

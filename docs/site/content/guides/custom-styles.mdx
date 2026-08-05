@@ -34,11 +34,9 @@ export function BrandedEditor() {
       .then(setTemplate);
   }, []);
 
-  return <DocxEditor documentBuffer={template} />;
+  return <DocxEditor document={template} />;
 }
 ```
-
-For Vue, pass the template buffer to the `document-buffer` prop.
 
 ## Create a template
 
@@ -48,24 +46,6 @@ For Vue, pass the template buffer to the `document-buffer` prop.
 2. Configure a default table style (see [Tables](#tables)).
 3. Remove the document content.
 4. Save the file as your template.
-
-### Patch a DOCX programmatically
-
-You can also update DOCX files directly with the headless API.
-
-```ts
-import { updateMultipleFiles } from '@docx-editor.dev/core/headless';
-
-const SETTINGS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:defaultTableStyle w:val="BrandGrid"/>
-</w:settings>`;
-
-const branded = await updateMultipleFiles(
-  originalDocx,
-  new Map([['word/settings.xml', SETTINGS]])
-);
-```
 
 ## Headings and paragraph styles
 
@@ -88,7 +68,7 @@ If no default table style is configured, inserted tables use a basic single-bord
 
 ## Fonts
 
-The recommended way to provide custom fonts is the editor's `fonts` prop. Each entry registers an `@font-face` rule, allowing the editor to render and measure the font without additional setup. Use `fontFamilies` to make fonts available in the toolbar.
+The recommended way to provide custom fonts is the editor's `fonts` prop. Each entry registers an `@font-face` rule, allowing the editor to render and measure the font without additional setup. The font picker offers the families the document declares plus the ones you configure.
 
 ```tsx
 const FONTS = [
@@ -97,13 +77,12 @@ const FONTS = [
 ];
 
 <DocxEditor
-  documentBuffer={template}
+  document={template}
   fonts={FONTS}
-  fontFamilies={['Custom Sans', 'Arial']}
 />;
 ```
 
-See [React props: Fonts](/docs/1.x/react/props#fonts) for the full API. In Vue, use the `fonts` and `font-families` props.
+See [React props: Fonts](/docs/2.x/react/props#fonts) for the full API.
 
 Alternatively, fonts can be installed on the user's system or loaded using your own `@font-face` rules. The editor renders fonts by name, so any font available to the browser can be used.
 

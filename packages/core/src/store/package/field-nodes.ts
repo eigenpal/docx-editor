@@ -23,6 +23,12 @@ import type {
 /** UTF-16 placeholder for one atomic field unit in `paragraphTextOf` / segments. */
 export const FIELD_ATOM_CHAR = '\uFFFC';
 
+/**
+ * Which part of a complex field a `w:fldChar` marks.
+ *
+ * A complex field spans many runs: `begin`, the instruction, `separate`, the cached result, then
+ * `end` — which is why a field is one logical unit across several nodes.
+ */
 export type FldCharType = 'begin' | 'separate' | 'end';
 
 const FLD_CHAR_TYPES: ReadonlySet<string> = new Set(['begin', 'separate', 'end']);
@@ -55,14 +61,21 @@ export function fldCharType(node: OoxmlNode): FldCharType | null {
   return null;
 }
 
+/** Whether a node is a `w:fldChar` field boundary marker. */
 export function isFldCharNode(node: OoxmlNode): node is OoxmlFldCharNode {
   return node.kind === 'fldChar';
 }
 
+/**
+ * Whether a node is `w:instrText` — a field's instruction.
+ *
+ * Instructions are never EXECUTED or auto-resolved: `DDE` and `INCLUDE*` render inert.
+ */
 export function isInstrTextNode(node: OoxmlNode): node is OoxmlInstrTextNode {
   return node.kind === 'instrText';
 }
 
+/** Whether a node is `w:fldSimple` — a field whose instruction and result are one element. */
 export function isFldSimpleNode(node: OoxmlNode): node is OoxmlFldSimpleNode {
   return node.kind === 'fldSimple';
 }

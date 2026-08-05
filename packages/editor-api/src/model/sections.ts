@@ -64,6 +64,14 @@ const PAGE_FIELDS = [
 
 type PageField = (typeof PAGE_FIELDS)[number];
 
+/**
+ * The page a section is laid out on: paper size, margins, and orientation.
+ *
+ * This is `w:sectPr` — everything a caller usually wants from a section lives here rather than on
+ * {@link Section} itself, which is mostly navigation.
+ *
+ * @public
+ */
 export class PageSetup extends ModelObject {
   #pending: Record<string, unknown> | undefined;
 
@@ -146,6 +154,7 @@ export class PageSetup extends ModelObject {
     this.#author('rightMargin', requirePoints(value, `${this.path.label}.rightMargin`));
   }
 
+  /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     const selected = this.selection(request, PAGE_FIELDS);
     if (selected.length === 0) return;
@@ -207,6 +216,21 @@ export class PageSetup extends ModelObject {
   }
 }
 
+/**
+ * One section: the document's layout, not its content.
+ *
+ * Everything a caller usually wants — paper size, margins, orientation — is on
+ * {@link Section.pageSetup}. The section itself is mostly navigation: the story it governs, the
+ * header and footer stories it declares, and the section after it.
+ *
+ * `getHeader` and `getFooter` answer a body that may not exist yet, and say so. A section with no
+ * first-page header inherits the previous section's; one at the start of a document with none at
+ * all is refused with `ItemNotFound` rather than minting the part. Word creates the header when a
+ * script asks for it — doing that here would make a READ write to the document, and a header that
+ * exists only because it was asked about is a header the author never added.
+ *
+ * @public
+ */
 export class Section extends ModelObject implements PromisedItem {
   #pageSetup: PageSetup | undefined;
   #body: Body | undefined;
@@ -226,13 +250,13 @@ export class Section extends ModelObject implements PromisedItem {
     super(context, path, { nullable });
   }
 
-  /** @internal */
+  /** @internal Bind this object to the address the owning read answered. */
   hydrateAddress(address: ObjectAddress): void {
     if (address.kind === 'handle') this.path.resolveTo(address.handle);
     else this.path.resolveNull();
   }
 
-  /** @internal */
+  /** @internal Settle as the null object: the read found nothing to name. */
   hydrateNull(): void {
     this.path.resolveNull();
   }
@@ -284,6 +308,7 @@ export class Section extends ModelObject implements PromisedItem {
     return next;
   }
 
+  /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     // A section has no readable property of its own here: everything about it is its page setup,
     // and naming a property it does not have is refused rather than ignored.
@@ -314,6 +339,11 @@ export class Section extends ModelObject implements PromisedItem {
   }
 }
 
+/**
+ * The sections of a document, in document order, as of the batch that loaded them.
+ *
+ * @public
+ */
 export class SectionCollection extends HandleCollection<Section> {
   readonly #plan: () => AutomationOperation;
 
@@ -337,14 +367,17 @@ export class SectionCollection extends HandleCollection<Section> {
     return this.edge('first', 'getFirst', false);
   }
 
+  /** @internal The read that answers this collection's members. */
   protected listing(): AutomationOperation {
     return this.#plan();
   }
 
+  /** @internal Build one member from an address the listing answered. */
   protected itemAt(label: string, address: ObjectAddress): Section {
     return Section.at(this.context, label, address);
   }
 
+  /** @internal A member an edge accessor named before the sync that finds it. */
   protected promised(label: string, nullable: boolean): Section & PromisedItem {
     return Section.promised(this.context, label, nullable);
   }

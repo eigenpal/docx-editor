@@ -21,10 +21,18 @@ import {
   type OoxmlPart,
   type OoxmlProperty,
   type TreeDocOp,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import { walkParagraphInline } from '../store/package/content-control-walk.ts';
 import { runPropsOf, treeSchema } from './tree-schema.ts';
 
+/**
+ * Why an edited projection could not be mapped back into tree ops.
+ *
+ * A refusal, not a fallback. The reverse direction never RECONSTRUCTS the tree from the
+ * projection — it explains a difference — so a shape it cannot explain is rejected outright.
+ * A silently-dropped edit is worse than a refused one, because only the refusal can be
+ * reconciled.
+ */
 export type TreeBindingRejection =
   | 'paragraph-count-unexplained'
   | 'paragraph-reordered'
@@ -34,6 +42,13 @@ export type TreeBindingRejection =
   | 'split-not-clean'
   | 'join-not-clean';
 
+/**
+ * The ops explaining one edit, or the reason it could not be explained.
+ *
+ * `ops` is the SMALLEST set that accounts for the difference, so anything the projection does not
+ * model — unknown nodes, lexical form, node identities — stays carried by the tree rather than
+ * round-tripping through the editor.
+ */
 export type MapResult =
   | { readonly ok: true; readonly ops: readonly TreeDocOp[] }
   | { readonly ok: false; readonly reason: TreeBindingRejection; readonly detail?: string };

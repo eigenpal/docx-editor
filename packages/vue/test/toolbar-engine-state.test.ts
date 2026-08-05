@@ -14,7 +14,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { createApp, nextTick } from 'vue';
 import { zipSync, strToU8 } from 'fflate';
-import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
+import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import DocxEditorToolbar from '../src/DocxEditorToolbar';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

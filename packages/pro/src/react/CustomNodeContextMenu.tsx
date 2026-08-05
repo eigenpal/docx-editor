@@ -40,6 +40,16 @@ import {
   useCustomNodeDefinitions,
 } from './custom-node-activation.ts';
 
+/**
+ * Props for {@link CustomNodeContextMenu}: which definitions get menu sections, and which rows
+ * those sections offer.
+ *
+ * The Edit row renders when either the definition's own `onEdit` or this component's
+ * `onEditNode` is present; the Remove row is on by default but only where the node's canonical id
+ * can be resolved.
+ *
+ * @public
+ */
 export interface CustomNodeContextMenuProps {
   /** Definitions to offer sections for. Defaults to the ones registered on the editor. */
   readonly nodes?: readonly CustomNodeDefinition[];

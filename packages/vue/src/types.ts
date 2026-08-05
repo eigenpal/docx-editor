@@ -8,16 +8,20 @@ import type {
   EditorSnapshot,
   ExecResult,
   FontConfiguration,
-} from '@docx-editor.dev/core-contract/contracts/editor';
-import type { EditorModule, FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
-export { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
+} from '@docx-editor.dev/core/contracts/editor';
+import type {
+  EditorModule,
+  FontConfigurationFragment,
+  FontResolver,
+} from '@docx-editor.dev/core/editor';
+export { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 export type {
   EditorFontErrorCode,
   FontConfiguration,
   FontFaceRequest,
   FontSource,
   FontSourceSubstitution,
-} from '@docx-editor.dev/core-contract/contracts/editor';
+} from '@docx-editor.dev/core/contracts/editor';
 
 export type EditorMode = 'edit' | 'view';
 
@@ -33,7 +37,7 @@ export interface DocxEditorProps {
    * wire in automatically either way. Accepts a full configuration or a bare
    * `{ sources, substitutions }` fragment (what `loadDefaultFonts()` returns).
    */
-  fonts?: FontConfiguration | FontConfigurationFragment;
+  fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
   /** A document to load: DOCX bytes or an existing handle. */
   document?: DocumentSource;
   /** 'edit' (default) or 'view' (read-only). Applied at mount only — not reactive; remount to change. */
