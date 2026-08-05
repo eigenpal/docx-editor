@@ -50,6 +50,32 @@ Green:
 - The obsolete plugin docs section was removed from docs navigation and the
   corresponding files were deleted.
 
+### H2 follow-up: current public markdown outside docs/site/content
+
+Red:
+
+- After the first H2 fix, `node scripts/check-public-docs-surface.mjs` still
+  missed stale current-doc claims outside `docs/site/content`, including
+  `README.md`, `docs/PROPS.md`, `docs/TOOLBAR.md`, and
+  `packages/nuxt/README.md`.
+- Once the scan widened to root/docs/package markdown, the gate failed on the
+  remaining removed-surface claims and the leftover top-level `docs/plugins/*`
+  pages.
+- `bun test ./scripts/__tests__/public-docs-surface.test.ts` was extended first
+  and failed red because `findRemovedSurfaceClaims()` did not exist yet.
+
+Green:
+
+- `bun test ./scripts/__tests__/public-docs-surface.test.ts` now passes with
+  the new regression covering current public markdown outside the docs site.
+- `node scripts/check-public-docs-surface.mjs` now scans the site docs, root
+  `README.md`, current `docs/*.md`, package markdown, and example markdown,
+  while excluding generated `*.api.md`, changelogs, and OpenSpec/archive
+  content.
+- The stale removed-surface claims were rewritten or deleted from the repo
+  README, standalone docs pages, the Nuxt README, and the obsolete top-level
+  plugin docs.
+
 ## Scoped Verification
 
 - `bun run --filter '@docx-editor.dev/agents' build`
@@ -60,3 +86,5 @@ Green:
 - `bun run check:public-docs-surface`
 - `bun run check:parity`
 - `bunx prettier --write ...` on the touched scripts, docs, and agents files
+- `bun test ./scripts/__tests__/public-docs-surface.test.ts`
+- `node scripts/check-public-docs-surface.mjs`

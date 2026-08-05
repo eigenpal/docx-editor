@@ -1,7 +1,11 @@
 import fs from 'node:fs';
-import { resolve, join } from 'node:path';
+import { resolve, join, relative } from 'node:path';
 import { collectNamedExports } from './lib/named-exports.mjs';
-import { evaluatePublicDocsSurface } from './lib/public-docs-surface.mjs';
+import {
+  evaluatePublicDocsSurface,
+  findRemovedSurfaceClaims,
+  isCurrentPublicDoc,
+} from './lib/public-docs-surface.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const docsRoot = resolve(root, 'docs/site/content');
@@ -77,12 +81,13 @@ const required = {
   },
 };
 
-function readMdxFiles(directory) {
+function readMarkdownFiles(directory) {
   const files = [];
+  if (!fs.existsSync(directory)) return files;
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const full = join(directory, entry.name);
     if (entry.isDirectory()) {
-      files.push(...readMdxFiles(full));
+      files.push(...readMarkdownFiles(full));
       continue;
     }
     if (entry.isFile() && /\.mdx?$/.test(entry.name)) files.push(full);
@@ -133,7 +138,7 @@ for (const [group, contract] of Object.entries(required)) {
   }
 }
 
-const mdxFiles = readMdxFiles(docsRoot);
+const mdxFiles = readMarkdownFiles(docsRoot);
 const docsSurface = evaluatePublicDocsSurface({
   docsByPackage: {
     '@docx-editor.dev/react': {
@@ -151,11 +156,33 @@ const docsSurface = evaluatePublicDocsSurface({
   },
 });
 
+const publicDocFiles = [
+  resolve(root, 'README.md'),
+  ...readMarkdownFiles(resolve(root, 'docs')),
+  ...readMarkdownFiles(resolve(root, 'packages')),
+  ...readMarkdownFiles(resolve(root, 'examples')),
+]
+  .filter((file, index, all) => all.indexOf(file) === index)
+  .filter((file) => isCurrentPublicDoc(relative(root, file)));
+
+const publicDocSources = Object.fromEntries(
+  publicDocFiles.map((file) => [relative(root, file), fs.readFileSync(file, 'utf8')])
+);
+const removedClaims = findRemovedSurfaceClaims(publicDocSources);
+
 if (docsSurface.invalidSubpaths.length > 0) {
   failed = true;
   console.error(`Public docs surface drift: removed package subpaths still documented:`);
   for (const claim of docsSurface.invalidSubpaths) {
     console.error(`  - ${claim.packageName}${claim.subpath === '.' ? '' : claim.subpath.slice(1)}`);
+  }
+}
+
+if (removedClaims.length > 0) {
+  failed = true;
+  console.error(`Public docs surface drift: removed React/Vue surface claims still documented:`);
+  for (const claim of removedClaims) {
+    console.error(`  - ${claim.file}: ${claim.claim}`);
   }
 }
 

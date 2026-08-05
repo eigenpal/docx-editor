@@ -33,17 +33,17 @@ export default defineNuxtConfig({
 <script setup lang="ts">
 import { ref } from 'vue';
 
-const buffer = ref<ArrayBuffer | null>(null);
+const doc = ref<Uint8Array>();
 
 async function loadFile(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0];
-  buffer.value = file ? await file.arrayBuffer() : null;
+  doc.value = file ? new Uint8Array(await file.arrayBuffer()) : undefined;
 }
 </script>
 
 <template>
   <input type="file" accept=".docx" @change="loadFile" />
-  <DocxEditor v-if="buffer" :document-buffer="buffer" mode="editing" />
+  <DocxEditor v-if="doc" :document="doc" mode="edit" />
 </template>
 ```
 
@@ -75,32 +75,23 @@ export default defineNuxtConfig({
 | [`@docx-editor.dev/nuxt`](https://www.npmjs.com/package/@docx-editor.dev/nuxt)     | <img src="https://cdn.simpleicons.org/nuxt/00DC82" width="20" align="middle" /> &nbsp; Nuxt 3 & 4 module wrapping the Vue adapter.         |
 | [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)     | Framework-agnostic core: OOXML parser, serializer, layout engine, ProseMirror schema. Depend on this if you fork the React or Vue adapter. |
 | [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)     | Shared locale strings and types consumed by both adapters.                                                                                 |
-| [`@docx-editor.dev/agents`](https://www.npmjs.com/package/@docx-editor.dev/agents) | Document automation: a batching object model that drives a document from a server or from an editor already open in a page. |
+| [`@docx-editor.dev/agents`](https://www.npmjs.com/package/@docx-editor.dev/agents) | Document automation: a batching object model that drives a document from a server or from an editor already open in a page.                |
 
 ## Component API
 
 `<DocxEditor>` is the Vue adapter's component, registered unchanged — the same props, emits, and `DocxEditorRef` methods. Full reference: **[docx-editor.dev/docs/props](https://www.docx-editor.dev/docs/props)**.
 
-## Composables
-
-The Vue composables (`useDocxEditor`, `useZoom`, `useFindReplace`, `useAutoSave`, ...) are auto-imported — use them in any component or page without an `import`:
-
-```vue
-<script setup lang="ts">
-const { save } = useAutoSave(/* ... */);
-</script>
-```
-
 ## Beyond the component
 
-Other `@docx-editor.dev/vue` surfaces — `renderAsync`, `createEmptyDocument`, the `DocxEditorProps`/`DocxEditorRef` types, and the `/ui`, `/dialogs`, `/plugin-api` subpaths — are not re-exported by this module. Import them from the adapter directly, and add it to your own `dependencies` so the import is explicit:
+When you need the rest of the Vue adapter surface, import it from `@docx-editor.dev/vue` directly:
+
+- the `DocxEditorProps` and `DocxEditorRef` types
+- root-level helpers like `DocxEditorShell`, `DocxEditorToolbar`, `DocxEditorSidebar`, `HorizontalRuler`, and `PageIndicator`
+
+These are not re-exported by the Nuxt module. Import them from the adapter directly, and add it to your own `dependencies` so the import is explicit:
 
 ```bash
 npm install @docx-editor.dev/vue
-```
-
-```ts
-import { renderAsync, createEmptyDocument } from '@docx-editor.dev/vue';
 ```
 
 ## Contributing

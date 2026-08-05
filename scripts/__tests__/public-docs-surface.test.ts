@@ -52,4 +52,43 @@ describe('public docs surface', () => {
       },
     ]);
   });
+
+  test('flags removed claims in current public markdown outside the docs site tree', () => {
+    const claims = surface.findRemovedSurfaceClaims({
+      'packages/nuxt/README.md': `
+        import { useAutoSave } from '@docx-editor.dev/vue/composables';
+        import { renderAsync } from '@docx-editor.dev/vue';
+      `,
+      'docs/PROPS.md': `
+        import { DocxEditor, type DocxEditorRef, renderAsync } from '@docx-editor.dev/react';
+        Both packages export DocxEditorHandle and RenderAsyncOptions.
+      `,
+      'CHANGELOG.md': `
+        import { PluginHost } from '@docx-editor.dev/react/plugin-api';
+      `,
+    });
+
+    expect(claims).toEqual([
+      {
+        file: 'docs/PROPS.md',
+        claim: 'DocxEditorHandle',
+      },
+      {
+        file: 'docs/PROPS.md',
+        claim: 'renderAsync',
+      },
+      {
+        file: 'docs/PROPS.md',
+        claim: 'RenderAsyncOptions',
+      },
+      {
+        file: 'packages/nuxt/README.md',
+        claim: '@docx-editor.dev/vue/composables',
+      },
+      {
+        file: 'packages/nuxt/README.md',
+        claim: 'renderAsync',
+      },
+    ]);
+  });
 });

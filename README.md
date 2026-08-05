@@ -42,14 +42,14 @@ See the [Nuxt quick start](#nuxt) below.
 
 ## Packages
 
-| Package                                                                            | Description                                                                                                                                | Docs                                                  |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
-| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)   | <img src="https://cdn.simpleicons.org/react/61DAFB" width="20" align="middle" /> &nbsp; React adapter. Toolbar, paged editor, plugins.     | [Docs](https://www.docx-editor.dev/docs/1.x/react)    |
-| [`@docx-editor.dev/vue`](https://www.npmjs.com/package/@docx-editor.dev/vue)       | <img src="https://cdn.simpleicons.org/vuedotjs/4FC08D" width="20" align="middle" /> &nbsp; Vue 3 adapter. Toolbar, paged editor, plugins.  | [Docs](https://www.docx-editor.dev/docs/1.x/vue)      |
-| [`@docx-editor.dev/nuxt`](https://www.npmjs.com/package/@docx-editor.dev/nuxt)     | <img src="https://cdn.simpleicons.org/nuxt/00DC82" width="20" align="middle" /> &nbsp; Nuxt 3 & 4 module wrapping the Vue adapter.         | [Docs](https://www.docx-editor.dev/docs/1.x/vue/nuxt) |
-| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)     | Framework-agnostic core: OOXML parser, serializer, layout engine, ProseMirror schema. Depend on this if you fork the React or Vue adapter. | [Docs](https://www.docx-editor.dev/docs/1.x/core)     |
-| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)     | Shared locale strings and types consumed by both adapters.                                                                                 | [Docs](https://www.docx-editor.dev/docs/1.x/i18n)     |
-| [`@docx-editor.dev/agents`](https://www.npmjs.com/package/@docx-editor.dev/agents) | Document automation: a batching object model that drives a document from a server or from an editor already open in a page. | [Docs](https://www.docx-editor.dev/docs/1.x/agents)   |
+| Package                                                                            | Description                                                                                                                                                                    | Docs                                                  |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)   | <img src="https://cdn.simpleicons.org/react/61DAFB" width="20" align="middle" /> &nbsp; React adapter. Root component, provider primitives, shared hooks, and compound chrome. | [Docs](https://www.docx-editor.dev/docs/1.x/react)    |
+| [`@docx-editor.dev/vue`](https://www.npmjs.com/package/@docx-editor.dev/vue)       | <img src="https://cdn.simpleicons.org/vuedotjs/4FC08D" width="20" align="middle" /> &nbsp; Vue 3 adapter. Root component plus shell, title bar, toolbar, sidebar, and rulers.  | [Docs](https://www.docx-editor.dev/docs/1.x/vue)      |
+| [`@docx-editor.dev/nuxt`](https://www.npmjs.com/package/@docx-editor.dev/nuxt)     | <img src="https://cdn.simpleicons.org/nuxt/00DC82" width="20" align="middle" /> &nbsp; Nuxt 3 & 4 module wrapping the Vue adapter.                                             | [Docs](https://www.docx-editor.dev/docs/1.x/vue/nuxt) |
+| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)     | Framework-agnostic core: OOXML parser, serializer, layout engine, ProseMirror schema. Depend on this if you fork the React or Vue adapter.                                     | [Docs](https://www.docx-editor.dev/docs/1.x/core)     |
+| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)     | Shared locale strings and types consumed by both adapters.                                                                                                                     | [Docs](https://www.docx-editor.dev/docs/1.x/i18n)     |
+| [`@docx-editor.dev/agents`](https://www.npmjs.com/package/@docx-editor.dev/agents) | Document automation: a batching object model that drives a document from a server or from an editor already open in a page.                                                    | [Docs](https://www.docx-editor.dev/docs/1.x/agents)   |
 
 > **Forking the adapter?** Keep your fork thin. Depend on `@docx-editor.dev/core` directly so parser, serializer, and rendering fixes land in your build automatically, without backporting each upstream change by hand.
 
@@ -61,16 +61,19 @@ import { DocxEditor } from '@docx-editor.dev/react';
 import '@docx-editor.dev/react/styles.css';
 
 export function App() {
-  const [buffer, setBuffer] = useState<ArrayBuffer | null>(null);
+  const [doc, setDoc] = useState<Uint8Array>();
 
   return (
     <>
       <input
         type="file"
         accept=".docx"
-        onChange={async (e) => setBuffer((await e.target.files?.[0]?.arrayBuffer()) ?? null)}
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          setDoc(file ? new Uint8Array(await file.arrayBuffer()) : undefined);
+        }}
       />
-      {buffer && <DocxEditor documentBuffer={buffer} mode="editing" />}
+      {doc && <DocxEditor document={doc} mode="edit" />}
     </>
   );
 }
@@ -88,17 +91,17 @@ import { ref } from 'vue';
 import { DocxEditor } from '@docx-editor.dev/vue';
 import '@docx-editor.dev/vue/styles.css';
 
-const buffer = ref<ArrayBuffer | null>(null);
+const doc = ref<Uint8Array>();
 
 async function loadFile(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0];
-  buffer.value = file ? await file.arrayBuffer() : null;
+  doc.value = file ? new Uint8Array(await file.arrayBuffer()) : undefined;
 }
 </script>
 
 <template>
   <input type="file" accept=".docx" @change="loadFile" />
-  <DocxEditor v-if="buffer" :document-buffer="buffer" mode="editing" />
+  <DocxEditor v-if="doc" :document="doc" mode="edit" />
 </template>
 ```
 
@@ -113,22 +116,9 @@ export default defineNuxtConfig({
 });
 ```
 
-`@docx-editor.dev/nuxt` wraps the Vue adapter as a Nuxt 3 & 4 module: it auto-imports an SSR-safe `<DocxEditor>` component (no manual import, no `<ClientOnly>` wrapper) and the Vue composables.
+`@docx-editor.dev/nuxt` wraps the Vue adapter as a Nuxt 3 & 4 module: it auto-imports an SSR-safe `<DocxEditor>` component (no manual import, no `<ClientOnly>` wrapper).
 
 Full docs: [`packages/nuxt`](packages/nuxt).
-
-## Plugins
-
-```tsx
-import { DocxEditor } from '@docx-editor.dev/react';
-import { PluginHost, templatePlugin } from '@docx-editor.dev/react/plugin-api';
-
-<PluginHost plugins={[templatePlugin]}>
-  <DocxEditor documentBuffer={buffer} />
-</PluginHost>;
-```
-
-See the [plugin documentation](https://www.docx-editor.dev/docs/plugins) for the full plugin API.
 
 ## Development
 
@@ -143,7 +133,7 @@ A live preview of `main` is auto-deployed at **[latest.docx-editor.dev](https://
 
 Examples: [Vite](examples/vite) | [Next.js](examples/nextjs) | [Remix](examples/remix) | [Astro](examples/astro) | [Vue](examples/vue) | [Nuxt](examples/nuxt)
 
-**[Documentation](https://www.docx-editor.dev/docs)** | **[Props & Ref Methods](https://www.docx-editor.dev/docs/props)** | **[Plugins](https://www.docx-editor.dev/docs/plugins)** | **[Architecture](https://www.docx-editor.dev/docs/architecture)**
+**[Documentation](https://www.docx-editor.dev/docs)** | **[Props & Ref Methods](https://www.docx-editor.dev/docs/props)** | **[Architecture](https://www.docx-editor.dev/docs/architecture)**
 
 ## Contributing
 
