@@ -29,6 +29,12 @@ export const MAX_BORDER_WIDTH_PT = 12;
 /** Soft ceiling on border-to-text gap (`w:space`, already in points). */
 export const MAX_BORDER_SPACE_PT = 3168;
 
+/**
+ * A paragraph's resolved space before and after, in points.
+ *
+ * Already collapsed against `w:contextualSpacing`, so adjacent same-style paragraphs that suppress
+ * their gap arrive here with it removed rather than leaving that to whoever stacks them.
+ */
 export interface ParagraphSpacing {
   /** `w:spacing/@before`, in points. */
   readonly before: number;
@@ -49,6 +55,12 @@ export interface ParagraphSpacing {
  */
 export type LineSpacingRule = 'auto' | 'exact' | 'atLeast';
 
+/**
+ * Resolved line spacing: the rule, and the value it applies.
+ *
+ * `value` means different things per rule — 240ths of a line under `auto`, points under `exact`
+ * and `atLeast` — which is why the two travel together and neither is useful alone.
+ */
 export interface ParagraphLineSpacing {
   readonly rule: LineSpacingRule;
   /** `auto`: the 240ths-of-a-line multiplier numerator. Otherwise points. */
@@ -70,6 +82,12 @@ export const SINGLE_LINE_SPACING: ParagraphLineSpacing = Object.freeze({
 const MAX_LINE_SPACING_MULTIPLE = 132;
 const MAX_LINE_SPACING_PT = 132 * 12;
 
+/**
+ * One resolved `w:pBdr` edge: its style, colour, thickness and gap.
+ *
+ * `widthPt` and `spacePt` are already converted and CLAMPED — both come from a file, and an
+ * unbounded border width becomes a layout dimension.
+ */
 export interface ParagraphBorderEdge {
   /** Authored `ST_Border` value (`single`, `dashed`, …). */
   readonly val: string;
@@ -91,6 +109,12 @@ export interface ParagraphBorderEdge {
 /** The six `CT_PBdr` children, in schema order (ECMA-376 §17.3.1.24). */
 export const PARAGRAPH_BORDER_SIDES = ['top', 'left', 'bottom', 'right', 'between', 'bar'] as const;
 
+/**
+ * Which of the six `CT_PBdr` edges.
+ *
+ * Four are physical box edges; `between` and `bar` are group-relative, drawn only where
+ * consecutive paragraphs share a border definition.
+ */
 export type ParagraphBorderSide = (typeof PARAGRAPH_BORDER_SIDES)[number];
 
 /**

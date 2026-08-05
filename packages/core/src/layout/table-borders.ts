@@ -38,8 +38,16 @@ export {
   type CompoundBorderMetrics,
 } from './border-metrics.ts';
 
+/** Which physical edge of a box a border sits on. */
 export type TableBorderSideName = 'top' | 'right' | 'bottom' | 'left';
 
+/**
+ * One border edge in one of three states.
+ *
+ * `omitted` and `none` are NOT the same: an omitted edge inherits from the table style or the
+ * neighbouring cell, while an explicit `none` wins the conflict and draws nothing. Collapsing
+ * them would let a style's border reappear where the author removed it.
+ */
 export type TableBorderSide =
   | { readonly state: 'omitted' }
   | { readonly state: 'none' }
@@ -52,6 +60,7 @@ export type TableBorderSide =
       readonly widthPt: number;
     };
 
+/** A table's six authored border edges: four outer, plus the two interior intervals. */
 export interface TableBorderBox {
   readonly top: TableBorderSide;
   readonly left: TableBorderSide;
@@ -61,6 +70,7 @@ export interface TableBorderBox {
   readonly insideV: TableBorderSide;
 }
 
+/** The four resolved edges of one cell, after conflict resolution against its neighbours. */
 export interface CellBorderBox {
   readonly top: TableBorderSide;
   readonly left: TableBorderSide;
@@ -237,6 +247,12 @@ function readBox(
   return result;
 }
 
+/**
+ * Read a table's `w:tblBorders`, dropping or clamping hostile values.
+ *
+ * Widths and colours come from a file: an out-of-range `w:sz` becomes a layout dimension, so it is
+ * bounded here rather than downstream.
+ */
 export function readTableBorders(tblPr: OoxmlElement | undefined): TableBorderBox {
   const container = tblPr && childNamed(tblPr, 'tblBorders');
   if (!container) return EMPTY_TABLE_BORDERS;
@@ -248,6 +264,7 @@ export function readTableBorders(tblPr: OoxmlElement | undefined): TableBorderBo
   };
 }
 
+/** Read one cell's `w:tcBorders`, under the same bounds {@link readTableBorders} applies. */
 export function readCellBorders(tcPr: OoxmlElement | undefined): CellBorderBox {
   return readBox(tcPr && childNamed(tcPr, 'tcBorders'), ['top', 'left', 'bottom', 'right']);
 }
@@ -373,6 +390,12 @@ function convenienceEdge(
   return only.edge;
 }
 
+/**
+ * The absolute grid a table's borders are drawn on: column widths, and per-row tops and heights.
+ *
+ * Shared by every edge so adjacent cells resolve to the SAME line, rather than each computing its
+ * own and leaving a hairline gap between them.
+ */
 export interface BorderGridGeometry {
   /** Absolute column widths for the whole table (points). */
   readonly columnWidthsPt: readonly number[];

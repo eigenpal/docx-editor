@@ -32,6 +32,29 @@ export interface RecognizedCustomNode {
   readonly tag: string;
 }
 
+/**
+ * One integrator-defined inline node, anchored on a run-level SDT whose `w:tag` carries its
+ * identity.
+ *
+ * A definition claims a tag PREFIX, so `acme` recognizes every `acme:*` tag. An SDT whose prefix
+ * no definition claims stays literal — which is also what the free tier and Word itself render,
+ * so an unrecognized node never loses content or locks editing.
+ *
+ * Build one with {@link defineCustomNode}, which validates the shape, then register it through
+ * {@link customNodesModule}.
+ *
+ * @example
+ * ```ts
+ * const citation = defineCustomNode({
+ *   name: 'citation',
+ *   tagPrefix: 'acme',
+ *   chrome: { color: '#2563eb' },
+ *   onClick: (node) => openCitation(node.attrs.key),
+ * });
+ * ```
+ *
+ * @public
+ */
 export interface CustomNodeDefinition {
   /** Node type name — the second segment of the tag (`<prefix>:<name>?…`). */
   readonly name: string;
@@ -148,7 +171,13 @@ export function defineCustomNode(definition: CustomNodeDefinition): CustomNodeDe
   return Object.freeze({ ...definition });
 }
 
+/**
+ * How {@link customNodesModule} is configured.
+ *
+ * @public
+ */
 export interface CustomNodesModuleOptions extends ProLicenseOptions {
+  /** The definitions this editor recognizes. A tag prefix no definition claims stays literal. */
   readonly nodes: readonly CustomNodeDefinition[];
 }
 

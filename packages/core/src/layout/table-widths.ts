@@ -44,12 +44,19 @@ const MAX_COLUMN_WIDTH_PT = 31_680 / 20;
  */
 export type PreferredWidthType = 'dxa' | 'pct' | 'auto' | 'nil';
 
+/**
+ * `w:tblW` / `w:tcW` — a requested width, whose UNIT depends on its type.
+ *
+ * Points for `dxa`, percent for `pct`, and zero for `auto`/`nil`. Reading `value` without `type`
+ * is always wrong.
+ */
 export interface PreferredWidth {
   readonly type: PreferredWidthType;
   /** POINTS for `dxa`, PERCENT (0–100) for `pct`, 0 for `auto`/`nil`. */
   readonly value: number;
 }
 
+/** The frozen "no preferred width" value — what a table or cell that declares none resolves to. */
 export const AUTO_PREFERRED_WIDTH: PreferredWidth = Object.freeze({ type: 'auto', value: 0 });
 
 /** Widest a `pct` preference may resolve to, so `w:w="999999"` cannot inflate a table. */

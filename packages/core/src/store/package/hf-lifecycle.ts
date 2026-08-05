@@ -58,6 +58,12 @@ const MAX_DISTANCE_TWIPS = 31_680;
 /** Cap on section property nodes walked for reference counting. */
 const MAX_SECTIONS = 4_096;
 
+/**
+ * A header/footer lifecycle mutation: create, remove, or relink a variant.
+ *
+ * Package-level, like note lifecycle: each touches the document, the header/footer part, the
+ * relationships and `[Content_Types].xml` together.
+ */
 export type HeaderFooterLifecycleOp =
   | {
       readonly op: 'createHeaderFooter';
@@ -96,8 +102,10 @@ export type HeaderFooterLifecycleOp =
       readonly footerDistanceTwips?: number;
     };
 
+/** Why a header/footer lifecycle op was refused. */
 export type HeaderFooterLifecycleRejection = 'invalidArgs' | 'tree-invariant';
 
+/** A new package, or a typed rejection. Pure and all-or-nothing — no partial writes. */
 export type HeaderFooterLifecycleResult =
   | {
       readonly ok: true;
@@ -120,6 +128,7 @@ const LIFECYCLE_OPS = new Set([
   'setSectionFurnitureOptions',
 ]);
 
+/** Whether an op is a header/footer lifecycle op rather than a story-level one. */
 export function isHeaderFooterLifecycleOp(op: {
   readonly op: string;
 }): op is HeaderFooterLifecycleOp {

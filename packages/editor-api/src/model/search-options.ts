@@ -15,6 +15,20 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import type { AutomationSearchOptions } from '../runtime/model-support.ts';
 import { fail } from '../runtime/model-support.ts';
 
+/**
+ * How a search is narrowed.
+ *
+ * Every flag is honoured or REFUSED — never quietly ignored. A search that accepted
+ * `matchWildcards` and then ran a plain-text scan would answer the wrong offsets to a caller who
+ * edits at them, so the unimplemented options reach the host and come back as `NotSupported`.
+ *
+ * They are declared here rather than left off the type because omitting them would make
+ * `{ matchWildcards: true }` a compile error in code that is otherwise source-compatible with
+ * Word. The honest answer to that code is a runtime refusal naming the option, not a type error
+ * naming the interface.
+ *
+ * @public
+ */
 export interface SearchOptions {
   /** Match the query's case. Off by default, like Word's Find. */
   readonly matchCase?: boolean;

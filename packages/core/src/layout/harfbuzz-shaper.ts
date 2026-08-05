@@ -28,6 +28,13 @@ type HarfBuzzBuffer = InstanceType<HarfBuzzModule['Buffer']>;
 type HarfBuzzFace = InstanceType<HarfBuzzModule['Face']>;
 type HarfBuzzFont = InstanceType<HarfBuzzModule['Font']>;
 
+/**
+ * The exact HarfBuzz build this engine shapes against.
+ *
+ * Pinned and verified at load: a runtime reporting a different version is REFUSED rather than
+ * used, because glyph positioning can change between releases and a cached measurement taken
+ * under one build must not be trusted under another.
+ */
 export const HARFBUZZ_SHAPING_LIBRARY: VersionedShapingLibrary = Object.freeze({
   name: 'HarfBuzz',
   version: '14.2.1',
@@ -57,6 +64,7 @@ export function initializeHarfBuzz(): Promise<void> {
   return harfBuzzInitialization;
 }
 
+/** Whether the WASM runtime is loaded and shaping can proceed synchronously. */
 export function isHarfBuzzInitialized(): boolean {
   return harfBuzzModule !== null;
 }
@@ -70,6 +78,13 @@ function requireHarfBuzz(): HarfBuzzModule {
   return harfBuzzModule;
 }
 
+/**
+ * Why shaping refused.
+ *
+ * Mostly RESOURCE limits, because every input here derives from a file: text length, codepoint
+ * count, glyph count and outline size are all attacker-influenced, and an unbounded shape call is
+ * a denial-of-service vector rather than a rendering bug.
+ */
 export type HarfBuzzShapingErrorCode =
   | 'notInitialized'
   | 'fontOverLimit'
@@ -87,6 +102,12 @@ export type HarfBuzzShapingErrorCode =
   | 'shapingLibraryMismatch'
   | 'disposed';
 
+/**
+ * A shaping call that was refused, carrying the limit it exceeded where there was one.
+ *
+ * Thrown rather than returned: unlike a missing font, a run that cannot be shaped has no sensible
+ * fallback measurement, and continuing would lay text out at made-up widths.
+ */
 export class HarfBuzzShapingError extends Error {
   readonly name = 'HarfBuzzShapingError';
   readonly code: HarfBuzzShapingErrorCode;
@@ -110,6 +131,13 @@ export class HarfBuzzShapingError extends Error {
   }
 }
 
+/**
+ * Resource budgets and cache sizes for one shaper. Every field optional.
+ *
+ * The caches exist because shaping is the expensive step: a face is opened once and reused, and
+ * identical runs return their previous result. The caps exist because file-derived input decides
+ * how much work is asked for.
+ */
 export interface HarfBuzzTextShaperOptions {
   readonly maxFontBytes?: number;
   readonly maxInputUtf16?: number;
@@ -124,11 +152,19 @@ export interface HarfBuzzTextShaperOptions {
   readonly instrumentation?: HarfBuzzTextShaperInstrumentation;
 }
 
+/** One face-cache transition, for instrumentation. */
 export interface HarfBuzzFaceCacheEvent {
   readonly kind: 'created' | 'hit' | 'evicted';
   readonly identity: string;
 }
 
+/**
+ * Optional counters for the work a shaper is expected to do rarely.
+ *
+ * Exists so tests can assert the ABSENCE of work — re-opening a face or re-copying its bytes per
+ * shape call would not change any output, only make typing slow, which no rendering assertion
+ * would catch.
+ */
 export interface HarfBuzzTextShaperInstrumentation {
   readonly onFaceCacheEvent?: (event: HarfBuzzFaceCacheEvent) => void;
   readonly onShapeCacheEvent?: (event: HarfBuzzShapeCacheEvent) => void;
@@ -139,16 +175,25 @@ export interface HarfBuzzTextShaperInstrumentation {
   readonly onOutlineCacheEvent?: (event: HarfBuzzOutlineCacheEvent) => void;
 }
 
+/** One shape-cache transition, for instrumentation. */
 export interface HarfBuzzShapeCacheEvent {
   readonly kind: 'hit' | 'miss' | 'stored' | 'evicted' | 'skipped' | 'cleared';
   readonly retainedBytes: number;
 }
 
+/** One outline-cache transition, for instrumentation. */
 export interface HarfBuzzOutlineCacheEvent {
   readonly kind: 'created' | 'hit' | 'evicted' | 'skipped' | 'cleared';
   readonly retainedBytes: number;
 }
 
+/**
+ * A {@link TextShaper} backed by HarfBuzz, holding WASM resources.
+ *
+ * {@link HarfBuzzTextShaper.dispose} is not optional housekeeping: the cached faces are WASM
+ * allocations that garbage collection cannot reclaim, so a shaper outliving its editor leaks
+ * until the page goes away.
+ */
 export interface HarfBuzzTextShaper extends TextShaper {
   dispose(): void;
 }
@@ -823,6 +868,12 @@ class ProductionHarfBuzzTextShaper implements HarfBuzzTextShaper {
   }
 }
 
+/**
+ * Build a HarfBuzz-backed shaper.
+ *
+ * Requires `initializeHarfBuzz()` to have resolved — shaping is synchronous, so the WASM runtime
+ * must already be loaded. Dispose the result when the editor goes away, or its cached faces leak.
+ */
 export const createHarfBuzzTextShaper = (
   options: HarfBuzzTextShaperOptions = {}
 ): HarfBuzzTextShaper => new ProductionHarfBuzzTextShaper(requireHarfBuzz(), options);

@@ -90,6 +90,12 @@ export const MAX_TABLE_ROW_HEIGHT_PT = 31_680 / 20;
  */
 export type TableRowHeightRule = 'auto' | 'atLeast' | 'exact';
 
+/**
+ * `w:trHeight` — a row's height rule and its value.
+ *
+ * `auto` carries no value at all, which is why this is a union rather than a rule plus an
+ * optional number.
+ */
 export type TableRowHeight =
   | { readonly rule: 'auto' }
   | { readonly rule: 'atLeast' | 'exact'; readonly valuePt: number };
@@ -100,6 +106,7 @@ const LAST_GRID_COLUMN = MAX_TABLE_COLUMNS - 1;
 /** Distinct conditional-format combinations memoized per table; see `styleFormattingFor`. */
 const MAX_CELL_CONDITION_SETS = 256;
 
+/** `w:vAlign` — where a cell's content sits when the row is taller than the content. */
 export type CellVerticalAlign = 'top' | 'center' | 'bottom';
 
 /** `w:tblPr/w:jc` (17.4.29, ST_JcTable): where the table sits within the text column. */
@@ -177,6 +184,7 @@ export interface TableAnchorFrames {
  */
 const MAX_TABLE_FLOAT_OFFSET_PT = 31_680 / 20;
 
+/** Resolved cell padding in points, after the table default and any per-cell override. */
 export interface CellMarginsPt {
   readonly top: number;
   readonly right: number;
@@ -184,6 +192,7 @@ export interface CellMarginsPt {
   readonly left: number;
 }
 
+/** Word's own default cell padding, applied where a table declares no `w:tblCellMar`. */
 export const DEFAULT_CELL_MARGINS: CellMarginsPt = {
   top: CELL_PAD,
   right: CELL_PAD,
@@ -191,6 +200,12 @@ export const DEFAULT_CELL_MARGINS: CellMarginsPt = {
   left: CELL_PAD,
 };
 
+/**
+ * One cell in the resolved table structure.
+ *
+ * `gridSpan` is clamped at READ time and layout never re-derives it — the value comes from a file
+ * and would otherwise be a loop bound an attacker controls.
+ */
 export interface SemanticTableCell {
   readonly id: string;
   /** Clamped to [1, MAX_TABLE_COLUMNS] at read time; layout never re-derives it. */
@@ -233,6 +248,7 @@ export interface SemanticTableCell {
   readonly blocks: readonly OoxmlElement[];
 }
 
+/** One row in the resolved structure: its cells, its height rule, and any row-level revision. */
 export interface SemanticTableRow {
   readonly id: string;
   /** Pending Word row insertion/deletion authored in `w:trPr`. */
@@ -258,6 +274,12 @@ export interface SemanticTableRow {
   readonly cells: readonly SemanticTableCell[];
 }
 
+/**
+ * A table resolved into a rectangular grid: column widths, rows, and the widths it asked for.
+ *
+ * The grid is normalized here so layout never has to reconcile `w:gridCol` against actual cell
+ * spans — vertical merges and column spans are already accounted for.
+ */
 export interface SemanticTableStructure {
   readonly columnWidthsPt: readonly number[];
   readonly rows: readonly SemanticTableRow[];

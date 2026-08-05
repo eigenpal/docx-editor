@@ -21,6 +21,7 @@ import { WML_NAMESPACE_URI } from './ooxml-tree.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import type { RelationshipRecord } from './relationships.ts';
 
+/** One paragraph in the index: its node id, its story, and its position. */
 export interface ParagraphIndexEntry {
   /** Canonical tree node id — the stable identity operations address. */
   readonly nodeId: string;
@@ -32,6 +33,7 @@ export interface ParagraphIndexEntry {
   readonly runIds: readonly string[];
 }
 
+/** One story root — body, a header/footer variant, or a note part. */
 export interface StoryIndexEntry {
   /** The part the story lives in. */
   readonly partName: string;
@@ -40,6 +42,7 @@ export interface StoryIndexEntry {
   readonly paragraphs: readonly ParagraphIndexEntry[];
 }
 
+/** One style definition, indexed by the id content references it under. */
 export interface StyleIndexEntry {
   readonly styleId: string;
   readonly type: string;
@@ -50,6 +53,12 @@ export interface StyleIndexEntry {
   readonly isDefault: boolean;
 }
 
+/**
+ * The derived lookups over a part: paragraphs, stories and styles by id.
+ *
+ * Diff-patched on commit rather than rebuilt — rebuilding every index per keystroke is what made
+ * typing scale with document length.
+ */
 export interface OoxmlIndexes {
   /** The tree revision these projections were derived from. */
   readonly revision: number;

@@ -26,6 +26,18 @@ import { Range } from './range.ts';
 
 export { HandleCollection, ItemCollection, type PromisedItem } from './item-collection.ts';
 
+/**
+ * The paragraphs of a story, a range, or a list, as of the batch that loaded them.
+ *
+ * Contains paragraphs at every depth — inside table cells, nested tables, and block-level content
+ * controls — matching Word's own collection rather than only the owner's direct children.
+ *
+ * One of the two collections whose members are not plain handles: the pieces a
+ * {@link Paragraph.split} answers are filled in by the split's own command rather than by a
+ * separate listing read.
+ *
+ * @public
+ */
 export class ParagraphCollection extends ItemCollection<Paragraph> {
   readonly #plan: (() => AutomationOperation) | null;
 
@@ -78,6 +90,7 @@ export class ParagraphCollection extends ItemCollection<Paragraph> {
     return this.edge('last', 'getLastOrNullObject', true);
   }
 
+  /** @internal The read that answers this collection's members. */
   protected listing(): AutomationOperation {
     if (this.#plan) return this.#plan();
     const address = this.path.address();
@@ -86,10 +99,12 @@ export class ParagraphCollection extends ItemCollection<Paragraph> {
       : { op: 'getSpanParagraphs', span: address.span };
   }
 
+  /** @internal How many members the listing's answer describes. */
   protected size(value: AutomationValue, label: string): number {
     return hydratedHandles(value, label).length;
   }
 
+  /** @internal The address of one member of the listing's answer. */
   protected addressAt(
     value: AutomationValue,
     label: string,
@@ -99,15 +114,26 @@ export class ParagraphCollection extends ItemCollection<Paragraph> {
     return handle ? { kind: 'handle', handle } : undefined;
   }
 
+  /** @internal Build one member from an address the listing answered. */
   protected itemAt(label: string, address: ObjectAddress): Paragraph {
     return Paragraph.at(this.context, label, address);
   }
 
+  /** @internal A member an edge accessor named before the sync that finds it. */
   protected promised(label: string, nullable: boolean): Paragraph & PromisedItem {
     return Paragraph.promised(this.context, label, nullable);
   }
 }
 
+/**
+ * Ranges a read produced — the hits of a search, or the pieces a split answered.
+ *
+ * Its members are SPANS rather than handles, which is what separates it from the handle-backed
+ * collections: each item carries its own paragraph-plus-offset endpoints instead of an opaque
+ * host-minted id.
+ *
+ * @public
+ */
 export class RangeCollection extends ItemCollection<Range> {
   readonly #plan: (() => AutomationOperation) | null;
 
@@ -157,14 +183,17 @@ export class RangeCollection extends ItemCollection<Range> {
     return this.edge('first', 'getFirstOrNullObject', true);
   }
 
+  /** @internal The read that answers this collection's members. */
   protected listing(): AutomationOperation | null {
     return this.#plan ? this.#plan() : null;
   }
 
+  /** @internal How many members the listing's answer describes. */
   protected size(value: AutomationValue, label: string): number {
     return hydratedSpans(value, label).length;
   }
 
+  /** @internal The address of one member of the listing's answer. */
   protected addressAt(
     value: AutomationValue,
     label: string,
@@ -174,10 +203,12 @@ export class RangeCollection extends ItemCollection<Range> {
     return span ? { kind: 'span', span } : undefined;
   }
 
+  /** @internal Build one member from an address the listing answered. */
   protected itemAt(label: string, address: ObjectAddress): Range {
     return Range.at(this.context, label, address);
   }
 
+  /** @internal A member an edge accessor named before the sync that finds it. */
   protected promised(label: string, nullable: boolean): Range & PromisedItem {
     return Range.promised(this.context, label, nullable);
   }

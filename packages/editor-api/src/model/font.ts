@@ -43,6 +43,28 @@ const FIELDS = ['bold', 'italic', 'color', 'name', 'size'] as const;
 
 type FontField = (typeof FIELDS)[number];
 
+/**
+ * The character formatting of whatever it belongs to: a story, a stretch of one, or a paragraph.
+ *
+ * A font has no identity of its own — it is a view onto its owner's characters and shares its
+ * owner's path, so a font reached from a deleted paragraph's range refuses at the same moment the
+ * range does rather than holding a stale address.
+ *
+ * Reading is AGREEMENT, and `null` means "no agreed value": every run the owner covers says bold,
+ * or the answer is null. Null is also the answer when nothing in range authors the property at
+ * all. Both are one answer on purpose, because this API reads what the document AUTHORS rather
+ * than what the style cascade computes — a heading whose bold comes from `styles.xml` reads null.
+ * Answering the cascade would let a caller read an inherited value, write it straight back, and
+ * silently freeze it into the paragraph as if the author had chosen it.
+ *
+ * Assignments within one `sync()` are ONE write: `font.bold = true; font.size = 12` accumulates
+ * into a single run-property operation. That is required, not an optimisation — a run-property
+ * write carries the run's whole property bag, so a second write planned from the same pre-batch
+ * tree would carry a bag the first had already superseded, which the host refuses with
+ * `ConflictingChanges`.
+ *
+ * @public
+ */
 export class Font extends ModelObject {
   readonly #owner: SpanOwner;
   #pending: Record<string, unknown> | undefined;
@@ -66,6 +88,7 @@ export class Font extends ModelObject {
     this.#author('bold', requireBoolean(value, `${this.path.label}.bold`));
   }
 
+  /** Whether every run in range is italic. `null` where they disagree or none says. */
   get italic(): boolean {
     return this.loadedProperty<boolean>('italic');
   }

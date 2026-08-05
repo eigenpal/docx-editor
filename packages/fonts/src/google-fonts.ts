@@ -1,3 +1,24 @@
+/**
+ * `@docx-editor.dev/fonts/google` — Google-hosted faces, fetched on demand.
+ *
+ * Nothing is bundled and nothing is fetched until a document turns out to name a family the
+ * pinned catalog covers. Open a file using only Calibri and exactly one family is fetched.
+ *
+ * Be deliberate about this: it makes OPENING A DOCUMENT perform network requests, which the
+ * engine never does on its own. What keeps it safe is that a document-declared family is only
+ * ever a LOOKUP KEY against a closed, commit-pinned catalog, and every face is trusted by
+ * content hash rather than by origin.
+ *
+ * @example Resolve catalogued families as documents need them
+ * ```ts
+ * import { googleFonts } from '@docx-editor.dev/fonts/google';
+ *
+ * const editor = createDocxEditor({ document: bytes, resolveFonts: googleFonts() });
+ * ```
+ *
+ * @packageDocumentation
+ * @public
+ */
 // @docx-editor.dev/fonts/google — Google-hosted faces, fetched on demand.
 //
 // `defaultFonts()` ships five families in the bundle and loads them whichever document
@@ -58,6 +79,13 @@ export const GOOGLE_METRIC_SUBSTITUTES: Readonly<Record<string, string>> = Objec
   'Courier New': 'Cousine',
 });
 
+/**
+ * One catalogued face that did not arrive. Non-fatal: the resolver returns whatever else
+ * succeeded, and the affected family falls back to the engine's fixed measurement.
+ *
+ * A `hashMismatch` does NOT appear here — bytes are trusted by content at the engine's
+ * admission path, which rejects them after this resolver has handed them over.
+ */
 export interface GoogleFontLoadFailure {
   /** The family as the DOCUMENT named it, which may be the substituted-from name. */
   readonly family: string;
@@ -65,6 +93,11 @@ export interface GoogleFontLoadFailure {
   readonly diagnostic: string;
 }
 
+/**
+ * How `googleFonts()` behaves once a document hands it a family list. Every field is
+ * optional; `googleFonts()` with no options fetches any catalogued family a document
+ * names, over the global `fetch`, warning to the console on failure.
+ */
 export interface GoogleFontsOptions {
   /**
    * Narrow what may ever be fetched, by catalog family name. Omitted, any catalogued

@@ -44,6 +44,12 @@ export type {
   ValidatedImageBytesRegistry,
 } from './validated-image-bytes.ts';
 
+/**
+ * What is known about one embedded image: validated, refused, or still decoding.
+ *
+ * Content type is a CLAIM. Signature sniffing, structural header validation and the decode port
+ * are authoritative, and bytes that fail them never enter public state.
+ */
 export type ImageResourceState =
   | {
       readonly kind: 'ready';
@@ -76,6 +82,12 @@ export type ImageResourceState =
   | { readonly kind: 'missing'; readonly relationshipId: string }
   | { readonly kind: 'pending'; readonly resourceKey: string };
 
+/**
+ * The injected image decoder.
+ *
+ * A port rather than a direct `Image`/`createImageBitmap` call, so a worker or server runtime
+ * supplies its own and the engine never reaches for a browser global.
+ */
 export interface ImageDecodePort {
   decode(
     bytes: Uint8Array,
@@ -95,6 +107,7 @@ export interface ImageDecodePort {
   ): Promise<Readonly<{ bytes: Uint8Array; mime: SupportedImageMime }> | null>;
 }
 
+/** Resolves a relationship id to a validated image resource, or reports why it could not. */
 export interface ImageResourceLookup {
   readonly resolveEmbedded: (
     ownerPartName: string,
@@ -129,6 +142,7 @@ const CONTENT_TYPE_TO_MIME: Readonly<Record<string, RenderableImageMime | Preser
     'image/x-wmf': 'image/x-wmf',
   });
 
+/** A raster header that passed structural validation: its real MIME type and pixel extent. */
 export interface ValidatedRasterHeader {
   readonly pixelWidth: number;
   readonly pixelHeight: number;
@@ -511,6 +525,12 @@ export function resolveSvgIntrinsicSize(
   return { pixelWidth: clamp(pixelWidth), pixelHeight: clamp(pixelHeight) };
 }
 
+/**
+ * Validate a raster image's header structurally and report its real MIME type and extent.
+ *
+ * Content type is a CLAIM; this is what makes it a fact. A file declaring `image/png` over JPEG
+ * bytes is caught here rather than at decode.
+ */
 export function validateRasterHeader(
   bytes: Uint8Array,
   mime: SupportedImageMime
@@ -646,6 +666,7 @@ export function liveDrawingReferenceCount(pkg: OoxmlPackage, partName: string): 
   return count;
 }
 
+/** How the image cache decodes, and what it will spend doing so. */
 export interface CreateImageResourceCacheOptions {
   readonly limits?: Partial<ImageResourceLimits>;
   readonly decodePort: ImageDecodePort;
@@ -727,6 +748,7 @@ export function imageResourceLookupFor(
 }
 
 /** @deprecated Prefer {@link imageResourceLookupFor} — registry binds cache to package identity. */
+/** Build the per-document image cache. Validated bytes only; refusals are remembered too. */
 export function createImageResourceCache(
   initialPkg: OoxmlPackage,
   options: CreateImageResourceCacheOptions

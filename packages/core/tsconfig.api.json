@@ -1,0 +1,21 @@
+{
+  // API Extractor's view of this package. `tsconfig.types.json` emits the declarations;
+  // this config only RESOLVES them.
+  //
+  // The `paths` block is the load-bearing part. Core's own modules import sibling subpaths by
+  // package name (`@docx-editor.dev/core/store`), which the exports map resolves back to `.ts`
+  // SOURCE. API Extractor cannot analyze a `.ts` entry and dies with an internal error, so the
+  // self-references are redirected at the emitted declarations instead.
+  "extends": "./tsconfig.types.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "emitDeclarationOnly": false,
+    "paths": {
+      "@docx-editor.dev/core": ["./dist-types/index.d.ts"],
+      "@docx-editor.dev/core/types": ["./dist-types/contracts/types-barrel.d.ts"],
+      "@docx-editor.dev/core/contracts/types": ["./dist-types/contracts/types-barrel.d.ts"],
+      "@docx-editor.dev/core/contracts/*": ["./dist-types/contracts/*.d.ts"],
+      "@docx-editor.dev/core/*": ["./dist-types/*/index.d.ts"]
+    }
+  }
+}

@@ -215,17 +215,36 @@ function render(entries) {
     `//\n// ${families.size} families, ${entries.length} faces, pinned to google/fonts@${REVISION}.\n` +
     '// Every family here ships all four static faces and passes the shaper\'s table checks;\n' +
     '// variable-only and colour families are excluded by the generator, not by hand.\n' +
-    '\nexport interface GoogleFontFace {\n' +
+    '\n/**\n' +
+    ' * One fetchable face in the pinned catalog.\n' +
+    ' *\n' +
+    ' * The catalog is a CLOSED set: a document-declared family is only ever a lookup key\n' +
+    ' * against it, never interpolated into a URL, so a crafted `w:rFonts` cannot redirect a\n' +
+    ' * fetch. Bytes are trusted by `hash`, not by origin.\n' +
+    ' */\n' +
+    'export interface GoogleFontFace {\n' +
     '  /** The family name a document would name, e.g. "PT Sans". */\n' +
     '  readonly family: string;\n' +
+    '  /** Only the two static weights; variable-only families are excluded by the generator. */\n' +
     '  readonly weight: 400 | 700;\n' +
     '  readonly style: \'normal\' | \'italic\';\n' +
     '  /** Immutable, commit-pinned jsDelivr URL. */\n' +
     '  readonly url: string;\n' +
+    '  /** Expected size; a response of any other length is rejected before use. */\n' +
     '  readonly byteLength: number;\n' +
+    '  /** `sha256:` digest the engine\'s admission path re-derives, catching a swapped CDN asset. */\n' +
     '  readonly hash: string;\n' +
     '}\n\n' +
+    '/**\n' +
+    ' * The google/fonts commit every {@link GoogleFontFace.url} is pinned to. Bump it only by\n' +
+    ' * regenerating this file, so URLs and hashes move together.\n' +
+    ' */\n' +
     `export const GOOGLE_FONTS_REVISION = '${REVISION}';\n\n` +
+    '/**\n' +
+    ' * Every face `googleFonts()` may fetch, sorted by family then weight then style. Closed\n' +
+    ' * and pinned: nothing outside this list is reachable, which is what makes resolving a\n' +
+    ' * document-declared family name safe.\n' +
+    ' */\n' +
     'export const GOOGLE_FONT_CATALOG: readonly GoogleFontFace[] = [\n' +
     entries
       .map(

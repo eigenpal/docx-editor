@@ -79,6 +79,7 @@ export interface ParagraphDigest {
   readonly genericStructure: readonly string[];
 }
 
+/** One story reduced to its semantic content, ignoring everything a normalized re-emit changes. */
 export interface StoryDigest {
   readonly partName: string;
   readonly paragraphs: readonly ParagraphDigest[];
@@ -93,10 +94,17 @@ export interface StoryDigest {
   readonly structure: readonly string[];
 }
 
+/**
+ * The whole document's semantic content — one of the D9 losslessness oracles.
+ *
+ * What a save/reopen round-trip is compared on. Byte identity applies only to non-XML parts;
+ * modelled parts re-emit normalized, so equality is asserted HERE rather than on bytes.
+ */
 export interface SemanticDigest {
   readonly stories: readonly StoryDigest[];
 }
 
+/** Where two digests diverge — the diagnostic when a round-trip loses something. */
 export type DigestDifference = {
   readonly path: string;
   readonly before: string;

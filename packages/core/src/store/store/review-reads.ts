@@ -73,6 +73,7 @@ export type ReviewRevisionKind =
   /** A row, cell, section or grid revision. Supported row revisions are resolvable. */
   | 'structural';
 
+/** One tracked change as the store derives it, keyed per decision rather than per site. */
 export interface ReviewRevisionItem {
   readonly kind: 'revision';
   /** Stable across renders and unique per DECISION, not per site. */
@@ -117,6 +118,7 @@ export interface ReviewRevisionItem {
   readonly pairedWith?: string;
 }
 
+/** One comment as the store derives it, with its thread links resolved. */
 export interface ReviewCommentItem {
   readonly kind: 'comment';
   readonly id: string;
@@ -131,6 +133,13 @@ export interface ReviewCommentItem {
   readonly orphaned: boolean;
 }
 
+/**
+ * One pending decision as the STORE derives it: a tracked change or a comment. Discriminate on
+ * `kind`.
+ *
+ * The layout layer's own `ReviewItem` widens this with the pro custom-node card, which has no
+ * store representation.
+ */
 export type ReviewItem = ReviewRevisionItem | ReviewCommentItem;
 
 /** The stable key a surface uses for the active item and for a React list. */
@@ -683,6 +692,7 @@ export function commentItemsOf(
   });
 }
 
+/** What review derivation reads: one story part plus its comment parts. */
 export interface ReviewModelInput {
   /** The story the ranges live in — the main document, a header, a note. */
   readonly storyPart: OoxmlPart;

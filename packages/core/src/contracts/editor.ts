@@ -1,7 +1,14 @@
 /**
- * `@docx-editor.dev/core/editor` — the browser editor facade.
+ * `@docx-editor.dev/core/contracts/editor` — the `Editor` contract adapters are written against.
  *
- * CONTRACT ONLY.
+ * Commands go through `can` before `exec`; queries answer against the live, laid-out document.
+ * Type-only where it can be, so an adapter can name the whole surface without importing the
+ * engine.
+ *
+ * CONTRACT ONLY — declarations, not an implementation.
+ *
+ * @packageDocumentation
+ * @public
  */
 
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './document.ts';
@@ -112,6 +119,13 @@ export interface FontConfiguration {
   readonly language?: string;
 }
 
+/**
+ * Why a font was not admitted.
+ *
+ * Distinguished rather than collapsed because the responses differ: `overLimit` and `malformed`
+ * are the caller's own bytes, while `forbidden` and `hashMismatch` mean the source was not what
+ * it claimed and the load should not be retried.
+ */
 export type EditorFontErrorCode =
   | 'initializationFailed'
   | 'missing'
@@ -165,6 +179,13 @@ export interface DocumentChange {
   readonly dirty?: readonly string[];
 }
 
+/**
+ * Everything `createDocxEditor` needs.
+ *
+ * Only {@link EditorConfig.host} is required — it is what lets the engine schedule work and
+ * measure text without owning a DOM of its own. Passing `document` loads at construction;
+ * omitting it produces an editor waiting for `load()`.
+ */
 export interface EditorConfig {
   host: EditorHost;
   /** A document to load at construction: DOCX bytes or an existing handle. */
@@ -266,8 +287,31 @@ export interface EditorHost {
   onTotalPages?(total: number): void;
 }
 
+/**
+ * Whether a command would be accepted, and why not when it would not.
+ *
+ * The `reason` is the ENGINE's own words, which is what lets disabled chrome explain itself
+ * instead of guessing — see `toolbarCommandState`.
+ */
 export type CanResult = { ok: true } | { ok: false; code: ExecErrorCode; reason: string };
 
+/**
+ * The engine's whole public surface: load and save, execute and query, observe and subscribe.
+ *
+ * Commands go through `can` before `exec` — the same check chrome uses to decide whether a
+ * control is enabled, so a button and the engine never disagree about what is possible.
+ *
+ * `snapshot()` is version-cached: the same reference until state actually moves, with
+ * reference-stable sub-objects, which is what makes it safe as a `useSyncExternalStore` source.
+ *
+ * @example
+ * ```ts
+ * const editor = createDocxEditor({ host });
+ * editor.load(bytes);
+ * if (editor.can({ type: 'toggleBold' }).ok) editor.exec({ type: 'toggleBold' });
+ * const bytesOut = await editor.save();
+ * ```
+ */
 export interface Editor {
   /** Load a new document (DOCX bytes or a handle), replacing the current one. */
   load(document: DocumentSource): void;
@@ -649,12 +693,27 @@ type EditorCommandShape<T> = {
  */
 export type { ReviewItem, ReviewRevisionKind };
 
+/**
+ * Narrows what `getReviewItems` returns.
+ *
+ * Both fields exist to keep the review rail cheap: filtering revision kinds is how a host hides
+ * structural cards it has no UI for, and `placement: false` skips the layout pass entirely when
+ * only metadata is wanted.
+ */
 export interface ReviewItemQuery {
   readonly excludeRevisionKinds?: readonly ReviewRevisionKind[];
   /** When false, skip layout geometry; metadata is unchanged and anchors are null. Default true. */
   readonly placement?: boolean;
 }
 
+/**
+ * What every review card carries, whatever kind of decision it represents.
+ *
+ * Presentation-ready by design: author, initials, date and text are derived by the ENGINE,
+ * because deriving them means walking runs and reading `w15:commentsEx`. An adapter doing that
+ * walk would put document derivation in the host and would have to be written once per
+ * framework.
+ */
 export interface ReviewItemPlacementBase {
   /** Stable and unique per DECISION — a revision with three ranges is one entry. */
   readonly key: string;
@@ -814,6 +873,13 @@ export interface TableColumnOccurrenceTarget {
   readonly isHeaderRepeat: boolean;
 }
 
+/**
+ * Every command the editor accepts, keyed by name with its payload as the value.
+ *
+ * Extends the document-level {@link DocEdits} vocabulary with the things only a LIVE editor has:
+ * selection, view state, chrome modes, header/footer and note editing. An interface rather than a
+ * closed union so an extension can widen it by declaration merging.
+ */
 export interface EditorCommands
   extends EditorCommandShape<DocEdits>, EditorHeaderFooterCommands, EditorNoteCommands {
   /** Switch how edits are written. A view command: it changes no document state. */
@@ -1136,10 +1202,21 @@ export interface EditorCommands
   paste: { text: string };
 }
 
+/**
+ * One command, as a discriminated union derived from {@link EditorCommands}.
+ *
+ * This is what `can` and `exec` take. Widening `EditorCommands` widens it automatically.
+ */
 export type EditorCommand = {
   [K in keyof EditorCommands]: { type: K } & EditorCommands[K];
 }[keyof EditorCommands];
 
+/**
+ * Every query the editor answers, keyed by name with its arguments as the value.
+ *
+ * Extends {@link DocQueries} with the reads that only mean something against a live, laid-out
+ * document: the selection, its formatting, the table or hyperlink under the caret.
+ */
 export interface EditorQueries extends DocQueries {
   selection: Record<never, never>;
   selectionFormatting: Record<never, never>;
@@ -1153,6 +1230,11 @@ export interface EditorQueries extends DocQueries {
   trackedChanges: Record<never, never>;
 }
 
+/**
+ * One query, as a discriminated union derived from {@link EditorQueries}.
+ *
+ * This is what `query` takes; {@link EditorQueryResults} says what each answers.
+ */
 export type EditorQuery = {
   [K in keyof EditorQueries]: { type: K } & EditorQueries[K];
 }[keyof EditorQueries];
@@ -1171,10 +1253,18 @@ export interface EditorQueryResults extends DocQueryResults {
   trackedChanges: readonly Revision[];
 }
 
+/**
+ * Where the caret sits inside a table: the table's shape, and the cell holding it.
+ *
+ * Null from the `tableContext` query when the selection is not in a table at all, which is how
+ * table-only chrome decides whether to render.
+ */
 export interface TableContext {
   readonly rows: number;
   readonly columns: number;
+  /** Zero-based, within the table. */
   readonly rowIndex: number;
+  /** Zero-based, within the row. */
   readonly columnIndex: number;
 }
 
@@ -1215,6 +1305,13 @@ export interface TextMatch {
   readonly contextAfter?: string;
 }
 
+/**
+ * The hyperlink under a position: where it points, how far it reaches, and what Word shows on
+ * hover.
+ *
+ * `href` has already been through `sanitizeHref` — it comes from a file, so a `javascript:` or
+ * `data:` target is dropped at the parse boundary rather than here.
+ */
 export interface HyperlinkInfo {
   readonly href: string;
   readonly range: DocRange;
@@ -1379,15 +1476,37 @@ export interface SelectedImageState {
   readonly canCrop: boolean;
 }
 
-/** @public */
+/**
+ * The selected image and what may be done to it — the `imageContext` query's answer.
+ *
+ * An alias of `SelectedImageState`, kept as its own name because it is the query's result type
+ * and chrome is written against it.
+ *
+ * @public
+ */
 export type ImageContext = SelectedImageState;
 
+/**
+ * An error the engine raised, carrying a machine-readable `code` alongside the message.
+ *
+ * `code` is optional because an `Error` from deeper down (a parser, a codec) is surfaced as-is
+ * rather than wrapped in a fabricated code.
+ */
 export interface EditorError extends Error {
   readonly code?: string;
 }
 
+/**
+ * What `editor.on(...)` can be subscribed to, and what each handler receives.
+ *
+ * These are PUSH notifications and are not interchangeable with reading `snapshot()`: a snapshot
+ * read cannot observe an event that was never emitted, which is why adapter behaviour is asserted
+ * against these rather than against the snapshot.
+ */
 export interface EditorEvents {
+  /** A document mutation committed, with the ids it touched. */
   change: (change: DocumentChange) => void;
+  /** The selection or its derived formatting moved. */
   selectionChange: (snapshot: EditorSnapshot) => void;
   error: (error: EditorError) => void;
 }

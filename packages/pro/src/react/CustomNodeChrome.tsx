@@ -30,6 +30,15 @@ import {
   useCustomNodeDefinitions,
 } from './custom-node-activation.ts';
 
+/**
+ * Props for {@link CustomNodeChrome}: which definitions to paint, and where activation goes.
+ *
+ * The two hooks are the COMPONENT-level twins of a definition's own `onClick`/`onHover`. Host UI
+ * state — a popover, a dialog — belongs here rather than on the definition, which is shared by
+ * every surface and has no React context to close over.
+ *
+ * @public
+ */
 export interface CustomNodeChromeProps {
   /** Definitions to style and dispatch on. Defaults to the ones registered on the editor. */
   readonly nodes?: readonly CustomNodeDefinition[];
@@ -65,6 +74,23 @@ const layerSelectors = (definition: CustomNodeDefinition): readonly string[] => 
   ];
 };
 
+/**
+ * Paints custom-node chips and dispatches pointer activation on them.
+ *
+ * Renders nothing itself — it installs the per-definition chip styles and the click/hover
+ * listeners, so mount it once anywhere inside the editor provider. Chip colours come from each
+ * definition's `chrome`, which is HOST-authored and never file data.
+ *
+ * @example
+ * ```tsx
+ * <DocxEditor.Root>
+ *   <CustomNodeChrome onNodeClick={(node) => setPopover(node)} />
+ *   <DocxEditor.Viewport><DocxEditor.Content /></DocxEditor.Viewport>
+ * </DocxEditor.Root>
+ * ```
+ *
+ * @public
+ */
 export function CustomNodeChrome(props: CustomNodeChromeProps): null {
   const { onNodeClick, onNodeHover } = props;
   const editor = useDocxEditor();

@@ -37,6 +37,20 @@ import type { ObjectPath } from './object-path.ts';
 import type { QueuedAction } from './queue.ts';
 import type { RequestContext } from './request-context.ts';
 
+/**
+ * The base every document proxy extends.
+ *
+ * A proxy is three things and no more: the context it belongs to, the path that says whether it
+ * can be addressed, and the properties a completed `load` filled in.
+ *
+ * A RELEASED proxy still answers what it already knew. Reading a property loaded before the run
+ * ended is served from memory, because that value is a copy the consumer already holds — it is
+ * not a reach into a document. Anything that would talk to the document (`load`, a write, a
+ * method) refuses with `InvalidObjectPath`. The line is "does this need the document", not "does
+ * this look like a read".
+ *
+ * @public
+ */
 export abstract class ClientObject implements RuntimeManagedObject {
   #context: RequestContext;
   #internals: ContextInternals;
@@ -93,10 +107,12 @@ export abstract class ClientObject implements RuntimeManagedObject {
   /** What this kind of object does with a resolved load request. */
   protected abstract onLoad(request: ResolvedLoadOptions): void;
 
+  /** @internal This object's address, or the placeholder standing in until a sync resolves it. */
   protected get path(): ObjectPath {
     return this.#path;
   }
 
+  /** @internal The owning context's internal surface. */
   protected get internals(): ContextInternals {
     return this.#internals;
   }
@@ -124,11 +140,13 @@ export abstract class ClientObject implements RuntimeManagedObject {
     this.#internals.assertUsable(this.#path.label);
   }
 
+  /** @internal Add one action to the context's queue, to be planned at the next sync. */
   protected enqueue(action: QueuedAction): void {
     this.requireAddressable();
     this.#internals.queue.push(action);
   }
 
+  /** @internal Read a property a completed `load` filled in; refuses if none did. */
   protected loadedProperty<T>(name: string): T {
     if (this.#path.isReleased && !this.#loaded.has(name)) {
       fail({ code: 'InvalidObjectPath', target: this.#path.label });
@@ -139,20 +157,22 @@ export abstract class ClientObject implements RuntimeManagedObject {
     return this.#loaded.get(name) as T;
   }
 
+  /** @internal Whether a completed `load` filled this property in. */
   protected hasLoadedProperty(name: string): boolean {
     return this.#loaded.has(name);
   }
 
+  /** @internal Record a value a completed load produced. */
   protected setLoadedProperty(name: string, value: unknown): void {
     this.#loaded.set(name, value);
   }
 
-  /** @internal */
+  /** @internal Drop this object's document reference; the run that owned it has ended. */
   [RELEASE](): void {
     this.#path.release();
   }
 
-  /** @internal */
+  /** @internal Adopt this object into another run's context. */
   [REBIND](context: RequestContext): void {
     this.#context = context;
     this.#internals = context[INTERNALS];

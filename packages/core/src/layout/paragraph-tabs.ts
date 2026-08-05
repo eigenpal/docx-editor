@@ -23,8 +23,15 @@ export const MAX_TAB_POSITION_TWIPS = 31_680;
 /** OOXML / Word default when `w:settings/w:defaultTabStop` is absent: 720 twips = 0.5". */
 export const DEFAULT_TAB_INTERVAL_TWIPS = 720;
 
+/** The default tab interval in points — {@link DEFAULT_TAB_INTERVAL_TWIPS} converted. */
 export const DEFAULT_TAB_INTERVAL_PT = DEFAULT_TAB_INTERVAL_TWIPS / 20;
 
+/**
+ * How a tab stop positions the text that follows it.
+ *
+ * Only `left` is a plain cursor jump. The other three size the tab glyph from the MEASURED
+ * following segment, so its end, centre or decimal point lands on the stop.
+ */
 export type TabAlignment = 'left' | 'center' | 'right' | 'decimal';
 
 /**
@@ -52,6 +59,7 @@ export const TAB_LEADER_GLYPH: ReadonlyMap<TabLeader, string> = new Map([
   ['middleDot', '\u00B7'],
 ]);
 
+/** One authored `w:tab`: where it sits, how it aligns, and what fills the gap. */
 export interface TabStop {
   /** Position from the paragraph content origin, in points. */
   readonly positionPt: number;
@@ -60,6 +68,10 @@ export interface TabStop {
   readonly leader?: TabLeader;
 }
 
+/**
+ * A paragraph's tab stops after the style cascade, with the default interval that applies past
+ * the last explicit one.
+ */
 export interface ResolvedTabStops {
   /** Custom stops sorted by ascending position. */
   readonly stops: readonly TabStop[];
@@ -67,6 +79,7 @@ export interface ResolvedTabStops {
   readonly defaultIntervalPt: number;
 }
 
+/** The frozen "no custom stops" value, so a paragraph without tabs mints no object. */
 export const EMPTY_TAB_STOPS: ResolvedTabStops = Object.freeze({
   stops: Object.freeze([]),
   defaultIntervalPt: DEFAULT_TAB_INTERVAL_PT,
@@ -248,6 +261,7 @@ export function defaultTabIntervalFromSettings(settings: OoxmlNode | null | unde
   return twips / 20;
 }
 
+/** Where one tab character lands: the resolved x, and the stop that decided it. */
 export interface TabDestination {
   readonly positionPt: number;
   readonly alignment: TabAlignment;

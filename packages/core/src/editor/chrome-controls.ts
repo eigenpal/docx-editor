@@ -99,6 +99,16 @@ export type ChromeControlState =
  *  and can never exercise. */
 export type ChromeControlShape = 'icon' | 'stepper' | 'dropdown' | 'colorSplit';
 
+/**
+ * One toolbar control as the registry describes it — what it renders as, never whether it is
+ * enabled.
+ *
+ * Enabled state has exactly ONE source, `toolbarCommandState`, which asks the engine. A
+ * descriptor carrying its own disabled flag would be a second answer that goes stale the moment
+ * the engine wires the slot.
+ *
+ * @public
+ */
 export interface ChromeControl<Id extends string = string> {
   /** Stable control id, unique WITHIN its group. Public API; renames are breaking. */
   readonly id: Id;
@@ -117,6 +127,14 @@ export interface ChromeControl<Id extends string = string> {
   readonly state: ChromeControlState;
 }
 
+/**
+ * One toolbar group: the taxonomy both adapters derive their default arrangement FROM.
+ *
+ * Never hand-list controls in an adapter — a default toolbar is built by walking `CHROME_GROUPS`,
+ * so a slot added here appears in React and Vue without either being edited.
+ *
+ * @public
+ */
 export interface ChromeGroup<Id extends string = string, ControlId extends string = string> {
   /** Stable group id. Public API; renames are breaking. */
   readonly id: Id;

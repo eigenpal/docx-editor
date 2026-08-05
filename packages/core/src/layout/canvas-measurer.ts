@@ -97,11 +97,23 @@ export interface CanvasTextMetrics {
   readonly fontBoundingBoxDescent?: number;
 }
 
+/**
+ * The slice of a 2D canvas context measurement needs.
+ *
+ * A structural subset rather than `CanvasRenderingContext2D`, so layout stays DOM-free and a test
+ * can supply a deterministic stub.
+ */
 export interface CanvasTextContext {
   font: string;
   measureText(text: string): CanvasTextMetrics;
 }
 
+/**
+ * How the canvas measurer resolves fonts, scales, and bounds its caches. Every field optional.
+ *
+ * Layout never creates a canvas itself: without a `context` this measurer does not exist and the
+ * surface falls back to fixed metrics.
+ */
 export interface CanvasMeasurerOptions {
   /**
    * Layout units to CSS pixels — the same value the painter uses.
@@ -139,6 +151,13 @@ export interface CanvasMeasurerOptions {
   readonly maxMetricsEntries?: number;
 }
 
+/**
+ * The measurer a surface ended up with, plus the identity its cache keys must include.
+ *
+ * The `producer` string is load-bearing: the same canvas measuring against document-embedded
+ * faces produces DIFFERENT advances, so the two must not share a cache key space or a document
+ * would keep its pre-font pagination after the font arrived.
+ */
 export interface ResolvedSurfaceMeasurer {
   readonly measurer: TextMeasurer;
   /**

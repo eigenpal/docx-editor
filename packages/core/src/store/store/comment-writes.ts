@@ -50,6 +50,12 @@ export interface CommentAnchorRequest {
   readonly endParagraphId?: string;
 }
 
+/**
+ * What adding a comment needs: where it anchors, who wrote it, and its body.
+ *
+ * `author` is required because `CT_Comment` makes `@w:author` mandatory — a comment without one
+ * writes invalid XML, so the write is refused rather than filled with an empty attribute.
+ */
 export interface AddCommentRequest {
   readonly anchor: CommentAnchorRequest;
   /** Required by `CT_TrackChange`. A comment without one writes invalid XML. */
@@ -62,6 +68,7 @@ export interface AddCommentRequest {
   readonly replyToCommentId?: string;
 }
 
+/** The new comment's id and the story change, or the reason the write was refused. */
 export type AddCommentResult =
   | {
       readonly ok: true;
@@ -597,6 +604,7 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
   return { ok: true, commentId, change: result.change };
 }
 
+/** Whether resolving a thread applied. Marks the comment AND every reply to it, as Word does. */
 export type SetCommentResolvedResult =
   | {
       readonly ok: true;

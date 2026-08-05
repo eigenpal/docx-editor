@@ -53,6 +53,7 @@ export const MAX_STYLE_DEFINITIONS = 4096;
 const STYLE_ID_MAX = 128;
 const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/;
 
+/** One `w:style` as the cascade reads it: its properties, and the style it is based on. */
 export interface StyleDefinition {
   readonly styleId: string;
   readonly type: string;
@@ -73,6 +74,12 @@ export interface StyleDefinition {
   readonly conditionalTableFormats: ReadonlyMap<string, OoxmlElement>;
 }
 
+/**
+ * The whole styles part, indexed and ready to resolve against.
+ *
+ * `cacheToken` is load-bearing: it folds into layout cache producers so breaks measured under one
+ * styles part are never reused under another.
+ */
 export interface StyleCascadeTable {
   /**
    * Bounded fingerprint folded into layout cache producers so a different styles part cannot
@@ -99,6 +106,13 @@ export interface StyleCascadeTable {
 /** A document with no theme part: every theme reference falls back to its explicit name. */
 export const NO_THEME_FONTS: ThemeFonts = { major: null, minor: null };
 
+/**
+ * A paragraph's properties after the cascade, plus the same list WITHOUT its own `w:pPr`.
+ *
+ * Both, because a writer needs to know what a paragraph INHERITS to decide whether setting a
+ * value is a change or a no-op — and writing back an inherited value freezes it into the
+ * paragraph as though the author had chosen it.
+ */
 export interface CascadedParagraphFormatting {
   /** Flat paragraph properties in cascade order (defaults → bases → style → direct). */
   readonly paragraphProperties: readonly OoxmlProperty[];
@@ -608,6 +622,7 @@ export function cascadeRunProperties(
   return [...inheritedRunProperties, ...characterProps, ...directRunProperties];
 }
 
+/** Everything the line breaker needs about one paragraph, already cascaded and converted. */
 export interface ParagraphLayoutInputs {
   readonly props: OoxmlProperty[];
   readonly indent: { left: number; right: number; hanging: number; firstLine: number };

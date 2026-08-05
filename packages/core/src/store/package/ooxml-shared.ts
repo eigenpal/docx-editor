@@ -29,8 +29,11 @@ export { knownKindAllowsWmlVal } from './ooxml-sdt.ts';
 // `as const` variable declaration, and any public type that reaches `OoxmlElement` drags
 // these attribute kinds along with it. Same reason `CHROME_GROUPS` in
 // `editor/chrome-controls.ts` avoids the derived-from-`as const` form.
+/** The WordprocessingML main namespace — the `w:` prefix in every `word/document.xml`. */
 export const WML_NAMESPACE_URI = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+/** The reserved `xml:` namespace, which carries `xml:space`. */
 export const XML_NAMESPACE_URI = 'http://www.w3.org/XML/1998/namespace';
+/** The reserved `xmlns:` namespace that namespace declarations themselves live in. */
 export const XMLNS_NAMESPACE_URI = 'http://www.w3.org/2000/xmlns/';
 export const MC_NAMESPACE_URI = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
 export const XSI_NAMESPACE_URI = 'http://www.w3.org/2001/XMLSchema-instance';

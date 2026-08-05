@@ -143,6 +143,13 @@ export function resolveThemeColorHex(
 
 export type ColorLowerRefusal = { readonly ok: false; readonly reason: string };
 
+/**
+ * A public colour lowered for a border or fill op, or the reason it could not be.
+ *
+ * Refusals happen because paint needs a literal: a theme colour the document's theme does not
+ * define has no hex to draw, and inventing one would show a border in a colour the file never
+ * named.
+ */
 export type ColorLowerResult =
   | { readonly ok: true; readonly color: TreeDocColorValue }
   | ColorLowerRefusal;

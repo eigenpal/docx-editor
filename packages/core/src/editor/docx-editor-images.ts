@@ -185,6 +185,13 @@ function wrapOf(record: SelectedDrawingRecord): ImageWrapTarget {
   return record.wrap;
 }
 
+/**
+ * The selected image and what may be done to it, or null when nothing image-like is selected.
+ *
+ * Null covers more than "no selection": a placeholder graphic, a drawing the file marks hidden,
+ * and one whose `select` lock is set all read as no selection, because chrome that offered
+ * resize handles on them would promise an edit the store is about to refuse.
+ */
 export function selectedImageStateOf(surface: PaginatedSurface | null): SelectedImageState | null {
   const record = resolveSelectedDrawingRecord(surface);
   if (!record) return null;
@@ -468,6 +475,14 @@ function asyncImageExecutionGate(surface: PaginatedSurface | null): ExecResult |
   return null;
 }
 
+/**
+ * Snapshot the state an image mutation was planned against: mount generation, package revision,
+ * and the selection anchor.
+ *
+ * Taken at the START of a drag so the commit can be checked against it with
+ * {@link isStaleImageInteractionCommit}. A pointer gesture spans many frames, and a document that
+ * moved underneath it must not have the gesture's final coordinates applied to it.
+ */
 export function captureImageMutationPreconditions(
   editor: Pick<DocxEditorInstance, 'surface' | 'mountGeneration'>
 ): ImageMutationPreconditions | null {
@@ -697,6 +712,11 @@ export function gateImageCommand(
   }
 }
 
+/**
+ * Whether an insert or replace would be accepted — the `can` half of the can-before-exec pair.
+ *
+ * Refuses in suggesting mode, since an image property edit has no tracked-change representation.
+ */
 export function canExecuteImageCommand(
   command: Extract<EditorCommand, { type: 'insertImage' | 'replaceImage' }>,
   surface: PaginatedSurface | null
@@ -849,6 +869,12 @@ export function execImageCommand(
   }
 }
 
+/**
+ * Run an insert or replace, re-checking the same gates {@link canExecuteImageCommand} applies.
+ *
+ * Async because image bytes must be decoded to derive their natural extent before the drawing can
+ * be projected — the one editor command that cannot complete synchronously.
+ */
 export async function executeImageCommand(
   editor: DocxEditorInstance,
   command: Extract<EditorCommand, { type: 'insertImage' | 'replaceImage' }>
@@ -933,12 +959,25 @@ export async function executeImageCommand(
   return { ok: true, changed: result.change !== null };
 }
 
+/** Which of the eight resize handles a drag started from, by compass direction. */
 export type ImageResizeHandle = 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw';
 
+/** How far one arrow-key press nudges a selected image, in points. */
 export const IMAGE_OVERLAY_NUDGE_PT = 1;
+
+/** How far Shift+arrow nudges a selected image, in points. */
 export const IMAGE_OVERLAY_NUDGE_SHIFT_PT = 10;
+
+/** EMUs per point. DrawingML stores extents in EMU; layout works in points. */
 export const EMU_PER_POINT = 12_700;
 
+/**
+ * One in-flight image drag: where it started, and everything needed to decide at commit time
+ * whether the document still describes what the gesture was planned against.
+ *
+ * Both revisions are captured because they move independently — layout can re-flow without the
+ * package changing, and vice versa.
+ */
 export interface ImageInteractionSession {
   readonly drawingNodeId: string;
   readonly startBounds: {
@@ -960,11 +999,25 @@ export interface ImageInteractionSession {
   readonly kind: 'inline' | 'anchored';
 }
 
+/**
+ * How an image drag scrolls the page when it reaches the viewport edge.
+ *
+ * Returns the delta ACTUALLY applied rather than the one requested, because a drag at the end of
+ * the document cannot scroll further and the overlay must not move the image by a distance the
+ * page did not travel.
+ */
 export interface ImageOverlayScrollPort {
   /** Scroll by a preview delta and return the actual applied document-space delta in points. */
   scrollBy(deltaY: number): number;
 }
 
+/**
+ * The painted geometry of the selected drawing, plus what the overlay is allowed to do to it.
+ *
+ * Carries BOTH the painted rect (points, for hit-testing and handle placement) and the stored
+ * extent (EMU, for writing back), so the overlay never has to convert between the two spaces to
+ * decide what it is looking at.
+ */
 export interface SelectedDrawingOverlayTarget {
   readonly id: string;
   readonly pageIndex: number;
@@ -999,6 +1052,13 @@ function overlayCapabilityFlags(
   });
 }
 
+/**
+ * The painted geometry of the selected drawing, for the resize/move overlay — or null.
+ *
+ * Stricter than {@link selectedImageStateOf}: it also requires a COLLAPSED selection, because a
+ * range that merely contains a drawing is a text selection, and drawing handles over it would
+ * claim an object the user did not single out.
+ */
 export function selectedDrawingOverlayTargetOf(
   surface: PaginatedSurface | null
 ): SelectedDrawingOverlayTarget | null {
@@ -1038,14 +1098,26 @@ export function selectedDrawingOverlayTargetOf(
   });
 }
 
+/** Points to EMU, rounded — EMUs are integral in the file. */
 export function pointsToEmu(points: number): number {
   return Math.round(points * EMU_PER_POINT);
 }
 
+/** EMU to points. Unrounded, so overlay geometry keeps sub-point precision during a drag. */
 export function emuToOverlayPoints(emu: number): number {
   return emu / EMU_PER_POINT;
 }
 
+/**
+ * The extent a resize drag produces, in EMU.
+ *
+ * Computed from the drag's START extent rather than the previous frame's, so a drag that reverses
+ * direction lands exactly where it began instead of accumulating rounding error.
+ *
+ * `preserveAspect` behaves the way Word's handles do: a corner handle scales by whichever axis
+ * moved further, while an edge handle drives the other axis from the original ratio. Both axes
+ * are floored at one point, so a drag past the opposite edge cannot invert the image.
+ */
 export function computeResizedImageExtentEmu(
   startWidthEmu: number,
   startHeightEmu: number,
@@ -1079,6 +1151,13 @@ export function computeResizedImageExtentEmu(
   return Object.freeze({ cx: pointsToEmu(widthPt), cy: pointsToEmu(heightPt) });
 }
 
+/**
+ * The position a move drag produces, preserving the anchoring the file already used.
+ *
+ * A `frame`-mode position keeps its `relativeToH`/`relativeToV` bases and only shifts the offsets
+ * it actually had — writing an offset the file omitted would re-anchor the drawing to a different
+ * reference and move it somewhere the drag never pointed.
+ */
 export function computeMovedImagePosition(
   start: DrawingPositionInput,
   deltaXPt: number,
@@ -1104,6 +1183,14 @@ export function computeMovedImagePosition(
   });
 }
 
+/**
+ * Whether a drag's commit should be refused because the document moved under it — the refusal to
+ * return, or null when the commit is still valid.
+ *
+ * Checks the mount generation and both revisions captured by
+ * {@link captureImageMutationPreconditions}. A gesture spans many frames, so this is the one
+ * place that decides its coordinates still describe the document they were measured against.
+ */
 export function isStaleImageInteractionCommit(
   editor: Pick<DocxEditorInstance, 'surface' | 'mountGeneration'>,
   session: ImageInteractionSession

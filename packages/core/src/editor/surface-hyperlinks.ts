@@ -211,6 +211,13 @@ export interface HyperlinkOpsDeps {
   ) => void;
 }
 
+/**
+ * Reading and writing hyperlinks on the surface.
+ *
+ * Every href that leaves here has already been through `sanitizeHref` — targets come from files,
+ * so `javascript:`, `data:` and `vbscript:` are dropped at the parse boundary rather than trusted
+ * to be filtered by whoever renders them.
+ */
 export interface HyperlinkOps {
   /** Every link in the paragraph the caret is in. */
   linksInCaretParagraph(): SurfaceHyperlink[];

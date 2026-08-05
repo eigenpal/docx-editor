@@ -24,6 +24,7 @@ import { formsProtectionRefusal } from './tree-op-content-controls.ts';
 import { applyTreeOp, type ImpactClass, type TreeDocOp, type TreeOpRejection } from './tree-ops.ts';
 
 /** A selection the caller wants restored when an entry is undone or redone. */
+/** A selection captured with a transaction, so undo restores where the caret was. */
 export interface SelectionMark {
   readonly paragraphId: string;
   readonly start: number;
@@ -44,6 +45,7 @@ function collapsedSelection(mark: SelectionMark | null): SelectionMark | undefin
  * commits omit `rId`; header/footer commits carry the relationship id that addressed
  * the part. Notes parts use `{ kind: 'notesPart'; noteKind }` (one store per part).
  */
+/** Which story a transaction targets: the body, a header/footer part, or a notes part. */
 export type TreeStoryRef =
   | { readonly kind: 'body'; readonly partName: string }
   | { readonly kind: 'headerFooter'; readonly partName: string; readonly rId: string }
@@ -53,6 +55,11 @@ export type TreeStoryRef =
       readonly noteKind: 'footnote' | 'endnote';
     };
 
+/**
+ * What one committed transaction changed: the revision, the ids touched, and the impact class.
+ *
+ * The ids are what let layout and paint re-do only the affected blocks instead of the document.
+ */
 export interface TreeModelChange {
   readonly change: 'model-change';
   readonly fromRevision: number;
@@ -82,10 +89,12 @@ export interface TreeModelChange {
   readonly caret?: SelectionMark;
 }
 
+/** Whether a transaction committed, or the typed reason it was refused. */
 export type TransactResult =
   | { readonly ok: true; readonly change: TreeModelChange | null }
   | { readonly ok: false; readonly reason: TreeOpRejection; readonly detail?: string };
 
+/** What a transaction body is handed: the working tree, and the means to stage ops against it. */
 export interface TransactionContext {
   /** Stage one op against the STORY part. Returns false once the transaction has failed. */
   apply(op: TreeDocOp): boolean;
@@ -110,6 +119,7 @@ export interface TransactionContext {
   selectionAfter(selection: SelectionMark | null): void;
 }
 
+/** How one transaction behaves: its story scope, its attribution, and its selection marks. */
 export interface TransactOptions {
   readonly origin?: string;
   /**
@@ -150,6 +160,7 @@ const IMPACT_RANK: Record<ImpactClass, number> = {
   global: 3,
 };
 
+/** How a store is constructed: its limits, its history depth, and its identity source. */
 export interface TreeDocumentStoreOptions {
   /** Bound on retained history entries. Oldest entries drop first. */
   readonly historyLimit?: number;
@@ -174,6 +185,7 @@ function singlePartPackage(part: OoxmlPart): OoxmlPackage {
  * Opaque document+history checkpoint for package-coordinator rollback.
  * Used when a story mutation may promote to a package undo unit (note-ref cascade).
  */
+/** A restorable point in history — one entry of the intent-scoped undo stack. */
 export interface TreeDocumentCheckpoint {
   /**
    * The whole package, not one part. The store owns the package so a transaction spanning
@@ -190,6 +202,14 @@ export interface TreeDocumentCheckpoint {
   } | null;
 }
 
+/**
+ * The document store: one transaction is one atomic publication and one history entry.
+ *
+ * `apply` STAGES ops against a working part and nothing is visible until `transact` returns, so a
+ * batch rejected halfway leaves the revision, the tree, the indexes and every subscriber exactly
+ * as they were. That all-or-nothing property is what lets a caller compose ops without having to
+ * reason about partial application.
+ */
 export class TreeDocumentStore {
   private current: OoxmlPackage;
   /** The part `apply` targets and `part` returns: the story this store is editing. */

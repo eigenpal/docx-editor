@@ -11,8 +11,19 @@ import { resolveInternalTarget, validateExternalTarget, type NameResult } from '
 export const IMAGE_RELATIONSHIP_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image';
 
+/**
+ * Whether a relationship points inside the package or out of it.
+ *
+ * The security-relevant distinction: an `External` target is retained VERBATIM and never
+ * owner-resolved or fetched, because auto-loading a file-supplied remote target is a zero-click
+ * external fetch.
+ */
 export type TargetMode = 'Internal' | 'External';
 
+/**
+ * One authored relationship, with nothing materialized away: owner part, id, type, raw target
+ * lexical form, mode, and position.
+ */
 export interface RelationshipRecord {
   readonly ownerPart: string; // canonical part name of the source part
   readonly id: string; // authored r:id, e.g. "rId1"
@@ -22,12 +33,14 @@ export interface RelationshipRecord {
   readonly order: number; // significant order within the owner's rels
 }
 
+/** Why a relationship set is invalid. Duplicate ids within one owner fail closed. */
 export type RelationshipError = {
   readonly code: 'duplicate-id';
   readonly ownerPart: string;
   readonly id: string;
 };
 
+/** The validated relationship set, or the conflict that rejected it. */
 export type RelationshipSetResult =
   | { readonly ok: true; readonly byOwner: ReadonlyMap<string, readonly RelationshipRecord[]> }
   | { readonly ok: false; readonly error: RelationshipError };
@@ -52,6 +65,11 @@ export function buildRelationshipSet(
   return { ok: true, byOwner };
 }
 
+/**
+ * A relationship resolved to a part, or the reason it could not be.
+ *
+ * External targets resolve to a refusal by design: they are never followed from a file.
+ */
 export type ResolvedRelationship =
   | { readonly mode: 'Internal'; readonly target: NameResult; readonly raw: string }
   | { readonly mode: 'External'; readonly sinkSafe: NameResult; readonly raw: string };
@@ -77,6 +95,12 @@ export function resolveRelationship(rec: RelationshipRecord): ResolvedRelationsh
   };
 }
 
+/**
+ * An image relationship resolved to package bytes, or why it was refused.
+ *
+ * External-mode image rels are refused rather than fetched — the no-zero-click-external-fetch
+ * rule applies to images exactly as it does to links.
+ */
 export type ImageRelationshipResolution =
   | { readonly mode: 'internal'; readonly partName: string; readonly raw: string }
   | { readonly mode: 'external'; readonly sinkSafe: boolean; readonly raw: string }

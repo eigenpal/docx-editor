@@ -352,6 +352,7 @@ export function drawingOpImpact(op: DrawingTreeDocOp): ImpactClass {
   }
 }
 
+/** Validate a drawing op's extents, crops and positions before it reaches the store. */
 export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOpRejection | null {
   switch (op.op) {
     case 'insertDrawing': {
@@ -1577,6 +1578,7 @@ export function applyDrawingOp(
   }
 }
 
+/** Whether an op is one of the drawing ops. Narrows the type. */
 export function isDrawingTreeDocOp(op: TreeDocOp): op is DrawingTreeDocOp {
   return (
     op.op === 'insertDrawing' ||

@@ -10,6 +10,12 @@
 import { assertValidId, type IdKind } from './ids.ts';
 import { parseSemVer, satisfies } from './versions.ts';
 
+/**
+ * Why registry resolution failed.
+ *
+ * Every code names a declaration conflict a bundle author can fix — a missing dependency, an
+ * unsatisfied version range, a duplicate contribution with no replacement policy.
+ */
 export type RegistryErrorCode =
   | 'invalid-id'
   | 'invalid-version'
@@ -24,6 +30,13 @@ export type RegistryErrorCode =
   | 'conflict'
   | 'missing-port';
 
+/**
+ * A resolution failure naming every responsible party.
+ *
+ * Thrown rather than returned: an unresolvable registry is a build-time composition mistake, and
+ * an engine running with a half-resolved registry would fail later in ways that do not point back
+ * to the bundle that caused it.
+ */
 export class RegistryError extends Error {
   constructor(
     readonly code: RegistryErrorCode,
@@ -42,6 +55,7 @@ export type ReplacementPolicy =
   | { readonly kind: 'single' } // exactly one authorized replacer allowed
   | { readonly kind: 'priority' }; // highest unique `replaces.priority` wins
 
+/** One thing a bundle contributes: a command, a query, a schema, a port, keyed by `(kind, id)`. */
 export interface Contribution {
   readonly kind: Exclude<IdKind, 'extension' | 'origin' | 'result'>;
   readonly id: string;
@@ -57,6 +71,13 @@ export interface Contribution {
   readonly payload?: unknown;
 }
 
+/**
+ * A unit of engine functionality: its identity, version, dependencies, conflicts, required ports,
+ * and contributions.
+ *
+ * The registry's whole input. Everything a bundle needs and everything it offers is DECLARED, so
+ * resolution can be deterministic and order-independent.
+ */
 export interface FeatureBundle {
   readonly id: string;
   readonly version: string;
@@ -66,6 +87,7 @@ export interface FeatureBundle {
   readonly contributions: readonly Contribution[];
 }
 
+/** The resolved result: every contribution selected, indexed by `(kind, id)`. */
 export interface ResolvedRegistry {
   readonly extensions: ReadonlyMap<string, FeatureBundle>;
   readonly contributions: ReadonlyMap<string, Contribution>;
@@ -74,11 +96,20 @@ export interface ResolvedRegistry {
 
 const contribKey = (kind: string, id: string): string => `${kind}:${id}`;
 
+/** How resolution treats optional bundles and replacement policies. */
 export interface ResolveOptions {
   /** Runtime port ids available in this environment (design D9 / task 0.3). */
   readonly availablePorts?: readonly string[];
 }
 
+/**
+ * Resolve a set of bundles into one registry, or throw.
+ *
+ * Deterministic and registration-order independent: selection is by `(kind, id)` plus version,
+ * and ties break only on declared policy. Array order never decides anything.
+ *
+ * @throws RegistryError naming every bundle responsible for the failure.
+ */
 export function resolve(
   bundles: readonly FeatureBundle[],
   options: ResolveOptions = {}

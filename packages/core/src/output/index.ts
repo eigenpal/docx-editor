@@ -1,3 +1,13 @@
+/**
+ * `@docx-editor.dev/core/output` — painting a layout into DOM.
+ *
+ * The painted pages ARE the editable surface, but the DOM is a picture: browser mutations are
+ * prevented and re-expressed as tree ops, and selection maps only through `data-paragraph-id`
+ * and `data-start`.
+ *
+ * @packageDocumentation
+ * @public
+ */
 // @docx-editor.dev/engine-output
 //
 // Outputs: the semantic-layout painter for the paginated surface. Consumes semantic

@@ -20,6 +20,15 @@ function surfaceOf(editor: Editor): PaginatedSurface | null {
   return candidate.surface ?? null;
 }
 
+/**
+ * How {@link insertCustomNode} places a node.
+ *
+ * Every field is optional: the ordinary call inserts at the caret with `contentLocked`, which is
+ * the behaviour that keeps a chip's label from drifting out of sync with its attrs while leaving
+ * the node deletable as one unit.
+ *
+ * @public
+ */
 export interface InsertCustomNodeOptions {
   /**
    * Where to insert. Omitted, the node lands at the current selection HEAD —

@@ -39,6 +39,20 @@ function kindOf(answer: string): NoteItemType {
   return answer === 'endnote' ? 'Endnote' : 'Footnote';
 }
 
+/**
+ * One footnote or endnote: text that belongs to the document but not to its flow.
+ *
+ * A note IS a story. Its {@link NoteItem.body} is an ordinary {@link Body} — paragraphs,
+ * formatting, styles, the same operations — laid out at the foot of a page or the end of the
+ * document rather than in the column, so everything the object model can do to the main story it
+ * can do to a note without a second vocabulary.
+ *
+ * `delete()` removes the reference too. A note's body and the citation that reached it are one
+ * thing to a reader, and deleting the body alone would leave a mark pointing at nothing. The
+ * engine spells that as a package-level transaction, which is why it travels alone in its batch.
+ *
+ * @public
+ */
 export class NoteItem extends ModelObject implements PromisedItem {
   #body: Body | undefined;
 
@@ -57,13 +71,13 @@ export class NoteItem extends ModelObject implements PromisedItem {
     super(context, path, { nullable });
   }
 
-  /** @internal */
+  /** @internal Bind this object to the address the owning read answered. */
   hydrateAddress(address: ObjectAddress): void {
     if (address.kind === 'handle') this.path.resolveTo(address.handle);
     else this.path.resolveNull();
   }
 
-  /** @internal */
+  /** @internal Settle as the null object: the read found nothing to name. */
   hydrateNull(): void {
     this.path.resolveNull();
   }
@@ -132,6 +146,7 @@ export class NoteItem extends ModelObject implements PromisedItem {
     return next;
   }
 
+  /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     if (!this.selection(request, ['type']).includes('type')) return;
     const label = `${this.path.label}.type`;
@@ -164,7 +179,7 @@ export class NoteItem extends ModelObject implements PromisedItem {
 export class NoteItemCollection extends HandleCollection<NoteItem> {
   readonly #plan: () => AutomationOperation;
 
-  /** @internal */
+  /** @internal A collection a named read will answer. */
   static of(
     context: RequestContext,
     label: string,
@@ -184,14 +199,17 @@ export class NoteItemCollection extends HandleCollection<NoteItem> {
     return this.edge('first', 'getFirst', false);
   }
 
+  /** @internal The read that answers this collection's members. */
   protected listing(): AutomationOperation {
     return this.#plan();
   }
 
+  /** @internal Build one member from an address the listing answered. */
   protected itemAt(label: string, address: ObjectAddress): NoteItem {
     return NoteItem.at(this.context, label, address);
   }
 
+  /** @internal A member an edge accessor named before the sync that finds it. */
   protected promised(label: string, nullable: boolean): NoteItem & PromisedItem {
     return NoteItem.promised(this.context, label, nullable);
   }

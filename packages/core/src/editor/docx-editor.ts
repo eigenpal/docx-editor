@@ -230,6 +230,25 @@ const EMPTY_FONT_SUBSTITUTIONS: readonly string[] = Object.freeze([]);
 const PRO_REVIEW_REASON =
   'comments and tracked changes require the pro review module (@docx-editor.dev/pro)';
 
+/**
+ * Build an editor: the full `Editor` contract over a paginated surface.
+ *
+ * Construction is separate from mounting. Pass a `container` and the document mounts
+ * immediately; omit it and nothing touches the DOM until `attach(el)` — the provider-first
+ * shape. `detach()` remounts from the saved bytes, which resets undo and the caret.
+ *
+ * `snapshot()` is version-cached: the same reference until state actually moves, with
+ * reference-stable sub-objects, so it is safe as a `useSyncExternalStore` source.
+ *
+ * @example
+ * ```ts
+ * const editor = createDocxEditor({ document: bytes, modules: [reviewModule()] });
+ * editor.attach(element);
+ * editor.on('change', () => setDirty(true));
+ * ```
+ *
+ * @public
+ */
 export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const localeCode =
     config.locale && config.locale in locales ? (config.locale as LocaleCode) : ('en' as const);
