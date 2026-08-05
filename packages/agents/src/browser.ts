@@ -21,14 +21,13 @@
  * @public
  */
 
-import { createBrowser } from './runtime/browser.ts';
+import { createBrowser, type DocxEditorInstance } from './runtime/browser.ts';
 import { createServer } from './runtime/server.ts';
 import type {
   CreateServerOptions,
   DocxEditorRuntime,
   DocxEditorServerRuntime,
 } from './runtime/public.ts';
-import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
 
 export * from './runtime/public.ts';
 
@@ -38,7 +37,7 @@ export * from './runtime/public.ts';
  * @public
  */
 export interface DocxEditorNamespace {
-  createBrowser(editor: Editor): DocxEditorRuntime;
+  createBrowser(editor: DocxEditorInstance): DocxEditorRuntime;
   createServer(bytes: Uint8Array, options?: CreateServerOptions): Promise<DocxEditorServerRuntime>;
 }
 

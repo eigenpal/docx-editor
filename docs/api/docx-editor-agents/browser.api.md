@@ -4,7 +4,19 @@
 
 ```ts
 
+import { BookmarkIndex } from '@docx-editor.dev/core-contract/store';
+import { CellSelection } from '@docx-editor.dev/core-contract/layout';
+import * as _docx_editor_dev_core_contract_layout from '@docx-editor.dev/core-contract/layout';
 import { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import { NavigationCommand } from '@docx-editor.dev/core-contract/layout';
+import { SectionProperties } from '@docx-editor.dev/core-contract/layout';
+import { SemanticLayout } from '@docx-editor.dev/core-contract/layout';
+import { SemanticSelection } from '@docx-editor.dev/core-contract/layout';
+import { StoryScope } from '@docx-editor.dev/core-contract/store';
+import { TreeApplyResult } from '@docx-editor.dev/core-contract/binding';
+import { TreeDocOp } from '@docx-editor.dev/core-contract/store';
+import { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
+import { Unsubscribe } from '@docx-editor.dev/core-contract/contracts/editor';
 
 // @public
 export type BesideLocation = Extract<InsertLocation, 'Before' | 'After'>;
@@ -379,7 +391,7 @@ export interface DocxEditorErrorInit {
 // @public
 export interface DocxEditorNamespace {
     // (undocumented)
-    createBrowser(editor: Editor): DocxEditorRuntime;
+    createBrowser(editor: DocxEditorInstance): DocxEditorRuntime;
     // (undocumented)
     createServer(bytes: Uint8Array, options?: CreateServerOptions): Promise<DocxEditorServerRuntime>;
 }

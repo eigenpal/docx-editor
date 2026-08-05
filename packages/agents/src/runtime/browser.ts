@@ -12,10 +12,18 @@
 // else — the queue, the context, the object lifetime, the errors — is neutral and compiles without
 // the DOM lib, which is what `__tests__/runtime-boundaries.test.ts` holds in place.
 
-import { createBrowserAutomationHost } from '@docx-editor.dev/core-contract/editor';
-import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import {
+  createBrowserAutomationHost,
+  type DocxEditorInstance,
+} from '@docx-editor.dev/core-contract/editor';
 import { createRuntime, type DocxEditorRuntime } from './runtime.ts';
 
-export function createBrowser(editor: Editor): DocxEditorRuntime {
-  return createRuntime({ host: createBrowserAutomationHost(editor as never), save: false });
+// The editor instance, not the narrower `Editor` a document command programs against: the host
+// adapter reads `editor.surface`, so an editor that only satisfies `Editor` would answer
+// `document-unavailable` to every operation. Re-exported so the entry can write the signature
+// down without naming the editor lane a second time.
+export type { DocxEditorInstance };
+
+export function createBrowser(editor: DocxEditorInstance): DocxEditorRuntime {
+  return createRuntime({ host: createBrowserAutomationHost(editor), save: false });
 }
