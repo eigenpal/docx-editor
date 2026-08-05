@@ -30,6 +30,11 @@ export const PACKAGES = [
     root: 'packages/vue',
     pkgSlug: 'docx-editor-vue',
     tsconfigPath: 'packages/vue/tsconfig.api.json',
+    // WIP and unpublished (`private: true` in its package.json), so it is off
+    // `build:packages` and has no `dist` for Extractor to read. Clear this flag and
+    // put the package back in `build:packages` in the same change that starts
+    // publishing it again.
+    disconnected: 'WIP adapter, not published and not built on the release path',
   },
   {
     name: '@docx-editor.dev/editor-api',
