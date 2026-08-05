@@ -6,14 +6,16 @@ import { PreviewBanner } from '../../shared/PreviewBanner';
 const params = new URLSearchParams(location.search);
 const base = import.meta.env.BASE_URL;
 
-// Served straight from `e2e/fixtures/` by a vite plugin, so the demo and the e2e suite
-// read the SAME bytes and a second copy cannot drift.
-const DEFAULT_FIXTURE = 'comprehensive-word-element-test.docx';
+// What a visitor sees by default is the demo document built by `scripts/demo-doc/build.ts`
+// — the same content as the comprehensive fixture, rebranded and colour-tuned for public
+// viewing. It ships in this app's `public/`, so it is served without the fixture plugin.
+const DEFAULT_DOCUMENT = 'sample.docx';
 
-// `?fixture=<name>.docx` picks which same-origin fixture loads. Sanitized to a bare
+// `?fixture=<name>.docx` swaps in a fixture instead, served straight from `e2e/fixtures/`
+// by a vite plugin so the demo and the e2e suite read the SAME bytes. Sanitized to a bare
 // `.docx` basename so the value can never become a path-traversal or cross-origin URL.
 const fixtureParam = params.get('fixture') ?? '';
-const fixtureName = /^[\w.-]+\.docx$/.test(fixtureParam) ? fixtureParam : DEFAULT_FIXTURE;
+const documentName = /^[\w.-]+\.docx$/.test(fixtureParam) ? fixtureParam : DEFAULT_DOCUMENT;
 
 // `?treeFirst=1` is a Playwright harness, not a demo surface — see the header of
 // `./test-harness/TreeSurfaceHarness`. Dynamically imported, so it stays out of the
@@ -34,7 +36,7 @@ if (container) {
     root.render(
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
         <PreviewBanner />
-        <View fixtureUrl={`${base}${fixtureName}`} />
+        <View fixtureUrl={`${base}${documentName}`} />
       </div>
     );
   })();
