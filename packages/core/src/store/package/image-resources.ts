@@ -844,8 +844,7 @@ function createImageResourceCacheInternal(
       const existingFlight = inFlightByContent.get(flightKey);
       if (existingFlight) return existingFlight;
       const convertCopy = snapshotBytes(snapshotted);
-      let flight!: Promise<ImageResourceState>;
-      flight = new Promise<ImageResourceState>((resolve, reject) => {
+      const flight = new Promise<ImageResourceState>((resolve, reject) => {
         void (async () => {
           try {
             let converted: Readonly<{ bytes: Uint8Array; mime: SupportedImageMime }> | null;
@@ -998,8 +997,7 @@ function createImageResourceCacheInternal(
     if (existingFlight) return existingFlight;
 
     const decodeCopy = snapshotBytes(snapshotted);
-    let flight!: Promise<ImageResourceState>;
-    flight = new Promise<ImageResourceState>((resolve, reject) => {
+    const flight = new Promise<ImageResourceState>((resolve, reject) => {
       void (async () => {
         try {
           let decoded: Readonly<{
