@@ -1033,6 +1033,9 @@ export function layoutRowFragmentBounded(
     record: {
       id: row.id,
       ...(row.revisionKind ? { revisionKind: row.revisionKind } : {}),
+      ...(row.revisionId !== undefined ? { revisionId: row.revisionId } : {}),
+      ...(row.revisionAuthor !== undefined ? { revisionAuthor: row.revisionAuthor } : {}),
+      ...(row.revisionDate !== undefined ? { revisionDate: row.revisionDate } : {}),
       rowIndex: 0,
       isHeaderRepeat,
       ...(isContinuation ? { isContinuation: true as const } : {}),

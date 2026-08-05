@@ -634,6 +634,7 @@ export interface DocxEditorReviewNamespace {
     readonly Draft: typeof ReviewDraft;
     // (undocumented)
     readonly Empty: typeof ReviewEmpty;
+    readonly Hover: typeof ReviewHover;
     // (undocumented)
     readonly List: typeof ReviewList;
     readonly Markers: typeof ReviewMarkers;

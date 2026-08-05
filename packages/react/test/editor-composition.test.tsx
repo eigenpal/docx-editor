@@ -16,7 +16,7 @@ import './dom-setup.ts';
 import { afterEach, describe, expect, test } from 'bun:test';
 import { StrictMode, createRef } from 'react';
 import { renderToString } from 'react-dom/server';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
 import type {
   Editor,
@@ -338,6 +338,59 @@ describe('the review sidebar', () => {
       </DocxEditorRoot>
     );
     expect(kindsOf(shown.container)).toContain('structural');
+  });
+
+  test('hovering a tracked change raises its balloon — including a structural row whose rail card is hidden', async () => {
+    const TRACKED = docx(
+      '<w:p><w:r><w:t>base </w:t></w:r>' +
+        '<w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:t>added</w:t></w:r></w:ins></w:p>' +
+        '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>' +
+        '<w:tr><w:tc><w:tcPr/><w:p><w:r><w:t>a</w:t></w:r></w:p></w:tc></w:tr>' +
+        '<w:tr><w:trPr><w:ins w:id="2" w:author="A" w:date="2026-01-01T00:00:00Z"/></w:trPr>' +
+        '<w:tc><w:tcPr/><w:p><w:r><w:t>b</w:t></w:r></w:p></w:tc></w:tr>' +
+        '</w:tbl>'
+    );
+    const view = render(
+      <DocxEditorRoot document={TRACKED}>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const hoverAndWait = async (element: Element) => {
+      await act(async () => {
+        fireEvent.mouseOver(element);
+        // Past the balloon's deliberate-hover delay.
+        await new Promise((resolve) => setTimeout(resolve, 320));
+      });
+    };
+
+    // A revision SPAN: the balloon carries the decision's card, actions included.
+    const span = view.container.querySelector(
+      '.docx-paginated-surface [data-revision-id][data-revision-kind="insert"]'
+    );
+    expect(span).not.toBeNull();
+    await hoverAndWait(span!);
+    expect((view.getByTestId('review-hover-card') as HTMLElement).dataset.kind).toBe('insert');
+    expect(view.getByTestId('review-hover').textContent).toContain('added');
+
+    // A tracked ROW: its rail card is hidden by default, so the balloon is the only way
+    // to read the decision — the painted row carries the attribution to find it.
+    const row = view.container.querySelector('.docx-table-row--revision') as HTMLElement;
+    expect(row.dataset.revisionId).toBe('2');
+    expect(row.dataset.revisionAuthor).toBe('A');
+    await hoverAndWait(row);
+    expect((view.getByTestId('review-hover-card') as HTMLElement).dataset.kind).toBe(
+      'structural'
+    );
+
+    // Leaving the page puts the balloon away.
+    await act(async () => {
+      fireEvent.mouseOver(view.container.querySelector('.docx-editor__scroll-container')!);
+      await new Promise((resolve) => setTimeout(resolve, 260));
+    });
+    expect(view.queryByTestId('review-hover')).toBeNull();
   });
 });
 

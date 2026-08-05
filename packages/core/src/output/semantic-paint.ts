@@ -1250,6 +1250,13 @@ function paintTableFragment(
         'docx-table-row--revision',
         row.revisionKind === 'insert' ? 'layout-revision-ins' : 'layout-revision-del'
       );
+      // The same attribution datasets revision SPANS carry, so chrome that maps a hovered
+      // element to its review decision treats a tracked row like any other tracked change.
+      // Dataset assignment escapes; the values are attacker-controlled and never markup.
+      rowElement.dataset.revisionKind = row.revisionKind;
+      if (row.revisionId !== undefined) rowElement.dataset.revisionId = row.revisionId;
+      if (row.revisionAuthor !== undefined) rowElement.dataset.revisionAuthor = row.revisionAuthor;
+      if (row.revisionDate !== undefined) rowElement.dataset.revisionDate = row.revisionDate;
     }
     rowElement.dataset.rowId = row.id;
     if (row.isHeaderRepeat) rowElement.dataset.headerRepeat = 'true';
