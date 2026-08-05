@@ -16,6 +16,7 @@ import { resolve } from 'node:path';
 import {
   readOoxmlPackage,
   readOoxmlPart,
+  findNode,
   type OoxmlPart,
 } from '@docx-editor.dev/core-contract/store';
 import {
@@ -29,7 +30,7 @@ import {
   type ReviewItem,
   type ReviewRevisionItem,
 } from '@docx-editor.dev/core-contract/layout';
-import { collectReviewItems, revisionItemsOf } from '../review/review-model.ts';
+import { collectReviewItems, revisionItemsOf, revisionItemsOfParagraph } from '../review/review-model.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
@@ -85,6 +86,24 @@ describe('the queue is a property of the document, not of the view', () => {
   const part = story(
     `<w:p>${run('keep ')}${ins('1', run('new '))}${del('2', delRun('old'))}</w:p>`
   );
+
+  test('revisionItemsOfParagraph walks a paragraph-root view, not the full story', () => {
+    const part = story(
+      `<w:p>${ins('1', run('one'))}</w:p><w:p>${ins('2', run('two'))}</w:p>`
+    );
+    const order = paragraphOrderOfPart(part);
+    const firstParagraphId = [...order.keys()][0]!;
+    const paragraphNode = findNode(part, firstParagraphId)!;
+    expect(paragraphNode.kind).toBe('paragraph');
+    expect(paragraphNode).not.toBe(part.root);
+    if (paragraphNode.kind !== 'paragraph') throw new Error('expected paragraph');
+
+    const localItems = revisionItemsOf({ ...part, root: paragraphNode });
+    const scopedItems = revisionItemsOfParagraph(part, firstParagraphId);
+    expect(scopedItems).toEqual(localItems);
+    expect(scopedItems).toHaveLength(1);
+    expect(scopedItems[0]!.text).toBe('one');
+  });
 
   test('both an insertion and a deletion are listed', () => {
     const kinds = revisionsOf(collectReviewItems({ storyPart: part })).map(

@@ -14,7 +14,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 
 import type { EditorModule } from '@docx-editor.dev/core-contract/editor';
-import { collectReviewItems } from './review-model.ts';
+import { collectReviewItems, revisionItemsOfParagraph } from './review-model.ts';
 import { rememberLicenseKey, type ProLicenseOptions } from '../license.ts';
 
 export interface ReviewModuleOptions extends ProLicenseOptions {}
@@ -27,6 +27,7 @@ export function reviewModule(options: ReviewModuleOptions = {}): EditorModule {
     review: {
       displayModes: ['all-markup', 'proposed', 'original'],
       collectReviewItems,
+      revisionItemsOfParagraph,
     },
   };
 }

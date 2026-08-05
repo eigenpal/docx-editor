@@ -12,8 +12,13 @@
  * the review chrome slots stay disabled with the engine's own reason.
  */
 
+import type { OoxmlPart } from '@docx-editor.dev/core-contract/store';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
-import type { ReviewItem, ReviewModelInput } from '../layout/review-support.ts';
+import type {
+  ReviewItem,
+  ReviewModelInput,
+  ReviewRevisionItem,
+} from '../layout/review-support.ts';
 
 export type { ReviewModelInput };
 
@@ -46,6 +51,14 @@ export interface ReviewModuleContribution {
   readonly displayModes: readonly RevisionDisplayMode[];
   /** The review queue derivation. */
   readonly collectReviewItems: CollectReviewItems;
+  /**
+   * Revisions wholly inside one paragraph — for the conservative local review
+   * patch after a text-local body edit.
+   */
+  readonly revisionItemsOfParagraph: (
+    part: OoxmlPart,
+    paragraphId: string
+  ) => readonly ReviewRevisionItem[];
 }
 
 /**

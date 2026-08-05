@@ -13,6 +13,7 @@ export function testReviewModule(): EditorModule {
     review: {
       displayModes: ['all-markup', 'proposed', 'original'],
       collectReviewItems: () => [],
+      revisionItemsOfParagraph: () => [],
     },
   };
 }

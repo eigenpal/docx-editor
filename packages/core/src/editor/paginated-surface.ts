@@ -184,7 +184,7 @@ export function mountPaginatedSurface(
   };
   const opened = openTreeSession(
     bytes,
-    options.collectReviewItems ? { reviewModel: options.collectReviewItems } : {}
+    options.reviewModel ? { reviewModel: options.reviewModel } : {}
   );
   if (!opened.ok) {
     return {

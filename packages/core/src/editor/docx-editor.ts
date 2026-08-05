@@ -64,7 +64,7 @@ import {
   type SemanticLayout,
   type SemanticPosition,
 } from '../layout/index.ts';
-import type { DocumentEditingMode, ReviewItemPlacement } from '../contracts/editor.ts';
+import type { DocumentEditingMode, ReviewItemPlacement, ReviewItemQuery } from '../contracts/editor.ts';
 import { resolveEditorModules } from '../contracts/modules.ts';
 import {
   NO_TRACKING_SETTINGS,
@@ -443,7 +443,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       ...(reviewEnabled ? {} : { revisionDisplayMode: 'proposed' as const }),
       // The module's derivation reaches the session through the surface: the session
       // owns the per-revision memo, the module owns the algorithm.
-      ...(modules.review ? { collectReviewItems: modules.review.collectReviewItems } : {}),
+      ...(modules.review ? { reviewModel: modules.review } : {}),
       ...(shapedMeasurer
         ? { measurer: shapedMeasurer, ...(shapedProducer ? { producer: shapedProducer } : {}) }
         : {}),
@@ -1130,16 +1130,22 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * queue itself per revision.
    */
 
-  function reviewPlacements(): readonly ReviewItemPlacement[] {
-    // No review module, no queue. The derivation lives in the module; the free
-    // engine reports the typed empty value (the `isActive` precedent), never a
-    // partial answer.
+  function reviewPlacements(query?: ReviewItemQuery): readonly ReviewItemPlacement[] {
     if (!reviewEnabled) return [];
-    const items = surface?.session.reviewItems() ?? [];
-    // The PUBLISHED layout, never `layout()`: that one flushes pending work, and a rail
-    // asking for it on every keystroke turned each one into a synchronous full pass.
-    const layout = surface?.publishedLayout() ?? null;
-    const anchors = layout ? anchorIndexOf(layout) : null;
+    let items = surface?.session.reviewItems() ?? [];
+    const excluded = query?.excludeRevisionKinds;
+    if (excluded && excluded.length > 0) {
+      const excludedKinds = new Set(excluded);
+      items = items.filter(
+        (item) => item.kind === 'comment' || !excludedKinds.has(item.revisionKind)
+      );
+    }
+    const withPlacement = query?.placement !== false;
+    let anchors: Map<string, ReviewParagraphAnchor> | null = null;
+    if (withPlacement && items.length > 0) {
+      const layout = surface?.publishedLayout() ?? null;
+      if (layout) anchors = anchorIndexOf(layout);
+    }
     const activeReviewKey = activeReviewKeyNow();
     // The queue ranks furniture stories after the whole body (tree order), but the rail
     // stacks cards top-down and never moves one UP past its anchor — a header card sorted
@@ -1679,7 +1685,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           };
         }),
 
-    getReviewItems: () => reviewPlacements(),
+    getReviewItems: (query?: ReviewItemQuery) => reviewPlacements(query),
 
     addComment(text: string, author?: string): ExecResult {
       // Comment AUTHORING is the review module's capability, like every other

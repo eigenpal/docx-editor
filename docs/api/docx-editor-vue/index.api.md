@@ -514,7 +514,7 @@ export interface Editor {
     getPageGeometry(): readonly { index: number; box: Rect; contentBox: Rect }[];
     getPageSetup(): PageSetup | null;
     getRenderScale(): number;
-    getReviewItems(): readonly ReviewItemPlacement[];
+    getReviewItems(query?: ReviewItemQuery): readonly ReviewItemPlacement[];
     getReviewRevision(): number;
     getSelectedImage(): SelectedImageState | null;
     getSelectedTable(): {

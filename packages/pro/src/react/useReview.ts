@@ -18,7 +18,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // document and break outright during pagination.
 
 import { useCallback, useMemo, useSyncExternalStore } from 'react';
-import type { Editor, ReviewItemPlacement } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { Editor, ReviewItemPlacement, ReviewItemQuery } from '@docx-editor.dev/core-contract/contracts/editor';
 import { useDocxEditor } from '@docx-editor.dev/react';
 
 /**
@@ -74,13 +74,13 @@ export interface UseReviewReturn {
  * Subscribes to the editor's own change stream, so the list re-derives when the document does
  * and not on every render.
  */
-export function useReview(): UseReviewReturn {
+export function useReview(query?: ReviewItemQuery): UseReviewReturn {
   const editor = useDocxEditor();
-  return useReviewOf(editor);
+  return useReviewOf(editor, query);
 }
 
 /** The same hook against an explicit editor, for hosts that hold their own. */
-export function useReviewOf(editor: Editor | null): UseReviewReturn {
+export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): UseReviewReturn {
   const subscribe = useCallback(
     (onChange: () => void) => {
       if (!editor) return () => undefined;
@@ -101,10 +101,10 @@ export function useReviewOf(editor: Editor | null): UseReviewReturn {
   );
 
   const items = useMemo<readonly ReviewItemView[]>(
-    () => (editor ? editor.getReviewItems() : []),
+    () => (editor ? editor.getReviewItems(query) : []),
     // `version` is the dependency: it changes exactly when the document or selection does.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [editor, version]
+    [editor, version, query]
   );
 
   const activeKey = useMemo(() => items.find((entry) => entry.isActive)?.key ?? null, [items]);

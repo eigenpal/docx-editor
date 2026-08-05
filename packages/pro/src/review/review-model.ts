@@ -40,3 +40,28 @@ export {
   type ReviewRevisionItem,
   type ReviewRevisionKind,
 } from '@docx-editor.dev/core-contract/store';
+
+import {
+  findNode,
+  revisionItemsOf,
+  type OoxmlPart,
+  type ReviewRevisionItem,
+} from '@docx-editor.dev/core-contract/store';
+
+/**
+ * Revisions wholly inside one paragraph — for a conservative local review patch after a
+ * text-local edit. Walks a paragraph-root part view, not the full story.
+ */
+export function revisionItemsOfParagraph(
+  part: OoxmlPart,
+  paragraphId: string
+): ReviewRevisionItem[] {
+  const paragraph = findNode(part, paragraphId);
+  if (!paragraph || paragraph.kind !== 'paragraph') return [];
+  return revisionItemsOf({
+    id: part.id,
+    name: part.name,
+    contentType: part.contentType,
+    root: paragraph,
+  });
+}

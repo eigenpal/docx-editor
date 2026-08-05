@@ -14,6 +14,7 @@ export function stubReviewModule(): EditorModule {
     review: {
       displayModes: ['all-markup', 'proposed', 'original'],
       collectReviewItems: () => [],
+      revisionItemsOfParagraph: () => [],
     },
   };
 }

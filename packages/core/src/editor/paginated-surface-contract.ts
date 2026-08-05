@@ -9,7 +9,7 @@ import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core-con
 import type { BookmarkIndex, StoryScope, TreeDocOp } from '@docx-editor.dev/core-contract/store';
 import type { ViewScope } from '../contracts/editor.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
-import type { CollectReviewItems } from '../contracts/modules.ts';
+import type { ReviewModuleContribution } from '../contracts/modules.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
 import type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
 import type {
@@ -101,11 +101,11 @@ export interface PaginatedSurfaceOptions {
    */
   readonly revisionDisplayMode?: RevisionDisplayMode;
   /**
-   * The review queue derivation for this surface's session, from the registered
-   * review module. Absent, `session.reviewItems()` is the typed empty queue and
-   * every review affordance built on it stays inert.
+   * The review module's derivation hooks for this surface's session. Absent,
+   * `session.reviewItems()` is the typed empty queue and every review affordance
+   * built on it stays inert.
    */
-  readonly collectReviewItems?: CollectReviewItems;
+  readonly reviewModel?: ReviewModuleContribution;
   /**
    * The family a run with no authored font is reported as by `formatting()` AND painted
    * in — the face the measurer falls back to. Absent, such a run reports

@@ -233,13 +233,11 @@ describe('the review sidebar', () => {
     expect(view.queryByTestId('review-balloon')).toBeNull();
   });
 
-  test('a crowded cluster spreads around its text instead of spilling below it', async () => {
+  test('a crowded cluster collapses distant cards instead of spilling below', async () => {
     // Many changes packed line-on-line: their cards cannot all fit beside the text.
-    // Push-down alone marched the tail pages below; the cluster instead CENTRES on its
-    // anchors, so cards spread up as well as down and every card stays a full card.
+    // Push-down alone marched the tail pages below; collapse keeps the run bounded by
+    // rendering distant cards as headers only.
     const CROWDED = docx(
-      // Plain paragraphs first, so the cluster has room ABOVE it to spread into — enough
-      // that aligning a mid-cluster member to its text never hits the top of the document.
       Array.from({ length: 60 }, (_, index) => `<w:p><w:r><w:t>plain ${index}</w:t></w:r></w:p>`)
         .join('') +
         Array.from(
@@ -265,27 +263,15 @@ describe('the review sidebar', () => {
         </DocxEditorViewport>
       </DocxEditorRoot>
     );
-    // EVERY decision renders as a full card — nothing is minimized or demoted.
     const slots = [...view.container.querySelectorAll('.docx-review__slot')];
     expect(slots.length).toBe(16);
     const items = instance!.getReviewItems();
-    const anchors = new Map(items.map((item) => [item.key, item.anchorY] as const));
     const tops = slots.map((slot) => parseFloat((slot as HTMLElement).style.top));
-    // Ordered and non-overlapping (estimates space them; happy-dom measures no heights).
     for (let index = 1; index < tops.length; index += 1) {
       expect(tops[index]!).toBeGreaterThan(tops[index - 1]!);
     }
-    // Centred: the run starts ABOVE the first anchor (spread went upward too, in CSS px —
-    // slot tops are layout points times the render scale), and the last card sits closer
-    // to its text than pure push-down would have put it.
-    const SCALE = 96 / 72;
-    const firstAnchorPx = ([...anchors.values()][0] as number) * SCALE;
-    const lastAnchorPx = ([...anchors.values()].at(-1) as number) * SCALE;
-    expect(tops[0]!).toBeLessThan(firstAnchorPx);
-    const pushDownLastTop = firstAnchorPx + (tops.length - 1) * (tops[1]! - tops[0]!);
-    expect(tops.at(-1)! - lastAnchorPx).toBeLessThan(pushDownLastTop - lastAnchorPx);
+    expect(slots.some((slot) => slot.hasAttribute('data-collapsed'))).toBe(true);
 
-    // Activating a member shifts the cluster so THAT card aligns with its own text.
     const target = items[7]!;
     await act(async () => {
       instance!.setActiveReviewItem(target.key);
@@ -294,8 +280,45 @@ describe('the review sidebar', () => {
       .querySelector('[data-testid="review-card"][data-active]')
       ?.closest('.docx-review__slot') as HTMLElement | null;
     expect(activeSlot).not.toBeNull();
-    expect(
-      Math.abs(parseFloat(activeSlot!.style.top) - (target.anchorY as number) * SCALE)
-    ).toBeLessThan(2);
+    expect(activeSlot!.hasAttribute('data-collapsed')).toBe(false);
+  });
+});
+
+const FORMAT_AND_INSERT = docx(
+  '<w:p><w:r><w:rPr>' +
+    '<w:rPrChange w:id="3" w:author="Ada Lovelace" w:date="2026-01-02T03:04:05Z"><w:b/></w:rPrChange>' +
+    '<w:b/></w:rPr><w:t>bold</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:t xml:space="preserve">Kept </w:t></w:r>' +
+    '<w:ins w:id="1" w:author="Ada Lovelace" w:date="2026-01-02T03:04:05Z">' +
+    '<w:r><w:t>added text</w:t></w:r></w:ins></w:p>'
+);
+
+describe('DocxEditor.Review query exclusions', () => {
+  test('default rail lists only non-format/non-structural cards', () => {
+    const view = render(
+      <DocxEditorRoot document={FORMAT_AND_INSERT} modules={[reviewModule()]}>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+
+    act(() => undefined);
+    expect(view.getByTestId('review-rail').getAttribute('data-count')).toBe('1');
+  });
+
+  test('formatting and structural opt-ins list every card', () => {
+    const view = render(
+      <DocxEditorRoot document={FORMAT_AND_INSERT} modules={[reviewModule()]}>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview structural formatting />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+
+    act(() => undefined);
+    expect(view.getByTestId('review-rail').getAttribute('data-count')).toBe('2');
   });
 });

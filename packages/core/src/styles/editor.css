@@ -5053,6 +5053,15 @@ a.docx-hyperlink:focus-visible {
   overflow: hidden;
 }
 
+/* A card the stacking pass pushed too far from its own text collapses to its header —
+   a full summary there reads as annotating whatever text happens to be beside it.
+   Clicking still works, and the active card never collapses. */
+.docx-review__slot[data-collapsed] .docx-review__summary,
+.docx-review__slot[data-collapsed] .docx-review__replies,
+.docx-review__slot[data-collapsed] .docx-review__reply-box {
+  display: none;
+}
+
 .docx-review__card {
   display: flex;
   flex-direction: column;

@@ -12,8 +12,15 @@
 // collapse to a single honest statement of what the part contains.
 
 import type { Node as PMNode } from 'prosemirror-model';
-import type { ReviewItem } from '../layout/review-support.ts';
-import type { CollectReviewItems } from '../contracts/modules.ts';
+import {
+  paragraphOrderOfPart,
+  reviewItemKey,
+  reviewItemPositionRank,
+  type ReviewCommentItem,
+  type ReviewItem,
+  type ReviewRevisionItem,
+} from '../layout/review-support.ts';
+import type { ReviewModuleContribution } from '../contracts/modules.ts';
 import {
   addComment,
   setCommentResolved,
@@ -34,6 +41,7 @@ import {
   ensureNumberingLevel,
   ensureHyperlinkRelationship,
   buildBookmarkIndex,
+  findNode,
   relationshipTargetIn,
   isHeaderFooterLifecycleOp,
   isNoteLifecycleOp,
@@ -442,12 +450,12 @@ const EMPTY_REVIEW_ITEMS: readonly ReviewItem[] = Object.freeze([]);
 
 export interface OpenTreeSessionOptions {
   /**
-   * The review queue derivation, contributed by the pro review module through
-   * the editor's `EditorModule` seam. Absent — the free engine — the session's
+   * The review module's derivation hooks, contributed through the editor's
+   * `EditorModule` seam. Absent — the free engine — the session's
    * `reviewItems()` reports the typed empty queue; parse, preservation, and
    * `hasReviewContent` are unaffected.
    */
-  readonly reviewModel?: CollectReviewItems;
+  readonly reviewModel?: ReviewModuleContribution;
 }
 
 export function openTreeSession(
@@ -480,8 +488,17 @@ export function openTreeSession(
     readonly parts: readonly HeaderFooterParts[];
     readonly resolution: readonly HeaderFooterSectionResolution[];
   } | null = null;
-  /** Memoized per package revision: the queue only changes when the document does. */
-  let reviewCache: { revision: string; items: readonly ReviewItem[] } | null = null;
+  /** Memoized per package/body revision: the queue only changes when the document does. */
+  let reviewCache: {
+    revisionKey: string;
+    bodyRevision: number;
+    /** Package revision when this queue was last fully derived or patched. */
+    packageRevision: number;
+    items: readonly ReviewItem[];
+    paragraphOrder: ReadonlyMap<string, number>;
+    commentsPart: OoxmlPart | undefined;
+    commentsExtendedPart: OoxmlPart | undefined;
+  } | null = null;
   /** Memoized per body revision, like `reviewCache` — see `hasReviewContent`. */
   let reviewContentCache: { revision: number; present: boolean } | null = null;
   let lastChange: TreeModelChange | null = null;
@@ -961,46 +978,84 @@ export function openTreeSession(
       },
 
       reviewItems() {
-        // The derivation is the review MODULE's: without one the queue is the typed
-        // empty value, never a partial answer derived in-engine.
         const derive = options.reviewModel;
         if (!derive) return EMPTY_REVIEW_ITEMS;
         const store = bodyStore();
-        // Keyed on BOTH revisions. The body store's alone missed a tracked change typed
-        // into a header (only the package revision moves); the package revision alone
-        // missed a comment written straight through the body store (`replyToComment`
-        // commits on the story store, which moves only the body revision).
         const revisionKey = `${packageStore.packageRevision}:${store.revision}`;
-        if (!reviewCache || reviewCache.revision !== revisionKey) {
-          const pkg = currentPackage();
-          // Every header/footer story that any section resolves to, deduped by part
-          // identity — the same pattern `documentFonts` walks, and for the same reason:
-          // a shared part must contribute its cards once.
-          const furnitureParts: OoxmlPart[] = [];
-          const seenFurniture = new Set<OoxmlPart>();
-          for (const section of resolvedHeaderFooterBySection().parts) {
-            for (const slots of [section.headers, section.footers]) {
-              for (const part of slots.values()) {
-                if (seenFurniture.has(part)) continue;
-                seenFurniture.add(part);
-                furnitureParts.push(part);
-              }
+        if (reviewCache && reviewCache.revisionKey === revisionKey) {
+          return reviewCache.items;
+        }
+
+        const pkg = currentPackage();
+        const commentsPart = pkg.parts.get(commentPartNameOf(pkg, store.part.name));
+        const commentsExtendedPart = pkg.parts.get(
+          commentsExtendedPartNameOf(pkg, store.part.name)
+        );
+        const furnitureParts: OoxmlPart[] = [];
+        const seenFurniture = new Set<OoxmlPart>();
+        for (const section of resolvedHeaderFooterBySection().parts) {
+          for (const slots of [section.headers, section.footers]) {
+            for (const part of slots.values()) {
+              if (seenFurniture.has(part)) continue;
+              seenFurniture.add(part);
+              furnitureParts.push(part);
             }
           }
-          // Resolved through the story's own relationships, exactly as the WRITE side
-          // resolves them. Hardcoding `/word/comments.xml` here made the reader disagree
-          // with the writer for any package that names its comment part something else —
-          // the comment was written and then never read back.
-          reviewCache = {
-            revision: revisionKey,
-            items: derive({
+        }
+
+        const patchParagraphId =
+          reviewCache && lastChange
+            ? localReviewPatchParagraphId(
+                lastChange,
+                reviewCache,
+                reviewCache.items,
+                store.part,
+                commentsPart,
+                commentsExtendedPart,
+                packageStore.packageRevision
+              )
+            : null;
+
+        let items: readonly ReviewItem[];
+        let paragraphOrder: ReadonlyMap<string, number>;
+        if (patchParagraphId && reviewCache) {
+          const localRevisions = derive.revisionItemsOfParagraph(store.part, patchParagraphId);
+          if (canApplyLocalReviewPatch(reviewCache.items, localRevisions, patchParagraphId)) {
+            items = patchLocalReviewItems(
+              reviewCache.items,
+              reviewCache.paragraphOrder,
+              patchParagraphId,
+              localRevisions
+            );
+            paragraphOrder = reviewCache.paragraphOrder;
+          } else {
+            paragraphOrder = paragraphOrderOfPart(store.part);
+            items = derive.collectReviewItems({
               storyPart: store.part,
               furnitureParts,
-              commentsPart: pkg.parts.get(commentPartNameOf(pkg, store.part.name)),
-              commentsExtendedPart: pkg.parts.get(commentsExtendedPartNameOf(pkg, store.part.name)),
-            }),
-          };
+              commentsPart,
+              commentsExtendedPart,
+            });
+          }
+        } else {
+          paragraphOrder = paragraphOrderOfPart(store.part);
+          items = derive.collectReviewItems({
+            storyPart: store.part,
+            furnitureParts,
+            commentsPart,
+            commentsExtendedPart,
+          });
         }
+
+        reviewCache = {
+          revisionKey,
+          bodyRevision: store.revision,
+          packageRevision: packageStore.packageRevision,
+          items,
+          paragraphOrder,
+          commentsPart,
+          commentsExtendedPart,
+        };
         return reviewCache.items;
       },
 
@@ -1126,6 +1181,151 @@ function projectedText(part: OoxmlPart): string {
   return bodyParagraphs(part)
     .map((paragraph) => paragraphTextOf(part, paragraph.id) ?? '')
     .join('\n');
+}
+
+function itemStartParagraphRank(
+  item: ReviewItem,
+  order: ReadonlyMap<string, number>
+): number | null {
+  const range = item.kind === 'comment' ? item.range : (item.ranges[0] ?? null);
+  if (!range) return null;
+  const rank = order.get(range.start.paragraphId);
+  return rank === undefined ? null : rank;
+}
+
+function canApplyLocalReviewPatch(
+  cached: readonly ReviewItem[],
+  localRevisions: readonly ReviewRevisionItem[],
+  dirtyParagraphId: string
+): boolean {
+  for (const local of localRevisions) {
+    if (local.ranges.length === 0) return false;
+  }
+  const keptRangelessKeys = new Set<string>();
+  for (const item of cached) {
+    if (item.kind !== 'revision' || item.ranges.length > 0) continue;
+    if (isRevisionWhollyInParagraph(item, dirtyParagraphId)) continue;
+    keptRangelessKeys.add(reviewItemKey(item));
+  }
+  for (const local of localRevisions) {
+    if (keptRangelessKeys.has(reviewItemKey(local))) return false;
+  }
+  return true;
+}
+
+function patchLocalReviewItems(
+  cached: readonly ReviewItem[],
+  paragraphOrder: ReadonlyMap<string, number>,
+  dirtyParagraphId: string,
+  localRevisions: readonly ReviewRevisionItem[]
+): ReviewItem[] {
+  const dirtyRank = paragraphOrder.get(dirtyParagraphId);
+  if (dirtyRank === undefined) return [...cached];
+
+  const patched: ReviewItem[] = [];
+  let insertAt: number | null = null;
+
+  for (const item of cached) {
+    if (item.kind === 'revision' && isRevisionWhollyInParagraph(item, dirtyParagraphId)) {
+      if (insertAt === null) insertAt = patched.length;
+      continue;
+    }
+    if (insertAt === null) {
+      const rank = itemStartParagraphRank(item, paragraphOrder);
+      if (rank !== null && rank > dirtyRank) insertAt = patched.length;
+    }
+    patched.push(item);
+  }
+
+  if (insertAt === null) insertAt = patched.length;
+  if (localRevisions.length > 0) {
+    const orderedLocalRevisions =
+      localRevisions.length < 2
+        ? [...localRevisions]
+        : [...localRevisions].sort(
+            (a, b) => reviewItemPositionRank(a, paragraphOrder) - reviewItemPositionRank(b, paragraphOrder)
+          );
+    patched.splice(insertAt, 0, ...orderedLocalRevisions);
+  }
+  return patched;
+}
+
+function isRevisionWhollyInParagraph(
+  item: ReviewRevisionItem,
+  paragraphId: string
+): boolean {
+  return (
+    item.ranges.length > 0 &&
+    item.ranges.every(
+      (range) =>
+        range.start.paragraphId === paragraphId && range.end.paragraphId === paragraphId
+    )
+  );
+}
+
+function commentTouchesParagraph(item: ReviewCommentItem, paragraphId: string): boolean {
+  if (!item.range) return false;
+  return (
+    item.range.start.paragraphId === paragraphId || item.range.end.paragraphId === paragraphId
+  );
+}
+
+function revisionCrossesParagraphBoundary(
+  item: ReviewRevisionItem,
+  paragraphId: string
+): boolean {
+  if (item.ranges.length === 0) return false;
+  const touches = item.ranges.some(
+    (range) =>
+      range.start.paragraphId === paragraphId || range.end.paragraphId === paragraphId
+  );
+  if (!touches) return false;
+  return !item.ranges.every(
+    (range) =>
+      range.start.paragraphId === paragraphId && range.end.paragraphId === paragraphId
+  );
+}
+
+function localReviewPatchParagraphId(
+  change: TreeModelChange,
+  cache: {
+    bodyRevision: number;
+    packageRevision: number;
+    commentsPart: OoxmlPart | undefined;
+    commentsExtendedPart: OoxmlPart | undefined;
+  },
+  items: readonly ReviewItem[],
+  part: OoxmlPart,
+  commentsPart: OoxmlPart | undefined,
+  commentsExtendedPart: OoxmlPart | undefined,
+  currentPackageRevision: number
+): string | null {
+  if (change.fromRevision !== cache.bodyRevision) return null;
+  // Body text-local edits bump package revision by exactly one. A header/footer or package
+  // write can move package revision without moving the body revision — patching against a
+  // queue derived before that would keep stale furniture cards by reference.
+  if (currentPackageRevision !== cache.packageRevision + 1) return null;
+  if (change.story !== undefined && change.story.kind !== 'body') return null;
+  if (change.impact !== 'text-local') return null;
+  if (change.dirty.length !== 1) return null;
+  if (change.created.length > 0 || change.deleted.length > 0 || change.splitJoin.length > 0) {
+    return null;
+  }
+  if (cache.commentsPart !== commentsPart || cache.commentsExtendedPart !== commentsExtendedPart) {
+    return null;
+  }
+  const paragraphId = change.dirty[0]!;
+  const paragraph = findNode(part, paragraphId);
+  if (!paragraph || paragraph.kind !== 'paragraph') return null;
+
+  for (const item of items) {
+    if (item.kind === 'comment') {
+      if (commentTouchesParagraph(item, paragraphId)) return null;
+      continue;
+    }
+    if (revisionCrossesParagraphBoundary(item, paragraphId)) return null;
+  }
+  return paragraphId;
 }
 
 /**

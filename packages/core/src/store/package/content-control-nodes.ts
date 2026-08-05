@@ -561,20 +561,13 @@ export interface ContentControlEntry {
   readonly ancestors: readonly OoxmlContentControlNode[];
 }
 
-/**
- * Every control under a node, in document order, bounded in depth and in count.
- *
- * ONE walk, shared. The nesting bound is the same one layout flattens with, so a control
- * a lane can address is a control every lane can address — and a file that nests past it
- * keeps its content in the tree (the serializer never stops) while no walk recurses
- * further.
- */
-export function contentControlsIn(
+const defaultContentControlsInCache = new WeakMap<OoxmlNode, readonly ContentControlEntry[]>();
+
+function collectContentControlsIn(
   root: OoxmlNode,
-  options?: { readonly maxDepth?: number; readonly limit?: number }
-): readonly ContentControlEntry[] {
-  const maxDepth = options?.maxDepth ?? MAX_CONTENT_CONTROL_NESTING;
-  const limit = options?.limit ?? MAX_CONTENT_CONTROLS_PER_PART;
+  maxDepth: number,
+  limit: number
+): ContentControlEntry[] {
   const entries: ContentControlEntry[] = [];
   const walk = (node: OoxmlNode, depth: number, ancestors: OoxmlContentControlNode[]): void => {
     if (node.kind === 'textValue' || entries.length >= limit) return;
@@ -591,6 +584,44 @@ export function contentControlsIn(
   };
   walk(root, 0, []);
   return entries;
+}
+
+function freezeContentControlEntries(
+  entries: readonly ContentControlEntry[]
+): readonly ContentControlEntry[] {
+  for (const entry of entries) {
+    Object.freeze(entry.ancestors);
+    Object.freeze(entry);
+  }
+  return Object.freeze(entries);
+}
+
+/**
+ * Every control under a node, in document order, bounded in depth and in count.
+ *
+ * ONE walk, shared. The nesting bound is the same one layout flattens with, so a control
+ * a lane can address is a control every lane can address — and a file that nests past it
+ * keeps its content in the tree (the serializer never stops) while no walk recurses
+ * further.
+ */
+export function contentControlsIn(
+  root: OoxmlNode,
+  options?: { readonly maxDepth?: number; readonly limit?: number }
+): readonly ContentControlEntry[] {
+  if (options === undefined) {
+    const cached = defaultContentControlsInCache.get(root);
+    if (cached !== undefined) return cached;
+    const entries = freezeContentControlEntries(
+      collectContentControlsIn(root, MAX_CONTENT_CONTROL_NESTING, MAX_CONTENT_CONTROLS_PER_PART)
+    );
+    defaultContentControlsInCache.set(root, entries);
+    return entries;
+  }
+  return collectContentControlsIn(
+    root,
+    options.maxDepth ?? MAX_CONTENT_CONTROL_NESTING,
+    options.limit ?? MAX_CONTENT_CONTROLS_PER_PART
+  );
 }
 
 /** Find one control by canonical node id, with the same bounded walk. */

@@ -222,6 +222,7 @@ describe('useEditorCommand', () => {
   });
 });
 
+
 describe('useEditorEvent', () => {
   test('subscribes for the component lifetime and calls the latest handler', () => {
     const changes: number[] = [];
