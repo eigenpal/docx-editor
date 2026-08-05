@@ -352,6 +352,16 @@ export function gateCommand(
       refusal: { ok: false, code: 'unsupported', reason: 'nothing to redo' },
     };
   }
+  if (command.type === 'insertTable' && !surface.canInsertTable(command.rows, command.cols)) {
+    return {
+      ok: false,
+      refusal: {
+        ok: false,
+        code: 'unsupported',
+        reason: 'a table can only be inserted at a caret in editable body, cell, or note text',
+      },
+    };
+  }
   if (command.type === 'insertToc' && !surface.canInsertToc()) {
     return {
       ok: false,

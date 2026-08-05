@@ -472,8 +472,13 @@ export function MenuTableGrid({ slot = 'table.insert', className }: MenuTableGri
       // can-before-exec even here: the panel opened because the slot was enabled, and the
       // selection can move under it.
       const command = { type: 'insertTable' as const, rows, cols };
-      if (editor.can(command).ok) editor.exec(command);
+      if (!editor.can(command).ok) return;
+      editor.exec(command);
       setOpenMenu(null);
+      // The engine left the caret in the first cell; DOM focus is still on the grid cell
+      // that was clicked, and the panel is about to unmount. Without this the user has to
+      // click into a table they just asked for before they can type in it.
+      editor.focus();
     },
     [editor, isEnabled, setOpenMenu]
   );

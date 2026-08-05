@@ -109,6 +109,7 @@ import {
   applyReplaceTocResult,
   applyRewriteTocPageNumbers,
 } from './tree-op-toc.ts';
+import { applyInsertTable } from './tree-op-insert-table.ts';
 import type {
   OoxmlProperty,
   TreeDocOp,
@@ -261,6 +262,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   }
   if (isDrawingTreeDocOp(op)) return applyDrawingOp(part, op, options);
 
+  if (op.op === 'insertTable') return applyInsertTable(part, op, options);
   if (op.op === 'deleteBlock') return applyDeleteBlock(part, op.blockId, options);
   if (op.op === 'insertToc') return applyInsertToc(part, op, options);
   if (op.op === 'replaceTocResult') return applyReplaceTocResult(part, op, options);

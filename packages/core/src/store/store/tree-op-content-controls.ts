@@ -370,6 +370,9 @@ const TREE_OP_REACH: {
   // TABLE TOPOLOGY restructures the table itself: a row or a column arrives or leaves and every
   // cell after it shifts. The TABLE is therefore the node they rearrange — naming only the row
   // or the grid column would ask permission of one cell while rewriting the rest around it.
+  // A whole-table insert writes BESIDE the anchor paragraph, never into it — the same shape
+  // as a TOC insert, and answered by the controls enclosing that paragraph.
+  insertTable: (op) => ({ kind: 'nodes', targets: [{ nodeId: op.beforeParagraphId }] }),
   insertTableRow: (op) => restructuring(op.tableId),
   deleteTableRow: (op) => ({
     kind: 'nodes',
