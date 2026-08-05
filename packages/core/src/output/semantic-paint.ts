@@ -1003,8 +1003,9 @@ function paintLine(
     Math.max(
       leading,
       ...line.spans.map((span) => span.box.height + leading),
-      // Empty lines still need a content band so the caret has a strut.
-      line.spans.length === 0 ? line.box.height : 0
+      // Empty lines still need a content band so the caret has a strut — the paragraph
+      // mark's own depth, which layout publishes, not the whole spaced box.
+      line.spans.length === 0 ? (line.glyphBand ?? line.box.height) : 0
     ),
     line.box.height
   );

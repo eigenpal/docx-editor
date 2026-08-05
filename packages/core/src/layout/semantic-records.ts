@@ -216,6 +216,17 @@ export interface LineRecord {
    */
   readonly leading: number;
   /**
+   * Depth of the glyph band inside {@link box}, before the spacing rule grew the box.
+   *
+   * A line WITH spans carries its band in the span heights. An empty paragraph carries
+   * nothing, so consumers that need a strut — the caret, and paint's `padding-bottom` —
+   * read this instead of taking {@link box} whole. Subtracting {@link leading} is not the
+   * same thing: `auto`/`atLeast` extras sit BELOW the band and leave `leading` at zero.
+   *
+   * Absent on lines published before this was measured; treat as {@link box} height.
+   */
+  readonly glyphBand?: number;
+  /**
    * Model ranges on this line covering DELETED content, absent when there is none.
    *
    * The caret steps over these rather than entering them: text typed inside a deletion exists

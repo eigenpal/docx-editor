@@ -33,8 +33,11 @@ const SMALL: PageGeometry = {
   margin: { top: 10, right: 10, bottom: 10, left: 10 },
 };
 
+// The measurer's 6pt/14pt base describes an 11pt run, so these paragraphs author `w:sz="22"`
+// instead of resolving to the 10pt terminal fallback (see `DEFAULT_RUN_STYLE`), which would
+// scale every box by 10/11 and turn round assertions into repeating decimals.
 const paragraph = (text: string, pPr = '') =>
-  `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ''}<w:r><w:t>${text}</w:t></w:r></w:p>`;
+  `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ''}<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
 
 describe('layout records carry revision and stable source ranges (task 7.1)', () => {
   test('the layout is tagged with the revision it came from', () => {
@@ -79,7 +82,10 @@ describe('layout records carry revision and stable source ranges (task 7.1)', ()
   });
 
   test('spans are positioned left to right within the line', () => {
-    const part = load('<w:p><w:r><w:t>abc</w:t></w:r><w:r><w:t>de</w:t></w:r></w:p>');
+    // The measurer's 6pt base describes an 11pt run, so the runs author `w:sz="22"` rather
+    // than resolving to the 10pt terminal fallback (see `DEFAULT_RUN_STYLE`).
+    const sz = '<w:rPr><w:sz w:val="22"/></w:rPr>';
+    const part = load(`<w:p><w:r>${sz}<w:t>abc</w:t></w:r><w:r>${sz}<w:t>de</w:t></w:r></w:p>`);
     const [line] = linesOf(lay(part));
     expect(line!.spans[0]!.box.x).toBe(0);
     expect(line!.spans[1]!.box.x).toBe(18); // 3 characters at 6pt
@@ -268,9 +274,14 @@ describe('resolved style reaches measurement and the spans (task 7.2)', () => {
   });
 
   test('superscript occupies less line height than baseline text', () => {
+    // The paragraph MARK is measured with the line, and it carries its own `w:rPr`. So a
+    // paragraph whose run is superscript but whose mark is not stays full height — Word does
+    // the same. Raising the run alone therefore proves nothing; the mark has to be raised too
+    // for the line itself to shrink.
+    const superscriptRun = '<w:rPr><w:vertAlign w:val="superscript"/></w:rPr>';
     const baseline = lay(load('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
     const superscript = lay(
-      load('<w:p><w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:t>x</w:t></w:r></w:p>')
+      load(`<w:p><w:pPr>${superscriptRun}</w:pPr><w:r>${superscriptRun}<w:t>x</w:t></w:r></w:p>`)
     );
     expect(linesOf(superscript)[0]!.box.height).toBeLessThan(linesOf(baseline)[0]!.box.height);
   });
@@ -569,10 +580,10 @@ describe('per-section pagination (the per-section lane)', () => {
   });
 
   describe('a section break mark never manufactures a page', () => {
-    // 200x100pt sheets with 10pt margins: six lines fill the 80pt column exactly, so the
+    // 200x108pt sheets with 10pt margins: six 14pt lines fill the 88pt column, so the
     // seventh has nothing left. That seventh line is what a section boundary lands on in a
     // real document, and whether it fits is a matter of a point or two.
-    const SHORT = sect(4000, 2000);
+    const SHORT = sect(4000, 2160);
     /** A paragraph that is nothing but the section break it carries. */
     const breakMark = (pPr: string) => `<w:p><w:pPr>${pPr}</w:pPr></w:p>`;
     const FILL = ['a', 'b', 'c', 'd', 'e', 'f'].map((text) => paragraph(text)).join('');

@@ -63,10 +63,16 @@ function docx(body: string, withNumbering = false): Uint8Array {
   return zipSync(files);
 }
 
-const paragraph = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+// The measurer's 6pt/14pt base describes an 11pt run, so these fixtures author `w:sz="22"`
+// instead of resolving to the 10pt terminal fallback (see `DEFAULT_RUN_STYLE`). The size is
+// on the paragraph MARK as well as the run: `splitParagraph` gives the new empty paragraph
+// its own mark, and that mark alone decides the caret height there.
+const SZ = '<w:rPr><w:sz w:val="22"/></w:rPr>';
+const paragraph = (text: string) =>
+  `<w:p><w:pPr>${SZ}</w:pPr><w:r>${SZ}<w:t>${text}</w:t></w:r></w:p>`;
 const listItem = (text: string) =>
-  '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>' +
-  `<w:r><w:t>${text}</w:t></w:r></w:p>`;
+  `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>${SZ}</w:pPr>` +
+  `<w:r>${SZ}<w:t>${text}</w:t></w:r></w:p>`;
 
 interface Mounted {
   readonly surface: PaginatedSurface;

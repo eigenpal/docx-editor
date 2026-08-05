@@ -163,7 +163,9 @@ describe('the leader reaches the layout record and the paint', () => {
     expect(new Set(leader!.textContent!)).toEqual(new Set(['.']));
     // Positioned and clipped to the advance the tab reserved, never wider.
     const tab = linesOf(lay(load(TOC_ENTRY)))[0]!.spans.find((span) => span.text === '\t')!;
-    expect(leader!.style.width).toBe(`${tab.box.width}px`);
+    // Compared as a number: CSS serializes a width to six decimals, so a published advance
+    // that is a repeating decimal never matches its own `${value}px` spelling.
+    expect(Number.parseFloat(leader!.style.width)).toBeCloseTo(tab.box.width, 5);
     expect(leader!.style.overflow).toBe('hidden');
   });
 

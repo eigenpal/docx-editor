@@ -20,6 +20,7 @@ import {
 import { caretAt, caretStops, moveCaret } from '../semantic-interaction.ts';
 import { resetGraphemeBoundary, setGraphemeBoundary } from '../grapheme.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import { elevenPointDefaults } from './fixtures/eleven-point-defaults.ts';
 import type { ResolvedRunStyle } from '../run-style.ts';
 import {
   paragraphFragmentsOf,
@@ -40,7 +41,10 @@ function load(body: string): OoxmlPart {
 
 const measurer = createFixedMeasurer(6, 14);
 const lay = (body: string, port: TextMeasurer = measurer): SemanticLayout =>
-  layoutSemanticDocument(load(body), 1, { measurer: port });
+  layoutSemanticDocument(load(body), 1, {
+    measurer: port,
+    styleCascade: elevenPointDefaults(),
+  });
 
 const P0 = '/word/document.xml#0.0.0';
 const P1 = '/word/document.xml#0.0.1';

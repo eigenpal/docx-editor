@@ -301,18 +301,22 @@ describe('canvas measurer cache bounds', () => {
 });
 
 describe('resolveDefaultSurfaceMeasurer', () => {
+  // These name a size rather than leaning on the default: the claim under test is WHICH
+  // measurer got resolved, and the fixed measurer's 6pt grid describes an 11pt run.
+  const elevenPt = () => style({ fontSizePt: 11 });
+
   test('selects the canvas measurer when a 2d context is supplied', () => {
     const resolved = resolveDefaultSurfaceMeasurer(1, { context: mockContext() });
     expect(resolved.producer).toBe('canvas-measurer');
     // Distinct from the fixed 6pt-wide grid: three characters at 11pt → 23.1, not 18.
-    expect(resolved.measurer.measure('abc', style())).toBeCloseTo(3 * 11 * 0.7, 5);
-    expect(createFixedMeasurer().measure('abc', style())).toBe(18);
+    expect(resolved.measurer.measure('abc', elevenPt())).toBeCloseTo(3 * 11 * 0.7, 5);
+    expect(createFixedMeasurer().measure('abc', elevenPt())).toBe(18);
   });
 
   test('falls back to the fixed measurer when canvas is unavailable', () => {
     const resolved = resolveDefaultSurfaceMeasurer(1, { context: null });
     expect(resolved.producer).toBe('fixed-measurer');
-    expect(resolved.measurer.measure('abc', style())).toBe(18);
+    expect(resolved.measurer.measure('abc', elevenPt())).toBe(18);
   });
 
   test('without an injected context, canvas measurement is unavailable', () => {

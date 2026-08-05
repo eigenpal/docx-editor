@@ -323,6 +323,16 @@ export interface PendingLine {
    * the spacing rule produced instead of guessing at it from the box.
    */
   leading: number;
+  /**
+   * Height of the glyph band inside {@link height}, before line spacing grew the box.
+   *
+   * Only meaningful for a line with no spans: a line WITH spans has its band in its span
+   * heights, but an empty paragraph has nothing to measure and its whole box would be taken
+   * as text. That is how a double-spaced empty paragraph got a caret twice the height of
+   * the text about to be typed once `auto` extras moved below the band and `leading` — the
+   * number both consumers had been subtracting — correctly became zero.
+   */
+  glyphBand: number;
   /** When true, layout must start a new page after this line is placed. */
   pageBreakAfter?: boolean;
   /** When true, layout must advance to the next authored section column. */
@@ -380,6 +390,7 @@ export function frozenLine(line: PendingLine): PendingLine {
     height: line.height,
     baseline: line.baseline,
     leading: line.leading,
+    glyphBand: line.glyphBand,
     ...(line.pageBreakAfter ? { pageBreakAfter: true } : {}),
     ...(line.columnBreakAfter ? { columnBreakAfter: true } : {}),
     ...(line.deletedRanges ? { deletedRanges: Object.freeze(line.deletedRanges) } : {}),
@@ -654,6 +665,7 @@ export function breakParagraph(
     height: 0,
     baseline: 0,
     leading: 0,
+    glyphBand: 0,
   };
   let topAndBottomSkipApplied = false;
   const anchorLineTopByModelStart = new Map<number, number>();
@@ -1113,6 +1125,9 @@ export function breakParagraph(
     finalizeDrawingGeometry();
     // Line spacing applies to the finished box, once, so a paragraph's rule governs every
     // line it produced regardless of which run happened to be tallest.
+    // Captured BEFORE the spacing rule grows the box: this is the depth the glyphs (or, on
+    // an empty line, the paragraph mark) actually occupy.
+    line.glyphBand = line.height;
     const spaced = applyLineSpacing(lineSpacing, line.height, line.baseline);
     line.baseline = spaced.baseline;
     // Space ABOVE the glyph band only (exact centering, not auto/atLeast). Never negative.
@@ -1147,6 +1162,7 @@ export function breakParagraph(
       height: 0,
       baseline: 0,
       leading: 0,
+      glyphBand: 0,
     };
     applyTopAndBottomSkipIfNeeded();
   };

@@ -906,7 +906,10 @@ export function validateDrawingNode(
       children.every((child) => BLIP_FILL_CHILD_KINDS.has(child.kind)) &&
       countKind(children, 'pictureBlip') === 1 &&
       countKind(children, 'pictureSrcRect') <= 1 &&
-      stretchCount + tileCount === 1
+      // `EG_FillModeProperties` is minOccurs="0" in CT_BlipFillProperties (dml-main), so a
+      // blipFill with neither `a:stretch` nor `a:tile` is valid and means the default fill.
+      // Demanding one demoted the whole `pic:pic` to generic, i.e. the image vanished.
+      stretchCount + tileCount <= 1
     );
   }
 
@@ -931,8 +934,11 @@ export function validateDrawingNode(
     return (
       localName === 'spPr' &&
       children.every((child) => SHAPE_PROPERTIES_CHILD_KINDS.has(child.kind)) &&
-      countKind(children, 'pictureTransform') === 1 &&
-      countKind(children, 'picturePresetGeometry') === 1
+      // Both `a:xfrm` and the `EG_Geometry` group are minOccurs="0" in CT_ShapeProperties
+      // (dml-main), so an spPr carrying neither is valid — an unrotated picture that takes
+      // its size from `wp:extent` authors nothing here.
+      countKind(children, 'pictureTransform') <= 1 &&
+      countKind(children, 'picturePresetGeometry') <= 1
     );
   }
 

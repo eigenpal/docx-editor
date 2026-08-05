@@ -12,6 +12,10 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
+import { DEFAULT_RUN_STYLE } from '../../layout/run-style.ts';
+
+/** These fixtures author no `w:sz`, so an untouched marker sits at the terminal fallback. */
+const UNSTYLED_PT = DEFAULT_RUN_STYLE.fontSizePt;
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -95,7 +99,7 @@ describe('the marker follows the paragraph it numbers', () => {
 
   test('sizing the whole paragraph moves the marker with it', () => {
     withItem(item('BIG'), (surface) => {
-      expect(sizes(surface).marker).toBe(11);
+      expect(sizes(surface).marker).toBe(UNSTYLED_PT);
       selectAllOf(surface, 'BIG');
       surface.setRunProperty('sz', { val: '52' });
       expect(sizes(surface)).toEqual({ marker: 26, text: 26 });
@@ -127,7 +131,7 @@ describe('the marker follows the paragraph it numbers', () => {
         head: { paragraphId: id, offset: 3 },
       });
       surface.setRunProperty('sz', { val: '52' });
-      expect(sizes(surface).marker).toBe(11);
+      expect(sizes(surface).marker).toBe(UNSTYLED_PT);
     });
   });
 

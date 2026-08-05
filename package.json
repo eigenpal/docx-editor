@@ -5,6 +5,7 @@
   "workspaces": [
     "packages/*",
     "examples/astro",
+    "examples/automation",
     "examples/custom-nodes",
     "examples/igloo",
     "examples/nextjs",

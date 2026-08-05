@@ -6,6 +6,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import { elevenPointDefaults } from './fixtures/eleven-point-defaults.ts';
 import { type PageGeometry } from '../semantic-records.ts';
 import {
   caretAt,
@@ -31,7 +32,11 @@ function load(body: string): OoxmlPart {
 
 const measurer = createFixedMeasurer(6, 14);
 const lay = (part: OoxmlPart, geometry?: PageGeometry) =>
-  layoutSemanticDocument(part, 1, { measurer, ...(geometry ? { geometry } : {}) });
+  layoutSemanticDocument(part, 1, {
+    measurer,
+    styleCascade: elevenPointDefaults(),
+    ...(geometry ? { geometry } : {}),
+  });
 
 const P0 = '/word/document.xml#0.0.0';
 const P1 = '/word/document.xml#0.0.1';
@@ -106,13 +111,15 @@ describe('caret geometry for a model position', () => {
     const emptyLine = spaced.pages[0]!.fragments[0]!;
     if (emptyLine.kind !== 'paragraph') throw new Error('expected a paragraph');
     const line = emptyLine.lines[0]!;
-    expect(line.leading).toBeGreaterThan(0);
+    // `auto` extras grow the box BELOW the glyphs, so the band starts at the line top and
+    // there is no above-band leading to step over (see `LineRecord.leading`).
+    expect(line.leading).toBe(0);
 
     const caret = caretAt(spaced, at(P0, 0))!;
     expect(caret).not.toBeNull();
-    // The glyph band is what is left of the box once the leading is taken off, and it sits
-    // at the bottom — where the text will appear.
-    expect(caret.height).toBe(line.box.height - line.leading);
+    // The glyph band is where the text will appear, and it is a fraction of the box the
+    // double spacing produced — taking the box whole is the bug this test exists for.
+    expect(caret.height).toBeLessThan(line.box.height);
     expect(caret.y).toBe(line.box.y + line.leading);
     // Same height a single-spaced empty paragraph would get: the spacing changed the box,
     // not the text.

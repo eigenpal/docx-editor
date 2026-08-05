@@ -21,11 +21,11 @@ const NUMBERING = `
     <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="bullet"/>
       <w:lvlText w:val="${SYMBOL_BULLET}"/><w:lvlJc w:val="left"/>
       <w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>
-      <w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol" w:hint="default"/></w:rPr></w:lvl>
+      <w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol" w:hint="default"/><w:sz w:val="22"/></w:rPr></w:lvl>
     <w:lvl w:ilvl="2"><w:start w:val="1"/><w:numFmt w:val="bullet"/>
       <w:lvlText w:val="${WINGDINGS_SQUARE}"/><w:lvlJc w:val="left"/>
       <w:pPr><w:ind w:left="2160" w:hanging="360"/></w:pPr>
-      <w:rPr><w:rFonts w:ascii="Wingdings" w:hAnsi="Wingdings" w:hint="default"/></w:rPr></w:lvl>
+      <w:rPr><w:rFonts w:ascii="Wingdings" w:hAnsi="Wingdings" w:hint="default"/><w:sz w:val="22"/></w:rPr></w:lvl>
   </w:abstractNum>
   <w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>
 `;

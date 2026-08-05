@@ -117,6 +117,7 @@ function anchoredPictureDrawing(
     '<wp:docPr id="7" name="Picture 3" descr="Floating" title="Title text"/>' +
     '<wp:cNvGraphicFramePr/>' +
     `<a:graphic><a:graphicData uri="${PIC_URI}"><pic:pic>` +
+    '<pic:nvPicPr><pic:cNvPr id="7" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
     '<pic:blipFill><a:blip r:embed="rId15"/></pic:blipFill>' +
     '<pic:spPr><a:xfrm rot="0"><a:ext cx="952500" cy="952500"/></a:xfrm><a:prstGeom prst="ellipse"/></pic:spPr>' +
     '</pic:pic></a:graphicData></a:graphic>' +

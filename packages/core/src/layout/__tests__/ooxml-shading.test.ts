@@ -3,6 +3,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import { elevenPointDefaults } from './fixtures/eleven-point-defaults.ts';
 import {
   paragraphShading,
   paragraphShadingBox,
@@ -23,7 +24,8 @@ function load(body: string): OoxmlPart {
 }
 
 const measurer = createFixedMeasurer(6, 14);
-const lay = (body: string) => layoutSemanticDocument(load(body), 1, { measurer });
+const lay = (body: string) =>
+  layoutSemanticDocument(load(body), 1, { measurer, styleCascade: elevenPointDefaults() });
 
 describe('resolveStrictHexFill', () => {
   test('accepts exactly six hex digits and uppercases', () => {
@@ -195,11 +197,13 @@ describe('paragraph shading geometry excludes before/after spacing', () => {
     expect(
       fragment.box.y + fragment.box.height - (fragment.shadingBox!.y + fragment.shadingBox!.height)
     ).toBe(6);
+    // Spans are split at break opportunities, so the shaded run arrives as several of them
+    // ("Character-", "level ", "shading."); joining is what makes the claim checkable.
     expect(
-      fragment.lines[0]!.spans.some(
-        (span) => span.style.shading === 'FFEEAA' && span.text.includes('Character-level')
-      )
-    ).toBe(true);
+      fragment.lines[0]!.spans.filter((span) => span.style.shading === 'FFEEAA')
+        .map((span) => span.text)
+        .join('')
+    ).toBe('Character-level shading.');
   });
 
   test('multi-line shaded paragraph unions line boxes without after spacing', () => {

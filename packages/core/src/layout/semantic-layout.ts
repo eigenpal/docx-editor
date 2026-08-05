@@ -2229,6 +2229,7 @@ function layoutBlocksPass(
               },
               baseline: brokenLine.baseline,
               leading: brokenLine.leading,
+              glyphBand: brokenLine.glyphBand,
               spans: brokenLine.spans.map((span) => ({
                 ...span,
                 box: { ...span.box, x: span.box.x + origin.columnX, y: syntheticY },
@@ -2420,6 +2421,7 @@ function layoutBlocksPass(
         },
         baseline: pendingLine.baseline,
         leading: pendingLine.leading,
+        glyphBand: pendingLine.glyphBand,
         ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
         ...(alignedDrawings.length > 0 ? { drawings: alignedDrawings } : {}),
       };
@@ -3004,7 +3006,14 @@ function placedGeometryOf(
       for (const line of fragment.lines) {
         const lineKey = lineOrdinal;
         lineOrdinal += 1;
-        const textHeight = Math.max(0, line.box.height - line.leading);
+        // The glyph band, READ rather than recovered: `box.height - leading` was the band
+        // only while every spacing rule put its extra ABOVE the text. `auto`/`atLeast` put
+        // it below and leave `leading` at zero, which handed a double-spaced line a boundary
+        // chip covering the whole doubled box instead of the glyphs in it.
+        const textHeight = Math.max(
+          0,
+          Math.min(line.glyphBand ?? line.box.height, line.box.height - line.leading)
+        );
         for (const span of line.spans) {
           addSpan({
             pageIndex,

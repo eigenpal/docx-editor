@@ -965,15 +965,19 @@ export function caretBoxOnLine(
   const spans = line.spans;
   if (spans.length === 0) {
     // An empty paragraph paints no run to size the caret against, so the LINE is all there
-    // is — but the line box on a spaced paragraph is mostly leading, and taking it whole
-    // drew a double-spaced empty line a caret twice the height of the text it would type.
-    // The leading is published, so the glyph band is exactly what is left of the box, and
-    // it sits at the bottom because that is where the text will appear.
+    // is — but the line box on a spaced paragraph is mostly spacing, and taking it whole
+    // draws a double-spaced empty line a caret twice the height of the text it would type.
+    //
+    // Both numbers are READ, never recovered from the box: `leading` is the `exact`-rule
+    // space above the band, and `glyphBand` is the depth the paragraph mark occupies before
+    // the rule grew the box. Subtracting `leading` alone was right only while every rule put
+    // its extra above; `auto`/`atLeast` put it below and leave `leading` at zero.
     const leading = line.leading ?? 0;
+    const band = line.glyphBand ?? Math.max(0, line.box.height - leading);
     return {
       x: line.box.x,
       y: line.box.y + leading,
-      height: Math.max(0, line.box.height - leading),
+      height: Math.max(0, Math.min(band, line.box.height - leading)),
     };
   }
   let chosen = spans[0]!;

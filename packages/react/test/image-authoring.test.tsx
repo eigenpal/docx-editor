@@ -98,7 +98,7 @@ function inlinePictureDocument(
         `<wp:docPr id="1" name="green" descr="Green square" title="Green title"/>` +
         '<wp:cNvGraphicFramePr/>' +
         `<a:graphic xmlns:a="${A}"><a:graphicData uri="${PIC_URI}">` +
-        `<pic:pic xmlns:pic="${PIC}"><pic:nvPicPr><pic:cNvPicPr/></pic:nvPicPr>` +
+        `<pic:pic xmlns:pic="${PIC}"><pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr>` +
         `<pic:blipFill><a:blip r:embed="rIdImage"><a:stretch><a:fillRect/></a:stretch></a:blip></pic:blipFill>` +
         '<pic:spPr><a:xfrm rot="0"><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>' +
         '</pic:pic></a:graphicData></a:graphic></wp:anchor>'
@@ -107,7 +107,7 @@ function inlinePictureDocument(
         `<wp:docPr id="1" name="green" descr="Green square" title="Green title"/>` +
         '<wp:cNvGraphicFramePr/>' +
         `<a:graphic xmlns:a="${A}"><a:graphicData uri="${PIC_URI}">` +
-        `<pic:pic xmlns:pic="${PIC}"><pic:nvPicPr><pic:cNvPicPr/></pic:nvPicPr>` +
+        `<pic:pic xmlns:pic="${PIC}"><pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr>` +
         `<pic:blipFill><a:blip r:embed="rIdImage"><a:stretch><a:fillRect/></a:stretch></a:blip></pic:blipFill>` +
         '<pic:spPr><a:xfrm rot="0"><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>' +
         '</pic:pic></a:graphicData></a:graphic></wp:inline>';
@@ -465,7 +465,7 @@ describe('edits floating image position in properties', () => {
       '<wp:docPr id="1" name="green" descr="Green square" title="Green title"/>' +
       '<wp:cNvGraphicFramePr/>' +
       `<a:graphic xmlns:a="${A}"><a:graphicData uri="${PIC_URI}">` +
-      `<pic:pic xmlns:pic="${PIC}"><pic:nvPicPr><pic:cNvPicPr/></pic:nvPicPr>` +
+      `<pic:pic xmlns:pic="${PIC}"><pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr>` +
       `<pic:blipFill><a:blip r:embed="rIdImage"><a:stretch><a:fillRect/></a:stretch></a:blip></pic:blipFill>` +
       '<pic:spPr><a:xfrm rot="0"><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>' +
       '</pic:pic></a:graphicData></a:graphic></wp:anchor>';

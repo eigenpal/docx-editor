@@ -31,7 +31,10 @@ const linesOf = (body: string, width = 60): string[] =>
     line.spans.map((span) => span.text).join('')
   );
 
-const run = (text: string) => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
+// The 6pt measurer base describes an 11pt run, so runs author `w:sz="22"` rather than the
+// 10pt terminal fallback (see `DEFAULT_RUN_STYLE`), which widens the measure by 11/10.
+const run = (text: string) =>
+  `<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">${text}</w:t></w:r>`;
 
 describe('a word split across runs stays whole', () => {
   test('two plain runs forming one word', () => {
@@ -131,10 +134,11 @@ describe('a dash is a break opportunity', () => {
 });
 
 describe('a word wider than the measure breaks at the margin', () => {
+  // 60pt of measure at 6pt a glyph: exactly ten characters to a line.
   test('an unbroken run chops into full lines instead of overflowing', () => {
     expect(linesOf(`<w:p>${run('aaaaaaaaaaaaaaaaaaaa')}</w:p>`)).toEqual([
-      'aaaaaaaaaaa',
-      'aaaaaaaaa',
+      'aaaaaaaaaa',
+      'aaaaaaaaaa',
     ]);
   });
 
@@ -150,10 +154,10 @@ describe('a word wider than the measure breaks at the margin', () => {
     );
     expect(
       lines.map((line) => line.spans.map((span) => [span.range.start, span.range.end]))
-    ).toEqual([[[0, 11]], [[11, 14]]]);
+    ).toEqual([[[0, 10]], [[10, 14]]]);
   });
 
   test('a word that follows text on the line wraps first, then chops', () => {
-    expect(linesOf(`<w:p>${run('aaa cccccccccccc')}</w:p>`)).toEqual(['aaa ', 'ccccccccccc', 'c']);
+    expect(linesOf(`<w:p>${run('aaa cccccccccccc')}</w:p>`)).toEqual(['aaa ', 'cccccccccc', 'cc']);
   });
 });

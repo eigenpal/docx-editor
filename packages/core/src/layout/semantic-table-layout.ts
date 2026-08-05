@@ -736,6 +736,7 @@ function placeCellParagraph(
       },
       baseline: pendingLine.baseline,
       leading: pendingLine.leading,
+      glyphBand: pendingLine.glyphBand,
       ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
     });
     y += pendingLine.height;

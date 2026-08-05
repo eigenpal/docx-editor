@@ -39,14 +39,18 @@ const SMALL: PageGeometry = {
 
 const lay = (body: string) => layoutSemanticDocument(load(body), 1, { measurer, geometry: SMALL });
 
+// The 6pt/14pt measurer base describes an 11pt run, so every fixture authors `w:sz="22"`.
+// Leaning on the terminal fallback instead would measure at 10pt (see `DEFAULT_RUN_STYLE`)
+// and scale every line box by 10/11, which is a font-size question, not a pagination one.
+
 /** One line of text, so filler paragraphs are countable. */
 const one = (text: string, pPr = '') =>
-  `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ''}<w:r><w:t>${text}</w:t></w:r></w:p>`;
+  `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ''}<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
 
 /** `count` lines in ONE paragraph, via hard breaks — deterministic, no wrap arithmetic. */
 const multi = (count: number, pPr = '') => {
   const runs = Array.from({ length: count }, (_, index) => `<w:t>l${index}</w:t>`).join('<w:br/>');
-  return `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ''}<w:r>${runs}</w:r></w:p>`;
+  return `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ''}<w:r><w:rPr><w:sz w:val="22"/></w:rPr>${runs}</w:r></w:p>`;
 };
 
 const fillers = (count: number) =>

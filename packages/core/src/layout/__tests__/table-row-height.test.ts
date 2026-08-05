@@ -45,7 +45,10 @@ function allTables(result: ReturnType<typeof layout>): TableFragmentRecord[] {
   );
 }
 
-const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+// The measurer's 14pt line base describes an 11pt run, so cells author `w:sz="22"` rather
+// than resolving to the 10pt terminal fallback (see `DEFAULT_RUN_STYLE`).
+const p = (text: string) =>
+  `<w:p><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
 const tc = (content: string, tcPr = '') => `<w:tc>${tcPr}${content}</w:tc>`;
 const tr = (cells: string, trPr = '') => `<w:tr>${trPr}${cells}</w:tr>`;
 const trHeight = (val: string, hRule?: string) =>
