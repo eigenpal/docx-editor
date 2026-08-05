@@ -30,8 +30,9 @@
 // `compat/manifest.json` — with a reason each — and removed from the declarations, so the authored
 // file is an inventory rather than a roadmap. `Range#start`/`end` were the first members treated that
 // way (document-wide character offsets are a second addressing scheme for positions this lane already
-// addresses by paragraph identity and UTF-16 offset); `ParagraphFormat`, lists, bookmarks,
-// hyperlinks, sections, page setup, note bodies, comments and revisions followed.
+// addresses by paragraph identity and UTF-16 offset); `Bookmark#start`/`end`/`delete`,
+// `ListItem#listString`/`siblingIndex`, `ParagraphFormat`, and a comment's assignable body and its
+// author's email address followed, each for its own recorded reason.
 //
 //   Document       — `contentControls`
 //   Body           — `contentControls`
@@ -49,11 +50,23 @@
 
 import type { DocxEditor as Declared } from '../../../compat/docxeditor/declarations.ts';
 import type { Body } from '../../model/body.ts';
+import type { Bookmark, BookmarkCollection } from '../../model/bookmarks.ts';
 import type { ParagraphCollection, RangeCollection } from '../../model/collections.ts';
 import type { Document } from '../../model/document.ts';
 import type { Font } from '../../model/font.ts';
+import type { List, ListCollection, ListItem } from '../../model/lists.ts';
+import type { NoteItem, NoteItemCollection } from '../../model/notes.ts';
 import type { Paragraph } from '../../model/paragraph.ts';
 import type { Range } from '../../model/range.ts';
+import type {
+  Comment,
+  CommentCollection,
+  CommentReply,
+  CommentReplyCollection,
+  Revision,
+  RevisionCollection,
+} from '../../model/review.ts';
+import type { PageSetup, Section, SectionCollection } from '../../model/sections.ts';
 import type { ClientObject } from '../client-object.ts';
 import type { RequestContext } from '../request-context.ts';
 import type { DocxEditorRuntime } from '../runtime.ts';
@@ -246,6 +259,143 @@ const rangeEdgesAgree: Satisfies<
   [Range, Range]
 > = true;
 
+// ---------------------------------------------------------------------------
+// Lists, bookmarks, sections, notes, comments and tracked changes
+// ---------------------------------------------------------------------------
+
+// A list's number and its members, and the two ways of asking for its paragraphs.
+const listMatchesTheDeclaredList: Satisfies<Pick<List, 'id'>, Pick<Declared.List, 'id'>> = true;
+const listTakesAParagraph: TakesTheSameArguments<
+  List['insertParagraph'],
+  Declared.List['insertParagraph']
+> = true;
+const listLevelsAreParagraphs: TakesTheSameArguments<
+  List['getLevelParagraphs'],
+  Declared.List['getLevelParagraphs']
+> = true;
+const listAnswersItsOwnObjects: Satisfies<
+  [List['paragraphs'], ReturnType<List['insertParagraph']>],
+  [ParagraphCollection, Paragraph]
+> = true;
+const listsAreReachable: TakesTheSameArguments<
+  ListCollection['getById'],
+  Declared.ListCollection['getById']
+> = true;
+const listItemsAreLists: Satisfies<
+  [ListCollection['items'], ReturnType<ListCollection['getFirst']>],
+  [readonly List[], List]
+> = true;
+const listItemLevelMatches: Satisfies<Pick<ListItem, 'level'>, Pick<Declared.ListItem, 'level'>> =
+  true;
+
+// A paragraph says which list it is in and where in it — the two accessors upstream declares.
+const paragraphReachesItsList: Satisfies<
+  [Paragraph['list'], Paragraph['listItem']],
+  [List, ListItem]
+> = true;
+
+// A bookmark's name, the words it encloses, and moving the reader to it.
+const bookmarkMatchesTheDeclaredBookmark: Satisfies<
+  Pick<Bookmark, 'name'>,
+  Pick<Declared.Bookmark, 'name'>
+> = true;
+const bookmarkSelects: TakesTheSameArguments<Bookmark['select'], Declared.Bookmark['select']> =
+  true;
+const bookmarkRangeIsARange: Satisfies<Bookmark['range'], Range> = true;
+const bookmarkItemsAreBookmarks: Satisfies<BookmarkCollection['items'], readonly Bookmark[]> = true;
+const rangeReachesItsBookmarks: Satisfies<Range['bookmarks'], BookmarkCollection> = true;
+const rangeHyperlinkMatches: Satisfies<
+  Pick<Range, 'hyperlink'>,
+  Pick<Declared.Range, 'hyperlink'>
+> = true;
+
+// A section: the page it is laid out on, the furniture it prints, and the next one.
+const pageSetupMatchesTheDeclaredPageSetup: Satisfies<PageSetup, Declared.PageSetup> = true;
+const sectionFurnitureTakesTheDeclaredVariant: Satisfies<
+  [
+    TakesTheSameArguments<Section['getHeader'], Declared.Section['getHeader']>,
+    TakesTheSameArguments<Section['getFooter'], Declared.Section['getFooter']>,
+  ],
+  [true, true]
+> = true;
+const sectionAnswersItsOwnObjects: Satisfies<
+  [
+    Section['body'],
+    Section['pageSetup'],
+    ReturnType<Section['getHeader']>,
+    ReturnType<Section['getNext']>,
+  ],
+  [Body, PageSetup, Body, Section]
+> = true;
+const sectionItemsAreSections: Satisfies<
+  [SectionCollection['items'], ReturnType<SectionCollection['getFirst']>],
+  [readonly Section[], Section]
+> = true;
+const documentReachesItsSections: Satisfies<Document['sections'], SectionCollection> = true;
+
+// A note is a story of its own, and it says which kind of note it is.
+const noteMatchesTheDeclaredNote: Satisfies<Pick<NoteItem, 'type'>, Pick<Declared.NoteItem, 'type'>> =
+  true;
+const noteDeletes: Satisfies<Pick<NoteItem, 'delete'>, Pick<Declared.NoteItem, 'delete'>> = true;
+const noteAnswersItsOwnObjects: Satisfies<
+  [NoteItem['body'], ReturnType<NoteItem['getNext']>],
+  [Body, NoteItem]
+> = true;
+const noteItemsAreNotes: Satisfies<
+  [NoteItemCollection['items'], ReturnType<NoteItemCollection['getFirst']>],
+  [readonly NoteItem[], NoteItem]
+> = true;
+// Upstream hangs these off a story; here they are the document's, because only the main story may
+// reference a note (a recorded omission). The collection they answer is the measured one.
+const notesAreReachable: Satisfies<
+  [Document['footnotes'], Document['endnotes']],
+  [NoteItemCollection, NoteItemCollection]
+> = true;
+
+// A comment: who wrote it, when, whether the thread is settled, and answering it.
+const commentMatchesTheDeclaredComment: Satisfies<
+  Pick<Comment, 'authorName' | 'creationDate' | 'id' | 'resolved'>,
+  Pick<Declared.Comment, 'authorName' | 'creationDate' | 'id' | 'resolved'>
+> = true;
+const commentRepliesTakeText: TakesTheSameArguments<Comment['reply'], Declared.Comment['reply']> =
+  true;
+const commentAnswersItsOwnObjects: Satisfies<
+  [Comment['replies'], ReturnType<Comment['getRange']>, ReturnType<Comment['reply']>],
+  [CommentReplyCollection, Range, CommentReply]
+> = true;
+const replyMatchesTheDeclaredReply: Satisfies<
+  Pick<CommentReply, 'authorName' | 'creationDate' | 'id'>,
+  Pick<Declared.CommentReply, 'authorName' | 'creationDate' | 'id'>
+> = true;
+const commentItemsAreComments: Satisfies<
+  [
+    CommentCollection['items'],
+    ReturnType<CommentCollection['getFirst']>,
+    CommentReplyCollection['items'],
+  ],
+  [readonly Comment[], Comment, readonly CommentReply[]]
+> = true;
+const commentsAreReachableBothWays: Satisfies<
+  [Document['comments'], ReturnType<Body['getComments']>],
+  [CommentCollection, CommentCollection]
+> = true;
+
+// A tracked change, and the decision a reviewer makes about it. The declared `type` union is the
+// whole upstream vocabulary; this model publishes the same union and answers seven of its members.
+const revisionMatchesTheDeclaredRevision: Satisfies<
+  Pick<Revision, 'author' | 'date' | 'type' | 'accept' | 'reject'>,
+  Pick<Declared.Revision, 'author' | 'date' | 'type' | 'accept' | 'reject'>
+> = true;
+const revisionRangeIsARange: Satisfies<Revision['range'], Range> = true;
+const revisionsAreDecidedInBulk: Satisfies<
+  Pick<RevisionCollection, 'acceptAll' | 'rejectAll'>,
+  Pick<Declared.RevisionCollection, 'acceptAll' | 'rejectAll'>
+> = true;
+const revisionItemsAreRevisions: Satisfies<RevisionCollection['items'], readonly Revision[]> = true;
+// By the object it answers rather than against the declared property, for the reason the file header
+// gives: a declared `items` is a mutable array and this model's is `readonly`, which is narrower.
+const revisionsAreReachable: Satisfies<Document['revisions'], RevisionCollection> = true;
+
 // A declared search option object is accepted verbatim by this model's `search`.
 declare const declaredOptions: Declared.SearchOptions;
 declare const body: Body;
@@ -289,3 +439,38 @@ void fontsAreTheSameObject;
 void fontMatchesTheDeclaredFont;
 void paragraphFormattingMatches;
 void stylesMatch;
+void listMatchesTheDeclaredList;
+void listTakesAParagraph;
+void listLevelsAreParagraphs;
+void listAnswersItsOwnObjects;
+void listsAreReachable;
+void listItemsAreLists;
+void listItemLevelMatches;
+void paragraphReachesItsList;
+void bookmarkMatchesTheDeclaredBookmark;
+void bookmarkSelects;
+void bookmarkRangeIsARange;
+void bookmarkItemsAreBookmarks;
+void rangeReachesItsBookmarks;
+void rangeHyperlinkMatches;
+void pageSetupMatchesTheDeclaredPageSetup;
+void sectionFurnitureTakesTheDeclaredVariant;
+void sectionAnswersItsOwnObjects;
+void sectionItemsAreSections;
+void documentReachesItsSections;
+void noteMatchesTheDeclaredNote;
+void noteDeletes;
+void noteAnswersItsOwnObjects;
+void commentMatchesTheDeclaredComment;
+void commentRepliesTakeText;
+void commentAnswersItsOwnObjects;
+void replyMatchesTheDeclaredReply;
+void commentItemsAreComments;
+void commentsAreReachableBothWays;
+void revisionMatchesTheDeclaredRevision;
+void revisionRangeIsARange;
+void revisionsAreDecidedInBulk;
+void revisionItemsAreRevisions;
+void revisionsAreReachable;
+void noteItemsAreNotes;
+void notesAreReachable;

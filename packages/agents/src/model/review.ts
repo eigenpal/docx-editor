@@ -36,15 +36,38 @@ import { HandleCollection, type PromisedItem } from './item-collection.ts';
 import { ModelObject } from './model-object.ts';
 import { Range } from './range.ts';
 
-/** Word's own names for a kind of change, as the host answers them. */
+/**
+ * Word's own names for a kind of change.
+ *
+ * The WHOLE upstream vocabulary, because a declaration says what a caller may be handed and a caller
+ * switching on it should not have to be told which subset this engine happens to produce. Seven of
+ * these actually occur — insert, delete, replace, the two property kinds and the two move halves —
+ * because a change to a row, a cell or a section is structural, and this engine reports only the
+ * changes it can also accept or reject. See `compat/manifest.json`.
+ */
 export type RevisionType =
+  | 'None'
   | 'Insert'
   | 'Delete'
-  | 'Replace'
   | 'Property'
+  | 'ParagraphNumber'
+  | 'DisplayField'
+  | 'Reconcile'
+  | 'Conflict'
+  | 'Style'
+  | 'Replace'
   | 'ParagraphProperty'
+  | 'TableProperty'
+  | 'SectionProperty'
+  | 'StyleDefinition'
   | 'MovedFrom'
-  | 'MovedTo';
+  | 'MovedTo'
+  | 'CellInsertion'
+  | 'CellDeletion'
+  | 'CellMerge'
+  | 'CellSplit'
+  | 'ConflictInsert'
+  | 'ConflictDelete';
 
 /**
  * A stamp the file wrote, or `null` where it wrote none.

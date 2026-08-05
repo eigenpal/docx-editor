@@ -2,10 +2,50 @@
   "schemaVersion": 1,
   "$comment": "Allowlisted subset of the Microsoft Word JavaScript API (Word.* namespace) that DocxEditor's public surface is measured against for source/shape compatibility. This file selects the upstream UIDs used as *reference-only conformance input*; it is not a dependency declaration and DocxEditor does not vendor, copy, or generate its own declarations from Microsoft's. See README.md in this directory for the full policy.",
   "categories": {
-    "core": ["RequestContext", "ClientObject", "Document", "Body", "Range", "Paragraph"],
-    "collectionsAndSearch": ["ParagraphCollection", "RangeCollection", "SearchOptions"],
-    "fontAndParagraphFormatting": ["Font"],
-    "contentControls": ["ContentControl", "ContentControlCollection"]
+    "core": [
+      "RequestContext",
+      "ClientObject",
+      "Document",
+      "Body",
+      "Range",
+      "Paragraph"
+    ],
+    "collectionsAndSearch": [
+      "ParagraphCollection",
+      "RangeCollection",
+      "SearchOptions"
+    ],
+    "fontAndParagraphFormatting": [
+      "Font"
+    ],
+    "contentControls": [
+      "ContentControl",
+      "ContentControlCollection"
+    ],
+    "listsAndNumbering": [
+      "List",
+      "ListCollection",
+      "ListItem"
+    ],
+    "bookmarks": [
+      "Bookmark",
+      "BookmarkCollection"
+    ],
+    "sectionsAndStories": [
+      "Section",
+      "SectionCollection",
+      "PageSetup",
+      "NoteItem",
+      "NoteItemCollection"
+    ],
+    "commentsAndRevisions": [
+      "Comment",
+      "CommentCollection",
+      "CommentReply",
+      "CommentReplyCollection",
+      "Revision",
+      "RevisionCollection"
+    ]
   },
   "symbols": {
     "run": {
@@ -13,23 +53,37 @@
       "members": []
     },
     "RequestContext": {
-      "members": ["document"]
+      "members": [
+        "document"
+      ]
     },
     "ClientObject": {
       "namespace": "OfficeExtension",
-      "members": ["context", "isNullObject"]
+      "members": [
+        "context",
+        "isNullObject"
+      ]
     },
     "Document": {
-      "members": ["body", "paragraphs", "contentControls"]
+      "members": [
+        "body",
+        "comments",
+        "contentControls",
+        "paragraphs",
+        "sections",
+        "revisions"
+      ]
     },
     "Body": {
       "members": [
         "paragraphs",
         "contentControls",
         "font",
+        "lists",
         "style",
         "text",
         "clear",
+        "getComments",
         "insertParagraph",
         "insertText",
         "search"
@@ -41,6 +95,8 @@
         "font",
         "paragraphs",
         "contentControls",
+        "bookmarks",
+        "hyperlink",
         "style",
         "insertText",
         "insertParagraph",
@@ -59,6 +115,8 @@
         "lineSpacing",
         "spaceBefore",
         "spaceAfter",
+        "list",
+        "listItem",
         "style",
         "text",
         "clear",
@@ -69,16 +127,35 @@
       ]
     },
     "ParagraphCollection": {
-      "members": ["items", "getFirst", "getLast"]
+      "members": [
+        "items",
+        "getFirst",
+        "getLast"
+      ]
     },
     "RangeCollection": {
-      "members": ["items", "getFirst"]
+      "members": [
+        "items",
+        "getFirst"
+      ]
     },
     "SearchOptions": {
-      "members": ["ignorePunct", "ignoreSpace", "matchCase", "matchWholeWord", "matchWildcards"]
+      "members": [
+        "ignorePunct",
+        "ignoreSpace",
+        "matchCase",
+        "matchWholeWord",
+        "matchWildcards"
+      ]
     },
     "Font": {
-      "members": ["bold", "italic", "color", "name", "size"]
+      "members": [
+        "bold",
+        "italic",
+        "color",
+        "name",
+        "size"
+      ]
     },
     "ContentControl": {
       "members": [
@@ -100,7 +177,129 @@
       ]
     },
     "ContentControlCollection": {
-      "members": ["items", "getById"]
+      "members": [
+        "items",
+        "getById"
+      ]
+    },
+    "List": {
+      "members": [
+        "id",
+        "paragraphs",
+        "getLevelParagraphs",
+        "insertParagraph"
+      ]
+    },
+    "ListCollection": {
+      "members": [
+        "items",
+        "getById",
+        "getFirst"
+      ]
+    },
+    "ListItem": {
+      "members": [
+        "level"
+      ]
+    },
+    "Bookmark": {
+      "members": [
+        "name",
+        "range",
+        "select"
+      ]
+    },
+    "BookmarkCollection": {
+      "members": [
+        "items"
+      ]
+    },
+    "Section": {
+      "members": [
+        "body",
+        "pageSetup",
+        "getHeader",
+        "getFooter",
+        "getNext"
+      ]
+    },
+    "SectionCollection": {
+      "members": [
+        "items",
+        "getFirst"
+      ]
+    },
+    "PageSetup": {
+      "members": [
+        "pageWidth",
+        "pageHeight",
+        "orientation",
+        "topMargin",
+        "bottomMargin",
+        "leftMargin",
+        "rightMargin"
+      ]
+    },
+    "NoteItem": {
+      "members": [
+        "body",
+        "type",
+        "delete",
+        "getNext"
+      ]
+    },
+    "Comment": {
+      "members": [
+        "authorName",
+        "creationDate",
+        "id",
+        "replies",
+        "resolved",
+        "getRange",
+        "reply"
+      ]
+    },
+    "CommentCollection": {
+      "members": [
+        "items",
+        "getFirst"
+      ]
+    },
+    "CommentReply": {
+      "members": [
+        "authorName",
+        "creationDate",
+        "id"
+      ]
+    },
+    "CommentReplyCollection": {
+      "members": [
+        "items",
+        "getFirst"
+      ]
+    },
+    "Revision": {
+      "members": [
+        "author",
+        "date",
+        "range",
+        "type",
+        "accept",
+        "reject"
+      ]
+    },
+    "RevisionCollection": {
+      "members": [
+        "items",
+        "acceptAll",
+        "rejectAll"
+      ]
+    },
+    "NoteItemCollection": {
+      "members": [
+        "items",
+        "getFirst"
+      ]
     }
   },
   "omissions": [
@@ -167,10 +366,6 @@
     {
       "uid": "Word.Style",
       "reason": "The named-style object model (Word.Style, Word.StyleCollection) is deferred. Word.Body/Range/Paragraph/ContentControl#style (apply a style by name, WordApi 1.1) and Word.ParagraphFormat (formatting values themselves) cover this slice's styling needs without it."
-    },
-    {
-      "uid": "Word.NoteItemCollection",
-      "reason": "Collection wiring (Body#footnotes/endnotes) is deferred; Word.NoteItem itself is the selected symbol for the header/footer-and-note-bodies category in this slice."
     },
     {
       "uid": "Word.ContentControl#checkboxContentControl",
@@ -245,100 +440,99 @@
       "reason": "The formatting VALUES are implemented; the wrapper object around them is not, because in the selected subset nothing owns one. Upstream reaches a ParagraphFormat through Table/TableRow/TableCell/ContentControl#paragraphFormat, and tables are omitted here, while Paragraph declares the same eight values as its own members \u2014 which is the form this implementation backs (Paragraph#alignment, the indents, lineSpacing, spaceBefore/spaceAfter, and style). A selected class no object model member returns would be reachable only by a caller writing the type name, so it is de-selected rather than declared and left unreachable. `widowControl` leaves the subset with it: it is the one value Paragraph does not also declare."
     },
     {
-      "uid": "Word.List",
-      "reason": "Lists are not implemented in this slice. The engine has the numbering ops, but a List object is identified by its w:numId and its members answer numbering-definition state (level paragraphs, level strings) that has to be resolved through numbering.xml and its abstract-numbering indirection. None of that resolution exists outside the layout lane, which the automation lane may not import, so the members would have to fabricate values."
-    },
-    {
-      "uid": "Word.ListCollection",
-      "reason": "Depends on Word.List; de-selected for the same reason. Word.Body#lists goes with it."
-    },
-    {
-      "uid": "Word.ListItem",
-      "reason": "Depends on Word.List; de-selected for the same reason. `listString` in particular is a rendered marker \u2014 the layout lane computes it \u2014 and `siblingIndex` is a position within a numbering sequence, neither of which this lane can answer from the canonical tree alone."
-    },
-    {
-      "uid": "Word.Bookmark",
-      "reason": "Bookmarks are not implemented in this slice. The blocking member is upstream's `start`/`end`: document-wide character offsets, the same coordinate space already de-selected on Word.Range for the same reason, so a conforming Bookmark cannot be published without either publishing that space or shipping a class two of whose selected members are unimplementable."
-    },
-    {
-      "uid": "Word.BookmarkCollection",
-      "reason": "Depends on Word.Bookmark; de-selected for the same reason. Word.Range#bookmarks goes with it."
-    },
-    {
-      "uid": "Word.Section",
-      "reason": "Sections and page setup are not implemented in this slice. `getHeader`/`getFooter` answer a Body for a header or footer story, and this automation protocol addresses one story \u2014 the main document part \u2014 so the handles a story-scoped Body needs do not exist yet. Implementing `body`/`pageSetup`/`getNext` while refusing the two header/footer members would publish a class whose main purpose does not work."
-    },
-    {
-      "uid": "Word.SectionCollection",
-      "reason": "Depends on Word.Section; de-selected for the same reason. Word.Document#sections goes with it."
-    },
-    {
-      "uid": "Word.PageSetup",
-      "reason": "Depends on Word.Section, which owns the only selected member that returns one; de-selected for the same reason. The section-properties writes themselves exist in the engine, so this is the group most likely to be re-selected first."
-    },
-    {
-      "uid": "Word.NoteItem",
-      "reason": "Footnote and endnote bodies are not implemented in this slice, for the same reason as Word.Section#getHeader: `body` answers a Body for a story this automation protocol does not yet address, and `getNext` walks an ordering across that story. A NoteItem whose `body` could not be read would be a name with nothing behind it."
-    },
-    {
-      "uid": "Word.Comment",
-      "reason": "Comments are not implemented in this slice. The canonical comment reader (`commentsOfPart`, `commentAnchorsOfStory`) lives in the layout lane, which the automation lane may not import; duplicating it here would create a second reader that can disagree with the one the review rail uses about which comments a document has. Moving it into the store lane is the honest fix and is larger than this slice."
-    },
-    {
-      "uid": "Word.CommentCollection",
-      "reason": "Depends on Word.Comment; de-selected for the same reason. Word.Document#comments and Word.Body#getComments go with it."
-    },
-    {
-      "uid": "Word.CommentReply",
-      "reason": "Depends on Word.Comment; de-selected for the same reason."
-    },
-    {
-      "uid": "Word.CommentReplyCollection",
-      "reason": "Depends on Word.CommentReply; de-selected for the same reason."
-    },
-    {
-      "uid": "Word.Revision",
-      "reason": "Tracked changes are not implemented in this slice. The revision sites are a store-lane primitive, but `accept`/`reject` are the members that make the object worth having, and resolving an insertion or a deletion means rewriting the tree that carries it \u2014 which is exactly the structural revision resolution the brief says not to claim while it is incomplete. Reads alone would publish a class whose two verbs refuse."
-    },
-    {
-      "uid": "Word.RevisionCollection",
-      "reason": "Depends on Word.Revision; de-selected for the same reason, and `acceptAll`/`rejectAll` are the same unimplemented resolution applied to every site at once."
-    },
-    {
       "uid": "Word.Font#highlightColor",
       "reason": "De-selected because it cannot be answered honestly at this engine's property boundary. Upstream's type is a `#RRGGBB` string, and Word writes an arbitrary highlight as run shading (`w:shd`); the property this engine authors is `w:highlight`, whose value is one of a fixed set of NAMES (`yellow`, `cyan`, ...). So a selected `highlightColor` would either accept a hex value and drop it, or answer a name where a caller's own code expects a hex string. The other five Font members are implemented."
     },
     {
-      "uid": "Word.Body#lists",
-      "reason": "Answers a Word.ListCollection; de-selected with it."
+      "uid": "Word.ListItem#listString",
+      "reason": "The marker a reader SEES ('1.', 'a)', a bullet glyph) rather than anything the file states: the layout engine computes it while painting, from numbering.xml's abstract-numbering indirection and a running counter per level. Answering it from the automation lane would mean a second implementation of that counter, free to disagree with the one on the page \u2014 and a list marker that disagrees with the page is worse than no list marker. Word.List#getLevelString is omitted for the same reason (and for its ClientResult return)."
     },
     {
-      "uid": "Word.Body#getComments",
-      "reason": "Answers a Word.CommentCollection; de-selected with it."
+      "uid": "Word.ListItem#siblingIndex",
+      "reason": "A position within a numbering sequence, which is the same counter as listString and is de-selected for the same reason. A caller who needs the position of a paragraph among a list's items can index Word.List#getLevelParagraphs, which is a question about the file rather than about the paint."
     },
     {
-      "uid": "Word.Range#bookmarks",
-      "reason": "Answers a Word.BookmarkCollection; de-selected with it."
+      "uid": "Word.Bookmark#start",
+      "reason": "A document-wide character offset \u2014 the coordinate space already de-selected on Word.Range#start for the same reason: DocxEditor addresses every position as a paragraph identity plus a UTF-16 offset in that paragraph, and maintains no document-wide counter. Word.Bookmark#range answers the same question in the vocabulary this engine validates."
     },
     {
-      "uid": "Word.Range#hyperlink",
-      "reason": "Hyperlinks are not implemented in this slice. Reading is straightforward, but setting one means minting an external relationship in the package, and the only sanctioned path for that (`ensureHyperlinkRelationship`, a package write beside the tree transaction) is not something this protocol's operations reach \u2014 adding it is a port-level change across both hosts. A get-only `hyperlink` on a read/write member would be a worse contract than none, and the security requirement (`sanitizeHref` on every caller-provided target) belongs with the write."
+      "uid": "Word.Bookmark#end",
+      "reason": "See Word.Bookmark#start."
     },
     {
-      "uid": "Word.Paragraph#list",
-      "reason": "Answers a Word.List; de-selected with it."
+      "uid": "Word.Bookmark#delete",
+      "reason": "Removing a bookmark means deleting its marker PAIR (w:bookmarkStart plus the w:bookmarkEnd carrying the same w:id) as one transaction, and the canonical op vocabulary has no operation that removes a bookmark marker. Authoring one is store-lane work; a delete() that removed one half would leave the document with an unclosed bookmark, which Word treats as running to the end of the story."
     },
     {
-      "uid": "Word.Paragraph#listItem",
-      "reason": "Answers a Word.ListItem; de-selected with it."
+      "uid": "Word.Comment#authorEmail",
+      "reason": "An address is not in comments.xml \u2014 Word keeps it in word/people.xml, keyed by author name, and this subset does not read that part. The canonical comment record therefore has no email to answer, and a name-derived guess would be a fabricated identity attached to a real person's comment."
     },
     {
-      "uid": "Word.Document#comments",
-      "reason": "Answers a Word.CommentCollection; de-selected with it."
+      "uid": "Word.Comment#content",
+      "reason": "Assignable upstream: writing it REPLACES a comment's body. A comment's body is a story of its own in comments.xml, and this subset transacts one story per batch \u2014 the story the comment is anchored in \u2014 so replacing the body is a write the canonical path does not yet express. Reading a body stays available as DocxEditor's own read-only Comment#text (recorded below), so a script that reports on comments is unaffected; only rewriting somebody else's comment is."
     },
     {
-      "uid": "Word.Document#sections",
-      "reason": "Answers a Word.SectionCollection; de-selected with it."
+      "uid": "Word.Comment#delete",
+      "reason": "Deleting a comment means removing its entry from comments.xml, its w15:commentEx entry, and the w:commentRangeStart/End plus w:commentReference in the story \u2014 as one transaction. `addComment` exists in the store lane and its inverse does not, so this would be a partial delete or a second write path. Resolving a thread (Word.Comment#resolved, implemented) is the operation that hides it from a reviewer without losing what was said."
+    },
+    {
+      "uid": "Word.CommentReply#content",
+      "reason": "See Word.Comment#content."
+    },
+    {
+      "uid": "Word.CommentReply#delete",
+      "reason": "See Word.Comment#delete."
+    },
+    {
+      "uid": "Word.CommentReply#authorEmail",
+      "reason": "See Word.Comment#authorEmail."
+    },
+    {
+      "uid": "Word.Comment#text",
+      "reason": "Implemented by DocxEditor's object model as a read-only way to reach a comment's body \u2014 the half of Word.Comment#content that IS backed \u2014 but not selected for exact conformance, because upstream has no such member and adding one to the reference is impossible. Recorded so the extra member is a decision rather than drift."
+    },
+    {
+      "uid": "Word.CommentReply#text",
+      "reason": "See Word.Comment#text."
+    },
+    {
+      "uid": "Word.Body#revisions",
+      "reason": "See Word.Document#revisions."
+    },
+    {
+      "uid": "Word.Body#footnotes",
+      "reason": "Upstream hangs a story's notes off the story. A footnote is not IN a story \u2014 it is a part of the package (word/footnotes.xml) that a story REFERENCES, and only the main story may reference one (Word refuses a note in a header, a footer or another note). So this subset answers the notes on the document, where the statement is true, as DocxEditor's own Document#footnotes/#endnotes; the NoteItem and NoteItemCollection they answer are both selected and measured. Selecting Body#footnotes would mean answering the document's notes for a header body, which is a false answer to a question a caller is entitled to ask."
+    },
+    {
+      "uid": "Word.Body#endnotes",
+      "reason": "See Word.Body#footnotes."
+    },
+    {
+      "uid": "Word.Document#footnotes",
+      "reason": "Implemented by DocxEditor's object model as the reachable accessor for the selected NoteItem/NoteItemCollection (see Word.Body#footnotes for why it is on the document), but not itself selected for exact conformance: upstream declares the member on Body, not on Document, so there is no reference shape to measure this one against. Recorded so the extra member is a decision rather than drift."
+    },
+    {
+      "uid": "Word.Document#endnotes",
+      "reason": "See Word.Document#footnotes."
+    },
+    {
+      "uid": "Word.Body#revisions",
+      "reason": "Implemented by DocxEditor's object model \u2014 a header or a footnote can carry tracked changes of its own, and a review pass over one story is the natural way to reach them \u2014 but not selected for exact conformance: upstream declares revisions on Document (selected here), not on Body, so there is no reference shape for the story-scoped accessor. Recorded so the extra member is a decision rather than drift."
     }
-  ]
+  ],
+  "divergences": [
+    {
+      "uid": "Word.Revision#type",
+      "note": "The type union is declared in full and seven of its members occur: Insert, Delete, Replace, Property, ParagraphProperty, MovedFrom and MovedTo. A change to a table row, a cell, the grid or a section's properties is STRUCTURAL, and the canonical accept/reject ops refuse it \u2014 so reporting it would list a change with an accept() and a reject() that both fail. Such revisions are therefore not reported at all rather than reported and un-actionable; the document's own markup is untouched either way, and a save round-trips it."
+    },
+    {
+      "uid": "Word.List#insertParagraph",
+      "note": "All four locations are accepted, and Before/After land INSIDE the list at its first and last position \u2014 the same places Start and End name. A list is a set of paragraphs sharing a w:numId rather than a contiguous region of the story, so 'before the list' is a position in the story, not in the list, and Word.Paragraph#insertParagraph is the member that addresses it. A refusal on two of the four locations would fail scripts written against the shape; a silent unnumbered insert outside the list would answer a paragraph the list does not contain."
+    },
+    {
+      "uid": "Word.Section#getHeader / #getFooter",
+      "note": "A section that declares no header of its own INHERITS the previous section's, which is what Word paints, and this is what these members answer. Upstream's own behaviour additionally MINTS an empty header part when none exists anywhere; this subset refuses instead (ItemNotFound), because a read that adds a part to the package is a write, and a getter that writes cannot be batched with reads under one transaction. Shape conformance is unaffected; the divergence is behavioural and recorded here."
+    }
+  ],
+  "$divergencesComment": "Members that ARE selected and DO conform in shape, but whose behaviour differs from upstream in a way a caller can observe. Kept apart from \"omissions\" on purpose: an omission is a member this subset does not publish, and one of these is a member it publishes and answers differently. Nothing in the tooling reads this list; it is the record that each difference was decided."
 }

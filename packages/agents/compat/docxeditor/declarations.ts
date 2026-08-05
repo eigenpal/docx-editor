@@ -21,11 +21,11 @@
  * de-selected from `compat/manifest.json` with a specific reason and removed
  * from here, rather than declared and left to fail. That is why the formatting
  * values appear on `Paragraph` but there is no `ParagraphFormat`, why `Font`
- * declares five members and not `highlightColor`, and why lists, bookmarks,
- * hyperlinks, sections, page setup, note bodies, comments and revisions are
- * absent. `ContentControl` is the one exception, and a scheduled one: the plan
- * completes it as its own step, and its members are declared here from that
- * contract freeze.
+ * declares five members and not `highlightColor`, why `Bookmark` declares
+ * `name`/`range`/`select` and not the document-wide `start`/`end` offsets, and
+ * why a `Comment`'s body is readable and not assignable. `ContentControl` is
+ * the one exception, and a scheduled one: the plan completes it as its own
+ * step, and its members are declared here from that contract freeze.
  *
  * A NULL A DECLARATION CANNOT SAY. `Font#bold`, `Paragraph#alignment` and
  * `#style` are declared with upstream's own non-nullable types, and the runtime
@@ -64,6 +64,15 @@
 export declare namespace DocxEditor {
   export type SelectionMode = 'Select' | 'Start' | 'End';
 
+  /**
+   * Which header or footer of a section.
+   *
+   * A named type for the same reason `SelectionMode` is one: upstream offers the position as two
+   * overloads, one keyed on an enum type and one on the equivalent string-literal union, so a
+   * same-named type has to exist for the enum-typed overload to type-check at all.
+   */
+  export type HeaderFooterType = 'Primary' | 'FirstPage' | 'EvenPages';
+
   /** Base request-context handle; see the file header for why only `sync` is declared here. */
   export class ClientRequestContext {
     sync(): Promise<void>;
@@ -84,17 +93,22 @@ export declare namespace DocxEditor {
 
   export class Document {
     readonly body: Body;
+    readonly comments: CommentCollection;
     readonly contentControls: ContentControlCollection;
     readonly paragraphs: ParagraphCollection;
+    readonly revisions: RevisionCollection;
+    readonly sections: SectionCollection;
   }
 
   export class Body {
     readonly contentControls: ContentControlCollection;
     readonly font: Font;
+    readonly lists: ListCollection;
     readonly paragraphs: ParagraphCollection;
     style: string;
     readonly text: string;
     clear(): void;
+    getComments(): CommentCollection;
     insertParagraph(paragraphText: string, insertLocation: 'Start' | 'End'): Paragraph;
     insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range;
     search(searchText: string, searchOptions?: SearchOptions): RangeCollection;
@@ -107,8 +121,10 @@ export declare namespace DocxEditor {
   // would make this file a roadmap rather than an inventory. The recorded reasons are the
   // `Word.Range#start` / `Word.Range#end` entries in `compat/manifest.json`'s omissions.
   export class Range {
+    readonly bookmarks: BookmarkCollection;
     readonly contentControls: ContentControlCollection;
     readonly font: Font;
+    hyperlink: string;
     readonly paragraphs: ParagraphCollection;
     style: string;
     readonly text: string;
@@ -129,6 +145,8 @@ export declare namespace DocxEditor {
     readonly font: Font;
     leftIndent: number;
     lineSpacing: number;
+    readonly list: List;
+    readonly listItem: ListItem;
     rightIndent: number;
     spaceAfter: number;
     spaceBefore: number;
@@ -174,6 +192,171 @@ export declare namespace DocxEditor {
     italic: boolean;
     name: string;
     size: number;
+  }
+
+  // ---------------------------------------------------------------------
+  // listsAndNumbering
+  // ---------------------------------------------------------------------
+
+  // `Before`/`After` insert at the list's own first and last position, the same places `Start` and
+  // `End` name: a list is a set of paragraphs rather than a region of the story, so a position
+  // outside it is a position in the story, which `Paragraph#insertParagraph` addresses. The
+  // divergence is recorded in `compat/manifest.json`.
+  export class List {
+    readonly id: number;
+    readonly paragraphs: ParagraphCollection;
+    getLevelParagraphs(level: number): ParagraphCollection;
+    insertParagraph(
+      paragraphText: string,
+      insertLocation: 'Start' | 'End' | 'Before' | 'After'
+    ): Paragraph;
+  }
+
+  export class ListCollection {
+    readonly items: List[];
+    getById(id: number): List;
+    getFirst(): List;
+  }
+
+  // `listString` and `siblingIndex` are deliberately ABSENT: both are the marker a page shows, which
+  // the layout engine computes from numbering.xml as it paints. See `compat/manifest.json`.
+  export class ListItem {
+    level: number;
+  }
+
+  // ---------------------------------------------------------------------
+  // bookmarks
+  // ---------------------------------------------------------------------
+
+  // `start`, `end` and `delete` are deliberately ABSENT: the first two are the document-wide
+  // character offsets already de-selected on `Range`, and nothing in the engine removes a bookmark's
+  // marker pair. See `compat/manifest.json`.
+  export class Bookmark {
+    readonly name: string;
+    readonly range: Range;
+    select(): void;
+  }
+
+  export class BookmarkCollection {
+    readonly items: Bookmark[];
+  }
+
+  // ---------------------------------------------------------------------
+  // sectionsAndStories
+  // ---------------------------------------------------------------------
+
+  export class Section {
+    readonly body: Body;
+    readonly pageSetup: PageSetup;
+    getFooter(type: HeaderFooterType): Body;
+    getFooter(type: 'Primary' | 'FirstPage' | 'EvenPages'): Body;
+    getHeader(type: HeaderFooterType): Body;
+    getHeader(type: 'Primary' | 'FirstPage' | 'EvenPages'): Body;
+    getNext(): Section;
+  }
+
+  export class SectionCollection {
+    readonly items: Section[];
+    getFirst(): Section;
+  }
+
+  export class PageSetup {
+    bottomMargin: number;
+    leftMargin: number;
+    orientation: 'Portrait' | 'Landscape';
+    pageHeight: number;
+    pageWidth: number;
+    rightMargin: number;
+    topMargin: number;
+  }
+
+  export class NoteItem {
+    readonly body: Body;
+    readonly type: 'Footnote' | 'Endnote';
+    delete(): void;
+    getNext(): NoteItem;
+  }
+
+  // Upstream reaches this from `Body#footnotes`/`#endnotes`; here it hangs off the document, because
+  // a note is a part of the package that only the main story may reference. See
+  // `compat/manifest.json`.
+  export class NoteItemCollection {
+    readonly items: NoteItem[];
+    getFirst(): NoteItem;
+  }
+
+  // ---------------------------------------------------------------------
+  // commentsAndRevisions
+  // ---------------------------------------------------------------------
+
+  // `authorEmail`, `content` and `delete` are deliberately ABSENT: an author's address is in
+  // people.xml, which this subset does not read; a comment's body is assignable upstream and nothing
+  // here rewrites one; and nothing removes a comment's anchor. `text` is DocxEditor's own read-only
+  // way to reach the body, recorded as unmeasured. See `compat/manifest.json`.
+  export class Comment {
+    readonly authorName: string;
+    readonly creationDate: Date;
+    readonly id: string;
+    readonly replies: CommentReplyCollection;
+    resolved: boolean;
+    getRange(): Range;
+    reply(replyText: string): CommentReply;
+  }
+
+  export class CommentCollection {
+    readonly items: Comment[];
+    getFirst(): Comment;
+  }
+
+  export class CommentReply {
+    readonly authorName: string;
+    readonly creationDate: Date;
+    readonly id: string;
+  }
+
+  export class CommentReplyCollection {
+    readonly items: CommentReply[];
+    getFirst(): CommentReply;
+  }
+
+  // The whole upstream vocabulary is declared, and seven of its members occur: a change to a row, a
+  // cell or a section is structural, and this subset reports only changes it can also accept or
+  // reject. See `compat/manifest.json`.
+  export class Revision {
+    readonly author: string;
+    readonly date: Date;
+    readonly range: Range;
+    readonly type:
+      | 'None'
+      | 'Insert'
+      | 'Delete'
+      | 'Property'
+      | 'ParagraphNumber'
+      | 'DisplayField'
+      | 'Reconcile'
+      | 'Conflict'
+      | 'Style'
+      | 'Replace'
+      | 'ParagraphProperty'
+      | 'TableProperty'
+      | 'SectionProperty'
+      | 'StyleDefinition'
+      | 'MovedFrom'
+      | 'MovedTo'
+      | 'CellInsertion'
+      | 'CellDeletion'
+      | 'CellMerge'
+      | 'CellSplit'
+      | 'ConflictInsert'
+      | 'ConflictDelete';
+    accept(): void;
+    reject(): void;
+  }
+
+  export class RevisionCollection {
+    readonly items: Revision[];
+    acceptAll(): void;
+    rejectAll(): void;
   }
 
   // ---------------------------------------------------------------------
