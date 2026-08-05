@@ -1,5 +1,12 @@
 # @docx-editor.dev/core
 
+## 2.0.1
+
+### Patch Changes
+
+- 51f14f5: Add the `repository` field to the core package manifest so npm can verify its provenance statement on publish.
+  - @docx-editor.dev/i18n@2.0.1
+
 ## 2.0.0
 
 ### Major Changes
