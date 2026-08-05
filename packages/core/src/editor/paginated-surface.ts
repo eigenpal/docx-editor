@@ -1677,6 +1677,10 @@ export function mountPaginatedSurface(
   let materializedSet: ReadonlySet<number> | undefined;
   /** Sizing the last paint used, so scroll can re-centre when the visible width band moves. */
   let materializedExtent: SurfaceExtent | undefined;
+  /** Last body page occupied by the focused collapsed caret. */
+  let lastCaretPageIndex: number | null = null;
+  /** An edit may move the caret within the same page without going through `setSelection`. */
+  let caretFollowPending = false;
   /**
    * The scroller whose SIZE is being watched, and the observer watching it.
    *
@@ -1757,6 +1761,8 @@ export function mountPaginatedSurface(
     // re-resolves its target here rather than trusting what existed at mount.
     watchScrollerSize();
     selectionSync.mirrorToDom();
+    followCaretIntoView(caretFollowPending);
+    caretFollowPending = false;
     // A scroll reports nothing — nothing about the document or the selection moved. Taking up
     // a pending gesture DID move the selection, so that pass has to report after all.
     if (notifyChange || adopted) options.onChange?.(currentState());
@@ -1781,6 +1787,59 @@ export function mountPaginatedSurface(
       return;
     }
     render(false);
+  }
+
+  /**
+   * Keep the focused body caret inside the viewport without snapping an already-visible line.
+   *
+   * Geometry comes from layout because the destination page may still be virtualized. A
+   * plain scroll repaint must not pull the reader back to an unchanged caret, so an ordinary
+   * render follows only when layout moved the caret to another page; selection/edit paths can
+   * force the same nearest-edge check for movement within one page.
+   */
+  function followCaretIntoView(force = false): void {
+    if (hfScope?.getActive() || noteOps?.activeNoteScope()) return;
+    if (
+      selection.anchor.paragraphId !== selection.head.paragraphId ||
+      selection.anchor.offset !== selection.head.offset
+    ) {
+      return;
+    }
+    const active = document.activeElement;
+    if (active !== pagesLayer && (!active || !pagesLayer.contains(active))) return;
+
+    const geometry = caretAt(currentLayout, selection.head, { measurer });
+    if (!geometry) return;
+    const changedPage = lastCaretPageIndex !== null && lastCaretPageIndex !== geometry.pageIndex;
+    lastCaretPageIndex = geometry.pageIndex;
+    if (!force && !changedPage) return;
+
+    const page = currentLayout.pages[geometry.pageIndex];
+    const scroller = surfaceScroller(container);
+    if (!page || !scroller || scroller.clientHeight <= 0) return;
+
+    const padding = 24;
+    const contentTop = page.contentBox.y - page.box.y;
+    const top = (page.box.y + contentTop + geometry.y) * scale + container.offsetTop;
+    const bottom = top + geometry.height * scale;
+    const viewportTop = scroller.scrollTop;
+    const viewportBottom = viewportTop + scroller.clientHeight;
+    let target = viewportTop;
+    if (top < viewportTop + padding) {
+      target = top - padding;
+    } else if (bottom > viewportBottom - padding) {
+      target = bottom + padding - scroller.clientHeight;
+    } else {
+      return;
+    }
+
+    const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    const next = Math.max(0, Math.min(target, maxScroll));
+    if (Math.abs(next - scroller.scrollTop) < 0.5) return;
+    scroller.scrollTop = next;
+    // The destination may have been only a shell. Build it in the next frame rather than
+    // recursively repainting from inside the paint that detected the movement.
+    scheduleRematerialize();
   }
 
   let editingMode: SurfaceEditingMode = options.editingMode ?? 'edit';
@@ -1964,6 +2023,7 @@ export function mountPaginatedSurface(
       if (next) {
         selection = next;
         desiredX = null;
+        caretFollowPending = true;
       }
       // Re-anchor AFTER the post-edit caret is installed, so the armed format follows the
       // edit (Backspace moves it one left, Enter moves it into the new paragraph). Only a
@@ -2037,6 +2097,7 @@ export function mountPaginatedSurface(
     // `undo` on an empty history left it up and disarmed the NEXT repaint, whenever it came.
     selectionSync.noteSelectionSettled();
     selectionSync.mirrorToDom();
+    followCaretIntoView(true);
     renderOverlay();
     // A dismissal is dismissed for where the caret WAS; any move re-asks the question, which
     // is how the reader reopens an item — by clicking back into its text.
@@ -2075,6 +2136,7 @@ export function mountPaginatedSurface(
       releaseRetainedIfEscaped(next);
       selection = next;
       desiredX = null;
+      caretFollowPending = true;
     },
     commit: (run) => commit(run),
     render: () => render(),

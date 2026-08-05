@@ -64,3 +64,53 @@ describe('bookmark navigation', () => {
     scroller.remove();
   });
 });
+
+describe('caret following', () => {
+  test('scrolls the nearest edge into view when a collapsed caret changes page', () => {
+    const filler = Array.from({ length: 120 }, (_, index) =>
+      paragraph(`paragraph ${index} ${'word '.repeat(20)}`)
+    ).join('');
+    const { surface, scroller } = mount(filler);
+    surface.focus();
+
+    const targetId = surface.session.paragraphIds().find((paragraphId) => {
+      const caret = caretAt(surface.layout(), { paragraphId, offset: 0 });
+      return caret !== null && caret.pageIndex > 0;
+    });
+    expect(targetId).toBeDefined();
+
+    surface.setSelection({
+      anchor: { paragraphId: targetId!, offset: 0 },
+      head: { paragraphId: targetId!, offset: 0 },
+    });
+
+    const caret = caretAt(surface.layout(), { paragraphId: targetId!, offset: 0 })!;
+    const page = surface.layout().pages[caret.pageIndex]!;
+    const sheetY = page.box.y + (page.contentBox.y - page.box.y) + caret.y;
+    expect(scroller.scrollTop).toBeCloseTo(
+      Math.max(0, sheetY + caret.height + 24 - scroller.clientHeight),
+      5
+    );
+
+    surface.destroy();
+    scroller.remove();
+  });
+
+  test('does not follow a range selection', () => {
+    const filler = Array.from({ length: 120 }, (_, index) =>
+      paragraph(`paragraph ${index} ${'word '.repeat(20)}`)
+    ).join('');
+    const { surface, scroller } = mount(filler);
+    surface.focus();
+    const ids = surface.session.paragraphIds();
+
+    surface.setSelection({
+      anchor: { paragraphId: ids[0]!, offset: 0 },
+      head: { paragraphId: ids[ids.length - 1]!, offset: 0 },
+    });
+
+    expect(scroller.scrollTop).toBe(0);
+    surface.destroy();
+    scroller.remove();
+  });
+});
