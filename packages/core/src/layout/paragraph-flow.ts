@@ -149,9 +149,13 @@ export interface ParagraphFlowOptions {
   /**
    * The theme's Latin typefaces, resolving `w:rFonts` theme references.
    *
-   * A different theme measures every `+Body`/`+Headings` run in a different face, so this
-   * belongs in the caller's cache key — `StyleCascadeTable.cacheToken`, which carries it,
-   * is already there.
+   * A different theme measures every `+Body`/`+Headings` run in a different face, so it
+   * belongs in the caller's cache key. The BODY lane has that: `semantic-layout` folds
+   * `StyleCascadeTable.cacheToken` into its producer. The header/footer and note lanes pass
+   * the raw surface producer instead, so their keys carry the cascaded `w:rFonts` property
+   * but not the theme it resolves through. That is safe only because the theme is memoized
+   * per session and every reload rebuilds the surface with a fresh cache — a live retheme
+   * would need `cacheToken` folded into those producers too.
    */
   readonly themeFonts?: ThemeFonts;
 }
@@ -521,8 +525,11 @@ export function alignSpans(
   const last = spans[spans.length - 1]!;
   const visible = last.text.replace(/\s+$/, '');
   // `box.width` was reserved from the DRAWN text, so the visible part has to be measured the
-  // same way or a `w:caps` run reports trailing whitespace it does not have and shifts the
-  // whole centred/right-aligned line.
+  // same way: the difference is what the trailing whitespace measures, and mixing a drawn
+  // total with a source-measured visible part reports nearly the whole span as whitespace.
+  // Centre and right pass `lineUsedWidth` and never read this; the path that does is a
+  // JUSTIFIED non-last line, where an over-reported `trailing` inflates `slack` and
+  // over-stretches the line.
   const trailing =
     visible === last.text ? 0 : last.box.width - measureDisplayText(visible, last.style, measurer);
   const used = lineUsedWidth ?? last.box.x - indentLeft + last.box.width - trailing;

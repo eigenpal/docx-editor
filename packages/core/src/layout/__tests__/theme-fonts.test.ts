@@ -14,7 +14,8 @@ import {
 } from '@docx-editor.dev/core-contract/store';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
-import { paragraphFragmentsOf } from '../semantic-records.ts';
+import { layoutHeaderFooterStory } from '../hf-layout.ts';
+import { paragraphFragmentsOf, type BlockFragmentRecord } from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -68,6 +69,29 @@ describe('a themed document lays out in its theme fonts', () => {
   test('without a theme every run falls through to the surface default', () => {
     // The regression this guards: the document renders, and renders entirely wrong.
     expect(familiesOf({ major: null, minor: null })).toEqual([null, null]);
+  });
+
+  test('a header resolves the same theme the body does', () => {
+    // Headers and footers do not go through the body block pass — they reach the shared
+    // cell-paragraph path instead. A refactor that stopped handing them the style cascade
+    // would put the page furniture on a different face from the body with every other test
+    // in this file still green.
+    const header = part(
+      '/word/header1.xml',
+      `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>Letterhead</w:t></w:r></w:p></w:hdr>`
+    );
+    const story = layoutHeaderFooterStory(
+      header,
+      468,
+      createFixedMeasurer(6, 14),
+      'test',
+      undefined,
+      buildStyleCascadeTable(STYLES, THEME)
+    );
+    const families = story.fragments
+      .filter((block: BlockFragmentRecord) => block.kind === 'paragraph')
+      .map((block) => block.lines[0]?.spans[0]?.style.fontFamily ?? null);
+    expect(families).toEqual(['Grandview']);
   });
 
   test('retheming changes the cascade token, so cached breaks are not reused', () => {
