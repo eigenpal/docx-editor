@@ -462,6 +462,32 @@ describe('paintSemanticLayout drawing integration', () => {
       container.querySelector('.docx-drawing-ready, .docx-drawing-placeholder')
     ).not.toBeNull();
   });
+
+  test('a repaint reuses the same <img> element, so the decode survives a keystroke', () => {
+    const part = load(inlinePictureXml());
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+      inlineDrawingLayout: {
+        ownerPartName: OWNER,
+        project: (node) =>
+          projectDrawing(node, {
+            ownerPartName: OWNER,
+            limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
+          }),
+        resourceOf: () => READY_PNG,
+      },
+    });
+    const { port } = fakeUrlPort();
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, { scale: 1, imageUrlPort: port, ariaHidden: false });
+    const first = container.querySelector('img.docx-drawing-image');
+    expect(first).not.toBeNull();
+    const firstSrc = first!.getAttribute('src');
+    paintSemanticLayout(container, layout, { scale: 1, imageUrlPort: port, ariaHidden: false });
+    const second = container.querySelector('img.docx-drawing-image');
+    expect(second).toBe(first as never);
+    expect(second!.getAttribute('src')).toBe(firstSrc as never);
+  });
 });
 
 describe('URL port lifecycle', () => {

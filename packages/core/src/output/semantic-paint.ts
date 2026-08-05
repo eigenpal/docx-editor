@@ -151,6 +151,8 @@ type DrawingUrlRegistry = ReturnType<typeof drawingUrlRegistryFor>;
 type DrawingPaintHostContext = PaintContext & {
   readonly drawingStrings?: DrawingPaintStrings;
   readonly urlRegistry?: DrawingUrlRegistry | null;
+  /** Per-page discriminator for drawing element reuse (see DrawingPaintContext). */
+  readonly paintInstance?: string;
 };
 
 interface ResolvedPaintContext extends DrawingPaintHostContext {
@@ -172,6 +174,7 @@ function resolvedDrawingPaint(ctx: ResolvedPaintContext): DrawingPaintContext {
     strings: ctx.drawingStrings,
     ...(ctx.imageUrlPort ? { imageUrlPort: ctx.imageUrlPort } : {}),
     ...(ctx.inertLinks ? { inertLinks: true } : {}),
+    ...(ctx.paintInstance ? { paintInstance: ctx.paintInstance } : {}),
   });
 }
 
@@ -1451,7 +1454,7 @@ function paintTableFragment(
 function paintPage(
   document: Document,
   page: PageRecord,
-  options: ResolvedPaintContext & {
+  baseOptions: ResolvedPaintContext & {
     readonly ariaHidden: boolean;
     readonly activeHeaderFooterRId?: string;
     readonly activeHeaderFooterPageIndex?: number;
@@ -1459,6 +1462,10 @@ function paintPage(
   },
   materialize: boolean
 ): HTMLElement {
+  // Every drawing painted below carries this page's instance key, so a repaint of the
+  // page reuses its own already-decoded <img> elements (no per-keystroke flash) without
+  // ever stealing a repeated header image from a sibling page.
+  const options = { ...baseOptions, paintInstance: `p${page.index}` };
   const element = positioned(document, 'div', page.box, options.scale);
   // Deliberately NOT `layout-page`: that class carries the legacy lane's whole-frame
   // inversion, which would flip the paper itself. The sheet keeps the canvas colour its

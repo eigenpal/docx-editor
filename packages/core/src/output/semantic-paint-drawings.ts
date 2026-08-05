@@ -43,6 +43,13 @@ export interface DrawingPaintContext {
   readonly strings: DrawingPaintStrings;
   readonly imageUrlPort?: PaintImageUrlPort;
   readonly inertLinks?: boolean;
+  /**
+   * Discriminates repeated paints of the SAME drawing (a header image appears once per
+   * page). Combined with the drawing id it keys `<img>` element reuse across repaints,
+   * so a keystroke moves the already-decoded element instead of recreating it — a fresh
+   * element re-decodes asynchronously and flashes blank for a frame.
+   */
+  readonly paintInstance?: string;
 }
 
 const MIME_FORMAT_LABEL: Readonly<Record<string, string>> = Object.freeze({
@@ -58,11 +65,20 @@ interface UrlRegistry {
     handle: ValidatedImageBytesHandle,
     mime: SupportedImageMime
   ) => string | null;
+  /** Stable `<img>` per (paint instance, drawing, resource) — reuse keeps the decode. */
+  readonly imageFor?: (
+    elementKey: string,
+    resourceKey: string,
+    document: Document
+  ) => HTMLImageElement;
   readonly reconcile: (usedKeys: ReadonlySet<string>) => void;
   readonly revokeAll: () => void;
 }
 
 const urlRegistries = new WeakMap<object, UrlRegistry>();
+
+/** Cached-element ceiling per registry — beyond it paint falls back to fresh elements. */
+const MAX_CACHED_DRAWING_IMAGES = 256;
 
 export function drawingUrlRegistryFor(
   container: HTMLElement,
@@ -71,6 +87,10 @@ export function drawingUrlRegistryFor(
   let registry = urlRegistries.get(container);
   if (registry) return registry;
   const urlsByKey = new Map<string, string>();
+  const imagesByElementKey = new Map<
+    string,
+    { readonly element: HTMLImageElement; readonly resourceKey: string }
+  >();
   registry = Object.freeze({
     urlForReady(handle: ValidatedImageBytesHandle, mime: SupportedImageMime): string | null {
       const existing = urlsByKey.get(handle.resourceKey);
@@ -79,16 +99,32 @@ export function drawingUrlRegistryFor(
       urlsByKey.set(handle.resourceKey, url);
       return url;
     },
+    imageFor(elementKey: string, resourceKey: string, document: Document): HTMLImageElement {
+      const cached = imagesByElementKey.get(elementKey);
+      if (cached && cached.resourceKey === resourceKey) return cached.element;
+      const element = document.createElement('img');
+      if (imagesByElementKey.size < MAX_CACHED_DRAWING_IMAGES) {
+        imagesByElementKey.set(elementKey, { element, resourceKey });
+      }
+      return element;
+    },
     reconcile(usedKeys: ReadonlySet<string>): void {
       for (const [key, url] of urlsByKey) {
         if (usedKeys.has(key)) continue;
         port.revoke(url);
         urlsByKey.delete(key);
       }
+      for (const [key, entry] of imagesByElementKey) {
+        if (usedKeys.has(entry.resourceKey)) continue;
+        entry.element.removeAttribute('src');
+        imagesByElementKey.delete(key);
+      }
     },
     revokeAll(): void {
       for (const url of urlsByKey.values()) port.revoke(url);
       urlsByKey.clear();
+      for (const entry of imagesByElementKey.values()) entry.element.removeAttribute('src');
+      imagesByElementKey.clear();
     },
   });
   urlRegistries.set(container, registry);
@@ -276,6 +312,7 @@ function paintReadyImage(
   drawing: InlineDrawingRecord | AnchoredDrawingRecord,
   ctx: DrawingPaintContext,
   url: string,
+  urlRegistry: UrlRegistry | null,
   origin?: LayoutBox
 ): HTMLElement {
   const resource = drawing.resource;
@@ -323,11 +360,17 @@ function paintReadyImage(
   cropViewport.style.height = '100%';
   cropViewport.style.overflow = 'hidden';
 
-  const img = document.createElement('img');
+  const img =
+    urlRegistry?.imageFor?.(
+      `${ctx.paintInstance ?? ''}|${drawing.drawingNodeId}`,
+      resource.resourceKey,
+      document
+    ) ?? document.createElement('img');
   img.className = 'docx-drawing-image';
   img.setAttribute('draggable', 'false');
   // SAFE: `src` is a host-minted object URL from PaintImageUrlPort, never file-derived.
-  img.setAttribute('src', url);
+  // Re-assigning an identical src still restarts the load and blanks a frame — skip it.
+  if (img.getAttribute('src') !== url) img.setAttribute('src', url);
   img.setAttribute('alt', '');
 
   const cropStyles = cropImageStyles(drawing, resource);
@@ -447,7 +490,7 @@ export function paintDrawingRecord(
     }
     const url = urlRegistry.urlForReady(resource.validatedHandle, resource.mime);
     if (!url) return paintPlaceholderCard(document, drawing, ctx, origin);
-    return paintReadyImage(document, drawing, ctx, url, origin);
+    return paintReadyImage(document, drawing, ctx, url, urlRegistry, origin);
   }
 
   if (resource.kind === 'pending') {
