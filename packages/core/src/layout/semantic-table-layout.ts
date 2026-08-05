@@ -148,7 +148,9 @@ export const MAX_TABLE_ROW_FRAGMENTS = 4096;
 const MIN_CELL_BOX_PT = 1;
 
 export type TablePaginationErrorCode =
-  'table-row-overheight' | 'table-row-split-unsupported' | 'table-row-fragment-limit';
+  | 'table-row-overheight'
+  | 'table-row-split-unsupported'
+  | 'table-row-fragment-limit';
 
 /**
  * Bounded table pagination failure. Prefer this over emitting a fragment that overflows
@@ -568,7 +570,13 @@ function placeCellParagraph(
     left: 0,
     right: indent.left + available + indent.right,
   });
+  // Zone geometry alone does NOT identify the break: these zones stay in page-content Y
+  // (only x is localized to the cell), so which band a line crosses depends on where the
+  // paragraph starts. Two cells of the same text and width under the same float would
+  // otherwise share a cache entry and the one that sits clear of the picture would inherit
+  // the wrapped break of the one that does not.
   const exclusionToken = exclusionLayoutToken(pageZones);
+  const positionedExclusionToken = exclusionToken ? `${top.toFixed(3)}|${exclusionToken}` : '';
   const key = paragraphLayoutKey({
     paragraph,
     properties: [
@@ -584,7 +592,7 @@ function placeCellParagraph(
       : deps.drawingLayoutToken
         ? { drawingToken: deps.drawingLayoutToken }
         : {}),
-    ...(exclusionToken ? { exclusionToken } : {}),
+    ...(positionedExclusionToken ? { exclusionToken: positionedExclusionToken } : {}),
   });
   const lines = breakParagraph(
     paragraph,
@@ -1442,6 +1450,17 @@ function stripAnchorSinksForProbe(deps: TableFlowDeps): TableFlowDeps {
   };
 }
 
+/**
+ * The row's height on its own, with no page position — what the caller compares against a
+ * fresh content box to decide whether the row fits where it stands or has to move.
+ *
+ * The probe places the row at y=0 because that height must not depend on where the row
+ * currently sits. Wrap exclusions are the opposite: they are page-content bands, so at y=0
+ * a float near the top of the page covers a row that really sits far below it, and every
+ * cell paragraph breaks around a picture it never touches. The probe therefore measures
+ * free of them — the placing pass runs at the row's true top and applies whichever bands
+ * actually cross it.
+ */
 export function measureRowHeight(
   row: SemanticTableRow,
   cols: readonly number[],
@@ -1453,6 +1472,7 @@ export function measureRowHeight(
   let lineCounter = 0;
   const probeDeps: TableFlowDeps = {
     ...stripAnchorSinksForProbe(deps),
+    pageExclusionZones: undefined,
     nextLineId: () => `probe-${lineCounter++}`,
   };
   const placed = layoutRowFragment(row, cols, left, 0, false, depth, probeDeps, cellSpacingPt);
