@@ -15,6 +15,12 @@ export interface OperationSnapshot {
   readonly producerVersion: number;
 }
 
+/**
+ * One resource a cached entry consumed, and the fingerprint it had at the time.
+ *
+ * Per-dependency rather than one global epoch, so updating one font does not evict entries that
+ * consumed a different, unchanged font.
+ */
 export interface ResourceDependencyProvenance {
   readonly key: string;
   readonly fingerprint: string;
@@ -48,11 +54,25 @@ export type CacheMiss =
       readonly reason: 'epoch-changed';
       readonly epoch: keyof OperationSnapshot;
     };
+/**
+ * A cache probe: the value and its provenance on a hit, or the reason it missed.
+ *
+ * Misses are typed rather than merely absent, so a caller can tell a cold entry from one
+ * invalidated by a dependency change.
+ */
 export type CacheLookup<V> =
   | { readonly hit: true; readonly value: V; readonly provenance: CacheProvenance }
   | CacheMiss;
 
+/** Which field of an {@link OperationSnapshot} changed. */
 export type OperationSnapshotField = keyof OperationSnapshot;
+
+/**
+ * Whether the environment is still the one an in-flight operation started under.
+ *
+ * `restart` names the fields that moved. A long layout pass whose fonts or configuration change
+ * midway must restart rather than finish against a mixture of both.
+ */
 export type OperationSnapshotGuard =
   | { readonly status: 'current' }
   | { readonly status: 'restart'; readonly changed: readonly OperationSnapshotField[] };
@@ -83,6 +103,9 @@ export const captureOperationSnapshot = (source: OperationSnapshot): OperationSn
   });
 };
 
+/**
+ * Compare the current environment against the one an operation captured, naming what changed.
+ */
 export const guardOperationSnapshot = (
   captured: OperationSnapshot,
   current: OperationSnapshot
@@ -173,6 +196,14 @@ function firstMismatch(a: CacheProvenance, b: Omit<CacheProvenance, 'revision'>)
   return null;
 }
 
+/**
+ * The layout measurement cache, keyed by fingerprint rather than by revision.
+ *
+ * An entry may be reused ACROSS revisions: the model revision is recorded as PROVENANCE, not as
+ * an equality condition. Reuse is proven only when the transitive dependency fingerprint, the
+ * unit's own input fingerprint, and every non-model environment input all match — which is what
+ * lets an edit in one paragraph leave the rest of a long document measured.
+ */
 export class ResolvedCache<V> {
   private readonly entries = new Map<string, { value: V; provenance: CacheProvenance }>();
 

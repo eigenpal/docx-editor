@@ -33,13 +33,24 @@ export interface DocLocation {
   offset?: number;
 }
 
+/**
+ * Which STORY a location belongs to.
+ *
+ * The body is one container; every header, footer and note is another. A path alone is
+ * ambiguous without it, because block index 0 exists in every story a document has.
+ */
 export type ContainerRef =
   | { part: 'body' }
   | { part: 'header' | 'footer'; rId: string }
   | { part: 'footnote' | 'endnote'; noteId: number };
 
+/**
+ * Anything an operation can be pointed at: a paragraph-relative {@link DocAnchor}, a structural
+ * {@link DocLocation}, or a {@link DocRange} spanning two of them.
+ */
 export type DocTarget = DocAnchor | DocLocation | DocRange;
 
+/** A span between two positions. The endpoints may be addressed either way, independently. */
 export interface DocRange {
   from: DocAnchor | DocLocation;
   to: DocAnchor | DocLocation;
@@ -58,6 +69,12 @@ export type ExecResult =
   | { ok: true; changed: boolean }
   | { ok: false; code: ExecErrorCode; reason: string; target?: DocTarget };
 
+/**
+ * Why a write was refused, as a value to branch on.
+ *
+ * Deliberately finer-grained than a boolean: "no-op", "target not found" and "content control is
+ * locked" are different outcomes, and a caller retrying the first should not retry the third.
+ */
 export type ExecErrorCode =
   | 'notFound'
   | 'ambiguous'
@@ -86,6 +103,7 @@ export interface DocxDocument {
   readonly revisions: readonly Revision[];
 }
 
+/** The main story: its blocks in reading order, plus the sections derived from them. */
 export interface DocumentBody {
   readonly content: readonly Block[];
   /**
@@ -100,20 +118,29 @@ export interface DocxDocumentJSON {
   readonly [key: string]: unknown;
 }
 
+/** One section: the page it lays out on, and the header/footer stories it declares. */
 export interface Section {
   readonly properties: SectionProperties;
   readonly headers: HeaderFooterSet;
   readonly footers: HeaderFooterSet;
 }
 
+/**
+ * A section's three header (or footer) variants, each a relationship id.
+ *
+ * All optional: a variant a section does not declare inherits the previous section's, and one
+ * absent everywhere means the document simply has none.
+ */
 export interface HeaderFooterSet {
   readonly default?: string;
   readonly first?: string;
   readonly even?: string;
 }
 
+/** Anything that can sit at block level in a story. Discriminate on `kind`. */
 export type Block = Paragraph | Table | ContentControl;
 
+/** One paragraph: its runs, the style it names, and its list membership. */
 export interface Paragraph {
   readonly kind: 'paragraph';
   /** `w14:paraId`. The stable handle `DocAnchor` addresses. */
@@ -123,12 +150,22 @@ export interface Paragraph {
   readonly numbering?: NumberingRef;
 }
 
+/** A stretch of text sharing one set of character properties. */
 export interface Run {
   readonly text: string;
   readonly formatting?: RunFormatting;
+  /** Set when the run carries a tracked change. Unique only within its part. */
   readonly revisionId?: number;
 }
 
+/**
+ * Character formatting, and — at selection level — the paragraph properties a toolbar reads
+ * alongside it.
+ *
+ * One type serves both roles so a toolbar reads alignment, style and script state from the same
+ * object as bold and italic. On a {@link Run} the selection-level fields stay absent: a run has
+ * no alignment or paragraph style of its own.
+ */
 export interface RunFormatting {
   readonly bold?: boolean;
   readonly italic?: boolean;
@@ -204,19 +241,27 @@ export interface IndentFormatting {
   };
 }
 
+/** A table: its rows, and the table style they resolve through. */
 export interface Table {
   readonly kind: 'table';
   readonly rows: readonly TableRow[];
   readonly styleId?: string;
 }
 
+/** One table row. Cell count may vary between rows: `colSpan` and vertical merges reshape it. */
 export interface TableRow {
   readonly cells: readonly TableCell[];
 }
 
+/**
+ * One cell. Its `content` is ordinary blocks, so a cell may hold paragraphs, nested tables and
+ * content controls alike.
+ */
 export interface TableCell {
   readonly content: readonly Block[];
+  /** Vertical merge span. Absent means 1. */
   readonly rowSpan?: number;
+  /** `w:gridSpan`. Absent means 1. */
   readonly colSpan?: number;
 }
 
@@ -231,6 +276,7 @@ export interface ContentControl {
   readonly content: readonly Block[];
 }
 
+/** Which kind of control a `w:sdt` is, and therefore what a value written into it must be. */
 export type ContentControlType =
   | 'richText'
   | 'plainText'
@@ -241,6 +287,10 @@ export type ContentControlType =
   | 'picture'
   | 'repeatingSection';
 
+/**
+ * Narrows a content-control query. Fields combine with AND; an empty filter matches every
+ * control.
+ */
 export interface ContentControlFilter {
   readonly tag?: string;
   readonly alias?: string;
@@ -263,6 +313,12 @@ export interface DocAnchorRange {
   readonly endOffset: number;
 }
 
+/**
+ * One comment or reply, as `comments.xml` records it.
+ *
+ * A reply is a comment with a `parentId`; OOXML gives replies no separate element, so the thread
+ * is reconstructed from that link rather than from nesting.
+ */
 export interface DocComment {
   readonly id: string;
   readonly author: string;
@@ -312,6 +368,12 @@ export type RevisionType =
   /** A row, cell, section or grid revision. */
   | 'structural';
 
+/**
+ * One tracked change.
+ *
+ * Addressing needs BOTH `id` and `part`: `@w:id` is unique only within a part, so an id alone
+ * names two revisions in any package that has a header or a comments part.
+ */
 export interface Revision {
   /** Numeric, and unique only WITHIN a part. Pair with `part` to address one. */
   readonly id: number;
@@ -334,13 +396,16 @@ export interface Revision {
   readonly part: string;
 }
 
+/** `w:sectPr`: the page a section lays out on. Twips throughout, as the file stores them. */
 export interface SectionProperties {
   readonly pageSize: { widthTwips: number; heightTwips: number };
   readonly margins: PageMargins;
   readonly columns?: { count: number; gapTwips: number };
+  /** `w:titlePg` — whether the section's first page takes the `first` header/footer variant. */
   readonly titlePage?: boolean;
 }
 
+/** Page margins in twips. */
 export interface PageMargins {
   readonly topTwips: number;
   readonly rightTwips: number;
@@ -348,23 +413,41 @@ export interface PageMargins {
   readonly leftTwips: number;
 }
 
+/**
+ * `styles.xml`, split by the three style families that address separately.
+ *
+ * Keyed by style ID rather than by the name a reader sees, because the ID is what a paragraph or
+ * run actually references.
+ */
 export interface StyleDefinitions {
   readonly paragraph: ReadonlyMap<string, StyleDefinition>;
   readonly character: ReadonlyMap<string, StyleDefinition>;
   readonly table: ReadonlyMap<string, StyleDefinition>;
 }
 
+/** One style: the ID content references, the name a reader sees, and its inheritance link. */
 export interface StyleDefinition {
   readonly id: string;
   readonly name: string;
+  /** `w:basedOn` — the style this one inherits from. Absent at the root of a chain. */
   readonly basedOn?: string;
 }
 
+/** A paragraph's list membership: which `numbering.xml` definition, and at which level. */
 export interface NumberingRef {
   readonly numId: string;
+  /** Zero-based. OOXML numbering has nine levels, 0 through 8. */
   readonly level: number;
 }
 
+/**
+ * A colour as the FILE expresses it, not as a resolved RGB string.
+ *
+ * A theme colour stays a theme reference — slot plus tint or shade — so that changing the theme
+ * repaints the document the way Word does. Flattening to hex at read time would freeze the
+ * resolved value and break that link. `auto` is Word's "let the renderer decide", usually black
+ * on white.
+ */
 export type ColorValue =
   | { readonly kind: 'hex'; readonly value: string }
   | {
@@ -375,23 +458,28 @@ export type ColorValue =
     }
   | { readonly kind: 'auto' };
 
+/** `theme1.xml` — what a {@link ColorValue} of kind `theme` resolves against. */
 export interface Theme {
   readonly colorScheme: ThemeColorScheme;
   readonly fontScheme?: Record<string, string>;
 }
 
+/** Theme colour slots (`accent1`, `dk1`, `lt2`, …) to hex. */
 export type ThemeColorScheme = Readonly<Record<string, string>>;
 
+/** A watermark, which OOXML expresses as either text or an image — never both meaningfully. */
 export interface Watermark {
   readonly text?: string;
   readonly imageData?: Uint8Array;
 }
 
+/** A size in EMUs, the unit DrawingML stores extents in. 914400 EMU = 1 inch. */
 export interface Extent {
   readonly widthEmu: number;
   readonly heightEmu: number;
 }
 
+/** A font the document names, and whether its bytes travel inside the package. */
 export interface FontDefinition {
   readonly family: string;
   readonly embedded: boolean;
@@ -399,6 +487,7 @@ export interface FontDefinition {
 
 // ─── Geometry primitives ─────────────────────────────────────────────────────
 
+/** An axis-aligned rectangle in points, the unit layout works in throughout. */
 export interface Rect {
   readonly x: number;
   readonly y: number;
@@ -406,11 +495,19 @@ export interface Rect {
   readonly height: number;
 }
 
+/** A position in points. */
 export interface Point {
   readonly x: number;
   readonly y: number;
 }
 
+/**
+ * A JSON Schema document, held opaquely.
+ *
+ * Not modelled further on purpose: this contract passes schemas through to MCP tool definitions
+ * and never interprets them, so narrowing the type would constrain callers without buying
+ * validation anywhere.
+ */
 export type JSONSchema = Readonly<Record<string, unknown>>;
 
 /** An editor extension. Declared here so `core/editor` can type its config
@@ -419,4 +516,5 @@ export interface Extension {
   readonly name: string;
 }
 
+/** What every subscription returns. Calling it twice is safe. */
 export type Unsubscribe = () => void;

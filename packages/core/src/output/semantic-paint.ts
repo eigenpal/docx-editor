@@ -109,6 +109,12 @@ function aliasIdentity(alias: (family: string) => string | undefined): string {
   return token;
 }
 
+/**
+ * How a layout is painted into DOM. Every field is optional.
+ *
+ * The painted pages ARE the editable surface, so everything here is presentation-only — nothing
+ * set through these options is ever serialised back into the document.
+ */
 export interface PaintOptions {
   /** Points to CSS pixels. 96/72 renders a point as a CSS point at 100% zoom. */
   readonly scale?: number;

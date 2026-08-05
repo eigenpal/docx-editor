@@ -1,8 +1,20 @@
 import type { BidiEmbeddingLevels } from './bidi.ts';
 import type { TextDirection } from './shaped-run.ts';
 
+/**
+ * Which `w:rFonts` slot a character resolves its face through.
+ *
+ * OOXML gives a run up to four faces and picks between them by SCRIPT, so one run of mixed Latin
+ * and CJK text uses two different fonts without saying so anywhere in its properties.
+ */
 export type FontSlot = 'ascii' | 'hAnsi' | 'eastAsia' | 'cs';
 
+/**
+ * A run of text sharing one script, direction and font slot — the unit handed to the shaper.
+ *
+ * Shaping cannot span a script change: Arabic and Latin in one call would produce wrong joining
+ * behaviour, so a run is itemized into these first.
+ */
 export interface ScriptItem {
   readonly from: number;
   readonly to: number;
@@ -27,6 +39,12 @@ type Classified = Omit<ScriptItem, 'from' | 'to' | 'direction' | 'bidiLevel'> | 
 
 const inRange = (value: number, from: number, to: number): boolean => value >= from && value <= to;
 
+/**
+ * A code point whose script this engine does not itemize.
+ *
+ * Carries the offending `codePoint` so the caller can report which character stopped it, rather
+ * than failing anonymously somewhere in the middle of a paragraph.
+ */
 export class UnsupportedScriptError extends Error {
   readonly name = 'UnsupportedScriptError';
   readonly code = 'unsupportedScript';
@@ -141,6 +159,12 @@ const classify = (codePoint: number): Classified => {
   throw new UnsupportedScriptError(codePoint);
 };
 
+/**
+ * Split text into shapeable runs by script, bidi level and font slot.
+ *
+ * Consumes the bidi levels rather than re-deriving direction, so itemization and reordering agree
+ * by construction instead of by two implementations happening to match.
+ */
 export function itemizeScriptFontSlots(
   text: string,
   paragraphOffset: number,

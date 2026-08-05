@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { evaluateForgottenExportPolicy } from './api-extractor-forgotten-exports.mjs';
 import { collectNamedExports } from './named-exports.mjs';
+import { declarationEntryFor } from './packages.mjs';
 
 function slugForKey(key) {
   if (key === '.') return 'index';
@@ -32,18 +33,23 @@ function sourcePathForEntry(packageRoot, value) {
   return direct;
 }
 
-function entriesFromExports(packageRoot, exportsMap) {
+function entriesFromExports(packageRoot, exportsMap, sourceEntries = false) {
   const entries = [];
   for (const [key, value] of Object.entries(exportsMap)) {
     if (key === './package.json') continue;
     if (key.startsWith('./internal/')) continue;
     if (typeof value !== 'object' || value === null) continue;
     if (typeof value.types !== 'string') continue;
+    // A source-published package points `types` at the `.ts` API Extractor cannot read;
+    // its declarations come from the `build:types` tree instead.
+    const dts = (sourceEntries && declarationEntryFor(value.types)) || value.types;
     entries.push({
       key,
-      dts: value.types,
+      dts,
       slug: slugForKey(key),
-      src: sourcePathForEntry(packageRoot, value),
+      src: sourceEntries
+        ? value.types.replace(/^\.\//, '')
+        : sourcePathForEntry(packageRoot, value),
     });
   }
   return entries;
@@ -57,6 +63,7 @@ function entriesFromExports(packageRoot, exportsMap) {
  *   buildHint: string,
  *   tsconfigPath?: string,
  *   emitDocModel?: boolean,
+ *   sourceEntries?: boolean,
  *   forgottenExports?:
  *     | 'none'
  *     | 'warning'
@@ -76,6 +83,7 @@ export function runApiExtractor(options) {
     buildHint,
     tsconfigPath = path.join(packageRoot, 'tsconfig.json'),
     emitDocModel = false,
+    sourceEntries = false,
     forgottenExports = 'none',
   } = options;
 
@@ -108,7 +116,7 @@ export function runApiExtractor(options) {
   if (emitDocModel) fs.mkdirSync(docModelDir, { recursive: true });
 
   const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-  const targets = entriesFromExports(packageRoot, pkg.exports || {});
+  const targets = entriesFromExports(packageRoot, pkg.exports || {}, sourceEntries);
 
   fs.mkdirSync(reportDir, { recursive: true });
   fs.mkdirSync(tempDir, { recursive: true });

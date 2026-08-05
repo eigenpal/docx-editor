@@ -25,6 +25,7 @@ const MAX_BOOKMARKS = 10_000;
  */
 const GO_BACK = '_GoBack';
 
+/** One bookmark's name and the range its marker pair currently encloses. */
 export interface BookmarkAnchor {
   readonly name: string;
   /** Canonical node id of the paragraph the marker sits in. */
@@ -33,6 +34,7 @@ export interface BookmarkAnchor {
   readonly offset: number;
 }
 
+/** Bookmarks by name. A name the document declares twice resolves to the first in order. */
 export type BookmarkIndex = ReadonlyMap<string, BookmarkAnchor>;
 
 function attributeValue(node: OoxmlNode, localName: string): string | undefined {

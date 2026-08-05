@@ -26,8 +26,10 @@ import type { OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 /** How deep block-level content controls may nest before the walk stops descending. */
 export const MAX_STORY_SDT_NESTING = 32;
 
+/** Which kind of story a root is. Layout walks all four the same way. */
 export type OoxmlStoryKind = 'body' | 'header' | 'footer' | 'note';
 
+/** One story root and the blocks under it, with block-level SDTs already flattened. */
 export interface OoxmlStoryRoot {
   readonly kind: OoxmlStoryKind;
   /** The `w:body` / `w:hdr` / `w:ftr` / `w:footnote` element that holds the blocks. */

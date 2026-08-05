@@ -72,6 +72,12 @@ export interface ContentControlOps {
   disabledReason(controlId: string, action: 'edit' | 'remove'): string | null;
 }
 
+/**
+ * How a paginated surface opens. Every field is optional.
+ *
+ * `measurer` is the injection seam that keeps layout DOM-free — supply one to lay a document out
+ * on a server, or leave it off in a browser to get the canvas measurer.
+ */
 export interface PaginatedSurfaceOptions {
   readonly measurer?: TextMeasurer;
   /** Ambient author for tracked edits. Required before suggesting can write anything. */
@@ -244,6 +250,12 @@ export interface RevealOptions {
   readonly behavior?: ScrollBehavior;
 }
 
+/**
+ * Everything observable about the surface right now, as one immutable value.
+ *
+ * `revision` is the change token: it moves whenever anything else here does, which is what lets
+ * `snapshot()` hand back the same reference until state actually changes.
+ */
 export interface PaginatedSurfaceState {
   readonly revision: number;
   readonly pageCount: number;
@@ -302,6 +314,16 @@ export interface ContentControlSurfaceState {
   readonly activeControlId: string | null;
 }
 
+/**
+ * The mounted, painted, editable document — the layer `createDocxEditor` builds its contract on.
+ *
+ * The painted pages ARE the editable surface: they are `contenteditable`, but the DOM is a
+ * picture. Browser mutations are prevented and re-expressed as tree ops, and selection maps only
+ * through `data-paragraph-id`/`data-start`, never through DOM node identity.
+ *
+ * Every write goes through the guarded mutation path on this object. Reaching past it into
+ * `session` to apply ops directly bypasses the layout invalidation and the caret bookkeeping.
+ */
 export interface PaginatedSurface {
   readonly session: TreeDocxSession;
   storyScope(): import('@docx-editor.dev/core/store').StoryScope;
@@ -789,6 +811,13 @@ export interface PaginatedSurface {
   ): import('../contracts/editor.ts').ExecResult;
 }
 
+/**
+ * What opening a document produced: a mounted surface, or a refusal.
+ *
+ * A result rather than a throw, because every refusal here comes from FILE input — a package the
+ * bounded reader rejected, a part that exceeded a limit — and a malformed upload should surface
+ * as a message the host can show rather than an exception it has to catch.
+ */
 export type OpenPaginatedResult =
   | { readonly ok: true; readonly surface: PaginatedSurface }
   | { readonly ok: false; readonly reason: string; readonly detail?: string };

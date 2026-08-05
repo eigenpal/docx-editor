@@ -42,10 +42,33 @@ export * from './runtime/public.ts';
  * @public
  */
 export interface DocxEditorNamespace {
+  /** A runtime over an editor that is already open. The editor keeps its own lifetime. */
   createBrowser(editor: DocxEditorInstance): DocxEditorRuntime;
+  /** A runtime over DOCX bytes. Additionally offers `save()`. */
   createServer(bytes: Uint8Array, options?: CreateServerOptions): Promise<DocxEditorServerRuntime>;
 }
 
+/**
+ * The entry point, with the editor-bound factory — a superset of the package root's.
+ *
+ * `createBrowser` borrows an editor that is already open, so the runtime reads and writes the
+ * document the user is looking at. The editor keeps its own lifetime: disposing the runtime does
+ * not close the editor.
+ *
+ * @example
+ * ```ts
+ * import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
+ *
+ * const runtime = DocxEditor.createBrowser(editor);
+ * await runtime.run(async (context) => {
+ *   const paragraphs = context.document.paragraphs;
+ *   paragraphs.load('text');
+ *   await context.sync();
+ * });
+ * ```
+ *
+ * @public
+ */
 export const DocxEditor: DocxEditorNamespace = Object.freeze({
   /** A runtime over an editor that is already open. The editor keeps its own lifetime. */
   createBrowser,

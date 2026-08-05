@@ -68,6 +68,7 @@ export interface SemanticHitDrawing {
   readonly start: number;
 }
 
+/** What a point landed on: a semantic position, its caret geometry, and where it sits. */
 export interface SemanticHit {
   readonly position: SemanticPosition;
   readonly caret: CaretGeometry;
@@ -93,6 +94,13 @@ export interface SemanticHit {
   readonly drawing: SemanticHitDrawing | null;
 }
 
+/**
+ * How precisely a hit resolves within a run.
+ *
+ * Without a measurer the offset is INTERPOLATED across the span's advance, which is exact only
+ * for monospaced text — supply one for proportional fonts, or a click lands a character or two
+ * away from the glyph under the pointer.
+ */
 export interface HitTestOptions {
   /**
    * Exact resolution of the character within a run.

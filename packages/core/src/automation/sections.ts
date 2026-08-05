@@ -30,6 +30,12 @@ const TWIPS_PER_POINT = 20;
 /** The largest page or margin this lane will write, in twips — `w:pgSz`'s own ceiling. */
 const MAX_TWIPS = 63360;
 
+/**
+ * Which way round a page is, in OOXML's own lower-case spelling.
+ *
+ * The public object model capitalises it; the mapping between the two lives at that boundary and
+ * nowhere else.
+ */
 export type AutomationPageOrientation = 'portrait' | 'landscape';
 
 /** One section's page geometry, in points. */

@@ -89,6 +89,13 @@ export type StoryScope =
   | { readonly kind: 'headerFooter'; readonly rId: string }
   | { readonly kind: 'notesPart'; readonly noteKind: NoteKind };
 
+/**
+ * Why a story scope could not be resolved to a part.
+ *
+ * Several of these are FILE-hostile shapes rather than caller mistakes:
+ * `external-relationship` and `bad-relationship-target` are how a crafted document tries to
+ * point a story at something outside the package, and both are refused rather than followed.
+ */
 export type StoryTargetRejection =
   | 'unknown-scope'
   | 'dangling-relationship'
@@ -99,6 +106,7 @@ export type StoryTargetRejection =
   | 'not-a-story-part'
   | 'too-many-story-stores';
 
+/** A story scope resolved to a part, or the typed reason it could not be. */
 export type StoryResolveResult =
   | {
       readonly ok: true;
@@ -107,6 +115,7 @@ export type StoryResolveResult =
     }
   | { readonly ok: false; readonly reason: StoryTargetRejection; readonly detail?: string };
 
+/** Whether a package-level transaction committed, or why it was refused. */
 export type PackageTransactResult =
   | { readonly ok: true; readonly change: TreeModelChange | null }
   | {
@@ -118,6 +127,7 @@ export type PackageTransactResult =
 /** Cap on simultaneously opened editable story stores (body + HF parts). Fail closed. */
 export const DEFAULT_MAX_EDITABLE_STORY_PARTS = 64;
 
+/** How a package store is constructed: limits, history depth, and review contributions. */
 export interface TreePackageStoreOptions {
   readonly historyLimit?: number;
   /** Bound on opened story stores; defaults to {@link DEFAULT_MAX_EDITABLE_STORY_PARTS}. */

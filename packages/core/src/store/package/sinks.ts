@@ -11,6 +11,13 @@
 const HREF_SCHEMES = new Set(['http', 'https', 'mailto', 'tel', 'ftp']);
 const SCHEME_RE = /^([a-zA-Z][a-zA-Z0-9+.-]*):/;
 
+/**
+ * A hyperlink target projected for a RUNTIME sink, or the reason it was withheld.
+ *
+ * The authored target stays authored — the record layer keeps it verbatim and escapes it into
+ * owned OOXML, which is not a runtime sink. Only this allowlist-sanitized projection reaches DOM,
+ * CSS, navigation or fetch, so `javascript:`, `data:` and `vbscript:` never leave the boundary.
+ */
 export type HrefProjection =
   | { readonly ok: true; readonly href: string }
   | { readonly ok: false; readonly inert: true };
@@ -97,6 +104,13 @@ export function containsCssFetch(value: string): boolean {
 
 // Executable content classes that are preserved inertly by default and never
 // evaluated, exposed, or fetched.
+/**
+ * Content that must never execute or auto-resolve: OLE objects, macros, DDE and `INCLUDE*` field
+ * instructions.
+ *
+ * Rendered INERT by default rather than stripped — removing it would be a lossless-preservation
+ * failure, so it is carried and never acted on.
+ */
 export const INERT_EXECUTABLE_KINDS = [
   'field-dde',
   'field-include',
@@ -106,9 +120,12 @@ export const INERT_EXECUTABLE_KINDS = [
   'embedded-object',
   'executable-relationship',
 ] as const;
+/** One of {@link INERT_EXECUTABLE_KINDS}. */
+/** One of {@link INERT_EXECUTABLE_KINDS} — content carried but never executed. */
 export type InertExecutableKind = (typeof INERT_EXECUTABLE_KINDS)[number];
 const INERT = new Set<string>(INERT_EXECUTABLE_KINDS);
 
+/** Whether a content kind is one this engine refuses to execute or auto-resolve. */
 export function isInertExecutable(kind: string): boolean {
   return INERT.has(kind);
 }
@@ -133,11 +150,18 @@ export function isEvaluableField(instruction: string): boolean {
   return EVALUABLE_FIELDS.has(keyword);
 }
 
+/** One item a scrub pass considers: its kind, and where in the package it sits. */
 export interface ContentItem {
   readonly id: string;
   readonly kind: string;
 }
 
+/**
+ * What an explicit scrub removed.
+ *
+ * A scrub DECLARES ITSELF non-lossless: removing executable content changes the file, which is a
+ * choice a caller makes deliberately rather than a default the engine applies.
+ */
 export interface ScrubResult {
   readonly kept: readonly ContentItem[];
   readonly removed: readonly ContentItem[];

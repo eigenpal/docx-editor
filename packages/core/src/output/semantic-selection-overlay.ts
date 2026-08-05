@@ -27,6 +27,12 @@ export interface OverlayRect {
   readonly className?: string;
 }
 
+/**
+ * How the selection overlay draws its rectangles over the painted pages.
+ *
+ * `scale` and `pageOffsetX` must match what the page painter used, or the highlight lands beside
+ * the content it describes rather than on it.
+ */
 export interface SelectionOverlayOptions {
   /** Points to CSS pixels. */
   readonly scale: number;

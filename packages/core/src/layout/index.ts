@@ -1,3 +1,16 @@
+/**
+ * `@docx-editor.dev/core/layout` — DOM-free pagination, shaping, and hit testing.
+ *
+ * Text is measured through an injected `TextMeasurer` and shaped through an injected
+ * `TextShaper`, so the same code paginates in a browser and on a server. Points everywhere;
+ * twips convert at property-read boundaries.
+ *
+ * Incremental by construction: per-block cache keys and flow checkpoints mean a pass that
+ * changes nothing returns the previous pages by identity.
+ *
+ * @packageDocumentation
+ * @public
+ */
 // @docx-editor.dev/engine-layout
 //
 // Layout: resolved caches, dependency closure, shaping, convergent pagination, and the anchored DisplayItem[] IR. DOM-free — emits positioned geometry, never paints.

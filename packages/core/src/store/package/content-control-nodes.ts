@@ -42,6 +42,12 @@ export const MAX_CONTENT_CONTROLS_PER_PART = 10_000;
 export const CONTENT_CONTROL_ID_MAX = 0x7fffffff;
 
 /** `ST_Lock` (§17.5.2.24). An absent `w:lock` is `unlocked`. */
+/**
+ * `w:lock` — what a control refuses.
+ *
+ * `sdtLocked` protects the wrapper, `contentLocked` the text inside it, and `sdtContentLocked`
+ * both. A control inside a locked one is locked in effect regardless of its own value.
+ */
 export type ContentControlLock = 'unlocked' | 'sdtLocked' | 'contentLocked' | 'sdtContentLocked';
 
 const LOCK_VALUES: ReadonlySet<string> = new Set([
@@ -60,6 +66,7 @@ const LOCK_VALUES: ReadonlySet<string> = new Set([
  * that read only the ECMA-376 choice reported them untyped. `untyped` means the control
  * declares neither — a rich-text container, which is what Word treats it as.
  */
+/** Which kind of control a `w:sdt` is, and therefore what a written value must look like. */
 export type ContentControlKind =
   | 'richText'
   | 'plainText'
@@ -92,11 +99,13 @@ const TYPE_ELEMENTS: Readonly<Record<string, ContentControlKind>> = {
   equation: 'equation',
 };
 
+/** One declared option of a dropdown or combo box: its display text and its stored value. */
 export interface ContentControlListItem {
   readonly displayText: string;
   readonly value: string;
 }
 
+/** A date picker's authored format and locale, for rendering and for parsing what it stores. */
 export interface ContentControlDateFormat {
   readonly fullDate?: string;
   readonly dateFormat?: string;
@@ -105,12 +114,19 @@ export interface ContentControlDateFormat {
   readonly calendar?: string;
 }
 
+/** One of a checkbox's two glyphs: the font and code point it is drawn with. */
 export interface ContentControlCheckboxState {
   /** The `w14:val` hex code point of the glyph, exactly as the control declares it. */
   readonly value: string;
   readonly font?: string;
 }
 
+/**
+ * A checkbox's state and the two glyphs it chooses between.
+ *
+ * Both glyphs matter on a write: setting the value has to update `w14:checked` AND the run's
+ * character, or the document's glyph and its recorded state disagree.
+ */
 export interface ContentControlCheckbox {
   readonly checked: boolean;
   readonly checkedState?: ContentControlCheckboxState;
@@ -118,12 +134,19 @@ export interface ContentControlCheckbox {
 }
 
 /** `CT_DataBinding` — preserved metadata. Never resolved, never fetched. */
+/** `w:dataBinding` — the custom-XML part and XPath a control's value is bound to. */
 export interface ContentControlDataBinding {
   readonly xpath?: string;
   readonly storeItemID?: string;
   readonly prefixMappings?: string;
 }
 
+/**
+ * A control's whole `w:sdtPr`, projected into one typed shape.
+ *
+ * What every other lane reads instead of walking `localName` strings — which also means a Word
+ * re-save that demotes the properties node to generic does not break the projection.
+ */
 export interface ContentControlProperties {
   readonly type: ContentControlKind;
   readonly alias?: string;
@@ -146,10 +169,12 @@ export interface ContentControlProperties {
   readonly checkbox?: ContentControlCheckbox;
 }
 
+/** Whether a node is a `w:sdt` wrapper. */
 export function isContentControlNode(node: OoxmlNode): node is OoxmlContentControlNode {
   return node.kind === 'contentControl';
 }
 
+/** Whether a node is a `w:sdtContent` — the container holding a control's actual content. */
 export function isContentControlContentNode(
   node: OoxmlNode
 ): node is OoxmlContentControlContentNode {
@@ -234,6 +259,7 @@ export function flattenContentControls(
   return flat;
 }
 
+/** A control's `w:sdtPr`, or null. Matches structurally, so a Word-demoted node still resolves. */
 export function contentControlPropertiesNodeOf(
   control: OoxmlNode
 ): OoxmlContentControlPropertiesNode | undefined {
@@ -267,6 +293,7 @@ function contentControlPropertiesContainerOf(control: OoxmlNode): OoxmlElement |
   );
 }
 
+/** A control's `w:sdtEndPr` — the run properties applied to its closing marker. */
 export function contentControlEndPropertiesNodeOf(
   control: OoxmlNode
 ): OoxmlContentControlEndPropertiesNode | undefined {
@@ -277,6 +304,7 @@ export function contentControlEndPropertiesNodeOf(
   );
 }
 
+/** A control's `w:sdtContent`, or null when the wrapper has none. */
 export function contentControlContentNodeOf(
   control: OoxmlNode
 ): OoxmlContentControlContentNode | undefined {
@@ -517,6 +545,12 @@ function onOffAttribute(element: OoxmlElement, localName: string): boolean | und
 /** Where a control sits, read off what its content holds. */
 export type ContentControlLevel = 'block' | 'inline' | 'row' | 'cell' | 'empty';
 
+/**
+ * How deeply a control is nested inside other controls.
+ *
+ * Bounded by {@link MAX_CONTENT_CONTROL_NESTING}: nesting depth comes from a file and is a
+ * recursion bound.
+ */
 export function contentControlLevelOf(control: OoxmlNode): ContentControlLevel {
   const content = contentControlContentNodeOf(control);
   if (!content) return 'empty';

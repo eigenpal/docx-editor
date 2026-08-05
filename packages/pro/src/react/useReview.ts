@@ -35,6 +35,11 @@ import { useDocxEditor } from '@docx-editor.dev/react';
  */
 export type ReviewItemView = ReviewItemPlacement;
 
+/**
+ * What {@link useReview} returns: the review rail's data and the four things a card can do.
+ *
+ * @public
+ */
 export interface UseReviewReturn {
   /** Every pending decision in the document, in reading order. */
   readonly items: readonly ReviewItemView[];

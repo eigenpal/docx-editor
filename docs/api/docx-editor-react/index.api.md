@@ -43,8 +43,6 @@ import { FontConfigurationFragment } from '@docx-editor.dev/core/editor';
 import { FontFaceRequest } from '@docx-editor.dev/core/contracts/editor';
 import { FontLoadFailure } from '@docx-editor.dev/core/editor';
 import { FontLoadFailureReason } from '@docx-editor.dev/core/editor';
-import { FontResolutionRequest } from '@docx-editor.dev/core/editor';
-import { FontResolver } from '@docx-editor.dev/core/editor';
 import { FontSource } from '@docx-editor.dev/core/contracts/editor';
 import { FontSourceSubstitution } from '@docx-editor.dev/core/contracts/editor';
 import { FontUrlSource } from '@docx-editor.dev/core/editor';
@@ -57,7 +55,6 @@ import { IndentFormatting } from '@docx-editor.dev/core/contracts/editor';
 import { loadFonts } from '@docx-editor.dev/core/editor';
 import { LoadFontsRequest } from '@docx-editor.dev/core/editor';
 import { LoadFontsResult } from '@docx-editor.dev/core/editor';
-import { MAX_RESOLVER_FAMILIES } from '@docx-editor.dev/core/editor';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core/editor';
@@ -615,7 +612,7 @@ export interface DocxEditorProps {
     readonly colorMode?: 'light' | 'dark' | 'system';
     contextMenu?: boolean | DocxEditorContextMenuProps;
     document?: DocumentSource;
-    fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+    fonts?: FontConfiguration | FontConfigurationFragment;
     hyperlinkPopup?: boolean;
     // (undocumented)
     locale?: string;
@@ -664,7 +661,7 @@ export interface DocxEditorRootProps {
     // (undocumented)
     children?: ReactNode;
     document?: DocumentSource;
-    fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+    fonts?: FontConfiguration | FontConfigurationFragment;
     imageDecodePort?: ImageDecodePort;
     // (undocumented)
     locale?: string;
@@ -942,13 +939,6 @@ export { FontLoadFailure }
 
 export { FontLoadFailureReason }
 
-export { FontResolutionRequest }
-
-export { FontResolver }
-
-// @public
-export type FontsInput = FontConfiguration | FontConfigurationFragment | FontResolver | Promise<FontConfiguration | FontConfigurationFragment | undefined> | undefined;
-
 export { FontSource }
 
 export { FontSourceSubstitution }
@@ -1104,8 +1094,6 @@ export function LocaleProvider(input: LocaleProviderProps): react.JSX.Element;
 
 // @public (undocumented)
 export function Logo(input: LogoProps): react__default.JSX.Element;
-
-export { MAX_RESOLVER_FAMILIES }
 
 // @public
 export interface MenuActionProps {
@@ -1841,9 +1829,6 @@ export interface UseFontFamilyResult {
     readonly setValue: (family: string) => void;
     readonly value: string | null;
 }
-
-// @public
-export function useFonts(source: FontsInput, ...fragments: readonly (FontConfigurationFragment | undefined)[]): FontResolver;
 
 // @public
 export function useHeaderFooterState(): HeaderFooterState | null;

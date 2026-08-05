@@ -1,3 +1,16 @@
+/**
+ * `@docx-editor.dev/core/automation` — the host protocol document automation runs against.
+ *
+ * One interface with two implementations: a headless host owning bytes it opened, and a browser
+ * host borrowing the live editor's session. Both answer the same operations identically, because
+ * the operations are implemented once above this protocol.
+ *
+ * Everything here is transport-shaped — a handle is a NAME, never a pointer — so the same host
+ * works behind a worker port, an HTTP boundary, or nothing at all.
+ *
+ * @packageDocumentation
+ * @public
+ */
 // The automation lane: one transport-neutral host port for document automation.
 //
 // An automation object model — the batching, promise-shaped API a script or an agent

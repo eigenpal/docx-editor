@@ -91,6 +91,13 @@ export function sourceCropFromCropPermille(crop: ImageCropPermille): SourceCrop 
   return sourceCropFromCropPercent(cropPercentFromCropPermille(crop));
 }
 
+/**
+ * Whether a crop is expressible: every edge finite and in range, and opposite edges not
+ * overlapping.
+ *
+ * Opposite edges matter — a left plus right crop summing past 100% describes a negative width,
+ * which DrawingML has no way to store.
+ */
 export function validateImageCropPercent(crop: ImageCropPercent): boolean {
   const edges = cropEdges(crop);
   if (edges.some((edge) => !Number.isFinite(edge) || edge < 0 || edge > IMAGE_CROP_PERCENT_MAX)) {

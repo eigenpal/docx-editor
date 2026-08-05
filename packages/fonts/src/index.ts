@@ -1,3 +1,25 @@
+/**
+ * `@docx-editor.dev/fonts` — metric-compatible substitutes for Word's default faces.
+ *
+ * Word's own defaults (Calibri, Cambria, Times New Roman, Arial, Courier New) are proprietary
+ * and cannot ship in an open package. What CAN ship are the faces built to MATCH THEIR METRICS:
+ * identical advance widths, so wrap and pagination land where Word puts them even though the
+ * glyph outlines differ slightly.
+ *
+ * Nothing loads until an app calls in. Importing this module fetches no bytes, and the editor
+ * engine never calls it on its own.
+ *
+ * @example Load the packaged substitutes and hand them to the editor
+ * ```ts
+ * import { defaultFonts } from '@docx-editor.dev/fonts';
+ *
+ * const fonts = await defaultFonts();
+ * const editor = createDocxEditor({ document: bytes, fonts });
+ * ```
+ *
+ * @packageDocumentation
+ * @public
+ */
 // @docx-editor.dev/fonts — metric-compatible substitutes for Word's default faces.
 //
 // Word's own defaults (Calibri, Cambria, Times New Roman, Arial, Courier New) are
@@ -42,6 +64,11 @@ export interface DefaultFontSource {
   readonly faceIndex: number;
 }
 
+/**
+ * One Word-name → substitute redirect, structurally identical to the editor contract's
+ * `FontSourceSubstitution`. `from` is the proprietary face a document asks for, `to` is
+ * the metric-compatible face this package actually ships.
+ */
 export interface DefaultFontSubstitution {
   readonly from: DefaultFontFaceRequest;
   readonly to: DefaultFontFaceRequest;
@@ -50,6 +77,15 @@ export interface DefaultFontSubstitution {
 /** The Word default families this package can stand in for. */
 export type WordDefaultFamily = 'Calibri' | 'Cambria' | 'Times New Roman' | 'Arial' | 'Courier New';
 
+/**
+ * One face that did not load. `family` is the Word name that was asked for, `file` the
+ * packaged asset that failed, and `diagnostic` a human-readable cause — a missing
+ * manifest entry, an HTTP status, a byte-length mismatch against the baked manifest, or
+ * a thrown fetch error.
+ *
+ * Non-fatal by design: the surrounding fragment stays usable and the affected family
+ * falls back to the engine's fixed measurement.
+ */
 export interface DefaultFontLoadFailure {
   readonly family: string;
   readonly file: string;
@@ -64,6 +100,11 @@ export interface DefaultFontsFragment {
   readonly failures: readonly DefaultFontLoadFailure[];
 }
 
+/**
+ * Options shared by {@link loadDefaultFonts}, {@link installDefaultFontFaces} and
+ * {@link defaultFonts}. Both fields are optional, so `{}` loads all five families over
+ * the global `fetch`.
+ */
 export interface LoadDefaultFontsOptions {
   /** Narrow to specific Word families; default is all five. */
   readonly families?: readonly WordDefaultFamily[];
@@ -100,6 +141,11 @@ const manifestByFile = new Map(FONT_ASSET_MANIFEST.map((entry) => [entry.file, e
 /** Bundler-visible asset URL for one packaged face. */
 const assetUrl = (file: string): URL => new URL(`../assets/${file}`, import.meta.url);
 
+/**
+ * Every Word family this package substitutes for, and the default when
+ * {@link LoadDefaultFontsOptions.families} is omitted. Frozen — treat it as a constant
+ * rather than a mutable list to filter in place.
+ */
 export const ALL_WORD_DEFAULT_FAMILIES: readonly WordDefaultFamily[] = Object.freeze([
   'Calibri',
   'Cambria',

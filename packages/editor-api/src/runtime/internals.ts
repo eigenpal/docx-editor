@@ -84,6 +84,7 @@ export interface ContextInternals {
 
 /** What a context may do to a proxy it owns. */
 export interface RuntimeManagedObject {
+  /** @internal Drop this object's document reference; the run that owned it has ended. */
   [RELEASE](): void;
   /** Adoption: this object now belongs to another run's context on the same runtime. */
   [REBIND](context: RequestContext): void;

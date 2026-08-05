@@ -8,6 +8,7 @@
 
 import { CANONICAL_MUTATION_ORIGINS, NON_CANONICAL_ORIGINS } from '../registry/frozen-ids.ts';
 
+/** Whether a recorded conformance step was expected to commit or be refused. */
 export type FixtureOutcome =
   | 'applied'
   | 'aborted'
@@ -16,6 +17,7 @@ export type FixtureOutcome =
   | 'resource'
   | 'authorization';
 
+/** The change one step produced, summarized to what a fixture can compare across runtimes. */
 export interface ModelChangeSummary {
   readonly fromRevision: number;
   readonly toRevision: number;
@@ -24,6 +26,7 @@ export interface ModelChangeSummary {
   readonly dependencyKeys: readonly string[];
 }
 
+/** Where anchors sat after a step — how a fixture proves positions survived an edit. */
 export interface AnchorSnapshot {
   readonly anchorId: string;
   readonly story: string;
@@ -31,6 +34,7 @@ export interface AnchorSnapshot {
   readonly affinity: 'before' | 'after';
 }
 
+/** What one step must produce: its outcome, its change summary, and its authored-state hash. */
 export interface FixtureExpectation {
   readonly outcome: FixtureOutcome;
   /** Present iff outcome === 'applied'; MUST be > baseRevision. */
@@ -42,6 +46,7 @@ export interface FixtureExpectation {
   readonly anchors?: readonly AnchorSnapshot[];
 }
 
+/** One recorded operation and what it was expected to do. */
 export interface FixtureStep {
   readonly baseRevision: number;
   readonly origin: string;
@@ -61,10 +66,19 @@ export interface EncodedEnvelope {
   readonly bytesHex: string;
 }
 
+/** Which implementation recorded a fixture — local store, Yjs, or a binding. */
 export type FixtureSource =
   | { readonly kind: 'create' }
   | { readonly kind: 'docx'; readonly sha256: string; readonly bytesRef: string };
 
+/**
+ * The frozen conformance container: revisions, origins, operations, changes, snapshots and
+ * hashes.
+ *
+ * The CONTAINER is what is frozen — field names, origin membership, revision monotonicity, hash
+ * format. The op and change payloads travel opaquely, so their schemas can evolve without
+ * invalidating every recorded fixture.
+ */
 export interface ConformanceFixture {
   readonly formatVersion: 1;
   readonly documentId: string;
@@ -78,6 +92,7 @@ const VALID_ORIGINS = new Set<string>([...CANONICAL_MUTATION_ORIGINS, ...NON_CAN
 const HASH_RE = /^[0-9a-f]{16}$/;
 const HEX_RE = /^[0-9a-f]*$/;
 
+/** Whether a fixture is well-formed, listing every structural violation. */
 export interface ValidationResult {
   readonly valid: boolean;
   readonly errors: readonly string[];

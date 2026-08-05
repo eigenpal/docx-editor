@@ -117,6 +117,7 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
     for (const edge of waiting) this.#settleEdge(edge, value);
   }
 
+  /** @internal Plan the read this object's `load(...)` asked for. */
   protected onLoad(request: ResolvedLoadOptions): void {
     selectedProperties(request, ['items'], this.path.label);
     const listing = this.listing();
@@ -202,10 +203,12 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
 export abstract class HandleCollection<
   T extends ClientObject & PromisedItem,
 > extends ItemCollection<T> {
+  /** @internal How many members the listing's answer describes. */
   protected size(value: AutomationValue, label: string): number {
     return hydratedHandles(value, label).length;
   }
 
+  /** @internal The address of one member of the listing's answer. */
   protected addressAt(
     value: AutomationValue,
     label: string,

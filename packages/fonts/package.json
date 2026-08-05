@@ -26,6 +26,7 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "build:types": "tsc -p tsconfig.types.json",
     "manifest": "node scripts/generate-manifest.mjs",
     "manifest:check": "node scripts/generate-manifest.mjs --check",
     "google:catalog": "node scripts/generate-google-catalog.mjs",

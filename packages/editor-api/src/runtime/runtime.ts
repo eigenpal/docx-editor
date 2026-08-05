@@ -45,14 +45,33 @@ export type RunCallback<T> = (context: RequestContext) => Promise<T>;
 
 /** Capabilities exposed by a DocxEditor runtime, frozen for its lifetime. */
 export interface DocumentCapabilities {
+  /** There is a document to address at all. False for a browser host between mounts. */
   readonly document: boolean;
+  /** `save()` is offered — true for a server runtime, false for one borrowing an editor. */
   readonly save: boolean;
+  /** The host raises document events. */
   readonly events: boolean;
+  /** The host has a user selection to read or move. */
   readonly selection: boolean;
+  /** The host can be scrolled to a position. */
   readonly scrolling: boolean;
+  /** The host lays the document out, so paginated positions are meaningful. */
   readonly layout: boolean;
 }
 
+/**
+ * A runtime: one document host, many runs.
+ *
+ * Runs are ISOLATED, not serialized. Every {@link DocxEditorRuntime.run} gets its own context and
+ * its own queue, so two runs cannot interleave into one batch, and a run started inside another
+ * run works instead of waiting for a lock its own caller holds. Batches are still ordered — each
+ * `sync()` sends one atomic batch, in the order the `sync()` calls happen.
+ *
+ * Disposal is final: {@link DocxEditorRuntime.dispose} releases the host once and is safe to call
+ * again, and every later `run` fails with `RuntimeDisposed`.
+ *
+ * @public
+ */
 export interface DocxEditorRuntime {
   /** What the document host behind this runtime can do. Frozen at construction. */
   readonly capabilities: DocumentCapabilities;
@@ -64,6 +83,14 @@ export interface DocxEditorRuntime {
   dispose(): void;
 }
 
+/**
+ * A runtime over DOCX bytes rather than a live editor — what `DocxEditor.createServer` answers.
+ *
+ * Adds {@link DocxEditorServerRuntime.save} to the shared contract, because a server runtime owns
+ * its document and can serialize it; a browser runtime borrows the editor's and cannot.
+ *
+ * @public
+ */
 export interface DocxEditorServerRuntime extends DocxEditorRuntime {
   /** The current document as DOCX bytes. */
   save(): Promise<Uint8Array>;

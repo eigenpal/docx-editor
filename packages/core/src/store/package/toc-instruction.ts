@@ -13,10 +13,20 @@ export interface TocInstruction {
   readonly raw: string;
 }
 
+/** Longest TOC field instruction read. Instructions come from a file; the parse is bounded. */
 export const TOC_MAX_INSTRUCTION_CHARS = 256;
+/** Most entries one generated table of contents may hold. */
 export const TOC_MAX_ENTRIES = 512;
+/** Most bookmarks minted during one TOC refresh. */
 export const TOC_MAX_BOOKMARKS_PER_REFRESH = 512;
+/** Deepest nested field instruction followed. Caps recursion on file-supplied structure. */
 export const TOC_MAX_FIELD_NESTING = 4;
+/**
+ * Most layout passes a TOC refresh runs before settling.
+ *
+ * Page numbers change the TOC's own height, which changes page numbers — bounded so a
+ * non-converging document stops rather than looping.
+ */
 export const TOC_MAX_PAGE_PASSES = 3;
 
 /**

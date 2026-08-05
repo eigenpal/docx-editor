@@ -5,19 +5,38 @@
 // Every family here ships all four static faces and passes the shaper's table checks;
 // variable-only and colour families are excluded by the generator, not by hand.
 
+/**
+ * One fetchable face in the pinned catalog.
+ *
+ * The catalog is a CLOSED set: a document-declared family is only ever a lookup key
+ * against it, never interpolated into a URL, so a crafted `w:rFonts` cannot redirect a
+ * fetch. Bytes are trusted by `hash`, not by origin.
+ */
 export interface GoogleFontFace {
   /** The family name a document would name, e.g. "PT Sans". */
   readonly family: string;
+  /** Only the two static weights; variable-only families are excluded by the generator. */
   readonly weight: 400 | 700;
   readonly style: 'normal' | 'italic';
   /** Immutable, commit-pinned jsDelivr URL. */
   readonly url: string;
+  /** Expected size; a response of any other length is rejected before use. */
   readonly byteLength: number;
+  /** `sha256:` digest the engine's admission path re-derives, catching a swapped CDN asset. */
   readonly hash: string;
 }
 
+/**
+ * The google/fonts commit every {@link GoogleFontFace.url} is pinned to. Bump it only by
+ * regenerating this file, so URLs and hashes move together.
+ */
 export const GOOGLE_FONTS_REVISION = 'ea14f3c4c462af1d847b1abe96fcb3c3a8a66f97';
 
+/**
+ * Every face `googleFonts()` may fetch, sorted by family then weight then style. Closed
+ * and pinned: nothing outside this list is reachable, which is what makes resolving a
+ * document-declared family name safe.
+ */
 export const GOOGLE_FONT_CATALOG: readonly GoogleFontFace[] = [
   {
     family: 'Alegreya Sans',

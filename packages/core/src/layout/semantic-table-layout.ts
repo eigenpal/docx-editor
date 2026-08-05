@@ -147,6 +147,12 @@ export const MAX_TABLE_ROW_FRAGMENTS = 4096;
 /** A cell box never narrows below this, however wide a `w:tblCellSpacing` gap is stated. */
 const MIN_CELL_BOX_PT = 1;
 
+/**
+ * Why a table could not be paginated as authored.
+ *
+ * Each is a bound: a row taller than a page, a row that cannot be split, or a row producing more
+ * fragments than the limit allows.
+ */
 export type TablePaginationErrorCode =
   | 'table-row-overheight'
   | 'table-row-split-unsupported'

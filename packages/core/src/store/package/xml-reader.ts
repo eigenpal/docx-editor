@@ -8,6 +8,12 @@
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { isValidXmlText } from './sinks.ts';
 
+/**
+ * One parsed XML node, preserving significant order, whitespace and raw lexical values.
+ *
+ * Attribute records have a NULL prototype: attribute names come from a file and become object
+ * keys, so `__proto__` must be inert by construction rather than by filtering.
+ */
 export type XmlNode =
   | {
       readonly type: 'element';
@@ -17,6 +23,13 @@ export type XmlNode =
     }
   | { readonly type: 'text'; readonly value: string };
 
+/**
+ * Why XML was refused at the trust boundary.
+ *
+ * DTDs, entity declarations and external-entity references are PRE-rejected before parsing —
+ * blocking XXE and billion-laughs by never handing the parser the construct, rather than by
+ * trusting it to be configured safely.
+ */
 export type XmlRejection =
   | 'too-large'
   | 'dtd-forbidden'
@@ -91,6 +104,7 @@ function validateXmlText(value: string): string {
 class DepthError extends Error {}
 class ElementCountError extends Error {}
 
+/** A parsed document, or a typed refusal. Never throws — the input is untrusted. */
 export type XmlResult =
   | { readonly ok: true; readonly nodes: readonly XmlNode[] }
   | { readonly ok: false; readonly reason: XmlRejection };
@@ -255,6 +269,7 @@ function preflightDepth(xml: string): XmlRejection | undefined {
   return undefined;
 }
 
+/** Per-part caps on size, element count and depth. Clamped into the hard ceilings. */
 export interface XmlLimits {
   readonly maxBytes: number;
   readonly maxElements?: number;
@@ -275,6 +290,12 @@ const parser = new XMLParser({
 });
 
 /** Read XML into an ordered tree, refusing DTDs/entities and bounding size. */
+/**
+ * Read XML at the trust boundary: bounded, entity-free, and fidelity-preserving.
+ *
+ * Pre-rejects DTDs and entity constructs, disables expansion and value coercion, and keeps child
+ * order, attributes, whitespace and raw lexical form — everything a lossless re-emit needs.
+ */
 export function readXml(
   xml: string,
   limits: XmlLimits = { maxBytes: XML_HARD_MAX_BYTES }

@@ -33,6 +33,12 @@ function publicRequest(request: FontFaceRequest): FontFaceRequest {
   });
 }
 
+/**
+ * Normalize anything thrown during font work into an {@link EditorFontError}.
+ *
+ * One error type reaches consumers whether the failure came from resolution, admission or
+ * shaping, so a host branches on `code` rather than on which layer happened to throw.
+ */
 export function toEditorFontError(error: unknown): EditorFontError {
   if (error instanceof EditorFontError) return error;
   if (error instanceof FontResolutionError) {
@@ -161,6 +167,13 @@ export async function createLayoutShaping(
   }
 }
 
+/**
+ * Release a shaping environment's native resources.
+ *
+ * The shaper holds WASM memory that garbage collection cannot reclaim on its own, so a host that
+ * builds shaping options must dispose them when the editor goes away. Safe on a shaper that has
+ * no `dispose`.
+ */
 export function disposeLayoutShaping(shaping: LayoutShapingOptions): void {
   const shaper = shaping.shaper as LayoutShapingOptions['shaper'] & {
     dispose?: () => void;

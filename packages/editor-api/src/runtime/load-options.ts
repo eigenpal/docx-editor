@@ -20,6 +20,16 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { fail } from './errors.ts';
 
+/**
+ * The object form of `load(...)`: which properties, and how much of a collection.
+ *
+ * An unknown key, a non-integer `top`, a property name that is not an identifier, or a value of
+ * the wrong type is refused as `InvalidArgument` here, naming the option — a misspelled key is
+ * the difference between "load selected properties" and "load nothing", which would otherwise
+ * surface as a `PropertyNotLoaded` much later at a call that looks correct.
+ *
+ * @public
+ */
 export interface LoadQueryOptions {
   /** Which properties to load. */
   readonly select?: string | readonly string[];
@@ -31,6 +41,19 @@ export interface LoadQueryOptions {
   readonly skip?: number;
 }
 
+/**
+ * Everything `load(...)` accepts: one property name, several, or a
+ * {@link LoadQueryOptions} object.
+ *
+ * @example
+ * ```ts
+ * paragraph.load('text');
+ * paragraph.load(['text', 'style']);
+ * paragraphs.load({ select: ['text'], top: 5 });
+ * ```
+ *
+ * @public
+ */
 export type LoadOption = string | readonly string[] | LoadQueryOptions;
 
 export interface ResolvedLoadOptions {

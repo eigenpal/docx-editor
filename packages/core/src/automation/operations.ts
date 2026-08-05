@@ -136,6 +136,13 @@ export interface AutomationSearchOptions {
 /** Where a selection lands. `start`/`end` collapse it to one edge of the span. */
 export type AutomationSelectionMode = 'select' | 'start' | 'end';
 
+/**
+ * Every operation a host answers: the whole read-and-write vocabulary, as one discriminated
+ * union keyed on `op`.
+ *
+ * Reads never open a transaction; commands in one batch commit together. Handles are NAMES the
+ * host minted, never pointers, so an operation is plain transport data.
+ */
 export type AutomationOperation =
   /** The document itself — the root every other handle is reached through. */
   | { readonly op: 'getDocument' }
@@ -611,6 +618,7 @@ export type AutomationOperation =
       readonly title?: string;
     };
 
+/** Just the `op` discriminants of {@link AutomationOperation}, for dispatch tables. */
 export type AutomationOperationKind = AutomationOperation['op'];
 
 /** Operations that read. They never open a transaction. */

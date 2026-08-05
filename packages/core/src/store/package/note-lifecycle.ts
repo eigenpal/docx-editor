@@ -148,8 +148,15 @@ function isNoteRefAtomInRun(node: OoxmlNode): boolean {
   return noteReferenceKindOf(node) !== null || noteRefKindOf(node) !== null;
 }
 
+/** How far a note lifecycle op reaches — which parts a caller must expect to have changed. */
 export type NoteLifecycleImpact = 'flow-structural' | 'global';
 
+/**
+ * A note lifecycle mutation: insert, delete, convert, or set properties.
+ *
+ * Package-level rather than story-level, because every one of these touches the main document,
+ * the notes part, the document relationships AND `[Content_Types].xml` together.
+ */
 export type NoteLifecycleOp =
   | {
       readonly op: 'insertNote';
@@ -193,8 +200,15 @@ export type NoteLifecycleOp =
       };
     };
 
+/** Why a note lifecycle op was refused. */
 export type NoteLifecycleRejection = 'invalidArgs' | 'tree-invariant';
 
+/**
+ * A new package, or a typed rejection.
+ *
+ * Application is PURE and all-or-nothing: there are no partial writes, so a refused op leaves the
+ * caller's package untouched rather than half-migrated across four parts.
+ */
 export type NoteLifecycleResult =
   | {
       readonly ok: true;
@@ -218,6 +232,7 @@ const LIFECYCLE_OPS = new Set([
   'setNoteProperties',
 ]);
 
+/** Whether an op is a note lifecycle op rather than a story-level one. */
 export function isNoteLifecycleOp(op: { readonly op: string }): op is NoteLifecycleOp {
   return LIFECYCLE_OPS.has(op.op);
 }
@@ -239,6 +254,7 @@ function isPositiveNoteId(value: unknown): value is number {
   );
 }
 
+/** Attribution and limits applied to one note lifecycle op. */
 export interface NoteLifecycleOptions {
   /**
    * Shared part + visited-node budget for reference scans. When omitted a fresh default
@@ -396,6 +412,12 @@ function applyDeleteNote(
   };
 }
 
+/**
+ * How deleting text cascades into the notes it referenced.
+ *
+ * A note's body and the citation reaching it are one thing to a reader, so removing the reference
+ * must remove the body too or the notes part keeps an entry nothing points at.
+ */
 export interface CascadeDeletedNoteReferencesOptions {
   /**
    * Independent full budgets per snapshot. When omitted each snapshot gets its own

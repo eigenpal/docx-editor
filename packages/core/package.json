@@ -79,7 +79,8 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:types": "tsc -p tsconfig.types.json"
   },
   "devDependencies": {
     "typescript": "^5.3.3"

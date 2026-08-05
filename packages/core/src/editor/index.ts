@@ -1,3 +1,14 @@
+/**
+ * `@docx-editor.dev/core/editor` — the editor facade and its chrome vocabulary.
+ *
+ * `createDocxEditor` implements the full `Editor` contract over a paginated surface, and the
+ * chrome registry (`CHROME_GROUPS`, `ChromeSlotId`) is the toolbar taxonomy both adapters derive
+ * their default arrangement from. Enabled state has exactly one source — `toolbarCommandState`,
+ * which asks the engine — so a control and the engine can never disagree.
+ *
+ * @packageDocumentation
+ * @public
+ */
 // @docx-editor.dev/engine-editor
 //
 // Browser editor composition root: the production tree-lane editor. Composes the typed

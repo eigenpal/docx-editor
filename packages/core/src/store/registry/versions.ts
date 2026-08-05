@@ -4,6 +4,7 @@
 // rejected rather than silently accepted, so a malformed range never
 // masquerades as "compatible".
 
+/** A parsed semantic version. Only the three numeric components — no pre-release or build. */
 export interface SemVer {
   readonly major: number;
   readonly minor: number;
@@ -12,12 +13,19 @@ export interface SemVer {
 
 const SEMVER_RE = /^(\d+)\.(\d+)\.(\d+)$/;
 
+/**
+ * Parse a semantic version, rejecting anything the registry's rules do not need.
+ *
+ * Deliberately narrow: an unsupported range form is refused rather than accepted, so a malformed
+ * range can never masquerade as "compatible".
+ */
 export function parseSemVer(input: string): SemVer {
   const m = SEMVER_RE.exec(input);
   if (!m) throw new Error(`invalid semantic version: ${JSON.stringify(input)}`);
   return { major: Number(m[1]), minor: Number(m[2]), patch: Number(m[3]) };
 }
 
+/** Order two versions: negative, zero or positive, by major then minor then patch. */
 export function compareSemVer(a: SemVer, b: SemVer): -1 | 0 | 1 {
   if (a.major !== b.major) return a.major < b.major ? -1 : 1;
   if (a.minor !== b.minor) return a.minor < b.minor ? -1 : 1;

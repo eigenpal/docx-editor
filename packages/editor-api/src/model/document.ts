@@ -29,6 +29,28 @@ import { NoteItemCollection } from './notes.ts';
 import { CommentCollection, RevisionCollection } from './review.ts';
 import { SectionCollection } from './sections.ts';
 
+/**
+ * The document: the root every other object is reached from.
+ *
+ * Deliberately thin. A document here is not a bag of content — it is the thing that HAS stories.
+ * It publishes the main story as {@link Document.body}, plus that story's paragraphs directly as
+ * `document.paragraphs`, because that is how source-compatible code walks a document.
+ *
+ * Reached once per {@link RequestContext} and memoized: `context.document` is the same object
+ * every time, so a property loaded through one reference reads back through any other.
+ *
+ * @example
+ * ```ts
+ * await runtime.run(async (context) => {
+ *   const paragraphs = context.document.paragraphs;
+ *   paragraphs.load('text');
+ *   await context.sync();
+ *   for (const paragraph of paragraphs.items) console.log(paragraph.text);
+ * });
+ * ```
+ *
+ * @public
+ */
 export class Document extends ModelObject {
   #body: Body | undefined;
   #paragraphs: ParagraphCollection | undefined;
@@ -144,6 +166,7 @@ export class Document extends ModelObject {
     return this.#endnotes;
   }
 
+  /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
     // The document offers no readable property of its own in this slice, so the only selection it
     // accepts is the empty one — and naming a property it does not have is refused, not ignored.

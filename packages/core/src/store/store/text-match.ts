@@ -30,6 +30,7 @@ export const SEARCH_MATCH_LIMIT = 2000;
  */
 const WORD_CHAR = /[\p{L}\p{N}_]/u;
 
+/** How a text search is narrowed. Options the engine cannot honour are refused, never ignored. */
 export interface TextMatchOptions {
   readonly matchCase?: boolean;
   readonly wholeWord?: boolean;
@@ -52,6 +53,7 @@ export interface TextOccurrence {
   readonly length: number;
 }
 
+/** Where a phrase occurs in a story, as paragraph-plus-offset ranges. */
 export interface TextOccurrences {
   readonly matches: readonly TextOccurrence[];
   /** The scan stopped at `limit` with occurrences still ahead of it. */

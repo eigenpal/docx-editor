@@ -49,8 +49,18 @@ export const SERVER_AUTOMATION_CAPABILITIES: AutomationCapabilities = Object.fre
   layout: false,
 });
 
+/**
+ * Why bytes could not be opened as a document: any bounded-reader rejection, plus the package
+ * that parsed but carried no main document part.
+ */
 export type ServerAutomationHostRejection = OoxmlPackageRejection | 'no-main-document-part';
 
+/**
+ * A host over the opened bytes, or a refusal.
+ *
+ * A result rather than a throw: these bytes are untrusted input, and a malformed upload should
+ * be a value the caller inspects rather than an exception from inside a zip decoder.
+ */
 export type ServerAutomationHostResult =
   | { readonly ok: true; readonly host: AutomationHost }
   | {
@@ -59,6 +69,11 @@ export type ServerAutomationHostResult =
       readonly detail?: string;
     };
 
+/**
+ * How a headless host opens a document. Every field is optional.
+ *
+ * @public
+ */
 export interface ServerAutomationHostOptions {
   /**
    * Tighter budgets for the bounded reader — zip ratio, part count, XML depth.

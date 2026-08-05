@@ -4,6 +4,12 @@
 // Number.MAX_SAFE_INTEGER, so a file-supplied count can never be trusted into an
 // allocation.
 
+/**
+ * A counter's limit was reached. Carries the label, the limit, and what was attempted.
+ *
+ * Thrown at the N → N+1 boundary, so the increment that would have crossed the limit never
+ * happens rather than being detected afterwards.
+ */
 export class LimitExceededError extends Error {
   constructor(
     readonly label: string,
@@ -15,6 +21,13 @@ export class LimitExceededError extends Error {
   }
 }
 
+/**
+ * Overflow-safe counting against a fixed limit.
+ *
+ * Never silently wraps: it rejects the increment that would cross its limit AND any arithmetic
+ * that would exceed `Number.MAX_SAFE_INTEGER`. That second guard is the point — a file-supplied
+ * count must never be trusted into an allocation, and a wrapped counter reads as small.
+ */
 export class BoundedCounter {
   private value = 0;
 

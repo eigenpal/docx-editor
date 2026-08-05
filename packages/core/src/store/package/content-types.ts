@@ -9,22 +9,36 @@
 import { partNameKey, asciiFold, type NameResult, normalizePartName } from './opc-names.ts';
 import { BoundedCounter } from '../runtime/counter.ts';
 
+/** One `<Default>`: a file extension mapped to a content type. */
 export interface DefaultRecord {
   readonly extension: string; // authored lexical form
   readonly contentType: string;
   readonly order: number;
 }
+/** One `<Override>`: a specific part name mapped to a content type. Beats any Default. */
 export interface OverrideRecord {
   readonly partName: string; // authored lexical form
   readonly contentType: string;
   readonly order: number;
 }
 
+/**
+ * The authored `[Content_Types].xml` records, in significant order.
+ *
+ * Retained rather than collapsed into a lookup, because the file's lexical form and ordering are
+ * part of what a lossless save re-emits.
+ */
 export interface ContentTypeRecords {
   readonly defaults: readonly DefaultRecord[];
   readonly overrides: readonly OverrideRecord[];
 }
 
+/**
+ * Why content-type records could not be indexed.
+ *
+ * All fail CLOSED: conflicting Defaults on one extension, duplicate normalized Override names, or
+ * invalid MIME syntax are refused rather than resolved by picking one.
+ */
 export type ContentTypeError =
   | { readonly code: 'invalid-mime'; readonly value: string }
   | { readonly code: 'conflicting-default'; readonly extension: string }
@@ -36,6 +50,7 @@ export type ContentTypeError =
 const MIME_RE =
   /^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*(\s*;\s*[^;]+)*$/;
 
+/** Whether a string is syntactically a MIME type. Syntax only — no registry lookup. */
 export function isValidMime(value: string): boolean {
   return MIME_RE.test(value);
 }
@@ -45,6 +60,7 @@ export function extensionKey(extension: string): string {
   return asciiFold(extension.replace(/^\./, ''));
 }
 
+/** The resolved lookup: Override by case-folded part name, Default by case-insensitive extension. */
 export interface ContentTypeIndex {
   /** ext key -> single MIME (identical duplicates collapsed). */
   readonly defaults: ReadonlyMap<string, string>;
@@ -52,6 +68,7 @@ export interface ContentTypeIndex {
   readonly overrides: ReadonlyMap<string, string>;
 }
 
+/** The built index, or the conflict that made it impossible. */
 export type IndexResult =
   | { readonly ok: true; readonly index: ContentTypeIndex }
   | { readonly ok: false; readonly error: ContentTypeError };
@@ -106,6 +123,12 @@ export function buildContentTypeIndex(
   return { ok: true, index: { defaults, overrides } };
 }
 
+/**
+ * A part's content type, or why it has none.
+ *
+ * An orphan record never determines a part's type — a Default with no matching part is preserved
+ * inertly rather than applied.
+ */
 export type ResolveResult =
   | { readonly ok: true; readonly contentType: string; readonly source: 'override' | 'default' }
   | { readonly ok: false; readonly reason: 'unknown' };

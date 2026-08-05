@@ -11,6 +11,10 @@ import type {
   ResolvedFootnoteProperties,
 } from '../store/package/note-properties.ts';
 
+/**
+ * Where one note is referenced from — what per-page and per-section restart rules are computed
+ * against.
+ */
 export interface NoteReferenceSite {
   /** Stable note id (`w:id`). */
   readonly noteId: number;
@@ -25,6 +29,12 @@ export interface NoteReferenceSite {
   readonly customMarkFollows?: boolean;
 }
 
+/**
+ * The mark a note reference paints.
+ *
+ * `null` where `w:customMarkFollows` suppresses it: the document supplies its own glyph, and
+ * painting an automatic number too would show the note twice.
+ */
 export interface NoteDisplayMark {
   readonly noteId: number;
   /** Formatted mark, or `null` when suppressed by customMarkFollows. */

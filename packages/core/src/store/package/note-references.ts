@@ -41,6 +41,12 @@ export const MAX_NOTE_REFERENCE_MUTATION_SCAN = 1_000_000;
  */
 export const MAX_NOTE_REFERENCE_PARTS = 256;
 
+/**
+ * A load-time note problem worth reporting.
+ *
+ * `dangling-note-reference` is a citation pointing at no note; `note-reference-scan-truncated`
+ * says the scan hit its budget, so absence of further diagnostics is not proof of correctness.
+ */
 export type NoteDiagnosticCode = 'dangling-note-reference' | 'note-reference-scan-truncated';
 
 /**
@@ -60,6 +66,7 @@ export type NoteDiagnostic =
       readonly code: 'note-reference-scan-truncated';
     };
 
+/** One note reference found in a story, with where it sits. */
 export interface NoteReferenceHit {
   readonly noteKind: NoteKind;
   readonly noteId: number;
@@ -82,6 +89,7 @@ export interface NoteReferenceScanBudget {
   truncated: boolean;
 }
 
+/** A bounded budget for scanning note references, so a crafted document cannot stall a load. */
 export function createNoteReferenceScanBudget(
   maxVisited: number = MAX_NOTE_REFERENCE_SCAN,
   maxParts: number = MAX_NOTE_REFERENCE_PARTS

@@ -98,7 +98,13 @@ const MESSAGES: Readonly<Record<DocxEditorErrorCode, string>> = Object.freeze({
   GeneralException: 'the document could not complete the request.',
 });
 
+/**
+ * The fields a {@link DocxEditorError} is constructed from.
+ *
+ * @public
+ */
 export interface DocxEditorErrorInit {
+  /** Which refusal this is. The stable thing to branch on. */
   readonly code: DocxEditorErrorCode;
   /**
    * The consumer-facing path of the object or property involved — `document.body.text`, not a
@@ -111,10 +117,40 @@ export interface DocxEditorErrorInit {
   readonly actualRevision?: number;
 }
 
+/**
+ * Every refusal this runtime throws.
+ *
+ * Branch on {@link DocxEditorError.code}, never on the message. Codes are stable public API —
+ * added rather than repurposed — so a consumer that handles `PropertyNotLoaded` by loading and
+ * syncing again keeps working across versions.
+ *
+ * Nothing from the engine appears in the message. Host rejection reasons, opaque handle refs and
+ * offset ranges are all withheld: a ref in a message is a name a consumer can start depending on,
+ * and a store's rejection reason would become a documented one the moment somebody matched on it.
+ * What a consumer gets instead is a stable code, a fixed sentence, and `target` — the
+ * consumer-facing path they wrote themselves.
+ *
+ * @example
+ * ```ts
+ * try {
+ *   await context.sync();
+ * } catch (error) {
+ *   if (error instanceof DocxEditorError && error.code === 'StaleDocument') {
+ *     // Re-read and retry: someone else changed the document first.
+ *   }
+ * }
+ * ```
+ *
+ * @public
+ */
 export class DocxEditorError extends Error {
+  /** Which refusal this is. Stable across versions; the thing to branch on. */
   readonly code: DocxEditorErrorCode;
+  /** Consumer-facing path of the object or property involved, when there is one to name. */
   readonly target?: string;
+  /** For `StaleDocument`: the revision the context had read at. */
   readonly expectedRevision?: number;
+  /** For `StaleDocument`: the revision the document was actually at. */
   readonly actualRevision?: number;
 
   constructor(init: DocxEditorErrorInit) {

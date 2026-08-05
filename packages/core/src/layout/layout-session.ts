@@ -22,6 +22,14 @@ export interface FlowCheckpoint {
   readonly flowColumnIndex: number;
 }
 
+/**
+ * What the last layout pass actually did — the observable evidence that incremental layout is
+ * working.
+ *
+ * `reusedPages` and `fullPasses` are the ones that matter: a typing keystroke that rebuilds every
+ * page produces identical output and unusable performance, so the tests assert on these rather
+ * than on the rendered result.
+ */
 export interface LayoutSessionStats {
   /** Paragraphs placed by the last pass, against the number in the document. */
   readonly placed: number;
@@ -51,6 +59,13 @@ export interface MultiSectionLayoutState {
   previousPageCount: number;
 }
 
+/**
+ * Carried-over state that makes layout incremental.
+ *
+ * A caller creates one and hands the SAME object back each pass. It holds the previous pages, the
+ * per-block cache keys and the flow checkpoints a pass resumes from, so an edit low in a document
+ * re-lays only what follows it. A no-change pass returns the previous pages by identity.
+ */
 export interface LayoutSession {
   /** @internal Mutable across passes; a caller only creates one and passes it back. */
   previous: SemanticLayout | null;

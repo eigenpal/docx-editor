@@ -7,6 +7,12 @@
 // fetched. This is the package trust boundary (design D14) — pure, DOM-free, and
 // dependency-free; it operates on names, not archive bytes.
 
+/**
+ * Why a part or relationship name was refused.
+ *
+ * Path traversal is the reason this exists: a name with `..` or a leading `/` is refused rather
+ * than normalized, because normalizing is how a crafted package reaches outside itself.
+ */
 export type NameRejection =
   | 'empty'
   | 'control-char'
@@ -23,6 +29,7 @@ export type NameRejection =
   | 'not-absolute-uri'
   | 'unsafe-scheme';
 
+/** A validated OPC name, or the typed reason it was refused. */
 export type NameResult =
   | { readonly ok: true; readonly partName: string }
   | { readonly ok: false; readonly reason: NameRejection };

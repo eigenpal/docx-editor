@@ -42,25 +42,43 @@ export interface CancellationPort {
 
 // Ports owned/detailed by later sections; declared here so the registry can
 // resolve them uniformly. Kept as opaque markers until their milestone.
+
+/** Where documents are stored and retrieved. Opaque marker until its milestone. */
 export interface PersistencePort {
   readonly kind: 'persistence';
 }
+
+/** How the engine talks to a remote peer. Opaque marker until its milestone. */
 export interface TransportPort {
   readonly kind: 'transport';
 }
+
+/** Where font bytes come from. Opaque marker until its milestone. */
 export interface FontPort {
   readonly kind: 'font';
 }
+
+/** Which shaping backend measures text. Opaque marker until its milestone. */
 export interface ShapingPort {
   readonly kind: 'shaping';
 }
+
+/** How image bytes are decoded. Opaque marker until its milestone. */
 export interface ImagePort {
   readonly kind: 'image';
 }
+
+/** Where resource consumption is reported. Opaque marker until its milestone. */
 export interface ResourceAccountingPort {
   readonly kind: 'resource-accounting';
 }
 
+/**
+ * A required port the runtime did not provide.
+ *
+ * Thrown rather than falling back: silently reaching for a browser global when a worker or server
+ * adapter did not supply a port is exactly the coupling ports exist to prevent.
+ */
 export class PortResolutionError extends Error {
   constructor(readonly portId: string) {
     super(`runtime port not available: ${portId}`);
@@ -68,6 +86,13 @@ export class PortResolutionError extends Error {
   }
 }
 
+/**
+ * The environment-dependent services an engine instance may reach.
+ *
+ * Everything outside pure computation — the clock, identity minting, scheduling, fonts, images —
+ * is reached only through here, which is what lets browser, worker and server adapters supply
+ * only what their runtime actually offers.
+ */
 export class PortRegistry {
   private readonly ports = new Map<string, unknown>();
 

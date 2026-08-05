@@ -196,6 +196,12 @@ export interface PageFurniture {
   readonly footers: ReadonlyMap<HeaderFooterVariantName, HeaderFooterStoryLayout>;
 }
 
+/**
+ * Everything a layout pass needs beyond the document itself.
+ *
+ * `measurer` is the only required field — layout is DOM-free and measures through whatever is
+ * injected here, which is what lets the same code paginate on a server and in a browser.
+ */
 export interface SemanticLayoutOptions {
   readonly geometry?: PageGeometry;
   readonly measurer: TextMeasurer;
@@ -370,6 +376,16 @@ const drawingSourceOrderByContext = new WeakMap<
   ReadonlyMap<string, number>
 >();
 
+/**
+ * Lay one story part out into pages.
+ *
+ * The engine's layout entry point. Walks body, header, footer and note roots, flattens block
+ * SDTs, paginates tables with header-row repeats and vertical merges, and resolves every
+ * paragraph through the style cascade.
+ *
+ * Incremental when given a {@link LayoutSession}: per-block cache keys plus flow checkpoints mean
+ * a pass that changes nothing returns the previous pages by identity.
+ */
 export function layoutSemanticDocument(
   part: OoxmlPart,
   revision: number,

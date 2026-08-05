@@ -25,6 +25,7 @@ import {
   type OoxmlPart,
 } from './ooxml-tree.ts';
 
+/** An edited part, or the invariant violations that rejected the edit. */
 export type OoxmlEditResult =
   | { readonly ok: true; readonly part: OoxmlPart }
   | { readonly ok: false; readonly issues: readonly OoxmlInvariantIssue[] };

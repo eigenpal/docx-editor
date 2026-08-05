@@ -27,6 +27,12 @@ import { paragraphIndent, propertiesOf } from './paragraph-flow.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 
+/**
+ * A paragraph's list membership fully resolved: definition, level, marker text and geometry.
+ *
+ * `markerText` is already expanded through the counter state, so it is the string a reader sees
+ * rather than the `w:lvlText` template.
+ */
 export interface ResolvedListItem {
   readonly numId: string;
   readonly ilvl: number;

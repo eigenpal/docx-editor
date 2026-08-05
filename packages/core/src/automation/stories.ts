@@ -24,6 +24,14 @@ export const HEADER_FOOTER_VARIANTS: readonly HeaderFooterVariant[] = Object.fre
   'even',
 ]);
 
+/**
+ * Which story an operation acts on: the main body, one header/footer variant of one section, or
+ * one note.
+ *
+ * A header is addressed by section INDEX plus variant rather than by relationship id, because
+ * that is how a caller thinks about it and because a section inheriting its predecessor's header
+ * has no relationship of its own to name.
+ */
 export type AutomationStoryId =
   | { readonly kind: 'body' }
   | {

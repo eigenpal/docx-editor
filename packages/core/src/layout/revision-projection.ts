@@ -57,6 +57,12 @@ export interface RevisionAttribution {
  */
 export type RevisionDisplayMode = 'all-markup' | 'proposed' | 'original';
 
+/**
+ * How a document renders tracked changes when nothing says otherwise.
+ *
+ * `all-markup` matches Word's own default: a reader who opens a document with pending changes
+ * sees them, rather than a clean-looking document hiding edits nobody has accepted.
+ */
 export const DEFAULT_REVISION_DISPLAY_MODE: RevisionDisplayMode = 'all-markup';
 
 /** No enclosing revision. Shared so the common untracked case allocates nothing. */

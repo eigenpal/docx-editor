@@ -100,6 +100,10 @@ interface NoteOverflowBudget {
  */
 export const MAX_EACH_PAGE_MARK_CANDIDATES = 12;
 
+/**
+ * Why note PAGINATION fell back, widening {@link NoteLayoutFallbackReason} with the reasons that
+ * only arise while distributing notes across pages.
+ */
 export type NotePaginationFallbackReason =
   | NoteLayoutFallbackReason
   | 'note-reflow-exhausted'
@@ -113,6 +117,13 @@ export type NotePaginationFallbackReason =
   /** A single note line exceeds the full content column; content is not placed overflowing. */
   | 'note-line-exceeds-page';
 
+/**
+ * Everything note pagination needs: the note parts, and the per-section properties governing
+ * them.
+ *
+ * Per-SECTION because numbering, restart rules and placement are all section properties — one
+ * document can restart footnote numbering at every section and end notes at the document end.
+ */
 export interface NotesLayoutInput {
   readonly footnotesPart: OoxmlPart | null;
   readonly endnotesPart: OoxmlPart | null;
@@ -130,6 +141,12 @@ export interface NotesLayoutInput {
   readonly defaultTabStopPt?: number;
 }
 
+/**
+ * The layout with notes attached, plus any fallbacks taken and the mark context used.
+ *
+ * The marks come back because they feed the body's incremental cache tokens: a note number that
+ * changed must invalidate the paragraph that references it.
+ */
 export interface NotesAttachResult {
   readonly layout: SemanticLayout;
   readonly fallbackReasons: readonly NotePaginationFallbackReason[];

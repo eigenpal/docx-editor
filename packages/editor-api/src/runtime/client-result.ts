@@ -17,6 +17,24 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { fail } from './errors.ts';
 
+/**
+ * A value a queued method promised to produce, readable after the next `sync()`.
+ *
+ * Deliberately not a `Promise`. A method call inside a batch has not been sent yet, so there is
+ * no pending work to await and nothing that could resolve on its own — awaiting one would
+ * deadlock a consumer who then never calls `sync()`. A result is a box that stays EMPTY until the
+ * sync fills it, and reading it early is `ValueNotLoaded` rather than `undefined` flowing onwards
+ * into something that misinterprets it.
+ *
+ * @example
+ * ```ts
+ * const count = body.getParagraphCount();
+ * await context.sync();
+ * console.log(count.value);
+ * ```
+ *
+ * @public
+ */
 export class ClientResult<T> {
   #filled = false;
   #value: T | undefined;
@@ -27,6 +45,12 @@ export class ClientResult<T> {
     this.#target = target;
   }
 
+  /**
+   * The value, once a `sync()` has filled it in.
+   *
+   * Reading before then is `ValueNotLoaded` rather than `undefined`, so a mistake surfaces at the
+   * read instead of flowing onwards into something that misinterprets it.
+   */
   get value(): T {
     if (!this.#filled) fail({ code: 'ValueNotLoaded', target: this.#target });
     return this.#value as T;
@@ -37,7 +61,7 @@ export class ClientResult<T> {
     return this.#filled;
   }
 
-  /** @internal */
+  /** @internal The box and the way to fill it, so only the creator can settle it. */
   static create<T>(target: string): {
     result: ClientResult<T>;
     fill: (value: T) => void;

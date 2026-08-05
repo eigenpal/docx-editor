@@ -55,6 +55,12 @@ export interface SourceRange {
   readonly end: number;
 }
 
+/**
+ * A rectangle in layout POINTS.
+ *
+ * Points everywhere in this layer — twips convert at property-read boundaries and CSS pixels at
+ * paint. A box carrying either of those would eventually be added to one carrying the other.
+ */
 export interface LayoutBox {
   readonly x: number;
   readonly y: number;
@@ -197,6 +203,12 @@ export interface StyleSpanRecord {
   };
 }
 
+/**
+ * One laid-out line: its geometry, its baseline, and the styled spans it renders.
+ *
+ * The unit hit-testing and caret placement resolve against. Geometry comes from HERE, never from
+ * the DOM, which is what lets an empty paragraph still get a caret.
+ */
 export interface LineRecord {
   readonly id: string;
   readonly range: SourceRange;
@@ -403,6 +415,12 @@ export interface TableFragmentRecord {
   readonly box: LayoutBox;
 }
 
+/**
+ * One table row on one page.
+ *
+ * A FRAGMENT, not the row: a row split across a page break appears once per page it touches, and
+ * a repeated header row appears on every page of its table.
+ */
 export interface TableRowFragmentRecord {
   /** Canonical node id of the `w:tr`. */
   readonly id: string;
@@ -431,6 +449,13 @@ export interface TableRowFragmentRecord {
   readonly box: LayoutBox;
 }
 
+/**
+ * One table cell on one page, already resolved against the grid.
+ *
+ * `gridSpan` is clamped at read time, because it comes from a file and an unclamped span is a
+ * loop bound an attacker controls. A vertical-merge continuation paints its box but holds no
+ * blocks — its content belongs to the cell that started the merge.
+ */
 export interface TableCellFragmentRecord {
   /** Canonical node id of the `w:tc`. */
   readonly id: string;
@@ -625,6 +650,12 @@ export interface ContentControlBoundaryRecord {
   readonly fragments: readonly ContentControlGeometryFragment[];
 }
 
+/**
+ * One laid-out page: the sheet, the content area, and everything that landed on it.
+ *
+ * Page identity is REUSED across incremental passes — a pass that changes nothing returns the
+ * previous records by reference, which is what lets paint skip untouched pages entirely.
+ */
 export interface PageRecord {
   readonly id: string;
   readonly index: number;
@@ -669,6 +700,13 @@ export interface PageRecord {
   readonly contentControls?: readonly ContentControlBoundaryRecord[];
 }
 
+/**
+ * A complete layout pass: every page, plus the document-wide indexes derived alongside them.
+ *
+ * Stamped with the store `revision` it was laid out from, so anything holding geometry can tell
+ * whether the document has moved underneath it — which is how stale pointer gestures and
+ * overlays are refused rather than applied to coordinates that no longer describe anything.
+ */
 export interface SemanticLayout {
   /** The store revision these records were laid out from. */
   readonly revision: number;

@@ -101,6 +101,11 @@ export function removeCustomNode(editor: Editor, nodeId: string): ExecResult {
   return { ok: true, changed: true };
 }
 
+/**
+ * How {@link updateCustomNode} rewrites the control it replaces.
+ *
+ * @public
+ */
 export interface UpdateCustomNodeOptions {
   /** `w:alias` for the rewritten control. */
   readonly alias?: string;
