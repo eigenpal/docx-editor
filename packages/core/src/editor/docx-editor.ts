@@ -1911,6 +1911,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         anchor: { paragraphId: range.start.paragraphId, offset: range.start.offset },
         head: { paragraphId: range.start.paragraphId, offset: range.start.offset },
       });
+      // ANNOUNCED, exactly as dismissing is. Opening a card is observable state of its own,
+      // and the surface's `onChange` deliberately stays quiet when the caret did not move —
+      // which is precisely this case whenever the card is reopened after being DISMISSED:
+      // dismissing leaves the caret inside the range, so setting it back to the range start
+      // moves nothing, no `selectionChange` was emitted, and the rail never re-rendered. The
+      // engine considered the card open and the reader was looking at a closed one that would
+      // not respond to any number of further clicks.
+      bump();
+      emitSelectionChange();
     },
 
     acceptReviewItem: (key: string) => resolveReviewItem(key, 'accept'),

@@ -435,6 +435,30 @@ describe('comments in the queue', () => {
     expect(nested || isRoot).toBe(true);
   });
 
+  test('a card dismissed without moving the caret reopens when it is clicked again', () => {
+    const editor = mount({ body: COMMENTED_BODY, comments: COMMENTS });
+    const [card] = editor.getReviewItems();
+    const seen: (string | null)[] = [];
+    editor.on('selectionChange', () =>
+      seen.push(editor.getReviewItems().find((item) => item.isActive)?.key ?? null)
+    );
+
+    editor.setActiveReviewItem(card!.key);
+    expect(editor.getReviewItems()[0]!.isActive).toBe(true);
+
+    // Dismissing leaves the caret INSIDE the range — the rail's reply-box Cancel does exactly
+    // this. So putting the caret back at the range start moves nothing.
+    editor.setActiveReviewItem(null);
+    expect(editor.getReviewItems()[0]!.isActive).toBe(false);
+
+    editor.setActiveReviewItem(card!.key);
+    expect(editor.getReviewItems()[0]!.isActive).toBe(true);
+    // PUSH, not pull. The engine reopening the card is no use if nobody is told: the surface
+    // stays quiet when the caret does not move, so without an explicit emit the rail never
+    // re-rendered and the reader was left clicking a card that would not open.
+    expect(seen[seen.length - 1]).toBe(card!.key);
+  });
+
   test('deleting one comment leaves a different open card open', () => {
     const editor = mount({ body: COMMENTED_BODY, comments: COMMENTS });
     const [first] = editor.getReviewItems();
