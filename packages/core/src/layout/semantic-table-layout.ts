@@ -23,7 +23,11 @@ import type { FieldPageContext, HyperlinkProjector } from './field-projection.ts
 import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
 import { alignSpans, breakParagraph, type PendingLine } from './paragraph-flow.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';
-import { collapsedSpaceBefore, paragraphBorderExtentPt } from './paragraph-style.ts';
+import {
+  collapsedSpaceBefore,
+  paragraphBorderExtentPt,
+  paragraphBorderStrokeWidthPt,
+} from './paragraph-style.ts';
 import { tabStopsFingerprint, withDefaultTabInterval } from './paragraph-tabs.ts';
 import { DEFAULT_RUN_STYLE } from './run-style.ts';
 import {
@@ -91,9 +95,7 @@ export const MAX_TABLE_ROW_FRAGMENTS = 4096;
 const MIN_CELL_BOX_PT = 1;
 
 export type TablePaginationErrorCode =
-  | 'table-row-overheight'
-  | 'table-row-split-unsupported'
-  | 'table-row-fragment-limit';
+  'table-row-overheight' | 'table-row-split-unsupported' | 'table-row-fragment-limit';
 
 /**
  * Bounded table pagination failure. Prefer this over emitting a fragment that overflows
@@ -368,9 +370,7 @@ function placeCellParagraph(
     const pendingLine = lines[lineIndex]!;
     const isLastLine = lineIndex === lines.length - 1;
     const borderExtra =
-      isLastLine && includeBottomBorder && bottomBorder
-        ? bottomBorder.spacePt + bottomBorder.widthPt
-        : 0;
+      isLastLine && includeBottomBorder && bottomBorder ? paragraphBorderExtentPt(bottomBorder) : 0;
     const afterExtra = isLastLine && includeAfter ? spacing.after : 0;
     const lineBottom = y + pendingLine.height + borderExtra + afterExtra;
     if (lineBottom > maxBottom + 0.001) {
@@ -434,33 +434,36 @@ function placeCellParagraph(
   // same here or one document paints the identical callout two ways depending on whether it
   // sits in a table cell or a header. The side rules stand outside the text column by their
   // own `w:space`, so horizontals drawn only across the column leave the frame open.
-  const boxLeft = borders.left
-    ? fragmentX - borders.left.spacePt - borders.left.widthPt
-    : fragmentX;
+  // Stroke thickness uses the inflated compound band for `double`/etc. (shared with body).
+  const leftStroke = borders.left ? paragraphBorderStrokeWidthPt(borders.left) : 0;
+  const rightStroke = borders.right ? paragraphBorderStrokeWidthPt(borders.right) : 0;
+  const boxLeft = borders.left ? fragmentX - borders.left.spacePt - leftStroke : fragmentX;
   const boxRight = borders.right
-    ? fragmentX + available + borders.right.spacePt + borders.right.widthPt
+    ? fragmentX + available + borders.right.spacePt + rightStroke
     : fragmentX + available;
   const boxWidth = Math.max(boxRight - boxLeft, 0);
   if (topExtent > 0 && borders.top) {
-    const ruleY = linesTop - borders.top.spacePt - borders.top.widthPt;
+    const topStroke = paragraphBorderStrokeWidthPt(borders.top);
+    const ruleY = linesTop - borders.top.spacePt - topStroke;
     strokes.push({
       side: 'top',
       edge: borders.top,
-      box: { x: boxLeft, y: ruleY, width: boxWidth, height: borders.top.widthPt },
+      box: { x: boxLeft, y: ruleY, width: boxWidth, height: topStroke },
     });
     contentTop = ruleY;
   }
   if (complete && includeBottomBorder && bottomBorder) {
+    const closeStroke = paragraphBorderStrokeWidthPt(bottomBorder);
     const ruleY = linesBottom + bottomBorder.spacePt;
     const box = {
       x: boxLeft,
       y: ruleY,
       width: boxWidth,
-      height: bottomBorder.widthPt,
+      height: closeStroke,
     };
     bottomBorderRecord = { edge: bottomBorder, box };
     strokes.push({ side: 'bottom', edge: bottomBorder, box });
-    contentBottom = ruleY + bottomBorder.widthPt;
+    contentBottom = ruleY + closeStroke;
   }
   // Side rules run corner to corner of THIS fragment's frame. Horizontally they are
   // publish-only: Word draws them outside the text column and never re-breaks the lines for
@@ -471,9 +474,9 @@ function placeCellParagraph(
       side: 'left',
       edge: borders.left,
       box: {
-        x: fragmentX - borders.left.spacePt - borders.left.widthPt,
+        x: fragmentX - borders.left.spacePt - leftStroke,
         y: contentTop,
-        width: borders.left.widthPt,
+        width: leftStroke,
         height: sideHeight,
       },
     });
@@ -485,7 +488,7 @@ function placeCellParagraph(
       box: {
         x: fragmentX + available + borders.right.spacePt,
         y: contentTop,
-        width: borders.right.widthPt,
+        width: rightStroke,
         height: sideHeight,
       },
     });
@@ -494,13 +497,14 @@ function placeCellParagraph(
   // text only and adds no flow height, so a barred cell paragraph is exactly as tall as a
   // bare one.
   if (borders.bar) {
+    const barStroke = paragraphBorderStrokeWidthPt(borders.bar);
     strokes.push({
       side: 'bar',
       edge: borders.bar,
       box: {
-        x: fragmentX - borders.bar.spacePt - borders.bar.widthPt,
+        x: fragmentX - borders.bar.spacePt - barStroke,
         y: linesTop,
-        width: borders.bar.widthPt,
+        width: barStroke,
         height: Math.max(linesBottom - linesTop, 0),
       },
     });

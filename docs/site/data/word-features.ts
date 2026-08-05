@@ -234,7 +234,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Paragraph shading (w:shd) is editable. Borders render and round-trip but cannot be added, changed or removed from the editor yet.',
+      'Paragraph shading (w:shd) is editable. Borders render common ST_Border line styles (single, double, dashed, dotted, and CSS approximations for thick/3-D/inset/outset); decorative art borders paint as a solid rule. Thin doubles inflate to a visible compound band in layout, matching table borders. Borders round-trip but cannot be added, changed or removed from the editor yet.',
   },
   {
     id: 'paragraphs.tabs',
