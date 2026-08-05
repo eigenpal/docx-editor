@@ -91,8 +91,10 @@ function fieldTokens(paragraph: OoxmlElement): OoxmlNode[] {
   return tokens;
 }
 
-/** Discover refreshable body TOCs without evaluating any field instruction. */
-export function detectBodyTocs(part: OoxmlPart): readonly DetectedToc[] {
+/** Memoized per immutable part identity; a commit replaces the part object. */
+const detectBodyTocsCache = new WeakMap<OoxmlPart, readonly DetectedToc[]>();
+
+function detectBodyTocsUncached(part: OoxmlPart): readonly DetectedToc[] {
   const stack: (OpenField | null)[] = [];
   const completed: Omit<DetectedToc, 'id'>[] = [];
 
@@ -182,6 +184,15 @@ export function detectBodyTocs(part: OoxmlPart): readonly DetectedToc[] {
         ? toc.contentControlId
         : toc.beginNodeId,
   }));
+}
+
+/** Discover refreshable body TOCs without evaluating any field instruction. */
+export function detectBodyTocs(part: OoxmlPart): readonly DetectedToc[] {
+  const cached = detectBodyTocsCache.get(part);
+  if (cached) return cached;
+  const result = detectBodyTocsUncached(part);
+  detectBodyTocsCache.set(part, result);
+  return result;
 }
 
 export function findDetectedToc(tocs: readonly DetectedToc[], tocId: string): DetectedToc | null {
