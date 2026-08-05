@@ -21,6 +21,7 @@
 // Refusing to answer is never right: a click has to put the caret somewhere, and returning
 // null makes it do nothing at all.
 
+import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
 import { graphemeBoundaryEpoch, segmentGraphemes } from './grapheme.ts';
 import { baselineShiftPtOf } from './run-style.ts';
 import type { CaretGeometry, SemanticPosition } from './semantic-interaction.ts';
@@ -624,12 +625,23 @@ function endOfLine(line: LineRecord, rightEdge: number, context: HitContext): Li
  * it belongs to the line the break opened (`caretAt` places it there), so a click in the
  * right margin of the line the break ENDED has to stop in front of it or the caret appears
  * a row below the click.
+ *
+ * A PAGE break is discounted even on the paragraph's LAST line, which is the one case the
+ * last-line shortcut got wrong. The position after such a break is on the next page — and
+ * when the remainder is empty it has no line anywhere, because Word Online starts the
+ * following block flush at the top of that page. So the caret for it stays behind on the
+ * line the break ended, and a click in the wide blank space beside the mark resolved to a
+ * position a page away from where it landed: the caret appeared under the pointer and the
+ * typing came out on the next page. `<w:p><w:r><w:br w:type="page"/></w:r></w:p>` is the
+ * commonest way to end a page, so that blank space is most of a page wide.
  */
 export function lineEndOffset(layout: SemanticLayout, line: LineRecord): number {
+  const end = line.range.end;
+  if (end > line.range.start && characterAt(line, end - 1) === PAGE_BREAK_CHAR) return end - 1;
   if (hitIndex(layout).lastLineIdOfParagraph.get(line.range.paragraphId) === line.id) {
-    return line.range.end;
+    return end;
   }
-  let offset = line.range.end;
+  let offset = end;
   if (offset > line.range.start && characterAt(line, offset - 1) === '\n') offset -= 1;
   while (offset > line.range.start && characterAt(line, offset - 1) === ' ') offset -= 1;
   return offset;
