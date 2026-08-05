@@ -18,7 +18,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // document and break outright during pagination.
 
 import { useCallback, useMemo, useSyncExternalStore } from 'react';
-import type { Editor, ReviewItemPlacement, ReviewItemQuery } from '@docx-editor.dev/core-contract/contracts/editor';
+import type {
+  Editor,
+  ReviewItemPlacement,
+  ReviewItemQuery,
+} from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from '@docx-editor.dev/react';
 
 /**

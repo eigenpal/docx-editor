@@ -13,7 +13,7 @@
 // case the legacy projection dropped entirely.
 
 import { Schema, type Node as PMNode } from 'prosemirror-model';
-import type { OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import { paragraphPropsToCss, runPropsToCss } from './tree-styles.ts';
 
 /** Attributes carried by a projected paragraph. */

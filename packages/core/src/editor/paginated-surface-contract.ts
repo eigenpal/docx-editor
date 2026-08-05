@@ -5,8 +5,8 @@
 // paginated-surface.ts implements and re-exports them, so importers keep one entry point.
 
 import type { IndentFormatting } from '../contracts/types.ts';
-import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import type { BookmarkIndex, StoryScope, TreeDocOp } from '@docx-editor.dev/core-contract/store';
+import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { BookmarkIndex, StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import type { ViewScope } from '../contracts/editor.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
 import type { ReviewModuleContribution } from '../contracts/modules.ts';
@@ -20,7 +20,7 @@ import type {
   SemanticLayout,
   SemanticSelection,
   TextMeasurer,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';
 
 /**
  * How an edit is written.
@@ -304,7 +304,7 @@ export interface ContentControlSurfaceState {
 
 export interface PaginatedSurface {
   readonly session: TreeDocxSession;
-  storyScope(): import('@docx-editor.dev/core-contract/store').StoryScope;
+  storyScope(): import('@docx-editor.dev/core/store').StoryScope;
   imageDecodePort(): import('../store/package/image-resources.ts').ImageDecodePort;
   applyDrawingOps(
     ops: readonly import('../store/store/tree-op-types.ts').DrawingTreeDocOp[]
@@ -718,7 +718,7 @@ export interface PaginatedSurface {
     readonly sectionIndex?: number;
     readonly kind?: 'header' | 'footer';
     readonly variant?: 'default' | 'first' | 'even';
-    readonly position?: import('@docx-editor.dev/core-contract/layout').SemanticPosition;
+    readonly position?: import('@docx-editor.dev/core/layout').SemanticPosition;
   }): boolean;
   /** Leave furniture editing and restore the prior body selection. */
   exitHeaderFooter(): void;

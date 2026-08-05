@@ -114,20 +114,20 @@ export default defineConfig(async () => {
               replacement: path.join(monorepoRoot, 'packages/react/src/index.ts'),
             },
             {
-              find: '@docx-editor.dev/core-contract/editor',
+              find: '@docx-editor.dev/core/editor',
               replacement: path.join(monorepoRoot, 'packages/core/src/editor/index.ts'),
             },
-            // The remaining core-contract lane subpaths, one rule. `@docx-editor.dev/react`
+            // The remaining core lane subpaths, one rule. `@docx-editor.dev/react`
             // above resolves to package SOURCE, so the whole `packages/react/src` graph is
             // compiled here and its own bare specifiers resolve through these aliases too.
             // `editor` and the `contracts/*` single-file entries are matched above / by the
             // capture.
             {
-              find: /^@docx-editor\.dev\/core-contract\/(binding|layout|output|store|sync|clients|server)$/,
+              find: /^@docx-editor\.dev\/core\/(binding|layout|output|store|sync|clients|server)$/,
               replacement: path.join(monorepoRoot, 'packages/core/src/$1/index.ts'),
             },
             {
-              find: /^@docx-editor\.dev\/core-contract\/contracts\/(.+)$/,
+              find: /^@docx-editor\.dev\/core\/contracts\/(.+)$/,
               replacement: path.join(monorepoRoot, 'packages/core/src/contracts/$1.ts'),
             },
             {

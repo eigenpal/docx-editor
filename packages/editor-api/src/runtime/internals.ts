@@ -21,7 +21,7 @@ import type {
   AutomationCapabilities,
   AutomationHandle,
   AutomationHost,
-} from '@docx-editor.dev/core-contract/automation';
+} from '@docx-editor.dev/core/automation';
 import type { ActionQueue } from './queue.ts';
 import type { RequestContext } from './request-context.ts';
 

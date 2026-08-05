@@ -6,7 +6,7 @@
 // on the very first frame without guarding.
 
 import { createContext, useContext } from 'react';
-import type { DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
+import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 
 export const DocxEditorContext = createContext<DocxEditorInstance | null>(null);
 

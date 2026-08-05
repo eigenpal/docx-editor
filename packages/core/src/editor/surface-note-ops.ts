@@ -4,14 +4,14 @@
 // undo entry each). Entering a note scope rebinds StoryScope to notesPart + the
 // focused note identity via EditorScope { kind: 'note', id }.
 
-import type { TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import type { SemanticSelection } from '@docx-editor.dev/core-contract/layout';
+import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { SemanticSelection } from '@docx-editor.dev/core/layout';
 import {
   segmentsOf,
   type OoxmlNode,
   type OoxmlParagraphNode,
   type TreeDocOp,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import type { ViewScope } from '../contracts/editor.ts';
 import {
   findNoteById,

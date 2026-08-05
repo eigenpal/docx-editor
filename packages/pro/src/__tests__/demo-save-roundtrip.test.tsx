@@ -15,7 +15,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { afterEach, expect, test } from 'bun:test';
 import { act, cleanup, render } from '@testing-library/react';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
-import type { DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
+import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorContent, DocxEditorRoot, DocxEditorViewport } from '@docx-editor.dev/react';
 import { customNodesModule, defineCustomNode, insertCustomNode, reviewModule } from '../index.ts';
 

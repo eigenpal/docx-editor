@@ -9,7 +9,7 @@ import {
   documentOrder,
   moveCaret,
   paragraphFragmentsOf,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';
 import type {
   BlockFragmentRecord,
   CaretGeometry,
@@ -22,9 +22,9 @@ import type {
   SemanticPosition,
   SemanticSelection,
   TextMeasurer,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';
 import type { EditorScope, ViewScope } from '../contracts/editor.ts';
-import type { StoryScope } from '@docx-editor.dev/core-contract/store';
+import type { StoryScope } from '@docx-editor.dev/core/store';
 import { hitTestFragments, pageAtY, type SemanticHit } from '../layout/semantic-hit-test.ts';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
 

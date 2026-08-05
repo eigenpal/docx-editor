@@ -63,7 +63,7 @@ import {
   type StoryTargetRejection,
   type TreeDocOp,
   type TreeModelChange,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import {
   collectDocumentFonts,
   collectDocumentStyles,
@@ -430,7 +430,7 @@ export type { DocumentStyleEntry } from './document-catalog.ts';
 export type { DocumentThemeColorEntry, ThemeColorSlot } from './document-theme.ts';
 export type { DocumentOutlineEntry } from './document-outline.ts';
 export type { ParagraphAnchorIndex } from './paragraph-anchors.ts';
-export type { StoryScope, StoryTargetRejection } from '@docx-editor.dev/core-contract/store';
+export type { StoryScope, StoryTargetRejection } from '@docx-editor.dev/core/store';
 
 export type TreeSessionRejection = OoxmlPackageRejection | 'no-main-document-tree';
 

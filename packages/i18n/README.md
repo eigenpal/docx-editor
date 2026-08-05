@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://www.docx-editor.dev/">
-    <img src="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/header.png" alt="DOCX Editor — .docx in, .docx out. Open source, agent ready, client-side." width="500" />
+    <img src="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/header.png" alt="DOCX Editor — .docx in, .docx out. Open source, client-side." width="500" />
   </a>
 </p>
 
@@ -14,7 +14,7 @@
 
 # @docx-editor.dev/i18n
 
-Shared locale strings, types, and runtime helpers for the [docx-editor](https://docx-editor.dev) adapters. One source of truth for translations consumed by `@docx-editor.dev/react` and `@docx-editor.dev/vue`.
+Locale strings, types, and runtime helpers for the [docx-editor.dev](https://docx-editor.dev) editor chrome. Ten languages, with per-key fallback to English.
 
 ## Quick Start
 
@@ -22,17 +22,18 @@ Shared locale strings, types, and runtime helpers for the [docx-editor](https://
 npm install @docx-editor.dev/i18n
 ```
 
-Pass a typed locale to the editor's `i18n` prop:
+Wrap the editor in a `LocaleProvider`:
 
 ```tsx
-// React
+import { DocxEditor, LocaleProvider } from '@docx-editor.dev/react';
 import { de } from '@docx-editor.dev/i18n';
-<DocxEditor documentBuffer={file} i18n={de} />
 
-// Vue
-import { de } from '@docx-editor.dev/i18n';
-<DocxEditor :document-buffer="file" :i18n="de" />
+<LocaleProvider i18n={de}>
+  <DocxEditor document={bytes} />
+</LocaleProvider>;
 ```
+
+Chrome you write yourself reads the same catalogue through `useTranslation()`.
 
 Mix a community locale with custom overrides:
 
@@ -49,13 +50,13 @@ Keys set to `null` in any locale fall back to English.
 
 ## Packages
 
-| Package                                                                                    | Description                                                                                                                                |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)           | <img src="https://cdn.simpleicons.org/react/61DAFB" width="20" align="middle" /> &nbsp; React adapter. Toolbar, paged editor, plugins.     |
-| [`@docx-editor.dev/vue`](https://www.npmjs.com/package/@docx-editor.dev/vue)               | <img src="https://cdn.simpleicons.org/vuedotjs/4FC08D" width="20" align="middle" /> &nbsp; Vue 3 adapter. Toolbar, paged editor, plugins.  |
-| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)             | Framework-agnostic core: OOXML parser, serializer, layout engine, ProseMirror schema. Depend on this if you fork the React or Vue adapter. |
-| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)             | Shared locale strings and types consumed by both adapters.                                                                                 |
-| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Document automation: a batching object model that drives a document from a server or from an editor already open in a page.                |
+| Package                                                                                    | Description                                                                                       |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)           | React adapter. `<DocxEditor>`, provider primitives, hooks, and compound chrome.                   |
+| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)             | Framework-agnostic engine: OOXML read/write, canonical document tree, layout, paint.              |
+| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)             | Shared locale strings and types.                                                                  |
+| [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro)               | Tracked changes, comments, and custom nodes.                                                      |
+| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Office.js-compatible editing API: a batching object model, on a server or against an open editor. |
 
 > **Forking the adapter?** Keep your fork thin. Depend on `@docx-editor.dev/core` directly so parser, serializer, and rendering fixes land in your build automatically, without backporting each upstream change by hand.
 
@@ -107,7 +108,7 @@ import type {
 } from '@docx-editor.dev/i18n';
 ```
 
-## Non-React/Vue hosts
+## Outside the React adapter
 
 Build a typed `t()` outside the adapter packages:
 

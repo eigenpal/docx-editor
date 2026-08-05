@@ -12,10 +12,10 @@
 
 /* eslint-disable max-lines -- paint seam; note areas live in semantic-paint-notes.ts */
 
-import { baselineShiftPtOf, TAB_LEADER_GLYPH } from '@docx-editor.dev/core-contract/layout';
+import { baselineShiftPtOf, TAB_LEADER_GLYPH } from '@docx-editor.dev/core/layout';
 import { DEFAULT_CANVAS_FONT_STACK } from '../layout/canvas-measurer.ts';
 import { authorSlotsOf, revisionPresentationOf } from './revision-presentation.ts';
-import { formatRevisionOf, type RevisionAttribution } from '@docx-editor.dev/core-contract/layout';
+import { formatRevisionOf, type RevisionAttribution } from '@docx-editor.dev/core/layout';
 import type {
   ContentControlBoundaryRecord,
   ContentControlMappedType,
@@ -30,7 +30,7 @@ import type {
   StyleSpanRecord,
   TableCellFragmentRecord,
   TableFragmentRecord,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';
 import { paintPageNoteAreas } from './semantic-paint-notes.ts';
 import { anchoredDrawingsOf } from '../layout/semantic-records.ts';
 import type { AnchoredDrawingRecord } from '../layout/drawing-layout.ts';

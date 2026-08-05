@@ -8,8 +8,8 @@ import {
   parseDocx,
   writeDocx,
   type ParagraphRecord,
-} from '@docx-editor.dev/core-contract/store';
-import { layoutBody, type TextItem } from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/store';
+import { layoutBody, type TextItem } from '@docx-editor.dev/core/layout';
 import { createHarfBuzzLayoutOptions } from '../../packages/engine-layout/test/fixtures/layout-shaping.ts';
 import {
   FIDELITY_DOCUMENT_XML,

@@ -3,11 +3,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import {
-  type OoxmlElement,
-  type OoxmlNode,
-  type OoxmlPart,
-} from '../package/ooxml-tree.ts';
+import { type OoxmlElement, type OoxmlNode, type OoxmlPart } from '../package/ooxml-tree.ts';
 import { readOoxmlPackage } from '../package/ooxml-package.ts';
 import { schemaAttributeValue } from '../package/ooxml-drawing-rules.ts';
 import { validateRasterHeader } from '../package/image-resources.ts';
@@ -57,9 +53,7 @@ function findAll(root: OoxmlNode, kind: string): OoxmlElement[] {
 function genericChild(parent: OoxmlElement, localName: string, namespaceUri: string): OoxmlElement {
   const child = parent.children.find(
     (node) =>
-      node.kind === 'generic' &&
-      node.localName === localName &&
-      node.namespaceUri === namespaceUri
+      node.kind === 'generic' && node.localName === localName && node.namespaceUri === namespaceUri
   );
   if (!child || child.kind !== 'generic') {
     throw new Error(`missing ${localName} under ${parent.localName}`);
@@ -69,8 +63,7 @@ function genericChild(parent: OoxmlElement, localName: string, namespaceUri: str
 
 function relAttribute(node: OoxmlElement, localName: 'embed' | 'link'): string | undefined {
   return node.attributes.find(
-    (attribute) =>
-      attribute.localName === localName && attribute.namespaceUri === R
+    (attribute) => attribute.localName === localName && attribute.namespaceUri === R
   )?.value;
 }
 

@@ -6,11 +6,7 @@
 // of a converted agreement a full indent step left of where Word draws it.
 
 import { describe, expect, test } from 'bun:test';
-import {
-  readOoxmlPart,
-  type OoxmlElement,
-  type OoxmlPart,
-} from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlElement, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { buildNumberingIndex } from '../numbering-index.ts';
 import { resolveStoryListItems } from '../list-resolve.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';

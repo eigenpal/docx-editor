@@ -1,6 +1,6 @@
 ---
 title: "@docx-editor.dev/i18n"
-description: "Locale data shared by the React and Vue adapters. Ships nine languages: English, Polish, German, French, Portuguese, Hebrew, Hindi, Turkish, and Chinese."
+description: "Locale data for the editor chrome. Ships ten languages: English, Polish, German, French, Portuguese, Hebrew, Hindi, Indonesian, Turkish, and Chinese."
 category: "Packages"
 order: 60
 ---
@@ -13,7 +13,7 @@ Locale data for the editor UI; both adapters consume it through the `i18n` prop.
 npm install @docx-editor.dev/i18n
 ```
 
-You usually don't install this directly. `-react` and `-vue` pull it in transitively. Install it explicitly only when you're using the locale data outside the editor (a custom toolbar, a search dropdown, that kind of thing).
+You usually don't install this directly. `-react` pulls it in transitively. Install it explicitly only when you're using the locale data outside the editor (a custom toolbar, a search dropdown, that kind of thing).
 
 ## Available locales
 
@@ -47,27 +47,25 @@ ls node_modules/@docx-editor.dev/i18n/
 Pass the locale object to the `i18n` prop. React:
 
 ```tsx
-import { DocxEditor } from '@docx-editor.dev/react';
+import { DocxEditor, LocaleProvider } from '@docx-editor.dev/react';
 import { pl } from '@docx-editor.dev/i18n';
 
-<DocxEditor documentBuffer={buf} i18n={pl} />;
+<LocaleProvider i18n={pl}>
+  <DocxEditor document={bytes} />
+</LocaleProvider>;
 ```
 
-Vue:
+`LocaleProvider` merges your catalogue over English, so a locale that has not translated every key falls back per key rather than per language. Chrome you write yourself reads the same catalogue through `useTranslation()`:
 
-```vue
-<script setup lang="ts">
-import { DocxEditor } from '@docx-editor.dev/vue';
-import { pl } from '@docx-editor.dev/i18n';
-</script>
+```tsx
+import { useTranslation } from '@docx-editor.dev/react';
 
-<template>
-  <DocxEditor :document-buffer="buf" :i18n="pl" />
-</template>
+const { t } = useTranslation();
+<button>{t('toolbar.bold')}</button>;
 ```
 
 ## Next steps
 
-- [Contributing a translation](/docs/1.x/i18n/contributing): add or improve a locale with one JSON file
-- [i18n API reference](/docs/1.x/api/i18n)
-- [React API reference: i18n prop](/docs/1.x/api/react)
+- [Contributing a translation](/docs/2.x/i18n/contributing): add or improve a locale with one JSON file
+- [i18n API reference](/docs/2.x/api/i18n)
+- [React API reference](/docs/2.x/api/react)

@@ -7,12 +7,8 @@
 // at the caret; opening the panel is this hook's job.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import type { ContentControlSummary, ContentControlType } from '@docx-editor.dev/core-contract';
-import type {
-  CanResult,
-  EditorSnapshot,
-  ExecResult,
-} from '@docx-editor.dev/core-contract/contracts/editor';
+import type { ContentControlSummary, ContentControlType } from '@docx-editor.dev/core';
+import type { CanResult, EditorSnapshot, ExecResult } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 

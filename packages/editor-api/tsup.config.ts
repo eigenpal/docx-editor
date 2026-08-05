@@ -27,10 +27,10 @@ export default defineConfig({
     preset: 'smallest',
   },
   minify: true,
-  // `@docx-editor.dev/core-contract` is private and never published, so both entries have to
+  // `@docx-editor.dev/core` is private and never published, so both entries have to
   // carry it: left external, the shipped bundles would import a package that does not exist on
   // npm. Same treatment `packages/react` gives it.
-  noExternal: [/^@docx-editor\.dev\/core-contract(?:\/|$)/],
+  noExternal: [/^@docx-editor\.dev\/core(?:\/|$)/],
   // `harfbuzzjs` is external to get the build to RESOLVE, not because the output needs it.
   //
   // The browser entry reaches the editor lane, whose layout pass loads the font shaper through

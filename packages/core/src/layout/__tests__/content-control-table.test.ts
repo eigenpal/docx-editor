@@ -18,7 +18,7 @@ import {
   bodyStoryRoot,
   type OoxmlNode,
   type OoxmlPart,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import { createFixedMeasurer } from '../index.ts';
 import { layoutSemanticDocument } from '../semantic-layout.ts';
 import type {

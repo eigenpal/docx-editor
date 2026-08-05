@@ -3,8 +3,8 @@
 // Projection only — never mutation or serialization authority. Hostile values are dropped
 // or clamped; missing definitions resolve to "no list" rather than guessing.
 
-import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core-contract/store';
-import { WML_NAMESPACE_URI } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
+import { WML_NAMESPACE_URI } from '@docx-editor.dev/core/store';
 import { propertiesOfRunContainer } from './field-projection.ts';
 
 /** Soft ceiling on abstractNum / num entries read from one part. */

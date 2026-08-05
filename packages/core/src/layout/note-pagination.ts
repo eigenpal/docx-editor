@@ -7,7 +7,7 @@
 // layout-owned note records. Endnotes reserve nothing on reference pages — they collect at
 // sectEnd / docEnd. Hostile counts and oscillation fail closed with named reasons.
 
-import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import { collectNoteReferences } from '../store/package/note-references.ts';
 import type { DocumentSection } from './section-properties.ts';
 import { storyBlocks } from './story-roots.ts';

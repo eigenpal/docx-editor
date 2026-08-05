@@ -21,7 +21,7 @@ import type {
   PaginatedSurfaceState,
   SectionProperties,
   TextMeasurer,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/editor';
 import type { FormattingAction, SelectionFormatting } from './Toolbar';
 import { EditorToolbar } from './EditorToolbar';
 import { HorizontalRuler, type RulerPageSetup } from './ui/HorizontalRuler';

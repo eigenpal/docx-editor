@@ -22,7 +22,7 @@
 // exactly as `DocxEditorViewport` does, so it looks right wherever it is composed.
 
 import type { CSSProperties, ReactNode } from 'react';
-import type { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
 import { useEditorState } from './useEditorState';
 

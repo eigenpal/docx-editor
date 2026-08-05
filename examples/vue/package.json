@@ -8,8 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@docx-editor.dev/core": "^0.0.1",
-    "@docx-editor.dev/core-contract": "workspace:*",
+    "@docx-editor.dev/core": "workspace:*",
     "@docx-editor.dev/i18n": "workspace:*",
     "@docx-editor.dev/pro": "workspace:*",
     "@docx-editor.dev/vue": "workspace:*",

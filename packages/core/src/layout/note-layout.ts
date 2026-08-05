@@ -9,7 +9,7 @@
 // convergence counter never moves because a note changed. Resource accounting is
 // bounded: hostile note counts and over-tall flows fail closed with named reasons.
 
-import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import {
   findNoteById,
   formatNoteScopeId,

@@ -3,7 +3,7 @@ import {
   type EditorFontErrorCode,
   type FontConfiguration,
   type FontFaceRequest,
-} from '@docx-editor.dev/core-contract/contracts/editor';
+} from '@docx-editor.dev/core/contracts/editor';
 import {
   HARFBUZZ_SHAPING_LIBRARY,
   HARD_MAX_AGGREGATE_FONT_BYTES,
@@ -15,7 +15,7 @@ import {
   harfBuzzFontValidator,
   initializeHarfBuzz,
   type LayoutShapingOptions,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';
 
 const FEATURES = Object.freeze({ kern: 1, liga: 1 });
 

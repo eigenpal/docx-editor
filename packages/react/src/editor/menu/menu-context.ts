@@ -10,7 +10,7 @@
 // the chrome registry, resolved through the host's `t` or falling back to the KEY.
 
 import { createContext, useContext } from 'react';
-import type { ChromeMenuId } from '@docx-editor.dev/core-contract/editor';
+import type { ChromeMenuId } from '@docx-editor.dev/core/editor';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 
 /**

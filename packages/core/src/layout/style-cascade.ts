@@ -13,7 +13,7 @@
 // full styles material — layout embeds it in every paragraph key, so an unbounded string
 // would be quadratic in memory.
 
-import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
 import { stableHash } from '../store/comparators/canonical.ts';
 import { isDangerousKey } from '../store/package/safe-record.ts';
 import {

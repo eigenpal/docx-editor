@@ -15,7 +15,7 @@ import {
   isContentRevisionKind,
   type OoxmlElement,
   type OoxmlNode,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 
 /**
  * What a revision wrapper asserts about the content inside it.

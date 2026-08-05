@@ -13,7 +13,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode } from 'react';
-import type { TextMatch } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { TextMatch } from '@docx-editor.dev/core/contracts/editor';
 import { MaterialSymbol } from '../../components/ui/Icons';
 import { useNavigationContext } from './navigation-context';
 // Aliased: this module also EXPORTS a component called `NavigationTab`, and the two

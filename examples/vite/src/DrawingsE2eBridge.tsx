@@ -3,7 +3,7 @@
 
 import { useEffect } from 'react';
 import { useDocxEditor } from '@docx-editor.dev/react';
-import { selectedDrawingOverlayTargetOf } from '@docx-editor.dev/core-contract/editor';
+import { selectedDrawingOverlayTargetOf } from '@docx-editor.dev/core/editor';
 
 declare global {
   interface Window {

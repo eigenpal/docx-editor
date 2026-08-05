@@ -7,8 +7,8 @@
 // `removeContentControl` for a fully covered typed control.
 
 import { describe, expect, test } from 'bun:test';
-import type { SemanticLayout } from '@docx-editor.dev/core-contract/layout';
-import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import type { SemanticLayout } from '@docx-editor.dev/core/layout';
+import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import { planRangeDeletion } from '../surface-selection-ops.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

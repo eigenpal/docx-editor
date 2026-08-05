@@ -12,7 +12,7 @@
 //   registry's parity rule (visible, never dropped, never faked).
 
 import { useContext } from 'react';
-import { chromeProbeForSlot, type ChromeSlotId } from '@docx-editor.dev/core-contract/editor';
+import { chromeProbeForSlot, type ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useHyperlinkPopup } from '../useHyperlinkPopup';
 import { ToolbarContext, useToolbarLabel } from './toolbar-context';

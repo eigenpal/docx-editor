@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://www.docx-editor.dev/">
-    <img src="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/header.png" alt="DOCX Editor — .docx in, .docx out. Agent ready, client-side." width="500" />
+    <img src="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/header.png" alt="DOCX Editor — .docx in, .docx out. Open source, client-side." width="500" />
   </a>
 </p>
 
@@ -14,9 +14,13 @@
 
 # @docx-editor.dev/editor-api
 
-Document automation for DOCX. Describe work against an object model, and one `sync()` sends it as
-a single ordered batch that either applies whole or not at all. The same code drives bytes on a
-server and a document a reader already has open in a page.
+An **Office.js-compatible editing API** for DOCX. It implements the Word JavaScript object model —
+`context.document.body.paragraphs`, `load()` then `sync()`, `search()`, `getFirstOrNullObject()` —
+so code written for a Word add-in compiles and runs here.
+
+Describe work against objects, and one `sync()` sends it as a single ordered batch that either
+applies whole or not at all. The same code drives bytes on a server and a document a reader
+already has open in a page.
 
 ```bash
 npm install @docx-editor.dev/editor-api
@@ -54,7 +58,7 @@ try {
 ## In a page, on a document already open
 
 The browser entry takes an editor the host already created — from `@docx-editor.dev/react`,
-`@docx-editor.dev/vue`, or a plain page — and drives it in place, so edits land in the open
+`@docx-editor.dev/react` or a plain page — and drives it in place, so edits land in the open
 document with the reader's undo stack intact. There is no `save()`: the host saves as it already
 did.
 
@@ -117,13 +121,13 @@ Upgrading from the reviewer/bridge/MCP/chat surfaces this package used to ship? 
 
 ## Packages
 
-| Package                                                                                    | Description                                                                                                                                |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)           | <img src="https://cdn.simpleicons.org/react/61DAFB" width="20" align="middle" /> &nbsp; React adapter. Toolbar, paged editor, plugins.     |
-| [`@docx-editor.dev/vue`](https://www.npmjs.com/package/@docx-editor.dev/vue)               | <img src="https://cdn.simpleicons.org/vuedotjs/4FC08D" width="20" align="middle" /> &nbsp; Vue 3 adapter. Toolbar, paged editor, plugins.  |
-| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)             | Framework-agnostic core: OOXML parser, serializer, layout engine, ProseMirror schema. Depend on this if you fork the React or Vue adapter. |
-| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)             | Shared locale strings and types consumed by both adapters.                                                                                 |
-| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Document automation: this package.                                                                                                         |
+| Package                                                                                    | Description                                                                                       |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)           | React adapter. `<DocxEditor>`, provider primitives, hooks, and compound chrome.                   |
+| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)             | Framework-agnostic engine: OOXML read/write, canonical document tree, layout, paint.              |
+| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)             | Shared locale strings and types.                                                                  |
+| [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro)               | Tracked changes, comments, and custom nodes.                                                      |
+| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Office.js-compatible editing API: a batching object model, on a server or against an open editor. |
 
 The editor packages above are Apache 2.0. This one is not — see below.
 

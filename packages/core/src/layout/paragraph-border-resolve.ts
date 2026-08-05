@@ -4,7 +4,7 @@
 // The "does any style declare pBdr?" probe is cached per cascade table so documents without
 // style borders skip a second cascade walk on every paragraph.
 
-import type { OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
 import {
   cascadedParagraphBorders,
   paragraphBorders,

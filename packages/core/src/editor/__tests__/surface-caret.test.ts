@@ -15,7 +15,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
-import { caretAt } from '@docx-editor.dev/core-contract/layout';
+import { caretAt } from '@docx-editor.dev/core/layout';
 import {
   mountPaginatedSurface,
   setPaginatedSurfaceScale,

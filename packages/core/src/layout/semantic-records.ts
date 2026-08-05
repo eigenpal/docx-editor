@@ -13,7 +13,7 @@
 // Measurement is a PORT. This package is DOM-free by construction, and a layout that could
 // only run in a browser could not be tested deterministically or run headless.
 
-import type { OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import type {
   ParagraphBorderEdge,
   ParagraphBorderSide,

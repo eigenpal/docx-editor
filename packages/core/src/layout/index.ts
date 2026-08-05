@@ -7,7 +7,7 @@
 // greenfield skeleton; capability implementation lands in the sections that own it.
 
 /** Stable package identity used by the import-graph / package-authority checks. */
-export const ENGINE_LAYOUT_PACKAGE = '@docx-editor.dev/core-contract/layout' as const;
+export const ENGINE_LAYOUT_PACKAGE = '@docx-editor.dev/core/layout' as const;
 
 export {
   FontResolutionError,

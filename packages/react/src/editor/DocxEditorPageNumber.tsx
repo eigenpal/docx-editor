@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
-import type { EditorSnapshot } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
 import { useDocxEditor } from './context';
 import { useNavigationViewportElement } from './navigation/navigation-layout';

@@ -5,7 +5,7 @@
 // on what it derives. The real module and the review pane live in
 // `@docx-editor.dev/pro`, whose own tests cover the derived queue.
 
-import type { EditorModule } from '@docx-editor.dev/core-contract/editor';
+import type { EditorModule } from '@docx-editor.dev/core/editor';
 
 export function testReviewModule(): EditorModule {
   return {

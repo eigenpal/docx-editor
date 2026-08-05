@@ -1,8 +1,8 @@
 {
-  "name": "@docx-editor.dev/core-contract",
-  "version": "0.0.1",
+  "name": "@docx-editor.dev/core",
+  "version": "1.0.0",
   "private": true,
-  "description": "Contract-only declaration of the @docx-editor.dev/core public API. Not the implementation; never published.",
+  "description": "Framework-agnostic core for docx-editor.dev: OOXML parse/serialize, the canonical document tree, layout and paint, and the Editor contract the adapters render.",
   "type": "module",
   "exports": {
     ".": {
@@ -24,6 +24,11 @@
       "types": "./src/contracts/editor.ts",
       "import": "./src/contracts/editor.ts",
       "default": "./src/contracts/editor.ts"
+    },
+    "./contracts/document": {
+      "types": "./src/contracts/document.ts",
+      "import": "./src/contracts/document.ts",
+      "default": "./src/contracts/document.ts"
     },
     "./contracts/interaction": {
       "types": "./src/contracts/interaction.ts",
@@ -69,7 +74,9 @@
       "types": "./src/editor/index.ts",
       "import": "./src/editor/index.ts",
       "default": "./src/editor/index.ts"
-    }
+    },
+    "./styles/editor.css": "./src/styles/editor.css",
+    "./package.json": "./package.json"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

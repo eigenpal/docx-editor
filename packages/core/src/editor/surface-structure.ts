@@ -6,8 +6,8 @@
 // that read `numbering.xml` or `w:sectPr`, so they sit together rather than in the
 // composition root.
 
-import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import type { TreeDocOp, StoryScope } from '@docx-editor.dev/core-contract/store';
+import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { TreeDocOp, StoryScope } from '@docx-editor.dev/core/store';
 import {
   documentOrder,
   enumerateDocumentSections,
@@ -17,8 +17,8 @@ import {
   type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,
-} from '@docx-editor.dev/core-contract/layout';
-import type { ListMarkerRecord } from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';
+import type { ListMarkerRecord } from '@docx-editor.dev/core/layout';
 import {
   directParagraphProperties,
   mergedProperties,

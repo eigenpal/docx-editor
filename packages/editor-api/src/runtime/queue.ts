@@ -17,10 +17,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // with a typed error, and whatever is queued afterwards is a new batch that can succeed on its
 // own.
 
-import type {
-  AutomationOperation,
-  AutomationValue,
-} from '@docx-editor.dev/core-contract/automation';
+import type { AutomationOperation, AutomationValue } from '@docx-editor.dev/core/automation';
 
 /** Whether an action reads or writes. Drives the conditional-revision rule in `sync()`. */
 export type ActionSort = 'read' | 'write';

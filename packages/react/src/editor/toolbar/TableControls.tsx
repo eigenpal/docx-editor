@@ -14,7 +14,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
-import type { TableBorderStyle } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { TableBorderStyle } from '@docx-editor.dev/core/contracts/editor';
 import {
   TABLE_BORDER_STYLE_OPTIONS,
   TABLE_BORDER_TARGET_OPTIONS,
@@ -23,7 +23,7 @@ import {
   tableChromeLabelKeyForTarget,
   type TableBorderTargetValue,
   type TableChromeSlotId,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/editor';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import type { ToolbarSlotPartComponent } from './parts';

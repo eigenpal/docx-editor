@@ -21,7 +21,7 @@ import {
   type OoxmlPart,
   type OoxmlProperty,
   type TreeDocOp,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import { walkParagraphInline } from '../store/package/content-control-walk.ts';
 import { runPropsOf, treeSchema } from './tree-schema.ts';
 

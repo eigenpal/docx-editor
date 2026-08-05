@@ -13,7 +13,7 @@
 // Note parts (`w:footnotes` / `w:endnotes`) are NOT story roots: each typed `w:footnote` /
 // `w:endnote` child is its own story via {@link noteStoryBlocks}.
 
-import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';
 import { revisionRemovesParagraph } from './revision-visibility.ts';

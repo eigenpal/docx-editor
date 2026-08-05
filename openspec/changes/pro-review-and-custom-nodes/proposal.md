@@ -7,7 +7,7 @@ The editor needs a commercial tier to fund development. Comments/tracked changes
 ## What Changes
 
 - New `packages/pro` → `@docx-editor.dev/pro`, published on public npm under a commercial license (`SEE LICENSE IN LICENSE.md`), versioned in the fixed changeset group.
-- Core (`@docx-editor.dev/core-contract`, Apache-2.0) gains a narrow, purpose-built `EditorModule` seam on `createDocxEditor({ modules })` — not a general plugin system. Core also gains a cheap `hasReviewContent` derived read (the free-tier upsell hook).
+- Core (`@docx-editor.dev/core`, Apache-2.0) gains a narrow, purpose-built `EditorModule` seam on `createDocxEditor({ modules })` — not a general plugin system. Core also gains a cheap `hasReviewContent` derived read (the free-tier upsell hook).
 - **Review module (pro)**: revision display modes beyond final-state (markup/original), review model derivation (lifted `review-model.ts` + `comment-anchors.ts`), accept/reject/reply/add-comment/toggle-track-changes commands, and the React review pane (`DocxEditorReview.tsx`, `useReview.ts`).
 - **Custom nodes (pro)**: `defineCustomNode` — integrator-defined inline nodes anchored on run-level SDTs with `w:tag` identity (`sdtLocked` by default), tag-prefix `fromDocx` recognition and `toDocx` serialization, framework-neutral `render` (DOM element + measurable extent for `TextMeasurer`) with React portal sugar, atomic UTF-16 offset semantics, hover/interaction hooks.
 - **Free tier behavior**: lossless round-trip of revisions/comments/SDTs is unchanged; rendering is locked to final-state projection; review chrome slots render disabled with a `pro` reason; unrecognized or unlicensed SDTs render their literal content.

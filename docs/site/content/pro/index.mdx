@@ -1,0 +1,93 @@
+---
+title: '@docx-editor.dev/pro'
+description: 'Tracked changes, comments, and custom nodes. Register a module on the editor root and take the hook or the packaged sidebar.'
+category: 'Pro'
+order: 60
+---
+
+<PackageStats name="@docx-editor.dev/pro" />
+
+`@docx-editor.dev/pro` adds three capabilities to the React editor:
+
+- **[Tracked changes](/docs/2.x/pro/tracked-changes)** — suggesting mode, markup rendering, accept and reject.
+- **[Comments](/docs/2.x/pro/comments)** — threads anchored to a range, with replies.
+- **[Custom nodes](/docs/2.x/pro/custom-nodes)** — your own inline node types, stored as Word content controls.
+
+## Install
+
+```bash
+npm install @docx-editor.dev/react @docx-editor.dev/pro
+```
+
+The framework-neutral entry is `@docx-editor.dev/pro`; React chrome lives at `@docx-editor.dev/pro/react`.
+
+## Register a module
+
+Capabilities are modules you pass to the editor root. Module registration happens at construction, like `mode`, so the array identity must be stable — build it outside the component or memoize it, or the editor rebuilds on every render.
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
+
+// Module array built once, outside render.
+const MODULES = [reviewModule()];
+
+export function Reviewer({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
+      <DocxEditor.Toolbar />
+      <DocxEditor.Viewport>
+        <DocxEditor.Content />
+        {/* The review sidebar: tracked changes and comments as cards beside the page. */}
+        <DocxEditorReview />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  );
+}
+```
+
+`modules` is also a prop on the packaged `<DocxEditor modules={MODULES} />`.
+
+Without a review module the editor still opens a document containing revisions and comments and still saves them back untouched — it renders revisions in their final state and offers no review UI. Registering the module is what makes them visible and actionable.
+
+## Author attribution
+
+Comments and tracked changes are authored, and OOXML requires an author on both. `author` on the root supplies it ambiently, the way Word takes it from the signed-in user:
+
+```tsx
+<DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
+```
+
+Write calls report whether they landed rather than throwing, so a reply written with no author available returns `false` instead of silently producing an invalid document.
+
+## Chrome or hooks
+
+Everything the packaged sidebar renders is reachable from `useReview()`. Take the sidebar when you want Word-like cards out of the box; take the hook when you want your own markup:
+
+```tsx
+import { useReview } from '@docx-editor.dev/pro/react';
+
+function ChangeCount() {
+  const { items, ready } = useReview();
+  if (!ready) return null;
+  return <span>{items.length} pending</span>;
+}
+```
+
+See [Tracked changes](/docs/2.x/pro/tracked-changes) for the full hook surface.
+
+## Licensing
+
+`@docx-editor.dev/pro` is licensed under the EigenPal Pro Evaluation License 1.0: free for internal, non-production evaluation, with production use requiring a commercial agreement. Contact [licensing@eigenpal.com](mailto:licensing@eigenpal.com).
+
+Both module factories accept an optional `licenseKey`. Construction never validates the key and never touches the network:
+
+```ts
+const MODULES = [reviewModule({ licenseKey: process.env.NEXT_PUBLIC_DOCX_LICENSE })];
+```
+
+## Next steps
+
+- [Tracked changes](/docs/2.x/pro/tracked-changes)
+- [Comments](/docs/2.x/pro/comments)
+- [Custom nodes](/docs/2.x/pro/custom-nodes)

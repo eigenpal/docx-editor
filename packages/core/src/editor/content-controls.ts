@@ -12,8 +12,9 @@ import type {
   EditorScope,
   ExecErrorCode,
   ExecResult,
-} from '@docx-editor.dev/core-contract/contracts/editor';
-import type { ContentControlFilter, ContentControlSummary, ContentControlType } from '../index.ts';
+} from '@docx-editor.dev/core/contracts/editor';
+import type { ContentControlFilter, ContentControlType } from '../contracts/types.ts';
+import type { ContentControlSummary } from '../contracts/document.ts';
 import type { DocAnchor, DocLocation, DocRange } from '../contracts/types.ts';
 import {
   WML_NAMESPACE_URI,
@@ -28,7 +29,7 @@ import {
   type OoxmlNode,
   type OoxmlPart,
   type TreeDocOp,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import type { ParagraphAnchorIndex } from '../binding/paragraph-anchors.ts';
 import { isDocAnchor, resolveDocAnchor } from './anchor-resolution.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';

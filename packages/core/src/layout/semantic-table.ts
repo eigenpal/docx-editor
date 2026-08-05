@@ -19,7 +19,7 @@ import {
   flattenContentControls,
   type OoxmlElement,
   type OoxmlNode,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import { shadingFillFromElement } from './ooxml-shading.ts';
 import { revisionRemovesParagraph } from './revision-visibility.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';

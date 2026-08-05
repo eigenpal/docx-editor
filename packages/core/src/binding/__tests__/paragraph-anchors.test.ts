@@ -2,7 +2,7 @@
 // verbatim values out, case-insensitive lookups in, reading-order ordinals.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { buildParagraphAnchorIndex } from '../paragraph-anchors.ts';
 import { allParagraphs } from '../tree-binding.ts';
 

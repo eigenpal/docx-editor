@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import type { ReactNode } from 'react';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
-import type { DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
+import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';

@@ -3,7 +3,7 @@
 
 /* eslint-disable max-lines -- composition root; seams live in surface-*.ts */
 
-import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
+import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core/binding';
 import {
   TOC_MAX_PAGE_PASSES,
   detectBodyTocs,
@@ -21,7 +21,7 @@ import {
   type OoxmlNode,
   type StoryScope,
   type TreeDocOp,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import {
   createLayoutScheduler,
   createLayoutSession,
@@ -55,12 +55,12 @@ import {
   type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';
 import {
   paintSelectionOverlay,
   paintSemanticLayout,
   type OverlayRect,
-} from '@docx-editor.dev/core-contract/output';
+} from '@docx-editor.dev/core/output';
 import {
   DEFAULT_DRAWING_PAINT_STRINGS,
   detachDrawingUrlRegistry,

@@ -2,7 +2,7 @@
 // deterministic resource bounds under attacker-controlled control/span counts.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import {
   attachContentControlBoundaries,
   createFixedMeasurer,

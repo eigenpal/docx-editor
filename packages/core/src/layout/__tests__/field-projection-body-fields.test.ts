@@ -19,7 +19,7 @@ import {
   segmentsOf,
   type OoxmlNode,
   type OoxmlPart,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const metadata = {

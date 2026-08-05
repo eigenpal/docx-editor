@@ -14,12 +14,12 @@
 // every admitted source plus a typed failure list, so the app can mount with partial
 // coverage (unresolved families measure via the fixed fallback) and report.
 
-import type { FontFaceRequest, FontSource } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { FontFaceRequest, FontSource } from '@docx-editor.dev/core/contracts/editor';
 import {
   HARD_MAX_FONT_BYTES,
   boundedStructuralFontValidator,
   sha256FontBytes,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';
 import type { FontConfigurationFragment } from './font-composition.ts';
 
 /** One URL to fetch and the face it claims to be. */

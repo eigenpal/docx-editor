@@ -23,7 +23,7 @@ import {
   type SectionProperties,
   type SurfaceFormatting,
   type TextMeasurer,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/editor';
 
 /** The imperative surface a template ref exposes, paired with the React handle. */
 export interface PaginatedDocxEditorExpose {

@@ -10,18 +10,18 @@ import type {
   EditorSnapshot,
   ExecResult,
   FontConfiguration,
-} from '@docx-editor.dev/core-contract/contracts/editor';
-import type { EditorModule, FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/contracts/editor';
+import type { EditorModule, FontConfigurationFragment } from '@docx-editor.dev/core/editor';
 import type { DocxEditorMenuProps } from './editor/menu';
 import type { DocxEditorContextMenuProps } from './editor/contextmenu';
-export { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
+export { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 export type {
   EditorFontErrorCode,
   FontConfiguration,
   FontFaceRequest,
   FontSource,
   FontSourceSubstitution,
-} from '@docx-editor.dev/core-contract/contracts/editor';
+} from '@docx-editor.dev/core/contracts/editor';
 
 export type EditorMode = 'edit' | 'view';
 

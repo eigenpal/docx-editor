@@ -126,6 +126,10 @@ jobs:
       # The single step that does both PR-management and publishing.
       # - If `.changeset/*.md` are pending: opens / updates a "chore: release X.Y.Z" PR
       #   that runs `version` (drains changesets, bumps versions, writes CHANGELOG).
+      #   `version-packages` also regenerates the Office.js conformance fixture:
+      #   `compat/generated/docxeditor.shape.json` stamps editor-api's version, and a
+      #   test asserts it equals a fresh regeneration — so a bump without this leaves
+      #   the release PR red on a file only the bump changed.
       # - If no pending changesets and current package.json versions aren't on npm yet:
       #   runs `publish` and creates per-package git tags.
       - name: Release PR or Publish

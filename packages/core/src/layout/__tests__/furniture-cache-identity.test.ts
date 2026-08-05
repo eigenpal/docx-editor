@@ -17,11 +17,7 @@ import {
 } from '../index.ts';
 import { headerFooterContentKey, layoutHeaderFooterStory } from '../hf-layout.ts';
 import { furnitureFingerprint, multiSectionStructureKey } from '../multi-section-layout.ts';
-import {
-  readOoxmlPackage,
-  readOoxmlPart,
-  type OoxmlPart,
-} from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPackage, readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';

@@ -4,7 +4,7 @@
 // only draws them. Unrecognised or hostile values are dropped or clamped rather than
 // guessed — a wrong before-spacing moves every subsequent page break.
 
-import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
 import { borderStrokeWidthPt } from './border-metrics.ts';
 
 /** Whether a paragraph must start a new page (`w:pageBreakBefore`). */

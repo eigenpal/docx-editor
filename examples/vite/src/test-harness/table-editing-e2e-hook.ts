@@ -4,8 +4,8 @@ declare global {
   }
 }
 
-import type { Editor, EditorCommand } from '@docx-editor.dev/core-contract/contracts/editor';
-import type { DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
+import type { Editor, EditorCommand } from '@docx-editor.dev/core/contracts/editor';
+import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import {
   findTableInteractionAt,
   tableInteractionIndex,
@@ -13,14 +13,14 @@ import {
 import {
   type SemanticLayout,
   type TableFragmentRecord,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';
 import {
   canonicalOoxmlFingerprint,
   diffSemanticDigests,
   readOoxmlPackage,
   semanticDigest,
   type OoxmlPart,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import {
   detailedTableSnapshot,
   findInnerTable,

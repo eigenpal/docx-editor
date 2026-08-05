@@ -22,7 +22,7 @@
 // a bounded share of what is left rather than zero, and no fit may scale a table below one
 // point per column — a zero-width column is unrecoverable downstream.
 
-import type { OoxmlElement } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { MAX_TABLE_COLUMNS } from '../store/store/table-constraints.ts';
 
 export { MAX_TABLE_COLUMNS };

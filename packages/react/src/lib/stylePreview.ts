@@ -10,7 +10,7 @@
  * @packageDocumentation
  * @public
  */
-import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 
 /**
  * One entry of `Editor.getDocumentStyles()` — the engine's document-style

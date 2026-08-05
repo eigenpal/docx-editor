@@ -38,7 +38,7 @@ import {
   DocxEditorReview,
   useReviewItem,
 } from '@docx-editor.dev/pro/react';
-import { blankDocumentBytes } from '@docx-editor.dev/core-contract/editor';
+import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
 import { BrandLogo } from '../../shared/BrandLogo';

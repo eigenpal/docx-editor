@@ -17,10 +17,7 @@ import {
   layoutSemanticDocument,
   type PageFurniture,
 } from '../index.ts';
-import {
-  readOoxmlPackage,
-  resolveHeaderFooterPartsBySection,
-} from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPackage, resolveHeaderFooterPartsBySection } from '@docx-editor.dev/core/store';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -47,7 +44,7 @@ function pageText(layout: ReturnType<typeof layoutSemanticDocument>, pageIndex: 
 
 function furnitureFor(
   pkg: ReturnType<typeof readOoxmlPackage> extends { ok: true; package: infer P } ? P : never,
-  part: import('@docx-editor.dev/core-contract/store').OoxmlPart
+  part: import('@docx-editor.dev/core/store').OoxmlPart
 ): readonly (PageFurniture | undefined)[] {
   const sections = enumerateDocumentSections(part);
   const bySection = resolveHeaderFooterPartsBySection(pkg);

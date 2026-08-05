@@ -20,7 +20,7 @@ import {
   type OoxmlElement,
   type OoxmlNode,
   type OoxmlPart,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import { DEFAULT_PAGE_GEOMETRY, type PageGeometry } from './semantic-records.ts';
 import { storyBlocks } from './story-roots.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';

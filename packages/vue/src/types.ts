@@ -8,16 +8,16 @@ import type {
   EditorSnapshot,
   ExecResult,
   FontConfiguration,
-} from '@docx-editor.dev/core-contract/contracts/editor';
-import type { EditorModule, FontConfigurationFragment } from '@docx-editor.dev/core-contract/editor';
-export { EditorFontError } from '@docx-editor.dev/core-contract/contracts/editor';
+} from '@docx-editor.dev/core/contracts/editor';
+import type { EditorModule, FontConfigurationFragment } from '@docx-editor.dev/core/editor';
+export { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 export type {
   EditorFontErrorCode,
   FontConfiguration,
   FontFaceRequest,
   FontSource,
   FontSourceSubstitution,
-} from '@docx-editor.dev/core-contract/contracts/editor';
+} from '@docx-editor.dev/core/contracts/editor';
 
 export type EditorMode = 'edit' | 'view';
 

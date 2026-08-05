@@ -1,7 +1,7 @@
 // Bounded layout-side style cascade (docDefaults, basedOn, last-wins duplicates).
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlElement } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlElement } from '@docx-editor.dev/core/store';
 import {
   MAX_STYLE_BASED_ON_DEPTH,
   MAX_STYLE_DEFINITIONS,

@@ -5,13 +5,13 @@
 // covers a WHOLE paragraph also writes its mark, because that is what a list marker
 // inherits its face from.
 
-import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core-contract/binding';
-import type { StoryScope } from '@docx-editor.dev/core-contract/store';
+import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { StoryScope } from '@docx-editor.dev/core/store';
 import {
   type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,
-} from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/layout';
 import {
   directParagraphMarkProperties,
   directParagraphProperties,
@@ -26,8 +26,8 @@ import {
   withPendingFormatting,
   type SurfaceProperty,
 } from './surface-formatting.ts';
-import type { TreeDocOp } from '@docx-editor.dev/core-contract/store';
-import { paragraphsInCells } from '@docx-editor.dev/core-contract/layout';
+import type { TreeDocOp } from '@docx-editor.dev/core/store';
+import { paragraphsInCells } from '@docx-editor.dev/core/layout';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
 /** What the composition root lends this lane. */

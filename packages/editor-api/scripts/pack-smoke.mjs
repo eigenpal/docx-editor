@@ -177,11 +177,11 @@ try {
     'dist/index.mjs imports a Node builtin, so it no longer runs in a worker'
   );
   check(
-    !/@docx-editor\.dev\/core-contract/.test(serverBundle),
+    !/@docx-editor\.dev\/core/.test(serverBundle),
     'dist/index.mjs imports the private contract package, which does not exist on npm'
   );
   check(
-    !/@docx-editor\.dev\/core-contract/.test(browserBundle),
+    !/@docx-editor\.dev\/core/.test(browserBundle),
     'dist/browser.mjs imports the private contract package, which does not exist on npm'
   );
   // And the BROWSER bundle really is the other one. Stated with markers the editor lane owns

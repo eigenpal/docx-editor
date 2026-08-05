@@ -10,7 +10,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { useMemo } from 'react';
 import { useDocxEditor } from '@docx-editor.dev/react';
-import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import {
   isCustomNodeDefinition,
   type ActivatedCustomNode,

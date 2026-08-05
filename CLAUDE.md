@@ -8,7 +8,7 @@ layout.
 
 This repo contains contracts, production engine packages, and adapters.
 
-- `packages/core` is the private `@docx-editor.dev/core-contract`.
+- `packages/core` is the private `@docx-editor.dev/core`.
 - `packages/engine-*` contains the in-tree engine. Package responsibilities and
   dependency rules live in `docs/architecture/production-engine-packages.md`.
 - Adapters live in `packages/react`, `packages/vue`, and `packages/nuxt`.

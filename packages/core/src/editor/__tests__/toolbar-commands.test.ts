@@ -13,7 +13,7 @@ import type {
   EditorCommand,
   ExecResult,
   SelectedImageState,
-} from '@docx-editor.dev/core-contract/contracts/editor';
+} from '@docx-editor.dev/core/contracts/editor';
 import { IMAGE_WRAP_TARGETS } from '../../store/package/drawing-projection.ts';
 import {
   chromeProbeForSlot,

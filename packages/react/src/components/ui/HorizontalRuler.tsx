@@ -20,7 +20,7 @@
 
 import React, { useCallback, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, KeyboardEvent } from 'react';
-import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import {
   dragIndent,
   handlePosition,
@@ -29,7 +29,7 @@ import {
   type RulerIndent,
   type RulerIndentHandle,
   type RulerPageMetrics,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/editor';
 import { twipsToPixels, pixelsToTwips, formatPx } from '../../lib/units';
 import { useTranslation } from '../../i18n';
 

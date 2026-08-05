@@ -104,9 +104,6 @@ describe('what the package depends on', () => {
       'jszip',
       'pizzip',
       'xml-js',
-      // The published engine, as opposed to the private contract package the build inlines.
-      // Nothing here imports it, and declaring it would make the tarball install a second engine.
-      '@docx-editor.dev/core',
       // The compatible subset is authored here and checked against a reference fixture offline.
       // A Microsoft package in any dependency kind would make the claim a dependency instead.
       'office-js',
@@ -116,6 +113,19 @@ describe('what the package depends on', () => {
       '@microsoft/office-js-helpers',
     ];
     expect(declared.filter((name) => forbidden.includes(name))).toEqual([]);
+  });
+
+  test('the engine is a build-time dependency only, never one a consumer installs', () => {
+    // `@docx-editor.dev/core` is inlined by tsup (`noExternal`), so the tarball carries the
+    // engine rather than resolving it. Declaring it as a runtime or peer dependency would make
+    // a consumer install a second copy — which is what this forbids. A devDependency is the
+    // build reading workspace source, and is correct.
+    const installed = Object.keys({
+      ...(manifest.dependencies ?? {}),
+      ...(manifest.peerDependencies ?? {}),
+    });
+    expect(installed).not.toContain('@docx-editor.dev/core');
+    expect(Object.keys(manifest.devDependencies ?? {})).toContain('@docx-editor.dev/core');
   });
 
   test('there are no peer dependencies left to be optional about', () => {
@@ -134,8 +144,8 @@ describe('what the package depends on', () => {
   });
 
   test('the private contract package is a dev dependency, because the build inlines it', () => {
-    expect(manifest.devDependencies?.['@docx-editor.dev/core-contract']).toBe('workspace:*');
-    expect(manifest.dependencies?.['@docx-editor.dev/core-contract']).toBeUndefined();
+    expect(manifest.devDependencies?.['@docx-editor.dev/core']).toBe('workspace:*');
+    expect(manifest.dependencies?.['@docx-editor.dev/core']).toBeUndefined();
   });
 });
 

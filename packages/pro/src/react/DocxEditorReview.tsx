@@ -45,10 +45,7 @@ import {
   useState,
 } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type {
-  ReviewItemQuery,
-  ReviewRevisionKind,
-} from '@docx-editor.dev/core-contract/contracts/editor';
+import type { ReviewItemQuery, ReviewRevisionKind } from '@docx-editor.dev/core/contracts/editor';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { ReviewRailContext, Slot, useDocxEditor, useTranslation } from '@docx-editor.dev/react';
 import { useReview, type ReviewItemView } from './useReview';

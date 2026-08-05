@@ -5,7 +5,7 @@
 // decide what page it is on. Renders nothing for a single-page document.
 
 import { computed, defineComponent, h, type PropType } from 'vue';
-import type { Editor } from '@docx-editor.dev/core-contract/contracts/editor';
+import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { useEditorSnapshot } from './useEditorSnapshot';
 
 export interface PageIndicatorProps {

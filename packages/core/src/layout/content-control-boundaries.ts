@@ -24,7 +24,7 @@ import {
   type ContentControlLock,
   type OoxmlNode,
   type OoxmlPart,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import type { BlockFragmentRecord, LayoutBox, SemanticLayout } from './semantic-records.ts';
 
 /** One page-local rectangle covering the part of a control that sits on that page. */

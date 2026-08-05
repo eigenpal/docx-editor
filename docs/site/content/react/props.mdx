@@ -5,7 +5,7 @@ category: 'React'
 order: 31
 ---
 
-`<DocxEditor>` is the packaged host over the v2 provider primitives. The full generated reference is at [/docs/1.x/api/react](/docs/1.x/api/react); this page groups the current root props by how you actually wire the editor.
+`<DocxEditor>` is the packaged host over the v2 provider primitives. The full generated reference is at [/docs/2.x/api/react](/docs/2.x/api/react); this page groups the current root props by how you actually wire the editor.
 
 ## Document and mount state
 
@@ -55,20 +55,19 @@ const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
 <DocxEditor document={bytes} colorMode={colorMode} />
 ```
 
-See the [Dark mode](/docs/1.x/guides/dark-mode) guide for how the canvas transform works, what it does and doesn't change, and how to report issues.
+See the [Dark mode](/docs/2.x/guides/dark-mode) guide for how the canvas transform works, what it does and doesn't change, and how to report issues.
 
 ## Fonts
 
-`fontFamilies` controls what the toolbar dropdown offers. `fonts` supplies the actual
-font bytes the engine measures with, so line wrap and page breaks match Word. They are
-independent: list a family in `fontFamilies` to make it pickable, supply its bytes
-through `fonts` so it measures accurately.
+`fonts` supplies the font bytes the engine measures with, so line wrap and page breaks
+match Word. Fonts embedded in the document wire in automatically. The font picker offers
+what the document declares merged with what you configure — read that list from
+`useFontFamily()` rather than a prop.
 
-| Prop           | Type                                             | Default     | Description                                                                                                |
-| -------------- | ------------------------------------------------ | ----------- | ---------------------------------------------------------------------------------------------------------- |
-| `fonts`        | `FontConfiguration \| FontConfigurationFragment` | none        | Font bytes for Word-accurate measurement. Fonts embedded in the document wire in automatically either way. |
-| `fontFamilies` | `ReadonlyArray<string \| FontOption>`            | built-in 12 | Constrain the font picker to a specific list.                                                              |
-| `onFontError`  | `(error: EditorFontError) => void`               | none        | Per-face failures (corrupt embedded face, 404, hash mismatch).                                             |
+| Prop          | Type                                             | Default | Description                                                                        |
+| ------------- | ------------------------------------------------ | ------- | ---------------------------------------------------------------------------------- |
+| `fonts`       | `FontConfiguration \| FontConfigurationFragment` | none    | Font bytes for Word-accurate measurement.                                          |
+| `onFontError` | `(error: EditorFontError) => void`               | none    | Per-face failures (corrupt embedded face, 404, hash mismatch).                     |
 
 The usual value is what `loadDefaultFonts()` returns:
 
@@ -83,7 +82,7 @@ const fonts = await loadDefaultFonts();
 
 `fonts` is sampled at mount. Replace it by remounting the editor with a new configuration.
 
-See the [Fonts and measurement](/docs/1.x/guides/fonts) guide for the three font
+See the [Fonts and measurement](/docs/2.x/guides/fonts) guide for the three font
 sources, how they compose, and how to supply your own faces with `loadFonts`.
 
 ## Title bar customization
@@ -156,10 +155,10 @@ Common methods:
 | `snapshot(options?)`      | `EditorSnapshot`               | Read the current facade snapshot.                                                   |
 | `focus()`                 | `void`                         | Focus the mounted editor surface.                                                   |
 
-The full method list with signatures is at [/docs/1.x/api/react](/docs/1.x/api/react).
+The full method list with signatures is at [/docs/2.x/api/react](/docs/2.x/api/react).
 
 ## Next steps
 
-- [React quickstart](/docs/1.x/react)
-- [React examples](/docs/1.x/react/examples)
-- [Full API reference](/docs/1.x/api/react)
+- [React quickstart](/docs/2.x/react)
+- [React examples](/docs/2.x/react/examples)
+- [Full API reference](/docs/2.x/api/react)

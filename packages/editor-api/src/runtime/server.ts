@@ -18,7 +18,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // did not author gets "not a document this API can open", and a probe cannot use the error to
 // learn about the reader's limits.
 
-import { createServerAutomationHost } from '@docx-editor.dev/core-contract/automation';
+import { createServerAutomationHost } from '@docx-editor.dev/core/automation';
 import { fail } from './errors.ts';
 import { createRuntime, type DocxEditorServerRuntime } from './runtime.ts';
 

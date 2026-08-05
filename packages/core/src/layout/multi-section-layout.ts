@@ -8,7 +8,7 @@
 // finalize still runs once the total page count is known; when that count is unchanged,
 // finalized page identities from the previous pass are restored for untouched sheets.
 
-import type { OoxmlElement } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { finalizePageFieldProjection, withPageFieldSources } from './field-projection.ts';
 import { remapPage, type HeaderFooterStoryLayout } from './hf-layout.ts';
 import {

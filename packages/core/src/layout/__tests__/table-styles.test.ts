@@ -5,7 +5,7 @@
 // unshaded table where Word draws a full grid with a header row and banding.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlElement } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlElement } from '@docx-editor.dev/core/store';
 import { buildStyleCascadeTable, readTableStructure } from '../index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

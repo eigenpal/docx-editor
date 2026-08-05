@@ -30,7 +30,7 @@ import {
   semanticDigest,
   serializeOoxmlPart,
   type SemanticDigest,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import type { DocxEditorServerRuntime } from '../../runtime/runtime.ts';
 import { REPRESENTATIVE, reopen, serverRuntime } from './support/documents.ts';
 

@@ -20,7 +20,7 @@
 // chains are deliberately not chased: both are bounded-cost rules, and the style-level
 // answer is what Word's navigation pane keys on for the documents this slice loads.
 
-import { paragraphTextOf } from '@docx-editor.dev/core-contract/store';
+import { paragraphTextOf } from '@docx-editor.dev/core/store';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { bodyParagraphs } from './tree-binding.ts';
 

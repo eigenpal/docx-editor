@@ -75,7 +75,7 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
     // Relocated by the contract half of task 10.2; still owns the core package itself, so
     // it has no alias and never "moves" in the sense the other lanes do.
     directory: 'src/contracts',
-    package: '@docx-editor.dev/core-contract',
+    package: '@docx-editor.dev/core',
     mayImport: [],
     environment: 'neutral',
     subpath: './contracts',
@@ -197,7 +197,7 @@ export function laneSourceRoot(name: LaneName): string {
 export function sourceRootOf(lane: Lane): string {
   if (lane.package === null) return `core/${lane.directory}`;
   const directory = lane.package.replace('@docx-editor.dev/', '');
-  return `${directory === 'core-contract' ? 'core' : directory}/src`;
+  return `${directory === 'core' ? 'core' : directory}/src`;
 }
 
 /** Every lane, in an order where a lane's dependencies come first. */

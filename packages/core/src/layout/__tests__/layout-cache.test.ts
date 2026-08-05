@@ -6,7 +6,7 @@
 // correct until someone types.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import {
   createFixedMeasurer,
   createParagraphLayoutCache,

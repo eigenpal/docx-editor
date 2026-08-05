@@ -13,8 +13,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // change's remaining tasks — a document recognized today renders its SDT
 // content literally, which is also the free tier's and Word's fallback.
 
-import type { EditorModule } from '@docx-editor.dev/core-contract/editor';
-import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core-contract/store';
+import type { EditorModule } from '@docx-editor.dev/core/editor';
+import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import { rememberLicenseKey, type ProLicenseOptions } from '../license.ts';
 import { decodeCustomNodeTag } from './tag-codec.ts';
 

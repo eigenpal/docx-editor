@@ -20,7 +20,7 @@ import type {
   AutomationError,
   AutomationErrorCode,
   AutomationOperation,
-} from '@docx-editor.dev/core-contract/automation';
+} from '@docx-editor.dev/core/automation';
 import { DocxEditorError, type DocxEditorErrorCode } from './errors.ts';
 import type { QueuedAction } from './queue.ts';
 

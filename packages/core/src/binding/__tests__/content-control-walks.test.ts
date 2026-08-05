@@ -1,11 +1,7 @@
 // Binding walks descend content controls transparently for paragraph and inline tokens.
 
 import { describe, expect, test } from 'bun:test';
-import {
-  readOoxmlPart,
-  type OoxmlNode,
-  type OoxmlPart,
-} from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPart, type OoxmlNode, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { allParagraphs } from '../tree-binding.ts';
 import { collectTextMatches } from '../document-search.ts';
 

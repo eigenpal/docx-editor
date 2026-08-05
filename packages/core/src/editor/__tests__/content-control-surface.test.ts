@@ -7,9 +7,9 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
-import { paintSemanticLayout } from '@docx-editor.dev/core-contract/output';
-import { createFixedMeasurer, layoutSemanticDocument } from '@docx-editor.dev/core-contract/layout';
-import { readOoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { paintSemanticLayout } from '@docx-editor.dev/core/output';
+import { createFixedMeasurer, layoutSemanticDocument } from '@docx-editor.dev/core/layout';
+import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import { CHROME_GROUPS, chromeSlotId, type ChromeSlotId } from '../chrome-controls.ts';
 import { commandForSlot } from '../toolbar-commands.ts';
 

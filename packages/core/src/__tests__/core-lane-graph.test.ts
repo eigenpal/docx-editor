@@ -29,7 +29,7 @@ function manifestOf(lane: LaneName): Record<string, unknown> | null {
   const name = CORE_LANES[lane].package;
   if (!name) return null;
   const directory = name.replace('@docx-editor.dev/', '');
-  const file = join(PACKAGES, directory === 'core-contract' ? 'core' : directory, 'package.json');
+  const file = join(PACKAGES, directory === 'core' ? 'core' : directory, 'package.json');
   if (!existsSync(file)) return null;
   return JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
 }
@@ -149,7 +149,7 @@ describe('a browser bundle cannot reach the server (task 10.1)', () => {
     let checked = 0;
     for (const lane of BROWSER_REACHABLE) {
       if (laneHasMoved(lane)) continue;
-      if (shared && CORE_LANES[lane].package === '@docx-editor.dev/core-contract') continue;
+      if (shared && CORE_LANES[lane].package === '@docx-editor.dev/core') continue;
       const manifest = manifestOf(lane);
       if (!manifest) continue;
       checked += 1;
@@ -167,8 +167,7 @@ describe('a browser bundle cannot reach the server (task 10.1)', () => {
     if (checked === 0) {
       expect(
         BROWSER_REACHABLE.every(
-          (lane) =>
-            laneHasMoved(lane) || CORE_LANES[lane].package === '@docx-editor.dev/core-contract'
+          (lane) => laneHasMoved(lane) || CORE_LANES[lane].package === '@docx-editor.dev/core'
         )
       ).toBe(true);
     }

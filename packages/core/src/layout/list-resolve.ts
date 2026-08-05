@@ -1,8 +1,8 @@
 // Resolve paragraph `numPr` against a numbering index and produce per-paragraph list
 // layout inputs (marker text, effective indent, marker face) for one story walk.
 
-import { flattenContentControls } from '@docx-editor.dev/core-contract/store';
-import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core-contract/store';
+import { flattenContentControls } from '@docx-editor.dev/core/store';
+import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
 import { createListCounterState } from './list-counters.ts';
 import {
   EMPTY_NUMBERING_INDEX,

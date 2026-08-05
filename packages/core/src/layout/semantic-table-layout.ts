@@ -18,7 +18,7 @@
 // paragraph fragments already live in. Cell paragraph breaks go through the shared
 // `breakParagraph`, so they hit the same cache with keys at the cell's content width.
 
-import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core-contract/store';
+import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
 import {
   clipInlineDrawingRecordToRegion,
   shiftInlineDrawingRecord,

@@ -13,7 +13,7 @@ order: 30
 npm install @docx-editor.dev/react
 ```
 
-Pulls in `@docx-editor.dev/core-contract` and `@docx-editor.dev/i18n`. Add `@docx-editor.dev/editor-api` if you want to automate the document from code.
+Carries the engine and the string catalogue. Add [`@docx-editor.dev/pro`](/docs/2.x/pro) for tracked changes, comments, and custom nodes, or [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) to automate the document from code.
 
 ## Quickstart
 
@@ -35,9 +35,9 @@ export default function App() {
 - hooks from the same root: `useDocxEditor`, `useEditorState`, `useEditorCommand`, `useEditorEvent`, `usePageSetup`, `useParagraphIndent`, `useFontFamily`
 - shared top-level pieces: `DocxEditorRoot`, `DocxEditorViewport`, `DocxEditorContent`, `DocxEditorToolbar`, `DocxEditorMenu`, `DocxEditorNavigation`, `DocxEditorPageSetupDialog`
 
-The review module and pane are licensed PRO surfaces from `@docx-editor.dev/pro` and `@docx-editor.dev/pro/react`; they are not exports of the React adapter.
+The review module and sidebar are licensed surfaces in [`@docx-editor.dev/pro`](/docs/2.x/pro); they are not exports of the React adapter.
 
-There are no separate `/ui`, `/hooks`, `/dialogs`, or `/plugin-api` package exports in v2. The documented React surface lives on the package root.
+There is one export path. Components, hooks, and the engine helpers all live on the package root — there are no `/ui`, `/hooks`, or `/dialogs` subpaths.
 
 ## Provider primitives
 
@@ -95,7 +95,7 @@ The lower-level helpers (`useEditorCommand`, `useEditorState`, `useFontFamily`) 
 
 ## DocxEditor API
 
-Drive the open document from code with `@docx-editor.dev/editor-api/browser`, which takes the editor instance this adapter created:
+Drive the open document from code with the Office.js-compatible `@docx-editor.dev/editor-api/browser`, which takes the editor instance this adapter created:
 
 ```tsx
 import { useDocxEditor } from '@docx-editor.dev/react';
@@ -105,11 +105,13 @@ const editor = useDocxEditor(); // null until the content is mounted
 const runtime = DocxEditor.createBrowser(editor!);
 ```
 
-The object model and its rules are in [DocxEditor API](/docs/1.x/editor-api).
+The object model and its rules are in [Editing API](/docs/2.x/editor-api).
 
 ## Next steps
 
-- [API reference](/docs/1.x/api/react)
-- [React props](/docs/1.x/react/props)
-- [React examples](/docs/1.x/react/examples)
-- [DocxEditor API](/docs/1.x/editor-api)
+- [Composition](/docs/2.x/react/composition): replace the packaged chrome with your own
+- [Hooks](/docs/2.x/react/hooks): the API every packaged control is built on
+- [Props](/docs/2.x/react/props): `<DocxEditor>` and the imperative ref
+- [Examples](/docs/2.x/react/examples)
+- [Igloo example](https://github.com/eigenpal/docx-editor/tree/main/examples/igloo): a fully re-skinned editor, every customization point in one app
+- [Full API reference](/docs/2.x/api/react)

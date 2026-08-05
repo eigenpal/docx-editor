@@ -4,7 +4,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
-import { readOoxmlPackage, readOoxmlPart } from '@docx-editor.dev/core-contract/store';
+import { readOoxmlPackage, readOoxmlPart } from '@docx-editor.dev/core/store';
 import { resolveNotesPart, collectNoteReferences } from '../../store/package/note-references.ts';
 import {
   resolveEndnoteProperties,

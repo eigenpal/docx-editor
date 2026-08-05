@@ -10,4 +10,4 @@ export {
   PX_PER_CM,
   type RulerTick,
   type RulerUnit,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/editor';

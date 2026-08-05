@@ -1,18 +1,15 @@
 // Image properties dialog — one atomic `setImageProperties` on Apply.
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import type {
-  EditorSnapshot,
-  SelectedImageState,
-} from '@docx-editor.dev/core-contract/contracts/editor';
-import type { DrawingPositionInput, ImageWrapTarget } from '@docx-editor.dev/core-contract/editor';
+import type { EditorSnapshot, SelectedImageState } from '@docx-editor.dev/core/contracts/editor';
+import type { DrawingPositionInput, ImageWrapTarget } from '@docx-editor.dev/core/editor';
 import {
   DRAWING_REL_FROM_H,
   DRAWING_REL_FROM_V,
   IMAGE_WRAP_TARGETS,
   positionInputFromPropertiesCommand,
   validateDrawingPositionInput,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/editor';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';

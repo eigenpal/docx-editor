@@ -34,7 +34,7 @@
     "types": [],
     "baseUrl": ".",
     "paths": {
-      "@docx-editor.dev/core-contract/automation": ["../../../core/src/automation/index.ts"]
+      "@docx-editor.dev/core/automation": ["../../../core/src/automation/index.ts"]
     }
   },
   "include": [

@@ -1,5 +1,5 @@
 {
-  "title": "DocxEditor API",
+  "title": "Editing API",
   "defaultOpen": true,
-  "pages": ["index", "word-js-api", "migration"]
+  "pages": ["index", "word-js-api"]
 }

@@ -11,7 +11,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
-import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core-contract/editor';
+import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import {
   customNodesModule,
   defineCustomNode,

@@ -20,14 +20,14 @@ import type {
   Editor,
   EditorFontError,
   FontConfiguration,
-} from '@docx-editor.dev/core-contract/contracts/editor';
-import { createDocxEditor, defaultTableLabel } from '@docx-editor.dev/core-contract/editor';
-import type { EditorModule } from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/contracts/editor';
+import { createDocxEditor, defaultTableLabel } from '@docx-editor.dev/core/editor';
+import type { EditorModule } from '@docx-editor.dev/core/editor';
 import type {
   DocxEditorInstance,
   FontConfigurationFragment,
   ImageDecodePort,
-} from '@docx-editor.dev/core-contract/editor';
+} from '@docx-editor.dev/core/editor';
 import { useTranslation, type TranslationKey } from '../i18n';
 import { DocxEditorContext, ReviewRailContext, type ReviewRailRegistry } from './context';
 import { HyperlinkPopupContext, useHyperlinkPopupInstance } from './useHyperlinkPopup';

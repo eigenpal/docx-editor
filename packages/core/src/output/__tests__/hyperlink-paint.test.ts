@@ -15,8 +15,8 @@ import {
   relationshipTargetIn,
   type OoxmlNode,
   type OoxmlPackage,
-} from '@docx-editor.dev/core-contract/store';
-import { createFixedMeasurer, layoutSemanticDocument } from '@docx-editor.dev/core-contract/layout';
+} from '@docx-editor.dev/core/store';
+import { createFixedMeasurer, layoutSemanticDocument } from '@docx-editor.dev/core/layout';
 import { paintSemanticLayout } from '../semantic-paint.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

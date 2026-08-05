@@ -14,7 +14,7 @@ import type {
   OoxmlNode,
   OoxmlPart,
   OoxmlProperty,
-} from '@docx-editor.dev/core-contract/store';
+} from '@docx-editor.dev/core/store';
 import { WML_MAIN_DOCUMENT_PART } from '../store/package/opc-names.ts';
 import {
   finalizePageFieldProjection,
