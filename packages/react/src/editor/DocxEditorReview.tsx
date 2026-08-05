@@ -1168,7 +1168,7 @@ function BalloonTime({ raw }: { raw: string }) {
   const when = new Date(raw);
   if (Number.isNaN(when.getTime())) return null;
   return (
-    <time className="docx-review__time" dateTime={raw} title={when.toLocaleString()}>
+    <time className="docx-review__time" dateTime={raw}>
       {REVIEW_DATE_FORMAT.format(when)}
     </time>
   );
@@ -1363,11 +1363,12 @@ function ReviewTime({ className, asChild, hidden, children }: ReviewPartProps) {
   if (!raw) return null;
   const when = new Date(raw);
   if (Number.isNaN(when.getTime())) return null;
+  // No `title`: the visible text already carries the date and time, and the native tooltip
+  // popped over the author's name in the balloon, reading as a mystery grey box.
   const shared = {
     className: `docx-review__time${className ? ` ${className}` : ''}`,
     'data-testid': 'review-time',
     dateTime: raw,
-    title: when.toLocaleString(),
   };
   if (asChild) return <Slot {...shared}>{children}</Slot>;
   // Month, day and time — what Word shows, and what a reviewer actually needs: two comments
