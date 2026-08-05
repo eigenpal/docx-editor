@@ -11,13 +11,11 @@
  * @packageDocumentation
  * @public
  */
-// @docx-editor.dev/engine-layout
+// Lane: layout. Responsibilities and dependency rules:
+// docs/architecture/production-engine-packages.md.
 //
-// Layout: resolved caches, dependency closure, shaping, convergent pagination, and the anchored DisplayItem[] IR. DOM-free — emits positioned geometry, never paints.
-//
-// Production placement is fixed by document-engine task 1.4. Responsibilities and
-// dependency rules: docs/architecture/production-engine-packages.md. This is a
-// greenfield skeleton; capability implementation lands in the sections that own it.
+// Resolved caches, dependency closure, shaping, convergent pagination, and the anchored
+// DisplayItem[] IR. DOM-free — emits positioned geometry, never paints.
 
 /** Stable package identity used by the import-graph / package-authority checks. */
 export const ENGINE_LAYOUT_PACKAGE = '@docx-editor.dev/core/layout' as const;

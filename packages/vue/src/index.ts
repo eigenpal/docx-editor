@@ -51,7 +51,6 @@ export {
 // Re-export the contract types a consumer needs to drive the editor.
 export type {
   Editor,
-  EditorHost,
   EditorCommand,
   EditorQuery,
   EditorSnapshot,

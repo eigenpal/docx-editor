@@ -9,12 +9,11 @@
  * @packageDocumentation
  * @public
  */
-// @docx-editor.dev/engine-editor
+// Lane: editor. Responsibilities and dependency rules:
+// docs/architecture/production-engine-packages.md.
 //
-// Browser editor composition root: the production tree-lane editor. Composes the typed
-// OOXML tree session, engine-layout pagination, and the paginated surface into the
-// PM-free Editor/EditorHost contract. Becomes @docx-editor.dev/core/editor at the section 7/14
-// migration. Production placement: docs/architecture/production-engine-packages.md.
+// Browser composition root: composes the typed OOXML tree session, layout pagination,
+// and the paginated surface into the PM-free Editor contract.
 
 /** Stable package identity used by the import-graph / package-authority checks. */
 export const ENGINE_EDITOR_PACKAGE = '@docx-editor.dev/core/editor' as const;

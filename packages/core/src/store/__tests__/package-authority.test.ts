@@ -19,10 +19,10 @@ const PUBLIC_SRC_DIRS = [
   'core/src',
   'react/src',
   'vue/src',
-  'engine-core/src',
-  'engine-binding/src',
-  'engine-layout/src',
-  'engine-output/src',
+  'core/src/store',
+  'core/src/binding',
+  'core/src/layout',
+  'core/src/output',
 ];
 
 function collectSources(root: string): string[] {

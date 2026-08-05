@@ -8,13 +8,11 @@
  * @packageDocumentation
  * @public
  */
-// @docx-editor.dev/engine-output
+// Lane: output. Responsibilities and dependency rules:
+// docs/architecture/production-engine-packages.md.
 //
-// Outputs: the semantic-layout painter for the paginated surface. Consumes semantic
-// layout records only; never rederives geometry or interprets CSS.
-//
-// Production placement is fixed by document-engine task 1.4. Responsibilities and
-// dependency rules: docs/architecture/production-engine-packages.md.
+// The semantic-layout painter for the paginated surface. Consumes semantic layout
+// records only; never rederives geometry or interprets CSS.
 
 /** Stable package identity used by the import-graph / package-authority checks. */
 export const ENGINE_OUTPUT_PACKAGE = '@docx-editor.dev/core/output' as const;

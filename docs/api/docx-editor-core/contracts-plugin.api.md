@@ -28,6 +28,7 @@ export interface Editor {
     }>, options?: {
         scope?: EditorScope;
     }): CanResult;
+    deleteReviewItem(key: string): ExecResult;
     // (undocumented)
     destroy(): void;
     // (undocumented)

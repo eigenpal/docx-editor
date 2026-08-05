@@ -102,13 +102,7 @@ describe('the DAG matches the packages that hold the code today (task 10.1)', ()
       const manifest = manifestOf(lane);
       if (!manifest) continue;
       const actual = workspaceDependencies(manifest)
-        // `package ?? alias`: a moved lane is still depended on under its old package name
-        // until the compatibility alias is removed, and that edge is a real one.
-        .map((name) =>
-          laneNames.find(
-            (candidate) => (CORE_LANES[candidate].package ?? CORE_LANES[candidate].alias) === name
-          )
-        )
+        .map((name) => laneNames.find((candidate) => CORE_LANES[candidate].package === name))
         .filter((name): name is LaneName => name !== undefined)
         .sort();
       const declared = [...CORE_LANES[lane].mayImport].sort();
@@ -221,20 +215,6 @@ describe('every lane has somewhere to be imported from (task 10.1)', () => {
     }
   });
 
-  test('a moved lane keeps a compatibility alias, and an unmoved one has none', () => {
-    // The alias is what task 10.5 permits while a lane is in flight; task 10.6 deletes it.
-    // Asserting BOTH directions so the field cannot quietly become permanent decoration.
-    //
-    // A lane declared straight into `packages/core` is the third case: it reads as "moved"
-    // because it has no package of its own, but there is no importer to keep compatible
-    // with, so an alias would be decoration rather than a migration aid.
-    for (const lane of laneNames) {
-      const hasAlias = CORE_LANES[lane].alias !== undefined;
-      const wantsAlias = laneHasMoved(lane) && CORE_LANES[lane].nativeToCore !== true;
-      expect({ lane, hasAlias }).toEqual({ lane, hasAlias: wantsAlias });
-    }
-  });
-
   test('each lane declares the directory it will occupy under the core package', () => {
     for (const lane of laneNames) {
       expect(CORE_LANES[lane].directory).toBe(`src/${lane}`);
@@ -332,9 +312,8 @@ describe('the automation lane is a neutral host port (Office-compatible automati
     expect(BROWSER_REACHABLE).toContain('automation');
   });
 
-  test('it was declared straight into core, so it carries no compatibility alias', () => {
+  test('it was declared straight into core, never a standalone package', () => {
     expect(CORE_LANES.automation.package).toBeNull();
-    expect(CORE_LANES.automation.alias).toBeUndefined();
     expect(CORE_LANES.automation.nativeToCore).toBe(true);
   });
 

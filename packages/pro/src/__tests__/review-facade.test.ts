@@ -308,7 +308,7 @@ describe('comments in the queue', () => {
 
     const reply = items.find((item) => item.kind === 'comment' && item.parentId !== undefined);
     expect(reply?.text).toBe('Yes, checked against the schedule.');
-    // The AMBIENT author, from `EditorConfig.author` — `CT_Comment` requires one.
+    // The AMBIENT author, from `DocxEditorConfig.author` — `CT_Comment` requires one.
     expect(reply?.author).toBe('Grace Hopper');
   });
 

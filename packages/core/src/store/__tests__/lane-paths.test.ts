@@ -1,82 +1,50 @@
-// The lane resolver has to actually resolve (task 10.2 preparation).
+// The lane resolver has to fail loudly (task 10.2).
 //
-// Every guard that now calls `existingLanePath` passes today, and would pass identically if
-// the function simply returned its argument — the lanes have not moved yet, so the rewrite is
-// a no-op on every real input. That makes the passing guards no evidence at all.
-//
-// So the resolver is tested against the case that does not exist yet: a lane whose `package`
-// is null, meaning it has moved into `packages/core`. If these fail, the migration will find
-// the guards scanning empty directories and reporting success.
+// Every guard in this directory scans a lane by path and calls `collectSources` on the
+// result. `collectSources` on a missing directory returns [], so a guard whose lane moved
+// passes having examined no files. That is the failure this file exists to prevent: not a
+// wrong answer, a green run that proved nothing.
 
 import { describe, expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { CORE_LANES, laneSourceRoot, sourceRootOf } from '../../__tests__/core-lane-graph.ts';
-import { existingLanePath, laneRelativePath, PACKAGES_ROOT } from './lane-paths.ts';
-import { laneHasMoved, type LaneName } from '../../__tests__/core-lane-graph.ts';
+import { CORE_LANES, laneSourceRoot, type LaneName } from '../../__tests__/core-lane-graph.ts';
+import {
+  existingLanePath,
+  lanePath,
+  NESTED_LANE_DIRECTORIES,
+  PACKAGES_ROOT,
+} from './lane-paths.ts';
 
-/**
- * A lane that has not moved yet, chosen at run time.
- *
- * Naming one made this file fail the moment that lane moved — which is a test breaking on
- * the change it is supposed to survive. Section 10 moves every lane eventually, so the
- * example has to be looked up rather than written down.
- */
-const UNMOVED: LaneName | undefined = (
-  ['contracts', 'sync', 'server', 'clients', 'binding', 'output', 'editor'] as LaneName[]
-).find((lane) => !laneHasMoved(lane));
-
-describe('lane path resolution survives a lane moving', () => {
-  test('an unmoved lane keeps its current location', () => {
-    if (!UNMOVED) return; // Every lane has moved: this case no longer exists to test.
-    const root = laneSourceRoot(UNMOVED);
-    expect(laneRelativePath(root)).toBe(root);
-    expect(laneRelativePath(`${root}/index.ts`)).toBe(`${root}/index.ts`);
-  });
-
-  test('the store lane, which HAS moved, redirects both root and nested file', () => {
-    // Not hypothetical any more: task 10.2 moved this lane, so every guard still naming it
-    // `engine-core/src` is relying on exactly this rewrite.
-    expect(laneRelativePath('engine-core/src')).toBe('core/src/store');
-    expect(laneRelativePath('engine-core/src/package/ooxml-tree.ts')).toBe(
-      'core/src/store/package/ooxml-tree.ts'
-    );
-  });
-
-  test('the rewrite rule itself handles a lane that has not moved yet', () => {
-    // The whole point of the indirection, exercised on the only input that can show it.
-    // `laneSourceRoot` reads the DAG, so this is the behaviour the guards will get the
-    // moment a `package` field flips to null — not a restatement of it.
-    // `sourceRootOf` is the rule `laneSourceRoot` and `laneRelativePath` both run on, called
-    // here with a lane record whose `package` is null — the state the migration creates.
-    expect(sourceRootOf({ ...CORE_LANES.store, package: null })).toBe('core/src/store');
-    expect(sourceRootOf({ ...CORE_LANES.editor, package: null })).toBe('core/src/editor');
-    // Same function, unmoved: the two branches are not separate implementations.
-    if (UNMOVED) {
-      expect(sourceRootOf(CORE_LANES[UNMOVED])).toBe(laneSourceRoot(UNMOVED));
-      expect(sourceRootOf(CORE_LANES[UNMOVED]).startsWith('core/src/')).toBe(false);
-    }
-  });
-
-  test('a path outside every lane is returned untouched', () => {
-    // `react/src` is scanned by the layout guard and belongs to no lane.
-    expect(laneRelativePath('react/src')).toBe('react/src');
-  });
-
+describe('lane path resolution', () => {
   test('a path that does not exist THROWS rather than scanning nothing', () => {
-    // The failure this whole file exists to prevent: `collectSources` on a missing directory
-    // returns [], so a guard whose lane moved passes having examined no files.
-    expect(() => existingLanePath('engine-layout/src/definitely-not-here')).toThrow(
-      /does not exist/
-    );
+    expect(() => existingLanePath('core/src/layout/definitely-not-here')).toThrow(/does not exist/);
   });
 
   test('the resolver points at real files, so the guards are scanning something', () => {
-    const resolved = existingLanePath('engine-core/src');
+    const resolved = existingLanePath('core/src/store');
     expect(resolved.startsWith(PACKAGES_ROOT)).toBe(true);
   });
 
-  test('fixture paths in this lane still resolve after the move', () => {
+  test('every lane in the DAG resolves to source that exists', () => {
+    // The guards name lanes by path literal. If a lane's directory changes and a guard is not
+    // updated, this is what fails first — before a guard silently scans an empty list.
+    for (const lane of Object.keys(CORE_LANES) as LaneName[]) {
+      const root = laneSourceRoot(lane);
+      expect({ lane, exists: existsSync(lanePath(root)) }).toEqual({ lane, exists: true });
+    }
+  });
+
+  test('the nested-lane set names real directories under the contracts lane', () => {
+    // A collector walking `core/src` skips these to stay inside one lane. A stale name here
+    // means a lane's files get attributed to `contracts`.
+    for (const directory of NESTED_LANE_DIRECTORIES) {
+      const resolved = lanePath(join('core', 'src', directory));
+      expect({ directory, exists: existsSync(resolved) }).toEqual({ directory, exists: true });
+    }
+  });
+
+  test('fixture paths in this lane still resolve', () => {
     // The failure this catches is SILENT. Several tests here are written as
     // `test.if(existsSync(fixture))`, so a fixture path that stops resolving does not fail —
     // the test quietly stops running. Moving the lane two directories deeper broke four of

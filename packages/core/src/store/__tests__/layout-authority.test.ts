@@ -95,7 +95,7 @@ function findAll(source: string, patterns: readonly { pattern: RegExp; why: stri
 
 describe('semantic layout is the only geometry authority (task 7.6)', () => {
   test('the semantic painter never measures anything back', () => {
-    const file = existingLanePath('engine-output/src/semantic-paint.ts');
+    const file = existingLanePath('core/src/output/semantic-paint.ts');
     const offenders = findAll(readFileSync(file, 'utf8'), REMEASUREMENT);
     expect(offenders).toEqual([]);
   });
@@ -104,7 +104,7 @@ describe('semantic layout is the only geometry authority (task 7.6)', () => {
     // Scan every production source — a hard-coded file list lets a new module (e.g.
     // canvas-measurer) mount a probe and escape the guard. Editor/output seams create DOM
     // on purpose; they are outside this lane.
-    const layoutRoot = existingLanePath('engine-layout/src');
+    const layoutRoot = existingLanePath('core/src/layout');
     const files = collectSources(layoutRoot);
     expect(files.length).toBeGreaterThan(4);
     expect(files.some((file) => file.endsWith('canvas-measurer.ts'))).toBe(true);
@@ -122,7 +122,7 @@ describe('semantic layout is the only geometry authority (task 7.6)', () => {
 
   test('no output module builds DOM from an HTML string', () => {
     const offenders: string[] = [];
-    for (const file of collectSources(existingLanePath('engine-output/src'))) {
+    for (const file of collectSources(existingLanePath('core/src/output'))) {
       const code = stripComments(readFileSync(file, 'utf8'));
       for (const pattern of HTML_FROM_STRING) {
         if (pattern.test(code)) offenders.push(`${relative(REPO, file)}: ${pattern.source}`);
@@ -136,7 +136,7 @@ describe('semantic layout is the only geometry authority (task 7.6)', () => {
     // accident; `engine-core` has no DOM lib, but a bare `document.` would still compile in
     // a file that declared its own.
     const offenders: string[] = [];
-    for (const file of collectSources(existingLanePath('engine-core/src'))) {
+    for (const file of collectSources(existingLanePath('core/src/store'))) {
       const code = stripComments(readFileSync(file, 'utf8'));
       if (/\bdocument\s*\.\s*(createElement|querySelector|body)\b/.test(code)) {
         offenders.push(relative(REPO, file));
@@ -167,8 +167,8 @@ describe('semantic layout is the only geometry authority (task 7.6)', () => {
     expect(findAll('context.measureText(text);', REMEASUREMENT)).toEqual(['canvas text metrics']);
     // And the corpus is real. The output lane shrank to the semantic painter + barrel when
     // the legacy DOM/PDF/reading-order backends were deleted (phase-4 sweep).
-    expect(collectSources(existingLanePath('engine-output/src')).length).toBeGreaterThan(1);
-    expect(collectSources(existingLanePath('engine-layout/src')).length).toBeGreaterThan(4);
+    expect(collectSources(existingLanePath('core/src/output')).length).toBeGreaterThan(1);
+    expect(collectSources(existingLanePath('core/src/layout')).length).toBeGreaterThan(4);
   });
 
   test('the ADAPTER and editor seams may still measure, so the guard is not vacuous', () => {
@@ -177,7 +177,7 @@ describe('semantic layout is the only geometry authority (task 7.6)', () => {
     // measurement had been removed everywhere rather than confined to where it belongs.
     const adapters = [
       ...collectSources(existingLanePath('react/src')),
-      ...collectSources(existingLanePath('engine-editor/src')),
+      ...collectSources(existingLanePath('core/src/editor')),
     ];
     const measuring = adapters.filter(
       (file) => findAll(readFileSync(file, 'utf8'), REMEASUREMENT).length > 0

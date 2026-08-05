@@ -31,7 +31,6 @@ import { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
 import { EditorEvents } from '@docx-editor.dev/core/contracts/editor';
 import { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 import { EditorFontErrorCode } from '@docx-editor.dev/core/contracts/editor';
-import { EditorHost } from '@docx-editor.dev/core/contracts/editor';
 import { EditorModule } from '@docx-editor.dev/core/editor';
 import { EditorQuery } from '@docx-editor.dev/core/contracts/editor';
 import { EditorScope } from '@docx-editor.dev/core/contracts/editor';
@@ -880,8 +879,6 @@ export interface EditorCommandState {
 export { EditorFontError }
 
 export { EditorFontErrorCode }
-
-export { EditorHost }
 
 // @public (undocumented)
 export type EditorMode = 'edit' | 'view';

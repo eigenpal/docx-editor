@@ -1870,7 +1870,7 @@ function ReviewReply({ className, hidden, children }: ReviewPartProps) {
 
   const submit = useCallback(() => {
     if (!entry || draft.trim().length === 0) return;
-    // The author is AMBIENT (`EditorConfig.author`); the engine refuses rather than writing
+    // The author is AMBIENT (`DocxEditorConfig.author`); the engine refuses rather than writing
     // `w:author=""`, which `CT_Comment` does not allow. The draft is KEPT on a refusal —
     // clearing it would throw away what someone just wrote and show nothing in its place.
     const landed = review.reply(entry, draft.trim());

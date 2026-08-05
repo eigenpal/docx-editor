@@ -62,7 +62,7 @@ export interface UseReviewReturn {
   /**
    * Reply to a comment, or to a revision — which OOXML records as a comment on its range.
    *
-   * The author is AMBIENT (`EditorConfig.author`); pass one to override it for a single
+   * The author is AMBIENT (`DocxEditorConfig.author`); pass one to override it for a single
    * reply. `CT_Comment` makes `@w:author` required, so the engine refuses a reply with
    * neither rather than writing an empty attribute — which is why this REPORTS whether the
    * reply landed. A box that cleared itself on a refusal would throw the text away and show

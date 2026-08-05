@@ -36,8 +36,6 @@ export {
 // ─── The contract it implements ──────────────────────────────────────────────
 export type {
   Editor,
-  EditorHost,
-  EditorConfig,
   EditorCommand,
   EditorQuery,
   EditorSnapshot,
