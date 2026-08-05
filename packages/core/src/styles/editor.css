@@ -4956,6 +4956,14 @@ a.docx-hyperlink:focus-visible {
   transition: top 120ms ease-out;
 }
 
+/* While the reader scrolls, restacks snap instead of animating. The transition exists for
+   accept/reject collapses; during a scroll it animated the height-correction shifts of
+   every card below a newly measured one, and the moving cards over the moving page read
+   as a second scroll. The rail sets the attribute at scroll frequency without React. */
+.docx-review[data-scrolling] .docx-review__slot {
+  transition: none;
+}
+
 .docx-review__card {
   display: flex;
   flex-direction: column;

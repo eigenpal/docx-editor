@@ -381,8 +381,17 @@ function ReviewRoot({
           : { top, bottom };
       });
     };
+    // While the reader scrolls, the slots' `top` transition is suppressed (a DOM attribute
+    // so no React work happens at scroll frequency). Restacks DURING a scroll come from
+    // cards entering the window and correcting an estimated height to a measured one; each
+    // correction shifts every card below it, and ANIMATING those shifts while the page
+    // itself moves read as a second, faster scroll layered over the document.
+    let settle = 0;
     const onScroll = (): void => {
       if (frame === 0) frame = requestAnimationFrame(sync);
+      rail?.setAttribute('data-scrolling', '');
+      window.clearTimeout(settle);
+      settle = window.setTimeout(() => rail?.removeAttribute('data-scrolling'), 150);
     };
     sync();
     scroller.addEventListener('scroll', onScroll, { passive: true });
@@ -390,6 +399,7 @@ function ReviewRoot({
     observer.observe(scroller);
     return () => {
       if (frame !== 0) cancelAnimationFrame(frame);
+      window.clearTimeout(settle);
       scroller.removeEventListener('scroll', onScroll);
       observer.disconnect();
     };
@@ -443,13 +453,27 @@ function ReviewRoot({
     return at === -1 ? [...roots, compose] : [...roots.slice(0, at), compose, ...roots.slice(at)];
   }, [roots, draftAnchorY]);
 
-  const stacked = useStackedReviewPositions(stackInput, heights, {
+  // An unmeasured card — below the virtualization window, or in its first frame — reserves
+  // an estimate derived from ITS OWN text, not a flat constant. The estimate's error is the
+  // distance every card below it jumps at the moment the real measurement lands, and with
+  // hundreds of cards those corrections during a scroll compounded into the rail visibly
+  // sliding against the page. Card chrome (padding, head, gaps) is ~64px; summary lines
+  // wrap at roughly 36 characters of 20px line height.
+  const estimatedHeights = useMemo(() => {
+    const merged = new Map(heights);
+    for (const entry of roots) {
+      if (merged.has(entry.key)) continue;
+      const textLength = entry.text.length + (entry.replacedText?.length ?? 0);
+      const lines = Math.min(6, Math.max(1, Math.ceil(textLength / 36)));
+      merged.set(entry.key, 64 + lines * 20);
+    }
+    return merged;
+  }, [heights, roots]);
+
+  const stacked = useStackedReviewPositions(stackInput, estimatedHeights, {
     gap,
     scale: metrics.scale,
-    // An unmeasured card — below the virtualization window, or in its first frame — still
-    // reserves a plausible card's worth of room. Without this the run advanced by the gap
-    // alone and a dense redline opened as a column of cards painted over each other until
-    // every one had reported its height.
+    // The compose box, the one stacked key that is not a root card.
     defaultHeight: 72,
   });
   const composeTop =
@@ -938,11 +962,11 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
       });
     };
 
-    // ONE capture-phase mousedown listener; nothing runs at pointer-movement frequency.
+    // Capture-phase press listeners; nothing runs at pointer-movement frequency.
     // Observation only: the press still moves the caret exactly as it did before the
     // balloon existed. A press anywhere that is not a qualifying change closes the card —
     // including on an insertion or deletion, whose decision lives in the rail.
-    const onDown = (event: MouseEvent): void => {
+    const onDown = (event: Event): void => {
       const target = event.target;
       if (!(target instanceof Element)) return;
       // Pressing the balloon itself (accept, reject) is not a dismissal.
@@ -957,8 +981,17 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
       }
       if (openRef.current) setAnchor(null);
     };
+    // BOTH press events, not mousedown alone. The surface cancels `pointerdown` when it
+    // places the caret, and a cancelled pointerdown SUPPRESSES the compatibility mousedown
+    // outright — a mousedown-only listener never heard a real click on the page, only
+    // synthetic ones, which is exactly how that bug shipped. The rare double delivery
+    // (chrome areas cancel nothing) re-runs a handler that converges on the same state.
+    scroller.addEventListener('pointerdown', onDown, true);
     scroller.addEventListener('mousedown', onDown, true);
-    return () => scroller.removeEventListener('mousedown', onDown, true);
+    return () => {
+      scroller.removeEventListener('pointerdown', onDown, true);
+      scroller.removeEventListener('mousedown', onDown, true);
+    };
   }, []);
 
   // The decision the pressed SITE belongs to. Sites coalesce into decisions by the
