@@ -146,12 +146,6 @@ export interface ParagraphKeyInputs {
   readonly exclusionToken?: string;
 }
 
-/**
- * The cache key for one paragraph's measured break.
- *
- * Folds in the content, the available width, and the measurement producer. Anything that changes
- * where lines fall must be in here, or the cache serves a break taken under different conditions.
- */
 interface ParagraphKeyMemo {
   readonly producer: string;
   readonly width: number;
@@ -171,6 +165,12 @@ interface ParagraphKeyMemo {
  */
 const paragraphKeyMemos = new WeakMap<object, ParagraphKeyMemo>();
 
+/**
+ * The cache key for one paragraph's measured break.
+ *
+ * Folds in the content, the available width, and the measurement producer. Anything that changes
+ * where lines fall must be in here, or the cache serves a break taken under different conditions.
+ */
 export function paragraphLayoutKey(inputs: ParagraphKeyInputs): ParagraphLayoutKey {
   // Width is quantized to a thousandth of a point: a width that differs by less than that
   // cannot move a break, and keying on the raw float would miss on every scroll that
