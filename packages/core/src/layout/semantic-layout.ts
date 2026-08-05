@@ -849,7 +849,7 @@ function layoutBlocksWithGeometry(
    */
   const anchorFrames = (): TableAnchorFrames => ({
     text: { left: columnLeft(), width: columnWidth() },
-    margin: { left: 0, width: pageContentWidth },
+    margin: { left: 0, width: contentWidthForReflow },
     page: { left: -geometry.margin.left, width: geometry.width },
   });
   const regionHasFragments = (): boolean => pageFragments.length > regionFragmentStart;
