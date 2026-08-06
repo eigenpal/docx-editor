@@ -184,7 +184,7 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
       disabledReason: editable
         ? null
         : mode === 'viewing'
-          ? 'Viewing mode — switch to Editing or Suggesting'
+          ? 'Viewing mode: switch to Editing or Suggesting'
           : 'this document is read-only',
       compose,
       dropRandom,

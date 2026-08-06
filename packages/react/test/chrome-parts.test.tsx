@@ -186,6 +186,40 @@ describe('the context-fed ruler parts', () => {
     expect(ruler).not.toBeNull();
     expect(ruler.style.height).toBe('1056px');
   });
+
+  test('both rulers render nothing until the document arrives', async () => {
+    // A ruler measures the page; before the document there is no page, and the primitive's
+    // Letter-size fallback drew ticks for a page that was not there — over the host's
+    // loading screen.
+    const compose = (source?: Uint8Array) => (
+      <DocxEditorRoot {...(source ? { document: source } : {})}>
+        <DocxEditorHorizontalRuler />
+        <DocxEditorVerticalRuler />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const view = render(compose());
+    expect(view.container.querySelector('.docx-horizontal-ruler')).toBeNull();
+    expect(view.container.querySelector('.docx-vertical-ruler')).toBeNull();
+
+    await act(async () => {
+      view.rerender(compose(PLAIN_SOURCE));
+    });
+
+    expect(view.container.querySelector('.docx-horizontal-ruler')).not.toBeNull();
+    expect(view.container.querySelector('.docx-vertical-ruler')).not.toBeNull();
+
+    // A parse failure clears `isLoading` while still leaving nothing to measure; the
+    // rulers must not read the clearing as a page.
+    await act(async () => {
+      view.rerender(compose(strToU8('not a docx')));
+    });
+
+    expect(view.container.querySelector('.docx-horizontal-ruler')).toBeNull();
+    expect(view.container.querySelector('.docx-vertical-ruler')).toBeNull();
+  });
 });
 
 describe('the context-fed outline part', () => {

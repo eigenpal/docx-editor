@@ -11,7 +11,8 @@
 // in the chrome, in the sea behind, and in the berg the page rides on.
 
 import { useState } from 'react';
-import { DocxEditor, useDocxSource } from '@docx-editor.dev/react';
+import { DocxEditor, useDocxSource, useEditorState } from '@docx-editor.dev/react';
+import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { customNodesModule, reviewModule } from '@docx-editor.dev/pro';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 
@@ -127,6 +128,11 @@ export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
                 <span>{error ? error.message : 'Carving the berg…'}</span>
               </div>
             </DocxEditor.Loading>
+            {/* A parse failure CLEARS `isLoading` (a document that cannot open is not still
+                arriving), so the loading screen unmounts — this is the screen for that,
+                exactly where the docs say to report `snapshot().parseError`. Without it a
+                broken fixture left an empty sea and nothing to read. */}
+            <CarveFailure />
 
             {/* The berg the page rides on: art behind, page on top, both in one stage so the
                 berg tracks the page as it scrolls. */}
@@ -146,6 +152,20 @@ export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
         </div>
         </SpecimenProvider>
       </DocxEditor.Root>
+    </div>
+  );
+}
+
+const selectParseError = (snapshot: EditorSnapshot) => snapshot.parseError;
+
+/** The document could not be opened: the loading screen's sibling, same ice, no spin. */
+function CarveFailure() {
+  const parseError = useEditorState(selectParseError);
+  if (parseError === null) return null;
+  return (
+    <div className="igloo-loading" role="alert">
+      <IglooMark />
+      <span>This one would not carve: {parseError}</span>
     </div>
   );
 }

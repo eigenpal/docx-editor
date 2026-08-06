@@ -24,6 +24,17 @@ import { useNavigationShift, useNavigationViewportElement } from './navigation/n
 
 const selectZoom = (snapshot: EditorSnapshot): number => snapshot.zoom;
 
+/**
+ * True while the editor holds NO document: still loading one, or the one it was handed
+ * would not parse. A ruler MEASURES the page, and without a document there is no page —
+ * `pageSetup` is null and the ruler fell back to drawing default Letter ticks over a
+ * document that was not there. Render nothing instead; a host that wants the bar to hold
+ * its height sizes the row it put the ruler in. Not `isLoading` alone, because a parse
+ * failure clears that flag while still leaving nothing to measure.
+ */
+const selectDocumentAbsent = (snapshot: EditorSnapshot): boolean =>
+  snapshot.isLoading || snapshot.parseError !== null;
+
 /** Props for the context-fed ruler parts. @public */
 export interface DocxEditorRulerProps {
   /** Measurement unit for tick labels. Defaults to inches. */
@@ -173,9 +184,13 @@ function useViewportScrollLeft(): number {
  * draggable when the engine supports page-setup writes; the drag previews locally and
  * commits one undoable step on release.
  *
+ * Renders nothing while the editor holds no document — see
+ * {@link selectDocumentAbsent}.
+ *
  * @public
  */
-export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactElement {
+export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactElement | null {
+  const documentAbsent = useEditorState(selectDocumentAbsent);
   const { pageSetup, isEnabled } = usePageSetup();
   const zoom = useEditorState(selectZoom);
   const { pending, preview, commit } = useMarginDrag();
@@ -187,6 +202,7 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
   const shift = useNavigationShift();
   const reserved = useReviewGutter();
   const scrollLeft = useViewportScrollLeft();
+  if (documentAbsent) return null;
   return (
     <HorizontalRuler
       pageSetup={previewed(pageSetup, pending)}
@@ -253,12 +269,17 @@ const REVIEW_MARKERS_GUTTER = 44;
  * margins and zoom straight from the editor. Top/bottom margin handles are draggable
  * when the engine supports page-setup writes, committing one undoable step on release.
  *
+ * Renders nothing while the editor holds no document — see
+ * {@link selectDocumentAbsent}.
+ *
  * @public
  */
-export function DocxEditorVerticalRuler(props: DocxEditorRulerProps): ReactElement {
+export function DocxEditorVerticalRuler(props: DocxEditorRulerProps): ReactElement | null {
+  const documentAbsent = useEditorState(selectDocumentAbsent);
   const { pageSetup, isEnabled } = usePageSetup();
   const zoom = useEditorState(selectZoom);
   const { pending, preview, commit } = useMarginDrag();
+  if (documentAbsent) return null;
   return (
     <VerticalRuler
       pageSetup={previewed(pageSetup, pending)}

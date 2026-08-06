@@ -1,5 +1,6 @@
 ---
 '@docx-editor.dev/pro': patch
+'@docx-editor.dev/react': patch
 ---
 
-The review rail renders nothing while the editor is still waiting for its document, instead of floating its empty state and host furniture over the loading screen. `useReview().ready` now reports false until a document is present, matching its documented meaning.
+Chrome that describes the document no longer renders before one is loaded. The review rail kept its empty state and host furniture off screen until bytes arrive instead of floating them over the loading screen, `useReview().ready` reports false until a document is present, and the ruler parts render nothing rather than default Letter-size ticks for a page that does not exist yet.

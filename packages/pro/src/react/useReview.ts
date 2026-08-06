@@ -217,8 +217,11 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       setPaneOpen,
       // Not merely "an editor exists": the instance is constructed before any bytes arrive,
       // and a `ready` that reported true then invited surfaces to draw an empty state over
-      // the host's loading screen. Re-derived with the queue — the load emits `change`.
-      ready: editor !== null && !editor.snapshot().isLoading,
+      // the host's loading screen. A parse failure clears `isLoading` while still leaving
+      // no document, so it must stay false then too. Re-derived with the queue — the load
+      // emits `change`.
+      ready:
+        editor !== null && !editor.snapshot().isLoading && editor.snapshot().parseError === null,
     }),
     [
       items,

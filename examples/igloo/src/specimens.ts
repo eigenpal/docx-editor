@@ -68,7 +68,7 @@ export const ICEBERG = defineCustomNode({
   reviewCard: ({ attrs, text }) => {
     const depth = depthOf(attrs);
     return {
-      title: `Iceberg — ${tipHeight(depth)} m up, ${depth} m down`,
+      title: `Iceberg: ${tipHeight(depth)} m up, ${depth} m down`,
       detail: `“${text}” is all of it that surfaced. The other nine tenths are below the line.`,
     };
   },
@@ -87,7 +87,7 @@ export const IGLOO = defineCustomNode({
   reviewCard: ({ attrs }) => {
     const blocks = blocksOf(attrs);
     return {
-      title: `Igloo — ${blocks} blocks`,
+      title: `Igloo: ${blocks} blocks`,
       detail: `${insideTemperature(blocks)} °C in here, ${OUTSIDE} °C out there. Click it to lay another.`,
     };
   },

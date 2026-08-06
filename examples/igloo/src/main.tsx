@@ -1,4 +1,5 @@
 import './igloo.css';
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { IglooEditor } from './IglooEditor';
 
@@ -17,5 +18,11 @@ const fixture = /^[\w.-]+\.docx$/.test(requested) ? requested : DEFAULT_FIXTURE;
 
 const container = document.getElementById('app');
 if (container) {
-  createRoot(container).render(<IglooEditor fixtureUrl={`${base}${fixture}`} />);
+  // StrictMode, because the library asks its hosts to survive it: `DocxEditor.Root`
+  // documents itself as StrictMode-safe, and a demo that skipped it would stop proving that.
+  createRoot(container).render(
+    <StrictMode>
+      <IglooEditor fixtureUrl={`${base}${fixture}`} />
+    </StrictMode>
+  );
 }

@@ -82,6 +82,11 @@ export function SpecimenDialog({ form, onCommit, onClose }: SpecimenDialogProps)
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
+      // Escape closes, like every packaged panel. Listening on the scrim is enough because
+      // the autofocused field below puts focus inside it the moment the dialog opens.
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') onClose();
+      }}
     >
       <form
         className="igloo-dialog"
@@ -96,7 +101,7 @@ export function SpecimenDialog({ form, onCommit, onClose }: SpecimenDialogProps)
       >
         <h2 className="igloo-dialog__title">{editing ? 'Re-carve it' : 'Carve a specimen'}</h2>
         <p className="igloo-dialog__lede">
-          The label is what the paragraph shows — in this editor and in Word. The number rides
+          The label is what the paragraph shows, in this editor and in Word. The number rides
           in the control&rsquo;s tag and comes back typed on the chip, the card and the menu.
         </p>
 
@@ -119,7 +124,9 @@ export function SpecimenDialog({ form, onCommit, onClose }: SpecimenDialogProps)
 
         <label className="igloo-dialog__field">
           <span>Label (document text)</span>
-          <input value={label} onChange={(event) => setLabel(event.target.value)} required />
+          {/* A modal dialog is the one place initial focus belongs inside; the scrim's
+              Escape handler depends on focus landing here. */}
+          <input autoFocus value={label} onChange={(event) => setLabel(event.target.value)} required />
         </label>
 
         <label className="igloo-dialog__field">

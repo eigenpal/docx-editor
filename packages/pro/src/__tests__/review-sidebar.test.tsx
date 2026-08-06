@@ -492,5 +492,15 @@ describe('DocxEditor.Review while the document is loading', () => {
     expect(view.getByTestId('review-rail')).toBeDefined();
     expect(view.getByTestId('review-empty')).toBeDefined();
     expect(view.getByTestId('host-furniture')).toBeDefined();
+
+    // A parse failure clears `isLoading` (so a host can put its error screen up) while
+    // still leaving no document. The rail must read that as "nothing to review", not as
+    // a document — it floated its empty state over hosts' parse-error screens otherwise.
+    await act(async () => {
+      view.rerender(compose(strToU8('not a docx')));
+    });
+
+    expect(view.queryByTestId('review-rail')).toBeNull();
+    expect(view.queryByTestId('host-furniture')).toBeNull();
   });
 });
