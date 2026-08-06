@@ -55,10 +55,10 @@ const STRIP_Y_EMU = 63_500; // 5pt
 const STRIP_CX_EMU = 208_280; // ~16.4pt
 const STRIP_CY_EMU = 976_630; // ~76.9pt
 
-function headerStripDrawing(): string {
+function headerStripDrawing(behindDoc: '0' | '1' = '0'): string {
   return (
     '<w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0"' +
-    ' relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1">' +
+    ` relativeHeight="1" behindDoc="${behindDoc}" locked="0" layoutInCell="1" allowOverlap="1">` +
     '<wp:simplePos x="0" y="0"/>' +
     `<wp:positionH relativeFrom="column"><wp:posOffset>${STRIP_X_EMU}</wp:posOffset></wp:positionH>` +
     `<wp:positionV relativeFrom="paragraph"><wp:posOffset>${STRIP_Y_EMU}</wp:posOffset></wp:positionV>` +
@@ -73,14 +73,14 @@ function headerStripDrawing(): string {
   );
 }
 
-function headerDoc(): Uint8Array {
+function headerDoc(behindDoc: '0' | '1' = '0'): Uint8Array {
   const ns = `xmlns:w="${W}" xmlns:r="${R}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}"`;
   // The header paragraph hangs 35.4pt into the left margin (w:ind left="-708" twips) and
   // carries the anchored strip.
   const headerParagraph =
     '<w:p><w:pPr><w:ind w:left="-708"/></w:pPr>' +
     '<w:r><w:t>Sample header line</w:t></w:r>' +
-    `<w:r>${headerStripDrawing()}</w:r></w:p>`;
+    `<w:r>${headerStripDrawing(behindDoc)}</w:r></w:p>`;
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}">` +
@@ -193,8 +193,8 @@ function furnitureWithDrawings(
   });
 }
 
-function layoutHeaderDoc(): SemanticLayout {
-  const pkg = openPackage(headerDoc());
+function layoutHeaderDoc(behindDoc: '0' | '1' = '0'): SemanticLayout {
+  const pkg = openPackage(headerDoc(behindDoc));
   const part = pkg.parts.get(pkg.mainDocumentPart)!;
   return layoutSemanticDocument(part, 1, {
     measurer,
@@ -299,6 +299,34 @@ describe('header band ink overflows instead of clipping', () => {
     expect(Math.max(...ys)).toBeCloseTo(page.box.y - story.box.y + page.box.height, 3);
     // And the clip is genuinely OUTSIDE the band, or it would be the old bug again.
     expect(Math.max(...ys)).toBeGreaterThan(parseFloat(band.style.height));
+  });
+
+  test('a behindDoc header shape paints UNDER the body, not over it', () => {
+    // `behindDoc` means behind the DOCUMENT. Painted from inside the band — which the page
+    // appends after its content box — a letterhead reaching down over the body covered the
+    // first body lines, the one thing the flag exists to prevent.
+    const painted = paint(layoutHeaderDoc('1'));
+    const page = painted.querySelector<HTMLElement>('.docx-page')!;
+    const children = [...page.children];
+    const behind = page.querySelector<HTMLElement>('[data-docx-hf-behind="header"]');
+    const content = page.querySelector<HTMLElement>('.docx-page-content');
+    expect(behind).toBeTruthy();
+    expect(content).toBeTruthy();
+    expect(children.indexOf(behind!)).toBeLessThan(children.indexOf(content!));
+    // It carries real ink, and it is clipped to the sheet so it cannot reach the next page.
+    expect(behind!.querySelector('.docx-drawing-layer > *')).toBeTruthy();
+    expect(behind!.style.overflow).toBe('hidden');
+    // Never interactive: furniture behind the body must not take a click meant for text.
+    for (const element of behind!.querySelectorAll<HTMLElement>('.docx-drawing-layer > *')) {
+      expect(element.style.pointerEvents).toBe('none');
+    }
+  });
+
+  test('an inFront header shape still paints in the band, above the body', () => {
+    const painted = paint(layout);
+    const band = painted.querySelector<HTMLElement>('[data-docx-hf="header"]')!;
+    expect(band.querySelector('.docx-drawing-layer > *')).toBeTruthy();
+    expect(painted.querySelector('[data-docx-hf-behind="header"]')).toBeNull();
   });
 
   test('a nested drawing inside inert furniture is inert too', () => {

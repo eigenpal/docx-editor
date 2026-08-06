@@ -376,6 +376,42 @@ function hfAnchorOnPageSheet(
   });
 }
 
+/**
+ * Every header/footer BEHIND drawing, lifted onto the sheet and clipped to it.
+ *
+ * Both frames go through `hfAnchorOnPageSheet`: it resolves a page-frame axis against the
+ * page box and a story-relative one against the story box, which is what makes one layer
+ * able to carry both. Inert always — furniture behind the body must never take a click
+ * meant for the text over it, and the band, not this layer, is what editing activates.
+ */
+function appendHfBehindDrawingLayer(
+  document: Document,
+  pageElement: HTMLElement,
+  story: HeaderFooterStoryRecord,
+  drawings: readonly AnchoredDrawingRecord[],
+  ctx: ResolvedPaintContext,
+  pageOrigin: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  }
+): void {
+  const lifted = drawings.map((drawing) => hfAnchorOnPageSheet(story, drawing, pageOrigin));
+  // The wrapper spans the sheet exactly, so `overflow: hidden` on it is the paper edge:
+  // furniture ink can reach anywhere on this page and nowhere on the next.
+  const clip = document.createElement('div');
+  clip.className = 'docx-hf-behind-layer';
+  clip.dataset.docxHfBehind = story.kind;
+  clip.setAttribute('contenteditable', 'false');
+  clip.style.position = 'absolute';
+  clip.style.inset = '0';
+  clip.style.overflow = 'hidden';
+  clip.style.pointerEvents = 'none';
+  appendAnchoredDrawingsForRecords(document, clip, lifted, ctx, pageOrigin, 'behind', false);
+  if (clip.childElementCount > 0) pageElement.append(clip);
+}
+
 function appendHfPageRelativeDrawingLayer(
   document: Document,
   pageElement: HTMLElement,
@@ -1846,6 +1882,23 @@ function paintPage(
   });
   appendAnchoredDrawingLayer(document, element, page, options, bodyAnchorOrigin, 'behind');
 
+  // FURNITURE INK THAT GOES BEHIND THE TEXT IS PAINTED BEFORE THE TEXT.
+  //
+  // `behindDoc` means behind the DOCUMENT, and a letterhead or watermark anchored in a
+  // header routinely reaches down over the body. Painted from inside the band — which the
+  // page appends after its content box — it covered the first body lines instead, the one
+  // thing `behindDoc` exists to prevent. Every header/footer behind-drawing is lifted onto
+  // the sheet here, ahead of the content, exactly as the body's own behind layer is.
+  for (const story of [page.header, page.footer]) {
+    if (!story?.anchoredDrawings?.length) continue;
+    appendHfBehindDrawingLayer(document, element, story, story.anchoredDrawings, options, {
+      x: page.box.x,
+      y: page.box.y,
+      width: page.box.width,
+      height: page.box.height,
+    });
+  }
+
   const content = document.createElement('div');
   content.className = 'docx-page-content';
   content.style.position = 'absolute';
@@ -1930,16 +1983,8 @@ function paintPage(
       options.activeHeaderFooterRId === story.rId &&
       (options.activeHeaderFooterPageIndex === undefined ||
         options.activeHeaderFooterPageIndex === page.index);
-    appendHfPageRelativeDrawingLayer(
-      document,
-      element,
-      story,
-      anchored,
-      options,
-      pageOrigin,
-      'behind',
-      active
-    );
+    // The BEHIND half was already painted, on the sheet and ahead of the body content —
+    // see `appendHfBehindDrawingLayer`. Only the in-front ink belongs to the band.
     const container = document.createElement('div');
     container.className = 'docx-hf';
     container.dataset.docxHf = story.kind;
@@ -1991,15 +2036,6 @@ function paintPage(
       height: story.box.height,
     });
     const storyRelative = anchored.filter((drawing) => !isPageRelativeHfAnchor(drawing));
-    appendAnchoredDrawingsForRecords(
-      document,
-      container,
-      storyRelative,
-      asResolvedPaintContext(options),
-      storyOrigin,
-      'behind',
-      active
-    );
     // Furniture links paint styled but inert — see `paintHyperlinkAnchor`.
     const furnitureCtx: ResolvedPaintContext = {
       ...options,

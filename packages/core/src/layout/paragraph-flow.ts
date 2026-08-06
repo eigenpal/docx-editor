@@ -234,6 +234,34 @@ function wordBoundaries(text: string): number[] {
  * Measure text following a tab until the next tab or hard break, across mixed-style pieces.
  * Also reports the advance to the first decimal point for decimal-aligned stops.
  */
+/**
+ * Whether anything that occupies space still follows this tab on its own line.
+ *
+ * A TRAILING tab does not wrap in Word — same rule as a trailing space. Header lines are
+ * routinely authored as `LEFT<tab><tab><tab>RIGHT<tab><tab>`, and treating the last tabs
+ * as wrappable opened a new line per tab: the header grew by several lines, and because a
+ * header's flow height sets the body's effective top margin, the body was pushed down the
+ * page. Stops at a hard break, which ends the line anyway, and skips further tabs and
+ * spaces, which are themselves trimmed at the line end.
+ */
+function placeableContentFollows(
+  pieces: readonly Piece[],
+  pieceIndex: number,
+  offsetInPiece: number
+): boolean {
+  for (let index = pieceIndex; index < pieces.length; index += 1) {
+    const piece = pieces[index]!;
+    if (piece.inlineDrawing) return true;
+    const from = index === pieceIndex ? offsetInPiece : 0;
+    for (let cursor = from; cursor < piece.text.length; cursor += 1) {
+      const ch = piece.text[cursor]!;
+      if (ch === '\n' || ch === PAGE_BREAK_CHAR) return false;
+      if (ch !== '\t' && ch !== ' ') return true;
+    }
+  }
+  return false;
+}
+
 function measureFollowingTabSegment(
   pieces: readonly Piece[],
   pieceIndex: number,
@@ -1313,8 +1341,14 @@ export function breakParagraph(
 
       if (candidate === '\t') {
         // A tab that cannot advance on this line wraps first, then reapplies — matching
-        // Word's "tab past the right margin starts a new line" behaviour.
-        if ((line.spans.length > 0 || line.drawings.length > 0) && line.width >= lineAvailable())
+        // Word's "tab past the right margin starts a new line" behaviour. Unless it is
+        // TRAILING: a tab with nothing placeable after it ends the line rather than
+        // starting one, exactly as a trailing space does.
+        if (
+          (line.spans.length > 0 || line.drawings.length > 0) &&
+          line.width >= lineAvailable() &&
+          placeableContentFollows(pieces, pieceIndex, boundary)
+        )
           closeLine();
         const currentX = lineOrigin() + line.width;
         const segment = measureFollowingTabSegment(pieces, pieceIndex, boundary, measurer);

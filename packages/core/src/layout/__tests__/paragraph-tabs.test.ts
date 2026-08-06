@@ -285,3 +285,43 @@ describe('page layout regression with tabs present', () => {
     expect(plain!.spans[0]!.box.x).toBe(0);
   });
 });
+
+describe('a trailing tab ends its line rather than starting one', () => {
+  // Word treats a tab with nothing after it like a trailing space: it does not wrap. The
+  // shape this protects is the ordinary header line — `LEFT<tab><tab>RIGHT<tab><tab>` —
+  // where wrapping on each trailing tab added a line per tab. In a header that also moves
+  // the BODY, because a header's flow height sets the effective top margin.
+  // 80pt of content width against the default 36pt tab grid: the third tab is already past
+  // the right edge, so the wrap rule is genuinely reached rather than merely stated.
+  const narrow = {
+    width: 100,
+    height: 400,
+    margin: { top: 10, right: 10, bottom: 10, left: 10 },
+  };
+
+  test('tabs past the right edge with no text after them add no lines', () => {
+    const part = load(`<w:p><w:r><w:t>LEFT</w:t><w:tab/><w:tab/><w:tab/><w:tab/></w:r></w:p>`);
+    const layout = layoutSemanticDocument(part, 1, { measurer, geometry: narrow });
+    expect(linesOf(layout)).toHaveLength(1);
+  });
+
+  test('a tab that still has text after it wraps as before', () => {
+    // The same shape with content after the tabs keeps Word's wrap rule, so the
+    // trailing-tab exception cannot be mistaken for "tabs never wrap".
+    const part = load(
+      `<w:p><w:r><w:t>LEFT</w:t><w:tab/><w:tab/><w:tab/><w:t>AFTER</w:t></w:r></w:p>`
+    );
+    const layout = layoutSemanticDocument(part, 1, { measurer, geometry: narrow });
+    expect(linesOf(layout).length).toBeGreaterThan(1);
+  });
+
+  test('trailing tabs after the last word add no lines of their own', () => {
+    const part = load(
+      `<w:p><w:r><w:t>LEFT</w:t><w:tab/><w:t>RIGHT</w:t><w:tab/><w:tab/><w:tab/></w:r></w:p>`
+    );
+    const layout = layoutSemanticDocument(part, 1, { measurer, geometry: narrow });
+    const lines = linesOf(layout);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.spans.some((span) => span.text === 'RIGHT')).toBe(true);
+  });
+});
