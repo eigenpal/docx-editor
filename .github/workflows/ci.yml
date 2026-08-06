@@ -135,3 +135,10 @@ jobs:
         # so any breakage in the generator surfaces here instead of when
         # the docs site (`docx-editor-page`) tries to consume it.
         run: bun run docs:json
+
+      - name: Docs MDX check
+        # `docs/site/content/` is prose with no app in this repo to render it,
+        # so a bare `{identifier}` compiles fine here and only explodes when
+        # the docs site prerenders it. Same reasoning as the step above: catch
+        # it on the PR, not in `docx-editor-page`'s build.
+        run: bun run check:docs-mdx
