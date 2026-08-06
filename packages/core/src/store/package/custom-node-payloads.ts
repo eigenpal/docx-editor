@@ -17,6 +17,7 @@
 // payload nothing recognizes is left alone rather than deleted.
 
 import { contentControlPropertiesOf, contentControlsIn } from './content-control-nodes.ts';
+import { isValidXmlText } from './sinks.ts';
 import { customXmlLabelXPath, customXmlPrefixMappings } from './custom-xml-nodes.ts';
 import type { CustomXmlDataPart } from './custom-xml-part.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
@@ -58,6 +59,42 @@ export function customNodeBinding(
   const prefixMappings = customXmlPrefixMappings(CUSTOM_NODE_XPATH_PREFIX, part.namespaceUri);
   if (xpath === null || prefixMappings === null) return null;
   return { prefixMappings, xpath, storeItemId: part.itemId };
+}
+
+/**
+ * Longest `w:prefixMappings`, `w:xpath` or `w:storeItemID` an op may write.
+ *
+ * A binding is authored by this engine, never copied out of a file, so this is a bound on a
+ * caller's mistake rather than on an attacker: the three strings go straight into attributes,
+ * and an unbounded one would make the control's properties larger than its document.
+ */
+export const MAX_DATA_BINDING_ATTRIBUTE_LENGTH = 2_048;
+
+/**
+ * Whether a `w:dataBinding` is one this engine will author.
+ *
+ * ALL THREE OR NONE. Word needs the store id to find the part, the xpath to find the node in
+ * it, and the prefix mappings to resolve that xpath's steps; a binding missing any of them
+ * resolves to nothing, and Word then paints the control's own content and quietly stops
+ * mirroring the store — which is the drift the payload lane exists to make impossible.
+ *
+ * The control characters are refused rather than escaped, exactly as `authorableHyperlinkTarget`
+ * refuses them: XML 1.0 cannot represent them in an attribute value at all, so a document
+ * carrying one is one Word refuses to open.
+ */
+export function isAuthorableDataBinding(binding: unknown): boolean {
+  if (typeof binding !== 'object' || binding === null) return false;
+  const parts = binding as {
+    readonly prefixMappings?: unknown;
+    readonly xpath?: unknown;
+    readonly storeItemId?: unknown;
+  };
+  for (const value of [parts.prefixMappings, parts.xpath, parts.storeItemId]) {
+    if (typeof value !== 'string') return false;
+    if (value.length === 0 || value.length > MAX_DATA_BINDING_ATTRIBUTE_LENGTH) return false;
+    if (!isValidXmlText(value)) return false;
+  }
+  return true;
 }
 
 /** `{ABC-…}` and `abc-…` name one store. Word compares them the same way. */

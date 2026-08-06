@@ -42,6 +42,26 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+# Formatting, over the whole source tree rather than the staged subset. `lint-staged` runs
+# prettier on what you staged; this catches a file an earlier command rewrote and you did not.
+echo "Checking formatting..."
+bun run format:check
+if [ $? -ne 0 ]; then
+  echo "Formatting drift. Run 'bun run format' and re-stage."
+  exit 1
+fi
+
+# Lint, over the whole source tree for the same reason — and because the rules that matter here
+# are WHOLE-FILE ones. `max-lines` cannot be seen by typecheck or by the test suite, and
+# `eslint --fix` cannot fix it, so without this a commit that grows a large file passes every
+# other gate and fails CI.
+echo "Running lint..."
+bun run lint
+if [ $? -ne 0 ]; then
+  echo "Lint failed. 'max-lines' is fixed by extracting a module, not by raising the cap."
+  exit 1
+fi
+
 # Run lint-staged (prettier + eslint on staged files)
 echo "Running lint-staged..."
 npx lint-staged

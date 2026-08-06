@@ -136,6 +136,7 @@ zoom-without-remount, the Vue twin of provider/hooks.
 
 ```bash
 bun run typecheck
+bun run lint
 bun run test
 bun run check:parity
 bun run api:check
@@ -143,6 +144,9 @@ bun run i18n:validate
 openspec validate typed-ooxml-paragraph-editor --strict
 ```
 
+- `bun run lint`'s only errors are the `max-lines` caps: 1000 lines for most files, 2900 for the
+  handful already past it. Nothing else catches them, so adding to a large file passes typecheck
+  and the whole suite and fails CI. Extract; do not raise the cap.
 - `bun run test` shards the suite one process per file across a worker pool
   (`scripts/test/run-parallel.mjs`, `--jobs N` to pin the width). That is also
   what CI runs. `bun test` still works and is the one to reach for when you want
@@ -150,8 +154,9 @@ openspec validate typed-ooxml-paragraph-editor --strict
   old way.
 - A file that leaves state on `document` can only be caught by the serial run —
   per-file processes hide it. Scope DOM queries to the container you mounted.
-- `git commit --no-verify` is fine locally. Run the relevant scoped checks first,
-  and report a bypassed failing gate instead of calling it passing.
+- `git commit --no-verify` is fine locally, but `bun run format` and `bun run lint` are not
+  optional — the hook runs both, and they are the two gates nothing else covers. Run the other
+  relevant scoped checks too, and report a bypassed failing gate instead of calling it passing.
 - Compare the run against the non-clean baseline in the active change.
 - `bun run format` before pushing.
 
