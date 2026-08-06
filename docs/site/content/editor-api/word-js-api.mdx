@@ -1,11 +1,11 @@
 ---
 title: 'Office.js compatibility'
-description: 'The Office.js-compatible subset: which parts of the Word JavaScript object model are implemented, how compatibility is verified in CI, and what it omits.'
+description: 'The Office.js-compatible subset: which parts of the object model are implemented, how compatibility is verified in CI, and what it omits.'
 category: 'Editing API'
 order: 53
 ---
 
-`@docx-editor.dev/editor-api` is Office.js-compatible: it implements the Word JavaScript object model, so `context.document.body.paragraphs`, `load()` then `sync()`, `search(text, options)`, `getFirstOrNullObject()` and `isNullObject` all mean here what they mean in an add-in. Word add-in code ports by changing how the batch is opened.
+`@docx-editor.dev/editor-api` is Office.js-compatible: it implements the same object model, so `context.document.body.paragraphs`, `load()` then `sync()`, `search(text, options)`, `getFirstOrNullObject()` and `isNullObject` all mean here what they mean in an add-in. Word add-in code ports by changing how the batch is opened.
 
 The exact scope of that claim:
 
