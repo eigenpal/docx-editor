@@ -17,7 +17,11 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
-import { isNoteAtomNode } from '../package/note-nodes.ts';
+import {
+  contentControlContentNodeOf,
+  isContentControlNode,
+} from '../package/content-control-nodes.ts';
+import { paragraphOffsetIndex } from './tree-op-segments.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import { splitRunsAt } from './tree-op-apply.ts';
 import type { TreeOpResult } from './tree-op-validate.ts';
@@ -25,85 +29,75 @@ import type { TreeOpResult } from './tree-op-validate.ts';
 /** Which piece of comment markup an `insertCommentMarker` op places. */
 export type CommentMarkerKind = 'start' | 'end' | 'reference';
 
-/** Characters one run child contributes, matching `segmentsOf` exactly. */
-function textLengthOfRunChild(node: OoxmlNode): number {
-  if (node.kind === 'text' || node.kind === 'deletedText') {
-    let length = 0;
-    for (const value of node.children) if (value.kind === 'textValue') length += value.value.length;
-    return length;
-  }
-  // A tab and a hard break each occupy exactly one model offset, which is what `segmentsOf`
-  // counts. The two must not disagree, or a marker lands on a different character than the
-  // caret that asked for it.
-  if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
-  // So does a note atom — `w:footnoteRef`, `w:footnoteReference`, the separators — each of
-  // which `segmentsOf` gives one U+FFFC unit. Counting them as nothing measured the
-  // paragraph short by one per atom, so every offset at or after one was refused: Word
-  // writes `w:footnoteRef` as the first run of every footnote, which made commenting on a
-  // footnote impossible, and a body paragraph whose text follows a footnote reference
-  // failed the same way.
-  if (isNoteAtomNode(node)) return 1;
-  return 0;
-}
-
-function textLengthOfRun(run: OoxmlNode): number {
-  if (run.kind === 'textValue') return 0;
-  let length = 0;
-  for (const child of run.children) length += textLengthOfRunChild(child);
-  return length;
-}
-
-/** A child's length whether it is a run or another container holding runs. */
-function containerLength(node: OoxmlNode): number {
-  if (node.kind === 'textValue') return 0;
-  if (node.kind === 'run') return textLengthOfRun(node);
-  if (isContentRevisionKind(node.kind) || node.kind === 'hyperlink') {
-    let total = 0;
-    for (const child of node.children) total += containerLength(child);
-    return total;
-  }
-  return 0;
-}
-
 /**
- * Where in a container's child list an offset falls, descending into revision wrappers.
+ * Where in a container's child list an offset falls, descending into the containers a
+ * comment may legitimately be anchored inside.
  *
- * A comment anchored inside tracked text belongs inside the wrapper that tracks it, or the
- * markup would claim the comment covers text the revision does not.
+ * MEASURED BY THE PARAGRAPH OFFSET AUTHORITY, never by a second walk of its own. This
+ * function used to count characters itself, and every element the authority counts and it
+ * did not put the paragraph out of step by one: a drawing, a field, an inline content
+ * control. The visible half was a refusal (`offset-out-of-range`) for offsets past the
+ * element, and the invisible half was worse — an offset that still resolved landed the
+ * marker on the wrong character, so a comment silently covered text nobody selected.
  */
 function locateOffset(
+  paragraph: OoxmlParagraphNode,
   container: OoxmlElement,
   offset: number,
-  base: number,
   depth: number
 ): { readonly containerId: string; readonly index: number } | null {
-  let cursor = base;
-  for (let index = 0; index < container.children.length; index += 1) {
-    const child = container.children[index]!;
+  const index = paragraphOffsetIndex(paragraph);
+  const span =
+    container.id === paragraph.id ? { start: 0, end: index.length } : index.spanOf(container);
+  if (!span) return null;
+  let cursor = span.start;
+  for (let position = 0; position < container.children.length; position += 1) {
+    const child = container.children[position]!;
     // `w:pPr` and `w:rPr` must stay first among their siblings, so a marker at offset 0 goes
     // AFTER the properties rather than before them. Inserting ahead of `w:pPr` produces a
     // paragraph the tree invariants reject, which is the invariant doing its job.
     const isProperties = child.kind === 'paragraphProperties' || child.kind === 'runProperties';
-    if (cursor === offset && !isProperties) return { containerId: container.id, index };
+    if (cursor === offset && !isProperties) return { containerId: container.id, index: position };
     if (child.kind === 'textValue') continue;
-    if (child.kind === 'run') {
-      cursor += textLengthOfRun(child);
-      continue;
-    }
-    // A HYPERLINK is a run container exactly as a revision wrapper is, and `segmentsOf`
-    // descends into both. Skipping it here meant the paragraph measured shorter than the
-    // validator said it was, so commenting on link text — or on anything after a link, or at
-    // the end of that paragraph — was refused with `offset-out-of-range`.
-    if ((isContentRevisionKind(child.kind) || child.kind === 'hyperlink') && depth < 32) {
-      let inner = 0;
-      for (const grand of child.children) inner += containerLength(grand);
-      if (offset > cursor && offset < cursor + inner) {
-        return locateOffset(child, offset, cursor, depth + 1);
+    const length = index.lengthOf(child);
+    // A container the offset falls STRICTLY inside is descended into, so the marker lands
+    // where the text is rather than beside the wrapper. A hyperlink, a revision wrapper and
+    // an inline content control are all run containers, and any can hold another — a link
+    // inside a tracked insertion is ordinary. A comment anchored inside tracked text belongs
+    // inside the wrapper that tracks it, or the markup claims the comment covers text the
+    // revision does not.
+    if (offset > cursor && offset < cursor + length && depth < MAX_CONTAINER_DEPTH) {
+      const inner = descendableContainer(child);
+      if (inner) {
+        const found = locateOffset(paragraph, inner, offset, depth + 1);
+        if (found) return found;
       }
-      cursor += inner;
     }
+    cursor += length;
   }
   return cursor === offset ? { containerId: container.id, index: container.children.length } : null;
+}
+
+/** Matches the offset authority's own nesting bound. */
+const MAX_CONTAINER_DEPTH = 32;
+
+/**
+ * The element to descend into for an offset inside `child`, or null when the offset is
+ * inside something indivisible.
+ *
+ * A run is deliberately absent: `insertCommentMarker` splits the run straddling the offset
+ * before this runs, so an offset inside a run is already a boundary between runs by the time
+ * it is located. An atom — a drawing, a field, a note mark — has no inside to reach.
+ */
+function descendableContainer(child: OoxmlNode): OoxmlElement | null {
+  if (child.kind === 'textValue') return null;
+  if (isContentRevisionKind(child.kind) || child.kind === 'hyperlink') {
+    return child as OoxmlElement;
+  }
+  // An inline content control holds its content in `w:sdtContent`; the wrapper's other
+  // children (`w:sdtPr`, `w:sdtEndPr`) are properties a marker must never land among.
+  if (isContentControlNode(child)) return contentControlContentNodeOf(child) ?? null;
+  return null;
 }
 
 /**
@@ -180,7 +174,7 @@ export function applyInsertCommentMarker(
   const reloaded = findNode(split.part, paragraph.id);
   if (!reloaded || reloaded.kind !== 'paragraph') return { ok: false, reason: 'tree-invariant' };
 
-  const at = locateOffset(reloaded, op.offset, 0, 0);
+  const at = locateOffset(reloaded, reloaded, op.offset, 0);
   if (!at) return { ok: false, reason: 'offset-out-of-range' };
 
   const nodeId = `${part.name}#comment-${op.marker}-${op.commentId}-${op.offset}`;
