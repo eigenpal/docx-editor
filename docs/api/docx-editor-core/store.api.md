@@ -778,7 +778,51 @@ export function createNodeIdAllocator(part: OoxmlPart): () => string;
 export function createNoteReferenceScanBudget(maxVisited?: number, maxParts?: number): NoteReferenceScanBudget;
 
 // @public
+export const CUSTOM_XML_PROPS_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps";
+
+// @public
+export const CUSTOM_XML_PROPS_TYPE = "application/vnd.openxmlformats-officedocument.customXmlProperties+xml";
+
+// @public
+export const CUSTOM_XML_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml";
+
+// @public
 export function customMarkFollows(node: OoxmlNode): boolean | undefined;
+
+// @public
+export interface CustomXmlDataPart {
+    readonly itemId: string;
+    readonly namespaceUri: string;
+    readonly partName: string;
+    readonly propsPartName: string;
+}
+
+// @public
+export interface CustomXmlDataPartResult {
+    readonly part: CustomXmlDataPart | null;
+    // (undocumented)
+    readonly pkg: OoxmlPackage;
+}
+
+// @public
+export function customXmlDataParts(pkg: OoxmlPackage, storyPartName: string): CustomXmlDataPart[];
+
+// @public
+export function customXmlLabelXPath(prefix: string, rootLocalName: string, nodeId: string): string | null;
+
+// @public
+export interface CustomXmlNode {
+    readonly data: string;
+    // (undocumented)
+    readonly id: string;
+    readonly label: string;
+}
+
+// @public
+export function customXmlNodes(pkg: OoxmlPackage, partName: string): CustomXmlNode[];
+
+// @public
+export function customXmlPrefixMappings(prefix: string, namespaceUri: string): string | null;
 
 // @public
 export const DANGEROUS_KEYS: readonly string[];
@@ -791,6 +835,12 @@ export class DangerousKeyError extends Error {
     // (undocumented)
     readonly path: string;
 }
+
+// @public
+export const DATASTORE_NAMESPACE_URI = "http://schemas.openxmlformats.org/officeDocument/2006/customXml";
+
+// @public
+export function datastoreItemIdFor(seed: string): string;
 
 // @public
 export const DEFAULT_ENDNOTE_PROPERTIES: ResolvedEndnoteProperties;
@@ -1071,6 +1121,9 @@ export function fieldOnOffAttribute(node: OoxmlNode, localName: 'dirty' | 'fldLo
 
 // @public
 export function findContentControl(root: OoxmlNode, nodeId: string): ContentControlEntry | null;
+
+// @public
+export function findCustomXmlDataPart(pkg: OoxmlPackage, storyPartName: string, namespaceUri: string): CustomXmlDataPart | null;
 
 // @public
 export function findDetectedToc(tocs: readonly DetectedToc[], tocId: string): DetectedToc | null;
@@ -2791,6 +2844,9 @@ export function projectDrawing(drawing: OoxmlDrawingNode, context: Readonly<{
 export function propertyContainer(parent: OoxmlNode | null | undefined, kind: 'paragraphProperties' | 'runProperties', localName: 'pPr' | 'rPr'): OoxmlNode | undefined;
 
 // @public
+export function readCustomXmlNode(pkg: OoxmlPackage, partName: string, nodeId: string): CustomXmlNode | null;
+
+// @public
 export function readEmbeddedFonts(pkg: OoxmlPackage, fontTable: OoxmlPart | undefined, options?: ReadEmbeddedFontsOptions): EmbeddedFont[];
 
 // @public
@@ -4274,6 +4330,13 @@ export function withContentTypeOverride(pkg: OoxmlPackage, partName: string, con
 }): OoxmlPackage;
 
 // @public
+export function withCustomXmlDataPart(pkg: OoxmlPackage,
+storyPartName: string, namespaceUri: string, rootLocalName: string): CustomXmlDataPartResult;
+
+// @public
+export function withCustomXmlNode(pkg: OoxmlPackage, partName: string, node: CustomXmlNode): OoxmlPackage;
+
+// @public
 export function withEmbeddedImage(pkg: OoxmlPackage, ownerPartName: string, input: Readonly<{
     bytes: Uint8Array;
     mime: SupportedImageMime;
@@ -4292,12 +4355,24 @@ export function withEmbeddedImage(pkg: OoxmlPackage, ownerPartName: string, inpu
 export function withNewPart(pkg: OoxmlPackage, partName: string, root: OoxmlElement, contentType: string): OoxmlPackage;
 
 // @public
+export function withoutCustomXmlDataPart(pkg: OoxmlPackage, storyPartName: string, namespaceUri: string): OoxmlPackage;
+
+// @public
+export function withoutCustomXmlNode(pkg: OoxmlPackage, partName: string, nodeId: string): OoxmlPackage;
+
+// @public
+export function withoutOrphanCustomXmlNodes(pkg: OoxmlPackage, partName: string, referencedIds: ReadonlySet<string>): {
+    readonly pkg: OoxmlPackage;
+    readonly removed: readonly string[];
+};
+
+// @public
 export function withoutUnreferencedImagePart(pkg: OoxmlPackage, partName: string): OoxmlPackage;
 
 // @public
 export function withPart(pkg: OoxmlPackage, part: OoxmlPart): OoxmlPackage;
 
-// @public
+// @public (undocumented)
 export function withRelationship(pkg: OoxmlPackage, ownerPart: string, type: string, rawTarget: string): {
     readonly pkg: OoxmlPackage;
     readonly relationshipId: string;
