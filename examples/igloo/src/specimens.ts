@@ -104,17 +104,14 @@ export const ICEBERG = defineCustomNode({
   // Host-authored, never file data: `CustomNodeChrome` tints the painted chip with it.
   chrome: { color: '#0f6f95' },
   schema: IcebergData,
-  // WRITE: the whole node from the record. The tag carries identity alone and the words in the
-  // paragraph are computed, so an edit to the depth moves the sentence with it.
-  toDocx: (data) => ({
-    attrs: {},
-    text: `the tip of a ${data.depth + tipHeight(data.depth)} m berg`,
-  }),
-  // READ: nothing to declare. The payload round-trips through the schema, so `data` arrives as
-  // `IcebergData` on every surface. A `fromDocx` here would have nothing left to do — which is
-  // the point of contrast with the igloo below.
+  // What the document SHOWS, from the record. An edit to the depth moves the sentence with it.
+  // Nothing to declare for the way back: the payload round-trips through the schema, so `data`
+  // arrives as `IcebergData` on every surface — which is the contrast with the igloo below.
+  text: (data) => `the tip of a ${data.depth + tipHeight(data.depth)} m berg`,
   reviewCard: ({ attrs, text, data }) => {
-    const survey = surveyOf(data, attrs);
+    // `data` is already `IcebergData` here — the schema did that. `surveyOf` is only for the
+    // older documents that kept the depth in the tag.
+    const survey = data ?? surveyOf({ attrs });
     return {
       title: `Iceberg: ${tipHeight(survey.depth)} m up, ${survey.depth} m down`,
       detail: survey.notes

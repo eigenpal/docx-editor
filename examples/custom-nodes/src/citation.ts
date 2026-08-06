@@ -53,17 +53,12 @@ export const Citation = defineCustomNode({
   /** The payload's shape. Checked writing it and reading it back out of a file. */
   schema: CitationData,
 
-  /**
-   * What the DOCUMENT says, derived from the payload.
-   *
-   * With this declared a citation has ONE representation: `insertCustomNode(editor, Citation,
-   * { data })` computes the tag and the text, so the three can never disagree. The tag gets the
-   * identity and nothing else — 64 characters is not a bibliography.
-   */
-  toDocx: (data) => ({
-    attrs: { sourceId: data.sourceId },
-    text: data.page ? `(${data.sourceId}, p. ${data.page})` : `(${data.sourceId})`,
-  }),
+  // What the document SHOWS, from the payload. With this declared, a write takes the payload
+  // alone and the words cannot drift from the data they describe.
+  text: (data) => (data.page ? `(${data.sourceId}, p. ${data.page})` : `(${data.sourceId})`),
+  // Rare, and here for a reason: a reader who opens this file WITHOUT the payload store should
+  // still be able to tell which source it is.
+  tagAttrs: (data) => ({ sourceId: data.sourceId }),
 
   /**
    * A card in the review sidebar for every citation in the document.

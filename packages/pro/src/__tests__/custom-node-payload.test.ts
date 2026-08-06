@@ -598,11 +598,9 @@ describe('one payload, derived into the document', () => {
     name: 'citation',
     tagPrefix: 'acme',
     schema: Citation,
-    // The whole node, computed from the payload — so attrs, text and data cannot disagree.
-    toDocx: (data) => ({
-      attrs: { sourceId: data.sourceId },
-      text: `(${data.authors[0] ?? 'Anon'} ${String(data.year)})`,
-    }),
+    // What the document shows, computed from the payload — so the two cannot disagree.
+    text: (data) => `(${data.authors[0] ?? 'Anon'} ${String(data.year)})`,
+    tagAttrs: (data) => ({ sourceId: data.sourceId }),
   });
 
   test('an insert takes the payload alone', () => {
@@ -647,11 +645,11 @@ describe('one payload, derived into the document', () => {
     expect(recognized(editor, [Derived])[0]?.text).toBe('ibid.');
   });
 
-  test('a definition with no toDocx and no text is refused, and says which', () => {
+  test('a definition with no `text` hook and no `text` value is refused, and says which', () => {
     const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
     const result = insertCustomNode(editor, citation, { data: CITATION });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.reason).toContain('toDocx');
+    if (!result.ok) expect(result.reason).toContain('text');
   });
 });
 

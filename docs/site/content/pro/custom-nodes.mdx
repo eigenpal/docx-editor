@@ -34,52 +34,64 @@ const CitationData = z.object({
 const Citation = defineCustomNode({
   name: 'citation',
   tagPrefix: 'docx',
-  label: 'Citation',
   schema: CitationData,
-  toDocx: (data) => ({
-    attrs: { sourceId: data.sourceId },
-    text: `(${data.authors[0] ?? 'Anon'} ${String(data.year)})`,
-  }),
-  fromDocx: ({ attrs, text }) => ({ ...attrs, label: text }),
-  chrome: { color: '#7c3aed' },
+  text: (data) => `(${data.authors[0]} ${String(data.year)})`,
 });
 
 const MODULES = [customNodesModule({ nodes: [Citation] })];
 ```
 
+That is the whole definition: an identity, a shape, and what the document shows. `schema` is any zod schema — the payload is validated against it on the way in and comes back as that type on the way out. `text` computes what a reader sees, so it cannot drift from the data it describes.
+
 Module registration is construction-time. Build the array outside render; a new array each render rebuilds the editor.
 
 ### Parameters
 
-| Parameter                        | Type                                                            | Description                                                                                               |
-| -------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `name`                           | `string`                                                        | Node type name. The second segment of the tag.                                                            |
-| `tagPrefix`                      | `string`                                                        | The prefix this definition claims. `docx` claims `docx:*`. No colons.                                     |
-| `schema`                         | [Standard Schema](https://standardschema.dev)                   | Shape of the payload. zod, valibot and arktype all implement it. Nothing is bundled.                      |
-| `toDocx`                         | `(data) => { attrs, text }`                                     | Derives the tag attrs and the document text from the payload.                                             |
-| `fromDocx`                       | `({ attrs, text, data }) => attrs \| null`                      | Recognition hook. Return `null` to leave the control literal.                                             |
-| `reviewCard`                     | `({ attrs, text, data }) => { title, detail } \| null`          | Contributes a sidebar card per node.                                                                      |
-| `preserveOnExport`               | `boolean \| 'text'`                                             | What happens to the node on export. Defaults to `true`. See [Saving and exporting](#saving-and-exporting). |
-| `payloadNamespace`               | `string`                                                        | Which customXml store the payloads live in. Defaults to one derived from `tagPrefix`.                     |
-| `label`                          | `string`                                                        | Display name for chrome. Defaults to `name`. Localize it yourself.                                        |
-| `chrome.color`                   | `string`                                                        | Chip tint and border, applied by `CustomNodeChrome`.                                                      |
-| `onClick` / `onHover` / `onEdit` | `(node: ActivatedCustomNode) => void`                           | Interaction hooks on the painted chip.                                                                    |
+Required:
 
-### `toDocx` and `fromDocx` are not a pair
+| Parameter   | Type     | Description                                                  |
+| ----------- | -------- | ------------------------------------------------------------ |
+| `name`      | `string` | Node type name. The second segment of the tag.               |
+| `tagPrefix` | `string` | The prefix this definition claims. `docx` claims `docx:*`.   |
 
-They read like a codec. They are not, and which one you need depends on where your node keeps its data.
+What the node carries and shows:
 
-`toDocx` runs on the way **out**: `data → { attrs, text }`. It exists so a write takes one argument instead of three you have to keep consistent. It needs a `schema`, because otherwise there is no typed payload to derive from.
+| Parameter | Type                        | Description                                                          |
+| --------- | --------------------------- | ---------------------------------------------------------------------- |
+| `schema`  | zod (or any [Standard Schema](https://standardschema.dev)) | Shape of the payload. Nothing is bundled; bring your own. |
+| `text`    | `(data) => string`          | What the document shows, from the payload.                           |
 
-`fromDocx` runs on the way **in**, and its job is recognition, not decoding. It receives the `w:tag` attrs — a string-to-string bag out of a file the sender controls — and returns the attrs the node should carry, or `null` to disown the control and leave it literal. That veto is the part nothing else does.
+Presentation and interaction:
 
-The asymmetry is the point: for a node with a payload, `toDocx`'s inverse is not a hook at all. The payload round-trips through the schema on its own, so `data` arrives typed with nothing declared.
+| Parameter                        | Type                                                   | Description                                     |
+| -------------------------------- | ------------------------------------------------------ | ------------------------------------------------- |
+| `label`                          | `string`                                               | Display name for chrome. Defaults to `name`.    |
+| `chrome.color`                   | `string`                                               | Chip tint and border.                           |
+| `reviewCard`                     | `({ attrs, text, data }) => { title, detail } \| null` | Contributes a sidebar card per node.            |
+| `onClick` / `onHover` / `onEdit` | `(node: ActivatedCustomNode) => void`                  | Interaction hooks on the painted chip.          |
 
-| Your node keeps its data in | Declare                | Because                                                            |
-| --------------------------- | ---------------------- | ------------------------------------------------------------------- |
-| A payload                   | `schema` + `toDocx`    | The payload reads back typed by itself. Nothing to decode.          |
-| The tag only                | `fromDocx`             | Tag attrs are untrusted strings. Clamp, normalize, or veto here.    |
-| A payload, migrating from the tag | both              | `fromDocx` reads the old attrs; new writes go through `toDocx`.     |
+Advanced — skip these until you need them:
+
+| Parameter          | Type                                        | When                                                                     |
+| ------------------ | ------------------------------------------- | -------------------------------------------------------------------------- |
+| `preserveOnExport` | `boolean \| 'text'`                         | The node should not travel intact. See [Saving and exporting](#saving-and-exporting). |
+| `tagAttrs`         | `(data) => Record<string, string>`          | A reader without the payload store should still identify the node.       |
+| `payloadNamespace` | `string`                                    | You need a specific customXml namespace. Defaults to one from `tagPrefix`. |
+| `fromDocx`         | `({ attrs, text, data }) => attrs \| null`  | The node has **no** schema and keeps its data in the tag — or you need to disown a control by returning `null`. |
+
+### Nodes without a payload
+
+A node can skip `schema` and keep everything in the `w:tag`, which Word caps at 64 characters. Then `attrs` is all it has, and `fromDocx` is where you clamp those untrusted strings or return `null` to leave the control literal:
+
+```ts
+const Mention = defineCustomNode({
+  name: 'mention',
+  tagPrefix: 'docx',
+  fromDocx: ({ attrs }) => (attrs['userId'] ? attrs : null),
+});
+```
+
+Writes then pass `attrs` and `text` themselves, since there is no payload to derive from.
 
 `attrs` and `text` reaching `fromDocx` come from the `.docx`, which the sender controls end to end. They are rendered as text, never as markup; do not build URLs or DOM from them without sanitizing. `data` has been validated against `schema`.
 
@@ -107,8 +119,8 @@ Each is one transaction and one undo step, payload included.
 | Field   | Type                                                           | Description                                                                        |
 | ------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | `data`  | The schema's input type                                        | The payload. Validated before anything is written.                                 |
-| `attrs` | `Record<string, string>`                                       | Tag attrs. Derived by `toDocx` when declared. Passing it overrides the derivation. |
-| `text`  | `string`                                                       | Document text. Derived by `toDocx` when declared.                                  |
+| `attrs` | `Record<string, string>`                                       | Tag attrs. Derived by `tagAttrs` when declared. Passing it overrides the derivation. |
+| `text`  | `string`                                                       | Document text. Derived by `text` when declared. Passing it overrides the derivation. |
 | `at`    | `{ paragraphId, offset }`                                      | Insert position. Defaults to the caret. `insertCustomNode` only.                   |
 | `lock`  | `false \| 'sdtLocked' \| 'sdtContentLocked' \| 'contentLocked'` | Defaults to `contentLocked`.                                                       |
 | `alias` | `string`                                                       | `w:alias` — the title Word shows on the control.                                   |
@@ -196,7 +208,7 @@ The pairing is deliberate: `customNodeXml` writes the nodes with no browser, and
 
 ## Read
 
-Inside `fromDocx`, `toDocx` and `reviewCard`, `data` is the schema's output type. Elsewhere it is `unknown`, because those surfaces carry every definition's nodes under one type.
+Inside `text`, `reviewCard` and `fromDocx`, `data` is the schema's output type. Elsewhere it is `unknown`, because those surfaces carry every definition's nodes under one type.
 
 Use `dataOf` to cross that boundary. It narrows a node to this definition and validates its payload against this schema, so you never write a parse at the call site:
 

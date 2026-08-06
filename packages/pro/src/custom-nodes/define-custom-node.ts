@@ -121,32 +121,37 @@ export interface CustomNodeDefinition<
   /** Tag prefix this definition claims (`acme` claims `acme:*`). No colons. */
   readonly tagPrefix: string;
   /**
-   * The WRITE counterpart of {@link CustomNodeDefinition.fromDocx}: what the document should
-   * say, derived from the payload.
+   * What the document SHOWS for this node, from its payload.
    *
-   * Declare it and a node has ONE representation. `insertCustomNode(editor, Citation, { data })`
-   * is then the whole call: the `w:tag` attrs and the text a reader sees are both computed here,
-   * so they cannot drift from the payload or from each other. Without it a caller passes all
-   * three and is responsible for keeping them consistent — which nothing checks.
-   *
-   * `attrs` still has to fit the 64-character `w:tag` cap, so return the IDENTITY there and let
-   * everything else live in the payload. `text` is what Word paints and what a reader without
-   * this library sees.
+   * The one thing most definitions need beyond an identity and a schema:
    *
    * ```ts
-   * toDocx: (data) => ({
-   *   attrs: { sourceId: data.sourceId },
-   *   text: `(${data.authors[0]} ${data.year})`,
-   * }),
+   * defineCustomNode({
+   *   name: 'citation',
+   *   tagPrefix: 'docx',
+   *   schema: CitationData,
+   *   text: (data) => `(${data.authors[0]} ${data.year})`,
+   * });
    * ```
    *
-   * Declare a `schema` first. Without one `data` is `unknown`, so there is nothing to derive
-   * from and this can only guess.
+   * With it, a write takes the payload alone — `insertCustomNode(editor, Citation, { data })` —
+   * and the words in the paragraph are computed, so they cannot drift from the data they
+   * describe. Without it, pass `text` on every call and keep the two in step yourself.
+   *
+   * Word paints a bound control's text from the payload and will not let a user type into it,
+   * so this is the only thing that decides what a reader sees.
    */
-  readonly toDocx?: (data: InferSchemaOutput<Schema>) => {
-    readonly attrs: Readonly<Record<string, string>>;
-    readonly text: string;
-  };
+  readonly text?: (data: InferSchemaOutput<Schema>) => string;
+  /**
+   * Extra identity to put in the `w:tag`, from the payload. Rarely needed.
+   *
+   * The tag already carries `<prefix>:<name>`, which is what recognition matches on, so most
+   * nodes need nothing here. Add it when a reader that opens the document WITHOUT the payload
+   * store should still be able to tell which one this is — a `sourceId` on a citation, say.
+   *
+   * Word caps the encoded tag at 64 characters, prefix and name included.
+   */
+  readonly tagAttrs?: (data: InferSchemaOutput<Schema>) => Readonly<Record<string, string>>;
   /**
    * Recognition hook. Receives the decoded attrs and the SDT's literal text
    * (so label drift from Word edits is visible) and returns the attrs the node

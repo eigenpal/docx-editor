@@ -134,7 +134,7 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
       report(
         insertCustomNode(editor, definition, {
           alias: definition.label ?? definition.name,
-          // The berg is derived from its record by `toDocx`; the igloo has no payload, so it
+          // The berg's words are derived from its record; the igloo has no payload, so it
           // passes the tag attrs and the words it wants.
           ...(data ? { data } : { attrs: tagAttrsFor(kind, attrs), text: label }),
           ...(at ? { at } : {}),

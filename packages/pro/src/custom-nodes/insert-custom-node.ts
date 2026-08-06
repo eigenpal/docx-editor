@@ -100,12 +100,10 @@ const CALLER_FIXABLE: ReadonlySet<string> = new Set([
  * What a node says and where it goes — one object, so the parts cannot be passed in the wrong
  * order or get out of step.
  *
- * A definition with `toDocx` needs only `data`: the `w:tag` attrs and the text a reader sees are
- * derived from it, so a node has ONE representation and nothing has to keep three in agreement.
- * Without `toDocx`, pass `attrs` and `text` yourself.
+ * A definition with `text` needs only `data`: what the document shows is computed from it.
  *
  * ```ts
- * insertCustomNode(editor, Citation, { data: citation });                 // toDocx derives
+ * insertCustomNode(editor, Citation, { data: citation });                 // text derives
  * insertCustomNode(editor, Tag, { attrs: { id: 'x' }, text: '[tag]' });   // no payload
  * ```
  *
@@ -122,12 +120,12 @@ export interface CustomNodeInput<Schema extends StandardSchemaV1 | undefined = u
    */
   readonly data?: InferSchemaInput<Schema>;
   /**
-   * The `w:tag` attrs. Derived by `toDocx` when the definition declares one.
+   * The `w:tag` attrs. Derived by the definition's `tagAttrs` when it declares one.
    *
    * Word caps the encoded tag at 64 characters, so this is the node's IDENTITY and nothing else.
    */
   readonly attrs?: Readonly<Record<string, string>>;
-  /** The literal text the control holds — what Word and a reader without this library see. */
+  /** What the document shows. Derived by the definition's `text` when it declares one. */
   readonly text?: string;
   /**
    * Where to insert. Omitted, the node lands at the current selection HEAD — the programmatic
@@ -155,26 +153,22 @@ export function projectionOf(
 ):
   | { readonly attrs: Readonly<Record<string, string>>; readonly text: string }
   | { readonly reason: string } {
-  // EXPLICIT WINS. A caller that passed both meant the override — most often a label a user
-  // edited by hand — and silently recomputing it from the payload would throw that away.
-  if (input.attrs !== undefined && input.text !== undefined) {
-    return { attrs: input.attrs, text: input.text };
-  }
-  if (definition.toDocx && input.data !== undefined) {
-    const projected = definition.toDocx(input.data);
+  // EXPLICIT WINS, per field. A caller that passed `text` meant that text — most often a label a
+  // user edited by hand — and recomputing it from the payload would throw the edit away.
+  const derived = input.data === undefined ? undefined : input.data;
+  const text =
+    input.text ?? (definition.text && derived !== undefined ? definition.text(derived) : undefined);
+  if (text === undefined) {
     return {
-      attrs: input.attrs ?? projected.attrs,
-      text: input.text ?? projected.text,
-    };
-  }
-  if (input.text === undefined) {
-    return {
-      reason: definition.toDocx
+      reason: definition.text
         ? `${definition.name} derives its text from \`data\`, so pass one — or pass \`text\` directly`
-        : `${definition.name} declares no toDocx, so \`text\` is required`,
+        : `${definition.name} declares no \`text\`, so \`text\` is required`,
     };
   }
-  return { attrs: input.attrs ?? {}, text: input.text };
+  const attrs =
+    input.attrs ??
+    (definition.tagAttrs && derived !== undefined ? definition.tagAttrs(derived) : {});
+  return { attrs, text };
 }
 
 /**

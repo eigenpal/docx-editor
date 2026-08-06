@@ -220,7 +220,9 @@ function parsedPayload(
   definition: AnyCustomNodeDefinition,
   bound: CustomNodePayloadRead | undefined
 ): unknown {
-  if (!bound || !definition.toDocx) return undefined;
+  // Only for a definition that DERIVES what the document says: it needs the payload to
+  // recompute the text. One that spells its text out has nothing to re-derive from.
+  if (!bound || !(definition.text ?? definition.tagAttrs)) return undefined;
   const parsed = parseCustomNodeData(undefined, bound.data);
   return parsed.ok ? parsed.value : undefined;
 }

@@ -71,11 +71,9 @@ export interface CustomNodeDefinition<Schema extends StandardSchemaV1 | undefine
         readonly detail?: string;
     } | null;
     readonly schema?: Schema;
+    readonly tagAttrs?: (data: InferSchemaOutput<Schema>) => Readonly<Record<string, string>>;
     readonly tagPrefix: string;
-    readonly toDocx?: (data: InferSchemaOutput<Schema>) => {
-        readonly attrs: Readonly<Record<string, string>>;
-        readonly text: string;
-    };
+    readonly text?: (data: InferSchemaOutput<Schema>) => string;
 }
 
 // @public

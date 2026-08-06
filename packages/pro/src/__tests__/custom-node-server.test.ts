@@ -42,7 +42,8 @@ const Clause = defineCustomNode({
   name: 'clause',
   tagPrefix: 'acme',
   schema: ClauseData,
-  toDocx: (data) => ({ attrs: { clauseId: data.clauseId }, text: data.body }),
+  tagAttrs: (data) => ({ clauseId: data.clauseId }),
+  text: (data) => data.body,
   preserveOnExport: true,
 });
 
@@ -51,7 +52,8 @@ const Note = defineCustomNode({
   name: 'note',
   tagPrefix: 'acme',
   schema: ClauseData,
-  toDocx: (data) => ({ attrs: { clauseId: data.clauseId }, text: data.body }),
+  tagAttrs: (data) => ({ clauseId: data.clauseId }),
+  text: (data) => data.body,
   preserveOnExport: 'text',
 });
 
@@ -60,7 +62,8 @@ const Internal = defineCustomNode({
   name: 'internal',
   tagPrefix: 'acme',
   schema: ClauseData,
-  toDocx: (data) => ({ attrs: { clauseId: data.clauseId }, text: data.body }),
+  tagAttrs: (data) => ({ clauseId: data.clauseId }),
+  text: (data) => data.body,
   preserveOnExport: false,
 });
 
