@@ -1,20 +1,20 @@
 ---
 title: 'Images & drawings'
-description: "Inline and floating DrawingML pictures in DOCX: supported formats, wrap modes, authoring them from React, accessibility, and the security boundaries."
-category: "Guides"
+description: 'Inline and floating DrawingML pictures in DOCX: supported formats, wrap modes, authoring them from React, accessibility, and the security boundaries.'
+category: 'Guides'
 seoTitle: 'Images and floating pictures'
 ---
 
-DrawingML pictures (`w:drawing` with `pic:pic`) now layout, paint, and round-trip through the shared engine. React ships insert, wrap, properties, alt text, and selection-overlay authoring.
+DrawingML pictures (`w:drawing` with `pic:pic`) lay out, paint, and round-trip through the engine. React ships insert, wrap, properties, alt text, and selection-overlay authoring.
 
 ## Supported formats
 
-| Format | Insert (React) | Layout & paint | Round-trip |
-| --- | --- | --- | --- |
-| PNG, JPEG, GIF | Yes, `normalizeImageBytes` preflight | Full decode at authored `wp:extent` | Byte-identical media unless replaced |
-| SVG | No insert | Painted at authored `wp:extent` | Byte-identical media |
-| TIFF, EMF, WMF | No insert | Extent reserved; labelled placeholder | Preserved; no zero-click fetch |
-| External `r:link` / `TargetMode="External"` | No auto-load | Placeholder + preserved rel | Preserved; explicit user gesture to embed |
+| Format                                      | Insert (React)                       | Layout & paint                       | Round-trip                                |
+| ------------------------------------------- | ------------------------------------ | ------------------------------------ | ----------------------------------------- |
+| PNG, JPEG, GIF                              | Yes, `normalizeImageBytes` preflight | Full decode at authored `wp:extent`  | Byte-identical media unless replaced      |
+| SVG                                         | No insert                            | Painted at authored `wp:extent`      | Byte-identical media                      |
+| TIFF, EMF, WMF                              | No insert                            | Extent reserved; labeled placeholder | Preserved; no zero-click fetch            |
+| External `r:link` / `TargetMode="External"` | No auto-load                         | Placeholder + preserved rel          | Preserved; explicit user gesture to embed |
 
 Insert accepts PNG/JPEG/GIF only. Other payloads stay in the package and participate in pagination through their authored extent.
 
@@ -36,7 +36,7 @@ const image = useEditorState((s) => s.image);
 
 ```ts
 editor.getSelectedImage(); // same SelectedImageState shape
-editor.snapshot().image;   // reference-stable until selection or image fields move
+editor.snapshot().image; // reference-stable until selection or image fields move
 ```
 
 `SelectedImageState.wrap` reports all nine Word menu targets (`inline`, `square`, `squareLeft`, `squareRight`, `tight`, `through`, `topAndBottom`, `behind`, `inFront`). `behind` and `inFront` are both `wrapNone` with different `@behindDoc`.
@@ -45,12 +45,12 @@ editor.snapshot().image;   // reference-stable until selection or image fields m
 
 Default toolbar slots (contextual `image` group when a picture is selected):
 
-| Slot | Component / hook | Engine command |
-| --- | --- | --- |
-| `image.insert` | `ImageInsertProvider`, `ImageInsertTrigger` | `executeImageCommand({ type: 'insertImage', … })` |
-| `image.wrap` | `ImageWrap`, `useEditorValueCommand('image.wrap')` | `setImageWrapType` via `runToolbarCommand` |
-| `image.altText` | `ImageAltText` | `setImageAltText` |
-| `image.properties` | `ImagePropertiesTrigger`, `DocxEditorImagePropertiesDialog` | `setImageProperties` |
+| Slot               | Component / hook                                            | Engine command                                    |
+| ------------------ | ----------------------------------------------------------- | ------------------------------------------------- |
+| `image.insert`     | `ImageInsertProvider`, `ImageInsertTrigger`                 | `executeImageCommand({ type: 'insertImage', … })` |
+| `image.wrap`       | `ImageWrap`, `useEditorValueCommand('image.wrap')`          | `setImageWrapType` via `runToolbarCommand`        |
+| `image.altText`    | `ImageAltText`                                              | `setImageAltText`                                 |
+| `image.properties` | `ImagePropertiesTrigger`, `DocxEditorImagePropertiesDialog` | `setImageProperties`                              |
 
 Insert preflight:
 
@@ -90,14 +90,14 @@ Alt text uses `@descr`, then `@title`; `@name` is never announced. A picture wit
 
 Not edited or raster-rendered in this release:
 
-- VML (`w:pict`): follow-up `typed-vml-watermarks`
-- Charts, SmartArt, groups, canvases: extent + labelled placeholder
+- VML (`w:pict`), except watermarks
+- Charts, SmartArt, groups, canvases: extent + labeled placeholder
 - Anchored text boxes render their story read-only, clipped to the extent (page-number
   fields inside header/footer text boxes evaluate per page); inline text boxes, linked
   chains, autofit, and rotation stay placeholders
 - `w:object` / `w:altChunk`: generic preservation with diagnostics
-- Artistic effects (`a:effectLst`), TIFF/EMF/WMF converters
-- Tracked-change accept/reject on drawings: `typed-revisions-and-comments`
+- Artistic effects (`a:effectLst`), TIFF/EMF/WMF rasterization
+- Tracked-change accept/reject on drawings
 
 ## Next steps
 

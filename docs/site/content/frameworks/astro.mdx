@@ -1,7 +1,7 @@
 ---
 title: 'Astro'
 description: 'Run an Astro DOCX editor as a React island with client:only. Why client:load crashes, how styles load, and the path from file upload to .docx download.'
-category: "Frameworks"
+category: 'Frameworks'
 seoTitle: 'Astro DOCX editor setup'
 ---
 
@@ -85,7 +85,7 @@ export function Editor() {
 
 `client:only="react"` is the key directive. `client:load` would still server-render the component once to produce static HTML, and the editor crashes on `window` during that pass. `client:only` skips SSR for the island entirely and renders it in the browser only. The rest of the page stays zero-JS static HTML.
 
-Styles need no extra setup: the `styles.css` import sits inside the island component, and Astro's Vite pipeline bundles CSS imported from `client:only` components like any other module.
+Styles need no extra setup: the stylesheet import sits inside the island component, and Astro's Vite pipeline bundles CSS imported from `client:only` components like any other module.
 
 ## Run the example
 

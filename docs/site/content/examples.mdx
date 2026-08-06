@@ -1,7 +1,7 @@
 ---
 title: 'Examples'
-description: "Runnable DOCX editor starters for Vite, Next.js, Remix, and Astro, plus a fully themed editor and a headless editing script. Clone one and run it."
-category: "Getting Started"
+description: 'Runnable DOCX editor starters for Vite, Next.js, Remix, and Astro, plus a fully themed editor and a headless editing script. Clone one and run it.'
+category: 'Getting Started'
 order: 55
 ---
 
@@ -9,12 +9,12 @@ Two kinds of examples. The [starters](#runnable-starters) are complete apps in t
 
 ## Runnable starters
 
-Every starter lives under [`examples/`](https://github.com/eigenpal/docx-editor/tree/main/examples) in the repo and runs with `bun install` followed by the `bun run dev:*` script in its README. All of them resolve `@docx-editor.dev/*` from the monorepo workspace rather than from npm, so build the packages once first (`bun run build:packages` from the repo root); to run a starter against the published npm packages instead, replace the `workspace:*` versions in its `package.json`.
+Every starter lives under [`examples/`](https://github.com/eigenpal/docx-editor/tree/main/examples) in the repo and runs with `bun install` followed by the `bun run dev:*` script in its README. All of them resolve `@docx-editor.dev/*` from the monorepo workspace rather than from npm. Most need the packages built once first (`bun run build:packages` from the repo root); the Vite starter aliases package source directly and needs no build step. To run a starter against the published npm packages instead, replace the `workspace:*` versions in its `package.json`.
 
 <Cards>
   <Card title="Vite + React" href="https://github.com/eigenpal/docx-editor/tree/main/examples/vite">
-    Plain Vite + React SPA, and the fullest example in the repo: composed chrome, the review sidebar,
-    and a custom node, all on the public primitives.
+    Plain Vite + React SPA, and the fullest example in the repo: composed chrome, the review
+    sidebar, and a custom node, all on the public primitives.
   </Card>
   <Card title="Next.js" href="https://github.com/eigenpal/docx-editor/tree/main/examples/nextjs">
     App Router integration. One dynamic() import with ssr: false; the rest of the page stays
@@ -27,8 +27,14 @@ Every starter lives under [`examples/`](https://github.com/eigenpal/docx-editor/
     The editor as a React island with client:only="react", skipping Astro's SSR for the component.
   </Card>
   <Card title="Igloo" href="https://github.com/eigenpal/docx-editor/tree/main/examples/igloo">
-    A fully themed editor built to answer one question: how much of this is yours? Every control is
-    host markup over the hooks.
+    A fully themed editor. Every control is host markup over the hooks, so nothing of the packaged
+    look remains.
+  </Card>
+  <Card
+    title="Custom nodes"
+    href="https://github.com/eigenpal/docx-editor/tree/main/examples/custom-nodes"
+  >
+    Define, insert, edit, and round-trip a citation node stored as a Word content control.
   </Card>
   <Card
     title="Headless editing"

@@ -43,9 +43,9 @@
     "help": "Aide",
     "reportIssue": "Signaler un bug",
     "watermark": "Filigrane",
-    "break": null,
-    "sectionBreakContinuous": null,
-    "sectionBreakNextPage": null,
+    "break": "Saut",
+    "sectionBreakContinuous": "Saut de section (continu)",
+    "sectionBreakNextPage": "Saut de section (page suivante)",
     "insertFootnote": "Insérer une note de bas de page",
     "insertEndnote": "Insérer une note de fin"
   },
@@ -86,12 +86,12 @@
     "imageProperties": "Propriétés de l'image",
     "imagePropertiesShortcut": "Propriétés de l'image... (description, bordure)",
     "clearFormatting": "Effacer la mise en forme",
-    "commentsAndChanges": null,
-    "moreItems": null,
-    "unavailableInPreview": null,
-    "more": null,
-    "altText": null,
-    "imageWrap": null
+    "commentsAndChanges": "Commentaires et modifications",
+    "moreItems": "{count, plural, one {# élément supplémentaire} other {# éléments supplémentaires}}",
+    "unavailableInPreview": "Non disponible dans cette version préliminaire",
+    "more": "Plus",
+    "altText": "Texte de remplacement",
+    "imageWrap": "Habillage du texte"
   },
   "alignment": {
     "alignLeft": "Aligner à gauche",
@@ -117,11 +117,11 @@
     "double": "Double",
     "lineSpacingTitle": "Interligne : {label}",
     "blockSpacingRules": "Espacement des paragraphes",
-    "label": null,
-    "addSpaceAfter": null,
-    "addSpaceBefore": null,
-    "removeSpaceAfter": null,
-    "removeSpaceBefore": null
+    "label": "Interligne",
+    "addSpaceAfter": "Ajouter un espace après le paragraphe",
+    "addSpaceBefore": "Ajouter un espace avant le paragraphe",
+    "removeSpaceAfter": "Supprimer l'espace après le paragraphe",
+    "removeSpaceBefore": "Supprimer l'espace avant le paragraphe"
   },
   "styles": {
     "selectAriaLabel": "Sélectionner le type de paragraphe",
@@ -137,8 +137,8 @@
     "sansSerif": "Sans Serif",
     "serif": "Serif",
     "monospace": "Monospace",
-    "other": null,
-    "documentFonts": null
+    "other": "Autres",
+    "documentFonts": "Polices du document"
   },
   "fontSize": {
     "decrease": "Diminuer la taille de la police",
@@ -148,9 +148,9 @@
   },
   "zoom": {
     "ariaLabel": "Zoom : {label}",
-    "zoomIn": null,
-    "zoomLevel": null,
-    "zoomOut": null
+    "zoomIn": "Zoom avant",
+    "zoomLevel": "Niveau de zoom",
+    "zoomOut": "Zoom arrière"
   },
   "colorPicker": {
     "ariaLabel": "Choisir la couleur {type}",
@@ -204,38 +204,38 @@
       "lightMagenta": "Magenta clair",
       "brightGreen": "Vert vif",
       "violet": "Violet",
-      "darkCyan": null,
-      "darkMagenta": null,
-      "lightGray": null
+      "darkCyan": "Cyan foncé",
+      "darkMagenta": "Magenta foncé",
+      "lightGray": "Gris clair"
     },
-    "apply": null,
+    "apply": "Appliquer",
     "theme": {
-      "accent1": null,
-      "accent2": null,
-      "accent3": null,
-      "accent4": null,
-      "accent5": null,
-      "accent6": null,
-      "background1": null,
-      "background2": null,
-      "darker25": null,
-      "darker50": null,
-      "lighter40": null,
-      "lighter60": null,
-      "lighter80": null,
-      "text1": null,
-      "text2": null,
-      "lighter50": null,
-      "lighter35": null,
-      "lighter25": null,
-      "lighter15": null,
-      "lighter5": null,
-      "darker5": null,
-      "darker10": null,
-      "darker15": null,
-      "darker35": null,
-      "darker75": null,
-      "darker90": null
+      "accent1": "Accentuation 1",
+      "accent2": "Accentuation 2",
+      "accent3": "Accentuation 3",
+      "accent4": "Accentuation 4",
+      "accent5": "Accentuation 5",
+      "accent6": "Accentuation 6",
+      "background1": "Arrière-plan 1",
+      "background2": "Arrière-plan 2",
+      "darker25": "Plus sombre 25 %",
+      "darker50": "Plus sombre 50 %",
+      "lighter40": "Plus clair 40 %",
+      "lighter60": "Plus clair 60 %",
+      "lighter80": "Plus clair 80 %",
+      "text1": "Texte 1",
+      "text2": "Texte 2",
+      "lighter50": "Plus clair 50 %",
+      "lighter35": "Plus clair 35 %",
+      "lighter25": "Plus clair 25 %",
+      "lighter15": "Plus clair 15 %",
+      "lighter5": "Plus clair 5 %",
+      "darker5": "Plus sombre 5 %",
+      "darker10": "Plus sombre 10 %",
+      "darker15": "Plus sombre 15 %",
+      "darker35": "Plus sombre 35 %",
+      "darker75": "Plus sombre 75 %",
+      "darker90": "Plus sombre 90 %"
     }
   },
   "dialogs": {
@@ -425,9 +425,9 @@
         "b5": "B5 (17,6 × 25 cm)",
         "executive": "Executive (18,4 × 26,7 cm)"
       },
-      "applyTo": null,
-      "applyToDocument": null,
-      "applyToSection": null
+      "applyTo": "Appliquer à",
+      "applyToDocument": "À tout le document",
+      "applyToSection": "À cette section"
     },
     "tableProperties": {
       "title": "Propriétés du tableau",
@@ -658,8 +658,8 @@
       "custom": "Personnalisé"
     },
     "updateTableOfContents": "Mettre à jour la table des matières",
-    "editCustomNode": null,
-    "removeCustomNode": null
+    "editCustomNode": "Modifier {label}",
+    "removeCustomNode": "Supprimer {label}"
   },
   "documentOutline": {
     "ariaLabel": "Plan du document",
@@ -741,23 +741,23 @@
       "gridTable4Accent5": "Grille de tableau 4 Accent 5",
       "gridTable4Accent6": "Grille de tableau 4 Accent 6"
     },
-    "selectTable": null,
+    "selectTable": "Sélectionner le tableau entier",
     "borderStyles": {
-      "dashed": null,
-      "dotted": null,
-      "double": null,
-      "single": null,
-      "thick": null,
-      "triple": null
+      "dashed": "Tirets",
+      "dotted": "Pointillé",
+      "double": "Double",
+      "single": "Trait plein",
+      "thick": "Épais",
+      "triple": "Triple"
     },
     "borderWidths": {
-      "halfPt": null,
-      "oneHalfPt": null,
-      "onePt": null,
-      "threePt": null,
-      "twoPt": null
+      "halfPt": "0,5 pt",
+      "oneHalfPt": "1,5 pt",
+      "onePt": "1 pt",
+      "threePt": "3 pt",
+      "twoPt": "2 pt"
     },
-    "clearCellFill": null
+    "clearCellFill": "Effacer le remplissage de la cellule"
   },
   "tableAdvanced": {
     "verticalAlignment": "Alignement vertical",
@@ -822,20 +822,20 @@
       "behindText": "L'image s'affiche en arrière-plan derrière le texte",
       "inFrontOfText": "L'image s'affiche au premier plan par-dessus le texte"
     },
-    "square": null,
+    "square": "Carré",
     "targets": {
-      "behind": null,
-      "inFront": null,
-      "inline": null,
-      "square": null,
-      "squareLeft": null,
-      "squareRight": null,
-      "through": null,
-      "tight": null,
-      "topAndBottom": null
+      "behind": "Derrière le texte",
+      "inFront": "Devant le texte",
+      "inline": "Aligné sur le texte",
+      "square": "Carré",
+      "squareLeft": "Carré à gauche",
+      "squareRight": "Carré à droite",
+      "through": "Au travers",
+      "tight": "Rapproché",
+      "topAndBottom": "Haut et bas"
     },
-    "through": null,
-    "tight": null
+    "through": "Au travers",
+    "tight": "Rapproché"
   },
   "responsePreview": {
     "loading": "{action}...",
@@ -864,7 +864,7 @@
     "linkRemoved": "Lien supprimé",
     "linkCopied": "Lien copié dans le presse-papiers",
     "failedToSave": "Échec de l'enregistrement du document",
-    "fontSubstitutionNotice": null
+    "fontSubstitutionNotice": "Certaines polices de ce document ne sont pas disponibles ; des polices de substitution sont affichées : {fonts}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Texte à afficher",
@@ -872,15 +872,15 @@
     "copyLink": "Copier le lien",
     "editLink": "Modifier le lien",
     "removeLink": "Supprimer le lien",
-    "apply": null,
-    "bookmarkTarget": null,
-    "cancel": null,
-    "editTitle": null,
-    "inertTarget": null,
-    "insertTitle": null,
-    "openLink": null,
-    "refused": null,
-    "urlLabel": null
+    "apply": "Appliquer",
+    "bookmarkTarget": "Renvoie à un emplacement dans ce document",
+    "cancel": "Annuler",
+    "editTitle": "Modifier le lien",
+    "inertTarget": "Ce lien pointe vers une destination que l'éditeur n'ouvrira pas",
+    "insertTitle": "Insérer un lien",
+    "openLink": "Ouvrir le lien",
+    "refused": "Ce lien n'a pas pu être appliqué. Vérifiez l'adresse et réessayez.",
+    "urlLabel": "URL"
   },
   "headerFooter": {
     "header": "En-tête",
@@ -911,38 +911,38 @@
     "insertPageXofY": "Insérer page X sur Y",
     "pageXofYLabel": "Page",
     "pageXofYSeparator": "sur",
-    "pageNumbers": null
+    "pageNumbers": "Numéros de page"
   },
   "image": {
     "placeholder": "Insérer une image",
     "placeholderText": "[Image]",
     "editableAriaLabel": "Éditer l'image",
-    "contentMismatch": null,
-    "decodeFailed": null,
-    "externalResource": null,
-    "invalidResource": null,
-    "missingResource": null,
-    "nonPictureGraphic": null,
-    "pendingResource": null,
-    "resourceLimit": null,
-    "unsupportedFormat": null
+    "contentMismatch": "Le contenu de l'image ne correspond pas à son type",
+    "decodeFailed": "L'image n'a pas pu être décodée",
+    "externalResource": "Image externe non chargée",
+    "invalidResource": "Image non valide",
+    "missingResource": "Image manquante",
+    "nonPictureGraphic": "Graphique non pris en charge ({kind})",
+    "pendingResource": "Chargement de l'image",
+    "resourceLimit": "L'image dépasse les limites de taille",
+    "unsupportedFormat": "Format d'image non pris en charge ({format})"
   },
   "imageOverlay": {
     "rotate": "Faire pivoter",
     "imageProperties": "Propriétés de l'image",
     "deleteImage": "Supprimer l'image",
-    "replaceImage": null,
+    "replaceImage": "Remplacer l'image…",
     "handle": {
-      "e": null,
-      "n": null,
-      "ne": null,
-      "nw": null,
-      "s": null,
-      "se": null,
-      "sw": null,
-      "w": null
+      "e": "Redimensionner le bord droit",
+      "n": "Redimensionner le bord supérieur",
+      "ne": "Redimensionner le coin supérieur droit",
+      "nw": "Redimensionner le coin supérieur gauche",
+      "s": "Redimensionner le bord inférieur",
+      "se": "Redimensionner le coin inférieur droit",
+      "sw": "Redimensionner le coin inférieur gauche",
+      "w": "Redimensionner le bord gauche"
     },
-    "selection": null
+    "selection": "Image sélectionnée"
   },
   "ruler": {
     "horizontal": "Règle horizontale",
@@ -952,7 +952,7 @@
     "rightIndent": "Décalage à droite",
     "topMargin": "Marge supérieure",
     "bottomMargin": "Marge inférieure",
-    "hangingIndent": null
+    "hangingIndent": "Retrait négatif"
   },
   "print": {
     "label": "Imprimer",
@@ -972,73 +972,73 @@
     "label": "Chargement"
   },
   "revisions": {
-    "cellDeleted": null,
-    "cellInserted": null,
-    "cellMerged": null,
-    "cellPropertiesChanged": null,
-    "paragraphMarkDeleted": null,
-    "paragraphMarkInserted": null,
-    "paragraphPropertiesChanged": null,
-    "rowDeleted": null,
-    "rowInserted": null,
-    "rowPropertiesChanged": null,
-    "tableDeleted": null,
-    "tableInserted": null,
-    "tablePropertiesChanged": null,
-    "runPropertiesChanged": null
+    "cellDeleted": "Cellule supprimée",
+    "cellInserted": "Cellule insérée",
+    "cellMerged": "Cellules fusionnées",
+    "cellPropertiesChanged": "Propriétés de cellule modifiées",
+    "paragraphMarkDeleted": "Marque de paragraphe supprimée",
+    "paragraphMarkInserted": "Marque de paragraphe insérée",
+    "paragraphPropertiesChanged": "Propriétés de paragraphe modifiées",
+    "rowDeleted": "Ligne supprimée",
+    "rowInserted": "Ligne insérée",
+    "rowPropertiesChanged": "Propriétés de ligne modifiées",
+    "tableDeleted": "Tableau supprimé",
+    "tableInserted": "Tableau inséré",
+    "tablePropertiesChanged": "Propriétés de tableau modifiées",
+    "runPropertiesChanged": "Mise en forme du texte modifiée"
   },
   "toc": {
-    "updatePrompt": null,
+    "updatePrompt": "Ce document contient une table des matières obsolète. La régénérer maintenant ?",
     "refresh": "Mettre à jour toute la table",
     "refreshPageNumbers": "Mettre à jour uniquement les numéros de page"
   },
   "app": {
-    "name": null,
-    "newDocument": null,
-    "by": null,
-    "framework": null,
-    "theme": null
+    "name": "Éditeur DOCX",
+    "newDocument": "Nouveau",
+    "by": "par EigenPal",
+    "framework": "Framework",
+    "theme": "Thème"
   },
   "editingMode": {
-    "editing": null,
-    "label": null,
-    "editingHint": null,
-    "suggesting": null,
-    "suggestingHint": null,
-    "viewing": null,
-    "viewingHint": null
+    "editing": "Édition",
+    "label": "Mode d'édition",
+    "editingHint": "Modifier directement le document",
+    "suggesting": "Suggestion",
+    "suggestingHint": "Les modifications deviennent des suggestions",
+    "viewing": "Affichage",
+    "viewingHint": "Lecture seule, aucune modification"
   },
   "navigation": {
-    "ariaLabel": null,
-    "closeAriaLabel": null,
-    "closeTitle": null,
+    "ariaLabel": "Navigation dans le document",
+    "closeAriaLabel": "Fermer la navigation",
+    "closeTitle": "Fermer la navigation",
     "find": {
-      "clearAriaLabel": null,
-      "counter": null,
-      "counterTruncated": null,
-      "inputAriaLabel": null,
-      "matchCase": null,
-      "nextAriaLabel": null,
-      "noResults": null,
-      "optionsAriaLabel": null,
-      "placeholder": null,
-      "previousAriaLabel": null,
-      "resultsAriaLabel": null,
-      "searching": null,
-      "wholeWord": null,
-      "total": null,
-      "totalTruncated": null
+      "clearAriaLabel": "Effacer la recherche",
+      "counter": "Résultat {current} sur {total}",
+      "counterTruncated": "Résultat {current} sur {total}+",
+      "inputAriaLabel": "Rechercher dans le document",
+      "matchCase": "Respecter la casse",
+      "nextAriaLabel": "Résultat suivant",
+      "noResults": "Aucun résultat",
+      "optionsAriaLabel": "Options de recherche",
+      "placeholder": "Rechercher dans le document",
+      "previousAriaLabel": "Résultat précédent",
+      "resultsAriaLabel": "Résultats de la recherche",
+      "searching": "Recherche…",
+      "wholeWord": "Mots entiers uniquement",
+      "total": "{total, plural, one {# résultat} other {# résultats}}",
+      "totalTruncated": "{total, plural, other {#+ résultats}}"
     },
     "headings": {
-      "noHeadings": null
+      "noHeadings": "Aucun titre trouvé. Ajoutez des titres à votre document pour les voir ici."
     },
-    "openAriaLabel": null,
-    "openTitle": null,
+    "openAriaLabel": "Ouvrir la navigation",
+    "openTitle": "Navigation",
     "tabs": {
-      "find": null,
-      "headings": null
+      "find": "Rechercher",
+      "headings": "Titres"
     },
-    "title": null
+    "title": "Navigation"
   },
   "contentControl": {
     "formFill": "Mode remplissage de formulaire",
@@ -1097,62 +1097,62 @@
     "inheritedValue": "(hérité)"
   },
   "review": {
-    "accept": null,
-    "ariaLabel": null,
-    "commentRefused": null,
-    "deleted": null,
-    "empty": null,
-    "inserted": null,
-    "movedFrom": null,
-    "movedTo": null,
-    "reject": null,
-    "replaced": null,
-    "replacedWith": null,
-    "reply": null,
-    "replyRefused": null,
-    "showPane": null,
-    "structural": null,
-    "deleteComment": null,
-    "discardChange": null
+    "accept": "Accepter",
+    "ariaLabel": "Révision",
+    "commentRefused": "Impossible d'ajouter le commentaire",
+    "deleted": "Supprimé",
+    "empty": "Aucune modification ni aucun commentaire",
+    "inserted": "Ajouté",
+    "movedFrom": "Déplacé d'ici",
+    "movedTo": "Déplacé ici",
+    "reject": "Refuser",
+    "replaced": "Remplacé",
+    "replacedWith": "par",
+    "reply": "Répondre",
+    "replyRefused": "Impossible de publier la réponse",
+    "showPane": "Afficher les commentaires",
+    "structural": "Structure du document modifiée",
+    "deleteComment": "Supprimer le commentaire",
+    "discardChange": "Ignorer la modification"
   },
   "imageAltText": {
-    "description": null,
-    "panelTitle": null,
-    "title": null
+    "description": "Description",
+    "panelTitle": "Texte de remplacement",
+    "title": "Titre"
   },
   "imageInsert": {
     "errors": {
-      "emptyFile": null,
-      "invalidSignature": null,
-      "oversize": null,
-      "refused": null,
-      "unsupportedFormat": null
+      "emptyFile": "Le fichier sélectionné est vide.",
+      "invalidSignature": "Le fichier n'est pas une image PNG, JPEG ou GIF prise en charge.",
+      "oversize": "L'image dépasse la taille maximale autorisée.",
+      "refused": "L'image n'a pas pu être insérée.",
+      "unsupportedFormat": "Ce format d'image n'est pas pris en charge pour l'insertion."
     }
   },
   "imageProperties": {
-    "crop": null,
-    "cropBottom": null,
-    "cropLeft": null,
-    "cropRight": null,
-    "cropTop": null,
+    "crop": "Rogner",
+    "cropBottom": "Bas (%)",
+    "cropLeft": "Gauche (%)",
+    "cropRight": "Droite (%)",
+    "cropTop": "Haut (%)",
     "errors": {
-      "invalidCrop": null,
-      "invalidDimensions": null,
-      "refused": null,
-      "invalidPosition": null
+      "invalidCrop": "Les valeurs de rognage doivent être des pourcentages compris entre 0 et 100.",
+      "invalidDimensions": "Entrez des valeurs de largeur et de hauteur positives.",
+      "refused": "Ces propriétés n'ont pas pu être appliquées.",
+      "invalidPosition": "Entrez des valeurs de position horizontale et verticale valides."
     },
-    "hyperlink": null,
-    "nonPictureHint": null,
-    "resetNaturalSize": null,
+    "hyperlink": "Lien hypertexte",
+    "nonPictureHint": "Le rognage et la réinitialisation à la taille d'origine ne sont disponibles que pour les images.",
+    "resetNaturalSize": "Rétablir la taille d'origine",
     "units": {
-      "points": null
+      "points": "pt"
     },
-    "horizontalOffset": null,
-    "position": null,
-    "positionLocked": null,
-    "positionUnavailable": null,
-    "relativeToHorizontal": null,
-    "relativeToVertical": null,
-    "verticalOffset": null
+    "horizontalOffset": "Décalage horizontal",
+    "position": "Position",
+    "positionLocked": "Ce dessin ne peut pas être déplacé.",
+    "positionUnavailable": "La position n'est disponible que pour les images flottantes.",
+    "relativeToHorizontal": "Par rapport à (horizontal)",
+    "relativeToVertical": "Par rapport à (vertical)",
+    "verticalOffset": "Décalage vertical"
   }
 }

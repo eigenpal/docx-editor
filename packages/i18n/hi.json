@@ -43,9 +43,9 @@
     "help": "सहायता",
     "reportIssue": "समस्या की रिपोर्ट करें",
     "watermark": "वॉटरमार्क",
-    "break": null,
-    "sectionBreakContinuous": null,
-    "sectionBreakNextPage": null,
+    "break": "ब्रेक",
+    "sectionBreakContinuous": "अनुभाग ब्रेक (निरंतर)",
+    "sectionBreakNextPage": "अनुभाग ब्रेक (अगला पृष्ठ)",
     "insertFootnote": "फ़ुटनोट डालें",
     "insertEndnote": "एंडनोट डालें"
   },
@@ -86,12 +86,12 @@
     "imageProperties": "चित्र की विशेषताएँ",
     "imagePropertiesShortcut": "चित्र की विशेषताएँ (ऑल्ट टेक्स्ट, बॉर्डर)...",
     "clearFormatting": "प्रारूपण साफ करें",
-    "commentsAndChanges": null,
-    "moreItems": null,
-    "unavailableInPreview": null,
-    "more": null,
-    "altText": null,
-    "imageWrap": null
+    "commentsAndChanges": "टिप्पणियाँ और परिवर्तन",
+    "moreItems": "{count, plural, one {# और आइटम} other {# और आइटम}}",
+    "unavailableInPreview": "इस पूर्वावलोकन बिल्ड में उपलब्ध नहीं है",
+    "more": "अधिक",
+    "altText": "वैकल्पिक पाठ",
+    "imageWrap": "पाठ रैप करें"
   },
   "alignment": {
     "alignLeft": "बाएं संरेखित करें",
@@ -117,11 +117,11 @@
     "double": "दुगुना",
     "lineSpacingTitle": "लाइन स्पेसिंग: {label}",
     "blockSpacingRules": "पैराग्राफ स्पेसिंग",
-    "label": null,
-    "addSpaceAfter": null,
-    "addSpaceBefore": null,
-    "removeSpaceAfter": null,
-    "removeSpaceBefore": null
+    "label": "पंक्ति रिक्ति",
+    "addSpaceAfter": "अनुच्छेद के बाद स्थान जोड़ें",
+    "addSpaceBefore": "अनुच्छेद से पहले स्थान जोड़ें",
+    "removeSpaceAfter": "अनुच्छेद के बाद स्थान हटाएँ",
+    "removeSpaceBefore": "अनुच्छेद से पहले स्थान हटाएँ"
   },
   "styles": {
     "selectAriaLabel": "पैराग्राफ शैली चुनें",
@@ -137,8 +137,8 @@
     "sansSerif": "Sans Serif",
     "serif": "Serif",
     "monospace": "Monospace",
-    "other": null,
-    "documentFonts": null
+    "other": "अन्य",
+    "documentFonts": "दस्तावेज़ फ़ॉन्ट"
   },
   "fontSize": {
     "decrease": "फ़ॉन्ट आकार घटाएं",
@@ -148,9 +148,9 @@
   },
   "zoom": {
     "ariaLabel": "ज़ूम: {label}",
-    "zoomIn": null,
-    "zoomLevel": null,
-    "zoomOut": null
+    "zoomIn": "ज़ूम इन",
+    "zoomLevel": "ज़ूम स्तर",
+    "zoomOut": "ज़ूम आउट"
   },
   "colorPicker": {
     "ariaLabel": "{type} रंग पिकर",
@@ -204,38 +204,38 @@
       "lightMagenta": "हल्का मैजेंटा",
       "brightGreen": "चमकीला हरा",
       "violet": "बैंगनी",
-      "darkCyan": null,
-      "darkMagenta": null,
-      "lightGray": null
+      "darkCyan": "गहरा स्यान",
+      "darkMagenta": "गहरा मैजेंटा",
+      "lightGray": "हल्का ग्रे"
     },
-    "apply": null,
+    "apply": "लागू करें",
     "theme": {
-      "accent1": null,
-      "accent2": null,
-      "accent3": null,
-      "accent4": null,
-      "accent5": null,
-      "accent6": null,
-      "background1": null,
-      "background2": null,
-      "darker25": null,
-      "darker50": null,
-      "lighter40": null,
-      "lighter60": null,
-      "lighter80": null,
-      "text1": null,
-      "text2": null,
-      "lighter50": null,
-      "lighter35": null,
-      "lighter25": null,
-      "lighter15": null,
-      "lighter5": null,
-      "darker5": null,
-      "darker10": null,
-      "darker15": null,
-      "darker35": null,
-      "darker75": null,
-      "darker90": null
+      "accent1": "एक्सेंट 1",
+      "accent2": "एक्सेंट 2",
+      "accent3": "एक्सेंट 3",
+      "accent4": "एक्सेंट 4",
+      "accent5": "एक्सेंट 5",
+      "accent6": "एक्सेंट 6",
+      "background1": "पृष्ठभूमि 1",
+      "background2": "पृष्ठभूमि 2",
+      "darker25": "गहरा 25%",
+      "darker50": "गहरा 50%",
+      "lighter40": "हल्का 40%",
+      "lighter60": "हल्का 60%",
+      "lighter80": "हल्का 80%",
+      "text1": "पाठ 1",
+      "text2": "पाठ 2",
+      "lighter50": "हल्का 50%",
+      "lighter35": "हल्का 35%",
+      "lighter25": "हल्का 25%",
+      "lighter15": "हल्का 15%",
+      "lighter5": "हल्का 5%",
+      "darker5": "गहरा 5%",
+      "darker10": "गहरा 10%",
+      "darker15": "गहरा 15%",
+      "darker35": "गहरा 35%",
+      "darker75": "गहरा 75%",
+      "darker90": "गहरा 90%"
     }
   },
   "dialogs": {
@@ -425,9 +425,9 @@
         "b5": "B5 (6.93\" × 9.84\")",
         "executive": "Executive (7.25\" × 10.5\")"
       },
-      "applyTo": null,
-      "applyToDocument": null,
-      "applyToSection": null
+      "applyTo": "इस पर लागू करें",
+      "applyToDocument": "संपूर्ण दस्तावेज़",
+      "applyToSection": "यह अनुभाग"
     },
     "tableProperties": {
       "title": "तालिका की विशेषताएँ",
@@ -658,8 +658,8 @@
       "custom": "कस्टम"
     },
     "updateTableOfContents": "विषय-सूची अपडेट करें",
-    "editCustomNode": null,
-    "removeCustomNode": null
+    "editCustomNode": "{label} संपादित करें",
+    "removeCustomNode": "{label} निकालें"
   },
   "documentOutline": {
     "ariaLabel": "दस्तावेज़ की रूपरेखा",
@@ -741,23 +741,23 @@
       "gridTable4Accent5": "ग्रिड तालिका 4 एक्सेंट 5",
       "gridTable4Accent6": "ग्रिड तालिका 4 एक्सेंट 6"
     },
-    "selectTable": null,
+    "selectTable": "संपूर्ण तालिका चुनें",
     "borderStyles": {
-      "dashed": null,
-      "dotted": null,
-      "double": null,
-      "single": null,
-      "thick": null,
-      "triple": null
+      "dashed": "डैश",
+      "dotted": "बिंदीदार",
+      "double": "दोहरा",
+      "single": "ठोस",
+      "thick": "मोटा",
+      "triple": "तिहरा"
     },
     "borderWidths": {
-      "halfPt": null,
-      "oneHalfPt": null,
-      "onePt": null,
-      "threePt": null,
-      "twoPt": null
+      "halfPt": "0.5 pt",
+      "oneHalfPt": "1.5 pt",
+      "onePt": "1 pt",
+      "threePt": "3 pt",
+      "twoPt": "2 pt"
     },
-    "clearCellFill": null
+    "clearCellFill": "कक्ष भरण साफ़ करें"
   },
   "tableAdvanced": {
     "verticalAlignment": "लंबवत संरेखण",
@@ -822,20 +822,20 @@
       "behindText": "चित्र मुख्य टेक्स्ट के पीछे पेंट करता है",
       "inFrontOfText": "चित्र मुख्य टेक्स्ट के ऊपर पेंट करता है"
     },
-    "square": null,
+    "square": "वर्गाकार",
     "targets": {
-      "behind": null,
-      "inFront": null,
-      "inline": null,
-      "square": null,
-      "squareLeft": null,
-      "squareRight": null,
-      "through": null,
-      "tight": null,
-      "topAndBottom": null
+      "behind": "पाठ के पीछे",
+      "inFront": "पाठ के सामने",
+      "inline": "पाठ के साथ पंक्ति में",
+      "square": "वर्गाकार",
+      "squareLeft": "वर्गाकार बाएँ",
+      "squareRight": "वर्गाकार दाएँ",
+      "through": "आर-पार",
+      "tight": "सटा हुआ",
+      "topAndBottom": "ऊपर और नीचे"
     },
-    "through": null,
-    "tight": null
+    "through": "आर-पार",
+    "tight": "सटा हुआ"
   },
   "responsePreview": {
     "loading": "{action}...",
@@ -864,7 +864,7 @@
     "linkRemoved": "लिंक हटा दिया गया",
     "linkCopied": "लिंक क्लिपबोर्ड पर कॉपी किया गया",
     "failedToSave": "दस्तावेज़ सहेजने में विफल",
-    "fontSubstitutionNotice": null
+    "fontSubstitutionNotice": "इस दस्तावेज़ के कुछ फ़ॉन्ट उपलब्ध नहीं हैं, इसलिए विकल्प दिखाए जा रहे हैं: {fonts}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "दिखाया जाने वाला टेक्स्ट",
@@ -872,15 +872,15 @@
     "copyLink": "लिंक कॉपी करें",
     "editLink": "लिंक संपादित करें",
     "removeLink": "लिंक हटाएं",
-    "apply": null,
-    "bookmarkTarget": null,
-    "cancel": null,
-    "editTitle": null,
-    "inertTarget": null,
-    "insertTitle": null,
-    "openLink": null,
-    "refused": null,
-    "urlLabel": null
+    "apply": "लागू करें",
+    "bookmarkTarget": "इस दस्तावेज़ में किसी स्थान पर ले जाता है",
+    "cancel": "रद्द करें",
+    "editTitle": "लिंक संपादित करें",
+    "inertTarget": "यह लिंक ऐसी जगह ले जाता है जिसे संपादक नहीं खोलेगा",
+    "insertTitle": "लिंक सम्मिलित करें",
+    "openLink": "लिंक खोलें",
+    "refused": "वह लिंक लागू नहीं किया जा सका. पता जाँचें और पुनः प्रयास करें.",
+    "urlLabel": "URL"
   },
   "headerFooter": {
     "header": "हेडर",
@@ -911,38 +911,38 @@
     "insertPageXofY": "पृष्ठ X of Y डालें",
     "pageXofYLabel": "पृष्ठ",
     "pageXofYSeparator": "में से",
-    "pageNumbers": null
+    "pageNumbers": "पृष्ठ संख्याएँ"
   },
   "image": {
     "placeholder": "चित्र प्लेसहोल्डर",
     "placeholderText": "[चित्र]",
     "editableAriaLabel": "संपादित करने योग्य चित्र",
-    "contentMismatch": null,
-    "decodeFailed": null,
-    "externalResource": null,
-    "invalidResource": null,
-    "missingResource": null,
-    "nonPictureGraphic": null,
-    "pendingResource": null,
-    "resourceLimit": null,
-    "unsupportedFormat": null
+    "contentMismatch": "छवि की सामग्री उसके प्रकार से मेल नहीं खाती",
+    "decodeFailed": "छवि को डिकोड नहीं किया जा सका",
+    "externalResource": "बाहरी छवि लोड नहीं की गई",
+    "invalidResource": "अमान्य छवि",
+    "missingResource": "छवि अनुपलब्ध",
+    "nonPictureGraphic": "असमर्थित ग्राफ़िक ({kind})",
+    "pendingResource": "छवि लोड हो रही है",
+    "resourceLimit": "छवि आकार सीमा से अधिक है",
+    "unsupportedFormat": "असमर्थित छवि स्वरूप ({format})"
   },
   "imageOverlay": {
     "rotate": "घुमाएं",
     "imageProperties": "चित्र की विशेषताएँ",
     "deleteImage": "चित्र हटाएं",
-    "replaceImage": null,
+    "replaceImage": "छवि बदलें…",
     "handle": {
-      "e": null,
-      "n": null,
-      "ne": null,
-      "nw": null,
-      "s": null,
-      "se": null,
-      "sw": null,
-      "w": null
+      "e": "दाएँ किनारे का आकार बदलें",
+      "n": "ऊपरी किनारे का आकार बदलें",
+      "ne": "ऊपरी-दाएँ कोने का आकार बदलें",
+      "nw": "ऊपरी-बाएँ कोने का आकार बदलें",
+      "s": "निचले किनारे का आकार बदलें",
+      "se": "निचले-दाएँ कोने का आकार बदलें",
+      "sw": "निचले-बाएँ कोने का आकार बदलें",
+      "w": "बाएँ किनारे का आकार बदलें"
     },
-    "selection": null
+    "selection": "चयनित छवि"
   },
   "ruler": {
     "horizontal": "क्षैतिज रूलर",
@@ -952,7 +952,7 @@
     "rightIndent": "दायां इंडेंट",
     "topMargin": "शीर्ष मार्जिन",
     "bottomMargin": "तल मार्जिन",
-    "hangingIndent": null
+    "hangingIndent": "हैंगिंग इंडेंट"
   },
   "print": {
     "label": "प्रिंट करें",
@@ -972,73 +972,73 @@
     "label": "लोड हो रहा है"
   },
   "revisions": {
-    "cellDeleted": null,
-    "cellInserted": null,
-    "cellMerged": null,
-    "cellPropertiesChanged": null,
-    "paragraphMarkDeleted": null,
-    "paragraphMarkInserted": null,
-    "paragraphPropertiesChanged": null,
-    "rowDeleted": null,
-    "rowInserted": null,
-    "rowPropertiesChanged": null,
-    "tablePropertiesChanged": null,
-    "tableDeleted": null,
-    "tableInserted": null,
-    "runPropertiesChanged": null
+    "cellDeleted": "कक्ष हटाया गया",
+    "cellInserted": "कक्ष सम्मिलित किया गया",
+    "cellMerged": "कक्ष मर्ज किए गए",
+    "cellPropertiesChanged": "कक्ष गुण बदले गए",
+    "paragraphMarkDeleted": "अनुच्छेद चिह्न हटाया गया",
+    "paragraphMarkInserted": "अनुच्छेद चिह्न सम्मिलित किया गया",
+    "paragraphPropertiesChanged": "अनुच्छेद गुण बदले गए",
+    "rowDeleted": "पंक्ति हटाई गई",
+    "rowInserted": "पंक्ति सम्मिलित की गई",
+    "rowPropertiesChanged": "पंक्ति गुण बदले गए",
+    "tablePropertiesChanged": "तालिका गुण बदले गए",
+    "tableDeleted": "तालिका हटाई गई",
+    "tableInserted": "तालिका सम्मिलित की गई",
+    "runPropertiesChanged": "पाठ स्वरूपण बदला गया"
   },
   "toc": {
-    "updatePrompt": null,
+    "updatePrompt": "इस दस्तावेज़ की विषय-सूची पुरानी हो गई है. क्या इसे अभी पुनः बनाएँ?",
     "refresh": "पूरी तालिका अपडेट करें",
     "refreshPageNumbers": "केवल पृष्ठ संख्याएँ अपडेट करें"
   },
   "app": {
-    "name": null,
-    "newDocument": null,
-    "by": null,
-    "framework": null,
-    "theme": null
+    "name": "DOCX संपादक",
+    "newDocument": "नया",
+    "by": "EigenPal द्वारा",
+    "framework": "फ़्रेमवर्क",
+    "theme": "थीम"
   },
   "editingMode": {
-    "editing": null,
-    "label": null,
-    "editingHint": null,
-    "suggesting": null,
-    "suggestingHint": null,
-    "viewing": null,
-    "viewingHint": null
+    "editing": "संपादन",
+    "label": "संपादन मोड",
+    "editingHint": "दस्तावेज़ सीधे संपादित करें",
+    "suggesting": "सुझाव",
+    "suggestingHint": "संपादन सुझाव बन जाते हैं",
+    "viewing": "देखना",
+    "viewingHint": "केवल पढ़ने के लिए, कोई संपादन नहीं"
   },
   "navigation": {
-    "ariaLabel": null,
-    "closeAriaLabel": null,
-    "closeTitle": null,
+    "ariaLabel": "दस्तावेज़ नेविगेशन",
+    "closeAriaLabel": "नेविगेशन बंद करें",
+    "closeTitle": "नेविगेशन बंद करें",
     "find": {
-      "clearAriaLabel": null,
-      "counter": null,
-      "counterTruncated": null,
-      "inputAriaLabel": null,
-      "matchCase": null,
-      "nextAriaLabel": null,
-      "noResults": null,
-      "optionsAriaLabel": null,
-      "placeholder": null,
-      "previousAriaLabel": null,
-      "resultsAriaLabel": null,
-      "searching": null,
-      "wholeWord": null,
-      "total": null,
-      "totalTruncated": null
+      "clearAriaLabel": "खोज साफ़ करें",
+      "counter": "{total} में से परिणाम {current}",
+      "counterTruncated": "{total}+ में से परिणाम {current}",
+      "inputAriaLabel": "दस्तावेज़ में खोजें",
+      "matchCase": "केस का मिलान करें",
+      "nextAriaLabel": "अगला परिणाम",
+      "noResults": "कोई परिणाम नहीं",
+      "optionsAriaLabel": "खोज विकल्प",
+      "placeholder": "दस्तावेज़ में खोजें",
+      "previousAriaLabel": "पिछला परिणाम",
+      "resultsAriaLabel": "खोज परिणाम",
+      "searching": "खोजा जा रहा है…",
+      "wholeWord": "केवल पूर्ण शब्द",
+      "total": "{total, plural, one {# परिणाम} other {# परिणाम}}",
+      "totalTruncated": "{total, plural, other {#+ परिणाम}}"
     },
     "headings": {
-      "noHeadings": null
+      "noHeadings": "कोई शीर्षक नहीं मिला. उन्हें यहाँ देखने के लिए दस्तावेज़ में शीर्षक जोड़ें."
     },
-    "openAriaLabel": null,
-    "openTitle": null,
+    "openAriaLabel": "नेविगेशन खोलें",
+    "openTitle": "नेविगेशन",
     "tabs": {
-      "find": null,
-      "headings": null
+      "find": "ढूँढें",
+      "headings": "शीर्षक"
     },
-    "title": null
+    "title": "नेविगेशन"
   },
   "contentControl": {
     "formFill": "फ़ॉर्म भरने का मोड",
@@ -1097,62 +1097,62 @@
     "inheritedValue": "(विरासत में)"
   },
   "review": {
-    "accept": null,
-    "ariaLabel": null,
-    "commentRefused": null,
-    "deleted": null,
-    "empty": null,
-    "inserted": null,
-    "movedFrom": null,
-    "movedTo": null,
-    "reject": null,
-    "replaced": null,
-    "replacedWith": null,
-    "reply": null,
-    "replyRefused": null,
-    "showPane": null,
-    "structural": null,
-    "deleteComment": null,
-    "discardChange": null
+    "accept": "स्वीकार करें",
+    "ariaLabel": "समीक्षा",
+    "commentRefused": "टिप्पणी नहीं जोड़ी जा सकी",
+    "deleted": "हटाया गया",
+    "empty": "कोई परिवर्तन या टिप्पणी नहीं",
+    "inserted": "जोड़ा गया",
+    "movedFrom": "यहाँ से स्थानांतरित किया गया",
+    "movedTo": "यहाँ स्थानांतरित किया गया",
+    "reject": "अस्वीकार करें",
+    "replaced": "प्रतिस्थापित किया गया",
+    "replacedWith": "इससे:",
+    "reply": "उत्तर दें",
+    "replyRefused": "उत्तर पोस्ट नहीं किया जा सका",
+    "showPane": "टिप्पणियाँ दिखाएँ",
+    "structural": "दस्तावेज़ संरचना बदली गई",
+    "deleteComment": "टिप्पणी हटाएँ",
+    "discardChange": "परिवर्तन छोड़ें"
   },
   "imageAltText": {
-    "description": null,
-    "panelTitle": null,
-    "title": null
+    "description": "विवरण",
+    "panelTitle": "वैकल्पिक पाठ",
+    "title": "शीर्षक"
   },
   "imageInsert": {
     "errors": {
-      "emptyFile": null,
-      "invalidSignature": null,
-      "oversize": null,
-      "refused": null,
-      "unsupportedFormat": null
+      "emptyFile": "चयनित फ़ाइल खाली है.",
+      "invalidSignature": "फ़ाइल समर्थित PNG, JPEG या GIF छवि नहीं है.",
+      "oversize": "छवि अधिकतम अनुमत आकार से अधिक है.",
+      "refused": "छवि सम्मिलित नहीं की जा सकी.",
+      "unsupportedFormat": "यह छवि स्वरूप सम्मिलन के लिए समर्थित नहीं है."
     }
   },
   "imageProperties": {
-    "crop": null,
-    "cropBottom": null,
-    "cropLeft": null,
-    "cropRight": null,
-    "cropTop": null,
+    "crop": "क्रॉप",
+    "cropBottom": "नीचे (%)",
+    "cropLeft": "बाएँ (%)",
+    "cropRight": "दाएँ (%)",
+    "cropTop": "ऊपर (%)",
     "errors": {
-      "invalidCrop": null,
-      "invalidDimensions": null,
-      "refused": null,
-      "invalidPosition": null
+      "invalidCrop": "क्रॉप मान 0 से 100 तक के प्रतिशत होने चाहिए.",
+      "invalidDimensions": "धनात्मक चौड़ाई और ऊँचाई मान दर्ज करें.",
+      "refused": "ये गुण लागू नहीं किए जा सके.",
+      "invalidPosition": "मान्य क्षैतिज और लंबवत स्थिति मान दर्ज करें."
     },
-    "hyperlink": null,
-    "nonPictureHint": null,
-    "resetNaturalSize": null,
+    "hyperlink": "हाइपरलिंक",
+    "nonPictureHint": "क्रॉप और मूल आकार रीसेट केवल चित्रों के लिए उपलब्ध हैं.",
+    "resetNaturalSize": "मूल आकार पर रीसेट करें",
     "units": {
-      "points": null
+      "points": "pt"
     },
-    "horizontalOffset": null,
-    "position": null,
-    "positionLocked": null,
-    "positionUnavailable": null,
-    "relativeToHorizontal": null,
-    "relativeToVertical": null,
-    "verticalOffset": null
+    "horizontalOffset": "क्षैतिज ऑफ़सेट",
+    "position": "स्थिति",
+    "positionLocked": "यह आरेखण स्थानांतरित नहीं किया जा सकता.",
+    "positionUnavailable": "स्थिति केवल फ़्लोटिंग छवियों के लिए उपलब्ध है.",
+    "relativeToHorizontal": "सापेक्ष (क्षैतिज)",
+    "relativeToVertical": "सापेक्ष (लंबवत)",
+    "verticalOffset": "लंबवत ऑफ़सेट"
   }
 }

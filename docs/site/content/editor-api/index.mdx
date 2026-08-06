@@ -1,7 +1,7 @@
 ---
 title: 'Overview'
 description: 'Office.js-compatible editing API: an object model that batches its work, running on a server over bytes or in a page against an editor already open.'
-category: "Editor API"
+category: 'Editing API'
 order: 50
 seoTitle: 'Office.js-compatible DOCX editing API'
 ---
@@ -16,7 +16,7 @@ You describe work against objects (paragraphs, ranges, comments, revisions, cont
 npm install @docx-editor.dev/editor-api
 ```
 
-## On a server, from bytes
+## On a server
 
 Runs headless: it takes bytes and returns bytes.
 
@@ -42,7 +42,7 @@ try {
 }
 ```
 
-## In a page, on a document already open
+## In the browser
 
 The browser entry takes an editor the host already created (from `@docx-editor.dev/react` or a plain page) and drives it in place. Edits land in the open document with the reader's undo stack intact, so there is no `save()`: the host saves the way it already did.
 
@@ -62,12 +62,12 @@ await runtime.run(async (context) => {
 
 Import it from `/browser` deliberately: reaching a live editor means reaching the painted engine, and a server holding bytes should not pay for that.
 
-## The four rules
+## Programming model
 
-- **Read what you asked for.** A property you did not `load()` throws instead of answering `undefined`, so a typo fails at the read rather than producing a wrong document three steps later.
-- **`sync()` is the only round trip.** Everything queued between two syncs is one ordered transaction. If any operation in it is refused, none of them happened.
-- **Objects live inside `run`.** They are proxies into a document the runtime owns. Keeping one past the callback, or past `dispose()`, is an error rather than a stale read: to keep one across syncs deliberately, hand it to `context.trackedObjects`.
-- **Ask before you assume.** `getFirstOrNullObject` and `getLastOrNullObject` answer an object whose `isNullObject` is `true` after the sync, which is the difference between "no such heading" and a crash.
+- A property you did not `load()` throws instead of answering `undefined`, so a typo fails at the read rather than producing a wrong document three steps later.
+- `sync()` is the only round trip. Everything queued between two syncs is one ordered transaction. If any operation in it is refused, none of them happened.
+- Objects are proxies into a document the runtime owns and live inside `run`. Keeping one past the callback, or past `dispose()`, is an error rather than a stale read: to keep one across syncs deliberately, hand it to `context.trackedObjects`.
+- `getFirstOrNullObject` and `getLastOrNullObject` answer an object whose `isNullObject` is `true` after the sync, which is the difference between "no such heading" and a crash.
 
 ## Capabilities
 
@@ -88,7 +88,7 @@ This package ships no model integration, no tool catalog and no chat UI. That is
 
 <Cards>
   <Card title="Office.js compatibility" href="/docs/2.x/editor-api/word-js-api">
-    The supported subset, how the shape is kept honest, and what it omits.
+    The supported subset, how compatibility is verified, and what it omits.
   </Card>
 </Cards>
 

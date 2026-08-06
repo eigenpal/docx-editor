@@ -47,7 +47,7 @@ async function loadFile(e: Event) {
 </template>
 ```
 
-That's the whole integration. The module registers `<DocxEditor>` as **client-only** — the editor drives a hidden ProseMirror instance and browser DOM APIs, so it never runs during SSR. Nuxt renders a placeholder on the server and hydrates the editor in the browser. The module also pushes the editor stylesheet into Nuxt's CSS pipeline, so the toolbar is styled without a manual `import`.
+That's the whole integration. The module registers `<DocxEditor>` as client-only: the editor measures text and paints pages in the browser DOM, so it never runs during SSR. Nuxt renders a placeholder on the server and hydrates the editor in the browser. The module also pushes the editor stylesheet into Nuxt's CSS pipeline, so the toolbar is styled without a manual `import`.
 
 ## Options
 
@@ -68,14 +68,14 @@ export default defineNuxtConfig({
 
 ## Packages
 
-| Package                                                                                    | Description                                                                                                                                |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)           | <img src="https://cdn.simpleicons.org/react/61DAFB" width="20" align="middle" /> &nbsp; React adapter. Toolbar, paged editor, plugins.     |
-| [`@docx-editor.dev/vue`](https://www.npmjs.com/package/@docx-editor.dev/vue)               | <img src="https://cdn.simpleicons.org/vuedotjs/4FC08D" width="20" align="middle" /> &nbsp; Vue 3 adapter. Toolbar, paged editor, plugins.  |
-| [`@docx-editor.dev/nuxt`](https://www.npmjs.com/package/@docx-editor.dev/nuxt)             | <img src="https://cdn.simpleicons.org/nuxt/00DC82" width="20" align="middle" /> &nbsp; Nuxt 3 & 4 module wrapping the Vue adapter.         |
-| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)             | Framework-agnostic core: OOXML parser, serializer, layout engine, ProseMirror schema. Depend on this if you fork the React or Vue adapter. |
-| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)             | Shared locale strings and types consumed by both adapters.                                                                                 |
-| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Document automation: a batching object model that drives a document from a server or from an editor already open in a page.                |
+| Package                                                                                    | Description                                                                                                                               |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)           | <img src="https://cdn.simpleicons.org/react/61DAFB" width="20" align="middle" /> &nbsp; React adapter. Toolbar, paged editor, plugins.    |
+| [`@docx-editor.dev/vue`](https://www.npmjs.com/package/@docx-editor.dev/vue)               | <img src="https://cdn.simpleicons.org/vuedotjs/4FC08D" width="20" align="middle" /> &nbsp; Vue 3 adapter. Toolbar, paged editor, plugins. |
+| [`@docx-editor.dev/nuxt`](https://www.npmjs.com/package/@docx-editor.dev/nuxt)             | <img src="https://cdn.simpleicons.org/nuxt/00DC82" width="20" align="middle" /> &nbsp; Nuxt 3 & 4 module wrapping the Vue adapter.        |
+| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)             | Framework-agnostic engine: OOXML read/write, canonical document tree, layout, paint. Depend on this if you fork the React or Vue adapter. |
+| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)             | Shared locale strings and types consumed by both adapters.                                                                                |
+| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Document automation: a batching object model that drives a document from a server or from an editor already open in a page.               |
 
 ## Component API
 
