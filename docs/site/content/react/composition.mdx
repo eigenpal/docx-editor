@@ -80,7 +80,7 @@ A part child replaces the slot of the same name and leaves the rest of the defau
 `preset={false}` opts out of the registry's default arrangement, so the order in your JSX is the order on screen. Every packaged part still drives its chrome slot: enabled state, pressed state, and the command all still come from the engine. Only the glyph is yours.
 
 ```tsx
-<DocxEditor.Toolbar preset={false} className="my-toolbar" t={myLabels}>
+<DocxEditor.Toolbar preset={false} className="my-toolbar">
   <DocxEditor.Toolbar.Undo icon={MyUndo} />
   <DocxEditor.Toolbar.Redo icon={MyRedo} />
   <DocxEditor.Toolbar.Separator />
@@ -173,7 +173,7 @@ Every composition mode in one panel: packaged rows kept, a packaged row re-icone
 {
   /* `enabled` and `apply` come from useHighlightAction() above; `editor` from useDocxEditor(). */
 }
-<DocxEditor.ContextMenu className="my-menu" t={myLabels}>
+<DocxEditor.ContextMenu className="my-menu">
   {/* Packaged rows, re-iconed. They still run the engine's commands and still carry the
       engine's reason when nothing is selected. */}
   <DocxEditor.ContextMenu.Cut icon={MyCut} />
@@ -217,7 +217,7 @@ The default bar derives from `CHROME_MENUS`, so it is already correct without yo
 {
   /* `enabled` and `apply` come from useHighlightAction() above; `editor` from useDocxEditor(). */
 }
-<DocxEditor.Menu className="my-menubar" t={myLabels}>
+<DocxEditor.Menu className="my-menubar">
   {/* The registry's menus, re-iconed in place. Each still derives its rows from the
       registry, so a row added upstream still appears here. */}
   <DocxEditor.Menu.File icon={MyFile} />
@@ -281,28 +281,88 @@ The pane's parts are statics, so you can hang your own class on each one instead
 </DocxEditor.Viewport>
 ```
 
+To keep the packaged spinner and restyle only it, `DocxEditor.Loading.Spinner` takes a `className`.
+
+## The link popover
+
+`DocxEditor.HyperLink` is the popover that opens on a link: the URL, edit fields, apply, copy, unlink. Its parts follow the same contract as every other compound (`className`, `asChild`, `hidden`; action parts take `icon`), so restyling it is the same work as restyling the toolbar:
+
+```tsx
+<DocxEditor.HyperLink className="my-popover">
+  <DocxEditor.HyperLink.Copy hidden />
+  <DocxEditor.HyperLink.Unlink icon={MyUnlink} />
+</DocxEditor.HyperLink>
+```
+
+The parts are `Url`, `Fields`, `Edit`, `Apply`, `Cancel`, `Copy`, `Unlink`, and `Error`. For a popover that shares no markup with the packaged one, `useHyperlinkPopup()` is the state behind it.
+
+## Rulers
+
+`DocxEditor.HorizontalRuler` and `DocxEditor.VerticalRuler` read page setup and zoom from the snapshot, so they stay correct across section changes and zoom. Dragging a margin previews live and commits once on release: one transaction, one undo entry. Against a read-only document the handles are inert.
+
+```tsx
+<DocxEditor.Root document={bytes}>
+  <DocxEditor.HorizontalRuler />
+  <DocxEditor.Viewport>
+    {/* Absolutely positioned at the editing area's left edge, so it scrolls with the pages. */}
+    <DocxEditor.VerticalRuler />
+    <DocxEditor.Content />
+  </DocxEditor.Viewport>
+</DocxEditor.Root>
+```
+
+## Page setup dialog
+
+`DocxEditor.PageSetupDialog` is controlled: you own `open` and it reports `onClose`. The packaged menu wires it to Format → Page setup; a composed host wires it to its own trigger:
+
+```tsx
+const [open, setOpen] = useState(false);
+
+<button onClick={() => setOpen(true)}>Page setup…</button>
+<DocxEditor.PageSetupDialog open={open} onClose={() => setOpen(false)} />
+```
+
+It reads and writes through the same engine command as `usePageSetup()`, so a dialog of your own markup is the hook plus a form.
+
+## Content-control panel
+
+`DocxEditor.ContentControl` is the inspector for the control at the caret, with `Header`, `Fields`, and `Remove` parts that compose like every other compound. What the panel reports (locks, data bindings, fill-only mode) is covered in [Content controls](/docs/2.x/guides/content-controls).
+
+## Page furniture
+
+The smaller parts place individually; a part you do not mount has no UI:
+
+- `DocxEditor.PageNumber`: the "page n of m" indicator that appears while the document scrolls and fades after.
+- `DocxEditor.FontNotice`: a dismissible notice listing the fonts the document asked for that were substituted.
+- `DocxEditor.DocumentOutline`: the headings list on its own, outside the navigation pane. Clicking a heading moves the caret and scrolls it into view.
+- `DocxEditor.HeaderFooterChrome`: the header/footer editing overlay: region label, inheritance warning, field inserts, and the options menu.
+- `DocxEditor.NotesChrome`: footnote and endnote chrome: hover preview, context menu, and the numbering properties dialog.
+
 ## Labels
 
-Every packaged part takes a `t`. Delegate to the bundled English catalog rather than replacing it, so renaming six things does not mean restating the other four hundred:
+Composed chrome resolves its labels through the active locale catalog on its own: a bare `<DocxEditor.Toolbar />` renders real labels with no `t` handed to it, localized by `LocaleProvider` like everything else. The same goes for `Menu`, `ContextMenu`, and the rest.
 
-```ts
-import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
+Pass a `t` only to rename labels. `useChromeTranslate(overrides?)` returns the catalog-backed resolver every part's `t` prop accepts, with your overrides consulted first:
 
-const english = createT(en);
+```tsx
+import { DocxEditor, useChromeTranslate } from '@docx-editor.dev/react';
 
+// Module level: the resolver is memoized on the Map's identity, so an inline
+// `new Map(...)` would re-create it, and every consuming part's props, per render.
 // A Map, not an object literal: the key is caller input, and an object answers
 // `constructor` and `toString` off the prototype chain.
-const OVERRIDES = new Map<string, string>([
+const OVERRIDES = new Map([
   ['contextMenu.cut', 'Cut text'],
   ['toolbar.bold', 'Heavy'],
 ]);
 
-export function myLabels(key: string): string {
-  return OVERRIDES.get(key) ?? english(key as TranslationKey) ?? key;
+function MyToolbar() {
+  const t = useChromeTranslate(OVERRIDES);
+  return <DocxEditor.Toolbar t={t} />;
 }
 ```
 
-A key that falls through to its own name is a visible bug rather than a blank control.
+Keys you do not override fall through to the catalog, so renaming two labels does not mean restating the other four hundred.
 
 ## Theming
 
