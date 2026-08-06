@@ -305,6 +305,24 @@ describe('a replacement says where its halves divide', () => {
     expect(revisionsOf(collectReviewItems({ storyPart: part }))).toHaveLength(2);
   });
 
+  test('a zero-width insertion does not steal the pairing from the real one', () => {
+    // An inserted run carrying only run properties covers no characters, and it starts at
+    // exactly the offset the deletion ends at. Pairing with it produced a card that read
+    // Replaced "old" with nothing, and orphaned the words that actually replaced it.
+    const part = story(
+      `<w:p>${run('keep ')}${delAt('2', delRun('old'), '2024-01-01T10:00:00Z')}` +
+        `<w:ins w:id="3" w:author="QA" w:date="2024-01-01T10:00:00Z">` +
+        `<w:r><w:rPr><w:b/></w:rPr></w:r></w:ins>` +
+        `${insAt('4', run('new'), '2024-01-02T09:00:00Z')}</w:p>`
+    );
+    const replaced = revisionsOf(collectReviewItems({ storyPart: part })).find(
+      (item) => item.revisionKind === 'replace'
+    );
+    expect(replaced).toBeDefined();
+    expect(replaced!.replacedText).toBe('old');
+    expect(replaced!.text).toBe('new');
+  });
+
   test('an insertion followed by a deletion stays two cards', () => {
     // This engine only ever writes delete-then-insert; the reverse order in a foreign file
     // is two edits, and folding them would be an invention.

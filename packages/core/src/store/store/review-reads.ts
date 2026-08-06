@@ -434,7 +434,17 @@ function pairReplacements(
     // The deletion's LAST range end: the end that actually meets the insertion's first
     // start when the halves span more than one range each.
     const end = deletion.ranges[deletion.ranges.length - 1]!.end;
-    const candidates = insertionsByStart.get(`${end.paragraphId} ${end.offset}`) ?? [];
+    const bucket = insertionsByStart.get(`${end.paragraphId} ${end.offset}`) ?? [];
+    // A ZERO-WIDTH insertion is not the replacement, even when it starts exactly here.
+    // Several legal shapes cover no characters: an empty run carrying only run properties,
+    // a comment reference, a bookmark pair. Taking the first candidate in the bucket paired
+    // the deletion with one of those, so the card read Replaced-old-with-nothing while the
+    // real insertion beside it was orphaned into an Inserted card of its own. Text-bearing
+    // candidates go first; order within each group is preserved.
+    const candidates =
+      bucket.length > 1
+        ? [...bucket].sort((a, b) => (a.text.length > 0 ? 0 : 1) - (b.text.length > 0 ? 0 : 1))
+        : bucket;
     for (const insertion of candidates) {
       if (taken.has(insertion.id)) continue;
       // Same AUTHOR is the whole predicate, deliberately. A time window used to sit here
@@ -549,7 +559,7 @@ function foldChain(chain: readonly ReviewRevisionItem[]): ReviewRevisionItem {
     for (const address of next.addresses) {
       if (!addresses.some((known) => sameAddress(known, address))) addresses.push(address);
     }
-    ranges.push(...next.ranges);
+    for (const range of next.ranges) ranges.push(range);
     text += next.text;
     date = laterStamp(date, next.date);
   }
