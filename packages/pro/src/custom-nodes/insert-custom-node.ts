@@ -34,35 +34,46 @@ function surfaceOf(editor: Editor): PaginatedSurface | null {
 }
 
 /**
- * The payload half of a write, or the reason there is not one.
+ * A payload that passed the definition's schema: what to store, and what the schema produced.
  *
- * Null means the caller asked for no payload, which is the ordinary tagged control. The id is
- * minted against the document as it stands, so it is unique inside it and stable afterwards.
+ * VALIDATED BEFORE ANYTHING ELSE HAPPENS. Everything downstream — the text a reader sees, the
+ * tag, the store entry — derives from `value`, which is the schema's OUTPUT and not the caller's
+ * argument. A `.default()`, a `.transform()` or a `.coerce()` all make the two differ, and
+ * deriving from the argument writes a document that describes a value it does not hold.
  */
-export function payloadFor(
+export type ValidatedPayload =
+  | { readonly ok: true; readonly serialized: string; readonly value: unknown }
+  | { readonly ok: false; readonly reason: string; readonly issues: readonly CustomNodeIssue[] }
+  | null;
+
+/** Null when the caller asked for no payload, which is the ordinary tagged control. */
+export function validatePayload(
+  definition: AnyCustomNodeDefinition,
+  data: unknown
+): ValidatedPayload {
+  if (data === undefined || data === null) return null;
+  const prepared = customNodeDataFor(definition, data);
+  if (!prepared.ok) return { ok: false, reason: prepared.reason, issues: prepared.issues };
+  return { ok: true, serialized: prepared.data, value: prepared.value };
+}
+
+/** The store entry for a validated payload. The id is minted against the document as it stands. */
+export function payloadWriteOf(
   surface: PaginatedSurface,
   definition: AnyCustomNodeDefinition,
-  data: unknown,
+  serialized: string,
   label: string,
   nodeId?: string
-):
-  | { readonly value: CustomNodePayloadWrite }
-  | { readonly reason: string; readonly issues: readonly CustomNodeIssue[] }
-  | null {
-  if (data === undefined) return null;
-  const prepared = customNodeDataFor(definition, data);
-  if (!prepared.ok) return { reason: prepared.reason, issues: prepared.issues };
+): CustomNodePayloadWrite {
   const namespaceUri = customNodeNamespace(definition);
   const storyPartName = surface.session.part().name;
   return {
-    value: {
-      namespaceUri,
-      rootLocalName: CUSTOM_NODE_STORE_ROOT,
-      nodeId:
-        nodeId ?? nextCustomNodeId(surface.session.currentPackage(), storyPartName, namespaceUri),
-      label,
-      data: prepared.data,
-    },
+    namespaceUri,
+    rootLocalName: CUSTOM_NODE_STORE_ROOT,
+    nodeId:
+      nodeId ?? nextCustomNodeId(surface.session.currentPackage(), storyPartName, namespaceUri),
+    label,
+    data: serialized,
   };
 }
 
@@ -109,7 +120,13 @@ const CALLER_FIXABLE: ReadonlySet<string> = new Set([
  *
  * @public
  */
-export interface CustomNodeInput<Schema extends StandardSchemaV1 | undefined = undefined> {
+export interface CustomNodeInput<
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the same reason
+  // `CustomNodeDefinition` defaults to `any`: without it the obvious wrapper annotation,
+  // `function add(input: CustomNodeInput) { insertCustomNode(editor, Citation, input) }`, fails
+  // with an error naming the DEFINITION rather than the annotation that caused it.
+  Schema extends StandardSchemaV1 | undefined = any,
+> {
   /**
    * The node's payload: everything that does not fit in 64 characters of `w:tag`.
    *
@@ -146,18 +163,40 @@ export interface CustomNodeInput<Schema extends StandardSchemaV1 | undefined = u
   readonly alias?: string;
 }
 
-/** What the definition says this node should look like in the document, or why it cannot say. */
+/**
+ * What the definition says this node looks like in the document, or why it cannot say.
+ *
+ * `data` is the SCHEMA'S OUTPUT, never the caller's argument — see {@link ValidatedPayload}.
+ *
+ * The hooks are the host's code running on the host's data, so they can throw. They are called
+ * inside a guard because everything on this path answers a typed refusal, and a `TypeError` out
+ * of `insertCustomNode` is not one.
+ */
 export function projectionOf(
   definition: AnyCustomNodeDefinition,
-  input: CustomNodeInput<StandardSchemaV1 | undefined>
+  input: Pick<CustomNodeInput<StandardSchemaV1 | undefined>, 'attrs' | 'text'>,
+  data: unknown
 ):
   | { readonly attrs: Readonly<Record<string, string>>; readonly text: string }
   | { readonly reason: string } {
   // EXPLICIT WINS, per field. A caller that passed `text` meant that text — most often a label a
   // user edited by hand — and recomputing it from the payload would throw the edit away.
-  const derived = input.data === undefined ? undefined : input.data;
-  const text =
-    input.text ?? (definition.text && derived !== undefined ? definition.text(derived) : undefined);
+  let derivedText: string | undefined;
+  let derivedAttrs: Readonly<Record<string, string>> | undefined;
+  if (data !== undefined) {
+    try {
+      derivedText = definition.text?.(data);
+      derivedAttrs = definition.tagAttrs?.(data);
+    } catch (error) {
+      return {
+        reason: `${definition.name} could not describe this payload: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      };
+    }
+  }
+
+  const text = input.text ?? derivedText;
   if (text === undefined) {
     return {
       reason: definition.text
@@ -165,10 +204,14 @@ export function projectionOf(
         : `${definition.name} declares no \`text\`, so \`text\` is required`,
     };
   }
-  const attrs =
-    input.attrs ??
-    (definition.tagAttrs && derived !== undefined ? definition.tagAttrs(derived) : {});
-  return { attrs, text };
+  // A definition that puts identity in the tag must not end up with an empty one because the
+  // caller supplied its own text and no payload to derive the attrs from.
+  if (input.attrs === undefined && definition.tagAttrs && derivedAttrs === undefined) {
+    return {
+      reason: `${definition.name} derives its tag attrs from \`data\`, so pass one — or pass \`attrs\` directly`,
+    };
+  }
+  return { attrs: input.attrs ?? derivedAttrs ?? {}, text };
 }
 
 /**
@@ -189,7 +232,12 @@ export function insertCustomNode<Schema extends StandardSchemaV1 | undefined = u
   if (!surface) {
     return { ok: false, code: 'notFound', reason: 'no document is mounted' };
   }
-  const projected = projectionOf(definition, input);
+  // VALIDATE FIRST. The text and the tag are derived from what the schema produced, so nothing
+  // downstream may run before the schema has had its say.
+  const payload = validatePayload(definition, input.data);
+  if (payload && !payload.ok) return invalidPayload(payload.reason, payload.issues);
+
+  const projected = projectionOf(definition, input, payload?.value);
   if ('reason' in projected) {
     return { ok: false, code: 'invalidArgs', reason: projected.reason };
   }
@@ -201,8 +249,6 @@ export function insertCustomNode<Schema extends StandardSchemaV1 | undefined = u
       reason: `the encoded tag is ${encoded.length} characters; Word caps w:tag at 64 — move what does not fit into the payload (\`data\`), or shorten the attrs`,
     };
   }
-  const payload = payloadFor(surface, definition, input.data, projected.text);
-  if (payload && 'reason' in payload) return invalidPayload(payload.reason, payload.issues);
   const at = input.at ?? surface.state().selection.head;
   const lock = input.lock === undefined ? 'contentLocked' : input.lock;
   const written = surface.session.insertCustomNode({
@@ -212,7 +258,9 @@ export function insertCustomNode<Schema extends StandardSchemaV1 | undefined = u
     text: projected.text,
     ...(input.alias === undefined ? {} : { alias: input.alias }),
     ...(lock === false ? {} : { lock }),
-    ...(payload ? { payload: payload.value } : {}),
+    ...(payload
+      ? { payload: payloadWriteOf(surface, definition, payload.serialized, projected.text) }
+      : {}),
   });
   if (!written.ok) return refusalOf(written);
   return { ok: true, changed: true };

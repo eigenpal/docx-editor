@@ -24,7 +24,6 @@ import {
   blocksOf,
   defaultAttrs,
   definitionOf,
-  depthOf,
   labelFor,
   payloadFor,
   randomSpecimen,
@@ -159,12 +158,22 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
         return;
       }
       const kind: SpecimenKind = node.name === 'iceberg' ? 'iceberg' : 'igloo';
+      // The berg keeps its record in the payload, so its `attrs` are empty — seeding the form
+      // from them opened every edit blank and saved the blanks back over the survey.
+      const attrs =
+        kind === 'iceberg'
+          ? (({ depth, surveyedBy, notes }) => ({
+              depth: String(depth),
+              surveyedBy,
+              notes,
+            }))(surveyOf(node))
+          : { ...node.attrs };
       setForm({
         mode: 'edit',
         kind,
         nodeId: node.nodeId,
-        attrs: { ...node.attrs },
-        label: node.text ?? labelFor(kind, node.attrs),
+        attrs,
+        label: node.text ?? labelFor(kind, attrs),
       });
     },
     [say]
@@ -190,7 +199,11 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
         return;
       }
       const attrs = { blocks: String(blocks) };
-      const result = updateCustomNode(editor, definitionOf('igloo'), node.nodeId, { attrs: attrs, text: labelFor('igloo', attrs), alias: 'Igloo' });
+      const result = updateCustomNode(editor, definitionOf('igloo'), node.nodeId, {
+        attrs: attrs,
+        text: labelFor('igloo', attrs),
+        alias: 'Igloo',
+      });
       if (!result.ok) {
         report(result, '');
         return;

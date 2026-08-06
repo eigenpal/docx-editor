@@ -85,7 +85,7 @@ export interface CustomNodeDiagnostic {
 }
 
 // @public
-export interface CustomNodeInput<Schema extends StandardSchemaV1 | undefined = undefined> {
+export interface CustomNodeInput<Schema extends StandardSchemaV1 | undefined = any> {
     readonly alias?: string;
     readonly at?: {
         readonly paragraphId: string;

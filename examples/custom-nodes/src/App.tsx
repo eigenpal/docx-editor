@@ -6,7 +6,7 @@
  * its text and hands it back untouched. Reopen it here and it is recognized from the same tag.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { DocxEditor, useDocxEditor } from '@docx-editor.dev/react';
 import { customNodesModule, insertCustomNode, updateCustomNode } from '@docx-editor.dev/pro';
 import { CustomNodeChrome, CustomNodeContextMenu } from '@docx-editor.dev/pro/react';
@@ -78,7 +78,16 @@ export function App() {
               </DocxEditor.ContextMenu>
             </DocxEditor.Viewport>
           </div>
-          <CitationForm state={form} onClose={() => setForm({ mode: 'closed' })} />
+          {/* Keyed and mounted CONDITIONALLY. A form that renders `null` when closed never
+              unmounts, so `useState` keeps the first render's values — every edit opened blank
+              and saved the blanks back over the citation. */}
+          {form.mode !== 'closed' ? (
+            <CitationForm
+              key={form.mode === 'edit' ? form.nodeId : 'insert'}
+              state={form}
+              onClose={() => setForm({ mode: 'closed' })}
+            />
+          ) : null}
         </DocxEditor.Root>
       ) : (
         <p style={{ padding: 24, color: '#64748b' }}>No document open.</p>
@@ -133,18 +142,14 @@ function SaveButton() {
  */
 function CitationForm({ state, onClose }: { state: FormState; onClose: () => void }) {
   const editor = useDocxEditor();
-  const carried = state.mode === 'edit' ? CitationData.safeParse(state.data) : null;
-  const initial = carried?.success
-    ? carried.data
-    : { sourceId: '', page: '', quote: '' };
+  const initial = (state.mode === 'edit' ? Citation.dataOf(state) : undefined) ?? {
+    sourceId: '',
+    page: '',
+    quote: '',
+  };
   const [sourceId, setSourceId] = useState(initial.sourceId);
   const [page, setPage] = useState(initial.page);
   const [quote, setQuote] = useState(initial.quote);
-
-  // Reset the fields whenever the form opens on a different node.
-  const key = useMemo(() => (state.mode === 'edit' ? state.nodeId : state.mode), [state]);
-
-  if (state.mode === 'closed') return null;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,7 +170,7 @@ function CitationForm({ state, onClose }: { state: FormState; onClose: () => voi
   };
 
   return (
-    <form key={key} onSubmit={submit} style={FORM} onMouseDown={(e) => e.stopPropagation()}>
+    <form onSubmit={submit} style={FORM} onMouseDown={(e) => e.stopPropagation()}>
       <strong>{state.mode === 'edit' ? 'Edit citation' : 'Insert citation'}</strong>
       <label style={LABEL}>
         Source

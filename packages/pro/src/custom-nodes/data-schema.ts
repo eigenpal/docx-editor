@@ -88,9 +88,9 @@ export type InferSchemaInput<Schema> = 0 extends 1 & Schema
 // `0 extends 1 & Schema` is the standard spelling of "is this `any`". It is only true for `any`,
 // because `1 & any` is `any` and everything extends `any`. It looks like nonsense; it is not.
 //
-// It earns its keep because both aliases above feed the PARAMETER of `toDocx`, which makes them
+// It earns its keep because both aliases above feed the PARAMETER of `text`, which makes them
 // contravariant. Without the special case `AnyCustomNodeDefinition` — the type every collection
-// takes — resolves that parameter to `unknown`, and a definition whose `toDocx` takes a real
+// takes — resolves that parameter to `unknown`, and a definition whose `text` takes a real
 // payload stops being assignable to it. `any` is the one type assignable in both directions,
 // which is exactly what a heterogeneous collection needs.
 

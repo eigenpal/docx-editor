@@ -307,7 +307,7 @@ export interface CustomNode<
  * A definition of any payload shape, spelled out.
  *
  * The AUTHORED shape, which is what every collection and every internal helper takes: they read
- * `name`, `schema`, `toDocx` and `preserveOnExport` and never need `dataOf`. A {@link CustomNode}
+ * `name`, `schema`, `text` and `preserveOnExport` and never need `dataOf`. A {@link CustomNode}
  * is assignable to it, so `defineCustomNode`'s result goes wherever this is asked for.
  *
  * The same thing bare `CustomNodeDefinition` already means — the interface defaults its
@@ -379,6 +379,19 @@ export function isCustomNodeDefinition(candidate: unknown): candidate is AnyCust
  */
 export const CUSTOM_NODE_IDENTITY_PATTERN = /^[A-Za-z0-9_.-]+$/;
 
+/**
+ * The characters a payload namespace may not contain.
+ *
+ * It is written inside single quotes inside a double-quoted attribute (`xmlns:ns0='…'`), so
+ * neither quote has a representation there, and the rest are what XML cannot carry at all.
+ */
+// eslint-disable-next-line no-control-regex -- naming them is the point
+const UNWRITABLE_IN_XPATH = /['"<>&]|[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
+
+function isAuthorableNamespace(value: string): boolean {
+  return value.length > 0 && !UNWRITABLE_IN_XPATH.test(value);
+}
+
 /** Validate and freeze a definition. Throws on a shape mistake — author error, not file input. */
 export function defineCustomNode<Schema extends StandardSchemaV1 | undefined = undefined>(
   definition: CustomNodeDefinition<Schema>
@@ -403,6 +416,17 @@ export function defineCustomNode<Schema extends StandardSchemaV1 | undefined = u
         `defineCustomNode: ${JSON.stringify(definition.name)} has a schema that does not implement Standard Schema`
       );
     }
+  }
+  // Checked HERE for the same reason the two below are: it is written into an XPath prefix
+  // declaration, which has no escape for a quote, so a bad one is refused at the first write
+  // with a message about XPath rather than at the line where it was typed.
+  if (
+    definition.payloadNamespace !== undefined &&
+    !isAuthorableNamespace(definition.payloadNamespace)
+  ) {
+    throw new Error(
+      `defineCustomNode: ${JSON.stringify(definition.name)} has a payloadNamespace that cannot be written into an XPath — no quotes, angle brackets, ampersands or control characters: ${JSON.stringify(definition.payloadNamespace)}`
+    );
   }
   if (
     definition.preserveOnExport !== undefined &&
@@ -479,6 +503,17 @@ export function reportCustomNodeDiagnostic(diagnostic: CustomNodeDiagnostic): vo
 /** Register custom node definitions with `createDocxEditor({ modules })`. */
 export function customNodesModule(options: CustomNodesModuleOptions): EditorModule {
   rememberLicenseKey(options.licenseKey);
+  // Caught HERE rather than in the recognition pass. Two definitions claiming one identity is an
+  // author mistake, and throwing from the derivation surfaces it mid-render — taking a React
+  // tree down at a point that says nothing about where the collision was written.
+  const claimed = new Set<string>();
+  for (const node of options.nodes) {
+    const identity = `${node.tagPrefix}:${node.name}`;
+    if (claimed.has(identity)) {
+      throw new Error(`customNodesModule: two definitions claim ${JSON.stringify(identity)}`);
+    }
+    claimed.add(identity);
+  }
   if (options.onDiagnostic) diagnosticListeners.add(options.onDiagnostic);
   return {
     id: 'custom-nodes',

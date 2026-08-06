@@ -287,3 +287,44 @@ describe('stripping that document, also on a server', () => {
     if (!exported.ok) expect(exported.reason).toContain('could not be read');
   });
 });
+
+describe('a chip outside the main story', () => {
+  test('its payload is stripped too, not shipped', () => {
+    // The store hangs off `/word/document.xml`, but the only control binding it lives in a
+    // header. Cleaning the stores during the main-part pass answered "still referenced" —
+    // because the header had not been unwrapped yet — so the payload shipped with `ok: true`.
+    const built = authored(
+      Note,
+      { clauseId: 'n-1', body: 'SECRET-HEADER-PAYLOAD', revision: 1 },
+      1,
+      'cx1'
+    );
+    const entries = unzipSync(withoutDom(() => serverAuthored([built])));
+    // Move the chip out of the body and into a header that the package declares.
+    entries['word/document.xml'] = strToU8(
+      `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>body</w:t></w:r></w:p></w:body></w:document>`
+    );
+    entries['word/header1.xml'] = strToU8(`<w:hdr xmlns:w="${W}"><w:p>${built.xml}</w:p></w:hdr>`);
+    entries['word/_rels/document.xml.rels'] = strToU8(
+      strFromU8(entries['word/_rels/document.xml.rels']!).replace(
+        '</Relationships>',
+        `<Relationship Id="rIdHdr" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/></Relationships>`
+      )
+    );
+    entries['[Content_Types].xml'] = strToU8(
+      strFromU8(entries['[Content_Types].xml']!).replace(
+        '</Types>',
+        '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/></Types>'
+      )
+    );
+
+    const exported = withoutDom(() => exportCustomNodes(zipSync(entries), [Note]));
+    expect(exported.ok).toBe(true);
+    if (!exported.ok) return;
+    expect(exported.unwrapped).toBe(1);
+    const after = unzipSync(exported.bytes);
+    expect(strFromU8(after['word/header1.xml']!)).toContain('SECRET-HEADER-PAYLOAD');
+    // The words survive in the header; the payload and its store do not.
+    expect(Object.keys(after).filter((name) => /customxml/i.test(name))).toEqual([]);
+  });
+});

@@ -12,17 +12,26 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import type { PaginatedSurface } from '@docx-editor.dev/core/editor';
 import {
+  contentControlPropertiesOf,
+  contentControlTextOf,
+  contentControlsIn,
   customNodePayloadsByControl,
   segmentsOf,
   type CustomNodePayloadRead,
-  type CustomNodePayloadWrite,
   type OoxmlNode,
   type OoxmlParagraphNode,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
-import type { AnyCustomNodeDefinition, CustomNodeDefinition } from './define-custom-node.ts';
-import { CUSTOM_NODE_STORE_ROOT, customNodeNamespace } from './node-payload.ts';
-import { payloadFor, projectionOf, refusalOf, type CustomNodeInput } from './insert-custom-node.ts';
+import type { CustomNodeDefinition } from './define-custom-node.ts';
+import {
+  payloadWriteOf,
+  projectionOf,
+  refusalOf,
+  validatePayload,
+  type CustomNodeInput,
+  type ValidatedPayload,
+} from './insert-custom-node.ts';
+import { decodeCustomNodeTag } from './tag-codec.ts';
 import {
   parseCustomNodeData,
   type InferSchemaInput,
@@ -133,8 +142,8 @@ export interface CustomNodeUpdate<
    * year would be data loss the caller never asked for and could not see. Pass `null` to remove
    * the payload deliberately.
    *
-   * A definition with `toDocx` re-derives its attrs and text from whichever payload ends up
-   * being written, so `updateCustomNode(editor, def, id, { data })` rewrites all three together.
+   * A definition with `text` re-derives what the document shows from whichever payload ends up
+   * being written, so `updateCustomNode(editor, def, id, { data })` rewrites both together.
    */
   readonly data?: InferSchemaInput<Schema> | null;
 }
@@ -158,19 +167,45 @@ export function updateCustomNode<Schema extends StandardSchemaV1 | undefined = u
   const part = surface.session.part();
   const paragraph = paragraphHolding(part, nodeId);
   const span = paragraph ? spanOf(paragraph, nodeId) : null;
-  if (!paragraph || !span) {
+  const existing = existingNodeOf(surface, nodeId);
+  if (!paragraph || !span || !existing) {
     return { ok: false, code: 'notFound', reason: 'no custom node with that id' };
   }
+  // THE NODE HAS TO BE THIS DEFINITION'S. Without the check an update rewrites the tag, the text
+  // and the payload of whatever the id named — turning a citation into a figure and reporting
+  // success. Node ids arrive from review items and activations that carry several definitions'
+  // nodes, so picking the wrong one out of a registry is a single keystroke.
+  const identity = `${definition.tagPrefix}:${definition.name}`;
+  if (existing.identity !== null && existing.identity !== identity) {
+    return {
+      ok: false,
+      code: 'invalidArgs',
+      reason: `node ${nodeId} is a ${existing.identity}, not a ${identity}`,
+    };
+  }
 
-  // The payload the node already has, so an omitted `data` carries it forward and a definition
-  // with `toDocx` can re-derive its text from it.
+  // Everything the caller did not mention is carried from the node being replaced. An update is
+  // a REWRITE of one control, so anything omitted has to survive it: the payload, the tag attrs
+  // that carry the node's identity, the Word title, and the lock.
   const bound = boundPayloadOf(surface, nodeId);
-  const carried = update.data === undefined ? parsedPayload(definition, bound) : update.data;
-  const projected = projectionOf(definition, {
-    ...(update.attrs === undefined ? {} : { attrs: update.attrs }),
-    ...(update.text === undefined ? {} : { text: update.text }),
-    ...(carried === undefined || carried === null ? {} : { data: carried }),
-  });
+  const payload =
+    update.data === null
+      ? null
+      : update.data === undefined
+        ? carriedPayload(bound)
+        : validatePayload(definition, update.data);
+  if (payload && !payload.ok) return invalidPayload(payload.reason, payload.issues);
+
+  const projected = projectionOf(
+    definition,
+    {
+      // The old attrs are the fallback, not `{}`: a definition with no `tagAttrs` keeps its
+      // identity in the tag, and dropping it leaves a node nothing can recognize again.
+      attrs: update.attrs ?? (update.data === undefined ? existing.attrs : undefined),
+      text: update.text ?? (payload === null && update.data === null ? existing.text : undefined),
+    },
+    payload?.value
+  );
   if ('reason' in projected) {
     return { ok: false, code: 'invalidArgs', reason: projected.reason };
   }
@@ -184,50 +219,86 @@ export function updateCustomNode<Schema extends StandardSchemaV1 | undefined = u
     };
   }
 
-  // The payload keeps the id the node already had, so an update is an upsert in the store rather
-  // than a new entry beside the old one.
-  const payload =
-    update.data === null
-      ? null
-      : update.data === undefined
-        ? carriedPayload(definition, bound, projected.text)
-        : payloadFor(surface, definition, update.data, projected.text, bound?.nodeId);
-  if (payload && 'reason' in payload) return invalidPayload(payload.reason, payload.issues);
-
-  const lock = update.lock === undefined ? 'contentLocked' : update.lock;
+  const alias = update.alias ?? existing.alias;
+  const lock = update.lock ?? existing.lock;
   const written = surface.session.insertCustomNode({
     replaceControlId: nodeId,
     paragraphId: paragraph.id,
     offset: span.start,
     tag: encoded.tag,
     text: projected.text,
-    ...(update.alias === undefined ? {} : { alias: update.alias }),
-    ...(lock === false ? {} : { lock }),
-    ...(payload ? { payload: payload.value } : {}),
+    ...(alias === undefined ? {} : { alias }),
+    ...(lock === false || lock === undefined ? {} : { lock }),
+    // The payload keeps the id the node already had, so an update is an upsert in the store
+    // rather than a new entry beside the old one.
+    ...(payload
+      ? {
+          payload: payloadWriteOf(
+            surface,
+            definition,
+            payload.serialized,
+            projected.text,
+            bound?.nodeId
+          ),
+        }
+      : {}),
   });
   if (!written.ok) return refusalOf(written);
   return { ok: true, changed: true };
 }
 
-/**
- * The node's existing payload as a VALUE, for a definition that needs to re-derive from it.
- *
- * Parsed without the schema: it came out of the store, so it has already been through one on the
- * way in, and a schema that tightened since the document was written must not make a label edit
- * impossible.
- */
-function parsedPayload(
-  definition: AnyCustomNodeDefinition,
-  bound: CustomNodePayloadRead | undefined
-): unknown {
-  // Only for a definition that DERIVES what the document says: it needs the payload to
-  // recompute the text. One that spells its text out has nothing to re-derive from.
-  if (!bound || !(definition.text ?? definition.tagAttrs)) return undefined;
-  const parsed = parseCustomNodeData(undefined, bound.data);
-  return parsed.ok ? parsed.value : undefined;
+/** What the control being replaced already says, so an omitted field survives the rewrite. */
+interface ExistingNode {
+  /** `<prefix>:<name>` from the tag, or null when the tag does not decode. */
+  readonly identity: string | null;
+  readonly attrs: Readonly<Record<string, string>>;
+  readonly text: string;
+  readonly alias: string | undefined;
+  readonly lock: false | 'sdtLocked' | 'sdtContentLocked' | 'contentLocked' | undefined;
 }
 
-/** The payload this control already binds, so a rewrite can reuse both its id and its data. */
+function existingNodeOf(surface: PaginatedSurface, nodeId: string): ExistingNode | null {
+  const part = surface.session.part();
+  const entry = contentControlsIn(part.root).find((candidate) => candidate.node.id === nodeId);
+  if (!entry) return null;
+  const properties = contentControlPropertiesOf(entry.node);
+  const decoded = properties.tag === undefined ? null : decodeCustomNodeTag(properties.tag);
+  const declared = properties.lock;
+  return {
+    identity: decoded ? `${decoded.prefix}:${decoded.name}` : null,
+    attrs: decoded?.attrs ?? {},
+    text: contentControlTextOf(entry.node),
+    alias: properties.alias,
+    lock:
+      declared === 'sdtLocked' || declared === 'sdtContentLocked' || declared === 'contentLocked'
+        ? declared
+        : declared === 'unlocked'
+          ? false
+          : undefined,
+  };
+}
+
+/**
+ * The payload the node already had, ready to be written again unchanged.
+ *
+ * Parsed WITHOUT the schema deliberately: it came out of the store, so it went through one on the
+ * way in, and a schema that has tightened since — or a file someone hand-edited — must not make a
+ * label-only update impossible. Anything deriving from it is guarded, so a value the schema would
+ * now reject produces a refusal rather than an exception.
+ */
+function carriedPayload(bound: CustomNodePayloadRead | undefined): ValidatedPayload {
+  if (!bound) return null;
+  const parsed = parseCustomNodeData(undefined, bound.data);
+  return parsed.ok
+    ? { ok: true, serialized: bound.data, value: parsed.value }
+    : {
+        ok: false,
+        reason: `the stored payload is not readable: ${parsed.issues.join(', ')}`,
+        issues: [],
+      };
+}
+
+/** The payload this control already binds, so a rewrite reuses both its id and its data. */
 function boundPayloadOf(
   surface: PaginatedSurface,
   controlNodeId: string
@@ -236,28 +307,4 @@ function boundPayloadOf(
   return customNodePayloadsByControl(surface.session.currentPackage(), part.name).get(
     controlNodeId
   );
-}
-
-/**
- * The payload the node already had, under the NEW label.
- *
- * Re-serialized rather than re-validated: it came out of the store, so it has already been
- * through the schema on the way in, and a definition whose schema TIGHTENED since the document
- * was written should not have its label edit refused by a payload the caller never touched.
- */
-function carriedPayload(
-  definition: AnyCustomNodeDefinition,
-  bound: CustomNodePayloadRead | undefined,
-  label: string
-): { readonly value: CustomNodePayloadWrite } | null {
-  if (!bound) return null;
-  return {
-    value: {
-      namespaceUri: customNodeNamespace(definition),
-      rootLocalName: CUSTOM_NODE_STORE_ROOT,
-      nodeId: bound.nodeId,
-      label,
-      data: bound.data,
-    },
-  };
 }

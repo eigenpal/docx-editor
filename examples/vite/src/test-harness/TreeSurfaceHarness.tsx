@@ -104,7 +104,9 @@ export function TreeSurfaceHarness({ fixtureUrl }: { fixtureUrl: string }) {
             const current = window.__docxTreeSession;
             if (!current) return;
             const reopened = openTreeSession(current.save());
-            setSavedText(reopened.ok ? reopened.session.bodyText() : `save failed: ${reopened.reason}`);
+            setSavedText(
+              reopened.ok ? reopened.session.bodyText() : `save failed: ${reopened.reason}`
+            );
           }}
         >
           Save + reopen
@@ -133,7 +135,6 @@ export function TreeSurfaceHarness({ fixtureUrl }: { fixtureUrl: string }) {
           {savedText}
         </pre>
       ) : null}
-
     </div>
   );
 }

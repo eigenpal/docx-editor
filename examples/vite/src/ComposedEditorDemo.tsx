@@ -86,7 +86,8 @@ const DEMO_CITATION = defineCustomNode({
   schema: CitationData,
   // What the document SHOWS, from the payload — so the sentence cannot drift from the citation
   // it describes. This is why a write below passes `{ data }` and nothing else.
-  text: (data) => `(${data.authors[0] ?? 'Anon'} ${String(data.year)}${data.locator ? `, ${data.locator}` : ''})`,
+  text: (data) =>
+    `(${data.authors[0] ?? 'Anon'} ${String(data.year)}${data.locator ? `, ${data.locator}` : ''})`,
   // The one thing worth putting in the tag as well: a reader who opens this file WITHOUT the
   // payload store can still tell which source it is.
   tagAttrs: (data) => ({ sourceId: data.sourceId }),
@@ -537,10 +538,10 @@ function CitationDialog({ form, onClose }: { form: CitationFormState; onClose: (
           {editing ? 'Edit citation' : 'Insert citation'}
         </div>
         <div style={{ marginTop: 4, font: '12px/1.5 system-ui, sans-serif', color: '#64748b' }}>
-          The definition derives what the paragraph shows from these fields, so there is no
-          separate label to keep in step. Only the source ID rides in the chip&#39;s tag; the rest
-          is a payload in a customXml data part, checked against the schema and handed back typed
-          on click, hover, and the review card.
+          The definition derives what the paragraph shows from these fields, so there is no separate
+          label to keep in step. Only the source ID rides in the chip&#39;s tag; the rest is a
+          payload in a customXml data part, checked against the schema and handed back typed on
+          click, hover, and the review card.
         </div>
         <label style={labelStyle}>
           Source ID

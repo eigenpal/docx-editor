@@ -10,10 +10,7 @@ import {
   findTableInteractionAt,
   tableInteractionIndex,
 } from '../../../../packages/core/src/layout/semantic-table-interaction.ts';
-import {
-  type SemanticLayout,
-  type TableFragmentRecord,
-} from '@docx-editor.dev/core/layout';
+import { type SemanticLayout, type TableFragmentRecord } from '@docx-editor.dev/core/layout';
 import {
   canonicalOoxmlFingerprint,
   diffSemanticDigests,
@@ -52,7 +49,9 @@ export interface DocxEditorE2EHook {
   getRenderScale(): number | null;
   canUndo(): boolean;
   canRedo(): boolean;
-  tableTopology(marker: 'inner' | 'outer' | 'merged' | 'tall'): ReturnType<typeof tableSnapshot> | null;
+  tableTopology(
+    marker: 'inner' | 'outer' | 'merged' | 'tall'
+  ): ReturnType<typeof tableSnapshot> | null;
   detailedTopology(marker: 'inner' | 'outer' | 'merged' | 'tall'): DetailedTableSnapshot | null;
   outerTableIsolationEqual(bytes: Uint8Array): boolean;
   scrollToParagraph(needle: string): boolean;
@@ -217,11 +216,15 @@ export function createDocxEditorE2EHook(getEditor: () => Editor | null): DocxEdi
     },
     can(command) {
       const editor = getEditor();
-      return editor?.can(command) ?? { ok: false, code: 'notFound', reason: 'no editor is mounted' };
+      return (
+        editor?.can(command) ?? { ok: false, code: 'notFound', reason: 'no editor is mounted' }
+      );
     },
     setZoom(zoom) {
       const editor = getEditor();
-      return editor?.setZoom(zoom) ?? { ok: false, code: 'notFound', reason: 'no editor is mounted' };
+      return (
+        editor?.setZoom(zoom) ?? { ok: false, code: 'notFound', reason: 'no editor is mounted' }
+      );
     },
     getZoom() {
       return getEditor()?.snapshot().zoom ?? null;
@@ -382,9 +385,15 @@ export function createDocxEditorE2EHook(getEditor: () => Editor | null): DocxEdi
         node.textContent?.includes(needle)
       );
       if (!(fragment instanceof HTMLElement)) return false;
-      fragment.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
-      fragment.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, button: 0 }));
-      fragment.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+      fragment.dispatchEvent(
+        new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 })
+      );
+      fragment.dispatchEvent(
+        new MouseEvent('mouseup', { bubbles: true, cancelable: true, button: 0 })
+      );
+      fragment.dispatchEvent(
+        new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })
+      );
       return true;
     },
   };

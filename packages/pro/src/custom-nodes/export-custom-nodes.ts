@@ -140,11 +140,16 @@ export function exportCustomNodes(
   let pkg: OoxmlPackage = read.package;
   let unwrapped = 0;
   let removed = 0;
-  for (const partName of storyPartNames(pkg)) {
+  // EVERY STORY FIRST, then the stores. The cleanup asks "does anything still bind this
+  // payload", which is a question about the finished document — asking it during the main-part
+  // pass answered "yes" for a chip in a header that had not been unwrapped yet, so the store
+  // survived, the header chip was then unwrapped, and the export shipped the payload of a node
+  // the caller had asked to remove.
+  const stories = storyPartNames(pkg);
+  for (const partName of stories) {
     const applied = withExportedCustomNodes(pkg, {
       storyPartName: partName,
-      // The stores are related to the MAIN part, so that is the only pass that may remove one.
-      namespaces: partName === pkg.mainDocumentPart ? namespaces : [],
+      namespaces: [],
       decide,
     });
     if (!applied.ok) return { ok: false, reason: applied.reason };
@@ -152,6 +157,15 @@ export function exportCustomNodes(
     unwrapped += applied.unwrapped;
     removed += applied.removed;
   }
+  // The stores hang off the main document part, which is where Word enumerates its data store
+  // from, so that is the part they are cleaned up against.
+  const cleaned = withExportedCustomNodes(pkg, {
+    storyPartName: pkg.mainDocumentPart,
+    namespaces,
+    decide: () => 'keep',
+  });
+  if (!cleaned.ok) return { ok: false, reason: cleaned.reason };
+  pkg = cleaned.pkg;
   return { ok: true, bytes: writeOoxmlPackage(pkg), unwrapped, removed };
 }
 

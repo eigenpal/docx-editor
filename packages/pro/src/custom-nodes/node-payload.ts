@@ -61,7 +61,18 @@ export function nextCustomNodeId(
 
 /** A payload ready to be written, or why it was refused — with the fields that were wrong. */
 export type CustomNodeDataResult =
-  | { readonly ok: true; readonly data: string }
+  | {
+      readonly ok: true;
+      /** Serialized, for the store. */
+      readonly data: string;
+      /**
+       * The value the SCHEMA produced, which is not always the value passed in: a `.default()`,
+       * a `.transform()` or a `.coerce` all mean the payload written differs from the argument.
+       * Anything deriving from the payload has to derive from THIS, or the document ends up
+       * describing a value it does not hold.
+       */
+      readonly value: unknown;
+    }
   | { readonly ok: false; readonly reason: string; readonly issues: readonly CustomNodeIssue[] };
 
 /**
@@ -86,12 +97,11 @@ export function customNodeDataFor(
       issues: [],
     };
   }
-  if (!definition.schema) return { ok: true, data: serialized.value };
-  // Through the same parse the READ path uses, against the serialized form: a value that
-  // survives `JSON.stringify` and then fails the schema is one the reader would have refused,
-  // and finding that out at the insert is the whole point of checking here.
+  if (!definition.schema) return { ok: true, data: serialized.value, value };
   // Validated against the SCHEMA ITSELF rather than through the read path's string form, so the
-  // issues keep their `path` — which is the whole reason a host declared a schema.
+  // issues keep their `path` — which is the whole reason a host declared a schema. Validating
+  // the SERIALIZED form is what makes this agree with the reader: a value that survives
+  // `JSON.stringify` and then fails is one the read path would have refused too.
   // Annotated because the definition is held as `AnyCustomNodeDefinition` here, so its schema —
   // and everything the validator returns — would otherwise be `any`.
   const schema: StandardSchemaV1 = definition.schema;
@@ -115,7 +125,18 @@ export function customNodeDataFor(
       issues,
     };
   }
-  return { ok: true, data: serialized.value };
+  // Re-serialized from the schema's OUTPUT, so what the store holds is what the schema produced
+  // and not what the caller happened to pass. Without this a `.default()` is applied on every
+  // read and never written, so the file and the value disagree forever.
+  const settled = serializeCustomNodeData(validated.value);
+  if (!settled.ok) {
+    return {
+      ok: false,
+      reason: `the payload cannot be serialized: ${settled.issues.join(', ')}`,
+      issues: [],
+    };
+  }
+  return { ok: true, data: settled.value, value: validated.value };
 }
 
 /** Thenable rather than `instanceof Promise`, for the same cross-realm reason `parseCustomNodeData` is. */

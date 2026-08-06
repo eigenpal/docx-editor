@@ -11,7 +11,12 @@
 // in the chrome, in the sea behind, and in the berg the page rides on.
 
 import { useState } from 'react';
-import { DocxEditor, useChromeTranslate, useDocxSource, useEditorState } from '@docx-editor.dev/react';
+import {
+  DocxEditor,
+  useChromeTranslate,
+  useDocxSource,
+  useEditorState,
+} from '@docx-editor.dev/react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { customNodesModule, reviewModule } from '@docx-editor.dev/pro';
 import { defaultFonts } from '@docx-editor.dev/fonts';
