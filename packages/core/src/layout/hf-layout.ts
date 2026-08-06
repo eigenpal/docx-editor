@@ -258,6 +258,8 @@ export function layoutHeaderFooterStory(
               ...(effectiveCtx ? { pageContext: effectiveCtx } : {}),
               ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
               ...(displayMode ? { displayMode } : {}),
+              inlineDrawingLayout,
+              ...(drawingTokenForParagraph ? { drawingTokenForParagraph } : {}),
             }),
           collectAnchoredDrawings: (drawings) => {
             pendingAnchoredDrawings.push(...drawings);

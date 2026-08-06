@@ -1294,6 +1294,8 @@ function layoutBlocksPass(
       styleCascade,
       ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
       ...(displayMode ? { displayMode } : {}),
+      inlineDrawingLayout: options.inlineDrawingLayout,
+      drawingTokenForParagraph: options.drawingTokenForParagraph,
     });
 
   // Table layout shares the flow's line counter, paragraph cache, and precomputed list

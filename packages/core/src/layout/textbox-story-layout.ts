@@ -84,6 +84,19 @@ export interface TextboxStoryLayoutOptions {
   readonly displayMode?: RevisionDisplayMode;
   /** Story nesting depth; a textbox laid out from inside another textbox passes depth + 1. */
   readonly depth?: number;
+  /**
+   * Inline drawing context for the part the text box lives in.
+   *
+   * A picture inside `w:txbxContent` is an ordinary inline drawing of the HOST part — same
+   * relationships, same resources — so the host's context is the right one. Scoped to inline
+   * drawings: an anchored drawing inside a text box would need frame and exclusion semantics
+   * against the box, which is a separate question.
+   */
+  readonly inlineDrawingLayout?: import('./drawing-layout.ts').InlineDrawingLayoutContext;
+  /** Per-paragraph projection + resource token for the break cache key. */
+  readonly drawingTokenForParagraph?: (
+    paragraph: import('@docx-editor.dev/core/store').OoxmlNode
+  ) => string;
 }
 
 /** Stable line-id namespace for one textbox story. */
@@ -148,6 +161,10 @@ export function layoutTextboxStory(
       ? { defaultTabStopPt: options.defaultTabStopPt }
       : {}),
     ...(options.displayMode ? { displayMode: options.displayMode } : {}),
+    ...(options.inlineDrawingLayout ? { inlineDrawingLayout: options.inlineDrawingLayout } : {}),
+    ...(options.drawingTokenForParagraph
+      ? { drawingTokenForParagraph: options.drawingTokenForParagraph }
+      : {}),
   });
 
   let fragments = flow.blocks;

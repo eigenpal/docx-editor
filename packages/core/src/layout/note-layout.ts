@@ -24,6 +24,7 @@ import {
   type NoteKind,
   MAX_NOTES_PER_PART,
 } from '../store/package/note-nodes.ts';
+import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import type { NoteMarkContext } from './note-projection.ts';
 import type { PendingLine } from './paragraph-flow.ts';
@@ -107,6 +108,26 @@ export interface NoteSeparatorLayout {
   readonly fallbackReason?: NoteLayoutFallbackReason;
 }
 
+/**
+ * Inline drawing support for ONE notes part.
+ *
+ * A note lives in `/word/footnotes.xml` or `/word/endnotes.xml`, not in the body part, so its
+ * pictures resolve against that part's relationships — the same per-part shape header/footer
+ * furniture uses. Without it a note paragraph flows with no drawing context at all and a
+ * picture inside it contributes no record: no image, and no placeholder either.
+ */
+export interface NoteStoryDrawings {
+  readonly inlineDrawingLayout: InlineDrawingLayoutContext;
+  /**
+   * Per-paragraph projection + RESOURCE token for the break cache key.
+   *
+   * Image resources settle asynchronously, and the authored extent does not move when one
+   * does — so without the resource in the key the cached `pending` lines are served forever
+   * and a decoded picture never reaches the page.
+   */
+  readonly drawingTokenForParagraph?: (paragraph: OoxmlNode) => string;
+}
+
 export interface LayoutNoteStoryOptions {
   readonly measurer: TextMeasurer;
   readonly producer: string;
@@ -120,6 +141,13 @@ export interface LayoutNoteStoryOptions {
    * unbounded page fragments; overflow is split by the pagination layer, not here.
    */
   readonly maxFlowHeightPt?: number;
+  /** Resolves inline drawing support for the notes part a story lives in. */
+  readonly drawingsForPart?: (ownerPartName: string) => NoteStoryDrawings | undefined;
+  /**
+   * Notes part the story being laid out came from. Set by {@link layoutNoteById} /
+   * {@link layoutNoteSeparator}, which are the callers that hold the part.
+   */
+  readonly ownerPartName?: string;
 }
 
 /**
@@ -181,6 +209,12 @@ export function layoutNoteStory(
     ? { ...options.noteMarks, activeNoteKey: scopeId }
     : { marks: new Map(), activeNoteKey: scopeId };
 
+  // INLINE pictures only. An anchored drawing in a note would need frame and exclusion
+  // semantics against a story that has no page of its own until pagination places it.
+  const drawings = options.ownerPartName
+    ? options.drawingsForPart?.(options.ownerPartName)
+    : undefined;
+
   const flow = flowBlocksInBox(blocks, 0, width, 0, 0, {
     measurer: options.measurer,
     cache: options.cache,
@@ -190,6 +224,14 @@ export function layoutNoteStory(
     noteMarks,
     ...(options.defaultTabStopPt !== undefined
       ? { defaultTabStopPt: options.defaultTabStopPt }
+      : {}),
+    ...(drawings
+      ? {
+          inlineDrawingLayout: drawings.inlineDrawingLayout,
+          ...(drawings.drawingTokenForParagraph
+            ? { drawingTokenForParagraph: drawings.drawingTokenForParagraph }
+            : {}),
+        }
       : {}),
   });
 
@@ -240,7 +282,7 @@ export function layoutNoteById(
   if (!part) return null;
   const note = findNoteById(part.root, noteId);
   if (!note) return null;
-  return layoutNoteStory(note, contentWidth, options);
+  return layoutNoteStory(note, contentWidth, { ...options, ownerPartName: part.name });
 }
 
 /**
@@ -337,7 +379,10 @@ export function layoutNoteSeparator(
         ruleStyle,
       };
     }
-    const laid = layoutNoteStory(authored, contentWidth, options);
+    const laid = layoutNoteStory(authored, contentWidth, {
+      ...options,
+      ...(part ? { ownerPartName: part.name } : {}),
+    });
     if (laid && laid.flowHeight > 0) {
       const cap = maxFlowHeightPt ?? Number.POSITIVE_INFINITY;
       if (laid.flowHeight > cap + 0.001) {

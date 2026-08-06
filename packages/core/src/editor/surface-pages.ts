@@ -7,7 +7,7 @@
 // story memo.
 
 import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
-import type { OoxmlElement, OoxmlPart } from '@docx-editor.dev/core/store';
+import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import { resolveRelationship } from '@docx-editor.dev/core/store';
 import {
   buildNumberingIndex,
@@ -460,6 +460,13 @@ export function createNotesLayoutInput(env: {
   readonly cache: Parameters<typeof layoutHeaderFooterStory>[4];
   readonly styleCascade?: StyleCascadeTable;
   readonly defaultTabStopPt?: number;
+  readonly inlineDrawingLayoutForPart?: (
+    partName: string
+  ) => import('../layout/drawing-layout.ts').InlineDrawingLayoutContext | undefined;
+  readonly drawingTokenForParagraphForPart?: (
+    partName: string,
+    paragraph: import('@docx-editor.dev/core/store').OoxmlNode
+  ) => string;
 }): NotesLayoutInput | undefined {
   const pkg = env.session.currentPackage();
   const footnotesPart = resolveNotesPart(pkg, 'footnote');
@@ -488,6 +495,26 @@ export function createNotesLayoutInput(env: {
     )
   );
 
+  const inlineDrawingLayoutForPart = env.inlineDrawingLayoutForPart;
+  const drawingTokenForParagraphForPart = env.drawingTokenForParagraphForPart;
+  // A notes part carries its own relationships, so its pictures resolve against a context
+  // built for THAT part — the body context would look their `r:embed` up in document.xml.rels.
+  const drawingsForPart = inlineDrawingLayoutForPart
+    ? (partName: string) => {
+        const inlineDrawingLayout = inlineDrawingLayoutForPart(partName);
+        if (!inlineDrawingLayout) return undefined;
+        return {
+          inlineDrawingLayout,
+          ...(drawingTokenForParagraphForPart
+            ? {
+                drawingTokenForParagraph: (paragraph: OoxmlNode) =>
+                  drawingTokenForParagraphForPart(partName, paragraph),
+              }
+            : {}),
+        };
+      }
+    : undefined;
+
   return {
     footnotesPart,
     endnotesPart,
@@ -502,6 +529,7 @@ export function createNotesLayoutInput(env: {
     cache: env.cache,
     styleCascade: env.styleCascade,
     defaultTabStopPt: env.defaultTabStopPt,
+    ...(drawingsForPart ? { drawingsForPart } : {}),
   };
 }
 

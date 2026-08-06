@@ -192,23 +192,23 @@ function drawingResourceLayoutToken(resource: ImageResourceState): string {
   }
 }
 
+/** Bound on text-box-in-text-box descent while building a paragraph's drawing token. */
+const MAX_HOSTED_STORY_TOKEN_DEPTH = 4;
+
+function collectDrawingAtoms(node: OoxmlNode, ids: string[]): void {
+  if (node.kind === 'drawing' || isRunLevelMcAlternateContent(node)) {
+    ids.push(node.id);
+    return;
+  }
+  if ('children' in node) {
+    for (const child of node.children) collectDrawingAtoms(child, ids);
+  }
+}
+
 function drawingAtomsInParagraph(paragraph: OoxmlNode): readonly string[] {
   if (paragraph.kind !== 'paragraph') return [];
   const ids: string[] = [];
-  const visit = (node: OoxmlNode): void => {
-    if (node.kind === 'drawing') {
-      ids.push(node.id);
-      return;
-    }
-    if (isRunLevelMcAlternateContent(node)) {
-      ids.push(node.id);
-      return;
-    }
-    if ('children' in node) {
-      for (const child of node.children) visit(child);
-    }
-  };
-  for (const child of paragraph.children) visit(child);
+  for (const child of paragraph.children) collectDrawingAtoms(child, ids);
   return Object.freeze(ids);
 }
 
@@ -318,10 +318,38 @@ function createPartDrawingContextSlot(options: {
     resourceOf,
   });
 
+  /**
+   * Atom ids in the paragraph, plus the atoms of any text-box story they host.
+   *
+   * A text box's OWN resource is `unrenderable` — it is a shape, not a picture — and never
+   * changes, so a picture inside it settling would move no token in the host paragraph's key
+   * and repaint nothing. The story's atoms have to ride the host paragraph's key, because
+   * that is what governs the break the story is laid out from.
+   */
+  const atomsWithHostedStories = (paragraph: OoxmlNode): readonly string[] => {
+    const direct = drawingAtomsInParagraph(paragraph);
+    let expanded: string[] | null = null;
+    const visit = (atomIds: readonly string[], depth: number): void => {
+      if (depth > MAX_HOSTED_STORY_TOKEN_DEPTH) return;
+      for (const atomId of atomIds) {
+        const story = atomProjections.get(atomId)?.textboxStory;
+        if (!story) continue;
+        const inner: string[] = [];
+        collectDrawingAtoms(story.content, inner);
+        if (inner.length === 0) continue;
+        expanded ??= [...direct];
+        expanded.push(...inner);
+        visit(inner, depth + 1);
+      }
+    };
+    visit(direct, 0);
+    return expanded ?? direct;
+  };
+
   const drawingTokenForParagraph = (paragraph: OoxmlNode): string => {
     const cached = drawingTokensByParagraph.get(paragraph);
     if (cached?.resourceEpoch === resourceEpoch) return cached.token;
-    const atoms = drawingAtomsInParagraph(paragraph);
+    const atoms = atomsWithHostedStories(paragraph);
     if (atoms.length === 0) {
       drawingTokensByParagraph.set(paragraph, { resourceEpoch, token: '' });
       return '';

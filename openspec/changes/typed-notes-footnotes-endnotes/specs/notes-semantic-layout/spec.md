@@ -140,3 +140,24 @@ The reference mark and the note's own mark SHALL be styled by the document's res
 
 - **WHEN** a document redefines `FootnoteReference` without superscript
 - **THEN** the mark renders as that style specifies, not forced superscript
+
+### Requirement: A picture inside a note is an ordinary inline drawing
+
+A note story SHALL lay out inline drawings the way a body paragraph does, resolving them
+against the relationships of the part the note lives in (`/word/footnotes.xml` or
+`/word/endnotes.xml`) rather than the body part's. A note paragraph's break cache key SHALL
+carry the resource identity of the pictures it paints, so a picture whose decode settles
+after the first pass reaches the page instead of staying a placeholder. Anchored drawings
+inside a note stay out of scope: they would need frame and exclusion semantics against a
+story that has no page until pagination places it.
+
+#### Scenario: Footnote picture renders
+
+- **WHEN** a footnote body contains an inline picture embedded through `footnotes.xml.rels`
+- **THEN** the note's fragments carry a drawing record for it and the picture paints in the
+  note area
+
+#### Scenario: Decoded picture reaches the note
+
+- **WHEN** the picture's decode settles after the first layout pass
+- **THEN** a later pass paints the ready image rather than the loading placeholder

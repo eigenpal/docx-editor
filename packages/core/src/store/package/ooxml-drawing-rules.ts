@@ -1069,10 +1069,30 @@ export function resolveDrawingElementKind(
   return null;
 }
 
-/** Demote every typed drawing kind under a generic parent subtree. */
+/**
+ * Whether a node opens a WML story that a drawing merely HOSTS.
+ *
+ * `w:txbxContent` is not part of the DrawingML grammar around it: it is ordinary body
+ * content — paragraphs, runs, and drawings of their own — that happens to live inside a
+ * shape.
+ */
+function opensHostedWmlStory(node: OoxmlElement): boolean {
+  return node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'txbxContent';
+}
+
+/**
+ * Demote every typed drawing kind under a generic parent subtree.
+ *
+ * Stops at a hosted WML story. A text box is a `wps:wsp` under an `a:graphicData` whose uri
+ * is not the picture one, so that graphicData is correctly not a typed `drawingGraphicData`
+ * and demotes — but its story is a separate grammar, and cascading into it stripped the
+ * typed `w:drawing` off a picture INSIDE the box. Nothing then recognized that picture as a
+ * drawing atom: no projection, no resource, nothing painted.
+ */
 export function demoteDrawingKindsInSubtree(children: readonly OoxmlNode[]): readonly OoxmlNode[] {
   return children.map((child) => {
     if (child.kind === 'textValue') return child;
+    if (opensHostedWmlStory(child)) return child;
     const nextKind = isDrawingKnownKind(child.kind) ? 'generic' : child.kind;
     return {
       ...child,

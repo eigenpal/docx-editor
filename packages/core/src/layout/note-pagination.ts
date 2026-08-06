@@ -39,6 +39,7 @@ import {
   MAX_NOTE_FRAGMENTS,
   type NoteLayoutFallbackReason,
   type NoteSeparatorLayout,
+  type NoteStoryDrawings,
   type NoteStoryLayout,
   type LayoutNoteStoryOptions,
 } from './note-layout.ts';
@@ -139,6 +140,11 @@ export interface NotesLayoutInput {
   readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
   readonly styleCascade?: StyleCascadeTable;
   readonly defaultTabStopPt?: number;
+  /**
+   * Inline drawing support per notes part. Absent means note paragraphs flow without
+   * drawing records, which is what a headless caller with no image port wants.
+   */
+  readonly drawingsForPart?: (ownerPartName: string) => NoteStoryDrawings | undefined;
 }
 
 /**
@@ -337,6 +343,7 @@ function layoutOpts(input: NotesLayoutInput, noteMarks?: NoteMarkContext): Layou
     styleCascade: input.styleCascade,
     defaultTabStopPt: input.defaultTabStopPt,
     noteMarks,
+    drawingsForPart: input.drawingsForPart,
   };
 }
 

@@ -81,7 +81,7 @@
 - [x] 8.1 `w:continuationNotice` authoring UI — round-tripped and drawn, not authored
 - [x] 8.2 Note references inside headers, footers, or other notes — round-tripped and deletable, not laid out
 - [x] 8.3 Tracked note insertions — owned by `typed-revisions-and-comments`
-- [x] 8.4 Images inside notes — blocked on `typed-drawings-and-images`
+- [x] 8.4 Anchored drawings inside notes — inline pictures now lay out (see `notes-semantic-layout`); an anchored drawing in a note still needs frame/exclusion semantics and stays out of scope
 
 ## 9. Review findings
 

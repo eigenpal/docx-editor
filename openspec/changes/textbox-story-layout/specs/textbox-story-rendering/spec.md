@@ -114,3 +114,31 @@ file-derived strings.
 - **THEN** the story paints inside the drawing's bounds on the anchor page
 - **AND** wrap behaviour for surrounding text derives from the drawing's extent
   exactly as before this change
+
+### Requirement: Pictures inside a textbox story render
+
+A `w:drawing` inside `w:txbxContent` SHALL stay a typed drawing and project like any other
+run-level drawing atom of the host part: demoting the shape's own DrawingML vocabulary (a
+`wps` graphic data is not a picture graphic data) SHALL NOT cascade into the WML story the
+shape hosts. The story SHALL lay out with the host part's inline drawing context, so its
+pictures resolve against the same relationships as the surrounding body. The host
+paragraph's break cache key SHALL carry the resource identity of the pictures inside the
+story: the box's own resource is unrenderable and never moves, so nothing else would
+invalidate the break when an inner picture decodes. Story descent SHALL be bounded by a
+text-box nesting cap. Anchored drawings inside a textbox story stay out of scope.
+
+#### Scenario: Picture inside a text box paints
+
+- **WHEN** an anchored text box's story holds one inline picture
+- **THEN** the story's fragments carry a drawing record for it and the picture paints inside
+  the box
+
+#### Scenario: Inner picture survives its decode
+
+- **WHEN** that picture's decode settles after the first layout pass
+- **THEN** the host paragraph re-breaks and the ready image paints
+
+#### Scenario: Nested boxes stop at the cap
+
+- **WHEN** a file nests text boxes beyond the projection nesting cap
+- **THEN** the scan stops descending and the pass still terminates

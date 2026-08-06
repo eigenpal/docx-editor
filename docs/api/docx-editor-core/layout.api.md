@@ -1467,6 +1467,7 @@ export interface NotesLayoutInput {
     // (undocumented)
     readonly documentEndnoteProps: ResolvedEndnoteProperties;
     readonly documentFootnoteProps: ResolvedFootnoteProperties;
+    readonly drawingsForPart?: (ownerPartName: string) => NoteStoryDrawings | undefined;
     readonly endnotePropsBySection: readonly ResolvedEndnoteProperties[];
     // (undocumented)
     readonly endnotesPart: OoxmlPart | null;
