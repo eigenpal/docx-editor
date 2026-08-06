@@ -20,10 +20,10 @@ bun e2e/fixtures/build-drawing-fixtures.mjs
 | File | Source | SHA-256 | Branch / refusal | Word evidence |
 | --- | --- | --- | --- | --- |
 | comprehensive-word-element-test.docx | Word-authored | `d2db0c9423d69d52…` | canonical tree / none for supported drawings | pending — editor-only baseline captured Task 0 |
-| list-pagination-break.docx | Word-authored | `4bf19f14c9a92542…` | external rel refusal / external image — no fetch | n/a — security oracle |
+| list-pagination-break.docx | Word-authored | `a4581c20871339e4…` | external rel refusal / external image — no fetch | n/a — security oracle |
 | float-wrap-comprehensive-test.docx | Word-authored | `276eff8171685aab…` | polygon/bbox exclusion / none | pending (9.5) |
 | image-layout-modes-demo.docx | Word-authored | `598ae22b400ce2e1…` | authoring chrome / none | pending (9.5) |
-| issue-705-anchored-header-letterhead.docx | Word-authored | `13cfc6e98562c77c…` | HF furniture / none | pending (9.5) |
+| issue-705-anchored-header-letterhead.docx | Word-authored | `a98dbe5afd96bba8…` | HF furniture / none | pending (9.5) |
 | wrap-none-positioned-image-demo.docx | Word-authored | `4ae338400267ef24…` | layer order / none | pending (9.5) |
 | images-external.docx | deterministic builder | `d9a81f2c66c3a237…` | external/missing/spoof/unrenderable / zero fetch | not applicable — synthetic OPC |
 | images-wrap-sides.docx | deterministic builder | `c10acd51efa93ab4…` | nine wrap modes / layout records per wrap | not applicable — synthetic OPC |
@@ -71,7 +71,7 @@ bun e2e/fixtures/build-drawing-fixtures.mjs
       "refusal": "external image — no fetch",
       "wordEvidence": "n/a — security oracle",
       "tolerance": "zero network requests",
-      "sha256": "4bf19f14c9a92542b7cfb0a0898eb651bce3f19b65d0a70db39202b9c1595b05"
+      "sha256": "a4581c20871339e4d364b7b1c8770d8b0a106d94d16f85599d05738b7fbe9c29"
     },
     {
       "file": "float-wrap-comprehensive-test.docx",
@@ -119,7 +119,7 @@ bun e2e/fixtures/build-drawing-fixtures.mjs
       "refusal": "none",
       "wordEvidence": "pending (9.5)",
       "tolerance": "pending Word comparison",
-      "sha256": "13cfc6e98562c77cc0e20bbe283f22496a37b6dda33ff217195b184d89f11ffc"
+      "sha256": "a98dbe5afd96bba8e215b2565f534b3b087dcbbaf67b855eca4bfa650ba7c474"
     },
     {
       "file": "wrap-none-positioned-image-demo.docx",
