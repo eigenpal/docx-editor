@@ -75,7 +75,7 @@ A part child replaces the slot of the same name and leaves the rest of the defau
 </DocxEditor.Toolbar>
 ```
 
-## A hand-ordered toolbar
+## Custom toolbar
 
 `preset={false}` opts out of the registry's default arrangement, so the order in your JSX is the order on screen. Every packaged part still drives its chrome slot: enabled state, pressed state, and the command all still come from the engine. Only the glyph is yours.
 
@@ -119,7 +119,7 @@ export const MyBold = (
 // Wrong: `() => <svg />` is a component, and the prop is a ReactNode.
 ```
 
-## A host action that asks the engine
+### A host action that asks the engine
 
 `Toolbar.Action` is for an action the registry has no slot for. The label, glyph, and effect are yours. What should not be yours is whether it may run: ask `useEditorCommand` about the command `onSelect` will exec, so the button cannot offer something the engine is about to refuse, and the tooltip carries the engine's reason rather than a guess.
 
@@ -165,7 +165,7 @@ function HighlightAction() {
 
 Put the hook in one file and share it across every surface that exposes the action. Two copies drift into disagreeing about when the action is available, which is the failure the chrome registry avoids for packaged controls by deriving the toolbar and the menu from one table.
 
-## Context menu
+## Custom context menu
 
 Every composition mode in one panel: packaged rows kept, a packaged row re-iconed, a packaged row removed, a chrome slot pulled in as a row, host rows, and a submenu.
 
@@ -209,7 +209,7 @@ Every composition mode in one panel: packaged rows kept, a packaged row re-icone
 
 A child the compound does not recognize is appended rather than wrapping the rows, so decorative markup lands after them in DOM order and the library keeps its own panel element, roles, keyboard handling, and placement.
 
-## Menu bar
+## Custom menu bar
 
 The default bar derives from `CHROME_MENUS`, so it is already correct without you writing anything. What a product adds on top is usually a menu of its own and a replacement for Help:
 
@@ -249,7 +249,7 @@ The default bar derives from `CHROME_MENUS`, so it is already correct without yo
 </DocxEditor.Menu>;
 ```
 
-## Navigation pane
+## Custom navigation pane
 
 The pane's parts are statics, so you can hang your own class on each one instead of styling the library's internals. The parts still do the work: the headings list is still fed by the engine's outline.
 
@@ -265,7 +265,7 @@ The pane's parts are statics, so you can hang your own class on each one instead
 </DocxEditor.Navigation>
 ```
 
-## Replace the loading screen
+## Custom loading screen
 
 `DocxEditor.Loading` renders only while there is no document:
 
@@ -283,7 +283,7 @@ The pane's parts are statics, so you can hang your own class on each one instead
 
 To keep the packaged spinner and restyle only it, `DocxEditor.Loading.Spinner` takes a `className`.
 
-## The link popover
+## Custom link popover
 
 `DocxEditor.HyperLink` is the popover that opens on a link: the URL, edit fields, apply, copy, unlink. Its parts follow the same contract as every other compound (`className`, `asChild`, `hidden`; action parts take `icon`), so restyling it is the same work as restyling the toolbar:
 
@@ -338,7 +338,7 @@ The smaller parts place individually; a part you do not mount has no UI:
 - `DocxEditor.HeaderFooterChrome`: the header/footer editing overlay: region label, inheritance warning, field inserts, and the options menu.
 - `DocxEditor.NotesChrome`: footnote and endnote chrome: hover preview, context menu, and the numbering properties dialog.
 
-## Labels
+## Custom labels
 
 Composed chrome resolves its labels through the active locale catalog on its own: a bare `<DocxEditor.Toolbar />` renders real labels with no `t` handed to it, localized by `LocaleProvider` like everything else. The same goes for `Menu`, `ContextMenu`, and the rest.
 
@@ -364,7 +364,7 @@ function MyToolbar() {
 
 Keys you do not override fall through to the catalog, so renaming two labels does not mean restating the other four hundred.
 
-## Theming
+## Custom colors
 
 The library's chrome is built on the `--doc-*` palette, so restating that palette under one scope re-themes the toolbar, menu bar, panels, pickers, rulers, and navigation pane at once. Custom properties inherit, so the scope _is_ the override.
 
@@ -381,13 +381,9 @@ Two rules worth keeping:
 - **Do not style `docx-*` classes and do not use `!important`.** Those names are implementation details. Every visual change should go through a prop, a `--doc-*` token, or an element you own. Where that was not possible the library grew a prop instead: trigger icons, color-split icons, and the page's centering margin all came out of building the Igloo demo.
 - **The document canvas is not themed, on purpose.** Painter output stays Word-faithful. A page rendered in your brand colors would be a lie about what the file contains, so the theme lives in the chrome around it.
 
-## Pro surfaces
+## Custom tracked changes and comments
 
-[`@docx-editor.dev/pro`](/docs/2.x/pro) adds two more compounds, and they compose the same way as everything above.
-
-### The review sidebar
-
-`DocxEditorReview` is the cards for tracked changes and comments. Its props decide _which_ decisions appear and how they stack; its parts decide what a card looks like.
+The review surface comes from [`@docx-editor.dev/pro`](/docs/2.x/pro) and composes the same way as everything above. `DocxEditorReview` renders one card per pending decision beside the page; its props decide _which_ decisions appear and how they stack, its parts decide what a card looks like.
 
 ```tsx
 import { DocxEditorReview } from '@docx-editor.dev/pro/react';
@@ -404,7 +400,17 @@ import { DocxEditorReview } from '@docx-editor.dev/pro/react';
   stack
   gap={12}
   furniture={<MyReviewFilters />}
->
+/>;
+```
+
+`furniture` is host content above the cards, for filters or a legend. Place the compound inside the viewport so it scrolls with the document. The suggesting-mode toggle, bulk accept, and the `useReview()` queue behind all of this are covered in [Tracked changes](/docs/2.x/pro/tracked-changes).
+
+### Custom cards
+
+Each card is a compound. Reorder, hide, and re-icon its parts in place:
+
+```tsx
+<DocxEditorReview className="my-review">
   <DocxEditorReview.Card className="my-card">
     <DocxEditorReview.Avatar className="my-avatar" />
     <DocxEditorReview.Author />
@@ -416,18 +422,14 @@ import { DocxEditorReview } from '@docx-editor.dev/pro/react';
     <DocxEditorReview.Reply />
   </DocxEditorReview.Card>
   <DocxEditorReview.Empty>Nothing to review</DocxEditorReview.Empty>
-</DocxEditorReview>;
+</DocxEditorReview>
 ```
 
-Every part takes `className`, `asChild`, and `hidden`; the action parts also take `icon`. `furniture` is host content above the cards, for filters or a legend.
+Every part takes `className`, `asChild`, and `hidden`; the action parts also take `icon`.
 
-`preset={false}` mounts the rail and its context without the packaged arrangement, so you can lay the cards out yourself and keep the subscription and the anchoring. `useStackedReviewPositions(items, heights, { gap })` is the packaged stacking math if you want it.
+For cards that share nothing with the packaged layout, `preset={false}` mounts the rail and its context without the packaged arrangement, so you keep the subscription and the anchoring and render the cards yourself. `useStackedReviewPositions(items, heights, { gap })` is the packaged stacking math if you want it. Below that, `useReview()` gives you the queue with no chrome at all.
 
-Below that, `useReview()` gives you the queue with no chrome at all. See [Tracked changes](/docs/2.x/pro/tracked-changes).
-
-### Host content inside a card
-
-`useReviewItem()` reads the card a child is rendered inside, so you can add your own row to some cards and not others:
+To add host content to some cards and not others, `useReviewItem()` reads the card a child is rendered inside:
 
 ```tsx
 import { DocxEditorReview, useReviewItem } from '@docx-editor.dev/pro/react';
@@ -444,7 +446,7 @@ function OpenSource() {
 </DocxEditorReview>;
 ```
 
-### Custom node chrome
+## Custom nodes
 
 `CustomNodeChrome` paints the chips for your [custom nodes](/docs/2.x/pro/custom-nodes) and dispatches interaction. The chip's tint comes from the definition's `chrome.color`; the click and hover handlers are where host UI state belongs.
 
