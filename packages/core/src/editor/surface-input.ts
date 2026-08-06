@@ -412,7 +412,17 @@ export function paintedTextOf(pagesLayer: HTMLElement, paragraphId: string): str
     if (!Number.isInteger(start)) continue;
     pieces.push({ start, text: element.textContent ?? '' });
   }
-  if (pieces.length === 0) return null;
+  if (pieces.length === 0) {
+    // Fallback: no [data-start] spans found (e.g., IME composition on an empty paragraph).
+    // Empty paragraphs are painted with a <br> that has no data-start attribute, so the
+    // query above finds nothing. When the IME writes text into the DOM, the text lives in
+    // a text node that also has no data-start. Read the paragraph fragment's text content
+    // directly and return it if it is non-empty.
+    const fragment = pagesLayer.querySelector(`[data-paragraph-id="${paragraphId}"]`);
+    if (!fragment) return null;
+    const text = fragment.textContent ?? '';
+    return text.length > 0 ? text : null;
+  }
   pieces.sort((a, b) => a.start - b.start);
   return pieces.map((piece) => piece.text).join('');
 }
