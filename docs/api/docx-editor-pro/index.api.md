@@ -31,6 +31,7 @@ export interface CustomNodeDefinition {
     readonly onClick?: (node: ActivatedCustomNode) => void;
     readonly onEdit?: (node: ActivatedCustomNode) => void;
     readonly onHover?: (node: ActivatedCustomNode) => void;
+    readonly preserveOnExport?: boolean | 'text';
     readonly reviewCard?: (node: {
         readonly attrs: Readonly<Record<string, string>>;
         readonly text: string;
@@ -38,6 +39,7 @@ export interface CustomNodeDefinition {
         readonly title: string;
         readonly detail?: string;
     } | null;
+    readonly schema?: StandardSchemaV1;
     readonly tagPrefix: string;
 }
 

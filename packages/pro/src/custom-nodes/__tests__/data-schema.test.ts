@@ -12,6 +12,7 @@ import {
   serializeCustomNodeData,
   type StandardSchemaV1,
 } from '../data-schema.ts';
+import { defineCustomNode } from '../define-custom-node.ts';
 
 /** A stand-in for a zod schema: the same `~standard` interface zod exposes. */
 function objectSchema<T>(check: (value: unknown) => value is T): StandardSchemaV1<unknown, T> {
@@ -127,5 +128,35 @@ describe('serializing a payload', () => {
 
   test('undefined serializes to nothing, which is refused', () => {
     expect(serializeCustomNodeData(undefined).ok).toBe(false);
+  });
+});
+
+describe('declaring the options on a definition', () => {
+  test('a zod schema is accepted, and comes back on the frozen definition', () => {
+    const definition = defineCustomNode({
+      name: 'citation',
+      tagPrefix: 'acme',
+      schema: IcebergSchema,
+      preserveOnExport: 'text',
+    });
+    expect(definition.schema).toBe(IcebergSchema);
+    expect(definition.preserveOnExport).toBe('text');
+  });
+
+  test('something that is not a schema is refused where the mistake was made', () => {
+    expect(() =>
+      defineCustomNode({
+        name: 'citation',
+        tagPrefix: 'acme',
+        // A plain object is the shape a host reaches for before learning it needs a schema.
+        schema: { depth: 'number' } as unknown as StandardSchemaV1,
+      })
+    ).toThrow(/not a Standard Schema/);
+  });
+
+  test('both options are optional, and default to preserving', () => {
+    const definition = defineCustomNode({ name: 'plain', tagPrefix: 'acme' });
+    expect(definition.schema).toBeUndefined();
+    expect(definition.preserveOnExport).toBeUndefined();
   });
 });

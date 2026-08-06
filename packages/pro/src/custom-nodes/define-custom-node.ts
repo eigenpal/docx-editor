@@ -17,6 +17,7 @@ import type { EditorModule } from '@docx-editor.dev/core/editor';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import { rememberLicenseKey, type ProLicenseOptions } from '../license.ts';
 import { decodeCustomNodeTag } from './tag-codec.ts';
+import type { StandardSchemaV1 } from './data-schema.ts';
 
 /** A recognized custom node: one inline SDT whose tag matched a definition. */
 export interface RecognizedCustomNode {
@@ -112,6 +113,43 @@ export interface CustomNodeDefinition {
    * `name`. Host-authored, never file data; provide a localized string.
    */
   readonly label?: string;
+  /**
+   * The shape of this node's payload, as a zod (or valibot, or arktype) schema.
+   *
+   * A payload lives in a customXml data part, so it arrives from a file the sender controls.
+   * Declaring the shape means it is parsed and checked ONCE, at the read boundary, after which
+   * the `data` handed to the hooks is the type that was asked for rather than something every
+   * caller has to re-guard. Without one, `data` is whatever JSON the file held, typed
+   * `unknown`, which is the honest description of an unchecked payload.
+   *
+   * Any Standard Schema satisfies this, which is what zod produces:
+   *
+   * ```ts
+   * const Citation = z.object({ sourceId: z.string(), year: z.number() });
+   * defineCustomNode({ name: 'citation', tagPrefix: 'acme', schema: Citation });
+   * ```
+   *
+   * NOT YET READ: the payload store landed before the write path that fills it, so a schema
+   * declared today is checked for shape here and does nothing else until that lands.
+   */
+  readonly schema?: StandardSchemaV1;
+  /**
+   * What happens to this node when a document is exported OUTSIDE the system that made it.
+   *
+   * A host may not want its own markup travelling in a file its users download: a `w:tag`
+   * naming the tool, or a payload with no meaning anywhere else. This declares the fate, and
+   * the save that applies it picks the pipeline — so one document can serialize one way at
+   * rest and another on the way out.
+   *
+   *  - `true` (default) — the node and its payload survive untouched.
+   *  - `'text'` — the control is unwrapped: a reader still sees the words, while the tag, the
+   *    binding and the payload are gone. Right for a citation, whose text is the point of it.
+   *  - `false` — the node goes, and takes its content with it.
+   *
+   * NOT YET READ, for the same reason as `schema`. Removing a store is implemented
+   * (`withoutCustomXmlDataPart`); choosing to do so per definition is not.
+   */
+  readonly preserveOnExport?: boolean | 'text';
 }
 
 /**
@@ -162,6 +200,16 @@ export const CUSTOM_NODE_IDENTITY_PATTERN = /^[A-Za-z0-9_.-]+$/;
 
 /** Validate and freeze a definition. Throws on a shape mistake — author error, not file input. */
 export function defineCustomNode(definition: CustomNodeDefinition): CustomNodeDefinition {
+  // Refuse a schema that is not one at definition time. The alternative is every node of this
+  // type failing to parse later, at a point where the cause is three layers away.
+  if (
+    definition.schema !== undefined &&
+    typeof definition.schema['~standard']?.validate !== 'function'
+  ) {
+    throw new Error(
+      `defineCustomNode: ${definition.name} has a schema that is not a Standard Schema`
+    );
+  }
   if (!CUSTOM_NODE_IDENTITY_PATTERN.test(definition.name ?? '')) {
     throw new Error(`defineCustomNode: invalid name ${JSON.stringify(definition.name)}`);
   }
