@@ -187,7 +187,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
   const { t: catalogT } = useTranslation();
   const translate = useCallback(
     (key: string, params?: Record<string, string | number>) =>
-      t ? t(key) : catalogT(key as TranslationKey, params),
+      t ? t(key, params) : catalogT(key as TranslationKey, params),
     [t, catalogT]
   );
 

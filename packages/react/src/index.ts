@@ -54,6 +54,7 @@ export {
 export { ReviewRailContext, type ReviewRailRegistry } from './editor/context';
 export { Slot, type SlotProps } from './editor/toolbar/Slot';
 export { LocaleProvider, useTranslation } from './i18n';
+export { useChromeTranslate, type ChromeTranslate } from './i18n';
 // The navigation pane (also reachable as `DocxEditor.Navigation`): the compound over the
 // left gutter, its parts, and the three hooks a custom pane is built from. The pane FLOATS
 // — it displaces the page only when the gutter is too narrow to hold it, and

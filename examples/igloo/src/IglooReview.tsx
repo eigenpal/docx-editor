@@ -9,7 +9,8 @@ import { DocxEditorReview, useReview, useReviewItem } from '@docx-editor.dev/pro
 import type { ReviewRevisionKind } from '@docx-editor.dev/core/contracts/editor';
 import { BergGlyph, DomeGlyph } from './art/Specimen';
 import { Stats } from './SpecimenPopover';
-import { iglooT } from './labels';
+import { useChromeTranslate } from '@docx-editor.dev/react';
+import { ICE_LABELS } from './labels';
 import { IceMelt, IceRefreeze } from './icons/review';
 import { blocksOf, depthOf, insideTemperature, OUTSIDE, tipHeight } from './specimens';
 
@@ -31,6 +32,7 @@ const FLOE_WORDS: Record<ReviewRevisionKind, string> = {
 };
 
 export function IglooReview() {
+  const iglooT = useChromeTranslate(ICE_LABELS);
   return (
     <DocxEditorReview
       className="igloo-rail"

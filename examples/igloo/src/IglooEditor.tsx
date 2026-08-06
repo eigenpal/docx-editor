@@ -11,7 +11,7 @@
 // in the chrome, in the sea behind, and in the berg the page rides on.
 
 import { useState } from 'react';
-import { DocxEditor, useDocxSource, useEditorState } from '@docx-editor.dev/react';
+import { DocxEditor, useChromeTranslate, useDocxSource, useEditorState } from '@docx-editor.dev/react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { customNodesModule, reviewModule } from '@docx-editor.dev/pro';
 import { defaultFonts } from '@docx-editor.dev/fonts';
@@ -23,7 +23,7 @@ import { IglooMenu } from './IglooMenu';
 import { IglooReview } from './IglooReview';
 import { IglooToolbar } from './IglooToolbar';
 import { Blizzard } from './art/Blizzard';
-import { iglooT } from './labels';
+import { ICE_LABELS } from './labels';
 import { SPECIMENS } from './specimens';
 import { SpecimenProvider } from './useSpecimens';
 
@@ -45,6 +45,7 @@ export interface IglooEditorProps {
 
 export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
   const [blizzard, setBlizzard] = useState(false);
+  const iglooT = useChromeTranslate(ICE_LABELS);
 
   // The whole boot: fetch the bytes, load Word's default faces, register them for paint,
   // compose the configuration, and cancel both if this unmounts. `defaultFonts` is passed

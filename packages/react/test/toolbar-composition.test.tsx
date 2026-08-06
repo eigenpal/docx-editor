@@ -21,6 +21,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import type { ReactNode } from 'react';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
+import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
 import {
   chromeSlotId,
   defaultChromeGroups,
@@ -142,6 +143,10 @@ function entryRootAtFlatIndex(toolbar: HTMLElement, index: number): Element | nu
   return null;
 }
 
+/** Bare parts resolve labels through the locale catalogue; tests address them by key. */
+const label = createT(en);
+const byLabel = (key: string): string => `[aria-label=${JSON.stringify(label(key as TranslationKey))}]`;
+
 afterEach(() => {
   cleanup();
 });
@@ -161,10 +166,10 @@ describe('the default arrangement', () => {
     }
     // Wired controls are live buttons; the labels come from the registry keys.
     expect(
-      view.container.querySelector('[aria-label="formattingBar.boldShortcut"]')
+      view.container.querySelector(byLabel('formattingBar.boldShortcut'))
     ).not.toBeNull();
     expect(
-      view.container.querySelector('[aria-label="formattingBar.undoShortcut"]')
+      view.container.querySelector(byLabel('formattingBar.undoShortcut'))
     ).not.toBeNull();
   });
 
@@ -180,7 +185,7 @@ describe('the default arrangement', () => {
     const identities = toolbarArrangement(toolbar);
     expect(identities.slice(0, EXPECTED_ARRANGEMENT.length)).toEqual([...EXPECTED_ARRANGEMENT]);
     // The Bold in the arrangement IS the override (its className landed).
-    const bold = view.container.querySelector('[aria-label="formattingBar.boldShortcut"]')!;
+    const bold = view.container.querySelector(byLabel('formattingBar.boldShortcut'))!;
     expect(bold.className).toContain('custom-bold');
     const boldIndex = EXPECTED_ARRANGEMENT.indexOf('text.bold');
     expect(identities[boldIndex]).toBe('text.bold');
@@ -199,11 +204,11 @@ describe('the default arrangement', () => {
       </DocxEditorToolbar>
     );
     const toolbar = toolbarElement(view);
-    expect(view.container.querySelector('[aria-label="formattingBar.strikethrough"]')).toBeNull();
+    expect(view.container.querySelector(byLabel('formattingBar.strikethrough'))).toBeNull();
     expect(toolbarArrangement(toolbar).length).toBe(EXPECTED_ARRANGEMENT.length - 1);
     // Neighbours unaffected: underline still present, alignment group intact.
     expect(
-      view.container.querySelector('[aria-label="formattingBar.underlineShortcut"]')
+      view.container.querySelector(byLabel('formattingBar.underlineShortcut'))
     ).not.toBeNull();
   });
 
@@ -227,7 +232,7 @@ describe('live button state', () => {
       editor().surface!.selectAll();
     });
     const bold = view.container.querySelector(
-      '[aria-label="formattingBar.boldShortcut"]'
+      byLabel('formattingBar.boldShortcut')
     ) as HTMLButtonElement;
     expect(bold.disabled).toBe(false);
     expect(bold.hasAttribute('data-active')).toBe(false);
@@ -247,7 +252,7 @@ describe('live button state', () => {
       </DocxEditorToolbar>
     );
     const button = view.container.querySelector(
-      '[aria-label="toolbar.image"]'
+      byLabel('toolbar.image')
     ) as HTMLButtonElement;
     expect(button.disabled).toBe(false);
     expect(button.hasAttribute('data-disabled')).toBe(false);
@@ -347,7 +352,7 @@ describe('the shaped parts', () => {
     const stepper = view.container.querySelector('[data-slot="font.size"]')!;
     const value = stepper.querySelector('.docx-toolbar__stepper-value') as HTMLInputElement;
     expect(value.value).toBe('12');
-    const increase = stepper.querySelector('[aria-label="fontSize.increase"]') as HTMLButtonElement;
+    const increase = stepper.querySelector(byLabel('fontSize.increase')) as HTMLButtonElement;
     expect(increase.disabled).toBe(false);
     await act(async () => {
       increase.click();
@@ -356,7 +361,7 @@ describe('the shaped parts', () => {
     // increment: 12pt steps to 14pt, read back from the engine's snapshot.
     expect(editor().snapshot().formatting?.fontSizePt).toBe(14);
     expect(value.value).toBe('14');
-    const decrease = stepper.querySelector('[aria-label="fontSize.decrease"]') as HTMLButtonElement;
+    const decrease = stepper.querySelector(byLabel('fontSize.decrease')) as HTMLButtonElement;
     await act(async () => {
       decrease.click();
     });
@@ -498,8 +503,8 @@ describe('the shaped parts', () => {
       trigger.click();
     });
     expect(rows().map((row) => row.textContent)).toEqual([
-      'lineSpacing.addSpaceBefore',
-      'lineSpacing.addSpaceAfter',
+      label('lineSpacing.addSpaceBefore' as TranslationKey),
+      label('lineSpacing.addSpaceAfter' as TranslationKey),
     ]);
 
     await act(async () => {
@@ -511,7 +516,7 @@ describe('the shaped parts', () => {
       trigger.click();
     });
     // Word never offers to add space that is already there.
-    expect(rows()[0]!.textContent).toBe('lineSpacing.removeSpaceBefore');
+    expect(rows()[0]!.textContent).toBe(label('lineSpacing.removeSpaceBefore' as TranslationKey));
     await act(async () => {
       rows()[0]!.click();
     });
@@ -571,7 +576,7 @@ describe('the shaped parts', () => {
     await act(async () => {
       (value as HTMLButtonElement).click();
     });
-    const zoomIn = stepper.querySelector('[aria-label="zoom.zoomIn"]') as HTMLButtonElement;
+    const zoomIn = stepper.querySelector(byLabel('zoom.zoomIn')) as HTMLButtonElement;
     await act(async () => {
       zoomIn.click();
     });
@@ -584,7 +589,7 @@ describe('the shaped parts', () => {
     expect(pageWidth()).toBeCloseTo(widthBefore * 1.25);
     expect(view.container.textContent).toContain('hello world!');
     expect(editor().can({ type: 'undo' }).ok).toBe(true);
-    const zoomOut = stepper.querySelector('[aria-label="zoom.zoomOut"]') as HTMLButtonElement;
+    const zoomOut = stepper.querySelector(byLabel('zoom.zoomOut')) as HTMLButtonElement;
     await act(async () => {
       zoomOut.click();
     });
@@ -832,7 +837,7 @@ describe('the FontFamily compound', () => {
     ]);
     expect(
       [...listbox.querySelectorAll('.docx-toolbar__menu-label')].map((label) => label.textContent)
-    ).toEqual(['font.sansSerif', 'font.serif', 'font.monospace']);
+    ).toEqual([label('font.sansSerif' as TranslationKey), label('font.serif' as TranslationKey), label('font.monospace' as TranslationKey)]);
 
     await act(async () => {
       (options[1] as HTMLButtonElement).click();
@@ -894,7 +899,7 @@ describe('the caret-preserving mousedown contract', () => {
         </select>
       </DocxEditorToolbar>
     );
-    const bold = view.container.querySelector('[aria-label="formattingBar.boldShortcut"]')!;
+    const bold = view.container.querySelector(byLabel('formattingBar.boldShortcut'))!;
     const buttonEvent = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
     bold.dispatchEvent(buttonEvent);
     expect(buttonEvent.defaultPrevented).toBe(true);
@@ -1238,7 +1243,7 @@ describe('enabled state is the engine answer, not a registry constant', () => {
     ) as HTMLButtonElement;
     expect(underline.disabled).toBe(false);
     // The label, not an "unavailable" apology.
-    expect(underline.title).toBe('formattingBar.underlineShortcut');
+    expect(underline.title).toBe(label('formattingBar.underlineShortcut' as TranslationKey));
     await act(async () => {
       underline.click();
     });

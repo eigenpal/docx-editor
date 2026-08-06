@@ -20,6 +20,7 @@ import type { ReactNode } from 'react';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
 import { CHROME_MENUS, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
 import { DocxEditor } from '../src/components/DocxEditor.tsx';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
@@ -85,11 +86,15 @@ function menuIds(element: HTMLElement): string[] {
   );
 }
 
-/** Open one menu by its trigger's visible label (the raw i18n key without a `t`). */
+/** Bare parts resolve labels through the locale catalogue; tests address them by key. */
+const label = createT(en);
+
+/** Open one menu by its i18n key — matched against the catalogue label it renders. */
 function openMenu(view: ReturnType<typeof render>, labelKey: string): void {
+  const text = label(labelKey as TranslationKey);
   const match = [...view.container.querySelectorAll<HTMLButtonElement>('.docx-menubar__trigger')] //
-    .find((button) => button.textContent === labelKey);
-  if (!match) throw new Error(`no trigger labelled ${labelKey}`);
+    .find((button) => button.textContent === text);
+  if (!match) throw new Error(`no trigger labelled ${text}`);
   act(() => {
     fireEvent.click(match);
   });
@@ -97,9 +102,10 @@ function openMenu(view: ReturnType<typeof render>, labelKey: string): void {
 
 /** Reveal a submenu's panel — the parent opens on hover, as it does for a pointer. */
 function openSubmenu(view: ReturnType<typeof render>, labelKey: string): void {
+  const text = label(labelKey as TranslationKey);
   const parent = [...view.container.querySelectorAll<HTMLElement>('.docx-menubar__submenu')] //
-    .find((element) => element.textContent?.includes(labelKey));
-  if (!parent) throw new Error(`no submenu labelled ${labelKey}`);
+    .find((element) => element.textContent?.includes(text));
+  if (!parent) throw new Error(`no submenu labelled ${text}`);
   act(() => {
     fireEvent.mouseEnter(parent);
   });
@@ -145,7 +151,7 @@ describe('the default bar', () => {
       element.getAttribute('data-slot')
     );
     expect(slots).toEqual(['file.open', 'file.save', 'file.pageSetup']);
-    expect(view.container.textContent).not.toContain('toolbar.print');
+    expect(view.container.textContent).not.toContain(label('toolbar.print' as TranslationKey));
   });
 
   test('a menu child overrides its menu IN PLACE; `hidden` removes it', () => {
@@ -205,7 +211,7 @@ describe('rows carry the engine, not a paraphrase', () => {
     const toc = row(view, 'insert.toc');
     expect(toc.disabled).toBe(false);
     expect(toc.getAttribute('aria-disabled')).toBeNull();
-    expect(toc.textContent).toContain('toolbar.tableOfContents');
+    expect(toc.textContent).toContain(label('toolbar.tableOfContents' as TranslationKey));
     act(() => {
       fireEvent.click(toc);
     });
@@ -253,7 +259,7 @@ describe('rows carry the engine, not a paraphrase', () => {
     expect(row(view, 'file.save').getAttribute('aria-disabled')).toBeNull();
     expect(row(view, 'file.pageSetup').getAttribute('aria-disabled')).toBeNull();
     // The shortcut column is filled from the registry's keys.
-    expect(row(view, 'file.save').textContent).toContain('toolbar.saveShortcut');
+    expect(row(view, 'file.save').textContent).toContain(label('toolbar.saveShortcut' as TranslationKey));
   });
 
   test('a host `onSave` replaces the packaged download', async () => {
@@ -317,15 +323,17 @@ describe('chrome contracts', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
-  test('labels resolve through `t`, and fall back to the KEY, never to English', () => {
+  test('labels resolve through `t`, and fall back to the CATALOGUE, never to the key', () => {
     const { view } = mountMenu(<DocxEditorMenu t={(key) => `[${key}]`} />);
     expect(view.container.textContent).toContain('[toolbar.file]');
     expect(view.container.textContent).toContain('[toolbar.insert]');
 
+    // A bare part matches `<DocxEditor>`'s own default — legible with zero configuration.
+    // A RAW KEY on screen is the bug this pins against, in both directions.
     cleanup();
     const bare = mountMenu(<DocxEditorMenu />);
-    expect(bare.view.container.textContent).toContain('toolbar.file');
-    expect(bare.view.container.textContent).not.toContain('File');
+    expect(bare.view.container.textContent).toContain(label('toolbar.file' as TranslationKey));
+    expect(bare.view.container.textContent).not.toContain('toolbar.file');
   });
 
   test('`<DocxEditor>` mounts the bar by default, and `menu={false}` removes it', () => {
@@ -348,7 +356,7 @@ describe('chrome contracts', () => {
     const { view } = mountMenu(<DocxEditorMenu />);
     openMenu(view, 'toolbar.file');
     const insert = [...view.container.querySelectorAll<HTMLButtonElement>('.docx-menubar__trigger')] //
-      .find((button) => button.textContent === 'toolbar.insert')!;
+      .find((button) => button.textContent === label('toolbar.insert' as TranslationKey))!;
     act(() => {
       fireEvent.mouseEnter(insert);
     });
@@ -374,7 +382,7 @@ describe('chrome contracts', () => {
     openSubmenu(view, 'toolbar.break');
     expect(row(view, 'insert.pageBreak')).toBeDefined();
     const parent = [...view.container.querySelectorAll<HTMLElement>('.docx-menubar__submenu')] //
-      .find((element) => element.textContent?.includes('toolbar.break'))!;
+      .find((element) => element.textContent?.includes(label('toolbar.break' as TranslationKey)))!;
     act(() => {
       fireEvent.click(parent.querySelector('button')!);
     });
@@ -387,7 +395,7 @@ describe('chrome contracts', () => {
     const { view } = mountMenu(<DocxEditorMenu />);
     openMenu(view, 'toolbar.insert');
     const parent = [...view.container.querySelectorAll<HTMLElement>('.docx-menubar__submenu')] //
-      .find((element) => element.textContent?.includes('toolbar.break'))!;
+      .find((element) => element.textContent?.includes(label('toolbar.break' as TranslationKey)))!;
     act(() => {
       fireEvent.focus(parent.querySelector('button')!);
     });
@@ -592,7 +600,7 @@ describe('chrome contracts', () => {
   test('ARIA containment: the menubar owns its items through role="none" wrappers', () => {
     const { view } = mountMenu(<DocxEditorMenu />);
     const menubar = bar(view);
-    expect(menubar.getAttribute('aria-label')).toBe('titleBar.menuBarAriaLabel');
+    expect(menubar.getAttribute('aria-label')).toBe(label('titleBar.menuBarAriaLabel' as TranslationKey));
     // `menubar` -> unrole'd div -> menuitem breaks the required-owned-elements
     // relationship AT derives item counts and "x of y" announcements from.
     for (const child of menubar.children) {

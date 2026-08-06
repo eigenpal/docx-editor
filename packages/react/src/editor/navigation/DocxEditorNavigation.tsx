@@ -98,7 +98,7 @@ export function DocxEditorNavigation(props: DocxEditorNavigationProps): ReactEle
   return (
     <NavigationContext.Provider value={value}>
       <div
-        className={`docx-nav${pane.open ? ' docx-nav--open' : ''}${className ? ` ${className}` : ''}`}
+        className={`ep-root docx-nav${pane.open ? ' docx-nav--open' : ''}${className ? ` ${className}` : ''}`}
         data-open={pane.open ? 'true' : 'false'}
         style={
           {
