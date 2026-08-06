@@ -265,7 +265,16 @@ export function withCustomXmlDataPart(
   rootLocalName: string
 ): CustomXmlDataPartResult {
   const existing = findCustomXmlDataPart(pkg, storyPartName, namespaceUri);
-  if (existing) return { pkg, part: existing };
+  if (existing) {
+    // THE ROOT NAME HAS TO MATCH TOO. A store is located by namespace, but a binding's xpath
+    // names the ROOT — so reusing a store whose root is called something else authors
+    // `/ns0:asked/ns0:node[…]` into a part whose root is `<got>`, and Word resolves that to
+    // nothing and paints an empty control. Two ways in: a caller passing a second root name for
+    // one namespace, and a file that planted a store under a namespace this host claims.
+    const root = pkg.parts.get(existing.partName)?.root;
+    if (root && root.localName !== rootLocalName) return { pkg, part: null };
+    return { pkg, part: existing };
+  }
 
   // An element name is not an attribute value: escaping cannot rescue a bad one, because the
   // injection lands in NAME position where `evil xmlns:q="urn:q" q:attr="1"` is markup and not

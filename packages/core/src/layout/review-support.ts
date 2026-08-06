@@ -224,7 +224,15 @@ export interface ReviewCustomItem {
    * `RecognizedCustomNode.data`, which this is carried from.
    */
   readonly data?: unknown;
-  /** Card title, from the definition's `reviewCard` hook. */
+  /**
+   * Whether this node asked for a sidebar card.
+   *
+   * False for a definition with no `reviewCard`: the item exists so the chip's own surfaces can
+   * read `attrs`, `text` and `data` off it, and the rail leaves it out. A surface listing cards
+   * filters on this rather than on an empty `title`.
+   */
+  readonly carded: boolean;
+  /** Card title, from the definition's `reviewCard` hook. Empty when `carded` is false. */
   readonly title: string;
   /** Card body, from the definition's `reviewCard` hook. */
   readonly detail?: string;

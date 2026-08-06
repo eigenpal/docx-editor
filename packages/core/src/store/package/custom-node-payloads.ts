@@ -19,6 +19,8 @@
 import { contentControlPropertiesOf, contentControlsIn } from './content-control-nodes.ts';
 import { customXmlLabelXPath, customXmlPrefixMappings } from './custom-xml-nodes.ts';
 import type { CustomXmlDataPart } from './custom-xml-part.ts';
+import type { OoxmlPackage } from './ooxml-package.ts';
+import { storyRootsOf } from './story-blocks.ts';
 import type { OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 
 /** The prefix every binding this library authors declares and quotes. */
@@ -76,6 +78,29 @@ export function boundCustomXmlNodeIds(part: OoxmlPart, storeItemId: string): Set
   for (const entry of contentControlsIn(part.root)) {
     const id = boundCustomXmlNodeIdOf(entry.node, storeItemId);
     if (id !== null) found.add(id);
+  }
+  return found;
+}
+
+/**
+ * Every node id ANY story in the package binds, in one store.
+ *
+ * THE WHOLE PACKAGE, not one story. A payload is reachable from a header as easily as from the
+ * body — Word enumerates its data store from the main part, but nothing stops a control
+ * elsewhere quoting the same `w:storeItemID` — and the two callers that decide what is an orphan
+ * both destroy data when they are wrong. The sweep would collect a payload a header still paints;
+ * the export would strip a store a header still names, which is a document Word offers to repair.
+ *
+ * Costs one walk per story per store, on open and on export. Neither is a keystroke.
+ */
+export function boundCustomXmlNodeIdsInPackage(
+  pkg: OoxmlPackage,
+  storeItemId: string
+): Set<string> {
+  const found = new Set<string>();
+  for (const part of pkg.parts.values()) {
+    if (storyRootsOf(part).length === 0) continue;
+    for (const id of boundCustomXmlNodeIds(part, storeItemId)) found.add(id);
   }
   return found;
 }

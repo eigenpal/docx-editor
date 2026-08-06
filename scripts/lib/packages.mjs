@@ -100,6 +100,48 @@ export const PACKAGES = [
     root: 'packages/pro',
     pkgSlug: 'docx-editor-pro',
     tsconfigPath: 'packages/pro/tsconfig.api.json',
+    // Rolled up into one `.d.ts` per entry, exactly like `editor-api` — so the same reasoning
+    // applies: a forgotten export here is a name a public signature hands a consumer that the
+    // consumer cannot import to write the signature down. `StandardSchemaV1` reached the
+    // published surface unexported on eight declarations, and nothing said so.
+    forgottenExports: {
+      logLevel: 'warning',
+      allowlist: {
+        // Owned by `core` and imported from there — a consumer CAN name these, just not
+        // through this package, which is the boundary `contracts/modules.ts` documents.
+        index: ['Editor', 'EditorModule', 'ExecResult', 'OoxmlPart'],
+        // The react entry is a compound-parts barrel: every `Review*` here is a namespace
+        // member reachable as `DocxEditorReview.Card`, and the three custom-node types are
+        // re-exports of names the package's own index publishes. This is the noise case the
+        // comment above describes; the gate earns its keep on `index`.
+        react: [
+          'ActivatedCustomNode',
+          'AnyCustomNodeDefinition',
+          'CustomNodeDefinition',
+          'Editor',
+          'EditorModule',
+          'ReviewAccept',
+          'ReviewAddComment',
+          'ReviewAuthor',
+          'ReviewAvatar',
+          'ReviewBalloon',
+          'ReviewCard',
+          'ReviewDelete',
+          'ReviewDraft',
+          'ReviewEmpty',
+          'ReviewItemPlacement',
+          'ReviewItemQuery',
+          'ReviewList',
+          'ReviewMarkers',
+          'ReviewReject',
+          'ReviewReplies',
+          'ReviewReply',
+          'ReviewRoot',
+          'ReviewSummary',
+          'ReviewTime',
+        ],
+      },
+    },
   },
   {
     name: '@docx-editor.dev/fonts',

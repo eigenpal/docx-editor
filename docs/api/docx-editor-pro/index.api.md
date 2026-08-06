@@ -19,13 +19,26 @@ export interface ActivatedCustomNode {
 }
 
 // @public
-export type AnyCustomNodeDefinition = CustomNodeDefinition<any>;
+export type AnyCustomNodeDefinition = CustomNodeDefinition;
 
 // @public
 export const CUSTOM_NODE_STORE_ROOT = "docxEditor";
 
 // @public
-export interface CustomNodeDefinition<Schema extends StandardSchemaV1 | undefined = undefined> {
+export type CustomNodeDataRejection = 'malformed' | 'invalid' | 'async';
+
+// @public
+export type CustomNodeDataResult<Output> = {
+    readonly ok: true;
+    readonly value: Output;
+} | {
+    readonly ok: false;
+    readonly reason: CustomNodeDataRejection;
+    readonly issues: readonly string[];
+};
+
+// @public
+export interface CustomNodeDefinition<Schema extends StandardSchemaV1 | undefined = any> {
     readonly chrome?: {
         readonly color?: string;
     };
@@ -55,8 +68,7 @@ export interface CustomNodeDefinition<Schema extends StandardSchemaV1 | undefine
 
 // @public
 export interface CustomNodeDiagnostic {
-    // (undocumented)
-    readonly code: 'payload-invalid';
+    readonly code: 'payload-invalid' | 'payload-missing';
     readonly issues: readonly string[];
     readonly name: string;
     readonly nodeId: string;
@@ -169,6 +181,12 @@ export type ExportCustomNodesResult = {
 };
 
 // @public
+export type InferSchemaInput<Schema> = Schema extends StandardSchemaV1<infer Input, unknown> ? Input : unknown;
+
+// @public
+export type InferSchemaOutput<Schema> = Schema extends StandardSchemaV1<unknown, infer Output> ? Output : unknown;
+
+// @public
 export function insertCustomNode<Schema extends StandardSchemaV1 | undefined = undefined>(editor: Editor, definition: CustomNodeDefinition<Schema>, attrs: Readonly<Record<string, string>>, text: string, options?: InsertCustomNodeOptions<Schema>): ExecResult;
 
 // @public
@@ -186,7 +204,13 @@ export interface InsertCustomNodeOptions<Schema extends StandardSchemaV1 | undef
 export function isCustomNodeDefinition(candidate: unknown): candidate is AnyCustomNodeDefinition;
 
 // @public
+export const MAX_CUSTOM_NODE_DATA_LENGTH: number;
+
+// @public
 export const MAX_TAG_LENGTH = 64;
+
+// @public
+export function parseCustomNodeData<Schema extends StandardSchemaV1 | undefined>(schema: Schema, raw: string): CustomNodeDataResult<Schema extends StandardSchemaV1 ? InferSchemaOutput<Schema> : unknown>;
 
 // @public
 export interface ProLicenseOptions {
@@ -217,12 +241,47 @@ export interface ReviewModuleOptions extends ProLicenseOptions {
 }
 
 // @public
+export function serializeCustomNodeData(value: unknown): CustomNodeDataResult<string>;
+
+// @public
+export interface StandardSchemaIssue {
+    // (undocumented)
+    readonly message: string;
+    // (undocumented)
+    readonly path?: readonly (PropertyKey | {
+        readonly key: PropertyKey;
+    })[] | undefined;
+}
+
+// @public
+export type StandardSchemaResult<Output> = {
+    readonly value: Output;
+    readonly issues?: undefined;
+} | {
+    readonly issues: readonly StandardSchemaIssue[];
+};
+
+// @public
+export interface StandardSchemaV1<Input = unknown, Output = Input> {
+    // (undocumented)
+    readonly '~standard': {
+        readonly version: 1;
+        readonly vendor: string;
+        readonly validate: (value: unknown) => StandardSchemaResult<Output> | Promise<StandardSchemaResult<Output>>;
+        readonly types?: {
+            readonly input: Input;
+            readonly output: Output;
+        } | undefined;
+    };
+}
+
+// @public
 export function updateCustomNode<Schema extends StandardSchemaV1 | undefined = undefined>(editor: Editor, definition: CustomNodeDefinition<Schema>, nodeId: string, attrs: Readonly<Record<string, string>>, text: string, options?: UpdateCustomNodeOptions<Schema>): ExecResult;
 
 // @public
 export interface UpdateCustomNodeOptions<Schema extends StandardSchemaV1 | undefined = undefined> {
     readonly alias?: string;
-    readonly data?: InferSchemaInput<Schema>;
+    readonly data?: InferSchemaInput<Schema> | null;
     readonly lock?: false | 'sdtLocked' | 'sdtContentLocked' | 'contentLocked';
 }
 

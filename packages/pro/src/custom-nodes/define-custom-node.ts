@@ -3,18 +3,25 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// `defineCustomNode` — integrator-defined inline nodes anchored on run-level
-// SDTs with `w:tag` identity (pro-review-and-custom-nodes, D5–D7).
+// `defineCustomNode` — integrator-defined inline nodes anchored on run-level SDTs.
 //
-// This module is the RECOGNITION half of the contract: definitions, the module
-// registration, and the pass that turns a document's inline SDTs into typed,
-// recognized nodes. The write side (`toDocx` through a new store op), the chip
-// render/extent contract, and interaction dispatch land on the same seam in the
-// change's remaining tasks — a document recognized today renders its SDT
-// content literally, which is also the free tier's and Word's fallback.
+// This module is the RECOGNITION half of the contract: definitions, the module registration,
+// and the pass that turns a document's inline SDTs into typed, recognized nodes. A node's
+// identity rides in `w:tag`, which Word caps at 64 characters; anything larger is a PAYLOAD in
+// a customXml data part the control binds to, resolved here and handed to the hooks already
+// checked against the definition's `schema`.
+//
+// The write side is `insert-custom-node.ts` / `update-custom-node.ts`; a document opened without
+// a matching definition renders its SDT content literally, which is also the free tier's and
+// Word's fallback.
 
 import type { EditorModule } from '@docx-editor.dev/core/editor';
-import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
+import {
+  contentControlPropertiesOf,
+  type OoxmlElement,
+  type OoxmlNode,
+  type OoxmlPart,
+} from '@docx-editor.dev/core/store';
 import { rememberLicenseKey, type ProLicenseOptions } from '../license.ts';
 import { decodeCustomNodeTag } from './tag-codec.ts';
 import { customNodeNamespace } from './node-payload.ts';
@@ -65,7 +72,15 @@ export interface CustomNodePayloadSource {
  * still renders.
  */
 export interface CustomNodeDiagnostic {
-  readonly code: 'payload-invalid';
+  /**
+   * `payload-invalid` — a payload was found and did not match the schema.
+   * `payload-missing` — the control's binding names a store node the document does not hold.
+   *
+   * The second is what a half-stripped export or a hand-edited file leaves behind, and it used
+   * to be indistinguishable from "this node carries no payload": both arrive as `data:
+   * undefined` and neither said anything.
+   */
+  readonly code: 'payload-invalid' | 'payload-missing';
   /** The definition whose schema refused it. */
   readonly name: string;
   /** The control's canonical node id, so a host can locate it. */
@@ -97,7 +112,10 @@ export interface CustomNodeDiagnostic {
  *
  * @public
  */
-export interface CustomNodeDefinition<Schema extends StandardSchemaV1 | undefined = undefined> {
+export interface CustomNodeDefinition<
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see `AnyCustomNodeDefinition`
+  Schema extends StandardSchemaV1 | undefined = any,
+> {
   /** Node type name — the second segment of the tag (`<prefix>:<name>?…`). */
   readonly name: string;
   /** Tag prefix this definition claims (`acme` claims `acme:*`). No colons. */
@@ -149,11 +167,9 @@ export interface CustomNodeDefinition<Schema extends StandardSchemaV1 | undefine
    * The "Edit {label}" row the context menu shows at the top when the
    * right-click lands on the node's chip. The HOST owns the dialog.
    *
-   * HONEST LIMIT: there is no in-place update call yet — re-authoring is
-   * `removeContentControl` + `insertCustomNode` at the node's range (the
-   * activation carries `nodeId` and, when a review module is registered, the
-   * current `text` to prefill a form). Schema-driven edit forms are the planned
-   * follow-up.
+   * Re-author with `updateCustomNode(editor, definition, node.nodeId, attrs, text, { data })`:
+   * one transaction, one undo step. The activation carries `nodeId`, the node's `text` and its
+   * `data`, which is everything a prefilled form needs.
    */
   readonly onEdit?: (node: ActivatedCustomNode) => void;
   /**
@@ -219,18 +235,22 @@ export interface CustomNodeDefinition<Schema extends StandardSchemaV1 | undefine
 }
 
 /**
- * A definition of ANY payload shape — the type every collection and registry uses.
+ * A definition of any payload shape, spelled out.
  *
- * `CustomNodeDefinition<Schema>` is invariant in `Schema`, because the schema's output type
- * appears in the PARAMETER of `fromDocx` and `reviewCard`. That is what makes those hooks typed,
- * and it also means two definitions with different schemas do not unify: `[citation, figure]`
- * would have no common type to infer. Every place that holds several — the module's `nodes`, the
- * recognition pass, the export policy — takes this instead, and the hooks stay typed at the one
- * place a host writes them, which is `defineCustomNode`.
+ * The same thing bare `CustomNodeDefinition` already means — the interface defaults its
+ * parameter to `any` for exactly this reason. `CustomNodeDefinition<Schema>` is INVARIANT in
+ * `Schema`, because the schema's output type appears in the PARAMETER of `fromDocx` and
+ * `reviewCard`; that is what makes those hooks typed, and it also means two definitions with
+ * different schemas are not assignable to one another. Had the default been `undefined`, the
+ * obvious annotation — `const nodes: CustomNodeDefinition[] = [citation, figure]` — would fail
+ * with a message naming neither the cause nor this alias.
+ *
+ * The cost, stated plainly: `data` is unchecked wherever a definition is held under this type.
+ * Pull one out of a registry and `insertCustomNode(editor, def, attrs, text, { data })` accepts
+ * any shape at all. Payload typing lives where the definition is WRITTEN — `defineCustomNode`
+ * infers the schema, and its hooks are typed from it.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- see above: the alias exists to
-// make definitions with different schemas assignable to one another in collection positions.
-export type AnyCustomNodeDefinition = CustomNodeDefinition<any>;
+export type AnyCustomNodeDefinition = CustomNodeDefinition;
 
 /**
  * A chip activation: identity + attrs, plus where it sits.
@@ -348,25 +368,29 @@ export interface CustomNodesModuleOptions extends ProLicenseOptions {
  * Module-level, like the license key, and for the same reason: recognition runs inside the
  * engine's review derivation, which forwards definitions and nothing else. Threading a callback
  * through `ReviewModelInput` would put a capability package's diagnostics channel in the
- * engine's own contract. Last registration wins, which matches one editor per page.
+ * engine's own contract.
+ *
+ * A SET, not a slot. Two editors on one page each register a module, and the second one — which
+ * may not want diagnostics at all — used to overwrite the first's callback with `null` and
+ * silence it for the rest of the session.
  */
-let reportDiagnostic: ((diagnostic: CustomNodeDiagnostic) => void) | null = null;
+const diagnosticListeners = new Set<(diagnostic: CustomNodeDiagnostic) => void>();
 
-/** Report to whatever `customNodesModule` was told, if anything. Never throws at the caller. */
+/** Report to every registered listener. Never throws at the caller. */
 export function reportCustomNodeDiagnostic(diagnostic: CustomNodeDiagnostic): void {
-  const report = reportDiagnostic;
-  if (!report) return;
-  try {
-    report(diagnostic);
-  } catch {
-    // A host's logger throwing must not take a document's recognition pass with it.
+  for (const report of [...diagnosticListeners]) {
+    try {
+      report(diagnostic);
+    } catch {
+      // A host's logger throwing must not take a document's recognition pass with it.
+    }
   }
 }
 
 /** Register custom node definitions with `createDocxEditor({ modules })`. */
 export function customNodesModule(options: CustomNodesModuleOptions): EditorModule {
   rememberLicenseKey(options.licenseKey);
-  reportDiagnostic = options.onDiagnostic ?? null;
+  if (options.onDiagnostic) diagnosticListeners.add(options.onDiagnostic);
   return {
     id: 'custom-nodes',
     customNodes: options.nodes,
@@ -436,7 +460,12 @@ export function recognizeCustomNodes(
         // Resolved BEFORE `fromDocx`, so the hook sees the payload alongside the attrs and can
         // decide with both. A node whose payload failed its schema arrives with `data`
         // undefined rather than not arriving.
-        const data = resolvePayload(definition, node.id, payloads?.get(node.id));
+        const data = resolvePayload(
+          definition,
+          node.id,
+          payloads?.get(node.id),
+          contentControlPropertiesOf(node).dataBinding !== undefined
+        );
         const attrs = definition.fromDocx
           ? definition.fromDocx({
               attrs: decoded.attrs,
@@ -476,9 +505,23 @@ export function recognizeCustomNodes(
 function resolvePayload(
   definition: AnyCustomNodeDefinition,
   nodeId: string,
-  source: CustomNodePayloadSource | undefined
+  source: CustomNodePayloadSource | undefined,
+  /** Whether the control declares a `w:dataBinding` — i.e. claims to have a payload. */
+  bound: boolean
 ): { readonly present: true; readonly value: unknown } | { readonly present: false } {
-  if (!source) return { present: false };
+  if (!source) {
+    // A control that says it is bound and a store that does not hold the node is not the same
+    // thing as a control that carries no payload, and both used to arrive as silence.
+    if (bound) {
+      reportCustomNodeDiagnostic({
+        code: 'payload-missing',
+        name: definition.name,
+        nodeId,
+        issues: ['the control binds a store node this document does not hold'],
+      });
+    }
+    return { present: false };
+  }
   const parsed = parseCustomNodeData(definition.schema, source.data);
   if (parsed.ok) return { present: true, value: parsed.value };
   reportCustomNodeDiagnostic({

@@ -80,7 +80,8 @@ export const OUTSIDE = -31;
 
 /**
  * The iceberg: nine tenths of it never made it into the paragraph. The document shows the tip;
- * `depth` rides in the tag and comes back typed on the chip, the card and the context menu.
+ * `depth` rides in the PAYLOAD — a customXml data part the chip binds to — and comes back on the
+ * chip, the card and the context menu. Its tag carries identity alone.
  */
 export const ICEBERG = defineCustomNode({
   name: 'iceberg',

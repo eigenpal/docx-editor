@@ -12,15 +12,16 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import type { Editor, ExecResult } from '@docx-editor.dev/core/contracts/editor';
 import type { PaginatedSurface } from '@docx-editor.dev/core/editor';
 import {
-  boundCustomXmlNodeIdOf,
-  contentControlsIn,
-  customXmlDataParts,
+  customNodePayloadsByControl,
   segmentsOf,
+  type CustomNodePayloadRead,
+  type CustomNodePayloadWrite,
   type OoxmlNode,
   type OoxmlParagraphNode,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
-import type { CustomNodeDefinition } from './define-custom-node.ts';
+import type { AnyCustomNodeDefinition, CustomNodeDefinition } from './define-custom-node.ts';
+import { CUSTOM_NODE_STORE_ROOT, customNodeNamespace } from './node-payload.ts';
 import type { InferSchemaInput, StandardSchemaV1 } from './data-schema.ts';
 import { describeRefusal, payloadFor } from './insert-custom-node.ts';
 import { encodeCustomNodeTag } from './tag-codec.ts';
@@ -119,10 +120,14 @@ export interface UpdateCustomNodeOptions<Schema extends StandardSchemaV1 | undef
    *
    * Written in the SAME transaction as the label, so an update cannot leave the two
    * disagreeing — which is the one way a bound chip could ever show text its payload does not
-   * describe. Omitted, the node comes back with no payload at all; pass the old value through
-   * to keep it.
+   * describe.
+   *
+   * OMITTING IT KEEPS THE PAYLOAD the node already had. That is the important default: the
+   * commonest update is a label edit, and an omission that dropped the citation's authors and
+   * year would be data loss the caller never asked for and could not see. Pass `null` to
+   * remove the payload deliberately.
    */
-  readonly data?: InferSchemaInput<Schema>;
+  readonly data?: InferSchemaInput<Schema> | null;
 }
 
 /**
@@ -160,13 +165,16 @@ export function updateCustomNode<Schema extends StandardSchemaV1 | undefined = u
   }
   // The payload keeps the id the node already had, so an update is an upsert in the store
   // rather than a new entry beside the old one.
-  const payload = payloadFor(
-    surface,
-    definition,
-    options.data,
-    text,
-    boundNodeIdOf(surface, nodeId)
-  );
+  const bound = boundPayloadOf(surface, nodeId);
+  const payload =
+    options.data === undefined
+      ? // CARRIED FORWARD. The node is removed and reinserted, so a payload nobody mentioned
+        // would otherwise be dropped by an update that only meant to fix a label. The LABEL is
+        // still the new one — that is the half an update is always about.
+        carriedPayload(definition, bound, text)
+      : options.data === null
+        ? null
+        : payloadFor(surface, definition, options.data, text, bound?.nodeId);
   if (payload && 'reason' in payload) {
     return { ok: false, code: 'invalidArgs', reason: payload.reason };
   }
@@ -187,14 +195,37 @@ export function updateCustomNode<Schema extends StandardSchemaV1 | undefined = u
   return { ok: true, changed: true };
 }
 
-/** The store node this control already binds, so a rewrite reuses the id rather than minting one. */
-function boundNodeIdOf(surface: PaginatedSurface, controlNodeId: string): string | undefined {
+/** The payload this control already binds, so a rewrite can reuse both its id and its data. */
+function boundPayloadOf(
+  surface: PaginatedSurface,
+  controlNodeId: string
+): CustomNodePayloadRead | undefined {
   const part = surface.session.part();
-  const control = contentControlsIn(part.root).find((entry) => entry.node.id === controlNodeId);
-  if (!control) return undefined;
-  for (const dataPart of customXmlDataParts(surface.session.currentPackage(), part.name)) {
-    const bound = boundCustomXmlNodeIdOf(control.node, dataPart.itemId);
-    if (bound !== null) return bound;
-  }
-  return undefined;
+  return customNodePayloadsByControl(surface.session.currentPackage(), part.name).get(
+    controlNodeId
+  );
+}
+
+/**
+ * The payload the node already had, under the NEW label.
+ *
+ * Re-serialized rather than re-validated: it came out of the store, so it has already been
+ * through the schema on the way in, and a definition whose schema TIGHTENED since the document
+ * was written should not have its label edit refused by a payload the caller never touched.
+ */
+function carriedPayload(
+  definition: AnyCustomNodeDefinition,
+  bound: CustomNodePayloadRead | undefined,
+  label: string
+): { readonly value: CustomNodePayloadWrite } | null {
+  if (!bound) return null;
+  return {
+    value: {
+      namespaceUri: customNodeNamespace(definition),
+      rootLocalName: CUSTOM_NODE_STORE_ROOT,
+      nodeId: bound.nodeId,
+      label,
+      data: bound.data,
+    },
+  };
 }

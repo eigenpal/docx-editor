@@ -96,14 +96,21 @@ describe('customItemsOf', () => {
     expect(item.range!.end.offset).toBe(23);
   });
 
-  test('a definition without reviewCard contributes nothing', () => {
+  test('a definition without reviewCard is recognized but asks for no card', () => {
+    // It used to contribute nothing at all, which meant the chip's own surfaces — click, hover,
+    // the context menu's Edit row — got no `text` and no `data`, because those are read off the
+    // review item. Now the item exists and says `carded: false`; the rail is what filters it.
     const bare = defineCustomNode({ name: 'citation', tagPrefix: 'acme' });
     const editor = createDocxEditor({
       container: document.createElement('div'),
       document: CITED,
       modules: [customNodesModule({ nodes: [bare] })],
     });
-    expect(customItemsOf(editor.surface!.session.part(), [bare])).toEqual([]);
+    const items = customItemsOf(editor.surface!.session.part(), [bare]);
+    expect(items).toHaveLength(1);
+    expect(items[0]?.carded).toBe(false);
+    expect(items[0]?.title).toBe('');
+    expect(items[0]?.text).toBe('(Smith 2024, p. 42)');
   });
 
   test('a reviewCard veto (null) skips that node', () => {

@@ -66,6 +66,7 @@ export {
   sweepCustomNodePayloads,
   type CustomNodePayloadRead,
   type CustomNodePayloadWrite,
+  type CustomNodeSweepOutcome,
   type CustomNodeSweepResult,
   type CustomNodeWriteRejection,
   type CustomNodeWriteResult,

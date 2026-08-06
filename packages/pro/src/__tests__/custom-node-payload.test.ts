@@ -31,6 +31,7 @@ import {
   type CustomNodeDiagnostic,
 } from '../index.ts';
 import { customNodePayloadsByControl } from '@docx-editor.dev/core/store';
+import { customItemsOf } from '../review/review-model.ts';
 import { readOoxmlPackage } from '@docx-editor.dev/core/store';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -361,5 +362,203 @@ describe('customNodeXml, for a server with no editor', () => {
     const built = customNodeXml(citation, { sourceId: 's' }, 'label');
     expect(built.ok && built.store).toBeUndefined();
     expect(built.ok && built.xml).not.toContain('dataBinding');
+  });
+});
+
+describe('the failures a payload store can hide', () => {
+  const shared = defineCustomNode({
+    name: 'figure',
+    tagPrefix: 'acme',
+    schema: z.object({ n: z.string() }),
+    preserveOnExport: true,
+  });
+
+  test('exporting a removed node does not ship its payload beside a surviving one', async () => {
+    // `secret` and `shared` share a tagPrefix, so they share ONE store. Dropping the whole
+    // store only when nothing binds it meant the surviving figure kept the removed node's
+    // payload alive — the export said ok and shipped the data it was called to remove.
+    const editor = mount(docx('<w:p><w:r><w:t>xy</w:t></w:r></w:p>'), [secret, shared]);
+    insertCustomNode(editor, shared, { n: '1' }, 'Figure 1', {
+      at: { paragraphId: firstParagraphId(editor), offset: 0 },
+      data: { n: '1' },
+    });
+    insertCustomNode(editor, secret, { k: 'v' }, 'classified', {
+      at: { paragraphId: firstParagraphId(editor), offset: 9 },
+      data: { body: 'SHOULD-NOT-SHIP' },
+    });
+
+    const exported = exportCustomNodes(new Uint8Array(await editor.save()), [secret, shared]);
+    expect(exported.ok).toBe(true);
+    if (!exported.ok) return;
+    expect(exported.removed).toBe(1);
+    const entries = unzipSync(exported.bytes);
+    const store = strFromU8(entries['customXml/item1.xml']!);
+    expect(store).not.toContain('SHOULD-NOT-SHIP');
+    // The figure the host asked to keep is untouched.
+    expect(store).toContain('Figure 1');
+    expect(strFromU8(entries['word/document.xml']!)).toContain('<w:dataBinding');
+  });
+
+  test('a payload a header binds is not swept away when the document opens', async () => {
+    const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
+    insertCustomNode(editor, citation, { sourceId: 'src_9f3' }, '(Smith 2024)', {
+      at: { paragraphId: firstParagraphId(editor), offset: 1 },
+      data: CITATION,
+    });
+    // Move the whole chip into a header, which Word permits — the data store is enumerated from
+    // the main part, but nothing stops a control elsewhere quoting its `w:storeItemID`.
+    const saved = unzipSync(new Uint8Array(await editor.save()));
+    const body = strFromU8(saved['word/document.xml']!);
+    const chip = /<w:sdt>.*<\/w:sdt>/s.exec(body)?.[0];
+    if (!chip) throw new Error('no chip to move');
+    saved['word/document.xml'] = strToU8(body.replace(chip, ''));
+    saved['word/header1.xml'] = strToU8(`<w:hdr xmlns:w="${W}"><w:p>${chip}</w:p></w:hdr>`);
+    saved['word/_rels/document.xml.rels'] = strToU8(
+      strFromU8(saved['word/_rels/document.xml.rels']!).replace(
+        '</Relationships>',
+        `<Relationship Id="rIdHdr" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/></Relationships>`
+      )
+    );
+    saved['[Content_Types].xml'] = strToU8(
+      strFromU8(saved['[Content_Types].xml']!).replace(
+        '</Types>',
+        '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/></Types>'
+      )
+    );
+
+    const reopened = mount(zipSync(saved));
+    const store = unzipSync(reopened.surface!.session.save())['customXml/item1.xml'];
+    // Reading the body alone made the open-time sweep collect this — with no undo entry.
+    expect(store && strFromU8(store)).toContain('src_9f3');
+  });
+
+  test('an update that only changes the label keeps the payload', () => {
+    const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
+    insertCustomNode(editor, citation, { sourceId: 'src_9f3' }, '(Smith 2024)', {
+      at: { paragraphId: firstParagraphId(editor), offset: 1 },
+      data: CITATION,
+    });
+    const [before] = recognized(editor);
+    // The commonest update there is, and the one shape that used to delete the payload.
+    const updated = updateCustomNode(
+      editor,
+      citation,
+      before!.nodeId,
+      { sourceId: 'src_9f3' },
+      '(Smith 2024, p. 42)'
+    );
+    expect(updated).toEqual({ ok: true, changed: true });
+    const [after] = recognized(editor);
+    expect(after?.text).toBe('(Smith 2024, p. 42)');
+    expect(after?.data).toEqual(CITATION);
+  });
+
+  test('passing data: null removes the payload deliberately', () => {
+    const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
+    insertCustomNode(editor, citation, { sourceId: 'src_9f3' }, '(Smith 2024)', {
+      at: { paragraphId: firstParagraphId(editor), offset: 1 },
+      data: CITATION,
+    });
+    const [before] = recognized(editor);
+    expect(
+      updateCustomNode(editor, citation, before!.nodeId, { sourceId: 's' }, 'plain', {
+        data: null,
+      }).ok
+    ).toBe(true);
+    const [after] = recognized(editor);
+    expect(after?.data).toBeUndefined();
+    const session = editor.surface!.session;
+    expect(customNodePayloadsByControl(session.currentPackage(), session.part().name).size).toBe(0);
+  });
+
+  test('a definition with no reviewCard still gets its payload on a chip activation', () => {
+    // The item exists so the chip's own surfaces can read it; the rail leaves it out.
+    const bare = defineCustomNode({ name: 'citation', tagPrefix: 'acme', schema: Citation });
+    const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'), [bare]);
+    insertCustomNode(editor, bare, { sourceId: 'src_9f3' }, '(Smith 2024)', {
+      at: { paragraphId: firstParagraphId(editor), offset: 1 },
+      data: CITATION,
+    });
+    const [node] = recognized(editor, [bare]);
+    expect(node?.data).toEqual(CITATION);
+    // And through the review derivation, which is what the chip's click and hover read: the
+    // item is there, saying it wants no card.
+    const items = customItemsOf(
+      editor.surface!.session.part(),
+      [bare],
+      customNodePayloadsByControl(
+        editor.surface!.session.currentPackage(),
+        editor.surface!.session.part().name
+      )
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0]?.carded).toBe(false);
+    expect(items[0]?.data).toEqual(CITATION);
+  });
+
+  test('a binding naming a node the store lost is reported, not silent', async () => {
+    const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
+    insertCustomNode(editor, citation, { sourceId: 'src_9f3' }, '(Smith 2024)', {
+      at: { paragraphId: firstParagraphId(editor), offset: 1 },
+      data: CITATION,
+    });
+    const saved = unzipSync(new Uint8Array(await editor.save()));
+    // What a half-stripped export or a hand edit leaves: the control still binds `cx1`.
+    saved['customXml/item1.xml'] = strToU8(
+      strFromU8(saved['customXml/item1.xml']!).replace(/<node id="cx1">.*<\/node>/s, '')
+    );
+
+    const seen: CustomNodeDiagnostic[] = [];
+    // Reopened with a namespace nobody claims, so the sweep does not tidy it away first.
+    const other = defineCustomNode({
+      name: 'citation',
+      tagPrefix: 'acme',
+      schema: Citation,
+      payloadNamespace: 'urn:example:unclaimed',
+    });
+    const reopened = mount(zipSync(saved), [other], (diagnostic) => seen.push(diagnostic));
+    recognized(reopened, [other]);
+    expect(seen.map((entry) => entry.code)).toContain('payload-missing');
+  });
+
+  test('two root names for one namespace is refused, not bound to nothing', () => {
+    const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
+    const session = editor.surface!.session;
+    const paragraphId = firstParagraphId(editor);
+    expect(
+      session.insertCustomNode({
+        paragraphId,
+        offset: 1,
+        tag: 'acme:a',
+        text: 'A',
+        payload: {
+          namespaceUri: 'urn:x',
+          rootLocalName: 'storeA',
+          nodeId: 'cx1',
+          label: 'A',
+          data: '{}',
+        },
+      }).ok
+    ).toBe(true);
+    // A second root name for the same namespace would have authored an xpath naming an element
+    // the store does not have — Word resolves that to nothing and paints an empty control.
+    const second = session.insertCustomNode({
+      paragraphId,
+      offset: 0,
+      tag: 'acme:b',
+      text: 'B',
+      payload: {
+        namespaceUri: 'urn:x',
+        rootLocalName: 'storeB',
+        nodeId: 'cx2',
+        label: 'B',
+        data: '{}',
+      },
+    });
+    expect(second.ok).toBe(false);
+    if (!second.ok) {
+      expect(second.reason).toBe('store-not-authored');
+      expect(second.detail).toContain('storeB');
+    }
   });
 });

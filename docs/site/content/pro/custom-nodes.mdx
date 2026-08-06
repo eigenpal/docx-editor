@@ -111,6 +111,8 @@ function InsertCitationButton() {
 
 The default `lock` is `contentLocked`: the text cannot be edited inline, so a label can never drift out of sync with its attributes, while the node stays deletable as one unit in both the editor and Word. Pass `lock: false` for no lock, or `'sdtContentLocked'` to forbid deleting it too.
 
+A node that carries a payload is uneditable regardless of `lock` — the engine refuses content edits inside a bound control, and so does Word. That is what keeps its text and its payload in step.
+
 ## Payloads larger than the tag
 
 `w:tag` caps at 64 characters, so it holds a node's identity and nothing else. A citation that
@@ -134,8 +136,11 @@ const Citation = defineCustomNode({
   name: 'citation',
   tagPrefix: 'docx',
   schema: CitationData,
-  // `data` arrives already checked against the schema.
-  reviewCard: ({ data }) => ({ title: `${data.authors.join(', ')} (${data.year})` }),
+  // `data` is typed by the schema — but it is OPTIONAL, because three real documents produce a
+  // node without one: no payload, a binding whose store node is missing, or a payload that
+  // failed the schema. The last two report through `onDiagnostic`.
+  reviewCard: ({ data, text }) =>
+    data ? { title: `${data.authors.join(', ')} (${data.year})` } : { title: text },
 });
 
 insertCustomNode(editor, Citation, { sourceId: 'smith-2024' }, '(Smith 2024)', {
@@ -150,11 +155,47 @@ the next open.
 
 `schema` is a [Standard Schema](https://standardschema.dev), which zod, valibot and arktype all
 implement — bring your own copy, nothing is bundled. Without one, `data` is whatever JSON the file
-held, typed `unknown`.
+held, typed `unknown`, on a null-prototype object.
+
+Insert, update and remove are each **one undo step**, payload included: the store write and the
+body write share a transaction. The open-time orphan sweep deliberately is not undoable — it
+collects payloads whose control was already gone when the document arrived, and Ctrl+Z straight
+after opening a file must not bring them back.
 
 **A bound control is read-only in Word.** Word paints its text from the payload and will not let a
 user type into it, so the two can never drift. That is what makes the store the source of truth
 rather than a cache of it.
+
+### What it looks like on disk
+
+The payload is a part in the `.docx`, which is worth seeing once when you are debugging your own
+output. `customXml/item1.xml`:
+
+```xml
+<docxEditor xmlns="urn:docx-editor.dev:custom-node:docx">
+  <node id="cx1">
+    <label>(Smith 2024)</label>
+    <data>{"sourceId":"smith-2024","locator":"p.14","authors":["Smith, J."],"year":2024}</data>
+  </node>
+</docxEditor>
+```
+
+and the control in `word/document.xml` that binds it:
+
+```xml
+<w:dataBinding w:prefixMappings="xmlns:ns0='urn:docx-editor.dev:custom-node:docx'"
+               w:xpath="/ns0:docxEditor/ns0:node[@id='cx1']/ns0:label"
+               w:storeItemID="{...}"/>
+```
+
+Node ids are `cx1`, `cx2`, … minted from what the store already holds, so the same document
+written twice produces the same bytes. `w:storeItemID` matches the `ds:itemID` in
+`customXml/itemProps1.xml` — that pair is the only link between the body and the payload.
+
+A payload is capped at 256 KB and a label at 4096 characters, enforced when writing and when
+reading. Keys named `__proto__`, `constructor` or `prototype` are stripped from a parsed payload
+at every depth — they are the shape a prototype-pollution attack takes, so `{"constructor": "Acme
+Corp"}` comes back without that field and a schema requiring it will fail.
 
 ### What happens to a payload
 
@@ -163,7 +204,26 @@ rather than a cache of it.
 | `removeCustomNode`                  | The payload goes in the same transaction.                                      |
 | A control deleted in Word           | Collected the next time the document opens, by reconciling against what the story still binds. |
 | `updateCustomNode` with `data`      | The label and the payload are written together, so they cannot disagree.       |
+| `updateCustomNode` without `data`   | The payload is carried forward under the new label. Pass `data: null` to drop it. |
+| A chip cut to the clipboard         | The payload does not travel with it yet. Pasting gives a chip with no data — which is why the sweep runs on open and not on save. |
 | A payload that fails its schema     | Reported through `customNodesModule({ onDiagnostic })`. The node still renders, without `data`. |
+
+### Reading a node's payload
+
+Inside the definition's own hooks — `fromDocx`, `reviewCard` — `data` is already the schema's
+type. Everywhere else it arrives as `unknown`, because those surfaces carry every definition's
+nodes under one type:
+
+```tsx
+// On the chip: click, hover, and the context menu's Edit row.
+<CustomNodeChrome onNodeClick={(node) => open(CitationData.parse(node.data))} />;
+
+// Every node in the document, with its range — needs the review module registered.
+const cards = editor.getReviewItems().filter((entry) => entry.item.kind === 'custom');
+```
+
+A definition does not need a `reviewCard` for this: a node with no card is still recognized and
+still carries its payload, it just contributes nothing to the sidebar.
 
 ### Export policy
 
@@ -185,7 +245,8 @@ if (exported.ok) download(exported.bytes);
 | `'text'`         | The control is unwrapped. A reader still sees the words; the tag, the binding and the payload are gone. |
 | `false`          | The node goes, and takes its content with it.                                  |
 
-Once the last node for a namespace is gone, so are the `customXml` part, its relationship and its
+A node that leaves takes its payload with it, even when other nodes in the same store stay. Once
+the last one for a namespace is gone, so are both `customXml` parts, both relationships and the
 content-type override. A refusal answers no bytes at all, so a caller can never mistake a failed
 strip for a successful one.
 

@@ -9,8 +9,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // survives Word's open→edit→save cycle (verified against Word for the web,
 // 2026-08-05: see e2e/fixtures/sdt-custom-tag-word-roundtrip.docx). Word caps
 // `w:tag` at 64 characters, so encoding refuses anything longer rather than
-// truncating an identity; the customXml data-part escape hatch for oversized
-// payloads is the follow-up recorded in the change tasks.
+// truncating an identity. Anything that does not fit belongs in the node's PAYLOAD — a
+// customXml data part the control binds to — which is what `insertCustomNode`'s `data` writes.
 //
 // SECURITY: a decoded tag comes from a file an attacker fully controls. Attr
 // names become object keys, so the decoder refuses the prototype-polluting

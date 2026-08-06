@@ -19,11 +19,12 @@
 
 import {
   boundCustomXmlNodeIdOf,
-  boundCustomXmlNodeIds,
+  boundCustomXmlNodeIdsInPackage,
   customNodeBinding,
 } from '../package/custom-node-payloads.ts';
 import {
   customXmlNodes,
+  readCustomXmlNode,
   withCustomXmlNode,
   withoutCustomXmlNode,
   withoutOrphanCustomXmlNodes,
@@ -151,6 +152,7 @@ export function insertCustomNodeWrite(
   // Set inside the transaction and read after it: the store's `ds:itemID` is not known until the
   // part is authored, and the binding cannot be built without it.
   let refusal: CustomNodeWriteRejection | null = null;
+  let refusalDetail: string | undefined;
 
   const result = store.transact((ctx) => {
     // The control being rewritten goes first, at the offsets the caller measured against the
@@ -169,7 +171,14 @@ export function insertCustomNodeWrite(
     // The replaced text goes first, so the offsets the caller supplied still describe the
     // paragraph when the deletion is planned against it.
     const replaced = write.replaceUntil;
-    if (replaced !== undefined && replaced > write.offset) {
+    if (replaced !== undefined && replaced <= write.offset) {
+      // A reversed or empty span is not a wrap. Silently inserting instead would put the node
+      // beside the text the caller believed it was replacing.
+      refusal = 'invalid-range';
+      refusalDetail = 'replaceUntil must be past offset';
+      return;
+    }
+    if (replaced !== undefined) {
       ctx.apply({
         op: 'deleteText',
         paragraphId: write.paragraphId,
@@ -203,18 +212,41 @@ export function insertCustomNodeWrite(
       );
       if (!authored.part) {
         refusal = 'store-not-authored';
+        refusalDetail =
+          `no customXml store could be created for ${payload.namespaceUri}. The namespace must ` +
+          `be free of control characters and quotes, the root name must be an XML name, and a ` +
+          `store this document already carries for that namespace must use the same root name ` +
+          `(${payload.rootLocalName})`;
         return current;
       }
+      // Built from the store's OWN root, never from what the caller asked for: the two agree
+      // by the check above, and deriving from the part means an xpath can never name an element
+      // the file does not have.
       binding = customNodeBinding(authored.part, payload.rootLocalName, payload.nodeId);
       if (!binding) {
         refusal = 'unaddressable-payload';
+        refusalDetail =
+          `the node id ${JSON.stringify(payload.nodeId)} or the namespace ` +
+          `${JSON.stringify(payload.namespaceUri)} cannot be written into an XPath. Ids and root ` +
+          `names must match [A-Za-z_][\\w.-]{0,127}; a namespace may not contain a quote, an ` +
+          `angle bracket or an ampersand`;
         return current;
       }
-      return withCustomXmlNode(authored.pkg, authored.part.partName, {
+      const written = withCustomXmlNode(authored.pkg, authored.part.partName, {
         id: payload.nodeId,
         label: payload.label,
         data: payload.data,
       });
+      // READ IT BACK, the way `withCustomXmlDataPart` reads its own part back. `applyPackage`
+      // treats an unchanged package as a no-op rather than a rejection, and `withCustomXmlNode`
+      // answers the package unchanged on three paths — so without this the body gets a control
+      // bound to a node that was never written, and the caller is told `ok`.
+      if (!readCustomXmlNode(written, authored.part.partName, payload.nodeId)) {
+        refusal = 'store-not-authored';
+        refusalDetail = 'the payload node could not be written into the store';
+        return current;
+      }
+      return written;
     });
     if (refusal !== null || !binding) return;
 
@@ -234,7 +266,11 @@ export function insertCustomNodeWrite(
   // package unchanged is not a rejection the store reports, so without this a refused store write
   // would come back as a successful no-op — a caller told its node was written when it was not.
   if (refusal !== null) {
-    return { ok: false, reason: refusal };
+    return {
+      ok: false,
+      reason: refusal,
+      ...(refusalDetail === undefined ? {} : { detail: refusalDetail }),
+    };
   }
   if (!result.ok) {
     return {
@@ -301,12 +337,21 @@ export function removeCustomNodeWrite(
   return { ok: true, change: result.change };
 }
 
-/** What one sweep collected, per store. */
-export interface CustomNodeSweepResult {
-  readonly pkg: OoxmlPackage;
-  /** Node ids removed, across every store swept. Empty means the document was already tidy. */
-  readonly removed: readonly string[];
-}
+/**
+ * What one sweep collected, or why it collected nothing.
+ *
+ * `ok: false` is NOT "the document was already tidy" — that is `ok: true` with an empty
+ * `removed`. It means a store this sweep was asked to tidy refused the rewrite, which a caller
+ * that keeps saving into the same document should know about rather than silently retry forever.
+ */
+export type CustomNodeSweepResult =
+  | {
+      readonly ok: true;
+      readonly pkg: OoxmlPackage;
+      /** Node ids removed, across every store swept. Empty means there were no orphans. */
+      readonly removed: readonly string[];
+    }
+  | { readonly ok: false; readonly reason: string };
 
 /**
  * Drop every payload no control binds, in the stores whose namespaces a host claims.
@@ -325,19 +370,31 @@ export function sweepCustomNodePayloads(
   storyPartName: string,
   namespaces: readonly string[]
 ): CustomNodeSweepResult {
-  const story = pkg.parts.get(storyPartName);
-  if (!story || namespaces.length === 0) return { pkg, removed: [] };
+  if (!pkg.parts.has(storyPartName) || namespaces.length === 0) {
+    return { ok: true, pkg, removed: [] };
+  }
   let next = pkg;
   const removed: string[] = [];
   for (const namespaceUri of namespaces) {
     const dataPart = findCustomXmlDataPart(next, storyPartName, namespaceUri);
     if (!dataPart) continue;
-    const referenced = boundCustomXmlNodeIds(story, dataPart.itemId);
+    // EVERY story in the package. A control in a header binds a payload as readily as one in
+    // the body, and reading the body alone made this delete a payload a header was still
+    // painting — on open, with no undo entry to bring it back.
+    const referenced = boundCustomXmlNodeIdsInPackage(next, dataPart.itemId);
     const swept = withoutOrphanCustomXmlNodes(next, dataPart.partName, referenced);
+    // An unchanged package means "nothing to collect" OR "the rewrite was refused", and only
+    // the first is a success. Told apart by asking whether anything unbound is still in there.
+    if (
+      swept.pkg === next &&
+      customXmlNodes(next, dataPart.partName).some((n) => !referenced.has(n.id))
+    ) {
+      return { ok: false, reason: `the payload store for ${namespaceUri} refused the sweep` };
+    }
     next = swept.pkg;
     removed.push(...swept.removed);
   }
-  return { pkg: next, removed };
+  return { ok: true, pkg: next, removed };
 }
 
 /** One control's payload, as the store holds it. Both strings are untrusted file input. */
@@ -404,3 +461,14 @@ export function customNodePayloadsOf(
   }
   return found;
 }
+
+/**
+ * What the session answers for a sweep: the ids collected, or the reason none were.
+ *
+ * Narrower than {@link CustomNodeSweepResult}, which also carries the rewritten package — the
+ * session has already installed that, and handing it back would invite a caller to install it
+ * twice.
+ */
+export type CustomNodeSweepOutcome =
+  | { readonly ok: true; readonly removed: readonly string[] }
+  | { readonly ok: false; readonly reason: string };

@@ -2161,6 +2161,7 @@ export interface ReviewCommentItem {
 // @public
 export interface ReviewCustomItem {
     readonly attrs: Readonly<Record<string, string>>;
+    readonly carded: boolean;
     readonly data?: unknown;
     readonly detail?: string;
     readonly id: string;

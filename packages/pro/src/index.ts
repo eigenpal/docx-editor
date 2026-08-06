@@ -50,6 +50,18 @@ export {
 } from './custom-nodes/export-custom-nodes.ts';
 export { CUSTOM_NODE_STORE_ROOT, customNodeNamespace } from './custom-nodes/node-payload.ts';
 export {
+  MAX_CUSTOM_NODE_DATA_LENGTH,
+  parseCustomNodeData,
+  serializeCustomNodeData,
+  type CustomNodeDataRejection,
+  type CustomNodeDataResult,
+  type InferSchemaInput,
+  type InferSchemaOutput,
+  type StandardSchemaIssue,
+  type StandardSchemaResult,
+  type StandardSchemaV1,
+} from './custom-nodes/data-schema.ts';
+export {
   decodeCustomNodeTag,
   encodeCustomNodeTag,
   MAX_TAG_LENGTH,

@@ -10,7 +10,7 @@
 
 ## 2. Pro
 
-- [x] 2.1 `insertCustomNode(editor, def, attrs, text, { data })` calls the operation. `data` is validated through `def.schema` first, and a failure is returned rather than written.
+- [x] 2.1 `insertCustomNode(editor, def, attrs, text, { data })` writes through `session.insertCustomNode`, which shares `insertCustomNodeWrite` with the automation operation — one implementation, reached without building a host per call. `data` is validated through `def.schema` first, and a failure is returned rather than written.
 - [x] 2.2 `updateCustomNode` writes the payload in the same transaction as the label, so an update cannot leave the two disagreeing.
 - [x] 2.3 `customNodeXml` gains a payload result: the `w:sdt` markup AND the store parts a caller must add, since a template engine can splice markup but cannot author a package.
 - [x] 2.4 Recognition resolves the bound node and hands typed `data` to `fromDocx` and `reviewCard`. An unresolvable binding recognizes as a chip with no payload rather than not at all.
@@ -20,7 +20,7 @@
 
 - [x] 3.1 Deleting a control removes its bound node in the same transaction.
 - [x] 3.2 The orphan sweep runs on open, over the ids the story binds. NOT on save: a chip cut to the clipboard and not yet pasted would lose its payload between the two.
-- [x] 3.3 `preserveOnExport` on save: `'text'` unwraps the control and drops the tag, binding and node; `false` removes the node with its content; `true` is untouched.
+- [x] 3.3 `preserveOnExport` on export (`exportCustomNodes`, not `save()` — see design.md): `'text'` unwraps the control and drops the tag, binding and node; `false` removes the node with its content; `true` is untouched.
 - [x] 3.4 Export leaves no `customXml/` folder, no relationship and no Override when the last node for a namespace goes.
 
 ## 4. Demos

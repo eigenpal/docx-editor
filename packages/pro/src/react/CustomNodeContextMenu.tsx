@@ -92,7 +92,13 @@ export function CustomNodeContextMenu(props: CustomNodeContextMenuProps) {
   );
   const card = useMemo(() => {
     if (!resolved?.definition.reviewCard || !node) return null;
-    return resolved.definition.reviewCard({ attrs: node.attrs, text: node.text ?? '' });
+    // `data` too: without it the info block silently rendered the no-payload branch of a hook
+    // whose whole point is the payload.
+    return resolved.definition.reviewCard({
+      attrs: node.attrs,
+      text: node.text ?? '',
+      ...(node.data === undefined ? {} : { data: node.data }),
+    });
   }, [resolved, node]);
   if (!resolved || !node) return null;
   const { definition } = resolved;

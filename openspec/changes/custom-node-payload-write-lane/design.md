@@ -41,3 +41,15 @@ would make a host choose one behaviour for both, and either choice is wrong for 
 
 A separate call also works where the editor is not: a server that assembled a document with
 `customNodeXml` can strip it the same way, with the same definitions, and never mount anything.
+
+## Why pro writes through the session rather than through a host
+
+Task 2.1 says the pro helpers "call the operation", and the argument above is why the operation
+belongs in `core/automation`. Both hold, but not by the route the wording implies: `insertCustomNode`
+in pro calls `TreeDocxSession.insertCustomNode`, and the automation operation calls the same thing
+through its port. The shared implementation is `insertCustomNodeWrite` in the store lane.
+
+Routing pro through the automation HOST instead would mean constructing one per call — it owns a
+change subscription and a handle table — or holding one for the editor's lifetime, to send a
+single-operation batch addressed by handles pro would first have to mint. The thing the design
+actually wants is that there is one implementation of the write, and there is.

@@ -177,7 +177,7 @@ export interface TreeDocxSession {
     stylesRoot(): OoxmlElement | null;
     // (undocumented)
     subscribe(onChange: (change: TreeModelChange) => void): () => void;
-    sweepCustomNodePayloads(namespaces: readonly string[]): readonly string[];
+    sweepCustomNodePayloads(namespaces: readonly string[]): CustomNodeSweepOutcome;
     trackingSettings(): DocumentTrackingSettings;
     undo(): SelectionMark | null;
 }

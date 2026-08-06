@@ -142,8 +142,11 @@ function keepCaret(event: ReactMouseEvent): void {
 }
 
 /** Hand DOCX bytes to the browser as a download. */
-function downloadDocx(buffer: ArrayBuffer, name: string): void {
-  const blob = new Blob([buffer], {
+function downloadDocx(bytes: ArrayBuffer | Uint8Array, name: string): void {
+  // `BlobPart`, not `ArrayBuffer`: `exportCustomNodes` answers a `Uint8Array`, and casting its
+  // `.buffer` would hand the browser the whole backing store rather than the view — silently
+  // corrupt for any view with an offset or a shorter length.
+  const blob = new Blob([bytes as BlobPart], {
     type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   });
   const url = URL.createObjectURL(blob);
@@ -245,14 +248,17 @@ export interface CitationCard {
   readonly x: number;
   readonly y: number;
   readonly attrs: Readonly<Record<string, string>>;
+  /** The chip's payload. Everything but the source ID lives here now. */
+  readonly data: unknown;
 }
 
 /** One card position rule for every opener: chip click and the context menu's Edit row. */
 function citationCardAt(node: {
   readonly rect: DOMRect;
   readonly attrs: Readonly<Record<string, string>>;
+  readonly data?: unknown;
 }): CitationCard {
-  return { x: node.rect.left, y: node.rect.bottom + 8, attrs: node.attrs };
+  return { x: node.rect.left, y: node.rect.bottom + 8, attrs: node.attrs, data: node.data };
 }
 
 function CitationPopover({
@@ -313,7 +319,9 @@ function CitationPopover({
           <div>
             Source: <code>{card.attrs['sourceId'] ?? '—'}</code>
           </div>
-          <div>Locator: {card.attrs['locator'] ?? '—'}</div>
+          {/* From the PAYLOAD, not the tag — only the source ID rides in `w:tag` now. */}
+          <div>Locator: {citationDataOf(card.data)?.locator || '—'}</div>
+          <div>Year: {citationDataOf(card.data)?.year ?? '—'}</div>
         </div>
         <button
           type="button"
@@ -853,7 +861,7 @@ function EditorChrome({
         return;
       }
       const base = title.trim() || 'document';
-      downloadDocx(exported.bytes.buffer as ArrayBuffer, `${base}-exported.docx`);
+      downloadDocx(exported.bytes, `${base}-exported.docx`);
     });
   };
 

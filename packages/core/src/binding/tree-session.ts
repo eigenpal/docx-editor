@@ -33,6 +33,7 @@ import {
   insertCustomNodeWrite,
   removeCustomNodeWrite,
   sweepCustomNodePayloads,
+  type CustomNodeSweepOutcome,
   type CustomNodeWriteResult,
   type InsertCustomNodeWrite,
 } from '../store/store/custom-node-writes.ts';
@@ -372,7 +373,7 @@ export interface TreeDocxSession {
    * Called ON OPEN and nowhere else — see `sweepCustomNodePayloads`. Answers the ids collected,
    * so a host can report what a document arrived carrying.
    */
-  sweepCustomNodePayloads(namespaces: readonly string[]): readonly string[];
+  sweepCustomNodePayloads(namespaces: readonly string[]): CustomNodeSweepOutcome;
   /**
    * Every occurrence of `query` in the BODY story, in document order, addressed in the
    * same offset vocabulary the tree ops and the surface selection use — so a match can be
@@ -1301,14 +1302,18 @@ export function openTreeSession(
           store.part.name,
           namespaces
         );
-        if (swept.removed.length === 0) return [];
+        // A refusal leaves the document exactly as it arrived, which is the safe half of a
+        // sweep that could not run. Reported rather than swallowed: the caller is the open
+        // path, and a store that refuses a rewrite will refuse it on every later open too.
+        if (!swept.ok) return { ok: false, reason: swept.reason };
+        if (swept.removed.length === 0) return { ok: true, removed: [] };
         // NO UNDO ENTRY and no published revision. The sweep is not an edit anyone made: it
         // collects payloads whose controls were already gone when the document arrived, and a
         // user who pressed Ctrl+Z straight after opening a file must not get them back.
         // `replacePackageShell` is the lane for exactly that — a package write that is not a
         // user intent.
         packageStore.replacePackageShell(swept.pkg);
-        return swept.removed;
+        return { ok: true, removed: swept.removed };
       },
 
       ensureListDefinition(kind) {

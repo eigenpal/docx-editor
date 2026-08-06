@@ -10,7 +10,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { DocxEditor, useDocxEditor } from '@docx-editor.dev/react';
 import { customNodesModule, insertCustomNode, updateCustomNode } from '@docx-editor.dev/pro';
 import { CustomNodeChrome, CustomNodeContextMenu } from '@docx-editor.dev/pro/react';
-import { Citation, citationText, type CitationAttrs } from './citation.ts';
+import { Citation, CitationData, citationText, type CitationAttrs } from './citation.ts';
 
 /**
  * Module registration is construction-time, like `mode`. One stable array, built outside
@@ -21,7 +21,13 @@ const MODULES = [customNodesModule({ nodes: [Citation] })];
 type FormState =
   | { readonly mode: 'closed' }
   | { readonly mode: 'insert' }
-  | { readonly mode: 'edit'; readonly nodeId: string; readonly attrs: CitationAttrs };
+  | {
+      readonly mode: 'edit';
+      readonly nodeId: string;
+      readonly attrs: CitationAttrs;
+      /** The node's payload, so the form starts from what the document says. */
+      readonly data: unknown;
+    };
 
 export function App() {
   const [bytes, setBytes] = useState<Uint8Array>();
@@ -63,10 +69,10 @@ export function App() {
                       ? setForm({
                           mode: 'edit',
                           nodeId: node.nodeId,
-                          attrs: {
-                            sourceId: node.attrs['sourceId'] ?? '',
-                            page: node.attrs['page'] ?? '',
-                          },
+                          attrs: { sourceId: node.attrs['sourceId'] ?? '' },
+                          // `unknown` here: the activation carries every definition's nodes, so
+                          // the form parses it against the schema it knows.
+                          data: node.data,
                         })
                       : undefined
                   }
@@ -124,13 +130,18 @@ function SaveButton() {
 
 /**
  * The host owns the form. `defineCustomNode` has no schema-driven dialog, so authoring is
- * `insertCustomNode` at the caret and `updateCustomNode` against a node id.
+ * `insertCustomNode` at the caret and `updateCustomNode` against a node id — each one
+ * transaction and one undo step, payload included.
  */
 function CitationForm({ state, onClose }: { state: FormState; onClose: () => void }) {
   const editor = useDocxEditor();
-  const initial = state.mode === 'edit' ? state.attrs : { sourceId: '', page: '' };
+  const carried = state.mode === 'edit' ? CitationData.safeParse(state.data) : null;
+  const initial = carried?.success
+    ? carried.data
+    : { sourceId: state.mode === 'edit' ? state.attrs.sourceId : '', page: '', quote: '' };
   const [sourceId, setSourceId] = useState(initial.sourceId);
   const [page, setPage] = useState(initial.page);
+  const [quote, setQuote] = useState(initial.quote);
 
   // Reset the fields whenever the form opens on a different node.
   const key = useMemo(() => (state.mode === 'edit' ? state.nodeId : state.mode), [state]);
@@ -140,11 +151,17 @@ function CitationForm({ state, onClose }: { state: FormState; onClose: () => voi
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editor) return;
-    const attrs: CitationAttrs = { sourceId, page };
+    // Only the identity goes in the tag; the record goes in the payload beside it, in the same
+    // transaction, checked against the schema on the way in.
+    const attrs: CitationAttrs = { sourceId };
+    const data = { sourceId, page, quote };
     const result =
       state.mode === 'edit'
-        ? updateCustomNode(editor, Citation, state.nodeId, attrs, citationText(attrs))
-        : insertCustomNode(editor, Citation, attrs, citationText(attrs), { alias: 'Citation' });
+        ? updateCustomNode(editor, Citation, state.nodeId, attrs, citationText(data), { data })
+        : insertCustomNode(editor, Citation, attrs, citationText(data), {
+            alias: 'Citation',
+            data,
+          });
     // Writes report refusal instead of throwing: a locked range, no caret, no document.
     if (!result.ok) {
       console.warn(`citation ${state.mode} refused: ${result.reason}`);
@@ -163,6 +180,11 @@ function CitationForm({ state, onClose }: { state: FormState; onClose: () => voi
       <label style={LABEL}>
         Page
         <input value={page} onChange={(e) => setPage(e.target.value)} />
+      </label>
+      <label style={LABEL}>
+        {/* The field that could never have fitted in a 64-character tag. */}
+        Quoted passage
+        <textarea rows={3} value={quote} onChange={(e) => setQuote(e.target.value)} />
       </label>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <button type="button" onClick={onClose}>

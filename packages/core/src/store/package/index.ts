@@ -499,6 +499,7 @@ export {
   CUSTOM_NODE_XPATH_PREFIX,
   boundCustomXmlNodeIdOf,
   boundCustomXmlNodeIds,
+  boundCustomXmlNodeIdsInPackage,
   customNodeBinding,
   type CustomNodeBinding,
 } from './custom-node-payloads.ts';

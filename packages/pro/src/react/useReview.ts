@@ -124,7 +124,16 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
   );
 
   const items = useMemo<readonly ReviewItemView[]>(
-    () => (editor ? editor.getReviewItems(query) : []),
+    () =>
+      editor
+        ? // A custom node with no `reviewCard` still produces an ITEM — that is what carries its
+          // payload and text to the chip's own surfaces — but it asked for no card, so the rail
+          // does not draw one. Filtered here rather than upstream so `getReviewItems` stays the
+          // one answer to "what does this document hold".
+          editor
+            .getReviewItems(query)
+            .filter((entry) => entry.item.kind !== 'custom' || entry.item.carded)
+        : [],
     // `version` is the dependency: it changes exactly when the document or selection does.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [editor, version, query]

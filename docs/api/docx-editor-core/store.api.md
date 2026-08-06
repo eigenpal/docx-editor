@@ -198,6 +198,9 @@ export function boundCustomXmlNodeIdOf(control: OoxmlNode, storeItemId: string):
 export function boundCustomXmlNodeIds(part: OoxmlPart, storeItemId: string): Set<string>;
 
 // @public
+export function boundCustomXmlNodeIdsInPackage(pkg: OoxmlPackage, storeItemId: string): Set<string>;
+
+// @public
 export class BoundedCounter {
     constructor(label: string, limit: number);
     add(n?: number): number;
@@ -858,11 +861,23 @@ export interface CustomNodePayloadWrite {
 }
 
 // @public
-export interface CustomNodeSweepResult {
-    // (undocumented)
+export type CustomNodeSweepOutcome = {
+    readonly ok: true;
+    readonly removed: readonly string[];
+} | {
+    readonly ok: false;
+    readonly reason: string;
+};
+
+// @public
+export type CustomNodeSweepResult = {
+    readonly ok: true;
     readonly pkg: OoxmlPackage;
     readonly removed: readonly string[];
-}
+} | {
+    readonly ok: false;
+    readonly reason: string;
+};
 
 // @public
 export type CustomNodeWriteRejection = TreeOpRejection

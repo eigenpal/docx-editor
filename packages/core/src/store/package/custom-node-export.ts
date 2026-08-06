@@ -17,7 +17,8 @@
 // rsids and custom document properties. Describing this as "no traces" would be false, and the
 // distinction belongs here as much as in the docs.
 
-import { boundCustomXmlNodeIds } from './custom-node-payloads.ts';
+import { boundCustomXmlNodeIdsInPackage } from './custom-node-payloads.ts';
+import { customXmlNodes, withoutOrphanCustomXmlNodes } from './custom-xml-nodes.ts';
 import { findCustomXmlDataPart, withoutCustomXmlDataPart } from './custom-xml-part.ts';
 import {
   contentControlContentNodeOf,
@@ -121,17 +122,35 @@ export function withExportedCustomNodes(
   }
 
   let next = part === story ? pkg : withPart(pkg, part);
-  const storyAfter = next.parts.get(request.storyPartName);
-  if (!storyAfter) return { ok: false, reason: 'the story went missing during the export' };
+  if (!next.parts.has(request.storyPartName)) {
+    return { ok: false, reason: 'the story went missing during the export' };
+  }
 
   for (const namespaceUri of request.namespaces) {
     const dataPart = findCustomXmlDataPart(next, request.storyPartName, namespaceUri);
     if (!dataPart) continue;
-    const referenced = boundCustomXmlNodeIds(storyAfter, dataPart.itemId);
-    // The whole store goes when nothing binds it any more — part, properties, both
-    // relationships and the content-type Override, which is what "no record of it" means.
-    // A store still holding a bound node keeps its unbound siblings too: this is an export,
-    // not the sweep, and collecting orphans is the sweep's decision to make on open.
+    // EVERY story, not the one this pass policed. Two definitions sharing a `tagPrefix` share a
+    // store, and a control in a header binds one as readily as a control in the body — so
+    // "nothing references this any more" is a question about the package, and answering it from
+    // one part strips a store another chip still names.
+    const referenced = boundCustomXmlNodeIdsInPackage(next, dataPart.itemId);
+
+    // THE PAYLOADS FIRST, one by one. Dropping the whole store only when nothing binds it left
+    // a store with one surviving chip carrying every OTHER chip's payload — including the ones
+    // a `preserveOnExport: false` definition had just been removed for. The export said `ok`
+    // and shipped the data it was called to remove.
+    const swept = withoutOrphanCustomXmlNodes(next, dataPart.partName, referenced);
+    if (
+      swept.pkg === next &&
+      swept.removed.length === 0 &&
+      !isTidy(next, dataPart.partName, referenced)
+    ) {
+      return { ok: false, reason: `the payloads in ${namespaceUri} could not be removed` };
+    }
+    next = swept.pkg;
+
+    // Then the store itself: part, properties, both relationships and the content-type
+    // Override, which is what "no record of it" means.
     if (referenced.size > 0) continue;
     const stripped = withoutCustomXmlDataPart(next, request.storyPartName, namespaceUri);
     // `ok: false` means NOTHING was removed. Answering the unchanged package would hand back a
@@ -143,6 +162,16 @@ export function withExportedCustomNodes(
   }
 
   return { ok: true, pkg: next, unwrapped, removed };
+}
+
+/**
+ * Whether a store already holds nothing but what is still bound.
+ *
+ * `withoutOrphanCustomXmlNodes` answers an unchanged package for "nothing to do" and for "the
+ * rewrite was refused" alike, and only one of those may be exported. This tells them apart.
+ */
+function isTidy(pkg: OoxmlPackage, partName: string, referenced: ReadonlySet<string>): boolean {
+  return customXmlNodes(pkg, partName).every((node) => referenced.has(node.id));
 }
 
 /** An edit refusal as one line, so an export failure names the invariant that stopped it. */

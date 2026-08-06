@@ -90,23 +90,33 @@ export function customItemsOf(
   definitions: readonly AnyCustomNodeDefinition[],
   payloads?: ReadonlyMap<string, CustomNodePayloadSource>
 ): ReviewCustomItem[] {
-  const carded = definitions.filter((definition) => definition.reviewCard);
-  if (carded.length === 0) return [];
-  const recognized = recognizeCustomNodes(part, carded, payloads);
+  // RECOGNIZE AGAINST EVERY DEFINITION, card or not. `reviewCard` decides whether a node gets a
+  // SIDEBAR CARD; it must not decide whether the node is recognized at all. It used to: a
+  // definition with a schema and an `onEdit` but no card contributed no item, and since the chip
+  // activation reads `data` and `text` off the review item, its payload was `undefined` forever
+  // with nothing saying why. The item is emitted with no title when there is no card, and the
+  // rail filters those out.
+  if (definitions.length === 0) return [];
+  const recognized = recognizeCustomNodes(part, definitions, payloads);
   if (recognized.length === 0) return [];
   const located = locateSites(part);
   const items: ReviewCustomItem[] = [];
   for (const node of recognized) {
-    const definition = carded.find(
+    const definition = definitions.find(
       (candidate) => candidate.name === node.name && node.tag.startsWith(`${candidate.tagPrefix}:`)
     );
     if (!definition) continue;
-    const card = definition.reviewCard!({
-      attrs: node.attrs,
-      text: node.text,
-      ...(node.data === undefined ? {} : { data: node.data }),
-    });
-    if (card === null) continue;
+    const card = definition.reviewCard
+      ? definition.reviewCard({
+          attrs: node.attrs,
+          text: node.text,
+          ...(node.data === undefined ? {} : { data: node.data }),
+        })
+      : // No card asked for. The item still exists so every surface keyed on it — the chip's
+        // `data`, its `text`, its `nodeId` — keeps working; `carded: false` is what the rail
+        // reads to leave it out of the sidebar.
+        null;
+    if (definition.reviewCard && card === null) continue;
     const where = located.get(node.nodeId);
     items.push({
       kind: 'custom',
@@ -116,8 +126,9 @@ export function customItemsOf(
       attrs: node.attrs,
       text: node.text,
       ...(node.data === undefined ? {} : { data: node.data }),
-      title: card.title,
-      ...(card.detail !== undefined ? { detail: card.detail } : {}),
+      carded: definition.reviewCard !== undefined && card !== null,
+      title: card?.title ?? '',
+      ...(card?.detail !== undefined ? { detail: card.detail } : {}),
       range: where
         ? {
             partName: part.name,

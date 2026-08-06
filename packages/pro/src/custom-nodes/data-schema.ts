@@ -20,8 +20,6 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 //   const parsed = parseCustomNodeData(Iceberg, node.data);
 //   if (parsed.ok) render(parsed.value.depth);
 //
-// `CustomNodeDefinition` does not carry a `schema` member yet; the definition-level wiring
-// lands with the write path.
 //
 // Depending on zod itself would put a copy of it in this tarball and a second one in the app,
 // and two zods disagree about `instanceof` in exactly the way two engines disagree about
