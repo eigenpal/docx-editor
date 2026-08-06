@@ -14,12 +14,12 @@
 // library's own element (and therefore its roles, its keyboard handling and its placement),
 // and the SVG sits behind at `z-index: 0` with no hit test of its own.
 
-import { DocxEditor, useDocxEditor } from '@docx-editor.dev/react';
+import { DocxEditor, useChromeTranslate, useDocxEditor } from '@docx-editor.dev/react';
 import { CustomNodeContextMenu } from '@docx-editor.dev/pro/react';
 import { BergPanel } from './art/Iceberg';
 import { useFrost } from './useFrost';
 import { useSpecimens } from './useSpecimens';
-import { iglooT } from './labels';
+import { ICE_LABELS } from './labels';
 import {
   IceBerg,
   IceCarve,
@@ -34,6 +34,8 @@ import {
 
 export function IglooContextMenu() {
   const editor = useDocxEditor();
+  // Ice vocabulary first, then the active locale catalogue — the packaged fallback chain.
+  const iglooT = useChromeTranslate(ICE_LABELS);
   // The SAME hook the toolbar's Freeze action uses, so the two surfaces cannot disagree
   // about when the demo's own edit is available.
   const { freeze, thaw, enabled, disabledReason } = useFrost();

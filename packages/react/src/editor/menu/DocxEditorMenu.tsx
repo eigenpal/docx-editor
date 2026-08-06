@@ -30,6 +30,9 @@ import {
 import type { ReactElement, ReactNode } from 'react';
 import { CHROME_MENUS, type ChromeMenuId } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
+import { editorScopeFor } from '../editor-scope';
+import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 import { DocxEditorPageSetupDialog } from '../DocxEditorPageSetup';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import { guardToolbarMousedown } from '../toolbar/ToolbarButton';
@@ -160,6 +163,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
     children,
   } = props;
   const editor = useDocxEditor();
+  const { t: catalogT } = useTranslation();
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
   // The last file the packaged Open read. The default Save names its download after it
   // when the host pinned no `fileName` — opening "contract-v2.docx" and saving must not
@@ -236,12 +240,12 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       // an unrelated field, and two mounted editors both answer one keypress. The shortcut
       // belongs to the editor the user is actually in: the chrome, the painted surface, or
       // anything else under this instance's root.
-      // `.ep-root` is the library's own scope class and wraps the whole editor — chrome,
-      // viewport and painted pages — so one containment test covers the bar AND the
-      // document. A composition that does not use it falls back to the bar's own subtree,
-      // which is narrow but never wrong.
+      // `editorScopeFor` finds the instance container — the `.ep-root` that holds the
+      // painted pages, NOT the bar's own self-emitted styling root — so one containment
+      // test covers the bar AND the document. A composition with no such container falls
+      // back to the bar's own subtree, which is narrow but never wrong.
       const target = event.target as Node | null;
-      const scope = rootRef.current?.closest('.ep-root') ?? rootRef.current;
+      const scope = editorScopeFor(rootRef.current) ?? rootRef.current;
       if (!target || !scope?.contains(target)) return;
       if (key === 's' && resolvedSave) {
         event.preventDefault();
@@ -321,9 +325,14 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
         role="menubar"
         // Named, because a host page can carry its own menubar beside the editor's and
         // "menu bar" twice tells a screen-reader user nothing about which is which.
-        aria-label={(t ?? ((key: string) => key))('titleBar.menuBarAriaLabel')}
+        aria-label={
+          t?.('titleBar.menuBarAriaLabel') ??
+          catalogT('titleBar.menuBarAriaLabel' as TranslationKey)
+        }
         data-testid="docx-menubar"
-        className={`docx-menubar${className ? ` ${className}` : ''}`}
+        // `ep-root` self-emitted so a composed menu bar is styled outside the packaged
+        // wrapper, as `DocxEditorLoading` and `DocxEditorViewport` already do.
+        className={`ep-root docx-menubar${className ? ` ${className}` : ''}`}
         // Container-level caret guard (CLAUDE.md focus-stealing pitfall): a disabled row
         // never receives mousedown, so per-row handlers cannot cover it.
         onMouseDown={guardToolbarMousedown}

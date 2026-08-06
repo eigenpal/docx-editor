@@ -28,6 +28,8 @@ import {
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import { useDocxEditor } from '../context';
+import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import { MenuContext, type MenuContextValue } from '../menu/menu-context';
 import { focusBy, focusEdge, panelItems } from '../menu/menu-keyboard';
@@ -250,6 +252,7 @@ export function DocxEditorContextMenu({
   children,
 }: DocxEditorContextMenuProps) {
   const editor = useDocxEditor();
+  const { t: catalogT } = useTranslation();
   const tableContextVisible = useTableContextMenuVisible();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -445,13 +448,15 @@ export function DocxEditorContextMenu({
             <div
               ref={panelRef}
               role="menu"
-              // Resolved through the host's `t` like every row label. A hardcoded English
-              // string here would be the one piece of the panel a locale could not reach.
-              aria-label={t?.('contextMenu.ariaLabel') ?? 'contextMenu.ariaLabel'}
+              // Resolved through the host's `t` like every row label, else the locale
+              // catalogue — matching the rows' own fallback.
+              aria-label={
+                t?.('contextMenu.ariaLabel') ?? catalogT('contextMenu.ariaLabel' as TranslationKey)
+              }
               // One tab stop for the whole panel, which is the menu pattern: rows are
               // reached with the arrows, never with Tab.
               tabIndex={-1}
-              className={`docx-toolbar__menu docx-contextmenu${className ? ` ${className}` : ''}`}
+              className={`ep-root docx-toolbar__menu docx-contextmenu${className ? ` ${className}` : ''}`}
               style={style}
               onKeyDown={(event) => {
                 const panel = panelRef.current;

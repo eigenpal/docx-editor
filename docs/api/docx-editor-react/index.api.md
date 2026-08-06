@@ -108,6 +108,9 @@ export { ChromeMenuSubmenuEntry }
 
 export { ChromeSlotId }
 
+// @public
+export type ChromeTranslate = (key: string, params?: Record<string, string | number>) => string;
+
 export { commandForSlot }
 
 export { composeFontConfiguration }
@@ -633,7 +636,7 @@ export interface DocxEditorProps {
     readonly renderTitleBarLeft?: () => ReactNode;
     // (undocumented)
     readonly renderTitleBarRight?: () => ReactNode;
-    t?: (key: string) => string;
+    t?: (key: string, params?: Record<string, string | number>) => string;
     title?: string;
     // (undocumented)
     zoom?: number;
@@ -1732,6 +1735,9 @@ export interface ToolbarSlotPartProps {
 
 // @public
 export type ToolbarTranslate = (key: string) => string;
+
+// @public
+export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): ChromeTranslate;
 
 // @public
 export function useContentControl(): UseContentControlResult;

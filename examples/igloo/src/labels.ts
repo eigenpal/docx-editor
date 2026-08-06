@@ -1,28 +1,22 @@
-// The demo's own label catalogue.
+// The demo's own label overrides.
 //
-// Every packaged part takes a `t`, and this is what a host passes it. The mechanism is
-// exactly the one a real product uses for a real locale — resolve a key to a string — so
-// exercising it with ice vocabulary proves the same path a French catalogue would take.
-//
-// It DELEGATES rather than replaces: overrides come first, then the bundled English
-// catalogue, then the key itself. A host that renamed six things should not have to restate
-// the other four hundred, and a key that falls through to its own name is a visible bug
-// rather than a blank control.
-
-import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
-
-const english = createT(en);
+// Every packaged part takes a `t`, and `useChromeTranslate(ICE_LABELS)` builds the one a
+// host passes: overrides first, then the active locale catalogue (bundled English by
+// default). A host that renamed six things should not have to restate the other four
+// hundred, and a key that falls through to its own name is a visible bug rather than a
+// blank control — both of which the hook already guarantees, so this file is left holding
+// only the theme's actual vocabulary.
 
 /**
  * Just the labels the Igloo theme renames — ROWS and CONTROLS, never the menu bar itself.
- * Everything else falls through to English.
+ * Everything else falls through to the catalogue.
  *
  * A `Map`, not an object literal, because the key is CALLER input: an object answers
- * `constructor` and `toString` off the prototype chain, so `iglooT('constructor')` would
- * return a function rather than a string. Core spells `MARKS` and `HIGHLIGHT_NAMES` this way
- * for exactly that reason; an example that teaches the API should teach that too.
+ * `constructor` and `toString` off the prototype chain, so `t('constructor')` would
+ * return a function rather than a string. `useChromeTranslate` takes a `ReadonlyMap` for
+ * exactly that reason; an example that teaches the API should teach that too.
  */
-const ICE_LABELS = new Map<string, string>(Object.entries({
+export const ICE_LABELS = new Map<string, string>(Object.entries({
   // The clipboard rows, in the theme's own vocabulary.
   'contextMenu.cut': 'Carve out',
   'contextMenu.copy': 'Cast a replica',
@@ -72,12 +66,3 @@ const ICE_LABELS = new Map<string, string>(Object.entries({
   // out, which is exactly what it is.
 }));
 
-/**
- * The resolver handed to every packaged part.
- *
- * Typed as `(key: string) => string` because that is what the parts take — a host's
- * catalogue is its own, and the library does not require it to be keyed by our union.
- */
-export function iglooT(key: string): string {
-  return ICE_LABELS.get(key) ?? english(key as TranslationKey);
-}

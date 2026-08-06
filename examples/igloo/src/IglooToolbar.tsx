@@ -9,9 +9,9 @@
 // Every packaged part still drives its chrome slot: the enabled state, the pressed state
 // and the command all still come from the engine. Only the glyph is the demo's.
 
-import { DocxEditor } from '@docx-editor.dev/react';
+import { DocxEditor, useChromeTranslate } from '@docx-editor.dev/react';
 import { useFrost } from './useFrost';
-import { iglooT } from './labels';
+import { ICE_LABELS } from './labels';
 import {
   IceAlignCenter,
   IceAlignLeft,
@@ -62,6 +62,7 @@ function FreezeAction() {
 }
 
 export function IglooToolbar({ blizzard, onBlizzard }: IglooActionsProps) {
+  const iglooT = useChromeTranslate(ICE_LABELS);
   return (
     <DocxEditor.Toolbar preset={false} className="igloo-toolbar" t={iglooT}>
       <DocxEditor.Toolbar.Undo icon={IceUndo} />
