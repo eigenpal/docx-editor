@@ -270,6 +270,38 @@ describe('the painter is a non-authoritative consumer', () => {
       expect(glyphRun.style.verticalAlign).toBe('baseline');
     }
   });
+
+  test('an underlined tab paints a rule across its advance, not via text-decoration on \\t', () => {
+    // Form blanks are often `w:u` on a bare `w:tab`. Word underlines the stop advance;
+    // CSS text-decoration on a clipped `\t` draws no visible ink across that width.
+    const container = paint(
+      '<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="2400"/></w:tabs></w:pPr>' +
+        '<w:r><w:t>[</w:t></w:r>' +
+        '<w:r><w:rPr><w:u w:val="thick"/></w:rPr><w:tab/></w:r>' +
+        '<w:r><w:t>]</w:t></w:r></w:p>'
+    );
+    const tab = [...container.querySelectorAll<HTMLElement>('.layout-run-text')].find(
+      (el) => el.textContent === '\t'
+    )!;
+    expect(tab.dataset.docxTabUnderline).toBe('');
+    expect(tab.style.textDecorationLine).toBe('');
+    expect(tab.style.borderBottomStyle).toBe('solid');
+    expect(tab.style.borderBottomWidth).toBe('2px');
+    expect(Number.parseFloat(tab.style.width)).toBeGreaterThan(6);
+  });
+
+  test('a single underlined tab keeps a thinner advance rule and optional colour', () => {
+    const container = paint(
+      '<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="1800"/></w:tabs></w:pPr>' +
+        '<w:r><w:rPr><w:u w:val="single" w:color="C00000"/></w:rPr><w:tab/></w:r></w:p>'
+    );
+    const tab = [...container.querySelectorAll<HTMLElement>('.layout-run-text')].find(
+      (el) => el.textContent === '\t'
+    )!;
+    expect(tab.dataset.docxTabUnderline).toBe('');
+    expect(tab.style.borderBottomColor.toLowerCase()).toBe('#c00000');
+    expect(tab.style.borderBottomWidth).toBe('1px');
+  });
 });
 
 describe('each run is its own box, so a mixed-size line highlights stepped', () => {

@@ -468,6 +468,27 @@ function applyUnderlineDecoration(
 }
 
 /**
+ * Underline a tab's reserved ADVANCE, not its invisible `\t` glyph.
+ *
+ * Form blanks are often authored as `w:u` on a bare `w:tab` (thick/single). Word draws the
+ * rule across the distance to the stop. CSS `text-decoration` on a clipped `\t` paints no
+ * visible ink over that width, so the advance box itself carries a bottom border instead.
+ * `wavy` is not a border style — fall back to solid rather than inventing a wave path.
+ */
+function applyTabAdvanceUnderline(
+  css: CSSStyleDeclaration,
+  underline: UnderlineDecoration,
+  scale: number
+): void {
+  const color = underline.color ? `#${underline.color}` : 'currentColor';
+  // Plain px widths — `max()` is fine on `text-decoration-thickness` but happy-dom (and
+  // some engines) drop it on `border-*-width`, which would erase the whole form blank.
+  css.borderBottomWidth = `${(underline.heavy ? 2 : 1) * scale}px`;
+  css.borderBottomStyle = underline.cssStyle === 'wavy' ? 'solid' : underline.cssStyle;
+  css.borderBottomColor = color;
+}
+
+/**
  * Face / box styles only — decorations are applied separately so underline and strike can
  * live on independent nested layers without sharing style/colour/thickness.
  */
@@ -545,6 +566,9 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: P
  * The outer layout-run keeps geometry, model range, highlight and shading. When underline
  * and strike both apply, nested inert spans each own one decoration family so CSS cannot
  * leak `text-decoration-style` / colour / thickness across them.
+ *
+ * Tab advances apply underline via {@link applyTabAdvanceUnderline} on the outer run; this
+ * path must not also set `text-decoration` on `\t` or the two mechanisms fight.
  */
 function mountRunText(
   document: Document,
@@ -553,7 +577,7 @@ function mountRunText(
   style: ResolvedRunStyle,
   scale: number
 ): void {
-  const underline = underlineDecorationOf(style);
+  const underline = text === '\t' ? null : underlineDecorationOf(style);
   const strike = strikeKindOf(style);
   let host: HTMLElement = run;
 
@@ -843,6 +867,12 @@ function paintSpan(
     // takes it out of the baseline calculation entirely; the box still clips, and its top
     // is exactly where a baseline-aligned run of the same band lands anyway.
     element.style.verticalAlign = 'top';
+    // Form blanks: `w:u` on `w:tab` underlines the ADVANCE (Word), not the `\t` glyph.
+    const tabUnderline = underlineDecorationOf(span.style);
+    if (tabUnderline) {
+      element.dataset.docxTabUnderline = '';
+      applyTabAdvanceUnderline(element.style, tabUnderline, ctx.scale);
+    }
   }
   mountRunText(document, element, span.text, span.style, ctx.scale);
   if (span.projected) {
