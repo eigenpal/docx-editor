@@ -17,6 +17,7 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
+import { isNoteAtomNode } from '../package/note-nodes.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import { splitRunsAt } from './tree-op-apply.ts';
 import type { TreeOpResult } from './tree-op-validate.ts';
@@ -35,6 +36,13 @@ function textLengthOfRunChild(node: OoxmlNode): number {
   // counts. The two must not disagree, or a marker lands on a different character than the
   // caret that asked for it.
   if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
+  // So does a note atom — `w:footnoteRef`, `w:footnoteReference`, the separators — each of
+  // which `segmentsOf` gives one U+FFFC unit. Counting them as nothing measured the
+  // paragraph short by one per atom, so every offset at or after one was refused: Word
+  // writes `w:footnoteRef` as the first run of every footnote, which made commenting on a
+  // footnote impossible, and a body paragraph whose text follows a footnote reference
+  // failed the same way.
+  if (isNoteAtomNode(node)) return 1;
   return 0;
 }
 

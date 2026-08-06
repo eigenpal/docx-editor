@@ -183,7 +183,7 @@ export interface TreeDocxSession {
 }
 
 // @public
-export const treeSchema: Schema<"paragraph" | "text" | "tab" | "hardBreak" | "pageBreak" | "doc" | "unknownInline", "runProps">;
+export const treeSchema: Schema<"text" | "paragraph" | "tab" | "hardBreak" | "pageBreak" | "doc" | "unknownInline", "runProps">;
 
 // @public
 export type TreeSessionRejection = OoxmlPackageRejection | 'no-main-document-tree';

@@ -2414,6 +2414,15 @@ export function mountPaginatedSurface(
         }
       }
     }
+    // Note stories too, now that their revisions reach the queue: a paragraph missing from
+    // this index is an item `rangeCovers` can never match, so a footnote card listed but
+    // could never become the ACTIVE one — and the rail gates its reply box on that.
+    for (const noteKind of ['footnote', 'endnote'] as const) {
+      const part = session.partFor({ kind: 'notesPart', noteKind });
+      if (!part || seenParts.has(part)) continue;
+      seenParts.add(part);
+      append(deepParagraphOrderOfPart(part));
+    }
     reviewOrderIndexCache = { packageRevision, bodyRoot, index };
     return index;
   }
@@ -3546,10 +3555,10 @@ export function mountPaginatedSurface(
     },
     setActiveScope: (scope: ViewScope) => {
       if (scope.kind === 'note') return noteOps!.enterNote(scope.id);
-      if (scope.kind === 'body') {
-        noteOps?.exitNote();
-        return hfScope!.setActiveScope(scope);
-      }
+      // REFUSED BEFORE ANYTHING IS LEFT. A scope this surface does not open — `frame`, or
+      // anything a later contract adds — used to fall through to the exit below and only
+      // then report false: the call failed AND closed the note the reader had open.
+      if (scope.kind !== 'body' && scope.kind !== 'headerFooter') return false;
       noteOps?.exitNote();
       return hfScope!.setActiveScope(scope);
     },

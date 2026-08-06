@@ -76,8 +76,7 @@ import {
   type DocumentTrackingSettings,
 } from '../store/package/tracking-settings.ts';
 import type { StoryScope } from '@docx-editor.dev/core/store';
-import { formatNoteScopeId, noteIdOf, parseNoteScopeId } from '../store/package/note-nodes.ts';
-import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
+import { parseNoteScopeId } from '../store/package/note-nodes.ts';
 import type {
   CanResult,
   ContainerRef,
@@ -1179,8 +1178,53 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           });
         }
       }
+      // Note stories, on the same terms. Without these a note card came back with
+      // `anchorY: null` and `pageIndex: null`: the rail sorts a null page last, so a
+      // footnote change on page 2 of a long document rendered below the final page's
+      // cards, with no leader line to the text it belongs to.
+      for (const area of [page.footnotes, page.endnotes]) {
+        if (!area) continue;
+        for (const note of area.notes) {
+          for (const fragment of paragraphFragmentsOfBlocks(note.fragments)) {
+            if (index.has(fragment.paragraphId)) continue;
+            index.set(fragment.paragraphId, {
+              pageIndex: page.index,
+              contentY: note.box.y,
+              fragmentY: fragment.box.y,
+              ...(fragment.lines ? { lines: fragment.lines } : {}),
+            });
+          }
+        }
+      }
     }
     anchorIndexCache.set(layout, index);
+    return index;
+  }
+
+  /**
+   * Paragraph id → note scope id, built once per LAYOUT from the painted note stories.
+   *
+   * The layout already states which note each paragraph belongs to (`NoteStoryRecord`
+   * carries `scopeId`), so this is a lookup rather than a search. The first version walked
+   * the notes part per item — O(items x notes x subtree), which measured 91 ms per
+   * `getTrackedChanges()` call on a document with 600 note revisions.
+   */
+  const noteScopeIndexCache = new WeakMap<SemanticLayout, Map<string, string>>();
+  function noteScopeIndexOf(layout: SemanticLayout): Map<string, string> {
+    const cached = noteScopeIndexCache.get(layout);
+    if (cached) return cached;
+    const index = new Map<string, string>();
+    for (const page of layout.pages) {
+      for (const area of [page.footnotes, page.endnotes]) {
+        if (!area) continue;
+        for (const note of area.notes) {
+          for (const fragment of paragraphFragmentsOfBlocks(note.fragments)) {
+            if (!index.has(fragment.paragraphId)) index.set(fragment.paragraphId, note.scopeId);
+          }
+        }
+      }
+    }
+    noteScopeIndexCache.set(layout, index);
     return index;
   }
 
@@ -1216,35 +1260,31 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    */
   function noteHomeOf(item: ReviewItem): string | null {
     const range = firstReviewRange(item);
-    if (!range || !surface) return null;
+    const layout = surface?.publishedLayout();
+    if (!range || !layout) return null;
+    return noteScopeIndexOf(layout).get(range.start.paragraphId) ?? null;
+  }
+
+  /**
+   * The notes PART a card lives in, for a write that must land there.
+   *
+   * Derived from the part NAME, not from the note: which part a write targets is a
+   * question the range answers by itself, and routing it through the per-note lookup made
+   * it fail whenever that lookup did — a note whose `w:id` the file omits, or one the
+   * layout has not painted. The card was then treated as a body card, so Accept reported
+   * `unknown-revision` on a card the queue itself listed as resolvable.
+   */
+  function noteStoryScopeOf(
+    item: ReviewItem
+  ): { readonly kind: 'notesPart'; readonly noteKind: 'footnote' | 'endnote' } | null {
+    const partName = firstReviewRange(item)?.partName;
+    if (!partName || !surface) return null;
     for (const noteKind of ['footnote', 'endnote'] as const) {
-      const part = surface.session.partFor({ kind: 'notesPart', noteKind });
-      if (!part || part.name !== range.partName) continue;
-      for (const note of part.root.children) {
-        const id = noteIdOf(note);
-        if (id === null) continue;
-        let found = false;
-        const walk = (node: OoxmlNode, depth: number): void => {
-          if (found || node.kind === 'textValue' || depth > 64) return;
-          if (node.kind === 'paragraph' && node.id === range.start.paragraphId) {
-            found = true;
-            return;
-          }
-          for (const child of node.children) walk(child, depth + 1);
-        };
-        walk(note, 0);
-        if (found) return formatNoteScopeId(noteKind, id);
+      if (surface.session.partFor({ kind: 'notesPart', noteKind })?.name === partName) {
+        return { kind: 'notesPart', noteKind };
       }
     }
     return null;
-  }
-
-  /** The notes PART a card lives in, for a write that must land there. */
-  function noteStoryScopeOf(item: ReviewItem): StoryScope | null {
-    const scopeId = noteHomeOf(item);
-    if (scopeId === null) return null;
-    const parsed = parseNoteScopeId(scopeId);
-    return parsed ? { kind: 'notesPart', noteKind: parsed.noteKind } : null;
   }
 
   /** The story a card's range lives in, for a write that must land in that part. */
@@ -1334,6 +1374,34 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (parsed) return { kind: 'notesPart', noteKind: parsed.noteKind };
     }
     return { kind: 'body' };
+  }
+
+  /**
+   * The story a PARAGRAPH lives in, which is what a write about that paragraph must target.
+   *
+   * The open scope is a near-enough proxy most of the time and wrong exactly when it
+   * matters: nothing binds the selection to it, so a host that sets a body selection while
+   * a header is open got an affordance offering to comment and a write that was then
+   * refused. Paragraph ids are part-qualified, so the range answers this by itself.
+   */
+  function storyScopeOfParagraph(paragraphId: string): StoryScope {
+    if (!surface) return { kind: 'body' };
+    if (surface.session.paragraphIds().includes(paragraphId)) return { kind: 'body' };
+    for (const section of surface.session.headerFooterResolutionBySection()) {
+      for (const slots of [section.headers, section.footers]) {
+        for (const slot of slots.values()) {
+          const scope = { kind: 'headerFooter', rId: slot.rId } as const;
+          if (surface.session.paragraphIdsIn(scope).includes(paragraphId)) return scope;
+        }
+      }
+    }
+    for (const noteKind of ['footnote', 'endnote'] as const) {
+      const scope = { kind: 'notesPart', noteKind } as const;
+      if (surface.session.paragraphIdsIn(scope).includes(paragraphId)) return scope;
+    }
+    // Unknown to every story: fall back to where the reader is, which is what the write
+    // would have used anyway, and let the store refuse it.
+    return openStoryScope();
   }
 
   /** Paragraph order of the story the reader currently has open, empty for the body. */
@@ -2018,16 +2086,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
             id: item.id,
             kind: item.kind === 'revision' ? item.revisionKind : 'revision',
             ...(item.kind === 'revision' && item.author ? { author: item.author } : {}),
+            // From the PART, so a note whose id the file omits still names its story.
             story:
-              home !== null
-                ? home.kind
-                : (() => {
-                    const note = noteHomeOf(item);
-                    if (note === null) return 'body' as const;
-                    return note.startsWith('endnote')
-                      ? ('endnote' as const)
-                      : ('footnote' as const);
-                  })(),
+              home !== null ? home.kind : (noteStoryScopeOf(item)?.noteKind ?? ('body' as const)),
           };
         }),
 
@@ -2068,10 +2129,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           text,
           writer,
           secondsPrecisionNow(),
-          // The story the SELECTION is in. Commenting on header or note text wrote against
-          // the body store, which has never heard of that paragraph, so the write was
-          // refused — after the affordance had already invited it.
-          openStoryScope()
+          // The story the SELECTED PARAGRAPH is in, not the one the reader happens to have
+          // open. Commenting on header or note text wrote against the body store, which has
+          // never heard of that paragraph, so the write was refused — after the affordance
+          // had already invited it.
+          storyScopeOfParagraph(range.from.paragraphId)
         );
         return { committed: created !== null };
       });

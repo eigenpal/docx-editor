@@ -367,7 +367,8 @@ export interface TreeDocxSession {
    * Omitting the payload authors the ordinary tagged control, which is what a node small enough
    * to live in its `w:tag` needs.
    */
-  insertCustomNode(write: InsertCustomNodeWrite): CustomNodeWriteResult;
+  /** `scope` names the story the paragraph is in, and defaults to the body. */
+  insertCustomNode(write: InsertCustomNodeWrite, scope?: StoryScope): CustomNodeWriteResult;
   /**
    * Remove a custom node and, in the same transaction, the payload it bound.
    *
@@ -1315,8 +1316,12 @@ export function openTreeSession(
         return true;
       },
 
-      insertCustomNode(write) {
-        return customNodeTransaction(() => insertCustomNodeWrite(bodyStore(), write));
+      insertCustomNode(write, scope = BODY_SCOPE) {
+        // The story the paragraph belongs to. An update is a replace through this call, so
+        // a chip in a header was rewritten against the body store and refused.
+        const resolved = scope.kind === 'body' ? null : packageStore.resolveStory(scope);
+        const store = resolved?.ok ? resolved.store : bodyStore();
+        return customNodeTransaction(() => insertCustomNodeWrite(store, write));
       },
 
       removeCustomNode(controlNodeId, scope = BODY_SCOPE) {

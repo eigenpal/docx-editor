@@ -1592,4 +1592,39 @@ describe('tracked changes in notes', () => {
     editor.setActiveReviewItem(card.key);
     expect(editor.surface!.activeScope()).toEqual({ kind: 'note', id: 'footnote:1' });
   });
+
+  test('a note card carries geometry, so a rail can place it', () => {
+    // Listed with `anchorY: null` it sorted after every body card and drew no leader line:
+    // a footnote change on page 2 rendered below the last page's cards.
+    const editor = mount(noteDoc());
+    const card = editor.getReviewItems().find((item) => item.author === 'Katherine Johnson')!;
+    expect(card.pageIndex).not.toBeNull();
+    expect(card.anchorY).not.toBeNull();
+  });
+
+  test('a note card becomes ACTIVE, so its reply box can open', () => {
+    // The rail gates the reply box on `isActive`, and the caret resolved items through an
+    // index that did not contain note paragraphs — so a note card could never be the open
+    // one, whatever the reader clicked.
+    const editor = mount(noteDoc());
+    const card = editor.getReviewItems().find((item) => item.author === 'Katherine Johnson')!;
+    editor.setActiveReviewItem(card.key);
+    const active = editor.getReviewItems().find((item) => item.author === 'Katherine Johnson')!;
+    expect(active.isActive).toBe(true);
+  });
+
+  test('a note card can be replied to', () => {
+    // Word writes `w:footnoteRef` as the first run of every footnote, and the comment
+    // offset walk counted that atom as zero characters while the offset model counts one:
+    // every offset at or after it was refused, so no note could be commented on at all.
+    const editor = mount(noteDoc());
+    const card = editor.getReviewItems().find((item) => item.author === 'Katherine Johnson')!;
+    expect(editor.replyToReviewItem(card.key, 'Which appendix?')).toEqual({
+      ok: true,
+      changed: true,
+    });
+    expect(editor.getReviewItems().some((item) => item.text.includes('Which appendix?'))).toBe(
+      true
+    );
+  });
 });

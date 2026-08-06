@@ -49,6 +49,20 @@ function surfaceOf(editor: Editor): PaginatedSurface | null {
 }
 
 /**
+ * Refuse a write while the document is open for VIEWING.
+ *
+ * `session.applyTreeOps` is the store's path, below the surface's editing-mode gate, so a
+ * write routed through it edited a read-only document — the context menu's Remove row
+ * deleted a chip in a viewing document and reported success. Every write in this file asks
+ * first rather than relying on a gate it does not pass through.
+ */
+function viewingRefusal(editor: Editor): CustomNodeWriteOutcome | null {
+  return editor.getEditingMode() === 'viewing'
+    ? { ok: false, code: 'unsupported', reason: 'the document is open for viewing' }
+    : null;
+}
+
+/**
  * The story the reader has open, in the vocabulary `applyTreeOps` takes.
  *
  * A chip lives wherever it was inserted, and a header is an ordinary place to put one.
@@ -129,6 +143,8 @@ function spanOf(
 export function removeCustomNode(editor: Editor, nodeId: string): CustomNodeWriteOutcome {
   const surface = surfaceOf(editor);
   if (!surface) return { ok: false, code: 'notFound', reason: 'no document is mounted' };
+  const refusal = viewingRefusal(editor);
+  if (refusal) return refusal;
   // The control AND the payload it bound, in one transaction. The orphan sweep would collect
   // the payload on the next open regardless, but a document saved in between would carry a
   // payload for a chip that is gone. Against the story the reader is IN: the write defaults
@@ -184,7 +200,10 @@ export function updateCustomNode<Schema extends StandardSchemaV1 | undefined = u
 ): CustomNodeWriteOutcome {
   const surface = surfaceOf(editor);
   if (!surface) return { ok: false, code: 'notFound', reason: 'no document is mounted' };
-  const part = surface.session.part();
+  const refusal = viewingRefusal(editor);
+  if (refusal) return refusal;
+  const scope = storyScopeOfEditor(editor);
+  const part = surface.session.partFor(scope) ?? surface.session.part();
   const paragraph = paragraphHolding(part, nodeId);
   const span = paragraph ? spanOf(paragraph, nodeId) : null;
   const existing = existingNodeOf(surface, nodeId);
@@ -241,28 +260,31 @@ export function updateCustomNode<Schema extends StandardSchemaV1 | undefined = u
 
   const alias = update.alias ?? existing.alias;
   const lock = update.lock ?? existing.lock;
-  const written = surface.session.insertCustomNode({
-    replaceControlId: nodeId,
-    paragraphId: paragraph.id,
-    offset: span.start,
-    tag: encoded.tag,
-    text: projected.text,
-    ...(alias === undefined ? {} : { alias }),
-    ...(lock === false || lock === undefined ? {} : { lock }),
-    // The payload keeps the id the node already had, so an update is an upsert in the store
-    // rather than a new entry beside the old one.
-    ...(payload
-      ? {
-          payload: payloadWriteOf(
-            surface,
-            definition,
-            payload.serialized,
-            projected.text,
-            bound?.nodeId
-          ),
-        }
-      : {}),
-  });
+  const written = surface.session.insertCustomNode(
+    {
+      replaceControlId: nodeId,
+      paragraphId: paragraph.id,
+      offset: span.start,
+      tag: encoded.tag,
+      text: projected.text,
+      ...(alias === undefined ? {} : { alias }),
+      ...(lock === false || lock === undefined ? {} : { lock }),
+      // The payload keeps the id the node already had, so an update is an upsert in the store
+      // rather than a new entry beside the old one.
+      ...(payload
+        ? {
+            payload: payloadWriteOf(
+              surface,
+              definition,
+              payload.serialized,
+              projected.text,
+              bound?.nodeId
+            ),
+          }
+        : {}),
+    },
+    scope
+  );
   if (!written.ok) return refusalOf(written);
   // The control that now exists, not the one passed in: the write replaces the node.
   return {

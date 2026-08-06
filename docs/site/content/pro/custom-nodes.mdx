@@ -334,6 +334,8 @@ export function Editor({ bytes }: { bytes: Uint8Array }) {
 
 An activated node gives you `name`, `attrs`, `tag`, `data`, and `rect` (viewport-relative, for anchoring your own popover), plus `nodeId` and `text` when they resolve.
 
+`CustomNodeContextMenu` also takes `onRemoveRefused(node, reason)`. Remove can be refused — a locked wrapper, a document open for viewing — and without a handler the menu simply closes and leaves the node where it was. Pass one if you have somewhere to show the engine's reason.
+
 ## Cards in the review sidebar
 
 A definition with `reviewCard` puts one card per node into the review sidebar, anchored at the node's range. `useReviewItem()` scopes host content to the card it is rendered inside, so you can add your own actions to citation cards only:
