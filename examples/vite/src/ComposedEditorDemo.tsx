@@ -44,7 +44,7 @@ import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
 import { BrandLogo } from '../../shared/BrandLogo';
-import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
+// import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
 import { ExampleSwitcher } from '../../shared/ExampleSwitcher';
 import { ThemeToggle } from './ThemeToggle';
 import { DrawingsE2eBridge } from './DrawingsE2eBridge';
@@ -670,7 +670,7 @@ function EditorChrome({
       <header className="demo-header">
         <div className="demo-header__left">
           <BrandLogo />
-          <AdapterSwitcher current="react" />
+          {/* Temporarily hidden: <AdapterSwitcher current="react" /> */}
           <ExampleSwitcher current="Vite" />
         </div>
 
@@ -745,16 +745,16 @@ function EditorChrome({
                   name, so rows a product ADDS are visibly its own without a hand-rolled
                   heading breaking the menu's ownership of its items. */}
               <DocxEditor.Menu.Group label="Custom elements">
-              <DocxEditor.Menu.Row
-                onSelect={() => {
-                  if (!editor) return;
-                  // Capture the caret NOW: the dialog's inputs take focus, and inserting
-                  // at "wherever the selection is by then" lands the chip wrong.
-                  onInsertCitation(caret);
-                }}
-              >
-                Insert citation
-              </DocxEditor.Menu.Row>
+                <DocxEditor.Menu.Row
+                  onSelect={() => {
+                    if (!editor) return;
+                    // Capture the caret NOW: the dialog's inputs take focus, and inserting
+                    // at "wherever the selection is by then" lands the chip wrong.
+                    onInsertCitation(caret);
+                  }}
+                >
+                  Insert citation
+                </DocxEditor.Menu.Row>
               </DocxEditor.Menu.Group>
             </DocxEditor.Menu.Menu>
           </DocxEditor.Menu>

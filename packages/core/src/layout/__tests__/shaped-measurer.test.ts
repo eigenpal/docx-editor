@@ -115,6 +115,15 @@ describe('line metrics come from the font, not from a multiplier (task 7.7)', ()
     const raised = measurer().lineMetrics(style({ verticalAlign: 'superscript' }));
     expect(raised.height).toBeLessThan(baseline.height);
   });
+
+  test('superscript line metrics are EXACTLY three quarters of the baseline metrics', () => {
+    // 11pt × 0.75 = 8.25pt = 16.5 half-points. Shaping at a rounded 17 half-points made
+    // super/subscript 3% taller and wider than paint draws them.
+    const baseline = measurer().lineMetrics(style());
+    const raised = measurer().lineMetrics(style({ verticalAlign: 'superscript' }));
+    expect(raised.height).toBeCloseTo(baseline.height * 0.75, 6);
+    expect(raised.baseline).toBeCloseTo(baseline.baseline * 0.75, 6);
+  });
 });
 
 describe('advances are summed glyph advances (task 7.7)', () => {
@@ -155,6 +164,24 @@ describe('advances are summed glyph advances (task 7.7)', () => {
   test('repeated measurement is cached and stays identical', () => {
     const measure = measurer();
     expect(measure.measure('cached', style())).toBe(measure.measure('cached', style()));
+  });
+
+  test('super/subscript advances are EXACTLY three quarters of the baseline advance', () => {
+    // Paint draws super/subscript at 0.75 of the run size, so measurement must be 0.75 of
+    // the baseline advance — not the advance at the nearest whole half-point. At 11pt the
+    // scaled size is 16.5 half-points; shaping at a rounded 17 measured every character 3%
+    // wide, which pushed each following span's published x right of its painted glyphs and
+    // drew the caret mid-glyph for the rest of the line.
+    const measure = measurer();
+    const plain = measure.measure('Superscript', style());
+    expect(measure.measure('Superscript', style({ verticalAlign: 'superscript' }))).toBeCloseTo(
+      plain * 0.75,
+      6
+    );
+    expect(measure.measure('Superscript', style({ verticalAlign: 'subscript' }))).toBeCloseTo(
+      plain * 0.75,
+      6
+    );
   });
 });
 
