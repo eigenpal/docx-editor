@@ -154,8 +154,20 @@ describe('the painted caret', () => {
     const { surface, container } = mount(paragraph('hello world'));
     putCaret(surface, 6);
     // `.docx-page-content` is inverted wholesale in dark mode, so a caret painted inside it
-    // has to opt out of the inversion the same way images and highlights do.
+    // has to opt out of the inversion the same way images and highlights do. The stylesheet's
+    // contrast ring rides through the same inversion as the core, keeping the pair
+    // complementary — which is what keeps the caret visible on a dark image, where a solid
+    // bar drawn on the picture's leading edge vanished.
     expect(caretElement(container)!.hasAttribute('data-no-color-invert')).toBe(true);
+  });
+
+  test('it is the last child of the page content box, so page content cannot paint over it', () => {
+    const { surface, container } = mount(paragraph('hello world'));
+    putCaret(surface, 6);
+    const painted = caretElement(container)!;
+    const host = painted.parentElement!;
+    expect(host.className).toBe('docx-page-content');
+    expect(host.lastElementChild).toBe(painted);
   });
 
   test('it suppresses the native caret only while it is up', () => {

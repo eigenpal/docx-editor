@@ -224,8 +224,14 @@
    * This was missing entirely and only ever declared in the dark block, so
    * `.ep-one-surface__caret { background: var(--doc-caret) }` resolved to nothing in the
    * default theme and painted a 1px transparent div — the caret was correctly positioned,
-   * visible and non-blinking-off, and simply had no colour. */
+   * visible and non-blinking-off, and simply had no colour.
+   *
+   * `--doc-caret-contrast` is its complement, drawn as a 1px ring so the insertion point
+   * survives a backdrop the core colour disappears into (see `.ep-one-surface__caret`).
+   * The two are transformed together by the dark page's inversion, so their contrast with
+   * each other holds in both themes. */
   --doc-caret: #202124;
+  --doc-caret-contrast: #ffffff;
 
   /* Document scroll container scrollbar */
   --doc-scrollbar-size: 14px;
@@ -351,6 +357,7 @@
     * page (it's a sibling, not filtered), so a black caret would be invisible —
     * point it at a light colour in dark mode. */
   --doc-caret: #e8e8e8;
+  --doc-caret-contrast: #202124;
 }
 
 /* Smart lightness inversion of the document canvas — the heart of dark mode.
@@ -2170,6 +2177,23 @@ a.docx-hyperlink:focus-visible {
    * Every desktop word processor draws a two-pixel insertion point. */
   width: 2px;
   background: var(--doc-caret);
+  /* A CONTRASTING 1px ring, because a caret position is not always beside text: the offset
+   * before an inline image puts the insertion point exactly on the picture's leading edge,
+   * so a full-width dark photo swallowed the near-black bar whole — the user could type
+   * there and see nothing. Dark table shading and dark highlights do it to a lesser degree.
+   *
+   * The ring and the core are a complementary pair, so whichever one the backdrop hides,
+   * the other reads. On an ordinary white page the ring is white on white and the caret
+   * looks exactly as it did before.
+   *
+   * NOT `mix-blend-mode: difference`, which is the textbook XOR caret and is wrong here:
+   * blending resolves against the nearest ISOLATED GROUP, and this stylesheet puts two of
+   * them between the caret and the paper — the dark page's `filter` on
+   * `.docx-page-content`, and the `opacity` that dims the body during header/footer
+   * editing. Inside either, the backdrop is transparent rather than the sheet's paper, so
+   * the caret would blend to white and the dark page's inversion would then paint it black
+   * on black: the very bug this ring exists to fix. The pair needs no backdrop at all. */
+  box-shadow: 0 0 0 1px var(--doc-caret-contrast);
   animation: ep-caret-blink 1.06s steps(1) infinite;
 }
 
