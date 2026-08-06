@@ -13,9 +13,19 @@ interface RecentRootCache<V> {
   set(root: object, value: V): void;
 }
 
+/**
+ * `WeakRef` is ES2021 and the workspace tsconfigs pin `lib` at ES2020, so the global is
+ * declared here rather than raising every package's lib: every supported runtime (Node
+ * 14.6+, all evergreen browsers) ships it.
+ */
+interface RootWeakRef {
+  deref(): object | undefined;
+}
+declare const WeakRef: new (target: object) => RootWeakRef;
+
 export function createRecentRootCache<V>(limit: number): RecentRootCache<V> {
   const values = new WeakMap<object, V>();
-  const recent: WeakRef<object>[] = [];
+  const recent: RootWeakRef[] = [];
   return {
     get: (root) => values.get(root),
     set(root, value) {
