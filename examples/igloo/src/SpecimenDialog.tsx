@@ -8,8 +8,8 @@ import {
   blocksOf,
   defaultAttrs,
   depthOf,
-  labelFor,
   randomSpecimen,
+  textFor,
   type SpecimenAt,
   type SpecimenKind,
 } from './specimens';
@@ -97,14 +97,14 @@ export function SpecimenDialog({ form, onCommit, onClose }: SpecimenDialogProps)
     const fresh = defaultAttrs(next);
     setKind(next);
     setAttrs(fresh);
-    setLabel(labelFor(next, fresh));
+    setLabel(textFor(next, fresh));
   };
 
   const surprise = (): void => {
     const picked = randomSpecimen();
     setKind(picked.kind);
     setAttrs(picked.attrs);
-    setLabel(picked.label);
+    setLabel(textFor(picked.kind, picked.attrs));
   };
 
   return (
@@ -143,9 +143,9 @@ export function SpecimenDialog({ form, onCommit, onClose }: SpecimenDialogProps)
           {editing ? 'Re-carve it' : 'Carve a specimen'}
         </h2>
         <p className="igloo-dialog__lede">
-          The label is what the paragraph shows, in this editor and in Word. The igloo&rsquo;s
-          number rides in the control&rsquo;s tag; the berg&rsquo;s depth rides in a payload beside
-          it, and both come back typed on the chip, the card and the menu.
+          The igloo&rsquo;s number rides in the control&rsquo;s tag, so its words are yours to type.
+          The berg&rsquo;s record rides in a payload beside the control, and its words are derived
+          from that record. Both come back typed on the chip, the card and the menu.
         </p>
 
         {/* Fixed while editing: swapping the tag would be deleting one node and authoring
@@ -169,17 +169,21 @@ export function SpecimenDialog({ form, onCommit, onClose }: SpecimenDialogProps)
           ))}
         </fieldset>
 
-        <label className="igloo-dialog__field">
-          <span>Label (document text)</span>
-          {/* A modal dialog is the one place initial focus belongs inside; the scrim's
-              Escape handler depends on focus landing here. */}
-          <input
-            autoFocus
-            value={label}
-            onChange={(event) => setLabel(event.target.value)}
-            required
-          />
-        </label>
+        {/* Only the igloo's words are typed. The berg's come from `text(data)`, so offering an
+            input would offer an edit the write path throws away. */}
+        {kind === 'igloo' ? (
+          <label className="igloo-dialog__field">
+            <span>Label (document text)</span>
+            {/* A modal dialog is the one place initial focus belongs inside; the scrim's
+                Escape handler depends on focus landing here. */}
+            <input
+              autoFocus
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
+              required
+            />
+          </label>
+        ) : null}
 
         <label className="igloo-dialog__field">
           <span>{field.label}</span>
@@ -215,6 +219,9 @@ export function SpecimenDialog({ form, onCommit, onClose }: SpecimenDialogProps)
               />
               <small>Free text. Kept in the payload, never in the tag.</small>
             </label>
+            <p className="igloo-dialog__lede">
+              The paragraph will read <strong>{textFor('iceberg', attrs)}</strong>.
+            </p>
           </>
         ) : null}
 

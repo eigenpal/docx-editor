@@ -42,6 +42,16 @@ export function depthOf(attrs: Readonly<Record<string, string>>): number {
   return boundedInt(attrs, 'depth', 90, 999);
 }
 
+/** The words a berg puts in the paragraph. The definition's `text` is this function. */
+export function bergText(data: IcebergData): string {
+  return `the tip of a ${data.depth + tipHeight(data.depth)} m berg`;
+}
+
+/** The words an igloo puts in the paragraph. Editable, unlike the berg's. */
+export function iglooText(attrs: Readonly<Record<string, string>>): string {
+  return `an igloo of ${blocksOf(attrs)} blocks`;
+}
+
 /** A berg with no record at all — what a node the schema rejects falls back to. */
 const UNSURVEYED: IcebergData = { depth: 90, surveyedBy: '', notes: '' };
 
@@ -76,7 +86,7 @@ export const ICEBERG = defineCustomNode({
   chrome: { color: '#0f6f95' },
   schema: IcebergData,
   // Nothing to declare for the way back: the payload round-trips through the schema.
-  text: (data) => `the tip of a ${data.depth + tipHeight(data.depth)} m berg`,
+  text: bergText,
   reviewCard: ({ text, data }) => {
     // Optional: a file can carry a node whose payload is missing or malformed.
     const survey = data ?? UNSURVEYED;
@@ -114,11 +124,21 @@ export function definitionOf(kind: SpecimenKind) {
   return kind === 'iceberg' ? ICEBERG : IGLOO;
 }
 
-/** The words the document carries. */
-export function labelFor(kind: SpecimenKind, attrs: Readonly<Record<string, string>>): string {
-  return kind === 'iceberg'
-    ? `the tip of a ${depthOf(attrs) + tipHeight(depthOf(attrs))} m berg`
-    : `an igloo of ${blocksOf(attrs)} blocks`;
+/**
+ * The words the document will carry. For the igloo that is a default the writer may overtype;
+ * for the berg it is what `text` derives, so the dialog shows it and nobody types it.
+ */
+export function textFor(kind: SpecimenKind, attrs: Readonly<Record<string, string>>): string {
+  return kind === 'iceberg' ? bergText(surveyAttrs(attrs)) : iglooText(attrs);
+}
+
+/** The berg's record, out of the dialog's string-keyed form state. */
+function surveyAttrs(attrs: Readonly<Record<string, string>>): IcebergData {
+  return {
+    depth: depthOf(attrs),
+    surveyedBy: attrs['surveyedBy'] ?? '',
+    notes: attrs['notes'] ?? '',
+  };
 }
 
 /** What a fresh specimen of each kind carries before anyone edits it. */
@@ -133,46 +153,42 @@ export function payloadFor(
   kind: SpecimenKind,
   attrs: Readonly<Record<string, string>>
 ): IcebergData | undefined {
-  if (kind !== 'iceberg') return undefined;
-  return {
-    depth: depthOf(attrs),
-    surveyedBy: attrs['surveyedBy'] ?? '',
-    notes: attrs['notes'] ?? '',
-  };
+  return kind === 'iceberg' ? surveyAttrs(attrs) : undefined;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // One at random
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Tips worth surfacing. Short on purpose: this string becomes document text. */
-const TIPS = [
-  'the tip of it',
-  'the bit you can see',
-  'what surfaced',
-  'the part above water',
-  'the visible tenth',
+const SURVEYORS = ['R. Amundsen', 'F. Nansen', 'M. Boyd', 'A. Tabei', 'E. Shackleton'];
+
+/** Field notes. Free text is the whole reason the berg needs a payload. */
+const NOTES = [
+  'Calved off the shelf overnight.',
+  'Rolled twice on approach; keel is longer than it looks.',
+  'Meltwater channels down the north face.',
+  'Grounded on the bank, holding through the ebb.',
+  'Blue ice at the waterline — old, and dense with it.',
 ];
 
 export interface RandomSpecimen {
   readonly kind: SpecimenKind;
   readonly attrs: Record<string, string>;
-  readonly label: string;
 }
 
 /** A specimen picked out of the water. Clock-seeded, unlike the deterministic sea and blizzard. */
 export function randomSpecimen(seed = Date.now()): RandomSpecimen {
   const random = makeRandom(seed);
-  const kind: SpecimenKind = random() < 0.5 ? 'iceberg' : 'igloo';
-  if (kind === 'igloo') {
-    const blocks = 3 + Math.floor(random() * 18);
-    const attrs = { blocks: String(blocks) };
-    return { kind, attrs, label: labelFor('igloo', attrs) };
+  const pick = (from: readonly string[]): string => from[Math.floor(random() * from.length)]!;
+  if (random() < 0.5) {
+    return { kind: 'igloo', attrs: { blocks: String(3 + Math.floor(random() * 18)) } };
   }
-  const depth = 40 + Math.floor(random() * 400);
   return {
-    kind,
-    attrs: { depth: String(depth) },
-    label: TIPS[Math.floor(random() * TIPS.length)]!,
+    kind: 'iceberg',
+    attrs: {
+      depth: String(40 + Math.floor(random() * 400)),
+      surveyedBy: pick(SURVEYORS),
+      notes: pick(NOTES),
+    },
   };
 }

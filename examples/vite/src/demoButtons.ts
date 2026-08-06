@@ -6,7 +6,12 @@
 //
 // Tokens, never literal colours — the editor chrome is themed and these sit inside it.
 
-import type { CSSProperties } from 'react';
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
+
+/** Keep the caret: chrome mousedown must never move focus out of the document. */
+export function keepCaret(event: ReactMouseEvent): void {
+  event.preventDefault();
+}
 
 export const DEMO_BUTTON: CSSProperties = {
   padding: '6px 12px',

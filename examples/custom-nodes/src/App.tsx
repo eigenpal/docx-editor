@@ -10,11 +10,11 @@ import { useCallback, useState } from 'react';
 import { DocxEditor, useDocxEditor } from '@docx-editor.dev/react';
 import { customNodesModule, insertCustomNode, updateCustomNode } from '@docx-editor.dev/pro';
 import { CustomNodeChrome, CustomNodeContextMenu } from '@docx-editor.dev/pro/react';
-import { Citation, CitationData } from './citation.ts';
+import { Citation } from './citation.ts';
 
 /**
- * Module registration is construction-time, like `mode`. One stable array, built outside
- * render: a fresh array each render rebuilds the editor.
+ * Modules are read once, when the instance is built. Hoisting the array keeps that visible:
+ * one rebuilt inline each render is not re-registered, it is ignored.
  */
 const MODULES = [customNodesModule({ nodes: [Citation] })];
 

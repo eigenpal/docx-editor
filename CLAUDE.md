@@ -7,15 +7,15 @@ theme colors, styles, tables, headers/footers, section layout.
 
 One engine. Thin chrome on top.
 
-| Package       | What                                                                                                                                                                                           | Status                                       |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `core`        | **The engine.** `store/` (canonical tree, ops, OPC read/write), `layout/` (DOM-free), `output/` (paint), `editor/` (facade, surface, chrome registry), `contracts/`, `binding/`, `automation/` | published, external to `react`               |
-| `react`       | The adapter: provider + hooks, holds no editing state                                                                                                                                          | published                                    |
-| `i18n`        | Shared strings                                                                                                                                                                                 | published                                    |
-| `editor-api`  | `DocxEditor` automation object model, headless/server                                                                                                                                          | published, Pro license                       |
-| `pro`         | Review module (comments, tracked changes) + custom nodes, as `EditorModule`s                                                                                                                   | published, Pro license                       |
-| `fonts`       | Metric-compatible substitutes for Word's defaults                                                                                                                                              | published                                    |
-| `vue`, `nuxt` | WIP, not shipping                                                                                                                                                                              | private                                      |
+| Package       | What                                                                                                                                                                                           | Status                         |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `core`        | **The engine.** `store/` (canonical tree, ops, OPC read/write), `layout/` (DOM-free), `output/` (paint), `editor/` (facade, surface, chrome registry), `contracts/`, `binding/`, `automation/` | published, external to `react` |
+| `react`       | The adapter: provider + hooks, holds no editing state                                                                                                                                          | published                      |
+| `i18n`        | Shared strings                                                                                                                                                                                 | published                      |
+| `editor-api`  | `DocxEditor` automation object model, headless/server                                                                                                                                          | published, Pro license         |
+| `pro`         | Review module (comments, tracked changes) + custom nodes, as `EditorModule`s                                                                                                                   | published, Pro license         |
+| `fonts`       | Metric-compatible substitutes for Word's defaults                                                                                                                                              | published                      |
+| `vue`, `nuxt` | WIP, not shipping                                                                                                                                                                              | private                        |
 
 React is the only real adapter today. Parity rules below are the target, not the
 state.
@@ -146,7 +146,8 @@ openspec validate typed-ooxml-paragraph-editor --strict
 
 - `bun run lint`'s only errors are the `max-lines` caps: 1000 lines for most files, 2900 for the
   handful already past it. Nothing else catches them, so adding to a large file passes typecheck
-  and the whole suite and fails CI. Extract; do not raise the cap.
+  and the whole suite and fails CI. Extract; do not raise the cap. It covers `examples/*/src` as
+  well as `packages/*/src` — the demos hit the same cap.
 - `bun run test` shards the suite one process per file across a worker pool
   (`scripts/test/run-parallel.mjs`, `--jobs N` to pin the width). That is also
   what CI runs. `bun test` still works and is the one to reach for when you want

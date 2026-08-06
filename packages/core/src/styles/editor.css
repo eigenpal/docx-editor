@@ -836,11 +836,11 @@ a.docx-hyperlink:focus-visible {
   opacity: 0;
 }
 
-/* The label tab. It sits ON the page, over body text, so it has to read as chrome rather than
-   as a word in the document: a ring in the page colour separates it from whatever line it
-   lands on, and the shadow lifts it off the text underneath. Inline controls sit in running
-   text with no room above them, so overlap is unavoidable — being unmistakably not-text is the
-   thing that makes it legible anyway. */
+/* The label tab, shown only while a control is ACTIVE or OPEN — never on plain hover.
+   An inline control sits in running text with no clearance above it, so the tab lands on the
+   previous line; on hover that means moving the pointer across a paragraph flashes labels over
+   the words being read. Word shows it when you are in the control, and so does this. The ring
+   and shadow are what keep it legible over whatever line it does land on. */
 .docx-content-control-label {
   box-sizing: border-box;
   max-width: 12rem;
@@ -864,9 +864,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-content-control-chrome[data-active] .docx-content-control-label,
-.docx-content-control-chrome[data-open] .docx-content-control-label,
-.docx-content-control-chrome[data-hover] .docx-content-control-label,
-.docx-content-control-chrome:hover .docx-content-control-label {
+.docx-content-control-chrome[data-open] .docx-content-control-label {
   display: block;
 }
 

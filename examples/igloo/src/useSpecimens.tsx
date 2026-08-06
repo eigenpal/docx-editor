@@ -24,10 +24,11 @@ import {
   blocksOf,
   defaultAttrs,
   definitionOf,
-  labelFor,
+  iglooText,
   payloadFor,
   randomSpecimen,
   surveyOf,
+  textFor,
   type SpecimenAt,
   type SpecimenKind,
 } from './specimens';
@@ -122,15 +123,16 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
   );
 
   const place = useCallback(
-    (kind: SpecimenKind, attrs: Record<string, string>, label: string, at: SpecimenAt) => {
+    (kind: SpecimenKind, attrs: Record<string, string>, at: SpecimenAt, label?: string) => {
       if (!editor) return;
       const definition = definitionOf(kind);
-      // The berg's `text` derives the words, so its payload is the whole argument.
+      // The berg's `text` derives the words, so its payload is the whole argument. Only the
+      // igloo, which has no schema, needs the words passed in.
       const data = payloadFor(kind, attrs);
       report(
         insertCustomNode(editor, definition, {
           alias: definition.label ?? definition.name,
-          ...(data ? { data } : { attrs, text: label }),
+          ...(data ? { data } : { attrs, text: label ?? iglooText(attrs) }),
           ...(at ? { at } : {}),
         }),
         kind === 'iceberg' ? 'A berg calved into the paragraph.' : 'An igloo went up.'
@@ -141,12 +143,12 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
 
   const compose = useCallback((kind: SpecimenKind) => {
     const attrs = defaultAttrs(kind);
-    setForm({ mode: 'insert', kind, attrs, label: labelFor(kind, attrs), at: caretRef.current });
+    setForm({ mode: 'insert', kind, attrs, label: textFor(kind, attrs), at: caretRef.current });
   }, []);
 
   const dropRandom = useCallback(() => {
     const picked = randomSpecimen();
-    place(picked.kind, picked.attrs, picked.label, caretRef.current);
+    place(picked.kind, picked.attrs, caretRef.current);
   }, [place]);
 
   const edit = useCallback(
@@ -173,7 +175,7 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
         kind,
         nodeId: node.nodeId,
         attrs,
-        label: node.text ?? labelFor(kind, attrs),
+        label: node.text ?? textFor(kind, attrs),
       });
     },
     [say]
@@ -201,7 +203,7 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
       const attrs = { blocks: String(blocks) };
       const result = updateCustomNode(editor, definitionOf('igloo'), node.nodeId, {
         attrs: attrs,
-        text: labelFor('igloo', attrs),
+        text: iglooText(attrs),
         alias: 'Igloo',
       });
       if (!result.ok) {
@@ -233,7 +235,7 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
       setForm(null);
       if (!editor) return;
       if (next.mode === 'insert') {
-        place(next.kind, next.attrs, next.label, next.at);
+        place(next.kind, next.attrs, next.at, next.label);
       } else {
         const definition = definitionOf(next.kind);
         const data = payloadFor(next.kind, next.attrs);
