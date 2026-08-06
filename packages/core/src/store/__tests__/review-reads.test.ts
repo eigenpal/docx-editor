@@ -142,3 +142,27 @@ describe('tracked rows inside a textbox keep their anchors', () => {
     expect(locateSites(part)).toBe(located);
   });
 });
+
+describe('the revision-card memo is keyed on the part, not just its root', () => {
+  test('two parts sharing one root under different names each get their own part name', () => {
+    const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const result = readOoxmlPart(
+      `<w:document xmlns:w="${W_NS}"><w:body>` +
+        `<w:p><w:ins w:id="1" w:author="QA" w:date="2024-01-01T00:00:00Z">` +
+        `<w:r><w:t>alpha</w:t></w:r></w:ins></w:p>` +
+        `</w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!result.ok) throw new Error(result.reason);
+    const part = result.part;
+    // The items embed `ranges[*].partName`; a root-only cache key would hand the second
+    // part the first part's stamped ranges.
+    const first = revisionItemsOf(part);
+    expect(first[0]!.ranges[0]!.partName).toBe('/word/document.xml');
+    const renamed = revisionItemsOf({ ...part, name: '/word/header1.xml' });
+    expect(renamed[0]!.ranges[0]!.partName).toBe('/word/header1.xml');
+    // And the original still answers with its own name (recomputed or re-cached — either
+    // way, never the other part's).
+    expect(revisionItemsOf(part)[0]!.ranges[0]!.partName).toBe('/word/document.xml');
+  });
+});
