@@ -1,5 +1,20 @@
 # @eigenpal/docx-js-editor
 
+## 2.1.0
+
+### Minor Changes
+
+- c1a20c8: Composed chrome is legible and styled with zero configuration. Bare `DocxEditor.Toolbar`, `DocxEditor.Menu`, and `DocxEditor.ContextMenu` now resolve labels through the active locale catalogue (so `LocaleProvider` localizes them) instead of rendering raw i18n keys, and emit the `docx-editor` styling scope on their own root — matching `DocxEditor.Loading` — so they render styled wherever the host mounts them. New `useChromeTranslate(overrides?)` returns a catalogue-backed resolver assignable to every part's `t` prop, with a `Map` of key-level overrides consulted first. The `<DocxEditor>` `t` prop now also receives interpolation params, so host resolvers can format parameterized labels like the navigation match counter.
+- dbf5501: Every remaining `ep-` prefixed CSS class and keyframe is renamed to `docx-editor-`, so the whole stylesheet shares one namespace with the `.docx-editor` root class. If your own CSS targets an `.ep-*` class or the `ep-caret-blink` keyframe, switch it to the same name under `docx-editor-` (`.ep-one-surface__caret` becomes `.docx-editor-one-surface__caret`).
+- 43c3e6a: The shipped stylesheet is now precompiled and fully namespaced: every Tailwind utility, editable-surface rule and keyframe is scoped under the renamed `.docx-editor` root class (previously `.ep-root`), so the CSS no longer collides with a host app's Tailwind setup and styles the chrome correctly in hosts without Tailwind. If your own CSS targets `.ep-root`, switch it to `.docx-editor`.
+
+### Patch Changes
+
+- 9bba164: Keep page-relative anchored drawings paintable in multi-column sections by clipping them to the full page width instead of the active column.
+- 03f57f3: Chrome that describes the document no longer renders before one is present. The review rail keeps its empty state and host furniture off screen until a document opens instead of floating them over the loading screen, the ruler parts render nothing rather than default Letter-size ticks for a page that does not exist, and the navigation pane and document outline no longer report "no headings" about an absent document. The same applies after a parse failure or a detach, not only while loading. `useReview().ready` reports false until a document is present and the hook now re-derives when a load fails.
+- Updated dependencies [232728c]
+  - @docx-editor.dev/i18n@2.1.0
+
 ## 2.0.1
 
 ### Patch Changes

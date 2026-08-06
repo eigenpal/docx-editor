@@ -1,5 +1,11 @@
 # @docx-editor.dev/i18n
 
+## 2.1.0
+
+### Patch Changes
+
+- 232728c: Complete the German, French, Hebrew, Hindi, Indonesian, Polish, Brazilian Portuguese, Turkish, and Simplified Chinese translations; previously missing strings fell back to English.
+
 ## 2.0.1
 
 ## 2.0.0
