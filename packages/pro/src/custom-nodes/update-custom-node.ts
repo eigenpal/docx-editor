@@ -16,11 +16,13 @@ import {
   contentControlTextOf,
   contentControlsIn,
   customNodePayloadsByControl,
+  parseNoteScopeId,
   segmentsOf,
   type CustomNodePayloadRead,
   type OoxmlNode,
   type OoxmlParagraphNode,
   type OoxmlPart,
+  type StoryScope,
 } from '@docx-editor.dev/core/store';
 import type { CustomNodeDefinition } from './define-custom-node.ts';
 import {
@@ -44,6 +46,22 @@ import { encodeCustomNodeTag } from './tag-codec.ts';
 function surfaceOf(editor: Editor): PaginatedSurface | null {
   const candidate = editor as Editor & { readonly surface?: PaginatedSurface | null };
   return candidate.surface ?? null;
+}
+
+/**
+ * The story the reader has open, in the vocabulary `applyTreeOps` takes.
+ *
+ * A chip lives wherever it was inserted, and a header is an ordinary place to put one.
+ * Writes default to the body, so the scope has to travel with them.
+ */
+function storyScopeOfEditor(editor: Editor): StoryScope {
+  const scope = editor.getActiveScope();
+  if (scope.kind === 'headerFooter') return { kind: 'headerFooter', rId: scope.rId };
+  if (scope.kind === 'note') {
+    const parsed = parseNoteScopeId(scope.id);
+    if (parsed) return { kind: 'notesPart', noteKind: parsed.noteKind };
+  }
+  return { kind: 'body' };
 }
 
 /** The paragraph holding a node, found in one walk from the part root. */
@@ -113,8 +131,10 @@ export function removeCustomNode(editor: Editor, nodeId: string): CustomNodeWrit
   if (!surface) return { ok: false, code: 'notFound', reason: 'no document is mounted' };
   // The control AND the payload it bound, in one transaction. The orphan sweep would collect
   // the payload on the next open regardless, but a document saved in between would carry a
-  // payload for a chip that is gone.
-  const removed = surface.session.removeCustomNode(nodeId);
+  // payload for a chip that is gone. Against the story the reader is IN: the write defaults
+  // to the body, so removing a chip inside an open header addressed a control the body
+  // store has never heard of — the menu closed, the chip stayed, and nothing said why.
+  const removed = surface.session.removeCustomNode(nodeId, storyScopeOfEditor(editor));
   if (!removed.ok) return refusalOf(removed);
   return { ok: true, changed: true };
 }

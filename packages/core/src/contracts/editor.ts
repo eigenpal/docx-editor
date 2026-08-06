@@ -473,7 +473,7 @@ export interface Editor {
     readonly kind: string;
     readonly author?: string;
     /** Which story holds the change, so a consumer can group or filter by region. */
-    readonly story?: 'body' | 'header' | 'footer';
+    readonly story?: 'body' | 'header' | 'footer' | 'footnote' | 'endnote';
   }[];
 
   /**

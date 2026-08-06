@@ -101,7 +101,7 @@ The props on `DocxEditorReview` decide which decisions appear and how they stack
 | `structural` | `false` | Show "changed the document structure" cards.                                                           |
 | `formatting` | `false` | Show "changed text formatting" cards.                                                                  |
 | `stack`      | `true`  | Push overlapping cards down instead of letting them collide.                                           |
-| `gap`        | none    | Pixels between stacked cards. The only source of vertical spacing.                                     |
+| `gap`        | `8`     | Pixels between stacked cards. The only source of vertical spacing.                                     |
 | `furniture`  | none    | Host content above the cards: filters, a legend, a summary.                                            |
 | `preset`     | `true`  | `false` mounts the rail and its context only, so you lay the cards out yourself.                       |
 
@@ -111,7 +111,7 @@ The props on `DocxEditorReview` decide which decisions appear and how they stack
 <DocxEditorReview filter={(item) => item.kind === 'comment'} gap={12} furniture={<MyFilters />} />
 ```
 
-With `preset={false}` you keep the subscription and the anchoring and render the cards yourself. `useStackedReviewPositions(items, heights, { gap })` is the packaged stacking math if you want the same behavior.
+With `preset={false}` you keep the subscription and the anchoring and render the cards yourself. `useStackedReviewPositions(items, heights, { gap, scale })` is the packaged stacking math if you want the same behavior. Pass `scale` — the editor's render scale, from `useEditorState((s) => s.renderScale)`. Card heights are CSS pixels and anchors are document points, so leaving it at its `1` default spaces the run by roughly a third too much.
 
 ## Host content inside a card
 

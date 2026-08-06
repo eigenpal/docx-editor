@@ -299,8 +299,17 @@ export function useStackedReviewPositions(
     const positions = new Map<string, number>();
     let cursor = Number.NEGATIVE_INFINITY;
     for (const entry of items) {
-      if (entry.anchorY === null) continue;
-      const top = Math.max(entry.anchorY, cursor);
+      // An entry with no geometry YET — its page has not produced a placement — is placed
+      // after the card before it rather than dropped. Dropped, it got no `top` at all and
+      // fell back into normal flow at the top of the container, underneath the absolutely
+      // positioned cards. The packaged rail has always done this; the exported hook is the
+      // same math, so it does it too.
+      const top =
+        entry.anchorY === null
+          ? Number.isFinite(cursor)
+            ? cursor
+            : 0
+          : Math.max(entry.anchorY, cursor);
       positions.set(entry.key, top);
       // Pixels to points before they meet an anchor.
       cursor = top + ((heights.get(entry.key) ?? defaultHeight) + gap) / scale;

@@ -65,6 +65,15 @@ export interface CustomNodeContextMenuProps {
    * (a registered review module resolves it). `false` removes the row.
    */
   readonly remove?: boolean;
+  /**
+   * Called when Remove was refused, with the engine's own reason.
+   *
+   * A locked wrapper and a document open for viewing both refuse, and without somewhere to
+   * report that the menu simply closed and left the chip where it was. Optional: a host
+   * that does not pass one keeps the silent behaviour, which is right for a surface with
+   * no place to show a message.
+   */
+  readonly onRemoveRefused?: (node: ActivatedCustomNode, reason: string) => void;
 }
 
 /**
@@ -75,7 +84,7 @@ export interface CustomNodeContextMenuProps {
  * @public
  */
 export function CustomNodeContextMenu(props: CustomNodeContextMenuProps) {
-  const { onEditNode, remove = true } = props;
+  const { onEditNode, onRemoveRefused, remove = true } = props;
   const nodes = useCustomNodeDefinitions(props.nodes);
   const target = useContextMenuTarget();
   const editor = useDocxEditor();
@@ -133,7 +142,10 @@ export function CustomNodeContextMenu(props: CustomNodeContextMenuProps) {
           label={t('contextMenu.removeCustomNode', { label })}
           className="docx-contextmenu__custom-remove"
           onSelect={() => {
-            removeCustomNode(editor!, node.nodeId!);
+            // REPORTED, not dropped: a refusal here (a locked wrapper, a read-only
+            // document) closed the menu and left the chip in place with nothing said.
+            const result = removeCustomNode(editor!, node.nodeId!);
+            if (!result.ok) onRemoveRefused?.(node, result.reason);
           }}
         />
       ) : null}

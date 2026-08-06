@@ -427,7 +427,7 @@ Each card is a compound. Reorder, hide, and re-icon its parts in place:
 
 Every part takes `className`, `asChild`, and `hidden`; the action parts also take `icon`.
 
-For cards that share nothing with the packaged layout, `preset={false}` mounts the rail and its context without the packaged arrangement, so you keep the subscription and the anchoring and render the cards yourself. `useStackedReviewPositions(items, heights, { gap })` is the packaged stacking math if you want it. Below that, `useReview()` gives you the queue with no chrome at all.
+For cards that share nothing with the packaged layout, `preset={false}` mounts the rail and its context without the packaged arrangement, so you keep the subscription and the anchoring and render the cards yourself. `useStackedReviewPositions(items, heights, { gap, scale })` is the packaged stacking math if you want it — pass the editor's render scale, or card heights in pixels get compared against anchors in points. Below that, `useReview()` gives you the queue with no chrome at all.
 
 To add host content to some cards and not others, `useReviewItem()` reads the card a child is rendered inside:
 

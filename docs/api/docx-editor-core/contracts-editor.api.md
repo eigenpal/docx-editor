@@ -561,7 +561,7 @@ export interface Editor {
         readonly id: string;
         readonly kind: string;
         readonly author?: string;
-        readonly story?: 'body' | 'header' | 'footer';
+        readonly story?: 'body' | 'header' | 'footer' | 'footnote' | 'endnote';
     }[];
     getWatermark(): {
         readonly kind: 'text' | 'image';

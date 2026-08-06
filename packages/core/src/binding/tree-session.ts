@@ -38,6 +38,7 @@ import {
   type InsertCustomNodeWrite,
 } from '../store/store/custom-node-writes.ts';
 import { deleteCommentThread } from '../store/package/comment-lifecycle.ts';
+import { resolveNotesPart } from '../store/package/note-references.ts';
 import {
   ORIGIN_IDS,
   TreePackageStore,
@@ -374,7 +375,11 @@ export interface TreeDocxSession {
    * document saved between the deletion and that open does not carry a payload for a chip that
    * is gone.
    */
-  removeCustomNode(controlNodeId: string): CustomNodeWriteResult;
+  /**
+   * Remove a custom node and the payload it bound. `scope` names the story holding it and
+   * defaults to the body; a chip in a header is refused against the body store.
+   */
+  removeCustomNode(controlNodeId: string, scope?: StoryScope): CustomNodeWriteResult;
   /**
    * Drop every payload no control binds, in the stores whose namespaces a module claims.
    *
@@ -1108,6 +1113,18 @@ export function openTreeSession(
             }
           }
         }
+        // NOTES ARE STORIES TOO. A tracked change or a comment inside a footnote paints on
+        // the page like any other, but the queue only ever walked the body and the
+        // header/footer parts — so it was visible in the document and unreachable from
+        // every review surface, and `acceptAllRevisions` refuses while it is still there.
+        // Read straight from the package rather than through `resolveStory`, which would
+        // OPEN a store for every derivation just to answer a read.
+        for (const noteKind of ['footnote', 'endnote'] as const) {
+          const part = resolveNotesPart(pkg, noteKind);
+          if (!part || seenFurniture.has(part)) continue;
+          seenFurniture.add(part);
+          furnitureParts.push(part);
+        }
 
         const patchParagraphId =
           reviewCache && lastChange
@@ -1302,8 +1319,13 @@ export function openTreeSession(
         return customNodeTransaction(() => insertCustomNodeWrite(bodyStore(), write));
       },
 
-      removeCustomNode(controlNodeId) {
-        return customNodeTransaction(() => removeCustomNodeWrite(bodyStore(), controlNodeId));
+      removeCustomNode(controlNodeId, scope = BODY_SCOPE) {
+        // The story that HOLDS the chip. A header is an ordinary place to put one, and the
+        // body store has never heard of a control that lives elsewhere, so the write was
+        // refused with `unknown-content-control` over a node the reader was looking at.
+        const resolved = scope.kind === 'body' ? null : packageStore.resolveStory(scope);
+        const store = resolved?.ok ? resolved.store : bodyStore();
+        return customNodeTransaction(() => removeCustomNodeWrite(store, controlNodeId));
       },
 
       sweepCustomNodePayloads(namespaces) {

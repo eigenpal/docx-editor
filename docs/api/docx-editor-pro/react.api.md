@@ -35,6 +35,7 @@ export namespace CustomNodeContextMenu {
 export interface CustomNodeContextMenuProps {
     readonly nodes?: readonly CustomNodeDefinition[];
     readonly onEditNode?: (node: ActivatedCustomNode, definition: CustomNodeDefinition) => void;
+    readonly onRemoveRefused?: (node: ActivatedCustomNode, reason: string) => void;
     readonly remove?: boolean;
 }
 
