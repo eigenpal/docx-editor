@@ -93,8 +93,7 @@ export function citationCardAt(
   },
   mode: 'preview' | 'open'
 ): CitationCard {
-  // No rect, no coordinates. `useChipPopover` names the chip and CSS does the rest, so a card
-  // opened here is still on its chip after a scroll, a resize or a reflow.
+  // No coordinates: `useChipPopover` names the chip and CSS places the card against it.
   return { attrs: node.attrs, data: node.data, mode, controlId: node.nodeId };
 }
 
@@ -113,9 +112,8 @@ export function CitationPopover({
     if (card?.mode !== 'open') onOpen(next);
   };
   const { ref } = useChipPopover<HTMLDivElement>(card?.controlId, onClose);
-  // A preview follows the pointer, so it leaves when the pointer does. Without this the card
-  // that hover opened stayed on screen until something else was clicked. A card a CLICK pinned
-  // is not a preview and stays until it is dismissed.
+  // A preview follows the pointer, so it leaves when the pointer does. A card a click pinned is
+  // not a preview and stays.
   const previewing = card?.mode === 'preview';
   useEffect(() => {
     if (!previewing) return;

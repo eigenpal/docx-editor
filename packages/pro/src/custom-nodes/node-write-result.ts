@@ -44,11 +44,9 @@ export interface CustomNodeIssue {
 export type CustomNodeWriteOutcome =
   | (Extract<ExecResult, { ok: true }> & {
       /**
-       * The control this write authored.
-       *
-       * A rewrite replaces the control rather than editing it, so the id passed to
-       * {@link updateCustomNode} names nothing afterwards. Re-point anything attached to that
-       * node — a card, a selection, the host's own index — at this one.
+       * The control this write authored. A rewrite replaces the control rather than editing it,
+       * so the id passed to `updateCustomNode` names nothing afterwards — re-point anything
+       * attached to that node at this one.
        */
       readonly nodeId?: string;
     })

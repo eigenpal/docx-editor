@@ -108,11 +108,8 @@ export type CustomNodeWriteResult =
       readonly ok: true;
       readonly change: TreeModelChange | null;
       /**
-       * The control this write authored, when it authored one.
-       *
-       * A rewrite REPLACES the control rather than editing it in place, so the id the caller
-       * passed in names nothing afterwards. Anything the host had attached to that node — a
-       * card, a selection, an entry in its own index — has to be re-pointed at this one.
+       * The control this write authored, when it authored one. A rewrite replaces the control
+       * rather than editing it, so the id the caller passed in names nothing afterwards.
        */
       readonly nodeId?: string;
     }
@@ -153,9 +150,7 @@ export function insertCustomNodeWrite(
     }
   }
 
-  // Which controls the story already had, so the one this write adds can be named afterwards.
-  // A set of ids, not the nodes: the tree is rebuilt by the transaction, so nothing carried
-  // across it stays valid except the ids themselves.
+  // Ids, not nodes: the transaction rebuilds the tree, so nothing else carries across it.
   const controlsBefore = new Set(contentControlsIn(store.part.root).map((entry) => entry.node.id));
 
   // Resolved BEFORE the transaction, because afterwards the control is gone and nothing says
@@ -300,11 +295,8 @@ export function insertCustomNodeWrite(
 }
 
 /**
- * The content control this transaction added: the one the story did not have before.
- *
- * Not from `change.created` — that reports the paragraphs a transaction touched, not the nodes
- * it minted, and comes back empty for an inline insert. One write authors one control, so the
- * first id that is new is it.
+ * The content control this transaction added. Not from `change.created`, which reports touched
+ * paragraphs rather than minted nodes and is empty for an inline insert.
  */
 function authoredControlId(
   store: TreeDocumentStore,

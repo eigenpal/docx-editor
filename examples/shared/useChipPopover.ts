@@ -1,25 +1,15 @@
 // A card that hangs off a painted content control, positioned by the browser.
 //
-// The obvious version reads the chip's rect and writes `position: fixed; left; top`. That is
-// a snapshot: it is wrong the moment the page scrolls, the window resizes, the zoom changes or
-// a reflow moves the chip, and the usual repair is a scroll listener re-measuring every frame.
-// This does none of that. `anchor-name` goes on the chip once, CSS names it with
-// `position-anchor`, and the browser keeps the two together for as long as both exist.
-//
-// The card is a `popover`, so it renders in the top layer: no z-index, and the page it sits
-// over cannot clip it.
+// `anchor-name` goes on the chip once and CSS names it with `position-anchor`, so nothing here
+// measures anything and the card follows its chip through scroll, resize and reflow. The card is
+// a `popover`, so it renders in the top layer: no z-index, and the page cannot clip it.
 
 import { useCallback, useEffect, useRef } from 'react';
 
 /** The name CSS anchors to. One card at a time, so one name is enough. */
 export const CHIP_ANCHOR = '--docx-chip';
 
-/**
- * How long to wait for a repainted chip before treating the control as gone, in ms.
- *
- * A budget rather than a frame count: what is being waited for is the engine's next paint, and
- * how many frames that takes depends on the document, not on the card.
- */
+/** How long to wait for a repainted chip before treating the control as gone, in ms. */
 const ANCHOR_TIMEOUT_MS = 600;
 
 /** The engine's painted chip: the boundary box, not the page-sized chrome layer over it. */
@@ -35,25 +25,19 @@ export interface ChipPopover<T extends HTMLElement> {
 }
 
 /**
- * Shows a card anchored to the control `controlId` names, and closes it on a press anywhere
- * that is not the card or a chip, or on Escape.
+ * Shows a card anchored to the control `controlId` names, and closes it on a press anywhere that
+ * is not the card or a chip, or on Escape. Pass `controlId: undefined` to close.
  *
- * Pass `controlId: undefined` to close. The caller still owns whether a card exists and what
- * is in it; this owns only where it appears and when it goes away.
- *
- * `popover="manual"`, not `"auto"`, so dismissal is written here. Light dismiss would be free,
- * but it treats a press on the chip as a press outside — and a chip press is exactly what OPENS
- * the card, so the platform closed each card in the same click that asked for it. Nothing can
- * be done about that from here: light dismiss exempts a popover's invoker, and the invoker is
- * a box the engine paints rather than a button this code hands over.
+ * `popover="manual"`, so dismissal is written here. Light dismiss treats a press on the chip as
+ * a press outside, and a chip press is what opens the card — it exempts a popover's invoker, and
+ * the invoker here is a box the engine paints rather than a button this code hands over.
  */
 export function useChipPopover<T extends HTMLElement>(
   controlId: string | undefined,
   onClose: () => void
 ): ChipPopover<T> {
   const cardRef = useRef<T | null>(null);
-  // Read inside the effects without making them depend on the caller's identity: a host that
-  // passes an inline arrow would otherwise re-run them every render, hiding and re-showing.
+  // Read inside the effects, so an inline arrow does not re-run them every render.
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
 
@@ -71,10 +55,8 @@ export function useChipPopover<T extends HTMLElement>(
     }
     let anchored: HTMLElement | null = null;
     let frame = 0;
-    // The chip may not be painted yet. A write that REPLACES a control — which is what
-    // re-authoring one is — publishes a new id, and the engine repaints on its own schedule
-    // rather than inside the React commit that handed the id over. So keep looking until the
-    // budget runs out; giving up on the first miss closed every card a write had just opened.
+    // Re-authoring a control publishes a new id, and the engine repaints on its own schedule
+    // rather than inside the React commit that handed it over — so the chip may not exist yet.
     const deadline = performance.now() + ANCHOR_TIMEOUT_MS;
     const attach = (): void => {
       const chip = chipFor(controlId);
@@ -87,8 +69,7 @@ export function useChipPopover<T extends HTMLElement>(
         return;
       }
       anchored = chip;
-      // The ONE imperative line, and it carries no geometry. Everything from here — placement,
-      // scroll tracking, flipping when it would overflow — is the browser's.
+      // The one imperative line, and it carries no geometry.
       chip.style.setProperty('anchor-name', CHIP_ANCHOR);
       if (!card.matches(':popover-open')) card.showPopover();
     };
@@ -104,12 +85,12 @@ export function useChipPopover<T extends HTMLElement>(
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') closeRef.current();
     };
-    // Capture, because the painted surface cancels its own pointer handling and a bubbling
-    // listener never hears a press on the page.
+    // Capture: the painted surface cancels its own pointer handling, so a bubbling listener
+    // never hears a press on the page.
     const onDown = (event: Event): void => {
       const target = event.target;
       if (!(target instanceof Element)) return;
-      // A press on the card is use, and a press on any chip is the next card opening.
+      // A press on a chip is the next card opening.
       if (target.closest('[popover]') || target.closest('[data-docx-content-control]')) return;
       closeRef.current();
     };

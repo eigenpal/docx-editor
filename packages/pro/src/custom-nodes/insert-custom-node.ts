@@ -262,8 +262,7 @@ export function insertCustomNode<Schema extends StandardSchemaV1 | undefined = u
       : {}),
   });
   if (!written.ok) return refusalOf(written);
-  // The id of the control that now exists, not the one that was passed in: the write replaces
-  // the node rather than editing it.
+  // The control that now exists, not the one passed in: the write replaces the node.
   return {
     ok: true,
     changed: true,

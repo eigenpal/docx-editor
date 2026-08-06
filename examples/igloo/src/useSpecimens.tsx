@@ -210,8 +210,7 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
         report(result, '');
         return;
       }
-      // `result.nodeId`, not `node.nodeId`: laying a block REPLACES the control, so the id that
-      // was clicked names nothing now and a card anchored to it would have nothing to hang off.
+      // `result.nodeId`, not `node.nodeId`: laying a block replaces the control.
       setProbe({ kind: 'igloo', controlId: result.nodeId ?? node.nodeId, blocks });
     },
     [editor, report, say]
