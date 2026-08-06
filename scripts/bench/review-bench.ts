@@ -64,13 +64,17 @@ if (!opened.ok) throw new Error(`open failed: ${opened.reason}`);
 const session = opened.session;
 
 // ── the review queue ──
-stage('hasReviewContent', () => session.hasReviewContent());
-const items = stage('reviewItems (cold)', () => session.reviewItems(), (list) => {
-  const comments = list.filter((item) => item.kind === 'comment').length;
-  const revisions = list.filter((item) => item.kind === 'revision').length;
-  return `${list.length} items (${comments} comments, ${revisions} revisions)`;
-});
+const items = stage(
+  'reviewItems (cold, document open)',
+  () => session.reviewItems(),
+  (list) => {
+    const comments = list.filter((item) => item.kind === 'comment').length;
+    const revisions = list.filter((item) => item.kind === 'revision').length;
+    return `${list.length} items (${comments} comments, ${revisions} revisions)`;
+  }
+);
 stage('reviewItems (cached)', () => session.reviewItems());
+stage('hasReviewContent', () => session.hasReviewContent());
 
 // ── keystroke paths ──
 const paragraphs = (() => {
@@ -137,9 +141,25 @@ const commentsPart = [...pkg.parts.values()].find((candidate) =>
   candidate.name.endsWith('comments.xml')
 );
 
-stage('collectReviewItems (full, cold-ish)', () =>
-  collectReviewItems({ storyPart: part, commentsPart })
-);
+// The keystroke rounds above local-patched without a full derivation, so the root-level
+// memos are cold for the CURRENT tree: this is the re-derive an accept, reject, comment
+// write or undo pays.
+stage('collectReviewItems (fresh root)', () => collectReviewItems({ storyPart: part, commentsPart }));
+// And this is what any second reader of the same revision pays.
+{
+  const timings: number[] = [];
+  for (let i = 0; i < 5; i++) {
+    const t0 = performance.now();
+    collectReviewItems({ storyPart: part, commentsPart });
+    timings.push(performance.now() - t0);
+  }
+  timings.sort((a, b) => a - b);
+  results.push({
+    stage: 'collectReviewItems (repeat, unchanged tree)',
+    ms: timings[2]!,
+    note: 'median of 5 repeats',
+  });
+}
 stage('revisionItemsOf', () => revisionItemsOf(part), (list) => `${list.length} cards`);
 stage('locateSites', () => locateSites(part), (map) => `${map.size} sites`);
 stage('commentAnchorsOfStory', () => commentAnchorsOfStory(part), (list) => `${list.length} anchors`);

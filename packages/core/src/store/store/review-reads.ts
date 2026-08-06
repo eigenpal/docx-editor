@@ -30,6 +30,7 @@ import {
   type CommentRecord,
   type CommentThreadState,
 } from './comment-reads.ts';
+import { createRecentRootCache } from './recent-root-cache.ts';
 
 /** A position in the model offset space of one story. */
 export interface ReviewPosition {
@@ -258,10 +259,21 @@ export function locateSites(part: OoxmlPart): Map<string, SiteLocation> {
 
   const anchorTrackedRows = (node: OoxmlNode, depth: number): void => {
     if (node.kind === 'textValue' || depth > 64) return;
-    // A table is block-level content: a row can sit inside a cell, a body or an SDT, never
-    // inside a paragraph — so the subtrees holding almost every node in the document have
-    // nothing for this walk, and descending into them cost more than the rest of it.
-    if (node.kind === 'paragraph') return;
+    // A paragraph CAN hold table rows — a textbox in a run holds block content, tables
+    // included — so paragraph subtrees are walked, not pruned. Memoized per paragraph
+    // like the location walk above: the ordinary paragraph with no textbox costs one
+    // cached empty answer instead of a descent through every run.
+    if (node.kind === 'paragraph') {
+      let entries = paragraphRowAnchorsCache.get(node);
+      if (!entries) {
+        const own: (readonly [string, SiteLocation])[] = [];
+        collectRowAnchorEntries(node, 0, own);
+        entries = own;
+        paragraphRowAnchorsCache.set(node, entries);
+      }
+      for (const [markerId, location] of entries) located.set(markerId, location);
+      return;
+    }
     if (node.kind === 'tableRow') {
       // Row-local by the same argument as the paragraph memo: the markers and the first
       // paragraph that anchors them all live inside the row subtree. A nested row's
@@ -280,6 +292,27 @@ export function locateSites(part: OoxmlPart): Map<string, SiteLocation> {
   anchorTrackedRows(part.root, 0);
   locatedSitesCache.set(part.root, located);
   return located;
+}
+
+/**
+ * Every row-marker anchor under a node, in the same emit order the outer walk uses —
+ * outer rows first, nested rows after, so a later entry for the same marker wins.
+ */
+function collectRowAnchorEntries(
+  node: OoxmlNode,
+  depth: number,
+  out: (readonly [string, SiteLocation])[]
+): void {
+  if (node.kind === 'textValue' || depth > 64) return;
+  if (node.kind === 'tableRow') {
+    let entries = rowMarkerAnchorsCache.get(node);
+    if (!entries) {
+      entries = computeRowMarkerAnchors(node);
+      rowMarkerAnchorsCache.set(node, entries);
+    }
+    for (const entry of entries) out.push(entry);
+  }
+  for (const child of node.children) collectRowAnchorEntries(child, depth + 1, out);
 }
 
 /** Tracked row/cell marker anchors of one row subtree, memoized on the immutable row. */
@@ -327,11 +360,23 @@ const EMPTY_ROW_ANCHORS: readonly (readonly [string, SiteLocation])[] = [];
 /** Node id → paragraph-local offsets, memoized on the immutable paragraph node. */
 const paragraphLocationsCache = new WeakMap<OoxmlNode, ReadonlyMap<string, SiteLocation>>();
 
-/** The merged site index, memoized on the immutable part root. */
-const locatedSitesCache = new WeakMap<OoxmlNode, Map<string, SiteLocation>>();
+/**
+ * The merged site index per part root, bounded to recent roots.
+ *
+ * Bounded because the undo history retains old roots by reference: a plain WeakMap would
+ * keep one O(document) index alive per retained root. Per-NODE memos above are exempt —
+ * unchanged nodes are shared across roots, so those caches stay O(document) in total.
+ */
+const locatedSitesCache = createRecentRootCache<Map<string, SiteLocation>>(8);
 
 /** Marker anchors per immutable table row. */
 const rowMarkerAnchorsCache = new WeakMap<
+  OoxmlNode,
+  readonly (readonly [string, SiteLocation])[]
+>();
+
+/** Row-marker anchors under one immutable paragraph (a textbox can hold a table). */
+const paragraphRowAnchorsCache = new WeakMap<
   OoxmlNode,
   readonly (readonly [string, SiteLocation])[]
 >();
@@ -996,8 +1041,8 @@ export function paragraphOrderOfPart(part: OoxmlPart): Map<string, number> {
   return order;
 }
 
-/** The paragraph order index, memoized on the immutable part root. */
-const paragraphOrderCache = new WeakMap<OoxmlNode, Map<string, number>>();
+/** The paragraph order index per part root, bounded like {@link locatedSitesCache}. */
+const paragraphOrderCache = createRecentRootCache<Map<string, number>>(8);
 
 /** Paragraph ids of one table subtree, in reading order, per immutable table node. */
 const tableParagraphIdsCache = new WeakMap<OoxmlNode, readonly string[]>();

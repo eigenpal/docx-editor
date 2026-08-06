@@ -17,7 +17,10 @@ import {
   commentBodyText,
   commentPartNameOf,
   commentsExtendedPartNameOf,
+  locateSites,
   readOoxmlPackage,
+  readOoxmlPart,
+  revisionItemsOf,
   TreeDocumentStore,
   type OoxmlPackage,
   type OoxmlPart,
@@ -85,5 +88,57 @@ describe('the store lane answers the review queue', () => {
     expect(comment.orphaned).toBe(false);
     expect(comment.range?.start).toEqual({ paragraphId, offset: 0 });
     expect(comment.range?.end).toEqual({ paragraphId, offset: 5 });
+  });
+});
+
+describe('tracked rows inside a textbox keep their anchors', () => {
+  // A paragraph CAN hold table rows: a textbox in a run carries block content, tables
+  // included. The site walk memoizes paragraph subtrees rather than pruning them — a
+  // prune here silently turned the row's card rangeless (no band, no local patch).
+  test('a tracked row deletion in a textbox table gets a range', () => {
+    const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const result = readOoxmlPart(
+      `<w:document xmlns:w="${W_NS}" xmlns:v="urn:schemas-microsoft-com:vml"><w:body>` +
+        `<w:p><w:r><w:pict><v:textbox><w:txbxContent>` +
+        `<w:tbl><w:tr>` +
+        `<w:trPr><w:del w:id="9" w:author="Ada Reviewer" w:date="2026-01-01T00:00:00Z"/></w:trPr>` +
+        `<w:tc><w:tcPr><w:cellDel w:id="9" w:author="Ada Reviewer" w:date="2026-01-01T00:00:00Z"/></w:tcPr>` +
+        `<w:p><w:r><w:t>in the box</w:t></w:r></w:p></w:tc>` +
+        `</w:tr></w:tbl>` +
+        `</w:txbxContent></v:textbox></w:pict></w:r></w:p>` +
+        `</w:body></w:document>`,
+      {
+        name: '/word/document.xml',
+        contentType:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
+      }
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    const part = result.part;
+
+    const boxParagraphId = (() => {
+      let inCell: string | null = null;
+      const visit = (node: (typeof part)['root'], insideCell: boolean): void => {
+        if (node.kind === 'textValue') return;
+        if (node.kind === 'paragraph' && insideCell && inCell === null) {
+          inCell = node.id;
+          return;
+        }
+        for (const child of node.children) visit(child, insideCell || node.kind === 'tableCell');
+      };
+      visit(part.root, false);
+      if (inCell === null) throw new Error('no textbox cell paragraph');
+      return inCell;
+    })();
+
+    const located = locateSites(part);
+    const cards = revisionItemsOf(part);
+    const card = cards.find((item) => item.revisionKind === 'structural');
+    expect(card).toBeDefined();
+    expect(card!.ranges.length).toBeGreaterThan(0);
+    expect(card!.ranges[0]!.start.paragraphId).toBe(boxParagraphId);
+    // The memoized index answers repeat reads with the same instance.
+    expect(locateSites(part)).toBe(located);
   });
 });

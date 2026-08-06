@@ -38,7 +38,9 @@ const content = body.slice(0, sectPrStart);
 const finalSectPr = body.slice(sectPrStart);
 
 function uniquify(chunk, copy) {
-  const offset = copy * 100000;
+  // 1,000,000 per copy: above the sample's largest id family (the ~900,000 TOC
+  // bookmarks), so no copy's bumped id can collide with another copy's original.
+  const offset = copy * 1000000;
   let out = chunk
     .replace(/(<w:bookmark(?:Start|End)[^>]*w:id=")(\d+)(")/g, (_, a, id, b) => a + (Number(id) + offset) + b)
     .replace(/(<w:bookmarkStart[^>]*w:name=")([^"]+)(")/g, (_, a, name, b) => a + name + '_c' + copy + b)

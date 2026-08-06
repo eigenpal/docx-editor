@@ -53,7 +53,8 @@ const INSERT_TEXTS = [
 ];
 
 // Injected ids start clear of the sample's own comment ids (0-3) and of each other;
-// copies then offset by copy*100000, matching the bookmark scheme.
+// copies then offset by copy*1,000,000 — above the sample's largest id family (the
+// ~900,000 TOC bookmarks), so no copy's bumped id can collide with another copy's.
 const COMMENT_ID_BASE = 1000;
 const REVISION_ID_BASE = 5000;
 
@@ -199,7 +200,7 @@ const content = injectReviewMarkup(body.slice(0, sectPrStart));
 // ── step 2: repeat, uniquifying per copy ──────────────────────────────────────────────
 
 function uniquify(chunk, copy) {
-  const offset = copy * 100000;
+  const offset = copy * 1000000;
   const bumpId = (_, a, id, b) => a + (Number(id) + offset) + b;
   return chunk
     .replace(/(<w:bookmark(?:Start|End)[^>]*w:id=")(\d+)(")/g, bumpId)
@@ -234,7 +235,10 @@ const baseComments = commentsXml.slice(0, commentsClose) + injectedEntries;
 const commentEntries = (baseComments.match(/<w:comment [\s\S]*?<\/w:comment>/g) ?? []).join('');
 let copiedEntries = '';
 for (let copy = 1; copy < multiplier; copy++) {
-  copiedEntries += commentEntries.replace(/(<w:comment [^>]*w:id=")(\d+)(")/g, (_, a, id, b) => a + (Number(id) + copy * 100000) + b);
+  copiedEntries += commentEntries.replace(
+    /(<w:comment [^>]*w:id=")(\d+)(")/g,
+    (_, a, id, b) => a + (Number(id) + copy * 1000000) + b
+  );
 }
 zip['word/comments.xml'] = strToU8(baseComments + copiedEntries + '</w:comments>');
 

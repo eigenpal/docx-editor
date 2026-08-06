@@ -37,6 +37,7 @@ import {
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
 import { collectStoryParagraphs, storyRootsOf } from '../package/story-blocks.ts';
 import { paragraphOffsetIndex } from './tree-op-segments.ts';
+import { createRecentRootCache } from './recent-root-cache.ts';
 
 /** The `w15` namespace: `commentsExtended.xml` — thread parent and resolved state. */
 export const W15_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2012/wordml';
@@ -256,8 +257,12 @@ function storyParagraphsOfPart(part: OoxmlPart): readonly OoxmlParagraphNode[] {
   return paragraphs;
 }
 
-/** Story paragraphs per immutable part root. */
-const storyParagraphsCache = new WeakMap<OoxmlNode, readonly OoxmlParagraphNode[]>();
+/**
+ * Story paragraphs per part root, bounded to recent roots: the undo history retains old
+ * roots by reference, and a plain WeakMap would keep one O(document) array alive per
+ * retained root.
+ */
+const storyParagraphsCache = createRecentRootCache<readonly OoxmlParagraphNode[]>(8);
 
 /**
  * The comments in `word/comments.xml`, in authored order.

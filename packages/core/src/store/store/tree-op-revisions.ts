@@ -170,7 +170,10 @@ export function collectRevisionSites(part: OoxmlPart): RevisionSite[] {
     if (node.kind === 'paragraph' || node.kind === 'table') {
       const cached = subtreeSitesCache.get(node);
       if (cached) {
-        sites.push(...cached);
+        // A plain loop, not a spread: spreading is bounded by the engine's argument-count
+        // limit, and one adversarial table can legally hold more tracked markers than that
+        // — the first walk would succeed and every cache hit after it would throw.
+        for (const site of cached) sites.push(site);
         return;
       }
       const before = sites.length;

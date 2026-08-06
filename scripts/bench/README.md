@@ -98,23 +98,27 @@ The review fixture is `sample.docx` with 50 comments (10 of them replies anchore
 exactly the parent's range) and 40 tracked changes (15 insertions, 15 deletions, 5
 delete+insert replacement pairs) injected, then the body repeated 20 times with comment
 and revision ids uniquified per copy: ~1,080 comments and ~800 tracked-change sites over
-540 pages — the "long reviewed contract" shape. Medians of 3 runs, Apple Silicon,
-Bun 1.3.14.
+540 pages — the "long reviewed contract" shape. Before and after are the SAME bench
+script (its stage names below) run against the pre- and post-change engine; medians of 3
+runs, Apple Silicon, Bun 1.3.14.
 
-| Path                                              | Before  | After  | Change |
-| ------------------------------------------------- | ------- | ------ | ------ |
-| Full queue re-derive, unchanged tree              | 117 ms  | 4.5 ms | −96%   |
-| Full queue re-derive after an edit (fresh root)   | 116 ms  | 47 ms  | −59%   |
-| `revisionItemsOf` (repeat read)                   | 86 ms   | 3 ms   | −96%   |
-| `locateSites` (repeat read)                       | 54 ms   | ~0 ms  | —      |
-| `commentAnchorsOfStory` (repeat read)             | 12 ms   | 0.5 ms | −96%   |
-| `paragraphOrderOfPart` (repeat read)              | 13 ms   | ~0 ms  | —      |
-| Session `reviewItems()` cold (document open)      | 192 ms  | 148 ms | −23%   |
-| `reviewItems()` after keystroke (local patch)     | 6–7 ms  | 4–6 ms | —      |
+| Stage                                            | Before | After | Change |
+| ------------------------------------------------ | ------ | ----- | ------ |
+| `collectReviewItems` (repeat, unchanged tree)    | 116 ms | 5 ms  | −96%   |
+| `collectReviewItems` (fresh root, after an edit) | 117 ms | 52 ms | −55%   |
+| `revisionItemsOf` (repeat read)                  | 86 ms  | 3 ms  | −96%   |
+| `locateSites` (repeat read)                      | 54 ms  | ~0 ms | —      |
+| `commentAnchorsOfStory` (repeat read)            | 12 ms  | 0.5 ms | −96%  |
+| `paragraphOrderOfPart` (repeat read)             | 13 ms  | ~0 ms | —      |
+| `hasReviewContent` (after the queue was read)    | 17 ms  | 1 ms  | −94%   |
+| `reviewItems()` after keystroke (local patch)    | 7.5 ms | 6 ms  | —      |
+| `reviewItems()` cold (document open)             | 207 ms | 197 ms | ~same |
 
 The fresh-root path is what an accept, reject, comment write or undo pays before the rail
 repaints; the unchanged-tree path is what any second reader (automation, a re-render, the
-geometry pass) pays. What the profiler found, and what changed:
+geometry pass) pays. The cold document-open read is deliberately reported as unchanged:
+the first derivation builds the per-node memos either way, and the win is every read
+after it. What the profiler found, and what changed:
 
 1. **Every full-tree review fact was re-derived per call** even though each is a pure
    function of immutable nodes. `locateSites` merged 82,800 entries into a fresh `Map` per
@@ -127,8 +131,10 @@ geometry pass) pays. What the profiler found, and what changed:
 2. **`collectRevisionSites` memoized per paragraph only**, so a document of tables
    re-walked every `w:trPr`/`w:tcPr` per derivation. The memo now covers table subtrees
    too, which also feeds `hasReviewContent` and accept-all.
-3. **`anchorTrackedRows` descended into every paragraph** looking for table rows, which
-   can never sit inside one — the walk now prunes paragraph subtrees.
+3. **`anchorTrackedRows` re-descended every paragraph** looking for table rows. A
+   paragraph CAN hold one — a textbox in a run holds block content, tables included — so
+   the subtrees are memoized per paragraph rather than pruned: the ordinary paragraph
+   costs one cached empty answer, and a textbox table keeps its anchors.
 4. **Replacement pairing scanned every insertion per deletion.** Pairing is exact
    end-to-start position equality, so insertions are indexed by their start position and
    the scan is one lookup.
@@ -144,4 +150,12 @@ validation and security bound, and the derivation SEMANTICS — the queue, its o
 threading and pairing rules are byte-for-byte the same, only recomputation of
 already-proven facts was removed. The shared memoized `Map` instances (`locateSites`,
 `paragraphOrderOfPart`) keep their public signatures; callers must treat them as
-read-only, which every in-repo caller already did.
+read-only, which every in-repo caller already did (declaring them `ReadonlyMap` is a
+follow-up, being a public signature change).
+
+Two bounds keep the memos honest under adversarial input and long sessions: cached site
+arrays replay through a plain loop (a spread would hit the engine's argument-count limit
+on a table holding tens of thousands of tracked markers), and the per-ROOT caches are
+bounded to recent roots (`recent-root-cache.ts`) so the undo history's retained snapshots
+do not each pin an O(document) derived index — per-NODE memos are exempt, because
+unchanged nodes are shared across revisions.
