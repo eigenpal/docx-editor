@@ -3,6 +3,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import {
+  AUTO_PARAGRAPH_SPACING_PT,
   MAX_PARAGRAPH_SPACING_PT,
   appliedSpaceBefore,
   collapsedSpaceBefore,
@@ -72,6 +73,105 @@ describe('paragraphSpacing resolves w:spacing before/after', () => {
     expect(appliedSpaceBefore(18, 0, true, false)).toBe(0);
     expect(appliedSpaceBefore(18, 0, true, true)).toBe(18);
     expect(appliedSpaceBefore(18, 10, false, false)).toBe(8);
+  });
+});
+
+// `w:beforeAutospacing` / `w:afterAutospacing` (§17.3.1.2, §17.3.1.13). Word writes the pair
+// `w:before="100" w:beforeAutospacing="1"` on every paragraph of a document that has been
+// through its HTML filter, and the 100 twips beside the flag is NOT the value: the flag means
+// the consumer picks, and Word picks HTML's `<p>` margin. Reading the literal laid such a
+// document out 9pt tight per paragraph boundary, which is enough to lose a page.
+describe('paragraphSpacing resolves w:beforeAutospacing / w:afterAutospacing', () => {
+  const AUTO = {
+    localName: 'spacing',
+    attributes: {
+      before: '100',
+      after: '100',
+      beforeAutospacing: '1',
+      afterAutospacing: '1',
+    },
+  };
+
+  test('auto replaces the measurement beside it rather than adding to it', () => {
+    expect(paragraphSpacing([AUTO])).toEqual({
+      before: AUTO_PARAGRAPH_SPACING_PT,
+      after: AUTO_PARAGRAPH_SPACING_PT,
+    });
+  });
+
+  test('each side is independent', () => {
+    expect(
+      paragraphSpacing([
+        {
+          localName: 'spacing',
+          attributes: { before: '100', after: '240', afterAutospacing: '1' },
+        },
+      ])
+    ).toEqual({ before: 5, after: AUTO_PARAGRAPH_SPACING_PT });
+  });
+
+  test('an explicit off keeps the authored measurement', () => {
+    for (const off of ['0', 'false', 'off']) {
+      expect(
+        paragraphSpacing([
+          { localName: 'spacing', attributes: { before: '240', beforeAutospacing: off } },
+        ])
+      ).toEqual({ before: 12, after: 0 });
+    }
+  });
+
+  test('list items and table cells resolve auto to 0, the way HTML collapses li/td margins', () => {
+    expect(paragraphSpacing([AUTO], { inList: true })).toEqual({ before: 0, after: 0 });
+    expect(paragraphSpacing([AUTO], { inTableCell: true })).toEqual({ before: 0, after: 0 });
+    // Suppression is about the auto value only — an authored measurement still applies.
+    expect(
+      paragraphSpacing([{ localName: 'spacing', attributes: { before: '240' } }], { inList: true })
+    ).toEqual({ before: 12, after: 0 });
+  });
+
+  test('the flags merge per attribute, like the measurements they sit beside', () => {
+    // A style turns auto spacing on; the paragraph overrides only `@before`. The flag must
+    // survive, or direct formatting silently reverts the paragraph to the style's 100 twips.
+    expect(
+      paragraphSpacing([AUTO, { localName: 'spacing', attributes: { before: '400' } }])
+    ).toEqual({ before: AUTO_PARAGRAPH_SPACING_PT, after: AUTO_PARAGRAPH_SPACING_PT });
+    // ...and a style that turns it off is not undone by a later element that says nothing.
+    expect(
+      paragraphSpacing([
+        AUTO,
+        { localName: 'spacing', attributes: { beforeAutospacing: '0', afterAutospacing: '0' } },
+        { localName: 'spacing', attributes: { before: '400' } },
+      ])
+    ).toEqual({ before: 20, after: 5 });
+  });
+});
+
+describe('layout applies Word’s auto spacing, not the twips beside the flag', () => {
+  const AUTO_PPR =
+    '<w:spacing w:after="100" w:afterAutospacing="1" w:before="100" w:beforeAutospacing="1"/>';
+
+  test('two body paragraphs sit 14pt apart, not 5pt', () => {
+    const layout = lay(load(paragraph('one', AUTO_PPR) + paragraph('two', AUTO_PPR)));
+    const [first, second] = layout.pages[0]!.fragments;
+    if (first!.kind !== 'paragraph' || second!.kind !== 'paragraph') throw new Error('paragraphs');
+    expect(first!.spacing.after).toBe(AUTO_PARAGRAPH_SPACING_PT);
+    // Collapsed against the previous after, so the gap is one 14pt band and not two.
+    expect(second!.lines[0]!.box.y - first!.lines[0]!.box.y).toBe(14 + AUTO_PARAGRAPH_SPACING_PT);
+  });
+
+  test('the same paragraphs in a table cell get no auto spacing at all', () => {
+    const cell = `<w:tc>${paragraph('one', AUTO_PPR)}${paragraph('two', AUTO_PPR)}</w:tc>`;
+    const layout = lay(load(`<w:tbl><w:tr>${cell}</w:tr></w:tbl>`));
+    const table = layout.pages[0]!.fragments.find((fragment) => fragment.kind === 'table');
+    if (table?.kind !== 'table') throw new Error('table fragment');
+    const paragraphs = table.rows[0]!.cells[0]!.blocks.filter(
+      (block) => block.kind === 'paragraph'
+    );
+    expect(paragraphs).toHaveLength(2);
+    for (const fragment of paragraphs) {
+      if (fragment.kind !== 'paragraph') continue;
+      expect(fragment.spacing).toEqual({ before: 0, after: 0 });
+    }
   });
 });
 

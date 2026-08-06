@@ -559,7 +559,8 @@ function placeCellParagraph(
     cellContentWidth,
     deps.styleCascade,
     listItem,
-    options?.tableCellStyle
+    options?.tableCellStyle,
+    true
   );
   // `w:defaultTabStop` lives in settings.xml, which the paragraph cascade never reads.
   const tabStops = withDefaultTabInterval(cascadedTabStops, deps.defaultTabStopPt);

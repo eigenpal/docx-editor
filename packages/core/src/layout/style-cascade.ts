@@ -687,13 +687,17 @@ export interface ParagraphLayoutInputs {
  *
  * `tableCellStyle` carries what the enclosing table's style says about this cell's
  * paragraphs; body paragraphs pass nothing.
+ *
+ * `inTableCell` is asked for separately because a cell paragraph may have no table style to
+ * inherit at all, and `w:beforeAutospacing` still needs to know it is in a cell.
  */
 export function resolveParagraphLayoutInputs(
   paragraph: OoxmlElement,
   contentWidth: number,
   styleCascade: StyleCascadeTable | undefined,
   listItem?: import('./list-resolve.ts').ResolvedListItem,
-  tableCellStyle?: TableCellStyleFormatting
+  tableCellStyle?: TableCellStyleFormatting,
+  inTableCell = false
 ): ParagraphLayoutInputs {
   const pPr = findParagraphProperties(paragraph);
   const cascaded = styleCascade
@@ -758,7 +762,7 @@ export function resolveParagraphLayoutInputs(
     indent,
     available: Math.max(1, contentWidth - indent.left - indent.right),
     alignment: paragraphAlignment(props),
-    spacing: paragraphSpacing(props),
+    spacing: paragraphSpacing(props, { inList: listItem !== undefined, inTableCell }),
     lineSpacing: paragraphLineSpacing(props),
     contextualSpacing: paragraphContextualSpacing(props),
     styleId: cascaded ? cascaded.styleId : (styleIdFromProps(props, 'pStyle') ?? null),

@@ -43,6 +43,32 @@ export interface ParagraphSpacing {
 }
 
 /**
+ * The gap Word substitutes when `w:beforeAutospacing` / `w:afterAutospacing` is on
+ * (ECMA-376 §17.3.1.2, §17.3.1.13).
+ *
+ * The attribute means "the consumer decides", and the authored `@before` / `@after` beside it
+ * is IGNORED rather than used as the value. Word's answer is HTML's default `<p>` margin,
+ * 14pt, which is what a document round-tripped through Word's HTML filter carries — and this
+ * one is everywhere, because Word writes `w:before="100" w:beforeAutospacing="1"` for it. Reading
+ * only the literal 100 twips lays every such paragraph out 9pt tight, which moves page breaks.
+ */
+export const AUTO_PARAGRAPH_SPACING_PT = 14;
+
+/**
+ * Where a paragraph sits, for the two contexts in which Word's auto spacing resolves to 0
+ * instead of {@link AUTO_PARAGRAPH_SPACING_PT}.
+ *
+ * Both come from the HTML model the attribute emulates: a `<li>` and a `<td>` collapse the
+ * paragraph margin, a bare `<p>` does not. A caller that says nothing gets the body answer.
+ */
+export interface ParagraphAutoSpacingContext {
+  /** The paragraph participates in numbering (`w:numPr`), i.e. it is a list item. */
+  readonly inList?: boolean;
+  /** The paragraph lives in a table cell. */
+  readonly inTableCell?: boolean;
+}
+
+/**
  * Resolved line spacing (`w:spacing/@line` + `@lineRule`, ECMA-376 17.3.1.33).
  *
  * `auto` is the interesting one: `@line` is 240ths of a line, so 240 is single, 360 is
@@ -161,6 +187,11 @@ function twipsToPoints(raw: string | undefined): number {
   return clampNonNegative(twips / 20, MAX_PARAGRAPH_SPACING_PT);
 }
 
+/** `ST_OnOff` carried as an attribute value: anything but an explicit off is on (§17.17.4). */
+function isOn(raw: string): boolean {
+  return raw !== '0' && raw !== 'false' && raw !== 'off';
+}
+
 function hexColor(raw: string | undefined): string | null {
   if (raw === undefined || raw === 'auto') return null;
   return HEX_COLOR.test(raw) ? raw.toUpperCase() : null;
@@ -182,10 +213,18 @@ function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undef
  *
  * Line spacing (`w:line` / `w:lineRule`) is a separate concern — it changes measured line
  * height, not the gap between paragraphs — and is not resolved here.
+ *
+ * `w:beforeAutospacing` / `w:afterAutospacing` REPLACE the authored measurement on their own
+ * side rather than adding to it; see {@link AUTO_PARAGRAPH_SPACING_PT}.
  */
-export function paragraphSpacing(props: readonly OoxmlProperty[]): ParagraphSpacing {
+export function paragraphSpacing(
+  props: readonly OoxmlProperty[],
+  context?: ParagraphAutoSpacingContext
+): ParagraphSpacing {
   let before = 0;
   let after = 0;
+  let beforeAuto = false;
+  let afterAuto = false;
   for (const property of props) {
     if (property.localName !== 'spacing') continue;
     // Merged PER ATTRIBUTE, not per element. `w:spacing` is one element carrying
@@ -196,6 +235,18 @@ export function paragraphSpacing(props: readonly OoxmlProperty[]): ParagraphSpac
     const authoredAfter = property.attributes?.after;
     if (authoredBefore !== undefined) before = twipsToPoints(authoredBefore);
     if (authoredAfter !== undefined) after = twipsToPoints(authoredAfter);
+    // The autospacing flags merge per attribute too, and independently of the measurement
+    // beside them: a style may turn auto spacing OFF while leaving the `@before` it inherited
+    // in place, and that paragraph must then use the measurement, not 0.
+    const authoredBeforeAuto = property.attributes?.beforeAutospacing;
+    const authoredAfterAuto = property.attributes?.afterAutospacing;
+    if (authoredBeforeAuto !== undefined) beforeAuto = isOn(authoredBeforeAuto);
+    if (authoredAfterAuto !== undefined) afterAuto = isOn(authoredAfterAuto);
+  }
+  if (beforeAuto || afterAuto) {
+    const auto = context?.inList || context?.inTableCell ? 0 : AUTO_PARAGRAPH_SPACING_PT;
+    if (beforeAuto) before = auto;
+    if (afterAuto) after = auto;
   }
   return { before, after };
 }
@@ -279,7 +330,7 @@ export function paragraphContextualSpacing(props: readonly OoxmlProperty[]): boo
   for (const property of props) {
     if (property.localName !== 'contextualSpacing') continue;
     const raw = property.attributes?.val;
-    value = raw !== '0' && raw !== 'false' && raw !== 'off';
+    value = raw === undefined || isOn(raw);
   }
   return value;
 }

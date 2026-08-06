@@ -174,6 +174,7 @@ export {
   type TextMeasurer,
 } from './semantic-records.ts';
 export {
+  AUTO_PARAGRAPH_SPACING_PT,
   MAX_BORDER_SPACE_PT,
   MAX_BORDER_WIDTH_PT,
   MAX_PARAGRAPH_SPACING_PT,
@@ -193,6 +194,7 @@ export {
   paragraphLineSpacing,
   paragraphSpacing,
   type LineSpacingRule,
+  type ParagraphAutoSpacingContext,
   type ParagraphBorders,
   type ParagraphLineSpacing,
 } from './paragraph-style.ts';

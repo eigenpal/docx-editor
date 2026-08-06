@@ -33,6 +33,9 @@ export function attachNotesToLayout(layout: SemanticLayout, allRefs: readonly Pa
 }): NotesAttachResult;
 
 // @public
+export const AUTO_PARAGRAPH_SPACING_PT = 14;
+
+// @public
 export const AUTO_PREFERRED_WIDTH: PreferredWidth;
 
 // @public
@@ -1648,6 +1651,12 @@ export function pagesToMaterialize(input: MaterializationInput): Set<number>;
 export const PARAGRAPH_BORDER_SIDES: readonly ["top", "left", "bottom", "right", "between", "bar"];
 
 // @public
+export interface ParagraphAutoSpacingContext {
+    readonly inList?: boolean;
+    readonly inTableCell?: boolean;
+}
+
+// @public
 export interface ParagraphBorderEdge {
     readonly color: string | null;
     readonly shadow?: true;
@@ -1861,7 +1870,7 @@ export interface ParagraphSpacing {
 }
 
 // @public
-export function paragraphSpacing(props: readonly OoxmlProperty[]): ParagraphSpacing;
+export function paragraphSpacing(props: readonly OoxmlProperty[], context?: ParagraphAutoSpacingContext): ParagraphSpacing;
 
 // @public
 export function paragraphTabStops(pPr: OoxmlNode | undefined): ResolvedTabStops;
@@ -2097,7 +2106,7 @@ export function resolveNumberingLevel(index: NumberingIndex, numId: string, ilvl
 export function resolveOoxmlShadingFill(attributes: Readonly<Record<string, string>> | undefined): string | undefined;
 
 // @public
-export function resolveParagraphLayoutInputs(paragraph: OoxmlElement, contentWidth: number, styleCascade: StyleCascadeTable | undefined, listItem?: ResolvedListItem, tableCellStyle?: TableCellStyleFormatting): ParagraphLayoutInputs;
+export function resolveParagraphLayoutInputs(paragraph: OoxmlElement, contentWidth: number, styleCascade: StyleCascadeTable | undefined, listItem?: ResolvedListItem, tableCellStyle?: TableCellStyleFormatting, inTableCell?: boolean): ParagraphLayoutInputs;
 
 // @public
 export function resolveRunStyle(props: readonly OoxmlProperty[], themeFonts?: ThemeFonts): ResolvedRunStyle;
