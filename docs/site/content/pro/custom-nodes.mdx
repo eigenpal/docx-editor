@@ -260,18 +260,11 @@ if (!outgoing.ok) throw new Error(outgoing.reason);
 download(outgoing.bytes);
 ```
 
-```
-                     one document
-                          │
-          ┌───────────────┴────────────────┐
-          │                                │
-   editor.save()                 saveForExport(editor)
-          │                                │
-          ▼                                ▼
-    your storage                 the user's download
-                                 an ordinary .docx
-  reopens in this editor
-  with the chips working
+```mermaid
+flowchart TD
+    doc["one document"]
+    doc -- "editor.save()" --> keep["your storage<br/>reopens here with the chips working"]
+    doc -- "saveForExport(editor)" --> send["the user's download<br/>an ordinary .docx"]
 ```
 
 `saveForExport` calls `editor.save()`, then applies every definition registered in `modules`. There is no list to pass and no list to get wrong. Pass `nodes` to narrow it.

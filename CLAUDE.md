@@ -258,6 +258,12 @@ updates both.
 has its own. Register a new page in BOTH, or it is URL-reachable but missing from
 the sidebar.
 
+**Diagrams are mermaid**, in a ` ```mermaid ` fence — not ASCII box drawing.
+ASCII renders at whatever the code block's font does, wraps on a phone, and is
+unreadable to a screen reader; mermaid scales and picks up the site theme. Keep
+it to the shape being explained (a flow, a sequence, a state machine); a diagram
+that just restates the prose earns nothing.
+
 OOXML reference: `reference/quick-ref/wordprocessingml.md`, `themes-colors.md`;
 schemas in `reference/ecma-376/part1/schemas/`. PDFs are gitignored — run `bun
 run reference:fetch` once when needed.
