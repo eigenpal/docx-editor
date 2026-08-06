@@ -75,6 +75,10 @@ function fixture(
       state.applied += 1;
       return { ok: true, changed: true };
     },
+    applyCustomNodeWrite: () => {
+      state.applied += 1;
+      return { ok: true, changed: true };
+    },
     applyCommentWrite: () => {
       state.applied += 1;
       return { ok: true, changed: true, commentId: '1' };
@@ -216,12 +220,14 @@ describe('the operation vocabulary declares which operations write', () => {
       'deleteContentControl',
       'insertContentControlText',
       'insertContentControl',
+      'insertCustomNode',
     ]);
     // And the ones that commit as a PACKAGE transaction, which is why they travel alone.
     expect([...AUTOMATION_SOLITARY_OPERATIONS]).toEqual([
       'deleteNote',
       'setCommentResolved',
       'replyToComment',
+      'insertCustomNode',
     ]);
     expect(
       isAutomationCommand({ op: 'insertText', at: { paragraph: FORGED, offset: 0 }, text: 'x' })

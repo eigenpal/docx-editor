@@ -127,6 +127,42 @@ function rangeTouchesHyperlink(paragraph: OoxmlParagraphNode, start: number, end
 }
 
 /**
+ * Longest `w:prefixMappings`, `w:xpath` or `w:storeItemID` an op may write.
+ *
+ * A binding is authored by this engine, never copied out of a file, so this is a bound on a
+ * caller's mistake rather than on an attacker: the three strings go straight into attributes,
+ * and an unbounded one would make the control's properties larger than its document.
+ */
+const MAX_DATA_BINDING_ATTRIBUTE_LENGTH = 2_048;
+
+/**
+ * Whether a `w:dataBinding` is one this engine will author.
+ *
+ * ALL THREE OR NONE. Word needs the store id to find the part, the xpath to find the node in
+ * it, and the prefix mappings to resolve that xpath's steps; a binding missing any of them
+ * resolves to nothing, and Word then paints the control's own content and quietly stops
+ * mirroring the store — which is the drift the payload lane exists to make impossible.
+ *
+ * The control characters are refused rather than escaped, exactly as `authorableHyperlinkTarget`
+ * refuses them: XML 1.0 cannot represent them in an attribute value at all, so a document
+ * carrying one is one Word refuses to open.
+ */
+function isAuthorableDataBinding(binding: unknown): boolean {
+  if (typeof binding !== 'object' || binding === null) return false;
+  const parts = binding as {
+    readonly prefixMappings?: unknown;
+    readonly xpath?: unknown;
+    readonly storeItemId?: unknown;
+  };
+  for (const value of [parts.prefixMappings, parts.xpath, parts.storeItemId]) {
+    if (typeof value !== 'string') return false;
+    if (value.length === 0 || value.length > MAX_DATA_BINDING_ATTRIBUTE_LENGTH) return false;
+    if (!isValidXmlText(value)) return false;
+  }
+  return true;
+}
+
+/**
  * The target half of an insert or a retarget: EXACTLY ONE of relationship or anchor, and
  * every value legal in XML.
  *
@@ -885,6 +921,9 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       // Inside another control's content the wrapper nests; inside a LINK it is
       // not a shape Word writes — reuse the link-nesting refusal.
       if (rangeTouchesHyperlink(paragraph, op.offset, op.offset)) {
+        return 'invalid-property-value';
+      }
+      if (op.dataBinding !== undefined && !isAuthorableDataBinding(op.dataBinding)) {
         return 'invalid-property-value';
       }
       return null;

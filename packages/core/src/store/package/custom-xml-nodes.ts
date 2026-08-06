@@ -21,6 +21,7 @@
 
 import { withPart, type OoxmlPackage } from './ooxml-package.ts';
 import { insertChildren, removeNode, replaceChildren } from './ooxml-edit.ts';
+import { XML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 
 /** The element holding the text a binding resolves to. */
@@ -102,7 +103,29 @@ function textElement(
   localName: string,
   value: string
 ): OoxmlElement {
-  return element(id, namespaceUri, localName, {}, [{ id: `${id}#text`, kind: 'textValue', value }]);
+  const authored = element(id, namespaceUri, localName, {}, [
+    { id: `${id}#text`, kind: 'textValue', value },
+  ]);
+  // `xml:space="preserve"` on an edge space, and only then. A binding supplies the control's
+  // text verbatim, so `(Smith 2024) ` and `(Smith 2024)` are different labels — but the default
+  // in XML is that a reader MAY normalize, and Word drops the attribute from the bound run
+  // whenever the text does not need it. Re-asserting here means the store keeps saying what it
+  // means whatever a round trip does to the body's copy. Written only when it is needed, so an
+  // ordinary label adds no attribute the file did not want.
+  if (value === value.trim()) return authored;
+  return {
+    ...authored,
+    attributes: [
+      ...authored.attributes,
+      {
+        kind: 'xmlSpace' as const,
+        namespaceUri: XML_NAMESPACE_URI,
+        localName: 'space' as const,
+        prefix: 'xml' as const,
+        value: 'preserve' as const,
+      },
+    ],
+  } as OoxmlElement;
 }
 
 /** Every node a store holds, in document order. */

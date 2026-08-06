@@ -165,6 +165,30 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       });
       return outcome;
     },
+    applyCustomNodeWrite(write, scope): AutomationPortApplyResult {
+      const surface = editor.surface;
+      const live = sync();
+      if (!surface || !live) return { ok: false, reason: 'no-document' };
+      // THE BODY's store, for as long as the session's payload lane is the body store's: the
+      // scope is carried so this refuses a story it cannot write rather than quietly authoring
+      // the node somewhere else.
+      if (scope.kind !== 'body') return { ok: false, reason: 'unsupported-story' };
+      let outcome: AutomationPortApplyResult = { ok: false, reason: 'refused' };
+      // Through `commitReviewOps`, the gate a package-scoped write goes through in the editor:
+      // viewing refuses, and the pages repaint from the commit. Reaching past it would let a
+      // script author a chip in a document open for reading.
+      surface.commitReviewOps(() => {
+        const result = live.insertCustomNode(write);
+        outcome = result.ok
+          ? { ok: true, changed: result.change !== null }
+          : {
+              ok: false,
+              reason: result.detail ? `${result.reason}: ${result.detail}` : result.reason,
+            };
+        return { committed: result.ok };
+      });
+      return outcome;
+    },
     save: () => sync()?.save() ?? null,
     // The one genuinely browser-only operation, and the reason the port declares it optional:
     // a headless host has no caret. Positions arrive as canonical paragraph ids and model

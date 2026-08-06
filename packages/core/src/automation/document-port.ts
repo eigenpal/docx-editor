@@ -11,8 +11,11 @@
 // the failure mode a second host implementation always ends in.
 
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
+import type { InsertCustomNodeWrite } from '../store/store/custom-node-writes.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
+
+export type { InsertCustomNodeWrite };
 
 /** What a comment write asks for: a reply on a comment's own range, or a thread's state. */
 export type AutomationCommentWrite =
@@ -106,6 +109,19 @@ export interface AutomationDocumentPort {
    * here is exactly one write and atomicity still means what it says.
    */
   applyCommentWrite(write: AutomationCommentWrite, scope: StoryScope): AutomationCommentWriteResult;
+  /**
+   * Commit ONE custom-node write — the data part, the node in it, and the bound control.
+   *
+   * A fourth path for the same reason as the third: a payload is not a tree edit. It is a part
+   * this document may not have yet, a relationship, a content-type override and a `w:sdt` that
+   * quotes the id the part was given, and the store already spells that as one transaction. A
+   * batch that expressed it as `TreeDocOp`s would need a second implementation of the same
+   * write, and the two would disagree on the document that arrives with no store.
+   *
+   * Solitary, like the comment path: the planner refuses it any company, so a batch reaching
+   * here is exactly one write and atomicity still means what it says.
+   */
+  applyCustomNodeWrite(write: InsertCustomNodeWrite, scope: StoryScope): AutomationPortApplyResult;
   /** DOCX bytes through the normalizing serializer, or null when there is no document. */
   save(): Uint8Array | null;
   /**

@@ -488,6 +488,29 @@ export type TreeDocOp =
       readonly alias?: string;
       /** `w:lock` value; omitted writes no lock. */
       readonly lock?: 'sdtLocked' | 'sdtContentLocked' | 'contentLocked';
+      /**
+       * `w:dataBinding` — the customXml data part node this control mirrors.
+       *
+       * The payload half of the custom-node contract: `w:tag` caps at 64
+       * characters, so anything larger lives in a data part and the control
+       * points at it. All three attributes travel together because Word needs
+       * all three — the store's `ds:itemID`, the XPath to the node's label, and
+       * the prefix declaration that XPath's steps resolve through.
+       *
+       * A control that carries one is READ-ONLY in Word (verified against
+       * `sdt-custom-node-databinding-word-roundtrip.docx`), and this engine
+       * refuses content edits inside it for the same reason — see
+       * `bindingRefusal`. That is what keeps the store and the page from
+       * drifting: there is no edit that could move one without the other.
+       *
+       * Nothing here is resolved or fetched. The op writes the three strings and
+       * the store lane owns the part they name.
+       */
+      readonly dataBinding?: {
+        readonly prefixMappings: string;
+        readonly xpath: string;
+        readonly storeItemId: string;
+      };
     }
   | {
       /** Repeating-section item insert — unsupported at this layer (out of scope). */

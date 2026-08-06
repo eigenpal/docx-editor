@@ -1258,6 +1258,11 @@ function applyInsertInlineContentControl(
     readonly text: string;
     readonly alias?: string;
     readonly lock?: 'sdtLocked' | 'sdtContentLocked' | 'contentLocked';
+    readonly dataBinding?: {
+      readonly prefixMappings: string;
+      readonly xpath: string;
+      readonly storeItemId: string;
+    };
   },
   options?: EditOptions
 ): TreeOpResult {
@@ -1343,9 +1348,22 @@ function inlineContentControlElement(
     readonly text: string;
     readonly alias?: string;
     readonly lock?: 'sdtLocked' | 'sdtContentLocked' | 'contentLocked';
+    readonly dataBinding?: {
+      readonly prefixMappings: string;
+      readonly xpath: string;
+      readonly storeItemId: string;
+    };
   },
   inheritedRunProperties: OoxmlNode | null = null
 ): OoxmlNode {
+  const wmlAttribute = (localName: string, value: string) =>
+    ({
+      kind: 'genericExtension',
+      namespaceUri: WML_NAMESPACE_URI,
+      localName,
+      prefix: 'w',
+      value,
+    }) as const;
   const valued = (localName: string, value: string): OoxmlNode =>
     ({
       id: nextId(),
@@ -1376,6 +1394,29 @@ function inlineContentControlElement(
   // stable. ST_DecimalNumber, positive, never zero. Emitted in CT_SdtPr's
   // schema sequence (alias, tag, id, lock) — the deep validator enforces it.
   const wordId = String(fnv1a32(`${propertiesId} ${op.tag}`) & 0x7fffffff || 1);
+  // `w:dataBinding` sits after `w:lock` and before `w:label` in CT_SdtPr's
+  // sequence (§17.5.2.6). Out of order Word refuses the whole document rather
+  // than ignoring the element, so this is load-bearing rather than tidy —
+  // `CONTENT_CONTROL_PROPERTY_ORDER` spells the same sequence and
+  // `insert-custom-node-payload.test.ts` asserts what this emits.
+  const binding = op.dataBinding;
+  const dataBinding = (): OoxmlNode =>
+    ({
+      id: nextId(),
+      kind: 'contentControlDataBinding',
+      namespaceUri: WML_NAMESPACE_URI,
+      localName: 'dataBinding',
+      prefix: 'w',
+      namespaceBindings: [],
+      attributes: [
+        wmlAttribute('prefixMappings', binding!.prefixMappings),
+        wmlAttribute('xpath', binding!.xpath),
+        // `storeItemID`, with that capitalization: it is the attribute name in
+        // the schema, and Word matches it case-sensitively.
+        wmlAttribute('storeItemID', binding!.storeItemId),
+      ],
+      children: [],
+    }) as unknown as OoxmlNode;
   const properties = {
     id: propertiesId,
     kind: 'contentControlProperties',
@@ -1389,6 +1430,7 @@ function inlineContentControlElement(
       valued('tag', op.tag),
       valued('id', wordId),
       ...(op.lock === undefined ? [] : [valued('lock', op.lock)]),
+      ...(binding ? [dataBinding()] : []),
     ],
   } as unknown as OoxmlNode;
   const content = {

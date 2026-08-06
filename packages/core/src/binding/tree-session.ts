@@ -28,6 +28,13 @@ import {
   commentPartNameOf,
   commentsExtendedPartNameOf,
 } from '../store/store/comment-writes.ts';
+import {
+  insertCustomNodeWrite,
+  removeCustomNodeWrite,
+  sweepCustomNodePayloads,
+  type CustomNodeWriteResult,
+  type InsertCustomNodeWrite,
+} from '../store/store/custom-node-writes.ts';
 import { deleteCommentThread } from '../store/package/comment-lifecycle.ts';
 import {
   ORIGIN_IDS,
@@ -340,6 +347,32 @@ export interface TreeDocxSession {
    */
   deleteComment(commentId: string): boolean;
   /**
+   * Insert a custom node, with the payload it carries, as ONE transaction.
+   *
+   * A package write reaching through the body store, exactly as a comment is: the customXml data
+   * part, the node inside it and the bound `w:sdt` commit together or not at all. A control bound
+   * to a store that was never written is a document Word offers to repair.
+   *
+   * Omitting the payload authors the ordinary tagged control, which is what a node small enough
+   * to live in its `w:tag` needs.
+   */
+  insertCustomNode(write: InsertCustomNodeWrite): CustomNodeWriteResult;
+  /**
+   * Remove a custom node and, in the same transaction, the payload it bound.
+   *
+   * The sweep would collect the payload on the next open regardless; doing it here means a
+   * document saved between the deletion and that open does not carry a payload for a chip that
+   * is gone.
+   */
+  removeCustomNode(controlNodeId: string): CustomNodeWriteResult;
+  /**
+   * Drop every payload no control binds, in the stores whose namespaces a module claims.
+   *
+   * Called ON OPEN and nowhere else — see `sweepCustomNodePayloads`. Answers the ids collected,
+   * so a host can report what a document arrived carrying.
+   */
+  sweepCustomNodePayloads(namespaces: readonly string[]): readonly string[];
+  /**
    * Every occurrence of `query` in the BODY story, in document order, addressed in the
    * same offset vocabulary the tree ops and the surface selection use — so a match can be
    * handed straight to `setSelection` without re-deriving anything.
@@ -547,6 +580,31 @@ export function openTreeSession(
   const bodyStore = () => packageStore.bodyStore();
   const currentPackage = (): OoxmlPackage => packageStore.currentPackage();
   const BODY_SCOPE: StoryScope = Object.freeze({ kind: 'body' as const });
+
+  /**
+   * Run a write that touches the story AND the package, and publish it as ONE undo unit.
+   *
+   * The same promotion a comment write gets, and for the same three reasons. The story store
+   * keeps a package of its own, so the coordinator's package-level writes have to be grafted in
+   * or this transaction builds on a package that never saw them. The story's own history entry
+   * cannot undo a customXml part, because undoing a story pointer syncs the story part and
+   * nothing else — so it is discarded for a package pointer. And the change is published last,
+   * after the shell is installed, so a subscriber re-deriving on the notification already sees
+   * the store the control it is about to paint binds to.
+   */
+  const customNodeTransaction = (run: () => CustomNodeWriteResult): CustomNodeWriteResult => {
+    const store = bodyStore();
+    const beforePackage = packageStore.currentPackage();
+    const checkpoint = store.checkpoint();
+    store.graftPackage(() => packageStore.currentPackage());
+    const result = run();
+    if (!result.ok) return result;
+    store.restoreHistoryStacks(checkpoint);
+    packageStore.replacePackageShell(store.package);
+    packageStore.adoptPackageUnit(beforePackage);
+    packageStore.publishStoryWrite(result.change);
+    return result;
+  };
 
   const resolvedHeaderFooterBySection = (): {
     readonly parts: readonly HeaderFooterParts[];
@@ -1220,6 +1278,31 @@ export function openTreeSession(
         packageStore.adoptPackageUnit(beforePackage);
         packageStore.publishStoryWrite(result.change);
         return true;
+      },
+
+      insertCustomNode(write) {
+        return customNodeTransaction(() => insertCustomNodeWrite(bodyStore(), write));
+      },
+
+      removeCustomNode(controlNodeId) {
+        return customNodeTransaction(() => removeCustomNodeWrite(bodyStore(), controlNodeId));
+      },
+
+      sweepCustomNodePayloads(namespaces) {
+        const store = bodyStore();
+        const swept = sweepCustomNodePayloads(
+          packageStore.currentPackage(),
+          store.part.name,
+          namespaces
+        );
+        if (swept.removed.length === 0) return [];
+        // NO UNDO ENTRY and no published revision. The sweep is not an edit anyone made: it
+        // collects payloads whose controls were already gone when the document arrived, and a
+        // user who pressed Ctrl+Z straight after opening a file must not get them back.
+        // `replacePackageShell` is the lane for exactly that — a package write that is not a
+        // user intent.
+        packageStore.replacePackageShell(swept.pkg);
+        return swept.removed;
       },
 
       ensureListDefinition(kind) {

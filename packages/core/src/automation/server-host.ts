@@ -30,6 +30,7 @@ import { normalizeParagraphIdentity } from '../store/package/para-id.ts';
 import { TreePackageStore, type StoryScope } from '../store/store/tree-package-store.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { addComment, setCommentResolved } from '../store/store/comment-writes.ts';
+import { insertCustomNodeWrite } from '../store/store/custom-node-writes.ts';
 import type {
   AutomationCommentWriteResult,
   AutomationDocumentPort,
@@ -214,6 +215,24 @@ function packageStorePort(store: TreePackageStore): AutomationDocumentPort {
         changed: true,
         ...('commentId' in result ? { commentId: result.commentId } : {}),
       };
+    },
+    applyCustomNodeWrite(write, scope): AutomationPortApplyResult {
+      if (!live) return { ok: false, reason: 'disposed' };
+      const story = store.resolveStory(scope);
+      if (!story.ok) return { ok: false, reason: story.reason };
+      // Grafted before and republished after, exactly as the comment path is: the story store's
+      // package is not the coordinator's, and skipping either half lets one write silently
+      // overwrite the parts the other made.
+      story.store.graftPackage(() => store.currentPackage());
+      const result = insertCustomNodeWrite(story.store, write);
+      if (!result.ok) {
+        return {
+          ok: false,
+          reason: result.detail ? `${result.reason}: ${result.detail}` : result.reason,
+        };
+      }
+      store.replacePackageShell(story.store.package);
+      return { ok: true, changed: result.change !== null };
     },
     save: () => (live ? writeOoxmlPackage(store.currentPackage()) : null),
     subscribe: (listener) => store.subscribe(() => listener()),

@@ -616,7 +616,62 @@ export type AutomationOperation =
       readonly subtype: AutomationContentControlSubtype;
       readonly tag?: string;
       readonly title?: string;
+    }
+  /**
+   * Insert a custom node: a tagged inline control, optionally bound to a payload.
+   *
+   * `w:tag` caps at 64 characters, so a node whose identity is a query string fits and a node
+   * carrying authors, a year and a locator does not. The payload answers that — it lives in a
+   * customXml data part and the control points at it — and the store, the node and the control
+   * are ONE transaction. A control bound to a store that was never written is a document Word
+   * offers to repair, and repairing it throws the control away.
+   *
+   * It lives HERE rather than on the editor session so both hosts answer it identically: a
+   * payload write needs package scope, and putting it on the session would make the browser the
+   * real implementation and leave the headless host to reimplement it or do without.
+   *
+   * `at` is a position; `span` wraps existing text instead. Exactly one, because a node with
+   * both would be an insertion the caller thinks is a wrap.
+   */
+  | {
+      readonly op: 'insertCustomNode';
+      /** Where the node goes. Omitted with `span`, which supplies its own place. */
+      readonly at?: AutomationPoint;
+      /** Text to wrap, in place of `at`. The node's label replaces it. */
+      readonly span?: AutomationSpanRef;
+      /** The node's identity, as its definition encoded it. Word caps this at 64 characters. */
+      readonly tag: string;
+      /** The literal text the control holds — what Word and a reader without this library see. */
+      readonly text: string;
+      /** `w:alias` — the title Word shows on the control. */
+      readonly title?: string;
+      /** `w:lock`; omitted writes none. */
+      readonly lock?: AutomationContentControlLock;
+      /** The payload, and where it lives. Omitted authors a control with no store. */
+      readonly payload?: AutomationCustomNodePayload;
     };
+
+/**
+ * A custom node's payload, and the store it lives in.
+ *
+ * `data` is a STRING and stays one all the way down. A schema belongs to the definition that
+ * declared it, and an automation lane that parsed payloads would be a second opinion about what
+ * a host's node means — carried over a transport that cannot hold the schema in the first place.
+ *
+ * @public
+ */
+export interface AutomationCustomNodePayload {
+  /** Namespace of the store's root element. One store per namespace, per document. */
+  readonly namespaceUri: string;
+  /** Local name of that root. An NCName; anything else refuses. */
+  readonly rootLocalName: string;
+  /** The node's id inside the store, which the binding's xpath quotes. */
+  readonly nodeId: string;
+  /** The text Word paints the control from. Empty is an empty chip. */
+  readonly label: string;
+  /** The payload, serialized. */
+  readonly data: string;
+}
 
 /** Just the `op` discriminants of {@link AutomationOperation}, for dispatch tables. */
 export type AutomationOperationKind = AutomationOperation['op'];
@@ -706,6 +761,7 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
   'deleteContentControl',
   'insertContentControlText',
   'insertContentControl',
+  'insertCustomNode',
 ] as const satisfies readonly AutomationOperationKind[];
 
 /**
@@ -721,6 +777,9 @@ export const AUTOMATION_SOLITARY_OPERATIONS = [
   'deleteNote',
   'setCommentResolved',
   'replyToComment',
+  // A payload write is a package transaction of its own — the data part, the node inside it and
+  // the body's control — so it shares a batch with nothing, for the same reason a reply does not.
+  'insertCustomNode',
 ] as const satisfies readonly AutomationOperationKind[];
 
 const SOLITARY: ReadonlySet<string> = new Set(AUTOMATION_SOLITARY_OPERATIONS);

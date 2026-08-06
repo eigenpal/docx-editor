@@ -34,7 +34,11 @@ import type {
   AutomationSaveResult,
   AutomationUnsubscribe,
 } from './protocol.ts';
-import type { AutomationCommentWrite, AutomationDocumentPort } from './document-port.ts';
+import type {
+  AutomationCommentWrite,
+  AutomationDocumentPort,
+  InsertCustomNodeWrite,
+} from './document-port.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 
 export interface AutomationHostComposition {
@@ -161,6 +165,8 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     let commentWrite: { write: AutomationCommentWrite; scope: StoryScope } | null = null;
     /** The id the comment write minted, which only the port can say. */
     let mintedComment: string | undefined;
+    /** The one custom-node write a batch may hold, solitary and its own commit for the same reason. */
+    let customNodeWrite: { write: InsertCustomNodeWrite; scope: StoryScope } | null = null;
     let firstCommand = -1;
     for (let index = 0; index < operations.length; index += 1) {
       const step = planner.plan(operations[index]!);
@@ -182,6 +188,9 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       } else if (step.kind === 'commentWrite') {
         if (firstCommand < 0) firstCommand = index;
         commentWrite = { write: step.write, scope: planner.writeScope ?? { kind: 'body' } };
+      } else if (step.kind === 'customNodeWrite') {
+        if (firstCommand < 0) firstCommand = index;
+        customNodeWrite = { write: step.write, scope: planner.writeScope ?? { kind: 'body' } };
       }
     }
 
@@ -202,6 +211,22 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       }
       changed = applied.changed;
       mintedComment = applied.commentId;
+    }
+    if (customNodeWrite) {
+      const applied = port.applyCustomNodeWrite(customNodeWrite.write, customNodeWrite.scope);
+      if (!applied.ok) {
+        return refuse(
+          operations,
+          firstCommand < 0 ? 0 : firstCommand,
+          automationError(
+            'transaction-refused',
+            'the document store refused the custom-node write',
+            applied.reason
+          ),
+          revision
+        );
+      }
+      changed = applied.changed;
     }
     if (lifecycle) {
       const applied = port.applyLifecycle(lifecycle);
@@ -281,7 +306,12 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
 
     const results: AutomationOperationResult[] = planned.map((step) => ({
       status: 'ok',
-      value: step.kind === 'query' ? step.value : step.answer(post, mintedComment),
+      value:
+        step.kind === 'query'
+          ? step.value
+          : step.kind === 'customNodeWrite'
+            ? step.answer(post)
+            : step.answer(post, mintedComment),
     }));
     return { ok: true, results, revision: port.revision(), changed };
   };

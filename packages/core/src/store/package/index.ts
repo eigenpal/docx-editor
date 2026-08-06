@@ -494,3 +494,16 @@ export {
   withoutOrphanCustomXmlNodes,
   type CustomXmlNode,
 } from './custom-xml-nodes.ts';
+export {
+  CUSTOM_NODE_XPATH_PREFIX,
+  boundCustomXmlNodeIdOf,
+  boundCustomXmlNodeIds,
+  customNodeBinding,
+  type CustomNodeBinding,
+} from './custom-node-payloads.ts';
+export {
+  withExportedCustomNodes,
+  type CustomNodeExportPolicy,
+  type CustomNodeExportRequest,
+  type CustomNodeExportResult,
+} from './custom-node-export.ts';
