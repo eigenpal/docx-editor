@@ -282,8 +282,13 @@ Never push the `chore: release` commit by hand, delete `.changeset/*.md` outside
 
 **Third-party notices.** Every publishable package ships a
 `THIRD_PARTY_NOTICES.md` reproducing the license of each package esbuild inlines
-into its bundles — core pulls in fast-xml-parser, fflate and prosemirror-\*, and
-MIT/Apache-2.0 both require the notice to travel with the copy. The Release
+into its bundles, because MIT/Apache-2.0 both require the notice to travel with
+the copy. Only genuinely inlined code counts: core declares fast-xml-parser,
+fflate and prosemirror-\* as real `dependencies` with no `noExternal`, so esbuild
+leaves them external, npm installs them with their own licenses, and every
+package currently generates an empty notice. An empty run is the correct result
+here, not a broken generator — what would be wrong is a bundled dependency
+missing its text, which fails the run outright. The Release
 workflow generates it from `dist/metafile-*.json` just before publishing; the
 file is gitignored, so regenerate with `bun run build:packages && bun run
 notices:generate`. `notices:check` compares against the CURRENT `dist/`, so it

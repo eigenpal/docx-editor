@@ -31,8 +31,17 @@ export interface ParagraphAttrs {
  * paragraphs, text, tabs, breaks, and run properties as marks — because everything it does NOT
  * model stays on the tree and is preserved losslessly there. Widening this schema moves content
  * out of the tree's custody, which is the opposite of what it is for.
+ *
+ * The node and mark unions are written out rather than inferred from the spec below. Inferred,
+ * tsup's dts worker emits their members in an order that varies run to run, so the generated
+ * `binding.api.md` differed between builds of identical source and `api:check` failed at random.
+ * An explicit annotation pins the emitted order. Adding a node or mark to the spec means adding
+ * it here too — the compiler rejects the assignment otherwise.
  */
-export const treeSchema = new Schema({
+export const treeSchema: Schema<
+  'doc' | 'paragraph' | 'text' | 'tab' | 'hardBreak' | 'pageBreak' | 'unknownInline',
+  'runProps'
+> = new Schema({
   nodes: {
     doc: { content: 'paragraph+' },
 
