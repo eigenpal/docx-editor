@@ -507,24 +507,47 @@ function applyUnderlineDecoration(
 }
 
 /**
+ * Point widths for tab-advance underlines (paint uses 1pt → 1css-px at scale 1).
+ *
+ * OOXML `ST_Underline` names the pattern only (§17.18.99) — thickness is application-defined.
+ * Word's thick form blank is a heavy baseline rule (~3× a single hairline), not a 1-device-px
+ * stroke. Keep single at 0.75pt (matches common body hairlines / 0.75pt shape bars) and thick
+ * at 2.25pt; floor with an em fraction so large display runs stay proportionally heavy.
+ */
+const TAB_UNDERLINE_SINGLE_PT = 0.75;
+const TAB_UNDERLINE_THICK_PT = 2.25;
+const TAB_UNDERLINE_HEAVY_EM = 0.15;
+const TAB_UNDERLINE_SINGLE_EM = 0.06;
+
+/**
  * Underline a tab's reserved ADVANCE, not its invisible `\t` glyph.
  *
  * Form blanks are often authored as `w:u` on a bare `w:tab` (thick/single). Word draws the
  * rule across the distance to the stop. CSS `text-decoration` on a clipped `\t` paints no
- * visible ink over that width, so the advance box itself carries a bottom border instead.
- * `wavy` is not a border style — fall back to solid rather than inventing a wave path.
+ * visible ink over that width. The advance box uses an inset background rule (not
+ * `border-bottom`): tabs set `overflow: hidden` for glyph clipping, and a bottom border sits
+ * on the margin edge where line boxes / overflow can thin or hide it.
  */
 function applyTabAdvanceUnderline(
   css: CSSStyleDeclaration,
   underline: UnderlineDecoration,
-  scale: number
+  scale: number,
+  fontSizePt: number
 ): void {
   const color = underline.color ? `#${underline.color}` : 'currentColor';
-  // Plain px widths — `max()` is fine on `text-decoration-thickness` but happy-dom (and
-  // some engines) drop it on `border-*-width`, which would erase the whole form blank.
-  css.borderBottomWidth = `${(underline.heavy ? 2 : 1) * scale}px`;
-  css.borderBottomStyle = underline.cssStyle === 'wavy' ? 'solid' : underline.cssStyle;
-  css.borderBottomColor = color;
+  const em = Math.max(0, fontSizePt) * scale;
+  const thicknessPx = underline.heavy
+    ? Math.max(TAB_UNDERLINE_THICK_PT * scale, TAB_UNDERLINE_HEAVY_EM * em)
+    : Math.max(TAB_UNDERLINE_SINGLE_PT * scale, TAB_UNDERLINE_SINGLE_EM * em);
+  // Solid fill only — dashed/dotted tab blanks are rare; wavy has no background analogue.
+  css.backgroundImage = `linear-gradient(${color}, ${color})`;
+  css.backgroundSize = `100% ${thicknessPx}px`;
+  // Bottom of the advance box ≈ Word's underline band under a top-aligned tab strut.
+  css.backgroundPosition = 'left bottom';
+  css.backgroundRepeat = 'no-repeat';
+  css.borderBottomWidth = '';
+  css.borderBottomStyle = '';
+  css.borderBottomColor = '';
 }
 
 /**
@@ -910,7 +933,7 @@ function paintSpan(
     const tabUnderline = underlineDecorationOf(span.style);
     if (tabUnderline) {
       element.dataset.docxTabUnderline = '';
-      applyTabAdvanceUnderline(element.style, tabUnderline, ctx.scale);
+      applyTabAdvanceUnderline(element.style, tabUnderline, ctx.scale, span.style.fontSizePt);
     }
   }
   mountRunText(document, element, span.text, span.style, ctx.scale);

@@ -51,9 +51,9 @@ function layoutOf(body: string, numbering?: string) {
   });
 }
 
-function paint(body: string): HTMLElement {
+function paint(body: string, options: { readonly scale?: number } = {}): HTMLElement {
   const container = document.createElement('div');
-  paintSemanticLayout(container, layoutOf(body), { scale: 1 });
+  paintSemanticLayout(container, layoutOf(body), { scale: options.scale ?? 1 });
   return container;
 }
 
@@ -285,8 +285,10 @@ describe('the painter is a non-authoritative consumer', () => {
     )!;
     expect(tab.dataset.docxTabUnderline).toBe('');
     expect(tab.style.textDecorationLine).toBe('');
-    expect(tab.style.borderBottomStyle).toBe('solid');
-    expect(tab.style.borderBottomWidth).toBe('2px');
+    // Inset background rule (overflow:hidden on the tab would fight a margin-edge border).
+    expect(tab.style.backgroundSize).toBe('100% 2.25px');
+    expect(tab.style.backgroundPosition).toBe('left bottom');
+    expect(tab.style.borderBottomWidth).toBe('');
     expect(Number.parseFloat(tab.style.width)).toBeGreaterThan(6);
   });
 
@@ -299,8 +301,29 @@ describe('the painter is a non-authoritative consumer', () => {
       (el) => el.textContent === '\t'
     )!;
     expect(tab.dataset.docxTabUnderline).toBe('');
-    expect(tab.style.borderBottomColor.toLowerCase()).toBe('#c00000');
-    expect(tab.style.borderBottomWidth).toBe('1px');
+    expect(tab.style.backgroundImage.toLowerCase()).toContain('#c00000');
+    expect(tab.style.backgroundSize).toBe('100% 0.75px');
+  });
+
+  test('thick tab underline scales with paint zoom and stays heavier than single', () => {
+    const thick = paint(
+      '<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="2400"/></w:tabs></w:pPr>' +
+        '<w:r><w:rPr><w:sz w:val="20"/><w:u w:val="thick"/></w:rPr><w:tab/></w:r></w:p>',
+      { scale: 2 }
+    );
+    const single = paint(
+      '<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="2400"/></w:tabs></w:pPr>' +
+        '<w:r><w:rPr><w:sz w:val="20"/><w:u w:val="single"/></w:rPr><w:tab/></w:r></w:p>',
+      { scale: 2 }
+    );
+    const thickTab = [...thick.querySelectorAll<HTMLElement>('.layout-run-text')].find(
+      (el) => el.textContent === '\t'
+    )!;
+    const singleTab = [...single.querySelectorAll<HTMLElement>('.layout-run-text')].find(
+      (el) => el.textContent === '\t'
+    )!;
+    expect(thickTab.style.backgroundSize).toBe('100% 4.5px');
+    expect(singleTab.style.backgroundSize).toBe('100% 1.5px');
   });
 });
 
