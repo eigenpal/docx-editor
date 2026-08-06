@@ -23,9 +23,15 @@ export type ChromeTranslate = (key: string, params?: Record<string, string | num
  * English by default), with `overrides` consulted first for key-level renames.
  *
  * ```tsx
- * const t = useChromeTranslate(new Map([['toolbar.bold', 'Heavy']]));
+ * const MY_LABELS = new Map([['toolbar.bold', 'Heavy']]); // module-level: stable identity
+ *
+ * const t = useChromeTranslate(MY_LABELS);
  * <DocxEditor.Toolbar t={t} />
  * ```
+ *
+ * Keep the `overrides` Map identity stable (module-level or memoized) — the returned
+ * resolver is memoized on it, and an inline `new Map(...)` re-creates the resolver, and
+ * with it every consuming part's props, on each render.
  *
  * `overrides` is a `Map` on purpose: the key is caller input, and an object literal
  * would answer `constructor` and `toString` off the prototype chain. Parts pass no

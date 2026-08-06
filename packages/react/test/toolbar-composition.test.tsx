@@ -21,7 +21,8 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import type { ReactNode } from 'react';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
-import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
+import { createT, en, type TranslationKey, type Translations } from '@docx-editor.dev/i18n';
+import { LocaleProvider } from '../src/i18n/index.ts';
 import {
   chromeSlotId,
   defaultChromeGroups,
@@ -171,6 +172,27 @@ describe('the default arrangement', () => {
     expect(
       view.container.querySelector(byLabel('formattingBar.undoShortcut'))
     ).not.toBeNull();
+    // No raw key ever reaches the screen — the guard the resolved-label helpers cannot
+    // provide, since they resolve through the same catalogue as the code under test.
+    expect(toolbar.textContent).not.toContain('toolbar.');
+    expect(toolbar.textContent).not.toContain('formattingBar.');
+    // The bar self-emits the ep-root styling scope, like Loading and Viewport.
+    expect(toolbar.classList.contains('ep-root')).toBe(true);
+  });
+
+  test('LocaleProvider localizes a bare composed toolbar', () => {
+    const de = {
+      _lang: 'de',
+      formattingBar: { boldShortcut: 'Fett (Strg+B)' },
+    } as Translations;
+    const { view } = mountToolbar(
+      <LocaleProvider i18n={de}>
+        <DocxEditorToolbar />
+      </LocaleProvider>
+    );
+    expect(view.container.querySelector('[aria-label="Fett (Strg+B)"]')).not.toBeNull();
+    // A key the locale leaves out falls through to English, not to the raw key.
+    expect(view.container.querySelector(byLabel('formattingBar.undoShortcut'))).not.toBeNull();
   });
 
   test('a part child overrides its slot IN PLACE; non-part children append', () => {

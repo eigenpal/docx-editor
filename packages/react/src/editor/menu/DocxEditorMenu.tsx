@@ -30,6 +30,7 @@ import {
 import type { ReactElement, ReactNode } from 'react';
 import { CHROME_MENUS, type ChromeMenuId } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
+import { editorScopeFor } from '../editor-scope';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 import { DocxEditorPageSetupDialog } from '../DocxEditorPageSetup';
@@ -239,12 +240,12 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       // an unrelated field, and two mounted editors both answer one keypress. The shortcut
       // belongs to the editor the user is actually in: the chrome, the painted surface, or
       // anything else under this instance's root.
-      // `.ep-root` is the library's own scope class and wraps the whole editor — chrome,
-      // viewport and painted pages — so one containment test covers the bar AND the
-      // document. A composition that does not use it falls back to the bar's own subtree,
-      // which is narrow but never wrong.
+      // `editorScopeFor` finds the instance container — the `.ep-root` that holds the
+      // painted pages, NOT the bar's own self-emitted styling root — so one containment
+      // test covers the bar AND the document. A composition with no such container falls
+      // back to the bar's own subtree, which is narrow but never wrong.
       const target = event.target as Node | null;
-      const scope = rootRef.current?.closest('.ep-root') ?? rootRef.current;
+      const scope = editorScopeFor(rootRef.current) ?? rootRef.current;
       if (!target || !scope?.contains(target)) return;
       if (key === 's' && resolvedSave) {
         event.preventDefault();

@@ -20,7 +20,8 @@ import type { ReactNode } from 'react';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
 import { CHROME_MENUS, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
-import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
+import { createT, en, type TranslationKey, type Translations } from '@docx-editor.dev/i18n';
+import { LocaleProvider } from '../src/i18n/index.ts';
 import { DocxEditor } from '../src/components/DocxEditor.tsx';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
@@ -323,6 +324,26 @@ describe('chrome contracts', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
+  test('LocaleProvider localizes a bare composed menu', () => {
+    // The bug the catalogue fallback fixed: composed chrome ignored `LocaleProvider`
+    // entirely, so the documented i18n path silently did nothing for it.
+    const de = { _lang: 'de', toolbar: { file: 'Datei' } } as Translations;
+    const { view } = mountMenu(
+      <LocaleProvider i18n={de}>
+        <DocxEditorMenu />
+      </LocaleProvider>
+    );
+    expect(view.container.textContent).toContain('Datei');
+    expect(view.container.textContent).not.toContain('toolbar.file');
+    // A key the locale leaves out falls through to English, not to the raw key.
+    expect(view.container.textContent).toContain('Insert');
+  });
+
+  test('the bar self-emits the ep-root styling scope', () => {
+    const { view } = mountMenu(<DocxEditorMenu />);
+    expect(bar(view).classList.contains('ep-root')).toBe(true);
+  });
+
   test('labels resolve through `t`, and fall back to the CATALOGUE, never to the key', () => {
     const { view } = mountMenu(<DocxEditorMenu t={(key) => `[${key}]`} />);
     expect(view.container.textContent).toContain('[toolbar.file]');
@@ -427,6 +448,24 @@ describe('chrome contracts', () => {
     });
     expect(saved).toBe(1);
     outside.remove();
+  });
+
+  test('Ctrl/Cmd+S fires with focus in the DOCUMENT, not only on the bar', async () => {
+    // The regression this pins: the menubar self-emits `.ep-root` (styling scope), so a
+    // naive closest('.ep-root') resolves to the bar itself and a keypress from the
+    // painted pages — the normal case — falls outside the containment test, handing
+    // Cmd+S back to the browser. The scope must be the instance container.
+    let saved = 0;
+    const view = render(<DocxEditor document={SOURCE} onSave={() => (saved += 1)} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const pages = view.container.querySelector('.docx-pages')!;
+    expect(pages).not.toBeNull();
+    act(() => {
+      fireEvent.keyDown(pages, { key: 's', ctrlKey: true });
+    });
+    expect(saved).toBe(1);
   });
 
   test('Help › Report issue is addressable: `reportIssue={false}` drops it and Help', () => {
