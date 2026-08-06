@@ -81,7 +81,7 @@ export interface UseReviewReturn {
   readonly paneOpen: boolean;
   /** Open or close the pane — the same toggle the toolbar button runs. */
   readonly setPaneOpen: (open: boolean) => void;
-  /** True while the engine has no document, so a surface can render nothing rather than empty. */
+  /** False until the engine has a document, so a surface can render nothing rather than empty. */
   readonly ready: boolean;
 }
 
@@ -215,7 +215,10 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       comment,
       paneOpen,
       setPaneOpen,
-      ready: editor !== null,
+      // Not merely "an editor exists": the instance is constructed before any bytes arrive,
+      // and a `ready` that reported true then invited surfaces to draw an empty state over
+      // the host's loading screen. Re-derived with the queue — the load emits `change`.
+      ready: editor !== null && !editor.snapshot().isLoading,
     }),
     [
       items,

@@ -466,3 +466,31 @@ describe('DocxEditor.Review query exclusions', () => {
     expect(view.getByTestId('review-rail').getAttribute('data-count')).toBe('2');
   });
 });
+
+describe('DocxEditor.Review while the document is loading', () => {
+  test('renders nothing — no rail, no empty state, no furniture — until bytes arrive', async () => {
+    const compose = (document?: Uint8Array) => (
+      <DocxEditorRoot {...(document ? { document } : {})} modules={[reviewModule()]}>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview furniture={<div data-testid="host-furniture" />} />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    // The Root mounted before its document, the shape every fetching host has: the editor
+    // instance exists, but there is nothing to review — and nothing to say "no comments
+    // yet" about. The rail must not float its empty state over the host's loading screen.
+    const view = render(compose());
+    expect(view.queryByTestId('review-rail')).toBeNull();
+    expect(view.queryByTestId('review-empty')).toBeNull();
+    expect(view.queryByTestId('host-furniture')).toBeNull();
+
+    await act(async () => {
+      view.rerender(compose(SOURCE));
+    });
+
+    expect(view.getByTestId('review-rail')).toBeDefined();
+    expect(view.getByTestId('review-empty')).toBeDefined();
+    expect(view.getByTestId('host-furniture')).toBeDefined();
+  });
+});

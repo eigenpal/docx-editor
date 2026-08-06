@@ -45,16 +45,24 @@ import {
   useState,
 } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { ReviewItemQuery, ReviewRevisionKind } from '@docx-editor.dev/core/contracts/editor';
+import type {
+  EditorSnapshot,
+  ReviewItemQuery,
+  ReviewRevisionKind,
+} from '@docx-editor.dev/core/contracts/editor';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import {
   ReviewRailContext,
   Slot,
   useDocxEditor,
+  useEditorState,
   useTranslation,
   type ToolbarTranslate,
 } from '@docx-editor.dev/react';
 import { useReview, type ReviewItemView } from './useReview';
+
+/** The same scalar slice `DocxEditor.Loading` reads, so the two can never disagree. */
+const selectIsLoading = (snapshot: EditorSnapshot) => snapshot.isLoading;
 
 /** The rail's data, provided once by the Root so a card never re-subscribes. */
 const ReviewContext = createContext<ReviewRailValue | null>(null);
@@ -344,6 +352,11 @@ function ReviewRoot({
   formatting = false,
 }: ReviewProps) {
   const editor = useDocxEditor();
+  // While the editor is still waiting for its document, the rail renders NOTHING — not its
+  // empty state, not the host's furniture. The instance exists before any bytes arrive, so
+  // without this gate "no comments yet" and the furniture floated over the host's loading
+  // screen, describing a document that was not there.
+  const isLoading = useEditorState(selectIsLoading);
   const excludeRevisionKinds = useMemo((): readonly ReviewRevisionKind[] | undefined => {
     const excluded: ReviewRevisionKind[] = [];
     if (!structural) excluded.push('structural');
@@ -481,8 +494,10 @@ function ReviewRoot({
     if (surface) observer.observe(surface);
     return () => observer.disconnect();
     // Re-measured whenever the queue could have moved: a new page above an anchor changes
-    // where its card belongs, and zoom changes every anchor at once.
-  }, [editor, items]);
+    // where its card belongs, and zoom changes every anchor at once. `isLoading` because
+    // the rail element does not exist until loading ends, and a binding pass that ran
+    // against the null ref must run again once there is a rail to measure.
+  }, [editor, items, isLoading]);
 
   // Clicking the canvas AROUND the page closes the open item. The caret decides everything
   // else, but a click on the grey moves no caret, so nothing else would ever put a card away.
@@ -504,7 +519,8 @@ function ReviewRoot({
     // bubbling listener never sees a click that lands on the pages layer.
     document.addEventListener('mousedown', onMouseDown, true);
     return () => document.removeEventListener('mousedown', onMouseDown, true);
-  }, [editor]);
+    // `isLoading` for the same reason as the metrics effect: no rail element until it clears.
+  }, [editor, isLoading]);
 
   // The visible band of the scroller, in the rail's own coordinates. Passive listener,
   // coalesced into a frame: the handler runs on every wheel tick and must do nothing but
@@ -547,7 +563,8 @@ function ReviewRoot({
       scroller.removeEventListener('scroll', onScroll);
       observer.disconnect();
     };
-  }, [editor]);
+    // `isLoading` for the same reason as the metrics effect: no rail element until it clears.
+  }, [editor, isLoading]);
 
   // A comment being composed, before anything is written. Held here rather than committed
   // empty: an empty `w:comment` is a real comment in the file, and abandoning the box would
@@ -677,7 +694,7 @@ function ReviewRoot({
     ]
   );
 
-  if (hidden) return null;
+  if (hidden || isLoading) return null;
 
   const shared = {
     ref: railRef as React.Ref<HTMLElement>,
