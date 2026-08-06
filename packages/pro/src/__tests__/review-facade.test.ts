@@ -1628,3 +1628,34 @@ describe('tracked changes in notes', () => {
     );
   });
 });
+
+describe('resolving a story never opens one', () => {
+  test('commenting in a note leaves every header still openable', () => {
+    // Asking each scope for its paragraph list to find a paragraph's story RESOLVES that
+    // scope, and resolving one opens a story store. The store cap is a permanent ceiling
+    // — a store whose part is still in the package is never evicted — so one comment in a
+    // footnote burned the budget on every header in the document and left the later ones
+    // unopenable for the rest of the session. The part name is in the paragraph id; no
+    // store needs opening to read it.
+    const editor = mount({
+      body: BODY_WITH_NOTE_REF + INSERTION,
+      header: HEADER_INSERTION,
+      footnotes: FOOTNOTE_WITH_REVISION,
+    });
+
+    const noteCard = editor.getReviewItems().find((i) => i.author === 'Katherine Johnson')!;
+    editor.setActiveReviewItem(noteCard.key);
+    const paragraphId = editor.surface!.state().selection.head.paragraphId;
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 3 },
+    });
+    expect(editor.addComment('In the note.').ok).toBe(true);
+
+    // The header is still reachable afterwards, with its content intact.
+    expect(editor.surface!.enterHeaderFooter!({ rId: 'rIdH', kind: 'header' })).toBe(true);
+    expect(
+      editor.surface!.session.paragraphIdsIn({ kind: 'headerFooter', rId: 'rIdH' }).length
+    ).toBeGreaterThan(0);
+  });
+});

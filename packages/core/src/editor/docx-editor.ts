@@ -77,6 +77,7 @@ import {
 } from '../store/package/tracking-settings.ts';
 import type { StoryScope } from '@docx-editor.dev/core/store';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
+import { resolveNotesPart } from '../store/package/note-references.ts';
 import type {
   CanResult,
   ContainerRef,
@@ -1279,8 +1280,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   ): { readonly kind: 'notesPart'; readonly noteKind: 'footnote' | 'endnote' } | null {
     const partName = firstReviewRange(item)?.partName;
     if (!partName || !surface) return null;
+    // Read from the PACKAGE, never `partFor`: resolving a notes scope opens a story store,
+    // and this runs per item on read paths (`getTrackedChanges`, the review placements).
     for (const noteKind of ['footnote', 'endnote'] as const) {
-      if (surface.session.partFor({ kind: 'notesPart', noteKind })?.name === partName) {
+      if (resolveNotesPart(surface.session.currentPackage(), noteKind)?.name === partName) {
         return { kind: 'notesPart', noteKind };
       }
     }
@@ -1386,18 +1389,27 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    */
   function storyScopeOfParagraph(paragraphId: string): StoryScope {
     if (!surface) return { kind: 'body' };
-    if (surface.session.paragraphIds().includes(paragraphId)) return { kind: 'body' };
+    // From the id's own PART NAME. Asking each story for its paragraph list instead would
+    // resolve every scope in turn, and resolving a scope OPENS a story store: one call
+    // opened every header and footer in the document, and the store cap (64) is a
+    // permanent ceiling because a store whose part is still in the package is never
+    // evicted. On a 40-section document that left 18 headers unopenable for the rest of
+    // the session — commenting in a footnote broke header editing.
+    const partName = paragraphId.slice(0, paragraphId.indexOf('#'));
+    if (partName.length === 0 || partName === surface.session.part().name) {
+      return { kind: 'body' };
+    }
     for (const section of surface.session.headerFooterResolutionBySection()) {
       for (const slots of [section.headers, section.footers]) {
         for (const slot of slots.values()) {
-          const scope = { kind: 'headerFooter', rId: slot.rId } as const;
-          if (surface.session.paragraphIdsIn(scope).includes(paragraphId)) return scope;
+          if (slot.partName === partName) return { kind: 'headerFooter', rId: slot.rId };
         }
       }
     }
     for (const noteKind of ['footnote', 'endnote'] as const) {
-      const scope = { kind: 'notesPart', noteKind } as const;
-      if (surface.session.paragraphIdsIn(scope).includes(paragraphId)) return scope;
+      if (resolveNotesPart(surface.session.currentPackage(), noteKind)?.name === partName) {
+        return { kind: 'notesPart', noteKind };
+      }
     }
     // Unknown to every story: fall back to where the reader is, which is what the write
     // would have used anyway, and let the store refuse it.
@@ -2468,13 +2480,17 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       surface?.layout();
     },
 
-    focus(scope?: ViewScope) {
+    focus(scope?: EditorScope) {
       if (!surface) {
         return { ok: false, code: 'invalidTarget', reason: 'no document is loaded' };
       }
       // The ARGUMENT was declared and ignored, so `focus({kind:'body'})` — the obvious call
       // for a host trying to leave an open header — reported success and changed nothing.
-      // Refused rather than silently dropped when the scope cannot be opened.
+      // Refused rather than silently dropped when the scope cannot be opened. `all` is a
+      // reading scope with no caret home, so it is not a thing to focus.
+      if (scope && scope.kind === 'all') {
+        return { ok: false, code: 'invalidTarget', reason: 'the all scope cannot take focus' };
+      }
       if (scope && !surface.setActiveScope(scope)) {
         return { ok: false, code: 'invalidTarget', reason: 'that scope cannot be opened' };
       }

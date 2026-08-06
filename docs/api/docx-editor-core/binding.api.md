@@ -138,7 +138,7 @@ export interface TreeDocxSession {
     headerFooterParts(): HeaderFooterParts;
     headerFooterPartsBySection(): readonly HeaderFooterParts[];
     headerFooterResolutionBySection(): readonly HeaderFooterSectionResolution[];
-    insertCustomNode(write: InsertCustomNodeWrite): CustomNodeWriteResult;
+    insertCustomNode(write: InsertCustomNodeWrite, scope?: StoryScope): CustomNodeWriteResult;
     insertImage(scope: StoryScope, input: InsertImageInput): Promise<ImageIntentResult>;
     lastCommitWasStructural(): boolean;
     nodeIdOf(paraId: string): string | null;
@@ -158,7 +158,7 @@ export interface TreeDocxSession {
         readonly target: string;
         readonly external: boolean;
     } | null;
-    removeCustomNode(controlNodeId: string): CustomNodeWriteResult;
+    removeCustomNode(controlNodeId: string, scope?: StoryScope): CustomNodeWriteResult;
     replaceImage(scope: StoryScope, drawingNodeId: string, bytes: Uint8Array, mime: SupportedImageMime, decodePort: ImageDecodePort, options: ReplaceImageOptions): Promise<ImageIntentResult>;
     replyToComment(parentCommentId: string | null, anchor: {
         paragraphId: string;
@@ -183,7 +183,7 @@ export interface TreeDocxSession {
 }
 
 // @public
-export const treeSchema: Schema<"text" | "paragraph" | "tab" | "hardBreak" | "pageBreak" | "doc" | "unknownInline", "runProps">;
+export const treeSchema: Schema<"paragraph" | "text" | "tab" | "hardBreak" | "pageBreak" | "doc" | "unknownInline", "runProps">;
 
 // @public
 export type TreeSessionRejection = OoxmlPackageRejection | 'no-main-document-tree';
