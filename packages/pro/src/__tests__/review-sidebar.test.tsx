@@ -503,4 +503,33 @@ describe('DocxEditor.Review while the document is loading', () => {
     expect(view.queryByTestId('review-rail')).toBeNull();
     expect(view.queryByTestId('host-furniture')).toBeNull();
   });
+
+  test('a failed live load hides the rail — the failure emits only `error`', async () => {
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={SOURCE}
+        modules={[reviewModule()]}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    expect(view.getByTestId('review-rail')).toBeDefined();
+
+    // The SAME editor instance, handed bytes that will not parse: the surface is torn
+    // down and the facade emits ONLY `error` — no `change` fires for a failing load. The
+    // rail (and the raw hook's `ready`) must hear that event, or they keep the previous
+    // document's cards over a document that never opened.
+    await act(async () => {
+      instance!.load(strToU8('not a docx'));
+    });
+
+    expect(view.queryByTestId('review-rail')).toBeNull();
+  });
 });

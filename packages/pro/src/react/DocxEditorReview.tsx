@@ -62,12 +62,14 @@ import {
 import { useReview, type ReviewItemView } from './useReview';
 
 /**
- * True while the editor holds NO document: still loading one, or the one it was handed
- * would not parse. Not `isLoading` alone — a parse failure clears that flag (so hosts can
- * put their own error screen up), and the rail must not read the clearing as a document.
+ * True while the editor has NO painted document: still loading one, the one it was handed
+ * would not parse, or bytes are held but detached from any mount point. Not `isLoading`
+ * alone — a parse failure clears that flag (so hosts can put their own error screen up),
+ * and handed-over-but-detached bytes clear it too, while in both states there is nothing
+ * for a card to anchor to. `pageSetup` is null in exactly those states.
  */
 const selectDocumentAbsent = (snapshot: EditorSnapshot) =>
-  snapshot.isLoading || snapshot.parseError !== null;
+  snapshot.isLoading || snapshot.parseError !== null || snapshot.pageSetup == null;
 
 /** The rail's data, provided once by the Root so a card never re-subscribes. */
 const ReviewContext = createContext<ReviewRailValue | null>(null);
@@ -499,10 +501,10 @@ function ReviewRoot({
     if (surface) observer.observe(surface);
     return () => observer.disconnect();
     // Re-measured whenever the queue could have moved: a new page above an anchor changes
-    // where its card belongs, and zoom changes every anchor at once. `documentAbsent` because
-    // the rail element does not exist until loading ends, and a binding pass that ran
-    // against the null ref must run again once there is a rail to measure.
-  }, [editor, items, documentAbsent]);
+    // where its card belongs, and zoom changes every anchor at once. `documentAbsent` and
+    // `hidden` because the rail element does not exist while either holds, and a binding
+    // pass that ran against the null ref must run again once there is a rail to measure.
+  }, [editor, items, documentAbsent, hidden]);
 
   // Clicking the canvas AROUND the page closes the open item. The caret decides everything
   // else, but a click on the grey moves no caret, so nothing else would ever put a card away.
@@ -524,8 +526,9 @@ function ReviewRoot({
     // bubbling listener never sees a click that lands on the pages layer.
     document.addEventListener('mousedown', onMouseDown, true);
     return () => document.removeEventListener('mousedown', onMouseDown, true);
-    // `documentAbsent` for the same reason as the metrics effect: no rail element until it clears.
-  }, [editor, documentAbsent]);
+    // `documentAbsent` and `hidden` for the same reason as the metrics effect: no rail element
+    // exists while either holds.
+  }, [editor, documentAbsent, hidden]);
 
   // The visible band of the scroller, in the rail's own coordinates. Passive listener,
   // coalesced into a frame: the handler runs on every wheel tick and must do nothing but
@@ -568,8 +571,9 @@ function ReviewRoot({
       scroller.removeEventListener('scroll', onScroll);
       observer.disconnect();
     };
-    // `documentAbsent` for the same reason as the metrics effect: no rail element until it clears.
-  }, [editor, documentAbsent]);
+    // `documentAbsent` and `hidden` for the same reason as the metrics effect: no rail element
+    // exists while either holds.
+  }, [editor, documentAbsent, hidden]);
 
   // A comment being composed, before anything is written. Held here rather than committed
   // empty: an empty `w:comment` is a real comment in the file, and abandoning the box would

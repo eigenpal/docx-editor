@@ -75,8 +75,13 @@
   height: 100vh;
   overflow: hidden;
   /* The water itself: deep below, bright at the horizon. */
-  background:
-    radial-gradient(120% 70% at 50% -10%, #9fd9f2 0%, #4a9fc8 38%, #17547a 72%, #0b2740 100%);
+  background: radial-gradient(
+    120% 70% at 50% -10%,
+    #9fd9f2 0%,
+    #4a9fc8 38%,
+    #17547a 72%,
+    #0b2740 100%
+  );
   color: var(--doc-text);
 }
 
@@ -164,6 +169,9 @@
 
 .igloo-rulerbar {
   z-index: 4;
+  /* The ruler renders nothing until a document is open; the bar holds its height so the
+     workspace does not jump down when the ticks appear. */
+  min-height: 28px;
 }
 
 .igloo-brand {
@@ -913,11 +921,21 @@
  *
  * `insertCustomNode` and `updateCustomNode` return a typed result, and repeating that reason
  * verbatim beats a host inventing one. */
+/* The persistent live region the notices swap through. Fixed and sizeless, so an empty
+   region never takes part in the shell's layout. */
+.igloo-notice-region {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+}
+
 .igloo-notice {
   position: fixed;
   bottom: 24px;
   left: 50%;
   z-index: 80;
+  /* Informational only: a press on it would blur the editor for nothing. */
+  pointer-events: none;
   padding: 9px 16px;
   border: 1px solid rgba(255, 255, 255, 0.7);
   border-radius: 999px;

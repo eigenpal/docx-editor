@@ -103,9 +103,15 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       if (!editor) return () => undefined;
       const offDocument = editor.on('change', onChange);
       const offSelection = editor.on('selectionChange', onChange);
+      // `error` too: a load that fails to parse tears the surface down and emits ONLY an
+      // error — no `change` fires for it. Without this, a surface built on the raw hook
+      // kept the previous document's cards (and `ready: true`) over a document that never
+      // opened, until some unrelated event happened to re-render it.
+      const offError = editor.on('error', onChange);
       return () => {
         offDocument();
         offSelection();
+        offError();
       };
     },
     [editor]
@@ -218,8 +224,9 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       // Not merely "an editor exists": the instance is constructed before any bytes arrive,
       // and a `ready` that reported true then invited surfaces to draw an empty state over
       // the host's loading screen. A parse failure clears `isLoading` while still leaving
-      // no document, so it must stay false then too. Re-derived with the queue — the load
-      // emits `change`.
+      // no document, so it must stay false then too. Re-derived with the queue: a
+      // successful load emits `change`, a failed one emits `error`, and `subscribe` above
+      // listens to both.
       ready:
         editor !== null && !editor.snapshot().isLoading && editor.snapshot().parseError === null,
     }),

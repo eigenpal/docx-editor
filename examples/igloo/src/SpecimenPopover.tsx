@@ -22,7 +22,9 @@ const PROBE_WIDTH = 260;
 
 export function SpecimenPopover({ probe, onClose }: SpecimenPopoverProps) {
   // Capture phase: the painted surface cancels its own pointer handling, so a bubbling
-  // listener never hears a press on the page.
+  // listener never hears a press on the page. Scroll closes too — the card is `fixed` and
+  // anchored to a rect captured at click, so a scrolled page would move the chip out from
+  // under it while the card stayed put, annotating open water.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') onClose();
@@ -34,9 +36,11 @@ export function SpecimenPopover({ probe, onClose }: SpecimenPopoverProps) {
     };
     document.addEventListener('keydown', onKey);
     document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('scroll', onClose, { capture: true, passive: true });
     return () => {
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('scroll', onClose, { capture: true });
     };
   }, [onClose]);
 
@@ -48,7 +52,16 @@ export function SpecimenPopover({ probe, onClose }: SpecimenPopoverProps) {
   };
 
   return (
-    <div className="igloo-probe" style={style} data-kind={probe.kind} role="dialog" aria-modal="false">
+    // Not a dialog: nothing in it takes focus and nothing in it acts. It is a transient
+    // readout the chip click revealed, so it carries no role — and its mousedown is
+    // prevented, per the chrome rule: a press that reaches the surface moves the caret,
+    // and reading two numbers must not do that.
+    <div
+      className="igloo-probe"
+      style={style}
+      data-kind={probe.kind}
+      onMouseDown={(event) => event.preventDefault()}
+    >
       {probe.kind === 'iceberg' ? (
         <>
           <p className="igloo-probe__title">There is more of it than that</p>

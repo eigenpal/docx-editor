@@ -376,7 +376,7 @@ export interface DocxEditorContextMenuProps {
 }
 
 // @public
-export function DocxEditorDocumentOutline(props: DocxEditorDocumentOutlineProps): ReactElement;
+export function DocxEditorDocumentOutline(props: DocxEditorDocumentOutlineProps): ReactElement | null;
 
 // @public
 export interface DocxEditorDocumentOutlineProps {

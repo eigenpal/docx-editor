@@ -17,23 +17,17 @@ import type { RulerIndent } from '@docx-editor.dev/core/editor';
 import { HorizontalRuler, type RulerPageSetup } from '../components/ui/HorizontalRuler';
 import { VerticalRuler } from '../components/ui/VerticalRuler';
 import { ReviewRailContext, useDocxEditor } from './context';
+// A ruler MEASURES the page, and while the document is absent there is no page — the
+// primitive fell back to drawing default Letter ticks over a document that was not
+// there. Render nothing instead; a host that wants the bar to hold its height sizes the
+// row it put the ruler in.
+import { selectDocumentAbsent } from './document-presence';
 import { useEditorState } from './useEditorState';
 import { usePageSetup } from './usePageSetup';
 import { useParagraphIndent } from './useParagraphIndent';
 import { useNavigationShift, useNavigationViewportElement } from './navigation/navigation-layout';
 
 const selectZoom = (snapshot: EditorSnapshot): number => snapshot.zoom;
-
-/**
- * True while the editor holds NO document: still loading one, or the one it was handed
- * would not parse. A ruler MEASURES the page, and without a document there is no page —
- * `pageSetup` is null and the ruler fell back to drawing default Letter ticks over a
- * document that was not there. Render nothing instead; a host that wants the bar to hold
- * its height sizes the row it put the ruler in. Not `isLoading` alone, because a parse
- * failure clears that flag while still leaving nothing to measure.
- */
-const selectDocumentAbsent = (snapshot: EditorSnapshot): boolean =>
-  snapshot.isLoading || snapshot.parseError !== null;
 
 /** Props for the context-fed ruler parts. @public */
 export interface DocxEditorRulerProps {

@@ -18,6 +18,7 @@ import type { ReactElement } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentOutline, type OutlineHeading } from '../components/DocumentOutline';
 import { useDocxEditor } from './context';
+import { selectDocumentAbsent } from './document-presence';
 import { useEditorState } from './useEditorState';
 
 const selectSnapshot = (snapshot: EditorSnapshot) => snapshot;
@@ -39,9 +40,14 @@ export interface DocxEditorDocumentOutlineProps {
  * from `Editor.getOutline()`, in document order; clicking one moves the caret to that
  * heading. The panel positions absolutely — give it a `position: relative` container.
  *
+ * Renders nothing while the editor has no document — a floating panel saying "no
+ * headings" about a document that is not there is the same false claim the rulers made.
+ *
  * @public
  */
-export function DocxEditorDocumentOutline(props: DocxEditorDocumentOutlineProps): ReactElement {
+export function DocxEditorDocumentOutline(
+  props: DocxEditorDocumentOutlineProps
+): ReactElement | null {
   const editor = useDocxEditor();
   const snapshot = useEditorState(selectSnapshot);
   const headings = useMemo(
@@ -69,6 +75,7 @@ export function DocxEditorDocumentOutline(props: DocxEditorDocumentOutlineProps)
     [editor]
   );
 
+  if (selectDocumentAbsent(snapshot)) return null;
   return (
     <DocumentOutline
       headings={headings}
