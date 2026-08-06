@@ -150,6 +150,9 @@ describe('headers and footers, read-only', () => {
     // Two default lines (14pt each with the fixed measurer) — nowhere near a 9144000-EMU extent.
     expect(height).toBeGreaterThan(0);
     expect(height).toBeLessThan(60);
+    // The band's GEOMETRY stops at flow height, but its INK must not: Word paints header
+    // overflow (negative indents, anchored shapes past the box) into the margins.
+    expect(header.style.overflow).toBe('visible');
   });
 
   test('a header taller than the margin pushes the content area down', () => {

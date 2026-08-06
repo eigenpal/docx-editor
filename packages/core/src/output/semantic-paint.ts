@@ -285,7 +285,12 @@ function appendAnchoredDrawingsForRecords(
     readonly width: number;
     readonly height: number;
   },
-  layer: 'behind' | 'inFront'
+  layer: 'behind' | 'inFront',
+  // Inert drawings paint but never take a click. Header/footer bands pass `false` while
+  // the band is not being edited: their box overflows are VISIBLE (Word draws header ink
+  // into the margins and over the body), so a shape hanging past the band must not
+  // swallow clicks meant for the document text underneath (#856).
+  interactive = true
 ): void {
   if (drawings.length === 0) return;
   const drawing = drawingContextOf(ctx);
@@ -306,7 +311,8 @@ function appendAnchoredDrawingsForRecords(
     drawing.urlRegistry,
     origin
   )) {
-    element.style.pointerEvents = 'auto';
+    // Inline, not a stylesheet rule: this `auto` would beat any CSS guard.
+    element.style.pointerEvents = interactive ? 'auto' : 'none';
     layerElement.append(element);
   }
   if (layerElement.childElementCount > 0) parent.append(layerElement);
@@ -1928,7 +1934,13 @@ function paintPage(
         ? Math.max(story.box.height, page.box.y + page.box.height - story.box.y)
         : Math.max(story.box.height, page.contentBox.y - story.box.y);
     container.style.height = `${bandHeight * options.scale}px`;
-    container.style.overflow = 'hidden';
+    // VISIBLE, exactly because the box is sized by flow height alone (#856). Word paints
+    // header ink wherever it lands — a negative indent hangs into the left margin, an
+    // anchored shape offset past the content width sits in the right margin and reaches
+    // below the header text. Clipping to the band silently deleted both. The band's
+    // GEOMETRY still stops at flow height, so hit-testing and the body's effective top
+    // margin are untouched; overflowing drawings stay inert below via `interactive`.
+    container.style.overflow = 'visible';
     const storyOrigin = Object.freeze({
       x: 0,
       y: 0,
@@ -1942,7 +1954,8 @@ function paintPage(
       storyRelative,
       asResolvedPaintContext(options),
       storyOrigin,
-      'behind'
+      'behind',
+      active
     );
     // Furniture links paint styled but inert — see `paintHyperlinkAnchor`.
     const furnitureCtx: ResolvedPaintContext = {
@@ -1962,13 +1975,15 @@ function paintPage(
       storyRelative,
       asResolvedPaintContext(options),
       storyOrigin,
-      'inFront'
+      'inFront',
+      active
     );
     element.append(container);
     // Hover invitation for an EXISTING band: a pill just outside the story box, shown by
     // CSS only while the adjacent band is hovered (`.docx-hf:hover + .docx-hf-edit-hint`).
-    // Outside the band because the band clips (`overflow: hidden`) and its content would
-    // sit under the pill. Adjacency is load-bearing — keep this append right here.
+    // A SIBLING, not a child: the `+` selector needs the pill right after the band, and
+    // keeping it out of the band keeps band content from sitting under the pill.
+    // Adjacency is load-bearing — keep this append right here.
     const hint = document.createElement('div');
     hint.className = 'docx-hf-edit-hint';
     hint.dataset.docxHfHint = story.kind;

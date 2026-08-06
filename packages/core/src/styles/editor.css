@@ -3044,7 +3044,7 @@ a.docx-hyperlink:focus-visible {
 
 /* Hovering an EXISTING inactive band tints it and floats an edit invitation beside it —
  * without this the enterable header answered a hover with nothing at all. The pill is a
- * sibling because the band clips its own overflow. */
+ * sibling because the `+` selector below needs it right after the band. */
 .docx-pages .docx-hf:not([data-docx-hf-active]):not(.docx-hf--placeholder):hover {
   background: var(--doc-primary-light);
   border-radius: 4px;
