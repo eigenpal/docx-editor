@@ -8,7 +8,14 @@ import { BergGlyph, DomeGlyph } from './art/Specimen';
 import { insideTemperature, OUTSIDE, tipHeight } from './specimens';
 
 export type SpecimenProbe =
-  | { readonly kind: 'iceberg'; readonly rect: DOMRect; readonly depth: number }
+  | {
+      readonly kind: 'iceberg';
+      readonly rect: DOMRect;
+      readonly depth: number;
+      /** From the payload, so the popover shows what the tag never could. */
+      readonly surveyedBy?: string;
+      readonly notes?: string;
+    }
   | { readonly kind: 'igloo'; readonly rect: DOMRect; readonly blocks: number };
 
 interface SpecimenPopoverProps {
@@ -70,6 +77,7 @@ export function SpecimenPopover({ probe, onClose }: SpecimenPopoverProps) {
             rows={[
               ['Above', `${tipHeight(probe.depth)} m`],
               ['Below', `${probe.depth} m`],
+              ...(probe.surveyedBy ? ([['Surveyed by', probe.surveyedBy]] as const) : []),
             ]}
           />
         </>

@@ -2003,6 +2003,15 @@ const PLACEHOLDER_BAND_PT = 30;
 const PLACEHOLDER_DISTANCE_PT = 36;
 
 /** Widget kinds the painted surface can activate without adapter chrome. */
+/**
+ * Height of the control label tab, in SCREEN pixels: `.docx-content-control-label` is 14px of
+ * line-height plus 1px of padding each side, and its font does not scale with the zoom.
+ *
+ * The two have to agree. A mismatch shows up as a gap or an overlap where the tab meets the box
+ * it labels, and only at a zoom nobody tested at.
+ */
+const CONTROL_LABEL_HEIGHT = 16;
+
 const WIDGET_TYPES = new Set<ContentControlMappedType>([
   'dropdown',
   'comboBox',
@@ -2131,7 +2140,11 @@ function paintContentControlBoundary(
     label.textContent = control.alias;
     label.style.position = 'absolute';
     label.style.left = `${(contentLeft + first.box.x) * scale}px`;
-    label.style.top = `${Math.max(0, (contentTop + first.box.y) * scale - 16)}px`;
+    // The box position scales; the OFFSET does not, and that is deliberate. The label is
+    // chrome, not content: its font is a fixed 10px/14px, so the tab is `CONTROL_LABEL_HEIGHT`
+    // screen pixels tall at every zoom. Subtracting a scaled height would open a gap between
+    // the tab and the box it labels, widening as the reader zooms in.
+    label.style.top = `${Math.max(0, (contentTop + first.box.y) * scale - CONTROL_LABEL_HEIGHT)}px`;
     label.style.pointerEvents = 'none';
     layer.append(label);
   }

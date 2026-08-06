@@ -2,8 +2,10 @@
 // call authors the locked, tagged control at the captured caret. The form itself is entirely
 // the demo's; nothing here is a library component.
 //
-// Attrs ride in the `w:tag`, which Word caps at 64 characters, so the fields collect one
-// number and a label rather than a payload.
+// The form collects one bag of fields; where each one ENDS UP differs by kind. The igloo's
+// number rides in the `w:tag`, which is all a small integer needs. The berg's depth, surveyor
+// and notes go into a payload — a customXml data part the chip binds to — because 64 characters
+// of tag was never going to hold a survey record. `payloadFor` and `tagAttrsFor` make the split.
 
 import { useEffect, useId, useRef, useState } from 'react';
 import {
@@ -131,6 +133,7 @@ export function SpecimenDialog({ form, onCommit, onClose }: SpecimenDialogProps)
           // COMMIT is where it clamps back into range, through the same reads the
           // recognition boundary uses.
           const clamped = {
+            ...attrs,
             [field.key]: String(kind === 'iceberg' ? depthOf(attrs) : blocksOf(attrs)),
           };
           onCommit(
@@ -193,10 +196,33 @@ export function SpecimenDialog({ form, onCommit, onClose }: SpecimenDialogProps)
             max={field.max}
             required
             value={attrs[field.key] ?? ''}
-            onChange={(event) => setAttrs({ [field.key]: event.target.value })}
+            onChange={(event) => setAttrs({ ...attrs, [field.key]: event.target.value })}
           />
           <small>{field.hint}</small>
         </label>
+
+        {/* The berg's survey record. Neither of these could ride in a `w:tag`, which is the
+            whole reason the payload exists — so they only show for the kind that has one. */}
+        {kind === 'iceberg' ? (
+          <>
+            <label className="igloo-dialog__field">
+              <span>Surveyed by</span>
+              <input
+                value={attrs['surveyedBy'] ?? ''}
+                onChange={(event) => setAttrs({ ...attrs, surveyedBy: event.target.value })}
+              />
+            </label>
+            <label className="igloo-dialog__field">
+              <span>Notes</span>
+              <textarea
+                rows={2}
+                value={attrs['notes'] ?? ''}
+                onChange={(event) => setAttrs({ ...attrs, notes: event.target.value })}
+              />
+              <small>Free text. Kept in the payload, never in the tag.</small>
+            </label>
+          </>
+        ) : null}
 
         <div className="igloo-dialog__actions">
           {/* The same form, filled from the water instead of by hand. */}

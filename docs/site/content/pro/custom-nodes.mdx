@@ -146,11 +146,11 @@ const outgoing = exportCustomNodes(bytes, [Citation]);
 if (outgoing.ok) download(outgoing.bytes);
 ```
 
-| `preserveOnExport` | Result                                                                     |
-| ------------------ | -------------------------------------------------------------------------- |
-| `true` (default)   | Unchanged. Tag, binding and payload all travel.                            |
-| `'text'`           | The control is unwrapped. The text remains; the tag, binding and payload go. |
-| `false`            | The node is removed with its content.                                      |
+| `preserveOnExport` | Result                                                                       | Use for                                            |
+| ------------------ | ---------------------------------------------------------------------------- | -------------------------------------------------- |
+| `true` (default)   | Unchanged. Tag, binding and payload all travel.                              | Nodes the recipient is meant to keep working with.  |
+| `'text'`           | The control is unwrapped. The text remains; the tag, binding and payload go. | A citation: the words are the point, the markup is yours. |
+| `false`            | The node is removed with its content.                                        | Internal annotations that must not leave.          |
 
 Pass `destination` when the choice is made at runtime. `'internal'` returns the input bytes unchanged, so one code path covers both:
 
@@ -160,9 +160,25 @@ const copy = exportCustomNodes(bytes, [Citation], {
 });
 ```
 
+`preserveOnExport` is declared per definition, so one document can hold nodes with all three settings and each is decided independently. A definition you do not pass to `exportCustomNodes` is not touched at all — the function applies your policy to your own markup, it does not scrub a document.
+
 A node that leaves takes its payload with it, even when other nodes in the same store remain. When the last node for a namespace is gone, both `customXml` parts, both relationships and the content-type override are removed. A refusal returns no bytes.
 
 This removes markup written by this library. It does not touch `docProps/app.xml`, `docProps/core.xml`, comment and revision authors, rsids, or custom document properties. It does not anonymize a document.
+
+### On a server
+
+`exportCustomNodes` takes bytes and returns bytes. It touches no DOM and needs no editor, so it runs in a request handler, a queue worker or a build step:
+
+```ts
+// A document your backend generated with customNodeXml, stripped before it is sent.
+const generated = await renderContract(order);
+const outgoing = exportCustomNodes(generated, [Clause, InternalNote]);
+if (!outgoing.ok) throw new Error(outgoing.reason);
+await email.attach(outgoing.bytes);
+```
+
+The pairing is deliberate: `customNodeXml` writes the nodes with no browser, and `exportCustomNodes` removes them with no browser. A document can be generated, stored with its payloads intact, and stripped on the way out, without an editor ever being mounted. `packages/pro/src/__tests__/custom-node-server.test.ts` runs that whole path with the DOM globals deleted.
 
 ## Read
 

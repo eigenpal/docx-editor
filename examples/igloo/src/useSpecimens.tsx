@@ -23,6 +23,7 @@ import { CustomNodeChrome } from '@docx-editor.dev/pro/react';
 import {
   blocksOf,
   defaultAttrs,
+  IcebergData,
   definitionOf,
   depthOf,
   labelFor,
@@ -131,9 +132,13 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
       // small number in the tag where it fits.
       const data = payloadFor(kind, attrs);
       report(
-        insertCustomNode(editor, definition, { attrs: tagAttrsFor(kind, attrs), text: label, alias: definition.label ?? definition.name,
-          ...(data ? { data } : {}),
-          ...(at ? { at } : {}) }),
+        insertCustomNode(editor, definition, {
+          alias: definition.label ?? definition.name,
+          // The berg is derived from its record by `toDocx`; the igloo has no payload, so it
+          // passes the tag attrs and the words it wants.
+          ...(data ? { data } : { attrs: tagAttrsFor(kind, attrs), text: label }),
+          ...(at ? { at } : {}),
+        }),
         kind === 'iceberg' ? 'A berg calved into the paragraph.' : 'An igloo went up.'
       );
     },
@@ -178,7 +183,16 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
   const activate = useCallback(
     (node: ActivatedCustomNode) => {
       if (node.name === 'iceberg') {
-        setProbe({ kind: 'iceberg', rect: node.rect, depth: depthOf(node.attrs) });
+        const survey = IcebergData.safeParse(node.data);
+        setProbe({
+          kind: 'iceberg',
+          rect: node.rect,
+          depth: survey.success ? survey.data.depth : depthOf(node.attrs),
+          ...(survey.success && survey.data.surveyedBy
+            ? { surveyedBy: survey.data.surveyedBy }
+            : {}),
+          ...(survey.success && survey.data.notes ? { notes: survey.data.notes } : {}),
+        });
         return;
       }
       const blocks = blocksOf(node.attrs) + 1;
@@ -222,7 +236,10 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
         const definition = definitionOf(next.kind);
         const data = payloadFor(next.kind, next.attrs);
         report(
-          updateCustomNode(editor, definition, next.nodeId, { attrs: tagAttrsFor(next.kind, next.attrs), text: next.label, alias: definition.label ?? definition.name, ...(data ? { data } : {}) }),
+          updateCustomNode(editor, definition, next.nodeId, {
+            alias: definition.label ?? definition.name,
+            ...(data ? { data } : { attrs: tagAttrsFor(next.kind, next.attrs), text: next.label }),
+          }),
           'Re-carved.'
         );
       }

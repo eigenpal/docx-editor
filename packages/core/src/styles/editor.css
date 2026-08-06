@@ -836,21 +836,31 @@ a.docx-hyperlink:focus-visible {
   opacity: 0;
 }
 
+/* The label tab. It sits ON the page, over body text, so it has to read as chrome rather than
+   as a word in the document: a ring in the page colour separates it from whatever line it
+   lands on, and the shadow lifts it off the text underneath. Inline controls sit in running
+   text with no room above them, so overlap is unavoidable — being unmistakably not-text is the
+   thing that makes it legible anyway. */
 .docx-content-control-label {
   box-sizing: border-box;
   max-width: 12rem;
   overflow: hidden;
   padding: 1px 6px;
-  border-radius: 3px 3px 0 0;
+  border-radius: 3px;
   background: var(--doc-primary);
   color: var(--doc-on-primary);
   font:
-    500 10px/14px system-ui,
+    500 10px/14px ui-sans-serif,
+    system-ui,
     sans-serif;
+  letter-spacing: 0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
   display: none;
   pointer-events: none;
+  box-shadow:
+    0 0 0 2px var(--doc-page-bg-rendered),
+    0 1px 4px color-mix(in srgb, var(--doc-primary) 35%, transparent);
 }
 
 .docx-content-control-chrome[data-active] .docx-content-control-label,

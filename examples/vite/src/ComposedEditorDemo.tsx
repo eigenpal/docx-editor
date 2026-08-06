@@ -288,7 +288,12 @@ function CitationPopover({
   const chrome = (
     // Definitions default to the ones registered on the Root — register once,
     // every surface (chip styling, context menu, review cards) follows.
-    <CustomNodeChrome onNodeClick={(node) => onOpen(citationCardAt(node))} />
+    <CustomNodeChrome
+      onNodeClick={(node) => onOpen(citationCardAt(node))}
+      // Hover shows the same card. `onNodeHover` fires once per chip entered, so the card
+      // follows the pointer across a paragraph of citations without a click.
+      onNodeHover={(node) => onOpen(citationCardAt(node))}
+    />
   );
   if (!card) return chrome;
   return (

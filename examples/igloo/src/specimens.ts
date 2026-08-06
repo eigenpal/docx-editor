@@ -16,7 +16,24 @@
 // honest description of it; clamping is what makes it a number.
 
 import { defineCustomNode } from '@docx-editor.dev/pro';
+import { z } from 'zod';
 import { makeRandom } from './art/random';
+
+/**
+ * A berg's survey record.
+ *
+ * This is the shape of thing a payload exists for: `depth` alone would fit in a `w:tag`, and
+ * `surveyedBy` plus a free-text note would not. Declaring it means every surface reads
+ * `data.depth` as a number rather than re-parsing an attribute string.
+ */
+export const IcebergData = z.object({
+  /** Metres below the waterline. */
+  depth: z.number().int().min(1).max(999),
+  surveyedBy: z.string().max(80),
+  /** Free text, and the field that could never have ridden in the tag. */
+  notes: z.string().max(600),
+});
+export type IcebergData = z.infer<typeof IcebergData>;
 
 /** Which specimen: the discriminator the demo's own UI switches on. */
 export type SpecimenKind = 'iceberg' | 'igloo';
@@ -89,15 +106,22 @@ export const ICEBERG = defineCustomNode({
   label: 'Iceberg',
   // Host-authored, never file data: `CustomNodeChrome` tints the painted chip with it.
   chrome: { color: '#0f6f95' },
+  schema: IcebergData,
+  // The whole node from the record: the tag carries identity alone, and the words in the
+  // paragraph are computed, so they cannot fall out of step with the depth they describe.
+  toDocx: (data) => ({ attrs: {}, text: `the tip of a ${data.depth + tipHeight(data.depth)} m berg` }),
   // The payload is resolved and handed here, so the number every later surface reads comes out
   // of the store — and the attrs this returns are the ONE shape the chip, the card, the menu
-  // and the dialog all see, whichever place it actually came from.
+  // and the dialog all see, whichever place it actually came from. The tag fallback is for
+  // documents this demo wrote before the payload existed.
   fromDocx: ({ attrs, data }) => ({ depth: String(icebergDepth(data, attrs)) }),
-  reviewCard: ({ attrs, text }) => {
-    const depth = depthOf(attrs);
+  reviewCard: ({ attrs, text, data }) => {
+    const depth = data?.depth ?? depthOf(attrs);
     return {
       title: `Iceberg: ${tipHeight(depth)} m up, ${depth} m down`,
-      detail: `“${text}” is all of it that surfaced. The other nine tenths are below the line.`,
+      detail: data?.notes
+        ? `${data.notes}${data.surveyedBy ? ` — ${data.surveyedBy}` : ''}`
+        : `“${text}” is all of it that surfaced. The other nine tenths are below the line.`,
     };
   },
 });
@@ -137,7 +161,9 @@ export function labelFor(kind: SpecimenKind, attrs: Readonly<Record<string, stri
 
 /** What a fresh specimen of each kind carries before anyone edits it. */
 export function defaultAttrs(kind: SpecimenKind): Record<string, string> {
-  return kind === 'iceberg' ? { depth: '90' } : { blocks: '7' };
+  return kind === 'iceberg'
+    ? { depth: '90', surveyedBy: 'R. Amundsen', notes: 'Calved off the shelf overnight.' }
+    : { blocks: '7' };
 }
 
 /**
@@ -160,8 +186,13 @@ export function tagAttrsFor(
 export function payloadFor(
   kind: SpecimenKind,
   attrs: Readonly<Record<string, string>>
-): { readonly depth: number } | undefined {
-  return kind === 'iceberg' ? { depth: depthOf(attrs) } : undefined;
+): IcebergData | undefined {
+  if (kind !== 'iceberg') return undefined;
+  return {
+    depth: depthOf(attrs),
+    surveyedBy: attrs['surveyedBy'] ?? '',
+    notes: attrs['notes'] ?? '',
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

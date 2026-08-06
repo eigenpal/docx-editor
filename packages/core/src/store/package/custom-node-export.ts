@@ -19,7 +19,8 @@
 
 import { boundCustomXmlNodeIdsInPackage } from './custom-node-payloads.ts';
 import { customXmlNodes, withoutOrphanCustomXmlNodes } from './custom-xml-nodes.ts';
-import { findCustomXmlDataPart, withoutCustomXmlDataPart } from './custom-xml-part.ts';
+import { customXmlDataParts, type CustomXmlDataPart } from './custom-xml-part.ts';
+import { withoutPart, type WithoutPartResult } from './package-edit.ts';
 import {
   contentControlContentNodeOf,
   contentControlPropertiesOf,
@@ -127,38 +128,41 @@ export function withExportedCustomNodes(
   }
 
   for (const namespaceUri of request.namespaces) {
-    const dataPart = findCustomXmlDataPart(next, request.storyPartName, namespaceUri);
-    if (!dataPart) continue;
-    // EVERY story, not the one this pass policed. Two definitions sharing a `tagPrefix` share a
-    // store, and a control in a header binds one as readily as a control in the body — so
-    // "nothing references this any more" is a question about the package, and answering it from
-    // one part strips a store another chip still names.
-    const referenced = boundCustomXmlNodeIdsInPackage(next, dataPart.itemId);
+    // EVERY store for the namespace, not the first. A document can carry several — a server
+    // splicing markup authors one store per `customNodeXml` call, and a file from anywhere can
+    // hold as many as it likes — and stripping only the first ships the payloads in the rest.
+    for (const dataPart of storesFor(next, request.storyPartName, namespaceUri)) {
+      // EVERY story, not the one this pass policed. Two definitions sharing a `tagPrefix` share a
+      // store, and a control in a header binds one as readily as a control in the body — so
+      // "nothing references this any more" is a question about the package, and answering it from
+      // one part strips a store another chip still names.
+      const referenced = boundCustomXmlNodeIdsInPackage(next, dataPart.itemId);
 
-    // THE PAYLOADS FIRST, one by one. Dropping the whole store only when nothing binds it left
-    // a store with one surviving chip carrying every OTHER chip's payload — including the ones
-    // a `preserveOnExport: false` definition had just been removed for. The export said `ok`
-    // and shipped the data it was called to remove.
-    const swept = withoutOrphanCustomXmlNodes(next, dataPart.partName, referenced);
-    if (
-      swept.pkg === next &&
-      swept.removed.length === 0 &&
-      !isTidy(next, dataPart.partName, referenced)
-    ) {
-      return { ok: false, reason: `the payloads in ${namespaceUri} could not be removed` };
-    }
-    next = swept.pkg;
+      // THE PAYLOADS FIRST, one by one. Dropping the whole store only when nothing binds it left
+      // a store with one surviving chip carrying every OTHER chip's payload — including the ones
+      // a `preserveOnExport: false` definition had just been removed for. The export said `ok`
+      // and shipped the data it was called to remove.
+      const swept = withoutOrphanCustomXmlNodes(next, dataPart.partName, referenced);
+      if (
+        swept.pkg === next &&
+        swept.removed.length === 0 &&
+        !isTidy(next, dataPart.partName, referenced)
+      ) {
+        return { ok: false, reason: `the payloads in ${namespaceUri} could not be removed` };
+      }
+      next = swept.pkg;
 
-    // Then the store itself: part, properties, both relationships and the content-type
-    // Override, which is what "no record of it" means.
-    if (referenced.size > 0) continue;
-    const stripped = withoutCustomXmlDataPart(next, request.storyPartName, namespaceUri);
-    // `ok: false` means NOTHING was removed. Answering the unchanged package would hand back a
-    // document a caller could not tell from a stripped one.
-    if (!stripped.ok) {
-      return { ok: false, reason: `the payload store for ${namespaceUri} could not be removed` };
+      // Then the store itself: part, properties, both relationships and the content-type
+      // Override, which is what "no record of it" means.
+      if (referenced.size > 0) continue;
+      const stripped = withoutCustomXmlPart(next, dataPart);
+      // `ok: false` means NOTHING was removed. Answering the unchanged package would hand back
+      // a document a caller could not tell from a stripped one.
+      if (!stripped.ok) {
+        return { ok: false, reason: `the payload store for ${namespaceUri} could not be removed` };
+      }
+      next = stripped.pkg;
     }
-    next = stripped.pkg;
   }
 
   return { ok: true, pkg: next, unwrapped, removed };
@@ -177,4 +181,29 @@ function isTidy(pkg: OoxmlPackage, partName: string, referenced: ReadonlySet<str
 /** An edit refusal as one line, so an export failure names the invariant that stopped it. */
 function describe(edit: { readonly issues: readonly OoxmlInvariantIssue[] }): string {
   return edit.issues.map((issue) => issue.code).join(', ') || 'the edit was refused';
+}
+
+/** Every store carrying this namespace, in relationship order. */
+function storesFor(
+  pkg: OoxmlPackage,
+  storyPartName: string,
+  namespaceUri: string
+): readonly CustomXmlDataPart[] {
+  return customXmlDataParts(pkg, storyPartName).filter(
+    (store) => store.namespaceUri === namespaceUri
+  );
+}
+
+/**
+ * Remove ONE store: its part, its properties, both relationships and the Override.
+ *
+ * By part rather than by namespace, because a namespace can name several and the caller here has
+ * already decided which of them is unreferenced.
+ */
+function withoutCustomXmlPart(pkg: OoxmlPackage, store: CustomXmlDataPart): WithoutPartResult {
+  const item = withoutPart(pkg, store.partName);
+  if (!item.ok) return { pkg, ok: false };
+  const props = withoutPart(item.pkg, store.propsPartName);
+  if (!props.ok) return { pkg, ok: false };
+  return { pkg: props.pkg, ok: true };
 }
