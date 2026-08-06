@@ -117,3 +117,38 @@ describe('scrollToPage / scrollToBlock actually scroll', () => {
     editor.destroy();
   });
 });
+
+describe('revealPosition and the setSelection command scroll without focus', () => {
+  test('revealPosition scrolls to an exact offset and refuses an unknown paragraph', () => {
+    const { editor, scroller } = mount();
+    const ids = editor.surface!.session.paragraphIds();
+    const last = ids[ids.length - 1]!;
+    expect(editor.surface!.revealPosition({ paragraphId: last, offset: 3 })).toBe(true);
+    expect(scroller.scrollTop).toBeGreaterThan(0);
+    expect(editor.surface!.revealPosition({ paragraphId: 'no-such-paragraph', offset: 0 })).toBe(
+      false
+    );
+    editor.destroy();
+  });
+
+  test('the setSelection command reveals its head even with focus outside the pages', () => {
+    const { editor, scroller } = mount();
+    // The realistic host state: a toolbar button or automation call holds focus, which is
+    // exactly what kept the caret-follow scroll from ever firing for this command.
+    expect(document.activeElement?.closest('.docx-pages') ?? null).toBeNull();
+    const ids = editor.surface!.session.paragraphIds();
+    const last = ids[ids.length - 1]!;
+    const result = editor.exec({
+      type: 'setSelection',
+      range: {
+        anchor: { paragraphId: last, offset: 0 },
+        head: { paragraphId: last, offset: 4 },
+      },
+    });
+    expect(result.ok).toBe(true);
+    // A RANGE selection: the internal caret-follow explicitly sits those out, so a moved
+    // viewport proves the command scrolled on its own.
+    expect(scroller.scrollTop).toBeGreaterThan(0);
+    editor.destroy();
+  });
+});

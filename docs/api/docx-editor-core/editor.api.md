@@ -1316,6 +1316,7 @@ export interface PaginatedSurface {
     revealPage(pageIndex: number, options?: RevealOptions): boolean;
     // (undocumented)
     revealParagraph(paragraphId: string, options?: RevealOptions): boolean;
+    revealPosition(position: SemanticPosition, options?: RevealOptions): boolean;
     sectionProperties(): SectionProperties;
     sectionPropertiesAt(paragraphId: string): SectionProperties;
     selectAll(): void;
@@ -1352,6 +1353,7 @@ export interface PaginatedSurface {
     setParagraphProperty(localName: string, attributes?: Record<string, string | null>, options?: {
         readonly mergeAttributes?: boolean;
     }): void;
+    setReviewActivationExclusions(kinds: readonly ReviewRevisionKind_2[] | null): void;
     setRunProperty(localName: string, attributes?: Record<string, string>): void;
     setSectionProperties(update: {
         readonly pageWidthTwips?: number;

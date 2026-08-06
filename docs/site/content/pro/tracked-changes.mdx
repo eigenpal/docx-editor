@@ -165,7 +165,7 @@ function ChangeList() {
 | Member                          | What it does                                                                 |
 | ------------------------------- | ---------------------------------------------------------------------------- |
 | `items`                         | Every pending decision, in reading order.                                    |
-| `activeKey` / `setActive`       | Which item the caret is in; setting selects its range and scrolls to it.     |
+| `activeKey` / `setActive`       | Which item the caret is in; setting selects its range and scrolls to it, entering or leaving a header/footer story as the item requires. |
 | `accept(item)` / `reject(item)` | Resolve a revision. No-ops on an item whose `readOnly` is true.              |
 | `reply(item, text, author?)`    | Reply to a change. Returns whether it landed.                                |
 | `remove(item)`                  | Delete a comment thread, or discard a suggestion. Returns whether it landed. |
@@ -183,6 +183,8 @@ Two things the hook gives you that you should not recompute. Items come from the
 `readOnly` marks a decision the engine cannot resolve structurally. Do not offer Accept and Reject on those: a card offering a button the engine will refuse is worse than one that explains why it cannot.
 
 `useReview(query)` narrows the set. `excludeRevisionKinds` drops kinds you do not want to show, and `placement: false` skips layout geometry when you only need the metadata. `useReviewOf(editor, query)` is the same hook against an editor you already hold.
+
+A hand-built rail that hides kinds should tell the engine as well: `editor.setReviewActivationExclusions(['format', 'structural'])`. Activation is caret-driven, so without it a click on text under a hidden change opens a card your rail never draws, and the click reads as ignored. `DocxEditor.Review` does this for you from its own `structural` and `formatting` props.
 
 ## Accept or reject in bulk
 

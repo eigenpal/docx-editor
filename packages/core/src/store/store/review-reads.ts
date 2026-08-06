@@ -980,6 +980,32 @@ export function paragraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, numbe
 /** The paragraph order index per part root, bounded like {@link locatedSitesCache}. */
 const paragraphOrderCache = createRecentRootCache<Map<string, number>>(8);
 
+/**
+ * Like {@link paragraphOrderOfPart}, but descends INTO paragraphs, so paragraphs nested
+ * in a run's content — a textbox's `w:txbxContent` — rank right after their host.
+ *
+ * A separate function on purpose: the shallow order feeds the review queue's card
+ * ordering, and re-ranking nested paragraphs there would move cards. This one exists for
+ * position containment tests ("is the caret inside this range"), where a paragraph the
+ * shallow order cannot see is a position that can never match.
+ */
+export function deepParagraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, number> {
+  const cached = deepParagraphOrderCache.get(part.root);
+  if (cached) return cached;
+  const order = new Map<string, number>();
+  const walk = (node: OoxmlNode, depth: number): void => {
+    if (node.kind === 'textValue' || depth > 64) return;
+    if (node.kind === 'paragraph' && !order.has(node.id)) order.set(node.id, order.size);
+    for (const child of node.children) walk(child, depth + 1);
+  };
+  walk(part.root, 0);
+  deepParagraphOrderCache.set(part.root, order);
+  return order;
+}
+
+/** The deep paragraph order per part root, bounded like the shallow one above. */
+const deepParagraphOrderCache = createRecentRootCache<Map<string, number>>(8);
+
 /** Paragraph ids of one table subtree, in reading order, per immutable table node. */
 const tableParagraphIdsCache = new WeakMap<OoxmlNode, readonly string[]>();
 

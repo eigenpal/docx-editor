@@ -793,6 +793,9 @@ export class DangerousKeyError extends Error {
 }
 
 // @public
+export function deepParagraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, number>;
+
+// @public
 export const DEFAULT_ENDNOTE_PROPERTIES: ResolvedEndnoteProperties;
 
 // @public

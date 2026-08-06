@@ -68,6 +68,7 @@ import type {
   DocumentEditingMode,
   ReviewItemPlacement,
   ReviewItemQuery,
+  ReviewRevisionKind,
 } from '../contracts/editor.ts';
 import { resolveEditorModules, type ReviewModelInput } from '../contracts/modules.ts';
 import {
@@ -272,6 +273,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * surface is handed it at mount, and a document reload keeps the reader's choice.
    */
   let editingMode: DocumentEditingMode = config.mode === 'view' ? 'viewing' : 'editing';
+
+  /**
+   * The host rail's activation filter, held here so a surface rebuilt on load or font
+   * remount comes back up with it (the surface holds the working copy). Declared before
+   * the first mount, which reads it.
+   */
+  let reviewActivationExclusions: readonly ReviewRevisionKind[] | null = null;
   /**
    * True once the reader has moved the mode themselves.
    *
@@ -582,6 +590,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // and still told a screen reader it was writable. Reads the CURRENT mode, not just the
     // constructed one, so a remount after `setEditingMode('viewing')` comes up right.
     surface.setEditable(editingMode !== 'viewing');
+    // Same remount rule for the host's activation filter: the rail set it once, and a
+    // rebuilt surface that forgot it would activate cards the rail does not render.
+    if (reviewActivationExclusions !== null) {
+      surface.setReviewActivationExclusions(reviewActivationExclusions);
+    }
     lastSelection = surface.state().selection;
     unsubscribeSession = surface.session.subscribe((change) => {
       const documentChange: DocumentChange = {
@@ -1219,8 +1232,60 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     return forwards ? { from: anchor, to: head } : { from: head, to: anchor };
   }
 
+  /**
+   * The selection `setActiveReviewItem` installed, while it is still the live one.
+   *
+   * Opening a card selects the item's span so the overlay highlights it — but a range
+   * selection is also what the "comment on this" affordance keys on, and v1 shipped
+   * exactly that regression: opening a card offered to add a second comment on top of
+   * the one just opened. This remembers the review-driven selection so
+   * `selectionPlacement` can sit out for it, and clears itself the moment the user
+   * selects anything else. `commentTargetRange` stays untouched, so replying over the
+   * activated text still works.
+   */
+  let lastReviewSelection: {
+    readonly key: string;
+    readonly from: SemanticPosition;
+    readonly to: SemanticPosition;
+  } | null = null;
+
+  /**
+   * The whole span a card covers. Content kinds (insert/delete/replace) span first range
+   * start to last range end — their ranges are contiguous by construction, a replacement's
+   * two halves included. Everything else anchors at its first range only.
+   */
+  function reviewItemSpan(
+    item: ReviewItem
+  ): { readonly start: SemanticPosition; readonly end: SemanticPosition } | null {
+    if (item.kind === 'revision') {
+      const ranges = item.ranges;
+      if (ranges.length === 0) return null;
+      const contiguous =
+        item.revisionKind === 'replace' ||
+        item.revisionKind === 'insert' ||
+        item.revisionKind === 'delete';
+      const last = contiguous ? ranges[ranges.length - 1]! : ranges[0]!;
+      return { start: ranges[0]!.start, end: last.end };
+    }
+    const range = firstReviewRange(item);
+    return range ? { start: range.start, end: range.end } : null;
+  }
+
   /** Where a comment on the current selection would sit. */
   function selectionPlacement(): { readonly anchorY: number; readonly pageIndex: number } | null {
+    if (lastReviewSelection && surface) {
+      const live = surface.retainedSelection() ?? surface.state().selection;
+      const same = (a: SemanticPosition, b: SemanticPosition) =>
+        a.paragraphId === b.paragraphId && a.offset === b.offset;
+      const stillReviewDriven =
+        (same(live.anchor, lastReviewSelection.to) && same(live.head, lastReviewSelection.from)) ||
+        (same(live.anchor, lastReviewSelection.from) && same(live.head, lastReviewSelection.to));
+      if (!stillReviewDriven) {
+        lastReviewSelection = null;
+      } else if (activeReviewKeyNow() === lastReviewSelection.key) {
+        return null;
+      }
+    }
     const range = commentTargetRange();
     const layout = surface?.publishedLayout();
     if (!range || !layout) return null;
@@ -1911,25 +1976,42 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (!range || !surface) return;
       // A card whose range lives in a header/footer opens that scope, exactly as Word does:
       // the body selection cannot address a furniture paragraph, so setting it would only
-      // clamp the caret to some unrelated body position.
+      // clamp the caret to some unrelated body position. The mounted `enterHeaderFooter`
+      // reveals the band on the way. Falls THROUGH to the announcement below — returning
+      // here left the rail unre-rendered, so the header card never lit up.
       const home = item ? furnitureHomeOf(item) : null;
       if (home !== null) {
-        surface.enterHeaderFooter?.({
+        const entered = surface.enterHeaderFooter?.({
           rId: home.rId,
           kind: home.kind,
           position: { paragraphId: range.start.paragraphId, offset: range.start.offset },
         });
-        return;
+        if (!entered) return;
+      } else {
+        // Card to document. The caret may be parked in a furniture or note scope from the
+        // PREVIOUS card — leave it first, exactly as the pointer path does, or the body
+        // selection below gets clamped inside the open story and no body card can ever
+        // become active again.
+        surface.exitNote?.();
+        surface.exitHeaderFooter?.();
+        // Select the item's whole span, HEAD AT THE START: the selection overlay is the
+        // highlight (as it was pre-rewrite), and the head is both what `activeReviewKey`
+        // classifies at and what the reveal scrolls to. A replacement's span runs from its
+        // struck half's start to its typed half's end — the ranges are contiguous by
+        // construction — so both halves highlight as one edit. The old "selecting offers a
+        // second comment on the reader's own selection" regression is handled by
+        // `selectionPlacement`, which stays quiet while this review-driven selection is
+        // the live one.
+        const span = reviewItemSpan(item!) ?? range;
+        surface.setSelection({
+          anchor: { paragraphId: span.end.paragraphId, offset: span.end.offset },
+          head: { paragraphId: span.start.paragraphId, offset: span.start.offset },
+        });
+        lastReviewSelection = { key, from: span.start, to: span.end };
+        // Focus-independent by design: the rail card focused itself on mousedown, which is
+        // exactly what keeps the caret-follow scroll from ever firing here.
+        surface.revealPosition?.(span.start, { block: 'nearest' });
       }
-      // Card to document: put the CARET at the range's start. Selecting the whole range
-      // instead turned the text grey and — because a range selection is what the "comment on
-      // this" affordance keys on — offered to add a second comment on top of the one the
-      // reader had just opened. The band already marks the range; the caret only has to land
-      // inside it for the card to stay open and the document to scroll there.
-      surface.setSelection({
-        anchor: { paragraphId: range.start.paragraphId, offset: range.start.offset },
-        head: { paragraphId: range.start.paragraphId, offset: range.start.offset },
-      });
       // ANNOUNCED, exactly as dismissing is. Opening a card is observable state of its own,
       // and the surface's `onChange` deliberately stays quiet when the caret did not move —
       // which is precisely this case whenever the card is reopened after being DISMISSED:
@@ -1939,6 +2021,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // not respond to any number of further clicks.
       bump();
       emitSelectionChange();
+    },
+
+    setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null) {
+      reviewActivationExclusions = kinds === null ? null : [...kinds];
+      surface?.setReviewActivationExclusions(reviewActivationExclusions);
     },
 
     acceptReviewItem: (key: string) => resolveReviewItem(key, 'accept'),
