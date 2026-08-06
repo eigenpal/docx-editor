@@ -140,8 +140,8 @@ export function revisionGroupKey(address: RevisionAddress, localName: string): s
   return `${localName}\u0000${address.id}\u0000${address.author}\u0000${address.date ?? ''}`;
 }
 
-/** Revision sites of one paragraph subtree, memoized on the immutable paragraph node. */
-const paragraphSitesCache = new WeakMap<OoxmlNode, readonly RevisionSite[]>();
+/** Revision sites of one paragraph or table subtree, memoized on the immutable node. */
+const subtreeSitesCache = new WeakMap<OoxmlNode, readonly RevisionSite[]>();
 
 /**
  * Every revision-bearing element in the part, with the classification that decides whether it
@@ -158,23 +158,25 @@ export function collectRevisionSites(part: OoxmlPart): RevisionSite[] {
     grandparent: OoxmlElement | null
   ): void => {
     if (node.kind === 'textValue') return;
-    // A PARAGRAPH's sites depend on nothing outside it. Classification reads the parent and
-    // grandparent, and every case that consults them (`w:rPr` under `w:pPr`, a structural
-    // parent) is at least two levels inside the paragraph — so the answer for a paragraph
-    // subtree is a pure function of that subtree, and an unchanged paragraph can hand back
-    // what it said last time. Without this, a document with no tracked changes at all still
-    // paid a full-tree walk per keystroke, on this path and on the review queue's.
-    if (node.kind === 'paragraph') {
-      const cached = paragraphSitesCache.get(node);
+    // A PARAGRAPH's — or a TABLE's — sites depend on nothing outside it. Classification
+    // reads the parent and grandparent, and every case that consults them (`w:rPr` under
+    // `w:pPr`, a structural `w:trPr`/`w:tcPr` parent) is at least two levels inside the
+    // memoized subtree — so the answer for that subtree is a pure function of it, and an
+    // unchanged one can hand back what it said last time. Without this, a document with no
+    // tracked changes at all still paid a full-tree walk per keystroke, on this path and on
+    // the review queue's. Tables are memoized as a unit because their row and cell markers
+    // live OUTSIDE any paragraph: a long document of tables otherwise re-walked every
+    // `w:trPr`/`w:tcPr` per derivation even though only one paragraph had changed.
+    if (node.kind === 'paragraph' || node.kind === 'table') {
+      const cached = subtreeSitesCache.get(node);
       if (cached) {
         sites.push(...cached);
         return;
       }
-      const own: RevisionSite[] = [];
       const before = sites.length;
       for (const child of node.children) visit(child, node, parent);
-      for (let index = before; index < sites.length; index += 1) own.push(sites[index]!);
-      paragraphSitesCache.set(node, own);
+      const own = sites.slice(before);
+      subtreeSitesCache.set(node, own);
       return;
     }
     const parentName = parent?.namespaceUri === WML_NAMESPACE_URI ? parent.localName : undefined;

@@ -225,6 +225,12 @@ interface SiteLocation {
  * range the caret and the ops disagreed with.
  */
 export function locateSites(part: OoxmlPart): Map<string, SiteLocation> {
+  // Memoized on the immutable root: the merged index is a pure function of the tree, and
+  // every caller in one derivation pass — the revision cards, the pro custom-node cards, an
+  // automation read — asks for the same one. Rebuilding it merged 80k+ entries per call on
+  // a long document. The instance is SHARED; callers must treat it as read-only.
+  const merged = locatedSitesCache.get(part.root);
+  if (merged) return merged;
   const located = new Map<string, SiteLocation>();
   const walkParagraph = (paragraph: OoxmlParagraphNode): void => {
     // Paragraph-local by construction: every offset here is measured inside this paragraph,
@@ -252,49 +258,83 @@ export function locateSites(part: OoxmlPart): Map<string, SiteLocation> {
 
   const anchorTrackedRows = (node: OoxmlNode, depth: number): void => {
     if (node.kind === 'textValue' || depth > 64) return;
+    // A table is block-level content: a row can sit inside a cell, a body or an SDT, never
+    // inside a paragraph — so the subtrees holding almost every node in the document have
+    // nothing for this walk, and descending into them cost more than the rest of it.
+    if (node.kind === 'paragraph') return;
     if (node.kind === 'tableRow') {
-      let paragraph: OoxmlParagraphNode | null = null;
-      const firstParagraph = (candidate: OoxmlNode, nestedDepth: number): void => {
-        if (paragraph || candidate.kind === 'textValue' || nestedDepth > 64) return;
-        if (candidate.kind === 'paragraph') {
-          paragraph = candidate;
-          return;
-        }
-        for (const child of candidate.children) firstParagraph(child, nestedDepth + 1);
-      };
-      firstParagraph(node, 0);
-      if (paragraph) {
-        const placeMarkers = (
-          candidate: OoxmlNode,
-          parentName: string | undefined,
-          nestedDepth: number
-        ): void => {
-          if (candidate.kind === 'textValue' || nestedDepth > 64) return;
-          if (candidate.kind === 'paragraph') return;
-          const rowMarker =
-            parentName === 'trPr' &&
-            (candidate.localName === 'ins' || candidate.localName === 'del');
-          const cellMarker =
-            parentName === 'tcPr' &&
-            (candidate.localName === 'cellIns' || candidate.localName === 'cellDel');
-          if (rowMarker || cellMarker) {
-            located.set(candidate.id, { paragraphId: paragraph!.id, start: 0, end: 0 });
-          }
-          for (const child of candidate.children) {
-            placeMarkers(child, candidate.localName, nestedDepth + 1);
-          }
-        };
-        placeMarkers(node, undefined, 0);
+      // Row-local by the same argument as the paragraph memo: the markers and the first
+      // paragraph that anchors them all live inside the row subtree. A nested row's
+      // markers are recorded by the OUTER row's walk too, anchored to the outer row's
+      // first paragraph — and then overwritten when the walk below reaches the nested row
+      // itself, whose own anchor wins. The per-row entries replay in that same order.
+      let entries = rowMarkerAnchorsCache.get(node);
+      if (!entries) {
+        entries = computeRowMarkerAnchors(node);
+        rowMarkerAnchorsCache.set(node, entries);
       }
+      for (const [markerId, location] of entries) located.set(markerId, location);
     }
     for (const child of node.children) anchorTrackedRows(child, depth + 1);
   };
   anchorTrackedRows(part.root, 0);
+  locatedSitesCache.set(part.root, located);
   return located;
 }
 
+/** Tracked row/cell marker anchors of one row subtree, memoized on the immutable row. */
+function computeRowMarkerAnchors(row: OoxmlNode): readonly (readonly [string, SiteLocation])[] {
+  let paragraph: OoxmlParagraphNode | null = null;
+  const firstParagraph = (candidate: OoxmlNode, nestedDepth: number): void => {
+    if (paragraph || candidate.kind === 'textValue' || nestedDepth > 64) return;
+    if (candidate.kind === 'paragraph') {
+      paragraph = candidate;
+      return;
+    }
+    for (const child of candidate.children) firstParagraph(child, nestedDepth + 1);
+  };
+  firstParagraph(row, 0);
+  if (!paragraph) return EMPTY_ROW_ANCHORS;
+  const anchor: SiteLocation = {
+    paragraphId: (paragraph as OoxmlParagraphNode).id,
+    start: 0,
+    end: 0,
+  };
+  const entries: (readonly [string, SiteLocation])[] = [];
+  const placeMarkers = (
+    candidate: OoxmlNode,
+    parentName: string | undefined,
+    nestedDepth: number
+  ): void => {
+    if (candidate.kind === 'textValue' || nestedDepth > 64) return;
+    if (candidate.kind === 'paragraph') return;
+    const rowMarker =
+      parentName === 'trPr' && (candidate.localName === 'ins' || candidate.localName === 'del');
+    const cellMarker =
+      parentName === 'tcPr' &&
+      (candidate.localName === 'cellIns' || candidate.localName === 'cellDel');
+    if (rowMarker || cellMarker) entries.push([candidate.id, anchor]);
+    for (const child of candidate.children) {
+      placeMarkers(child, candidate.localName, nestedDepth + 1);
+    }
+  };
+  placeMarkers(row, undefined, 0);
+  return entries;
+}
+
+const EMPTY_ROW_ANCHORS: readonly (readonly [string, SiteLocation])[] = [];
+
 /** Node id → paragraph-local offsets, memoized on the immutable paragraph node. */
 const paragraphLocationsCache = new WeakMap<OoxmlNode, ReadonlyMap<string, SiteLocation>>();
+
+/** The merged site index, memoized on the immutable part root. */
+const locatedSitesCache = new WeakMap<OoxmlNode, Map<string, SiteLocation>>();
+
+/** Marker anchors per immutable table row. */
+const rowMarkerAnchorsCache = new WeakMap<
+  OoxmlNode,
+  readonly (readonly [string, SiteLocation])[]
+>();
 
 function locateInParagraph(
   paragraph: OoxmlParagraphNode,
@@ -511,18 +551,37 @@ function pairReplacements(
   const taken = new Set<string>();
   const replacements = new Map<string, ReviewRevisionItem>();
 
+  // Insertions indexed by where their FIRST range starts. Pairing is exact end-to-start
+  // position equality — DELETION FIRST, same paragraph only. The cross-paragraph case is
+  // gone deliberately: it checked that the insertion's paragraph followed the deletion's,
+  // never that the deletion sat at the END of its own, so routine mid-paragraph edits
+  // folded into one card. Order matters too: this engine only ever writes
+  // delete-then-insert, so an insertion FOLLOWED by a deletion is a foreign file where
+  // pairing them would be an invention. The index makes the lookup exact rather than a
+  // scan of every insertion per deletion, which was quadratic in a heavily edited document.
+  const insertionsByStart = new Map<string, ReviewRevisionItem[]>();
+  for (const insertion of pairable) {
+    if (insertion.revisionKind !== 'insert') continue;
+    const start = insertion.ranges[0]!.start;
+    const key = `${start.paragraphId} ${start.offset}`;
+    const bucket = insertionsByStart.get(key);
+    if (bucket) bucket.push(insertion);
+    else insertionsByStart.set(key, [insertion]);
+  }
+
   for (const deletion of pairable) {
     if (deletion.revisionKind !== 'delete' || taken.has(deletion.id)) continue;
-    for (const insertion of pairable) {
-      if (insertion.revisionKind !== 'insert' || taken.has(insertion.id)) continue;
+    // The deletion's LAST range end: the end that actually meets the insertion's first
+    // start when the halves span more than one range each.
+    const end = deletion.ranges[deletion.ranges.length - 1]!.end;
+    const candidates = insertionsByStart.get(`${end.paragraphId} ${end.offset}`) ?? [];
+    for (const insertion of candidates) {
+      if (taken.has(insertion.id)) continue;
       if (insertion.author !== deletion.author) continue;
       // Same MOMENT, not just the same author. Adjacency alone folded two edits an hour
       // apart into one card, and accepting it then resolved a revision the reviewer was not
       // looking at. The window matches the write side's.
       if (!sameMoment(deletion.date, insertion.date)) continue;
-      // The deletion's LAST range against the insertion's FIRST: the two ends that actually
-      // meet when the halves span more than one range each.
-      if (!touching(deletion.ranges[deletion.ranges.length - 1]!, insertion.ranges[0]!)) continue;
       taken.add(deletion.id);
       taken.add(insertion.id);
       // Anchored at whichever half comes FIRST, so the card sits where the edit starts.
@@ -558,21 +617,6 @@ function pairReplacements(
     if (!taken.has(item.id)) out.push(item);
   }
   return out;
-}
-
-/**
- * Two ranges meet end-to-start, in the same paragraph.
- *
- * DELETION FIRST, and same paragraph only. The cross-paragraph case is gone: it checked that
- * the insertion's paragraph followed the deletion's, never that the deletion sat at the END
- * of its own — so "deleted something mid-paragraph, then inserted at the start of the next",
- * which is routine in a reviewed document, folded into one card, and one Accept then
- * resolved a revision the reviewer was not looking at. Order matters too: this engine only
- * ever writes delete-then-insert, so an insertion FOLLOWED by a deletion is a foreign file
- * where pairing them would be an invention.
- */
-function touching(a: ReviewRange, b: ReviewRange): boolean {
-  return a.end.paragraphId === b.start.paragraphId && a.end.offset === b.start.offset;
 }
 
 /** Two addresses naming one revision. */
@@ -756,13 +800,18 @@ export function collectReviewItems(input: ReviewModelInput): ReviewItem[] {
   // orphaned in all the others.
   const revisions: ReviewRevisionItem[] = [];
   const anchors: ReturnType<typeof commentAnchorsOfStory> = [];
-  const order = new Map<string, number>();
+  // With one story there is nothing to merge: the memoized per-part order IS the order,
+  // and copying it entry-by-entry was a measurable slice of every full derivation.
+  const order: ReadonlyMap<string, number> =
+    parts.length === 1 ? paragraphOrderOfPart(parts[0]!) : new Map<string, number>();
   for (const part of parts) {
     revisions.push(...revisionItemsOf(part));
     anchors.push(...commentAnchorsOfStory(part));
-    const base = order.size;
+    if (parts.length === 1) continue;
+    const merged = order as Map<string, number>;
+    const base = merged.size;
     for (const [id, position] of paragraphOrderOfPart(part)) {
-      if (!order.has(id)) order.set(id, base + position);
+      if (!merged.has(id)) merged.set(id, base + position);
     }
   }
 
@@ -898,8 +947,17 @@ export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonl
   });
 }
 
-/** Paragraph node id → document position, from the TREE rather than from a layout. */
+/**
+ * Paragraph node id → document position, from the TREE rather than from a layout.
+ *
+ * Memoized on the immutable root: one full derivation pass asks this question three times
+ * (replacement pairing, the queue's merged order, the session's cached order), and each
+ * answer was a fresh full-tree walk. The instance is SHARED; callers must treat it as
+ * read-only.
+ */
 export function paragraphOrderOfPart(part: OoxmlPart): Map<string, number> {
+  const cached = paragraphOrderCache.get(part.root);
+  if (cached) return cached;
   const order = new Map<string, number>();
   const walk = (node: OoxmlNode, depth: number): void => {
     if (node.kind === 'textValue' || depth > 64) return;
@@ -907,11 +965,42 @@ export function paragraphOrderOfPart(part: OoxmlPart): Map<string, number> {
       if (!order.has(node.id)) order.set(node.id, order.size);
       return;
     }
+    // A table's paragraph sequence is a pure function of the table subtree, so an unchanged
+    // table hands back its list instead of being re-descended — an edit outside any table
+    // otherwise re-walked every cell of every table in the document.
+    if (node.kind === 'table') {
+      let ids = tableParagraphIdsCache.get(node);
+      if (!ids) {
+        const found: string[] = [];
+        const collect = (candidate: OoxmlNode, nestedDepth: number): void => {
+          if (candidate.kind === 'textValue' || nestedDepth > 64) return;
+          if (candidate.kind === 'paragraph') {
+            found.push(candidate.id);
+            return;
+          }
+          for (const child of candidate.children) collect(child, nestedDepth + 1);
+        };
+        for (const child of node.children) collect(child, 0);
+        ids = found;
+        tableParagraphIdsCache.set(node, ids);
+      }
+      for (const id of ids) {
+        if (!order.has(id)) order.set(id, order.size);
+      }
+      return;
+    }
     for (const child of node.children) walk(child, depth + 1);
   };
   walk(part.root, 0);
+  paragraphOrderCache.set(part.root, order);
   return order;
 }
+
+/** The paragraph order index, memoized on the immutable part root. */
+const paragraphOrderCache = new WeakMap<OoxmlNode, Map<string, number>>();
+
+/** Paragraph ids of one table subtree, in reading order, per immutable table node. */
+const tableParagraphIdsCache = new WeakMap<OoxmlNode, readonly string[]>();
 
 /**
  * Every range a decision touches. One card can cover several, in different paragraphs.

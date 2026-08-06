@@ -16,6 +16,11 @@ bun scripts/bench/pipeline-bench.ts --json     # machine-readable
 
 # Attribute time to functions
 bun --cpu-prof scripts/bench/pipeline-bench.ts # writes CPU.*.cpuprofile
+
+# Review-path benchmark: the same document carrying ~1,080 comments and ~800
+# tracked-change sites (gitignored fixture)
+node scripts/create-review-20x-fixture.mjs
+bun scripts/bench/review-bench.ts
 ```
 
 The fixture is the demo `sample.docx` with its body repeated 20 times (bookmark ids,
@@ -86,3 +91,57 @@ shrank (item 4), but dev-mode React overhead and per-revision whole-document der
 (content-control walk, revision projection, note references, drawing projection — each a
 full-tree scan per edit) dominate the interactive path. Making those derivations
 incremental is the next lever, and it is a design change, not a micro-optimization.
+
+## 2026-08-06 review-scale pass — results
+
+The review fixture is `sample.docx` with 50 comments (10 of them replies anchored over
+exactly the parent's range) and 40 tracked changes (15 insertions, 15 deletions, 5
+delete+insert replacement pairs) injected, then the body repeated 20 times with comment
+and revision ids uniquified per copy: ~1,080 comments and ~800 tracked-change sites over
+540 pages — the "long reviewed contract" shape. Medians of 3 runs, Apple Silicon,
+Bun 1.3.14.
+
+| Path                                              | Before  | After  | Change |
+| ------------------------------------------------- | ------- | ------ | ------ |
+| Full queue re-derive, unchanged tree              | 117 ms  | 4.5 ms | −96%   |
+| Full queue re-derive after an edit (fresh root)   | 116 ms  | 47 ms  | −59%   |
+| `revisionItemsOf` (repeat read)                   | 86 ms   | 3 ms   | −96%   |
+| `locateSites` (repeat read)                       | 54 ms   | ~0 ms  | —      |
+| `commentAnchorsOfStory` (repeat read)             | 12 ms   | 0.5 ms | −96%   |
+| `paragraphOrderOfPart` (repeat read)              | 13 ms   | ~0 ms  | —      |
+| Session `reviewItems()` cold (document open)      | 192 ms  | 148 ms | −23%   |
+| `reviewItems()` after keystroke (local patch)     | 6–7 ms  | 4–6 ms | —      |
+
+The fresh-root path is what an accept, reject, comment write or undo pays before the rail
+repaints; the unchanged-tree path is what any second reader (automation, a re-render, the
+geometry pass) pays. What the profiler found, and what changed:
+
+1. **Every full-tree review fact was re-derived per call** even though each is a pure
+   function of immutable nodes. `locateSites` merged 82,800 entries into a fresh `Map` per
+   call on warm per-paragraph memos; `paragraphOrderOfPart` walked the whole tree three
+   times per derivation (replacement pairing, the queue's merged order, the session's
+   cached order); `commentAnchorsOfStory` re-walked every paragraph's markers. All are now
+   memoized on the immutable node they are a function of — the part root for merged
+   indexes, the paragraph for marker points, the table row for tracked-row anchors — the
+   same pattern the 2026-08-06 layout pass established.
+2. **`collectRevisionSites` memoized per paragraph only**, so a document of tables
+   re-walked every `w:trPr`/`w:tcPr` per derivation. The memo now covers table subtrees
+   too, which also feeds `hasReviewContent` and accept-all.
+3. **`anchorTrackedRows` descended into every paragraph** looking for table rows, which
+   can never sit inside one — the walk now prunes paragraph subtrees.
+4. **Replacement pairing scanned every insertion per deletion.** Pairing is exact
+   end-to-start position equality, so insertions are indexed by their start position and
+   the scan is one lookup.
+5. **The content-control gate re-walked the whole document per keystroke**
+   (`contentControlsIn` was cached per root, and every transaction makes a new root).
+   Outside any control, a block's entries are a pure function of the block subtree, so the
+   walk now composes memoized per-paragraph/per-table answers instead of descending.
+6. **The layout lane carried its own `paragraphOrderOfPart` copy**, unmemoized; it now
+   re-exports the store's.
+
+Not changed, deliberately: the local-patch keystroke path (already sub-10 ms), every
+validation and security bound, and the derivation SEMANTICS — the queue, its order, its
+threading and pairing rules are byte-for-byte the same, only recomputation of
+already-proven facts was removed. The shared memoized `Map` instances (`locateSites`,
+`paragraphOrderOfPart`) keep their public signatures; callers must treat them as
+read-only, which every in-repo caller already did.
