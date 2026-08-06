@@ -80,13 +80,13 @@ export interface ProLicenseOptions {
 }
 
 // @public
-export function resolveCustomNodeActivation(target: EventTarget | null, nodes: readonly CustomNodeDefinition[]): ResolvedCustomNodeActivation | null;
+export function resolveCustomNodeActivation(target: EventTarget | null, nodes: readonly AnyCustomNodeDefinition[]): ResolvedCustomNodeActivation | null;
 
 // @public
 export interface ResolvedCustomNodeActivation {
     readonly controlId: string | null;
     // (undocumented)
-    readonly definition: CustomNodeDefinition;
+    readonly definition: AnyCustomNodeDefinition;
     readonly node: ActivatedCustomNode;
 }
 
@@ -132,7 +132,7 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
 }
 
 // @public
-export function useCustomNodeDefinitions(nodes: readonly CustomNodeDefinition[] | undefined): readonly CustomNodeDefinition[];
+export function useCustomNodeDefinitions(nodes: readonly AnyCustomNodeDefinition[] | undefined): readonly AnyCustomNodeDefinition[];
 
 // @public
 export function useReview(query?: ReviewItemQuery): UseReviewReturn;

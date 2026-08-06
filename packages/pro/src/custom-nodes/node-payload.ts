@@ -20,7 +20,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { customNodePayloadsOf } from '@docx-editor.dev/core/store';
 import type { OoxmlPackage } from '@docx-editor.dev/core/store';
-import type { CustomNodeDefinition } from './define-custom-node.ts';
+import type { AnyCustomNodeDefinition } from './define-custom-node.ts';
 import { parseCustomNodeData, serializeCustomNodeData } from './data-schema.ts';
 
 /** The local name of every payload store this library authors. */
@@ -32,7 +32,7 @@ export const CUSTOM_NODE_STORE_ROOT = 'docxEditor';
  * Keyed on `tagPrefix` rather than on `name`, so one integrator's nodes share one store. A
  * document with a citation and a figure carries one customXml part, not two.
  */
-export function customNodeNamespace(definition: CustomNodeDefinition): string {
+export function customNodeNamespace(definition: AnyCustomNodeDefinition): string {
   return definition.payloadNamespace ?? `urn:docx-editor.dev:custom-node:${definition.tagPrefix}`;
 }
 
@@ -74,7 +74,7 @@ export type CustomNodeDataResult =
  * having asked for no guarantees.
  */
 export function customNodeDataFor(
-  definition: CustomNodeDefinition,
+  definition: AnyCustomNodeDefinition,
   value: unknown
 ): CustomNodeDataResult {
   const serialized = serializeCustomNodeData(value);

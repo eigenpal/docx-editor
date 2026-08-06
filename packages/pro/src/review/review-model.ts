@@ -59,7 +59,7 @@ import {
 import {
   isCustomNodeDefinition,
   recognizeCustomNodes,
-  type CustomNodeDefinition,
+  type AnyCustomNodeDefinition,
   type CustomNodePayloadSource,
 } from '../custom-nodes/define-custom-node.ts';
 
@@ -87,7 +87,7 @@ export function revisionItemsOfParagraph(
  */
 export function customItemsOf(
   part: OoxmlPart,
-  definitions: readonly CustomNodeDefinition[],
+  definitions: readonly AnyCustomNodeDefinition[],
   payloads?: ReadonlyMap<string, CustomNodePayloadSource>
 ): ReviewCustomItem[] {
   const carded = definitions.filter((definition) => definition.reviewCard);

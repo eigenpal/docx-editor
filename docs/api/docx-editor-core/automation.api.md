@@ -5,13 +5,13 @@
 ```ts
 
 // @public
-export const AUTOMATION_COMMAND_OPERATIONS: readonly ["insertText", "replaceSpan", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "insertListParagraph", "setHyperlink", "setCommentResolved", "replyToComment", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl"];
+export const AUTOMATION_COMMAND_OPERATIONS: readonly ["insertText", "replaceSpan", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "insertListParagraph", "setHyperlink", "setCommentResolved", "replyToComment", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl", "insertCustomNode"];
 
 // @public
 export const AUTOMATION_QUERY_OPERATIONS: readonly ["getDocument", "getBody", "getParagraphs", "getSpanParagraphs", "getText", "getSpanText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
 
 // @public
-export const AUTOMATION_SOLITARY_OPERATIONS: readonly ["deleteNote", "setCommentResolved", "replyToComment"];
+export const AUTOMATION_SOLITARY_OPERATIONS: readonly ["deleteNote", "setCommentResolved", "replyToComment", "insertCustomNode"];
 
 // @public
 export type AutomationAlignment = 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
@@ -832,6 +832,32 @@ export type AutomationOperation =
     readonly subtype: AutomationContentControlSubtype;
     readonly tag?: string;
     readonly title?: string;
+}
+/**
+* Insert a custom node: a tagged inline control, optionally bound to a payload.
+*
+* `w:tag` caps at 64 characters, so a node whose identity is a query string fits and a node
+* carrying authors, a year and a locator does not. The payload answers that — it lives in a
+* customXml data part and the control points at it — and the store, the node and the control
+* are ONE transaction. A control bound to a store that was never written is a document Word
+* offers to repair, and repairing it throws the control away.
+*
+* It lives HERE rather than on the editor session so both hosts answer it identically: a
+* payload write needs package scope, and putting it on the session would make the browser the
+* real implementation and leave the headless host to reimplement it or do without.
+*
+* `at` is a position; `span` wraps existing text instead. Exactly one, because a node with
+* both would be an insertion the caller thinks is a wrap.
+*/
+| {
+    readonly op: 'insertCustomNode';
+    readonly at?: AutomationPoint;
+    readonly span?: AutomationSpanRef;
+    readonly tag: string;
+    readonly text: string;
+    readonly title?: string;
+    readonly lock?: AutomationContentControlLock;
+    readonly payload?: AutomationCustomNodePayload;
 };
 
 // @public

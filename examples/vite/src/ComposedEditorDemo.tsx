@@ -74,7 +74,13 @@ const CitationData = z.object({
 });
 type CitationData = z.infer<typeof CitationData>;
 
-/** The payload as the schema hands it back, or nothing. */
+/**
+ * The payload as the schema hands it back, or nothing.
+ *
+ * Needed only where the payload arrives as `unknown`: the review ITEM and the chip activation
+ * are cross-definition surfaces, so they carry every node's payload under one type. Inside the
+ * definition's own hooks — `fromDocx`, `reviewCard` — `data` is already `CitationData`.
+ */
 function citationDataOf(data: unknown): CitationData | null {
   const parsed = CitationData.safeParse(data);
   return parsed.success ? parsed.data : null;
@@ -98,16 +104,14 @@ const DEMO_CITATION = defineCustomNode({
   // Word user may have edited — label drift), `data` is the validated payload.
   fromDocx: ({ attrs, text }) => ({ ...attrs, label: text }),
   // Sidebar card: every recognized citation gets a review-rail card anchored at its text.
-  reviewCard: ({ attrs, text, data }) => {
-    const citation = citationDataOf(data);
-    const who = citation?.authors.join(', ');
-    return {
-      title: `Citation — ${attrs['sourceId'] ?? 'unknown source'}`,
-      detail: citation
-        ? `${who || 'no authors'} (${String(citation.year)})${citation.locator ? `, ${citation.locator}` : ''}`
-        : text || (attrs['label'] ?? ''),
-    };
-  },
+  // `data` is TYPED here — `CitationData`, because that is the schema above. No cast, no
+  // guard: the payload was checked once at the read boundary.
+  reviewCard: ({ attrs, text, data }) => ({
+    title: `Citation — ${attrs['sourceId'] ?? 'unknown source'}`,
+    detail: data
+      ? `${data.authors.join(', ') || 'no authors'} (${String(data.year)})${data.locator ? `, ${data.locator}` : ''}`
+      : text || (attrs['label'] ?? ''),
+  }),
 });
 
 /**

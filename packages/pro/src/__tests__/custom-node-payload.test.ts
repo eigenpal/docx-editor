@@ -27,6 +27,7 @@ import {
   recognizeCustomNodes,
   removeCustomNode,
   updateCustomNode,
+  type AnyCustomNodeDefinition,
   type CustomNodeDiagnostic,
 } from '../index.ts';
 import { customNodePayloadsByControl } from '@docx-editor.dev/core/store';
@@ -87,7 +88,7 @@ function docx(body: string, extra: Record<string, Uint8Array> = {}): Uint8Array 
 
 function mount(
   bytes: Uint8Array,
-  nodes = [citation],
+  nodes: readonly AnyCustomNodeDefinition[] = [citation],
   onDiagnostic?: (diagnostic: CustomNodeDiagnostic) => void
 ): DocxEditorInstance {
   const editor = createDocxEditor({
@@ -106,7 +107,10 @@ function firstParagraphId(editor: DocxEditorInstance): string {
 }
 
 /** Recognition with the payloads the engine resolved, which is what the review rail gets. */
-function recognized(editor: DocxEditorInstance, nodes = [citation]) {
+function recognized(
+  editor: DocxEditorInstance,
+  nodes: readonly AnyCustomNodeDefinition[] = [citation]
+) {
   const session = editor.surface!.session;
   return recognizeCustomNodes(
     session.part(),
@@ -152,6 +156,10 @@ describe('a payload larger than w:tag, declared by a schema', () => {
     const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
     const result = insertCustomNode(editor, citation, { sourceId: 's' }, 'label', {
       at: { paragraphId: firstParagraphId(editor), offset: 1 },
+      // The `@ts-expect-error` IS the first half of this test: `data` is typed by the
+      // definition's schema, so a host writing this gets a compile error. The runtime refusal
+      // below is the second half — for the caller who reached here from untyped JavaScript.
+      // @ts-expect-error -- year is a number in the schema
       data: { ...CITATION, year: '2024' },
     });
     expect(result.ok).toBe(false);
@@ -267,7 +275,7 @@ describe('a payload does not outlive its control', () => {
 });
 
 describe('preserveOnExport', () => {
-  async function documentWith(definition: typeof ephemeral): Promise<Uint8Array> {
+  async function documentWith(definition: AnyCustomNodeDefinition): Promise<Uint8Array> {
     const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'), [definition]);
     insertCustomNode(editor, definition, { k: 'v' }, 'the words', {
       at: { paragraphId: firstParagraphId(editor), offset: 1 },
@@ -342,6 +350,7 @@ describe('customNodeXml, for a server with no editor', () => {
 
   test('a payload the schema refuses never becomes markup', () => {
     const built = customNodeXml(citation, { sourceId: 's' }, 'label', {
+      // @ts-expect-error -- typed by the schema here too, see the insert above
       data: { ...CITATION, year: '2024' },
     });
     expect(built.ok).toBe(false);

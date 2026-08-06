@@ -43,6 +43,9 @@ const MODULES = [customNodesModule({ nodes: [Citation] })];
 | `chrome.color`                   | Chip tint and border, applied by `CustomNodeChrome`.                                              |
 | `reviewCard`                     | Contribute a sidebar card per node. Return `null` to skip one.                                    |
 | `onClick` / `onHover` / `onEdit` | Interaction hooks on the painted chip.                                                            |
+| `schema`                         | The shape of the node's payload, as a zod (or valibot, or arktype) schema.                        |
+| `payloadNamespace`               | Which customXml store the payloads live in. Defaults to one derived from `tagPrefix`.             |
+| `preserveOnExport`               | What happens to this node in a document that leaves the system. See [Export policy](#export-policy). |
 
 Every value reaching `fromDocx` came out of a `.docx`, which is a zip of XML an attacker controls end to end. Treat `attrs` and `text` as untrusted: they are rendered as text, never as markup, and you must not build URLs or DOM from them without sanitizing.
 
@@ -108,6 +111,88 @@ function InsertCitationButton() {
 
 The default `lock` is `contentLocked`: the text cannot be edited inline, so a label can never drift out of sync with its attributes, while the node stays deletable as one unit in both the editor and Word. Pass `lock: false` for no lock, or `'sdtContentLocked'` to forbid deleting it too.
 
+## Payloads larger than the tag
+
+`w:tag` caps at 64 characters, so it holds a node's identity and nothing else. A citation that
+needs authors, a year, a locator and a link needs somewhere else to put them: a **payload**, stored
+in a customXml data part the control binds to.
+
+Declare the shape, then pass `data`:
+
+```ts
+import { z } from 'zod';
+
+const CitationData = z.object({
+  sourceId: z.string().min(1),
+  locator: z.string(),
+  authors: z.array(z.string()).max(64),
+  year: z.number().int(),
+  url: z.url().optional(),
+});
+
+const Citation = defineCustomNode({
+  name: 'citation',
+  tagPrefix: 'docx',
+  schema: CitationData,
+  // `data` arrives already checked against the schema.
+  reviewCard: ({ data }) => ({ title: `${data.authors.join(', ')} (${data.year})` }),
+});
+
+insertCustomNode(editor, Citation, { sourceId: 'smith-2024' }, '(Smith 2024)', {
+  data: { sourceId: 'smith-2024', locator: 'p.14', authors: ['Smith, J.'], year: 2024 },
+});
+```
+
+The store, the payload and the control are written in **one transaction**: a control bound to a
+store that was never written is a document Word offers to repair. A payload that does not match
+the schema is refused at the insert, naming the failing field, rather than written and rejected on
+the next open.
+
+`schema` is a [Standard Schema](https://standardschema.dev), which zod, valibot and arktype all
+implement — bring your own copy, nothing is bundled. Without one, `data` is whatever JSON the file
+held, typed `unknown`.
+
+**A bound control is read-only in Word.** Word paints its text from the payload and will not let a
+user type into it, so the two can never drift. That is what makes the store the source of truth
+rather than a cache of it.
+
+### What happens to a payload
+
+| When                                | What                                                                          |
+| ----------------------------------- | ------------------------------------------------------------------------------ |
+| `removeCustomNode`                  | The payload goes in the same transaction.                                      |
+| A control deleted in Word           | Collected the next time the document opens, by reconciling against what the story still binds. |
+| `updateCustomNode` with `data`      | The label and the payload are written together, so they cannot disagree.       |
+| A payload that fails its schema     | Reported through `customNodesModule({ onDiagnostic })`. The node still renders, without `data`. |
+
+### Export policy
+
+`preserveOnExport` decides what a node does in a file that leaves your system, and it is a
+**separate pipeline from `save()`** — the document at rest keeps its chips so reopening it here
+gives them back:
+
+```ts
+import { exportCustomNodes } from '@docx-editor.dev/pro';
+
+const bytes = new Uint8Array(await editor.save());
+const exported = exportCustomNodes(bytes, [Citation]);
+if (exported.ok) download(exported.bytes);
+```
+
+| Value            | Effect                                                                        |
+| ---------------- | ------------------------------------------------------------------------------ |
+| `true` (default) | Untouched: tag, binding and payload all travel.                                |
+| `'text'`         | The control is unwrapped. A reader still sees the words; the tag, the binding and the payload are gone. |
+| `false`          | The node goes, and takes its content with it.                                  |
+
+Once the last node for a namespace is gone, so are the `customXml` part, its relationship and its
+content-type override. A refusal answers no bytes at all, so a caller can never mistake a failed
+strip for a successful one.
+
+This removes **this library's markup and nothing else**. A `.docx` also carries its origin in
+`docProps/app.xml`, `docProps/core.xml`, comment and revision authors, rsids and custom document
+properties — none of which this touches. It does not make a document anonymous.
+
 ## Cards in the review sidebar
 
 A definition with `reviewCard` puts one card per node into the review sidebar, anchored at the node's range. `useReviewItem()` scopes host content to the card it is rendered inside, so you can add your own actions to citation cards only:
@@ -135,6 +220,16 @@ This needs the review module registered alongside the custom-nodes module.
 
 ```ts
 import { customNodeXml } from '@docx-editor.dev/pro';
+
+const built = customNodeXml(Citation, { sourceId: 'smith-2024' }, '(Smith 2024)', {
+  data: { sourceId: 'smith-2024', locator: 'p.14', authors: ['Smith, J.'], year: 2024 },
+});
+if (built.ok) {
+  template.replace('{{citation}}', built.xml);
+  // A template engine can splice markup but cannot author a package, so the parts come back
+  // for you to add: `built.store` carries the two customXml parts, both relationships and the
+  // content-type override the payload needs.
+}
 ```
 
 `encodeCustomNodeTag` / `decodeCustomNodeTag` are the tag codec if you need to read or write the identity yourself. Tags are capped at `MAX_TAG_LENGTH`.
@@ -147,7 +242,9 @@ A document opened without your definition registered renders the control's conte
 
 ## Known limit
 
-There is no in-place edit dialog. Re-authoring a node is `removeCustomNode` plus `insertCustomNode`, or `updateCustomNode`, with the form supplied by you. The activation carries `nodeId` and the current `text` to prefill it. Schema-driven edit forms are a planned follow-up.
+There is no in-place edit dialog. Re-authoring a node is `removeCustomNode` plus `insertCustomNode`, or `updateCustomNode`, with the form supplied by you. The activation carries `nodeId`, the current `text` and the node's `data` to prefill it.
+
+A bound chip cannot be edited **in Word**, which is what keeps its text and its payload in step. Making one editable there means a two-way binding, which is a per-definition opt-in and is not built.
 
 ## Next steps
 

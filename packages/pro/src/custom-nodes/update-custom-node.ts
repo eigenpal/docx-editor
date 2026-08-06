@@ -21,6 +21,7 @@ import {
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
 import type { CustomNodeDefinition } from './define-custom-node.ts';
+import type { InferSchemaInput, StandardSchemaV1 } from './data-schema.ts';
 import { describeRefusal, payloadFor } from './insert-custom-node.ts';
 import { encodeCustomNodeTag } from './tag-codec.ts';
 
@@ -108,7 +109,7 @@ export function removeCustomNode(editor: Editor, nodeId: string): ExecResult {
  *
  * @public
  */
-export interface UpdateCustomNodeOptions {
+export interface UpdateCustomNodeOptions<Schema extends StandardSchemaV1 | undefined = undefined> {
   /** `w:alias` for the rewritten control. */
   readonly alias?: string;
   /** `w:lock` for the rewritten control. Defaults to `contentLocked`, like the insert. */
@@ -121,7 +122,7 @@ export interface UpdateCustomNodeOptions {
    * describe. Omitted, the node comes back with no payload at all; pass the old value through
    * to keep it.
    */
-  readonly data?: unknown;
+  readonly data?: InferSchemaInput<Schema>;
 }
 
 /**
@@ -133,13 +134,13 @@ export interface UpdateCustomNodeOptions {
  * updateCustomNode(editor, citation, node.nodeId, { sourceId: 'src_2' }, '(Jones 2025)');
  * ```
  */
-export function updateCustomNode(
+export function updateCustomNode<Schema extends StandardSchemaV1 | undefined = undefined>(
   editor: Editor,
-  definition: CustomNodeDefinition,
+  definition: CustomNodeDefinition<Schema>,
   nodeId: string,
   attrs: Readonly<Record<string, string>>,
   text: string,
-  options: UpdateCustomNodeOptions = {}
+  options: UpdateCustomNodeOptions<Schema> = {}
 ): ExecResult {
   const surface = surfaceOf(editor);
   if (!surface) return { ok: false, code: 'notFound', reason: 'no document is mounted' };

@@ -29,7 +29,7 @@ import {
   type CustomNodeExportPolicy,
   type OoxmlPackage,
 } from '@docx-editor.dev/core/store';
-import type { CustomNodeDefinition } from './define-custom-node.ts';
+import type { AnyCustomNodeDefinition } from './define-custom-node.ts';
 import { decodeCustomNodeTag } from './tag-codec.ts';
 import { customNodeNamespace } from './node-payload.ts';
 
@@ -66,12 +66,12 @@ export type ExportCustomNodesResult =
  */
 export function exportCustomNodes(
   bytes: Uint8Array,
-  definitions: readonly CustomNodeDefinition[]
+  definitions: readonly AnyCustomNodeDefinition[]
 ): ExportCustomNodesResult {
   const read = readOoxmlPackage(bytes);
   if (!read.ok) return { ok: false, reason: `the document could not be read: ${read.reason}` };
 
-  const byIdentity = new Map<string, CustomNodeDefinition>();
+  const byIdentity = new Map<string, AnyCustomNodeDefinition>();
   for (const definition of definitions) {
     byIdentity.set(`${definition.tagPrefix}:${definition.name}`, definition);
   }

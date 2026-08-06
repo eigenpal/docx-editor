@@ -24,6 +24,7 @@ export interface CommentRecord {
 
 // @public
 export interface EditorModule {
+    readonly customNodePayloadNamespaces?: readonly string[];
     readonly customNodes?: readonly unknown[];
     readonly id: string;
     readonly review?: ReviewModuleContribution;
@@ -31,6 +32,7 @@ export interface EditorModule {
 
 // @public
 export interface EditorModuleRegistry {
+    readonly customNodePayloadNamespaces: readonly string[];
     // (undocumented)
     readonly customNodes: readonly unknown[];
     // (undocumented)
@@ -72,6 +74,7 @@ export interface ReviewCommentItem {
 // @public
 export interface ReviewCustomItem {
     readonly attrs: Readonly<Record<string, string>>;
+    readonly data?: unknown;
     readonly detail?: string;
     readonly id: string;
     // (undocumented)
@@ -91,6 +94,11 @@ export type ReviewItem = ReviewRevisionItem | ReviewCommentItem | ReviewCustomIt
 export interface ReviewModelInput {
     readonly commentsExtendedPart?: OoxmlPart | undefined;
     readonly commentsPart?: OoxmlPart | undefined;
+    readonly customNodePayloads?: ReadonlyMap<string, {
+        readonly nodeId: string;
+        readonly label: string;
+        readonly data: string;
+    }> | undefined;
     readonly customNodes?: readonly unknown[] | undefined;
     readonly furnitureParts?: readonly OoxmlPart[] | undefined;
     readonly storyPart: OoxmlPart;

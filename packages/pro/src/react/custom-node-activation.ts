@@ -14,7 +14,7 @@ import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import {
   isCustomNodeDefinition,
   type ActivatedCustomNode,
-  type CustomNodeDefinition,
+  type AnyCustomNodeDefinition,
 } from '../custom-nodes/define-custom-node.ts';
 import { decodeCustomNodeTag } from '../custom-nodes/tag-codec.ts';
 
@@ -25,8 +25,8 @@ import { decodeCustomNodeTag } from '../custom-nodes/tag-codec.ts';
  * one surface scoped narrower.
  */
 export function useCustomNodeDefinitions(
-  nodes: readonly CustomNodeDefinition[] | undefined
-): readonly CustomNodeDefinition[] {
+  nodes: readonly AnyCustomNodeDefinition[] | undefined
+): readonly AnyCustomNodeDefinition[] {
   const editor = useDocxEditor();
   return useMemo(() => {
     if (nodes) return nodes;
@@ -48,7 +48,7 @@ export const CUSTOM_NODE_BOUNDARY = '.docx-content-control-boundary';
 export interface ResolvedCustomNodeActivation {
   /** RAW decode: attrs straight from the tag, `fromDocx` not yet applied. */
   readonly node: ActivatedCustomNode;
-  readonly definition: CustomNodeDefinition;
+  readonly definition: AnyCustomNodeDefinition;
   /** The control's canonical node id, from the chrome layer — for review-item lookups. */
   readonly controlId: string | null;
 }
@@ -109,7 +109,7 @@ export function activatedCustomNodeOf(
  */
 export function resolveCustomNodeActivation(
   target: EventTarget | null,
-  nodes: readonly CustomNodeDefinition[]
+  nodes: readonly AnyCustomNodeDefinition[]
 ): ResolvedCustomNodeActivation | null {
   const boundary = (target as HTMLElement | null)?.closest?.(CUSTOM_NODE_BOUNDARY);
   const layer = boundary?.closest('.docx-content-control-chrome');

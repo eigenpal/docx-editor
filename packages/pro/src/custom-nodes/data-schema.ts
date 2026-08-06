@@ -58,9 +58,24 @@ export interface StandardSchemaIssue {
   readonly path?: readonly (PropertyKey | { readonly key: PropertyKey })[] | undefined;
 }
 
-/** The type a schema produces, for a definition to hand back to its host. */
+/**
+ * The type a schema produces, for a definition to hand back to its host.
+ *
+ * `unknown` for a definition with no schema, which is the honest description of an unchecked
+ * payload — not `never`, which would make the field unusable rather than merely unguaranteed.
+ */
 export type InferSchemaOutput<Schema> =
-  Schema extends StandardSchemaV1<unknown, infer Output> ? Output : never;
+  Schema extends StandardSchemaV1<unknown, infer Output> ? Output : unknown;
+
+/**
+ * The type a schema ACCEPTS, which is what a write has to satisfy.
+ *
+ * Different from the output whenever the schema transforms — a zod `.default()` or `.transform()`
+ * takes one shape and produces another — so a write typed by the output would reject the very
+ * value the schema was written to accept.
+ */
+export type InferSchemaInput<Schema> =
+  Schema extends StandardSchemaV1<infer Input, unknown> ? Input : unknown;
 
 /**
  * Why a payload was refused.

@@ -1511,6 +1511,7 @@ export interface EditorHeaderFooterCommands {
 
 // @public
 export interface EditorModule {
+    readonly customNodePayloadNamespaces?: readonly string[];
     readonly customNodes?: readonly unknown[];
     readonly id: string;
     readonly review?: ReviewModuleContribution;
@@ -2161,6 +2162,7 @@ export interface ReviewCommentPlacement extends ReviewItemPlacementBase {
 // @public
 export interface ReviewCustomItem {
     readonly attrs: Readonly<Record<string, string>>;
+    readonly data?: unknown;
     readonly detail?: string;
     readonly id: string;
     // (undocumented)
@@ -2216,6 +2218,11 @@ export interface ReviewItemQuery {
 export interface ReviewModelInput {
     readonly commentsExtendedPart?: OoxmlPart | undefined;
     readonly commentsPart?: OoxmlPart | undefined;
+    readonly customNodePayloads?: ReadonlyMap<string, {
+        readonly nodeId: string;
+        readonly label: string;
+        readonly data: string;
+    }> | undefined;
     readonly customNodes?: readonly unknown[] | undefined;
     readonly furnitureParts?: readonly OoxmlPart[] | undefined;
     readonly storyPart: OoxmlPart;

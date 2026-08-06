@@ -138,6 +138,7 @@ export interface TreeDocxSession {
     headerFooterParts(): HeaderFooterParts;
     headerFooterPartsBySection(): readonly HeaderFooterParts[];
     headerFooterResolutionBySection(): readonly HeaderFooterSectionResolution[];
+    insertCustomNode(write: InsertCustomNodeWrite): CustomNodeWriteResult;
     insertImage(scope: StoryScope, input: InsertImageInput): Promise<ImageIntentResult>;
     lastCommitWasStructural(): boolean;
     nodeIdOf(paraId: string): string | null;
@@ -157,6 +158,7 @@ export interface TreeDocxSession {
         readonly target: string;
         readonly external: boolean;
     } | null;
+    removeCustomNode(controlNodeId: string): CustomNodeWriteResult;
     replaceImage(scope: StoryScope, drawingNodeId: string, bytes: Uint8Array, mime: SupportedImageMime, decodePort: ImageDecodePort, options: ReplaceImageOptions): Promise<ImageIntentResult>;
     replyToComment(parentCommentId: string | null, anchor: {
         paragraphId: string;
@@ -175,6 +177,7 @@ export interface TreeDocxSession {
     stylesRoot(): OoxmlElement | null;
     // (undocumented)
     subscribe(onChange: (change: TreeModelChange) => void): () => void;
+    sweepCustomNodePayloads(namespaces: readonly string[]): readonly string[];
     trackingSettings(): DocumentTrackingSettings;
     undo(): SelectionMark | null;
 }

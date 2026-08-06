@@ -18,7 +18,11 @@ import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/s
 import { rememberLicenseKey, type ProLicenseOptions } from '../license.ts';
 import { decodeCustomNodeTag } from './tag-codec.ts';
 import { customNodeNamespace } from './node-payload.ts';
-import { parseCustomNodeData, type StandardSchemaV1 } from './data-schema.ts';
+import {
+  parseCustomNodeData,
+  type InferSchemaOutput,
+  type StandardSchemaV1,
+} from './data-schema.ts';
 
 /** A recognized custom node: one inline SDT whose tag matched a definition. */
 export interface RecognizedCustomNode {
@@ -93,7 +97,7 @@ export interface CustomNodeDiagnostic {
  *
  * @public
  */
-export interface CustomNodeDefinition {
+export interface CustomNodeDefinition<Schema extends StandardSchemaV1 | undefined = undefined> {
   /** Node type name — the second segment of the tag (`<prefix>:<name>?…`). */
   readonly name: string;
   /** Tag prefix this definition claims (`acme` claims `acme:*`). No colons. */
@@ -109,8 +113,11 @@ export interface CustomNodeDefinition {
   readonly fromDocx?: (input: {
     readonly attrs: Readonly<Record<string, string>>;
     readonly text: string;
-    /** The bound payload, through `schema`. Undefined when there is none or it did not match. */
-    readonly data?: unknown;
+    /**
+     * The bound payload, already through `schema` — so this is the type the definition
+     * declared, not `unknown`. Undefined when the node carries none or it did not match.
+     */
+    readonly data?: InferSchemaOutput<Schema>;
   }) => Readonly<Record<string, string>> | null;
   /**
    * Chip appearance, HOST-authored (never file data). `color` tints the chip
@@ -135,8 +142,8 @@ export interface CustomNodeDefinition {
   readonly reviewCard?: (node: {
     readonly attrs: Readonly<Record<string, string>>;
     readonly text: string;
-    /** The bound payload, through `schema`. Undefined when there is none or it did not match. */
-    readonly data?: unknown;
+    /** The bound payload, already through `schema` — see {@link CustomNodeDefinition.fromDocx}. */
+    readonly data?: InferSchemaOutput<Schema>;
   }) => { readonly title: string; readonly detail?: string } | null;
   /**
    * The "Edit {label}" row the context menu shows at the top when the
@@ -173,7 +180,7 @@ export interface CustomNodeDefinition {
    * Validated on the way IN as well as on the way out, so a payload that does not match is
    * refused at the insert rather than written and rejected on the next open.
    */
-  readonly schema?: StandardSchemaV1;
+  readonly schema?: Schema;
   /**
    * The customXml store this definition's payloads live in.
    *
@@ -212,6 +219,20 @@ export interface CustomNodeDefinition {
 }
 
 /**
+ * A definition of ANY payload shape — the type every collection and registry uses.
+ *
+ * `CustomNodeDefinition<Schema>` is invariant in `Schema`, because the schema's output type
+ * appears in the PARAMETER of `fromDocx` and `reviewCard`. That is what makes those hooks typed,
+ * and it also means two definitions with different schemas do not unify: `[citation, figure]`
+ * would have no common type to infer. Every place that holds several — the module's `nodes`, the
+ * recognition pass, the export policy — takes this instead, and the hooks stay typed at the one
+ * place a host writes them, which is `defineCustomNode`.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- see above: the alias exists to
+// make definitions with different schemas assignable to one another in collection positions.
+export type AnyCustomNodeDefinition = CustomNodeDefinition<any>;
+
+/**
  * A chip activation: identity + attrs, plus where it sits.
  *
  * `attrs` are the definition's OWN shape — the raw tag decode has already been
@@ -246,7 +267,7 @@ export interface ActivatedCustomNode {
  * The engine carries registered definitions as unknowns (`getCustomNodeDefinitions`), so
  * every pro surface that reads them back narrows through this ONE guard.
  */
-export function isCustomNodeDefinition(candidate: unknown): candidate is CustomNodeDefinition {
+export function isCustomNodeDefinition(candidate: unknown): candidate is AnyCustomNodeDefinition {
   return (
     typeof candidate === 'object' &&
     candidate !== null &&
@@ -266,7 +287,9 @@ export function isCustomNodeDefinition(candidate: unknown): candidate is CustomN
 export const CUSTOM_NODE_IDENTITY_PATTERN = /^[A-Za-z0-9_.-]+$/;
 
 /** Validate and freeze a definition. Throws on a shape mistake — author error, not file input. */
-export function defineCustomNode(definition: CustomNodeDefinition): CustomNodeDefinition {
+export function defineCustomNode<Schema extends StandardSchemaV1 | undefined = undefined>(
+  definition: CustomNodeDefinition<Schema>
+): CustomNodeDefinition<Schema> {
   if (!CUSTOM_NODE_IDENTITY_PATTERN.test(definition.name ?? '')) {
     throw new Error(`defineCustomNode: invalid name ${JSON.stringify(definition.name)}`);
   }
@@ -308,7 +331,7 @@ export function defineCustomNode(definition: CustomNodeDefinition): CustomNodeDe
  */
 export interface CustomNodesModuleOptions extends ProLicenseOptions {
   /** The definitions this editor recognizes. A tag prefix no definition claims stays literal. */
-  readonly nodes: readonly CustomNodeDefinition[];
+  readonly nodes: readonly AnyCustomNodeDefinition[];
   /**
    * Told about a document, never about a bug: a payload that failed its schema, so far.
    *
@@ -387,11 +410,11 @@ function textUnder(node: OoxmlNode): string {
  */
 export function recognizeCustomNodes(
   part: OoxmlPart,
-  definitions: readonly CustomNodeDefinition[],
+  definitions: readonly AnyCustomNodeDefinition[],
   payloads?: ReadonlyMap<string, CustomNodePayloadSource>
 ): RecognizedCustomNode[] {
   if (definitions.length === 0) return [];
-  const byIdentity = new Map<string, CustomNodeDefinition>();
+  const byIdentity = new Map<string, AnyCustomNodeDefinition>();
   for (const definition of definitions) {
     const identity = `${definition.tagPrefix}:${definition.name}`;
     // Author error, thrown like `defineCustomNode`'s own validation: two
@@ -451,7 +474,7 @@ export function recognizeCustomNodes(
  * a chip that vanished over one wrong field would be a worse answer than a chip with no data.
  */
 function resolvePayload(
-  definition: CustomNodeDefinition,
+  definition: AnyCustomNodeDefinition,
   nodeId: string,
   source: CustomNodePayloadSource | undefined
 ): { readonly present: true; readonly value: unknown } | { readonly present: false } {

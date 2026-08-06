@@ -12,7 +12,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import type { Editor, ExecResult } from '@docx-editor.dev/core/contracts/editor';
 import type { PaginatedSurface } from '@docx-editor.dev/core/editor';
 import type { CustomNodePayloadWrite, CustomNodeWriteResult } from '@docx-editor.dev/core/store';
-import type { CustomNodeDefinition } from './define-custom-node.ts';
+import type { AnyCustomNodeDefinition, CustomNodeDefinition } from './define-custom-node.ts';
+import type { InferSchemaInput, StandardSchemaV1 } from './data-schema.ts';
 import { encodeCustomNodeTag } from './tag-codec.ts';
 import {
   CUSTOM_NODE_STORE_ROOT,
@@ -35,7 +36,7 @@ function surfaceOf(editor: Editor): PaginatedSurface | null {
  */
 export function payloadFor(
   surface: PaginatedSurface,
-  definition: CustomNodeDefinition,
+  definition: AnyCustomNodeDefinition,
   data: unknown,
   label: string,
   nodeId?: string
@@ -71,7 +72,7 @@ export function describeRefusal(result: Extract<CustomNodeWriteResult, { ok: fal
  *
  * @public
  */
-export interface InsertCustomNodeOptions {
+export interface InsertCustomNodeOptions<Schema extends StandardSchemaV1 | undefined = undefined> {
   /**
    * Where to insert. Omitted, the node lands at the current selection HEAD —
    * the programmatic mirror of "type a citation at the caret".
@@ -100,7 +101,7 @@ export interface InsertCustomNodeOptions {
    * The label the control shows is `text`, and Word paints it from the store — which is why a
    * bound chip cannot be typed into and the two can never drift.
    */
-  readonly data?: unknown;
+  readonly data?: InferSchemaInput<Schema>;
 }
 
 /**
@@ -111,12 +112,12 @@ export interface InsertCustomNodeOptions {
  * insertCustomNode(editor, citation, { sourceId: 'src_9f3' }, '(Smith 2024)');
  * ```
  */
-export function insertCustomNode(
+export function insertCustomNode<Schema extends StandardSchemaV1 | undefined = undefined>(
   editor: Editor,
-  definition: CustomNodeDefinition,
+  definition: CustomNodeDefinition<Schema>,
   attrs: Readonly<Record<string, string>>,
   text: string,
-  options: InsertCustomNodeOptions = {}
+  options: InsertCustomNodeOptions<Schema> = {}
 ): ExecResult {
   const surface = surfaceOf(editor);
   if (!surface) {
