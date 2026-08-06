@@ -30,3 +30,14 @@ On open, the only unbound nodes are ones a control genuinely lost — deleted he
 ## What this does not make anonymous
 
 `preserveOnExport` removes this library's markup and nothing else. A `.docx` carries origin in `docProps/app.xml`, `docProps/core.xml`, comment and revision authors, rsids and custom document properties. Describing this as "no traces" would be false, and the distinction belongs in the docs as much as in the code.
+
+## Why the export is its own call rather than a `save()` flag
+
+`preserveOnExport` is applied by `exportCustomNodes(bytes, definitions)`, not by `Editor.save()`.
+The proposal already implies it — "the save that applies it picks the pipeline" — and the shape
+follows from what the option is FOR: the document at rest has to keep its tags, bindings and
+payloads, or reopening it here gives back a page of plain text instead of chips. A flag on `save()`
+would make a host choose one behaviour for both, and either choice is wrong for the other case.
+
+A separate call also works where the editor is not: a server that assembled a document with
+`customNodeXml` can strip it the same way, with the same definitions, and never mount anything.
