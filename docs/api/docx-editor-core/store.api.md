@@ -3174,7 +3174,7 @@ export interface RevisionAddress {
 }
 
 // @public
-export function revisionItemsOf(part: OoxmlPart): ReviewRevisionItem[];
+export function revisionItemsOf(part: OoxmlPart): readonly ReviewRevisionItem[];
 
 // @public
 export function runAddressRanges(paragraph: Extract<OoxmlNode, {

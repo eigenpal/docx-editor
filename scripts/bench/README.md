@@ -144,6 +144,13 @@ after it. What the profiler found, and what changed:
    walk now composes memoized per-paragraph/per-table answers instead of descending.
 6. **The layout lane carried its own `paragraphOrderOfPart` copy**, unmemoized; it now
    re-exports the store's.
+7. **The revision CARDS were rebuilt per read even when every index hit.** A real
+   heavily-tracked document (Word mints an id per editing burst) produces tens of
+   thousands of cards from a few thousand wrappers, and assembling them cost ~40 ms per
+   unchanged-tree read — more than everything the index memos saved. `revisionItemsOf`
+   is memoized per part root now, bounded like the indexes; on such a document the
+   unchanged-tree re-derive drops from ~48 ms to ~6 ms. The paragraph-scoped view the
+   local patch derives is deliberately uncached (each keystroke would churn the ring).
 
 Not changed, deliberately: the local-patch keystroke path (already sub-10 ms), every
 validation and security bound, and the derivation SEMANTICS — the queue, its order, its

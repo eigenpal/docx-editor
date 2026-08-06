@@ -222,8 +222,29 @@ const CONTENT_KINDS: Readonly<Record<string, ReviewRevisionKind>> = {
  * `w:trPr/w:ins` plus `w:cellIns` on every cell — so they coalesce into one card listing every
  * range it touches. Keying per site would show the reviewer four decisions where there is one,
  * and accepting any of them would make the other three vanish.
+ *
+ * Memoized per part root like the indexes it reads, and for the same reason: a heavily
+ * tracked document produces tens of thousands of cards, and rebuilding them per read cost
+ * more than everything the memos above saved. The paragraph-scoped view the local review
+ * patch derives (`revisionItemsOfParagraph`'s synthetic paragraph-root part) is NOT cached:
+ * each keystroke would insert a fresh root and churn the bounded ring. The instance is
+ * SHARED, so the return type is readonly.
  */
-export function revisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
+export function revisionItemsOf(part: OoxmlPart): readonly ReviewRevisionItem[] {
+  const cacheable = part.root.kind !== 'paragraph';
+  if (cacheable) {
+    const cached = revisionItemsCache.get(part.root);
+    if (cached) return cached;
+  }
+  const items = computeRevisionItemsOf(part);
+  if (cacheable) revisionItemsCache.set(part.root, items);
+  return items;
+}
+
+/** Revision cards per part root, bounded like the site index above. */
+const revisionItemsCache = createRecentRootCache<readonly ReviewRevisionItem[]>(8);
+
+function computeRevisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
   const located = locateSites(part);
   const byAddress = new Map<
     string,
