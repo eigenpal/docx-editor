@@ -236,6 +236,27 @@ describe('the Word keymap', () => {
     expect(xml).toContain('auto');
   });
 
+  test('Cmd+R stays the browser reload; Ctrl+R right-aligns', () => {
+    // The browser reserves Cmd+R — preventDefault does not cancel the reload, so the
+    // keymap must not touch the document on that chord.
+    const surface = mount('<w:p><w:r><w:t>x</w:t></w:r></w:p>');
+    const handler = createKeyDownHandler(surface);
+    let prevented = false;
+    handler(
+      key({
+        key: 'r',
+        metaKey: true,
+        preventDefault: () => {
+          prevented = true;
+        },
+      })
+    );
+    expect(prevented).toBe(false);
+    expect(JSON.stringify(surface.session.part().root)).not.toContain('right');
+    handler(key({ key: 'r', ctrlKey: true }));
+    expect(JSON.stringify(surface.session.part().root)).toContain('right');
+  });
+
   test('Ctrl+Backspace deletes a word, not a character', () => {
     const surface = mount('<w:p><w:r><w:t>alpha beta</w:t></w:r></w:p>');
     const id = surface.session.paragraphIds()[0]!;

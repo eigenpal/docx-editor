@@ -240,6 +240,11 @@ export function createKeyDownHandler(
       return;
     }
     if (accel && !event.shiftKey && ALIGNMENT[event.key.toLowerCase()]) {
+      // Cmd+R is the browser's reload and the browser RESERVES it — preventDefault does
+      // not cancel the reload, so claiming the chord would right-align and then lose the
+      // page anyway. Right alignment stays on Ctrl+R, which pages may claim and which is
+      // an unused chord on macOS.
+      if (event.metaKey && event.key.toLowerCase() === 'r') return;
       surface.setParagraphProperty('jc', { val: ALIGNMENT[event.key.toLowerCase()]! });
       event.preventDefault();
       return;
