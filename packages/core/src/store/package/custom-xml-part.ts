@@ -32,6 +32,7 @@ import {
   withRelationship,
   withRelationshipsPartFor,
   withContentTypeOverride,
+  withoutPart,
 } from './package-edit.ts';
 import { partNameKey, resolveInternalTarget } from './opc-names.ts';
 import { isValidNCName } from './qname.ts';
@@ -327,4 +328,24 @@ function existingItemIds(pkg: OoxmlPackage): Set<string> {
     if (id) found.add(id.value.toUpperCase());
   }
   return found;
+}
+
+/**
+ * Remove a store from a document: its nodes, both parts, both relationships, the Override.
+ *
+ * The export half of the custom-node story. A host can declare that a node type must not
+ * survive a document leaving the system, and then what leaves has to carry no record of it —
+ * not an empty store, not a `customXml/` folder, not an Override in `[Content_Types].xml`
+ * naming a part that is no longer there. Anyone who unzips the file sees an ordinary document.
+ *
+ * A package with no store for the namespace comes back unchanged.
+ */
+export function withoutCustomXmlDataPart(
+  pkg: OoxmlPackage,
+  storyPartName: string,
+  namespaceUri: string
+): OoxmlPackage {
+  const store = findCustomXmlDataPart(pkg, storyPartName, namespaceUri);
+  if (!store) return pkg;
+  return withoutPart(withoutPart(pkg, store.partName), store.propsPartName);
 }

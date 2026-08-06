@@ -84,8 +84,8 @@
     "@changesets/cli": "^2.30.0",
     "@happy-dom/global-registrator": "^20.8.3",
     "@microsoft/api-extractor": "^7.50.0",
-    "ajv": "^8.12.0",
     "@microsoft/tsdoc": "^0.16.0",
+    "@playwright/test": "^1.60.0",
     "@testing-library/react": "^16.0.0",
     "@types/bun": "^1.0.0",
     "@types/react": "19.2.17",
@@ -94,6 +94,7 @@
     "@typescript-eslint/parser": "^8.54.0",
     "@vitejs/plugin-react": "^6.0.2",
     "@vitejs/plugin-vue": "^6.0.4",
+    "ajv": "^8.12.0",
     "autoprefixer": "^10.4.17",
     "class-variance-authority": "^0.7.0",
     "eslint": "^10.0.3",
@@ -113,7 +114,7 @@
     "vite": "^8.0.10",
     "vue": "^3.5.29",
     "vue-eslint-parser": "^10.4.0",
-    "@playwright/test": "^1.60.0"
+    "zod": "^4.4.3"
   },
   "keywords": [
     "docx",

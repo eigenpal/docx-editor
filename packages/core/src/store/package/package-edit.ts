@@ -336,6 +336,88 @@ export function withContentTypeOverride(
 }
 
 /**
+ * Remove a part, its `.rels`, its content-type Override, and every relationship naming it.
+ *
+ * Deleting the tree alone is not deleting the part. The bytes it was loaded from would be
+ * written back out, the Override would still name it in `[Content_Types].xml`, and the owner's
+ * `.rels` would still point at it — so a caller stripping something out of a document for
+ * export would leave three separate records saying it had been there.
+ */
+export function withoutPart(pkg: OoxmlPackage, partName: string): OoxmlPackage {
+  const canonical = normalizePartName(partName);
+  if (!canonical.ok) return pkg;
+  const key = partNameKey(canonical.partName);
+  const relsKey = partNameKey(relsPartNameFor(canonical.partName));
+
+  const parts = new Map(pkg.parts);
+  const partBytes = new Map(pkg.partBytes);
+  for (const map of [parts, partBytes] as Map<string, unknown>[]) {
+    for (const name of [...map.keys()]) {
+      const named = partNameKey(name);
+      if (named === key || named === relsKey) map.delete(name);
+    }
+  }
+
+  // Relationship records, and the `.rels` TREES they were parsed from — the records alone are
+  // an index; the trees are what gets written.
+  const relationships = new Map(pkg.relationships);
+  relationships.delete(canonical.partName);
+  for (const [owner, records] of relationships) {
+    const kept = records.filter((record) => {
+      if (record.targetMode === 'External') return true;
+      const resolved = resolveInternalTarget(owner, record.rawTarget);
+      return !resolved.ok || partNameKey(resolved.partName) !== key;
+    });
+    if (kept.length === records.length) continue;
+    relationships.set(owner, kept);
+    const ownerRels = parts.get(relsPartNameFor(owner));
+    if (!ownerRels) continue;
+    const keptIds = new Set(kept.map((record) => record.id));
+    const children = ownerRels.root.children.filter((child) => {
+      const id = relationshipIdAttribute(child);
+      return id === undefined || keptIds.has(id);
+    });
+    const rewritten = replaceChildren(ownerRels, ownerRels.root.id, children);
+    if (rewritten.ok) parts.set(rewritten.part.name, rewritten.part);
+  }
+
+  let next: OoxmlPackage = Object.freeze({ ...pkg, parts, partBytes, relationships });
+  next = withoutContentTypeOverride(next, canonical.partName);
+  return next;
+}
+
+/** Drop a part's Override, which otherwise names a part that is no longer in the package. */
+function withoutContentTypeOverride(pkg: OoxmlPackage, partName: string): OoxmlPackage {
+  const overrideKey = partNameKey(partName);
+  if (!pkg.contentTypes.overrides.has(overrideKey)) return pkg;
+  const entry = contentTypesEntryOf(pkg.partBytes);
+  if (entry === null) return pkg;
+  const parsed = readOoxmlPart(new TextDecoder().decode(entry.bytes), {
+    name: CONTENT_TYPES_PART,
+    contentType: 'application/xml',
+  });
+  if (!parsed.ok) return pkg;
+  const children = parsed.part.root.children.filter((child) => {
+    if (child.kind === 'textValue' || child.localName !== 'Override') return true;
+    const named = child.attributes.find((a) => a.localName === 'PartName');
+    return named === undefined || partNameKey(named.value) !== overrideKey;
+  });
+  if (children.length === parsed.part.root.children.length) return pkg;
+  const rewritten = replaceChildren(parsed.part, parsed.part.root.id, children);
+  if (!rewritten.ok) return pkg;
+
+  const overrides = new Map(pkg.contentTypes.overrides);
+  overrides.delete(overrideKey);
+  const partBytes = new Map(pkg.partBytes);
+  partBytes.set(entry.storageKey, new TextEncoder().encode(serializeOoxmlPart(rewritten.part)));
+  return Object.freeze({
+    ...pkg,
+    partBytes,
+    contentTypes: { defaults: pkg.contentTypes.defaults, overrides } satisfies ContentTypeIndex,
+  });
+}
+
+/**
  * Point a relationship from one part at another, minting an unused `rId`.
  *
  * Returns the id as well as the package: the story that references a new part has to write that
