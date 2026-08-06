@@ -20,6 +20,7 @@ const GENERATED_PICTURE_FIXTURES = [
   'images-crop.docx',
   'images-zorder.docx',
   'images-formats.docx',
+  'images-tiff.docx',
   'images-header.docx',
   'images-transform.docx',
   'images-compatibility-malformed.docx',

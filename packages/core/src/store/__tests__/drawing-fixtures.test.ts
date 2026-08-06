@@ -168,8 +168,8 @@ function assertSaveReopenOracle(before: OoxmlPart, after: OoxmlPart): void {
 describe('fixture manifest matches checked-in drawings', () => {
   const manifest = loadManifest();
 
-  test('lists seventeen entries', () => {
-    expect(manifest.entries).toHaveLength(17);
+  test('lists eighteen entries', () => {
+    expect(manifest.entries).toHaveLength(18);
   });
 
   for (const entry of manifest.entries) {

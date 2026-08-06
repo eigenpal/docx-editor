@@ -1363,7 +1363,7 @@ export const IMAGE_WRAP_TARGETS: readonly ImageWrapTarget[];
 
 // @public
 export interface ImageDecodePort {
-    convertMetafile?(bytes: Uint8Array, mime: MetafileImageMime, limits: ImageResourceLimits): Promise<Readonly<{
+    convertPreserved?(bytes: Uint8Array, mime: PreservedImageMime, limits: ImageResourceLimits): Promise<Readonly<{
         bytes: Uint8Array;
         mime: SupportedImageMime;
     }> | null>;

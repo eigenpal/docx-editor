@@ -33,7 +33,10 @@ export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif';
 export type VectorImageMime = 'image/svg+xml';
 /** Every mime the painter can hand to an `<img>`. */
 export type RenderableImageMime = SupportedImageMime | VectorImageMime;
-/** Media kept in the package byte-for-byte but painted as a labelled placeholder. */
+/**
+ * Media kept in the package byte-for-byte that the painter cannot hand to an `<img>`.
+ * A decode port may rasterize it; without one it paints as a labelled placeholder.
+ */
 export type PreservedImageMime = 'image/tiff' | 'image/x-emf' | 'image/x-wmf';
 export type MetafileImageMime = 'image/x-emf' | 'image/x-wmf';
 
@@ -95,14 +98,15 @@ export interface ImageDecodePort {
     limits: ImageResourceLimits
   ): Promise<Readonly<{ pixelWidth: number; pixelHeight: number; dpiX: number; dpiY: number }>>;
   /**
-   * Optional metafile (EMF/WMF) → raster conversion. The returned bytes are untrusted
-   * and re-enter the full raster validation path (sniff, header, pixel caps, decode)
-   * before they can become a ready resource. A null return declines the format and
-   * keeps the labelled placeholder; so does a throw, as `decode-failed`.
+   * Optional conversion of media an `<img>` cannot render (EMF/WMF metafiles, TIFF) into a
+   * renderable raster. The returned bytes are untrusted and re-enter the full raster
+   * validation path (sniff, header, pixel caps, decode) before they can become a ready
+   * resource. A null return declines the format and keeps the labelled placeholder; so does
+   * a throw, as `decode-failed`.
    */
-  convertMetafile?(
+  convertPreserved?(
     bytes: Uint8Array,
-    mime: MetafileImageMime,
+    mime: PreservedImageMime,
     limits: ImageResourceLimits
   ): Promise<Readonly<{ bytes: Uint8Array; mime: SupportedImageMime }> | null>;
 }
@@ -362,6 +366,55 @@ export function validateJpegHeader(bytes: Uint8Array): ValidatedRasterHeader | n
     offset = segmentEnd;
   }
   return null;
+}
+
+/** IFD0 entry ceiling. Real files carry a few dozen; the count is a file-supplied number. */
+const MAX_TIFF_IFD_ENTRIES = 4096;
+const TIFF_TAG_IMAGE_WIDTH = 256;
+const TIFF_TAG_IMAGE_LENGTH = 257;
+const TIFF_FIELD_TYPE_SHORT = 3;
+const TIFF_FIELD_TYPE_LONG = 4;
+
+/**
+ * Structural TIFF validation: byte order, magic, and the extent tags of the first IFD.
+ *
+ * Read before any converter runs, so the pixel caps are applied to the declared extent
+ * rather than to whatever a third-party decoder allocated on the way to reporting it.
+ * Only the first image is inspected — Word paints page one of a multi-page TIFF.
+ * BigTIFF (magic 43) has a different directory layout and is refused here.
+ */
+export function validateTiffHeader(bytes: Uint8Array): ValidatedRasterHeader | null {
+  if (bytes.length < 8) return null;
+  let littleEndian: boolean;
+  if (bytes[0] === 0x49 && bytes[1] === 0x49) littleEndian = true;
+  else if (bytes[0] === 0x4d && bytes[1] === 0x4d) littleEndian = false;
+  else return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (view.getUint16(2, littleEndian) !== 42) return null;
+  const directoryOffset = view.getUint32(4, littleEndian);
+  if (directoryOffset < 8 || directoryOffset + 2 > bytes.length) return null;
+  const entryCount = view.getUint16(directoryOffset, littleEndian);
+  if (entryCount === 0 || entryCount > MAX_TIFF_IFD_ENTRIES) return null;
+  if (directoryOffset + 2 + entryCount * 12 > bytes.length) return null;
+
+  let pixelWidth = 0;
+  let pixelHeight = 0;
+  for (let index = 0; index < entryCount; index += 1) {
+    const entry = directoryOffset + 2 + index * 12;
+    const tag = view.getUint16(entry, littleEndian);
+    if (tag !== TIFF_TAG_IMAGE_WIDTH && tag !== TIFF_TAG_IMAGE_LENGTH) continue;
+    // Both extents are single-valued and fit inline; anything else is malformed.
+    if (view.getUint32(entry + 4, littleEndian) !== 1) return null;
+    const fieldType = view.getUint16(entry + 2, littleEndian);
+    let value: number;
+    if (fieldType === TIFF_FIELD_TYPE_SHORT) value = view.getUint16(entry + 8, littleEndian);
+    else if (fieldType === TIFF_FIELD_TYPE_LONG) value = view.getUint32(entry + 8, littleEndian);
+    else return null;
+    if (tag === TIFF_TAG_IMAGE_WIDTH) pixelWidth = value;
+    else pixelHeight = value;
+  }
+  if (pixelWidth <= 0 || pixelHeight <= 0) return null;
+  return { pixelWidth, pixelHeight };
 }
 
 /** CSS absolute length units, in CSS pixels. Percentages are not intrinsic and are refused. */
@@ -833,12 +886,25 @@ function createImageResourceCacheInternal(
       return unrenderable(resolvedPartName, 'unknown', 'unsupported-format');
     }
 
-    if (sniffed === 'image/x-emf' || sniffed === 'image/x-wmf') {
-      const convert = decodePort.convertMetafile?.bind(decodePort);
+    if (isPreservedMime(sniffed)) {
+      const preservedMime = sniffed;
+      const convert = decodePort.convertPreserved?.bind(decodePort);
       if (!convert) {
-        return unrenderable(resolvedPartName, sniffed, 'unsupported-format');
+        return unrenderable(resolvedPartName, preservedMime, 'unsupported-format');
       }
-      const metafileMime = sniffed;
+      if (preservedMime === 'image/tiff') {
+        // TIFF declares its extent up front, so the caps apply before the converter
+        // allocates a raster from it. Metafiles carry no comparable pre-decode extent
+        // and are bounded by the output size the converter is asked for instead.
+        const tiffHeader = validateTiffHeader(snapshotted);
+        if (tiffHeader === null) {
+          return unrenderable(resolvedPartName, preservedMime, 'unsupported-format');
+        }
+        const tiffPixels = checkedPixelCount(tiffHeader.pixelWidth, tiffHeader.pixelHeight, limits);
+        if (tiffPixels === null || !checkedDecodedRgbaBytes(tiffPixels, limits)) {
+          return unrenderable(resolvedPartName, preservedMime, 'resource-limit');
+        }
+      }
       const contentId = contentIdOf(snapshotted);
       const flightKey = contentFlightKey(ownerPartName, resolvedPartName, contentId);
       const existingFlight = inFlightByContent.get(flightKey);
@@ -849,9 +915,9 @@ function createImageResourceCacheInternal(
           try {
             let converted: Readonly<{ bytes: Uint8Array; mime: SupportedImageMime }> | null;
             try {
-              converted = await convert(convertCopy, metafileMime, limits);
+              converted = await convert(convertCopy, preservedMime, limits);
             } catch {
-              resolve(unrenderable(resolvedPartName, metafileMime, 'decode-failed'));
+              resolve(unrenderable(resolvedPartName, preservedMime, 'decode-failed'));
               return;
             }
             if (startGeneration !== generation || disposed) {
@@ -861,24 +927,24 @@ function createImageResourceCacheInternal(
             // A null return is the converter declining the format — the ordinary
             // labelled placeholder, not a decode failure.
             if (converted === null) {
-              resolve(unrenderable(resolvedPartName, metafileMime, 'unsupported-format'));
+              resolve(unrenderable(resolvedPartName, preservedMime, 'unsupported-format'));
               return;
             }
             // The converter runs on attacker-controlled bytes; its OUTPUT is untrusted
             // too. Converted rasters take the same validation the source raster path
             // applies: size cap, signature sniff, header structure, pixel caps, decode.
             if (converted.bytes.length > limits.maxEncodedBytes) {
-              resolve(unrenderable(resolvedPartName, metafileMime, 'resource-limit'));
+              resolve(unrenderable(resolvedPartName, preservedMime, 'resource-limit'));
               return;
             }
             const convertedSniffed = sniffImageMime(converted.bytes);
             if (convertedSniffed !== converted.mime || !isRasterSupportedMime(convertedSniffed)) {
-              resolve(unrenderable(resolvedPartName, metafileMime, 'decode-failed'));
+              resolve(unrenderable(resolvedPartName, preservedMime, 'decode-failed'));
               return;
             }
             const convertedHeader = validateRasterHeader(converted.bytes, convertedSniffed);
             if (convertedHeader === null) {
-              resolve(unrenderable(resolvedPartName, metafileMime, 'decode-failed'));
+              resolve(unrenderable(resolvedPartName, preservedMime, 'decode-failed'));
               return;
             }
             const pixelCount = checkedPixelCount(
@@ -887,7 +953,7 @@ function createImageResourceCacheInternal(
               limits
             );
             if (pixelCount === null || !checkedDecodedRgbaBytes(pixelCount, limits)) {
-              resolve(unrenderable(resolvedPartName, metafileMime, 'resource-limit'));
+              resolve(unrenderable(resolvedPartName, preservedMime, 'resource-limit'));
               return;
             }
             let decoded: Readonly<{ pixelWidth: number; pixelHeight: number }>;
@@ -898,7 +964,7 @@ function createImageResourceCacheInternal(
                 limits
               );
             } catch {
-              resolve(unrenderable(resolvedPartName, metafileMime, 'decode-failed'));
+              resolve(unrenderable(resolvedPartName, preservedMime, 'decode-failed'));
               return;
             }
             if (startGeneration !== generation || disposed) {
@@ -909,7 +975,7 @@ function createImageResourceCacheInternal(
               decoded.pixelWidth !== convertedHeader.pixelWidth ||
               decoded.pixelHeight !== convertedHeader.pixelHeight
             ) {
-              resolve(unrenderable(resolvedPartName, metafileMime, 'decode-failed'));
+              resolve(unrenderable(resolvedPartName, preservedMime, 'decode-failed'));
               return;
             }
             const resourceKey = resourceKeyOf(ownerPartName, resolvedPartName, contentId);
@@ -975,10 +1041,6 @@ function createImageResourceCacheInternal(
         dpiX: DEFAULT_DPI,
         dpiY: DEFAULT_DPI,
       });
-    }
-
-    if (isPreservedMime(sniffed)) {
-      return unrenderable(resolvedPartName, sniffed, 'unsupported-format');
     }
 
     const header = validateRasterHeader(snapshotted, sniffed);

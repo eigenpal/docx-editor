@@ -1,7 +1,7 @@
 /**
  * Word feature support matrix — single source of truth.
  *
- * Rendered on docx-editor.dev at /docs/1.x/word-fidelity via the site's
+ * Rendered on docx-editor.dev at /docs/2.x/word-fidelity via the site's
  * <FeatureMatrix> / <FeatureBadge> components (the site syncs this file at
  * build time, same pipeline as docs/site/content). The `tier` field exists
  * so the same data can later drive plan gating and pricing pages; today
@@ -48,7 +48,7 @@ export interface WordFeature {
   roundTrip: FeatureStatus;
   tier: FeatureTier;
   notes?: string;
-  /** Docs page that covers the feature, e.g. '/docs/1.x/guides/tracked-changes'. */
+  /** Docs page that covers the feature, e.g. '/docs/2.x/guides/tracked-changes'. */
   docsLink?: string;
 }
 
@@ -428,7 +428,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    docsLink: '/docs/1.x/guides/images',
+    docsLink: '/docs/2.x/guides/images',
     notes:
       'Engine layout and paint for embedded PNG/JPEG/GIF at authored wp:extent; React insert/overlay authoring (toolbar, properties, keyboard resize). Vue authoring UI deferred to vue-drawing-authoring-parity — shared engine commands only.',
   },
@@ -440,7 +440,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    docsLink: '/docs/1.x/guides/images',
+    docsLink: '/docs/2.x/guides/images',
     notes:
       'Nine wrap choices, exclusion reflow, z-order, and anchored drag/resize in React. Vue wrap/alt/properties chrome deferred; engine setImageWrapType and toolbarCommandState are shared.',
   },
@@ -452,7 +452,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    docsLink: '/docs/1.x/guides/images',
+    docsLink: '/docs/2.x/guides/images',
     notes:
       'Embedded SVG paints at the authored size. Rendered in the browser secure static mode, so scripts and external references inside the file stay inert. Inserting a new SVG is not supported yet.',
   },
@@ -464,9 +464,21 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'partial',
     roundTrip: 'full',
     tier: 'community',
-    docsLink: '/docs/1.x/guides/images',
+    docsLink: '/docs/2.x/guides/images',
     notes:
-      'Authored extent reserved; labelled placeholder instead of decode. No converter in this release.',
+      'Rasterized in the browser and painted at the authored extent. A metafile that will not convert keeps its extent and a labelled placeholder. Original bytes round-trip untouched.',
+  },
+  {
+    id: 'images.tiff',
+    name: 'TIFF images',
+    category: 'images',
+    editing: 'none',
+    rendering: 'partial',
+    roundTrip: 'full',
+    tier: 'community',
+    docsLink: '/docs/2.x/guides/images',
+    notes:
+      'Baseline TIFF is decoded in the browser and painted at the authored extent; the first page of a multi-page file is used. A flavour that will not decode keeps its extent and a labelled placeholder. Inserting a new TIFF is not supported yet.',
   },
   {
     id: 'images.tracked',
@@ -487,7 +499,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
-    docsLink: '/docs/1.x/guides/images',
+    docsLink: '/docs/2.x/guides/images',
     notes:
       'Anchored text boxes render their story content clipped inside the extent — in the body, headers, and footers, including page-relative anchors — with PAGE / NUMPAGES / SECTIONPAGES fields inside header/footer text boxes evaluated per page. Read-only: inner stories are not editable. Inline text boxes, linked chains, autofit, and rotation still render as placeholders or clip.',
   },
@@ -499,7 +511,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
-    docsLink: '/docs/1.x/guides/images',
+    docsLink: '/docs/2.x/guides/images',
     notes:
       'Charts, groups, canvases, and custom geometry reserve extent with placeholders; unsupported payloads stay generic in the canonical tree.',
   },
@@ -511,7 +523,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    docsLink: '/docs/1.x/guides/images',
+    docsLink: '/docs/2.x/guides/images',
     notes:
       'Crop renders and round-trips; React properties dialog edits crop in UI percent. Vue deferred.',
   },
@@ -544,7 +556,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
-    docsLink: '/docs/1.x/guides/images',
+    docsLink: '/docs/2.x/guides/images',
     notes:
       'Extent reserved with labelled placeholder; chart payload preserved generically, not semantically edited.',
   },
@@ -556,7 +568,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
-    docsLink: '/docs/1.x/guides/images',
+    docsLink: '/docs/2.x/guides/images',
     notes: 'Same placeholder policy as charts; payload preserved inertly.',
   },
   {
@@ -603,7 +615,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes:
       'React: typed scoped header/footer editing (enter/exit story, create/remove, link/unlink to previous, title-page and even/odd options) with PAGE/NUMPAGES/SECTIONPAGES insert chrome. `editHeaderFooter` accepts `variant` / `evenPage` / `firstPage` on the shared Editor contract. Per-section first/even/default variants paint like Word. Vue chrome deferred; Vue can still call the shared commands. Tracked changes, watermark/drawing authoring, and structural table ops inside furniture are not claimed.',
-    docsLink: '/docs/1.x/guides/headers-footers',
+    docsLink: '/docs/2.x/guides/headers-footers',
   },
   {
     id: 'layout.watermarks',
@@ -615,7 +627,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes:
       'Watermarks live as VML/drawings inside header parts. Typing, layout, and editing are deferred to the drawings lane; Editor.getWatermark() is a stub. Structural markup may survive in the header part but is not a supported watermark feature.',
-    docsLink: '/docs/1.x/guides/headers-footers',
+    docsLink: '/docs/2.x/guides/headers-footers',
   },
   {
     id: 'layout.footnotes',
@@ -713,7 +725,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes:
       'Full revision model incl. structural changes (paragraph breaks, paragraph props, table rows/cells). Opens cleanly in Word’s review pane.',
-    docsLink: '/docs/1.x/guides/tracked-changes',
+    docsLink: '/docs/2.x/guides/tracked-changes',
   },
   {
     id: 'review.accept-reject',
@@ -725,7 +737,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes:
       'Per-change and bulk accept/reject in the sidebar; headless acceptChangeById/rejectChangeById, and revision.accept()/reject() through the automation object model.',
-    docsLink: '/docs/1.x/guides/tracked-changes',
+    docsLink: '/docs/2.x/guides/tracked-changes',
   },
   {
     id: 'review.comments',
@@ -735,7 +747,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    docsLink: '/docs/1.x/guides/comments',
+    docsLink: '/docs/2.x/guides/comments',
   },
   {
     id: 'review.ai-redlining',
@@ -747,7 +759,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes:
       'Word-native tracked changes written through the automation object model, against DOCX bytes on a server or an editor open in a page.',
-    docsLink: '/docs/1.x/editor-api',
+    docsLink: '/docs/2.x/editor-api',
   },
   {
     id: 'review.moves',
@@ -852,7 +864,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes:
       'Block, inline, row and cell controls are typed and addressable in every story (table cells, headers, footers and note bodies included); a control around a table row or cell lays out as that row or cell, keeping its grid column, span and row semantics. Discover, create, fill and remove them by tag, title or file id from the document object model; content is editable, and tag, title and lock are writable through the API but have no toolbar chrome. All four `w:lock` modes are enforced against what an edit would actually change — including the characters inside an inline control, a tracked-change decision, and a hyperlink write — an enclosing control’s lock wins over an inner one, and text typed at a control’s leading edge counts as inside it, because that is where Word puts it. A write addressed at one control is resolved against every control it would actually land in, so filling in an outer control cannot put text inside a locked or bound control nested at its edge — including an empty paragraph such a control holds, where the write has to create the run it lands in. Replacing a control’s whole value, or deleting a control together with its content, is refused when it would destroy a locked or bound control nested inside it; removing the wrapper while keeping the content leaves those controls untouched and is allowed. A control’s lock protects the control and its content, not the document: page setup, section furniture and note numbering stay editable beside a locked field. Under `w:documentProtection w:edit="forms"` only control content is editable, resolved from what an edit addresses — so an inline field can be filled in while the sentence around it stays read-only. Picture and repeating-section controls, custom-XML-bound controls and docPart galleries are preserved as they were rather than typed; every edit inside a bound control is refused instead of desynchronising it from its part, while removing the control is allowed and takes the binding with it.',
-    docsLink: '/docs/1.x/guides/content-controls',
+    docsLink: '/docs/2.x/guides/content-controls',
   },
   {
     id: 'structure.repeating-sections',
@@ -864,7 +876,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes:
       'Add and remove items from the editor; the section configuration itself is read-only. A repeating section is not typed as a content control in the document object model — it is preserved as authored, so a script reaches the controls inside it rather than the section itself.',
-    docsLink: '/docs/1.x/guides/content-controls',
+    docsLink: '/docs/2.x/guides/content-controls',
   },
   {
     id: 'structure.typed-controls',
@@ -876,7 +888,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes:
       'Each control takes the value its own type accepts: a dropdown must name an item it declares, a combo box also takes free text, a date validates an ISO instant and writes both `w:fullDate` and the formatted text, and a checkbox writes its declared glyph and state together. A literal prompt is replaced whole on the first write; without a durable prompt source, clearing the value later leaves the control empty. A `w:temporary` control removes its own wrapper on the first edit and leaves the content.',
-    docsLink: '/docs/1.x/guides/content-controls',
+    docsLink: '/docs/2.x/guides/content-controls',
   },
   {
     id: 'structure.custom-xml',
@@ -931,7 +943,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes: 'Live cursors, presence, comment sync, per-author tracked-change attribution.',
-    docsLink: '/docs/1.x/realtime-collaboration',
+    docsLink: '/docs/2.x/realtime-collaboration',
   },
   {
     id: 'collab.find-replace',
@@ -969,7 +981,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes: 'en, de, fr, he, hi, pl, pt-BR, tr, zh-CN via @docx-editor.dev/i18n.',
-    docsLink: '/docs/1.x/i18n',
+    docsLink: '/docs/2.x/i18n',
   },
   {
     id: 'collab.agent-tools',
@@ -981,7 +993,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes:
       'Batching object model shaped after a documented subset of the Word JavaScript API; server entry over bytes, browser entry over an open editor. No model integration, tool catalog or MCP transport ships with it.',
-    docsLink: '/docs/1.x/editor-api',
+    docsLink: '/docs/2.x/editor-api',
   },
 ];
 

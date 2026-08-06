@@ -225,8 +225,23 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
       expectNames(projections, ['png', 'jpeg', 'gif', 'svg', 'tif', 'emf', 'wmf']);
     },
     assertResourceKinds: (kinds) => {
-      // PNG, JPEG, GIF decode; SVG paints straight from bytes. TIFF/EMF/WMF stay placeholders.
+      // PNG, JPEG, GIF decode; SVG paints straight from bytes. TIFF/EMF/WMF need a
+      // converting decode port, which this one is not, so they stay placeholders.
       expect(kinds.filter((kind) => kind === 'ready')).toHaveLength(4);
+      expect(kinds.filter((kind) => kind === 'unrenderable')).toHaveLength(3);
+    },
+  },
+  'images-tiff.docx': {
+    drawingCount: 3,
+    pageCount: 1,
+    readyCount: 3,
+    placeholderCount: 0,
+    assertProjections: (projections) => {
+      expectNames(projections, ['tiff little-endian', 'tiff big-endian', 'tiff truncated']);
+    },
+    assertResourceKinds: (kinds) => {
+      // Both byte orders and the truncated file alike: a port with no TIFF converter
+      // renders none of them. The conversion path is covered by its own suite.
       expect(kinds.filter((kind) => kind === 'unrenderable')).toHaveLength(3);
     },
   },

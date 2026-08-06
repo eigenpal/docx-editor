@@ -1009,7 +1009,7 @@ export interface ImageCropPermille {
 
 // @public
 export interface ImageDecodePort {
-    convertMetafile?(bytes: Uint8Array, mime: MetafileImageMime, limits: ImageResourceLimits): Promise<Readonly<{
+    convertPreserved?(bytes: Uint8Array, mime: PreservedImageMime, limits: ImageResourceLimits): Promise<Readonly<{
         bytes: Uint8Array;
         mime: SupportedImageMime;
     }> | null>;

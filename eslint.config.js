@@ -223,6 +223,19 @@ export default [
     },
   },
 
+  // word-features.ts is the feature-support matrix — a flat data table with one
+  // entry per Word feature and no logic. It grows by a dozen lines every time a
+  // feature ships, which is the file working as intended, not a file that wants
+  // splitting: the whole point is that every claim lives in one list. Raised so
+  // the next feature does not have to negotiate with the linter, and so the cap
+  // is never met by trimming an honest note.
+  {
+    files: ['docs/site/data/word-features.ts'],
+    rules: {
+      'max-lines': ['error', { max: 1400, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
   // semantic-layout.ts is the story loop: section flow, paragraph fragmentation
   // and table-row pagination advance ONE cursor, and a paragraph that spans a
   // page boundary is decided by all three at once. Splitting them into modules
@@ -323,9 +336,7 @@ export default [
   },
 
   {
-    files: [
-      'packages/core/src/store/__tests__/table-column-ops.test.ts',
-    ],
+    files: ['packages/core/src/store/__tests__/table-column-ops.test.ts'],
     rules: {
       'max-lines': ['error', { max: 1500, skipBlankLines: false, skipComments: false }],
     },
@@ -356,9 +367,7 @@ export default [
   },
 
   {
-    files: [
-      'packages/core/src/store/__tests__/table-cell-properties.test.ts',
-    ],
+    files: ['packages/core/src/store/__tests__/table-cell-properties.test.ts'],
     rules: {
       'max-lines': ['error', { max: 1800, skipBlankLines: false, skipComments: false }],
     },
@@ -376,9 +385,7 @@ export default [
   },
 
   {
-    files: [
-      'packages/core/src/store/package/drawing-projection.ts',
-    ],
+    files: ['packages/core/src/store/package/drawing-projection.ts'],
     rules: {
       'max-lines': ['error', { max: 2000, skipBlankLines: false, skipComments: false }],
     },
@@ -395,45 +402,35 @@ export default [
   },
 
   {
-    files: [
-      'packages/core/src/editor/docx-editor.ts',
-    ],
+    files: ['packages/core/src/editor/docx-editor.ts'],
     rules: {
       'max-lines': ['error', { max: 2300, skipBlankLines: false, skipComments: false }],
     },
   },
 
   {
-    files: [
-      'packages/core/src/store/__tests__/ooxml-tree.test.ts',
-    ],
+    files: ['packages/core/src/store/__tests__/ooxml-tree.test.ts'],
     rules: {
       'max-lines': ['error', { max: 2400, skipBlankLines: false, skipComments: false }],
     },
   },
 
   {
-    files: [
-      'packages/core/src/automation/plan.ts',
-    ],
+    files: ['packages/core/src/automation/plan.ts'],
     rules: {
       'max-lines': ['error', { max: 2900, skipBlankLines: false, skipComments: false }],
     },
   },
 
   {
-    files: [
-      'packages/core/src/layout/semantic-layout.ts',
-    ],
+    files: ['packages/core/src/layout/semantic-layout.ts'],
     rules: {
       'max-lines': ['error', { max: 3400, skipBlankLines: false, skipComments: false }],
     },
   },
 
   {
-    files: [
-      'packages/fonts/src/google-catalog.generated.ts',
-    ],
+    files: ['packages/fonts/src/google-catalog.generated.ts'],
     rules: {
       'max-lines': ['error', { max: 3500, skipBlankLines: false, skipComments: false }],
     },

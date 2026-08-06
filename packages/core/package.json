@@ -95,7 +95,8 @@
     "prosemirror-keymap": "^1.2.3",
     "prosemirror-model": "^1.25.4",
     "prosemirror-state": "^1.4.4",
-    "prosemirror-view": "^1.41.8"
+    "prosemirror-view": "^1.41.8",
+    "utif2": "4.1.0"
   },
   "peerDependencies": {
     "pdf-lib": "^1.17.1",

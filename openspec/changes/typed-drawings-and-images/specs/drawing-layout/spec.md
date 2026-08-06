@@ -159,7 +159,7 @@ A drawing SHALL be selectable and hit-testable through semantic layout records, 
 
 ### Requirement: Unrenderable formats reserve space and say so
 
-TIFF, EMF, WMF, and any format the runtime cannot decode SHALL reserve their declared extent and paint a placeholder carrying the reason. They SHALL NOT paint a broken-image indicator, collapse to zero size, or be omitted.
+Any format the runtime cannot decode SHALL reserve its declared extent and paint a placeholder carrying the reason. Such an image SHALL NOT paint a broken-image indicator, collapse to zero size, or be omitted. TIFF, EMF and WMF SHALL be offered to the decode port's conversion hook first, and paint as ordinary images when it returns a raster; the placeholder is what a declined, failed, or absent conversion falls back to.
 
 #### Scenario: EMF reserves its extent
 
