@@ -136,10 +136,19 @@ export const MAX_CUSTOM_NODE_LABEL_LENGTH = 4_096;
  */
 export function insertCustomNodeWrite(
   store: TreeDocumentStore,
-  write: InsertCustomNodeWrite
+  write: InsertCustomNodeWrite,
+  /**
+   * The part the customXml store hangs off, defaulting to the story being written.
+   *
+   * A chip in a header is written against the HEADER store, but Word enumerates the data
+   * store from the main document part — a store authored off a header is one Word never
+   * sees. So the caller passes the main part while the control itself lands in the story.
+   */
+  dataOwnerPartName?: string
 ): CustomNodeWriteResult {
   const payload = write.payload;
   const storyPartName = store.part.name;
+  const dataPartName = dataOwnerPartName ?? storyPartName;
 
   if (payload) {
     if (payload.data.length > MAX_CUSTOM_NODE_PAYLOAD_LENGTH) {
@@ -217,7 +226,7 @@ export function insertCustomNodeWrite(
     ctx.applyPackage((current) => {
       const authored = withCustomXmlDataPart(
         current,
-        storyPartName,
+        dataPartName,
         payload.namespaceUri,
         payload.rootLocalName
       );

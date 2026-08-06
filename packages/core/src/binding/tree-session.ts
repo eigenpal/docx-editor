@@ -74,6 +74,7 @@ import {
   type StoryScope,
   type StoryTargetRejection,
   type TreeDocOp,
+  type TreeDocumentStore,
   type TreeModelChange,
 } from '@docx-editor.dev/core/store';
 import {
@@ -608,8 +609,10 @@ export function openTreeSession(
    * after the shell is installed, so a subscriber re-deriving on the notification already sees
    * the store the control it is about to paint binds to.
    */
-  const customNodeTransaction = (run: () => CustomNodeWriteResult): CustomNodeWriteResult => {
-    const store = bodyStore();
+  const customNodeTransaction = (
+    store: TreeDocumentStore,
+    run: () => CustomNodeWriteResult
+  ): CustomNodeWriteResult => {
     const beforePackage = packageStore.currentPackage();
     const checkpoint = store.checkpoint();
     store.graftPackage(() => packageStore.currentPackage());
@@ -1321,7 +1324,9 @@ export function openTreeSession(
         // a chip in a header was rewritten against the body store and refused.
         const resolved = scope.kind === 'body' ? null : packageStore.resolveStory(scope);
         const store = resolved?.ok ? resolved.store : bodyStore();
-        return customNodeTransaction(() => insertCustomNodeWrite(store, write));
+        return customNodeTransaction(store, () =>
+          insertCustomNodeWrite(store, write, bodyStore().part.name)
+        );
       },
 
       removeCustomNode(controlNodeId, scope = BODY_SCOPE) {
@@ -1330,7 +1335,7 @@ export function openTreeSession(
         // refused with `unknown-content-control` over a node the reader was looking at.
         const resolved = scope.kind === 'body' ? null : packageStore.resolveStory(scope);
         const store = resolved?.ok ? resolved.store : bodyStore();
-        return customNodeTransaction(() => removeCustomNodeWrite(store, controlNodeId));
+        return customNodeTransaction(store, () => removeCustomNodeWrite(store, controlNodeId));
       },
 
       sweepCustomNodePayloads(namespaces) {

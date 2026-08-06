@@ -1682,7 +1682,8 @@ export interface InsertCustomNodeWrite {
 }
 
 // @public
-export function insertCustomNodeWrite(store: TreeDocumentStore, write: InsertCustomNodeWrite): CustomNodeWriteResult;
+export function insertCustomNodeWrite(store: TreeDocumentStore, write: InsertCustomNodeWrite,
+dataOwnerPartName?: string): CustomNodeWriteResult;
 
 // @public
 export function instrTextValue(node: OoxmlNode): string;

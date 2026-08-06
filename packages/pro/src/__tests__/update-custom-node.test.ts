@@ -43,6 +43,19 @@ function docx(body: string): Uint8Array {
 
 const citation = defineCustomNode({ name: 'citation', tagPrefix: 'acme' });
 
+/** Carries a payload, so the customXml store lane is exercised. */
+const payloadCitation = defineCustomNode({
+  name: 'payload-citation',
+  tagPrefix: 'acme',
+  schema: {
+    '~standard': {
+      version: 1,
+      vendor: 'test',
+      validate: (value: unknown) => ({ value: value as { sourceId: string } }),
+    },
+  },
+});
+
 function mountWithChip(): { editor: DocxEditorInstance; nodeId: string } {
   const editor = createDocxEditor({
     container: document.createElement('div'),
@@ -184,7 +197,41 @@ describe('custom-node writes respect the story and the mode', () => {
     expect(node?.text).toBe('NEW');
   });
 
-  test('a document open for viewing refuses both writes instead of performing them', () => {
+  test('a chip carrying a payload can be inserted into a header', () => {
+    // The write runs against the HEADER store, but the customXml store it binds must hang
+    // off the main document part — Word enumerates the data store from there, so one
+    // authored off a header is a store Word never sees. The transaction also grafted the
+    // package onto the body store while the write ran against the header's, whose package
+    // is a one-part stub, so authoring the part found nothing and refused with a message
+    // that blamed the caller's namespace.
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docxWithHeader(),
+      author: 'A',
+      modules: [customNodesModule({ nodes: [payloadCitation] })],
+    });
+    expect(editor.surface!.enterHeaderFooter!({ rId: 'rIdH', kind: 'header' })).toBe(true);
+    const paragraphId = editor.surface!.session.paragraphIdsIn({
+      kind: 'headerFooter',
+      rId: 'rIdH',
+    })[0]!;
+
+    const inserted = insertCustomNode(editor, payloadCitation, {
+      data: { sourceId: 'src-1' },
+      text: 'CHIP',
+      at: { paragraphId, offset: 0 },
+    });
+    expect(inserted.ok).toBe(true);
+
+    // The control is in the header, and the payload store is related to the BODY part.
+    const headerPart = editor.surface!.session.partFor({ kind: 'headerFooter', rId: 'rIdH' })!;
+    expect(recognizeCustomNodes(headerPart, [payloadCitation])).toHaveLength(1);
+    const pkg = editor.surface!.session.currentPackage();
+    const bodyRels = pkg.relationships.get(editor.surface!.session.part().name) ?? [];
+    expect(bodyRels.some((rel) => rel.type.endsWith('/customXml'))).toBe(true);
+  });
+
+  test('a document open for viewing refuses all three writes instead of performing them', () => {
     // These go through the STORE, below the surface's editing-mode gate, so without an
     // explicit refusal the context menu deleted a chip in a read-only document and reported
     // success.
@@ -195,6 +242,12 @@ describe('custom-node writes respect the story and the mode', () => {
     expect(removed.ok).toBe(false);
     const updated = updateCustomNode(editor, citation, nodeId, { text: 'NEW' });
     expect(updated.ok).toBe(false);
+    const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+    const insertedAgain = insertCustomNode(editor, citation, {
+      text: 'X',
+      at: { paragraphId, offset: 0 },
+    });
+    expect(insertedAgain.ok).toBe(false);
 
     // And the document is untouched: the chip is still there with its original label.
     const [node] = recognizeCustomNodes(editor.surface!.session.part(), [citation]);
