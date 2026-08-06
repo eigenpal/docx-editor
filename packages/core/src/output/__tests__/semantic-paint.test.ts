@@ -285,8 +285,8 @@ describe('the painter is a non-authoritative consumer', () => {
     )!;
     expect(tab.dataset.docxTabUnderline).toBe('');
     expect(tab.style.textDecorationLine).toBe('');
-    // Inset background rule (overflow:hidden on the tab would fight a margin-edge border).
-    expect(tab.style.backgroundSize).toBe('100% 2.25px');
+    // Same heavy heuristic as run text: max(2×scale px, 0.12em) at docDefaults 11pt → 2px.
+    expect(tab.style.backgroundSize).toBe('100% 2px');
     expect(tab.style.backgroundPosition).toBe('left bottom');
     expect(tab.style.borderBottomWidth).toBe('');
     expect(Number.parseFloat(tab.style.width)).toBeGreaterThan(6);
@@ -302,28 +302,29 @@ describe('the painter is a non-authoritative consumer', () => {
     )!;
     expect(tab.dataset.docxTabUnderline).toBe('');
     expect(tab.style.backgroundImage.toLowerCase()).toContain('#c00000');
-    expect(tab.style.backgroundSize).toBe('100% 0.75px');
+    expect(tab.style.backgroundSize).toBe('100% 1px');
   });
 
-  test('thick tab underline scales with paint zoom and stays heavier than single', () => {
-    const thick = paint(
-      '<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="2400"/></w:tabs></w:pPr>' +
-        '<w:r><w:rPr><w:sz w:val="20"/><w:u w:val="thick"/></w:rPr><w:tab/></w:r></w:p>',
-      { scale: 2 }
-    );
-    const single = paint(
-      '<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="2400"/></w:tabs></w:pPr>' +
-        '<w:r><w:rPr><w:sz w:val="20"/><w:u w:val="single"/></w:rPr><w:tab/></w:r></w:p>',
-      { scale: 2 }
-    );
-    const thickTab = [...thick.querySelectorAll<HTMLElement>('.layout-run-text')].find(
+  test('thick tab advance thickness matches ordinary w:u=thick text at the same size and scale', () => {
+    const scale = 2;
+    const sz = 40; // 20pt — large enough that 0.12em exceeds the 2×scale floor
+    const fontSizePt = sz / 2;
+    const expectedHeavyPx = Math.max(2 * scale, 0.12 * fontSizePt * scale);
+    const body =
+      `<w:p><w:pPr><w:tabs><w:tab w:val="left" w:pos="2400"/></w:tabs></w:pPr>` +
+      `<w:r><w:rPr><w:sz w:val="${sz}"/><w:u w:val="thick"/></w:rPr><w:t>Aa</w:t></w:r>` +
+      `<w:r><w:rPr><w:sz w:val="${sz}"/><w:u w:val="thick"/></w:rPr><w:tab/></w:r></w:p>`;
+    const container = paint(body, { scale });
+    const text = [...container.querySelectorAll<HTMLElement>('.layout-run-text')].find(
+      (el) => el.textContent === 'Aa'
+    )!;
+    const tab = [...container.querySelectorAll<HTMLElement>('.layout-run-text')].find(
       (el) => el.textContent === '\t'
     )!;
-    const singleTab = [...single.querySelectorAll<HTMLElement>('.layout-run-text')].find(
-      (el) => el.textContent === '\t'
-    )!;
-    expect(thickTab.style.backgroundSize).toBe('100% 4.5px');
-    expect(singleTab.style.backgroundSize).toBe('100% 1.5px');
+    // Text path keeps the CSS max() form; tab evaluates the same numbers to a stripe height.
+    expect(text.style.textDecorationThickness).toBe(`max(${2 * scale}px, 0.12em)`);
+    expect(tab.style.backgroundSize).toBe(`100% ${expectedHeavyPx}px`);
+    expect(expectedHeavyPx).toBeGreaterThan(2 * scale); // em floor engaged
   });
 });
 

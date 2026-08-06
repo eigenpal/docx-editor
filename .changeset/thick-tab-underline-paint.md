@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Paint thick/single underlined tab form blanks as point-sized inset rules so overflow clipping cannot thin the baseline band the way a bottom border could.
+Paint underlined tab form blanks with the same thick/single thickness heuristic as ordinary run underlines, using an inset rule so overflow clipping cannot drop the advance band.

@@ -467,6 +467,32 @@ function underlineDecorationOf(style: ResolvedRunStyle): UnderlineDecoration | n
 }
 
 /**
+ * Thick / *Heavy underline thickness — shared by run `text-decoration` and tab-advance paint.
+ *
+ * OOXML `ST_Underline` names the pattern only (§17.18.99); thickness is application-defined.
+ * The paint heuristic (twice a single rule, with a 0.12em floor at zoom) is what ordinary
+ * `w:u=thick` text already uses. Tab form blanks must evaluate the same numbers in JS because
+ * CSS `max()` is unreliable on `border-*-width` / background sizes in happy-dom.
+ */
+const HEAVY_UNDERLINE_MIN_PX_AT_SCALE = 2;
+const HEAVY_UNDERLINE_EM = 0.12;
+
+function heavyUnderlineThicknessCss(scale: number): string {
+  return `max(${HEAVY_UNDERLINE_MIN_PX_AT_SCALE * scale}px, ${HEAVY_UNDERLINE_EM}em)`;
+}
+
+/** Pixel thickness matching {@link heavyUnderlineThicknessCss} at a known font size. */
+function underlineThicknessPx(heavy: boolean, fontSizePt: number, scale: number): number {
+  const emPx = Math.max(0, fontSizePt) * scale;
+  if (heavy) {
+    return Math.max(HEAVY_UNDERLINE_MIN_PX_AT_SCALE * scale, HEAVY_UNDERLINE_EM * emPx);
+  }
+  // Single text underlines leave thickness to the browser; tab advances need an explicit
+  // stripe. 1×scale matches the previous tab `border-bottom` single.
+  return Math.max(1 * scale, 0);
+}
+
+/**
  * Apply one CSS text-decoration family to an element.
  *
  * Underline and strike must never share a single `text-decoration-*` declaration when their
@@ -483,9 +509,7 @@ function applyTextDecoration(
   css.textDecorationStyle = decorationStyle;
   if (options.color) css.textDecorationColor = `#${options.color}`;
   if (options.heavy) {
-    // Word's thick / *Heavy underlines are roughly twice a single rule. Floor scales with
-    // paint zoom so a 200% surface does not keep a 100%-thin heavy line.
-    css.textDecorationThickness = `max(${2 * options.scale}px, 0.12em)`;
+    css.textDecorationThickness = heavyUnderlineThicknessCss(options.scale);
   }
 }
 
@@ -507,26 +531,13 @@ function applyUnderlineDecoration(
 }
 
 /**
- * Point widths for tab-advance underlines (paint uses 1pt → 1css-px at scale 1).
- *
- * OOXML `ST_Underline` names the pattern only (§17.18.99) — thickness is application-defined.
- * Word's thick form blank is a heavy baseline rule (~3× a single hairline), not a 1-device-px
- * stroke. Keep single at 0.75pt (matches common body hairlines / 0.75pt shape bars) and thick
- * at 2.25pt; floor with an em fraction so large display runs stay proportionally heavy.
- */
-const TAB_UNDERLINE_SINGLE_PT = 0.75;
-const TAB_UNDERLINE_THICK_PT = 2.25;
-const TAB_UNDERLINE_HEAVY_EM = 0.15;
-const TAB_UNDERLINE_SINGLE_EM = 0.06;
-
-/**
  * Underline a tab's reserved ADVANCE, not its invisible `\t` glyph.
  *
  * Form blanks are often authored as `w:u` on a bare `w:tab` (thick/single). Word draws the
  * rule across the distance to the stop. CSS `text-decoration` on a clipped `\t` paints no
- * visible ink over that width. The advance box uses an inset background rule (not
- * `border-bottom`): tabs set `overflow: hidden` for glyph clipping, and a bottom border sits
- * on the margin edge where line boxes / overflow can thin or hide it.
+ * visible ink over that width. Thickness matches ordinary run underlines
+ * ({@link underlineThicknessPx}); the advance box uses an inset background rule because tabs
+ * set `overflow: hidden` and a margin-edge `border-bottom` can thin or hide.
  */
 function applyTabAdvanceUnderline(
   css: CSSStyleDeclaration,
@@ -535,10 +546,7 @@ function applyTabAdvanceUnderline(
   fontSizePt: number
 ): void {
   const color = underline.color ? `#${underline.color}` : 'currentColor';
-  const em = Math.max(0, fontSizePt) * scale;
-  const thicknessPx = underline.heavy
-    ? Math.max(TAB_UNDERLINE_THICK_PT * scale, TAB_UNDERLINE_HEAVY_EM * em)
-    : Math.max(TAB_UNDERLINE_SINGLE_PT * scale, TAB_UNDERLINE_SINGLE_EM * em);
+  const thicknessPx = underlineThicknessPx(underline.heavy, fontSizePt, scale);
   // Solid fill only — dashed/dotted tab blanks are rare; wavy has no background analogue.
   css.backgroundImage = `linear-gradient(${color}, ${color})`;
   css.backgroundSize = `100% ${thicknessPx}px`;
