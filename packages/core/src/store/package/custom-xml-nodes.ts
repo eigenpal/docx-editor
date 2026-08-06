@@ -24,6 +24,11 @@ import { insertChildren, removeNode, replaceChildren } from './ooxml-edit.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 
 /** The element holding the text a binding resolves to. */
+/** Ids a binding can address. XPath 1.0 has no escape for a quote inside a literal, so an id
+ *  carrying one could close the predicate and append an expression of the sender's choosing.
+ *  Restricting the id is honest — we mint them — and refusing beats a broken binding. */
+const ADDRESSABLE_ID = /^[A-Za-z_][\w.-]{0,127}$/;
+
 const LABEL = 'label';
 /** The element holding the payload, as JSON text. */
 const DATA = 'data';
@@ -140,6 +145,10 @@ export function withCustomXmlNode(
   partName: string,
   node: CustomXmlNode
 ): OoxmlPackage {
+  // An id `customXmlLabelXPath` will refuse is a payload no control can ever bind to. Writing
+  // it anyway leaves the store holding something unreachable, with the refusal surfacing later
+  // at the binding, where the id is no longer the obvious cause.
+  if (!ADDRESSABLE_ID.test(node.id)) return pkg;
   const part = pkg.parts.get(partName);
   if (!part) return pkg;
   const ns = part.root.namespaceUri;
@@ -208,11 +217,6 @@ export function withoutOrphanCustomXmlNodes(
     removed: orphans.map((node) => idOf(node) ?? '').filter((id) => id.length > 0),
   };
 }
-
-/** Ids this will address: XPath 1.0 has no escape for a quote inside a literal, so a node id
- *  carrying one could close the predicate and append an expression of the sender's choosing.
- *  Restricting the id is honest — we mint them — and refusing beats emitting a broken binding. */
-const ADDRESSABLE_ID = /^[A-Za-z_][\w.-]{0,127}$/;
 
 /**
  * The `w:xpath` a binding uses to reach a node's label, or null when the id cannot be addressed.

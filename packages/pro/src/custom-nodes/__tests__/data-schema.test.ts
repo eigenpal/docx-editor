@@ -151,12 +151,45 @@ describe('declaring the options on a definition', () => {
         // A plain object is the shape a host reaches for before learning it needs a schema.
         schema: { depth: 'number' } as unknown as StandardSchemaV1,
       })
-    ).toThrow(/not a Standard Schema/);
+    ).toThrow(/does not implement Standard Schema/);
   });
 
   test('both options are optional, and default to preserving', () => {
     const definition = defineCustomNode({ name: 'plain', tagPrefix: 'acme' });
     expect(definition.schema).toBeUndefined();
     expect(definition.preserveOnExport).toBeUndefined();
+  });
+});
+
+describe('options refused where the mistake was made', () => {
+  test('a mistyped preserveOnExport throws rather than degrading quietly', () => {
+    // The failure nobody notices: a truthy typo turns "strip this from anything that leaves"
+    // into "keep it", and the file is already out before anyone looks.
+    expect(() =>
+      defineCustomNode({
+        name: 'citation',
+        tagPrefix: 'acme',
+        preserveOnExport: 'txt' as 'text',
+      })
+    ).toThrow(/unknown preserveOnExport/);
+  });
+
+  test('a null schema reports the same way a wrong one does', () => {
+    expect(() =>
+      defineCustomNode({
+        name: 'citation',
+        tagPrefix: 'acme',
+        schema: null as unknown as StandardSchemaV1,
+      })
+    ).toThrow(/does not implement Standard Schema/);
+  });
+
+  test('the three values it does accept are accepted', () => {
+    for (const value of [true, false, 'text'] as const) {
+      expect(
+        defineCustomNode({ name: 'citation', tagPrefix: 'acme', preserveOnExport: value })
+          .preserveOnExport
+      ).toBe(value);
+    }
   });
 });

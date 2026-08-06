@@ -4351,7 +4351,7 @@ export function withEmbeddedImage(pkg: OoxmlPackage, ownerPartName: string, inpu
 export function withNewPart(pkg: OoxmlPackage, partName: string, root: OoxmlElement, contentType: string): OoxmlPackage;
 
 // @public
-export function withoutCustomXmlDataPart(pkg: OoxmlPackage, storyPartName: string, namespaceUri: string): OoxmlPackage;
+export function withoutCustomXmlDataPart(pkg: OoxmlPackage, storyPartName: string, namespaceUri: string): WithoutPartResult;
 
 // @public
 export function withoutCustomXmlNode(pkg: OoxmlPackage, partName: string, nodeId: string): OoxmlPackage;

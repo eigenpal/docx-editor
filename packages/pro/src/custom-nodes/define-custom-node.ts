@@ -146,8 +146,9 @@ export interface CustomNodeDefinition {
    *    binding and the payload are gone. Right for a citation, whose text is the point of it.
    *  - `false` — the node goes, and takes its content with it.
    *
-   * NOT YET READ, for the same reason as `schema`. Removing a store is implemented
-   * (`withoutCustomXmlDataPart`); choosing to do so per definition is not.
+   * NOT YET READ, for the same reason as `schema`. Removing the PAYLOAD is implemented
+   * (`withoutCustomXmlDataPart`); unwrapping the control and dropping the tag and the binding
+   * from the body is not, and neither is choosing between them per definition.
    */
   readonly preserveOnExport?: boolean | 'text';
 }
@@ -200,21 +201,36 @@ export const CUSTOM_NODE_IDENTITY_PATTERN = /^[A-Za-z0-9_.-]+$/;
 
 /** Validate and freeze a definition. Throws on a shape mistake — author error, not file input. */
 export function defineCustomNode(definition: CustomNodeDefinition): CustomNodeDefinition {
-  // Refuse a schema that is not one at definition time. The alternative is every node of this
-  // type failing to parse later, at a point where the cause is three layers away.
-  if (
-    definition.schema !== undefined &&
-    typeof definition.schema['~standard']?.validate !== 'function'
-  ) {
-    throw new Error(
-      `defineCustomNode: ${definition.name} has a schema that is not a Standard Schema`
-    );
-  }
   if (!CUSTOM_NODE_IDENTITY_PATTERN.test(definition.name ?? '')) {
     throw new Error(`defineCustomNode: invalid name ${JSON.stringify(definition.name)}`);
   }
   if (!CUSTOM_NODE_IDENTITY_PATTERN.test(definition.tagPrefix ?? '')) {
     throw new Error(`defineCustomNode: invalid tagPrefix ${JSON.stringify(definition.tagPrefix)}`);
+  }
+  // Both options are refused HERE, where the mistake was made. A schema that is not one means
+  // every node of this type fails to parse later, three layers from the cause; a mistyped
+  // `preserveOnExport` silently degrades "strip this from anything that leaves" into a value an
+  // export path reads as truthy, which is the failure nobody notices until a file is out.
+  const schema: unknown = definition.schema;
+  if (schema !== undefined) {
+    const standard = (
+      schema as { readonly '~standard'?: { readonly validate?: unknown } } | null
+    )?.['~standard'];
+    if (typeof standard?.validate !== 'function') {
+      throw new Error(
+        `defineCustomNode: ${JSON.stringify(definition.name)} has a schema that does not implement Standard Schema`
+      );
+    }
+  }
+  if (
+    definition.preserveOnExport !== undefined &&
+    definition.preserveOnExport !== true &&
+    definition.preserveOnExport !== false &&
+    definition.preserveOnExport !== 'text'
+  ) {
+    throw new Error(
+      `defineCustomNode: ${JSON.stringify(definition.name)} has an unknown preserveOnExport ${JSON.stringify(definition.preserveOnExport)}`
+    );
   }
   return Object.freeze({ ...definition });
 }

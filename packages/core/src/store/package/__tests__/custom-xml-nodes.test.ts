@@ -119,3 +119,14 @@ describe('the binding address', () => {
     expect(customXmlPrefixMappings('ns0', NS)).toBe(`xmlns:ns0='${NS}'`);
   });
 });
+
+describe('an id no binding could address', () => {
+  test('is refused at the write, not discovered at the binding', () => {
+    const { pkg, partName } = storeFixture();
+    // Escaping makes this safe in the XML; it is still an id `customXmlLabelXPath` refuses,
+    // so storing it would leave a payload nothing can ever reach.
+    const hostile = 'x" onload="alert(1)';
+    expect(withCustomXmlNode(pkg, partName, { id: hostile, label: 'x', data: '{}' })).toBe(pkg);
+    expect(customXmlLabelXPath('ns0', 'nodes', hostile)).toBeNull();
+  });
+});

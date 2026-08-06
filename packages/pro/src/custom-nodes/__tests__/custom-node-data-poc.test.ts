@@ -181,9 +181,9 @@ describe('a URL in the payload, for the badge thumbnail', () => {
 });
 
 describe('preserveOnExport: false', () => {
-  // A host can decide a node type must not leave the system inside the file. What leaves then
-  // has to carry no record of it — not an empty store, not a `customXml/` folder, not an
-  // Override naming a part that is gone. Someone who unzips it sees an ordinary document.
+  // The PAYLOAD half only. Stripping the store leaves any `w:dataBinding` in the body pointing
+  // at a store that is gone; unwrapping the control belongs to the export path and is not
+  // built, so these assert what this layer actually removes and nothing more.
   test('exporting strips the store, its parts, its relationships and its content type', () => {
     const { bytes } = openedWithCitation();
     const reopened = readOoxmlPackage(bytes);
@@ -191,7 +191,10 @@ describe('preserveOnExport: false', () => {
     expect(findCustomXmlDataPart(reopened.package, STORY, NS)).not.toBeNull();
 
     const exported = withoutCustomXmlDataPart(reopened.package, STORY, NS);
-    const written = writeOoxmlPackage(exported);
+    // The refusal is the interesting half: a caller that reads `ok` as "nothing to strip"
+    // ships the payload it meant to remove.
+    expect(exported.ok).toBe(true);
+    const written = writeOoxmlPackage(exported.pkg);
     const readBack = readOoxmlPackage(written);
     if (!readBack.ok) throw new Error(readBack.reason);
 
@@ -210,9 +213,9 @@ describe('preserveOnExport: false', () => {
     const withStore = readOoxmlPackage(bytes);
     if (!withStore.ok) throw new Error(withStore.reason);
 
-    const exported = readOoxmlPackage(
-      writeOoxmlPackage(withoutCustomXmlDataPart(withStore.package, STORY, NS))
-    );
+    const stripped = withoutCustomXmlDataPart(withStore.package, STORY, NS);
+    expect(stripped.ok).toBe(true);
+    const exported = readOoxmlPackage(writeOoxmlPackage(stripped.pkg));
     if (!exported.ok) throw new Error(exported.reason);
     expect(exported.package.parts.has(STORY)).toBe(true);
     expect(exported.package.parts.size).toBe(original.package.parts.size);

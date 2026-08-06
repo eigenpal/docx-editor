@@ -33,6 +33,7 @@ import {
   withRelationshipsPartFor,
   withContentTypeOverride,
   withoutPart,
+  type WithoutPartResult,
 } from './package-edit.ts';
 import { partNameKey, resolveInternalTarget } from './opc-names.ts';
 import { isValidNCName } from './qname.ts';
@@ -356,30 +357,34 @@ function existingItemIds(pkg: OoxmlPackage): Set<string> {
 }
 
 /**
- * Remove a store from a document: its nodes, both parts, both relationships, the Override.
+ * Remove a store from a document: both parts, both relationships, the Override.
  *
- * The export half of the custom-node story. A host can declare that a node type must not
- * survive a document leaving the system, and then what leaves has to carry no record of it —
- * not an empty store, not a `customXml/` folder, not an Override in `[Content_Types].xml`
- * naming a part that is no longer there. Anyone who unzips the file sees an ordinary document.
+ * PACKAGE ONLY. It does not touch the body, so a `w:sdt` bound to the store keeps its
+ * `w:dataBinding`, its `w:storeItemID` and its `w:tag`, and Word then opens a control bound to
+ * a store that is not there. Stripping those is the export path's job and is not built; this
+ * is the half that removes the payload, which is the half a caller can rely on.
  *
- * A package with no store for the namespace comes back unchanged.
+ * `ok: false` means nothing was removed and the package is unchanged — most often because an
+ * owner's `.rels` was never parsed into a tree, which {@link withoutPart} refuses to work
+ * around. A caller exporting a document has to treat that as a failure to export rather than
+ * as a document with nothing to strip, or it ships the payload it meant to remove.
  */
 export function withoutCustomXmlDataPart(
   pkg: OoxmlPackage,
   storyPartName: string,
   namespaceUri: string
-): OoxmlPackage {
+): WithoutPartResult {
   let next = pkg;
   // Every store for the namespace, not the first: a document can carry two, and "the export
   // leaves no record of it" is false if one survives.
   for (const store of customXmlDataParts(pkg, storyPartName)) {
     if (store.namespaceUri !== namespaceUri) continue;
     const item = withoutPart(next, store.partName);
-    if (!item.ok) return pkg;
+    if (!item.ok) return { pkg, ok: false };
     const props = withoutPart(item.pkg, store.propsPartName);
-    if (!props.ok) return pkg;
+    if (!props.ok) return { pkg, ok: false };
     next = props.pkg;
   }
-  return next;
+  // Nothing to remove is a success: the document already carries no such store.
+  return { pkg: next, ok: true };
 }
