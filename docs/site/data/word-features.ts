@@ -489,7 +489,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/1.x/guides/images',
     notes:
-      'Non-picture DrawingML payloads reserve extent and paint a labelled placeholder; inner stories are not editable. Distinct from typed text-box story work.',
+      'Anchored text boxes render their story content clipped inside the extent — in the body, headers, and footers, including page-relative anchors — with PAGE / NUMPAGES / SECTIONPAGES fields inside header/footer text boxes evaluated per page. Read-only: inner stories are not editable. Inline text boxes, linked chains, autofit, and rotation still render as placeholders or clip.',
   },
   {
     id: 'images.shapes',
@@ -795,7 +795,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Allowlisted complex PAGE, NUMPAGES, and SECTIONPAGES project in headers/footers at layout time (PAGE respects section pgNumType start/fmt). Insertable from React header/footer chrome (including Page X of Y). PAGE fields hosted inside drawing text boxes remain deferred with text-box story rendering. Other field instructions stay inert; body field evaluation is deferred.',
+      'Allowlisted complex PAGE, NUMPAGES, and SECTIONPAGES project in headers/footers at layout time (PAGE respects section pgNumType start/fmt), including fields hosted inside anchored header/footer text boxes. Insertable from React header/footer chrome (including Page X of Y). Other field instructions stay inert; body field evaluation is deferred.',
   },
   {
     id: 'fields.toc',

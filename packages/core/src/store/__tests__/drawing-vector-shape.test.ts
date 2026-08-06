@@ -116,7 +116,7 @@ describe('wps vector shape projection', () => {
     expect([...atoms.values()][0]!.vectorShape).not.toBeNull();
   });
 
-  test('an MC-wrapped wps textbox stays invisible, like its VML fallback always was', () => {
+  test('an MC-wrapped wps textbox projects a story; the VML fallback never renders', () => {
     const drawing =
       '<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
       '<wp:extent cx="914400" cy="457200"/><wp:docPr id="9" name="TextBox 9"/>' +
@@ -126,6 +126,46 @@ describe('wps vector shape projection', () => {
       '<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></wps:spPr>' +
       '<wps:txbx><w:txbxContent><w:p><w:r><w:t>boxed</w:t></w:r></w:p></w:txbxContent></wps:txbx>' +
       '<wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:inline></w:drawing>';
+    const part = parsePart(`<w:p><w:r>${mcWrapped(drawing)}</w:r></w:p>`);
+    const atoms = indexInlineDrawingProjectionsInPart(part);
+    // ONE projection: the wps Choice branch carries the story; the VML fallback is not a
+    // second drawing, so nothing double-renders.
+    expect(atoms.size).toBe(1);
+    const projection = [...atoms.values()][0]!;
+    expect(projection.picture).toBeNull();
+    expect(projection.vectorShape).toBeNull();
+    const story = projection.textboxStory;
+    expect(story).not.toBeNull();
+    expect(story!.fillHex).toBe('FF0000');
+    expect(story!.verticalAnchor).toBe('top');
+    // Empty bodyPr means the OOXML inset defaults, not zero.
+    expect(story!.insetsEmu).toEqual({ top: 45_720, right: 91_440, bottom: 45_720, left: 91_440 });
+  });
+
+  test('a wps txbx without txbxContent projects no story and keeps the placeholder path', () => {
+    const drawing =
+      '<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+      '<wp:extent cx="914400" cy="457200"/><wp:docPr id="11" name="TextBox 11"/>' +
+      '<a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">' +
+      '<wps:wsp><wps:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></wps:spPr>' +
+      '<wps:txbx></wps:txbx>' +
+      '<wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:inline></w:drawing>';
+    const part = parsePart(`<w:p><w:r>${drawing}</w:r></w:p>`);
+    const atoms = indexInlineDrawingProjectionsInPart(part);
+    expect(atoms.size).toBe(1);
+    const projection = [...atoms.values()][0]!;
+    expect(projection.textboxStory).toBeNull();
+    expect(projection.picture).toBeNull();
+    expect(projection.diagnostics.filter((d) => d.code === 'unsupported-graphic')).toHaveLength(1);
+  });
+
+  test('an MC-wrapped chart stays invisible, like its VML fallback always was', () => {
+    const drawing =
+      '<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+      '<wp:extent cx="914400" cy="457200"/><wp:docPr id="10" name="Chart 10"/>' +
+      '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">' +
+      '<c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"/>' +
+      '</a:graphicData></a:graphic></wp:inline></w:drawing>';
     const part = parsePart(`<w:p><w:r>${mcWrapped(drawing)}</w:r></w:p>`);
     const atoms = indexInlineDrawingProjectionsInPart(part);
     expect(atoms.size).toBe(0);

@@ -300,6 +300,21 @@ export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
     for (const grand of run.children) {
       if (!consumeScanNode(budget)) return;
       processFieldChild(grand, depth + 1);
+      // A drawing (or its MC wrapper) inside the run can carry a textbox story whose
+      // paragraphs hold their own PAGE-family fields. Descend with the host field state
+      // saved, so the nested story's paragraph resets cannot break a field that spans
+      // sibling runs around the drawing.
+      if (
+        (grand.kind === 'drawing' || grand.kind === 'generic') &&
+        !isInstrText(grand) &&
+        'children' in grand &&
+        grand.children.length > 0
+      ) {
+        const saved = { ...field };
+        walk(grand, depth + 1);
+        Object.assign(field, saved);
+      }
+      if (complete() || budget.exhausted) return;
     }
   };
 

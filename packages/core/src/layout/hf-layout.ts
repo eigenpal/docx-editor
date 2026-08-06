@@ -39,6 +39,7 @@ import {
   type ExclusionZone,
 } from './drawing-exclusion.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
+import { layoutTextboxStory } from './textbox-story-layout.ts';
 import type {
   BlockFragmentRecord,
   HeaderFooterStoryRecord,
@@ -245,6 +246,19 @@ export function layoutHeaderFooterStory(
           inlineDrawingLayout,
           anchorFrameBase,
           pageContentClip: () => pageClipRegion(anchorFrameBase()),
+          // Textbox stories flow with the SAME page-field context as the host story, so a
+          // PAGE field inside an anchored footer text box evaluates per page like a direct
+          // footer field. The context token already keys this cache entry.
+          layoutTextboxStoryFor: (projection) =>
+            layoutTextboxStory(projection, {
+              measurer,
+              producer: producer + token + (displayMode ? `|rev:${displayMode}` : ''),
+              cache,
+              styleCascade,
+              ...(effectiveCtx ? { pageContext: effectiveCtx } : {}),
+              ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+              ...(displayMode ? { displayMode } : {}),
+            }),
           collectAnchoredDrawings: (drawings) => {
             pendingAnchoredDrawings.push(...drawings);
           },

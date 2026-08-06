@@ -190,6 +190,7 @@ export interface DrawingProjection {
   }> | null;
   readonly picture: PictureProjection | null;
   readonly vectorShape: VectorShapeProjection | null;
+  readonly textboxStory: TextboxStoryProjection | null;
   readonly locks: DrawingLocks;
   readonly effects: Readonly<{ grayscale: boolean; brightness: number; contrast: number }>;
   readonly compatibilityBranchNodeId: string | null;
@@ -212,6 +213,32 @@ export interface VectorShapeProjection {
   /** Validated 6-digit sRGB hex (no `#`), or null for no stroke. */
   readonly strokeHex: string | null;
   /** Stroke width in EMU; 0 when absent. */
+  readonly strokeWidthEmu: number;
+}
+
+/**
+ * The story carried by a `wps:wsp` text box (`wps:txbx` → `w:txbxContent`).
+ *
+ * The projection captures only the story root and the shape chrome reads; it never walks the
+ * story content, so the per-drawing element budget is not spent on paragraphs. Layout collects
+ * blocks from `content` under its own caps.
+ */
+export interface TextboxStoryProjection {
+  /** Canonical node id of the `w:txbxContent` element. */
+  readonly contentNodeId: string;
+  /** The `w:txbxContent` element itself; treated as an opaque story root here. */
+  readonly content: OoxmlElement;
+  /** `wps:bodyPr` insets with the OOXML defaults (91440 EMU l/r, 45720 EMU t/b) when absent. */
+  readonly insetsEmu: Readonly<{ top: number; right: number; bottom: number; left: number }>;
+  /** `wps:bodyPr/@anchor` collapsed to the three renderable positions; default top. */
+  readonly verticalAnchor: 'top' | 'center' | 'bottom';
+  /** Autofit child of `wps:bodyPr`; extent stays authoritative either way (diagnostic only). */
+  readonly autofit: 'none' | 'shape' | 'normal';
+  /** Solid fill of the hosting shape, painted behind the story; null for no fill. */
+  readonly fillHex: string | null;
+  /** Solid outline of the hosting shape; null for no outline. */
+  readonly strokeHex: string | null;
+  /** Outline width in EMU; 0 when absent. */
   readonly strokeWidthEmu: number;
 }
 
@@ -1199,13 +1226,8 @@ function readShapePathPolygons(
  * Renderable-subset projection of a `wps:wsp` graphic. Returns null (→ placeholder) for
  * text bodies, rotated/flipped transforms, non-solid fills, curves, or over-limit paths.
  */
-function projectVectorShape(
-  anchor: OoxmlElement,
-  extent: Readonly<{ cx: number; cy: number }>,
-  compatibilityMode: boolean
-): VectorShapeProjection | null {
-  void compatibilityMode;
-  if (extent.cx <= 0 || extent.cy <= 0) return null;
+/** The `wps:wsp` under the anchor's graphic data, or null when the payload is something else. */
+function findWspInAnchor(anchor: OoxmlElement): OoxmlElement | null {
   // Non-picture graphic payloads demote to generic nodes even under a typed
   // `drawingGraphic`, so the generic lookup is always in play here.
   const graphic =
@@ -1223,10 +1245,22 @@ function projectVectorShape(
     });
   if (!data) return null;
   if (schemaAttributeValue(data.attributes, 'uri') !== WPS_GRAPHIC_DATA_URI) return null;
-  const wsp = findDirectChild(data.children, {
-    namespaceUri: WPS_NAMESPACE_URI,
-    localName: 'wsp',
-  });
+  return (
+    findDirectChild(data.children, {
+      namespaceUri: WPS_NAMESPACE_URI,
+      localName: 'wsp',
+    }) ?? null
+  );
+}
+
+function projectVectorShape(
+  anchor: OoxmlElement,
+  extent: Readonly<{ cx: number; cy: number }>,
+  compatibilityMode: boolean
+): VectorShapeProjection | null {
+  void compatibilityMode;
+  if (extent.cx <= 0 || extent.cy <= 0) return null;
+  const wsp = findWspInAnchor(anchor);
   if (!wsp) return null;
   if (findDirectChild(wsp.children, { namespaceUri: WPS_NAMESPACE_URI, localName: 'txbx' })) {
     return null;
@@ -1301,6 +1335,97 @@ function projectVectorShape(
   return {
     extentEmu: { cx: extent.cx, cy: extent.cy },
     subpathsEmu: polygons,
+    fillHex,
+    strokeHex,
+    strokeWidthEmu,
+  };
+}
+
+/** OOXML `wps:bodyPr` inset defaults in EMU. */
+const DEFAULT_TEXTBOX_INSET_LR_EMU = 91_440;
+const DEFAULT_TEXTBOX_INSET_TB_EMU = 45_720;
+
+/**
+ * Story projection of a `wps:wsp` carrying a `wps:txbx`. Captures the `w:txbxContent` root and
+ * the bodyPr/shape-chrome reads without walking the story content; returns null when the shape
+ * is not a text box or the box has no usable extent.
+ */
+function projectTextboxStory(
+  anchor: OoxmlElement,
+  extent: Readonly<{ cx: number; cy: number }>
+): TextboxStoryProjection | null {
+  if (extent.cx <= 0 || extent.cy <= 0) return null;
+  const wsp = findWspInAnchor(anchor);
+  if (!wsp) return null;
+  const txbx = findDirectChild(wsp.children, {
+    namespaceUri: WPS_NAMESPACE_URI,
+    localName: 'txbx',
+  });
+  if (!txbx) return null;
+  const content = findDirectChild(txbx.children, {
+    namespaceUri: WML_NAMESPACE_URI,
+    localName: 'txbxContent',
+  });
+  if (!content) return null;
+
+  const bodyPr = findDirectChild(wsp.children, {
+    namespaceUri: WPS_NAMESPACE_URI,
+    localName: 'bodyPr',
+  });
+  const inset = (name: string, fallback: number): number => {
+    const raw = bodyPr ? schemaAttributeValue(bodyPr.attributes, name) : undefined;
+    if (raw === undefined) return fallback;
+    const value = parseEmu(raw, false);
+    return value === null || value < 0 ? fallback : value;
+  };
+  const anchorRaw = bodyPr ? schemaAttributeValue(bodyPr.attributes, 'anchor') : undefined;
+  const verticalAnchor =
+    anchorRaw === 'ctr' ? 'center' : anchorRaw === 'b' ? 'bottom' : ('top' as const);
+  let autofit: TextboxStoryProjection['autofit'] = 'none';
+  if (bodyPr) {
+    if (
+      findDirectChild(bodyPr.children, {
+        namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
+        localName: 'spAutoFit',
+      })
+    ) {
+      autofit = 'shape';
+    } else if (
+      findDirectChild(bodyPr.children, {
+        namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
+        localName: 'normAutofit',
+      })
+    ) {
+      autofit = 'normal';
+    }
+  }
+
+  const spPr = findDirectChild(wsp.children, {
+    namespaceUri: WPS_NAMESPACE_URI,
+    localName: 'spPr',
+  });
+  const fillHex = spPr ? readSolidFillHex(spPr) : null;
+  const ln = spPr
+    ? findDirectChild(spPr.children, {
+        namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
+        localName: 'ln',
+      })
+    : null;
+  const strokeHex = ln ? readSolidFillHex(ln) : null;
+  const strokeWidthEmu =
+    strokeHex !== null ? (parseEmu(schemaAttributeValue(ln!.attributes, 'w')) ?? 12_700) : 0;
+
+  return {
+    contentNodeId: content.id,
+    content,
+    insetsEmu: {
+      top: inset('tIns', DEFAULT_TEXTBOX_INSET_TB_EMU),
+      right: inset('rIns', DEFAULT_TEXTBOX_INSET_LR_EMU),
+      bottom: inset('bIns', DEFAULT_TEXTBOX_INSET_TB_EMU),
+      left: inset('lIns', DEFAULT_TEXTBOX_INSET_LR_EMU),
+    },
+    verticalAnchor,
+    autofit,
     fillHex,
     strokeHex,
     strokeWidthEmu,
@@ -1483,6 +1608,13 @@ function freezeDrawingProjection(projection: DrawingProjection): DrawingProjecti
           ),
         })
       : null,
+    // `content` is a canonical-tree node shared with the store; it is not deep-frozen here.
+    textboxStory: projection.textboxStory
+      ? Object.freeze({
+          ...projection.textboxStory,
+          insetsEmu: Object.freeze({ ...projection.textboxStory.insetsEmu }),
+        })
+      : null,
     locks: Object.freeze({ ...projection.locks }),
     effects: Object.freeze({ ...projection.effects }),
     diagnostics: Object.freeze(
@@ -1526,6 +1658,7 @@ function buildUnrenderableProjection(
       anchor: null,
       picture: null,
       vectorShape: null,
+      textboxStory: null,
       locks: EMPTY_LOCKS,
       effects: EMPTY_EFFECTS,
       compatibilityBranchNodeId: state.compatibilityBranchNodeId,
@@ -1718,6 +1851,7 @@ export function projectDrawing(
       vectorShape: pictureResult.picture
         ? null
         : projectVectorShape(anchor, extent, compatibilityMode),
+      textboxStory: pictureResult.picture ? null : projectTextboxStory(anchor, extent),
       locks,
       effects: pictureResult.effects,
       compatibilityBranchNodeId: state.compatibilityBranchNodeId,
@@ -1749,10 +1883,17 @@ export function projectRunLevelMcDrawing(
     namespaceScope: context.namespaceScope,
   });
   if (!projection) return null;
-  // An MC-wrapped payload the engine cannot actually draw (textboxes, charts) stays
+  // An MC-wrapped payload the engine cannot actually draw (charts, diagrams, groups) stays
   // invisible like its VML fallback always was — a labelled placeholder card over
-  // letterhead furniture would be noisier than what either branch renders today.
-  if (projection.picture === null && projection.vectorShape === null) return null;
+  // letterhead furniture would be noisier than what either branch renders today. Text boxes
+  // carry a renderable story and pass through.
+  if (
+    projection.picture === null &&
+    projection.vectorShape === null &&
+    projection.textboxStory === null
+  ) {
+    return null;
+  }
   return projection;
 }
 

@@ -19,6 +19,7 @@ import { formatRevisionOf, type RevisionAttribution } from '@docx-editor.dev/cor
 import type {
   ContentControlBoundaryRecord,
   ContentControlMappedType,
+  LayoutBox,
   LineRecord,
   PageRecord,
   ParagraphBorderStrokeRecord,
@@ -222,12 +223,21 @@ function asResolvedPaintContext(ctx: DrawingPaintHostContext): ResolvedPaintCont
 }
 
 function resolvedDrawingPaint(ctx: ResolvedPaintContext): DrawingPaintContext {
+  // Textbox stories are furniture wherever they paint: links inert, no editable bindings.
+  const storyCtx: ResolvedPaintContext = { ...ctx, inertLinks: true };
   return Object.freeze({
     scale: ctx.scale,
     strings: ctx.drawingStrings,
     ...(ctx.imageUrlPort ? { imageUrlPort: ctx.imageUrlPort } : {}),
     ...(ctx.inertLinks ? { inertLinks: true } : {}),
     ...(ctx.paintInstance ? { paintInstance: ctx.paintInstance } : {}),
+    paintStoryFragment: (
+      document: Document,
+      fragment: ParagraphFragmentRecord | TableFragmentRecord
+    ) =>
+      fragment.kind === 'table'
+        ? paintTableFragment(document, fragment, storyCtx)
+        : paintFragment(document, fragment, storyCtx),
   });
 }
 
@@ -308,16 +318,45 @@ function isPageRelativeHfAnchor(drawing: AnchoredDrawingRecord): boolean {
 
 function hfAnchorOnPageSheet(
   story: HeaderFooterStoryRecord,
-  drawing: AnchoredDrawingRecord
+  drawing: AnchoredDrawingRecord,
+  pageBox: { readonly x: number; readonly y: number }
 ): AnchoredDrawingRecord {
   const pb = drawing.paintBounds;
+  // Layout resolves page-frame axes in page-CONTENT coordinates; the record's frame origin is
+  // the page edge in that space (−margin), so the sheet position needs the page box, not the
+  // story box — a footer story's own Y would double-count most of the page height. Axes on
+  // story-relative frames keep the story box base.
+  const absX =
+    drawing.horizontalFrame === 'page'
+      ? pageBox.x + (pb.x - drawing.horizontalFrameOrigin)
+      : story.box.x + pb.x;
+  const absY =
+    drawing.verticalFrame === 'page'
+      ? pageBox.y + (pb.y - drawing.verticalFrameOrigin)
+      : story.box.y + pb.y;
+  const dx = absX - pb.x;
+  const dy = absY - pb.y;
+  const shift = (box: LayoutBox): LayoutBox =>
+    Object.freeze({ x: box.x + dx, y: box.y + dy, width: box.width, height: box.height });
   return Object.freeze({
     ...drawing,
-    paintBounds: Object.freeze({
-      x: story.box.x + pb.x,
-      y: story.box.y + pb.y,
-      width: pb.width,
-      height: pb.height,
+    x: drawing.x + dx,
+    y: drawing.y + dy,
+    paintBounds: shift(pb),
+    hitBounds: shift(drawing.hitBounds),
+    geometry: Object.freeze({
+      ...drawing.geometry,
+      contentBounds: shift(drawing.geometry.contentBounds),
+      paintBounds: shift(drawing.geometry.paintBounds),
+      ...(drawing.geometry.clipPolygon
+        ? {
+            clipPolygon: Object.freeze(
+              drawing.geometry.clipPolygon.map((point) =>
+                Object.freeze({ x: point.x + dx, y: point.y + dy })
+              )
+            ),
+          }
+        : {}),
     }),
   });
 }
@@ -338,7 +377,7 @@ function appendHfPageRelativeDrawingLayer(
 ): void {
   const pageRelative = drawings
     .filter(isPageRelativeHfAnchor)
-    .map((drawing) => hfAnchorOnPageSheet(story, drawing));
+    .map((drawing) => hfAnchorOnPageSheet(story, drawing, pageOrigin));
   appendAnchoredDrawingsForRecords(document, pageElement, pageRelative, ctx, pageOrigin, layer);
 }
 

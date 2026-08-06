@@ -50,6 +50,14 @@ export interface DrawingPaintContext {
    * element re-decodes asynchronously and flashes blank for a frame.
    */
   readonly paintInstance?: string;
+  /**
+   * Host-supplied fragment painter for textbox stories (the host owns paragraph/table
+   * fragment paint). Absent hosts degrade textbox drawings to the placeholder card.
+   */
+  readonly paintStoryFragment?: (
+    document: Document,
+    fragment: ParagraphFragmentRecord | TableFragmentRecord
+  ) => HTMLElement;
 }
 
 const MIME_FORMAT_LABEL: Readonly<Record<string, string>> = Object.freeze({
@@ -548,6 +556,68 @@ function paintVectorShape(
   return outer;
 }
 
+/**
+ * Paint a textbox drawing's laid-out story: optional fill/outline box, then the story
+ * fragments inside a clipped content container at the resolved anchor position. The
+ * container is page furniture — non-editable, with no selection bindings inside.
+ */
+function paintTextboxStory(
+  document: Document,
+  drawing: AnchoredDrawingRecord,
+  story: NonNullable<AnchoredDrawingRecord['textboxStory']>,
+  ctx: DrawingPaintContext,
+  origin?: LayoutBox
+): HTMLElement {
+  const scale = ctx.scale;
+  const outer = document.createElement('div');
+  outer.className = 'docx-drawing docx-drawing-textbox';
+  outer.dataset.drawingNodeId = drawing.drawingNodeId;
+  outer.setAttribute('contenteditable', 'false');
+  positionedBox(outer, drawing.paintBounds, ctx.scale, origin);
+  outer.style.overflow = 'hidden';
+
+  // Extent box in paint-bounds-relative coordinates (paintBounds may be a clipped subregion).
+  const extentLeft = (drawing.x - drawing.paintBounds.x) * scale;
+  const extentTop = (drawing.y - drawing.paintBounds.y) * scale;
+
+  if (story.fillHex !== null || story.strokeHex !== null) {
+    const box = document.createElement('div');
+    box.className = 'docx-drawing-textbox-box';
+    box.style.position = 'absolute';
+    box.style.left = `${extentLeft}px`;
+    box.style.top = `${extentTop}px`;
+    box.style.width = `${drawing.width * scale}px`;
+    box.style.height = `${drawing.height * scale}px`;
+    box.style.boxSizing = 'border-box';
+    // SAFE: hex colors are validated 6-digit sRGB at the projection trust boundary.
+    if (story.fillHex !== null) box.style.backgroundColor = `#${story.fillHex}`;
+    if (story.strokeHex !== null) {
+      box.style.border = `${Math.max(story.strokeWidthPt * scale, 0.5)}px solid #${story.strokeHex}`;
+    }
+    outer.append(box);
+  }
+
+  const content = document.createElement('div');
+  content.className = 'docx-drawing-textbox-content';
+  content.style.position = 'absolute';
+  content.style.left = `${extentLeft + story.contentOffset.x * scale}px`;
+  content.style.top = `${extentTop + story.contentOffset.y * scale}px`;
+  content.style.width = `${story.contentWidth * scale}px`;
+  content.style.height = `${Math.max(0, story.contentHeight) * scale}px`;
+  content.style.overflow = 'hidden';
+  for (const fragment of story.fragments) {
+    content.append(ctx.paintStoryFragment!(document, fragment));
+  }
+  // Story text is furniture: strip selection/editing bindings so pointer mapping never
+  // resolves into a story the surface cannot edit.
+  for (const bound of content.querySelectorAll<HTMLElement>('[data-paragraph-id]')) {
+    delete bound.dataset.paragraphId;
+  }
+  outer.append(content);
+  applyAccessibility(outer, drawing, false);
+  return outer;
+}
+
 export function paintDrawingRecord(
   document: Document,
   drawing: InlineDrawingRecord | AnchoredDrawingRecord,
@@ -557,6 +627,14 @@ export function paintDrawingRecord(
 ): HTMLElement | null {
   if (drawing.accessibility.hidden) return null;
   if (drawing.paintBounds.width <= 0 || drawing.paintBounds.height <= 0) return null;
+
+  if (
+    drawing.kind === 'anchoredDrawing' &&
+    drawing.textboxStory !== undefined &&
+    ctx.paintStoryFragment !== undefined
+  ) {
+    return paintTextboxStory(document, drawing, drawing.textboxStory, ctx, origin);
+  }
 
   if (drawing.vectorShape && drawing.vectorShape.subpathsEmu.length > 0) {
     return paintVectorShape(document, drawing, ctx, origin);

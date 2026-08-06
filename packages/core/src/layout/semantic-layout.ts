@@ -168,6 +168,7 @@ import { publishListMarker } from './list-marker.ts';
 import { sameFragments, sameAnchoredDrawings } from './semantic-fragment-signature.ts';
 import { type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
 import { furnitureForSection, layoutMultiSectionDocument } from './multi-section-layout.ts';
+import { layoutTextboxStory } from './textbox-story-layout.ts';
 
 /** Extra full-document layouts after the reflow pass budget to detect a stable 2-cycle. */
 const MAX_DRAWING_EXCLUSION_STABILIZATION_PASSES = 2;
@@ -1235,6 +1236,21 @@ function layoutBlocksPass(
     carryDeferredToNextPage();
   };
 
+  // Body textbox stories flow without a page-field context: body PAGE projection stays
+  // deferred, so a PAGE field inside a body text box contributes only its cached result,
+  // consistent with direct body fields today.
+  const layoutTextboxStoryForBody = (
+    projection: import('../store/package/drawing-projection.ts').DrawingProjection
+  ) =>
+    layoutTextboxStory(projection, {
+      measurer,
+      producer,
+      cache,
+      styleCascade,
+      ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+      ...(displayMode ? { displayMode } : {}),
+    });
+
   // Table layout shares the flow's line counter, paragraph cache, and precomputed list
   // items (counters already advanced in document order, including cell paragraphs).
   // Border ownership intervals and vMerge cell visits are budgeted once per pass so nested
@@ -1259,6 +1275,7 @@ function layoutBlocksPass(
       ? {
           anchorFrameBase,
           pageContentClip,
+          layoutTextboxStoryFor: layoutTextboxStoryForBody,
           publishAnchoredDrawings: collectAnchoredDrawings,
           collectAnchoredDrawings,
           columnBoxForParagraph: anchorColumnBox,
@@ -2282,6 +2299,7 @@ function layoutBlocksPass(
             pageClip: pageContentClip(),
             measurer,
             sourceOrderOf,
+            layoutTextboxStory: layoutTextboxStoryForBody,
           })
         );
       }
