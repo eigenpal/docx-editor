@@ -63,7 +63,13 @@ export interface StandardSchemaIssue {
  * payload — not `never`, which would make the field unusable rather than merely unguaranteed.
  */
 export type InferSchemaOutput<Schema> =
-  Schema extends StandardSchemaV1<unknown, infer Output> ? Output : unknown;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see the note below
+  0 extends 1 & Schema
+    ? // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see the note below
+      any
+    : Schema extends StandardSchemaV1<unknown, infer Output>
+      ? Output
+      : unknown;
 
 /**
  * The type a schema ACCEPTS, which is what a write has to satisfy.
@@ -72,8 +78,21 @@ export type InferSchemaOutput<Schema> =
  * takes one shape and produces another — so a write typed by the output would reject the very
  * value the schema was written to accept.
  */
-export type InferSchemaInput<Schema> =
-  Schema extends StandardSchemaV1<infer Input, unknown> ? Input : unknown;
+export type InferSchemaInput<Schema> = 0 extends 1 & Schema
+  ? // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see the note below
+    any
+  : Schema extends StandardSchemaV1<infer Input, unknown>
+    ? Input
+    : unknown;
+
+// `0 extends 1 & Schema` is the standard spelling of "is this `any`". It is only true for `any`,
+// because `1 & any` is `any` and everything extends `any`. It looks like nonsense; it is not.
+//
+// It earns its keep because both aliases above feed the PARAMETER of `toDocx`, which makes them
+// contravariant. Without the special case `AnyCustomNodeDefinition` — the type every collection
+// takes — resolves that parameter to `unknown`, and a definition whose `toDocx` takes a real
+// payload stops being assignable to it. `any` is the one type assignable in both directions,
+// which is exactly what a heterogeneous collection needs.
 
 /**
  * Why a payload was refused.

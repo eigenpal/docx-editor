@@ -74,18 +74,6 @@ const CitationData = z.object({
 });
 type CitationData = z.infer<typeof CitationData>;
 
-/**
- * The payload as the schema hands it back, or nothing.
- *
- * Needed only where the payload arrives as `unknown`: the review ITEM and the chip activation
- * are cross-definition surfaces, so they carry every node's payload under one type. Inside the
- * definition's own hooks — `fromDocx`, `reviewCard` — `data` is already `CitationData`.
- */
-function citationDataOf(data: unknown): CitationData | null {
-  const parsed = CitationData.safeParse(data);
-  return parsed.success ? parsed.data : null;
-}
-
 const DEMO_CITATION = defineCustomNode({
   name: 'citation',
   tagPrefix: 'docx',
@@ -325,8 +313,8 @@ function CitationPopover({
             Source: <code>{card.attrs['sourceId'] ?? '—'}</code>
           </div>
           {/* From the PAYLOAD, not the tag — only the source ID rides in `w:tag` now. */}
-          <div>Locator: {citationDataOf(card.data)?.locator || '—'}</div>
-          <div>Year: {citationDataOf(card.data)?.year ?? '—'}</div>
+          <div>Locator: {DEMO_CITATION.dataOf(card)?.locator || '—'}</div>
+          <div>Year: {DEMO_CITATION.dataOf(card)?.year ?? '—'}</div>
         </div>
         <button
           type="button"
@@ -361,7 +349,7 @@ function CitationCardActions() {
   // is already on the item, so active-only content is one condition, not new wiring.
   if (!item.isActive) return null;
   const attrs = item.item.attrs;
-  const citation = citationDataOf(item.item.data);
+  const citation = DEMO_CITATION.dataOf(item.item);
   // THE URL IS THE SENDER'S. `sanitizeHref` is the allowlist — `javascript:`, `data:` and
   // `vbscript:` are well-formed URLs a schema is happy with and a browser will execute.
   const safe = citation?.url ? sanitizeHref(citation.url) : null;
@@ -465,9 +453,9 @@ export type CitationFormState =
 function CitationDialog({ form, onClose }: { form: CitationFormState; onClose: () => void }) {
   const editor = useDocxEditor();
   const editing = form.mode === 'edit';
-  // The payload the document already holds, validated. Everything but `sourceId` comes from
-  // here rather than from the tag: 64 characters is not a bibliography.
-  const current = editing ? citationDataOf(form.data) : null;
+  // The payload the document already holds, typed by the definition's own schema. Everything
+  // but `sourceId` comes from here rather than from the tag: 64 characters is not a bibliography.
+  const current = editing ? DEMO_CITATION.dataOf(form) : undefined;
   const [sourceId, setSourceId] = useState(() =>
     editing ? (form.attrs['sourceId'] ?? '') : `src_${Date.now().toString(36)}`
   );

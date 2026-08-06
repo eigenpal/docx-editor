@@ -38,6 +38,7 @@ export {
   recognizeCustomNodes,
   type ActivatedCustomNode,
   type AnyCustomNodeDefinition,
+  type CustomNode,
   type CustomNodeDefinition,
   type CustomNodeDiagnostic,
   type CustomNodePayloadSource,

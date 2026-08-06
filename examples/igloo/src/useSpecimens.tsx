@@ -23,12 +23,12 @@ import { CustomNodeChrome } from '@docx-editor.dev/pro/react';
 import {
   blocksOf,
   defaultAttrs,
-  IcebergData,
   definitionOf,
   depthOf,
   labelFor,
   payloadFor,
   randomSpecimen,
+  surveyOf,
   tagAttrsFor,
   type SpecimenAt,
   type SpecimenKind,
@@ -183,15 +183,13 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
   const activate = useCallback(
     (node: ActivatedCustomNode) => {
       if (node.name === 'iceberg') {
-        const survey = IcebergData.safeParse(node.data);
+        const survey = surveyOf(node);
         setProbe({
           kind: 'iceberg',
           rect: node.rect,
-          depth: survey.success ? survey.data.depth : depthOf(node.attrs),
-          ...(survey.success && survey.data.surveyedBy
-            ? { surveyedBy: survey.data.surveyedBy }
-            : {}),
-          ...(survey.success && survey.data.notes ? { notes: survey.data.notes } : {}),
+          depth: survey.depth,
+          ...(survey.surveyedBy ? { surveyedBy: survey.surveyedBy } : {}),
+          ...(survey.notes ? { notes: survey.notes } : {}),
         });
         return;
       }

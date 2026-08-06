@@ -139,6 +139,9 @@ export interface CustomNodeDefinition<
    *   text: `(${data.authors[0]} ${data.year})`,
    * }),
    * ```
+   *
+   * Declare a `schema` first. Without one `data` is `unknown`, so there is nothing to derive
+   * from and this can only guess.
    */
   readonly toDocx?: (data: InferSchemaOutput<Schema>) => {
     readonly attrs: Readonly<Record<string, string>>;
@@ -259,7 +262,48 @@ export interface CustomNodeDefinition<
 }
 
 /**
+ * A definition, plus what {@link defineCustomNode} attaches to it.
+ *
+ * You author a {@link CustomNodeDefinition}; you are handed one of these. The difference is
+ * `dataOf`, which cannot be written by hand because it closes over the schema you just declared.
+ */
+export interface CustomNode<
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see `AnyCustomNodeDefinition`
+  Schema extends StandardSchemaV1 | undefined = any,
+> extends CustomNodeDefinition<Schema> {
+  /**
+   * This node's payload, from a surface that carries every definition's under one type.
+   *
+   * `RecognizedCustomNode.data`, `ActivatedCustomNode.data` and `ReviewCustomItem.data` are all
+   * `unknown`, because each of those can be any registered definition's node. This narrows one
+   * to THIS definition and validates its payload against THIS schema, so a host reads a typed
+   * value without importing its own validator at the call site:
+   *
+   * ```ts
+   * const survey = Iceberg.dataOf(node); // IcebergData | undefined
+   * ```
+   *
+   * `undefined` when the node is a different definition's, carries no payload, or holds one the
+   * schema rejects — the three cases a caller has to handle anyway.
+   *
+   * `name` is checked when present and never required, so this also works on a host's own object
+   * that kept only the payload:
+   *
+   * ```ts
+   * const survey = Iceberg.dataOf(popoverState); // { data } is enough
+   * ```
+   */
+  readonly dataOf: (
+    node: { readonly name?: string; readonly data?: unknown } | null | undefined
+  ) => InferSchemaOutput<Schema> | undefined;
+}
+
+/**
  * A definition of any payload shape, spelled out.
+ *
+ * The AUTHORED shape, which is what every collection and every internal helper takes: they read
+ * `name`, `schema`, `toDocx` and `preserveOnExport` and never need `dataOf`. A {@link CustomNode}
+ * is assignable to it, so `defineCustomNode`'s result goes wherever this is asked for.
  *
  * The same thing bare `CustomNodeDefinition` already means — the interface defaults its
  * parameter to `any` for exactly this reason. `CustomNodeDefinition<Schema>` is INVARIANT in
@@ -333,7 +377,7 @@ export const CUSTOM_NODE_IDENTITY_PATTERN = /^[A-Za-z0-9_.-]+$/;
 /** Validate and freeze a definition. Throws on a shape mistake — author error, not file input. */
 export function defineCustomNode<Schema extends StandardSchemaV1 | undefined = undefined>(
   definition: CustomNodeDefinition<Schema>
-): CustomNodeDefinition<Schema> {
+): CustomNode<Schema> {
   if (!CUSTOM_NODE_IDENTITY_PATTERN.test(definition.name ?? '')) {
     throw new Error(`defineCustomNode: invalid name ${JSON.stringify(definition.name)}`);
   }
@@ -365,7 +409,23 @@ export function defineCustomNode<Schema extends StandardSchemaV1 | undefined = u
       `defineCustomNode: ${JSON.stringify(definition.name)} has an unknown preserveOnExport ${JSON.stringify(definition.preserveOnExport)}`
     );
   }
-  return Object.freeze({ ...definition });
+  const node: CustomNode<Schema> = Object.freeze({
+    ...definition,
+    dataOf: (candidate: { readonly name?: string; readonly data?: unknown } | null | undefined) => {
+      if (!candidate || candidate.data === undefined) return undefined;
+      // A `name` is CHECKED when there is one and never REQUIRED. An activation or a review item
+      // carries one, and rejecting a mismatch is the narrowing half of this function. A host's
+      // own object — a popover's state, a form's — usually carries only the payload it kept, and
+      // demanding a name it never had would make this silently answer undefined forever.
+      if (candidate.name !== undefined && candidate.name !== definition.name) return undefined;
+      if (!definition.schema) return candidate.data as InferSchemaOutput<Schema>;
+      const validated = definition.schema['~standard'].validate(candidate.data);
+      if (typeof (validated as { then?: unknown }).then === 'function') return undefined;
+      const settled = validated as { issues?: unknown; value?: unknown };
+      return settled.issues ? undefined : (settled.value as InferSchemaOutput<Schema>);
+    },
+  });
+  return node;
 }
 
 /**

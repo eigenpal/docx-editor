@@ -25,6 +25,14 @@ export type AnyCustomNodeDefinition = CustomNodeDefinition;
 export const CUSTOM_NODE_STORE_ROOT = "docxEditor";
 
 // @public
+export interface CustomNode<Schema extends StandardSchemaV1 | undefined = any> extends CustomNodeDefinition<Schema> {
+    readonly dataOf: (node: {
+        readonly name?: string;
+        readonly data?: unknown;
+    } | null | undefined) => InferSchemaOutput<Schema> | undefined;
+}
+
+// @public
 export type CustomNodeDataRejection = 'malformed' | 'invalid' | 'async';
 
 // @public
@@ -191,7 +199,7 @@ export interface DecodedCustomNodeTag {
 }
 
 // @public
-export function defineCustomNode<Schema extends StandardSchemaV1 | undefined = undefined>(definition: CustomNodeDefinition<Schema>): CustomNodeDefinition<Schema>;
+export function defineCustomNode<Schema extends StandardSchemaV1 | undefined = undefined>(definition: CustomNodeDefinition<Schema>): CustomNode<Schema>;
 
 // @public
 export type DocumentDestination = 'internal' | 'external';
@@ -229,10 +237,10 @@ export type ExportCustomNodesResult = {
 };
 
 // @public
-export type InferSchemaInput<Schema> = Schema extends StandardSchemaV1<infer Input, unknown> ? Input : unknown;
+export type InferSchemaInput<Schema> = 0 extends 1 & Schema ? any : Schema extends StandardSchemaV1<infer Input, unknown> ? Input : unknown;
 
 // @public
-export type InferSchemaOutput<Schema> = Schema extends StandardSchemaV1<unknown, infer Output> ? Output : unknown;
+export type InferSchemaOutput<Schema> = 0 extends 1 & Schema ? any : Schema extends StandardSchemaV1<unknown, infer Output> ? Output : unknown;
 
 // @public
 export function insertCustomNode<Schema extends StandardSchemaV1 | undefined = undefined>(editor: Editor, definition: CustomNodeDefinition<Schema>, input?: CustomNodeInput<Schema>): CustomNodeWriteOutcome;

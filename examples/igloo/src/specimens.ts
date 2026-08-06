@@ -59,22 +59,19 @@ export function depthOf(attrs: Readonly<Record<string, string>>): number {
 }
 
 /**
- * Depth out of the PAYLOAD, falling back to the tag.
+ * A berg's record, from wherever this document happens to keep it.
  *
- * The fallback is not politeness: documents this demo wrote before the payload existed carry
- * `igloo:iceberg?depth=412`, and a reader that only looked at the store would show every one of
- * them at the default. `data` is `unknown` because the definition declares no schema — a host
- * that wants it typed passes a zod schema and stops writing checks like this one.
+ * `ICEBERG.dataOf` does the real work — it narrows the node to this definition and validates the
+ * payload against the schema, so there is no `safeParse` at any call site. This wrapper only
+ * adds the fallback for documents written before the payload existed, which still carry
+ * `igloo:iceberg?depth=412` in the tag.
  */
-export function icebergDepth(
-  data: unknown,
-  attrs: Readonly<Record<string, string>> = {}
-): number {
-  const carried = (data as { readonly depth?: unknown } | null)?.depth;
-  if (typeof carried === 'number' || typeof carried === 'string') {
-    return boundedInt({ depth: String(carried) }, 'depth', 90, 999);
-  }
-  return depthOf(attrs);
+export function surveyOf(
+  node: { readonly name?: string; readonly attrs?: Readonly<Record<string, string>>; readonly data?: unknown },
+): IcebergData {
+  return (
+    ICEBERG.dataOf(node) ?? { depth: depthOf(node.attrs ?? {}), surveyedBy: '', notes: '' }
+  );
 }
 
 /** Blocks laid so far. */
@@ -107,20 +104,21 @@ export const ICEBERG = defineCustomNode({
   // Host-authored, never file data: `CustomNodeChrome` tints the painted chip with it.
   chrome: { color: '#0f6f95' },
   schema: IcebergData,
-  // The whole node from the record: the tag carries identity alone, and the words in the
-  // paragraph are computed, so they cannot fall out of step with the depth they describe.
-  toDocx: (data) => ({ attrs: {}, text: `the tip of a ${data.depth + tipHeight(data.depth)} m berg` }),
-  // The payload is resolved and handed here, so the number every later surface reads comes out
-  // of the store — and the attrs this returns are the ONE shape the chip, the card, the menu
-  // and the dialog all see, whichever place it actually came from. The tag fallback is for
-  // documents this demo wrote before the payload existed.
-  fromDocx: ({ attrs, data }) => ({ depth: String(icebergDepth(data, attrs)) }),
+  // WRITE: the whole node from the record. The tag carries identity alone and the words in the
+  // paragraph are computed, so an edit to the depth moves the sentence with it.
+  toDocx: (data) => ({
+    attrs: {},
+    text: `the tip of a ${data.depth + tipHeight(data.depth)} m berg`,
+  }),
+  // READ: nothing to declare. The payload round-trips through the schema, so `data` arrives as
+  // `IcebergData` on every surface. A `fromDocx` here would have nothing left to do — which is
+  // the point of contrast with the igloo below.
   reviewCard: ({ attrs, text, data }) => {
-    const depth = data?.depth ?? depthOf(attrs);
+    const survey = surveyOf(data, attrs);
     return {
-      title: `Iceberg: ${tipHeight(depth)} m up, ${depth} m down`,
-      detail: data?.notes
-        ? `${data.notes}${data.surveyedBy ? ` — ${data.surveyedBy}` : ''}`
+      title: `Iceberg: ${tipHeight(survey.depth)} m up, ${survey.depth} m down`,
+      detail: survey.notes
+        ? `${survey.notes}${survey.surveyedBy ? ` — ${survey.surveyedBy}` : ''}`
         : `“${text}” is all of it that surfaced. The other nine tenths are below the line.`,
     };
   },
@@ -135,6 +133,11 @@ export const IGLOO = defineCustomNode({
   tagPrefix: 'igloo',
   label: 'Igloo',
   chrome: { color: '#2f9dc7' },
+  // No schema and no payload: everything this node knows is one number in the `w:tag`, which is
+  // a string→string bag out of a file the sender wrote. THIS is what `fromDocx` is for — clamp
+  // it once, here, and every later surface reads a number already known to be sane. Returning
+  // `null` instead would leave the control literal, which is how you disown a tag that turns
+  // out not to be yours.
   fromDocx: ({ attrs }) => ({ blocks: String(blocksOf(attrs)) }),
   reviewCard: ({ attrs }) => {
     const blocks = blocksOf(attrs);

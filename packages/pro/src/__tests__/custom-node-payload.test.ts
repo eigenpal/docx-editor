@@ -700,3 +700,32 @@ describe('the copy you keep and the copy that leaves', () => {
     expect(leaving.ok && leaving.unwrapped).toBe(1);
   });
 });
+
+describe('dataOf: the payload, typed, wherever it turns up', () => {
+  test('it validates against this definition and narrows the type', () => {
+    const survey = citation.dataOf({ name: 'citation', data: CITATION });
+    expect(survey).toEqual(CITATION);
+    // Typed, not `unknown` — reading a field needs no cast and no guard.
+    expect(survey?.year).toBe(2024);
+  });
+
+  test("another definition's node answers undefined rather than a wrong type", () => {
+    expect(secret.dataOf({ name: 'citation', data: CITATION })).toBeUndefined();
+  });
+
+  test('a payload the schema rejects answers undefined', () => {
+    expect(citation.dataOf({ name: 'citation', data: { ...CITATION, year: 'x' } })).toBeUndefined();
+  });
+
+  test('an object carrying only a payload works — a name is checked, never required', () => {
+    // The shape a host's own popover or form state has: it kept the payload, not the identity.
+    expect(citation.dataOf({ data: CITATION })).toEqual(CITATION);
+    expect(citation.dataOf({})).toBeUndefined();
+    expect(citation.dataOf(null)).toBeUndefined();
+  });
+
+  test('with no schema it hands back what the file held, unchecked', () => {
+    const bare = defineCustomNode({ name: 'bare', tagPrefix: 'acme' });
+    expect(bare.dataOf({ data: { anything: 1 } })).toEqual({ anything: 1 });
+  });
+});

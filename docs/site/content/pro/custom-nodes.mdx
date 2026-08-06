@@ -65,9 +65,23 @@ Module registration is construction-time. Build the array outside render; a new 
 | `chrome.color`                   | `string`                                                        | Chip tint and border, applied by `CustomNodeChrome`.                                                      |
 | `onClick` / `onHover` / `onEdit` | `(node: ActivatedCustomNode) => void`                           | Interaction hooks on the painted chip.                                                                    |
 
-`attrs` and `text` reaching `fromDocx` come from the `.docx`, which the sender controls end to end. They are rendered as text, never as markup; do not build URLs or DOM from them without sanitizing. `data` has been validated against `schema`.
+### `toDocx` and `fromDocx` are not a pair
 
-`toDocx` is optional. Declare it and the payload is the only thing a write needs, because the tag and the text are computed from it. Without it, pass `attrs` and `text` on every call and keep them consistent yourself.
+They read like a codec. They are not, and which one you need depends on where your node keeps its data.
+
+`toDocx` runs on the way **out**: `data → { attrs, text }`. It exists so a write takes one argument instead of three you have to keep consistent. It needs a `schema`, because otherwise there is no typed payload to derive from.
+
+`fromDocx` runs on the way **in**, and its job is recognition, not decoding. It receives the `w:tag` attrs — a string-to-string bag out of a file the sender controls — and returns the attrs the node should carry, or `null` to disown the control and leave it literal. That veto is the part nothing else does.
+
+The asymmetry is the point: for a node with a payload, `toDocx`'s inverse is not a hook at all. The payload round-trips through the schema on its own, so `data` arrives typed with nothing declared.
+
+| Your node keeps its data in | Declare                | Because                                                            |
+| --------------------------- | ---------------------- | ------------------------------------------------------------------- |
+| A payload                   | `schema` + `toDocx`    | The payload reads back typed by itself. Nothing to decode.          |
+| The tag only                | `fromDocx`             | Tag attrs are untrusted strings. Clamp, normalize, or veto here.    |
+| A payload, migrating from the tag | both              | `fromDocx` reads the old attrs; new writes go through `toDocx`.     |
+
+`attrs` and `text` reaching `fromDocx` come from the `.docx`, which the sender controls end to end. They are rendered as text, never as markup; do not build URLs or DOM from them without sanitizing. `data` has been validated against `schema`.
 
 ## Write
 
@@ -184,12 +198,20 @@ The pairing is deliberate: `customNodeXml` writes the nodes with no browser, and
 
 Inside `fromDocx`, `toDocx` and `reviewCard`, `data` is the schema's output type. Elsewhere it is `unknown`, because those surfaces carry every definition's nodes under one type.
 
+Use `dataOf` to cross that boundary. It narrows a node to this definition and validates its payload against this schema, so you never write a parse at the call site:
+
 ```tsx
 // On the chip: click, hover, and the context menu's Edit row.
-<CustomNodeChrome onNodeClick={(node) => open(CitationData.parse(node.data))} />;
+<CustomNodeChrome onNodeClick={(node) => open(Citation.dataOf(node))} />;
 
 // Every node in the document, with its range. Requires the review module.
 const cards = editor.getReviewItems().filter((entry) => entry.item.kind === 'custom');
+```
+
+`Citation.dataOf(node)` returns the schema's output type or `undefined` — for a different definition's node, one with no payload, or one whose payload the schema rejects. A `name` is checked when the object has one and never required, so it also works on your own state:
+
+```ts
+const survey = Citation.dataOf(popoverState); // { data } is enough
 ```
 
 A definition does not need `reviewCard` for this. A node without one is still recognized and still carries its payload; it contributes nothing to the sidebar.
