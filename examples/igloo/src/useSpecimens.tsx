@@ -29,7 +29,6 @@ import {
   payloadFor,
   randomSpecimen,
   surveyOf,
-  tagAttrsFor,
   type SpecimenAt,
   type SpecimenKind,
 } from './specimens';
@@ -127,16 +126,12 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
     (kind: SpecimenKind, attrs: Record<string, string>, label: string, at: SpecimenAt) => {
       if (!editor) return;
       const definition = definitionOf(kind);
-      // The tag carries identity; the iceberg's depth goes to the payload beside it, in the
-      // same transaction. `payloadFor` answers undefined for the igloo, which keeps its one
-      // small number in the tag where it fits.
+      // The berg's `text` derives the words, so its payload is the whole argument.
       const data = payloadFor(kind, attrs);
       report(
         insertCustomNode(editor, definition, {
           alias: definition.label ?? definition.name,
-          // The berg's words are derived from its record; the igloo has no payload, so it
-          // passes the tag attrs and the words it wants.
-          ...(data ? { data } : { attrs: tagAttrsFor(kind, attrs), text: label }),
+          ...(data ? { data } : { attrs, text: label }),
           ...(at ? { at } : {}),
         }),
         kind === 'iceberg' ? 'A berg calved into the paragraph.' : 'An igloo went up.'
@@ -175,11 +170,7 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
     [say]
   );
 
-  /**
-   * The chip click. An iceberg surfaces what is under it; an igloo lays another block, which
-   * is a real `updateCustomNode` write — one transaction, one undo step, so the paragraph
-   * label, the rail card and the saved file move together.
-   */
+  /** The chip click: a berg surfaces what is under it, an igloo lays another block. */
   const activate = useCallback(
     (node: ActivatedCustomNode) => {
       if (node.name === 'iceberg') {
@@ -236,7 +227,7 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
         report(
           updateCustomNode(editor, definition, next.nodeId, {
             alias: definition.label ?? definition.name,
-            ...(data ? { data } : { attrs: tagAttrsFor(next.kind, next.attrs), text: next.label }),
+            ...(data ? { data } : { attrs: next.attrs, text: next.label }),
           }),
           'Re-carved.'
         );

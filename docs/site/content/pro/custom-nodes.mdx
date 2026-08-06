@@ -41,7 +41,7 @@ const Citation = defineCustomNode({
 const MODULES = [customNodesModule({ nodes: [Citation] })];
 ```
 
-That is the whole definition: an identity, a shape, and what the document shows. `schema` is any zod schema — the payload is validated against it on the way in and comes back as that type on the way out. `text` computes what a reader sees, so it cannot drift from the data it describes.
+`schema` is any zod schema. The payload is validated against it before it is written and comes back as that type when read. `text` computes what the paragraph shows, so it stays in step with the data.
 
 Module registration is construction-time. Build the array outside render; a new array each render rebuilds the editor.
 
@@ -158,11 +158,11 @@ if (!result.ok) {
 
 ## Saving and exporting
 
-Two operations, deliberately separate.
+Two operations, separate on purpose.
 
-`editor.save()` preserves everything. Use it for your own storage: the returned bytes reopen in this editor with their nodes intact.
+`editor.save()` preserves everything. The returned bytes reopen in this editor with their nodes intact — use it for your own storage.
 
-`exportCustomNodes` applies each definition's `preserveOnExport`. Use it for anything leaving your system — a download, an attachment, a hand-off to a recipient who does not run this library.
+`exportCustomNodes` applies each definition's `preserveOnExport`. Use it for anything leaving your system: a download, an attachment, a hand-off to a recipient who does not run this library.
 
 ```ts
 import { exportCustomNodes } from '@docx-editor.dev/pro';
@@ -175,7 +175,7 @@ if (outgoing.ok) download(outgoing.bytes);
 | `preserveOnExport` | Result                                                                       | Use for                                            |
 | ------------------ | ---------------------------------------------------------------------------- | -------------------------------------------------- |
 | `true` (default)   | Unchanged. Tag, binding and payload all travel.                              | Nodes the recipient is meant to keep working with.  |
-| `'text'`           | The control is unwrapped. The text remains; the tag, binding and payload go. | A citation: the words are the point, the markup is yours. |
+| `'text'`           | The control is unwrapped. The text remains; the tag, binding and payload go. | A citation, where the reader needs the words but not the markup. |
 | `false`            | The node is removed with its content.                                        | Internal annotations that must not leave.          |
 
 Pass `destination` when the choice is made at runtime. `'internal'` returns the input bytes unchanged, so one code path covers both:
@@ -204,7 +204,7 @@ if (!outgoing.ok) throw new Error(outgoing.reason);
 await email.attach(outgoing.bytes);
 ```
 
-The pairing is deliberate: `customNodeXml` writes the nodes with no browser, and `exportCustomNodes` removes them with no browser. A document can be generated, stored with its payloads intact, and stripped on the way out, without an editor ever being mounted. `packages/pro/src/__tests__/custom-node-server.test.ts` runs that whole path with the DOM globals deleted.
+`customNodeXml` writes nodes with no browser and `exportCustomNodes` removes them with no browser, so a document can be generated, stored with its payloads intact, and stripped on the way out without an editor being mounted. `packages/pro/src/__tests__/custom-node-server.test.ts` runs that path with the DOM globals deleted.
 
 ## Read
 
@@ -250,9 +250,9 @@ customNodesModule({
 | `updateCustomNode` without `data` | The payload is carried forward under the new label.                        |
 | A chip cut to the clipboard       | The payload does not travel with it. Pasting produces a node with no data. |
 
-The open-time sweep is not undoable. It collects payloads whose control was already gone when the document arrived, so undo immediately after opening a file must not restore them.
+The open-time sweep is not undoable: it collects payloads whose control was already gone when the document arrived.
 
-A bound control is read-only in Word: Word renders its text from the payload and does not accept typing into it. The payload is the source of truth, not a cache of the rendered text.
+A bound control is read-only in Word — Word renders its text from the payload and does not accept typing into it — so the payload is the source of truth rather than a cache of the rendered text.
 
 ### On-disk format
 
@@ -350,7 +350,7 @@ A template engine can splice markup but cannot author a package, so `built.store
 
 A recognized node is an ordinary inline content control. Word renders its text, honors the lock, and preserves the tag, the binding and the payload. A document edited in Word and reopened here is recognized from the same tag. If a Word user edited the text of an unbound node despite the lock, `fromDocx` sees the drift.
 
-A document opened without your definition registered renders the control's content literally, which is what Word does. Nothing is lost.
+A document opened without your definition registered renders the control's content literally, as Word does. Nothing is lost.
 
 ## Limits
 

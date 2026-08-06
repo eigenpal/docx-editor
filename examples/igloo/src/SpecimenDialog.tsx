@@ -1,11 +1,7 @@
-// The authoring form: collect the attrs, then one `insertCustomNode` (or `updateCustomNode`)
-// call authors the locked, tagged control at the captured caret. The form itself is entirely
-// the demo's; nothing here is a library component.
+// The authoring form. Entirely the demo's; nothing here is a library component.
 //
-// The form collects one bag of fields; where each one ENDS UP differs by kind. The igloo's
-// number rides in the `w:tag`, which is all a small integer needs. The berg's depth, surveyor
-// and notes go into a payload — a customXml data part the chip binds to — because 64 characters
-// of tag was never going to hold a survey record. `payloadFor` and `tagAttrsFor` make the split.
+// It collects one bag of fields; `payloadFor` decides which end up in the berg's payload and
+// which in the igloo's tag.
 
 import { useEffect, useId, useRef, useState } from 'react';
 import {
@@ -187,9 +183,8 @@ export function SpecimenDialog({ form, onCommit, onClose }: SpecimenDialogProps)
 
         <label className="igloo-dialog__field">
           <span>{field.label}</span>
-          {/* The RAW string, not the clamped read: clamping while someone is still typing
-              turns backspace-to-clear into an instant "90", and the only way to enter a
-              number becomes select-all-overtype. Submit clamps; see onSubmit. */}
+          {/* The RAW string, not the clamped read: clamping mid-typing turns backspace-to-clear
+              into an instant "90". Submit clamps. */}
           <input
             type="number"
             min={1}
@@ -201,8 +196,7 @@ export function SpecimenDialog({ form, onCommit, onClose }: SpecimenDialogProps)
           <small>{field.hint}</small>
         </label>
 
-        {/* The berg's survey record. Neither of these could ride in a `w:tag`, which is the
-            whole reason the payload exists — so they only show for the kind that has one. */}
+        {/* The berg's survey record — neither field could ride in a `w:tag`. */}
         {kind === 'iceberg' ? (
           <>
             <label className="igloo-dialog__field">

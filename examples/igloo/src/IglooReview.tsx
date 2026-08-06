@@ -140,13 +140,7 @@ function CardFrost() {
   );
 }
 
-/**
- * The demo's own element inside the library's card: a node authored here, recognized by this
- * demo's definition, drawing itself from what that node carries.
- *
- * The berg reads its PAYLOAD, already through the schema. The igloo reads its ATTRS, already
- * clamped by `fromDocx`. Two nodes, two places to keep a number, one card component.
- */
+/** The demo's own element inside the library's card. The berg reads its payload, the igloo its attrs. */
 function SpecimenPanel({
   node,
 }: {

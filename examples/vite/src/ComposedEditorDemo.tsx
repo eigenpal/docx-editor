@@ -80,25 +80,26 @@ const DEMO_CITATION = defineCustomNode({
   label: 'Citation',
   // HOST-authored chip appearance — CustomNodeChrome applies it.
   chrome: { color: '#7c3aed' },
-  // The payload's shape. Checked on the way IN (a bad `insertCustomNode` is refused, naming
-  // the field) and on the way OUT (a tampered file reports through `onDiagnostic` below and
-  // the chip still renders, without its data).
+  // The payload's shape. Checked on the way IN (a bad insert is refused, naming the field) and
+  // on the way OUT (a tampered file reports through `onDiagnostic` below and the chip still
+  // renders, without its data).
   schema: CitationData,
+  // What the document SHOWS, from the payload — so the sentence cannot drift from the citation
+  // it describes. This is why a write below passes `{ data }` and nothing else.
+  text: (data) => `(${data.authors[0] ?? 'Anon'} ${String(data.year)}${data.locator ? `, ${data.locator}` : ''})`,
+  // The one thing worth putting in the tag as well: a reader who opens this file WITHOUT the
+  // payload store can still tell which source it is.
+  tagAttrs: (data) => ({ sourceId: data.sourceId }),
   // What happens to a citation in a file that leaves this system: the sentence keeps its words
   // and loses the markup that only means something here. Applied by `exportCustomNodes` (the
   // header's Export button), never by `save()` — so the document at rest keeps its chips.
   preserveOnExport: 'text',
-  // Recognition hook: attrs decoded from the tag, text is the literal SDT content (which a
-  // Word user may have edited — label drift), `data` is the validated payload.
-  fromDocx: ({ attrs, text }) => ({ ...attrs, label: text }),
-  // Sidebar card: every recognized citation gets a review-rail card anchored at its text.
-  // `data` is TYPED here — `CitationData`, because that is the schema above. No cast, no
-  // guard: the payload was checked once at the read boundary.
-  reviewCard: ({ attrs, text, data }) => ({
-    title: `Citation — ${attrs['sourceId'] ?? 'unknown source'}`,
+  // Sidebar card. `data` is TYPED here — `CitationData`, because that is the schema above.
+  reviewCard: ({ text, data }) => ({
+    title: `Citation — ${data?.sourceId ?? 'unknown source'}`,
     detail: data
       ? `${data.authors.join(', ') || 'no authors'} (${String(data.year)})${data.locator ? `, ${data.locator}` : ''}`
-      : text || (attrs['label'] ?? ''),
+      : text,
   }),
 });
 
@@ -306,7 +307,7 @@ function CitationPopover({
         }}
       >
         <div style={{ fontWeight: 600, marginBottom: 6 }}>
-          📖 {card.attrs['label'] ?? 'Citation'}
+          📖 {DEMO_CITATION.dataOf(card)?.sourceId ?? 'Citation'}
         </div>
         <div style={{ color: '#475569' }}>
           <div>
@@ -444,8 +445,6 @@ export type CitationFormState =
   | {
       readonly mode: 'edit';
       readonly nodeId: string;
-      readonly attrs: Readonly<Record<string, string>>;
-      readonly text: string;
       /** The node's current payload, so an edit starts from what the document says. */
       readonly data?: unknown;
     };
@@ -456,8 +455,8 @@ function CitationDialog({ form, onClose }: { form: CitationFormState; onClose: (
   // The payload the document already holds, typed by the definition's own schema. Everything
   // but `sourceId` comes from here rather than from the tag: 64 characters is not a bibliography.
   const current = editing ? DEMO_CITATION.dataOf(form) : undefined;
-  const [sourceId, setSourceId] = useState(() =>
-    editing ? (form.attrs['sourceId'] ?? '') : `src_${Date.now().toString(36)}`
+  const [sourceId, setSourceId] = useState(
+    () => current?.sourceId ?? `src_${Date.now().toString(36)}`
   );
   const [locator, setLocator] = useState(() => current?.locator ?? 'p.42');
   const [authors, setAuthors] = useState(() =>
@@ -465,9 +464,6 @@ function CitationDialog({ form, onClose }: { form: CitationFormState; onClose: (
   );
   const [year, setYear] = useState(() => String(current?.year ?? 2024));
   const [url, setUrl] = useState(() => current?.url ?? '');
-  const [label, setLabel] = useState(() =>
-    editing ? form.text || (form.attrs['label'] ?? '') : '(Smith 2024, p. 42)'
-  );
   const field: CSSProperties = {
     display: 'block',
     width: '100%',
@@ -512,13 +508,10 @@ function CitationDialog({ form, onClose }: { form: CitationFormState; onClose: (
         onSubmit={(event) => {
           event.preventDefault();
           if (!editor) return;
-          // Chips are content-locked, so persistence goes through the node APIs: a fresh
-          // insert at the captured caret, or `updateCustomNode` — remove+reinsert at the
-          // node's own span, one undo step.
-          // ONLY `sourceId` rides in the tag — it is the identity, and Word caps `w:tag` at 64
-          // characters. Everything else is the payload, written into a customXml data part in
-          // the SAME transaction as the chip and validated against the schema on the way in, so
-          // a bad year is refused here rather than saved and rejected on the next open.
+          // Chips are content-locked, so persistence goes through the node APIs. The payload is
+          // the WHOLE argument: `text` and `tagAttrs` on the definition compute what the
+          // document shows and what rides in the tag, and the schema validates on the way in —
+          // so a bad year is refused here rather than saved and rejected on the next open.
           const data = {
             sourceId,
             locator,
@@ -530,11 +523,12 @@ function CitationDialog({ form, onClose }: { form: CitationFormState; onClose: (
             ...(url.trim() ? { url: url.trim() } : {}),
           };
           const result = editing
-            ? updateCustomNode(editor, DEMO_CITATION, form.nodeId, { attrs: { sourceId }, text: label, alias: 'Citation',
-                data })
-            : insertCustomNode(editor, DEMO_CITATION, { attrs: { sourceId }, text: label, alias: 'Citation',
+            ? updateCustomNode(editor, DEMO_CITATION, form.nodeId, { data, alias: 'Citation' })
+            : insertCustomNode(editor, DEMO_CITATION, {
                 data,
-                ...(form.at ? { at: form.at } : {}) });
+                alias: 'Citation',
+                ...(form.at ? { at: form.at } : {}),
+              });
           if (!result.ok) window.alert(`${editing ? 'Edit' : 'Insert'} refused: ${result.reason}`);
           onClose();
         }}
@@ -543,14 +537,11 @@ function CitationDialog({ form, onClose }: { form: CitationFormState; onClose: (
           {editing ? 'Edit citation' : 'Insert citation'}
         </div>
         <div style={{ marginTop: 4, font: '12px/1.5 system-ui, sans-serif', color: '#64748b' }}>
-          The label is what the document shows. Only the source ID rides in the chip&#39;s tag —
-          the rest is a payload in a customXml data part, checked against the schema and handed
-          back typed on click, hover, and the review card.
+          The definition derives what the paragraph shows from these fields, so there is no
+          separate label to keep in step. Only the source ID rides in the chip&#39;s tag; the rest
+          is a payload in a customXml data part, checked against the schema and handed back typed
+          on click, hover, and the review card.
         </div>
-        <label style={labelStyle}>
-          Label (document text)
-          <input style={field} value={label} onChange={(e) => setLabel(e.target.value)} required />
-        </label>
         <label style={labelStyle}>
           Source ID
           <input
@@ -1143,8 +1134,6 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
                       ? setCitationForm({
                           mode: 'edit',
                           nodeId: node.nodeId,
-                          attrs: node.attrs,
-                          text: node.text ?? '',
                           data: node.data,
                         })
                       : setCitationCard(citationCardAt(node))
