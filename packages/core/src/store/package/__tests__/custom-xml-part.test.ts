@@ -5,6 +5,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { readOoxmlPackage, writeOoxmlPackage } from '../ooxml-package.ts';
 import { relationshipsOf, resolveContentTypeOf } from '../package-edit.ts';
 import {
@@ -20,12 +21,53 @@ import type { OoxmlPackage } from '../ooxml-package.ts';
 const STORY = '/word/document.xml';
 const NS = 'http://docx-editor.dev/ns';
 
+function fixtureBytes(name: string): Uint8Array {
+  return new Uint8Array(
+    readFileSync(resolve(import.meta.dir, '../../../../../../e2e/fixtures', name))
+  );
+}
+
 function fixture(name: string): OoxmlPackage {
-  const path = resolve(import.meta.dir, '../../../../../../e2e/fixtures', name);
-  const read = readOoxmlPackage(new Uint8Array(readFileSync(path)));
+  const read = readOoxmlPackage(fixtureBytes(name));
   if (!read.ok) throw new Error(read.reason);
   return read.package;
 }
+
+/**
+ * A fixture with entries added, removed or rewritten — a package crafted the way a sender can.
+ *
+ * The guards below are about what a HOSTILE package can talk this module into, and a fixture
+ * this project wrote cannot carry the attack. Rebuilding the zip is the only way to hand the
+ * reader bytes it would actually have to defend against.
+ */
+function crafted(name: string, edit: (entries: Record<string, Uint8Array>) => void): OoxmlPackage {
+  const entries = unzipSync(fixtureBytes(name));
+  edit(entries);
+  const read = readOoxmlPackage(zipSync(entries));
+  if (!read.ok) throw new Error(read.reason);
+  return read.package;
+}
+
+/** The document's relationships, with more appended before the closing tag. */
+function withStoryRelationships(entries: Record<string, Uint8Array>, extra: string): void {
+  const name = 'word/_rels/document.xml.rels';
+  entries[name] = strToU8(
+    strFromU8(entries[name]!).replace('</Relationships>', `${extra}</Relationships>`)
+  );
+}
+
+/** An Override appended to `[Content_Types].xml`. */
+function withOverride(entries: Record<string, Uint8Array>, partName: string, type: string): void {
+  entries['[Content_Types].xml'] = strToU8(
+    strFromU8(entries['[Content_Types].xml']!).replace(
+      '</Types>',
+      `<Override PartName="${partName}" ContentType="${type}"/></Types>`
+    )
+  );
+}
+
+const RELS_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const DS_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/customXml';
 
 describe('reading the stores a document already carries', () => {
   test("Word's own output is read back as one store, with its item id", () => {
@@ -95,26 +137,82 @@ describe('authoring a store', () => {
 });
 
 describe('a package that lies about its stores', () => {
-  // Guard-rail cases against the fixtures we have. Hardening the three that cannot fail today
-  // needs packages crafted to carry the attack, which is follow-up work.
   test('a relationships part presented as a store is not one', () => {
-    // Without the guard a caller writes payload nodes into `document.xml.rels`, and the
-    // relationships part ships with foreign children for Word to repair away.
-    const pkg = fixture('comprehensive-word-element-test.docx');
+    // The package below is built so that EVERY other check passes: the `customXml`
+    // relationship resolves, the target part exists, it has its own `.rels` naming a real
+    // properties part, and that part carries the properties content type and a `ds:itemID`.
+    // The one thing wrong with it is that the "store" is `/word/_rels/document.xml.rels` —
+    // and without the guard a caller writes payload nodes straight into it, shipping a
+    // relationships part with foreign children for Word to repair away.
+    const pkg = crafted('comprehensive-word-element-test.docx', (entries) => {
+      withStoryRelationships(
+        entries,
+        `<Relationship Id="rIdEvil" Type="${CUSTOM_XML_REL}" Target="_rels/document.xml.rels"/>`
+      );
+      entries['word/_rels/_rels/document.xml.rels.rels'] = strToU8(
+        `<Relationships xmlns="${RELS_NS}">` +
+          `<Relationship Id="rId1" Type="${CUSTOM_XML_PROPS_REL}" Target="../evilProps.xml"/>` +
+          '</Relationships>'
+      );
+      entries['word/evilProps.xml'] = strToU8(
+        `<ds:datastoreItem ds:itemID="{11111111-1111-1111-1111-111111111111}" xmlns:ds="${DS_NS}"/>`
+      );
+      withOverride(entries, '/word/evilProps.xml', CUSTOM_XML_PROPS_TYPE);
+    });
+
     const relsName = '/word/_rels/document.xml.rels';
+    // The relationship IS there — this is not a test of the package being rejected.
+    expect(relationshipsOf(pkg, STORY).some((r) => r.type === CUSTOM_XML_REL)).toBe(true);
     expect(customXmlDataParts(pkg, STORY).some((p) => p.partName === relsName)).toBe(false);
     const { part } = withCustomXmlDataPart(pkg, STORY, NS, 'docxEditor');
-    expect(part?.partName).not.toBe(relsName);
+    expect(part?.partName).toBe('/customXml/item1.xml');
   });
 
   test('a store is not adopted unless its properties really are properties', () => {
     // The props part decides the `ds:itemID` a binding quotes, so a planted one that is not
-    // typed as properties would let the sender choose which store Word binds the control to.
-    const pkg = fixture('sdt-custom-tag-word-roundtrip.docx');
-    const found = customXmlDataParts(pkg, STORY);
-    for (const store of found) {
-      expect(resolveContentTypeOf(pkg, store.propsPartName)).toBe(CUSTOM_XML_PROPS_TYPE);
-    }
+    // TYPED as properties would let the sender choose which store Word binds the control to.
+    // Everything here is well formed except the content type, which is left as the package's
+    // `xml` default.
+    const pkg = crafted('comprehensive-word-element-test.docx', (entries) => {
+      withStoryRelationships(
+        entries,
+        `<Relationship Id="rIdPlanted" Type="${CUSTOM_XML_REL}" Target="../customXml/item9.xml"/>`
+      );
+      entries['customXml/item9.xml'] = strToU8(`<planted xmlns="urn:planted"/>`);
+      entries['customXml/_rels/item9.xml.rels'] = strToU8(
+        `<Relationships xmlns="${RELS_NS}">` +
+          `<Relationship Id="rId1" Type="${CUSTOM_XML_PROPS_REL}" Target="itemProps9.xml"/>` +
+          '</Relationships>'
+      );
+      entries['customXml/itemProps9.xml'] = strToU8(
+        `<ds:datastoreItem ds:itemID="{22222222-2222-2222-2222-222222222222}" xmlns:ds="${DS_NS}"/>`
+      );
+      // Deliberately NO Override: the part reads as `application/xml`.
+    });
+
+    expect(resolveContentTypeOf(pkg, '/customXml/itemProps9.xml')).not.toBe(CUSTOM_XML_PROPS_TYPE);
+    expect(customXmlDataParts(pkg, STORY)).toEqual([]);
+    // And the same package WITH the Override is adopted, so the refusal above is the content
+    // type and not something incidental about how this was built.
+    const declared = crafted('comprehensive-word-element-test.docx', (entries) => {
+      withStoryRelationships(
+        entries,
+        `<Relationship Id="rIdPlanted" Type="${CUSTOM_XML_REL}" Target="../customXml/item9.xml"/>`
+      );
+      entries['customXml/item9.xml'] = strToU8(`<planted xmlns="urn:planted"/>`);
+      entries['customXml/_rels/item9.xml.rels'] = strToU8(
+        `<Relationships xmlns="${RELS_NS}">` +
+          `<Relationship Id="rId1" Type="${CUSTOM_XML_PROPS_REL}" Target="itemProps9.xml"/>` +
+          '</Relationships>'
+      );
+      entries['customXml/itemProps9.xml'] = strToU8(
+        `<ds:datastoreItem ds:itemID="{22222222-2222-2222-2222-222222222222}" xmlns:ds="${DS_NS}"/>`
+      );
+      withOverride(entries, '/customXml/itemProps9.xml', CUSTOM_XML_PROPS_TYPE);
+    });
+    expect(customXmlDataParts(declared, STORY).map((p) => p.partName)).toEqual([
+      '/customXml/item9.xml',
+    ]);
   });
 
   test('a namespace that cannot be written is refused, not rewritten', () => {
@@ -135,11 +233,25 @@ describe('a package that lies about its stores', () => {
   });
 
   test('an id the package already carries is not reused', () => {
-    // The derivation is public, so a sender can precompute ours and plant a store holding it.
-    const pkg = fixture('sdt-custom-tag-word-roundtrip.docx');
-    const existing = customXmlDataParts(pkg, STORY).map((store) => store.itemId.toUpperCase());
-    const { part } = withCustomXmlDataPart(pkg, STORY, 'urn:second', 'second');
-    expect(existing).not.toContain(part?.itemId.toUpperCase() ?? '');
+    // The derivation is public, so a sender can precompute the id this module WOULD mint and
+    // plant a store holding it — two stores, one `ds:itemID`, and Word binds the control to
+    // whichever it prefers. The id is taken from an authoring run against the untouched
+    // fixture, then planted in a copy of it: the seed reads the main part, `core.xml` and
+    // `settings.xml`, none of which the planted parts change, so the second run mints exactly
+    // the same id unless the collision check moves it.
+    const clean = fixture('comprehensive-word-element-test.docx');
+    const wouldMint = withCustomXmlDataPart(clean, STORY, NS, 'docxEditor').part?.itemId;
+    expect(wouldMint).toBeDefined();
+
+    const planted = crafted('comprehensive-word-element-test.docx', (entries) => {
+      entries['customXml/itemProps7.xml'] = strToU8(
+        `<ds:datastoreItem ds:itemID="${wouldMint!}" xmlns:ds="${DS_NS}"/>`
+      );
+      withOverride(entries, '/customXml/itemProps7.xml', CUSTOM_XML_PROPS_TYPE);
+    });
+    const { part } = withCustomXmlDataPart(planted, STORY, NS, 'docxEditor');
+    expect(part).not.toBeNull();
+    expect(part?.itemId).not.toBe(wouldMint);
   });
 });
 
