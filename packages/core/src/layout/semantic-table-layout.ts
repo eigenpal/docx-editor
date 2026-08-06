@@ -551,6 +551,7 @@ function placeCellParagraph(
     borders,
     shading,
     inheritedRunProperties,
+    markRunProperties,
     tabStops: cascadedTabStops,
     tabStopsCacheToken: cascadedTabStopsCacheToken,
   } = resolveParagraphLayoutInputs(
@@ -594,6 +595,7 @@ function placeCellParagraph(
     properties: [
       ...props,
       ...inheritedRunProperties,
+      ...markRunProperties,
       { localName: 'tabStops', attributes: { token: tabStopsCacheToken } },
       ...(listItem ? [{ localName: 'list', attributes: { token: listItem.cacheToken } }] : []),
     ],
@@ -640,6 +642,7 @@ function placeCellParagraph(
       }),
       ...(pageZones.length > 0 ? { pageExclusionZones: pageZones } : {}),
       ...(deps.styleCascade ? { themeFonts: deps.styleCascade.themeFonts } : {}),
+      markRunProperties,
     }
   );
 

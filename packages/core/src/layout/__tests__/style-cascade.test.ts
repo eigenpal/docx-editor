@@ -275,6 +275,42 @@ describe('character rStyle cascade and default character style', () => {
   });
 });
 
+describe('paragraph-mark rPr does not size content runs', () => {
+  test('direct w:pPr/w:rPr sz stays on the mark cascade only', () => {
+    const styles =
+      DOC_DEFAULTS +
+      `<w:style w:type="paragraph" w:styleId="BodyText"><w:basedOn w:val="Normal"/>` +
+      `<w:rPr><w:sz w:val="20"/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    const cascaded = cascadeParagraphFormatting(
+      table,
+      paragraphPPr(
+        `<w:p><w:pPr><w:pStyle w:val="BodyText"/><w:rPr><w:sz w:val="13"/></w:rPr></w:pPr>` +
+          `<w:r><w:t>next Interest Period</w:t></w:r></w:p>`
+      )
+    );
+    expect(resolveRunStyle(cascaded.runProperties).fontSizePt).toBe(10);
+    expect(resolveRunStyle(cascaded.markRunProperties).fontSizePt).toBe(6.5);
+  });
+
+  test('layout paints BodyText size when content runs omit sz and the mark is 13 half-points', () => {
+    const styles =
+      DOC_DEFAULTS +
+      `<w:style w:type="paragraph" w:styleId="BodyText"><w:basedOn w:val="Normal"/>` +
+      `<w:rPr><w:sz w:val="20"/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    const part = loadDocument(
+      `<w:p><w:pPr><w:pStyle w:val="BodyText"/><w:rPr><w:sz w:val="13"/></w:rPr></w:pPr>` +
+        `<w:r><w:t>[We request that the next Interest Period</w:t></w:r></w:p>`
+    );
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+      styleCascade: table,
+    });
+    expect(linesOf(layout)[0]!.spans[0]!.style.fontSizePt).toBe(10);
+  });
+});
+
 describe('cascadeParagraphFormatting basedOn, cycles, depth, overrides', () => {
   test('basedOn inherits parent size while own color wins', () => {
     const styles =
