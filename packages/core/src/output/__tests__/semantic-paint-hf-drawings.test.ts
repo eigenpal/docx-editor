@@ -79,7 +79,7 @@ function headerDoc(): Uint8Array {
   // carries the anchored strip.
   const headerParagraph =
     '<w:p><w:pPr><w:ind w:left="-708"/></w:pPr>' +
-    '<w:r><w:t>ACME header line</w:t></w:r>' +
+    '<w:r><w:t>Sample header line</w:t></w:r>' +
     `<w:r>${headerStripDrawing()}</w:r></w:p>`;
   return zipSync({
     '[Content_Types].xml': strToU8(
