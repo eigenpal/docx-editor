@@ -13,11 +13,25 @@
 // The inline `w:customXml` ELEMENT is a different thing and is not what this writes: Word for
 // the web refuses a document containing one outright. The data PART is what survives.
 //
-// The evidence is `e2e/fixtures/sdt-custom-tag-word-roundtrip.docx`, Word for the web's own
-// output for a document carrying one, and it is worth reading for exactly what it shows: the
-// store came back with its parts, relationships and payload intact, so Word emits and accepts
-// this wiring. It carries no `w:dataBinding` at all, so whether Word preserves a BINDING is a
-// round trip nobody has run yet.
+// The evidence is two fixtures. `sdt-custom-tag-word-roundtrip.docx` is Word's own output for
+// a document carrying a store: parts, relationships and payload all came back intact, so Word
+// emits and accepts this wiring. It carries no binding.
+//
+// `sdt-custom-node-databinding-word-roundtrip.docx` is what Word returned for a document that
+// DOES carry one, and it settles the rest:
+//
+//   - `w:dataBinding` survives, with its `prefixMappings`, `storeItemID` and `xpath` intact;
+//   - the payload in the store survives unchanged;
+//   - `ds:itemID` still matches `w:storeItemID`;
+//   - the child order below is right — Word refuses a document whose `sdtPr` children are out
+//     of sequence, so a file that comes back at all had them in order;
+//   - a bound control with no type child is READ-ONLY in Word. The text is painted from the
+//     xpath and a user cannot type into it, which is why the store is the source of truth and
+//     the two can never drift. Making one editable in Word means adding `<w:text/>` to turn
+//     Word's binding two-way, which is an opt-in, not the default.
+//
+// One normalization to expect: Word drops `xml:space="preserve"` from the bound run when the
+// text has no leading or trailing space, so a label that needs it must re-assert it.
 //
 // SECURITY: everything read back out of one of these parts came from a file the sender
 // controls. This module writes and locates parts; it does not interpret payloads, and a caller
