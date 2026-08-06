@@ -71,7 +71,7 @@ describe('Vue tree-lane wiring (phase 3)', () => {
 
   test('both adapters mount the surface into the same shared container classes', () => {
     for (const source of [editorSource, reactEditorSource]) {
-      expect(source).toContain('ep-root');
+      expect(source).toContain('docx-editor');
       expect(source).toContain('docx-paginated-surface');
     }
   });

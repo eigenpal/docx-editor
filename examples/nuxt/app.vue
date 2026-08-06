@@ -1,5 +1,5 @@
 <template>
-  <div class="ep-root app">
+  <div class="docx-editor app">
     <header class="header">
       <h1 class="title">docx-editor · Nuxt module</h1>
       <input v-model="title" class="doc-title" aria-label="Document name" />

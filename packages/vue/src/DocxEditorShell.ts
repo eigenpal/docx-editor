@@ -20,7 +20,7 @@ export default defineComponent({
   name: 'DocxEditorShell',
   setup(_props, { slots }) {
     return () =>
-      h('div', { class: 'ep-root docx-editor ep-shell', 'data-testid': 'docx-editor-shell' }, [
+      h('div', { class: 'docx-editor ep-shell', 'data-testid': 'docx-editor-shell' }, [
         slots.titleBar ? h('div', { class: 'ep-shell__title' }, slots.titleBar()) : null,
         slots.toolbar ? h('div', { class: 'ep-shell__toolbar' }, slots.toolbar()) : null,
         h('div', { class: 'ep-shell__document' }, [

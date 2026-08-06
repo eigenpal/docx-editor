@@ -662,7 +662,7 @@ function positioned(
  * Word draws both — struck-through text that was also underlined by its author keeps both rules.
  *
  * The colour lands as a custom property on the element rather than a resolved value, so a host
- * restyling `--doc-review-author-N` under `.ep-root` changes the painted document with it.
+ * restyling `--doc-review-author-N` under `.docx-editor` changes the painted document with it.
  *
  * The dataset attributes are the review surface's join key: a card can find its own text, and
  * the active-item highlight is set by attribute rather than by building a CSS rule out of an

@@ -7,7 +7,7 @@ import { guardToolbarMousedown } from './ToolbarButton';
 
 /** Return focus to the painted pages layer after a table colour dialog applies. */
 export function restoreToolbarDocumentFocus(from: HTMLElement | null): void {
-  // NOT a bare `closest('.ep-root')`: the toolbar's own root self-emits that class.
+  // NOT a bare `closest('.docx-editor')`: the toolbar's own root self-emits that class.
   const root = editorScopeFor(from) ?? from?.ownerDocument?.body;
   root?.querySelector<HTMLElement>('.docx-pages')?.focus();
 }

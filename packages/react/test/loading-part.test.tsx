@@ -246,10 +246,10 @@ describe('DocxEditor.Loading', () => {
   });
 
   test('carries its own token scope, so it is styled wherever it is composed', () => {
-    // `--doc-*` lives on `.ep-root` and `Root` renders no DOM: without this the part
+    // `--doc-*` lives on `.docx-editor` and `Root` renders no DOM: without this the part
     // paints an unresolved, contrast-free ring when placed beside the Viewport.
     const view = render(<DocxEditorLoading when />);
-    expect(view.container.querySelector(LOADING)!.classList.contains('ep-root')).toBe(true);
+    expect(view.container.querySelector(LOADING)!.classList.contains('docx-editor')).toBe(true);
   });
 
   test('Loading.Spinner composes the packaged indicator into custom children', () => {
@@ -288,7 +288,7 @@ describe('DocxEditor.Loading', () => {
     const view = render(<DocxEditorLoading when className="demo-loading" />);
     const el = view.container.querySelector(LOADING)!;
 
-    expect(el.className).toBe('ep-root docx-editor__loading demo-loading');
+    expect(el.className).toBe('docx-editor docx-editor__loading demo-loading');
   });
 
   test('outside a Root it stays up: there is no editor to report otherwise', () => {

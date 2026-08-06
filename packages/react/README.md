@@ -31,7 +31,7 @@ npm install @docx-editor.dev/react
 ```tsx
 import { useState } from 'react';
 import { DocxEditor } from '@docx-editor.dev/react';
-import '@docx-editor.dev/react/styles.css';
+import '@docx-editor.dev/core/styles/editor.css';
 
 export function App() {
   const [doc, setDoc] = useState<Uint8Array>();

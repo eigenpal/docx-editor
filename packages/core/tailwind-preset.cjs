@@ -10,7 +10,7 @@
  *
  * CommonJS so the ESM adapter configs can `require()` it (Tailwind loads configs
  * via jiti, which supports require). Each adapter config still owns its own
- * `content` globs and `important: '.ep-root'` scoping.
+ * `content` globs and `important: '.docx-editor'` scoping.
  */
 module.exports = {
   darkMode: ['class'],

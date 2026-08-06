@@ -10,13 +10,19 @@
  *
  * Contains:
  * - CSS custom properties / color tokens (shadcn-compatible + --doc-* chrome
- *   palette) and the .ep-root.dark scaffold
+ *   palette) and the .docx-editor.dark scaffold
  * - Cursor/caret, selection, content-control, popup/menu chrome, etc.
  *
- * NOTE: `@tailwind utilities` lives here so the directive is shared; each
- * adapter's own Tailwind build (React via the CLI, Vue via vite PostCSS)
- * expands it against that adapter's component sources. We intentionally do NOT
- * include @tailwind base (preflight) to avoid resetting the host application.
+ * NOTE: `@tailwind utilities` lives here so the directive is shared. The CORE
+ * BUILD expands it (scripts/build-core-styles.mjs + tailwind.dist.config.cjs):
+ * dist/editor.css ships fully compiled, every utility scoped under `.docx-editor`,
+ * with no Tailwind directive left for a host pipeline to reinterpret — a host
+ * app's own Tailwind must never expand our directive against ITS config, and a
+ * host with no Tailwind still needs the chrome styled. In-repo examples that
+ * import this SOURCE file keep expanding it with their own Tailwind build for
+ * dev. We intentionally do NOT include @tailwind base (preflight) here to
+ * avoid resetting the host application; the dist build prepends it with
+ * preflight disabled purely for the `--tw-*` custom-property defaults.
  */
 
 @tailwind utilities;
@@ -25,8 +31,8 @@
   * CSS CUSTOM PROPERTIES (shadcn theme)
   * ============================================================================ */
 
-/* Scoped to .ep-root to avoid clashing with host application CSS variables */
-.ep-root {
+/* Scoped to .docx-editor to avoid clashing with host application CSS variables */
+.docx-editor {
   /* ----------------------------------------------------------------------
     * shadcn / Tailwind tokens (HSL triples). These back the Tailwind utility
     * classes (bg-primary, text-foreground, bg-muted, ...). These are the
@@ -58,7 +64,7 @@
   /* ======================================================================
     * Document-editor chrome palette — the single source of truth for UI
     * colors. Components reference these via var(--doc-*); component styles
-    * carry no raw hex/rgba. Override the whole set under .ep-root.dark to
+    * carry no raw hex/rgba. Override the whole set under .docx-editor.dark to
     * theme the UI. The document canvas is painted from the .docx and is
     * intentionally NOT themed here (it stays Word-faithful, like a page in
     * Word/Google Docs that stays white regardless of app chrome).
@@ -146,7 +152,7 @@
      something did. */
   /* Per-AUTHOR review colours. OOXML carries no colour on a revision — Word assigns one per
      author in the application — so this ramp is presentation policy, and overriding a slot
-     under `.ep-root` restyles both the painted document and the review cards. Chosen to stay
+     under `.docx-editor` restyles both the painted document and the review cards. Chosen to stay
      distinguishable from each other and from the black body text. */
   --doc-review-author-0: #c0392b;
   --doc-review-author-1: #1f6fb2;
@@ -229,23 +235,23 @@
 }
 
 /* ========================================================================
-  * Dark theme. Add the `dark` class to the .ep-root element to enable it
+  * Dark theme. Add the `dark` class to the .docx-editor element to enable it
   * (Tailwind darkMode: ['class'] is already configured). Theming is driven by
   * these token overrides — every UI token above is re-pointed here, so all
   * chrome re-themes automatically. The document canvas is left untouched on
   * purpose: it must stay Word-faithful.
   *
-  * NOTE: because `important: '.ep-root'` emits `dark:` utilities as
-  * `.ep-root .dark\:x:is(.dark *)`, those variants only match DESCENDANTS of a
-  * `.dark` element — NOT the `.ep-root.dark` element itself. So theme the root
+  * NOTE: because `important: '.docx-editor'` emits `dark:` utilities as
+  * `.docx-editor .dark\:x:is(.dark *)`, those variants only match DESCENDANTS of a
+  * `.dark` element — NOT the `.docx-editor.dark` element itself. So theme the root
   * via these token overrides (as below), never via a `dark:` utility placed
-  * directly on the `.ep-root` node.
+  * directly on the `.docx-editor` node.
   * ====================================================================== */
-/* Also targets nested `.ep-root` elements (e.g. the paged-editor root, Radix
-  * portals) so the base `.ep-root` light tokens don't shadow these inside a
+/* Also targets nested `.docx-editor` elements (e.g. the paged-editor root, Radix
+  * portals) so the base `.docx-editor` light tokens don't shadow these inside a
   * dark tree. */
-.ep-root.dark,
-.ep-root.dark .ep-root {
+.docx-editor.dark,
+.docx-editor.dark .docx-editor {
   /* Palette sampled from Microsoft Word Online dark mode (chrome + canvas).
     * shadcn / Tailwind tokens (HSL triples) — mirror the --doc-* chrome values
     * below so shadcn-based components (Select, Button) re-theme in lockstep. */
@@ -351,7 +357,7 @@
   * invert(1) hue-rotate(180deg) flips lightness but preserves hue for ALL
   * authored colors, so nothing is unreadable. Media is double-inverted back so
   * photos/logos render normally. */
-.ep-root.dark .layout-page,
+.docx-editor.dark .layout-page,
 /* The paginated lane paints its content into `.docx-page-content`; inverting the page
    FRAME as well would flip the paper itself, so the sheet keeps its own token background
    and only the content it holds is lightness-inverted. */
@@ -361,8 +367,8 @@
    where it clamps to zero, landing on a dark olive that reads as a redaction bar. Word keeps
    a highlight its authored colour, so the run is inverted back — the same treatment media
    already gets, for the same reason. */
-.ep-root.dark .docx-page-content [data-highlight],
-.ep-root.dark .layout-page [data-highlight] {
+.docx-editor.dark .docx-page-content [data-highlight],
+.docx-editor.dark .layout-page [data-highlight] {
   filter: invert(1) hue-rotate(180deg);
 }
 
@@ -370,10 +376,10 @@
    the filter receives, not what the user sees. A normal blue came out orange; this is the
    pre-image that inverts back to the accent blue. The comment further up claiming the
    selection overlay sits outside the inverted page is true of the legacy lane only. */
-.ep-root.dark .docx-page-content ::selection {
+.docx-editor.dark .docx-page-content ::selection {
   background-color: rgba(177, 98, 0, 0.32);
 }
-.ep-root.dark .docx-page-content {
+.docx-editor.dark .docx-page-content {
   /* contrast(0.92) softens the pure black/white extremes a plain invert
     * produces, landing on Word's gentler off-white text / dark-grey fills
     * rather than #fff on #000. */
@@ -385,26 +391,26 @@
 /* The ring replaces the page frame's drop shadow, so it belongs to the FRAME. Applied to
    the content box as well it outlined the text area — a box Word never draws — while the
    real page edge lost its separation from the workspace. */
-.ep-root.dark .layout-page {
+.docx-editor.dark .layout-page {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18) !important;
 }
-.ep-root.dark .layout-page img,
-.ep-root.dark .layout-page svg,
-.ep-root.dark .layout-page canvas,
-.ep-root.dark .layout-page video,
-.ep-root.dark .layout-page [data-no-color-invert],
-.ep-root.dark .docx-page-content img,
-.ep-root.dark .docx-page-content svg,
-.ep-root.dark .docx-page-content canvas,
-.ep-root.dark .docx-page-content video,
-.ep-root.dark .docx-page-content [data-no-color-invert] {
+.docx-editor.dark .layout-page img,
+.docx-editor.dark .layout-page svg,
+.docx-editor.dark .layout-page canvas,
+.docx-editor.dark .layout-page video,
+.docx-editor.dark .layout-page [data-no-color-invert],
+.docx-editor.dark .docx-page-content img,
+.docx-editor.dark .docx-page-content svg,
+.docx-editor.dark .docx-page-content canvas,
+.docx-editor.dark .docx-page-content video,
+.docx-editor.dark .docx-page-content [data-no-color-invert] {
   filter: invert(1) hue-rotate(180deg);
 }
 
 /* Printing is always on white paper: drop the inversion and paint the page
   * white with black text (matches Word, saves toner). */
 @media print {
-  .ep-root.dark {
+  .docx-editor.dark {
     --doc-page-bg: #ffffff;
     /* The colour a sheet is PAINTED. In the legacy lane the page is lightness-inverted, so
      `--doc-page-bg` is a pre-filter value and this is what it lands on; the paginated lane
@@ -416,11 +422,11 @@
      lands on near-white. */
     --doc-page-text: #000000;
   }
-  .ep-root.dark .layout-page,
-  .ep-root.dark .layout-page img,
-  .ep-root.dark .layout-page svg,
-  .ep-root.dark .layout-page canvas,
-  .ep-root.dark .layout-page video {
+  .docx-editor.dark .layout-page,
+  .docx-editor.dark .layout-page img,
+  .docx-editor.dark .layout-page svg,
+  .docx-editor.dark .layout-page canvas,
+  .docx-editor.dark .layout-page video {
     filter: none;
   }
 }
@@ -429,40 +435,40 @@
   * DOCUMENT SCROLLBAR
   * ============================================================================ */
 
-.ep-root .docx-editor__scroll-container,
-.ep-root .docx-editor-vue__pages-viewport {
+.docx-editor .docx-editor__scroll-container,
+.docx-editor .docx-editor-vue__pages-viewport {
   scrollbar-width: auto;
   scrollbar-color: var(--doc-scrollbar-thumb) var(--doc-scrollbar-track);
 }
 
-.ep-root .docx-editor__scroll-container {
+.docx-editor .docx-editor__scroll-container {
   /* `both-edges` reserves a symmetric gutter so the centered page stays centered
       on classic-scrollbar platforms (single-edge nudges it ~7px left). Matches
       the Vue viewport (DocxEditor.css `__pages-viewport`). */
   scrollbar-gutter: stable both-edges;
 }
 
-.ep-root .docx-editor__scroll-container::-webkit-scrollbar,
-.ep-root .docx-editor-vue__pages-viewport::-webkit-scrollbar {
+.docx-editor .docx-editor__scroll-container::-webkit-scrollbar,
+.docx-editor .docx-editor-vue__pages-viewport::-webkit-scrollbar {
   width: var(--doc-scrollbar-size);
   height: var(--doc-scrollbar-size);
 }
 
-.ep-root .docx-editor__scroll-container::-webkit-scrollbar-track,
-.ep-root .docx-editor-vue__pages-viewport::-webkit-scrollbar-track {
+.docx-editor .docx-editor__scroll-container::-webkit-scrollbar-track,
+.docx-editor .docx-editor-vue__pages-viewport::-webkit-scrollbar-track {
   background: var(--doc-scrollbar-track);
 }
 
-.ep-root .docx-editor__scroll-container::-webkit-scrollbar-thumb,
-.ep-root .docx-editor-vue__pages-viewport::-webkit-scrollbar-thumb {
+.docx-editor .docx-editor__scroll-container::-webkit-scrollbar-thumb,
+.docx-editor .docx-editor-vue__pages-viewport::-webkit-scrollbar-thumb {
   background: var(--doc-scrollbar-thumb);
   border: 3px solid transparent;
   border-radius: 9999px;
   background-clip: content-box;
 }
 
-.ep-root .docx-editor__scroll-container:hover::-webkit-scrollbar-thumb,
-.ep-root .docx-editor-vue__pages-viewport:hover::-webkit-scrollbar-thumb {
+.docx-editor .docx-editor__scroll-container:hover::-webkit-scrollbar-thumb,
+.docx-editor .docx-editor-vue__pages-viewport:hover::-webkit-scrollbar-thumb {
   background: var(--doc-scrollbar-thumb-hover);
   border: 3px solid transparent;
   border-radius: 9999px;
@@ -473,8 +479,10 @@
   * CURSOR / CARET STYLING
   * ============================================================================ */
 
-/* Base cursor styles for all editable elements */
-[contenteditable='true'] {
+/* Base cursor styles for all editable elements. Scoped under .docx-editor: an
+   unscoped [contenteditable] rule reaches into every rich-text field of the
+   HOST application. */
+.docx-editor [contenteditable='true'] {
   /* Black caret for light backgrounds - highly visible */
   caret-color: #000;
 
@@ -542,13 +550,15 @@
   * - Use rgba for semi-transparent highlight that shows text clearly
   */
 
-/* Base selection styling for all editable elements */
+/* Base selection styling for all editable elements. The bare [contenteditable]
+   variants are scoped under .docx-editor so host-app editors keep their own
+   selection colors. */
 .docx-run-editable::selection,
 .docx-run-editable *::selection,
 .docx-run::selection,
 .docx-run *::selection,
-[contenteditable='true']::selection,
-[contenteditable='true'] *::selection {
+.docx-editor [contenteditable='true']::selection,
+.docx-editor [contenteditable='true'] *::selection {
   background-color: rgba(26, 115, 232, 0.3) !important;
   color: inherit !important;
 }
@@ -558,8 +568,8 @@
 .docx-run-editable *::-moz-selection,
 .docx-run::-moz-selection,
 .docx-run *::-moz-selection,
-[contenteditable='true']::-moz-selection,
-[contenteditable='true'] *::-moz-selection {
+.docx-editor [contenteditable='true']::-moz-selection,
+.docx-editor [contenteditable='true'] *::-moz-selection {
   background-color: rgba(26, 115, 232, 0.3) !important;
   color: inherit !important;
 }
@@ -1126,7 +1136,7 @@ a.docx-hyperlink:focus-visible {
   max-height: none;
 }
 
-.ep-root.dark .docx-drawing-placeholder-card,
+.docx-editor.dark .docx-drawing-placeholder-card,
 .dark .docx-drawing-placeholder-card {
   background: var(--doc-surface-muted, #2a2a2a);
   border-color: var(--doc-border, #404040);
@@ -1496,14 +1506,14 @@ a.docx-hyperlink:focus-visible {
 /* React toolbar toggle buttons (bold/italic/comments/...). Owned here, not via
   * Tailwind utilities: `cn` is clsx-only (no tailwind-merge), so competing
   * hover:bg utilities don't dedupe and the active slab could lose its color on
-  * hover (white icon on a light bg). The `.ep-root` prefix outranks the
+  * hover (white icon on a light bg). The `.docx-editor` prefix outranks the
   * single-class Tailwind hover utilities. */
-.ep-root .ep-toolbar-toggle:hover {
+.docx-editor .ep-toolbar-toggle:hover {
   background-color: var(--doc-bg-hover);
   color: var(--doc-text);
 }
-.ep-root .ep-toolbar-toggle[data-active='true'],
-.ep-root .ep-toolbar-toggle[data-active='true']:hover {
+.docx-editor .ep-toolbar-toggle[data-active='true'],
+.docx-editor .ep-toolbar-toggle[data-active='true']:hover {
   background-color: var(--doc-toggle-active-bg);
   color: var(--doc-toggle-active-fg);
 }
@@ -2959,19 +2969,19 @@ a.docx-hyperlink:focus-visible {
   position: relative;
   outline: none;
 }
-.ep-root.dark .docx-paginated-surface .docx-page {
+.docx-editor.dark .docx-paginated-surface .docx-page {
   background: var(--doc-page-bg-rendered);
 }
 /* Paper is always white, whatever the screen theme. Without resetting the CONTENT
    inversion here, printing in dark mode left near-white text on paper the printer drops to
    white — blank pages. `print-color-adjust` stops the sheet colour being dropped too. */
 @media print {
-  .ep-root.dark .docx-page-content,
-  .ep-root.dark .docx-page-content img,
-  .ep-root.dark .docx-page-content svg,
-  .ep-root.dark .docx-page-content canvas,
-  .ep-root.dark .docx-page-content video,
-  .ep-root.dark .docx-page-content [data-no-color-invert] {
+  .docx-editor.dark .docx-page-content,
+  .docx-editor.dark .docx-page-content img,
+  .docx-editor.dark .docx-page-content svg,
+  .docx-editor.dark .docx-page-content canvas,
+  .docx-editor.dark .docx-page-content video,
+  .docx-editor.dark .docx-page-content [data-no-color-invert] {
     filter: none !important;
   }
   .docx-paginated-surface .docx-page {
@@ -3554,7 +3564,7 @@ a.docx-hyperlink:focus-visible {
   cursor: default;
 }
 
-.ep-root .docx-menubar__item[aria-disabled='true']:hover {
+.docx-editor .docx-menubar__item[aria-disabled='true']:hover {
   background: transparent;
 }
 
@@ -4411,7 +4421,7 @@ a.docx-hyperlink:focus-visible {
 
 /* The default screen when the host supplies no children.
    `display` and `box-sizing` are explicit rather than inherited from Tailwind's
-   preflight: the part emits its own `ep-root`, so it can be composed somewhere the
+   preflight: the part emits its own `docx-editor`, so it can be composed somewhere the
    preflight does not reach, and an inline span would otherwise measure 42px and only
    size at all by accident of being a flex item. */
 .docx-editor__loading-spinner {
@@ -4717,7 +4727,7 @@ a.docx-hyperlink:focus-visible {
 /* The page column moves ONLY by what the adapter computed, and only while a pane
  * is open. Absent (no pane mounted, pane closed, gutter wide enough) the custom
  * property falls back to 0 and this rule is inert. */
-.ep-root .docx-editor__scroll-container {
+.docx-editor .docx-editor__scroll-container {
   padding-inline-start: var(--docx-nav-shift, 0px);
   transition: padding-inline-start 0.2s ease;
 }
@@ -4725,7 +4735,7 @@ a.docx-hyperlink:focus-visible {
 /* Positioning frame: the gutter strip to the left of the page. `pointer-events`
  * is off on the frame and back on for its controls, so the strip never eats a
  * click meant for the document behind it. */
-.ep-root .docx-nav {
+.docx-editor .docx-nav {
   position: absolute;
   inset-block: 0;
   inset-inline-start: 0;
@@ -4736,7 +4746,7 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text);
 }
 
-.ep-root .docx-nav > * {
+.docx-editor .docx-nav > * {
   pointer-events: auto;
 }
 
@@ -4748,7 +4758,7 @@ a.docx-hyperlink:focus-visible {
  * contents, so every heading appears to unwrap from the left edge while the
  * text reflows inside the shrinking box. The pane is a tool you open to look
  * something up; it should be there when you ask for it. */
-.ep-root .docx-nav__panel-shell {
+.docx-editor .docx-nav__panel-shell {
   display: none;
   position: absolute;
   inset-block: 0;
@@ -4758,14 +4768,14 @@ a.docx-hyperlink:focus-visible {
   background: var(--doc-bg);
 }
 
-.ep-root .docx-nav--open .docx-nav__panel-shell {
+.docx-editor .docx-nav--open .docx-nav__panel-shell {
   display: flex;
 }
 
 /* The collapsed disc. Aligned with the page's top edge, not the viewport's, so it
  * sits where the panel's back arrow will appear, and inset past the vertical
  * ruler's 20px tick column so it never covers the ticks. */
-.ep-root .docx-nav__toggle {
+.docx-editor .docx-nav__toggle {
   position: absolute;
   inset-block-start: 24px;
   inset-inline-start: var(--docx-nav-inset, 32px);
@@ -4785,25 +4795,25 @@ a.docx-hyperlink:focus-visible {
     box-shadow 0.12s ease;
 }
 
-.ep-root .docx-nav__toggle:hover {
+.docx-editor .docx-nav__toggle:hover {
   background: var(--doc-border);
   color: var(--doc-text);
   box-shadow: 0 1px 3px var(--doc-shadow);
 }
 
-.ep-root .docx-nav__toggle:focus-visible,
-.ep-root .docx-nav__close:focus-visible,
-.ep-root .docx-nav__tab:focus-visible,
-.ep-root .docx-nav__stepper:focus-visible,
-.ep-root .docx-nav__heading:focus-visible,
-.ep-root .docx-nav__result:focus-visible {
+.docx-editor .docx-nav__toggle:focus-visible,
+.docx-editor .docx-nav__close:focus-visible,
+.docx-editor .docx-nav__tab:focus-visible,
+.docx-editor .docx-nav__stepper:focus-visible,
+.docx-editor .docx-nav__heading:focus-visible,
+.docx-editor .docx-nav__result:focus-visible {
   outline: 2px solid var(--doc-primary);
   outline-offset: 2px;
 }
 
 /* ── Header ───────────────────────────────────────────────────────────────── */
 
-.ep-root .docx-nav__header {
+.docx-editor .docx-nav__header {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -4811,7 +4821,7 @@ a.docx-hyperlink:focus-visible {
   flex: none;
 }
 
-.ep-root .docx-nav__close {
+.docx-editor .docx-nav__close {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4825,12 +4835,12 @@ a.docx-hyperlink:focus-visible {
   cursor: pointer;
 }
 
-.ep-root .docx-nav__close:hover {
+.docx-editor .docx-nav__close:hover {
   background: var(--doc-bg-hover);
   color: var(--doc-text);
 }
 
-.ep-root .docx-nav__title {
+.docx-editor .docx-nav__title {
   margin: 0;
   font-size: 17px;
   font-weight: 600;
@@ -4840,7 +4850,7 @@ a.docx-hyperlink:focus-visible {
 
 /* ── Tabs ─────────────────────────────────────────────────────────────────── */
 
-.ep-root .docx-nav__tabs {
+.docx-editor .docx-nav__tabs {
   display: flex;
   align-items: stretch;
   gap: 4px;
@@ -4850,7 +4860,7 @@ a.docx-hyperlink:focus-visible {
   flex: none;
 }
 
-.ep-root .docx-nav__tab {
+.docx-editor .docx-nav__tab {
   appearance: none;
   border: none;
   background: none;
@@ -4863,11 +4873,11 @@ a.docx-hyperlink:focus-visible {
   margin-block-end: -1px;
 }
 
-.ep-root .docx-nav__tab:hover {
+.docx-editor .docx-nav__tab:hover {
   color: var(--doc-text);
 }
 
-.ep-root .docx-nav__tab--selected {
+.docx-editor .docx-nav__tab--selected {
   color: var(--doc-primary);
   border-block-end-color: var(--doc-primary);
   font-weight: 600;
@@ -4875,7 +4885,7 @@ a.docx-hyperlink:focus-visible {
 
 /* ── Panels ───────────────────────────────────────────────────────────────── */
 
-.ep-root .docx-nav__panel {
+.docx-editor .docx-nav__panel {
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -4884,11 +4894,11 @@ a.docx-hyperlink:focus-visible {
   gap: 8px;
 }
 
-.ep-root .docx-nav__panel[hidden] {
+.docx-editor .docx-nav__panel[hidden] {
   display: none;
 }
 
-.ep-root .docx-nav__empty {
+.docx-editor .docx-nav__empty {
   margin: 0;
   padding: 8px;
   color: var(--doc-text-subtle);
@@ -4896,7 +4906,7 @@ a.docx-hyperlink:focus-visible {
   line-height: 1.45;
 }
 
-.ep-root .docx-nav__list {
+.docx-editor .docx-nav__list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -4907,7 +4917,7 @@ a.docx-hyperlink:focus-visible {
 
 /* ── Search box ───────────────────────────────────────────────────────────── */
 
-.ep-root .docx-nav__searchbox {
+.docx-editor .docx-nav__searchbox {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -4918,17 +4928,17 @@ a.docx-hyperlink:focus-visible {
   background: var(--doc-bg-input);
 }
 
-.ep-root .docx-nav__searchbox:focus-within {
+.docx-editor .docx-nav__searchbox:focus-within {
   border-color: var(--doc-primary);
   box-shadow: 0 0 0 1px var(--doc-primary);
 }
 
-.ep-root .docx-nav__search-icon {
+.docx-editor .docx-nav__search-icon {
   color: var(--doc-text-muted);
   flex: none;
 }
 
-.ep-root .docx-nav__search-input {
+.docx-editor .docx-nav__search-input {
   flex: 1;
   min-width: 0;
   border: none;
@@ -4939,16 +4949,16 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text);
 }
 
-.ep-root .docx-nav__search-input::placeholder {
+.docx-editor .docx-nav__search-input::placeholder {
   color: var(--doc-text-placeholder);
 }
 
 /* The UA's own clear affordance would sit next to ours. */
-.ep-root .docx-nav__search-input::-webkit-search-cancel-button {
+.docx-editor .docx-nav__search-input::-webkit-search-cancel-button {
   appearance: none;
 }
 
-.ep-root .docx-nav__search-clear {
+.docx-editor .docx-nav__search-clear {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4962,14 +4972,14 @@ a.docx-hyperlink:focus-visible {
   cursor: pointer;
 }
 
-.ep-root .docx-nav__search-clear:hover {
+.docx-editor .docx-nav__search-clear:hover {
   background: var(--doc-bg-hover);
   color: var(--doc-text);
 }
 
 /* ── Find: options, counter, results ──────────────────────────────────────── */
 
-.ep-root .docx-nav__options {
+.docx-editor .docx-nav__options {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 12px;
@@ -4977,7 +4987,7 @@ a.docx-hyperlink:focus-visible {
   padding-inline: 2px;
 }
 
-.ep-root .docx-nav__option {
+.docx-editor .docx-nav__option {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -4986,7 +4996,7 @@ a.docx-hyperlink:focus-visible {
   cursor: pointer;
 }
 
-.ep-root .docx-nav__resultbar {
+.docx-editor .docx-nav__resultbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -4996,18 +5006,18 @@ a.docx-hyperlink:focus-visible {
   padding-inline: 2px;
 }
 
-.ep-root .docx-nav__count {
+.docx-editor .docx-nav__count {
   font-size: 13px;
   font-weight: 600;
   color: var(--doc-text);
 }
 
-.ep-root .docx-nav__steppers {
+.docx-editor .docx-nav__steppers {
   display: flex;
   gap: 4px;
 }
 
-.ep-root .docx-nav__stepper {
+.docx-editor .docx-nav__stepper {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5425,7 +5435,7 @@ a.docx-hyperlink:focus-visible {
 /* Dark paper inverts the arithmetic: multiplying a tint into a dark sheet drives it to
    black, so the band disappears exactly where it is needed. Screen lightens instead, which
    is the same relationship the light theme has — the paper shifts, the glyphs do not. */
-.ep-root.dark .docx-comment-overlay {
+.docx-editor.dark .docx-comment-overlay {
   mix-blend-mode: screen;
 }
 
@@ -5512,17 +5522,17 @@ a.docx-hyperlink:focus-visible {
   cursor: pointer;
 }
 
-.ep-root .docx-nav__stepper:hover:not(:disabled) {
+.docx-editor .docx-nav__stepper:hover:not(:disabled) {
   background: var(--doc-bg-hover);
   color: var(--doc-text);
 }
 
-.ep-root .docx-nav__stepper:disabled {
+.docx-editor .docx-nav__stepper:disabled {
   opacity: 0.4;
   cursor: default;
 }
 
-.ep-root .docx-nav__result {
+.docx-editor .docx-nav__result {
   display: block;
   width: 100%;
   text-align: start;
@@ -5537,24 +5547,24 @@ a.docx-hyperlink:focus-visible {
   cursor: pointer;
 }
 
-.ep-root .docx-nav__result:hover {
+.docx-editor .docx-nav__result:hover {
   background: var(--doc-bg-hover);
 }
 
 /* The active result reads as the one the caret is on: bordered, like Word's. */
-.ep-root .docx-nav__result--active {
+.docx-editor .docx-nav__result--active {
   border-color: var(--doc-primary);
   color: var(--doc-text);
 }
 
-.ep-root .docx-nav__result-text {
+.docx-editor .docx-nav__result-text {
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.ep-root .docx-nav__result-hit {
+.docx-editor .docx-nav__result-hit {
   background: none;
   color: var(--doc-text);
   font-weight: 700;
@@ -5562,7 +5572,7 @@ a.docx-hyperlink:focus-visible {
 
 /* ── Headings list ────────────────────────────────────────────────────────── */
 
-.ep-root .docx-nav__heading {
+.docx-editor .docx-nav__heading {
   display: block;
   width: 100%;
   text-align: start;
@@ -5581,18 +5591,18 @@ a.docx-hyperlink:focus-visible {
   text-overflow: ellipsis;
 }
 
-.ep-root .docx-nav__heading:hover {
+.docx-editor .docx-nav__heading:hover {
   background: var(--doc-bg-hover);
 }
 
-.ep-root .docx-nav__heading--current {
+.docx-editor .docx-nav__heading--current {
   background: var(--doc-primary-light);
   font-weight: 600;
 }
 
 /* Reduced motion: the page still moves when it has to, it just does not glide. */
 @media (prefers-reduced-motion: reduce) {
-  .ep-root .docx-editor__scroll-container {
+  .docx-editor .docx-editor__scroll-container {
     transition-duration: 0s;
   }
 }
@@ -5604,7 +5614,7 @@ a.docx-hyperlink:focus-visible {
  * shared `.docx-toolbar__menu` card so a menu row and a toolbar dropdown row are the same
  * object. What the menu adds is the ROW GRID: a fixed icon column so labels line up down
  * the panel, and a right-hand shortcut column. */
-.ep-root .docx-menubar {
+.docx-editor .docx-menubar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -5618,11 +5628,11 @@ a.docx-hyperlink:focus-visible {
     sans-serif;
 }
 
-.ep-root .docx-menubar__menu-root {
+.docx-editor .docx-menubar__menu-root {
   position: relative;
 }
 
-.ep-root .docx-menubar__trigger {
+.docx-editor .docx-menubar__trigger {
   padding: 4px 8px;
   border: none;
   border-radius: 4px;
@@ -5638,7 +5648,7 @@ a.docx-hyperlink:focus-visible {
 /* An OPT-IN trigger icon. The bar has none by default — Word and Docs do not — so this
  * only ever applies where a host passed one, and it inherits the trigger's colour so the
  * glyph tracks hover and open state with the label. */
-.ep-root .docx-menubar__trigger-icon {
+.docx-editor .docx-menubar__trigger-icon {
   display: inline-flex;
   align-items: center;
   margin-right: 5px;
@@ -5646,13 +5656,13 @@ a.docx-hyperlink:focus-visible {
   color: inherit;
 }
 
-.ep-root .docx-menubar__trigger:hover,
-.ep-root .docx-menubar__trigger[data-open] {
+.docx-editor .docx-menubar__trigger:hover,
+.docx-editor .docx-menubar__trigger[data-open] {
   background: var(--doc-bg-hover);
 }
 
 /* The panel: the shared card, dropped below its trigger. */
-.ep-root .docx-menubar__menu {
+.docx-editor .docx-menubar__menu {
   position: absolute;
   top: 100%;
   left: 0;
@@ -5663,11 +5673,11 @@ a.docx-hyperlink:focus-visible {
 
 /* The row grid: icon | label | shortcut. The icon column is reserved even on a row with
  * no glyph, so nothing shifts between rows. */
-.ep-root .docx-menubar__item {
+.docx-editor .docx-menubar__item {
   gap: 12px;
 }
 
-.ep-root .docx-menubar__item-icon {
+.docx-editor .docx-menubar__item-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -5677,41 +5687,41 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text-muted);
 }
 
-.ep-root .docx-menubar__item-label {
+.docx-editor .docx-menubar__item-label {
   flex: 1;
   text-align: left;
 }
 
-.ep-root .docx-menubar__item-shortcut,
-.ep-root .docx-menubar__item-caret {
+.docx-editor .docx-menubar__item-shortcut,
+.docx-editor .docx-menubar__item-caret {
   flex: none;
   margin-left: 24px;
   color: var(--doc-text-muted);
   font-size: 12px;
 }
 
-.ep-root .docx-menubar__item-caret {
+.docx-editor .docx-menubar__item-caret {
   margin-left: 16px;
   font-size: 14px;
 }
 
 /* An applied toggle row (Bold on bold text) reads as the checked one. */
-.ep-root .docx-menubar__item[data-active] {
+.docx-editor .docx-menubar__item[data-active] {
   background: var(--doc-primary-light);
 }
 
 /* ── Submenus ──────────────────────────────────────────────────────────────────────── */
-.ep-root .docx-menubar__submenu {
+.docx-editor .docx-menubar__submenu {
   position: relative;
 }
 
-.ep-root .docx-menubar__submenu > .docx-menubar__item[data-open] {
+.docx-editor .docx-menubar__submenu > .docx-menubar__item[data-open] {
   background: var(--doc-bg-hover);
 }
 
 /* Opens to the RIGHT of its parent row, top-aligned with it — Word's and Docs' geometry.
  * The small negative offset pulls the panel's padding back onto the row. */
-.ep-root .docx-menubar__submenu-panel {
+.docx-editor .docx-menubar__submenu-panel {
   top: -4px;
   left: 100%;
   margin-top: 0;
@@ -5726,7 +5736,7 @@ a.docx-hyperlink:focus-visible {
 
 /* A named section of rows. The heading is decoration (the group carries the accessible name),
    so it is sized to read as a label rather than as a row. */
-.ep-root .docx-menubar__group-label {
+.docx-editor .docx-menubar__group-label {
   padding: 8px 12px 4px;
   color: var(--doc-text-subtle, #8a8f98);
   font-size: 10px;
@@ -5736,29 +5746,29 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* No leading gap on the first group: the panel's own padding is already there. */
-.ep-root .docx-menubar__group:first-child > .docx-menubar__group-label {
+.docx-editor .docx-menubar__group:first-child > .docx-menubar__group-label {
   padding-top: 2px;
 }
 
 /* ── The insert-table size grid ────────────────────────────────────────────────────── */
-.ep-root .docx-menubar__grid {
+.docx-editor .docx-menubar__grid {
   padding: 8px;
 }
 
 /* Rows are real elements now (`role="row"`), so the cells lay out per row rather than as
  * one grid container. */
-.ep-root .docx-menubar__grid-cells {
+.docx-editor .docx-menubar__grid-cells {
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
 
-.ep-root .docx-menubar__grid-row {
+.docx-editor .docx-menubar__grid-row {
   display: flex;
   gap: 3px;
 }
 
-.ep-root .docx-menubar__grid-cell {
+.docx-editor .docx-menubar__grid-cell {
   width: 22px;
   height: 22px;
   padding: 0;
@@ -5771,12 +5781,12 @@ a.docx-hyperlink:focus-visible {
     border-color 0.06s ease;
 }
 
-.ep-root .docx-menubar__grid-cell[data-filled] {
+.docx-editor .docx-menubar__grid-cell[data-filled] {
   background: var(--doc-primary);
   border-color: var(--doc-primary);
 }
 
-.ep-root .docx-menubar__grid-caption {
+.docx-editor .docx-menubar__grid-caption {
   min-height: 18px;
   padding-top: 6px;
   text-align: center;
@@ -5802,7 +5812,7 @@ a.docx-hyperlink:focus-visible {
  * one definition. What this block adds is only what differs: the panel is placed in client
  * space by the component rather than relative to a trigger, and it sits above the dialogs
  * and dropdowns (z-index 40) because it is opened ON them as often as on the page. */
-.ep-root .docx-contextmenu,
+.docx-editor .docx-contextmenu,
 .docx-contextmenu {
   z-index: 45;
   min-width: 240px;
@@ -5813,7 +5823,7 @@ a.docx-hyperlink:focus-visible {
   overflow-y: auto;
 }
 
-/* The panel is `position: fixed`, so it renders OUTSIDE the `.ep-root` cascade's usual
+/* The panel is `position: fixed`, so it renders OUTSIDE the `.docx-editor` cascade's usual
  * geometry but still inside its subtree — the token values resolve, and this block is
  * duplicated unscoped above so a host that mounts the viewport without the wrapper class
  * still gets the card. Focus ring on the panel itself is suppressed: it takes focus only
@@ -5917,13 +5927,13 @@ a.docx-hyperlink:focus-visible {
   border: 0;
 }
 
-.ep-root .docx-toolbar__image-wrap,
+.docx-editor .docx-toolbar__image-wrap,
 .docx-toolbar__image-wrap {
   position: relative;
   display: inline-flex;
 }
 
-.ep-root .docx-toolbar__image-wrap-menu,
+.docx-editor .docx-toolbar__image-wrap-menu,
 .docx-toolbar__image-wrap-menu {
   position: absolute;
   top: calc(100% + 4px);
@@ -5937,7 +5947,7 @@ a.docx-hyperlink:focus-visible {
   box-shadow: 0 4px 16px var(--doc-shadow);
 }
 
-.ep-root .docx-toolbar__image-wrap-item,
+.docx-editor .docx-toolbar__image-wrap-item,
 .docx-toolbar__image-wrap-item {
   display: block;
   width: 100%;
@@ -5950,18 +5960,18 @@ a.docx-hyperlink:focus-visible {
   cursor: pointer;
 }
 
-.ep-root .docx-toolbar__image-wrap-item[data-active],
+.docx-editor .docx-toolbar__image-wrap-item[data-active],
 .docx-toolbar__image-wrap-item[data-active] {
   background: var(--doc-surface-hover, rgb(0 0 0 / 6%));
 }
 
-.ep-root .docx-toolbar__alt-text,
+.docx-editor .docx-toolbar__alt-text,
 .docx-toolbar__alt-text {
   position: relative;
   display: inline-flex;
 }
 
-.ep-root .docx-toolbar__alt-text-panel,
+.docx-editor .docx-toolbar__alt-text-panel,
 .docx-toolbar__alt-text-panel {
   position: absolute;
   top: calc(100% + 4px);

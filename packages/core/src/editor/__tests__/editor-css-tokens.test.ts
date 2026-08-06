@@ -50,7 +50,8 @@ function consumedTokens(source: string): Map<string, boolean> {
  * That is exactly how the caret shipped invisible, and how the page sheet shipped
  * transparent; declaration ORDER is irrelevant to it.
  */
-const DARK_SELECTOR = /\.ep-root\.dark|\[data-theme=['"]dark['"]\]|prefers-color-scheme:\s*dark/g;
+const DARK_SELECTOR =
+  /\.docx-editor\.dark|\[data-theme=['"]dark['"]\]|prefers-color-scheme:\s*dark/g;
 
 function darkRanges(source: string): { from: number; to: number }[] {
   const ranges: { from: number; to: number }[] = [];
@@ -89,7 +90,7 @@ describe('editor stylesheet custom properties', () => {
   test('--doc-caret is declared for the DEFAULT theme, not only for dark', () => {
     // The specific regression: declared once, inside the dark block.
     const darkBlockStart = withoutComments.search(
-      /\.ep-root\.dark|\[data-theme=['"]dark['"]\]|prefers-color-scheme:\s*dark/
+      /\.docx-editor\.dark|\[data-theme=['"]dark['"]\]|prefers-color-scheme:\s*dark/
     );
     const beforeDark =
       darkBlockStart === -1 ? withoutComments : withoutComments.slice(0, darkBlockStart);

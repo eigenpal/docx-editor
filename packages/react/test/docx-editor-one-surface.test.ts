@@ -105,9 +105,9 @@ describe('React tree-lane wiring (phase 3)', () => {
   });
 
   test('the container carries the shared style-scope and surface classes', () => {
-    // ep-root scopes every --doc-* token; docx-paginated-surface carries the engine
+    // docx-editor scopes every --doc-* token; docx-paginated-surface carries the engine
     // surface's paper styling. Without either, pages paint unstyled.
-    expect(editorSource).toContain('ep-root');
+    expect(editorSource).toContain('docx-editor');
     expect(editorSource).toContain('docx-paginated-surface');
   });
 

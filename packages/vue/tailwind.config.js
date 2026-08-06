@@ -16,13 +16,13 @@ const corePreset = (() => {
 
 /**
  * Vue adapter Tailwind config. Expands the `@tailwind utilities` directive in the shared
- * core stylesheet against the Vue component sources, scoped to `.ep-root`, sharing the
+ * core stylesheet against the Vue component sources, scoped to `.docx-editor`, sharing the
  * color/theme palette with React via the core preset.
  * @type {import('tailwindcss').Config}
  */
 export default {
   presets: [corePreset],
-  important: '.ep-root',
+  important: '.docx-editor',
   content: [
     path.join(__configDir, 'src/**/*.{ts,vue}'),
     path.join(monorepoRoot, 'examples/**/*.{ts,vue}'),

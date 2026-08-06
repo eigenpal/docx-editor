@@ -339,9 +339,9 @@ describe('chrome contracts', () => {
     expect(view.container.textContent).toContain('Insert');
   });
 
-  test('the bar self-emits the ep-root styling scope', () => {
+  test('the bar self-emits the docx-editor styling scope', () => {
     const { view } = mountMenu(<DocxEditorMenu />);
-    expect(bar(view).classList.contains('ep-root')).toBe(true);
+    expect(bar(view).classList.contains('docx-editor')).toBe(true);
   });
 
   test('labels resolve through `t`, and fall back to the CATALOGUE, never to the key', () => {
@@ -451,8 +451,8 @@ describe('chrome contracts', () => {
   });
 
   test('Ctrl/Cmd+S fires with focus in the DOCUMENT, not only on the bar', async () => {
-    // The regression this pins: the menubar self-emits `.ep-root` (styling scope), so a
-    // naive closest('.ep-root') resolves to the bar itself and a keypress from the
+    // The regression this pins: the menubar self-emits `.docx-editor` (styling scope), so a
+    // naive closest('.docx-editor') resolves to the bar itself and a keypress from the
     // painted pages — the normal case — falls outside the containment test, handing
     // Cmd+S back to the browser. The scope must be the instance container.
     let saved = 0;

@@ -50,7 +50,7 @@ describe('the shipped stylesheets parse', () => {
     for (const selector of [
       '.docx-review__marker',
       '.docx-review__marker:hover',
-      '.ep-root .docx-nav__stepper',
+      '.docx-editor .docx-nav__stepper',
     ]) {
       expect(selectors.has(selector), selector).toBe(true);
     }

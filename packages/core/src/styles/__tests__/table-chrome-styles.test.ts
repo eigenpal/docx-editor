@@ -24,7 +24,7 @@ describe('table chrome stylesheet contract (Task 9 fix round 2)', () => {
     const root = postcss.parse(css, { from: cssPath });
     const aliases: Record<string, string> = {};
     root.walkRules((rule) => {
-      if (rule.selector !== '.ep-root') return;
+      if (rule.selector !== '.docx-editor') return;
       rule.walkDecls((decl) => {
         if (decl.prop === '--doc-destructive' || decl.prop === '--doc-destructive-hover-bg') {
           aliases[decl.prop] = decl.value.trim();

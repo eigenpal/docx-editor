@@ -79,7 +79,7 @@ export default defineConfig({
       },
     ],
   },
-  // The library's chrome is Tailwind scoped to `.ep-root` (see the monorepo preset), so a
+  // The library's chrome is Tailwind scoped to `.docx-editor` (see the monorepo preset), so a
   // host embedding it must run the same layer or half the packaged controls render unstyled.
   css: {
     postcss: {

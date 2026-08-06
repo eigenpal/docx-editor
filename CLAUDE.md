@@ -298,8 +298,12 @@ fails until it gets an attribution path; `packages/fonts` carries OFL text in
 dev` → `http://localhost:5173/`. Live demo `http://docx-editor.dev/editor`.
   Commit `fix: ... (fixes #N)`. Screenshots → `screenshots/`.
 - **ESM only** — no `require()`.
-- **Tailwind** — scoped to `.ep-root`; rendered output isn't always protected, so
-  use inline styles on painted elements.
+- **Tailwind** — scoped to `.docx-editor`; the scoping is baked into `dist/editor.css`
+  at core build time (`scripts/build-core-styles.mjs` + `packages/core/tailwind.dist.config.cjs`),
+  so the shipped file carries no raw `@tailwind` directive. Rendered output isn't
+  always protected, so use inline styles on painted elements. Never put Tailwind
+  utilities on the element that carries `docx-editor` itself — scoped utilities only
+  match descendants.
 - **Focus stealing** — painted pages are the editable surface, so any mousedown
   reaching them moves the caret.
 - **Icons** — inline SVG (Material Symbol paths), not a font. A missing name

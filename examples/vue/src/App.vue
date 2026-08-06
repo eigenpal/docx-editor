@@ -3,7 +3,7 @@
     <span>This is a <strong>preview deployment</strong>. The released editor lives at</span>
     <a href="https://docx-editor.dev" target="_blank" rel="noopener">docx-editor.dev ↗</a>
   </div>
-  <div class="ep-root demo-app">
+  <div class="docx-editor demo-app">
     <header class="demo-titlebar">
       <BrandLogo />
       <input v-model="title" class="demo-title" aria-label="Document name" />
