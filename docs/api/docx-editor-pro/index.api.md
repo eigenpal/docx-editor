@@ -64,6 +64,10 @@ export interface CustomNodeDefinition<Schema extends StandardSchemaV1 | undefine
     } | null;
     readonly schema?: Schema;
     readonly tagPrefix: string;
+    readonly toDocx?: (data: InferSchemaOutput<Schema>) => {
+        readonly attrs: Readonly<Record<string, string>>;
+        readonly text: string;
+    };
 }
 
 // @public
@@ -72,6 +76,28 @@ export interface CustomNodeDiagnostic {
     readonly issues: readonly string[];
     readonly name: string;
     readonly nodeId: string;
+}
+
+// @public
+export interface CustomNodeInput<Schema extends StandardSchemaV1 | undefined = undefined> {
+    readonly alias?: string;
+    readonly at?: {
+        readonly paragraphId: string;
+        readonly offset: number;
+    };
+    readonly attrs?: Readonly<Record<string, string>>;
+    readonly data?: InferSchemaInput<Schema>;
+    readonly lock?: false | 'sdtLocked' | 'sdtContentLocked' | 'contentLocked';
+    readonly text?: string;
+}
+
+// @public
+export interface CustomNodeIssue {
+    // (undocumented)
+    readonly message: string;
+    // (undocumented)
+    readonly path: readonly (string | number)[];
+    readonly pointer: string;
 }
 
 // @public
@@ -95,6 +121,20 @@ export interface CustomNodesModuleOptions extends ProLicenseOptions {
     readonly nodes: readonly AnyCustomNodeDefinition[];
     readonly onDiagnostic?: (diagnostic: CustomNodeDiagnostic) => void;
 }
+
+// @public
+export interface CustomNodeUpdate<Schema extends StandardSchemaV1 | undefined = undefined> extends Omit<CustomNodeInput<Schema>, 'at' | 'data'> {
+    readonly data?: InferSchemaInput<Schema> | null;
+}
+
+// @public
+export type CustomNodeWriteOutcome = Extract<ExecResult, {
+    ok: true;
+}> | (Extract<ExecResult, {
+    ok: false;
+}> & {
+    readonly issues?: readonly CustomNodeIssue[];
+});
 
 // @public
 export function customNodeXml<Schema extends StandardSchemaV1 | undefined = undefined>(definition: CustomNodeDefinition<Schema>, attrs: Readonly<Record<string, string>>, text: string, options?: CustomNodeXmlOptions<Schema>): CustomNodeXmlResult;
@@ -154,6 +194,9 @@ export interface DecodedCustomNodeTag {
 export function defineCustomNode<Schema extends StandardSchemaV1 | undefined = undefined>(definition: CustomNodeDefinition<Schema>): CustomNodeDefinition<Schema>;
 
 // @public
+export type DocumentDestination = 'internal' | 'external';
+
+// @public
 export function encodeCustomNodeTag(prefix: string, name: string, attrs: Readonly<Record<string, string>>): EncodeTagResult;
 
 // @public
@@ -167,7 +210,12 @@ export type EncodeTagResult = {
 };
 
 // @public
-export function exportCustomNodes(bytes: Uint8Array, definitions: readonly AnyCustomNodeDefinition[]): ExportCustomNodesResult;
+export function exportCustomNodes(bytes: Uint8Array, definitions: readonly AnyCustomNodeDefinition[], options?: ExportCustomNodesOptions): ExportCustomNodesResult;
+
+// @public
+export interface ExportCustomNodesOptions {
+    readonly destination?: DocumentDestination;
+}
 
 // @public
 export type ExportCustomNodesResult = {
@@ -187,18 +235,7 @@ export type InferSchemaInput<Schema> = Schema extends StandardSchemaV1<infer Inp
 export type InferSchemaOutput<Schema> = Schema extends StandardSchemaV1<unknown, infer Output> ? Output : unknown;
 
 // @public
-export function insertCustomNode<Schema extends StandardSchemaV1 | undefined = undefined>(editor: Editor, definition: CustomNodeDefinition<Schema>, attrs: Readonly<Record<string, string>>, text: string, options?: InsertCustomNodeOptions<Schema>): ExecResult;
-
-// @public
-export interface InsertCustomNodeOptions<Schema extends StandardSchemaV1 | undefined = undefined> {
-    readonly alias?: string;
-    readonly at?: {
-        readonly paragraphId: string;
-        readonly offset: number;
-    };
-    readonly data?: InferSchemaInput<Schema>;
-    readonly lock?: false | 'sdtLocked' | 'sdtContentLocked' | 'contentLocked';
-}
+export function insertCustomNode<Schema extends StandardSchemaV1 | undefined = undefined>(editor: Editor, definition: CustomNodeDefinition<Schema>, input?: CustomNodeInput<Schema>): CustomNodeWriteOutcome;
 
 // @public
 export function isCustomNodeDefinition(candidate: unknown): candidate is AnyCustomNodeDefinition;
@@ -231,7 +268,7 @@ export interface RecognizedCustomNode {
 }
 
 // @public
-export function removeCustomNode(editor: Editor, nodeId: string): ExecResult;
+export function removeCustomNode(editor: Editor, nodeId: string): CustomNodeWriteOutcome;
 
 // @public
 export function reviewModule(options?: ReviewModuleOptions): EditorModule;
@@ -276,14 +313,7 @@ export interface StandardSchemaV1<Input = unknown, Output = Input> {
 }
 
 // @public
-export function updateCustomNode<Schema extends StandardSchemaV1 | undefined = undefined>(editor: Editor, definition: CustomNodeDefinition<Schema>, nodeId: string, attrs: Readonly<Record<string, string>>, text: string, options?: UpdateCustomNodeOptions<Schema>): ExecResult;
-
-// @public
-export interface UpdateCustomNodeOptions<Schema extends StandardSchemaV1 | undefined = undefined> {
-    readonly alias?: string;
-    readonly data?: InferSchemaInput<Schema> | null;
-    readonly lock?: false | 'sdtLocked' | 'sdtContentLocked' | 'contentLocked';
-}
+export function updateCustomNode<Schema extends StandardSchemaV1 | undefined = undefined>(editor: Editor, definition: CustomNodeDefinition<Schema>, nodeId: string, update?: CustomNodeUpdate<Schema>): CustomNodeWriteOutcome;
 
 // (No @packageDocumentation comment for this package)
 
