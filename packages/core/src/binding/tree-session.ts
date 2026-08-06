@@ -29,6 +29,7 @@ import {
   commentsExtendedPartNameOf,
 } from '../store/store/comment-writes.ts';
 import {
+  customNodePayloadsByControl,
   insertCustomNodeWrite,
   removeCustomNodeWrite,
   sweepCustomNodePayloads,
@@ -1131,6 +1132,7 @@ export function openTreeSession(
               furnitureParts,
               commentsPart,
               commentsExtendedPart,
+              customNodePayloads: customNodePayloadsByControl(currentPackage(), store.part.name),
             });
           }
         } else {
@@ -1140,6 +1142,10 @@ export function openTreeSession(
             furnitureParts,
             commentsPart,
             commentsExtendedPart,
+            // Resolved HERE because a payload lives in a customXml data part: the derivation
+            // receives story parts, and reaching a package part from one is not something a
+            // capability module can do.
+            customNodePayloads: customNodePayloadsByControl(currentPackage(), store.part.name),
           });
         }
 

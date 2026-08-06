@@ -69,6 +69,15 @@ export interface InsertCustomNodeWrite {
    * leaves the text where it was.
    */
   readonly replaceUntil?: number;
+  /**
+   * Rewrite an existing control: it and the payload it bound go first, in this transaction.
+   *
+   * An UPDATE is remove-and-reinsert, because the tag codec has no in-place rewrite and
+   * pretending it did would put a second write path beside this one. Doing both halves here is
+   * what keeps it one undo step, and what stops an update from leaving a label and a payload
+   * that disagree.
+   */
+  readonly replaceControlId?: string;
   readonly tag: string;
   readonly text: string;
   readonly alias?: string;
@@ -132,11 +141,31 @@ export function insertCustomNodeWrite(
     }
   }
 
+  // Resolved BEFORE the transaction, because afterwards the control is gone and nothing says
+  // what it pointed at.
+  const superseded =
+    write.replaceControlId === undefined
+      ? []
+      : boundNodesOf(store, storyPartName, write.replaceControlId);
+
   // Set inside the transaction and read after it: the store's `ds:itemID` is not known until the
   // part is authored, and the binding cannot be built without it.
   let refusal: CustomNodeWriteRejection | null = null;
 
   const result = store.transact((ctx) => {
+    // The control being rewritten goes first, at the offsets the caller measured against the
+    // tree it could see. Its payload goes with it — a rewrite that kept the old node would
+    // leave the store growing an entry per edit.
+    if (write.replaceControlId !== undefined) {
+      ctx.apply({
+        op: 'removeContentControl',
+        controlId: write.replaceControlId,
+        keepContent: false,
+      });
+      for (const entry of superseded) {
+        ctx.applyPackage((current) => withoutCustomXmlNode(current, entry.partName, entry.nodeId));
+      }
+    }
     // The replaced text goes first, so the offsets the caller supplied still describe the
     // paragraph when the deletion is planned against it.
     const replaced = write.replaceUntil;
@@ -218,6 +247,31 @@ export function insertCustomNodeWrite(
 }
 
 /**
+ * Which store node, in which part, a control binds — across every store the story carries.
+ *
+ * Every store, not the first: a control's binding names one `w:storeItemID`, but a document may
+ * hold several stores and only the one whose id matches answers. Resolving against all of them
+ * means a removal cannot miss a payload because the store it lived in was not the store this
+ * definition usually writes to.
+ */
+function boundNodesOf(
+  store: TreeDocumentStore,
+  storyPartName: string,
+  controlNodeId: string
+): readonly { readonly partName: string; readonly nodeId: string }[] {
+  const control = contentControlsIn(store.part.root).find(
+    (entry) => entry.node.id === controlNodeId
+  );
+  if (!control) return [];
+  const bound: { readonly partName: string; readonly nodeId: string }[] = [];
+  for (const dataPart of customXmlDataParts(store.package, storyPartName)) {
+    const nodeId = boundCustomXmlNodeIdOf(control.node, dataPart.itemId);
+    if (nodeId !== null) bound.push({ partName: dataPart.partName, nodeId });
+  }
+  return bound;
+}
+
+/**
  * Remove a control and, in the same transaction, the payload it bound.
  *
  * The sweep would collect the node eventually — that is what makes deletion in Word survivable —
@@ -229,18 +283,7 @@ export function removeCustomNodeWrite(
   controlNodeId: string
 ): CustomNodeWriteResult {
   const storyPartName = store.part.name;
-  const control = contentControlsIn(store.part.root).find(
-    (entry) => entry.node.id === controlNodeId
-  );
-  // Which store and node this control binds, resolved BEFORE the removal: afterwards the control
-  // is gone and nothing says what it pointed at.
-  const bound: { readonly partName: string; readonly nodeId: string }[] = [];
-  if (control) {
-    for (const dataPart of customXmlDataParts(store.package, storyPartName)) {
-      const nodeId = boundCustomXmlNodeIdOf(control.node, dataPart.itemId);
-      if (nodeId !== null) bound.push({ partName: dataPart.partName, nodeId });
-    }
-  }
+  const bound = boundNodesOf(store, storyPartName, controlNodeId);
 
   const result = store.transact((ctx) => {
     ctx.apply({ op: 'removeContentControl', controlId: controlNodeId, keepContent: false });
@@ -295,6 +338,56 @@ export function sweepCustomNodePayloads(
     removed.push(...swept.removed);
   }
   return { pkg: next, removed };
+}
+
+/** One control's payload, as the store holds it. Both strings are untrusted file input. */
+export interface CustomNodePayloadRead {
+  /** The store node's own id. */
+  readonly nodeId: string;
+  /** The text Word paints the control from. */
+  readonly label: string;
+  /** The payload as authored. JSON by convention, unparsed here. */
+  readonly data: string;
+}
+
+/**
+ * The payload every control in a story binds to, keyed by the CONTROL's canonical node id.
+ *
+ * Keyed by the control rather than by the store node because that is the question a reader
+ * actually has — "what does this chip carry" — and because two stores may each hold a `cx1`.
+ * Resolved here rather than by a capability package: the stores are package parts, and a
+ * derivation that only gets story parts has no way to reach them.
+ *
+ * Every store the story relates to, so a document carrying two definitions' payloads answers
+ * for both without anyone naming a namespace.
+ */
+export function customNodePayloadsByControl(
+  pkg: OoxmlPackage,
+  storyPartName: string
+): ReadonlyMap<string, CustomNodePayloadRead> {
+  const found = new Map<string, CustomNodePayloadRead>();
+  const story = pkg.parts.get(storyPartName);
+  if (!story) return found;
+  const stores = customXmlDataParts(pkg, storyPartName);
+  if (stores.length === 0) return found;
+  const nodesByStore = stores.map((store) => ({
+    itemId: store.itemId,
+    nodes: new Map(customXmlNodes(pkg, store.partName).map((node) => [node.id, node])),
+  }));
+  for (const entry of contentControlsIn(story.root)) {
+    for (const store of nodesByStore) {
+      const nodeId = boundCustomXmlNodeIdOf(entry.node, store.itemId);
+      if (nodeId === null) continue;
+      const node = store.nodes.get(nodeId);
+      // A binding naming a node the store does not hold is a control Word paints from nothing.
+      // Left out rather than reported as an empty payload, so a reader can tell "no payload"
+      // from "a payload that says nothing".
+      if (!node) continue;
+      found.set(entry.node.id, { nodeId, label: node.label, data: node.data });
+      break;
+    }
+  }
+  return found;
 }
 
 /** Every payload one store holds, for a caller resolving a control's `data`. */

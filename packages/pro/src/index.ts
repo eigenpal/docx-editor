@@ -38,9 +38,16 @@ export {
   recognizeCustomNodes,
   type ActivatedCustomNode,
   type CustomNodeDefinition,
+  type CustomNodeDiagnostic,
+  type CustomNodePayloadSource,
   type CustomNodesModuleOptions,
   type RecognizedCustomNode,
 } from './custom-nodes/define-custom-node.ts';
+export {
+  exportCustomNodes,
+  type ExportCustomNodesResult,
+} from './custom-nodes/export-custom-nodes.ts';
+export { CUSTOM_NODE_STORE_ROOT, customNodeNamespace } from './custom-nodes/node-payload.ts';
 export {
   decodeCustomNodeTag,
   encodeCustomNodeTag,
@@ -61,4 +68,5 @@ export {
   customNodeXml,
   type CustomNodeXmlOptions,
   type CustomNodeXmlResult,
+  type CustomNodeXmlStore,
 } from './custom-nodes/sdt-xml.ts';

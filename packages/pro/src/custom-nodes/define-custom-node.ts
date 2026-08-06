@@ -17,7 +17,8 @@ import type { EditorModule } from '@docx-editor.dev/core/editor';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import { rememberLicenseKey, type ProLicenseOptions } from '../license.ts';
 import { decodeCustomNodeTag } from './tag-codec.ts';
-import type { StandardSchemaV1 } from './data-schema.ts';
+import { customNodeNamespace } from './node-payload.ts';
+import { parseCustomNodeData, type StandardSchemaV1 } from './data-schema.ts';
 
 /** A recognized custom node: one inline SDT whose tag matched a definition. */
 export interface RecognizedCustomNode {
@@ -31,6 +32,42 @@ export interface RecognizedCustomNode {
   readonly nodeId: string;
   /** The raw `w:tag` the node was recognized from. */
   readonly tag: string;
+  /**
+   * The payload the node's control binds to, validated against the definition's `schema`.
+   *
+   * `undefined` when the node carries none, when the binding named a store node the document
+   * does not hold, or when the payload failed its schema — the last of which is reported
+   * through {@link customNodesModule}'s `onDiagnostic` rather than swallowed. A chip that
+   * vanished because one field was wrong would be worse than a chip with no data.
+   *
+   * With a schema declared this is that schema's output type; without one it is whatever JSON
+   * the file held, which is the honest description of an unchecked payload.
+   */
+  readonly data?: unknown;
+}
+
+/** A payload as the store holds it, before any schema has looked at it. Untrusted file input. */
+export interface CustomNodePayloadSource {
+  readonly nodeId: string;
+  readonly label: string;
+  readonly data: string;
+}
+
+/**
+ * Something worth telling an integrator about a document, which is never worth throwing over.
+ *
+ * A payload arrives from a file the sender wrote, so "it did not match the schema" is an
+ * ordinary property of an ordinary document — not an exception. It is reported and the node
+ * still renders.
+ */
+export interface CustomNodeDiagnostic {
+  readonly code: 'payload-invalid';
+  /** The definition whose schema refused it. */
+  readonly name: string;
+  /** The control's canonical node id, so a host can locate it. */
+  readonly nodeId: string;
+  /** Human-readable, one per failing field. Never rendered as markup by this package. */
+  readonly issues: readonly string[];
 }
 
 /**
@@ -72,6 +109,8 @@ export interface CustomNodeDefinition {
   readonly fromDocx?: (input: {
     readonly attrs: Readonly<Record<string, string>>;
     readonly text: string;
+    /** The bound payload, through `schema`. Undefined when there is none or it did not match. */
+    readonly data?: unknown;
   }) => Readonly<Record<string, string>> | null;
   /**
    * Chip appearance, HOST-authored (never file data). `color` tints the chip
@@ -96,6 +135,8 @@ export interface CustomNodeDefinition {
   readonly reviewCard?: (node: {
     readonly attrs: Readonly<Record<string, string>>;
     readonly text: string;
+    /** The bound payload, through `schema`. Undefined when there is none or it did not match. */
+    readonly data?: unknown;
   }) => { readonly title: string; readonly detail?: string } | null;
   /**
    * The "Edit {label}" row the context menu shows at the top when the
@@ -129,10 +170,23 @@ export interface CustomNodeDefinition {
    * defineCustomNode({ name: 'citation', tagPrefix: 'acme', schema: Citation });
    * ```
    *
-   * NOT YET READ: the payload store landed before the write path that fills it, so a schema
-   * declared today is checked for shape here and does nothing else until that lands.
+   * Validated on the way IN as well as on the way out, so a payload that does not match is
+   * refused at the insert rather than written and rejected on the next open.
    */
   readonly schema?: StandardSchemaV1;
+  /**
+   * The customXml store this definition's payloads live in.
+   *
+   * One store per namespace, per document, so this is what decides whether two definitions
+   * share a store or get one each. Defaults to a namespace derived from `tagPrefix`, which
+   * means a host that never thinks about it still gets one store per prefix and never collides
+   * with another integrator's.
+   *
+   * Set it to interoperate with something that already reads a namespace of its own. Whatever
+   * it is, it must be free of quotes and angle brackets: it is written into an XPath prefix
+   * declaration, where there is no escape for either.
+   */
+  readonly payloadNamespace?: string;
   /**
    * What happens to this node when a document is exported OUTSIDE the system that made it.
    *
@@ -146,9 +200,13 @@ export interface CustomNodeDefinition {
    *    binding and the payload are gone. Right for a citation, whose text is the point of it.
    *  - `false` — the node goes, and takes its content with it.
    *
-   * NOT YET READ, for the same reason as `schema`. Removing the PAYLOAD is implemented
-   * (`withoutCustomXmlDataPart`); unwrapping the control and dropping the tag and the binding
-   * from the body is not, and neither is choosing between them per definition.
+   * Applied by `exportCustomNodes`, which is a pipeline of its own rather than something
+   * `save()` does — that is what lets one document serialize one way at rest and another on the
+   * way out.
+   *
+   * IT DOES NOT MAKE A DOCUMENT ANONYMOUS. It removes this library's markup and nothing else. A
+   * `.docx` carries its origin in `docProps/app.xml`, `docProps/core.xml`, comment and revision
+   * authors, rsids and custom document properties.
    */
   readonly preserveOnExport?: boolean | 'text';
 }
@@ -243,12 +301,48 @@ export function defineCustomNode(definition: CustomNodeDefinition): CustomNodeDe
 export interface CustomNodesModuleOptions extends ProLicenseOptions {
   /** The definitions this editor recognizes. A tag prefix no definition claims stays literal. */
   readonly nodes: readonly CustomNodeDefinition[];
+  /**
+   * Told about a document, never about a bug: a payload that failed its schema, so far.
+   *
+   * A payload comes from a file the sender wrote, so a mismatch is an ordinary property of an
+   * ordinary document. The node still renders, without its `data`; this is how an integrator
+   * finds out rather than wondering why one chip's dialog is empty.
+   */
+  readonly onDiagnostic?: (diagnostic: CustomNodeDiagnostic) => void;
+}
+
+/**
+ * Where recognition reports to.
+ *
+ * Module-level, like the license key, and for the same reason: recognition runs inside the
+ * engine's review derivation, which forwards definitions and nothing else. Threading a callback
+ * through `ReviewModelInput` would put a capability package's diagnostics channel in the
+ * engine's own contract. Last registration wins, which matches one editor per page.
+ */
+let reportDiagnostic: ((diagnostic: CustomNodeDiagnostic) => void) | null = null;
+
+/** Report to whatever `customNodesModule` was told, if anything. Never throws at the caller. */
+export function reportCustomNodeDiagnostic(diagnostic: CustomNodeDiagnostic): void {
+  const report = reportDiagnostic;
+  if (!report) return;
+  try {
+    report(diagnostic);
+  } catch {
+    // A host's logger throwing must not take a document's recognition pass with it.
+  }
 }
 
 /** Register custom node definitions with `createDocxEditor({ modules })`. */
 export function customNodesModule(options: CustomNodesModuleOptions): EditorModule {
   rememberLicenseKey(options.licenseKey);
-  return { id: 'custom-nodes', customNodes: options.nodes };
+  reportDiagnostic = options.onDiagnostic ?? null;
+  return {
+    id: 'custom-nodes',
+    customNodes: options.nodes,
+    // The stores this module owns, so the engine's open-time sweep collects orphaned payloads
+    // in them and touches nobody else's — see `EditorModule.customNodePayloadNamespaces`.
+    customNodePayloadNamespaces: [...new Set(options.nodes.map(customNodeNamespace))],
+  };
 }
 
 function wmlTag(node: OoxmlElement): string | undefined {
@@ -285,7 +379,8 @@ function textUnder(node: OoxmlNode): string {
  */
 export function recognizeCustomNodes(
   part: OoxmlPart,
-  definitions: readonly CustomNodeDefinition[]
+  definitions: readonly CustomNodeDefinition[],
+  payloads?: ReadonlyMap<string, CustomNodePayloadSource>
 ): RecognizedCustomNode[] {
   if (definitions.length === 0) return [];
   const byIdentity = new Map<string, CustomNodeDefinition>();
@@ -307,11 +402,26 @@ export function recognizeCustomNodes(
       const definition = decoded ? byIdentity.get(`${decoded.prefix}:${decoded.name}`) : undefined;
       if (decoded && definition && tag !== undefined) {
         const text = textUnder(node);
+        // Resolved BEFORE `fromDocx`, so the hook sees the payload alongside the attrs and can
+        // decide with both. A node whose payload failed its schema arrives with `data`
+        // undefined rather than not arriving.
+        const data = resolvePayload(definition, node.id, payloads?.get(node.id));
         const attrs = definition.fromDocx
-          ? definition.fromDocx({ attrs: decoded.attrs, text })
+          ? definition.fromDocx({
+              attrs: decoded.attrs,
+              text,
+              ...(data.present ? { data: data.value } : {}),
+            })
           : decoded.attrs;
         if (attrs !== null) {
-          found.push({ name: definition.name, attrs, text, nodeId: node.id, tag });
+          found.push({
+            name: definition.name,
+            attrs,
+            text,
+            nodeId: node.id,
+            tag,
+            ...(data.present ? { data: data.value } : {}),
+          });
           // A recognized node is ATOMIC: its content is the node's, so nothing
           // inside it can be another recognized node.
           return;
@@ -322,4 +432,29 @@ export function recognizeCustomNodes(
   };
   walk(part.root, 0);
   return found;
+}
+
+/**
+ * A stored payload through the definition's schema, or nothing.
+ *
+ * `present: false` covers three cases a caller cannot usefully tell apart at the hook: the node
+ * binds no payload, the binding named a store node the document does not hold, or the payload
+ * did not match. Only the last is worth reporting, and it is — the node still renders, because
+ * a chip that vanished over one wrong field would be a worse answer than a chip with no data.
+ */
+function resolvePayload(
+  definition: CustomNodeDefinition,
+  nodeId: string,
+  source: CustomNodePayloadSource | undefined
+): { readonly present: true; readonly value: unknown } | { readonly present: false } {
+  if (!source) return { present: false };
+  const parsed = parseCustomNodeData(definition.schema, source.data);
+  if (parsed.ok) return { present: true, value: parsed.value };
+  reportCustomNodeDiagnostic({
+    code: 'payload-invalid',
+    name: definition.name,
+    nodeId,
+    issues: parsed.issues,
+  });
+  return { present: false };
 }

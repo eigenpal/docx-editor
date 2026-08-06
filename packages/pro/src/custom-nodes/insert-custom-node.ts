@@ -11,13 +11,55 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import type { Editor, ExecResult } from '@docx-editor.dev/core/contracts/editor';
 import type { PaginatedSurface } from '@docx-editor.dev/core/editor';
+import type { CustomNodePayloadWrite, CustomNodeWriteResult } from '@docx-editor.dev/core/store';
 import type { CustomNodeDefinition } from './define-custom-node.ts';
 import { encodeCustomNodeTag } from './tag-codec.ts';
+import {
+  CUSTOM_NODE_STORE_ROOT,
+  customNodeDataFor,
+  customNodeNamespace,
+  nextCustomNodeId,
+} from './node-payload.ts';
 
 /** Instance-only surface on the concrete facade, the same escape hatch chrome uses. */
 function surfaceOf(editor: Editor): PaginatedSurface | null {
   const candidate = editor as Editor & { readonly surface?: PaginatedSurface | null };
   return candidate.surface ?? null;
+}
+
+/**
+ * The payload half of a write, or the reason there is not one.
+ *
+ * Null means the caller asked for no payload, which is the ordinary tagged control. The id is
+ * minted against the document as it stands, so it is unique inside it and stable afterwards.
+ */
+export function payloadFor(
+  surface: PaginatedSurface,
+  definition: CustomNodeDefinition,
+  data: unknown,
+  label: string,
+  nodeId?: string
+): { readonly value: CustomNodePayloadWrite } | { readonly reason: string } | null {
+  if (data === undefined) return null;
+  const prepared = customNodeDataFor(definition, data);
+  if (!prepared.ok) return { reason: prepared.reason };
+  const namespaceUri = customNodeNamespace(definition);
+  const storyPartName = surface.session.part().name;
+  return {
+    value: {
+      namespaceUri,
+      rootLocalName: CUSTOM_NODE_STORE_ROOT,
+      nodeId:
+        nodeId ?? nextCustomNodeId(surface.session.currentPackage(), storyPartName, namespaceUri),
+      label,
+      data: prepared.data,
+    },
+  };
+}
+
+/** An engine refusal as one sentence, with the detail when the engine gave one. */
+export function describeRefusal(result: Extract<CustomNodeWriteResult, { ok: false }>): string {
+  return result.detail ? `${result.reason}: ${result.detail}` : result.reason;
 }
 
 /**
@@ -48,6 +90,17 @@ export interface InsertCustomNodeOptions {
    * engine's control chrome uses as its floating label.
    */
   readonly alias?: string;
+  /**
+   * The node's payload: everything that does not fit in 64 characters of `w:tag`.
+   *
+   * Written into a customXml data part and bound to the control, in the SAME transaction as the
+   * control itself. Validated against the definition's `schema` first, so a payload that does
+   * not match is refused here rather than written and rejected on the next open.
+   *
+   * The label the control shows is `text`, and Word paints it from the store — which is why a
+   * bound chip cannot be typed into and the two can never drift.
+   */
+  readonly data?: unknown;
 }
 
 /**
@@ -74,25 +127,26 @@ export function insertCustomNode(
     return {
       ok: false,
       code: 'invalidArgs',
-      reason: `the encoded tag is ${encoded.length} characters; Word caps w:tag at 64 — shorten the attrs (the customXml data-part escape hatch is not built yet)`,
+      reason: `the encoded tag is ${encoded.length} characters; Word caps w:tag at 64 — move what does not fit into the payload (\`data\`), or shorten the attrs`,
     };
+  }
+  const payload = payloadFor(surface, definition, options.data, text);
+  if (payload && 'reason' in payload) {
+    return { ok: false, code: 'invalidArgs', reason: payload.reason };
   }
   const at = options.at ?? surface.state().selection.head;
   const lock = options.lock === undefined ? 'contentLocked' : options.lock;
-  const applied = surface.session.applyTreeOps([
-    {
-      op: 'insertInlineContentControl',
-      paragraphId: at.paragraphId,
-      offset: at.offset,
-      tag: encoded.tag,
-      text,
-      ...(options.alias === undefined ? {} : { alias: options.alias }),
-      ...(lock === false ? {} : { lock }),
-    },
-  ]);
-  if (!applied.committed) {
-    const reason = typeof applied.reason === 'string' ? applied.reason : 'the insert was refused';
-    return { ok: false, code: 'unsupported', reason };
+  const written = surface.session.insertCustomNode({
+    paragraphId: at.paragraphId,
+    offset: at.offset,
+    tag: encoded.tag,
+    text,
+    ...(options.alias === undefined ? {} : { alias: options.alias }),
+    ...(lock === false ? {} : { lock }),
+    ...(payload ? { payload: payload.value } : {}),
+  });
+  if (!written.ok) {
+    return { ok: false, code: 'unsupported', reason: describeRefusal(written) };
   }
   return { ok: true, changed: true };
 }

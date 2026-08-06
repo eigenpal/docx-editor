@@ -575,6 +575,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     parseError = null;
     surface = result.surface;
     adoptDocumentTracking();
+    // THE ORPHAN SWEEP, on open and nowhere else. Word will not delete a payload when a user
+    // deletes the control bound to it, so a document can arrive holding payloads for chips that
+    // no longer exist — and reconciling against what the story binds is the only thing that
+    // collects them. NOT on save: a chip cut to the clipboard is unbound for as long as it sits
+    // there, and a save mid-cut would destroy the payload the user is about to paste.
+    if (modules.customNodePayloadNamespaces.length > 0) {
+      surface.session.sweepCustomNodePayloads(modules.customNodePayloadNamespaces);
+    }
     mountGeneration += 1;
     // A surface is rebuilt on load and on the font remount, and it comes up editable. The
     // engine's own guards refuse the WRITE, but the pages layer stays `contenteditable`

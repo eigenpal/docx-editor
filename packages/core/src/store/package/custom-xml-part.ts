@@ -82,12 +82,16 @@ export interface CustomXmlDataPart {
 /**
  * A `ds:itemID` derived from the seed rather than drawn at random.
  *
+ * Exported so a caller that authors a store OUTSIDE a package — a template engine splicing
+ * markup it will assemble into a `.docx` later — mints the id the same way this does, rather
+ * than inventing a second GUID shape Word has to be tolerant of.
+ *
  * The store is a pure function of what it is asked to write: the same document written twice
  * has to produce the same bytes, or a save/reopen/save round trip stops being a fixed point
  * and every digest taken over saved bytes moves. A GUID's job here is uniqueness within one
  * package, not unguessability, so four FNV-1a passes over a salted seed carry it.
  */
-function datastoreItemIdFor(seed: string): string {
+export function datastoreItemIdFor(seed: string): string {
   const block = (salt: string): string =>
     fnv1a32(`${salt} ${seed}`).toString(16).padStart(8, '0').toUpperCase();
   const a = block('a');

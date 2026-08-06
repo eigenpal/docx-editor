@@ -60,6 +60,7 @@ import {
   isCustomNodeDefinition,
   recognizeCustomNodes,
   type CustomNodeDefinition,
+  type CustomNodePayloadSource,
 } from '../custom-nodes/define-custom-node.ts';
 
 /**
@@ -86,11 +87,12 @@ export function revisionItemsOfParagraph(
  */
 export function customItemsOf(
   part: OoxmlPart,
-  definitions: readonly CustomNodeDefinition[]
+  definitions: readonly CustomNodeDefinition[],
+  payloads?: ReadonlyMap<string, CustomNodePayloadSource>
 ): ReviewCustomItem[] {
   const carded = definitions.filter((definition) => definition.reviewCard);
   if (carded.length === 0) return [];
-  const recognized = recognizeCustomNodes(part, carded);
+  const recognized = recognizeCustomNodes(part, carded, payloads);
   if (recognized.length === 0) return [];
   const located = locateSites(part);
   const items: ReviewCustomItem[] = [];
@@ -99,7 +101,11 @@ export function customItemsOf(
       (candidate) => candidate.name === node.name && node.tag.startsWith(`${candidate.tagPrefix}:`)
     );
     if (!definition) continue;
-    const card = definition.reviewCard!({ attrs: node.attrs, text: node.text });
+    const card = definition.reviewCard!({
+      attrs: node.attrs,
+      text: node.text,
+      ...(node.data === undefined ? {} : { data: node.data }),
+    });
     if (card === null) continue;
     const where = located.get(node.nodeId);
     items.push({
@@ -145,7 +151,15 @@ export function collectReviewItems(input: ReviewModelInput): ReviewItem[] {
   const custom: ReviewCustomItem[] = [];
   const order = new Map<string, number>();
   for (const part of parts) {
-    custom.push(...customItemsOf(part, definitions));
+    // The payloads the ENGINE resolved, and only for the story they belong to: they are keyed
+    // by control node id, and a header's controls are not the body's.
+    custom.push(
+      ...customItemsOf(
+        part,
+        definitions,
+        part.name === input.storyPart.name ? input.customNodePayloads : undefined
+      )
+    );
     const offset = order.size;
     for (const [id, position] of paragraphOrderOfPart(part)) {
       if (!order.has(id)) order.set(id, offset + position);

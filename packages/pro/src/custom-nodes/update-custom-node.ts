@@ -12,12 +12,16 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import type { Editor, ExecResult } from '@docx-editor.dev/core/contracts/editor';
 import type { PaginatedSurface } from '@docx-editor.dev/core/editor';
 import {
+  boundCustomXmlNodeIdOf,
+  contentControlsIn,
+  customXmlDataParts,
   segmentsOf,
   type OoxmlNode,
   type OoxmlParagraphNode,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
 import type { CustomNodeDefinition } from './define-custom-node.ts';
+import { describeRefusal, payloadFor } from './insert-custom-node.ts';
 import { encodeCustomNodeTag } from './tag-codec.ts';
 
 /** Instance-only surface on the concrete facade, the same escape hatch chrome uses. */
@@ -91,13 +95,11 @@ function spanOf(
 export function removeCustomNode(editor: Editor, nodeId: string): ExecResult {
   const surface = surfaceOf(editor);
   if (!surface) return { ok: false, code: 'notFound', reason: 'no document is mounted' };
-  const applied = surface.session.applyTreeOps([
-    { op: 'removeContentControl', controlId: nodeId, keepContent: false },
-  ]);
-  if (!applied.committed) {
-    const reason = typeof applied.reason === 'string' ? applied.reason : 'the removal was refused';
-    return { ok: false, code: 'unsupported', reason };
-  }
+  // The control AND the payload it bound, in one transaction. The orphan sweep would collect
+  // the payload on the next open regardless, but a document saved in between would carry a
+  // payload for a chip that is gone.
+  const removed = surface.session.removeCustomNode(nodeId);
+  if (!removed.ok) return { ok: false, code: 'unsupported', reason: describeRefusal(removed) };
   return { ok: true, changed: true };
 }
 
@@ -111,6 +113,15 @@ export interface UpdateCustomNodeOptions {
   readonly alias?: string;
   /** `w:lock` for the rewritten control. Defaults to `contentLocked`, like the insert. */
   readonly lock?: false | 'sdtLocked' | 'sdtContentLocked' | 'contentLocked';
+  /**
+   * The payload the rewritten node carries.
+   *
+   * Written in the SAME transaction as the label, so an update cannot leave the two
+   * disagreeing — which is the one way a bound chip could ever show text its payload does not
+   * describe. Omitted, the node comes back with no payload at all; pass the old value through
+   * to keep it.
+   */
+  readonly data?: unknown;
 }
 
 /**
@@ -146,22 +157,43 @@ export function updateCustomNode(
   if (!paragraph || !span) {
     return { ok: false, code: 'notFound', reason: 'no custom node with that id' };
   }
+  // The payload keeps the id the node already had, so an update is an upsert in the store
+  // rather than a new entry beside the old one.
+  const payload = payloadFor(
+    surface,
+    definition,
+    options.data,
+    text,
+    boundNodeIdOf(surface, nodeId)
+  );
+  if (payload && 'reason' in payload) {
+    return { ok: false, code: 'invalidArgs', reason: payload.reason };
+  }
   const lock = options.lock === undefined ? 'contentLocked' : options.lock;
-  const applied = surface.session.applyTreeOps([
-    { op: 'removeContentControl', controlId: nodeId, keepContent: false },
-    {
-      op: 'insertInlineContentControl',
-      paragraphId: paragraph.id,
-      offset: span.start,
-      tag: encoded.tag,
-      text,
-      ...(options.alias === undefined ? {} : { alias: options.alias }),
-      ...(lock === false ? {} : { lock }),
-    },
-  ]);
-  if (!applied.committed) {
-    const reason = typeof applied.reason === 'string' ? applied.reason : 'the update was refused';
-    return { ok: false, code: 'unsupported', reason };
+  const written = surface.session.insertCustomNode({
+    replaceControlId: nodeId,
+    paragraphId: paragraph.id,
+    offset: span.start,
+    tag: encoded.tag,
+    text,
+    ...(options.alias === undefined ? {} : { alias: options.alias }),
+    ...(lock === false ? {} : { lock }),
+    ...(payload ? { payload: payload.value } : {}),
+  });
+  if (!written.ok) {
+    return { ok: false, code: 'unsupported', reason: describeRefusal(written) };
   }
   return { ok: true, changed: true };
+}
+
+/** The store node this control already binds, so a rewrite reuses the id rather than minting one. */
+function boundNodeIdOf(surface: PaginatedSurface, controlNodeId: string): string | undefined {
+  const part = surface.session.part();
+  const control = contentControlsIn(part.root).find((entry) => entry.node.id === controlNodeId);
+  if (!control) return undefined;
+  for (const dataPart of customXmlDataParts(surface.session.currentPackage(), part.name)) {
+    const bound = boundCustomXmlNodeIdOf(control.node, dataPart.itemId);
+    if (bound !== null) return bound;
+  }
+  return undefined;
 }

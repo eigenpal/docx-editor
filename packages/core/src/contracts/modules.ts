@@ -100,6 +100,20 @@ export interface EditorModule {
    * the custom-nodes lane; the registry carries them opaquely until then.
    */
   readonly customNodes?: readonly unknown[];
+  /**
+   * customXml payload namespaces this module OWNS, swept for orphans when a document opens.
+   *
+   * A payload lives in a customXml data part, and Word will not delete one when a user deletes
+   * the control bound to it — nothing in OOXML asks it to. So a document can arrive holding
+   * payloads for chips that no longer exist, and reconciling against what the story actually
+   * binds is the only thing that collects them.
+   *
+   * The claim is what keeps the sweep off other people's stores: Word's own Cover Page
+   * Properties store rides in most templates, and a sweep that walked every customXml part
+   * would be deleting from it on the strength of a name collision. A namespace no module names
+   * is never touched.
+   */
+  readonly customNodePayloadNamespaces?: readonly string[];
 }
 
 /**
@@ -110,11 +124,14 @@ export interface EditorModule {
 export interface EditorModuleRegistry {
   readonly review: ReviewModuleContribution | null;
   readonly customNodes: readonly unknown[];
+  /** Every claimed payload namespace, deduplicated, in registration order. */
+  readonly customNodePayloadNamespaces: readonly string[];
 }
 
 const EMPTY_REGISTRY: EditorModuleRegistry = Object.freeze({
   review: null,
   customNodes: Object.freeze([]) as readonly unknown[],
+  customNodePayloadNamespaces: Object.freeze([]) as readonly string[],
 });
 
 /** Resolve construction-time modules into the registry the instance dispatches over. */
@@ -124,6 +141,7 @@ export function resolveEditorModules(
   if (!modules || modules.length === 0) return EMPTY_REGISTRY;
   let review: ReviewModuleContribution | null = null;
   const customNodes: unknown[] = [];
+  const namespaces = new Set<string>();
   for (const module of modules) {
     // First registration wins: two review modules is a configuration mistake,
     // and silently merging them would leave neither author able to say which
@@ -131,6 +149,7 @@ export function resolveEditorModules(
     // list assembled from independent sources must not take the editor down.
     if (module.review && review === null) review = module.review;
     if (module.customNodes) customNodes.push(...module.customNodes);
+    for (const namespace of module.customNodePayloadNamespaces ?? []) namespaces.add(namespace);
   }
-  return { review, customNodes };
+  return { review, customNodes, customNodePayloadNamespaces: [...namespaces] };
 }

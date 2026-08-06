@@ -59,10 +59,12 @@ export {
 export {
   MAX_CUSTOM_NODE_LABEL_LENGTH,
   MAX_CUSTOM_NODE_PAYLOAD_LENGTH,
+  customNodePayloadsByControl,
   customNodePayloadsOf,
   insertCustomNodeWrite,
   removeCustomNodeWrite,
   sweepCustomNodePayloads,
+  type CustomNodePayloadRead,
   type CustomNodePayloadWrite,
   type CustomNodeSweepResult,
   type CustomNodeWriteRejection,

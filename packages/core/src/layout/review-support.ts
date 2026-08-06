@@ -252,6 +252,20 @@ export interface ReviewModelInput {
    * `kind: 'custom'` cards for definitions that opted in.
    */
   readonly customNodes?: readonly unknown[] | undefined;
+  /**
+   * The payload each of the story's controls binds to, keyed by the control's node id.
+   *
+   * Resolved by the ENGINE and handed over, because a payload lives in a customXml data part
+   * and a derivation that only receives story parts has no way to reach one. Untrusted file
+   * input on both members; a capability package validates it against whatever shape it
+   * declared before handing it to a host.
+   */
+  readonly customNodePayloads?:
+    | ReadonlyMap<
+        string,
+        { readonly nodeId: string; readonly label: string; readonly data: string }
+      >
+    | undefined;
 }
 
 // ── Pure helpers over the vocabulary ───────────────────────────────────────────
