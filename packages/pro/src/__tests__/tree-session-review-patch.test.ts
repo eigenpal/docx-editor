@@ -169,6 +169,21 @@ const NESTED_TBLPR_COLLISION =
   `<w:p>${run('second ')}${ins('2', run('kept'))}</w:p>` +
   BODY_TABLE_STRUCTURAL;
 
+/**
+ * A tracked ROW: `w:trPr/w:ins` plus a `w:cellIns` per cell, all under one address.
+ *
+ * None of those markers lives inside a paragraph — they anchor to the row's first one — which
+ * is the case the local patch has to leave alone.
+ */
+const TRACKED_ROW_TABLE =
+  `<w:tbl><w:tblPr/>` +
+  `<w:tr><w:tc><w:tcPr/><w:p>${run('kept cell')}</w:p></w:tc></w:tr>` +
+  `<w:tr><w:trPr>${tblPrIns('50', 'Ada', '2026-01-03T00:00:00Z')}</w:trPr>` +
+  `<w:tc><w:tcPr><w:cellIns w:id="50" w:author="Ada" w:date="2026-01-03T00:00:00Z"/></w:tcPr>` +
+  `<w:p>${run('typed here')}</w:p></w:tc>` +
+  `<w:tc><w:tcPr><w:cellIns w:id="50" w:author="Ada" w:date="2026-01-03T00:00:00Z"/></w:tcPr>` +
+  `<w:p>${run('other cell')}</w:p></w:tc></w:tr></w:tbl>`;
+
 const MIXED_LOCAL_REVISION_ORDER =
   `<w:p>` +
   `<w:pPr><w:rPr><w:ins w:id="6" w:author="QA" w:date="2026-01-01T00:00:00Z"/></w:rPr></w:pPr>` +
@@ -260,6 +275,36 @@ describe('local review patch after one-paragraph text-local edits', () => {
     expect(after).toEqual(oracle(session));
     expect(after.find((item) => item === structural)).toBe(structural);
     expect(after.find((item) => item === neighbor)).toBe(neighbor);
+  });
+
+  test('typing in a tracked row keeps the row card', () => {
+    const session = open(docx(TRACKED_ROW_TABLE));
+    const rowCardOf = (items: readonly ReviewItem[]) =>
+      items.find(
+        (item): item is ReviewRevisionItem => isRevision(item) && item.revisionKind === 'structural'
+      );
+    const before = rowCardOf(session.reviewItems())!;
+    expect(before.readOnly).toBe(false);
+    // The row's markers anchor to the FIRST cell's paragraph — the one being typed in.
+    const paragraphId = session.paragraphIds()[1]!;
+    expect(before.ranges[0]!.start.paragraphId).toBe(paragraphId);
+
+    const result = session.applyTreeOps([
+      {
+        op: 'insertText',
+        paragraphId,
+        offset: 0,
+        text: 'X',
+        revision: { author: 'Ada', date: '2026-01-03T00:00:00Z' },
+      },
+    ]);
+    expect(result.committed).toBe(true);
+
+    const after = session.reviewItems();
+    expect(after).toEqual(oracle(session));
+    // The row is still painted as a proposal, so its decision has to still be in the queue.
+    expect(rowCardOf(after)).toBeDefined();
+    expect(rowCardOf(after)!.readOnly).toBe(false);
   });
 
   test('range-less local ambiguity falls back instead of patching', () => {
