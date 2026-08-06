@@ -99,6 +99,46 @@ describe('a tracked insertion', () => {
     expect(xml(after)).toMatch(/<w:p><w:ins[^>]*><w:r><w:t>first<\/w:t><\/w:r><\/w:ins><\/w:p>/);
   });
 
+  test('an empty paragraph WITH properties keeps w:pPr first', () => {
+    // §17.3.1.26 puts `w:pPr` first, and the paragraph invariant enforces it — so an
+    // insertion placed before it took the whole transaction down. Every keystroke in an
+    // empty paragraph that carries properties was refused: the list item Enter has just
+    // opened, a styled blank line, an indented one. Suggesting mode looked dead from the
+    // moment the caret landed in a new paragraph.
+    const before = part(
+      '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr></w:p>'
+    );
+    const after = apply(before, {
+      op: 'insertText',
+      paragraphId: paragraphId(before),
+      offset: 0,
+      text: 'first',
+      revision: ADA,
+    });
+    const out = xml(after);
+    expect(out.indexOf('<w:pPr>')).toBeLessThan(out.indexOf('<w:ins'));
+    expect(out).toMatch(/<\/w:pPr><w:ins[^>]*><w:r><w:t>first<\/w:t><\/w:r><\/w:ins><\/w:p>/);
+  });
+
+  test('and so does the head of a paragraph that HAS runs', () => {
+    // Offset 0 is the properties' offset too, so this is the same refusal without an empty
+    // paragraph anywhere near it: Home and type, in any indented, aligned or numbered
+    // paragraph.
+    const before = part(
+      '<w:p><w:pPr><w:ind w:left="720"/></w:pPr><w:r><w:t>tail</w:t></w:r></w:p>'
+    );
+    const after = apply(before, {
+      op: 'insertText',
+      paragraphId: paragraphId(before),
+      offset: 0,
+      text: 'head',
+      revision: ADA,
+    });
+    expect(xml(after)).toMatch(
+      /<\/w:pPr><w:ins[^>]*><w:r><w:t>head<\/w:t><\/w:r><\/w:ins><w:r><w:t>tail/
+    );
+  });
+
   test('typing inside your OWN insertion extends it instead of nesting a second', () => {
     const before = part(
       `<w:p><w:ins w:id="1" w:author="Ada Lovelace"><w:r><w:t>abcd</w:t></w:r></w:ins></w:p>`

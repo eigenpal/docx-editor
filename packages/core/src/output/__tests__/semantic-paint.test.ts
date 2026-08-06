@@ -851,4 +851,31 @@ describe('list marker paint', () => {
     expect(run?.textContent).toBe('Item');
     expect(run?.dataset.start).toBe('0');
   });
+
+  test('an EMPTY item still gets a glyph band, so its marker stays on its own line', () => {
+    // The paragraph Enter has just opened has no spans to take the band from. With the band
+    // collapsed to zero the browser centred the glyph on a zero-height line box and drew it
+    // half a line above its own row, over the item before it. `paintLine` already falls back
+    // to the paragraph mark's own depth for an empty line; the marker reads the same number.
+    const layout = layoutOf(
+      '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>' +
+        '<w:r><w:t>Item</w:t></w:r></w:p>' +
+        '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr></w:p>',
+      NUM
+    );
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, { scale: 1 });
+    const markers = [...container.querySelectorAll<HTMLElement>('.docx-list-marker')];
+    expect(markers).toHaveLength(2);
+    const empty = markers[1]!;
+    const glyph = empty.firstElementChild as HTMLElement;
+    // The empty item's band matches the one beside text, and nothing is pushed above it.
+    expect(parseFloat(glyph.style.height)).toBeCloseTo(
+      parseFloat((markers[0]!.firstElementChild as HTMLElement).style.height),
+      5
+    );
+    expect(parseFloat(glyph.style.height)).toBeGreaterThan(0);
+    expect(parseFloat(empty.style.lineHeight)).toBeGreaterThan(0);
+    expect(parseFloat(empty.style.paddingBottom)).toBe(0);
+  });
 });

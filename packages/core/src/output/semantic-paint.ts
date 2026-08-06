@@ -1337,10 +1337,19 @@ function paintListMarker(
   // Mirror `paintLine`: content band at the top (plus any above-leading), auto extras as
   // padding-bottom so the marker shares the text baseline on spaced lines.
   const firstLine = fragment.lines[0];
-  const maxSpanH = firstLine
-    ? Math.max(0, ...firstLine.spans.map((span) => span.box.height))
+  // The same band `paintLine` gives the text beside it, including its EMPTY-line arm: a list
+  // item with no runs — the one Enter has just opened, and every blank item in a list — has
+  // no spans to take a height from, and `Math.max` over none collapsed the band to zero. The
+  // browser then centred the marker glyph on a zero-height line box and drew it half a line
+  // ABOVE its own row, overlapping the item before it until the next edit repainted.
+  const band = firstLine
+    ? Math.max(
+        leading,
+        ...firstLine.spans.map((span) => span.box.height + leading),
+        firstLine.spans.length === 0 ? firstLine.box.height - (firstLine.trailingSpacing ?? 0) : 0
+      )
     : marker.box.height;
-  const glyphBand = Math.min(Math.max(leading + maxSpanH, leading), marker.box.height);
+  const glyphBand = Math.min(band, marker.box.height);
   const trailing = Math.max(0, marker.box.height - glyphBand);
   element.style.fontSize = '0';
   element.style.boxSizing = 'border-box';
