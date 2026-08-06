@@ -241,7 +241,7 @@ function ContentControlRoot({
 
   const titled = (
     <>
-      <span id={titleId} className="ep-sr-only">
+      <span id={titleId} className="docx-editor-sr-only">
         {t('contentControl.inspectorPanel.title')}
       </span>
       {body}

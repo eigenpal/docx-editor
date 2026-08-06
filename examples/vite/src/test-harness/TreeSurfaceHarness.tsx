@@ -118,10 +118,10 @@ export function TreeSurfaceHarness({ fixtureUrl }: { fixtureUrl: string }) {
 
       <div style={{ padding: 24, display: 'flex', justifyContent: 'center' }}>
         <div
-          className="ep-browser-first__page"
+          className="docx-editor-browser-first__page"
           style={{ background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,.2)' }}
         >
-          <div ref={mountRef} className="ep-browser-first__mount" data-testid="tree-mount" />
+          <div ref={mountRef} className="docx-editor-browser-first__mount" data-testid="tree-mount" />
         </div>
       </div>
 

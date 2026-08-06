@@ -1,6 +1,6 @@
 // Every `--doc-*` token a stylesheet CONSUMES must also be DEFINED (interactive-paginated-editing).
 //
-// `.ep-one-surface__caret { background: var(--doc-caret) }` shipped with `--doc-caret`
+// `.docx-editor-one-surface__caret { background: var(--doc-caret) }` shipped with `--doc-caret`
 // declared only inside the dark-mode block, so in the default theme it resolved to nothing
 // and the caret painted as a 1px transparent div: correctly positioned, visible, blinking,
 // and completely invisible. A missing custom property fails silently — `var()` with no
@@ -129,7 +129,7 @@ describe('editor stylesheet custom properties', () => {
   });
 
   test('the caret rule paints a colour rather than relying on a default', () => {
-    const rule = /\.ep-one-surface__caret\s*\{([^}]*)\}/.exec(withoutComments);
+    const rule = /\.docx-editor-one-surface__caret\s*\{([^}]*)\}/.exec(withoutComments);
     expect(rule).not.toBeNull();
     expect(rule![1]).toMatch(/background:\s*var\(--doc-caret/);
     // 2px, not 1: a hairline caret is a single device pixel on a high-DPI screen and

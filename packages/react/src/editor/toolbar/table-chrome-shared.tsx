@@ -61,7 +61,7 @@ export function useTableChromeTriggerA11y({
     },
     reasonNode:
       describe && disabledReason ? (
-        <span id={reasonId} className="ep-sr-only">
+        <span id={reasonId} className="docx-editor-sr-only">
           {disabledReason}
         </span>
       ) : null,

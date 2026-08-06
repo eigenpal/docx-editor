@@ -242,7 +242,7 @@ describe('DocxEditor.Loading', () => {
     const el = view.container.querySelector(LOADING)!;
 
     expect(el.textContent!.trim().length).toBeGreaterThan(0);
-    expect(el.querySelector('.ep-sr-only')).not.toBeNull();
+    expect(el.querySelector('.docx-editor-sr-only')).not.toBeNull();
   });
 
   test('carries its own token scope, so it is styled wherever it is composed', () => {

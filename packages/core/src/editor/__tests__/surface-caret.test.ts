@@ -103,7 +103,7 @@ function putCaret(surface: PaginatedSurface, offset: number, paragraphIndex = 0)
 }
 
 const caretElement = (container: HTMLElement) =>
-  container.querySelector<HTMLElement>('.ep-one-surface__caret');
+  container.querySelector<HTMLElement>('.docx-editor-one-surface__caret');
 
 /** The caret's inline geometry, which is the only geometry it has. */
 const geometryOf = (element: HTMLElement) => ({
@@ -232,14 +232,14 @@ describe('the painted caret', () => {
     putCaret(surface, 2);
     const painted = caretElement(container)!;
     // The stylesheet owns width, colour and the blink; the element only has to claim them.
-    expect(painted.classList.contains('ep-one-surface__caret')).toBe(true);
+    expect(painted.classList.contains('docx-editor-one-surface__caret')).toBe(true);
     // A caret that keeps blinking under an arrow key or a drag disappears mid-gesture.
-    expect(painted.classList.contains('ep-one-surface__caret--steady')).toBe(true);
+    expect(painted.classList.contains('docx-editor-one-surface__caret--steady')).toBe(true);
 
     await Bun.sleep(700);
-    expect(painted.classList.contains('ep-one-surface__caret--steady')).toBe(false);
+    expect(painted.classList.contains('docx-editor-one-surface__caret--steady')).toBe(false);
     putCaret(surface, 7);
-    expect(painted.classList.contains('ep-one-surface__caret--steady')).toBe(true);
+    expect(painted.classList.contains('docx-editor-one-surface__caret--steady')).toBe(true);
   });
 
   test('an unfocused surface keeps the native caret and paints nothing', () => {

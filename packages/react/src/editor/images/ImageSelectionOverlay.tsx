@@ -494,7 +494,7 @@ export function ImageSelectionOverlay({
     return (
       <div
         ref={overlayRef}
-        className="docx-image-selection-overlay ep-one-surface__overlay-control"
+        className="docx-image-selection-overlay docx-editor-one-surface__overlay-control"
         data-drawing-node-id={active.id}
         tabIndex={0}
         onKeyDown={onOverlayKeyDown}

@@ -196,7 +196,7 @@
    *
    * Declared here for the DEFAULT theme, which it was not: `--doc-page-bg` existed only
    * inside the dark block (and a dark print override), so
-   * `.ep-one-surface__page { background: var(--doc-page-bg) }` resolved to nothing in light
+   * `.docx-editor-one-surface__page { background: var(--doc-page-bg) }` resolved to nothing in light
    * mode and the sheet painted TRANSPARENT — a box-shadow around a see-through interior,
    * because neither the viewport nor the surface sets a background either. The same silent
    * `var()` failure as the caret, in the same file, found by the scope-aware token check
@@ -222,12 +222,12 @@
    * for the inverted canvas.
    *
    * This was missing entirely and only ever declared in the dark block, so
-   * `.ep-one-surface__caret { background: var(--doc-caret) }` resolved to nothing in the
+   * `.docx-editor-one-surface__caret { background: var(--doc-caret) }` resolved to nothing in the
    * default theme and painted a 1px transparent div — the caret was correctly positioned,
    * visible and non-blinking-off, and simply had no colour.
    *
    * `--doc-caret-contrast` is its complement, drawn as a 1px ring so the insertion point
-   * survives a backdrop the core colour disappears into (see `.ep-one-surface__caret`).
+   * survives a backdrop the core colour disappears into (see `.docx-editor-one-surface__caret`).
    * The two are transformed together by the dark page's inversion, so their contrast with
    * each other holds in both themes. */
   --doc-caret: #202124;
@@ -1515,12 +1515,12 @@ a.docx-hyperlink:focus-visible {
   * hover:bg utilities don't dedupe and the active slab could lose its color on
   * hover (white icon on a light bg). The `.docx-editor` prefix outranks the
   * single-class Tailwind hover utilities. */
-.docx-editor .ep-toolbar-toggle:hover {
+.docx-editor .docx-editor-toolbar-toggle:hover {
   background-color: var(--doc-bg-hover);
   color: var(--doc-text);
 }
-.docx-editor .ep-toolbar-toggle[data-active='true'],
-.docx-editor .ep-toolbar-toggle[data-active='true']:hover {
+.docx-editor .docx-editor-toolbar-toggle[data-active='true'],
+.docx-editor .docx-editor-toolbar-toggle[data-active='true']:hover {
   background-color: var(--doc-toggle-active-bg);
   color: var(--doc-toggle-active-fg);
 }
@@ -1708,10 +1708,10 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* Body caret blink for the Vue adapter's painted caret (useSelectionSync sets
-    `animation: ep-caret-blink ...` inline). React drives its caret's blink from a
+    `animation: docx-editor-caret-blink ...` inline). React drives its caret's blink from a
     JS timer instead; both land on the same 530ms half-period, which is the
     platform default. Defined here so the keyframes aren't duplicated per adapter. */
-@keyframes ep-caret-blink {
+@keyframes docx-editor-caret-blink {
   0%,
   49% {
     opacity: 1;
@@ -1753,7 +1753,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* Hyperlink popup icon button hover */
-.ep-hyperlink-popup__icon-btn:hover {
+.docx-editor-hyperlink-popup__icon-btn:hover {
   background: var(--doc-bg-hover);
 }
 
@@ -2022,19 +2022,19 @@ a.docx-hyperlink:focus-visible {
   text-decoration: line-through;
 }
 
-.ep-revision-cell.ep-revision-ins {
+.docx-editor-revision-cell.docx-editor-revision-ins {
   box-shadow: inset 0 3px 0 var(--doc-revision-insertion);
   background-color: var(--doc-revision-insertion-tint);
 }
 
-.ep-revision-cell.ep-revision-del {
+.docx-editor-revision-cell.docx-editor-revision-del {
   box-shadow: inset 0 3px 0 var(--doc-revision-deletion);
   background-color: var(--doc-revision-deletion-tint);
   text-decoration: line-through;
   text-decoration-color: color-mix(in srgb, var(--doc-revision-deletion) 60%, transparent);
 }
 
-.ep-revision-cell.ep-revision-merge {
+.docx-editor-revision-cell.docx-editor-revision-merge {
   box-shadow: inset 0 3px 0 var(--doc-text-muted);
   background-color: color-mix(in srgb, var(--doc-text-muted) 8%, transparent);
 }
@@ -2078,11 +2078,11 @@ a.docx-hyperlink:focus-visible {
  *
  * Layer model, bottom to top, inside one scroll container:
  *
- *   .ep-one-surface                 positioning context
- *   └ .ep-one-surface__pages        stacked page boxes
- *     └ .ep-one-surface__page       one engine-sized page box
- *       ├ .ep-one-surface__content  painted DisplayItem[] (engine geometry)
- *       └ .ep-one-surface__overlay  caret + selection, pointer-transparent
+ *   .docx-editor-one-surface                 positioning context
+ *   └ .docx-editor-one-surface__pages        stacked page boxes
+ *     └ .docx-editor-one-surface__page       one engine-sized page box
+ *       ├ .docx-editor-one-surface__content  painted DisplayItem[] (engine geometry)
+ *       └ .docx-editor-one-surface__overlay  caret + selection, pointer-transparent
  *
  * Every box that carries document geometry is positioned by the engine in
  * content pixels through inline styles. Nothing here invents or overrides a
@@ -2093,7 +2093,7 @@ a.docx-hyperlink:focus-visible {
  * and geometry and paint agree by construction.
  * ======================================================================== */
 
-.ep-one-surface {
+.docx-editor-one-surface {
   position: relative;
   /* Page separation is a paint concern; the engine reports the same gap in
    * scrollGeometry so hit testing and paint stay in agreement. */
@@ -2102,7 +2102,7 @@ a.docx-hyperlink:focus-visible {
 
 /* Scroll container. The host reports scrollTop/scrollLeft to the engine as
  * InteractionHostMetrics.scrollOffset — the engine never reads the DOM. */
-.ep-one-surface__viewport {
+.docx-editor-one-surface__viewport {
   position: relative;
   overflow: auto;
   overscroll-behavior: contain;
@@ -2119,7 +2119,7 @@ a.docx-hyperlink:focus-visible {
  * (`align-items: center` on a stretched box) instead offsets every page from the
  * stack origin, which shifts every hit test by that offset and makes clicks land
  * on "page background". */
-.ep-one-surface__pages {
+.docx-editor-one-surface__pages {
   display: flex;
   flex-direction: column;
   width: max-content;
@@ -2132,7 +2132,7 @@ a.docx-hyperlink:focus-visible {
   transform-origin: 0 0;
 }
 
-.ep-one-surface__page {
+.docx-editor-one-surface__page {
   position: relative;
   flex: none;
   background: var(--doc-page-bg);
@@ -2145,32 +2145,32 @@ a.docx-hyperlink:focus-visible {
 /* Painted display items. Text is selected through the engine's semantic
  * selection, never the browser's, so native selection is suppressed here to
  * stop a second, contradictory selection appearing on the same glyphs. */
-.ep-one-surface__content {
+.docx-editor-one-surface__content {
   position: absolute;
   inset: 0;
   user-select: none;
   -webkit-user-select: none;
 }
 
-.ep-one-surface__content > * {
+.docx-editor-one-surface__content > * {
   position: absolute;
 }
 
 /* Overlay layer: caret and selection rectangles, both derived from
  * interaction-frame geometry. Pointer-transparent so a click always reaches
  * the page and resolves through the engine hit test. */
-.ep-one-surface__overlay {
+.docx-editor-one-surface__overlay {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
 
-.ep-one-surface__selection-rect {
+.docx-editor-one-surface__selection-rect {
   position: absolute;
   background: var(--doc-selection);
 }
 
-.ep-one-surface__caret {
+.docx-editor-one-surface__caret {
   position: absolute;
   /* 2px, not 1: a hairline caret disappears against body text at 100% zoom on a
    * high-DPI screen, and reads as a rendering artefact rather than a cursor.
@@ -2194,23 +2194,23 @@ a.docx-hyperlink:focus-visible {
    * the caret would blend to white and the dark page's inversion would then paint it black
    * on black: the very bug this ring exists to fix. The pair needs no backdrop at all. */
   box-shadow: 0 0 0 1px var(--doc-caret-contrast);
-  animation: ep-caret-blink 1.06s steps(1) infinite;
+  animation: docx-editor-caret-blink 1.06s steps(1) infinite;
 }
 
 /* A caret that is being moved or dragged should not blink. */
-.ep-one-surface__caret--steady {
+.docx-editor-one-surface__caret--steady {
   animation: none;
 }
 
 /* Right-to-left runs paint their caret on the trailing edge; the engine
  * supplies the rect, this only marks direction for the host. */
-.ep-one-surface__caret--rtl {
+.docx-editor-one-surface__caret--rtl {
   direction: rtl;
 }
 
 /* Active IME composition. The composed range stays visible under the engine
  * selection so the user can see what the input method is holding. */
-.ep-one-surface__composition {
+.docx-editor-one-surface__composition {
   position: absolute;
   border-bottom: 1px solid var(--doc-text);
   pointer-events: none;
@@ -2220,7 +2220,7 @@ a.docx-hyperlink:focus-visible {
  * object controls that must receive their own pointer events. Anything using
  * this class opts out deliberately — it is not the default for overlay content.
  */
-.ep-one-surface__overlay-control {
+.docx-editor-one-surface__overlay-control {
   pointer-events: auto;
 }
 
@@ -2247,13 +2247,13 @@ a.docx-hyperlink:focus-visible {
 
 /* The host must never expose a second visible or assistive copy of the
  * document, so its projected content is not painted. */
-.ep-one-surface__input-host * {
+.docx-editor-one-surface__input-host * {
   color: transparent;
 }
 
 /* Private browser-feedback checkpoint: one page-like sheet with the real
  * ProseMirror contenteditable. It is deliberately not a pagination claim. */
-.ep-browser-first__page {
+.docx-editor-browser-first__page {
   box-sizing: border-box;
   width: 816px;
   min-height: 1056px;
@@ -2262,12 +2262,12 @@ a.docx-hyperlink:focus-visible {
   cursor: text;
 }
 
-.ep-browser-first__mount,
-.ep-browser-first__mount * {
+.docx-editor-browser-first__mount,
+.docx-editor-browser-first__mount * {
   color: var(--doc-caret);
 }
 
-.ep-browser-first__mount .ProseMirror {
+.docx-editor-browser-first__mount .ProseMirror {
   min-height: 864px;
   outline: none;
   font-size: 11pt;
@@ -2276,12 +2276,12 @@ a.docx-hyperlink:focus-visible {
   overflow-wrap: break-word;
 }
 
-.ep-browser-first__mount .ProseMirror p {
+.docx-editor-browser-first__mount .ProseMirror p {
   margin: 0 0 0.75em;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ep-one-surface__caret {
+  .docx-editor-one-surface__caret {
     animation: none;
   }
 }
@@ -2294,12 +2294,12 @@ a.docx-hyperlink:focus-visible {
  * toolbar, rulers, and the page indicator.
  *
  * The shell owns CHROME ONLY. It sets no document geometry — the page stack
- * inside `.ep-shell__canvas` is positioned by the engine, and the shell must
+ * inside `.docx-editor-shell__canvas` is positioned by the engine, and the shell must
  * not introduce any horizontal offset the engine does not know about, or hit
  * testing drifts (the lesson from M3's centering bug).
  * ======================================================================== */
 
-.ep-shell {
+.docx-editor-shell {
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -2308,15 +2308,15 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text);
 }
 
-.ep-shell__title,
-.ep-shell__toolbar {
+.docx-editor-shell__title,
+.docx-editor-shell__toolbar {
   flex: none;
   border-bottom: 1px solid var(--doc-border);
   background: var(--doc-surface);
 }
 
 /* The scrolling document region — the backdrop the page sits on. */
-.ep-shell__document {
+.docx-editor-shell__document {
   position: relative;
   flex: 1;
   min-height: 0;
@@ -2328,7 +2328,7 @@ a.docx-hyperlink:focus-visible {
 
 /* Sticky horizontal ruler: scrolls horizontally with the document, stays put
  * vertically, and never covers the page content. */
-.ep-shell__ruler-h {
+.docx-editor-shell__ruler-h {
   position: sticky;
   top: 0;
   z-index: 2;
@@ -2339,7 +2339,7 @@ a.docx-hyperlink:focus-visible {
   background: var(--doc-bg);
 }
 
-.ep-shell__canvas {
+.docx-editor-shell__canvas {
   position: relative;
   flex: 1;
   min-height: 0;
@@ -2348,7 +2348,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* Vertical ruler pinned to the canvas's left edge so it scrolls with the page. */
-.ep-shell__ruler-v {
+.docx-editor-shell__ruler-v {
   position: absolute;
   left: 0;
   top: 0;
@@ -2357,16 +2357,16 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* The one-surface viewport fills the canvas. Page centering stays the page
- * stack's own job (`margin-inline: auto` on `.ep-one-surface__pages`), so the
+ * stack's own job (`margin-inline: auto` on `.docx-editor-one-surface__pages`), so the
  * shell adds no offset the engine would have to be told about. */
-.ep-shell__canvas > .ep-one-surface {
+.docx-editor-shell__canvas > .docx-editor-one-surface {
   flex: 1;
   min-width: 0;
 }
 
 /* Floating page indicator, out of the document flow and pointer-transparent so
  * it can never swallow a click meant for the page. */
-.ep-shell__page-indicator {
+.docx-editor-shell__page-indicator {
   position: absolute;
   bottom: 16px;
   left: 50%;
@@ -2378,8 +2378,8 @@ a.docx-hyperlink:focus-visible {
 /* Document scroll region padding: breathing room around the sheet, matching the
  * legacy backdrop. Applied to the viewport rather than the page stack so it
  * cannot shift the stack origin away from the engine's page origin. */
-.ep-shell .ep-one-surface__viewport,
-.docx-editor__content .ep-one-surface__viewport {
+.docx-editor-shell .docx-editor-one-surface__viewport,
+.docx-editor__content .docx-editor-one-surface__viewport {
   padding: 24px 0;
   scrollbar-gutter: stable both-edges;
 }
@@ -2388,7 +2388,7 @@ a.docx-hyperlink:focus-visible {
  * stays inline in `DocxEditorShell.tsx`; only what it expressed in CSS is here.
  *
  * A DEVIATION RECORDED HERE EARLIER IS NOW REVERTED: this file used to keep
- * `.ep-one-surface__viewport` as the scroller inside the shell as well. With the shell's
+ * `.docx-editor-one-surface__viewport` as the scroller inside the shell as well. With the shell's
  * container also declaring `overflow: auto`, neither box ended up bounded — the whole
  * chain grew to document height and the window scrolled, so the page indicator never
  * left page 1. Legacy's structure is restored: inside the shell,
@@ -2396,7 +2396,7 @@ a.docx-hyperlink:focus-visible {
  * Bare (no chrome), the viewport still scrolls and nothing about it changes. */
 
 /* Hosted in the shell: the shell's container scrolls, not this box. */
-.ep-one-surface__viewport--hosted {
+.docx-editor-one-surface__viewport--hosted {
   overflow: visible;
 }
 /* The title + menu column, INSIDE the header row (legacy layout). It used to render as
@@ -2426,14 +2426,14 @@ a.docx-hyperlink:focus-visible {
 
 /* Title chrome and page indicator (interactive-paginated-editing M4.3). */
 
-.ep-shell__title-bar {
+.docx-editor-shell__title-bar {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 8px 16px;
 }
 
-.ep-shell__title-input {
+.docx-editor-shell__title-input {
   flex: 1;
   min-width: 0;
   border: 1px solid transparent;
@@ -2449,17 +2449,17 @@ a.docx-hyperlink:focus-visible {
   background: transparent;
 }
 
-.ep-shell__title-input:hover:not([readonly]) {
+.docx-editor-shell__title-input:hover:not([readonly]) {
   border-color: var(--doc-border);
 }
 
-.ep-shell__title-input:focus {
+.docx-editor-shell__title-input:focus {
   outline: none;
   border-color: var(--doc-primary);
   box-shadow: 0 0 0 2px var(--doc-focus-ring);
 }
 
-.ep-shell__title-actions {
+.docx-editor-shell__title-actions {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2467,7 +2467,7 @@ a.docx-hyperlink:focus-visible {
 
 /* The indicator is a dark scrim in BOTH themes, so its text stays light —
  * --doc-on-primary flips dark in dark mode and would vanish here. */
-.ep-shell__page-indicator-chip {
+.docx-editor-shell__page-indicator-chip {
   background: var(--doc-overlay);
   color: #fff;
   padding: 6px 12px;
@@ -2509,7 +2509,7 @@ a.docx-hyperlink:focus-visible {
  * markers and no drag handles: this change owns no section-geometry contract,
  * so a draggable handle would be a control that silently does nothing. */
 
-.ep-ruler {
+.docx-editor-ruler {
   position: relative;
   background: var(--doc-surface);
   border: 1px solid var(--doc-border-light);
@@ -2518,7 +2518,7 @@ a.docx-hyperlink:focus-visible {
   pointer-events: none;
 }
 
-.ep-ruler--horizontal {
+.docx-editor-ruler--horizontal {
   height: 22px;
 }
 
@@ -2536,26 +2536,26 @@ a.docx-hyperlink:focus-visible {
   }
 }
 
-.ep-ruler--vertical {
+.docx-editor-ruler--vertical {
   height: 100%;
 }
 
-.ep-ruler__tick {
+.docx-editor-ruler__tick {
   position: absolute;
   background: var(--doc-text-subtle);
 }
 
-.ep-ruler--horizontal .ep-ruler__tick {
+.docx-editor-ruler--horizontal .docx-editor-ruler__tick {
   bottom: 0;
   width: 1px;
 }
 
-.ep-ruler--vertical .ep-ruler__tick {
+.docx-editor-ruler--vertical .docx-editor-ruler__tick {
   right: 0;
   height: 1px;
 }
 
-.ep-ruler__label {
+.docx-editor-ruler__label {
   position: absolute;
   font:
     400 9px/1 -apple-system,
@@ -2566,12 +2566,12 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text-muted);
 }
 
-.ep-ruler--horizontal .ep-ruler__label {
+.docx-editor-ruler--horizontal .docx-editor-ruler__label {
   left: 2px;
   bottom: 11px;
 }
 
-.ep-ruler--vertical .ep-ruler__label {
+.docx-editor-ruler--vertical .docx-editor-ruler__label {
   right: 11px;
   top: -4px;
 }
@@ -2591,7 +2591,7 @@ a.docx-hyperlink:focus-visible {
  * (Toolbar.tsx:679: `flex items-center px-2 py-1 bg-muted rounded-full min-h-[36px]
  * overflow-x-auto mx-2 mb-1`). Only the scroll behaviour stays here: the pill scrolls
  * horizontally and must never become a second VERTICAL scroller. */
-.ep-toolbar {
+.docx-editor-toolbar {
   flex-wrap: nowrap;
   flex-shrink: 0;
   overflow-y: hidden;
@@ -2600,12 +2600,12 @@ a.docx-hyperlink:focus-visible {
 
 /* One group plus the separator that precedes it, so the pair wraps together and a
  * separator never becomes the first thing on a wrapped row. */
-.ep-toolbar__group-wrap {
+.docx-editor-toolbar__group-wrap {
   display: inline-flex;
   align-items: center;
 }
 
-.ep-toolbar__group {
+.docx-editor-toolbar__group {
   display: flex;
   align-items: center;
   gap: 2px;
@@ -2613,7 +2613,7 @@ a.docx-hyperlink:focus-visible {
 
 /* Visually hidden but present for assistive technology: a parity-only picker has no
  * tooltip of its own, so its unavailable reason is exposed here instead. */
-.ep-sr-only {
+.docx-editor-sr-only {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -2625,7 +2625,7 @@ a.docx-hyperlink:focus-visible {
   border: 0;
 }
 
-.ep-toolbar__separator {
+.docx-editor-toolbar__separator {
   width: 1px;
   align-self: stretch;
   margin: 4px 6px;
@@ -2634,7 +2634,7 @@ a.docx-hyperlink:focus-visible {
 
 /* Sidebar frame (interactive-paginated-editing M4.6). */
 
-.ep-sidebar {
+.docx-editor-sidebar {
   display: flex;
   flex-direction: column;
   width: 300px;
@@ -2643,7 +2643,7 @@ a.docx-hyperlink:focus-visible {
   background: var(--doc-surface);
 }
 
-.ep-sidebar__header {
+.docx-editor-sidebar__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2652,7 +2652,7 @@ a.docx-hyperlink:focus-visible {
   border-bottom: 1px solid var(--doc-border);
 }
 
-.ep-sidebar__title {
+.docx-editor-sidebar__title {
   font:
     500 13px/1.2 -apple-system,
     BlinkMacSystemFont,
@@ -2662,7 +2662,7 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text);
 }
 
-.ep-sidebar__close {
+.docx-editor-sidebar__close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2675,11 +2675,11 @@ a.docx-hyperlink:focus-visible {
   cursor: pointer;
 }
 
-.ep-sidebar__close:hover {
+.docx-editor-sidebar__close:hover {
   background: var(--doc-bg-hover);
 }
 
-.ep-sidebar__body {
+.docx-editor-sidebar__body {
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -2812,7 +2812,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* The page floats on the workspace backdrop with a drop shadow, as in the reference. */
-.docx-editor__content .ep-one-surface__page {
+.docx-editor__content .docx-editor-one-surface__page {
   box-shadow:
     0 1px 3px rgb(60 64 67 / 30%),
     0 4px 8px 3px rgb(60 64 67 / 15%);
@@ -2916,14 +2916,14 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* The pill needs enough fill to read AS a pill against the workspace. */
-.ep-toolbar {
+.docx-editor-toolbar {
   background: var(--doc-bg-subtle);
   border: 1px solid var(--doc-border);
 }
 
 /* Ruler margin zones (M6V.6), from the legacy `ui/HorizontalRuler.tsx`:
  * `MARGIN_ZONE_COLOR = var(--doc-shadow-subtle)` with a 1px border on the inner edge. */
-.ep-ruler__margin {
+.docx-editor-ruler__margin {
   position: absolute;
   top: 0;
   bottom: 0;
@@ -2931,26 +2931,26 @@ a.docx-hyperlink:focus-visible {
   pointer-events: none;
 }
 
-.ep-ruler__margin--start {
+.docx-editor-ruler__margin--start {
   left: 0;
   border-right: 1px solid var(--doc-shadow-subtle);
 }
 
-.ep-ruler__margin--end {
+.docx-editor-ruler__margin--end {
   right: 0;
   border-left: 1px solid var(--doc-shadow-subtle);
 }
 
-/* The vertical ruler's zones run the other axis; the shared `.ep-ruler__margin` rule
+/* The vertical ruler's zones run the other axis; the shared `.docx-editor-ruler__margin` rule
  * pins top/bottom, so these override the horizontal defaults. */
-.ep-ruler__margin--top {
+.docx-editor-ruler__margin--top {
   left: 0;
   right: 0;
   bottom: auto;
   border-bottom: 1px solid var(--doc-shadow-subtle);
 }
 
-.ep-ruler__margin--bottom {
+.docx-editor-ruler__margin--bottom {
   left: 0;
   right: 0;
   top: auto;
@@ -3213,7 +3213,7 @@ a.docx-hyperlink:focus-visible {
  * - bar: `flex items-center px-2 py-1 bg-muted rounded-full min-h-[36px]`
  *   — the neutral #f1f3f4-family pill.
  * - buttons: 28px ghost squares (h-7 w-7), muted
- *   glyphs, subtle hover, the dark active slab (`.ep-toolbar-toggle`
+ *   glyphs, subtle hover, the dark active slab (`.docx-editor-toolbar-toggle`
  *   [data-active] → --doc-toggle-active tokens), disabled at opacity .3.
  * - pickers (style, font family, editing mode): TRANSPARENT triggers with a
  *   chevron (h-8 rounded px-2 bg-transparent hover:bg-muted/80),
@@ -4373,20 +4373,20 @@ a.docx-hyperlink:focus-visible {
   }
 }
 
-/* ── Vue registry-toolbar (`ep-toolbar` family) additions for the same shapes:
+/* ── Vue registry-toolbar (`docx-editor-toolbar` family) additions for the same shapes:
  * the parity stepper lookalike and the merged alignment dropdown. */
-.ep-toolbar__stepper {
+.docx-editor-toolbar__stepper {
   display: inline-flex;
   align-items: center;
   height: 28px;
   flex: none;
 }
 
-.ep-toolbar__stepper[aria-disabled='true'] {
+.docx-editor-toolbar__stepper[aria-disabled='true'] {
   opacity: 0.5;
 }
 
-.ep-toolbar__stepper-button {
+.docx-editor-toolbar__stepper-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4397,19 +4397,19 @@ a.docx-hyperlink:focus-visible {
   user-select: none;
 }
 
-.ep-toolbar__stepper-value {
+.docx-editor-toolbar__stepper-value {
   min-width: 34px;
   text-align: center;
   font-variant-numeric: tabular-nums;
   user-select: none;
 }
 
-.ep-toolbar__alignment {
+.docx-editor-toolbar__alignment {
   position: relative;
   display: inline-flex;
 }
 
-.ep-toolbar__alignment-popup {
+.docx-editor-toolbar__alignment-popup {
   position: absolute;
   top: 100%;
   left: 0;

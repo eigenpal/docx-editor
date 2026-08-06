@@ -24,7 +24,7 @@ const SCOPE = '.docx-editor';
  * matched on painted document elements rather than on chrome descendants, so
  * requiring the scope class on them would be wrong.
  */
-const OWNED_PREFIXES = ['.docx-', '.ep-', '.layout-', '.paged-editor', '.ProseMirror-'];
+const OWNED_PREFIXES = ['.docx-', '.layout-', '.paged-editor', '.ProseMirror-'];
 
 /** A keyframe step (`from`, `to`, `47%`) is not a selector. */
 const KEYFRAME_STEP = /^(from|to|-?[\d.]+%)$/;
@@ -77,7 +77,7 @@ export function coreCssProblems(rawCss) {
   // so they carry the editor's prefix instead (see build-core-styles.mjs).
   root.walkAtRules(/^(-\w+-)?keyframes$/, (rule) => {
     const name = rule.params.trim();
-    if (!/^(docx-|ep-|hf-)/.test(name)) {
+    if (!/^(docx-|hf-)/.test(name)) {
       problems.push(`@keyframes name is in the global namespace: ${name}`);
     }
   });

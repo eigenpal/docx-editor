@@ -163,7 +163,7 @@ export default defineComponent({
         'div',
         {
           'data-testid': 'docx-editor-scroll',
-          class: 'docx-editor ep-one-surface ep-one-surface__viewport',
+          class: 'docx-editor docx-editor-one-surface docx-editor-one-surface__viewport',
         },
         [
           h('div', {

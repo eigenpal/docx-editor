@@ -121,7 +121,7 @@ export function MenuRow(props: MenuRowProps) {
       <span className="docx-menubar__item-label">{children}</span>
       {shortcut ? <span className="docx-menubar__item-shortcut">{shortcut}</span> : null}
       {describe ? (
-        <span id={reasonId} className="ep-sr-only">
+        <span id={reasonId} className="docx-editor-sr-only">
           {title}
         </span>
       ) : null}

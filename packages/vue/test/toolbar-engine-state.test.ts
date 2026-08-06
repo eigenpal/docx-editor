@@ -161,7 +161,7 @@ describe('the Vue toolbar reads enabled state from the engine', () => {
     await nextTick();
 
     const trigger = toolbar.querySelector(
-      '.ep-toolbar__alignment-trigger'
+      '.docx-editor-toolbar__alignment-trigger'
     ) as HTMLButtonElement | null;
     expect(trigger).not.toBeNull();
     expect(trigger!.disabled).toBe(false);

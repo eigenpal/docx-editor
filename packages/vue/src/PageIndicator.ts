@@ -36,7 +36,7 @@ export default defineComponent({
         ? h(
             'div',
             {
-              class: 'ep-shell__page-indicator-chip',
+              class: 'docx-editor-shell__page-indicator-chip',
               'data-testid': 'page-indicator',
               style: { opacity: props.visible ? 1 : 0 },
               'aria-live': 'polite',

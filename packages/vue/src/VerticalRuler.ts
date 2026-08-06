@@ -40,7 +40,7 @@ export default defineComponent({
         ? h(
             'div',
             {
-              class: 'ep-ruler ep-ruler--vertical',
+              class: 'docx-editor-ruler docx-editor-ruler--vertical',
               'data-testid': 'vertical-ruler',
               role: 'presentation',
               'aria-hidden': 'true',
@@ -51,10 +51,10 @@ export default defineComponent({
                 'div',
                 {
                   key: tick.position,
-                  class: 'ep-ruler__tick',
+                  class: 'docx-editor-ruler__tick',
                   style: { top: `${tick.position * props.zoom}px`, width: `${tick.height}px` },
                 },
-                tick.label ? [h('span', { class: 'ep-ruler__label' }, tick.label)] : []
+                tick.label ? [h('span', { class: 'docx-editor-ruler__label' }, tick.label)] : []
               )
             )
           )

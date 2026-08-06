@@ -316,7 +316,7 @@ function HyperLinkUrl({ className, asChild, hidden, children }: HyperLinkPartPro
     return (
       <span {...shared}>
         {children ?? text}
-        <span className="ep-sr-only">{hint}</span>
+        <span className="docx-editor-sr-only">{hint}</span>
       </span>
     );
   }
@@ -448,7 +448,7 @@ function HyperLinkFields({ className, hidden }: HyperLinkPartProps) {
   if (hidden) return null;
   return (
     <div className={`docx-hyperlink-popup__fields${className ? ` ${className}` : ''}`}>
-      <label className="ep-sr-only" htmlFor={textId}>
+      <label className="docx-editor-sr-only" htmlFor={textId}>
         {t('hyperlinkPopup.displayTextPlaceholder')}
       </label>
       <input
@@ -460,7 +460,7 @@ function HyperLinkFields({ className, hidden }: HyperLinkPartProps) {
         onChange={(event) => setText(event.target.value)}
         onKeyDown={onKeyDown}
       />
-      <label className="ep-sr-only" htmlFor={urlId}>
+      <label className="docx-editor-sr-only" htmlFor={urlId}>
         {t('hyperlinkPopup.urlPlaceholder')}
       </label>
       <input

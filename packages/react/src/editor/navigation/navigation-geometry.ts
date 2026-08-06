@@ -5,7 +5,7 @@
 // feel like the editor jumped sideways for no reason — on a 1600px window with a Letter
 // page there is already 500px of empty gutter, and the pane fits in it untouched.
 //
-// The page stack centres itself in the viewport (`.ep-one-surface__pages` is
+// The page stack centres itself in the viewport (`.docx-editor-one-surface__pages` is
 // `width: max-content` + `margin-inline: auto`), so a left padding P on the viewport does
 // NOT move the page by P: it shrinks the centring box, and the page moves by P/2 — until
 // the box gets narrower than the page, at which point the auto margins collapse to zero

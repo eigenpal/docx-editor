@@ -102,7 +102,7 @@ function DocxEditorLoadingImpl({
           <DocxEditorLoadingSpinner />
           {/* The spinner is decorative, so the live region would otherwise announce an
               empty string — worse than having no region at all. */}
-          <span className="ep-sr-only">{t('loading.label')}</span>
+          <span className="docx-editor-sr-only">{t('loading.label')}</span>
         </>
       )}
     </div>

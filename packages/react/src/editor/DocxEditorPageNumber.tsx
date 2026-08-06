@@ -63,7 +63,7 @@ export function DocxEditorPageNumber({ className, style }: DocxEditorPageNumberP
     : t('viewer.pageIndicator', { current, total });
   return (
     <div
-      className={`docx-editor ep-shell__page-indicator-chip docx-editor__page-number${
+      className={`docx-editor docx-editor-shell__page-indicator-chip docx-editor__page-number${
         className ? ` ${className}` : ''
       }`}
       style={style}

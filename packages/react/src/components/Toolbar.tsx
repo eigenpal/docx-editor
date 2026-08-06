@@ -312,9 +312,9 @@ export function ToolbarButton({
       variant="ghost"
       size="icon-sm"
       className={cn(
-        // Hover + active states live in editor.css (.ep-toolbar-toggle); see
+        // Hover + active states live in editor.css (.docx-editor-toolbar-toggle); see
         // that rule for why they're not Tailwind utilities here.
-        'ep-toolbar-toggle text-muted-foreground',
+        'docx-editor-toolbar-toggle text-muted-foreground',
         disabled && 'opacity-30 cursor-not-allowed',
         className
       )}

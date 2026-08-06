@@ -60,7 +60,7 @@ const prefixKeyframes = {
     const renamed = new Map();
     cssRoot.walkAtRules(/^(-\w+-)?keyframes$/, (rule) => {
       const name = rule.params.trim();
-      if (name.startsWith('docx-') || name.startsWith('ep-') || name.startsWith('hf-')) return;
+      if (name.startsWith('docx-') || name.startsWith('hf-')) return;
       const next = `docx-editor-${name}`;
       renamed.set(name, next);
       rule.params = next;

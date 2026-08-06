@@ -66,8 +66,8 @@ export interface SurfaceCaret {
 }
 
 /** Appearance — width, colour, blink — lives in the stylesheet under these names. */
-const CARET_CLASS = 'ep-one-surface__caret';
-const STEADY_CLASS = 'ep-one-surface__caret--steady';
+const CARET_CLASS = 'docx-editor-one-surface__caret';
+const STEADY_CLASS = 'docx-editor-one-surface__caret--steady';
 
 /**
  * How long a moved caret stays solid before it resumes blinking.

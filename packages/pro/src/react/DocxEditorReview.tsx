@@ -1053,7 +1053,7 @@ function ReviewDraft({ top, className, hidden }: ReviewPartProps & { top: number
             submit();
           }}
         >
-          <label className="ep-sr-only" htmlFor={fieldId}>
+          <label className="docx-editor-sr-only" htmlFor={fieldId}>
             {t('comments.addComment')}
           </label>
           <input
@@ -1924,7 +1924,7 @@ function ReviewReply({ className, hidden, children }: ReviewPartProps) {
         submit();
       }}
     >
-      <label className="ep-sr-only" htmlFor={fieldId}>
+      <label className="docx-editor-sr-only" htmlFor={fieldId}>
         {t('comments.replyPlaceholder')}
       </label>
       <input

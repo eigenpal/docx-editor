@@ -309,7 +309,7 @@ describe('scoped HF interaction regressions', () => {
     expect(surface.state().selection.head).toEqual({ paragraphId, offset: afterLeft });
 
     // Engine caret is parented into the active band (story-relative), not the body content box.
-    const caret = container.querySelector('.ep-one-surface__caret') as HTMLElement | null;
+    const caret = container.querySelector('.docx-editor-one-surface__caret') as HTMLElement | null;
     expect(caret).not.toBeNull();
     expect(caret!.closest('[data-docx-hf-active]')?.getAttribute('data-docx-hf')).toBe('header');
     expect(
@@ -341,7 +341,7 @@ describe('scoped HF interaction regressions', () => {
       head: { paragraphId, offset: beforeC },
     });
 
-    const caret = container.querySelector('.ep-one-surface__caret') as HTMLElement;
+    const caret = container.querySelector('.docx-editor-one-surface__caret') as HTMLElement;
     expect(caret).not.toBeNull();
     const caretX = Number.parseFloat(caret.style.left);
     // Story-relative: must sit at CONFIDENTIAL, not at the pre-tab edge after "v2".
@@ -384,7 +384,7 @@ describe('scoped HF interaction regressions', () => {
       head: hit!.position,
     });
 
-    const caret = container.querySelector('.ep-one-surface__caret') as HTMLElement | null;
+    const caret = container.querySelector('.docx-editor-one-surface__caret') as HTMLElement | null;
     expect(caret).not.toBeNull();
     expect(caret!.closest('[data-docx-hf-active]')?.getAttribute('data-docx-hf')).toBe('footer');
     expect(Number.parseFloat(caret!.style.left)).toBeGreaterThanOrEqual(0);
@@ -475,7 +475,7 @@ describe('scoped HF interaction regressions', () => {
       anchor: { paragraphId, offset: 0 },
       head: { paragraphId, offset: 0 },
     });
-    let caret = container.querySelector('.ep-one-surface__caret') as HTMLElement | null;
+    let caret = container.querySelector('.docx-editor-one-surface__caret') as HTMLElement | null;
     expect(caret?.closest('[data-page-index]')?.getAttribute('data-page-index')).toBe(
       String(first.index)
     );
@@ -497,7 +497,7 @@ describe('scoped HF interaction regressions', () => {
     expect(surface.activeScope()).toEqual({ kind: 'headerFooter', rId: 'rId10' });
     expect(activeOn(second.index)).not.toBeNull();
     expect(activeOn(first.index)).toBeNull();
-    caret = container.querySelector('.ep-one-surface__caret') as HTMLElement | null;
+    caret = container.querySelector('.docx-editor-one-surface__caret') as HTMLElement | null;
     expect(caret).not.toBeNull();
     expect(caret!.closest('[data-page-index]')?.getAttribute('data-page-index')).toBe(
       String(second.index)
@@ -519,7 +519,7 @@ describe('scoped HF interaction regressions', () => {
     expect(surface.enterHeaderFooter({ rId: 'rId10', pageIndex: first.index })).toBe(true);
     expect(activeOn(first.index)).not.toBeNull();
     expect(activeOn(second.index)).toBeNull();
-    caret = container.querySelector('.ep-one-surface__caret') as HTMLElement | null;
+    caret = container.querySelector('.docx-editor-one-surface__caret') as HTMLElement | null;
     expect(caret?.closest('[data-page-index]')?.getAttribute('data-page-index')).toBe(
       String(first.index)
     );

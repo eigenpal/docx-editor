@@ -55,18 +55,18 @@ export default defineComponent({
       return h(
         'aside',
         {
-          class: 'ep-sidebar',
+          class: 'docx-editor-sidebar',
           'data-testid': 'docx-editor-sidebar',
           'aria-label': 'Document panels',
         },
         [
-          h('div', { class: 'ep-sidebar__header' }, [
-            h('span', { class: 'ep-sidebar__title' }, items[0]!.title),
+          h('div', { class: 'docx-editor-sidebar__header' }, [
+            h('span', { class: 'docx-editor-sidebar__title' }, items[0]!.title),
             h(
               'button',
               {
                 type: 'button',
-                class: 'ep-sidebar__close',
+                class: 'docx-editor-sidebar__close',
                 onClick: () => emit('close'),
                 'aria-label': 'Close panel',
               },
@@ -90,7 +90,7 @@ export default defineComponent({
               ]
             ),
           ]),
-          h('div', { class: 'ep-sidebar__body' }, items[0]!.content),
+          h('div', { class: 'docx-editor-sidebar__body' }, items[0]!.content),
         ]
       );
     };

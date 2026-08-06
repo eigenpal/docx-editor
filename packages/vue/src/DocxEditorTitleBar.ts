@@ -21,16 +21,18 @@ export default defineComponent({
   emits: { 'update:title': (_value: string) => true },
   setup(props, { emit, slots }) {
     return () =>
-      h('div', { class: 'ep-shell__title-bar', 'data-testid': 'document-title-bar' }, [
+      h('div', { class: 'docx-editor-shell__title-bar', 'data-testid': 'document-title-bar' }, [
         h('input', {
-          class: 'ep-shell__title-input',
+          class: 'docx-editor-shell__title-input',
           'data-testid': 'document-title',
           value: props.title,
           readonly: props.readOnly,
           'aria-label': 'Document title',
           onInput: (event: Event) => emit('update:title', (event.target as HTMLInputElement).value),
         }),
-        slots.actions ? h('div', { class: 'ep-shell__title-actions' }, slots.actions()) : null,
+        slots.actions
+          ? h('div', { class: 'docx-editor-shell__title-actions' }, slots.actions())
+          : null,
       ]);
   },
 });

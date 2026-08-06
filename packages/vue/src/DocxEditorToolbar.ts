@@ -92,7 +92,7 @@ function control(
       {
         key: c.id,
         type: 'button',
-        class: 'ep-toolbar__button',
+        class: 'docx-editor-toolbar__button',
         'data-testid': `toolbar-${slotId}`,
         disabled: !editor || !onSave,
         title: label,
@@ -113,16 +113,16 @@ function control(
       'span',
       {
         key: c.id,
-        class: 'ep-toolbar__stepper',
+        class: 'docx-editor-toolbar__stepper',
         'data-testid': `toolbar-${slotId}`,
         'aria-disabled': 'true',
         onMousedown: (event: MouseEvent) => event.preventDefault(),
       },
       [
-        h('span', { class: 'ep-toolbar__stepper-button', 'aria-hidden': 'true' }, '−'),
-        h('span', { class: 'ep-toolbar__stepper-value' }, c.valueText ?? ''),
-        h('span', { class: 'ep-toolbar__stepper-button', 'aria-hidden': 'true' }, '+'),
-        h('span', { class: 'ep-sr-only' }, `${label} — ${t(CHROME_UNAVAILABLE_KEY)}`),
+        h('span', { class: 'docx-editor-toolbar__stepper-button', 'aria-hidden': 'true' }, '−'),
+        h('span', { class: 'docx-editor-toolbar__stepper-value' }, c.valueText ?? ''),
+        h('span', { class: 'docx-editor-toolbar__stepper-button', 'aria-hidden': 'true' }, '+'),
+        h('span', { class: 'docx-editor-sr-only' }, `${label} — ${t(CHROME_UNAVAILABLE_KEY)}`),
       ]
     );
   }
@@ -138,7 +138,7 @@ function control(
       'span',
       {
         key: c.id,
-        class: 'ep-toolbar__picker',
+        class: 'docx-editor-toolbar__picker',
         'data-testid': `toolbar-${slotId}`,
         'aria-disabled': 'true',
         // A picker is a <span>, so it does not take focus itself, but a mousedown
@@ -147,9 +147,9 @@ function control(
       },
       [
         ...(c.paths ? [icon(c.paths)] : []),
-        ...(value ? [h('span', { class: 'ep-toolbar__picker-value' }, value)] : []),
-        h('span', { class: 'ep-toolbar__picker-caret', 'aria-hidden': 'true' }, '▾'),
-        h('span', { class: 'ep-sr-only' }, `${label} — ${t(CHROME_UNAVAILABLE_KEY)}`),
+        ...(value ? [h('span', { class: 'docx-editor-toolbar__picker-value' }, value)] : []),
+        h('span', { class: 'docx-editor-toolbar__picker-caret', 'aria-hidden': 'true' }, '▾'),
+        h('span', { class: 'docx-editor-sr-only' }, `${label} — ${t(CHROME_UNAVAILABLE_KEY)}`),
       ]
     );
   }
@@ -166,7 +166,7 @@ function control(
       {
         key: c.id,
         type: 'button',
-        class: 'ep-toolbar__button',
+        class: 'docx-editor-toolbar__button',
         'data-testid': `toolbar-${slotId}`,
         // Kept under its original name: hosts style off it, and it still marks exactly
         // what it always marked — present for parity, not driven by this toolbar.
@@ -195,7 +195,7 @@ function control(
     {
       key: c.id,
       type: 'button',
-      class: 'ep-toolbar__button',
+      class: 'docx-editor-toolbar__button',
       'data-testid': `toolbar-${slotId}`,
       disabled: !state.enabled,
       'aria-pressed': state.active ? 'true' : 'false',
@@ -240,55 +240,59 @@ const AlignmentDropdown = defineComponent({
       const current = options.find((option) => option.state.active) ?? options[0]!;
       const enabled = options.some((option) => option.state.enabled);
       const currentLabel = props.t(current.control.labelKey);
-      return h('span', { class: 'ep-toolbar__alignment', 'data-testid': 'toolbar-alignment' }, [
-        h(
-          'button',
-          {
-            type: 'button',
-            class: 'ep-toolbar__button ep-toolbar__alignment-trigger',
-            disabled: !enabled,
-            'aria-haspopup': 'true',
-            'aria-expanded': open.value ? 'true' : 'false',
-            'aria-label': currentLabel,
-            title: enabled ? currentLabel : (current.state.disabledReason ?? currentLabel),
-            onMousedown: (event: MouseEvent) => event.preventDefault(),
-            onClick: () => {
-              open.value = !open.value;
+      return h(
+        'span',
+        { class: 'docx-editor-toolbar__alignment', 'data-testid': 'toolbar-alignment' },
+        [
+          h(
+            'button',
+            {
+              type: 'button',
+              class: 'docx-editor-toolbar__button docx-editor-toolbar__alignment-trigger',
+              disabled: !enabled,
+              'aria-haspopup': 'true',
+              'aria-expanded': open.value ? 'true' : 'false',
+              'aria-label': currentLabel,
+              title: enabled ? currentLabel : (current.state.disabledReason ?? currentLabel),
+              onMousedown: (event: MouseEvent) => event.preventDefault(),
+              onClick: () => {
+                open.value = !open.value;
+              },
             },
-          },
-          [
-            icon(current.control.paths ?? []),
-            h('span', { class: 'ep-toolbar__picker-caret', 'aria-hidden': 'true' }, '▾'),
-          ]
-        ),
-        open.value
-          ? h(
-              'div',
-              { class: 'ep-toolbar__alignment-popup' },
-              options.map((option) =>
-                h(
-                  'button',
-                  {
-                    key: option.slot,
-                    type: 'button',
-                    class: 'ep-toolbar__button',
-                    'data-testid': `toolbar-${option.slot}`,
-                    disabled: !option.state.enabled,
-                    'aria-pressed': option.state.active ? 'true' : 'false',
-                    title: option.state.disabledReason ?? props.t(option.control.labelKey),
-                    'aria-label': props.t(option.control.labelKey),
-                    onMousedown: (event: MouseEvent) => event.preventDefault(),
-                    onClick: () => {
-                      runToolbarCommand(props.editor, option.slot);
-                      open.value = false;
+            [
+              icon(current.control.paths ?? []),
+              h('span', { class: 'docx-editor-toolbar__picker-caret', 'aria-hidden': 'true' }, '▾'),
+            ]
+          ),
+          open.value
+            ? h(
+                'div',
+                { class: 'docx-editor-toolbar__alignment-popup' },
+                options.map((option) =>
+                  h(
+                    'button',
+                    {
+                      key: option.slot,
+                      type: 'button',
+                      class: 'docx-editor-toolbar__button',
+                      'data-testid': `toolbar-${option.slot}`,
+                      disabled: !option.state.enabled,
+                      'aria-pressed': option.state.active ? 'true' : 'false',
+                      title: option.state.disabledReason ?? props.t(option.control.labelKey),
+                      'aria-label': props.t(option.control.labelKey),
+                      onMousedown: (event: MouseEvent) => event.preventDefault(),
+                      onClick: () => {
+                        runToolbarCommand(props.editor, option.slot);
+                        open.value = false;
+                      },
                     },
-                  },
-                  [icon(option.control.paths ?? [])]
+                    [icon(option.control.paths ?? [])]
+                  )
                 )
               )
-            )
-          : null,
-      ]);
+            : null,
+        ]
+      );
     };
   },
 });
@@ -317,7 +321,7 @@ export default defineComponent({
       return h(
         'div',
         {
-          class: 'ep-toolbar',
+          class: 'docx-editor-toolbar',
           role: 'toolbar',
           'aria-label': props.t('toolbar.ariaLabel'),
           'data-testid': 'docx-editor-toolbar',
@@ -330,12 +334,14 @@ export default defineComponent({
         // (image / table / save) are composition-only, and the alignment group
         // renders as ONE merged dropdown — same rules as the React toolbar.
         defaultChromeGroups().map((group, index) =>
-          h('div', { key: group.id, class: 'ep-toolbar__group-wrap' }, [
-            ...(index > 0 ? [h('div', { class: 'ep-toolbar__separator', role: 'separator' })] : []),
+          h('div', { key: group.id, class: 'docx-editor-toolbar__group-wrap' }, [
+            ...(index > 0
+              ? [h('div', { class: 'docx-editor-toolbar__separator', role: 'separator' })]
+              : []),
             h(
               'div',
               {
-                class: 'ep-toolbar__group',
+                class: 'docx-editor-toolbar__group',
                 role: 'group',
                 'aria-label': props.t(group.labelKey),
                 'data-group': group.id,

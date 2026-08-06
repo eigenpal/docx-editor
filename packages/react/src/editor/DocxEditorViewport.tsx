@@ -2,7 +2,7 @@
 //
 // The class list is LOAD-BEARING, not styling sugar:
 // - `docx-editor` scopes every --doc-* token and the library's Tailwind layer;
-// - `ep-one-surface ep-one-surface__viewport` carry the one-surface chrome geometry;
+// - `docx-editor-one-surface docx-editor-one-surface__viewport` carry the one-surface chrome geometry;
 // - `docx-editor__scroll-container` is how the engine finds its scroller — the
 //   paginated pages locate the nearest ancestor with that class for scroll
 //   rematerialization and page-visibility work. Without it the engine falls back to
@@ -81,7 +81,7 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
       data-testid="docx-editor-scroll"
       onKeyDownCapture={onKeyDownCapture}
       {...(reserve ? { 'data-review-pane': paneOpen ? 'open' : 'closed' } : {})}
-      className={`docx-editor ep-one-surface ep-one-surface__viewport docx-editor__scroll-container${
+      className={`docx-editor docx-editor-one-surface docx-editor-one-surface__viewport docx-editor__scroll-container${
         className ? ` ${className}` : ''
       }`}
       style={{ ...style, ['--docx-nav-shift' as string]: `${shift}px` } as CSSProperties}

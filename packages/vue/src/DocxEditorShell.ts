@@ -20,21 +20,21 @@ export default defineComponent({
   name: 'DocxEditorShell',
   setup(_props, { slots }) {
     return () =>
-      h('div', { class: 'docx-editor ep-shell', 'data-testid': 'docx-editor-shell' }, [
-        slots.titleBar ? h('div', { class: 'ep-shell__title' }, slots.titleBar()) : null,
-        slots.toolbar ? h('div', { class: 'ep-shell__toolbar' }, slots.toolbar()) : null,
-        h('div', { class: 'ep-shell__document' }, [
+      h('div', { class: 'docx-editor docx-editor-shell', 'data-testid': 'docx-editor-shell' }, [
+        slots.titleBar ? h('div', { class: 'docx-editor-shell__title' }, slots.titleBar()) : null,
+        slots.toolbar ? h('div', { class: 'docx-editor-shell__toolbar' }, slots.toolbar()) : null,
+        h('div', { class: 'docx-editor-shell__document' }, [
           slots.horizontalRuler
-            ? h('div', { class: 'ep-shell__ruler-h' }, slots.horizontalRuler())
+            ? h('div', { class: 'docx-editor-shell__ruler-h' }, slots.horizontalRuler())
             : null,
-          h('div', { class: 'ep-shell__canvas' }, [
+          h('div', { class: 'docx-editor-shell__canvas' }, [
             slots.verticalRuler
-              ? h('div', { class: 'ep-shell__ruler-v' }, slots.verticalRuler())
+              ? h('div', { class: 'docx-editor-shell__ruler-v' }, slots.verticalRuler())
               : null,
             slots.default ? slots.default() : null,
           ]),
           slots.pageIndicator
-            ? h('div', { class: 'ep-shell__page-indicator' }, slots.pageIndicator())
+            ? h('div', { class: 'docx-editor-shell__page-indicator' }, slots.pageIndicator())
             : null,
         ]),
       ]);
