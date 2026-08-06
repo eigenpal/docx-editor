@@ -309,8 +309,11 @@ export function resolveStoryListItems(
       cascaded?.inheritedParagraphProperties ?? [],
       directProps
     );
+    const directMarkRun = pPr && isElement(pPr) ? childNamed(pPr, 'rPr') : undefined;
+    const markOnly = propertiesOf(directMarkRun);
+    const inheritedMarkProps = cascaded ? cascaded.markRunProperties : markOnly;
     const markerProps = cascadeRunProperties(
-      cascaded?.runProperties ?? [],
+      inheritedMarkProps,
       advanced.level.runProperties,
       styleCascade
     );

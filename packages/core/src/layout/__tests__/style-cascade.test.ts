@@ -17,6 +17,8 @@ import { paragraphSpacing } from '../paragraph-style.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { linesOf } from '../semantic-records.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
+import { buildNumberingIndex } from '../numbering-index.ts';
+import { resolveStoryListItems } from '../list-resolve.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -308,6 +310,46 @@ describe('paragraph-mark rPr does not size content runs', () => {
       styleCascade: table,
     });
     expect(linesOf(layout)[0]!.spans[0]!.style.fontSizePt).toBe(10);
+  });
+
+  test('list marker resolution reads markRunProperties and keeps level rPr last', () => {
+    const numberingBody =
+      `<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0">` +
+      `<w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>` +
+      `<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>`;
+    const numberingWithLevelRpr = (rPr: string) => {
+      const result = readOoxmlPart(
+        `<w:numbering xmlns:w="${W}">${numberingBody}${rPr}</w:lvl></w:abstractNum>` +
+          `<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>`,
+        { name: '/word/numbering.xml', contentType: 'app/xml' }
+      );
+      if (!result.ok) throw new Error(result.reason);
+      return buildNumberingIndex(result.part.root);
+    };
+    const styles =
+      DOC_DEFAULTS +
+      `<w:style w:type="paragraph" w:styleId="BodyText"><w:basedOn w:val="Normal"/>` +
+      `<w:rPr><w:sz w:val="20"/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    const listParagraph =
+      `<w:p><w:pPr><w:pStyle w:val="BodyText"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>` +
+      `<w:rPr><w:sz w:val="52"/><w:b/></w:rPr></w:pPr><w:r><w:t>BIG</w:t></w:r></w:p>`;
+    const part = loadDocument(listParagraph);
+    const paragraph = part.root.children.find((child) => child.localName === 'body')!.children[0]!;
+
+    const fromMark = resolveStoryListItems([paragraph], numberingWithLevelRpr(''), table).get(
+      paragraph.id
+    )!;
+    expect(fromMark.markerStyle.fontSizePt).toBe(26);
+    expect(fromMark.markerStyle.bold).toBe(true);
+
+    const fromLevel = resolveStoryListItems(
+      [paragraph],
+      numberingWithLevelRpr('<w:rPr><w:sz w:val="20"/></w:rPr>'),
+      table
+    ).get(paragraph.id)!;
+    expect(fromLevel.markerStyle.fontSizePt).toBe(10);
+    expect(fromLevel.markerStyle.bold).toBe(true);
   });
 });
 
