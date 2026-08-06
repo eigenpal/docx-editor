@@ -1486,6 +1486,13 @@ export interface NotesLayoutInput {
 export function noteStoryBlocks(note: OoxmlNode, displayMode?: RevisionDisplayMode): OoxmlElement[];
 
 // @public
+export interface NoteStoryDrawings {
+    readonly drawingTokenForParagraph?: (paragraph: OoxmlNode) => string;
+    // (undocumented)
+    readonly inlineDrawingLayout: InlineDrawingLayoutContext;
+}
+
+// @public
 export interface NoteStoryLayout {
     readonly fallbackReason?: NoteLayoutFallbackReason;
     readonly flowHeight: number;

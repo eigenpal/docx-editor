@@ -1862,7 +1862,7 @@ function convertElement(
     candidateKind !== 'generic' && attributesOk && kindChecksPass ? candidateKind : 'generic';
   const finalChildren =
     kind === 'generic' && isDrawingKnownKind(candidateKind)
-      ? demoteDrawingKindsInSubtree(children)
+      ? demoteDrawingKindsInSubtree(children, name)
       : children;
   return {
     id: `${partName}#${path}`,

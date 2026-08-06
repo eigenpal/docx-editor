@@ -192,8 +192,16 @@ function drawingResourceLayoutToken(resource: ImageResourceState): string {
   }
 }
 
-/** Bound on text-box-in-text-box descent while building a paragraph's drawing token. */
-const MAX_HOSTED_STORY_TOKEN_DEPTH = 4;
+/**
+ * Story levels folded into a paragraph's drawing token.
+ *
+ * ONE, because one is what paints: `layoutTextboxStory` does not hand its own flow a
+ * textbox-story layout function, so a box inside a box renders nothing. Walking deeper would
+ * not just be wasted work — the token calls `resourceOf` on every atom it names, which
+ * schedules a decode and retains validated bytes for a picture nothing will ever draw. Raise
+ * this only together with nested story layout.
+ */
+const MAX_HOSTED_STORY_TOKEN_DEPTH = 1;
 
 function collectDrawingAtoms(node: OoxmlNode, ids: string[]): void {
   if (node.kind === 'drawing' || isRunLevelMcAlternateContent(node)) {
@@ -239,6 +247,7 @@ function createPartDrawingContextSlot(options: {
     OoxmlNode,
     { readonly resourceEpoch: number; readonly token: string }
   >();
+  const atomsByParagraph = new WeakMap<OoxmlNode, readonly string[]>();
   let resourceEpoch = 0;
 
   const resolveRelationshipTarget = createDrawingRelationshipResolver(pkg, ownerPartName);
@@ -325,25 +334,36 @@ function createPartDrawingContextSlot(options: {
    * changes, so a picture inside it settling would move no token in the host paragraph's key
    * and repaint nothing. The story's atoms have to ride the host paragraph's key, because
    * that is what governs the break the story is laid out from.
+   *
+   * Memoized on the paragraph NODE, not on the resource epoch: which atoms a paragraph owns
+   * is a fact about the tree, and the tree does not move when a picture decodes. Keying this
+   * with the token would re-walk every hosted story of every paragraph in the part each time
+   * any one image settles.
    */
   const atomsWithHostedStories = (paragraph: OoxmlNode): readonly string[] => {
+    const memo = atomsByParagraph.get(paragraph);
+    if (memo) return memo;
     const direct = drawingAtomsInParagraph(paragraph);
     let expanded: string[] | null = null;
     const visit = (atomIds: readonly string[], depth: number): void => {
-      if (depth > MAX_HOSTED_STORY_TOKEN_DEPTH) return;
+      if (depth >= MAX_HOSTED_STORY_TOKEN_DEPTH) return;
       for (const atomId of atomIds) {
         const story = atomProjections.get(atomId)?.textboxStory;
         if (!story) continue;
         const inner: string[] = [];
         collectDrawingAtoms(story.content, inner);
         if (inner.length === 0) continue;
-        expanded ??= [...direct];
-        expanded.push(...inner);
+        if (!expanded) expanded = [...direct];
+        // A LOOP, not `push(...inner)`: the count comes from the file, and spreading a few
+        // hundred thousand arguments is a stack overflow on V8, not a slow call.
+        for (const id of inner) expanded.push(id);
         visit(inner, depth + 1);
       }
     };
     visit(direct, 0);
-    return expanded ?? direct;
+    const atoms = expanded ?? direct;
+    atomsByParagraph.set(paragraph, atoms);
+    return atoms;
   };
 
   const drawingTokenForParagraph = (paragraph: OoxmlNode): string => {

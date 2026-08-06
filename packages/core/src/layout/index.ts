@@ -309,6 +309,7 @@ export {
   MAX_NOTES_LAID_OUT,
   MAX_NOTE_FRAGMENTS,
   type NoteStoryLayout,
+  type NoteStoryDrawings,
   type NoteSeparatorLayout,
   type NoteSeparatorRuleStyle,
   type NoteLayoutFallbackReason,

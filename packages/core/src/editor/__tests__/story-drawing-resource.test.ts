@@ -23,6 +23,7 @@ const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
 const IMG = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image';
 const FOOTNOTES = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes';
+const ENDNOTES = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/endnotes';
 const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
@@ -78,7 +79,30 @@ function textboxWithPicture(): string {
   );
 }
 
-function docx(options: { readonly bodyRuns: string; readonly footnoteRuns: string }): Uint8Array {
+/** A drawing that never types, carrying the story element's NAME in a position it cannot open one. */
+function strayStoryNameDrawing(): string {
+  return (
+    '<w:r><w:drawing>' +
+    '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" behindDoc="0" locked="0" ' +
+    'layoutInCell="1" allowOverlap="1" relativeHeight="1">' +
+    '<wp:simplePos x="0" y="0"/>' +
+    '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' +
+    '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
+    '<wp:extent cx="2743200" cy="1828800"/><wp:wrapNone/><wp:docPr id="20" name="stray"/>' +
+    `<a:graphic><a:graphicData uri="${WPS}">` +
+    '<wps:wsp><wps:cNvSpPr txBox="1"/>' +
+    // `w:txbxContent` under the shape properties rather than under `wps:txbx`.
+    `<wps:spPr><w:txbxContent><w:p>${inlinePicture(21)}</w:p></w:txbxContent></wps:spPr>` +
+    '<wps:bodyPr/></wps:wsp>' +
+    '</a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>'
+  );
+}
+
+function docx(options: {
+  readonly bodyRuns: string;
+  readonly footnoteRuns: string;
+  readonly endnoteRuns?: string;
+}): Uint8Array {
   const imageRels = strToU8(
     `<Relationships xmlns="${REL}"><Relationship Id="rIdImg" Type="${IMG}" Target="media/image1.png"/></Relationships>`
   );
@@ -89,6 +113,7 @@ function docx(options: { readonly bodyRuns: string; readonly footnoteRuns: strin
         '<Default Extension="png" ContentType="image/png"/>' +
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
         '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+        '<Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/>' +
         '</Types>'
     ),
     '_rels/.rels': strToU8(
@@ -105,6 +130,7 @@ function docx(options: { readonly bodyRuns: string; readonly footnoteRuns: strin
     'word/_rels/document.xml.rels': strToU8(
       `<Relationships xmlns="${REL}">` +
         `<Relationship Id="rIdFn" Type="${FOOTNOTES}" Target="footnotes.xml"/>` +
+        `<Relationship Id="rIdEn" Type="${ENDNOTES}" Target="endnotes.xml"/>` +
         `<Relationship Id="rIdImg" Type="${IMG}" Target="media/image1.png"/>` +
         '</Relationships>'
     ),
@@ -115,24 +141,61 @@ function docx(options: { readonly bodyRuns: string; readonly footnoteRuns: strin
         `<w:footnote w:id="1"><w:p><w:r><w:footnoteRef/></w:r><w:r><w:t>note </w:t></w:r>${options.footnoteRuns}</w:p></w:footnote>` +
         '</w:footnotes>'
     ),
+    'word/endnotes.xml': strToU8(
+      `<w:endnotes ${NS}>` +
+        '<w:endnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:endnote>' +
+        '<w:endnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:endnote>' +
+        `<w:endnote w:id="1"><w:p><w:r><w:endnoteRef/></w:r><w:r><w:t>note </w:t></w:r>${options.endnoteRuns ?? '<w:r><w:t>plain</w:t></w:r>'}</w:p></w:endnote>` +
+        '</w:endnotes>'
+    ),
     'word/_rels/footnotes.xml.rels': imageRels,
+    'word/_rels/endnotes.xml.rels': imageRels,
     'word/media/image1.png': PNG_1X1,
   });
 }
 
 const FOOTNOTE_REFERENCE = '<w:r><w:footnoteReference w:id="1"/></w:r>';
+const ENDNOTE_REFERENCE = '<w:r><w:endnoteReference w:id="1"/></w:r>';
+
+function decodeBytes(bytes: Uint8Array, mime: string): { pixelWidth: number; pixelHeight: number } {
+  const header = validateRasterHeader(bytes, mime);
+  if (!header) throw new Error('invalid raster');
+  const limits = resolveImageResourceLimits();
+  if (header.pixelWidth * header.pixelHeight > limits.maxPixels) throw new Error('too large');
+  return header;
+}
 
 /** Validates the real bytes, like the browser port does, but without a browser. */
 function decodePort(): ImageDecodePort {
   return Object.freeze({
     async decode(bytes, mime) {
-      const header = validateRasterHeader(bytes, mime);
-      if (!header) throw new Error('invalid raster');
-      const limits = resolveImageResourceLimits();
-      if (header.pixelWidth * header.pixelHeight > limits.maxPixels) throw new Error('too large');
-      return Object.freeze({ ...header, dpiX: 96, dpiY: 96 });
+      return Object.freeze({ ...decodeBytes(bytes, mime), dpiX: 96, dpiY: 96 });
     },
   });
+}
+
+/**
+ * A decode port that does not settle until told to.
+ *
+ * The whole asynchronous half of this fix — the resource identity in the break key — is only
+ * observable if a layout is READ while the picture is still pending. A port that resolves on
+ * its own microtask makes every assertion a post-decode one, and a test written that way
+ * passes with the invalidation removed entirely.
+ */
+function deferredDecodePort(): { port: ImageDecodePort; release: () => void } {
+  let release = (): void => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return {
+    port: Object.freeze({
+      async decode(bytes, mime) {
+        await gate;
+        return Object.freeze({ ...decodeBytes(bytes, mime), dpiX: 96, dpiY: 96 });
+      },
+    }),
+    release: () => release(),
+  };
 }
 
 /** Resource resolution and the relayout it triggers are both asynchronous. */
@@ -165,6 +228,14 @@ function footnoteDrawingKinds(page: PageRecord): string[] {
   return kinds;
 }
 
+function endnoteDrawingKinds(page: PageRecord): string[] {
+  const kinds: string[] = [];
+  for (const note of page.endnotes?.notes ?? []) {
+    kinds.push(...blockDrawingKinds(note.fragments));
+  }
+  return kinds;
+}
+
 function textboxDrawingKinds(page: PageRecord): string[] {
   const kinds: string[] = [];
   for (const drawing of page.anchoredDrawings ?? []) {
@@ -175,7 +246,10 @@ function textboxDrawingKinds(page: PageRecord): string[] {
   return kinds;
 }
 
-async function mount(bytes: Uint8Array): Promise<{
+async function mount(
+  bytes: Uint8Array,
+  port: ImageDecodePort = decodePort()
+): Promise<{
   surface: PaginatedSurface;
   container: HTMLElement;
 }> {
@@ -183,21 +257,74 @@ async function mount(bytes: Uint8Array): Promise<{
   document.body.append(container);
   const opened = mountPaginatedSurface(container, bytes, {
     scale: 1,
-    imageDecodePort: decodePort(),
+    imageDecodePort: port,
   });
   if (!opened.ok) throw new Error(opened.reason);
   await settle();
   return { surface: opened.surface, container };
 }
 
+/** `<img>` elements painted inside a page's note areas. */
+function paintedNoteImages(container: HTMLElement): HTMLImageElement[] {
+  return [...container.querySelectorAll('.docx-notes img')];
+}
+
 describe('pictures in stories outside the body flow', () => {
-  test('a footnote picture lays out and resolves', async () => {
+  test('a footnote picture lays out, resolves, and paints', async () => {
     const { surface, container } = await mount(
       docx({ bodyRuns: FOOTNOTE_REFERENCE, footnoteRuns: inlinePicture(2) })
     );
     const page = surface.layout().pages[0]!;
     expect(footnoteDrawingKinds(page)).toEqual(['ready']);
     expect(container.querySelectorAll('.docx-drawing-placeholder')).toHaveLength(0);
+    expect(paintedNoteImages(container)).toHaveLength(1);
+    surface.destroy();
+    container.remove();
+  });
+
+  test('an endnote picture does too', async () => {
+    const { surface, container } = await mount(
+      docx({
+        bodyRuns: ENDNOTE_REFERENCE,
+        footnoteRuns: '<w:r><w:t>plain</w:t></w:r>',
+        endnoteRuns: inlinePicture(3),
+      })
+    );
+    const page = surface.layout().pages[0]!;
+    expect(endnoteDrawingKinds(page)).toEqual(['ready']);
+    expect(paintedNoteImages(container)).toHaveLength(1);
+    surface.destroy();
+    container.remove();
+  });
+
+  // The invalidation half: the first pass MUST publish `pending`, and a later pass MUST
+  // replace it. Reading only after the decode settles would pass with the resource identity
+  // stripped out of the break key entirely.
+  test('a footnote picture pending at first paint reaches the page when it decodes', async () => {
+    const { port, release } = deferredDecodePort();
+    const { surface, container } = await mount(
+      docx({ bodyRuns: FOOTNOTE_REFERENCE, footnoteRuns: inlinePicture(2) }),
+      port
+    );
+    expect(footnoteDrawingKinds(surface.layout().pages[0]!)).toEqual(['pending']);
+    release();
+    await settle();
+    expect(footnoteDrawingKinds(surface.layout().pages[0]!)).toEqual(['ready']);
+    expect(paintedNoteImages(container)).toHaveLength(1);
+    surface.destroy();
+    container.remove();
+  });
+
+  test('a text-box picture pending at first paint reaches the page when it decodes', async () => {
+    const { port, release } = deferredDecodePort();
+    const { surface, container } = await mount(
+      docx({ bodyRuns: textboxWithPicture(), footnoteRuns: '<w:r><w:t>plain</w:t></w:r>' }),
+      port
+    );
+    expect(textboxDrawingKinds(surface.layout().pages[0]!)).toEqual(['pending']);
+    release();
+    await settle();
+    expect(textboxDrawingKinds(surface.layout().pages[0]!)).toEqual(['ready']);
     surface.destroy();
     container.remove();
   });
@@ -208,6 +335,19 @@ describe('pictures in stories outside the body flow', () => {
     );
     const page = surface.layout().pages[0]!;
     expect(textboxDrawingKinds(page)).toEqual(['ready']);
+    surface.destroy();
+    container.remove();
+  });
+
+  // The story carve-out in the drawing-kind demotion is positional: only a `w:txbxContent`
+  // directly under a `wps:txbx` opens one. A file that plants the name elsewhere inside a
+  // failed drawing subtree must not get typed drawings preserved there.
+  test('a stray txbxContent outside a text box opens no story', async () => {
+    const { surface, container } = await mount(
+      docx({ bodyRuns: strayStoryNameDrawing(), footnoteRuns: '<w:r><w:t>plain</w:t></w:r>' })
+    );
+    const page = surface.layout().pages[0]!;
+    expect(textboxDrawingKinds(page)).toEqual([]);
     surface.destroy();
     container.remove();
   });
