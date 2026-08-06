@@ -12,7 +12,6 @@ import {
   CUSTOM_XML_PROPS_TYPE,
   CUSTOM_XML_REL,
   customXmlDataParts,
-  datastoreItemIdFor,
   findCustomXmlDataPart,
   withCustomXmlDataPart,
 } from '../custom-xml-part.ts';
@@ -96,7 +95,8 @@ describe('authoring a store', () => {
 });
 
 describe('a package that lies about its stores', () => {
-  // Every one of these was a working attack before the checks that refuse them.
+  // Guard-rail cases against the fixtures we have. Hardening the three that cannot fail today
+  // needs packages crafted to carry the attack, which is follow-up work.
   test('a relationships part presented as a store is not one', () => {
     // Without the guard a caller writes payload nodes into `document.xml.rels`, and the
     // relationships part ships with foreign children for Word to repair away.
@@ -168,13 +168,5 @@ describe('the item id', () => {
     const first = withCustomXmlDataPart(pkg, STORY, NS, 'docxEditor');
     const second = withCustomXmlDataPart(pkg, STORY, NS, 'docxEditor');
     expect(first.part?.itemId).toBe(second.part?.itemId ?? '');
-  });
-
-  test('is a pure function of the seed', () => {
-    expect(datastoreItemIdFor('a')).toBe(datastoreItemIdFor('a'));
-    expect(datastoreItemIdFor('a')).not.toBe(datastoreItemIdFor('b'));
-    expect(datastoreItemIdFor('a')).toMatch(
-      /^\{[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}\}$/
-    );
   });
 });

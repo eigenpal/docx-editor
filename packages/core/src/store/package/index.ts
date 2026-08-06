@@ -478,7 +478,6 @@ export {
   CUSTOM_XML_REL,
   DATASTORE_NAMESPACE_URI,
   customXmlDataParts,
-  datastoreItemIdFor,
   findCustomXmlDataPart,
   withCustomXmlDataPart,
   withoutCustomXmlDataPart,

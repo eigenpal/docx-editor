@@ -237,7 +237,6 @@ export function customXmlLabelXPath(
 export function customXmlPrefixMappings(prefix: string, namespaceUri: string): string | null {
   if (!ADDRESSABLE_ID.test(prefix)) return null;
   if (/['"<>&]/.test(namespaceUri)) return null;
-  // eslint-disable-next-line no-control-regex -- unrepresentable, not merely awkward.
   if (/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(namespaceUri)) return null;
   return `xmlns:${prefix}='${namespaceUri}'`;
 }

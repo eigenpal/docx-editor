@@ -840,9 +840,6 @@ export class DangerousKeyError extends Error {
 export const DATASTORE_NAMESPACE_URI = "http://schemas.openxmlformats.org/officeDocument/2006/customXml";
 
 // @public
-export function datastoreItemIdFor(seed: string): string;
-
-// @public
 export const DEFAULT_ENDNOTE_PROPERTIES: ResolvedEndnoteProperties;
 
 // @public
@@ -4330,8 +4327,7 @@ export function withContentTypeOverride(pkg: OoxmlPackage, partName: string, con
 }): OoxmlPackage;
 
 // @public
-export function withCustomXmlDataPart(pkg: OoxmlPackage,
-storyPartName: string, namespaceUri: string, rootLocalName: string): CustomXmlDataPartResult;
+export function withCustomXmlDataPart(pkg: OoxmlPackage, storyPartName: string, namespaceUri: string, rootLocalName: string): CustomXmlDataPartResult;
 
 // @public
 export function withCustomXmlNode(pkg: OoxmlPackage, partName: string, node: CustomXmlNode): OoxmlPackage;
@@ -4372,7 +4368,7 @@ export function withoutUnreferencedImagePart(pkg: OoxmlPackage, partName: string
 // @public
 export function withPart(pkg: OoxmlPackage, part: OoxmlPart): OoxmlPackage;
 
-// @public (undocumented)
+// @public
 export function withRelationship(pkg: OoxmlPackage, ownerPart: string, type: string, rawTarget: string): {
     readonly pkg: OoxmlPackage;
     readonly relationshipId: string;

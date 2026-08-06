@@ -335,6 +335,12 @@ export function withContentTypeOverride(
   });
 }
 
+/** What {@link withoutPart} answers: `ok: false` leaves the package exactly as it was. */
+export interface WithoutPartResult {
+  readonly pkg: OoxmlPackage;
+  readonly ok: boolean;
+}
+
 /**
  * Remove a part, its `.rels`, its content-type Override, and every relationship naming it.
  *
@@ -343,11 +349,31 @@ export function withContentTypeOverride(
  * `.rels` would still point at it — so a caller stripping something out of a document for
  * export would leave three separate records saying it had been there.
  */
-export function withoutPart(pkg: OoxmlPackage, partName: string): OoxmlPackage {
+export function withoutPart(pkg: OoxmlPackage, partName: string): WithoutPartResult {
   const canonical = normalizePartName(partName);
-  if (!canonical.ok) return pkg;
+  if (!canonical.ok) return { pkg, ok: false };
   const key = partNameKey(canonical.partName);
   const relsKey = partNameKey(relsPartNameFor(canonical.partName));
+
+  // Every owner whose relationships name the part, and the ids to drop from each.
+  const removedIds = new Map<string, Set<string>>();
+  for (const [owner, records] of pkg.relationships) {
+    const naming = records.filter((record) => {
+      if (record.targetMode === 'External') return false;
+      const resolved = resolveInternalTarget(owner, record.rawTarget);
+      return resolved.ok && partNameKey(resolved.partName) === key;
+    });
+    if (naming.length > 0) removedIds.set(owner, new Set(naming.map((record) => record.id)));
+  }
+
+  // Refuse rather than half-remove. An owner whose `.rels` was never parsed into a tree —
+  // a package omitting `Default Extension="rels"` still loads that way — has its records here
+  // and its markup only in `partBytes`, which `writeOoxmlPackage` writes back out untouched.
+  // Dropping the record alone leaves the saved file pointing at a part that is gone, and
+  // `validatePackageInvariants` sees a clean model, so nothing anywhere reports it.
+  for (const owner of removedIds.keys()) {
+    if (!pkg.parts.has(relsPartNameFor(owner))) return { pkg, ok: false };
+  }
 
   const parts = new Map(pkg.parts);
   const partBytes = new Map(pkg.partBytes);
@@ -358,32 +384,43 @@ export function withoutPart(pkg: OoxmlPackage, partName: string): OoxmlPackage {
     }
   }
 
-  // Relationship records, and the `.rels` TREES they were parsed from — the records alone are
-  // an index; the trees are what gets written.
   const relationships = new Map(pkg.relationships);
   relationships.delete(canonical.partName);
-  for (const [owner, records] of relationships) {
-    const kept = records.filter((record) => {
-      if (record.targetMode === 'External') return true;
-      const resolved = resolveInternalTarget(owner, record.rawTarget);
-      return !resolved.ok || partNameKey(resolved.partName) !== key;
-    });
-    if (kept.length === records.length) continue;
-    relationships.set(owner, kept);
+  for (const [owner, ids] of removedIds) {
+    const records = relationships.get(owner) ?? [];
+    relationships.set(
+      owner,
+      records.filter((record) => !ids.has(record.id))
+    );
     const ownerRels = parts.get(relsPartNameFor(owner));
     if (!ownerRels) continue;
-    const keptIds = new Set(kept.map((record) => record.id));
+    // Remove the matched elements BY ID rather than keeping an allowlist: a `<Relationship>`
+    // the reader could not index — no `Id`, or one it dropped — is not ours to delete because
+    // an unrelated part was removed.
     const children = ownerRels.root.children.filter((child) => {
       const id = relationshipIdAttribute(child);
-      return id === undefined || keptIds.has(id);
+      return id === undefined || !ids.has(id);
     });
     const rewritten = replaceChildren(ownerRels, ownerRels.root.id, children);
-    if (rewritten.ok) parts.set(rewritten.part.name, rewritten.part);
+    // The tree is the file. If it cannot be rewritten, the whole removal is off.
+    if (!rewritten.ok) return { pkg, ok: false };
+    parts.set(rewritten.part.name, rewritten.part);
   }
 
-  let next: OoxmlPackage = Object.freeze({ ...pkg, parts, partBytes, relationships });
-  next = withoutContentTypeOverride(next, canonical.partName);
-  return next;
+  // External-target metadata is keyed by owner, so a removed part leaves records naming a part
+  // that no longer exists, and callers branch on those.
+  const externalTargets = pkg.externalTargets.filter(
+    (target) => partNameKey(target.ownerPart) !== key
+  );
+
+  const next: OoxmlPackage = Object.freeze({
+    ...pkg,
+    parts,
+    partBytes,
+    relationships,
+    externalTargets,
+  });
+  return { pkg: withoutContentTypeOverride(next, canonical.partName), ok: true };
 }
 
 /** Drop a part's Override, which otherwise names a part that is no longer in the package. */
@@ -461,7 +498,6 @@ export function allocateOwnerRelationshipId(pkg: OoxmlPackage, ownerPart: string
   return `rId${next}`;
 }
 
-/** Add or replace one relationship on a part, returning a new package. */
 /**
  * Give a part an empty `.rels` of its own, so {@link withRelationship} has somewhere to write.
  *
@@ -501,6 +537,7 @@ export function withRelationshipsPartFor(pkg: OoxmlPackage, ownerPart: string): 
   return withPart(pkg, part);
 }
 
+/** Add or replace one relationship on a part, returning a new package. */
 export function withRelationship(
   pkg: OoxmlPackage,
   ownerPart: string,

@@ -11,13 +11,13 @@
 // the node), which is the one link Word itself maintains.
 //
 // The inline `w:customXml` ELEMENT is a different thing and is not what this writes: Word for
-// the web refuses a document containing one outright. The data PART is what survives, proven
-// byte-identical through an upload/edit/re-save round trip in
-// `e2e/fixtures/sdt-custom-tag-word-roundtrip.docx`.
+// the web refuses a document containing one outright. The data PART is what survives.
 //
-// Read that fixture for exactly what it shows and no more: it carries a data part and three
-// SDTs identified by `w:tag`, and NO `w:dataBinding` anywhere. So it proves the part survives
-// Word; whether Word for the web preserves a BINDING is a round trip nobody has run yet.
+// The evidence is `e2e/fixtures/sdt-custom-tag-word-roundtrip.docx`, Word for the web's own
+// output for a document carrying one, and it is worth reading for exactly what it shows: the
+// store came back with its parts, relationships and payload intact, so Word emits and accepts
+// this wiring. It carries no `w:dataBinding` at all, so whether Word preserves a BINDING is a
+// round trip nobody has run yet.
 //
 // SECURITY: everything read back out of one of these parts came from a file the sender
 // controls. This module writes and locates parts; it does not interpret payloads, and a caller
@@ -72,7 +72,7 @@ export interface CustomXmlDataPart {
  * and every digest taken over saved bytes moves. A GUID's job here is uniqueness within one
  * package, not unguessability, so four FNV-1a passes over a salted seed carry it.
  */
-export function datastoreItemIdFor(seed: string): string {
+function datastoreItemIdFor(seed: string): string {
   const block = (salt: string): string =>
     fnv1a32(`${salt} ${seed}`).toString(16).padStart(8, '0').toUpperCase();
   const a = block('a');
@@ -110,6 +110,22 @@ function documentIdentityOf(pkg: OoxmlPackage): string {
 
 /** `<dir>/_rels/<file>.rels` — never a payload store, whatever points at it. */
 const RELS_PART = /\/_rels\/[^/]*\.rels$/i;
+
+/** A relationship target for `to`, written relative to `from`'s own directory. */
+function relativeTarget(from: string, to: string): string {
+  const fromParts = from.split('/').slice(1, -1);
+  const toParts = to.split('/').slice(1);
+  let shared = 0;
+  while (
+    shared < fromParts.length &&
+    shared < toParts.length - 1 &&
+    fromParts[shared] === toParts[shared]
+  ) {
+    shared += 1;
+  }
+  const up = '../'.repeat(fromParts.length - shared);
+  return `${up}${toParts.slice(shared).join('/')}`;
+}
 
 function itemNames(index: number): { readonly item: string; readonly props: string } {
   return {
@@ -200,13 +216,13 @@ export interface CustomXmlDataPartResult {
  *
  * Idempotent: a package that already has one for the namespace comes back untouched, so a
  * second node added to the same store does not author a second store.
+ *
+ * @param storyPartName - Whose relationships the store hangs off. Word enumerates its data
+ * store from the MAIN DOCUMENT part, so a store authored off a header or footer is one Word
+ * never sees.
  */
 export function withCustomXmlDataPart(
   pkg: OoxmlPackage,
-  /**
-   * Whose relationships the store hangs off. Word enumerates its data store from the MAIN
-   * DOCUMENT part, so a store authored off a header or footer is one Word never sees.
-   */
   storyPartName: string,
   namespaceUri: string,
   rootLocalName: string
@@ -274,11 +290,15 @@ export function withCustomXmlDataPart(
   if (!next.parts.has(names.item) || !next.parts.has(names.props)) return { pkg, part: null };
   next = withContentTypeOverride(next, names.props, CUSTOM_XML_PROPS_TYPE);
 
+  // Relative TO THE STORY. `../customXml/…` is only right when the story sits exactly one
+  // directory deep, and the main document part comes from the root `.rels`, which the file
+  // chooses — a root-level `/document.xml` made that target escape the package, so the store
+  // never read back, idempotency was lost, and every call authored another one.
   const stored = withRelationship(
     next,
     storyPartName,
     CUSTOM_XML_REL,
-    `../customXml/item${String(index)}.xml`
+    relativeTarget(storyPartName, names.item)
   );
   if (!stored.ok) return { pkg, part: null };
   // The item part is new, so it has no `.rels` of its own to write into yet.
@@ -289,6 +309,12 @@ export function withCustomXmlDataPart(
     `itemProps${String(index)}.xml`
   );
   if (!propsRelated.ok) return { pkg, part: null };
+
+  // Read it back before claiming it. Everything above can succeed while the result is not
+  // something `findCustomXmlDataPart` will ever locate again, and a store that cannot be found
+  // is a store the next call authors a duplicate of.
+  const readBack = findCustomXmlDataPart(propsRelated.pkg, storyPartName, namespaceUri);
+  if (!readBack || readBack.partName !== names.item) return { pkg, part: null };
 
   return {
     pkg: propsRelated.pkg,
@@ -306,7 +332,6 @@ export function withCustomXmlDataPart(
  * every single call until the document blew past the reader's part cap.
  */
 function attributeValue(value: string): string | null {
-  // eslint-disable-next-line no-control-regex -- the point is to detect them.
   if (/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(value)) return null;
   return value
     .replace(/&/g, '&amp;')
@@ -345,7 +370,16 @@ export function withoutCustomXmlDataPart(
   storyPartName: string,
   namespaceUri: string
 ): OoxmlPackage {
-  const store = findCustomXmlDataPart(pkg, storyPartName, namespaceUri);
-  if (!store) return pkg;
-  return withoutPart(withoutPart(pkg, store.partName), store.propsPartName);
+  let next = pkg;
+  // Every store for the namespace, not the first: a document can carry two, and "the export
+  // leaves no record of it" is false if one survives.
+  for (const store of customXmlDataParts(pkg, storyPartName)) {
+    if (store.namespaceUri !== namespaceUri) continue;
+    const item = withoutPart(next, store.partName);
+    if (!item.ok) return pkg;
+    const props = withoutPart(item.pkg, store.propsPartName);
+    if (!props.ok) return pkg;
+    next = props.pkg;
+  }
+  return next;
 }

@@ -17,7 +17,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // passes an ordinary zod schema and it works:
 //
 //   const Iceberg = z.object({ depth: z.number(), charted: z.boolean() });
-//   defineCustomNode({ name: 'iceberg', tagPrefix: 'igloo', schema: Iceberg, … });
+//   const parsed = parseCustomNodeData(Iceberg, node.data);
+//   if (parsed.ok) render(parsed.value.depth);
+//
+// `CustomNodeDefinition` does not carry a `schema` member yet; the definition-level wiring
+// lands with the write path.
 //
 // Depending on zod itself would put a copy of it in this tarball and a second one in the app,
 // and two zods disagree about `instanceof` in exactly the way two engines disagree about
@@ -28,7 +32,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  *
  * Any zod, valibot or arktype schema satisfies it. See https://standardschema.dev.
  *
- * @public
+ * Reduced to the parts used here rather than copied: the spec's namespace, `Props`,
+ * `SuccessResult`/`FailureResult`, `PathSegment` and `InferInput` are all absent. Assignability
+ * with a real schema is what matters, and is checked against zod in the tests.
  */
 export interface StandardSchemaV1<Input = unknown, Output = Input> {
   readonly '~standard': {
@@ -41,12 +47,18 @@ export interface StandardSchemaV1<Input = unknown, Output = Input> {
   };
 }
 
-/** What a Standard Schema validation answers. @public */
+/** What a Standard Schema validation answers. */
 export type StandardSchemaResult<Output> =
   | { readonly value: Output; readonly issues?: undefined }
-  | { readonly issues: readonly { readonly message: string }[] };
+  | { readonly issues: readonly StandardSchemaIssue[] };
 
-/** The type a schema produces, for a definition to hand back to its host. @public */
+/** One validation failure. `path` is what tells a host WHICH field was wrong. */
+export interface StandardSchemaIssue {
+  readonly message: string;
+  readonly path?: readonly (PropertyKey | { readonly key: PropertyKey })[] | undefined;
+}
+
+/** The type a schema produces, for a definition to hand back to its host. */
 export type InferSchemaOutput<Schema> =
   Schema extends StandardSchemaV1<unknown, infer Output> ? Output : never;
 
@@ -55,12 +67,10 @@ export type InferSchemaOutput<Schema> =
  *
  * `malformed` is not valid JSON at all; `invalid` parsed but did not match the schema; `async`
  * is a schema whose validation returns a promise, which cannot be used here (see below).
- *
- * @public
  */
 export type CustomNodeDataRejection = 'malformed' | 'invalid' | 'async';
 
-/** What {@link parseCustomNodeData} answers. @public */
+/** What {@link parseCustomNodeData} answers. */
 export type CustomNodeDataResult<Output> =
   | { readonly ok: true; readonly value: Output }
   | {
@@ -88,7 +98,9 @@ export const MAX_CUSTOM_NODE_DATA_LENGTH = 256 * 1024;
  * is refused (`async`) rather than awaited, so the limitation is visible instead of silent.
  *
  * A payload with no schema comes back as the parsed JSON, typed `unknown` — the host asked for
- * no guarantees and gets none, rather than getting a lie.
+ * no guarantees and gets none, rather than getting a lie. It is also a NULL-PROTOTYPE object on
+ * that path, where a schema-validated one is whatever the validator rebuilt: `hasOwnProperty`
+ * and `instanceof Object` do not hold on the former.
  */
 export function parseCustomNodeData<Schema extends StandardSchemaV1 | undefined>(
   schema: Schema,
@@ -127,7 +139,7 @@ export function parseCustomNodeData<Schema extends StandardSchemaV1 | undefined>
   if (!schema) return { ok: true, value: cleaned as Value };
 
   const result = schema['~standard'].validate(cleaned);
-  if (result instanceof Promise) {
+  if (isThenable(result)) {
     return {
       ok: false,
       reason: 'async',
@@ -135,12 +147,19 @@ export function parseCustomNodeData<Schema extends StandardSchemaV1 | undefined>
     };
   }
   if (result.issues) {
-    return { ok: false, reason: 'invalid', issues: result.issues.map((issue) => issue.message) };
+    return { ok: false, reason: 'invalid', issues: result.issues.map(describeIssue) };
   }
   return { ok: true, value: result.value as Value };
 }
 
-/** Serialize a payload for a data part. Refuses what cannot round-trip through JSON. */
+/**
+ * Serialize a payload for a data part. Refuses what cannot round-trip through JSON.
+ *
+ * NOT symmetric with {@link parseCustomNodeData}: a key named `__proto__`, `constructor` or
+ * `prototype` is written here and dropped on the way back, because a payload arriving from a
+ * file is the hazard and a payload leaving this process is not. A host that needs those keys
+ * needs a different name for them.
+ */
 export function serializeCustomNodeData(value: unknown): CustomNodeDataResult<string> {
   let raw: string;
   try {
@@ -168,6 +187,32 @@ export function serializeCustomNodeData(value: unknown): CustomNodeDataResult<st
   return { ok: true, value: raw };
 }
 
+/**
+ * Thenable, not `instanceof Promise`: a promise from another realm (a worker, an iframe, a vm
+ * context) fails that check, and the un-awaited value then sails through as an `ok` result
+ * whose `value` is undefined — a result violating its own declared type.
+ */
+function isThenable<T>(value: T | Promise<T>): value is Promise<T> {
+  return typeof (value as { then?: unknown }).then === 'function';
+}
+
+/** `"authors.0.name: expected string"` rather than `"expected string"`. */
+function describeIssue(issue: StandardSchemaIssue): string {
+  const path = (issue.path ?? [])
+    .map((segment) => String(typeof segment === 'object' ? segment.key : segment))
+    .join('.');
+  return path.length > 0 ? `${path}: ${issue.message}` : issue.message;
+}
+
+/**
+ * Keys dropped from a parsed payload, at every depth.
+ *
+ * `__proto__` is the hazard; `constructor` and `prototype` go with it because the deep-merge
+ * helpers that reach for one reach for the others. The cost is real and worth stating: these
+ * are also legitimate data keys, so `{"constructor":"Acme Corp"}` arrives as `{}`, and a schema
+ * requiring that field then fails with a confusing "expected string, received undefined".
+ * Stripping happens BEFORE validation deliberately, so a schema never sees them.
+ */
 const POLLUTING_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 /** Strip the keys that turn an ordinary merge into prototype pollution, at every depth. */

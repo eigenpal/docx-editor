@@ -57,7 +57,8 @@
     "license-check-and-add": "^4.0.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "zod": "^4.4.3"
   },
   "keywords": [
     "docx",

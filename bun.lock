@@ -44,7 +44,6 @@
         "vite": "^8.0.10",
         "vue": "^3.5.29",
         "vue-eslint-parser": "^10.4.0",
-        "zod": "^4.4.3",
       },
     },
     "examples/astro": {
@@ -302,6 +301,7 @@
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
         "typescript": "^5.3.3",
+        "zod": "^4.4.3",
       },
       "peerDependencies": {
         "@docx-editor.dev/core": "^1.0.0",
