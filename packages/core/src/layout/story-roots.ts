@@ -70,3 +70,18 @@ export function noteStoryBlocks(
   if (note.kind !== 'note') return [];
   return collectFlowBlocks(note.children, 0, (block) => acceptStoryBlock(block, displayMode));
 }
+
+/**
+ * Blocks of one `w:txbxContent` node — the story inside a text-box drawing.
+ *
+ * Like a note, a textbox is its own story root laid out independently of the part that
+ * hosts the drawing, so line ids and incremental convergence stay namespaced by drawing
+ * identity.
+ */
+export function textboxStoryBlocks(
+  content: OoxmlNode,
+  displayMode: RevisionDisplayMode = 'all-markup'
+): OoxmlElement[] {
+  if (content.kind === 'textValue') return [];
+  return collectFlowBlocks(content.children, 0, (block) => acceptStoryBlock(block, displayMode));
+}

@@ -315,20 +315,9 @@ export function commentInitials(comment: CommentRecord): string {
     .join('');
 }
 
-/** Paragraph node id → document position, from the TREE rather than from a layout. */
-export function paragraphOrderOfPart(part: OoxmlPart): Map<string, number> {
-  const order = new Map<string, number>();
-  const walk = (node: OoxmlNode, depth: number): void => {
-    if (node.kind === 'textValue' || depth > 64) return;
-    if (node.kind === 'paragraph') {
-      if (!order.has(node.id)) order.set(node.id, order.size);
-      return;
-    }
-    for (const child of node.children) walk(child, depth + 1);
-  };
-  walk(part.root, 0);
-  return order;
-}
+// The store's derivation, re-exported rather than copied: it is memoized on the part root,
+// and a second implementation here paid a full-tree walk per call and shared nothing.
+export { paragraphOrderOfPart } from '@docx-editor.dev/core/store';
 
 /** Every range a decision touches. One card can cover several, in different paragraphs. */
 export function reviewItemRanges(item: ReviewItem): readonly ReviewRange[] {

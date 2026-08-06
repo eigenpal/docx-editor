@@ -155,6 +155,26 @@ describe('computeDrawingGeometry', () => {
     expect(geometry.hitBounds).toEqual(geometry.paintBounds);
   });
 
+  test('sub-1pt extents keep full paintBounds (hairline form-rule bars)', () => {
+    // Regression: cropLocalPoints used Math.max(dim, 1) as the normalization divisor, so a
+    // 0.75pt-tall wp:extent (Word's ~9525 EMU solid fill bars) painted at 0.5625pt and
+    // disappeared as a sub-pixel SVG clip. The floor must only avoid divide-by-zero.
+    const geometry = computeDrawingGeometry({
+      extentWidth: 55.35,
+      extentHeight: 0.75,
+      anchorX: 289.5,
+      anchorY: 16.428,
+      effectExtentEmu: { top: 0, right: 0, bottom: 0, left: 0 },
+      crop: { left: 0, top: 0, right: 0, bottom: 0 },
+      transform: identityTransform,
+      presetGeometry: null,
+    });
+    expect(geometry.contentBounds.height).toBe(0.75);
+    expect(geometry.paintBounds.height).toBeCloseTo(0.75, 6);
+    expect(geometry.paintBounds.width).toBeCloseTo(55.35, 6);
+    expect(geometry.paintBounds.height).not.toBeCloseTo(0.5625, 6);
+  });
+
   test('90-degree rotation moves transformed corners without changing content bounds', () => {
     const geometry = computeDrawingGeometry({
       extentWidth: 40,

@@ -45,6 +45,16 @@ import {
   type OoxmlPart,
 } from './ooxml-tree.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
+import {
+  findDirectChild,
+  parseEmu,
+  projectTextboxStory,
+  projectVectorShape,
+  type TextboxStoryProjection,
+  type VectorShapeProjection,
+} from './drawing-shape-projection.ts';
+
+export type { TextboxStoryProjection, VectorShapeProjection } from './drawing-shape-projection.ts';
 
 export type { DrawingDiagnostic, DrawingProjectionLimits };
 
@@ -190,29 +200,11 @@ export interface DrawingProjection {
   }> | null;
   readonly picture: PictureProjection | null;
   readonly vectorShape: VectorShapeProjection | null;
+  readonly textboxStory: TextboxStoryProjection | null;
   readonly locks: DrawingLocks;
   readonly effects: Readonly<{ grayscale: boolean; brightness: number; contrast: number }>;
   readonly compatibilityBranchNodeId: string | null;
   readonly diagnostics: readonly DrawingDiagnostic[];
-}
-
-/**
- * The renderable subset of a `wps:wsp` non-picture graphic: closed polygon subpaths
- * (`a:custGeom` with move/line/close verbs only, or `a:prstGeom prst="rect"`) with a
- * solid sRGB fill and/or stroke. Anything richer (curves, theme fills, text bodies,
- * rotation) projects as `null` and paints the labelled placeholder instead.
- */
-export interface VectorShapeProjection {
-  /** The drawing extent that frames the subpath coordinate space. */
-  readonly extentEmu: Readonly<{ cx: number; cy: number }>;
-  /** Closed subpath polygons in extent-EMU space; fill rule is even-odd. */
-  readonly subpathsEmu: readonly (readonly Readonly<{ x: number; y: number }>[])[];
-  /** Validated 6-digit sRGB hex (no `#`), or null for no fill. */
-  readonly fillHex: string | null;
-  /** Validated 6-digit sRGB hex (no `#`), or null for no stroke. */
-  readonly strokeHex: string | null;
-  /** Stroke width in EMU; 0 when absent. */
-  readonly strokeWidthEmu: number;
 }
 
 export interface DrawingAccessibility {
@@ -275,11 +267,9 @@ export const DEFAULT_SUPPORTED_MC_REQUIRES: ReadonlySet<string> = new Set([
 ]);
 
 const PIC_GRAPHIC_DATA_URI = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
-const WPS_GRAPHIC_DATA_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
 
 /** Whole-part drawing scan budget — the parsed tree is already store-limit bounded. */
 const MAX_PART_SCAN_ELEMENTS = 1_000_000;
-const MAX_EMU = 2 ** 31 - 1;
 
 const EMPTY_EDGES = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
 const EMPTY_CROP: SourceCrop = Object.freeze({ left: 0, top: 0, right: 0, bottom: 0 });
@@ -394,16 +384,6 @@ function mcAttribute(
   return undefined;
 }
 
-function parseEmu(value: string | undefined, clamp = true): number | null {
-  if (value === undefined || !/^-?\d{1,15}$/.test(value)) return null;
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return null;
-  if (!clamp) return parsed;
-  if (parsed < 0) return 0;
-  if (parsed > MAX_EMU) return MAX_EMU;
-  return parsed;
-}
-
 /** Signed ST_PositionOffset (`xsd:int`) — reject out-of-range values, never clamp. */
 function parsePosOffset(value: string | undefined): number | null {
   if (value === undefined || !/^-?\d+$/.test(value)) return null;
@@ -501,30 +481,6 @@ function isCompatibilityAnchor(node: OoxmlElement): boolean {
       node.namespaceUri === WP_NAMESPACE_URI &&
       (node.localName === 'inline' || node.localName === 'anchor'))
   );
-}
-
-function findDirectChild(
-  nodes: readonly OoxmlNode[],
-  options: {
-    readonly typedKind?: string;
-    readonly namespaceUri?: string;
-    readonly localName?: string;
-  }
-): OoxmlElement | null {
-  for (const node of nodes) {
-    if (!isElement(node)) continue;
-    if (options.typedKind !== undefined && node.kind === options.typedKind) return node;
-    if (
-      options.namespaceUri !== undefined &&
-      options.localName !== undefined &&
-      node.kind === 'generic' &&
-      node.namespaceUri === options.namespaceUri &&
-      node.localName === options.localName
-    ) {
-      return node;
-    }
-  }
-  return null;
 }
 
 function selectCompatibilityBranch(
@@ -1134,179 +1090,6 @@ function readBlipEffects(
   return Object.freeze({ grayscale, brightness, contrast });
 }
 
-const WPS_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
-const SHAPE_HEX_RE = /^[0-9A-Fa-f]{6}$/;
-const MAX_VECTOR_SHAPE_SUBPATHS = 64;
-const MAX_VECTOR_SHAPE_POINTS = 1024;
-
-/** Direct `a:solidFill > a:srgbClr @val` under `parent`; only a validated 6-hex passes. */
-function readSolidFillHex(parent: OoxmlElement): string | null {
-  const solidFill = findDirectChild(parent.children, {
-    namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-    localName: 'solidFill',
-  });
-  if (!solidFill) return null;
-  const srgb = findDirectChild(solidFill.children, {
-    namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-    localName: 'srgbClr',
-  });
-  if (!srgb) return null;
-  const value = schemaAttributeValue(srgb.attributes, 'val');
-  return value !== undefined && SHAPE_HEX_RE.test(value) ? value : null;
-}
-
-/** Polygon subpaths of one `a:path` — move/line/close verbs only; anything else refuses. */
-function readShapePathPolygons(
-  path: OoxmlElement,
-  scaleX: number,
-  scaleY: number,
-  sink: { x: number; y: number }[][],
-  pointBudget: { remaining: number }
-): boolean {
-  let current: { x: number; y: number }[] | null = null;
-  for (const verb of path.children) {
-    if (!isElement(verb)) continue;
-    if (verb.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI) return false;
-    if (verb.localName === 'close') {
-      current = null;
-      continue;
-    }
-    if (verb.localName !== 'moveTo' && verb.localName !== 'lnTo') return false;
-    const pt = findDirectChild(verb.children, {
-      namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-      localName: 'pt',
-    });
-    if (!pt) return false;
-    const x = parseEmu(schemaAttributeValue(pt.attributes, 'x'), false);
-    const y = parseEmu(schemaAttributeValue(pt.attributes, 'y'), false);
-    if (x === null || y === null) return false;
-    const scaled = { x: x * scaleX, y: y * scaleY };
-    if (!Number.isFinite(scaled.x) || !Number.isFinite(scaled.y)) return false;
-    if (pointBudget.remaining <= 0) return false;
-    pointBudget.remaining -= 1;
-    if (verb.localName === 'moveTo' || current === null) {
-      if (sink.length >= MAX_VECTOR_SHAPE_SUBPATHS) return false;
-      current = [scaled];
-      sink.push(current);
-    } else {
-      current.push(scaled);
-    }
-  }
-  return true;
-}
-
-/**
- * Renderable-subset projection of a `wps:wsp` graphic. Returns null (→ placeholder) for
- * text bodies, rotated/flipped transforms, non-solid fills, curves, or over-limit paths.
- */
-function projectVectorShape(
-  anchor: OoxmlElement,
-  extent: Readonly<{ cx: number; cy: number }>,
-  compatibilityMode: boolean
-): VectorShapeProjection | null {
-  void compatibilityMode;
-  if (extent.cx <= 0 || extent.cy <= 0) return null;
-  // Non-picture graphic payloads demote to generic nodes even under a typed
-  // `drawingGraphic`, so the generic lookup is always in play here.
-  const graphic =
-    findDirectKind(anchor.children, 'drawingGraphic') ??
-    findDirectChild(anchor.children, {
-      namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-      localName: 'graphic',
-    });
-  if (!graphic) return null;
-  const data =
-    findDirectKind(graphic.children, 'drawingGraphicData') ??
-    findDirectChild(graphic.children, {
-      namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-      localName: 'graphicData',
-    });
-  if (!data) return null;
-  if (schemaAttributeValue(data.attributes, 'uri') !== WPS_GRAPHIC_DATA_URI) return null;
-  const wsp = findDirectChild(data.children, {
-    namespaceUri: WPS_NAMESPACE_URI,
-    localName: 'wsp',
-  });
-  if (!wsp) return null;
-  if (findDirectChild(wsp.children, { namespaceUri: WPS_NAMESPACE_URI, localName: 'txbx' })) {
-    return null;
-  }
-  const spPr = findDirectChild(wsp.children, {
-    namespaceUri: WPS_NAMESPACE_URI,
-    localName: 'spPr',
-  });
-  if (!spPr) return null;
-  const xfrm = findDirectChild(spPr.children, {
-    namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-    localName: 'xfrm',
-  });
-  if (xfrm) {
-    const rot = schemaAttributeValue(xfrm.attributes, 'rot');
-    if (rot !== undefined && rot !== '0') return null;
-    if (schemaAttributeValue(xfrm.attributes, 'flipH') === '1') return null;
-    if (schemaAttributeValue(xfrm.attributes, 'flipV') === '1') return null;
-  }
-
-  const fillHex = readSolidFillHex(spPr);
-  const ln = findDirectChild(spPr.children, {
-    namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-    localName: 'ln',
-  });
-  const strokeHex = ln ? readSolidFillHex(ln) : null;
-  const strokeWidthEmu =
-    strokeHex !== null ? (parseEmu(schemaAttributeValue(ln!.attributes, 'w')) ?? 12_700) : 0;
-  if (fillHex === null && strokeHex === null) return null;
-
-  const subpaths: { x: number; y: number }[][] = [];
-  const custGeom = findDirectChild(spPr.children, {
-    namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-    localName: 'custGeom',
-  });
-  if (custGeom) {
-    const pathLst = findDirectChild(custGeom.children, {
-      namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-      localName: 'pathLst',
-    });
-    if (!pathLst) return null;
-    const pointBudget = { remaining: MAX_VECTOR_SHAPE_POINTS };
-    for (const child of pathLst.children) {
-      if (!isElement(child)) continue;
-      if (child.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI || child.localName !== 'path') {
-        return null;
-      }
-      const pathW = parseEmu(schemaAttributeValue(child.attributes, 'w')) ?? extent.cx;
-      const pathH = parseEmu(schemaAttributeValue(child.attributes, 'h')) ?? extent.cy;
-      if (pathW <= 0 || pathH <= 0) return null;
-      if (
-        !readShapePathPolygons(child, extent.cx / pathW, extent.cy / pathH, subpaths, pointBudget)
-      ) {
-        return null;
-      }
-    }
-  } else {
-    const prstGeom = findDirectChild(spPr.children, {
-      namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-      localName: 'prstGeom',
-    });
-    if (!prstGeom || schemaAttributeValue(prstGeom.attributes, 'prst') !== 'rect') return null;
-    subpaths.push([
-      { x: 0, y: 0 },
-      { x: extent.cx, y: 0 },
-      { x: extent.cx, y: extent.cy },
-      { x: 0, y: extent.cy },
-    ]);
-  }
-  const polygons = subpaths.filter((points) => points.length >= 3);
-  if (polygons.length === 0) return null;
-  return {
-    extentEmu: { cx: extent.cx, cy: extent.cy },
-    subpathsEmu: polygons,
-    fillHex,
-    strokeHex,
-    strokeWidthEmu,
-  };
-}
-
 function projectPicture(
   anchor: OoxmlElement,
   state: WalkState,
@@ -1483,6 +1266,13 @@ function freezeDrawingProjection(projection: DrawingProjection): DrawingProjecti
           ),
         })
       : null,
+    // `content` is a canonical-tree node shared with the store; it is not deep-frozen here.
+    textboxStory: projection.textboxStory
+      ? Object.freeze({
+          ...projection.textboxStory,
+          insetsEmu: Object.freeze({ ...projection.textboxStory.insetsEmu }),
+        })
+      : null,
     locks: Object.freeze({ ...projection.locks }),
     effects: Object.freeze({ ...projection.effects }),
     diagnostics: Object.freeze(
@@ -1526,6 +1316,7 @@ function buildUnrenderableProjection(
       anchor: null,
       picture: null,
       vectorShape: null,
+      textboxStory: null,
       locks: EMPTY_LOCKS,
       effects: EMPTY_EFFECTS,
       compatibilityBranchNodeId: state.compatibilityBranchNodeId,
@@ -1718,6 +1509,7 @@ export function projectDrawing(
       vectorShape: pictureResult.picture
         ? null
         : projectVectorShape(anchor, extent, compatibilityMode),
+      textboxStory: pictureResult.picture ? null : projectTextboxStory(anchor, extent),
       locks,
       effects: pictureResult.effects,
       compatibilityBranchNodeId: state.compatibilityBranchNodeId,
@@ -1749,10 +1541,17 @@ export function projectRunLevelMcDrawing(
     namespaceScope: context.namespaceScope,
   });
   if (!projection) return null;
-  // An MC-wrapped payload the engine cannot actually draw (textboxes, charts) stays
+  // An MC-wrapped payload the engine cannot actually draw (charts, diagrams, groups) stays
   // invisible like its VML fallback always was — a labelled placeholder card over
-  // letterhead furniture would be noisier than what either branch renders today.
-  if (projection.picture === null && projection.vectorShape === null) return null;
+  // letterhead furniture would be noisier than what either branch renders today. Text boxes
+  // carry a renderable story and pass through.
+  if (
+    projection.picture === null &&
+    projection.vectorShape === null &&
+    projection.textboxStory === null
+  ) {
+    return null;
+  }
   return projection;
 }
 

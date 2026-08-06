@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'DOCX Editor — Open-source DOCX editor for the browser',
     description:
-      'WYSIWYG DOCX editor in the browser. Tables, images, tracked changes, comments. No server required. MIT.',
+      'WYSIWYG DOCX editor in the browser. Tables, images, tracked changes, comments. No server required. Open source.',
     url: '/',
     images: ['/og/docx-icon.png'],
   },

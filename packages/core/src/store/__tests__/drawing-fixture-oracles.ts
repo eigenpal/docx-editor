@@ -40,12 +40,17 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
     },
   },
   'list-pagination-break.docx': {
-    drawingCount: 0,
+    // One MC-wrapped header textbox ("Textbox 1") surfaced when textbox stories became
+    // renderable payloads; it was invisible before the textbox-story-layout change.
+    drawingCount: 1,
     pageCount: 81,
     readyCount: 0,
     placeholderCount: 0,
     assertProjections: (projections) => {
-      expect(projections).toHaveLength(0);
+      expect(projections).toHaveLength(1);
+      expect(projections[0]!.ownerPartName).toBe('/word/header3.xml');
+      expect(projections[0]!.textboxStory).not.toBeNull();
+      expect(projections[0]!.picture).toBeNull();
     },
   },
   'float-wrap-comprehensive-test.docx': {
@@ -123,12 +128,17 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
     },
   },
   'issue-705-anchored-header-letterhead.docx': {
-    drawingCount: 0,
+    // Seven MC-wrapped letterhead textboxes (one body, six header) surfaced when textbox
+    // stories became renderable payloads; all were invisible before textbox-story-layout.
+    drawingCount: 7,
     pageCount: 1,
     readyCount: 0,
     placeholderCount: 0,
     assertProjections: (projections) => {
-      expect(projections).toHaveLength(0);
+      expect(projections).toHaveLength(7);
+      expect(projections.every((p) => p.textboxStory !== null)).toBe(true);
+      expect(projections.every((p) => p.picture === null && p.vectorShape === null)).toBe(true);
+      expect(projections.filter((p) => p.ownerPartName === '/word/document.xml')).toHaveLength(1);
     },
   },
   'wrap-none-positioned-image-demo.docx': {
@@ -233,11 +243,14 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
   'images-nonpicture.docx': {
     drawingCount: 3,
     pageCount: 1,
-    readyCount: 3,
+    // The chart and group still paint through the (mock-ready) resource path; the text box
+    // now renders its story instead, so it is no longer a ready-image element.
+    readyCount: 2,
     placeholderCount: 0,
     assertProjections: (projections) => {
       expectNames(projections, ['chart', 'group', 'textbox']);
       expect(projections.every((p) => p.picture === null)).toBe(true);
+      expect(projections.filter((p) => p.textboxStory !== null)).toHaveLength(1);
       expect(
         projections.flatMap((p) => p.diagnostics).filter((d) => d.code === 'unsupported-graphic')
       ).toHaveLength(3);
@@ -274,6 +287,27 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
     assertProjections: (projections) => {
       expect(projections.some((p) => p.effects.grayscale === true)).toBe(true);
       expect(projections[0]!.wrap).toBe('behind');
+    },
+  },
+  'footer-textbox-page-fields.docx': {
+    // Sanitized multi-section document whose only page numbers live in anchored footer
+    // textboxes (PAGE / NUMPAGES with stale cached results). Per-page field projection is
+    // asserted in layout/__tests__/textbox-story-layout.test.ts; this oracle pins the
+    // package-wide projection census and body-only paint.
+    drawingCount: 14,
+    pageCount: 62,
+    readyCount: 2,
+    placeholderCount: 0,
+    assertProjections: (projections) => {
+      const stories = projections.filter((p) => p.textboxStory !== null);
+      expect(stories).toHaveLength(3);
+      expect(stories.map((p) => p.ownerPartName).sort()).toEqual([
+        '/word/footer1.xml',
+        '/word/footer2.xml',
+        '/word/footer4.xml',
+      ]);
+      expect(projections.filter((p) => p.picture !== null)).toHaveLength(2);
+      expect(projections.filter((p) => p.vectorShape !== null)).toHaveLength(9);
     },
   },
 };

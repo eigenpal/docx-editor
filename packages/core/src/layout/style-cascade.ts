@@ -125,8 +125,18 @@ export interface CascadedParagraphFormatting {
   readonly inheritedParagraphProperties: readonly OoxmlProperty[];
   /** Matching `w:pPr` nodes for nested border resolution. */
   readonly paragraphPropertyNodes: readonly OoxmlNode[];
-  /** Inherited run properties for every run in the paragraph (before direct run `rPr`). */
+  /**
+   * Inherited run properties for CONTENT runs (before direct run `rPr`).
+   *
+   * Does NOT include direct `w:pPr/w:rPr` — that formats the paragraph MARK only
+   * (ECMA-376 §17.3.1.36). Folding mark `w:sz` into content made BodyText runs with no
+   * direct size paint at the mark's size (Selection Notice "or" alternative → 6.5pt).
+   */
   readonly runProperties: readonly OoxmlProperty[];
+  /**
+   * Content cascade plus direct `w:pPr/w:rPr` — empty-line metrics and last-line mark height.
+   */
+  readonly markRunProperties: readonly OoxmlProperty[];
   /**
    * The style this paragraph resolved to, or null when it names none and there is no
    * document default. `w:contextualSpacing` compares neighbours by exactly this.
@@ -550,19 +560,23 @@ export function cascadeParagraphFormatting(
   const directMarkRun = findRunProperties(
     directPPr && isElement(directPPr) ? directPPr : undefined
   );
+  const markProps = propertiesOf(directMarkRun);
 
+  // Content runs: defaults → table → paragraph style. Mark `w:pPr/w:rPr` is NOT content.
   const runProperties: OoxmlProperty[] = [
     ...table.docDefaultsRun,
     ...(tableCellStyle?.runProperties ?? []),
     ...chain.flatMap((style) => style.runProperties),
-    ...propertiesOf(directMarkRun),
   ];
+  const markRunProperties: OoxmlProperty[] =
+    markProps.length === 0 ? runProperties : [...runProperties, ...markProps];
 
   return {
     paragraphProperties,
     inheritedParagraphProperties,
     paragraphPropertyNodes,
     runProperties,
+    markRunProperties,
     styleId: styleId ?? null,
   };
 }
@@ -647,6 +661,11 @@ export interface ParagraphLayoutInputs {
   /** Validated 6-hex paragraph shading fill from cascaded `w:pPr/w:shd`, absent for none. */
   readonly shading: string | undefined;
   readonly inheritedRunProperties: readonly OoxmlProperty[];
+  /**
+   * Paragraph-mark cascade (`inheritedRunProperties` + direct `w:pPr/w:rPr`).
+   * Empty-line sizing and last-line mark height — never content-run face.
+   */
+  readonly markRunProperties: readonly OoxmlProperty[];
   /** Cascaded custom tab stops + default interval for paragraph-flow breaking. */
   readonly tabStops: ResolvedTabStops;
   /**
@@ -681,12 +700,12 @@ export function resolveParagraphLayoutInputs(
     ? cascadeParagraphFormatting(styleCascade, pPr, tableCellStyle)
     : null;
   const props = cascaded ? [...cascaded.paragraphProperties] : propertiesOf(pPr);
-  // Direct `w:pPr/w:rPr` (paragraph mark) must reach empty-line / last-line metrics even
-  // when there is no styles part — cascadeParagraphFormatting already folds it in when a
-  // table is present.
-  const inheritedRunProperties = cascaded
-    ? cascaded.runProperties
-    : propertiesOf(findRunProperties(pPr && isElement(pPr) ? pPr : undefined));
+  // Content vs mark: with a styles table, `cascaded.runProperties` is content-only and
+  // `markRunProperties` carries direct `w:pPr/w:rPr`. Without styles, there is no style
+  // face to inherit — content stays empty and the mark props size empty lines alone.
+  const markOnly = propertiesOf(findRunProperties(pPr && isElement(pPr) ? pPr : undefined));
+  const inheritedRunProperties = cascaded ? cascaded.runProperties : [];
+  const markRunProperties = cascaded ? cascaded.markRunProperties : markOnly;
   const baseIndent = paragraphIndent(props);
   let hanging = 0;
   let firstLine = 0;
@@ -751,6 +770,7 @@ export function resolveParagraphLayoutInputs(
       : paragraphBorders(pPr),
     shading: paragraphShading(props),
     inheritedRunProperties,
+    markRunProperties,
     tabStops,
     tabStopsCacheToken: tabStopsFingerprint(tabStops),
     ...(listItem ? { listItem } : {}),

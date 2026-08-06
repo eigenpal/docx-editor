@@ -231,8 +231,12 @@ function cropLocalPoints(
   const visible = visibleCropRect(sourceWidth, sourceHeight, crop);
   const visibleWidth = visible.right - visible.left;
   const visibleHeight = visible.bottom - visible.top;
-  const safeWidth = Math.max(sourceWidth, 1);
-  const safeHeight = Math.max(sourceHeight, 1);
+  // Guard division by zero only. `Math.max(dim, 1)` used to force a 1pt floor, which
+  // silently scaled every sub-1pt source axis (Word's ~0.75pt form-rule bars) down by
+  // `dim/1` — paintBounds came out 0.5625pt tall for a 0.75pt extent and the SVG clipped
+  // to a sub-pixel box that disappeared on screen.
+  const safeWidth = sourceWidth > 0 ? sourceWidth : 1;
+  const safeHeight = sourceHeight > 0 ? sourceHeight : 1;
   const out: DrawingPoint[] = [];
   const limit = Math.min(points.length, MAX_IMAGE_POLYGON_POINTS);
   for (let index = 0; index < limit; index += 1) {

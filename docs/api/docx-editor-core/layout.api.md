@@ -204,6 +204,7 @@ export function cascadedParagraphBorders(paragraphPropertyNodes: readonly OoxmlN
 // @public
 export interface CascadedParagraphFormatting {
     readonly inheritedParagraphProperties: readonly OoxmlProperty[];
+    readonly markRunProperties: readonly OoxmlProperty[];
     readonly paragraphProperties: readonly OoxmlProperty[];
     readonly paragraphPropertyNodes: readonly OoxmlNode[];
     readonly runProperties: readonly OoxmlProperty[];
@@ -1806,6 +1807,7 @@ export interface ParagraphLayoutInputs {
     readonly inheritedRunProperties: readonly OoxmlProperty[];
     readonly lineSpacing: ParagraphLineSpacing;
     readonly listItem?: ResolvedListItem;
+    readonly markRunProperties: readonly OoxmlProperty[];
     // (undocumented)
     readonly props: OoxmlProperty[];
     readonly shading: string | undefined;
@@ -1836,7 +1838,7 @@ export function paragraphMarkDeleted(paragraph: OoxmlNode): boolean;
 export function paragraphMarkRevisionOf(paragraph: OoxmlNode): RevisionAttribution | null;
 
 // @public
-export function paragraphOrderOfPart(part: OoxmlPart): Map<string, number>;
+export function paragraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, number>;
 
 // @public
 export function paragraphSectionNode(paragraph: OoxmlElement): OoxmlElement | undefined;

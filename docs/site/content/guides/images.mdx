@@ -91,7 +91,10 @@ Alt text uses `@descr`, then `@title`; `@name` is never announced. A picture wit
 Not edited or raster-rendered in this release:
 
 - VML (`w:pict`), except watermarks
-- Charts, SmartArt, groups, canvases, text-box stories: extent + labeled placeholder
+- Charts, SmartArt, groups, canvases: extent + labeled placeholder
+- Anchored text boxes render their story read-only, clipped to the extent (page-number
+  fields inside header/footer text boxes evaluate per page); inline text boxes, linked
+  chains, autofit, and rotation stay placeholders
 - `w:object` / `w:altChunk`: generic preservation with diagnostics
 - Artistic effects (`a:effectLst`), TIFF/EMF/WMF rasterization
 - Tracked-change accept/reject on drawings

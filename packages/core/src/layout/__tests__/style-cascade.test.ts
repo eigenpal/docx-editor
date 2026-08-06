@@ -17,6 +17,8 @@ import { paragraphSpacing } from '../paragraph-style.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { linesOf } from '../semantic-records.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
+import { buildNumberingIndex } from '../numbering-index.ts';
+import { resolveStoryListItems } from '../list-resolve.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -272,6 +274,82 @@ describe('character rStyle cascade and default character style', () => {
       table
     );
     expect(resolveRunStyle(merged)).toMatchObject({ fontSizePt: 11, color: null });
+  });
+});
+
+describe('paragraph-mark rPr does not size content runs', () => {
+  test('direct w:pPr/w:rPr sz stays on the mark cascade only', () => {
+    const styles =
+      DOC_DEFAULTS +
+      `<w:style w:type="paragraph" w:styleId="BodyText"><w:basedOn w:val="Normal"/>` +
+      `<w:rPr><w:sz w:val="20"/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    const cascaded = cascadeParagraphFormatting(
+      table,
+      paragraphPPr(
+        `<w:p><w:pPr><w:pStyle w:val="BodyText"/><w:rPr><w:sz w:val="13"/></w:rPr></w:pPr>` +
+          `<w:r><w:t>next Interest Period</w:t></w:r></w:p>`
+      )
+    );
+    expect(resolveRunStyle(cascaded.runProperties).fontSizePt).toBe(10);
+    expect(resolveRunStyle(cascaded.markRunProperties).fontSizePt).toBe(6.5);
+  });
+
+  test('layout paints BodyText size when content runs omit sz and the mark is 13 half-points', () => {
+    const styles =
+      DOC_DEFAULTS +
+      `<w:style w:type="paragraph" w:styleId="BodyText"><w:basedOn w:val="Normal"/>` +
+      `<w:rPr><w:sz w:val="20"/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    const part = loadDocument(
+      `<w:p><w:pPr><w:pStyle w:val="BodyText"/><w:rPr><w:sz w:val="13"/></w:rPr></w:pPr>` +
+        `<w:r><w:t>[We request that the next Interest Period</w:t></w:r></w:p>`
+    );
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+      styleCascade: table,
+    });
+    expect(linesOf(layout)[0]!.spans[0]!.style.fontSizePt).toBe(10);
+  });
+
+  test('list marker resolution reads markRunProperties and keeps level rPr last', () => {
+    const numberingBody =
+      `<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0">` +
+      `<w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>` +
+      `<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>`;
+    const numberingWithLevelRpr = (rPr: string) => {
+      const result = readOoxmlPart(
+        `<w:numbering xmlns:w="${W}">${numberingBody}${rPr}</w:lvl></w:abstractNum>` +
+          `<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>`,
+        { name: '/word/numbering.xml', contentType: 'app/xml' }
+      );
+      if (!result.ok) throw new Error(result.reason);
+      return buildNumberingIndex(result.part.root);
+    };
+    const styles =
+      DOC_DEFAULTS +
+      `<w:style w:type="paragraph" w:styleId="BodyText"><w:basedOn w:val="Normal"/>` +
+      `<w:rPr><w:sz w:val="20"/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    const listParagraph =
+      `<w:p><w:pPr><w:pStyle w:val="BodyText"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>` +
+      `<w:rPr><w:sz w:val="52"/><w:b/></w:rPr></w:pPr><w:r><w:t>BIG</w:t></w:r></w:p>`;
+    const part = loadDocument(listParagraph);
+    const paragraph = part.root.children.find((child) => child.localName === 'body')!.children[0]!;
+
+    const fromMark = resolveStoryListItems([paragraph], numberingWithLevelRpr(''), table).get(
+      paragraph.id
+    )!;
+    expect(fromMark.markerStyle.fontSizePt).toBe(26);
+    expect(fromMark.markerStyle.bold).toBe(true);
+
+    const fromLevel = resolveStoryListItems(
+      [paragraph],
+      numberingWithLevelRpr('<w:rPr><w:sz w:val="20"/></w:rPr>'),
+      table
+    ).get(paragraph.id)!;
+    expect(fromLevel.markerStyle.fontSizePt).toBe(10);
+    expect(fromLevel.markerStyle.bold).toBe(true);
   });
 });
 

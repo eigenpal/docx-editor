@@ -600,7 +600,8 @@ const defaultContentControlsInCache = new WeakMap<OoxmlNode, readonly ContentCon
 function collectContentControlsIn(
   root: OoxmlNode,
   maxDepth: number,
-  limit: number
+  limit: number,
+  composeFromSubtrees = false
 ): ContentControlEntry[] {
   const entries: ContentControlEntry[] = [];
   const walk = (node: OoxmlNode, depth: number, ancestors: OoxmlContentControlNode[]): void => {
@@ -611,6 +612,23 @@ function collectContentControlsIn(
         if (depth >= maxDepth) continue;
         entries.push({ node: child, depth, ancestors: [...ancestors] });
         walk(child, depth + 1, [...ancestors, child]);
+        continue;
+      }
+      // OUTSIDE any control, a paragraph's or table's entries are a pure function of that
+      // subtree — same depths, same ancestor lists — so an unchanged block hands back its
+      // memoized answer through the per-root cache below instead of being re-descended.
+      // Every transaction gate otherwise re-walked the whole document per keystroke.
+      // Only for the default bounds, which is what the memoized entry point uses; inside a
+      // control the depths and ancestors differ, so composition stops applying there.
+      if (
+        composeFromSubtrees &&
+        depth === 0 &&
+        (child.kind === 'paragraph' || child.kind === 'table')
+      ) {
+        for (const entry of contentControlsIn(child)) {
+          if (entries.length >= limit) return;
+          entries.push(entry);
+        }
         continue;
       }
       walk(child, depth, ancestors);
@@ -646,7 +664,12 @@ export function contentControlsIn(
     const cached = defaultContentControlsInCache.get(root);
     if (cached !== undefined) return cached;
     const entries = freezeContentControlEntries(
-      collectContentControlsIn(root, MAX_CONTENT_CONTROL_NESTING, MAX_CONTENT_CONTROLS_PER_PART)
+      collectContentControlsIn(
+        root,
+        MAX_CONTENT_CONTROL_NESTING,
+        MAX_CONTENT_CONTROLS_PER_PART,
+        true
+      )
     );
     defaultContentControlsInCache.set(root, entries);
     return entries;

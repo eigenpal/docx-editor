@@ -95,5 +95,8 @@ tmp-preview/
 openspec/changes/*/notes/feature-parity-report.json
 dist-types/
 
-# Generated profiling fixture (scripts/create-sample-20x-fixture.mjs)
+# Generated profiling fixtures (scripts/create-sample-20x-fixture.mjs,
+# scripts/create-review-20x-fixture.mjs)
 examples/vite/public/sample-20x.docx
+examples/vite/public/sample-review.docx
+examples/vite/public/sample-review-20x.docx

@@ -37,6 +37,7 @@ import {
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
 import { collectStoryParagraphs, storyRootsOf } from '../package/story-blocks.ts';
 import { paragraphOffsetIndex } from './tree-op-segments.ts';
+import { createRecentRootCache } from './recent-root-cache.ts';
 
 /** The `w15` namespace: `commentsExtended.xml` — thread parent and resolved state. */
 export const W15_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2012/wordml';
@@ -127,7 +128,21 @@ interface MarkerPoint {
  * yielded no anchor at all and reported the comment orphaned; and it gave a note reference or
  * an atomic field nothing where the model gives them one unit each.
  */
-function markersInParagraph(paragraph: OoxmlParagraphNode): MarkerPoint[] {
+function markersInParagraph(paragraph: OoxmlParagraphNode): readonly MarkerPoint[] {
+  // Paragraph-local by construction, like the offset index it reads — an unchanged
+  // paragraph's markers sit at the offsets they sat at last time. Every full anchor pass
+  // otherwise re-walked all paragraphs of the story, comments or none.
+  const cached = markerPointsCache.get(paragraph);
+  if (cached) return cached;
+  const points = computeMarkersInParagraph(paragraph);
+  markerPointsCache.set(paragraph, points);
+  return points;
+}
+
+/** Marker points per immutable paragraph node. */
+const markerPointsCache = new WeakMap<OoxmlParagraphNode, readonly MarkerPoint[]>();
+
+function computeMarkersInParagraph(paragraph: OoxmlParagraphNode): MarkerPoint[] {
   const offsets = paragraphOffsetIndex(paragraph);
   const points: MarkerPoint[] = [];
   const walk = (children: readonly OoxmlNode[], depth: number): void => {
@@ -228,13 +243,26 @@ export function commentAnchorsOfStory(part: OoxmlPart): CommentAnchor[] {
  * offsets these anchors carry are the offsets the ops and the caret use.
  */
 function storyParagraphsOfPart(part: OoxmlPart): readonly OoxmlParagraphNode[] {
+  // Memoized on the immutable root: the enumeration is a pure function of the tree, and the
+  // anchor pass runs once per story part per derivation.
+  const cached = storyParagraphsCache.get(part.root);
+  if (cached) return cached;
   const found: OoxmlNode[] = [];
   for (const story of storyRootsOf(part)) {
     if (story.root.kind === 'textValue') continue;
     collectStoryParagraphs(story.root.children, found, 0);
   }
-  return found.filter((node): node is OoxmlParagraphNode => node.kind === 'paragraph');
+  const paragraphs = found.filter((node): node is OoxmlParagraphNode => node.kind === 'paragraph');
+  storyParagraphsCache.set(part.root, paragraphs);
+  return paragraphs;
 }
+
+/**
+ * Story paragraphs per part root, bounded to recent roots: the undo history retains old
+ * roots by reference, and a plain WeakMap would keep one O(document) array alive per
+ * retained root.
+ */
+const storyParagraphsCache = createRecentRootCache<readonly OoxmlParagraphNode[]>(8);
 
 /**
  * The comments in `word/comments.xml`, in authored order.

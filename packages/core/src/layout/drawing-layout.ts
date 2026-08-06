@@ -503,6 +503,12 @@ export interface AnchoredDrawingRecord extends Omit<
   readonly layoutFallback?: AnchoredDrawingLayoutFallback;
   /** Canonical document traversal index within the owner story part. */
   readonly sourceOrder?: number;
+  /**
+   * Laid-out textbox story for a `wps:txbx` drawing; paint renders it clipped inside the
+   * extent instead of a placeholder. Absent when the drawing carries no story or the host
+   * did not thread story layout (the record then degrades to the placeholder path).
+   */
+  readonly textboxStory?: import('./textbox-story-layout.ts').TextboxStoryLayout;
 }
 
 function isOddPage(pageNumber: number): boolean {
@@ -924,6 +930,7 @@ export function buildAnchoredDrawingRecord(options: {
   readonly resolved: ResolvedAnchoredPosition;
   readonly clipRegion?: LayoutBox;
   readonly sourceOrder?: number;
+  readonly textboxStory?: import('./textbox-story-layout.ts').TextboxStoryLayout | null;
 }): AnchoredDrawingRecord {
   const projection = options.input.projection;
   const anchorMeta = projection.anchor;
@@ -964,6 +971,7 @@ export function buildAnchoredDrawingRecord(options: {
     wrap: projection.wrap === 'inline' ? 'inFront' : projection.wrap,
     ...(options.sourceOrder !== undefined ? { sourceOrder: options.sourceOrder } : {}),
     ...(options.resolved.layoutFallback ? { layoutFallback: options.resolved.layoutFallback } : {}),
+    ...(options.textboxStory ? { textboxStory: options.textboxStory } : {}),
     paintBounds,
     hitBounds,
     geometry: options.clipRegion ? clipGeometryToRegion(geometry, options.clipRegion) : geometry,
@@ -1163,6 +1171,13 @@ export function publishAnchoredDrawingsForParagraph(options: {
   readonly pageClip: LayoutBox;
   readonly measurer?: import('./semantic-records.ts').TextMeasurer;
   readonly sourceOrderOf?: (drawingNodeId: string) => number | undefined;
+  /**
+   * Lays out a textbox drawing's story (host-supplied closure over flow deps and the page
+   * context). Absent hosts degrade textbox drawings to the placeholder path.
+   */
+  readonly layoutTextboxStory?: (
+    projection: DrawingProjection
+  ) => import('./textbox-story-layout.ts').TextboxStoryLayout | null;
 }): readonly AnchoredDrawingRecord[] {
   const atoms = anchoredDrawingAtomsInParagraph(options.paragraph, options.drawingLayout);
   if (atoms.length === 0) return [];
@@ -1217,6 +1232,9 @@ export function publishAnchoredDrawingsForParagraph(options: {
       resolved,
       clipRegion,
       ...(options.sourceOrderOf ? { sourceOrder: options.sourceOrderOf(atom.atomId) } : {}),
+      ...(projection.textboxStory && options.layoutTextboxStory
+        ? { textboxStory: options.layoutTextboxStory(projection) }
+        : {}),
     });
     records.push(record);
   }

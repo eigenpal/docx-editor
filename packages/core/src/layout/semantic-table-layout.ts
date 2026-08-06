@@ -222,6 +222,10 @@ export interface TableFlowDeps {
     DrawingAnchorFrameContext,
     'paragraphBox' | 'anchorLineBox' | 'anchorCharacterX' | 'columnBox' | 'cellBox' | 'layoutInCell'
   >;
+  /** Lays out a textbox drawing's story; absent hosts degrade to the placeholder path. */
+  readonly layoutTextboxStoryFor?: (
+    projection: import('../store/package/drawing-projection.ts').DrawingProjection
+  ) => import('./textbox-story-layout.ts').TextboxStoryLayout | null;
   readonly pageContentClip?: () => import('./semantic-records.ts').LayoutBox;
   readonly collectAnchoredDrawings?: (drawings: readonly AnchoredDrawingRecord[]) => void;
   /** Root anchor sink — preserved when row defer strips {@link collectAnchoredDrawings}. */
@@ -338,6 +342,7 @@ function publishDeferredRowAnchors(
         cellBox,
         pageClip: deps.pageContentClip(),
         measurer: deps.measurer,
+        ...(deps.layoutTextboxStoryFor ? { layoutTextboxStory: deps.layoutTextboxStoryFor } : {}),
       })
     );
   }
@@ -378,6 +383,7 @@ function republishAnchoredParagraphsInBlocks(
         cellBox,
         pageClip: deps.pageContentClip(),
         measurer: deps.measurer,
+        ...(deps.layoutTextboxStoryFor ? { layoutTextboxStory: deps.layoutTextboxStoryFor } : {}),
       })
     );
   }
@@ -545,6 +551,7 @@ function placeCellParagraph(
     borders,
     shading,
     inheritedRunProperties,
+    markRunProperties,
     tabStops: cascadedTabStops,
     tabStopsCacheToken: cascadedTabStopsCacheToken,
   } = resolveParagraphLayoutInputs(
@@ -588,6 +595,7 @@ function placeCellParagraph(
     properties: [
       ...props,
       ...inheritedRunProperties,
+      ...markRunProperties,
       { localName: 'tabStops', attributes: { token: tabStopsCacheToken } },
       ...(listItem ? [{ localName: 'list', attributes: { token: listItem.cacheToken } }] : []),
     ],
@@ -634,6 +642,7 @@ function placeCellParagraph(
       }),
       ...(pageZones.length > 0 ? { pageExclusionZones: pageZones } : {}),
       ...(deps.styleCascade ? { themeFonts: deps.styleCascade.themeFonts } : {}),
+      markRunProperties,
     }
   );
 
@@ -940,6 +949,7 @@ function placeCellParagraph(
           cellBox,
           pageClip: deps.pageContentClip(),
           measurer: deps.measurer,
+          ...(deps.layoutTextboxStoryFor ? { layoutTextboxStory: deps.layoutTextboxStoryFor } : {}),
         })
       );
     }

@@ -40,11 +40,26 @@ const XML_ESCAPES: Record<string, string> = {
   '>': '&gt;',
   '"': '&quot;',
   "'": '&apos;',
+  // A literal CR is normalized away by any conforming parser on re-read (to LF in text, to a
+  // space in attributes), silently breaking round-trip identity — emit the character reference.
+  '\r': '&#xD;',
 };
 
 /** XML-escape a value for validated serialization back into owned OOXML. */
 export function escapeXml(value: string): string {
-  return value.replace(/[&<>"']/g, (c) => XML_ESCAPES[c]);
+  return value.replace(/[&<>"'\r]/g, (c) => XML_ESCAPES[c]);
+}
+
+const XML_ATTRIBUTE_ESCAPES: Record<string, string> = {
+  ...XML_ESCAPES,
+  // Attribute-value normalization also folds literal LF and TAB to spaces on re-read.
+  '\n': '&#xA;',
+  '\t': '&#x9;',
+};
+
+/** XML-escape a value bound for an ATTRIBUTE, preserving CR/LF/TAB across a re-parse. */
+export function escapeXmlAttribute(value: string): string {
+  return value.replace(/[&<>"'\r\n\t]/g, (c) => XML_ATTRIBUTE_ESCAPES[c]);
 }
 
 /** True for a UTF-16 code unit forbidden in XML 1.0 character data: a control char other than
@@ -85,6 +100,14 @@ export function escapeXmlChecked(value: string, what: string): string {
     throw new Error(`${what} must be a string scalar (got ${typeof value})`);
   if (!isValidXmlText(value)) throw new Error(`${what} contains a character not valid in XML 1.0`);
   return escapeXml(value);
+}
+
+/** Validate (fail-closed) then XML-escape an authored value bound for an owned attribute. */
+export function escapeXmlAttributeChecked(value: string, what: string): string {
+  if (typeof value !== 'string')
+    throw new Error(`${what} must be a string scalar (got ${typeof value})`);
+  if (!isValidXmlText(value)) throw new Error(`${what} contains a character not valid in XML 1.0`);
+  return escapeXmlAttribute(value);
 }
 
 /**

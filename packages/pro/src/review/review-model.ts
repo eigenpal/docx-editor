@@ -70,7 +70,7 @@ import {
 export function revisionItemsOfParagraph(
   part: OoxmlPart,
   paragraphId: string
-): ReviewRevisionItem[] {
+): readonly ReviewRevisionItem[] {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return [];
   return revisionItemsOf({

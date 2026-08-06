@@ -1,6 +1,6 @@
 # Drawings fixture manifest
 
-Sixteen inputs for typed-drawings-and-images Task 17: six Word-authored repository fixtures plus ten deterministic builder outputs.
+Seventeen inputs: six Word-authored repository fixtures, ten deterministic builder outputs, and one sanitized Word-authored multi-section document (textbox-story-layout).
 
 Regenerate focused fixtures:
 
@@ -35,6 +35,7 @@ bun e2e/fixtures/build-drawing-fixtures.mjs
 | images-transform.docx | deterministic builder | `313237fe1ef34828…` | three inline drawings / transform paint metadata | not applicable — synthetic OPC |
 | images-compatibility-malformed.docx | deterministic builder | `9a8582879a75fae3…` | demotion/generic preservation / inert unsupported payloads | not applicable — synthetic OPC |
 | images-drawingml-watermark.docx | deterministic builder | `3b41aa8cad33a27e…` | centered watermark anchor / watermark effects paint | not applicable — synthetic OPC |
+| footer-textbox-page-fields.docx | Word-authored, sanitized | `f10deb8c12cc325d…` | footer textbox stories / PAGE-NUMPAGES per page | pending (9.5) |
 
 <!-- DRAWINGS_FIXTURE_MANIFEST
 {
@@ -291,6 +292,24 @@ bun e2e/fixtures/build-drawing-fixtures.mjs
       "wordEvidence": "not applicable — synthetic OPC",
       "tolerance": "fingerprint + digest equality",
       "sha256": "3b41aa8cad33a27e5960b5feaeaeb1dec9a257fa373bcfb9edf4741f0552cd62"
+    },
+    {
+      "file": "footer-textbox-page-fields.docx",
+      "source": "Word-authored, sanitized (length-preserving text scramble, neutral metadata and media)",
+      "version": "Microsoft Word (repository fixture)",
+      "features": [
+        "42 sections",
+        "anchored page-positioned footer textboxes",
+        "PAGE and NUMPAGES fields inside textbox stories",
+        "stale cached field results",
+        "mc:AlternateContent wps/VML pairs"
+      ],
+      "geometry": "A4; page-relative posOffset anchors in footers 1, 2 and 4",
+      "branch": "textbox story layout",
+      "refusal": "cached field text never painted",
+      "wordEvidence": "pending (9.5)",
+      "tolerance": "fingerprint + digest equality",
+      "sha256": "f10deb8c12cc325de75b509e0fa135e996a8b9ca935ea21d874dc6a2056acddd"
     }
   ]
 }

@@ -1879,7 +1879,7 @@ export type ListKind = 'bullet' | 'ordered';
 export function liveDrawingReferenceCount(pkg: OoxmlPackage, partName: string): number;
 
 // @public
-export function locateSites(part: OoxmlPart): Map<string, SiteLocation>;
+export function locateSites(part: OoxmlPart): ReadonlyMap<string, SiteLocation>;
 
 // @public
 export function lockForbidsEdit(lock: ContentControlLock): boolean;
@@ -2881,7 +2881,7 @@ export interface ParagraphOffsetIndex {
 export function paragraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOffsetIndex;
 
 // @public
-export function paragraphOrderOfPart(part: OoxmlPart): Map<string, number>;
+export function paragraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, number>;
 
 // @public
 export function paragraphTextOf(part: OoxmlPart, paragraphId: string): string | null;
@@ -3369,7 +3369,7 @@ export interface RevisionAddress {
 }
 
 // @public
-export function revisionItemsOf(part: OoxmlPart): ReviewRevisionItem[];
+export function revisionItemsOf(part: OoxmlPart): readonly ReviewRevisionItem[];
 
 // @public
 export function runAddressRanges(paragraph: Extract<OoxmlNode, {

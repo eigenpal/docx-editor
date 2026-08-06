@@ -6,7 +6,7 @@
 // stays there, and importers keep reaching everything through that module's re-exports.
 
 import { isValidNCName } from './qname.ts';
-import { escapeXmlChecked } from './sinks.ts';
+import { escapeXmlAttributeChecked, escapeXmlChecked } from './sinks.ts';
 import {
   MC_NAMESPACE_URI,
   MC_QNAME_LIST_ATTRIBUTES,
@@ -394,7 +394,9 @@ function serializeNode(
       true
     );
     const value = controlledQNameValue(attribute, node, bindings, prefixes);
-    out.push(` ${attributeName}="${escapeXmlChecked(value, `attribute ${attributeName}`)}"`);
+    out.push(
+      ` ${attributeName}="${escapeXmlAttributeChecked(value, `attribute ${attributeName}`)}"`
+    );
   }
   const children = significantChildren(node, preserve);
   if (children.length === 0) {

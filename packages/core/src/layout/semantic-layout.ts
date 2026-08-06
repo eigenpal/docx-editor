@@ -168,6 +168,7 @@ import { publishListMarker } from './list-marker.ts';
 import { sameFragments, sameAnchoredDrawings } from './semantic-fragment-signature.ts';
 import { type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
 import { furnitureForSection, layoutMultiSectionDocument } from './multi-section-layout.ts';
+import { layoutTextboxStory } from './textbox-story-layout.ts';
 
 /** Extra full-document layouts after the reflow pass budget to detect a stable 2-cycle. */
 const MAX_DRAWING_EXCLUSION_STABILIZATION_PASSES = 2;
@@ -355,6 +356,7 @@ type PreparedBlock =
       readonly borderGroupKey: string;
       readonly shading: string | undefined;
       readonly inheritedRunProperties: readonly OoxmlProperty[];
+      readonly markRunProperties: readonly OoxmlProperty[];
       readonly tabStops: ResolvedTabStops;
       /** `w:widowControl` / `w:keepNext` / `w:keepLines`, after the style cascade. */
       readonly keeps: ParagraphKeeps;
@@ -814,6 +816,7 @@ function layoutBlocksPass(
         styleId,
         shading,
         inheritedRunProperties,
+        markRunProperties,
       } = preparedParagraph;
       const borders = resolveParagraphBorders(
         block.children.find((child) => child.kind === 'paragraphProperties'),
@@ -842,6 +845,7 @@ function layoutBlocksPass(
           bordersToken === '' ? '' : `${bordersToken}@${indent.left},${indent.left + available}`,
         shading,
         inheritedRunProperties,
+        markRunProperties,
         tabStops,
         keeps: paragraphKeeps(props),
         ...(listItem ? { listItem } : {}),
@@ -850,6 +854,7 @@ function layoutBlocksPass(
           properties: [
             ...props,
             ...inheritedRunProperties,
+            ...markRunProperties,
             { localName: 'tabStops', attributes: { token: tabStopsCacheToken } },
             ...(listItem
               ? [{ localName: 'list', attributes: { token: listItem.cacheToken } }]
@@ -1235,6 +1240,21 @@ function layoutBlocksPass(
     carryDeferredToNextPage();
   };
 
+  // Body textbox stories flow without a page-field context: body PAGE projection stays
+  // deferred, so a PAGE field inside a body text box contributes only its cached result,
+  // consistent with direct body fields today.
+  const layoutTextboxStoryForBody = (
+    projection: import('../store/package/drawing-projection.ts').DrawingProjection
+  ) =>
+    layoutTextboxStory(projection, {
+      measurer,
+      producer,
+      cache,
+      styleCascade,
+      ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+      ...(displayMode ? { displayMode } : {}),
+    });
+
   // Table layout shares the flow's line counter, paragraph cache, and precomputed list
   // items (counters already advanced in document order, including cell paragraphs).
   // Border ownership intervals and vMerge cell visits are budgeted once per pass so nested
@@ -1259,6 +1279,7 @@ function layoutBlocksPass(
       ? {
           anchorFrameBase,
           pageContentClip,
+          layoutTextboxStoryFor: layoutTextboxStoryForBody,
           publishAnchoredDrawings: collectAnchoredDrawings,
           collectAnchoredDrawings,
           columnBoxForParagraph: anchorColumnBox,
@@ -1383,6 +1404,7 @@ function layoutBlocksPass(
         ...(pageZones.length > 0 ? { pageExclusionZones: pageZones } : {}),
         ...(suppressChrome ? { suppressEmptyPlaceholderLine: true } : {}),
         ...(styleCascade ? { themeFonts: styleCascade.themeFonts } : {}),
+        markRunProperties: entry.markRunProperties,
       }
     );
   };
@@ -1858,7 +1880,7 @@ function layoutBlocksPass(
       shading,
       keeps,
     } = entry;
-    let { indent, alignment, inheritedRunProperties } = entry;
+    let { indent, alignment, markRunProperties } = entry;
     let available = entry.available;
     // `w:contextualSpacing` (17.3.1.9) drops the gap between paragraphs of the SAME style.
     // Word's own ListParagraph sets it, so without this every Word-authored list carries a
@@ -1931,7 +1953,7 @@ function layoutBlocksPass(
       indent = next.indent;
       alignment = next.alignment;
       available = next.available;
-      inheritedRunProperties = next.inheritedRunProperties;
+      markRunProperties = next.markRunProperties;
       firstLineOffset = startOffset === 0 ? firstLineOffsetOf(next) : 0;
       lines = [...breakBlock(next, index, startOffset)];
     };
@@ -1940,9 +1962,9 @@ function layoutBlocksPass(
     {
       const lead = collapsedSpaceBefore(spacing.before, previousSpaceAfter);
       const emptyStyle =
-        inheritedRunProperties.length === 0
+        markRunProperties.length === 0
           ? DEFAULT_RUN_STYLE
-          : resolveRunStyle(inheritedRunProperties, styleCascade?.themeFonts);
+          : resolveRunStyle(markRunProperties, styleCascade?.themeFonts);
       const firstTail = lines.length <= 1 ? borderExtent + spacing.after : 0;
       const prospectiveFirstTop = cursorY + lead + topExtent;
       const firstZones = placementZonesForLine(
@@ -2282,6 +2304,7 @@ function layoutBlocksPass(
             pageClip: pageContentClip(),
             measurer,
             sourceOrderOf,
+            layoutTextboxStory: layoutTextboxStoryForBody,
           })
         );
       }

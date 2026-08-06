@@ -154,6 +154,11 @@ export interface ParagraphFlowOptions {
    * would need `cacheToken` folded into those producers too.
    */
   readonly themeFonts?: ThemeFonts;
+  /**
+   * Paragraph-mark cascade for empty-line metrics and last-line mark height.
+   * When omitted, falls back to the content `inheritedRunProperties` argument.
+   */
+  readonly markRunProperties?: readonly OoxmlProperty[];
 }
 
 /** One measurable piece of a paragraph: text carrying one property set. */
@@ -644,10 +649,11 @@ export function breakParagraph(
   /** Carried onto every span so paint and the review surface read one attribution. */
   const revisionsOf = (piece: FieldAwarePiece): { revisions?: readonly RevisionAttribution[] } =>
     piece.revisions === undefined ? {} : { revisions: piece.revisions };
+  // Mark face (CT_PPr/rPr), not content inheritance — a taller mark grows the last line
+  // without shrinking BodyText runs that only inherit the paragraph style.
+  const markProps = flow?.markRunProperties ?? inheritedRunProperties;
   const emptyStyle =
-    inheritedRunProperties.length === 0
-      ? DEFAULT_RUN_STYLE
-      : resolveRunStyle(inheritedRunProperties, flow?.themeFonts);
+    markProps.length === 0 ? DEFAULT_RUN_STYLE : resolveRunStyle(markProps, flow?.themeFonts);
   const rightEdge = indentLeft + available;
   const contentLeft = flow?.contentLeft ?? indentLeft;
   const contentRight = flow?.contentRight ?? rightEdge;
