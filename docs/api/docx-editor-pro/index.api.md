@@ -214,6 +214,22 @@ export function defineCustomNode<Schema extends StandardSchemaV1 | undefined = u
 export type DocumentDestination = 'internal' | 'external';
 
 // @public
+export interface DocumentExportOptions {
+    readonly destination?: DocumentDestination;
+}
+
+// @public
+export type DocumentExportResult = {
+    readonly ok: true;
+    readonly bytes: Uint8Array;
+    readonly unwrapped: number;
+    readonly removed: number;
+} | {
+    readonly ok: false;
+    readonly reason: string;
+};
+
+// @public
 export function encodeCustomNodeTag(prefix: string, name: string, attrs: Readonly<Record<string, string>>): EncodeTagResult;
 
 // @public
@@ -224,25 +240,6 @@ export type EncodeTagResult = {
     readonly ok: false;
     readonly reason: 'tag-overflow';
     readonly length: number;
-};
-
-// @public
-export function exportCustomNodes(bytes: Uint8Array, definitions: readonly AnyCustomNodeDefinition[], options?: ExportCustomNodesOptions): ExportCustomNodesResult;
-
-// @public
-export interface ExportCustomNodesOptions {
-    readonly destination?: DocumentDestination;
-}
-
-// @public
-export type ExportCustomNodesResult = {
-    readonly ok: true;
-    readonly bytes: Uint8Array;
-    readonly unwrapped: number;
-    readonly removed: number;
-} | {
-    readonly ok: false;
-    readonly reason: string;
 };
 
 // @public
@@ -265,6 +262,9 @@ export const MAX_TAG_LENGTH = 64;
 
 // @public
 export function parseCustomNodeData<Schema extends StandardSchemaV1 | undefined>(schema: Schema, raw: string): CustomNodeDataResult<Schema extends StandardSchemaV1 ? InferSchemaOutput<Schema> : unknown>;
+
+// @public
+export function prepareForExport(bytes: Uint8Array, definitions: readonly AnyCustomNodeDefinition[], options?: DocumentExportOptions): DocumentExportResult;
 
 // @public
 export interface ProLicenseOptions {
@@ -298,6 +298,14 @@ export function reviewModule(options?: ReviewModuleOptions): EditorModule;
 
 // @public
 export interface ReviewModuleOptions extends ProLicenseOptions {
+}
+
+// @public
+export function saveForExport(editor: Editor, options?: SaveForExportOptions): Promise<DocumentExportResult>;
+
+// @public
+export interface SaveForExportOptions extends DocumentExportOptions {
+    readonly nodes?: readonly AnyCustomNodeDefinition[];
 }
 
 // @public

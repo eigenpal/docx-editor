@@ -48,11 +48,12 @@ export {
 } from './custom-nodes/define-custom-node.ts';
 export { customNodesOf, type CustomNodesOfOptions } from './custom-nodes/read-custom-nodes.ts';
 export {
-  exportCustomNodes,
+  prepareForExport,
   type DocumentDestination,
-  type ExportCustomNodesOptions,
-  type ExportCustomNodesResult,
+  type DocumentExportOptions,
+  type DocumentExportResult,
 } from './custom-nodes/export-custom-nodes.ts';
+export { saveForExport, type SaveForExportOptions } from './custom-nodes/save-for-export.ts';
 export { CUSTOM_NODE_STORE_ROOT, customNodeNamespace } from './custom-nodes/node-payload.ts';
 export {
   MAX_CUSTOM_NODE_DATA_LENGTH,
