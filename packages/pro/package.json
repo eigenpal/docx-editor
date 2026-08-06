@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/pro",
-  "version": "1.0.0",
+  "version": "2.0.1",
   "description": "Commercial capabilities for @docx-editor.dev: the review module (comments, tracked changes, markup rendering) and custom inline nodes over content controls.",
   "sideEffects": false,
   "type": "module",
@@ -30,8 +30,8 @@
     "license:add": "license-check-and-add add -f license-check.json"
   },
   "peerDependencies": {
-    "@docx-editor.dev/core": "^1.0.0",
-    "@docx-editor.dev/react": "^1.0.0",
+    "@docx-editor.dev/core": "^2.0.1",
+    "@docx-editor.dev/react": "^2.0.1",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0"
   },

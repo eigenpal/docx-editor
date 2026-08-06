@@ -331,6 +331,8 @@ export function normalizeParagraphIdentity(part: OoxmlPart): OoxmlPart {
     root = freezeElement({ ...root, namespaceBindings: bindings, attributes } as OoxmlElement);
   }
 
-  const normalized: OoxmlPart = { ...part, root };
+  // Frozen like every part the edit primitives publish — layout memos key on part identity,
+  // and the freeze discipline is what makes that identity trustworthy.
+  const normalized: OoxmlPart = Object.freeze({ ...part, root });
   return validateOoxmlPart(normalized).ok ? normalized : part;
 }

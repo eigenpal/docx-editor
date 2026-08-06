@@ -94,3 +94,6 @@ examples/vue/public/DC_Template_Descricao_Cargo_Controlado_Enterprise.docx
 tmp-preview/
 openspec/changes/*/notes/feature-parity-report.json
 dist-types/
+
+# Generated profiling fixture (scripts/create-sample-20x-fixture.mjs)
+examples/vite/public/sample-20x.docx

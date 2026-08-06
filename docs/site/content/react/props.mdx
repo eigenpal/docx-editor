@@ -1,11 +1,11 @@
 ---
 title: 'Props'
 description: 'Reference for the current React root props and ref: document source, chrome toggles, menu integration, callbacks, and the shared imperative handle.'
-category: "React"
+category: 'React'
 order: 31
 ---
 
-`<DocxEditor>` is the packaged host over the v2 provider primitives. The full generated reference is at [/docs/2.x/api/react](/docs/2.x/api/react); this page groups the current root props by how you actually wire the editor.
+`<DocxEditor>` is the packaged host over the provider primitives. The full generated reference is at [/docs/2.x/api/react](/docs/2.x/api/react); this page groups the current root props by how you actually wire the editor.
 
 ## Document and mount state
 
@@ -30,9 +30,9 @@ const bytes = new Uint8Array(await fetch('/template.docx').then((r) => r.arrayBu
 
 `modules` registers capability modules at construction. It is how [`@docx-editor.dev/pro`](/docs/2.x/pro) adds tracked changes, comments, and custom nodes.
 
-| Prop      | Type              | Description                                             |
-| --------- | ----------------- | ------------------------------------------------------- |
-| `modules` | `EditorModule[]`  | Capability modules, read once when the editor is built. |
+| Prop      | Type             | Description                                             |
+| --------- | ---------------- | ------------------------------------------------------- |
+| `modules` | `EditorModule[]` | Capability modules, read once when the editor is built. |
 
 Registration happens at construction, like `mode`, so the array identity has to be stable. Build it outside the component or memoize it, or the editor rebuilds on every render:
 
@@ -51,21 +51,22 @@ Without a module the editor still opens a document that carries revisions and co
 
 These props control the packaged frame around the painted document.
 
-| Prop                                         | Type                                    | Description                                                                                     |
-| -------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `chrome`                                     | `boolean`                               | Render the packaged title bar, menu, toolbar, and navigation. Set `false` for the bare surface. |
-| `title`                                      | `string`                                | Document title shown in the title bar.                                                          |
-| `onTitleChange`                              | `(title) => void`                       | Makes the title editable.                                                                       |
-| `renderTitleBarLeft` / `renderTitleBarRight` | `() => ReactNode`                       | Host-owned title-bar slots.                                                                     |
-| `colorMode`                                  | `'light' \| 'dark' \| 'system'`         | Chrome-only theming mode.                                                                       |
-| `menu`                                       | `boolean \| DocxEditorMenuProps`        | Toggle or customize the packaged menu bar.                                                      |
-| `navigation`                                 | `boolean`                               | Toggle the packaged navigation pane.                                                            |
-| `hyperlinkPopup`                             | `boolean`                               | Toggle the packaged link popover.                                                               |
-| `contextMenu`                                | `boolean \| DocxEditorContextMenuProps` | Toggle or customize the packaged context menu.                                                  |
+| Prop                                         | Type                                    | Description                                                                                      |
+| -------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `chrome`                                     | `boolean`                               | Render the packaged title bar, menu, toolbar, and navigation. Set `false` for the bare surface.  |
+| `title`                                      | `string`                                | Document title shown in the title bar.                                                           |
+| `onTitleChange`                              | `(title) => void`                       | Makes the title editable.                                                                        |
+| `renderTitleBarLeft` / `renderTitleBarRight` | `() => ReactNode`                       | Host-owned title-bar slots.                                                                      |
+| `colorMode`                                  | `'light' \| 'dark' \| 'system'`         | Light, dark, or OS-following theme.                                                              |
+| `menu`                                       | `boolean \| DocxEditorMenuProps`        | Toggle or customize the packaged menu bar.                                                       |
+| `navigation`                                 | `boolean`                               | Toggle the packaged navigation pane.                                                             |
+| `hyperlinkPopup`                             | `boolean`                               | Toggle the packaged link popover.                                                                |
+| `contextMenu`                                | `boolean \| DocxEditorContextMenuProps` | Toggle or customize the packaged context menu.                                                   |
+| `t`                                          | `(key, params?) => string`              | Label resolver for the packaged chrome; receives interpolation params for counters and the like. |
 
 ## Appearance (dark mode)
 
-`colorMode` controls the editor chrome only; the document canvas stays Word-faithful. Drive it from your own UI:
+`colorMode` themes the editor chrome and renders the document canvas the way Word's dark view does. It never changes the document itself: saving and printing are unaffected. Drive it from your own UI:
 
 ```tsx
 const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
@@ -111,16 +112,17 @@ keep the prop's identity stable, or the editor rebuilds on every render:
 import { DocxEditor, useFonts } from '@docx-editor.dev/react';
 import { googleFonts } from '@docx-editor.dev/fonts/google';
 
-const fonts = useFonts(googleFonts());
-
-<DocxEditor document={bytes} fonts={fonts} />;
+function Editor({ bytes }: { bytes: Uint8Array }) {
+  const fonts = useFonts(googleFonts());
+  return <DocxEditor document={bytes} fonts={fonts} />;
+}
 ```
 
 A resolver that fetches makes opening a document perform network requests, which the
 editor never does on its own. Read the guide before reaching for one.
 
-See the [Fonts and measurement](/docs/2.x/guides/fonts) guide for the three font
-sources, on-demand resolution, how they compose, and how to supply your own faces with
+See the [Fonts and measurement](/docs/2.x/guides/fonts) guide for the font sources,
+on-demand resolution, how they compose, and how to supply your own faces with
 `loadFonts`.
 
 ## Title bar customization

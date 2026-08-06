@@ -43,9 +43,9 @@
     "save": "Speichern",
     "saveShortcut": "Strg+S",
     "watermark": "Wasserzeichen",
-    "break": null,
-    "sectionBreakContinuous": null,
-    "sectionBreakNextPage": null,
+    "break": "Umbruch",
+    "sectionBreakContinuous": "Abschnittsumbruch (fortlaufend)",
+    "sectionBreakNextPage": "Abschnittsumbruch (nächste Seite)",
     "insertFootnote": "Fußnote einfügen",
     "insertEndnote": "Endnote einfügen"
   },
@@ -88,10 +88,10 @@
     "clearFormatting": "Formatierung löschen",
     "commentsAndChanges": "Kommentare & Änderungen",
     "moreItems": "{count, plural, one {# weiteres Element} other {# weitere Elemente}}",
-    "unavailableInPreview": null,
-    "more": null,
-    "altText": null,
-    "imageWrap": null
+    "unavailableInPreview": "In dieser Vorschauversion nicht verfügbar",
+    "more": "Mehr",
+    "altText": "Alternativtext",
+    "imageWrap": "Textumbruch"
   },
   "alignment": {
     "alignLeft": "Linksbündig",
@@ -118,10 +118,10 @@
     "lineSpacingTitle": "Zeilenabstand: {label}",
     "blockSpacingRules": "Absatzabstand",
     "label": "Zeilenabstand",
-    "addSpaceAfter": null,
-    "addSpaceBefore": null,
-    "removeSpaceAfter": null,
-    "removeSpaceBefore": null
+    "addSpaceAfter": "Abstand nach Absatz hinzufügen",
+    "addSpaceBefore": "Abstand vor Absatz hinzufügen",
+    "removeSpaceAfter": "Abstand nach Absatz entfernen",
+    "removeSpaceBefore": "Abstand vor Absatz entfernen"
   },
   "styles": {
     "selectAriaLabel": "Absatzformatvorlage auswählen",
@@ -138,7 +138,7 @@
     "serif": "Serif",
     "monospace": "Monospace",
     "other": "Andere",
-    "documentFonts": null
+    "documentFonts": "Dokumentschriftarten"
   },
   "fontSize": {
     "decrease": "Schriftgrad verkleinern",
@@ -204,38 +204,38 @@
       "lightMagenta": "Hell-Magenta",
       "brightGreen": "Hellgrün",
       "violet": "Violett",
-      "darkCyan": null,
-      "darkMagenta": null,
-      "lightGray": null
+      "darkCyan": "Dunkelcyan",
+      "darkMagenta": "Dunkel-Magenta",
+      "lightGray": "Hellgrau"
     },
-    "apply": null,
+    "apply": "Übernehmen",
     "theme": {
-      "accent1": null,
-      "accent2": null,
-      "accent3": null,
-      "accent4": null,
-      "accent5": null,
-      "accent6": null,
-      "background1": null,
-      "background2": null,
-      "darker25": null,
-      "darker50": null,
-      "lighter40": null,
-      "lighter60": null,
-      "lighter80": null,
-      "text1": null,
-      "text2": null,
-      "lighter50": null,
-      "lighter35": null,
-      "lighter25": null,
-      "lighter15": null,
-      "lighter5": null,
-      "darker5": null,
-      "darker10": null,
-      "darker15": null,
-      "darker35": null,
-      "darker75": null,
-      "darker90": null
+      "accent1": "Akzent 1",
+      "accent2": "Akzent 2",
+      "accent3": "Akzent 3",
+      "accent4": "Akzent 4",
+      "accent5": "Akzent 5",
+      "accent6": "Akzent 6",
+      "background1": "Hintergrund 1",
+      "background2": "Hintergrund 2",
+      "darker25": "Dunkler 25 %",
+      "darker50": "Dunkler 50 %",
+      "lighter40": "Heller 40 %",
+      "lighter60": "Heller 60 %",
+      "lighter80": "Heller 80 %",
+      "text1": "Text 1",
+      "text2": "Text 2",
+      "lighter50": "Heller 50 %",
+      "lighter35": "Heller 35 %",
+      "lighter25": "Heller 25 %",
+      "lighter15": "Heller 15 %",
+      "lighter5": "Heller 5 %",
+      "darker5": "Dunkler 5 %",
+      "darker10": "Dunkler 10 %",
+      "darker15": "Dunkler 15 %",
+      "darker35": "Dunkler 35 %",
+      "darker75": "Dunkler 75 %",
+      "darker90": "Dunkler 90 %"
     }
   },
   "dialogs": {
@@ -425,9 +425,9 @@
         "b5": "B5 (6,93\" × 9,84\")",
         "executive": "Executive (7,25\" × 10,5\")"
       },
-      "applyTo": null,
-      "applyToDocument": null,
-      "applyToSection": null
+      "applyTo": "Übernehmen für",
+      "applyToDocument": "Gesamtes Dokument",
+      "applyToSection": "Aktuellen Abschnitt"
     },
     "tableProperties": {
       "title": "Tabelleneigenschaften",
@@ -658,8 +658,8 @@
       "custom": "Benutzerdefiniert"
     },
     "updateTableOfContents": "Inhaltsverzeichnis aktualisieren",
-    "editCustomNode": null,
-    "removeCustomNode": null
+    "editCustomNode": "{label} bearbeiten",
+    "removeCustomNode": "{label} entfernen"
   },
   "documentOutline": {
     "ariaLabel": "Dokumentgliederung",
@@ -738,23 +738,23 @@
       "gridTable4Accent5": "Rastertabelle 4 Akzent 5",
       "gridTable4Accent6": "Rastertabelle 4 Akzent 6"
     },
-    "selectTable": null,
+    "selectTable": "Gesamte Tabelle auswählen",
     "borderStyles": {
-      "dashed": null,
-      "dotted": null,
-      "double": null,
-      "single": null,
-      "thick": null,
-      "triple": null
+      "dashed": "Gestrichelt",
+      "dotted": "Gepunktet",
+      "double": "Doppelt",
+      "single": "Durchgezogen",
+      "thick": "Dick",
+      "triple": "Dreifach"
     },
     "borderWidths": {
-      "halfPt": null,
-      "oneHalfPt": null,
-      "onePt": null,
-      "threePt": null,
-      "twoPt": null
+      "halfPt": "0,5 pt",
+      "oneHalfPt": "1,5 pt",
+      "onePt": "1 pt",
+      "threePt": "3 pt",
+      "twoPt": "2 pt"
     },
-    "clearCellFill": null
+    "clearCellFill": "Zellenfüllung entfernen"
   },
   "tableAdvanced": {
     "verticalAlignment": "Vertikale Ausrichtung",
@@ -819,20 +819,20 @@
       "squareLeft": "Bild links, Text fließt rechts",
       "squareRight": "Bild rechts, Text fließt links"
     },
-    "square": null,
+    "square": "Quadrat",
     "targets": {
-      "behind": null,
-      "inFront": null,
-      "inline": null,
-      "square": null,
-      "squareLeft": null,
-      "squareRight": null,
-      "through": null,
-      "tight": null,
-      "topAndBottom": null
+      "behind": "Hinter den Text",
+      "inFront": "Vor den Text",
+      "inline": "Mit Text in Zeile",
+      "square": "Quadrat",
+      "squareLeft": "Quadrat links",
+      "squareRight": "Quadrat rechts",
+      "through": "Transparent",
+      "tight": "Eng",
+      "topAndBottom": "Oben und unten"
     },
-    "through": null,
-    "tight": null
+    "through": "Transparent",
+    "tight": "Eng"
   },
   "responsePreview": {
     "loading": "{action}...",
@@ -861,7 +861,7 @@
     "linkRemoved": "Link entfernt",
     "linkCopied": "Link in Zwischenablage kopiert",
     "failedToSave": "Dokument konnte nicht gespeichert werden",
-    "fontSubstitutionNotice": null
+    "fontSubstitutionNotice": "Einige Schriftarten in diesem Dokument sind nicht verfügbar, daher werden Ersatzschriftarten angezeigt: {fonts}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Anzuzeigender Text",
@@ -869,15 +869,15 @@
     "copyLink": "Link kopieren",
     "editLink": "Link bearbeiten",
     "removeLink": "Link entfernen",
-    "apply": null,
-    "bookmarkTarget": null,
-    "cancel": null,
-    "editTitle": null,
-    "inertTarget": null,
-    "insertTitle": null,
-    "openLink": null,
-    "refused": null,
-    "urlLabel": null
+    "apply": "Übernehmen",
+    "bookmarkTarget": "Führt zu einer Stelle in diesem Dokument",
+    "cancel": "Abbrechen",
+    "editTitle": "Link bearbeiten",
+    "inertTarget": "Dieser Link verweist auf ein Ziel, das der Editor nicht öffnet",
+    "insertTitle": "Link einfügen",
+    "openLink": "Link öffnen",
+    "refused": "Der Link konnte nicht übernommen werden. Überprüfen Sie die Adresse, und versuchen Sie es erneut.",
+    "urlLabel": "URL"
   },
   "headerFooter": {
     "header": "Kopfzeile",
@@ -908,21 +908,21 @@
     "insertPageXofY": "Seite X von Y einfügen",
     "pageXofYLabel": "Seite",
     "pageXofYSeparator": "von",
-    "pageNumbers": null
+    "pageNumbers": "Seitenzahlen"
   },
   "image": {
     "placeholder": "Bildplatzhalter",
     "placeholderText": "[Grafik]",
     "editableAriaLabel": "Bearbeitbares Bild",
-    "contentMismatch": null,
-    "decodeFailed": null,
-    "externalResource": null,
-    "invalidResource": null,
-    "missingResource": null,
-    "nonPictureGraphic": null,
-    "pendingResource": null,
-    "resourceLimit": null,
-    "unsupportedFormat": null
+    "contentMismatch": "Der Bildinhalt stimmt nicht mit dem Bildtyp überein",
+    "decodeFailed": "Das Bild konnte nicht decodiert werden",
+    "externalResource": "Externes Bild nicht geladen",
+    "invalidResource": "Ungültiges Bild",
+    "missingResource": "Bild fehlt",
+    "nonPictureGraphic": "Nicht unterstützte Grafik ({kind})",
+    "pendingResource": "Bild wird geladen",
+    "resourceLimit": "Bild überschreitet die Größenbeschränkung",
+    "unsupportedFormat": "Nicht unterstütztes Bildformat ({format})"
   },
   "ruler": {
     "horizontal": "Horizontales Lineal",
@@ -932,7 +932,7 @@
     "rightIndent": "Rechter Einzug",
     "topMargin": "Oberer Seitenrand",
     "bottomMargin": "Unterer Seitenrand",
-    "hangingIndent": null
+    "hangingIndent": "Hängender Einzug"
   },
   "print": {
     "label": "Drucken",
@@ -960,85 +960,85 @@
     "rotate": "Drehen",
     "replaceImage": "Bild ersetzen…",
     "handle": {
-      "e": null,
-      "n": null,
-      "ne": null,
-      "nw": null,
-      "s": null,
-      "se": null,
-      "sw": null,
-      "w": null
+      "e": "Größe ändern (rechte Kante)",
+      "n": "Größe ändern (obere Kante)",
+      "ne": "Größe ändern (obere rechte Ecke)",
+      "nw": "Größe ändern (obere linke Ecke)",
+      "s": "Größe ändern (untere Kante)",
+      "se": "Größe ändern (untere rechte Ecke)",
+      "sw": "Größe ändern (untere linke Ecke)",
+      "w": "Größe ändern (linke Kante)"
     },
-    "selection": null
+    "selection": "Ausgewähltes Bild"
   },
   "revisions": {
-    "cellDeleted": null,
-    "cellInserted": null,
-    "cellMerged": null,
-    "cellPropertiesChanged": null,
-    "paragraphMarkDeleted": null,
-    "paragraphMarkInserted": null,
-    "paragraphPropertiesChanged": null,
-    "rowDeleted": null,
-    "rowInserted": null,
-    "rowPropertiesChanged": null,
-    "tablePropertiesChanged": null,
-    "tableDeleted": null,
-    "tableInserted": null,
-    "runPropertiesChanged": null
+    "cellDeleted": "Zelle gelöscht",
+    "cellInserted": "Zelle eingefügt",
+    "cellMerged": "Zellen verbunden",
+    "cellPropertiesChanged": "Zelleneigenschaften geändert",
+    "paragraphMarkDeleted": "Absatzmarke gelöscht",
+    "paragraphMarkInserted": "Absatzmarke eingefügt",
+    "paragraphPropertiesChanged": "Absatzeigenschaften geändert",
+    "rowDeleted": "Zeile gelöscht",
+    "rowInserted": "Zeile eingefügt",
+    "rowPropertiesChanged": "Zeileneigenschaften geändert",
+    "tablePropertiesChanged": "Tabelleneigenschaften geändert",
+    "tableDeleted": "Tabelle gelöscht",
+    "tableInserted": "Tabelle eingefügt",
+    "runPropertiesChanged": "Textformatierung geändert"
   },
   "toc": {
-    "updatePrompt": null,
+    "updatePrompt": "Dieses Dokument enthält ein Inhaltsverzeichnis, das nicht mehr aktuell ist. Jetzt neu erstellen?",
     "refresh": "Gesamtes Verzeichnis aktualisieren",
     "refreshPageNumbers": "Nur Seitenzahlen aktualisieren"
   },
   "app": {
-    "name": null,
-    "newDocument": null,
-    "by": null,
-    "framework": null,
-    "theme": null
+    "name": "DOCX-Editor",
+    "newDocument": "Neu",
+    "by": "von EigenPal",
+    "framework": "Framework",
+    "theme": "Design"
   },
   "editingMode": {
-    "editing": null,
-    "label": null,
-    "editingHint": null,
-    "suggesting": null,
-    "suggestingHint": null,
-    "viewing": null,
-    "viewingHint": null
+    "editing": "Bearbeiten",
+    "label": "Bearbeitungsmodus",
+    "editingHint": "Dokument direkt bearbeiten",
+    "suggesting": "Vorschlagen",
+    "suggestingHint": "Änderungen werden zu Vorschlägen",
+    "viewing": "Anzeigen",
+    "viewingHint": "Schreibgeschützt, keine Änderungen"
   },
   "navigation": {
-    "ariaLabel": null,
-    "closeAriaLabel": null,
-    "closeTitle": null,
+    "ariaLabel": "Dokumentnavigation",
+    "closeAriaLabel": "Navigation schließen",
+    "closeTitle": "Navigation schließen",
     "find": {
-      "clearAriaLabel": null,
-      "counter": null,
-      "counterTruncated": null,
-      "inputAriaLabel": null,
-      "matchCase": null,
-      "nextAriaLabel": null,
-      "noResults": null,
-      "optionsAriaLabel": null,
-      "placeholder": null,
-      "previousAriaLabel": null,
-      "resultsAriaLabel": null,
-      "searching": null,
-      "wholeWord": null,
-      "total": null,
-      "totalTruncated": null
+      "clearAriaLabel": "Suche löschen",
+      "counter": "Ergebnis {current} von {total}",
+      "counterTruncated": "Ergebnis {current} von {total}+",
+      "inputAriaLabel": "Dokument durchsuchen",
+      "matchCase": "Groß-/Kleinschreibung beachten",
+      "nextAriaLabel": "Nächstes Ergebnis",
+      "noResults": "Keine Ergebnisse",
+      "optionsAriaLabel": "Suchoptionen",
+      "placeholder": "Dokument durchsuchen",
+      "previousAriaLabel": "Vorheriges Ergebnis",
+      "resultsAriaLabel": "Suchergebnisse",
+      "searching": "Suche läuft…",
+      "wholeWord": "Nur ganze Wörter",
+      "total": "{total, plural, one {# Ergebnis} other {# Ergebnisse}}",
+      "totalTruncated": "{total, plural, other {#+ Ergebnisse}}"
     },
     "headings": {
-      "noHeadings": null
+      "noHeadings": "Keine Überschriften gefunden. Fügen Sie dem Dokument Überschriften hinzu, um sie hier zu sehen."
     },
-    "openAriaLabel": null,
-    "openTitle": null,
+    "openAriaLabel": "Navigation öffnen",
+    "openTitle": "Navigation",
     "tabs": {
-      "find": null,
-      "headings": null
+      "find": "Suchen",
+      "headings": "Überschriften"
     },
-    "title": null
+    "title": "Navigation"
   },
   "contentControl": {
     "formFill": "Formularfüllmodus",
@@ -1097,62 +1097,62 @@
     "inheritedValue": "(geerbt)"
   },
   "review": {
-    "accept": null,
-    "ariaLabel": null,
-    "commentRefused": null,
-    "deleted": null,
-    "empty": null,
-    "inserted": null,
-    "movedFrom": null,
-    "movedTo": null,
-    "reject": null,
-    "replaced": null,
-    "replacedWith": null,
-    "reply": null,
-    "replyRefused": null,
-    "showPane": null,
-    "structural": null,
-    "deleteComment": null,
-    "discardChange": null
+    "accept": "Annehmen",
+    "ariaLabel": "Überprüfen",
+    "commentRefused": "Der Kommentar konnte nicht hinzugefügt werden",
+    "deleted": "Gelöscht",
+    "empty": "Keine Änderungen oder Kommentare",
+    "inserted": "Hinzugefügt",
+    "movedFrom": "Von hier verschoben",
+    "movedTo": "Hierhin verschoben",
+    "reject": "Ablehnen",
+    "replaced": "Ersetzt",
+    "replacedWith": "durch",
+    "reply": "Antworten",
+    "replyRefused": "Die Antwort konnte nicht gesendet werden",
+    "showPane": "Kommentare anzeigen",
+    "structural": "Dokumentstruktur geändert",
+    "deleteComment": "Kommentar löschen",
+    "discardChange": "Änderung verwerfen"
   },
   "imageAltText": {
-    "description": null,
-    "panelTitle": null,
-    "title": null
+    "description": "Beschreibung",
+    "panelTitle": "Alternativtext",
+    "title": "Titel"
   },
   "imageInsert": {
     "errors": {
-      "emptyFile": null,
-      "invalidSignature": null,
-      "oversize": null,
-      "refused": null,
-      "unsupportedFormat": null
+      "emptyFile": "Die ausgewählte Datei ist leer.",
+      "invalidSignature": "Die Datei ist kein unterstütztes PNG-, JPEG- oder GIF-Bild.",
+      "oversize": "Das Bild überschreitet die maximal zulässige Größe.",
+      "refused": "Das Bild konnte nicht eingefügt werden.",
+      "unsupportedFormat": "Dieses Bildformat wird beim Einfügen nicht unterstützt."
     }
   },
   "imageProperties": {
-    "crop": null,
-    "cropBottom": null,
-    "cropLeft": null,
-    "cropRight": null,
-    "cropTop": null,
+    "crop": "Zuschneiden",
+    "cropBottom": "Unten (%)",
+    "cropLeft": "Links (%)",
+    "cropRight": "Rechts (%)",
+    "cropTop": "Oben (%)",
     "errors": {
-      "invalidCrop": null,
-      "invalidDimensions": null,
-      "refused": null,
-      "invalidPosition": null
+      "invalidCrop": "Zuschneidewerte müssen Prozentwerte zwischen 0 und 100 sein.",
+      "invalidDimensions": "Geben Sie positive Werte für Breite und Höhe ein.",
+      "refused": "Diese Eigenschaften konnten nicht übernommen werden.",
+      "invalidPosition": "Geben Sie gültige Werte für die horizontale und vertikale Position ein."
     },
-    "hyperlink": null,
-    "nonPictureHint": null,
-    "resetNaturalSize": null,
+    "hyperlink": "Hyperlink",
+    "nonPictureHint": "Zuschneiden und Zurücksetzen auf Originalgröße sind nur bei Bildern verfügbar.",
+    "resetNaturalSize": "Auf Originalgröße zurücksetzen",
     "units": {
-      "points": null
+      "points": "pt"
     },
-    "horizontalOffset": null,
-    "position": null,
-    "positionLocked": null,
-    "positionUnavailable": null,
-    "relativeToHorizontal": null,
-    "relativeToVertical": null,
-    "verticalOffset": null
+    "horizontalOffset": "Horizontaler Versatz",
+    "position": "Position",
+    "positionLocked": "Diese Zeichnung kann nicht verschoben werden.",
+    "positionUnavailable": "Die Position ist nur bei frei beweglichen Bildern verfügbar.",
+    "relativeToHorizontal": "Relativ zu (horizontal)",
+    "relativeToVertical": "Relativ zu (vertikal)",
+    "verticalOffset": "Vertikaler Versatz"
   }
 }

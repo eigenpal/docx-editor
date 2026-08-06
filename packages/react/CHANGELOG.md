@@ -1,5 +1,70 @@
 # @eigenpal/docx-js-editor
 
+## 2.0.1
+
+### Patch Changes
+
+- Updated dependencies [51f14f5]
+  - @docx-editor.dev/core@2.0.1
+  - @docx-editor.dev/i18n@2.0.1
+
+## 2.0.0
+
+### Major Changes
+
+- 26095c6: Initial release.
+
+  A WYSIWYG `.docx` editor that runs entirely in the browser: it opens a Word file, paints
+  the real paginated layout, edits it in place, and writes a `.docx` back out.
+  - `@docx-editor.dev/react` — the React adapter. `<DocxEditor document={bytes} />` for the
+    packaged editor, or compose `DocxEditor.Root` / `.Viewport` / `.Content` with the hooks
+    (`useEditorState`, `useEditorCommand`, `useDocxEditor`) to build your own chrome.
+  - `@docx-editor.dev/core` — the framework-agnostic engine: OPC/XML reading, the canonical
+    OOXML tree, layout, paint, and the `Editor` contract the adapters render.
+  - `@docx-editor.dev/i18n` — the shared string catalogue, with nine locales.
+  - `@docx-editor.dev/editor-api` — a batching document object model for automating a
+    document from a server or from an editor already open in a page.
+  - `@docx-editor.dev/pro` — tracked changes, comments, and custom nodes.
+
+  Word fidelity is structural: styles, theme colours, tables, headers and footers, section
+  layout, numbering, and tab stops resolve through the same cascade Word uses, and content
+  the editor does not model round-trips untouched.
+
+- 26095c6: Remove `EditorHost`, `EditorConfig` and `createEditor` from the public surface. They described a retired pipeline in which the adapter supplied DOM handles and a display sink; the editor has painted its own surface since `createDocxEditor` replaced it, and none of the three had a caller. Use `createDocxEditor` with `DocxEditorConfig`.
+
+### Minor Changes
+
+- 26095c6: Five additions to the customization surface, each one a gap a host had to work around:
+  - `DocxEditor.Review` takes a `t` label resolver, like every other compound, and a `card={{ className }}` for the card box itself.
+  - `DocxEditor.Review` accepts a render prop as its children, replacing the packaged card while keeping the rail's anchoring, stacking and virtualization.
+  - A custom node's review card honours the same part overrides as every other kind, and carries `data-node-name` so a theme can tell one definition's cards from another's.
+  - `DocxEditor.Menu.Group` and `DocxEditor.ContextMenu.Group` — a named section of rows with a real `role="group"` taking its heading as the accessible name.
+  - `useEditorCaret()` returns the caret as `{ paragraphId, offset }` — the shape the write APIs take as their `at`, and reference-stable so it can be captured in a handler.
+
+  An avatar with no author renders nothing rather than a blank disc, and rail `furniture` unmounts when the pane is shut — a closed rail is a 32px marker strip, and content laid out for the open column has nowhere to go in it.
+
+### Patch Changes
+
+- 26095c6: Document the whole public API surface. Every exported symbol in the engine, the pro modules, the font packages and the automation object model now carries TSDoc, and the generated API reference covers `@docx-editor.dev/core`, `/pro` and `/fonts` alongside the adapters it already described.
+- 26095c6: Insert › Table now inserts a table. Pick a size from the 6×6 grid and an empty table with visible borders lands at the caret, columns evenly dividing the page's text width, caret in the first cell. The Insert menu no longer carries an Image row — picture insertion stays available through the image toolbar control and `DocxEditor.Menu.ImageInsert`.
+- 26095c6: Resolve fonts on demand. `fonts` now also accepts a function, called once per load with the families the document actually declares, so only what a file needs is loaded. `googleFonts()` from `@docx-editor.dev/fonts/google` serves those families from a pinned, hash-checked catalog of 105 Google-hosted families, and `useFonts` gives React a stable `fonts` prop that never rebuilds the editor. App-supplied faces now also paint, through the same aliasing the engine already uses for embedded fonts.
+- 26095c6: Render pictures whose `pic:spPr` or `pic:blipFill` omit optional children. `a:xfrm`, the geometry group and the fill-mode group are all optional in ECMA-376, but each was being required, so a conforming picture was treated as unrecognised content and never drawn. Word writes all of them, which is why this only showed up on files from other producers.
+
+  Size the caret on an empty spaced paragraph to the text rather than the line box. Auto and at-least line spacing add their extra depth below the glyphs, so on a double-spaced empty paragraph the caret was drawn at the full height of the spaced box — about twice the height of the text about to be typed. The same measurement also fixes the highlight band a content control draws on such a line.
+
+- 26095c6: The review rail now measures its position from client rects, so a host that positions its own page wrapper no longer lands the cards on top of the document. Rail furniture no longer pushes every card down by its own height, a custom node's context-menu card wraps instead of stretching the whole menu, the editing-mode menu right-aligns to its pill so a toolbar-end control no longer opens off-screen, and submenu panels place themselves in client space rather than being clipped by the context menu's own scroller.
+- 26095c6: Stop an empty paragraph that carries a section break from producing a blank page. The paragraph mark holding a `w:sectPr` is the section break itself, so when it paints nothing it now stays on the page its section ended on instead of opening a sheet the following next-page section then leaves empty.
+- 26095c6: Published packages now ship a `THIRD_PARTY_NOTICES.md` reproducing the license of every third-party package bundled into their release artifacts.
+- 26095c6: Match Word's vertical pagination by excluding a font's external `hhea.lineGap` from shaped line boxes and allowing auto line-spacing depth below a final glyph band to cross the bottom text margin.
+- Updated dependencies [26095c6]
+- Updated dependencies [26095c6]
+- Updated dependencies [26095c6]
+- Updated dependencies [26095c6]
+- Updated dependencies [26095c6]
+- Updated dependencies [26095c6]
+  - @docx-editor.dev/core@2.0.0
+  - @docx-editor.dev/i18n@2.0.0
+
 ## 1.10.0
 
 ### Minor Changes
@@ -661,7 +726,7 @@
 
   Refs #412.
 
-- 4e194d7: Three Word-fidelity fixes surfaced by the Metal Nobre "DC_Template_Descricao_Cargo" template:
+- 4e194d7: Three Word-fidelity fixes surfaced by a customer job-description template:
   - **Inline images no longer overflow their containing line.** Browsers compute a non-integer height for `<img>` from the natural aspect ratio when only `width`/`height` attributes are set, which clipped images sized in EMU (e.g. wp:extent `1771650×278918` rounds to `186×29` px but the natural ratio gave `29.29` px). Width/height are now also pinned via inline style, and the inline-image vertical alignment is the default `baseline` rather than `middle` — `middle` adds half-x-height of parent-font leading and pushed the image past the bottom of any line sized to fit just the image (the typical "image alone in a table cell" case).
   - **Explicit `w:before` is honored on the first paragraph of a page/column.** The pageComposer was unconditionally zeroing `spaceBefore` whenever the cursor was at `topMargin`, which dropped Word-authored leading space (e.g. `w:before="1800"` on the title paragraph). Word 2013+ honors explicit before-spacing at the top of a page; trailing-spacing is already reset on new-page so applying it here does not carry spacing across page breaks.
   - **A hard `<w:br w:type="page"/>` in an otherwise-empty paragraph now forces a page break.** `paragraphHasPageBreak` previously required preceding visible content (relying on `renderedPageBreakBefore` to cover leading breaks), but that attr is informational only and not honored at layout, so an empty paragraph containing just a page-break run silently dropped the break.

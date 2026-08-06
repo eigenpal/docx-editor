@@ -1,7 +1,7 @@
 ---
 title: 'Architecture'
 description: 'How the editor renders DOCX with Word fidelity: one canonical OOXML tree, a DOM-free layout pass, and painted pages that are themselves the editable surface.'
-category: "Reference"
+category: 'Reference'
 ---
 
 There is one document model and one pipeline:
@@ -10,7 +10,7 @@ There is one document model and one pipeline:
 bytes → bounded OPC/XML read → canonical OOXML tree → layout → painted pages → serialize
 ```
 
-There is one document model. What you see painted and what an edit mutates are the same tree, so nothing has to be kept in sync.
+What you see painted and what an edit mutates are the same tree, so nothing has to be kept in sync.
 
 ## The canonical tree
 

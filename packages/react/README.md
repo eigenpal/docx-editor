@@ -18,7 +18,7 @@ WYSIWYG `.docx` editor for React. Opens a Word file in the browser, paints the r
 layout, edits it in place, and writes a `.docx` back out. No upload service, no conversion
 backend: parsing and serialization both happen client-side.
 
-**It is lossless.** Everything you do not edit comes back byte for byte, including the parts
+Saving is lossless. Everything you do not edit comes back byte for byte, including the parts
 the editor does not understand: custom XML, embedded fonts, macros, unknown extensions. Two
 oracles gate that in CI, so opening a document here cannot quietly destroy it.
 
@@ -54,17 +54,17 @@ export function App() {
 }
 ```
 
-`<DocxEditor>` is the batteries-included host: title bar, menu, toolbar, navigation pane,
-context menu, and the painted document. Two things catch people out: it fills its parent, so
-give it a box with a real height, and the stylesheet import is required once.
+`<DocxEditor>` is the full packaged editor: title bar, menu, toolbar, navigation pane,
+context menu, and the painted document. It fills its parent, so give it a box with a real
+height, and import the stylesheet once.
 
 > **Next.js / SSR:** the editor measures text in the DOM at mount, so render it client-side
 > (`dynamic(..., { ssr: false })`).
 
 ## Build your own UI
 
-The packaged chrome is one arrangement of parts that are all public. There is no private API
-behind it. Every packaged control is a consumer of the same hooks you would use.
+The packaged chrome is one arrangement of public parts. Every packaged control uses the same
+hooks you would; there is no private API behind it.
 
 ```tsx
 import { DocxEditor, useEditorCommand } from '@docx-editor.dev/react';
@@ -96,7 +96,7 @@ export function Editor({ bytes }: { bytes: Uint8Array }) {
 ```
 
 `Root` owns the editor instance, `Viewport` is the scroll container, `Content` is where pages
-are painted. Everything else — toolbar, menu, rulers, navigation, link popover, context menu —
+are painted. Everything else (toolbar, menu, rulers, navigation, link popover, context menu)
 is optional and placed by name.
 
 The customization ladder, in order: `className` and `data-active` → the `icon` prop →

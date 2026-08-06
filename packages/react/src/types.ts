@@ -65,8 +65,12 @@ export interface DocxEditorProps {
    * Strings still come from `packages/i18n/en.json` rather than literals in components;
    * this only chooses who resolves the key. For another language, pass
    * `createT(locale)` from `@docx-editor.dev/i18n`.
+   *
+   * `params` carries interpolation values for parameterized keys (for example the
+   * navigation pane's `{current} of {total}` match counter) — a resolver that ignores
+   * them renders the raw placeholders for those labels.
    */
-  t?: (key: string) => string;
+  t?: (key: string, params?: Record<string, string | number>) => string;
   /**
    * Renders the packaged chrome — title bar and toolbar — around the document.
    * Default `true`. Set `false` for the painted surface alone when the host supplies

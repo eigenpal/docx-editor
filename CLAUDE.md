@@ -268,6 +268,8 @@ Every code PR gets a changeset (`bun changeset`, or a correct hand-written
 - Default `patch`; `minor` for additive public API; `major` for breaks.
 - The summary lands verbatim in CHANGELOG: consumer-facing, what changed not how,
   `Fixes #N` at the end if relevant. No emojis, no marketing.
+- Keep the summary minimal: one sentence, two at most. No bullet lists, no
+  implementation detail.
 
 Never push the `chore: release` commit by hand, delete `.changeset/*.md` outside
 `changeset version`, or hand-edit `CHANGELOG.md` / `package.json#version`.

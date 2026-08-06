@@ -765,15 +765,21 @@ function positionFromVertical(
   return edges.top + offset;
 }
 
-/** Full page clip including margin bands — page-relative anchors may paint into margins. */
+/**
+ * Full page clip including margin bands — page-relative anchors may paint into margins.
+ *
+ * Width MUST be {@link DrawingAnchorFrameContext.pageWidth}, not `contentWidth`: in a
+ * multi-column section `contentWidth` is the active column, and page-relative drawings that
+ * sit outside that column must still paint. Height stays the physical content band plus
+ * margin bands (furniture-shrunk `contentHeight` must not clip page-relative paint).
+ */
 export function pageClipRegion(
   frameBase: Pick<
     DrawingAnchorFrameContext,
+    | 'pageWidth'
     | 'marginLeft'
-    | 'marginRight'
     | 'marginTop'
     | 'marginBottom'
-    | 'contentWidth'
     | 'contentHeight'
     | 'physicalContentHeight'
   >
@@ -782,7 +788,7 @@ export function pageClipRegion(
   return Object.freeze({
     x: -frameBase.marginLeft,
     y: -frameBase.marginTop,
-    width: frameBase.contentWidth + frameBase.marginLeft + frameBase.marginRight,
+    width: frameBase.pageWidth,
     height: bandHeight + frameBase.marginTop + frameBase.marginBottom,
   });
 }

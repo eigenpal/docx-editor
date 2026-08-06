@@ -270,6 +270,9 @@
      navigation + review reservations force horizontal overflow. */
   justify-content: safe center;
   padding: 6px 0 2px;
+  /* The ruler renders nothing until a document is open; the row holds its height so the
+     page stack does not jump down when the ticks appear. */
+  min-height: 36px;
   overflow: hidden;
   flex: none;
 }

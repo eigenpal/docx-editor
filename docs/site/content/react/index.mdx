@@ -1,7 +1,7 @@
 ---
 title: '@docx-editor.dev/react'
-description: "React adapter for the DOCX editor: the packaged root component, provider primitives, shared hooks, and compound chrome, all from the package root."
-category: "React"
+description: 'React adapter for the DOCX editor: the packaged root component, provider primitives, shared hooks, and compound chrome, all from the package root.'
+category: 'React'
 order: 30
 ---
 
@@ -13,7 +13,7 @@ order: 30
 npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
-Carries the engine and the string catalogue. Add [`@docx-editor.dev/pro`](/docs/2.x/pro) for tracked changes, comments, and custom nodes, or [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) to automate the document from code.
+The adapter holds the engine as a peer, so install both; the string catalog comes with it. Add [`@docx-editor.dev/pro`](/docs/2.x/pro) for tracked changes, comments, and custom nodes, or [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) to automate the document from code.
 
 ## Quickstart
 
@@ -25,7 +25,7 @@ export default function App() {
 }
 ```
 
-`<DocxEditor>` is the batteries-included host: title bar, menu, toolbar, navigation pane, hyperlink popover, context menu, and the painted editable document. On Next.js App Router, render it inside a `"use client"` component; the editor has nothing to SSR.
+`<DocxEditor>` is the full packaged editor: title bar, menu, toolbar, navigation pane, hyperlink popover, context menu, and the painted editable document. On Next.js App Router, render it inside a `"use client"` component; the editor has nothing to SSR.
 
 <DemoPlayground />
 
@@ -71,7 +71,11 @@ import { DocxEditor, useEditorCommand } from '@docx-editor.dev/react';
 function BoldButton() {
   const bold = useEditorCommand('text.bold');
   return (
-    <button onClick={() => bold.execute()} disabled={!bold.isEnabled}>
+    <button
+      onMouseDown={(e) => e.preventDefault()} // chrome must not steal the caret
+      onClick={() => bold.execute()}
+      disabled={!bold.isEnabled}
+    >
       Bold
     </button>
   );
@@ -93,7 +97,7 @@ export function ToolbarOnly({ bytes }: { bytes: Uint8Array }) {
 
 The lower-level helpers (`useEditorCommand`, `useEditorState`, `useFontFamily`) also come from the root package.
 
-## DocxEditor API
+## Editing API
 
 Drive the open document from code with the Office.js-compatible `@docx-editor.dev/editor-api/browser`, which takes the editor instance this adapter created:
 

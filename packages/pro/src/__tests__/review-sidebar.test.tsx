@@ -466,3 +466,70 @@ describe('DocxEditor.Review query exclusions', () => {
     expect(view.getByTestId('review-rail').getAttribute('data-count')).toBe('2');
   });
 });
+
+describe('DocxEditor.Review while the document is loading', () => {
+  test('renders nothing — no rail, no empty state, no furniture — until bytes arrive', async () => {
+    const compose = (document?: Uint8Array) => (
+      <DocxEditorRoot {...(document ? { document } : {})} modules={[reviewModule()]}>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview furniture={<div data-testid="host-furniture" />} />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    // The Root mounted before its document, the shape every fetching host has: the editor
+    // instance exists, but there is nothing to review — and nothing to say "no comments
+    // yet" about. The rail must not float its empty state over the host's loading screen.
+    const view = render(compose());
+    expect(view.queryByTestId('review-rail')).toBeNull();
+    expect(view.queryByTestId('review-empty')).toBeNull();
+    expect(view.queryByTestId('host-furniture')).toBeNull();
+
+    await act(async () => {
+      view.rerender(compose(SOURCE));
+    });
+
+    expect(view.getByTestId('review-rail')).toBeDefined();
+    expect(view.getByTestId('review-empty')).toBeDefined();
+    expect(view.getByTestId('host-furniture')).toBeDefined();
+
+    // A parse failure clears `isLoading` (so a host can put its error screen up) while
+    // still leaving no document. The rail must read that as "nothing to review", not as
+    // a document — it floated its empty state over hosts' parse-error screens otherwise.
+    await act(async () => {
+      view.rerender(compose(strToU8('not a docx')));
+    });
+
+    expect(view.queryByTestId('review-rail')).toBeNull();
+    expect(view.queryByTestId('host-furniture')).toBeNull();
+  });
+
+  test('a failed live load hides the rail — the failure emits only `error`', async () => {
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={SOURCE}
+        modules={[reviewModule()]}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    expect(view.getByTestId('review-rail')).toBeDefined();
+
+    // The SAME editor instance, handed bytes that will not parse: the surface is torn
+    // down and the facade emits ONLY `error` — no `change` fires for a failing load. The
+    // rail (and the raw hook's `ready`) must hear that event, or they keep the previous
+    // document's cards over a document that never opened.
+    await act(async () => {
+      instance!.load(strToU8('not a docx'));
+    });
+
+    expect(view.queryByTestId('review-rail')).toBeNull();
+  });
+});

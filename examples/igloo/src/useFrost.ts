@@ -9,6 +9,7 @@
 // round-trips to DOCX like any other formatting. A demo action that only moved local state
 // would look the same on screen and prove nothing about the API.
 
+import { useCallback, useMemo } from 'react';
 import { useDocxEditor, useEditorCommand, useEditorState } from '@docx-editor.dev/react';
 import type { EditorCommand } from '@docx-editor.dev/react';
 
@@ -46,10 +47,17 @@ export function useFrost(): FrostActions {
   const { isEnabled, disabledReason } = useEditorCommand(frostCommand('cyan'));
   const collapsed = useEditorState((snapshot) => snapshot.selectionCollapsed);
 
-  return {
-    freeze: () => editor?.exec(frostCommand('cyan')),
-    thaw: () => editor?.exec(frostCommand('none')),
-    enabled: isEnabled && !collapsed,
-    disabledReason: collapsed && isEnabled ? 'nothing is selected' : disabledReason,
-  };
+  // Memoized like the library's own hooks: three surfaces render from this return, and a
+  // fresh object per render would defeat any memo a consumer put between itself and it.
+  const freeze = useCallback(() => editor?.exec(frostCommand('cyan')), [editor]);
+  const thaw = useCallback(() => editor?.exec(frostCommand('none')), [editor]);
+  return useMemo(
+    () => ({
+      freeze,
+      thaw,
+      enabled: isEnabled && !collapsed,
+      disabledReason: collapsed && isEnabled ? 'nothing is selected' : disabledReason,
+    }),
+    [freeze, thaw, isEnabled, collapsed, disabledReason]
+  );
 }

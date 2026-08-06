@@ -7,9 +7,13 @@
 // never decides policy; it renders what the context gives it.
 //
 // Like the toolbar context, no user-facing English lives here: labels are i18n keys from
-// the chrome registry, resolved through the host's `t` or falling back to the KEY.
+// the chrome registry, resolved through the host's `t` or the active `LocaleContext`
+// catalogue — the same default the packaged `<DocxEditor>` uses. The context menu's rows
+// resolve through `useMenuLabel` too, so this one fallback covers both surfaces.
 
 import { createContext, useContext } from 'react';
+import { useTranslation } from '../../i18n';
+import type { TranslationKey } from '../../i18n';
 import type { ChromeMenuId } from '@docx-editor.dev/core/editor';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 
@@ -63,8 +67,9 @@ export function useMenuContext(): MenuContextValue {
   return useContext(MenuContext);
 }
 
-/** The label for an i18n key: the host's translation, or the key itself. */
+/** The label for an i18n key: the host's translation, else the locale catalogue. */
 export function useMenuLabel(): (key: string) => string {
   const { t } = useMenuContext();
-  return (key: string) => t?.(key) ?? key;
+  const { t: catalogT } = useTranslation();
+  return (key: string) => t?.(key) ?? catalogT(key as TranslationKey);
 }

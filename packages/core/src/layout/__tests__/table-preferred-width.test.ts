@@ -515,3 +515,40 @@ describe('store column resize lands in preferred-width readback', () => {
     expect(total(structure.columnWidthsPt)).toBeCloseTo(330, 6);
   });
 });
+
+describe('structure memoization over immutable table nodes', () => {
+  const TABLE =
+    '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="4200"/></w:tblGrid>' +
+    '<w:tr><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr></w:tbl>';
+
+  test('the same table under the same inputs returns the SAME structure object', () => {
+    // One layout pass reads a table more than once — document-order indexing, flow
+    // layout, row measurement — and the structure is deeply readonly, so the second
+    // read must be an identity hit, not a recompute.
+    const table = tableNode(TABLE);
+    const first = readTableStructure(table, CONTENT_WIDTH_PT, 0);
+    const second = readTableStructure(table, CONTENT_WIDTH_PT, 0);
+    expect(second).toBe(first);
+  });
+
+  test('a changed content width recomputes, and recomputation is value-stable', () => {
+    const table = tableNode(TABLE);
+    const wide = readTableStructure(table, CONTENT_WIDTH_PT, 0)!;
+    const narrow = readTableStructure(table, 200, 0)!;
+    expect(narrow).not.toBe(wide);
+    const wideAgain = readTableStructure(table, CONTENT_WIDTH_PT, 0)!;
+    expect(wideAgain.columnWidthsPt).toEqual(wide.columnWidthsPt);
+  });
+
+  test('a changed style cascade recomputes the structure', () => {
+    const table = tableNode(TABLE);
+    const bare = readTableStructure(table, CONTENT_WIDTH_PT, 0);
+    const styles = part(
+      `<w:styles xmlns:w="${W}"><w:style w:type="table" w:styleId="TableGrid"><w:tblPr/></w:style></w:styles>`,
+      '/word/styles.xml'
+    );
+    const cascade = buildStyleCascadeTable(styles.root);
+    const cascaded = readTableStructure(table, CONTENT_WIDTH_PT, 0, cascade);
+    expect(cascaded).not.toBe(bare);
+  });
+});

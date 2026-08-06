@@ -506,7 +506,11 @@ export function writeOoxmlPackage(pkg: OoxmlPackage): Uint8Array {
 
 /** Replace one part's tree, returning a new package. Pure, like the tree edits themselves. */
 export function withPart(pkg: OoxmlPackage, part: OoxmlPart): OoxmlPackage {
-  return Object.freeze({ ...pkg, parts: new Map([...pkg.parts, [part.name, part]]) });
+  // Copy the map directly instead of spreading through an intermediate entry array; this
+  // runs on every staged op of every transaction.
+  const parts = new Map(pkg.parts);
+  parts.set(part.name, part);
+  return Object.freeze({ ...pkg, parts });
 }
 
 export {

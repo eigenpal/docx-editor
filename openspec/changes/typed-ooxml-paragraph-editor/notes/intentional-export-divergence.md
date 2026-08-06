@@ -209,6 +209,10 @@ not the contract. Publishing retain/release on `Editor` is the prerequisite.
 - `SlotProps`
 - `LocaleProvider`
 - `useTranslation`
+- `useChromeTranslate` — the catalogue-backed resolver a composing host passes as any
+  part's `t` (override-Map-first); rides the same locale binding, so its Vue twin lands
+  with `LocaleProvider`/`useTranslation`.
+- `ChromeTranslate`
 
 The font-fallback notice is React chrome with no Vue twin yet, same lane as the
 rest of the notice/banner chrome:

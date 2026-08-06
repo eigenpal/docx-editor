@@ -85,9 +85,17 @@ export interface ShapedMeasurerOptions {
 const sizeFactorOf = (style: ResolvedRunStyle): number =>
   style.verticalAlign === 'baseline' ? 1 : 0.75;
 
-/** Half-points, which is the unit the shaper takes and OOXML stores. */
+/**
+ * Half-points, which is the unit the shaper takes and OOXML stores.
+ *
+ * The BASE size, never the super/subscript size: the shaper asserts an integer, and rounding
+ * `11pt × 0.75 × 2 = 16.5` up to 17 half-points measured superscript 3% wider than paint
+ * draws it — every span after one on the line sat left of its glyphs, and the caret landed
+ * mid-glyph. Advances are unhinted and scale linearly, so callers shape at the base size and
+ * multiply by {@link sizeFactorOf}, which is exactly the factor paint applies.
+ */
 function halfPointsOf(style: ResolvedRunStyle): number {
-  const halfPoints = Math.round(style.fontSizePt * sizeFactorOf(style) * 2);
+  const halfPoints = Math.round(style.fontSizePt * 2);
   // A zero-sized run would shape to nothing and make a line of no height; the smallest size
   // Word records is half a point.
   return Math.max(1, halfPoints);
@@ -161,8 +169,11 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
         advance = total / fixedPointScale;
         widths.set(key, advance);
       }
+      // Base-size advance scaled to the drawn size; the cache stays keyed on the base size,
+      // so baseline and super/subscript runs of one face share entries.
       return (
-        advance * (style.horizontalScalePercent / 100) + text.length * style.characterSpacingPt
+        advance * sizeFactorOf(style) * (style.horizontalScalePercent / 100) +
+        text.length * style.characterSpacingPt
       );
     },
 
@@ -170,11 +181,17 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
       const font = resolveFont(style);
       if (!font) return fallback.lineMetrics(style);
 
+      const factor = sizeFactorOf(style);
       const key = keyOf(font, style);
       const cached = lines.get(key);
-      if (cached) return cached;
+      if (cached) {
+        return factor === 1
+          ? cached
+          : { height: cached.height * factor, baseline: cached.baseline * factor };
+      }
 
       let metrics: { height: number; baseline: number };
+      let scalable = true;
       try {
         // Vertical metrics are a property of the FACE, not of the text, so any string
         // yields them; a single space is the cheapest to shape.
@@ -184,12 +201,23 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
         // `lineGap` is external leading. Word's line box uses the face ascent + descent;
         // adding the gap again makes Arial/Liberation Sans about 2.9% too tall per line.
         const height = ascent + descent;
-        metrics = height > 0 ? { height, baseline: ascent } : fallback.lineMetrics(style);
+        if (height > 0) {
+          metrics = { height, baseline: ascent };
+        } else {
+          metrics = fallback.lineMetrics(style);
+          scalable = false;
+        }
       } catch {
         metrics = fallback.lineMetrics(style);
+        scalable = false;
       }
+      // Fallback answers are already at the drawn size; only face metrics shaped at the base
+      // size are cached and rescaled.
+      if (!scalable) return metrics;
       lines.set(key, metrics);
-      return metrics;
+      return factor === 1
+        ? metrics
+        : { height: metrics.height * factor, baseline: metrics.baseline * factor };
     },
   };
 }

@@ -11,7 +11,8 @@
 // in the chrome, in the sea behind, and in the berg the page rides on.
 
 import { useState } from 'react';
-import { DocxEditor, useDocxSource } from '@docx-editor.dev/react';
+import { DocxEditor, useChromeTranslate, useDocxSource, useEditorState } from '@docx-editor.dev/react';
+import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { customNodesModule, reviewModule } from '@docx-editor.dev/pro';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 
@@ -22,7 +23,7 @@ import { IglooMenu } from './IglooMenu';
 import { IglooReview } from './IglooReview';
 import { IglooToolbar } from './IglooToolbar';
 import { Blizzard } from './art/Blizzard';
-import { iglooT } from './labels';
+import { ICE_LABELS } from './labels';
 import { SPECIMENS } from './specimens';
 import { SpecimenProvider } from './useSpecimens';
 
@@ -44,6 +45,7 @@ export interface IglooEditorProps {
 
 export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
   const [blizzard, setBlizzard] = useState(false);
+  const iglooT = useChromeTranslate(ICE_LABELS);
 
   // The whole boot: fetch the bytes, load Word's default faces, register them for paint,
   // compose the configuration, and cancel both if this unmounts. `defaultFonts` is passed
@@ -67,85 +69,106 @@ export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
             the click popover and the notice strip, plus the actions the two menus call. It
             wraps the chrome because those menus are inside it. */}
         <SpecimenProvider>
-        <div className="igloo-chrome">
-          <header className="igloo-brand">
-            <IglooMark />
-            <div className="igloo-brand__text">
-              <h1>Igloo Editor</h1>
-              <p>Same editor. Colder.</p>
-            </div>
-          </header>
-          <IglooMenu />
-          <IglooToolbar blizzard={blizzard} onBlizzard={() => setBlizzard((on) => !on)} />
-        </div>
+          <div className="igloo-chrome">
+            <header className="igloo-brand">
+              <IglooMark />
+              <div className="igloo-brand__text">
+                <h1>Igloo Editor</h1>
+                <p>Same editor. Colder.</p>
+              </div>
+            </header>
+            <IglooMenu />
+            <IglooToolbar blizzard={blizzard} onBlizzard={() => setBlizzard((on) => !on)} />
+          </div>
 
-        {/* The rulers, context-fed: they read page setup from the editor and commit margin
+          {/* The rulers, context-fed: they read page setup from the editor and commit margin
             drags back to it. Restyled as icicle ticks, not reimplemented. */}
-        <div className="igloo-rulerbar">
-          <DocxEditor.HorizontalRuler className="igloo-ruler" />
-        </div>
+          <div className="igloo-rulerbar">
+            <DocxEditor.HorizontalRuler className="igloo-ruler" />
+          </div>
 
-        {/* The navigation pane is a SIBLING of the viewport inside a positioned row, not a
+          {/* The navigation pane is a SIBLING of the viewport inside a positioned row, not a
             column beside it — the same shape the packaged component uses. The pane floats
             over the gutter and absolutely positions against this box, so without the
             positioning context it would lay out in the flow and push the page down. */}
-        <div className="igloo-workspace">
-          {/* COMPOSED, not just re-themed. The pane's parts are statics, so the demo can
+          <div className="igloo-workspace">
+            {/* COMPOSED, not just re-themed. The pane's parts are statics, so the demo can
               hang its OWN class on each one rather than styling the library's internals —
               which is the difference between customizing the API and working around it. The
               parts still do all the work: the headings list is still `Navigation.Headings`,
               still fed by the engine's outline. */}
-          <DocxEditor.Navigation
-            className="igloo-nav"
-            t={iglooT}
-            toggle={{ className: 'igloo-nav__toggle' }}
-          >
-            <DocxEditor.Navigation.Header className="igloo-nav__header">
-              <DocxEditor.Navigation.Close className="igloo-nav__close" />
-              <DocxEditor.Navigation.Title className="igloo-nav__title" />
-            </DocxEditor.Navigation.Header>
-            <DocxEditor.Navigation.Tabs className="igloo-nav__tabs" />
-            <DocxEditor.Navigation.Headings className="igloo-nav__headings" />
-            <DocxEditor.Navigation.Find className="igloo-nav__find" />
-          </DocxEditor.Navigation>
+            <DocxEditor.Navigation
+              className="igloo-nav"
+              t={iglooT}
+              toggle={{ className: 'igloo-nav__toggle' }}
+            >
+              <DocxEditor.Navigation.Header className="igloo-nav__header">
+                <DocxEditor.Navigation.Close className="igloo-nav__close" />
+                <DocxEditor.Navigation.Title className="igloo-nav__title" />
+              </DocxEditor.Navigation.Header>
+              <DocxEditor.Navigation.Tabs className="igloo-nav__tabs" />
+              <DocxEditor.Navigation.Headings className="igloo-nav__headings" />
+              <DocxEditor.Navigation.Find className="igloo-nav__find" />
+            </DocxEditor.Navigation>
 
-          <DocxEditor.Viewport className="igloo-viewport">
-            {/* The vertical ruler sits at the EDITING AREA's left edge, where Word and Docs
+            <DocxEditor.Viewport className="igloo-viewport">
+              {/* The vertical ruler sits at the EDITING AREA's left edge, where Word and Docs
                 put it — not beside the page. It rides inside the scroll container as an
                 absolutely positioned child, so it scrolls with the document and its zero
                 stays on the first page's top edge; that offset is the stage's own top
                 padding, and the two have to agree or the inch marks describe a page they are
                 not level with. */}
-            <div className="igloo-vrulerbar" aria-hidden="true">
-              <DocxEditor.VerticalRuler className="igloo-ruler" />
-            </div>
-
-            {/* The loading screen, replaced: rendered only while there is no document. */}
-            <DocxEditor.Loading>
-              <div className="igloo-loading">
-                <IglooMark spinning />
-                <span>{error ? error.message : 'Carving the berg…'}</span>
+              <div className="igloo-vrulerbar" aria-hidden="true">
+                <DocxEditor.VerticalRuler className="igloo-ruler" />
               </div>
-            </DocxEditor.Loading>
 
-            {/* The berg the page rides on: art behind, page on top, both in one stage so the
+              {/* The loading screen, replaced: rendered only while there is no document. */}
+              <DocxEditor.Loading>
+                {/* A failed fetch parks here for good (no bytes ever arrive), so the mark
+                  stops spinning — an error that keeps animating reads as progress. */}
+                <div className="igloo-loading">
+                  <IglooMark spinning={!error} />
+                  <span>{error ? error.message : 'Carving the berg…'}</span>
+                </div>
+              </DocxEditor.Loading>
+              {/* A parse failure CLEARS `isLoading` (a document that cannot open is not still
+                arriving), so the loading screen unmounts — this is the screen for that,
+                exactly where the docs say to report `snapshot().parseError`. Without it a
+                broken fixture left an empty sea and nothing to read. */}
+              <CarveFailure />
+
+              {/* The berg the page rides on: art behind, page on top, both in one stage so the
                 berg tracks the page as it scrolls. */}
-            <div className="igloo-stage">
-              <Iceberg />
-              <DocxEditor.Content className="igloo-page" />
-            </div>
+              <div className="igloo-stage">
+                <Iceberg />
+                <DocxEditor.Content className="igloo-page" />
+              </div>
 
-            {/* The packaged link popover, restyled into an ice shard by class alone. */}
-            <DocxEditor.HyperLink className="igloo-shard" />
-            {/* The PRO review rail — comments, tracked changes AND this demo's own
+              {/* The packaged link popover, restyled into an ice shard by class alone. */}
+              <DocxEditor.HyperLink className="igloo-shard" />
+              {/* The PRO review rail — comments, tracked changes AND this demo's own
                 specimens, as cards beside the page. Enabled by `reviewModule()` on the
                 Root; `IglooReview.tsx` is where it is re-cut. */}
-            <IglooReview />
-            <IglooContextMenu />
-          </DocxEditor.Viewport>
-        </div>
+              <IglooReview />
+              <IglooContextMenu />
+            </DocxEditor.Viewport>
+          </div>
         </SpecimenProvider>
       </DocxEditor.Root>
+    </div>
+  );
+}
+
+const selectParseError = (snapshot: EditorSnapshot) => snapshot.parseError;
+
+/** The document could not be opened: the loading screen's sibling, same ice, no spin. */
+function CarveFailure() {
+  const parseError = useEditorState(selectParseError);
+  if (parseError === null) return null;
+  return (
+    <div className="igloo-loading" role="alert">
+      <IglooMark />
+      <span>This one would not carve: {parseError}</span>
     </div>
   );
 }

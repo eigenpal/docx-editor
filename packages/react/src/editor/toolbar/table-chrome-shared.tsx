@@ -1,12 +1,14 @@
 // Shared a11y and keyboard helpers for contextual table toolbar compounds.
 
 import { useEffect, useId, type ReactNode, type RefObject } from 'react';
+import { editorScopeFor } from '../editor-scope';
 import { focusBy, focusEdge } from '../menu/menu-keyboard';
 import { guardToolbarMousedown } from './ToolbarButton';
 
 /** Return focus to the painted pages layer after a table colour dialog applies. */
 export function restoreToolbarDocumentFocus(from: HTMLElement | null): void {
-  const root = from?.closest('.ep-root') ?? from?.ownerDocument?.body;
+  // NOT a bare `closest('.ep-root')`: the toolbar's own root self-emits that class.
+  const root = editorScopeFor(from) ?? from?.ownerDocument?.body;
   root?.querySelector<HTMLElement>('.docx-pages')?.focus();
 }
 

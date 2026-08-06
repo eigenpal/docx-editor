@@ -42,9 +42,8 @@ import {
 } from '@docx-editor.dev/pro/react';
 import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
 import { defaultFonts } from '@docx-editor.dev/fonts';
-import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
 import { BrandLogo } from '../../shared/BrandLogo';
-import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
+// import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
 import { ExampleSwitcher } from '../../shared/ExampleSwitcher';
 import { ThemeToggle } from './ThemeToggle';
 import { DrawingsE2eBridge } from './DrawingsE2eBridge';
@@ -80,10 +79,6 @@ const DEMO_CITATION = defineCustomNode({
 });
 
 const PRO_MODULES = [reviewModule(), customNodesModule({ nodes: [DEMO_CITATION] })];
-
-/** English labels for the library toolbar's i18n keys. Demos are apps: English is fine. */
-const tEnglish = createT(en);
-const translate = (key: string): string => tEnglish(key as TranslationKey);
 
 /** Keep the caret: chrome mousedown must never move focus out of the document. */
 function keepCaret(event: ReactMouseEvent): void {
@@ -670,7 +665,7 @@ function EditorChrome({
       <header className="demo-header">
         <div className="demo-header__left">
           <BrandLogo />
-          <AdapterSwitcher current="react" />
+          {/* Temporarily hidden: <AdapterSwitcher current="react" /> */}
           <ExampleSwitcher current="Vite" />
         </div>
 
@@ -696,7 +691,6 @@ function EditorChrome({
             spellCheck={false}
           />
           <DocxEditor.Menu
-            t={translate}
             onOpen={() => fileInputRef.current?.click()}
             onSave={saveDocument}
             onPageSetup={() => setShowPageSetup(true)}
@@ -745,16 +739,16 @@ function EditorChrome({
                   name, so rows a product ADDS are visibly its own without a hand-rolled
                   heading breaking the menu's ownership of its items. */}
               <DocxEditor.Menu.Group label="Custom elements">
-              <DocxEditor.Menu.Row
-                onSelect={() => {
-                  if (!editor) return;
-                  // Capture the caret NOW: the dialog's inputs take focus, and inserting
-                  // at "wherever the selection is by then" lands the chip wrong.
-                  onInsertCitation(caret);
-                }}
-              >
-                Insert citation
-              </DocxEditor.Menu.Row>
+                <DocxEditor.Menu.Row
+                  onSelect={() => {
+                    if (!editor) return;
+                    // Capture the caret NOW: the dialog's inputs take focus, and inserting
+                    // at "wherever the selection is by then" lands the chip wrong.
+                    onInsertCitation(caret);
+                  }}
+                >
+                  Insert citation
+                </DocxEditor.Menu.Row>
               </DocxEditor.Menu.Group>
             </DocxEditor.Menu.Menu>
           </DocxEditor.Menu>
@@ -810,7 +804,7 @@ function EditorChrome({
           customized IN PLACE to show override semantics: FontFamily renders each
           document-derived family in its own typeface. Save is
           live because the toolbar was given an onSave handler. */}
-      <DocxEditor.Toolbar t={translate} className="demo-toolbar" onSave={saveDocument}>
+      <DocxEditor.Toolbar className="demo-toolbar" onSave={saveDocument}>
         <DocxEditor.Toolbar.FontFamily>
           <DocxEditor.Toolbar.FontFamily.Trigger className="demo-font-trigger" />
           <DocxEditor.Toolbar.FontFamily.Content className="demo-font-menu">
@@ -820,7 +814,7 @@ function EditorChrome({
       </DocxEditor.Toolbar>
 
       {/* Word-style compatibility bar when document fonts render in substitutes. */}
-      <DocxEditor.FontNotice t={translate} />
+      <DocxEditor.FontNotice />
 
       {/* File > Page setup: the library dialog, applied as one undo step. */}
       <DocxEditor.PageSetupDialog open={showPageSetup} onClose={() => setShowPageSetup(false)} />
@@ -934,7 +928,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
               {/* The right-click menu, with the PRO custom-node section on top: pointing
                   at a citation chip shows its data and "Edit Citation" above the packaged
                   rows. Chips are content-locked, so the menu is the editing entry point. */}
-              <DocxEditor.ContextMenu t={translate}>
+              <DocxEditor.ContextMenu>
                 <CustomNodeContextMenu
                   onEditNode={(node) =>
                     node.nodeId
@@ -958,7 +952,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
                   `@docx-editor.dev/pro/react` and enabled by the `reviewModule()` on the
                   Root. Inside the viewport for the same reason as the popover — it
                   scrolls with the document rather than chasing it. */}
-              <DocxEditorReview t={translate} card={{ className: 'demo-review-card' }}>
+              <DocxEditorReview card={{ className: 'demo-review-card' }}>
                 {/* Host content inside every card: `useReviewItem()` scopes it to
                     citation cards, the packaged parts stay. A custom node's card carries
                     `data-node-name`, so `demo-review-card[data-node-name='citation']`

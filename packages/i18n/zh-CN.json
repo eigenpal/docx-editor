@@ -43,9 +43,9 @@
     "help": "帮助",
     "reportIssue": "反馈问题",
     "watermark": "水印",
-    "break": null,
-    "sectionBreakContinuous": null,
-    "sectionBreakNextPage": null,
+    "break": "分隔符",
+    "sectionBreakContinuous": "分节符（连续）",
+    "sectionBreakNextPage": "分节符（下一页）",
     "insertFootnote": "插入脚注",
     "insertEndnote": "插入尾注"
   },
@@ -86,12 +86,12 @@
     "imageProperties": "图片属性",
     "imagePropertiesShortcut": "图片属性(替代文本、边框)...",
     "clearFormatting": "清除格式",
-    "commentsAndChanges": null,
-    "moreItems": null,
-    "unavailableInPreview": null,
-    "more": null,
-    "altText": null,
-    "imageWrap": null
+    "commentsAndChanges": "批注和更改",
+    "moreItems": "{count, plural, other {还有 # 项}}",
+    "unavailableInPreview": "此预览版本中不可用",
+    "more": "更多",
+    "altText": "替换文字",
+    "imageWrap": "环绕文字"
   },
   "alignment": {
     "alignLeft": "左对齐",
@@ -117,11 +117,11 @@
     "double": "双倍行距",
     "lineSpacingTitle": "行距: {label}",
     "blockSpacingRules": "段间距",
-    "label": null,
-    "addSpaceAfter": null,
-    "addSpaceBefore": null,
-    "removeSpaceAfter": null,
-    "removeSpaceBefore": null
+    "label": "行距",
+    "addSpaceAfter": "增加段后间距",
+    "addSpaceBefore": "增加段前间距",
+    "removeSpaceAfter": "删除段后间距",
+    "removeSpaceBefore": "删除段前间距"
   },
   "styles": {
     "selectAriaLabel": "选择段落样式",
@@ -137,8 +137,8 @@
     "sansSerif": "Sans Serif",
     "serif": "Serif",
     "monospace": "Monospace",
-    "other": null,
-    "documentFonts": null
+    "other": "其他",
+    "documentFonts": "文档字体"
   },
   "fontSize": {
     "decrease": "减小字号",
@@ -148,9 +148,9 @@
   },
   "zoom": {
     "ariaLabel": "缩放: {label}",
-    "zoomIn": null,
-    "zoomLevel": null,
-    "zoomOut": null
+    "zoomIn": "放大",
+    "zoomLevel": "缩放级别",
+    "zoomOut": "缩小"
   },
   "colorPicker": {
     "ariaLabel": "{type} 颜色选择器",
@@ -204,38 +204,38 @@
       "lightMagenta": "浅品红",
       "brightGreen": "亮绿",
       "violet": "紫罗兰色",
-      "darkCyan": null,
-      "darkMagenta": null,
-      "lightGray": null
+      "darkCyan": "深青",
+      "darkMagenta": "深品红",
+      "lightGray": "浅灰"
     },
-    "apply": null,
+    "apply": "应用",
     "theme": {
-      "accent1": null,
-      "accent2": null,
-      "accent3": null,
-      "accent4": null,
-      "accent5": null,
-      "accent6": null,
-      "background1": null,
-      "background2": null,
-      "darker25": null,
-      "darker50": null,
-      "lighter40": null,
-      "lighter60": null,
-      "lighter80": null,
-      "text1": null,
-      "text2": null,
-      "lighter50": null,
-      "lighter35": null,
-      "lighter25": null,
-      "lighter15": null,
-      "lighter5": null,
-      "darker5": null,
-      "darker10": null,
-      "darker15": null,
-      "darker35": null,
-      "darker75": null,
-      "darker90": null
+      "accent1": "着色 1",
+      "accent2": "着色 2",
+      "accent3": "着色 3",
+      "accent4": "着色 4",
+      "accent5": "着色 5",
+      "accent6": "着色 6",
+      "background1": "背景 1",
+      "background2": "背景 2",
+      "darker25": "深色 25%",
+      "darker50": "深色 50%",
+      "lighter40": "淡色 40%",
+      "lighter60": "淡色 60%",
+      "lighter80": "淡色 80%",
+      "text1": "文字 1",
+      "text2": "文字 2",
+      "lighter50": "淡色 50%",
+      "lighter35": "淡色 35%",
+      "lighter25": "淡色 25%",
+      "lighter15": "淡色 15%",
+      "lighter5": "淡色 5%",
+      "darker5": "深色 5%",
+      "darker10": "深色 10%",
+      "darker15": "深色 15%",
+      "darker35": "深色 35%",
+      "darker75": "深色 75%",
+      "darker90": "深色 90%"
     }
   },
   "dialogs": {
@@ -425,9 +425,9 @@
         "b5": "B5 (6.93\" × 9.84\")",
         "executive": "Executive (7.25\" × 10.5\")"
       },
-      "applyTo": null,
-      "applyToDocument": null,
-      "applyToSection": null
+      "applyTo": "应用于",
+      "applyToDocument": "整篇文档",
+      "applyToSection": "本节"
     },
     "tableProperties": {
       "title": "表格属性",
@@ -658,8 +658,8 @@
       "custom": "自定义"
     },
     "updateTableOfContents": "更新目录",
-    "editCustomNode": null,
-    "removeCustomNode": null
+    "editCustomNode": "编辑{label}",
+    "removeCustomNode": "删除{label}"
   },
   "documentOutline": {
     "ariaLabel": "文档大纲",
@@ -738,23 +738,23 @@
       "gridTable4Accent5": "网格表 4 强调色 5",
       "gridTable4Accent6": "网格表 4 强调色 6"
     },
-    "selectTable": null,
+    "selectTable": "选择整个表格",
     "borderStyles": {
-      "dashed": null,
-      "dotted": null,
-      "double": null,
-      "single": null,
-      "thick": null,
-      "triple": null
+      "dashed": "虚线",
+      "dotted": "点线",
+      "double": "双线",
+      "single": "实线",
+      "thick": "粗线",
+      "triple": "三线"
     },
     "borderWidths": {
-      "halfPt": null,
-      "oneHalfPt": null,
-      "onePt": null,
-      "threePt": null,
-      "twoPt": null
+      "halfPt": "0.5 磅",
+      "oneHalfPt": "1.5 磅",
+      "onePt": "1 磅",
+      "threePt": "3 磅",
+      "twoPt": "2 磅"
     },
-    "clearCellFill": null
+    "clearCellFill": "清除单元格填充"
   },
   "tableAdvanced": {
     "verticalAlignment": "垂直对齐",
@@ -819,20 +819,20 @@
       "squareLeft": "图像靠左，文字环绕右侧",
       "squareRight": "图像靠右，文字环绕左侧"
     },
-    "square": null,
+    "square": "四周型",
     "targets": {
-      "behind": null,
-      "inFront": null,
-      "inline": null,
-      "square": null,
-      "squareLeft": null,
-      "squareRight": null,
-      "through": null,
-      "tight": null,
-      "topAndBottom": null
+      "behind": "衬于文字下方",
+      "inFront": "浮于文字上方",
+      "inline": "嵌入型",
+      "square": "四周型",
+      "squareLeft": "四周型（左）",
+      "squareRight": "四周型（右）",
+      "through": "穿越型",
+      "tight": "紧密型",
+      "topAndBottom": "上下型"
     },
-    "through": null,
-    "tight": null
+    "through": "穿越型",
+    "tight": "紧密型"
   },
   "responsePreview": {
     "loading": "正在{action}...",
@@ -861,7 +861,7 @@
     "linkRemoved": "链接已删除",
     "linkCopied": "链接已复制到剪贴板",
     "failedToSave": "保存文档失败",
-    "fontSubstitutionNotice": null
+    "fontSubstitutionNotice": "此文档中的某些字体不可用，已显示替代字体：{fonts}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "显示文本",
@@ -869,15 +869,15 @@
     "copyLink": "复制链接",
     "editLink": "编辑链接",
     "removeLink": "删除链接",
-    "apply": null,
-    "bookmarkTarget": null,
-    "cancel": null,
-    "editTitle": null,
-    "inertTarget": null,
-    "insertTitle": null,
-    "openLink": null,
-    "refused": null,
-    "urlLabel": null
+    "apply": "应用",
+    "bookmarkTarget": "转到本文档中的某个位置",
+    "cancel": "取消",
+    "editTitle": "编辑链接",
+    "inertTarget": "此链接指向编辑器不会打开的位置",
+    "insertTitle": "插入链接",
+    "openLink": "打开链接",
+    "refused": "无法应用该链接。请检查地址后重试。",
+    "urlLabel": "URL"
   },
   "headerFooter": {
     "header": "页眉",
@@ -908,21 +908,21 @@
     "insertPageXofY": "插入第 X 页，共 Y 页",
     "pageXofYLabel": "第",
     "pageXofYSeparator": "页，共",
-    "pageNumbers": null
+    "pageNumbers": "页码"
   },
   "image": {
     "placeholder": "图片占位符",
     "placeholderText": "[图片]",
     "editableAriaLabel": "可编辑图片",
-    "contentMismatch": null,
-    "decodeFailed": null,
-    "externalResource": null,
-    "invalidResource": null,
-    "missingResource": null,
-    "nonPictureGraphic": null,
-    "pendingResource": null,
-    "resourceLimit": null,
-    "unsupportedFormat": null
+    "contentMismatch": "图像内容与其类型不匹配",
+    "decodeFailed": "无法解码图像",
+    "externalResource": "未加载外部图像",
+    "invalidResource": "无效图像",
+    "missingResource": "缺少图像",
+    "nonPictureGraphic": "不受支持的图形（{kind}）",
+    "pendingResource": "正在加载图像",
+    "resourceLimit": "图像超出大小限制",
+    "unsupportedFormat": "不受支持的图像格式（{format}）"
   },
   "ruler": {
     "horizontal": "水平标尺",
@@ -932,7 +932,7 @@
     "rightIndent": "右缩进",
     "topMargin": "上边距",
     "bottomMargin": "下边距",
-    "hangingIndent": null
+    "hangingIndent": "悬挂缩进"
   },
   "print": {
     "label": "打印",
@@ -958,87 +958,87 @@
     "deleteImage": "删除图片",
     "imageProperties": "图片属性",
     "rotate": "旋转",
-    "replaceImage": null,
+    "replaceImage": "替换图像…",
     "handle": {
-      "e": null,
-      "n": null,
-      "ne": null,
-      "nw": null,
-      "s": null,
-      "se": null,
-      "sw": null,
-      "w": null
+      "e": "调整右边缘大小",
+      "n": "调整上边缘大小",
+      "ne": "调整右上角大小",
+      "nw": "调整左上角大小",
+      "s": "调整下边缘大小",
+      "se": "调整右下角大小",
+      "sw": "调整左下角大小",
+      "w": "调整左边缘大小"
     },
-    "selection": null
+    "selection": "选定的图像"
   },
   "revisions": {
-    "cellDeleted": null,
-    "cellInserted": null,
-    "cellMerged": null,
-    "cellPropertiesChanged": null,
-    "paragraphMarkDeleted": null,
-    "paragraphMarkInserted": null,
-    "paragraphPropertiesChanged": null,
-    "rowDeleted": null,
-    "rowInserted": null,
-    "rowPropertiesChanged": null,
-    "tablePropertiesChanged": null,
-    "tableDeleted": null,
-    "tableInserted": null,
-    "runPropertiesChanged": null
+    "cellDeleted": "已删除单元格",
+    "cellInserted": "已插入单元格",
+    "cellMerged": "已合并单元格",
+    "cellPropertiesChanged": "已更改单元格属性",
+    "paragraphMarkDeleted": "已删除段落标记",
+    "paragraphMarkInserted": "已插入段落标记",
+    "paragraphPropertiesChanged": "已更改段落属性",
+    "rowDeleted": "已删除行",
+    "rowInserted": "已插入行",
+    "rowPropertiesChanged": "已更改行属性",
+    "tablePropertiesChanged": "已更改表格属性",
+    "tableDeleted": "已删除表格",
+    "tableInserted": "已插入表格",
+    "runPropertiesChanged": "已更改文本格式"
   },
   "toc": {
-    "updatePrompt": null,
+    "updatePrompt": "此文档包含的目录已过期。是否立即重新生成？",
     "refresh": "更新整个目录",
     "refreshPageNumbers": "仅更新页码"
   },
   "app": {
-    "name": null,
-    "newDocument": null,
-    "by": null,
-    "framework": null,
-    "theme": null
+    "name": "DOCX 编辑器",
+    "newDocument": "新建",
+    "by": "由 EigenPal 提供",
+    "framework": "框架",
+    "theme": "主题"
   },
   "editingMode": {
-    "editing": null,
-    "label": null,
-    "editingHint": null,
-    "suggesting": null,
-    "suggestingHint": null,
-    "viewing": null,
-    "viewingHint": null
+    "editing": "编辑",
+    "label": "编辑模式",
+    "editingHint": "直接编辑文档",
+    "suggesting": "建议",
+    "suggestingHint": "编辑将成为建议",
+    "viewing": "查看",
+    "viewingHint": "只读，不可编辑"
   },
   "navigation": {
-    "ariaLabel": null,
-    "closeAriaLabel": null,
-    "closeTitle": null,
+    "ariaLabel": "文档导航",
+    "closeAriaLabel": "关闭导航",
+    "closeTitle": "关闭导航",
     "find": {
-      "clearAriaLabel": null,
-      "counter": null,
-      "counterTruncated": null,
-      "inputAriaLabel": null,
-      "matchCase": null,
-      "nextAriaLabel": null,
-      "noResults": null,
-      "optionsAriaLabel": null,
-      "placeholder": null,
-      "previousAriaLabel": null,
-      "resultsAriaLabel": null,
-      "searching": null,
-      "wholeWord": null,
-      "total": null,
-      "totalTruncated": null
+      "clearAriaLabel": "清除搜索",
+      "counter": "第 {current} 个结果，共 {total} 个",
+      "counterTruncated": "第 {current} 个结果，共 {total}+ 个",
+      "inputAriaLabel": "搜索文档",
+      "matchCase": "区分大小写",
+      "nextAriaLabel": "下一个结果",
+      "noResults": "无结果",
+      "optionsAriaLabel": "搜索选项",
+      "placeholder": "搜索文档",
+      "previousAriaLabel": "上一个结果",
+      "resultsAriaLabel": "搜索结果",
+      "searching": "正在搜索…",
+      "wholeWord": "全字匹配",
+      "total": "{total, plural, other {# 个结果}}",
+      "totalTruncated": "{total, plural, other {#+ 个结果}}"
     },
     "headings": {
-      "noHeadings": null
+      "noHeadings": "未找到标题。在文档中添加标题即可在此处查看。"
     },
-    "openAriaLabel": null,
-    "openTitle": null,
+    "openAriaLabel": "打开导航",
+    "openTitle": "导航",
     "tabs": {
-      "find": null,
-      "headings": null
+      "find": "查找",
+      "headings": "标题"
     },
-    "title": null
+    "title": "导航"
   },
   "contentControl": {
     "formFill": "表单填写模式",
@@ -1097,62 +1097,62 @@
     "inheritedValue": "（继承）"
   },
   "review": {
-    "accept": null,
-    "ariaLabel": null,
-    "commentRefused": null,
-    "deleted": null,
-    "empty": null,
-    "inserted": null,
-    "movedFrom": null,
-    "movedTo": null,
-    "reject": null,
-    "replaced": null,
-    "replacedWith": null,
-    "reply": null,
-    "replyRefused": null,
-    "showPane": null,
-    "structural": null,
-    "deleteComment": null,
-    "discardChange": null
+    "accept": "接受",
+    "ariaLabel": "审阅",
+    "commentRefused": "无法添加批注",
+    "deleted": "已删除",
+    "empty": "没有更改或批注",
+    "inserted": "已添加",
+    "movedFrom": "从此处移动",
+    "movedTo": "移动到此处",
+    "reject": "拒绝",
+    "replaced": "已替换",
+    "replacedWith": "为",
+    "reply": "答复",
+    "replyRefused": "无法发布答复",
+    "showPane": "显示批注",
+    "structural": "已更改文档结构",
+    "deleteComment": "删除批注",
+    "discardChange": "放弃更改"
   },
   "imageAltText": {
-    "description": null,
-    "panelTitle": null,
-    "title": null
+    "description": "说明",
+    "panelTitle": "替换文字",
+    "title": "标题"
   },
   "imageInsert": {
     "errors": {
-      "emptyFile": null,
-      "invalidSignature": null,
-      "oversize": null,
-      "refused": null,
-      "unsupportedFormat": null
+      "emptyFile": "所选文件为空。",
+      "invalidSignature": "该文件不是受支持的 PNG、JPEG 或 GIF 图像。",
+      "oversize": "图像超过允许的最大大小。",
+      "refused": "无法插入图像。",
+      "unsupportedFormat": "不支持插入此图像格式。"
     }
   },
   "imageProperties": {
-    "crop": null,
-    "cropBottom": null,
-    "cropLeft": null,
-    "cropRight": null,
-    "cropTop": null,
+    "crop": "裁剪",
+    "cropBottom": "下（%）",
+    "cropLeft": "左（%）",
+    "cropRight": "右（%）",
+    "cropTop": "上（%）",
     "errors": {
-      "invalidCrop": null,
-      "invalidDimensions": null,
-      "refused": null,
-      "invalidPosition": null
+      "invalidCrop": "裁剪值必须是 0 到 100 之间的百分比。",
+      "invalidDimensions": "请输入正的宽度和高度值。",
+      "refused": "无法应用这些属性。",
+      "invalidPosition": "请输入有效的水平和垂直位置值。"
     },
-    "hyperlink": null,
-    "nonPictureHint": null,
-    "resetNaturalSize": null,
+    "hyperlink": "超链接",
+    "nonPictureHint": "裁剪和恢复原始大小仅适用于图片。",
+    "resetNaturalSize": "恢复原始大小",
     "units": {
-      "points": null
+      "points": "磅"
     },
-    "horizontalOffset": null,
-    "position": null,
-    "positionLocked": null,
-    "positionUnavailable": null,
-    "relativeToHorizontal": null,
-    "relativeToVertical": null,
-    "verticalOffset": null
+    "horizontalOffset": "水平偏移",
+    "position": "位置",
+    "positionLocked": "无法移动此绘图。",
+    "positionUnavailable": "位置仅适用于浮动图像。",
+    "relativeToHorizontal": "相对于（水平）",
+    "relativeToVertical": "相对于（垂直）",
+    "verticalOffset": "垂直偏移"
   }
 }

@@ -15,6 +15,8 @@ import { useCallback, useMemo, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode } from 'react';
 import type { TextMatch } from '@docx-editor.dev/core/contracts/editor';
 import { MaterialSymbol } from '../../components/ui/Icons';
+import { selectDocumentAbsent } from '../document-presence';
+import { useEditorState } from '../useEditorState';
 import { useNavigationContext } from './navigation-context';
 // Aliased: this module also EXPORTS a component called `NavigationTab`, and the two
 // declarations would collide in the generated .d.ts.
@@ -212,6 +214,9 @@ function SearchBox({
 export function NavigationHeadings({ className, style }: NavigationPartProps): ReactElement {
   const { pane, outline, t } = useNavigationContext('Headings');
   const [filter, setFilter] = useState('');
+  // "This document has no headings" is a claim about the document; while there is none
+  // (loading, parse failure, detached) the panel shows neither the claim nor the list.
+  const documentAbsent = useEditorState(selectDocumentAbsent);
 
   const items = useMemo(() => {
     const needle = filter.trim().toLowerCase();
@@ -238,7 +243,7 @@ export function NavigationHeadings({ className, style }: NavigationPartProps): R
         label={t('navigation.find.inputAriaLabel')}
         clearLabel={t('navigation.find.clearAriaLabel')}
       />
-      {outline.isEmpty ? (
+      {documentAbsent ? null : outline.isEmpty ? (
         <p className="docx-nav__empty">{t('navigation.headings.noHeadings')}</p>
       ) : items.length === 0 ? (
         <p className="docx-nav__empty">{t('navigation.find.noResults')}</p>

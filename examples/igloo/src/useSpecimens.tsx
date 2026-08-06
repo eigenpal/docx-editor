@@ -7,7 +7,16 @@
 // It also mounts `CustomNodeChrome`, which belongs inside `DocxEditor.Root` and drives its
 // `onNodeClick` from the state held here.
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useDocxEditor, useEditorCaret, useEditorState } from '@docx-editor.dev/react';
 import { insertCustomNode, updateCustomNode, type ActivatedCustomNode } from '@docx-editor.dev/pro';
 import { CustomNodeChrome } from '@docx-editor.dev/pro/react';
@@ -81,13 +90,28 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
   const [notice, setNotice] = useState<Notice | null>(null);
 
   // The caret at the moment a row is chosen. A dialog takes focus, so inserting at "wherever
-  // the selection is by then" lands the specimen wherever the last click left it. The value is
-  // reference-stable, so capturing it in a handler is safe.
+  // the selection is by then" lands the specimen wherever the last click left it.
+  //
+  // Read through a REF at call time, not closed over: the caret moves on every keystroke,
+  // and actions whose identities followed it rebuilt the context value — and with it the
+  // whole menu tree of every consumer — once per typed character. The handlers only need
+  // the caret at the moment they run, which is exactly what a ref carries.
   const caret = useEditorCaret();
+  const caretRef = useRef(caret);
+  caretRef.current = caret;
 
   const say = useCallback((text: string) => {
     setNotice((previous) => ({ id: (previous?.id ?? 0) + 1, text }));
   }, []);
+
+  // The fade animation's `onAnimationEnd` is the primary dismissal; this is the fallback
+  // for environments where it never fires (reduced motion, a hidden tab's throttled
+  // rendering) — a status pill must not outlive its moment.
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timer = window.setTimeout(() => setNotice(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   const report = useCallback(
     (result: Refusable, done: string) => {
@@ -111,18 +135,15 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
     [editor, report]
   );
 
-  const compose = useCallback(
-    (kind: SpecimenKind) => {
-      const attrs = defaultAttrs(kind);
-      setForm({ mode: 'insert', kind, attrs, label: labelFor(kind, attrs), at: caret });
-    },
-    [caret]
-  );
+  const compose = useCallback((kind: SpecimenKind) => {
+    const attrs = defaultAttrs(kind);
+    setForm({ mode: 'insert', kind, attrs, label: labelFor(kind, attrs), at: caretRef.current });
+  }, []);
 
   const dropRandom = useCallback(() => {
     const picked = randomSpecimen();
-    place(picked.kind, picked.attrs, picked.label, caret);
-  }, [caret, place]);
+    place(picked.kind, picked.attrs, picked.label, caretRef.current);
+  }, [place]);
 
   const edit = useCallback(
     (node: ActivatedCustomNode) => {
@@ -184,7 +205,7 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
       disabledReason: editable
         ? null
         : mode === 'viewing'
-          ? 'Viewing mode — switch to Editing or Suggesting'
+          ? 'Viewing mode: switch to Editing or Suggesting'
           : 'this document is read-only',
       compose,
       dropRandom,
@@ -199,36 +220,59 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
       if (!editor) return;
       if (next.mode === 'insert') {
         place(next.kind, next.attrs, next.label, next.at);
-        return;
+      } else {
+        const definition = definitionOf(next.kind);
+        report(
+          updateCustomNode(editor, definition, next.nodeId, next.attrs, next.label, {
+            alias: definition.label ?? definition.name,
+          }),
+          'Re-carved.'
+        );
       }
-      const definition = definitionOf(next.kind);
-      report(
-        updateCustomNode(editor, definition, next.nodeId, next.attrs, next.label, {
-          alias: definition.label ?? definition.name,
-        }),
-        'Re-carved.'
-      );
+      // Back to the document, the way the packaged compose box returns focus: the dialog
+      // took it, and without this the writer lands on `body` with Tab restarting at the top.
+      editor.focus();
     },
     [editor, place, report]
   );
+
+  // Stable, so the dialog's and popover's document-level listener effects bind once per
+  // open rather than re-subscribing on every provider render.
+  const closeDialog = useCallback(() => {
+    setForm(null);
+    editor?.focus();
+  }, [editor]);
+  const closePopover = useCallback(() => setProbe(null), []);
 
   return (
     <SpecimenContext.Provider value={value}>
       {/* Chip tint and click delegation. Defaults to the definitions registered on the Root. */}
       <CustomNodeChrome onNodeClick={activate} />
       {children}
-      {form ? <SpecimenDialog form={form} onCommit={commit} onClose={() => setForm(null)} /> : null}
-      {probe ? <SpecimenPopover probe={probe} onClose={() => setProbe(null)} /> : null}
-      {notice ? (
-        <div
-          key={notice.id}
-          className="igloo-notice"
-          role="status"
-          onAnimationEnd={() => setNotice(null)}
-        >
-          {notice.text}
-        </div>
+      {/* KEYED by what is being authored: the fields are seeded from `form` at mount, and
+          the key guarantees a different target never reuses a mounted dialog's state —
+          without it, an edit reached while another edit was open would show the previous
+          node's fields and save them to the new nodeId. */}
+      {form ? (
+        <SpecimenDialog
+          key={form.mode === 'edit' ? form.nodeId : 'insert'}
+          form={form}
+          onCommit={commit}
+          onClose={closeDialog}
+        />
       ) : null}
+      {probe ? <SpecimenPopover probe={probe} onClose={closePopover} /> : null}
+      {/* The live region is PERSISTENT and the notice swaps inside it: a `role="status"`
+          element inserted already holding its text is unreliably announced, and this one
+          was also remounted per notice to replay the fade. The inner key keeps the replay;
+          the region keeps the announcement. */}
+      <div role="status" className="igloo-notice-region">
+        {notice ? (
+          <div key={notice.id} className="igloo-notice" onAnimationEnd={() => setNotice(null)}>
+            {notice.text}
+          </div>
+        ) : null}
+      </div>
     </SpecimenContext.Provider>
   );
 }

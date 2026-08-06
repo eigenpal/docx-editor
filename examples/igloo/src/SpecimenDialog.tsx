@@ -5,7 +5,7 @@
 // Attrs ride in the `w:tag`, which Word caps at 64 characters, so the fields collect one
 // number and a label rather than a payload.
 
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   blocksOf,
   defaultAttrs,
@@ -55,7 +55,43 @@ export function SpecimenDialog({ form, onCommit, onClose }: SpecimenDialogProps)
   const [label, setLabel] = useState(form.label);
   const editing = form.mode === 'edit';
   const field = FIELD[kind];
-  const value = kind === 'iceberg' ? depthOf(attrs) : blocksOf(attrs);
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const titleId = useId();
+
+  // Escape and Tab containment on `document`, not the scrim: a click on the dialog's own
+  // non-focusable text moves focus to `body`, and a scrim-scoped keydown would never hear
+  // the Escape that follows. Tab wraps at the edges — the scrim only blocks the POINTER,
+  // and `aria-modal` promises assistive tech the background is not there, so the keyboard
+  // must not walk out into it. Capture phase, so the editor's keymap never sees these keys.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const root = formRef.current;
+      if (!root) return;
+      // `:disabled` also matches inputs inside the editing mode's disabled fieldset.
+      const focusable = [...root.querySelectorAll<HTMLElement>('input, button')].filter(
+        (element) => !element.matches(':disabled')
+      );
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !root.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || !root.contains(active))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [onClose]);
 
   /** Switching kind switches which attr is meaningful, so the defaults come with it. */
   const chooseKind = (next: SpecimenKind): void => {
@@ -74,30 +110,42 @@ export function SpecimenDialog({ form, onCommit, onClose }: SpecimenDialogProps)
   };
 
   return (
+    // The scrim is presentation: it blocks the pointer and closes on a backdrop press.
+    // The dialog ROLE lives on the box itself, named by its own heading, so the
+    // accessibility tree matches what a sighted user sees as "the dialog".
     <div
       className="igloo-dialog__scrim"
-      role="dialog"
-      aria-modal="true"
-      aria-label={editing ? 'Re-carve this specimen' : 'Carve a specimen'}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
       <form
+        ref={formRef}
         className="igloo-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         onSubmit={(event) => {
           event.preventDefault();
+          // The field keeps whatever was typed, including a mid-edit empty string; the
+          // COMMIT is where it clamps back into range, through the same reads the
+          // recognition boundary uses.
+          const clamped = {
+            [field.key]: String(kind === 'iceberg' ? depthOf(attrs) : blocksOf(attrs)),
+          };
           onCommit(
             editing
-              ? { mode: 'edit', kind, nodeId: form.nodeId, attrs, label }
-              : { mode: 'insert', kind, attrs, label, at: form.at }
+              ? { mode: 'edit', kind, nodeId: form.nodeId, attrs: clamped, label }
+              : { mode: 'insert', kind, attrs: clamped, label, at: form.at }
           );
         }}
       >
-        <h2 className="igloo-dialog__title">{editing ? 'Re-carve it' : 'Carve a specimen'}</h2>
+        <h2 className="igloo-dialog__title" id={titleId}>
+          {editing ? 'Re-carve it' : 'Carve a specimen'}
+        </h2>
         <p className="igloo-dialog__lede">
-          The label is what the paragraph shows — in this editor and in Word. The number rides
-          in the control&rsquo;s tag and comes back typed on the chip, the card and the menu.
+          The label is what the paragraph shows, in this editor and in Word. The number rides in the
+          control&rsquo;s tag and comes back typed on the chip, the card and the menu.
         </p>
 
         {/* Fixed while editing: swapping the tag would be deleting one node and authoring
@@ -105,7 +153,11 @@ export function SpecimenDialog({ form, onCommit, onClose }: SpecimenDialogProps)
         <fieldset className="igloo-dialog__kinds" disabled={editing}>
           <legend className="igloo-dialog__legend">Specimen</legend>
           {(['iceberg', 'igloo'] as const).map((option) => (
-            <label key={option} className="igloo-dialog__kind" data-checked={kind === option ? '' : undefined}>
+            <label
+              key={option}
+              className="igloo-dialog__kind"
+              data-checked={kind === option ? '' : undefined}
+            >
               <input
                 type="radio"
                 name="igloo-specimen-kind"
@@ -119,16 +171,27 @@ export function SpecimenDialog({ form, onCommit, onClose }: SpecimenDialogProps)
 
         <label className="igloo-dialog__field">
           <span>Label (document text)</span>
-          <input value={label} onChange={(event) => setLabel(event.target.value)} required />
+          {/* A modal dialog is the one place initial focus belongs inside; the scrim's
+              Escape handler depends on focus landing here. */}
+          <input
+            autoFocus
+            value={label}
+            onChange={(event) => setLabel(event.target.value)}
+            required
+          />
         </label>
 
         <label className="igloo-dialog__field">
           <span>{field.label}</span>
+          {/* The RAW string, not the clamped read: clamping while someone is still typing
+              turns backspace-to-clear into an instant "90", and the only way to enter a
+              number becomes select-all-overtype. Submit clamps; see onSubmit. */}
           <input
             type="number"
             min={1}
             max={field.max}
-            value={value}
+            required
+            value={attrs[field.key] ?? ''}
             onChange={(event) => setAttrs({ [field.key]: event.target.value })}
           />
           <small>{field.hint}</small>

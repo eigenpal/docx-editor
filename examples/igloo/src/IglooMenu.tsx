@@ -13,10 +13,10 @@
 // it (a page break belongs under Insert), and the product's own menu is for what the product
 // added.
 
-import { DocxEditor, useDocxEditor } from '@docx-editor.dev/react';
+import { DocxEditor, useChromeTranslate, useDocxEditor } from '@docx-editor.dev/react';
 import { useFrost } from './useFrost';
 import { useSpecimens } from './useSpecimens';
-import { iglooT } from './labels';
+import { ICE_LABELS } from './labels';
 import {
   IceBerg,
   IceCarve,
@@ -33,6 +33,7 @@ import {
 
 export function IglooMenu() {
   const editor = useDocxEditor();
+  const iglooT = useChromeTranslate(ICE_LABELS);
   const { freeze, thaw, enabled, disabledReason } = useFrost();
   // `editable` is the engine's answer: a view-only document greys these out like it does Bold.
   const { compose, dropRandom, editable, disabledReason: nodeReason } = useSpecimens();

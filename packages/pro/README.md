@@ -60,8 +60,8 @@ UI; the module is what makes them visible and actionable.
 
 ## Chrome or hooks
 
-Everything the packaged sidebar renders is reachable from `useReview()`. Take the sidebar for
-Word-like cards out of the box; take the hook for your own markup.
+Everything the packaged sidebar renders is reachable from `useReview()`. Use the sidebar for
+Word-like cards out of the box, or the hook to render your own markup.
 
 ```tsx
 import { useReview } from '@docx-editor.dev/pro/react';
@@ -95,7 +95,7 @@ repaint behind the page or break during pagination.
 
 ## Custom nodes
 
-An inline node type you define — a citation, a mention, a merge field — stored as a Word content
+An inline node type you define (a citation, a mention, a merge field) stored as a Word content
 control whose `w:tag` carries your identity and attributes. Word opens the document, shows the
 node's text, and gives it back unchanged.
 
@@ -120,10 +120,10 @@ Every value reaching `fromDocx` came out of a `.docx`, so treat `attrs` and `tex
 
 ## Licensing
 
-Not Apache 2.0 like the editor packages. Licensed under the
+Unlike the editor packages, this one is not Apache 2.0. It is licensed under the
 [EigenPal Pro Evaluation License 1.0](https://github.com/eigenpal/docx-editor/blob/main/packages/pro/LICENSE.md):
-free to read, run, and modify internally to evaluate. Production use — a live or customer-facing
-environment, business-operational data, or this package inside something you offer to others —
+free to read, run, and modify internally to evaluate. Production use (a live or customer-facing
+environment, business-operational data, or this package inside something you offer to others)
 requires a written commercial agreement, and so does redistribution.
 
 Commercial licensing: [licensing@eigenpal.com](mailto:licensing@eigenpal.com)

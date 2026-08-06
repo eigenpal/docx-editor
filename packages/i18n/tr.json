@@ -43,9 +43,9 @@
     "help": "Yardım",
     "reportIssue": "Sorun bildir",
     "watermark": "Filigran",
-    "break": null,
-    "sectionBreakContinuous": null,
-    "sectionBreakNextPage": null,
+    "break": "Kesme",
+    "sectionBreakContinuous": "Bölüm sonu (sürekli)",
+    "sectionBreakNextPage": "Bölüm sonu (sonraki sayfa)",
     "insertFootnote": "Dipnot ekle",
     "insertEndnote": "Sonnot ekle"
   },
@@ -86,12 +86,12 @@
     "imageProperties": "Görsel özellikleri",
     "imagePropertiesShortcut": "Görsel özellikleri (alternatif metin, kenarlık)...",
     "clearFormatting": "Biçimlendirmeyi temizle",
-    "commentsAndChanges": null,
-    "moreItems": null,
-    "unavailableInPreview": null,
-    "more": null,
-    "altText": null,
-    "imageWrap": null
+    "commentsAndChanges": "Açıklamalar ve değişiklikler",
+    "moreItems": "{count, plural, other {# öğe daha}}",
+    "unavailableInPreview": "Bu önizleme sürümünde kullanılamaz",
+    "more": "Diğer",
+    "altText": "Alternatif metin",
+    "imageWrap": "Metni kaydır"
   },
   "alignment": {
     "alignLeft": "Sola hizala",
@@ -117,11 +117,11 @@
     "double": "Çift",
     "lineSpacingTitle": "Satır aralığı: {label}",
     "blockSpacingRules": "Paragraf aralığı",
-    "label": null,
-    "addSpaceAfter": null,
-    "addSpaceBefore": null,
-    "removeSpaceAfter": null,
-    "removeSpaceBefore": null
+    "label": "Satır aralığı",
+    "addSpaceAfter": "Paragraftan sonra boşluk ekle",
+    "addSpaceBefore": "Paragraftan önce boşluk ekle",
+    "removeSpaceAfter": "Paragraftan sonraki boşluğu kaldır",
+    "removeSpaceBefore": "Paragraftan önceki boşluğu kaldır"
   },
   "styles": {
     "selectAriaLabel": "Paragraf stili seç",
@@ -137,8 +137,8 @@
     "sansSerif": "Sans Serif",
     "serif": "Serif",
     "monospace": "Eş aralıklı",
-    "other": null,
-    "documentFonts": null
+    "other": "Diğer",
+    "documentFonts": "Belge yazı tipleri"
   },
   "fontSize": {
     "decrease": "Yazı tipi boyutunu küçült",
@@ -148,9 +148,9 @@
   },
   "zoom": {
     "ariaLabel": "Yakınlaştırma: {label}",
-    "zoomIn": null,
-    "zoomLevel": null,
-    "zoomOut": null
+    "zoomIn": "Yakınlaştır",
+    "zoomLevel": "Yakınlaştırma düzeyi",
+    "zoomOut": "Uzaklaştır"
   },
   "colorPicker": {
     "ariaLabel": "{type} renk seçici",
@@ -204,38 +204,38 @@
       "lightMagenta": "Açık macenta",
       "brightGreen": "Parlak yeşil",
       "violet": "Eflatun",
-      "darkCyan": null,
-      "darkMagenta": null,
-      "lightGray": null
+      "darkCyan": "Koyu camgöbeği",
+      "darkMagenta": "Koyu macenta",
+      "lightGray": "Açık gri"
     },
-    "apply": null,
+    "apply": "Uygula",
     "theme": {
-      "accent1": null,
-      "accent2": null,
-      "accent3": null,
-      "accent4": null,
-      "accent5": null,
-      "accent6": null,
-      "background1": null,
-      "background2": null,
-      "darker25": null,
-      "darker50": null,
-      "lighter40": null,
-      "lighter60": null,
-      "lighter80": null,
-      "text1": null,
-      "text2": null,
-      "lighter50": null,
-      "lighter35": null,
-      "lighter25": null,
-      "lighter15": null,
-      "lighter5": null,
-      "darker5": null,
-      "darker10": null,
-      "darker15": null,
-      "darker35": null,
-      "darker75": null,
-      "darker90": null
+      "accent1": "Vurgu 1",
+      "accent2": "Vurgu 2",
+      "accent3": "Vurgu 3",
+      "accent4": "Vurgu 4",
+      "accent5": "Vurgu 5",
+      "accent6": "Vurgu 6",
+      "background1": "Arka Plan 1",
+      "background2": "Arka Plan 2",
+      "darker25": "Daha Koyu %25",
+      "darker50": "Daha Koyu %50",
+      "lighter40": "Daha Açık %40",
+      "lighter60": "Daha Açık %60",
+      "lighter80": "Daha Açık %80",
+      "text1": "Metin 1",
+      "text2": "Metin 2",
+      "lighter50": "Daha Açık %50",
+      "lighter35": "Daha Açık %35",
+      "lighter25": "Daha Açık %25",
+      "lighter15": "Daha Açık %15",
+      "lighter5": "Daha Açık %5",
+      "darker5": "Daha Koyu %5",
+      "darker10": "Daha Koyu %10",
+      "darker15": "Daha Koyu %15",
+      "darker35": "Daha Koyu %35",
+      "darker75": "Daha Koyu %75",
+      "darker90": "Daha Koyu %90"
     }
   },
   "dialogs": {
@@ -425,9 +425,9 @@
         "b5": "B5 (6.93\" × 9.84\")",
         "executive": "Executive (7.25\" × 10.5\")"
       },
-      "applyTo": null,
-      "applyToDocument": null,
-      "applyToSection": null
+      "applyTo": "Uygulama yeri",
+      "applyToDocument": "Tüm belge",
+      "applyToSection": "Bu bölüm"
     },
     "tableProperties": {
       "title": "Tablo özellikleri",
@@ -658,8 +658,8 @@
       "custom": "Özel"
     },
     "updateTableOfContents": "İçindekiler tablosunu güncelle",
-    "editCustomNode": null,
-    "removeCustomNode": null
+    "editCustomNode": "{label} öğesini düzenle",
+    "removeCustomNode": "{label} öğesini kaldır"
   },
   "documentOutline": {
     "ariaLabel": "Belge ana hattı",
@@ -741,23 +741,23 @@
       "gridTable4Accent5": "Izgara 4 vurgu 5",
       "gridTable4Accent6": "Izgara 4 vurgu 6"
     },
-    "selectTable": null,
+    "selectTable": "Tüm tabloyu seç",
     "borderStyles": {
-      "dashed": null,
-      "dotted": null,
-      "double": null,
-      "single": null,
-      "thick": null,
-      "triple": null
+      "dashed": "Kesik çizgili",
+      "dotted": "Noktalı",
+      "double": "Çift",
+      "single": "Düz",
+      "thick": "Kalın",
+      "triple": "Üçlü"
     },
     "borderWidths": {
-      "halfPt": null,
-      "oneHalfPt": null,
-      "onePt": null,
-      "threePt": null,
-      "twoPt": null
+      "halfPt": "0,5 nk",
+      "oneHalfPt": "1,5 nk",
+      "onePt": "1 nk",
+      "threePt": "3 nk",
+      "twoPt": "2 nk"
     },
-    "clearCellFill": null
+    "clearCellFill": "Hücre dolgusunu temizle"
   },
   "tableAdvanced": {
     "verticalAlignment": "Dikey hizalama",
@@ -822,20 +822,20 @@
       "behindText": "Görsel metnin arkasına yerleşir",
       "inFrontOfText": "Görsel metnin üzerine yerleşir"
     },
-    "square": null,
+    "square": "Kare",
     "targets": {
-      "behind": null,
-      "inFront": null,
-      "inline": null,
-      "square": null,
-      "squareLeft": null,
-      "squareRight": null,
-      "through": null,
-      "tight": null,
-      "topAndBottom": null
+      "behind": "Metin arkasına",
+      "inFront": "Metin önüne",
+      "inline": "Metinle aynı hizada",
+      "square": "Kare",
+      "squareLeft": "Kare (sol)",
+      "squareRight": "Kare (sağ)",
+      "through": "İçinden",
+      "tight": "Sıkı",
+      "topAndBottom": "Üst ve alt"
     },
-    "through": null,
-    "tight": null
+    "through": "İçinden",
+    "tight": "Sıkı"
   },
   "responsePreview": {
     "loading": "{action}...",
@@ -864,7 +864,7 @@
     "linkRemoved": "Bağlantı kaldırıldı",
     "linkCopied": "Bağlantı panoya kopyalandı",
     "failedToSave": "Belge kaydedilemedi",
-    "fontSubstitutionNotice": null
+    "fontSubstitutionNotice": "Bu belgedeki bazı yazı tipleri kullanılamıyor; bunların yerine şunlar gösteriliyor: {fonts}"
   },
   "hyperlinkPopup": {
     "displayTextPlaceholder": "Görüntülenen metin",
@@ -872,15 +872,15 @@
     "copyLink": "Bağlantıyı kopyala",
     "editLink": "Bağlantıyı düzenle",
     "removeLink": "Bağlantıyı kaldır",
-    "apply": null,
-    "bookmarkTarget": null,
-    "cancel": null,
-    "editTitle": null,
-    "inertTarget": null,
-    "insertTitle": null,
-    "openLink": null,
-    "refused": null,
-    "urlLabel": null
+    "apply": "Uygula",
+    "bookmarkTarget": "Bu belgedeki bir konuma gider",
+    "cancel": "İptal",
+    "editTitle": "Bağlantıyı düzenle",
+    "inertTarget": "Bu bağlantı, düzenleyicinin açmayacağı bir yere işaret ediyor",
+    "insertTitle": "Bağlantı ekle",
+    "openLink": "Bağlantıyı aç",
+    "refused": "Bu bağlantı uygulanamadı. Adresi denetleyip yeniden deneyin.",
+    "urlLabel": "URL"
   },
   "headerFooter": {
     "header": "Üstbilgi",
@@ -911,21 +911,21 @@
     "insertPageXofY": "X / Y sayfasını ekle",
     "pageXofYLabel": "Sayfa",
     "pageXofYSeparator": "/",
-    "pageNumbers": null
+    "pageNumbers": "Sayfa numaraları"
   },
   "image": {
     "placeholder": "Görsel yer tutucu",
     "placeholderText": "[Görsel]",
     "editableAriaLabel": "Düzenlenebilir görsel",
-    "contentMismatch": null,
-    "decodeFailed": null,
-    "externalResource": null,
-    "invalidResource": null,
-    "missingResource": null,
-    "nonPictureGraphic": null,
-    "pendingResource": null,
-    "resourceLimit": null,
-    "unsupportedFormat": null
+    "contentMismatch": "Görüntü içeriği türüyle eşleşmiyor",
+    "decodeFailed": "Görüntünün kodu çözülemedi",
+    "externalResource": "Dış görüntü yüklenmedi",
+    "invalidResource": "Geçersiz görüntü",
+    "missingResource": "Görüntü eksik",
+    "nonPictureGraphic": "Desteklenmeyen grafik ({kind})",
+    "pendingResource": "Görüntü yükleniyor",
+    "resourceLimit": "Görüntü boyut sınırlarını aşıyor",
+    "unsupportedFormat": "Desteklenmeyen görüntü biçimi ({format})"
   },
   "ruler": {
     "horizontal": "Yatay cetvel",
@@ -935,7 +935,7 @@
     "rightIndent": "Sağ girinti",
     "topMargin": "Üst kenar boşluğu",
     "bottomMargin": "Alt kenar boşluğu",
-    "hangingIndent": null
+    "hangingIndent": "Asılı girinti"
   },
   "print": {
     "label": "Yazdır",
@@ -958,87 +958,87 @@
     "deleteImage": "Görseli sil",
     "imageProperties": "Görsel özellikleri",
     "rotate": "Döndür",
-    "replaceImage": null,
+    "replaceImage": "Görüntüyü değiştir…",
     "handle": {
-      "e": null,
-      "n": null,
-      "ne": null,
-      "nw": null,
-      "s": null,
-      "se": null,
-      "sw": null,
-      "w": null
+      "e": "Sağ kenarı yeniden boyutlandır",
+      "n": "Üst kenarı yeniden boyutlandır",
+      "ne": "Sağ üst köşeyi yeniden boyutlandır",
+      "nw": "Sol üst köşeyi yeniden boyutlandır",
+      "s": "Alt kenarı yeniden boyutlandır",
+      "se": "Sağ alt köşeyi yeniden boyutlandır",
+      "sw": "Sol alt köşeyi yeniden boyutlandır",
+      "w": "Sol kenarı yeniden boyutlandır"
     },
-    "selection": null
+    "selection": "Seçili görüntü"
   },
   "revisions": {
-    "cellDeleted": null,
-    "cellInserted": null,
-    "cellMerged": null,
-    "cellPropertiesChanged": null,
-    "paragraphMarkDeleted": null,
-    "paragraphMarkInserted": null,
-    "paragraphPropertiesChanged": null,
-    "rowDeleted": null,
-    "rowInserted": null,
-    "rowPropertiesChanged": null,
-    "tablePropertiesChanged": null,
-    "tableDeleted": null,
-    "tableInserted": null,
-    "runPropertiesChanged": null
+    "cellDeleted": "Hücre silindi",
+    "cellInserted": "Hücre eklendi",
+    "cellMerged": "Hücreler birleştirildi",
+    "cellPropertiesChanged": "Hücre özellikleri değiştirildi",
+    "paragraphMarkDeleted": "Paragraf işareti silindi",
+    "paragraphMarkInserted": "Paragraf işareti eklendi",
+    "paragraphPropertiesChanged": "Paragraf özellikleri değiştirildi",
+    "rowDeleted": "Satır silindi",
+    "rowInserted": "Satır eklendi",
+    "rowPropertiesChanged": "Satır özellikleri değiştirildi",
+    "tablePropertiesChanged": "Tablo özellikleri değiştirildi",
+    "tableDeleted": "Tablo silindi",
+    "tableInserted": "Tablo eklendi",
+    "runPropertiesChanged": "Metin biçimlendirmesi değiştirildi"
   },
   "toc": {
-    "updatePrompt": null,
+    "updatePrompt": "Bu belge güncel olmayan bir içindekiler tablosu içeriyor. Şimdi yeniden oluşturulsun mu?",
     "refresh": "Tüm tabloyu güncelle",
     "refreshPageNumbers": "Yalnızca sayfa numaralarını güncelle"
   },
   "app": {
-    "name": null,
-    "newDocument": null,
-    "by": null,
-    "framework": null,
-    "theme": null
+    "name": "DOCX Düzenleyicisi",
+    "newDocument": "Yeni",
+    "by": "EigenPal tarafından",
+    "framework": "Framework",
+    "theme": "Tema"
   },
   "editingMode": {
-    "editing": null,
-    "label": null,
-    "editingHint": null,
-    "suggesting": null,
-    "suggestingHint": null,
-    "viewing": null,
-    "viewingHint": null
+    "editing": "Düzenleme",
+    "label": "Düzenleme modu",
+    "editingHint": "Belgeyi doğrudan düzenle",
+    "suggesting": "Öneri",
+    "suggestingHint": "Düzenlemeler öneriye dönüşür",
+    "viewing": "Görüntüleme",
+    "viewingHint": "Salt okunur, düzenleme yok"
   },
   "navigation": {
-    "ariaLabel": null,
-    "closeAriaLabel": null,
-    "closeTitle": null,
+    "ariaLabel": "Belge gezintisi",
+    "closeAriaLabel": "Gezintiyi kapat",
+    "closeTitle": "Gezintiyi kapat",
     "find": {
-      "clearAriaLabel": null,
-      "counter": null,
-      "counterTruncated": null,
-      "inputAriaLabel": null,
-      "matchCase": null,
-      "nextAriaLabel": null,
-      "noResults": null,
-      "optionsAriaLabel": null,
-      "placeholder": null,
-      "previousAriaLabel": null,
-      "resultsAriaLabel": null,
-      "searching": null,
-      "wholeWord": null,
-      "total": null,
-      "totalTruncated": null
+      "clearAriaLabel": "Aramayı temizle",
+      "counter": "Sonuç {current}/{total}",
+      "counterTruncated": "Sonuç {current}/{total}+",
+      "inputAriaLabel": "Belgede ara",
+      "matchCase": "Büyük/küçük harf eşleştir",
+      "nextAriaLabel": "Sonraki sonuç",
+      "noResults": "Sonuç yok",
+      "optionsAriaLabel": "Arama seçenekleri",
+      "placeholder": "Belgede ara",
+      "previousAriaLabel": "Önceki sonuç",
+      "resultsAriaLabel": "Arama sonuçları",
+      "searching": "Aranıyor…",
+      "wholeWord": "Yalnızca tam sözcükler",
+      "total": "{total, plural, other {# sonuç}}",
+      "totalTruncated": "{total, plural, other {#+ sonuç}}"
     },
     "headings": {
-      "noHeadings": null
+      "noHeadings": "Başlık bulunamadı. Burada görmek için belgenize başlık ekleyin."
     },
-    "openAriaLabel": null,
-    "openTitle": null,
+    "openAriaLabel": "Gezintiyi aç",
+    "openTitle": "Gezinti",
     "tabs": {
-      "find": null,
-      "headings": null
+      "find": "Bul",
+      "headings": "Başlıklar"
     },
-    "title": null
+    "title": "Gezinti"
   },
   "contentControl": {
     "formFill": "Form doldurma modu",
@@ -1097,62 +1097,62 @@
     "inheritedValue": "(devralınan)"
   },
   "review": {
-    "accept": null,
-    "ariaLabel": null,
-    "commentRefused": null,
-    "deleted": null,
-    "empty": null,
-    "inserted": null,
-    "movedFrom": null,
-    "movedTo": null,
-    "reject": null,
-    "replaced": null,
-    "replacedWith": null,
-    "reply": null,
-    "replyRefused": null,
-    "showPane": null,
-    "structural": null,
-    "deleteComment": null,
-    "discardChange": null
+    "accept": "Kabul et",
+    "ariaLabel": "Gözden geçir",
+    "commentRefused": "Açıklama eklenemedi",
+    "deleted": "Silindi",
+    "empty": "Değişiklik veya açıklama yok",
+    "inserted": "Eklendi",
+    "movedFrom": "Buradan taşındı",
+    "movedTo": "Buraya taşındı",
+    "reject": "Reddet",
+    "replaced": "Değiştirildi",
+    "replacedWith": "şununla:",
+    "reply": "Yanıtla",
+    "replyRefused": "Yanıt gönderilemedi",
+    "showPane": "Açıklamaları göster",
+    "structural": "Belge yapısı değiştirildi",
+    "deleteComment": "Açıklamayı sil",
+    "discardChange": "Değişikliği at"
   },
   "imageAltText": {
-    "description": null,
-    "panelTitle": null,
-    "title": null
+    "description": "Açıklama",
+    "panelTitle": "Alternatif metin",
+    "title": "Başlık"
   },
   "imageInsert": {
     "errors": {
-      "emptyFile": null,
-      "invalidSignature": null,
-      "oversize": null,
-      "refused": null,
-      "unsupportedFormat": null
+      "emptyFile": "Seçilen dosya boş.",
+      "invalidSignature": "Dosya desteklenen bir PNG, JPEG veya GIF görüntüsü değil.",
+      "oversize": "Görüntü izin verilen en büyük boyutu aşıyor.",
+      "refused": "Görüntü eklenemedi.",
+      "unsupportedFormat": "Bu görüntü biçimi ekleme için desteklenmiyor."
     }
   },
   "imageProperties": {
-    "crop": null,
-    "cropBottom": null,
-    "cropLeft": null,
-    "cropRight": null,
-    "cropTop": null,
+    "crop": "Kırp",
+    "cropBottom": "Alt (%)",
+    "cropLeft": "Sol (%)",
+    "cropRight": "Sağ (%)",
+    "cropTop": "Üst (%)",
     "errors": {
-      "invalidCrop": null,
-      "invalidDimensions": null,
-      "refused": null,
-      "invalidPosition": null
+      "invalidCrop": "Kırpma değerleri 0 ile 100 arasında yüzde olmalıdır.",
+      "invalidDimensions": "Pozitif genişlik ve yükseklik değerleri girin.",
+      "refused": "Bu özellikler uygulanamadı.",
+      "invalidPosition": "Geçerli yatay ve dikey konum değerleri girin."
     },
-    "hyperlink": null,
-    "nonPictureHint": null,
-    "resetNaturalSize": null,
+    "hyperlink": "Köprü",
+    "nonPictureHint": "Kırpma ve doğal boyuta sıfırlama yalnızca resimler için kullanılabilir.",
+    "resetNaturalSize": "Doğal boyuta sıfırla",
     "units": {
-      "points": null
+      "points": "nk"
     },
-    "horizontalOffset": null,
-    "position": null,
-    "positionLocked": null,
-    "positionUnavailable": null,
-    "relativeToHorizontal": null,
-    "relativeToVertical": null,
-    "verticalOffset": null
+    "horizontalOffset": "Yatay uzaklık",
+    "position": "Konum",
+    "positionLocked": "Bu çizim taşınamaz.",
+    "positionUnavailable": "Konum yalnızca kayan görüntüler için kullanılabilir.",
+    "relativeToHorizontal": "Göreli konum (yatay)",
+    "relativeToVertical": "Göreli konum (dikey)",
+    "verticalOffset": "Dikey uzaklık"
   }
 }

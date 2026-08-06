@@ -108,6 +108,9 @@ export { ChromeMenuSubmenuEntry }
 
 export { ChromeSlotId }
 
+// @public
+export type ChromeTranslate = (key: string, params?: Record<string, string | number>) => string;
+
 export { commandForSlot }
 
 export { composeFontConfiguration }
@@ -376,7 +379,7 @@ export interface DocxEditorContextMenuProps {
 }
 
 // @public
-export function DocxEditorDocumentOutline(props: DocxEditorDocumentOutlineProps): ReactElement;
+export function DocxEditorDocumentOutline(props: DocxEditorDocumentOutlineProps): ReactElement | null;
 
 // @public
 export interface DocxEditorDocumentOutlineProps {
@@ -405,7 +408,7 @@ export interface DocxEditorHeaderFooterChromeProps {
 }
 
 // @public
-export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactElement;
+export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactElement | null;
 
 // @public (undocumented)
 export const DocxEditorHyperLink: DocxEditorHyperLinkNamespace;
@@ -633,7 +636,7 @@ export interface DocxEditorProps {
     readonly renderTitleBarLeft?: () => ReactNode;
     // (undocumented)
     readonly renderTitleBarRight?: () => ReactNode;
-    t?: (key: string) => string;
+    t?: (key: string, params?: Record<string, string | number>) => string;
     title?: string;
     // (undocumented)
     zoom?: number;
@@ -833,7 +836,7 @@ export interface DocxEditorToolbarProps {
 }
 
 // @public
-export function DocxEditorVerticalRuler(props: DocxEditorRulerProps): ReactElement;
+export function DocxEditorVerticalRuler(props: DocxEditorRulerProps): ReactElement | null;
 
 // @public
 export function DocxEditorViewport(input: DocxEditorViewportProps): react.JSX.Element;
@@ -1732,6 +1735,9 @@ export interface ToolbarSlotPartProps {
 
 // @public
 export type ToolbarTranslate = (key: string) => string;
+
+// @public
+export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): ChromeTranslate;
 
 // @public
 export function useContentControl(): UseContentControlResult;

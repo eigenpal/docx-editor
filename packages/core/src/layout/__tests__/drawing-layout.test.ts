@@ -17,6 +17,7 @@ import {
   emuToPoints,
   lineLayoutAtoms,
   measureInlineDrawing,
+  pageClipRegion,
   resolveAnchoredDrawingPosition,
   type InlineDrawingLayoutContext,
 } from '../drawing-layout.ts';
@@ -789,5 +790,75 @@ describe('drawing record geometry', () => {
     expect(drawing.geometry.contentBounds.width).toBe(emuToPoints(914400));
     expect(drawing.geometry.effectInsets.left).toBeCloseTo(1, 3);
     expect(drawing.geometry.transformedCorners.length).toBe(4);
+  });
+});
+
+describe('page clip for page-relative anchors', () => {
+  const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+  const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
+  const WPS_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+
+  test('pageClipRegion uses pageWidth, not the active column contentWidth', () => {
+    const clip = pageClipRegion({
+      pageWidth: 595.5,
+      marginLeft: 49,
+      marginTop: 61,
+      marginBottom: 14,
+      contentHeight: 767,
+      physicalContentHeight: 767,
+    });
+    expect(clip).toEqual({
+      x: -49,
+      y: -61,
+      width: 595.5,
+      height: 842,
+    });
+  });
+
+  test('multi-column page-relative behindDoc vector shape keeps non-zero paint bounds', () => {
+    // Repro: a multi-column section feeds column width into frame contentWidth. Page clip used
+    // to be contentWidth+margins, so a page-relative black box past the first column painted
+    // as 0×0 (Graphic 17–20). Raster inFront boxes on a later single-column page still worked.
+    const shapeDrawing =
+      '<w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" ' +
+      'relativeHeight="1" behindDoc="1" locked="0" layoutInCell="1" allowOverlap="1">' +
+      '<wp:simplePos x="0" y="0"/>' +
+      '<wp:positionH relativeFrom="page"><wp:posOffset>2383154</wp:posOffset></wp:positionH>' +
+      '<wp:positionV relativeFrom="paragraph"><wp:posOffset>148238</wp:posOffset></wp:positionV>' +
+      '<wp:extent cx="1016635" cy="207645"/><wp:effectExtent l="0" t="0" r="0" b="0"/>' +
+      '<wp:wrapTopAndBottom/><wp:docPr id="17" name="Graphic 17"/>' +
+      `<a:graphic><a:graphicData uri="${WPS_URI}">` +
+      '<wps:wsp><wps:cNvSpPr/><wps:spPr>' +
+      '<a:xfrm><a:off x="0" y="0"/><a:ext cx="1016635" cy="207645"/></a:xfrm>' +
+      '<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="l" t="t" r="r" b="b"/>' +
+      '<a:pathLst><a:path w="1016635" h="207645">' +
+      '<a:moveTo><a:pt x="1016177" y="0"/></a:moveTo>' +
+      '<a:lnTo><a:pt x="0" y="0"/></a:lnTo>' +
+      '<a:lnTo><a:pt x="0" y="207391"/></a:lnTo>' +
+      '<a:lnTo><a:pt x="1016177" y="207391"/></a:lnTo>' +
+      '<a:close/></a:path></a:pathLst></a:custGeom>' +
+      '<a:solidFill><a:srgbClr val="000000"/></a:solidFill>' +
+      '</wps:spPr><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing>';
+    const xml =
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" ` +
+      `xmlns:wps="${WPS}" xmlns:mc="${MC}"><w:body>` +
+      `<w:p><w:r><mc:AlternateContent><mc:Choice Requires="wps">${shapeDrawing}</mc:Choice>` +
+      '<mc:Fallback><w:pict/></mc:Fallback></mc:AlternateContent></w:r>' +
+      '<w:r><w:t>col</w:t></w:r></w:p>' +
+      '<w:sectPr>' +
+      '<w:pgSz w:w="11906" w:h="16838"/>' +
+      '<w:pgMar w:top="1220" w:right="0" w:bottom="280" w:left="980"/>' +
+      '<w:cols w:num="3" w:space="720"/>' +
+      '</w:sectPr></w:body></w:document>';
+    const part = load(xml);
+    const layout = lay(part, layoutContext(part));
+    const drawing = layout.pages[0]!.anchoredDrawings?.[0];
+    expect(drawing).toBeDefined();
+    expect(drawing!.behindDocument).toBe(true);
+    expect(drawing!.wrap).toBe('topAndBottom');
+    expect(drawing!.vectorShape).not.toBeNull();
+    expect(drawing!.paintBounds.width).toBeGreaterThan(1);
+    expect(drawing!.paintBounds.height).toBeGreaterThan(1);
+    expect(drawing!.x).toBeGreaterThan(120);
   });
 });

@@ -41,10 +41,10 @@ Font binaries ship as separate files (`assets/*.ttf`) fetched lazily per request
 family. Each face's `sha256:` hash is baked at packaging time
 (`src/manifest.generated.ts`) and CI-verified against the shipped bytes.
 
-## On demand, from Google's catalog
+## Google Fonts, on demand
 
-`@docx-editor.dev/fonts/google` inverts both halves: nothing ships in the bundle, and
-nothing is fetched until a document turns out to name a family the catalog covers.
+`@docx-editor.dev/fonts/google` ships nothing in the bundle and fetches nothing until a
+document names a family the catalog covers.
 
 ```ts
 import { googleFonts } from '@docx-editor.dev/fonts/google';
@@ -55,21 +55,21 @@ import { googleFonts } from '@docx-editor.dev/fonts/google';
 ```
 
 Open a file that uses only Calibri and one family is fetched (Carlito, its
-metric-compatible stand-in). Open one that names nothing catalogued and no request is
+metric-compatible stand-in). Open one that names nothing cataloged and no request is
 made at all.
 
 The catalog is generated, closed and pinned to a single google/fonts commit
 (`src/google-catalog.generated.ts`, 105 families). A family a document names is only
-ever a lookup key — nothing is interpolated into a URL — and every entry carries a
-baked `sha256:` that the engine re-derives on admission. Families are included by rule:
+ever a lookup key, never interpolated into a URL, and every entry carries a baked
+`sha256:` that the engine re-derives on admission. Families are included by rule:
 all four static faces present, and the shaper's table checks passed. Variable-only
 families (Roboto, Arimo, Open Sans, …) are excluded, because the shaper refuses
 variation axes and a variable file would render bold at regular weight.
 
-Be deliberate about this: a fetching resolver makes opening a document perform network
-requests, and the CDN learns which families a document uses. The engine never supplies
-one, so it stays your call. `loadDefaultFonts()` remains the zero-network answer. Narrow
-what may ever be fetched with `googleFonts({ allow: ['Tinos', 'Lato'] })`.
+A fetching resolver makes opening a document perform network requests, and the CDN learns
+which families a document uses. The engine never supplies one, so opting in stays your call.
+`loadDefaultFonts()` remains the zero-network answer, and
+`googleFonts({ allow: ['Tinos', 'Lato'] })` narrows what may ever be fetched.
 
 Regenerate the catalog with `bun run google:catalog` (downloads ~90 MB, pins hashes);
 `google:check` guards the committed file offline, `google:verify` re-checks it against

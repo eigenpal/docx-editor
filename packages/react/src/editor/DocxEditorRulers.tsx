@@ -17,6 +17,11 @@ import type { RulerIndent } from '@docx-editor.dev/core/editor';
 import { HorizontalRuler, type RulerPageSetup } from '../components/ui/HorizontalRuler';
 import { VerticalRuler } from '../components/ui/VerticalRuler';
 import { ReviewRailContext, useDocxEditor } from './context';
+// A ruler MEASURES the page, and while the document is absent there is no page — the
+// primitive fell back to drawing default Letter ticks over a document that was not
+// there. Render nothing instead; a host that wants the bar to hold its height sizes the
+// row it put the ruler in.
+import { selectDocumentAbsent } from './document-presence';
 import { useEditorState } from './useEditorState';
 import { usePageSetup } from './usePageSetup';
 import { useParagraphIndent } from './useParagraphIndent';
@@ -173,9 +178,13 @@ function useViewportScrollLeft(): number {
  * draggable when the engine supports page-setup writes; the drag previews locally and
  * commits one undoable step on release.
  *
+ * Renders nothing while the editor holds no document — see
+ * {@link selectDocumentAbsent}.
+ *
  * @public
  */
-export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactElement {
+export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactElement | null {
+  const documentAbsent = useEditorState(selectDocumentAbsent);
   const { pageSetup, isEnabled } = usePageSetup();
   const zoom = useEditorState(selectZoom);
   const { pending, preview, commit } = useMarginDrag();
@@ -187,6 +196,7 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
   const shift = useNavigationShift();
   const reserved = useReviewGutter();
   const scrollLeft = useViewportScrollLeft();
+  if (documentAbsent) return null;
   return (
     <HorizontalRuler
       pageSetup={previewed(pageSetup, pending)}
@@ -253,12 +263,17 @@ const REVIEW_MARKERS_GUTTER = 44;
  * margins and zoom straight from the editor. Top/bottom margin handles are draggable
  * when the engine supports page-setup writes, committing one undoable step on release.
  *
+ * Renders nothing while the editor holds no document — see
+ * {@link selectDocumentAbsent}.
+ *
  * @public
  */
-export function DocxEditorVerticalRuler(props: DocxEditorRulerProps): ReactElement {
+export function DocxEditorVerticalRuler(props: DocxEditorRulerProps): ReactElement | null {
+  const documentAbsent = useEditorState(selectDocumentAbsent);
   const { pageSetup, isEnabled } = usePageSetup();
   const zoom = useEditorState(selectZoom);
   const { pending, preview, commit } = useMarginDrag();
+  if (documentAbsent) return null;
   return (
     <VerticalRuler
       pageSetup={previewed(pageSetup, pending)}

@@ -185,13 +185,21 @@ export function validateOoxmlPartDelta(previous: OoxmlPart, part: OoxmlPart): Oo
 function runValidation(part: OoxmlPart, previous: OoxmlPart | null): OoxmlInvariantResult {
   const issues: OoxmlInvariantIssue[] = [];
   const ids = new Set<string>();
-  const report = (code: OoxmlInvariantIssueCode, path: string, nodeId?: string): void => {
-    issues.push({ code, path, ...(nodeId === undefined ? {} : { nodeId }) });
+  // The child-index trail of the node currently being visited. Issue paths are derived from
+  // it ON REPORT — building a `root.children[i]…` string for every node visited made path
+  // assembly a measurable cost of validating a long, overwhelmingly valid part.
+  const indexTrail: number[] = [];
+  const pathHere = (): string => {
+    let path = 'root';
+    for (const index of indexTrail) path += `.children[${index}]`;
+    return path;
+  };
+  const report = (code: OoxmlInvariantIssueCode, nodeId?: string): void => {
+    issues.push({ code, path: pathHere(), ...(nodeId === undefined ? {} : { nodeId }) });
   };
   const walk = (
     node: OoxmlNode,
     inheritedBindings: ReadonlyMap<string, string>,
-    path: string,
     priorNode: OoxmlNode | undefined,
     priorContext: boolean,
     parent?: DrawingParentContext
@@ -200,62 +208,72 @@ function runValidation(part: OoxmlPart, previous: OoxmlPart | null): OoxmlInvari
     // context proven identical — nothing in the subtree can have changed.
     if (priorContext && priorNode === node) return;
 
-    if (typeof node.id !== 'string' || node.id.length === 0) report('invalid-id', path, node.id);
-    else if (ids.has(node.id)) report('duplicate-id', path, node.id);
+    if (typeof node.id !== 'string' || node.id.length === 0) report('invalid-id', node.id);
+    else if (ids.has(node.id)) report('duplicate-id', node.id);
     else ids.add(node.id);
 
     if (node.kind === 'textValue') {
-      if (!isValidXmlText(node.value)) report('invalid-xml-value', path, node.id);
+      if (!isValidXmlText(node.value)) report('invalid-xml-value', node.id);
       return;
     }
 
-    const bindings = new Map(inheritedBindings);
-    const localPrefixes = new Set<string>();
-    for (const binding of node.namespaceBindings) {
-      const valid =
-        !localPrefixes.has(binding.prefix) &&
-        (binding.prefix === '' || isValidNCName(binding.prefix)) &&
-        binding.prefix !== 'xmlns' &&
-        isValidXmlText(binding.namespaceUri) &&
-        binding.namespaceUri !== XMLNS_NAMESPACE_URI &&
-        !(binding.prefix === 'xml' && binding.namespaceUri !== XML_NAMESPACE_URI) &&
-        !(binding.prefix !== 'xml' && binding.namespaceUri === XML_NAMESPACE_URI) &&
-        !(binding.prefix !== '' && binding.namespaceUri === '');
-      if (!valid) report('invalid-namespace', path, node.id);
-      localPrefixes.add(binding.prefix);
-      bindings.set(binding.prefix, binding.namespaceUri);
+    // Copy-on-write: most nodes declare no namespaces, and copying the inherited map per
+    // node made this walk the dominant cost of validating a long part.
+    let bindings: ReadonlyMap<string, string> = inheritedBindings;
+    if (node.namespaceBindings.length > 0) {
+      const own = new Map(inheritedBindings);
+      const localPrefixes = new Set<string>();
+      for (const binding of node.namespaceBindings) {
+        const valid =
+          !localPrefixes.has(binding.prefix) &&
+          (binding.prefix === '' || isValidNCName(binding.prefix)) &&
+          binding.prefix !== 'xmlns' &&
+          isValidXmlText(binding.namespaceUri) &&
+          binding.namespaceUri !== XMLNS_NAMESPACE_URI &&
+          !(binding.prefix === 'xml' && binding.namespaceUri !== XML_NAMESPACE_URI) &&
+          !(binding.prefix !== 'xml' && binding.namespaceUri === XML_NAMESPACE_URI) &&
+          !(binding.prefix !== '' && binding.namespaceUri === '');
+        if (!valid) report('invalid-namespace', node.id);
+        localPrefixes.add(binding.prefix);
+        own.set(binding.prefix, binding.namespaceUri);
+      }
+      bindings = own;
     }
 
-    if (!isValidNCName(node.localName)) report('invalid-name', path, node.id);
+    if (!isValidNCName(node.localName)) report('invalid-name', node.id);
     if (!isValidXmlText(node.namespaceUri) || node.namespaceUri === XMLNS_NAMESPACE_URI)
-      report('invalid-namespace', path, node.id);
+      report('invalid-namespace', node.id);
     const elementPrefixValid =
       node.prefix === undefined
         ? (bindings.get('') ?? '') === node.namespaceUri
         : isValidNCName(node.prefix) && bindings.get(node.prefix) === node.namespaceUri;
-    if (!elementPrefixValid) report('invalid-qname', path, node.id);
+    if (!elementPrefixValid) report('invalid-qname', node.id);
 
-    const expandedAttributes = new Set<string>();
+    // A single attribute cannot collide with itself, so the duplicate-tracking set is only
+    // allocated once a second attribute exists.
+    const expandedAttributes = node.attributes.length > 1 ? new Set<string>() : null;
     for (const attribute of node.attributes) {
-      if (!isValidNCName(attribute.localName)) report('invalid-name', path, node.id);
+      if (!isValidNCName(attribute.localName)) report('invalid-name', node.id);
       if (!isValidXmlText(attribute.namespaceUri) || attribute.namespaceUri === XMLNS_NAMESPACE_URI)
-        report('invalid-namespace', path, node.id);
-      if (!isValidXmlText(attribute.value)) report('invalid-xml-value', path, node.id);
+        report('invalid-namespace', node.id);
+      if (!isValidXmlText(attribute.value)) report('invalid-xml-value', node.id);
       const attributePrefixValid =
         attribute.prefix === undefined
           ? attribute.namespaceUri === ''
           : isValidNCName(attribute.prefix) &&
             bindings.get(attribute.prefix) === attribute.namespaceUri;
-      if (!attributePrefixValid) report('invalid-qname', path, node.id);
-      const key = expandedKey(attribute.namespaceUri, attribute.localName);
-      if (expandedAttributes.has(key)) report('duplicate-expanded-attribute', path, node.id);
-      expandedAttributes.add(key);
+      if (!attributePrefixValid) report('invalid-qname', node.id);
+      if (expandedAttributes) {
+        const key = expandedKey(attribute.namespaceUri, attribute.localName);
+        if (expandedAttributes.has(key)) report('duplicate-expanded-attribute', node.id);
+        expandedAttributes.add(key);
+      }
     }
 
     try {
       validateQNameAttributeValues(node.attributes, bindings, node.namespaceUri, node.localName);
     } catch {
-      report('invalid-qname', path, node.id);
+      report('invalid-qname', node.id);
     }
 
     if (node.kind !== 'generic') {
@@ -276,7 +294,7 @@ function runValidation(part: OoxmlPart, previous: OoxmlPart | null): OoxmlInvari
           : !knownAttributesAreValid(node.kind, node.attributes) ||
             !validKnownKind(node.kind, node.children))
       )
-        report('known-node-invariant', path, node.id);
+        report('known-node-invariant', node.id);
     }
 
     // Children may prune only when THIS node's paired predecessor declares the very same
@@ -303,16 +321,12 @@ function runValidation(part: OoxmlPart, previous: OoxmlPart | null): OoxmlInvari
       localName: node.localName,
       attributes: node.attributes,
     };
-    node.children.forEach((child, index) =>
-      walk(
-        child,
-        bindings,
-        `${path}.children[${index}]`,
-        priorChildren?.get(child.id),
-        childContext,
-        childParent
-      )
-    );
+    for (let index = 0; index < node.children.length; index += 1) {
+      const child = node.children[index]!;
+      indexTrail.push(index);
+      walk(child, bindings, priorChildren?.get(child.id), childContext, childParent);
+      indexTrail.pop();
+    }
   };
 
   walk(
@@ -321,7 +335,6 @@ function runValidation(part: OoxmlPart, previous: OoxmlPart | null): OoxmlInvari
       ['xml', XML_NAMESPACE_URI],
       ['xmlns', XMLNS_NAMESPACE_URI],
     ]),
-    'root',
     previous?.root,
     previous !== null,
     undefined

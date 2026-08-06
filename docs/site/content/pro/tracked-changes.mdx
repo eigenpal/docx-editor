@@ -1,7 +1,7 @@
 ---
 title: 'Tracked changes'
-description: "Suggesting mode records every edit as a Word revision. Render them, accept and reject them, from the packaged review sidebar or from your own UI."
-category: "Pro"
+description: 'Suggesting mode records every edit as a Word revision. Render them, accept and reject them, from the packaged review sidebar or from your own UI.'
+category: 'Pro'
 order: 61
 ---
 
@@ -87,9 +87,9 @@ Each card is a compound you can take apart:
 
 Every part takes `className`, `asChild`, and `hidden`. The action parts (`Accept`, `Reject`, `Delete`, `Reply`) also take `icon`.
 
-`Delete` is the destructive one, and it is on both kinds of card: on a comment it deletes the thread, and on a tracked change it discards the suggestion. `Replies` draws one per reply as well, so a single answer can be taken back without deleting the conversation it belongs to. It is absent on a card with nothing to discard.
+`Delete` is the destructive one, and it is on both kinds of card: on a comment it deletes the thread, and on a tracked change it discards the suggestion. `Replies` draws a Delete control per reply as well, so a single answer can be taken back without deleting the conversation it belongs to. Delete is absent on a card with nothing to discard.
 
-The stylesheet reveals it on hover of the one node it deletes, and on keyboard focus — a rail where every card offers to throw a remark away invites clicking one by mistake, and a reply that lit up its parent's control at the same time is how a reader deletes the wrong one. Restyle it like any other part; if you want it always visible, `visibility: visible` on `[data-testid='review-delete']` is the whole override.
+The stylesheet reveals it on hover of the one node it deletes, and on keyboard focus. A rail where every card offers to throw a remark away invites clicking one by mistake, and a reply that lit up its parent's control at the same time is how a reader deletes the wrong one. Restyle it like any other part; if you want it always visible, `visibility: visible` on `[data-testid='review-delete']` is the whole override.
 
 ## Choosing what the sidebar shows
 
@@ -111,7 +111,7 @@ The props on `DocxEditorReview` decide which decisions appear and how they stack
 <DocxEditorReview filter={(item) => item.kind === 'comment'} gap={12} furniture={<MyFilters />} />
 ```
 
-With `preset={false}` you keep the subscription and the anchoring and render the cards yourself. `useStackedReviewPositions(items, heights, { gap })` is the packaged stacking maths if you want the same behavior.
+With `preset={false}` you keep the subscription and the anchoring and render the cards yourself. `useStackedReviewPositions(items, heights, { gap })` is the packaged stacking math if you want the same behavior.
 
 ## Host content inside a card
 
@@ -162,17 +162,17 @@ function ChangeList() {
 }
 ```
 
-| Member                          | What it does                                                             |
-| ------------------------------- | ------------------------------------------------------------------------ |
-| `items`                         | Every pending decision, in reading order.                                |
-| `activeKey` / `setActive`       | Which item the caret is in; setting selects its range and scrolls to it. |
-| `accept(item)` / `reject(item)` | Resolve a revision. No-ops on an item whose `readOnly` is true.          |
-| `reply(item, text, author?)`    | Reply to a change. Returns whether it landed.                            |
+| Member                          | What it does                                                                 |
+| ------------------------------- | ---------------------------------------------------------------------------- |
+| `items`                         | Every pending decision, in reading order.                                    |
+| `activeKey` / `setActive`       | Which item the caret is in; setting selects its range and scrolls to it.     |
+| `accept(item)` / `reject(item)` | Resolve a revision. No-ops on an item whose `readOnly` is true.              |
+| `reply(item, text, author?)`    | Reply to a change. Returns whether it landed.                                |
 | `remove(item)`                  | Delete a comment thread, or discard a suggestion. Returns whether it landed. |
-| `comment(text, author?)`        | Comment on the current selection. Returns whether it landed.             |
-| `selectionAnchorY`              | Where a comment on the selection would sit, or `null`.                   |
-| `paneOpen` / `setPaneOpen`      | The same toggle the toolbar's comments button runs.                      |
-| `ready`                         | False while no document is loaded.                                       |
+| `comment(text, author?)`        | Comment on the current selection. Returns whether it landed.                 |
+| `selectionAnchorY`              | Where a comment on the selection would sit, or `null`.                       |
+| `paneOpen` / `setPaneOpen`      | The same toggle the toolbar's comments button runs.                          |
+| `ready`                         | False while no document is loaded.                                           |
 
 Each item carries `key`, `id`, `author`, `initials`, `date`, `text`, `replyIds`, `readOnly`, `anchorY`, `pageIndex`, and `isActive`. Revision items add `kind: 'revision'`, a `revisionKind`, and `replacedText` for replacements, so a card can say _Replaced "x" with "y"_.
 
