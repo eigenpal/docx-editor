@@ -124,7 +124,7 @@ Dark mode is the same list re-declared under `.docx-editor.dark`.
 - **`docx-editor` must be an ancestor** of any chrome you mount. `DocxEditor.Viewport` applies it
   to itself; a toolbar or menu bar you place outside the viewport needs it on a wrapper, or
   the whole Tailwind layer and every token silently resolve to nothing.
-- **Import the stylesheet**: `@import '@docx-editor.dev/react/styles.css'`.
+- **Import the stylesheet**: `@import '@docx-editor.dev/core/styles/editor.css'`.
 
 ### What is deliberately not themeable
 

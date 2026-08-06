@@ -50,9 +50,32 @@ const scopeTailwindDefaults = {
   },
 };
 
+// `@keyframes` names are DOCUMENT-GLOBAL: no selector strategy can scope them, so a
+// generic name we ship (tailwindcss-animate emits `enter` and `exit`) silently overrides
+// a host's own animation of the same name, or is overridden by it, depending on import
+// order. Every name we emit gets the editor's prefix, and every reference is rewritten.
+const prefixKeyframes = {
+  postcssPlugin: 'prefix-keyframes',
+  OnceExit(cssRoot) {
+    const renamed = new Map();
+    cssRoot.walkAtRules(/^(-\w+-)?keyframes$/, (rule) => {
+      const name = rule.params.trim();
+      if (name.startsWith('docx-') || name.startsWith('ep-') || name.startsWith('hf-')) return;
+      const next = `docx-editor-${name}`;
+      renamed.set(name, next);
+      rule.params = next;
+    });
+    if (renamed.size === 0) return;
+    cssRoot.walkDecls(/^(-\w+-)?animation(-name)?$/, (decl) => {
+      decl.value = decl.value.replace(/[\w-]+/g, (token) => renamed.get(token) ?? token);
+    });
+  },
+};
+
 const result = await postcss([
   tailwindcss({ config: join(root, 'tailwind.dist.config.cjs') }),
   scopeTailwindDefaults,
+  prefixKeyframes,
   autoprefixer(),
 ]).process(input, { from, map: false });
 
