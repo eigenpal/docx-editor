@@ -331,8 +331,12 @@ export function withCustomXmlDataPart(
   // directory deep, and the main document part comes from the root `.rels`, which the file
   // chooses — a root-level `/document.xml` made that target escape the package, so the store
   // never read back, idempotency was lost, and every call authored another one.
+  // The STORY's `.rels` too, not just the item's. A document that has never needed a
+  // relationship carries no `.rels` for its main part — a bare two-part package is legal and
+  // Word opens one — and `withRelationship` refuses rather than inventing the part, so without
+  // this the first store a document ever gets is refused with `store-not-authored`.
   const stored = withRelationship(
-    next,
+    withRelationshipsPartFor(next, storyPartName),
     storyPartName,
     CUSTOM_XML_REL,
     relativeTarget(storyPartName, names.item)
