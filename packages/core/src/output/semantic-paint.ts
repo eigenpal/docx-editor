@@ -1888,7 +1888,16 @@ function paintPage(
     container.style.left = `${(story.box.x - page.box.x) * options.scale}px`;
     container.style.top = `${(story.box.y - page.box.y) * options.scale}px`;
     container.style.width = `${story.box.width * options.scale}px`;
-    container.style.height = `${story.box.height * options.scale}px`;
+    // A footer whose only direct content is the empty paragraph hosting a floating shape
+    // flows to a hairline, which makes the ACTIVE edit band invisible. Editing extends the
+    // band down to the sheet edge — origin unchanged, so fragment and caret geometry stay
+    // put, and normal-mode sizing keeps the flow-height rule (#856) intact.
+    const bandHeight = !active
+      ? story.box.height
+      : story.kind === 'footer'
+        ? Math.max(story.box.height, page.box.y + page.box.height - story.box.y)
+        : Math.max(story.box.height, page.contentBox.y - story.box.y);
+    container.style.height = `${bandHeight * options.scale}px`;
     container.style.overflow = 'hidden';
     const storyOrigin = Object.freeze({
       x: 0,

@@ -436,6 +436,70 @@ describe('real-word textbox fixtures', () => {
   });
 });
 
+describe('active footer edit band', () => {
+  function stampRId(story: HeaderFooterStoryLayout, rId: string): HeaderFooterStoryLayout {
+    return {
+      ...story,
+      rId,
+      withPageContext: (ctx) => stampRId(story.withPageContext(ctx), rId),
+    };
+  }
+
+  test('editing a hairline footer extends the band to the sheet edge, viewing does not', () => {
+    const pkg = openPackage(footerTextboxDoc(textboxDrawing(PAGE_FIELD_PARAGRAPH), 10));
+    const part = pkg.parts.get(pkg.mainDocumentPart)!;
+    const sections = enumerateDocumentSections(part);
+    const bySection = resolveHeaderFooterPartsBySection(pkg);
+    const furniture = sections.map((section, index) => {
+      const parts = bySection[index];
+      if (!parts) return undefined;
+      const geometry = geometryOfSection(section.properties);
+      const mapStories = (source: typeof parts.footers) => {
+        const laid = new Map();
+        for (const [variant, hfPart] of source) {
+          laid.set(variant, stampRId(layoutFooterStory(hfPart, geometry), 'rId1'));
+        }
+        return laid;
+      };
+      return {
+        titlePage: parts.titlePage,
+        evenAndOddHeaders: parts.evenAndOddHeaders,
+        headers: mapStories(parts.headers),
+        footers: mapStories(parts.footers),
+      };
+    });
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer,
+      producer: 'test',
+      sectionFurniture: furniture,
+    });
+    const page = layout.pages[0]!;
+    const storyBox = page.footer!.box;
+    // The footer's only direct content is the empty anchor-host paragraph — a sliver.
+    expect(storyBox.height).toBeLessThan(page.box.height / 8);
+
+    const viewing = document.createElement('div');
+    paintSemanticLayout(viewing, layout, { scale: 1 });
+    const viewingBand = viewing.querySelector<HTMLElement>('[data-docx-hf="footer"]')!;
+    expect(parseFloat(viewingBand.style.height)).toBeCloseTo(storyBox.height, 1);
+
+    const editing = document.createElement('div');
+    paintSemanticLayout(editing, layout, {
+      scale: 1,
+      activeHeaderFooterRId: 'rId1',
+      activeHeaderFooterPageIndex: 0,
+    });
+    const activeBand = editing.querySelector<HTMLElement>('[data-docx-hf-active]')!;
+    expect(activeBand.dataset['docxHf']).toBe('footer');
+    // Band reaches the sheet edge so the edit region is visible and clickable; origin is
+    // unchanged, so fragment and caret geometry stay put.
+    expect(parseFloat(activeBand.style.top) + parseFloat(activeBand.style.height)).toBeCloseTo(
+      page.box.height,
+      1
+    );
+  });
+});
+
 describe('incremental relayout with footer textboxes', () => {
   test('an unchanged document re-lays out to the identical shape', () => {
     const bytes = footerTextboxDoc(textboxDrawing(PAGE_FIELD_PARAGRAPH), 60);
