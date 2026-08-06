@@ -32,6 +32,6 @@
 
 ## 5. Gaps inherited from PR #178
 
-- [ ] 5.1 The item id still collides across two documents made from one template — the seed is the main part's bytes at open time. Real, Word-visible, and currently only a comment claims otherwise.
+- [x] 5.1 The item id no longer collides across two documents made from one template: the seed reads `docProps/core.xml` and `word/settings.xml` alongside the body, which diverge as soon as either document is edited. Two byte-identical packages still seed identically, which is correct — they are the same document.
 - [ ] 5.2 Three guard tests in `custom-xml-part.test.ts` pass on fixture data and would survive their guards being deleted. They need crafted packages.
 - [ ] 5.3 `withoutPart` and `withRelationshipsPartFor` have no direct tests.

@@ -163,6 +163,26 @@ describe('the item id', () => {
     expect(a.part?.itemId).not.toBe(b.part?.itemId);
   });
 
+  test('differs between two documents made from one template', () => {
+    // The narrower case, and the one that survived the first fix: two files from one corporate
+    // template have byte-identical BODY content when opened, so a seed of body bytes alone
+    // hands them the same GUID and Word binds a pasted control to the wrong payload.
+    const template = fixture('comprehensive-word-element-test.docx');
+    const edited = {
+      ...template,
+      partBytes: new Map(template.partBytes).set(
+        '/docProps/core.xml',
+        new TextEncoder().encode(
+          '<cp:coreProperties><cp:revision>7</cp:revision></cp:coreProperties>'
+        )
+      ),
+    };
+    const a = withCustomXmlDataPart(template, STORY, 'urn:same', 'same');
+    const b = withCustomXmlDataPart(edited, STORY, 'urn:same', 'same');
+    expect(a.part?.itemId).toBeTruthy();
+    expect(a.part?.itemId).not.toBe(b.part?.itemId);
+  });
+
   test('is stable for one document, so a save is a fixed point', () => {
     const pkg = fixture('comprehensive-word-element-test.docx');
     const first = withCustomXmlDataPart(pkg, STORY, NS, 'docxEditor');

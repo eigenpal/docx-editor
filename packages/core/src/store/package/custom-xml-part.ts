@@ -107,20 +107,38 @@ function datastoreItemIdFor(seed: string): string {
  * silently binding the pasted control to the host document's payload instead. Nothing repairs
  * that: Word preserves the GUID it is given rather than reissuing one.
  *
- * The main part's bytes as loaded, which are fixed for the life of a document and differ
- * between any two real ones. Read once, at mint time; afterwards the id is read back out of
- * the store rather than recomputed, so later edits cannot move it.
+ * The bytes as loaded, over the parts that distinguish one document from another. Read once,
+ * at mint time; afterwards the id is read back out of the store rather than recomputed, so
+ * later edits cannot move it.
+ *
+ * The main part alone is not enough, and that gap is why this reads more than one: two
+ * documents made from one corporate template have byte-identical body content the moment they
+ * are opened, so a seed of body bytes alone hands them the same GUID — and Word's data store
+ * dedupes on it, so a bound control pasted from one into the other binds to the wrong payload.
+ * `core.xml` carries the revision and the modified time, `settings.xml` the editing-session
+ * rsids: two documents that have been edited at all differ in those long before they differ
+ * in anything else.
+ *
+ * Two byte-identical packages still seed identically. That is the correct answer — they are
+ * the same document, and their stores hold the same payload.
  */
+const IDENTITY_PARTS = ['/docProps/core.xml', '/word/settings.xml'];
+
 function documentIdentityOf(pkg: OoxmlPackage): string {
-  const bytes = pkg.partBytes.get(pkg.mainDocumentPart) ?? new Uint8Array();
   // FNV-1a over the bytes themselves: `fnv1a32` takes a string, and decoding a megabyte of
   // XML to hash it would cost more than the hash.
   let hash = 0x811c9dc5;
-  for (const byte of bytes) {
-    hash ^= byte;
-    hash = Math.imul(hash, 0x01000193) >>> 0;
+  let length = 0;
+  for (const name of [pkg.mainDocumentPart, ...IDENTITY_PARTS]) {
+    const bytes = pkg.partBytes.get(name);
+    if (!bytes) continue;
+    length += bytes.length;
+    for (const byte of bytes) {
+      hash ^= byte;
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
   }
-  return `${pkg.mainDocumentPart}#${String(bytes.length)}#${hash.toString(16)}`;
+  return `${pkg.mainDocumentPart}#${String(length)}#${hash.toString(16)}`;
 }
 
 /** `<dir>/_rels/<file>.rels` — never a payload store, whatever points at it. */
