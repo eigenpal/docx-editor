@@ -23,7 +23,7 @@ import {
 import type { AnyCustomNodeDefinition, CustomNodeDefinition } from './define-custom-node.ts';
 import { CUSTOM_NODE_STORE_ROOT, customNodeNamespace } from './node-payload.ts';
 import type { InferSchemaInput, StandardSchemaV1 } from './data-schema.ts';
-import { describeRefusal, payloadFor } from './insert-custom-node.ts';
+import { payloadFor, refusalOf } from './insert-custom-node.ts';
 import { encodeCustomNodeTag } from './tag-codec.ts';
 
 /** Instance-only surface on the concrete facade, the same escape hatch chrome uses. */
@@ -101,7 +101,7 @@ export function removeCustomNode(editor: Editor, nodeId: string): ExecResult {
   // the payload on the next open regardless, but a document saved in between would carry a
   // payload for a chip that is gone.
   const removed = surface.session.removeCustomNode(nodeId);
-  if (!removed.ok) return { ok: false, code: 'unsupported', reason: describeRefusal(removed) };
+  if (!removed.ok) return refusalOf(removed);
   return { ok: true, changed: true };
 }
 
@@ -189,9 +189,7 @@ export function updateCustomNode<Schema extends StandardSchemaV1 | undefined = u
     ...(lock === false ? {} : { lock }),
     ...(payload ? { payload: payload.value } : {}),
   });
-  if (!written.ok) {
-    return { ok: false, code: 'unsupported', reason: describeRefusal(written) };
-  }
+  if (!written.ok) return refusalOf(written);
   return { ok: true, changed: true };
 }
 

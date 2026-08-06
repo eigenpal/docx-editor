@@ -58,10 +58,33 @@ export function payloadFor(
   };
 }
 
-/** An engine refusal as one sentence, with the detail when the engine gave one. */
-export function describeRefusal(result: Extract<CustomNodeWriteResult, { ok: false }>): string {
-  return result.detail ? `${result.reason}: ${result.detail}` : result.reason;
+/**
+ * The engine's refusal, as an `ExecResult` a host can branch on.
+ *
+ * `invalidArgs` for the ones the CALLER can fix by passing something else — a payload past the
+ * cap, an offset outside the paragraph, a store that could not be authored for this namespace.
+ * `unsupported` for the rest, which are facts about the document: a lock, a protected form, a
+ * control bound to a part this engine will not rewrite. Sorting them here means a host can tell
+ * "fix your call" from "this document says no" without string-matching a reason.
+ */
+export function refusalOf(result: Extract<CustomNodeWriteResult, { ok: false }>): ExecResult {
+  const reason = result.detail ? `${result.reason}: ${result.detail}` : result.reason;
+  return {
+    ok: false,
+    code: CALLER_FIXABLE.has(result.reason) ? 'invalidArgs' : 'unsupported',
+    reason,
+  };
 }
+
+const CALLER_FIXABLE: ReadonlySet<string> = new Set([
+  'payload-too-large',
+  'unaddressable-payload',
+  'store-not-authored',
+  'offset-out-of-range',
+  'invalid-range',
+  'invalid-property-value',
+  'splits-surrogate-pair',
+]);
 
 /**
  * How {@link insertCustomNode} places a node.
@@ -146,8 +169,6 @@ export function insertCustomNode<Schema extends StandardSchemaV1 | undefined = u
     ...(lock === false ? {} : { lock }),
     ...(payload ? { payload: payload.value } : {}),
   });
-  if (!written.ok) {
-    return { ok: false, code: 'unsupported', reason: describeRefusal(written) };
-  }
+  if (!written.ok) return refusalOf(written);
   return { ok: true, changed: true };
 }
