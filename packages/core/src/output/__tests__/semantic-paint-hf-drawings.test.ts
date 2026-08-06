@@ -275,4 +275,42 @@ describe('header band ink overflows instead of clipping', () => {
     // box sits exactly at the section's top margin.
     expect(parseFloat(content.style.top)).toBeCloseTo(72, 0);
   });
+
+  test('ink escaping the band is still clipped at the SHEET', () => {
+    // Overflow is the fix; unbounded overflow is a new bug. A story-relative record can
+    // resolve past the paper — a footer shape anchored far above its paragraph, a header
+    // one reaching far below — and without a clip it paints across the inter-page gutter
+    // onto the neighbouring sheet. The clip is the sheet in the band's own coordinates.
+    const painted = paint(layout);
+    const page = layout.pages[0]!;
+    const story = page.header!;
+    const band = painted.querySelector<HTMLElement>('[data-docx-hf="header"]')!;
+
+    const clip = band.style.clipPath;
+    expect(clip).toContain('polygon');
+    const numbers = [...clip.matchAll(/(-?[\d.]+)px/g)].map((match) => Number(match[1]));
+    expect(numbers).toHaveLength(8);
+    const xs = numbers.filter((_, index) => index % 2 === 0);
+    const ys = numbers.filter((_, index) => index % 2 === 1);
+    // Exactly the sheet, expressed relative to the band's own origin.
+    expect(Math.min(...xs)).toBeCloseTo(page.box.x - story.box.x, 3);
+    expect(Math.max(...xs)).toBeCloseTo(page.box.x - story.box.x + page.box.width, 3);
+    expect(Math.min(...ys)).toBeCloseTo(page.box.y - story.box.y, 3);
+    expect(Math.max(...ys)).toBeCloseTo(page.box.y - story.box.y + page.box.height, 3);
+    // And the clip is genuinely OUTSIDE the band, or it would be the old bug again.
+    expect(Math.max(...ys)).toBeGreaterThan(parseFloat(band.style.height));
+  });
+
+  test('a nested drawing inside inert furniture is inert too', () => {
+    // `pointer-events: none` on an ancestor is undone by an explicit `auto` on a child,
+    // and every nested drawing carries one — a letterhead authored as a text box with a
+    // picture inside would still have taken clicks meant for the body underneath.
+    const painted = paint(layout);
+    const nested = painted.querySelectorAll<HTMLElement>(
+      '[data-docx-hf="header"] .docx-drawing-layer .docx-drawing'
+    );
+    for (const element of nested) {
+      expect(element.style.pointerEvents).toBe('none');
+    }
+  });
 });

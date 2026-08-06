@@ -313,6 +313,15 @@ function appendAnchoredDrawingsForRecords(
   )) {
     // Inline, not a stylesheet rule: this `auto` would beat any CSS guard.
     element.style.pointerEvents = interactive ? 'auto' : 'none';
+    if (!interactive) {
+      // DESCENDANTS TOO. `pointer-events: none` on an ancestor is undone by an explicit
+      // `auto` on a child, and every nested drawing gets one — inline, from
+      // `positionedBox`, and from the `.docx-drawing` rule. A letterhead authored as a
+      // text box with a picture inside would still have swallowed the click underneath it.
+      for (const nested of element.querySelectorAll<HTMLElement>('.docx-drawing')) {
+        nested.style.pointerEvents = 'none';
+      }
+    }
     layerElement.append(element);
   }
   if (layerElement.childElementCount > 0) parent.append(layerElement);
@@ -379,12 +388,21 @@ function appendHfPageRelativeDrawingLayer(
     readonly width: number;
     readonly height: number;
   },
-  layer: 'behind' | 'inFront'
+  layer: 'behind' | 'inFront',
+  interactive = false
 ): void {
   const pageRelative = drawings
     .filter(isPageRelativeHfAnchor)
     .map((drawing) => hfAnchorOnPageSheet(story, drawing, pageOrigin));
-  appendAnchoredDrawingsForRecords(document, pageElement, pageRelative, ctx, pageOrigin, layer);
+  appendAnchoredDrawingsForRecords(
+    document,
+    pageElement,
+    pageRelative,
+    ctx,
+    pageOrigin,
+    layer,
+    interactive
+  );
 }
 
 const HEX = /^[0-9A-Fa-f]{6}$/;
@@ -1895,6 +1913,14 @@ function paintPage(
   for (const story of [page.header, page.footer]) {
     if (!story) continue;
     const anchored = story.anchoredDrawings ?? [];
+    // Ahead of the layers below, which BOTH need it: furniture ink is inert while the band
+    // is not being edited, wherever on the sheet it was lifted to.
+    const active =
+      !!options.activeHeaderFooterRId &&
+      !!story.rId &&
+      options.activeHeaderFooterRId === story.rId &&
+      (options.activeHeaderFooterPageIndex === undefined ||
+        options.activeHeaderFooterPageIndex === page.index);
     appendHfPageRelativeDrawingLayer(
       document,
       element,
@@ -1902,18 +1928,13 @@ function paintPage(
       anchored,
       options,
       pageOrigin,
-      'behind'
+      'behind',
+      active
     );
     const container = document.createElement('div');
     container.className = 'docx-hf';
     container.dataset.docxHf = story.kind;
     if (story.rId) container.dataset.docxRId = story.rId;
-    const active =
-      !!options.activeHeaderFooterRId &&
-      !!story.rId &&
-      options.activeHeaderFooterRId === story.rId &&
-      (options.activeHeaderFooterPageIndex === undefined ||
-        options.activeHeaderFooterPageIndex === page.index);
     if (active) {
       container.dataset.docxHfActive = '';
       container.setAttribute('contenteditable', 'true');
@@ -1941,6 +1962,19 @@ function paintPage(
     // GEOMETRY still stops at flow height, so hit-testing and the body's effective top
     // margin are untouched; overflowing drawings stay inert below via `interactive`.
     container.style.overflow = 'visible';
+    // BUT NEVER PAST THE PAPER. Word clips ink at the sheet edge, and the band's own
+    // records are story-relative: a footer shape anchored far above its paragraph, or a
+    // header one reaching far below, resolves to a paint box that runs off the sheet and
+    // would paint across the inter-page gutter onto the neighbouring page. The clip is the
+    // SHEET expressed in the band's own coordinates, so ink still escapes the band (the
+    // whole point) and still stops at the paper.
+    const sheetLeft = (page.box.x - story.box.x) * options.scale;
+    const sheetTop = (page.box.y - story.box.y) * options.scale;
+    const sheetRight = sheetLeft + page.box.width * options.scale;
+    const sheetBottom = sheetTop + page.box.height * options.scale;
+    container.style.clipPath =
+      `polygon(${sheetLeft}px ${sheetTop}px, ${sheetRight}px ${sheetTop}px, ` +
+      `${sheetRight}px ${sheetBottom}px, ${sheetLeft}px ${sheetBottom}px)`;
     const storyOrigin = Object.freeze({
       x: 0,
       y: 0,
@@ -2004,7 +2038,8 @@ function paintPage(
       anchored,
       options,
       pageOrigin,
-      'inFront'
+      'inFront',
+      active
     );
   }
 
