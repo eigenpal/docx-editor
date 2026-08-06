@@ -104,7 +104,18 @@ export type CustomNodeWriteRejection =
   | 'payload-too-large';
 
 export type CustomNodeWriteResult =
-  | { readonly ok: true; readonly change: TreeModelChange | null }
+  | {
+      readonly ok: true;
+      readonly change: TreeModelChange | null;
+      /**
+       * The control this write authored, when it authored one.
+       *
+       * A rewrite REPLACES the control rather than editing it in place, so the id the caller
+       * passed in names nothing afterwards. Anything the host had attached to that node — a
+       * card, a selection, an entry in its own index — has to be re-pointed at this one.
+       */
+      readonly nodeId?: string;
+    }
   | { readonly ok: false; readonly reason: CustomNodeWriteRejection; readonly detail?: string };
 
 /**
@@ -141,6 +152,11 @@ export function insertCustomNodeWrite(
       return { ok: false, reason: 'payload-too-large', detail: 'label' };
     }
   }
+
+  // Which controls the story already had, so the one this write adds can be named afterwards.
+  // A set of ids, not the nodes: the tree is rebuilt by the transaction, so nothing carried
+  // across it stays valid except the ids themselves.
+  const controlsBefore = new Set(contentControlsIn(store.part.root).map((entry) => entry.node.id));
 
   // Resolved BEFORE the transaction, because afterwards the control is gone and nothing says
   // what it pointed at.
@@ -279,7 +295,25 @@ export function insertCustomNodeWrite(
       ...(result.detail === undefined ? {} : { detail: result.detail }),
     };
   }
-  return { ok: true, change: result.change };
+  const nodeId = authoredControlId(store, controlsBefore);
+  return { ok: true, change: result.change, ...(nodeId === undefined ? {} : { nodeId }) };
+}
+
+/**
+ * The content control this transaction added: the one the story did not have before.
+ *
+ * Not from `change.created` — that reports the paragraphs a transaction touched, not the nodes
+ * it minted, and comes back empty for an inline insert. One write authors one control, so the
+ * first id that is new is it.
+ */
+function authoredControlId(
+  store: TreeDocumentStore,
+  before: ReadonlySet<string>
+): string | undefined {
+  for (const entry of contentControlsIn(store.part.root)) {
+    if (!before.has(entry.node.id)) return entry.node.id;
+  }
+  return undefined;
 }
 
 /**

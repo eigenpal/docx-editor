@@ -128,7 +128,7 @@ describe('a payload larger than w:tag, declared by a schema', () => {
       at: { paragraphId: firstParagraphId(editor), offset: 7 },
       data: CITATION,
     });
-    expect(result).toEqual({ ok: true, changed: true });
+    expect(result).toMatchObject({ ok: true, changed: true });
 
     const saved = new Uint8Array(await editor.save());
     const entries = unzipSync(saved);
@@ -188,7 +188,7 @@ describe('a payload larger than w:tag, declared by a schema', () => {
       text: '(Jones 2025)',
       data: { ...CITATION, sourceId: 'src_2', year: 2025 },
     });
-    expect(updated).toEqual({ ok: true, changed: true });
+    expect(updated).toMatchObject({ ok: true, changed: true });
     const [after] = recognized(editor);
     expect(after?.text).toBe('(Jones 2025)');
     expect((after?.data as Citation).year).toBe(2025);
@@ -241,7 +241,7 @@ describe('a payload does not outlive its control', () => {
       data: CITATION,
     });
     const [node] = recognized(editor);
-    expect(removeCustomNode(editor, node!.nodeId)).toEqual({ ok: true, changed: true });
+    expect(removeCustomNode(editor, node!.nodeId)).toMatchObject({ ok: true, changed: true });
     const session = editor.surface!.session;
     const store = unzipSync(session.save())['customXml/item1.xml'];
     expect(store && strFromU8(store)).not.toContain('src_9f3');
@@ -470,7 +470,7 @@ describe('the failures a payload store can hide', () => {
       attrs: { sourceId: 'src_9f3' },
       text: '(Smith 2024, p. 42)',
     });
-    expect(updated).toEqual({ ok: true, changed: true });
+    expect(updated).toMatchObject({ ok: true, changed: true });
     const [after] = recognized(editor);
     expect(after?.text).toBe('(Smith 2024, p. 42)');
     expect(after?.data).toEqual(CITATION);
@@ -610,7 +610,7 @@ describe('one payload, derived into the document', () => {
       data: CITATION,
       at: { paragraphId: firstParagraphId(editor), offset: 1 },
     });
-    expect(result).toEqual({ ok: true, changed: true });
+    expect(result).toMatchObject({ ok: true, changed: true });
     const [node] = recognized(editor, [Derived]);
     expect(node?.text).toBe('(Smith, J. 2024)');
     expect(node?.attrs['sourceId']).toBe('src_9f3');

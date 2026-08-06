@@ -143,9 +143,11 @@ export interface CustomNodeUpdate<Schema extends StandardSchemaV1 | undefined = 
 }
 
 // @public
-export type CustomNodeWriteOutcome = Extract<ExecResult, {
+export type CustomNodeWriteOutcome = (Extract<ExecResult, {
     ok: true;
-}> | (Extract<ExecResult, {
+}> & {
+    readonly nodeId?: string;
+}) | (Extract<ExecResult, {
     ok: false;
 }> & {
     readonly issues?: readonly CustomNodeIssue[];

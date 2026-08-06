@@ -130,7 +130,14 @@ export function CustomNodeChrome(props: CustomNodeChromeProps): null {
   // hook written against the review rail's attrs shape sees the same shape from the chip.
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
-      const resolved = resolveCustomNodeActivation(event.target, nodes);
+      // Resolve from the click POINT when the target does not answer. Pressing a chip moves
+      // the caret into it, which repaints the control — so the boundary the press landed on
+      // is gone by mouseup, and the browser dispatches `click` on the nearest surviving
+      // ancestor (the pages layer) instead. `elementFromPoint` sees the repainted boundary
+      // that is there now, and a drag that ends elsewhere still resolves to nothing.
+      const resolved =
+        resolveCustomNodeActivation(event.target, nodes) ??
+        resolveCustomNodeActivation(document.elementFromPoint(event.clientX, event.clientY), nodes);
       if (!resolved) return;
       const node = activatedCustomNodeOf(resolved, editor);
       if (!node) return;

@@ -347,3 +347,48 @@
 .demo-review-card[data-node-name='citation'] {
   border-left: 3px solid #7c3aed;
 }
+
+/* ---------------------------------------------------------------------------
+   The citation card, anchored to its chip.
+
+   `useChipPopover` names the chip with `anchor-name`; everything below is the
+   browser's answer to "where does this go". No script measures anything, so the
+   card tracks its chip through scroll, resize, zoom and reflow, and
+   `position-try-fallbacks` flips it above the line when there is no room below.
+   `popover` puts it in the top layer: no z-index, and the page cannot clip it.
+   --------------------------------------------------------------------------- */
+.citation-card {
+  position: absolute;
+  position-anchor: --docx-chip;
+  position-area: bottom span-right;
+  position-try-fallbacks:
+    flip-block,
+    flip-inline,
+    flip-block flip-inline;
+  margin: 8px 0 0;
+  /* The popover UA sheet centres with `inset: 0; margin: auto`; `position-area` owns
+     placement here, so hand both back. */
+  inset: auto;
+  min-width: 260px;
+  max-width: 320px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgb(15 23 42 / 18%);
+  font:
+    13px/1.5 system-ui,
+    sans-serif;
+  color: #0f172a;
+  overflow: visible;
+}
+
+/* Flipped above the line, the 8px gap belongs on the other side. */
+.citation-card:is(:popover-open) {
+  margin-block: 8px;
+}
+
+/* Nothing to show yet: the element stays mounted so `showPopover` has a target. */
+.citation-card:not(:popover-open) {
+  display: none;
+}

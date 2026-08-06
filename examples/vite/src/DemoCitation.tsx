@@ -5,7 +5,7 @@
 // beside each other because they all speak the same schema — the definition is the only
 // place the shape is written down.
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { z } from 'zod';
 import { useDocxEditor, type EditorCaret } from '@docx-editor.dev/react';
@@ -13,6 +13,7 @@ import { defineCustomNode, insertCustomNode, updateCustomNode } from '@docx-edit
 import { CustomNodeChrome, useReviewItem } from '@docx-editor.dev/pro/react';
 import { sanitizeHref } from '@docx-editor.dev/core/store';
 import { DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON, keepCaret } from './demoButtons';
+import { useChipPopover } from '../../shared/useChipPopover';
 
 /**
  * What a citation carries, as an ordinary zod schema.
@@ -68,10 +69,8 @@ export const DEMO_CITATION = defineCustomNode({
  * styles.css), its chrome layer carries the node's `w:tag`, and decoding that
  * tag is the whole lookup — attrs come straight from the document.
  */
-/** Where the citation card opens, and for which attrs — owned by the demo root. */
+/** What the citation card shows, and which chip it hangs off — owned by the demo root. */
 export interface CitationCard {
-  readonly x: number;
-  readonly y: number;
   readonly attrs: Readonly<Record<string, string>>;
   /** The chip's payload. Everything but the source ID lives here now. */
   readonly data: unknown;
@@ -85,43 +84,18 @@ export interface CitationCard {
   readonly controlId: string | undefined;
 }
 
-/** One card position rule for every opener: chip click and the context menu's Edit row. */
+/** One card for every opener: chip click, chip hover, and the context menu's Edit row. */
 export function citationCardAt(
   node: {
-    readonly rect: DOMRect;
     readonly attrs: Readonly<Record<string, string>>;
     readonly data?: unknown;
     readonly nodeId?: string;
   },
   mode: 'preview' | 'open'
 ): CitationCard {
-  // Clamped to the viewport: a chip near the right margin put the card half off-screen.
-  const width = 260;
-  const margin = 12;
-  const x = Math.min(node.rect.left, Math.max(margin, window.innerWidth - width - margin));
-  return {
-    x,
-    y: node.rect.bottom + 8,
-    attrs: node.attrs,
-    data: node.data,
-    mode,
-    controlId: node.nodeId,
-  };
-}
-
-/** Where a card sits, from the chip's CURRENT rect. Null once the chip is gone or out of view. */
-function anchorFor(controlId: string): { readonly x: number; readonly y: number } | null {
-  const layer = document.querySelector(`[data-docx-content-control="${CSS.escape(controlId)}"]`);
-  const boundary = layer?.querySelector('.docx-content-control-boundary');
-  const rect = boundary?.getBoundingClientRect();
-  if (!rect || rect.width === 0) return null;
-  if (rect.bottom < 0 || rect.top > window.innerHeight) return null;
-  const width = 260;
-  const margin = 12;
-  return {
-    x: Math.min(rect.left, Math.max(margin, window.innerWidth - width - margin)),
-    y: rect.bottom + 8,
-  };
+  // No rect, no coordinates. `useChipPopover` names the chip and CSS does the rest, so a card
+  // opened here is still on its chip after a scroll, a resize or a reflow.
+  return { attrs: node.attrs, data: node.data, mode, controlId: node.nodeId };
 }
 
 export function CitationPopover({
@@ -138,114 +112,61 @@ export function CitationPopover({
   const onHover = (next: CitationCard) => {
     if (card?.mode !== 'open') onOpen(next);
   };
-  // The card is `position: fixed`, so its coordinates are viewport-space and go stale the moment
-  // the page scrolls — it used to stay put on screen while its chip travelled away. Re-anchored
-  // from the control's live rect instead, and closed once the chip is gone or off-screen.
-  const controlId = card?.controlId;
-  useEffect(() => {
-    if (!card || !controlId) return;
-    const reanchor = () => {
-      const anchor = anchorFor(controlId);
-      if (!anchor) {
-        onClose();
-        return;
-      }
-      if (anchor.x !== card.x || anchor.y !== card.y) onOpen({ ...card, ...anchor });
-    };
-    // Capture, because the scroller is the editor's viewport rather than the window.
-    window.addEventListener('scroll', reanchor, true);
-    window.addEventListener('resize', reanchor);
-    return () => {
-      window.removeEventListener('scroll', reanchor, true);
-      window.removeEventListener('resize', reanchor);
-    };
-  }, [card, controlId, onOpen, onClose]);
-
-  // Close when a click lands outside the card (chip clicks reopen through the API).
-  useEffect(() => {
-    if (!card) return;
-    const onClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (
-        !target?.closest('[role="dialog"]') &&
-        !target?.closest('.docx-content-control-boundary')
-      ) {
-        onClose();
-      }
-    };
-    document.addEventListener('click', onClick);
-    return () => document.removeEventListener('click', onClick);
-  }, [card, onClose]);
-  const chrome = (
-    // Definitions default to the ones registered on the Root — register once,
-    // every surface (chip styling, context menu, review cards) follows.
-    <CustomNodeChrome
-      onNodeClick={(node) => onOpen(citationCardAt(node, 'open'))}
-      // `onNodeHover` fires once per chip entered, so the preview follows the pointer across a
-      // paragraph of citations. It never replaces a card a click has already pinned.
-      onNodeHover={(node) => onHover(citationCardAt(node, 'preview'))}
-    />
-  );
-  if (!card) return chrome;
+  const { ref } = useChipPopover<HTMLDivElement>(card?.controlId, onClose);
+  const citation = card ? DEMO_CITATION.dataOf(card) : undefined;
   return (
     <>
-      {chrome}
+      {/* Definitions default to the ones registered on the Root — register once,
+          every surface (chip styling, context menu, review cards) follows. */}
+      <CustomNodeChrome
+        onNodeClick={(node) => onOpen(citationCardAt(node, 'open'))}
+        // `onNodeHover` fires once per chip entered, so the preview follows the pointer across a
+        // paragraph of citations. It never replaces a card a click has already pinned.
+        onNodeHover={(node) => onHover(citationCardAt(node, 'preview'))}
+      />
+      {/* Always mounted, because `showPopover` needs an element to call it on. Empty and
+          closed when there is no card. */}
       <div
+        ref={ref}
+        popover="manual"
+        className="citation-card"
         role="dialog"
         aria-label="Citation details"
-        style={{
-          position: 'fixed',
-          left: card.x,
-          top: card.y,
-          zIndex: 60,
-          minWidth: 260,
-          background: '#fff',
-          border: '1px solid #e2e8f0',
-          borderRadius: 12,
-          boxShadow: '0 12px 32px rgba(15, 23, 42, 0.18)',
-          padding: '12px 14px',
-          font: '13px/1.5 system-ui, sans-serif',
-          color: '#0f172a',
-        }}
       >
-        {(() => {
-          // One read for the whole card. `dataOf` narrows the node to this definition and
-          // validates the payload, so everything below is typed.
-          const citation = DEMO_CITATION.dataOf(card);
-          if (!citation) {
-            return <div style={{ color: '#64748b' }}>This citation carries no readable data.</div>;
-          }
-          return (
-            <>
-              <div style={{ fontWeight: 600, marginBottom: 2 }}>
-                {citation.authors.join(', ') || 'Unknown author'}
-              </div>
-              <div style={{ color: '#475569' }}>
-                {citation.year}
-                {citation.locator ? `, ${citation.locator}` : ''}
-              </div>
-              <div
-                style={{ marginTop: 8, font: '11px/1.4 ui-monospace, monospace', color: '#94a3b8' }}
-              >
-                {citation.sourceId}
-              </div>
-            </>
-          );
-        })()}
-        {card.mode === 'open' ? (
-          <button
-            type="button"
-            style={{ ...DEMO_PRIMARY_BUTTON, marginTop: 10 }}
-            onClick={() => {
-              const citation = DEMO_CITATION.dataOf(card);
-              window.alert(`A real app opens source ${citation?.sourceId ?? 'unknown'} here.`);
-              onClose();
-            }}
-          >
-            Open source
-          </button>
+        {card && !citation ? (
+          <div style={{ color: '#64748b' }}>This citation carries no readable data.</div>
+        ) : null}
+        {citation ? (
+          <>
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>
+              {citation.authors.join(', ') || 'Unknown author'}
+            </div>
+            <div style={{ color: '#475569' }}>
+              {citation.year}
+              {citation.locator ? `, ${citation.locator}` : ''}
+            </div>
+            <div
+              style={{ marginTop: 8, font: '11px/1.4 ui-monospace, monospace', color: '#94a3b8' }}
+            >
+              {citation.sourceId}
+            </div>
+          </>
+        ) : null}
+        {card?.mode === 'open' ? (
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button
+              type="button"
+              style={DEMO_PRIMARY_BUTTON}
+              onMouseDown={keepCaret}
+              onClick={() =>
+                window.alert(`A real app opens source ${card.attrs['sourceId']} here.`)
+              }
+            >
+              Open source
+            </button>
+          </div>
         ) : (
-          <div style={{ marginTop: 8, font: '11px/1.4 system-ui, sans-serif', color: '#94a3b8' }}>
+          <div style={{ marginTop: 10, fontSize: 12, color: '#94a3b8' }}>
             Click the citation to open it
           </div>
         )}

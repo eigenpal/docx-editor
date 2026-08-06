@@ -69,7 +69,7 @@ describe('updateCustomNode', () => {
       text: 'NEW',
       alias: 'Citation',
     });
-    expect(result).toEqual({ ok: true, changed: true });
+    expect(result).toMatchObject({ ok: true, changed: true });
     const [node] = recognizeCustomNodes(editor.surface!.session.part(), [citation]);
     expect(node?.attrs).toEqual({ sourceId: 's2', locator: 'p.9' });
     expect(node?.text).toBe('NEW');
@@ -80,6 +80,18 @@ describe('updateCustomNode', () => {
     const [restored] = recognizeCustomNodes(editor.surface!.session.part(), [citation]);
     expect(restored?.text).toBe('OLD');
     expect(restored?.attrs['sourceId']).toBe('s1');
+  });
+
+  test('answers the id of the control it authored, which is not the one it replaced', () => {
+    const { editor, nodeId } = mountWithChip();
+    const result = updateCustomNode(editor, citation, nodeId, { text: 'NEW' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // The rewrite replaces the control, so anything the host attached to `nodeId` has to
+    // follow this id instead.
+    expect(result.nodeId).toBeDefined();
+    const [node] = recognizeCustomNodes(editor.surface!.session.part(), [citation]);
+    expect(result.nodeId).toBe(node!.nodeId);
   });
 
   test('an unknown node id is refused, not silently inserted', () => {
@@ -93,7 +105,7 @@ describe('updateCustomNode', () => {
 describe('removeCustomNode', () => {
   test('deletes the node — wrapper and label — as one unit', () => {
     const { editor, nodeId } = mountWithChip();
-    expect(removeCustomNode(editor, nodeId)).toEqual({ ok: true, changed: true });
+    expect(removeCustomNode(editor, nodeId)).toMatchObject({ ok: true, changed: true });
     expect(recognizeCustomNodes(editor.surface!.session.part(), [citation])).toEqual([]);
     expect(editor.surface!.session.bodyText()).toBe('before after');
   });

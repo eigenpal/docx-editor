@@ -188,7 +188,7 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
         const survey = surveyOf(node);
         setProbe({
           kind: 'iceberg',
-          rect: node.rect,
+          controlId: node.nodeId,
           depth: survey.depth,
           ...(survey.surveyedBy ? { surveyedBy: survey.surveyedBy } : {}),
           ...(survey.notes ? { notes: survey.notes } : {}),
@@ -210,7 +210,9 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
         report(result, '');
         return;
       }
-      setProbe({ kind: 'igloo', rect: node.rect, blocks });
+      // `result.nodeId`, not `node.nodeId`: laying a block REPLACES the control, so the id that
+      // was clicked names nothing now and a card anchored to it would have nothing to hang off.
+      setProbe({ kind: 'igloo', controlId: result.nodeId ?? node.nodeId, blocks });
     },
     [editor, report, say]
   );
@@ -279,7 +281,7 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
           onClose={closeDialog}
         />
       ) : null}
-      {probe ? <SpecimenPopover probe={probe} onClose={closePopover} /> : null}
+      <SpecimenPopover probe={probe} onClose={closePopover} />
       {/* The live region is PERSISTENT and the notice swaps inside it: a `role="status"`
           element inserted already holding its text is unreliably announced, and this one
           was also remounted per notice to replay the fade. The inner key keeps the replay;

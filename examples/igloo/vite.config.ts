@@ -55,7 +55,9 @@ export default defineConfig({
   root: __dirname,
   resolve: {
     // Workspace source aliases, so editing the library repaints the demo. Mirrors
-    // `examples/vite/vite.config.ts`; ordered most-specific first.
+    // `examples/vite/vite.config.ts`; ordered most-specific first. `pro` belongs here too:
+    // without it this demo ran the last BUILT `packages/pro/dist`, so a library fix looked
+    // like it had not worked.
     alias: [
       {
         find: '@docx-editor.dev/react',
@@ -72,6 +74,14 @@ export default defineConfig({
       {
         find: /^@docx-editor\.dev\/core\/contracts\/(.+)$/,
         replacement: path.join(monorepoRoot, 'packages/core/src/contracts/$1.ts'),
+      },
+      {
+        find: '@docx-editor.dev/pro/react',
+        replacement: path.join(monorepoRoot, 'packages/pro/src/react/index.ts'),
+      },
+      {
+        find: '@docx-editor.dev/pro',
+        replacement: path.join(monorepoRoot, 'packages/pro/src/index.ts'),
       },
       {
         find: '@docx-editor.dev/i18n',

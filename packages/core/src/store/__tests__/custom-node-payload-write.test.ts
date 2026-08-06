@@ -202,6 +202,52 @@ describe('one transaction authors the store, the node and the control', () => {
   });
 });
 
+describe('the write answers which control it authored', () => {
+  test('an insert names the control it created', () => {
+    const store = storeWith();
+    const result = insert(store);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const controls = contentControlsIn(store.part.root);
+    expect(controls).toHaveLength(1);
+    expect(result.nodeId).toBe(controls[0]!.node.id);
+  });
+
+  test('a rewrite names the NEW control, not the one it replaced', () => {
+    const store = storeWith();
+    const first = insert(store);
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const replaced = insert(store, {
+      replaceControlId: first.nodeId,
+      text: '(Smith 2025)',
+      payload: {
+        namespaceUri: NS,
+        rootLocalName: ROOT,
+        nodeId: 'cx2',
+        label: '(Smith 2025)',
+        data: DATA,
+      },
+    });
+    expect(replaced.ok).toBe(true);
+    if (!replaced.ok) return;
+    // The id the caller passed in names nothing now, which is the whole reason it is answered.
+    expect(replaced.nodeId).toBeDefined();
+    expect(replaced.nodeId).not.toBe(first.nodeId);
+    const controls = contentControlsIn(store.part.root);
+    expect(controls).toHaveLength(1);
+    expect(replaced.nodeId).toBe(controls[0]!.node.id);
+  });
+
+  test('a control with no payload is named too', () => {
+    const store = storeWith();
+    const result = insert(store, { payload: undefined });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.nodeId).toBe(contentControlsIn(store.part.root)[0]!.node.id);
+  });
+});
+
 describe('a refusal leaves nothing behind', () => {
   test('an id no XPath can name refuses, and authors no store', () => {
     const store = storeWith();

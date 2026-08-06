@@ -758,9 +758,20 @@
 }
 
 /* ── The chip popover: anchored on `ActivatedCustomNode.rect`, a viewport rect ────────── */
+/* Anchored to the chip by CSS: `useChipPopover` names the painted boundary, and the
+   browser keeps the card on it through scroll, resize and reflow. `popover` renders it in
+   the top layer, so the page cannot clip it and it needs no z-index. */
 .igloo-probe {
-  position: fixed;
-  z-index: 60;
+  position: absolute;
+  position-anchor: --docx-chip;
+  position-area: bottom span-right;
+  position-try-fallbacks:
+    flip-block,
+    flip-inline,
+    flip-block flip-inline;
+  /* The popover UA sheet centres with `inset: 0; margin: auto`; `position-area` places it. */
+  inset: auto;
+  margin-block: 8px;
   width: 260px;
   padding: 12px 14px;
   border: 1px solid rgba(255, 255, 255, 0.8);
@@ -768,6 +779,12 @@
   background: rgba(243, 253, 255, 0.96);
   box-shadow: 0 16px 34px rgba(4, 32, 52, 0.45);
   color: var(--doc-text);
+  overflow: visible;
+}
+
+/* Mounted but empty until a chip is picked, so `showPopover` always has a target. */
+.igloo-probe:not(:popover-open) {
+  display: none;
 }
 
 .igloo-probe__title {

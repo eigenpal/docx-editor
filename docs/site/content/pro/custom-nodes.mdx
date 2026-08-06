@@ -132,7 +132,20 @@ Each is one transaction and one undo step, payload included.
 
 ### Returns
 
-`{ ok: true, changed: true }`, or a refusal:
+`{ ok: true, changed: true, nodeId }`, or a refusal.
+
+`nodeId` names the control the write authored. A rewrite replaces the control rather than editing
+it, so the id passed to `updateCustomNode` names nothing afterwards. Re-point anything attached to
+that node — a card, a selection, your own index — at the returned one:
+
+```tsx
+const result = updateCustomNode(editor, Citation, card.nodeId, { data: next });
+if (result.ok && result.nodeId) setCard({ ...card, nodeId: result.nodeId });
+```
+
+`removeCustomNode` authors no control, so it returns no `nodeId`.
+
+A refusal carries a `code`:
 
 | `code`        | Meaning                                                                                                                |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------- |

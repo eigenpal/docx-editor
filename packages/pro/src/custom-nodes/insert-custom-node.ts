@@ -121,7 +121,7 @@ const CALLER_FIXABLE: ReadonlySet<string> = new Set([
  * @public
  */
 export interface CustomNodeInput<
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the same reason
+   
   // `CustomNodeDefinition` defaults to `any`: without it the obvious wrapper annotation,
   // `function add(input: CustomNodeInput) { insertCustomNode(editor, Citation, input) }`, fails
   // with an error naming the DEFINITION rather than the annotation that caused it.
@@ -263,5 +263,11 @@ export function insertCustomNode<Schema extends StandardSchemaV1 | undefined = u
       : {}),
   });
   if (!written.ok) return refusalOf(written);
-  return { ok: true, changed: true };
+  // The id of the control that now exists, not the one that was passed in: the write replaces
+  // the node rather than editing it.
+  return {
+    ok: true,
+    changed: true,
+    ...(written.nodeId === undefined ? {} : { nodeId: written.nodeId }),
+  };
 }

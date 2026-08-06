@@ -244,7 +244,13 @@ export function updateCustomNode<Schema extends StandardSchemaV1 | undefined = u
       : {}),
   });
   if (!written.ok) return refusalOf(written);
-  return { ok: true, changed: true };
+  // The id of the control that now exists, not the one that was passed in: the write replaces
+  // the node rather than editing it.
+  return {
+    ok: true,
+    changed: true,
+    ...(written.nodeId === undefined ? {} : { nodeId: written.nodeId }),
+  };
 }
 
 /** What the control being replaced already says, so an omitted field survives the rewrite. */

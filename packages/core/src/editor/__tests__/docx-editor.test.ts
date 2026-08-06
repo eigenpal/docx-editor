@@ -559,7 +559,7 @@ describe('createDocxEditor', () => {
     });
     expect(editor.can({ type: 'insertBreak', kind: 'section' } as never)).toEqual({ ok: true });
     const result = editor.exec({ type: 'insertBreak', kind: 'section' } as never);
-    expect(result).toMatchObject({ ok: true, changed: true });
+    expect(result).toEqual({ ok: true, changed: true });
     expect(editor.surface!.session.paragraphIds()).toHaveLength(2);
     // The document now has two sections; one undo removes the break entirely.
     expect(editor.surface!.layout().pages.length).toBeGreaterThanOrEqual(2);

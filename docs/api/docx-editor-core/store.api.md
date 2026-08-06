@@ -892,6 +892,7 @@ export type CustomNodeWriteRejection = TreeOpRejection
 export type CustomNodeWriteResult = {
     readonly ok: true;
     readonly change: TreeModelChange | null;
+    readonly nodeId?: string;
 } | {
     readonly ok: false;
     readonly reason: CustomNodeWriteRejection;

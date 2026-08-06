@@ -67,7 +67,7 @@ describe('insertCustomNode', () => {
       text: '(Smith 2024, p. 42)',
       at: { paragraphId: firstParagraphId(editor), offset: 7 },
     });
-    expect(result).toEqual({ ok: true, changed: true });
+    expect(result).toMatchObject({ ok: true, changed: true });
     const [node] = recognizeCustomNodes(editor.surface!.session.part(), [citation]);
     expect(node?.attrs).toEqual({ sourceId: 'src_9f3', locator: 'p.42' });
     expect(node?.text).toBe('(Smith 2024, p. 42)');
