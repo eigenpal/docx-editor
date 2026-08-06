@@ -28,6 +28,7 @@ import {
   withoutCustomXmlDataPart,
   withoutOrphanCustomXmlNodes,
 } from '@docx-editor.dev/core/store';
+import { sanitizeHref } from '@docx-editor.dev/core/store';
 import { parseCustomNodeData, serializeCustomNodeData } from '../data-schema.ts';
 
 const STORY = '/word/document.xml';
@@ -40,6 +41,9 @@ const Citation = z.object({
   locator: z.string(),
   authors: z.array(z.string()).max(64),
   year: z.number().int().gte(0).lte(3000),
+  // Optional, and the badge shows a thumbnail for it. Both halves of that are hostile input:
+  // the string is the sender's, and so is whatever the URL would fetch.
+  url: z.url().optional(),
 });
 type Citation = z.infer<typeof Citation>;
 
@@ -48,6 +52,7 @@ const CITATION: Citation = {
   locator: 'p.42',
   authors: ['Smith, J.', 'Okonkwo, A.'],
   year: 2024,
+  url: 'https://example.test/papers/9f3.pdf',
 };
 
 function document(): ReturnType<typeof readOoxmlPackage> {
@@ -135,6 +140,43 @@ describe('a payload larger than w:tag, defined by a zod schema', () => {
       "/ns0:nodes/ns0:node[@id='cx1']/ns0:label"
     );
     expect(customXmlPrefixMappings('ns0', NS)).toBe(`xmlns:ns0='${NS}'`);
+  });
+});
+
+describe('a URL in the payload, for the badge thumbnail', () => {
+  test('it round-trips and validates like any other field', () => {
+    const { bytes, partName } = openedWithCitation();
+    const reopened = readOoxmlPackage(bytes);
+    if (!reopened.ok) throw new Error(reopened.reason);
+    const parsed = parseCustomNodeData(
+      Citation,
+      readCustomXmlNode(reopened.package, partName, 'cx1')?.data ?? ''
+    );
+    expect(parsed.ok && parsed.value.url).toBe('https://example.test/papers/9f3.pdf');
+  });
+
+  test('the schema refuses what is not a URL, and names the field', () => {
+    const parsed = parseCustomNodeData(
+      Citation,
+      '{"sourceId":"s","locator":"","authors":[],"year":2024,"url":"not a url"}'
+    );
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) expect(parsed.issues.join(' ')).toContain('url');
+  });
+
+  // A schema saying "this is a URL" is not the same as "this is safe to fetch". zod accepts
+  // `javascript:` and `data:` as well-formed URLs; the allowlist is what refuses them.
+  test('a scheme the allowlist rejects is inert before anything renders it', () => {
+    for (const hostile of [
+      'javascript:alert(1)',
+      'data:text/html,<script>x</script>',
+      'vbscript:x',
+    ]) {
+      expect(sanitizeHref(hostile).ok).toBe(false);
+    }
+    expect(sanitizeHref('https://example.test/a.png').ok).toBe(true);
+    // Embedded control characters are how a blocked scheme gets smuggled past a naive check.
+    expect(sanitizeHref('java\tscript:alert(1)').ok).toBe(false);
   });
 });
 
