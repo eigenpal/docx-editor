@@ -60,6 +60,7 @@ import {
   isCustomNodeDefinition,
   recognizeCustomNodes,
   type AnyCustomNodeDefinition,
+  type CustomNodeDiagnostic,
   type CustomNodePayloadSource,
 } from '../custom-nodes/define-custom-node.ts';
 
@@ -88,7 +89,8 @@ export function revisionItemsOfParagraph(
 export function customItemsOf(
   part: OoxmlPart,
   definitions: readonly AnyCustomNodeDefinition[],
-  payloads?: ReadonlyMap<string, CustomNodePayloadSource>
+  payloads?: ReadonlyMap<string, CustomNodePayloadSource>,
+  report?: (diagnostic: CustomNodeDiagnostic) => void
 ): ReviewCustomItem[] {
   // RECOGNIZE AGAINST EVERY DEFINITION, card or not. `reviewCard` decides whether a node gets a
   // SIDEBAR CARD; it must not decide whether the node is recognized at all. It used to: a
@@ -97,7 +99,10 @@ export function customItemsOf(
   // with nothing saying why. The item is emitted with no title when there is no card, and the
   // rail filters those out.
   if (definitions.length === 0) return [];
-  const recognized = recognizeCustomNodes(part, definitions, payloads);
+  const recognized = recognizeCustomNodes(part, definitions, {
+    ...(payloads === undefined ? {} : { payloads }),
+    ...(report === undefined ? {} : { onDiagnostic: report }),
+  });
   if (recognized.length === 0) return [];
   const located = locateSites(part);
   const items: ReviewCustomItem[] = [];
@@ -169,7 +174,8 @@ export function collectReviewItems(input: ReviewModelInput): ReviewItem[] {
       ...customItemsOf(
         part,
         definitions,
-        part.name === input.storyPart.name ? input.customNodePayloads : undefined
+        part.name === input.storyPart.name ? input.customNodePayloads : undefined,
+        input.reportCustomNodeDiagnostic as ((d: CustomNodeDiagnostic) => void) | undefined
       )
     );
     const offset = order.size;

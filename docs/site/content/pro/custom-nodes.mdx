@@ -216,12 +216,20 @@ Inside `text`, `reviewCard` and `fromDocx`, `data` is the schema's output type. 
 Use `dataOf` to cross that boundary. It narrows a node to this definition and validates its payload against this schema, so you never write a parse at the call site:
 
 ```tsx
+// Every node in the document, in order, with its payload.
+for (const node of customNodesOf(editor)) {
+  const citation = Citation.dataOf(node);
+  if (citation) index.add(citation.sourceId);
+}
+
 // On the chip: click, hover, and the context menu's Edit row.
 <CustomNodeChrome onNodeClick={(node) => open(Citation.dataOf(node))} />;
 
-// Every node in the document, with its range. Requires the review module.
+// With ranges, for anchoring UI. Requires the review module.
 const cards = editor.getReviewItems().filter((entry) => entry.item.kind === 'custom');
 ```
+
+`customNodesOf` reads the body and recognizes every definition registered on the editor; pass `{ nodes }` to narrow it. It derives from the document each time it is called — there is no change event, so re-read after an edit rather than holding the array.
 
 A payload with no `schema` comes back as parsed JSON on a null-prototype object, so `hasOwnProperty` and `instanceof Object` do not hold on it.
 
@@ -244,6 +252,8 @@ customNodesModule({
   },
 });
 ```
+
+The listener belongs to the editor the module is registered on. Two editors on one page hear only their own documents, and a listener goes when its editor does.
 
 ## Payload lifecycle
 

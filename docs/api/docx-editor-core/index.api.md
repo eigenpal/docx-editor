@@ -1201,6 +1201,7 @@ export interface Editor {
         sync?: boolean;
     }): void;
     replyToReviewItem(key: string, text: string, author?: string): ExecResult;
+    reportCustomNodeDiagnostic(diagnostic: unknown): void;
     save(): Promise<ArrayBuffer>;
     // (undocumented)
     scrollToBlock(blockId: string): boolean;
@@ -1514,6 +1515,7 @@ export interface EditorModule {
     readonly customNodePayloadNamespaces?: readonly string[];
     readonly customNodes?: readonly unknown[];
     readonly id: string;
+    readonly onCustomNodeDiagnostic?: (diagnostic: unknown) => void;
     readonly review?: ReviewModuleContribution;
 }
 
@@ -2219,6 +2221,7 @@ export interface ReviewItemQuery {
 export interface ReviewModelInput {
     readonly commentsExtendedPart?: OoxmlPart | undefined;
     readonly commentsPart?: OoxmlPart | undefined;
+    // (undocumented)
     readonly customNodePayloads?: ReadonlyMap<string, {
         readonly nodeId: string;
         readonly label: string;
@@ -2226,6 +2229,7 @@ export interface ReviewModelInput {
     }> | undefined;
     readonly customNodes?: readonly unknown[] | undefined;
     readonly furnitureParts?: readonly OoxmlPart[] | undefined;
+    readonly reportCustomNodeDiagnostic?: ((diagnostic: unknown) => void) | undefined;
     readonly storyPart: OoxmlPart;
 }
 

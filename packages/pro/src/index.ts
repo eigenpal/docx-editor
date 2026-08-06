@@ -43,8 +43,10 @@ export {
   type CustomNodeDiagnostic,
   type CustomNodePayloadSource,
   type CustomNodesModuleOptions,
+  type RecognizeCustomNodesOptions,
   type RecognizedCustomNode,
 } from './custom-nodes/define-custom-node.ts';
+export { customNodesOf, type CustomNodesOfOptions } from './custom-nodes/read-custom-nodes.ts';
 export {
   exportCustomNodes,
   type DocumentDestination,

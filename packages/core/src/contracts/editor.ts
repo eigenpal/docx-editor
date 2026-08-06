@@ -497,6 +497,17 @@ export interface Editor {
    * every surface taking the same `nodes` array and drifting.
    */
   getCustomNodeDefinitions(): readonly unknown[];
+  /**
+   * Report a custom-node diagnostic to the modules registered on THIS editor.
+   *
+   * The capability package raises these from its own read paths as well as from the review
+   * derivation, and both have to reach the same listeners — the ones belonging to this instance.
+   * Keeping the channel here rather than in the package is what stops two editors on one page
+   * hearing about each other's documents.
+   *
+   * Opaque, like `getCustomNodeDefinitions`: what a diagnostic means belongs to whoever raised it.
+   */
+  reportCustomNodeDiagnostic(diagnostic: unknown): void;
 
   /**
    * How edits are written: directly, as suggestions, or not at all.

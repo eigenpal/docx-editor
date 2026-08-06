@@ -114,6 +114,15 @@ export interface EditorModule {
    * is never touched.
    */
   readonly customNodePayloadNamespaces?: readonly string[];
+  /**
+   * Told when the recognition pass finds something wrong with a node in THIS editor's document.
+   *
+   * Carried per module rather than kept by the capability package, so two editors on one page
+   * hear only their own documents and a detached editor's listener goes with it. The shape is
+   * opaque here for the same reason `customNodes` is: what a diagnostic means belongs to the
+   * package that raised it.
+   */
+  readonly onCustomNodeDiagnostic?: (diagnostic: unknown) => void;
 }
 
 /**
@@ -126,12 +135,15 @@ export interface EditorModuleRegistry {
   readonly customNodes: readonly unknown[];
   /** Every claimed payload namespace, deduplicated, in registration order. */
   readonly customNodePayloadNamespaces: readonly string[];
+  /** Every registered diagnostic listener, in registration order. */
+  readonly customNodeDiagnostics: readonly ((diagnostic: unknown) => void)[];
 }
 
 const EMPTY_REGISTRY: EditorModuleRegistry = Object.freeze({
   review: null,
   customNodes: Object.freeze([]) as readonly unknown[],
   customNodePayloadNamespaces: Object.freeze([]) as readonly string[],
+  customNodeDiagnostics: Object.freeze([]) as readonly ((diagnostic: unknown) => void)[],
 });
 
 /** Resolve construction-time modules into the registry the instance dispatches over. */
@@ -142,6 +154,7 @@ export function resolveEditorModules(
   let review: ReviewModuleContribution | null = null;
   const customNodes: unknown[] = [];
   const namespaces = new Set<string>();
+  const diagnostics: ((diagnostic: unknown) => void)[] = [];
   for (const module of modules) {
     // First registration wins: two review modules is a configuration mistake,
     // and silently merging them would leave neither author able to say which
@@ -150,6 +163,12 @@ export function resolveEditorModules(
     if (module.review && review === null) review = module.review;
     if (module.customNodes) customNodes.push(...module.customNodes);
     for (const namespace of module.customNodePayloadNamespaces ?? []) namespaces.add(namespace);
+    if (module.onCustomNodeDiagnostic) diagnostics.push(module.onCustomNodeDiagnostic);
   }
-  return { review, customNodes, customNodePayloadNamespaces: [...namespaces] };
+  return {
+    review,
+    customNodes,
+    customNodePayloadNamespaces: [...namespaces],
+    customNodeDiagnostics: diagnostics,
+  };
 }

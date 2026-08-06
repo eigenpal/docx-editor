@@ -263,6 +263,17 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * construction-time and immutable for the instance's lifetime.
    */
   const modules = resolveEditorModules(config.modules);
+  /** Every listener this instance's modules registered. Never the ones another editor's did. */
+  const reportDiagnostic = (diagnostic: unknown): void => {
+    for (const report of modules.customNodeDiagnostics) {
+      // One listener throwing must not stop the others hearing it.
+      try {
+        report(diagnostic);
+      } catch {
+        /* reported to the rest regardless */
+      }
+    }
+  };
   const reviewEnabled = modules.review !== null;
   /** Document bytes waiting for a container — set when constructed or loaded detached. */
   let pendingBytes: Uint8Array | null = null;
@@ -511,7 +522,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
               collectReviewItems: (input: ReviewModelInput) =>
                 modules.review!.collectReviewItems(
                   modules.customNodes.length > 0
-                    ? { ...input, customNodes: modules.customNodes }
+                    ? {
+                        ...input,
+                        customNodes: modules.customNodes,
+                        // THIS editor's listeners, so a second editor on the page never hears
+                        // about a document it did not open.
+                        ...(modules.customNodeDiagnostics.length > 0
+                          ? { reportCustomNodeDiagnostic: reportDiagnostic }
+                          : {}),
+                      }
                     : input
                 ),
             },
@@ -1847,6 +1866,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     getReviewItems: (query?: ReviewItemQuery) => reviewPlacements(query),
     getCustomNodeDefinitions: () => modules.customNodes,
+    reportCustomNodeDiagnostic: reportDiagnostic,
 
     addComment(text: string, author?: string): ExecResult {
       // Comment AUTHORING is the review module's capability, like every other

@@ -588,6 +588,7 @@ export interface Editor {
         sync?: boolean;
     }): void;
     replyToReviewItem(key: string, text: string, author?: string): ExecResult;
+    reportCustomNodeDiagnostic(diagnostic: unknown): void;
     save(): Promise<ArrayBuffer>;
     // (undocumented)
     scrollToBlock(blockId: string): boolean;

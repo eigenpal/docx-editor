@@ -475,31 +475,6 @@ export interface CustomNodesModuleOptions extends ProLicenseOptions {
   readonly onDiagnostic?: (diagnostic: CustomNodeDiagnostic) => void;
 }
 
-/**
- * Where recognition reports to.
- *
- * Module-level, like the license key, and for the same reason: recognition runs inside the
- * engine's review derivation, which forwards definitions and nothing else. Threading a callback
- * through `ReviewModelInput` would put a capability package's diagnostics channel in the
- * engine's own contract.
- *
- * A SET, not a slot. Two editors on one page each register a module, and the second one — which
- * may not want diagnostics at all — used to overwrite the first's callback with `null` and
- * silence it for the rest of the session.
- */
-const diagnosticListeners = new Set<(diagnostic: CustomNodeDiagnostic) => void>();
-
-/** Report to every registered listener. Never throws at the caller. */
-export function reportCustomNodeDiagnostic(diagnostic: CustomNodeDiagnostic): void {
-  for (const report of [...diagnosticListeners]) {
-    try {
-      report(diagnostic);
-    } catch {
-      // A host's logger throwing must not take a document's recognition pass with it.
-    }
-  }
-}
-
 /** Register custom node definitions with `createDocxEditor({ modules })`. */
 export function customNodesModule(options: CustomNodesModuleOptions): EditorModule {
   rememberLicenseKey(options.licenseKey);
@@ -514,10 +489,18 @@ export function customNodesModule(options: CustomNodesModuleOptions): EditorModu
     }
     claimed.add(identity);
   }
-  if (options.onDiagnostic) diagnosticListeners.add(options.onDiagnostic);
   return {
     id: 'custom-nodes',
     customNodes: options.nodes,
+    // Carried ON THE MODULE, so it belongs to the editor this is registered with. Two editors on
+    // one page hear only their own documents, and a detached editor's listener goes with it.
+    ...(options.onDiagnostic
+      ? {
+          onCustomNodeDiagnostic: (diagnostic: unknown) => {
+            options.onDiagnostic?.(diagnostic as CustomNodeDiagnostic);
+          },
+        }
+      : {}),
     // The stores this module owns, so the engine's open-time sweep collects orphaned payloads
     // in them and touches nobody else's — see `EditorModule.customNodePayloadNamespaces`.
     customNodePayloadNamespaces: [...new Set(options.nodes.map(customNodeNamespace))],
@@ -556,10 +539,17 @@ function textUnder(node: OoxmlNode): string {
  * definition's `fromDocx`; everything else — foreign tags, unregistered
  * prefixes, a `fromDocx` veto — stays a literal SDT.
  */
+export interface RecognizeCustomNodesOptions {
+  /** The payload each control binds, from `customNodePayloadsByControl`. */
+  readonly payloads?: ReadonlyMap<string, CustomNodePayloadSource>;
+  /** Told about a node whose payload could not be read. Omitted, nothing is reported. */
+  readonly onDiagnostic?: (diagnostic: CustomNodeDiagnostic) => void;
+}
+
 export function recognizeCustomNodes(
   part: OoxmlPart,
   definitions: readonly AnyCustomNodeDefinition[],
-  payloads?: ReadonlyMap<string, CustomNodePayloadSource>
+  options: RecognizeCustomNodesOptions = {}
 ): RecognizedCustomNode[] {
   if (definitions.length === 0) return [];
   const byIdentity = new Map<string, AnyCustomNodeDefinition>();
@@ -587,8 +577,9 @@ export function recognizeCustomNodes(
         const data = resolvePayload(
           definition,
           node.id,
-          payloads?.get(node.id),
-          contentControlPropertiesOf(node).dataBinding !== undefined
+          options.payloads?.get(node.id),
+          contentControlPropertiesOf(node).dataBinding !== undefined,
+          options.onDiagnostic
         );
         const attrs = definition.fromDocx
           ? definition.fromDocx({
@@ -631,13 +622,14 @@ function resolvePayload(
   nodeId: string,
   source: CustomNodePayloadSource | undefined,
   /** Whether the control declares a `w:dataBinding` — i.e. claims to have a payload. */
-  bound: boolean
+  bound: boolean,
+  report: ((diagnostic: CustomNodeDiagnostic) => void) | undefined
 ): { readonly present: true; readonly value: unknown } | { readonly present: false } {
   if (!source) {
     // A control that says it is bound and a store that does not hold the node is not the same
     // thing as a control that carries no payload, and both used to arrive as silence.
     if (bound) {
-      reportCustomNodeDiagnostic({
+      report?.({
         code: 'payload-missing',
         name: definition.name,
         nodeId,
@@ -648,7 +640,7 @@ function resolvePayload(
   }
   const parsed = parseCustomNodeData(definition.schema, source.data);
   if (parsed.ok) return { present: true, value: parsed.value };
-  reportCustomNodeDiagnostic({
+  report?.({
     code: 'payload-invalid',
     name: definition.name,
     nodeId,

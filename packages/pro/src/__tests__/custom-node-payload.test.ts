@@ -26,6 +26,7 @@ import {
   insertCustomNode,
   recognizeCustomNodes,
   removeCustomNode,
+  customNodesOf,
   updateCustomNode,
   type AnyCustomNodeDefinition,
   type CustomNodeDiagnostic,
@@ -113,11 +114,9 @@ function recognized(
   nodes: readonly AnyCustomNodeDefinition[] = [citation]
 ) {
   const session = editor.surface!.session;
-  return recognizeCustomNodes(
-    session.part(),
-    nodes,
-    customNodePayloadsByControl(session.currentPackage(), session.part().name)
-  );
+  return recognizeCustomNodes(session.part(), nodes, {
+    payloads: customNodePayloadsByControl(session.currentPackage(), session.part().name),
+  });
 }
 
 describe('a payload larger than w:tag, declared by a schema', () => {
@@ -220,7 +219,9 @@ describe('a payload the file got wrong', () => {
 
     const seen: CustomNodeDiagnostic[] = [];
     const reopened = mount(zipSync(saved), [citation], (diagnostic) => seen.push(diagnostic));
-    const [node] = recognized(reopened);
+    // Through the EDITOR, because that is what carries the listener now — the module is
+    // registered on this instance and nothing else hears it.
+    const [node] = customNodesOf(reopened, { onDiagnostic: (d) => seen.push(d) });
     // The chip is still there, with its tag attrs — only the payload is withheld.
     expect(node?.attrs).toEqual({ sourceId: 'src_9f3' });
     expect(node?.data).toBeUndefined();
@@ -547,7 +548,7 @@ describe('the failures a payload store can hide', () => {
       payloadNamespace: 'urn:example:unclaimed',
     });
     const reopened = mount(zipSync(saved), [other], (diagnostic) => seen.push(diagnostic));
-    recognized(reopened, [other]);
+    customNodesOf(reopened, { onDiagnostic: (d) => seen.push(d) });
     expect(seen.map((entry) => entry.code)).toContain('payload-missing');
   });
 
@@ -725,5 +726,69 @@ describe('dataOf: the payload, typed, wherever it turns up', () => {
   test('with no schema it hands back what the file held, unchecked', () => {
     const bare = defineCustomNode({ name: 'bare', tagPrefix: 'acme' });
     expect(bare.dataOf({ data: { anything: 1 } })).toEqual({ anything: 1 });
+  });
+});
+
+describe('diagnostics belong to the editor that registered them', () => {
+  /** A document whose control binds a store node the file no longer holds. */
+  async function withBrokenBinding(): Promise<Uint8Array> {
+    const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 'src_9f3' },
+      text: '(Smith 2024)',
+      at: { paragraphId: firstParagraphId(editor), offset: 1 },
+      data: CITATION,
+    });
+    const saved = unzipSync(new Uint8Array(await editor.save()));
+    saved['customXml/item1.xml'] = strToU8(
+      strFromU8(saved['customXml/item1.xml']!).replace(/<node id="cx1">.*<\/node>/s, '')
+    );
+    return zipSync(saved);
+  }
+
+  test('a second editor does not hear about the first editor’s document', async () => {
+    const broken = await withBrokenBinding();
+    const clean = docx('<w:p><w:r><w:t>nothing here</w:t></w:r></w:p>');
+    // The namespace nobody claims keeps the open-time sweep from tidying the orphan away first.
+    const unclaimed = defineCustomNode({
+      name: 'citation',
+      tagPrefix: 'acme',
+      schema: Citation,
+      payloadNamespace: 'urn:example:unclaimed',
+    });
+
+    const heardByClean: string[] = [];
+    const heardByBroken: string[] = [];
+    const cleanEditor = mount(clean, [unclaimed], (d) => heardByClean.push(d.code));
+    const brokenEditor = mount(broken, [unclaimed], (d) => heardByBroken.push(d.code));
+
+    customNodesOf(brokenEditor);
+    expect(heardByBroken).toContain('payload-missing');
+    // The listener was module-level once, so this editor was told about a document it never
+    // opened — and the diagnostic carries no editor id, so it could not have filtered it out.
+    expect(heardByClean).toEqual([]);
+
+    customNodesOf(cleanEditor);
+    expect(heardByClean).toEqual([]);
+  });
+
+  test('a detached editor stops hearing anything', async () => {
+    const broken = await withBrokenBinding();
+    const unclaimed = defineCustomNode({
+      name: 'citation',
+      tagPrefix: 'acme',
+      schema: Citation,
+      payloadNamespace: 'urn:example:unclaimed',
+    });
+    const heard: string[] = [];
+    const gone = mount(broken, [unclaimed], (d) => heard.push(d.code));
+    gone.destroy();
+
+    // A fresh editor with its own listener. Nothing routes to the destroyed one's closure.
+    const live: string[] = [];
+    const editor = mount(broken, [unclaimed], (d) => live.push(d.code));
+    customNodesOf(editor);
+    expect(live).toContain('payload-missing');
+    expect(heard).toEqual([]);
   });
 });

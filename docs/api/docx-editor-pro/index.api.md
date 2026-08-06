@@ -129,6 +129,15 @@ export interface CustomNodesModuleOptions extends ProLicenseOptions {
 }
 
 // @public
+export function customNodesOf(editor: Editor, options?: CustomNodesOfOptions): readonly RecognizedCustomNode[];
+
+// @public
+export interface CustomNodesOfOptions {
+    readonly nodes?: readonly AnyCustomNodeDefinition[];
+    readonly onDiagnostic?: (diagnostic: CustomNodeDiagnostic) => void;
+}
+
+// @public
 export interface CustomNodeUpdate<Schema extends StandardSchemaV1 | undefined = undefined> extends Omit<CustomNodeInput<Schema>, 'at' | 'data'> {
     readonly data?: InferSchemaInput<Schema> | null;
 }
@@ -260,8 +269,14 @@ export interface ProLicenseOptions {
     readonly licenseKey?: string;
 }
 
+// @public (undocumented)
+export function recognizeCustomNodes(part: OoxmlPart, definitions: readonly AnyCustomNodeDefinition[], options?: RecognizeCustomNodesOptions): RecognizedCustomNode[];
+
 // @public
-export function recognizeCustomNodes(part: OoxmlPart, definitions: readonly AnyCustomNodeDefinition[], payloads?: ReadonlyMap<string, CustomNodePayloadSource>): RecognizedCustomNode[];
+export interface RecognizeCustomNodesOptions {
+    readonly onDiagnostic?: (diagnostic: CustomNodeDiagnostic) => void;
+    readonly payloads?: ReadonlyMap<string, CustomNodePayloadSource>;
+}
 
 // @public
 export interface RecognizedCustomNode {

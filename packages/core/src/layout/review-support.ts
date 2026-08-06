@@ -275,6 +275,11 @@ export interface ReviewModelInput {
    * input on both members; a capability package validates it against whatever shape it
    * declared before handing it to a host.
    */
+  /**
+   * Where a capability package reports a node it could not read. Supplied per editor, so a page
+   * with two of them keeps their diagnostics apart.
+   */
+  readonly reportCustomNodeDiagnostic?: ((diagnostic: unknown) => void) | undefined;
   readonly customNodePayloads?:
     | ReadonlyMap<
         string,

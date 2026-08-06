@@ -190,11 +190,9 @@ describe('a document authored on a server', () => {
     expect(story).toBeDefined();
     if (!story) return;
     const [node] = withoutDom(() =>
-      recognizeCustomNodes(
-        story,
-        [Clause],
-        customNodePayloadsByControl(read.package, '/word/document.xml')
-      )
+      recognizeCustomNodes(story, [Clause], {
+        payloads: customNodePayloadsByControl(read.package, '/word/document.xml'),
+      })
     );
     expect(node?.attrs['clauseId']).toBe('c-1');
     // The payload the server wrote, back through the schema the definition declared.
