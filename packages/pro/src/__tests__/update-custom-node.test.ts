@@ -85,7 +85,6 @@ describe('updateCustomNode', () => {
   test('answers the id of the control it authored, which is not the one it replaced', () => {
     const { editor, nodeId } = mountWithChip();
     const result = updateCustomNode(editor, citation, nodeId, { text: 'NEW' });
-    if (!result.ok) console.log('UPDATE REFUSED:', JSON.stringify(result));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     // The rewrite replaces the control, so anything the host attached to `nodeId` has to
@@ -153,7 +152,6 @@ describe('custom-node writes respect the story and the mode', () => {
     });
     const entered = editor.surface!.enterHeaderFooter!({ rId: 'rIdH', kind: 'header' });
     if (!entered) throw new Error('could not open the header');
-    const headerPart = editor.surface!.session.partFor({ kind: 'headerFooter', rId: 'rIdH' })!;
     const paragraphId = editor.surface!.session.paragraphIdsIn({
       kind: 'headerFooter',
       rId: 'rIdH',
@@ -165,7 +163,6 @@ describe('custom-node writes respect the story and the mode', () => {
     });
     if (!inserted.ok) throw new Error(`insert refused: ${inserted.reason}`);
     const refreshed = editor.surface!.session.partFor({ kind: 'headerFooter', rId: 'rIdH' })!;
-    void headerPart;
     const [node] = recognizeCustomNodes(refreshed, [citation]);
     if (!node?.nodeId) throw new Error('the chip was not recognized in the header');
     return { editor, nodeId: node.nodeId };

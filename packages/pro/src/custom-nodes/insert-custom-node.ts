@@ -228,7 +228,7 @@ export function projectionOf(
  */
 export function viewingRefusal(editor: Editor): CustomNodeWriteOutcome | null {
   return editor.getEditingMode() === 'viewing'
-    ? { ok: false, code: 'unsupported', reason: 'the document is open for viewing' }
+    ? { ok: false, code: 'locked', reason: 'the document is open for viewing' }
     : null;
 }
 
@@ -246,6 +246,35 @@ export function storyScopeOfEditor(editor: Editor): StoryScope {
     if (parsed) return { kind: 'notesPart', noteKind: parsed.noteKind };
   }
   return { kind: 'body' };
+}
+
+/**
+ * The story a node or paragraph LIVES in, from its own id.
+ *
+ * Ids are part-qualified (`/word/header1.xml#0.0`), so the target answers this itself. The
+ * open scope is only a fallback for an id that names no part: it is where the READER is,
+ * which is a different question and the wrong one whenever a caller addresses a node
+ * somewhere else — passing an explicit body `at` while a header is open used to work and
+ * would otherwise start refusing as `unknown-paragraph`.
+ */
+export function storyScopeOfId(editor: Editor, id: string | undefined): StoryScope {
+  const surface = surfaceOf(editor);
+  const partName = id === undefined ? '' : id.slice(0, id.indexOf('#'));
+  if (!surface || partName.length === 0) return storyScopeOfEditor(editor);
+  if (partName === surface.session.part().name) return { kind: 'body' };
+  for (const section of surface.session.headerFooterResolutionBySection()) {
+    for (const slots of [section.headers, section.footers]) {
+      for (const slot of slots.values()) {
+        if (slot.partName === partName) return { kind: 'headerFooter', rId: slot.rId };
+      }
+    }
+  }
+  for (const noteKind of ['footnote', 'endnote'] as const) {
+    if (surface.session.partFor({ kind: 'notesPart', noteKind })?.name === partName) {
+      return { kind: 'notesPart', noteKind };
+    }
+  }
+  return storyScopeOfEditor(editor);
 }
 
 /**
