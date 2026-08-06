@@ -26,11 +26,12 @@ export interface SiteLocation {
  * instruction text the wrong lengths, so every card in a paragraph holding one reported a
  * range the caret and the ops disagreed with.
  */
-export function locateSites(part: OoxmlPart): Map<string, SiteLocation> {
+export function locateSites(part: OoxmlPart): ReadonlyMap<string, SiteLocation> {
   // Memoized on the immutable root: the merged index is a pure function of the tree, and
   // every caller in one derivation pass — the revision cards, the pro custom-node cards, an
   // automation read — asks for the same one. Rebuilding it merged 80k+ entries per call on
-  // a long document. The instance is SHARED; callers must treat it as read-only.
+  // a long document. The instance is SHARED, so the return type is ReadonlyMap: a caller
+  // mutating it would poison every later reader of this root, undo included.
   const merged = locatedSitesCache.get(part.root);
   if (merged) return merged;
   const located = new Map<string, SiteLocation>();

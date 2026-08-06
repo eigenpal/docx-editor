@@ -1836,7 +1836,7 @@ export function paragraphMarkDeleted(paragraph: OoxmlNode): boolean;
 export function paragraphMarkRevisionOf(paragraph: OoxmlNode): RevisionAttribution | null;
 
 // @public
-export function paragraphOrderOfPart(part: OoxmlPart): Map<string, number>;
+export function paragraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, number>;
 
 // @public
 export function paragraphSectionNode(paragraph: OoxmlElement): OoxmlElement | undefined;

@@ -779,10 +779,10 @@ export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonl
  *
  * Memoized on the immutable root: one full derivation pass asks this question three times
  * (replacement pairing, the queue's merged order, the session's cached order), and each
- * answer was a fresh full-tree walk. The instance is SHARED; callers must treat it as
- * read-only.
+ * answer was a fresh full-tree walk. The instance is SHARED, so the return type is
+ * ReadonlyMap: a caller mutating it would poison every later reader of this root.
  */
-export function paragraphOrderOfPart(part: OoxmlPart): Map<string, number> {
+export function paragraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, number> {
   const cached = paragraphOrderCache.get(part.root);
   if (cached) return cached;
   const order = new Map<string, number>();
