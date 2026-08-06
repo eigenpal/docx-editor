@@ -26,7 +26,9 @@ import {
   definitionOf,
   depthOf,
   labelFor,
+  payloadFor,
   randomSpecimen,
+  tagAttrsFor,
   type SpecimenAt,
   type SpecimenKind,
 } from './specimens';
@@ -124,9 +126,14 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
     (kind: SpecimenKind, attrs: Record<string, string>, label: string, at: SpecimenAt) => {
       if (!editor) return;
       const definition = definitionOf(kind);
+      // The tag carries identity; the iceberg's depth goes to the payload beside it, in the
+      // same transaction. `payloadFor` answers undefined for the igloo, which keeps its one
+      // small number in the tag where it fits.
+      const data = payloadFor(kind, attrs);
       report(
-        insertCustomNode(editor, definition, attrs, label, {
+        insertCustomNode(editor, definition, tagAttrsFor(kind, attrs), label, {
           alias: definition.label ?? definition.name,
+          ...(data ? { data } : {}),
           ...(at ? { at } : {}),
         }),
         kind === 'iceberg' ? 'A berg calved into the paragraph.' : 'An igloo went up.'
@@ -222,10 +229,16 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
         place(next.kind, next.attrs, next.label, next.at);
       } else {
         const definition = definitionOf(next.kind);
+        const data = payloadFor(next.kind, next.attrs);
         report(
-          updateCustomNode(editor, definition, next.nodeId, next.attrs, next.label, {
-            alias: definition.label ?? definition.name,
-          }),
+          updateCustomNode(
+            editor,
+            definition,
+            next.nodeId,
+            tagAttrsFor(next.kind, next.attrs),
+            next.label,
+            { alias: definition.label ?? definition.name, ...(data ? { data } : {}) }
+          ),
           'Re-carved.'
         );
       }

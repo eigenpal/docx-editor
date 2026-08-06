@@ -13,6 +13,7 @@
 // `docx-menubar` families); this demo styles only its own header.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { z } from 'zod';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import {
   DocxEditor,
@@ -30,6 +31,7 @@ import {
 import {
   customNodesModule,
   defineCustomNode,
+  exportCustomNodes,
   insertCustomNode,
   reviewModule,
   updateCustomNode,
@@ -41,6 +43,7 @@ import {
   useReviewItem,
 } from '@docx-editor.dev/pro/react';
 import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
+import { sanitizeHref } from '@docx-editor.dev/core/store';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 import { BrandLogo } from '../../shared/BrandLogo';
 // import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
@@ -54,31 +57,80 @@ import { DEMO_BUTTON, DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON } from './demoB
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * The pro capabilities this demo registers. One stable array — module
- * registration is construction-time (like `mode`), so the identity must not
- * change per render. `reviewModule()` enables markup rendering, suggesting
- * mode, and the review pane; `customNodesModule` shows `defineCustomNode`:
- * an inline content control tagged `docx:citation?...` is recognized as a
- * typed node (open e2e/fixtures/sdt-custom-tag-original.docx to see one).
- * Both accept `{ licenseKey }` — optional while licensing is honor-system.
+ * What a citation carries, as an ordinary zod schema.
+ *
+ * `w:tag` caps at 64 characters, so the tag holds the IDENTITY and nothing else — everything
+ * below lives in a customXml data part the chip binds to, and comes back through this schema
+ * already checked. A payload arrives from a file the sender wrote, so "already checked" is the
+ * difference between reading `data.year` and guarding every field at every call site.
  */
+const CitationData = z.object({
+  sourceId: z.string().min(1),
+  locator: z.string(),
+  authors: z.array(z.string()).max(64),
+  year: z.number().int().gte(0).lte(3000),
+  /** Optional, and the review card offers a thumbnail for it — behind a click. */
+  url: z.url().optional(),
+});
+type CitationData = z.infer<typeof CitationData>;
+
+/** The payload as the schema hands it back, or nothing. */
+function citationDataOf(data: unknown): CitationData | null {
+  const parsed = CitationData.safeParse(data);
+  return parsed.success ? parsed.data : null;
+}
+
 const DEMO_CITATION = defineCustomNode({
   name: 'citation',
   tagPrefix: 'docx',
   label: 'Citation',
   // HOST-authored chip appearance — CustomNodeChrome applies it.
   chrome: { color: '#7c3aed' },
-  // Recognition hook: attrs decoded from the tag, text is the literal
-  // SDT content (which a Word user may have edited — label drift).
+  // The payload's shape. Checked on the way IN (a bad `insertCustomNode` is refused, naming
+  // the field) and on the way OUT (a tampered file reports through `onDiagnostic` below and
+  // the chip still renders, without its data).
+  schema: CitationData,
+  // What happens to a citation in a file that leaves this system: the sentence keeps its words
+  // and loses the markup that only means something here. Applied by `exportCustomNodes` (the
+  // header's Export button), never by `save()` — so the document at rest keeps its chips.
+  preserveOnExport: 'text',
+  // Recognition hook: attrs decoded from the tag, text is the literal SDT content (which a
+  // Word user may have edited — label drift), `data` is the validated payload.
   fromDocx: ({ attrs, text }) => ({ ...attrs, label: text }),
   // Sidebar card: every recognized citation gets a review-rail card anchored at its text.
-  reviewCard: ({ attrs, text }) => ({
-    title: `Citation — ${attrs['sourceId'] ?? 'unknown source'}`,
-    detail: text || (attrs['label'] ?? ''),
-  }),
+  reviewCard: ({ attrs, text, data }) => {
+    const citation = citationDataOf(data);
+    const who = citation?.authors.join(', ');
+    return {
+      title: `Citation — ${attrs['sourceId'] ?? 'unknown source'}`,
+      detail: citation
+        ? `${who || 'no authors'} (${String(citation.year)})${citation.locator ? `, ${citation.locator}` : ''}`
+        : text || (attrs['label'] ?? ''),
+    };
+  },
 });
 
-const PRO_MODULES = [reviewModule(), customNodesModule({ nodes: [DEMO_CITATION] })];
+/**
+ * The pro capabilities this demo registers. One stable array — module registration is
+ * construction-time (like `mode`), so the identity must not change per render.
+ * `reviewModule()` enables markup rendering, suggesting mode, and the review pane;
+ * `customNodesModule` shows `defineCustomNode`: an inline content control tagged
+ * `docx:citation?...` is recognized as a typed node carrying the payload above (open
+ * e2e/fixtures/sdt-custom-tag-original.docx to see one). Both accept `{ licenseKey }` —
+ * optional while licensing is honor-system.
+ */
+const PRO_MODULES = [
+  reviewModule(),
+  customNodesModule({
+    nodes: [DEMO_CITATION],
+    // A payload comes from a file the sender wrote, so a mismatch is an ordinary property of an
+    // ordinary document rather than a bug. The chip still renders; this is how the host finds
+    // out its data is missing.
+    onDiagnostic: (diagnostic) => {
+      console.warn(`custom node ${diagnostic.name}: ${diagnostic.issues.join(', ')}`);
+    },
+  }),
+];
 
 /** Keep the caret: chrome mousedown must never move focus out of the document. */
 function keepCaret(event: ReactMouseEvent): void {
@@ -282,21 +334,94 @@ function CitationPopover({
  */
 function CitationCardActions() {
   const item = useReviewItem();
+  // Which URLs this reader has agreed to load, for this session. Remembered so a card that
+  // scrolls out and back does not ask again — and never persisted, because consent to fetch is
+  // this reader's, not the document's.
+  const [allowed, setAllowed] = useState<ReadonlySet<string>>(() => new Set());
   if (!item || item.kind !== 'custom' || item.item.kind !== 'custom') return null;
   // Collapsed until the card is ACTIVE — clicking a card activates it (and selects the
   // chip's text); clicking another card or pressing elsewhere deactivates it. The state
   // is already on the item, so active-only content is one condition, not new wiring.
   if (!item.isActive) return null;
   const attrs = item.item.attrs;
+  const citation = citationDataOf(item.item.data);
+  // THE URL IS THE SENDER'S. `sanitizeHref` is the allowlist — `javascript:`, `data:` and
+  // `vbscript:` are well-formed URLs a schema is happy with and a browser will execute.
+  const safe = citation?.url ? sanitizeHref(citation.url) : null;
+  const href = safe?.ok ? safe.href : null;
   return (
-    <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-      <button
-        type="button"
-        style={DEMO_PRIMARY_BUTTON}
-        onMouseDown={keepCaret}
-        onClick={() => window.alert(`A real app opens source ${attrs['sourceId']} here.`)}
-      >
-        Open source
+    <div style={{ marginTop: 10 }}>
+      {href ? (
+        <CitationThumbnail
+          href={href}
+          loaded={allowed.has(href)}
+          onLoad={() => setAllowed((previous) => new Set(previous).add(href))}
+        />
+      ) : null}
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <button
+          type="button"
+          style={DEMO_PRIMARY_BUTTON}
+          onMouseDown={keepCaret}
+          onClick={() => window.alert(`A real app opens source ${attrs['sourceId']} here.`)}
+        >
+          Open source
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The payload's URL as a badge — a PLACEHOLDER until the reader asks for it.
+ *
+ * NOTHING IS FETCHED ON OPEN. A remote URL in a document is a beacon: loading it tells whoever
+ * wrote the file that this reader opened it, from this address, at this moment. So the card
+ * shows the host and a button, and only a click turns it into an `<img>`. The href has already
+ * been through `sanitizeHref`; this renders it as text and as a `src`, never as markup.
+ */
+function CitationThumbnail({
+  href,
+  loaded,
+  onLoad,
+}: {
+  href: string;
+  loaded: boolean;
+  onLoad: () => void;
+}) {
+  const host = (() => {
+    try {
+      return new URL(href).host;
+    } catch {
+      return href;
+    }
+  })();
+  if (loaded) {
+    return (
+      <img
+        src={href}
+        alt=""
+        referrerPolicy="no-referrer"
+        style={{ display: 'block', maxWidth: '100%', borderRadius: 6, border: '1px solid #e2e8f0' }}
+      />
+    );
+  }
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '6px 8px',
+        border: '1px dashed #cbd5e1',
+        borderRadius: 6,
+        font: '12px/1.4 system-ui, sans-serif',
+        color: '#475569',
+      }}
+    >
+      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{host}</span>
+      <button type="button" style={DEMO_SECONDARY_BUTTON} onMouseDown={keepCaret} onClick={onLoad}>
+        Load preview
       </button>
     </div>
   );
@@ -316,15 +441,25 @@ export type CitationFormState =
       readonly nodeId: string;
       readonly attrs: Readonly<Record<string, string>>;
       readonly text: string;
+      /** The node's current payload, so an edit starts from what the document says. */
+      readonly data?: unknown;
     };
 
 function CitationDialog({ form, onClose }: { form: CitationFormState; onClose: () => void }) {
   const editor = useDocxEditor();
   const editing = form.mode === 'edit';
+  // The payload the document already holds, validated. Everything but `sourceId` comes from
+  // here rather than from the tag: 64 characters is not a bibliography.
+  const current = editing ? citationDataOf(form.data) : null;
   const [sourceId, setSourceId] = useState(() =>
     editing ? (form.attrs['sourceId'] ?? '') : `src_${Date.now().toString(36)}`
   );
-  const [locator, setLocator] = useState(() => (editing ? (form.attrs['locator'] ?? '') : 'p.42'));
+  const [locator, setLocator] = useState(() => current?.locator ?? 'p.42');
+  const [authors, setAuthors] = useState(() =>
+    (current?.authors ?? ['Smith, J.', 'Okonkwo, A.']).join(', ')
+  );
+  const [year, setYear] = useState(() => String(current?.year ?? 2024));
+  const [url, setUrl] = useState(() => current?.url ?? '');
   const [label, setLabel] = useState(() =>
     editing ? form.text || (form.attrs['label'] ?? '') : '(Smith 2024, p. 42)'
   );
@@ -375,12 +510,28 @@ function CitationDialog({ form, onClose }: { form: CitationFormState; onClose: (
           // Chips are content-locked, so persistence goes through the node APIs: a fresh
           // insert at the captured caret, or `updateCustomNode` — remove+reinsert at the
           // node's own span, one undo step.
+          // ONLY `sourceId` rides in the tag — it is the identity, and Word caps `w:tag` at 64
+          // characters. Everything else is the payload, written into a customXml data part in
+          // the SAME transaction as the chip and validated against the schema on the way in, so
+          // a bad year is refused here rather than saved and rejected on the next open.
+          const data = {
+            sourceId,
+            locator,
+            authors: authors
+              .split(',')
+              .map((name) => name.trim())
+              .filter((name) => name.length > 0),
+            year: Number(year),
+            ...(url.trim() ? { url: url.trim() } : {}),
+          };
           const result = editing
-            ? updateCustomNode(editor, DEMO_CITATION, form.nodeId, { sourceId, locator }, label, {
+            ? updateCustomNode(editor, DEMO_CITATION, form.nodeId, { sourceId }, label, {
                 alias: 'Citation',
+                data,
               })
-            : insertCustomNode(editor, DEMO_CITATION, { sourceId, locator }, label, {
+            : insertCustomNode(editor, DEMO_CITATION, { sourceId }, label, {
                 alias: 'Citation',
+                data,
                 ...(form.at ? { at: form.at } : {}),
               });
           if (!result.ok) window.alert(`${editing ? 'Edit' : 'Insert'} refused: ${result.reason}`);
@@ -391,8 +542,9 @@ function CitationDialog({ form, onClose }: { form: CitationFormState; onClose: (
           {editing ? 'Edit citation' : 'Insert citation'}
         </div>
         <div style={{ marginTop: 4, font: '12px/1.5 system-ui, sans-serif', color: '#64748b' }}>
-          The label is what the document shows; source and locator ride in the chip&#39;s tag and
-          come back typed on click, hover, and the review card.
+          The label is what the document shows. Only the source ID rides in the chip&#39;s tag —
+          the rest is a payload in a customXml data part, checked against the schema and handed
+          back typed on click, hover, and the review card.
         </div>
         <label style={labelStyle}>
           Label (document text)
@@ -410,6 +562,29 @@ function CitationDialog({ form, onClose }: { form: CitationFormState; onClose: (
         <label style={labelStyle}>
           Locator
           <input style={field} value={locator} onChange={(e) => setLocator(e.target.value)} />
+        </label>
+        <label style={labelStyle}>
+          Authors (comma separated)
+          <input style={field} value={authors} onChange={(e) => setAuthors(e.target.value)} />
+        </label>
+        <label style={labelStyle}>
+          Year
+          <input
+            style={field}
+            type="number"
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+            required
+          />
+        </label>
+        <label style={labelStyle}>
+          URL (optional)
+          <input
+            style={field}
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://example.com/paper.pdf"
+          />
         </label>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
           <button type="button" style={DEMO_SECONDARY_BUTTON} onClick={onClose}>
@@ -655,6 +830,28 @@ function EditorChrome({
       downloadDocx(buffer, `${base}.docx`);
     });
   };
+  /**
+   * The same document, with `preserveOnExport` applied.
+   *
+   * A SEPARATE PIPELINE from Save, which is the whole point of the option: the saved file keeps
+   * its chips so reopening it here gives them back, and the exported one carries whatever the
+   * definitions said should travel. The demo's citation is `'text'`, so the words survive and
+   * the tag, the binding and the payload do not.
+   *
+   * It removes THIS LIBRARY's markup and nothing else — `docProps`, comment authors and rsids
+   * are untouched, so the result is not an anonymous document and must not be described as one.
+   */
+  const exportDocument = () => {
+    void editor?.save().then((buffer) => {
+      const exported = exportCustomNodes(new Uint8Array(buffer), [DEMO_CITATION]);
+      if (!exported.ok) {
+        window.alert(`Export refused: ${exported.reason}`);
+        return;
+      }
+      const base = title.trim() || 'document';
+      downloadDocx(exported.bytes.buffer as ArrayBuffer, `${base}-exported.docx`);
+    });
+  };
 
   return (
     // The chrome surface is header + toolbar ONLY: its seam (border + shadow)
@@ -773,6 +970,16 @@ function EditorChrome({
             onClick={newDocument}
           >
             New
+          </button>
+          <button
+            type="button"
+            style={DEMO_SECONDARY_BUTTON}
+            disabled={!editor}
+            onMouseDown={keepCaret}
+            onClick={exportDocument}
+            title="Save with preserveOnExport applied: the citation's words stay, its tag, binding and payload go"
+          >
+            Export
           </button>
           <button
             type="button"
@@ -937,6 +1144,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
                           nodeId: node.nodeId,
                           attrs: node.attrs,
                           text: node.text ?? '',
+                          data: node.data,
                         })
                       : setCitationCard(citationCardAt(node))
                   }

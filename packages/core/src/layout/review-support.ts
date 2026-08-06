@@ -217,6 +217,13 @@ export interface ReviewCustomItem {
   readonly attrs: Readonly<Record<string, string>>;
   /** The SDT's literal content text. Untrusted input. */
   readonly text: string;
+  /**
+   * The payload the node's control binds to, after the definition validated it.
+   *
+   * Undefined when the node carries none or the payload did not match — see the pro package's
+   * `RecognizedCustomNode.data`, which this is carried from.
+   */
+  readonly data?: unknown;
   /** Card title, from the definition's `reviewCard` hook. */
   readonly title: string;
   /** Card body, from the definition's `reviewCard` hook. */

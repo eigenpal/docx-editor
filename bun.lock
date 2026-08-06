@@ -179,6 +179,7 @@
         "fflate": "^0.8.2",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
+        "zod": "^4.4.3",
       },
       "devDependencies": {
         "@types/react": "^19.2.17",
@@ -206,9 +207,9 @@
     },
     "packages/core": {
       "name": "@docx-editor.dev/core",
-      "version": "1.0.0",
+      "version": "2.0.1",
       "dependencies": {
-        "@docx-editor.dev/i18n": "^1.0.0",
+        "@docx-editor.dev/i18n": "^2.0.1",
         "bidi-js": "1.0.3",
         "emf-converter": "2.0.2",
         "fast-xml-parser": "^4.5.0",
@@ -234,7 +235,7 @@
     },
     "packages/editor-api": {
       "name": "@docx-editor.dev/editor-api",
-      "version": "1.0.0",
+      "version": "2.0.1",
       "dependencies": {
         "@docx-editor.dev/core": "workspace:*",
       },
@@ -246,7 +247,7 @@
     },
     "packages/fonts": {
       "name": "@docx-editor.dev/fonts",
-      "version": "0.0.1",
+      "version": "2.0.1",
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",
         "typescript": "^5.3.3",
@@ -254,7 +255,7 @@
     },
     "packages/i18n": {
       "name": "@docx-editor.dev/i18n",
-      "version": "1.0.0",
+      "version": "2.0.1",
       "devDependencies": {
         "tsup": "^8.0.1",
         "typescript": "^5.3.3",
@@ -262,7 +263,7 @@
     },
     "packages/nuxt": {
       "name": "@docx-editor.dev/nuxt",
-      "version": "0.0.1",
+      "version": "2.0.1",
       "dependencies": {
         "@docx-editor.dev/vue": "^0.0.1",
         "@nuxt/kit": "^3.14.0 || ^4.0.0",
@@ -288,7 +289,7 @@
     },
     "packages/pro": {
       "name": "@docx-editor.dev/pro",
-      "version": "1.0.0",
+      "version": "2.0.1",
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/i18n": "workspace:*",
@@ -304,8 +305,8 @@
         "zod": "^4.4.3",
       },
       "peerDependencies": {
-        "@docx-editor.dev/core": "^1.0.0",
-        "@docx-editor.dev/react": "^1.0.0",
+        "@docx-editor.dev/core": "^2.0.1",
+        "@docx-editor.dev/react": "^2.0.1",
         "react": "^18.0.0 || ^19.0.0",
         "react-dom": "^18.0.0 || ^19.0.0",
       },
@@ -317,9 +318,9 @@
     },
     "packages/react": {
       "name": "@docx-editor.dev/react",
-      "version": "1.0.0",
+      "version": "2.0.1",
       "dependencies": {
-        "@docx-editor.dev/i18n": "^1.0.0",
+        "@docx-editor.dev/i18n": "^2.0.1",
         "@radix-ui/react-select": "^2.3.3",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -331,7 +332,7 @@
         "fflate": "^0.8.2",
       },
       "peerDependencies": {
-        "@docx-editor.dev/core": "^1.0.0",
+        "@docx-editor.dev/core": "^2.0.1",
         "react": "^18.0.0 || ^19.0.0",
         "react-dom": "^18.0.0 || ^19.0.0",
       },
@@ -342,7 +343,7 @@
     },
     "packages/vue": {
       "name": "@docx-editor.dev/vue",
-      "version": "0.0.1",
+      "version": "2.0.1",
       "dependencies": {
         "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/i18n": "workspace:*",

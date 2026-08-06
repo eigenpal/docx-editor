@@ -4,11 +4,16 @@
 // file, and contributes a rail card. From there the packaged chrome does the rest — chip tint,
 // click dispatch, the context menu's Edit/Remove rows, the card anchored at the node's text.
 //
-// On disk each is a run-level `w:sdt` tagged `igloo:iceberg?depth=412` with the label as its
-// content, so Word opens it as ordinary text and nothing is lost either way.
+// On disk each is a run-level `w:sdt` with the label as its content, so Word opens it as
+// ordinary text and nothing is lost either way. The two differ in WHERE their number lives, on
+// purpose: the igloo's `blocks` rides in the `w:tag`, which is all a small integer needs, and
+// the iceberg's `depth` rides in a PAYLOAD — a customXml data part the chip binds to, which is
+// where anything past 64 characters has to go and where a real specimen record would be.
 //
-// SECURITY: attrs come from a file an attacker controls, so the two numbers are parsed and
-// clamped in `fromDocx` — every later surface reads a value already known to be sane.
+// SECURITY: both come from a file an attacker controls, so the two numbers are parsed and
+// clamped in `fromDocx` — every later surface reads a value already known to be sane. A payload
+// with no schema declared arrives as whatever JSON the file held, typed `unknown`, which is the
+// honest description of it; clamping is what makes it a number.
 
 import { defineCustomNode } from '@docx-editor.dev/pro';
 import { makeRandom } from './art/random';
@@ -31,9 +36,28 @@ function boundedInt(
   return Math.min(parsed, max);
 }
 
-/** Metres of berg below the waterline. */
+/** Metres of berg below the waterline, out of the attrs `fromDocx` already clamped. */
 export function depthOf(attrs: Readonly<Record<string, string>>): number {
   return boundedInt(attrs, 'depth', 90, 999);
+}
+
+/**
+ * Depth out of the PAYLOAD, falling back to the tag.
+ *
+ * The fallback is not politeness: documents this demo wrote before the payload existed carry
+ * `igloo:iceberg?depth=412`, and a reader that only looked at the store would show every one of
+ * them at the default. `data` is `unknown` because the definition declares no schema — a host
+ * that wants it typed passes a zod schema and stops writing checks like this one.
+ */
+export function icebergDepth(
+  data: unknown,
+  attrs: Readonly<Record<string, string>> = {}
+): number {
+  const carried = (data as { readonly depth?: unknown } | null)?.depth;
+  if (typeof carried === 'number' || typeof carried === 'string') {
+    return boundedInt({ depth: String(carried) }, 'depth', 90, 999);
+  }
+  return depthOf(attrs);
 }
 
 /** Blocks laid so far. */
@@ -64,7 +88,10 @@ export const ICEBERG = defineCustomNode({
   label: 'Iceberg',
   // Host-authored, never file data: `CustomNodeChrome` tints the painted chip with it.
   chrome: { color: '#0f6f95' },
-  fromDocx: ({ attrs }) => ({ depth: String(depthOf(attrs)) }),
+  // The payload is resolved and handed here, so the number every later surface reads comes out
+  // of the store — and the attrs this returns are the ONE shape the chip, the card, the menu
+  // and the dialog all see, whichever place it actually came from.
+  fromDocx: ({ attrs, data }) => ({ depth: String(icebergDepth(data, attrs)) }),
   reviewCard: ({ attrs, text }) => {
     const depth = depthOf(attrs);
     return {
@@ -110,6 +137,30 @@ export function labelFor(kind: SpecimenKind, attrs: Readonly<Record<string, stri
 /** What a fresh specimen of each kind carries before anyone edits it. */
 export function defaultAttrs(kind: SpecimenKind): Record<string, string> {
   return kind === 'iceberg' ? { depth: '90' } : { blocks: '7' };
+}
+
+/**
+ * What goes in the `w:tag`, which is not everything the specimen knows.
+ *
+ * The iceberg's depth is written to the payload instead, so its tag carries identity alone —
+ * `igloo:iceberg`. That is the shape a real node wants: 64 characters is enough to say WHAT
+ * something is and never enough to say what it holds.
+ */
+export function tagAttrsFor(
+  kind: SpecimenKind,
+  attrs: Readonly<Record<string, string>>
+): Record<string, string> {
+  if (kind !== 'iceberg') return { ...attrs };
+  const { depth: _depth, ...rest } = attrs;
+  return rest;
+}
+
+/** What goes in the payload, or undefined for a specimen that carries none. */
+export function payloadFor(
+  kind: SpecimenKind,
+  attrs: Readonly<Record<string, string>>
+): { readonly depth: number } | undefined {
+  return kind === 'iceberg' ? { depth: depthOf(attrs) } : undefined;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

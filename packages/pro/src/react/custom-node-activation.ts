@@ -84,6 +84,7 @@ export function activatedCustomNodeOf(
       ...node,
       attrs: item.attrs,
       text: item.text,
+      ...(item.data === undefined ? {} : { data: item.data }),
       ...(controlId ? { nodeId: controlId } : {}),
     };
   }

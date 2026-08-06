@@ -15,7 +15,8 @@
     "@docx-editor.dev/react": "workspace:*",
     "fflate": "^0.8.2",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",

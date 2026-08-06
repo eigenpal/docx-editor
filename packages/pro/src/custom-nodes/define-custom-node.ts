@@ -230,6 +230,14 @@ export interface ActivatedCustomNode {
   readonly nodeId?: string;
   /** The node's literal content text, when resolvable. */
   readonly text?: string;
+  /**
+   * The node's payload, when the surface could resolve one.
+   *
+   * Present only where the review derivation has already run — a chip's own click and hover
+   * resolve through the review item, which is what carries the payload. Undefined otherwise,
+   * and undefined for a node whose payload failed its schema.
+   */
+  readonly data?: unknown;
 }
 
 /**

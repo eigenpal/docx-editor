@@ -115,6 +115,7 @@ export function customItemsOf(
       tag: node.tag,
       attrs: node.attrs,
       text: node.text,
+      ...(node.data === undefined ? {} : { data: node.data }),
       title: card.title,
       ...(card.detail !== undefined ? { detail: card.detail } : {}),
       range: where

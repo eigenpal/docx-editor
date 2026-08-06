@@ -144,8 +144,9 @@ export function SpecimenDialog({ form, onCommit, onClose }: SpecimenDialogProps)
           {editing ? 'Re-carve it' : 'Carve a specimen'}
         </h2>
         <p className="igloo-dialog__lede">
-          The label is what the paragraph shows, in this editor and in Word. The number rides in the
-          control&rsquo;s tag and comes back typed on the chip, the card and the menu.
+          The label is what the paragraph shows, in this editor and in Word. The igloo&rsquo;s
+          number rides in the control&rsquo;s tag; the berg&rsquo;s depth rides in a payload
+          beside it, and both come back typed on the chip, the card and the menu.
         </p>
 
         {/* Fixed while editing: swapping the tag would be deleting one node and authoring
