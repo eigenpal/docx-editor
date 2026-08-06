@@ -255,7 +255,7 @@ export interface CustomNodeDefinition<
    *    binding and the payload are gone. Right for a citation, whose text is the point of it.
    *  - `false` — the node goes, and takes its content with it.
    *
-   * Applied by `exportCustomNodes`, which is a pipeline of its own rather than something
+   * Applied by `prepareForExport`, which is a pipeline of its own rather than something
    * `save()` does — that is what lets one document serialize one way at rest and another on the
    * way out.
    *

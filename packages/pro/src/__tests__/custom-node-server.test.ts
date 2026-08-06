@@ -9,7 +9,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // would prove nothing. `withoutDom` DELETES the globals for the duration of the call instead, so
 // anything in this graph that reaches for a browser throws where it does it.
 //
-// `customNodeXml` and `exportCustomNodes` are the two halves a backend needs — generate a
+// `customNodeXml` and `prepareForExport` are the two halves a backend needs — generate a
 // contract from a template, strip it before it is emailed — and neither may depend on a browser.
 
 import { describe, expect, test } from 'bun:test';
@@ -20,7 +20,7 @@ import { customNodePayloadsByControl } from '@docx-editor.dev/core/store';
 import {
   customNodeXml,
   defineCustomNode,
-  exportCustomNodes,
+  prepareForExport,
   recognizeCustomNodes,
   type CustomNodeXmlStore,
 } from '../index.ts';
@@ -212,7 +212,7 @@ describe('stripping that document, also on a server', () => {
   }
 
   test('each flag decides that node, and only that node', () => {
-    const exported = withoutDom(() => exportCustomNodes(threeNodes(), [Clause, Note, Internal]));
+    const exported = withoutDom(() => prepareForExport(threeNodes(), [Clause, Note, Internal]));
     expect(exported.ok).toBe(true);
     if (!exported.ok) return;
     expect(exported).toMatchObject({ unwrapped: 1, removed: 1 });
@@ -245,7 +245,7 @@ describe('stripping that document, also on a server', () => {
   });
 
   test('the stripped document is still a document', () => {
-    const exported = withoutDom(() => exportCustomNodes(threeNodes(), [Clause, Note, Internal]));
+    const exported = withoutDom(() => prepareForExport(threeNodes(), [Clause, Note, Internal]));
     if (!exported.ok) throw new Error(exported.reason);
     const reopened = readOoxmlPackage(exported.bytes);
     expect(reopened.ok).toBe(true);
@@ -259,7 +259,7 @@ describe('stripping that document, also on a server', () => {
   test('a definition the caller does not pass is left alone', () => {
     // The export applies a host's policy to a host's own markup. A tag it was not told about is
     // not its business, even when the tag prefix matches.
-    const exported = withoutDom(() => exportCustomNodes(threeNodes(), [Clause]));
+    const exported = withoutDom(() => prepareForExport(threeNodes(), [Clause]));
     expect(exported.ok).toBe(true);
     if (!exported.ok) return;
     expect(exported).toMatchObject({ unwrapped: 0, removed: 0 });
@@ -271,7 +271,7 @@ describe('stripping that document, also on a server', () => {
   test("destination 'internal' returns the input untouched", () => {
     const bytes = threeNodes();
     const kept = withoutDom(() =>
-      exportCustomNodes(bytes, [Clause, Note, Internal], { destination: 'internal' })
+      prepareForExport(bytes, [Clause, Note, Internal], { destination: 'internal' })
     );
     expect(kept.ok).toBe(true);
     if (!kept.ok) return;
@@ -280,7 +280,7 @@ describe('stripping that document, also on a server', () => {
   });
 
   test('bytes that are not a document are refused, not passed through', () => {
-    const exported = withoutDom(() => exportCustomNodes(new Uint8Array([1, 2, 3]), [Clause]));
+    const exported = withoutDom(() => prepareForExport(new Uint8Array([1, 2, 3]), [Clause]));
     expect(exported.ok).toBe(false);
     if (!exported.ok) expect(exported.reason).toContain('could not be read');
   });
@@ -316,7 +316,7 @@ describe('a chip outside the main story', () => {
       )
     );
 
-    const exported = withoutDom(() => exportCustomNodes(zipSync(entries), [Note]));
+    const exported = withoutDom(() => prepareForExport(zipSync(entries), [Note]));
     expect(exported.ok).toBe(true);
     if (!exported.ok) return;
     expect(exported.unwrapped).toBe(1);

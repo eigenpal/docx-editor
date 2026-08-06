@@ -26,7 +26,7 @@ import {
 // review module on the Root and mount the pane; without the module the same
 // document still opens (final-state view) and the review toolbar controls
 // disable with the engine's own "requires the pro review module" reason.
-import { customNodesModule, exportCustomNodes, reviewModule } from '@docx-editor.dev/pro';
+import { customNodesModule, reviewModule, saveForExport } from '@docx-editor.dev/pro';
 import { CustomNodeContextMenu, DocxEditorReview } from '@docx-editor.dev/pro/react';
 import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
 import { defaultFonts } from '@docx-editor.dev/fonts';
@@ -74,7 +74,7 @@ const PRO_MODULES = [
 
 /** Hand DOCX bytes to the browser as a download. */
 function downloadDocx(bytes: ArrayBuffer | Uint8Array, name: string): void {
-  // `BlobPart`, not `ArrayBuffer`: `exportCustomNodes` answers a `Uint8Array`, and casting its
+  // `BlobPart`, not `ArrayBuffer`: `saveForExport` answers a `Uint8Array`, and casting its
   // `.buffer` would hand the browser the whole backing store rather than the view — silently
   // corrupt for any view with an offset or a shorter length.
   const blob = new Blob([bytes as BlobPart], {
@@ -411,8 +411,10 @@ function EditorChrome({
    * are untouched, so the result is not an anonymous document and must not be described as one.
    */
   const exportDocument = () => {
-    void editor?.save().then((buffer) => {
-      const exported = exportCustomNodes(new Uint8Array(buffer), [DEMO_CITATION]);
+    if (!editor) return;
+    // No definition list: `saveForExport` reads them off the editor's registered modules, so a
+    // node cannot leave because this call site forgot to name it.
+    void saveForExport(editor).then((exported) => {
       if (!exported.ok) {
         window.alert(`Export refused: ${exported.reason}`);
         return;

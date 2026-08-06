@@ -11,10 +11,15 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // one call would have to choose, and whichever it chose would be wrong for the other case.
 //
 // ```ts
-// const bytes = new Uint8Array(await editor.save());
-// const exported = exportCustomNodes(bytes, [citation, figure]);
-// if (exported.ok) download(exported.bytes);
+// await storage.put(docId, new Uint8Array(await editor.save())); // the copy you keep
+// const outgoing = await saveForExport(editor);                  // the copy that leaves
+// if (outgoing.ok) download(outgoing.bytes);
 // ```
+//
+// TWO ENTRY POINTS, one pipeline. `saveForExport` takes the editor, which already holds every
+// definition the host registered, so the common call cannot ship a node by forgetting to list it.
+// `prepareForExport` takes bytes and an explicit list, for the server, where there is no editor
+// to ask.
 //
 // WHAT IT DOES NOT DO. It removes THIS LIBRARY'S markup and nothing else. A `.docx` carries its
 // origin in `docProps/app.xml`, `docProps/core.xml`, comment and revision authors, rsids and
@@ -42,7 +47,7 @@ import { customNodeNamespace } from './node-payload.ts';
  *
  * @public
  */
-export type ExportCustomNodesResult =
+export type DocumentExportResult =
   | {
       readonly ok: true;
       readonly bytes: Uint8Array;
@@ -70,8 +75,8 @@ export type ExportCustomNodesResult =
  */
 export type DocumentDestination = 'internal' | 'external';
 
-/** How {@link exportCustomNodes} treats this copy. */
-export interface ExportCustomNodesOptions {
+/** How {@link saveForExport} and {@link prepareForExport} treat this copy. */
+export interface DocumentExportOptions {
   /**
    * Defaults to `external`, because that is what calling an export function means.
    *
@@ -84,25 +89,31 @@ export interface ExportCustomNodesOptions {
 /**
  * Apply every definition's `preserveOnExport` to a document, and answer the bytes to ship.
  *
+ * The BYTES form, for a caller with no editor: a request handler, a queue worker, a build step, a
+ * document `customNodeXml` authored server-side. In a browser with an editor mounted, reach for
+ * {@link saveForExport} instead — it reads the definitions off the editor, so a node cannot leave
+ * because the list passed here forgot it.
+ *
  * `true` (the default) leaves a node untouched. `'text'` unwraps the control, keeping the words
  * and dropping the tag, the binding and the payload. `false` removes the node with its content.
  * A tag no definition claims is never touched — this is a host applying its own policy to its
  * own markup, not a scrub of the document.
  *
  * ```ts
- * const bytes = new Uint8Array(await editor.save());   // the copy you keep
- * const outgoing = exportCustomNodes(bytes, [Citation]); // the copy that leaves
+ * const generated = await renderContract(order);
+ * const outgoing = prepareForExport(generated, [Clause, InternalNote]);
+ * if (outgoing.ok) await email.attach(outgoing.bytes);
  * ```
  *
  * Applied to EVERY story, so a chip in a header is treated like a chip in the body. The payload
  * stores hang off the main document part, which is where Word enumerates its data store from, so
  * that is the only part they are cleaned up against.
  */
-export function exportCustomNodes(
+export function prepareForExport(
   bytes: Uint8Array,
   definitions: readonly AnyCustomNodeDefinition[],
-  options: ExportCustomNodesOptions = {}
-): ExportCustomNodesResult {
+  options: DocumentExportOptions = {}
+): DocumentExportResult {
   // THE COPY YOU KEEP. Answered before anything is parsed: an internal save must be the bytes
   // the editor produced, not a re-serialization of them, so a round trip through here cannot
   // become a way for the export path to touch a document it was told to leave alone.

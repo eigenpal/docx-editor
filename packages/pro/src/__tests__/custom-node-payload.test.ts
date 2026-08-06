@@ -22,11 +22,12 @@ import {
   customNodeXml,
   customNodesModule,
   defineCustomNode,
-  exportCustomNodes,
+  prepareForExport,
   insertCustomNode,
   recognizeCustomNodes,
   removeCustomNode,
   customNodesOf,
+  saveForExport,
   updateCustomNode,
   type AnyCustomNodeDefinition,
   type CustomNodeDiagnostic,
@@ -302,7 +303,7 @@ describe('preserveOnExport', () => {
   }
 
   test("'text' keeps the words and drops the markup, the binding and the payload", async () => {
-    const exported = exportCustomNodes(await documentWith(ephemeral), [ephemeral]);
+    const exported = prepareForExport(await documentWith(ephemeral), [ephemeral]);
     expect(exported.ok).toBe(true);
     if (!exported.ok) return;
     expect(exported.unwrapped).toBe(1);
@@ -321,7 +322,7 @@ describe('preserveOnExport', () => {
   });
 
   test('`false` takes the content with it', async () => {
-    const exported = exportCustomNodes(await documentWith(secret), [secret]);
+    const exported = prepareForExport(await documentWith(secret), [secret]);
     expect(exported.ok).toBe(true);
     if (!exported.ok) return;
     expect(exported.removed).toBe(1);
@@ -339,7 +340,7 @@ describe('preserveOnExport', () => {
       at: { paragraphId: firstParagraphId(editor), offset: 1 },
       data: CITATION,
     });
-    const exported = exportCustomNodes(new Uint8Array(await editor.save()), [citation]);
+    const exported = prepareForExport(new Uint8Array(await editor.save()), [citation]);
     expect(exported.ok).toBe(true);
     if (!exported.ok) return;
     expect(exported).toMatchObject({ unwrapped: 0, removed: 0 });
@@ -409,7 +410,7 @@ describe('the failures a payload store can hide', () => {
       data: { body: 'SHOULD-NOT-SHIP' },
     });
 
-    const exported = exportCustomNodes(new Uint8Array(await editor.save()), [secret, shared]);
+    const exported = prepareForExport(new Uint8Array(await editor.save()), [secret, shared]);
     expect(exported.ok).toBe(true);
     if (!exported.ok) return;
     expect(exported.removed).toBe(1);
@@ -686,7 +687,7 @@ describe('the copy you keep and the copy that leaves', () => {
     });
     const saved = new Uint8Array(await editor.save());
 
-    const kept = exportCustomNodes(saved, [ephemeral], { destination: 'internal' });
+    const kept = prepareForExport(saved, [ephemeral], { destination: 'internal' });
     expect(kept.ok).toBe(true);
     if (!kept.ok) return;
     // Byte-identical: an internal save must be what the editor produced, not a re-serialization.
@@ -695,7 +696,7 @@ describe('the copy you keep and the copy that leaves', () => {
     // And it still opens with its chips, which is the point of keeping it.
     expect(recognized(mount(kept.bytes, [ephemeral]), [ephemeral])).toHaveLength(1);
 
-    const leaving = exportCustomNodes(saved, [ephemeral], { destination: 'external' });
+    const leaving = prepareForExport(saved, [ephemeral], { destination: 'external' });
     expect(leaving.ok && leaving.unwrapped).toBe(1);
   });
 });
@@ -790,5 +791,84 @@ describe('diagnostics belong to the editor that registered them', () => {
     customNodesOf(editor);
     expect(live).toContain('payload-missing');
     expect(heard).toEqual([]);
+  });
+});
+
+// `saveForExport` is `prepareForExport` with the definition list taken off the editor instead of
+// out of the call. That difference IS the feature: the list argument is the one a host gets wrong,
+// and getting it wrong ships a node it meant to withhold, silently and with `ok: true`.
+describe('saveForExport', () => {
+  test('applies a registered definition the caller never named', async () => {
+    const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'), [citation, secret]);
+    insertCustomNode(editor, secret, {
+      attrs: { k: 'v' },
+      text: 'classified',
+      at: { paragraphId: firstParagraphId(editor), offset: 0 },
+      data: { body: 'SHOULD-NOT-SHIP' },
+    });
+
+    const exported = await saveForExport(editor);
+    expect(exported.ok).toBe(true);
+    if (!exported.ok) return;
+    expect(exported.removed).toBe(1);
+    const entries = unzipSync(exported.bytes);
+    expect(strFromU8(entries['word/document.xml']!)).not.toContain('classified');
+    expect(Object.keys(entries).filter((name) => /customxml/i.test(name))).toEqual([]);
+  });
+
+  test('leaves the editor and its saved copy alone', async () => {
+    const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'), [ephemeral]);
+    insertCustomNode(editor, ephemeral, {
+      attrs: { k: 'v' },
+      text: 'the words',
+      at: { paragraphId: firstParagraphId(editor), offset: 0 },
+      data: { body: 'internal' },
+    });
+
+    const exported = await saveForExport(editor);
+    expect(exported.ok).toBe(true);
+    if (!exported.ok) return;
+    expect(exported.unwrapped).toBe(1);
+    expect(strFromU8(unzipSync(exported.bytes)['word/document.xml']!)).not.toContain(
+      '<w:dataBinding'
+    );
+
+    // The copy you keep is unchanged: same editor, saved after the export, chips intact.
+    const kept = unzipSync(new Uint8Array(await editor.save()));
+    expect(strFromU8(kept['word/document.xml']!)).toContain('<w:dataBinding');
+    expect(customNodesOf(editor)).toHaveLength(1);
+  });
+
+  test('destination internal answers the saved bytes untouched', async () => {
+    const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'), [secret]);
+    insertCustomNode(editor, secret, {
+      attrs: { k: 'v' },
+      text: 'classified',
+      at: { paragraphId: firstParagraphId(editor), offset: 0 },
+      data: { body: 'kept' },
+    });
+
+    const exported = await saveForExport(editor, { destination: 'internal' });
+    expect(exported.ok).toBe(true);
+    if (!exported.ok) return;
+    expect(exported).toMatchObject({ unwrapped: 0, removed: 0 });
+    expect(strFromU8(unzipSync(exported.bytes)['word/document.xml']!)).toContain('classified');
+  });
+
+  test('an explicit nodes list narrows what is applied', async () => {
+    const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'), [citation, secret]);
+    insertCustomNode(editor, secret, {
+      attrs: { k: 'v' },
+      text: 'classified',
+      at: { paragraphId: firstParagraphId(editor), offset: 0 },
+      data: { body: 'kept' },
+    });
+
+    // `secret` is registered but not listed, so its policy does not run and the node travels.
+    const exported = await saveForExport(editor, { nodes: [citation] });
+    expect(exported.ok).toBe(true);
+    if (!exported.ok) return;
+    expect(exported).toMatchObject({ unwrapped: 0, removed: 0 });
+    expect(strFromU8(unzipSync(exported.bytes)['word/document.xml']!)).toContain('classified');
   });
 });

@@ -51,7 +51,7 @@ export const DEMO_CITATION = defineCustomNode({
   // payload store can still tell which source it is.
   tagAttrs: (data) => ({ sourceId: data.sourceId }),
   // What happens to a citation in a file that leaves this system: the sentence keeps its words
-  // and loses the markup that only means something here. Applied by `exportCustomNodes` (the
+  // and loses the markup that only means something here. Applied by `prepareForExport` (the
   // header's Export button), never by `save()` — so the document at rest keeps its chips.
   preserveOnExport: 'text',
   // Sidebar card. `data` is TYPED here — `CitationData`, because that is the schema above.
