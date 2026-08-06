@@ -47,10 +47,16 @@ export interface UseReviewReturn {
   readonly activeKey: string | null;
   /** Card to document: selects the item's range and scrolls to it. */
   readonly setActive: (key: string | null) => void;
-  /** Accept a revision. A no-op on an item whose `readOnly` is true. */
-  readonly accept: (item: ReviewItemView) => void;
-  /** Reject a revision. A no-op on an item whose `readOnly` is true. */
-  readonly reject: (item: ReviewItemView) => void;
+  /**
+   * Accept a revision. Reports whether it landed.
+   *
+   * False for an item whose `readOnly` is true, and equally for a resolution the engine
+   * refuses on other grounds — a document open for viewing refuses every one. A caller
+   * that assumed success drew a live button that did nothing.
+   */
+  readonly accept: (item: ReviewItemView) => boolean;
+  /** Reject a revision. Reports whether it landed, on the same terms as {@link accept}. */
+  readonly reject: (item: ReviewItemView) => boolean;
   /**
    * Discard the item: delete a comment thread, or reject a tracked change.
    *
@@ -139,18 +145,22 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     [editor]
   );
 
+  // BOTH REPORT, like `remove` and `reply` below. `readOnly` is not the only way a
+  // resolution is refused — a document open for viewing refuses every one of them — and
+  // swallowing the result left a host rendering live Accept and Reject buttons that did
+  // nothing at all when clicked: no change, no error, nothing in the console.
   const accept = useCallback(
-    (item: ReviewItemView) => {
-      if (item.kind !== 'revision' || item.readOnly) return;
-      editor?.acceptReviewItem(item.key);
+    (item: ReviewItemView): boolean => {
+      if (!editor || item.kind !== 'revision' || item.readOnly) return false;
+      return editor.acceptReviewItem(item.key).ok;
     },
     [editor]
   );
 
   const reject = useCallback(
-    (item: ReviewItemView) => {
-      if (item.kind !== 'revision' || item.readOnly) return;
-      editor?.rejectReviewItem(item.key);
+    (item: ReviewItemView): boolean => {
+      if (!editor || item.kind !== 'revision' || item.readOnly) return false;
+      return editor.rejectReviewItem(item.key).ok;
     },
     [editor]
   );

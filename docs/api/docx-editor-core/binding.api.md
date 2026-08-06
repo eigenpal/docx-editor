@@ -164,7 +164,7 @@ export interface TreeDocxSession {
         end: number;
         endParagraphId?: string;
     }, text: string, author: string,
-    date?: string): string | null;
+    date?: string, scope?: StoryScope): string | null;
     reviewItems(): readonly ReviewItem[];
     revision(): number;
     revisionFor(scope: StoryScope): number | null;

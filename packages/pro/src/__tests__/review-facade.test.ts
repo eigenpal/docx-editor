@@ -1334,6 +1334,47 @@ describe('tracked changes in headers', () => {
     expect(active.isActive).toBe(true);
   });
 
+  test('accepting a header card leaves the caret inside the header, still typable', () => {
+    // The post-commit clamp used the BODY's paragraph list, so resolving a header card
+    // threw the caret into the document while the scope stayed on the header — and every
+    // keystroke after it was refused as `unknown-paragraph`. The reader typed and nothing
+    // happened.
+    const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
+    const header = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
+    editor.setActiveReviewItem(header.key);
+    expect(editor.surface!.activeScope()).toEqual({ kind: 'headerFooter', rId: 'rIdH' });
+
+    expect(editor.acceptReviewItem(header.key)).toEqual({ ok: true, changed: true });
+    const caret = editor.surface!.state().selection.head.paragraphId;
+    const bodyParagraphs = editor.surface!.session.paragraphIds();
+    expect(bodyParagraphs).not.toContain(caret);
+  });
+
+  test('replying to a header card lands, rather than being refused every time', () => {
+    // The reply was always written against the body store, so a header anchor named a
+    // paragraph that store had never heard of and the transaction was rejected: the reply
+    // box accepted text and threw it away.
+    const HEADER_COMMENT =
+      `<w:p><w:commentRangeStart w:id="7"/><w:r><w:t>letterhead</w:t></w:r>` +
+      `<w:commentRangeEnd w:id="7"/><w:r><w:commentReference w:id="7"/></w:r></w:p>`;
+    const editor = mount({
+      body: INSERTION,
+      header: HEADER_COMMENT,
+      comments:
+        `<w:comment w:id="7" w:author="Margaret Hamilton" w:date="2026-03-04T05:06:07Z">` +
+        `<w:p><w:r><w:t>Wrong wordmark.</w:t></w:r></w:p></w:comment>`,
+    });
+    const card = editor.getReviewItems().find((item) => item.kind === 'comment')!;
+    expect(editor.replyToReviewItem(card.key, 'Fixed in the new template.')).toEqual({
+      ok: true,
+      changed: true,
+    });
+    const replies = editor
+      .getReviewItems()
+      .filter((item) => item.kind === 'comment' && item.text.includes('Fixed in the new template'));
+    expect(replies.length).toBeGreaterThan(0);
+  });
+
   test('walking header card then body card re-activates the BODY', () => {
     // The traversal a reviewer actually performs. The body branch never left the header
     // scope, so the caret stayed clamped inside the header story and no body card could

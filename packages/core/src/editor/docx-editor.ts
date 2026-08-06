@@ -75,6 +75,7 @@ import {
   NO_TRACKING_SETTINGS,
   type DocumentTrackingSettings,
 } from '../store/package/tracking-settings.ts';
+import type { StoryScope } from '@docx-editor.dev/core/store';
 import type {
   CanResult,
   ContainerRef,
@@ -1191,6 +1192,32 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     return null;
   }
 
+  /** The story a card's range lives in, for a write that must land in that part. */
+  function storyScopeOfReviewItem(item: ReviewItem): StoryScope {
+    const home = furnitureHomeOf(item);
+    return home === null ? { kind: 'body' } : { kind: 'headerFooter', rId: home.rId };
+  }
+
+  /**
+   * Leave the open header/footer or note story when the paragraph being navigated to does
+   * not live in it.
+   *
+   * Every "go to this position" API addresses a paragraph, and an open furniture scope makes
+   * that address ambiguous: a body id set while a header is open clamps the caret back into
+   * the story the reader is in, and the surface then refuses each keystroke as
+   * `unknown-paragraph` — the page scrolls to the target and typing goes nowhere. Called
+   * BEFORE the selection is set, so the caret lands in the story that owns it.
+   */
+  function leaveScopeForParagraph(paragraphId: string): void {
+    if (!surface || surface.activeScope().kind === 'body') return;
+    // Only for a BODY target. A paragraph belonging to some other story is not somewhere
+    // leaving this one would help, and in-story navigation must not close the story the
+    // reader opened.
+    if (!surface.session.paragraphIds().includes(paragraphId)) return;
+    surface.exitNote?.();
+    surface.exitHeaderFooter?.();
+  }
+
   /** Word writes `@w:date` to the second; milliseconds group with nothing. */
   const secondsPrecisionNow = (): string => `${new Date().toISOString().slice(0, 19)}Z`;
 
@@ -1845,6 +1872,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       ) {
         return { ok: false, code: 'invalidArgs', reason: 'match must carry a blockId and offsets' };
       }
+      // A hit in the body while a header is open belongs to the body: land the caret in the
+      // story that owns it, or the selection clamps back into the furniture and the reader
+      // types into nothing.
+      leaveScopeForParagraph(match.blockId);
       surface.setSelection({
         anchor: { paragraphId: match.blockId, offset: match.start },
         head: { paragraphId: match.blockId, offset: match.start + match.length },
@@ -2105,7 +2136,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           // than the ones around it. The clock is the HOST's, which is why the store takes
           // the value rather than reading one: a store that called `Date.now()` could not
           // be tested for a deterministic round trip.
-          secondsPrecisionNow()
+          secondsPrecisionNow(),
+          // The story the card's range lives in. Written against the body, a header
+          // anchor names a paragraph the body store does not have, and every reply to a
+          // header or footer card was refused.
+          storyScopeOfReviewItem(item)
         );
         return { committed: created !== null };
       });
@@ -2184,10 +2219,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       Number.isInteger(pageNumber) && pageNumber >= 1
         ? (surface?.revealPage(pageNumber - 1) ?? false)
         : false,
-    scrollToBlock: (blockId: string) =>
-      typeof blockId === 'string' && blockId.length > 0
-        ? (surface?.revealParagraph(blockId) ?? false)
-        : false,
+    scrollToBlock: (blockId: string) => {
+      if (typeof blockId !== 'string' || blockId.length === 0) return false;
+      // Revealing a body block is a move OUT of an open header or note: the outline and the
+      // search pane both drive this, and leaving the scope on the furniture left the reader
+      // looking at the body with every keystroke going to a story off screen.
+      leaveScopeForParagraph(blockId);
+      return surface?.revealParagraph(blockId) ?? false;
+    },
 
     getZoom: () => zoom,
     setZoom(next: number): ExecResult {

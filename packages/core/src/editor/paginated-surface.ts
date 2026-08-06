@@ -3387,7 +3387,14 @@ export function mountPaginatedSurface(
           // and the flush above consumed it — so the render that follows read the stale DOM
           // selection back over the clamp and the caret jumped to the paragraph start.
           selectionSync.noteModelMoved();
-          return clampedToDocument(currentLayout, session.paragraphIds(), selection);
+          // Clamped within the story the READER is in, for the reason `applyAutomationOps`
+          // states below: the body's paragraph list is the wrong ruler while a header or a
+          // note is open, and clamping to it moved the caret into the document while the
+          // scope stayed on the furniture — after which every keystroke was refused as
+          // `unknown-paragraph`. Accepting a header card is exactly that situation.
+          const order = paragraphOrder();
+          if (order.length === 0) return null;
+          return clampedToDocument(currentLayout, order, selection);
         }
       ),
 
