@@ -16,20 +16,21 @@ import {
   contentControlTextOf,
   contentControlsIn,
   customNodePayloadsByControl,
-  parseNoteScopeId,
   segmentsOf,
   type CustomNodePayloadRead,
   type OoxmlNode,
   type OoxmlParagraphNode,
   type OoxmlPart,
-  type StoryScope,
 } from '@docx-editor.dev/core/store';
 import type { CustomNodeDefinition } from './define-custom-node.ts';
+import type { StoryScope } from '@docx-editor.dev/core/store';
 import {
   payloadWriteOf,
   projectionOf,
   refusalOf,
+  storyScopeOfEditor,
   validatePayload,
+  viewingRefusal,
   type CustomNodeInput,
   type ValidatedPayload,
 } from './insert-custom-node.ts';
@@ -46,36 +47,6 @@ import { encodeCustomNodeTag } from './tag-codec.ts';
 function surfaceOf(editor: Editor): PaginatedSurface | null {
   const candidate = editor as Editor & { readonly surface?: PaginatedSurface | null };
   return candidate.surface ?? null;
-}
-
-/**
- * Refuse a write while the document is open for VIEWING.
- *
- * `session.applyTreeOps` is the store's path, below the surface's editing-mode gate, so a
- * write routed through it edited a read-only document — the context menu's Remove row
- * deleted a chip in a viewing document and reported success. Every write in this file asks
- * first rather than relying on a gate it does not pass through.
- */
-function viewingRefusal(editor: Editor): CustomNodeWriteOutcome | null {
-  return editor.getEditingMode() === 'viewing'
-    ? { ok: false, code: 'unsupported', reason: 'the document is open for viewing' }
-    : null;
-}
-
-/**
- * The story the reader has open, in the vocabulary `applyTreeOps` takes.
- *
- * A chip lives wherever it was inserted, and a header is an ordinary place to put one.
- * Writes default to the body, so the scope has to travel with them.
- */
-function storyScopeOfEditor(editor: Editor): StoryScope {
-  const scope = editor.getActiveScope();
-  if (scope.kind === 'headerFooter') return { kind: 'headerFooter', rId: scope.rId };
-  if (scope.kind === 'note') {
-    const parsed = parseNoteScopeId(scope.id);
-    if (parsed) return { kind: 'notesPart', noteKind: parsed.noteKind };
-  }
-  return { kind: 'body' };
 }
 
 /** The paragraph holding a node, found in one walk from the part root. */
@@ -206,7 +177,7 @@ export function updateCustomNode<Schema extends StandardSchemaV1 | undefined = u
   const part = surface.session.partFor(scope) ?? surface.session.part();
   const paragraph = paragraphHolding(part, nodeId);
   const span = paragraph ? spanOf(paragraph, nodeId) : null;
-  const existing = existingNodeOf(surface, nodeId);
+  const existing = existingNodeOf(surface, nodeId, scope);
   if (!paragraph || !span || !existing) {
     return { ok: false, code: 'notFound', reason: 'no custom node with that id' };
   }
@@ -304,8 +275,14 @@ interface ExistingNode {
   readonly lock: false | 'sdtLocked' | 'sdtContentLocked' | 'contentLocked' | undefined;
 }
 
-function existingNodeOf(surface: PaginatedSurface, nodeId: string): ExistingNode | null {
-  const part = surface.session.part();
+function existingNodeOf(
+  surface: PaginatedSurface,
+  nodeId: string,
+  scope: StoryScope
+): ExistingNode | null {
+  // The STORY the chip lives in. Reading the body part while a header was open found no
+  // control with that id, so an update reported `notFound` over a chip on screen.
+  const part = surface.session.partFor(scope) ?? surface.session.part();
   const entry = contentControlsIn(part.root).find((candidate) => candidate.node.id === nodeId);
   if (!entry) return null;
   const properties = contentControlPropertiesOf(entry.node);
