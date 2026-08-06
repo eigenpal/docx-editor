@@ -1,8 +1,8 @@
 ---
 title: 'React examples'
 description: 'Concrete patterns for the current React root surface: mount bytes, save through the ref, compose custom chrome, and automate an open editor.'
-category: "React"
-order: 32
+category: 'React'
+order: 34
 ---
 
 Each example uses the current root exports only.
@@ -64,7 +64,11 @@ import { DocxEditor, useEditorCommand } from '@docx-editor.dev/react';
 function BoldButton() {
   const bold = useEditorCommand('text.bold');
   return (
-    <button onClick={() => bold.execute()} disabled={!bold.isEnabled}>
+    <button
+      onMouseDown={(e) => e.preventDefault()} // chrome must not steal the caret
+      onClick={() => bold.execute()}
+      disabled={!bold.isEnabled}
+    >
       Bold
     </button>
   );
@@ -119,4 +123,4 @@ export function AutomateButton() {
 - [React package overview](/docs/2.x/react)
 - [Props reference](/docs/2.x/react/props)
 - [Toolbar guide](/docs/2.x/guides/toolbar)
-- [DocxEditor API](/docs/2.x/editor-api)
+- [Editing API](/docs/2.x/editor-api)

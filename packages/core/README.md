@@ -25,38 +25,33 @@ types to write a function signature.
 npm install @docx-editor.dev/core
 ```
 
-## The root is the 80% path
+## Entry points
 
 ```ts
 import { createDocxEditor, loadFonts, WORD_DEFAULT_FONT } from '@docx-editor.dev/core';
 import type { Editor, EditorSnapshot } from '@docx-editor.dev/core';
 ```
 
-Create an editor, the `Editor` contract it implements, fonts, the chrome registry, and the
-document model types. Reach for a subpath when you need the canonical tree, the layout pass,
-or the paint step directly.
+The root covers most uses: creating an editor, the `Editor` contract it implements, fonts,
+the chrome registry, and the document model types. Subpaths expose the canonical tree, the
+layout pass, and the paint step directly.
 
-| Subpath                | What's there                                                                    |
-| ---------------------- | ------------------------------------------------------------------------------- |
-| `.`                    | Create an editor, the contract, fonts, the chrome registry, the document model. |
-| `./editor`             | Everything the root re-exports, plus the paginated surface and ruler geometry.  |
-| `./contracts/editor`   | `Editor`, `EditorCommand`, `EditorQuery`, `EditorSnapshot`, `PageSetup`.        |
-| `./contracts/document` | The document-level edit and query vocabulary.                                   |
-| `./contracts/types`    | Document model types.                                                           |
-| `./contracts/modules`  | `EditorModule` — the shape `@docx-editor.dev/pro` implements.                   |
-| `./store`              | The canonical tree and its transactional store.                                 |
-| `./layout`             | The DOM-free layout pass.                                                       |
-| `./output`             | Serialization.                                                                  |
-| `./automation`         | The object model behind `@docx-editor.dev/editor-api`.                          |
-| `./styles/editor.css`  | The one editor stylesheet, shared by packaged and custom chrome.                |
+| Subpath                   | What's there                                                                                 |
+| ------------------------- | -------------------------------------------------------------------------------------------- |
+| `.`                       | Create an editor, the contract, fonts, the chrome registry, the document model.              |
+| `./editor`                | Everything the root re-exports, plus the paginated surface and ruler geometry.               |
+| `./contracts/editor`      | `Editor`, `EditorCommand`, `EditorQuery`, `EditorSnapshot`, `PageSetup`.                     |
+| `./contracts/document`    | The document-level edit and query vocabulary.                                                |
+| `./contracts/interaction` | Semantic addressing (`SemanticTarget`) and the `InteractionOutcome` an attempt answers with. |
+| `./contracts/types`       | Document model types.                                                                        |
+| `./contracts/modules`     | `EditorModule` — the shape `@docx-editor.dev/pro` implements.                                |
+| `./store`                 | The canonical tree and its transactional store.                                              |
+| `./layout`                | The DOM-free layout pass.                                                                    |
+| `./output`                | Serialization.                                                                               |
+| `./automation`            | The object model behind `@docx-editor.dev/editor-api`.                                       |
+| `./styles/editor.css`     | The one editor stylesheet, shared by packaged and custom chrome.                             |
 
-## Nothing is lost
-
-Everything you do not edit comes back byte for byte, including parts the engine does not
-model — custom XML, embedded fonts, macros, media, unknown extensions. Two oracles gate it in
-CI: a canonical fingerprint over the tree, and a save-and-reopen semantic digest.
-
-## One pipeline
+## Architecture
 
 ```
 bytes → bounded OPC/XML read → canonical OOXML tree → layout → painted pages → serialize
@@ -66,18 +61,22 @@ There is one document model. The painted pages are the editable surface: they ar
 `contenteditable`, but the DOM is a picture. Browser mutations are prevented and re-expressed
 as tree operations, so the browser never invents markup inside your document.
 
-Nodes are **typed** where layout needs them and **generic** everywhere else, preserving the
-element verbatim. So content the engine does not model is carried rather than dropped, and a
-document full of unknown extensions still opens, edits, and saves.
+Nodes are typed where layout needs them and generic everywhere else, preserving the element
+verbatim. Content the engine does not model is carried rather than dropped, so a document full
+of unknown extensions still opens, edits, and saves.
 
-On save, modeled parts are re-emitted normalized; everything else — custom XML, embedded fonts,
-media — is repacked from the original file untouched. Two oracles gate that in CI: a canonical
-fingerprint over the tree, and a save-and-reopen semantic digest.
+## Fidelity
+
+Everything you do not edit comes back byte for byte, including parts the engine does not model:
+custom XML, embedded fonts, macros, media, unknown extensions. On save, modeled parts are
+re-emitted normalized; everything else is repacked from the original file untouched. Two
+oracles gate this in CI: a canonical fingerprint over the tree, and a save-and-reopen semantic
+digest.
 
 ## Untrusted input
 
 A `.docx` is a zip of XML that whoever sent it controls end to end. The engine sanitizes at the
-parse boundary — URL allowlisting, entity and zip-bomb limits, recursion and element caps, no
+parse boundary: URL allowlisting, entity and zip-bomb limits, recursion and element caps, no
 zero-click external fetches, escaping on the way back out.
 
 Anything you render from document data (a font name, a hyperlink target, a comment body) is

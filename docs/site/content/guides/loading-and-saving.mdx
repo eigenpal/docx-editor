@@ -1,7 +1,7 @@
 ---
 title: 'Loading & saving'
-description: "Load DOCX bytes into the editor root, swap documents through the shared ref, and serialize the current state back out to a .docx file on demand."
-category: "Guides"
+description: 'Load DOCX bytes into the editor root, swap documents through the shared ref, and serialize the current state back out to a .docx file on demand.'
+category: 'Guides'
 seoTitle: 'Loading and saving DOCX documents'
 ---
 
@@ -9,7 +9,7 @@ The editor takes a `.docx` file in and gives a `.docx` file back. Everything hap
 
 ## Input formats
 
-The current adapters take the document through the `document` prop. The most common value is `Uint8Array` DOCX bytes:
+The editor takes the document through the `document` prop. The most common value is `Uint8Array` DOCX bytes:
 
 ```tsx
 <DocxEditor document={bytes} />
@@ -119,7 +119,7 @@ Debounce `ref.save()` when `onChange` fires:
 import { useRef } from 'react';
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
 
-export function AutosaveEditor({ docId }: { docId: string }) {
+export function AutosaveEditor({ docId, bytes }: { docId: string; bytes: Uint8Array }) {
   const ref = useRef<DocxEditorRef>(null);
   const timer = useRef<number | null>(null);
 

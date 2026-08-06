@@ -1,7 +1,7 @@
 ---
 title: 'Installation'
-description: "Install the DOCX editor in React, Next.js, Vite, Remix, or Astro. Covers the stylesheet import, the client-only SSR boundary, fonts, and which package to pick."
-category: "Getting Started"
+description: 'Install the DOCX editor in React, Next.js, Vite, Remix, or Astro. Covers the stylesheet import, the client-only SSR boundary, fonts, and which package to pick.'
+category: 'Getting Started'
 order: 2
 ---
 
@@ -9,7 +9,7 @@ order: 2
 
 ## Pick a package
 
-The adapter carries the engine and the string catalogue, so for most apps it is one install.
+The adapter holds the engine as a peer, so install both. The string catalog comes with the adapter.
 
 ```bash
 # React adapter: the editor, plus the engine it holds as a peer
@@ -44,7 +44,7 @@ export default function App() {
 }
 ```
 
-Two things that catch people out:
+Two details to get right:
 
 - Without the stylesheet the editor works but the chrome renders unstyled. The styles are scoped under `.ep-root` and do not leak into your app.
 - `<DocxEditor>` fills its parent. In a parent with no height it collapses and nothing appears.
@@ -54,10 +54,22 @@ Two things that catch people out:
 The editor measures text in the DOM at mount, so it must render client-side. Client-rendered apps (Vite) need nothing special; SSR frameworks need one client-only boundary. Each guide is a complete walkthrough backed by a runnable example:
 
 <Cards>
-  <Card href="/docs/2.x/frameworks/nextjs" title="Next.js" description="dynamic() with ssr: false; fixes 'window is not defined'." />
-  <Card href="/docs/2.x/frameworks/vite" title="Vite" description="Client-rendered React setup with no SSR boundary." />
+  <Card
+    href="/docs/2.x/frameworks/nextjs"
+    title="Next.js"
+    description="dynamic() with ssr: false; fixes 'window is not defined'."
+  />
+  <Card
+    href="/docs/2.x/frameworks/vite"
+    title="Vite"
+    description="Client-rendered React setup with no SSR boundary."
+  />
   <Card href="/docs/2.x/frameworks/remix" title="Remix" description="Mount check + React.lazy." />
-  <Card href="/docs/2.x/frameworks/astro" title="Astro" description="React island with client:only." />
+  <Card
+    href="/docs/2.x/frameworks/astro"
+    title="Astro"
+    description="React island with client:only."
+  />
 </Cards>
 
 ## Fonts
@@ -74,7 +86,7 @@ const fonts = await loadDefaultFonts();
 
 See [Fonts and measurement](/docs/2.x/guides/fonts) for how the sources compose.
 
-## No UI
+## Headless
 
 To read, edit, and write a `.docx` headlessly, on a server, in a worker, or in a script, use [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api). It opens bytes, edits them through an Office.js-compatible batching object model, and saves them back.
 

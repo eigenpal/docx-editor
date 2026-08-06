@@ -1,7 +1,7 @@
 ---
 title: 'Content controls'
-description: "Find and fill Word content controls by tag or id. Set text, dropdown, checkbox, and date values, from inside the editor or from a server-side script."
-category: "Guides"
+description: 'Find and fill Word content controls by tag or id. Set text, dropdown, checkbox, and date values, from inside the editor or from a server-side script.'
+category: 'Guides'
 seoTitle: 'Content controls (SDTs)'
 ---
 
@@ -10,7 +10,8 @@ Word content controls (`w:sdt`, Structured Document Tags) are labeled, bounded r
 The editor parses controls into the canonical tree, keeps them editable, renders their boundary, and round-trips them losslessly on save, including properties it does not model, such as `w:dataBinding` and `w15:repeatingSection`.
 
 <Callout>
-Content controls are addressed by `tag`, `title`, or `id`. They are not `{{mustache}}` template variables; the two systems can coexist in one document.
+  Content controls are addressed by `tag`, `title`, or `id`. They are not `{{ mustache }}` template
+  variables; the two systems can coexist in one document.
 </Callout>
 
 ## Filling a template from a server
@@ -49,12 +50,12 @@ try {
 
 `setValue` takes a discriminated value rather than a bare string, so a typed control cannot be filled with something it cannot hold:
 
-| Kind | Shape | For |
-|---|---|---|
-| `text` | `{ kind: 'text', text }` | Rich-text and plain-text controls. |
-| `listItem` | `{ kind: 'listItem', value }` | Dropdowns and combo boxes. Must match a declared item. |
-| `checkbox` | `{ kind: 'checkbox', checked }` | Checkbox controls. |
-| `date` | `{ kind: 'date', iso }` | Date pickers. `YYYY-MM-DD` or a full ISO-8601 instant. |
+| Kind       | Shape                           | For                                                    |
+| ---------- | ------------------------------- | ------------------------------------------------------ |
+| `text`     | `{ kind: 'text', text }`        | Rich-text and plain-text controls.                     |
+| `listItem` | `{ kind: 'listItem', value }`   | Dropdowns and combo boxes. Must match a declared item. |
+| `checkbox` | `{ kind: 'checkbox', checked }` | Checkbox controls.                                     |
+| `date`     | `{ kind: 'date', iso }`         | Date pickers. `YYYY-MM-DD` or a full ISO-8601 instant. |
 
 `insertText(text, 'Replace' | 'Start' | 'End')` writes free text where that is what you want, and `delete(keepContent)` either drops a control with its content or unwraps it and keeps the content in place.
 
@@ -86,11 +87,16 @@ function ControlInspector() {
     <div>
       <h4>{control.alias ?? control.tag ?? control.id}</h4>
       <p>{control.controlType}</p>
-      <button disabled={!canSetValue} title={setValueDisabledReason ?? undefined}
-        onClick={() => setValue('Acme GmbH')}>
+      <button
+        disabled={!canSetValue}
+        title={setValueDisabledReason ?? undefined}
+        onClick={() => setValue('Acme GmbH')}
+      >
         Fill
       </button>
-      <button disabled={!canRemove} onClick={() => remove()}>Remove</button>
+      <button disabled={!canRemove} onClick={() => remove()}>
+        Remove
+      </button>
     </div>
   );
 }
@@ -108,7 +114,7 @@ In the editor, typed controls get an interactive trigger at the top-right of the
 
 ## Current limits
 
-- A control that *wraps* a whole table cell or row is not supported (controls *inside* a cell are).
+- A control that _wraps_ a whole table cell or row is not supported (controls _inside_ a cell are).
 - A control inside a hyperlink is not surfaced.
 - `dataBinding` and repeating sections round-trip but have no live behavior: no bound-value resolution, no automatic repeat expansion.
 

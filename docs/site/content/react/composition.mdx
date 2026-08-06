@@ -1,7 +1,7 @@
 ---
 title: 'Composition'
-description: "Build your own DOCX editor UI on unstyled primitives: provider, viewport, content, compound parts, asChild, slot overrides, and the escalation ladder."
-category: "React"
+description: 'Build your own DOCX editor UI on unstyled primitives: provider, viewport, content, compound parts, asChild, slot overrides, and the customization ladder.'
+category: 'React'
 order: 32
 ---
 
@@ -11,13 +11,13 @@ The packaged toolbar is built from the hooks and primitives on this page, so a c
 
 <Callout>
   The [Igloo example](https://github.com/eigenpal/docx-editor/tree/main/examples/igloo) is a fully
-  re-skinned editor built to answer one question: how much of this is yours? Every pattern below
-  appears in it, running. `bun run dev:igloo`.
+  re-skinned editor: every control is host markup over the hooks. Every pattern below appears in it,
+  running. `bun run dev:igloo`.
 </Callout>
 
-## The three primitives
+## Primitives
 
-Every editor is these three, in this order:
+Every editor is these three components, in this order:
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -39,7 +39,7 @@ export function Editor({ bytes }: { bytes: Uint8Array }) {
 
 Everything else (toolbar, menu, rulers, navigation pane, link popover, context menu) is optional and can be placed anywhere inside `Root`.
 
-## Escalation ladder
+## Customization ladder
 
 Start at the top and go down only as far as you need:
 
@@ -170,6 +170,9 @@ Put the hook in one file and share it across every surface that exposes the acti
 Every composition mode in one panel: packaged rows kept, a packaged row re-iconed, a packaged row removed, a chrome slot pulled in as a row, host rows, and a submenu.
 
 ```tsx
+{
+  /* `enabled` and `apply` come from useHighlightAction() above; `editor` from useDocxEditor(). */
+}
 <DocxEditor.ContextMenu className="my-menu" t={myLabels}>
   {/* Packaged rows, re-iconed. They still run the engine's commands and still carry the
       engine's reason when nothing is selected. */}
@@ -201,7 +204,7 @@ Every composition mode in one panel: packaged rows kept, a packaged row re-icone
   {/* A chrome slot as a row: label, icon and enabled state all from the registry, so it
       cannot disagree with its toolbar twin. */}
   <DocxEditor.ContextMenu.Slot slot="format.clear" />
-</DocxEditor.ContextMenu>
+</DocxEditor.ContextMenu>;
 ```
 
 A child the compound does not recognize is appended rather than wrapping the rows, so decorative markup lands after them in DOM order and the library keeps its own panel element, roles, keyboard handling, and placement.
@@ -211,6 +214,9 @@ A child the compound does not recognize is appended rather than wrapping the row
 The default bar derives from `CHROME_MENUS`, so it is already correct without you writing anything. What a product adds on top is usually a menu of its own and a replacement for Help:
 
 ```tsx
+{
+  /* `enabled` and `apply` come from useHighlightAction() above; `editor` from useDocxEditor(). */
+}
 <DocxEditor.Menu className="my-menubar" t={myLabels}>
   {/* The registry's menus, re-iconed in place. Each still derives its rows from the
       registry, so a row added upstream still appears here. */}
@@ -219,7 +225,7 @@ The default bar derives from `CHROME_MENUS`, so it is already correct without yo
   <DocxEditor.Menu.Insert icon={MyInsert} />
 
   {/* A menu the library has never heard of. `MenuId` accepts any string. `label` rather
-      than `labelKey`, because its name will never be in our catalogue. */}
+      than `labelKey`, because its name will never be in our catalog. */}
   <DocxEditor.Menu.Menu id="review" label="Review" icon={MyReview} preset={false}>
     <DocxEditor.Menu.Row disabled={!enabled} onSelect={apply}>
       Highlight passage
@@ -240,7 +246,7 @@ The default bar derives from `CHROME_MENUS`, so it is already correct without yo
       Documentation
     </DocxEditor.Menu.Row>
   </DocxEditor.Menu.Help>
-</DocxEditor.Menu>
+</DocxEditor.Menu>;
 ```
 
 ## Navigation pane
@@ -277,7 +283,7 @@ The pane's parts are statics, so you can hang your own class on each one instead
 
 ## Labels
 
-Every packaged part takes a `t`. Delegate to the bundled English catalogue rather than replacing it, so renaming six things does not mean restating the other four hundred:
+Every packaged part takes a `t`. Delegate to the bundled English catalog rather than replacing it, so renaming six things does not mean restating the other four hundred:
 
 ```ts
 import { createT, en, type TranslationKey } from '@docx-editor.dev/i18n';
@@ -312,8 +318,8 @@ The library's chrome is built on the `--doc-*` palette, so restating that palett
 
 Two rules worth keeping:
 
-- **Do not style `docx-*` classes and do not use `!important`.** Those names are implementation details. Every visual change should go through a prop, a `--doc-*` token, or an element you own. Where that was not possible the library grew a prop instead: trigger icons, colour-split icons, and the page's centring margin all came out of building the Igloo demo.
-- **The document canvas is not themed, on purpose.** Painter output stays Word-faithful. A page rendered in your brand colours would be a lie about what the file contains, so the theme lives in the chrome around it.
+- **Do not style `docx-*` classes and do not use `!important`.** Those names are implementation details. Every visual change should go through a prop, a `--doc-*` token, or an element you own. Where that was not possible the library grew a prop instead: trigger icons, color-split icons, and the page's centering margin all came out of building the Igloo demo.
+- **The document canvas is not themed, on purpose.** Painter output stays Word-faithful. A page rendered in your brand colors would be a lie about what the file contains, so the theme lives in the chrome around it.
 
 ## Pro surfaces
 
@@ -355,7 +361,7 @@ import { DocxEditorReview } from '@docx-editor.dev/pro/react';
 
 Every part takes `className`, `asChild`, and `hidden`; the action parts also take `icon`. `furniture` is host content above the cards, for filters or a legend.
 
-`preset={false}` mounts the rail and its context without the packaged arrangement, so you can lay the cards out yourself and keep the subscription and the anchoring. `useStackedReviewPositions(items, heights, { gap })` is the packaged stacking maths if you want it.
+`preset={false}` mounts the rail and its context without the packaged arrangement, so you can lay the cards out yourself and keep the subscription and the anchoring. `useStackedReviewPositions(items, heights, { gap })` is the packaged stacking math if you want it.
 
 Below that, `useReview()` gives you the queue with no chrome at all. See [Tracked changes](/docs/2.x/pro/tracked-changes).
 
@@ -440,11 +446,11 @@ export function Workspace({ bytes }: { bytes: Uint8Array }) {
 
 Composing gets you every part by name. Parts you do not place have no UI, which is the work `<DocxEditor>` does for you.
 
-## Two layout traps
+## Layout pitfalls
 
-**The navigation pane needs a positioning context.** It is a sibling of the viewport inside a positioned row, not a column beside it. The pane floats over the gutter and absolutely positions against that box, so without `position: relative` on the row it lays out in the flow and pushes the page down.
+The navigation pane needs a positioning context. It is a sibling of the viewport inside a positioned row, not a column beside it. The pane floats over the gutter and absolutely positions against that box, so without `position: relative` on the row it lays out in the flow and pushes the page down.
 
-**Do not set `z-index` on the workspace row or the viewport.** Either opens a stacking context around the context menu, and a `position: fixed` panel cannot escape the context it is declared in. It renders under the chrome bar however high its own `z-index` goes.
+Do not set `z-index` on the workspace row or the viewport. Either opens a stacking context around the context menu, and a `position: fixed` panel cannot escape the context it is declared in. It renders under the chrome bar however high its own `z-index` goes.
 
 ## Keep the caret
 

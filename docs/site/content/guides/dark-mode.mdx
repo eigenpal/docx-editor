@@ -1,20 +1,20 @@
 ---
 title: 'Dark mode'
 description: 'Enable dark mode in the DOCX editor with the colorMode prop: theme the chrome, render the document canvas like Word dark view, and toggle from your own UI.'
-category: "Guides"
+category: 'Guides'
 seoTitle: 'Dark mode'
 ---
 
-The editor ships a native dark mode. One prop, `colorMode`, themes the whole UI and renders the document the way Word's dark view does. 
+The editor ships a native dark mode. One prop, `colorMode`, themes the whole UI and renders the document the way Word's dark view does.
 
 ## Enabling dark mode
 
 `colorMode` is a controlled prop. There is no internal toggle button; you set the value and the editor follows it.
 
-| Value | Behavior |
-|---|---|
-| `'light'` | Light theme (default). |
-| `'dark'` | Dark theme. |
+| Value      | Behavior                                                                                             |
+| ---------- | ---------------------------------------------------------------------------------------------------- |
+| `'light'`  | Light theme (default).                                                                               |
+| `'dark'`   | Dark theme.                                                                                          |
 | `'system'` | Follows the operating system via `prefers-color-scheme`, and updates live when the OS theme changes. |
 
 ```tsx
@@ -36,14 +36,14 @@ const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
 
 To follow the operating system instead, pass `colorMode="system"`.
 
-## What changes, and what doesn't
+## What dark mode changes
 
 Dark mode has two layers:
 
 - **Editor chrome** (toolbar, title bar, dialogs, dropdowns, sidebar, menus) re-themes through the shared design tokens, so every surface tracks the theme.
 - **The document canvas** is rendered like Word's dark view: the page turns dark and text turns light. Rather than swapping two fixed colors, the canvas applies a perceptual transform that inverts each authored color's lightness while preserving its hue: black body text becomes near-white, a dark-navy heading becomes light blue, a dark red stays red. Nothing on the page becomes unreadable.
 
-It is a **display transform only.** Dark mode never changes the document itself:
+It is a display transform only. Dark mode never changes the document itself:
 
 - The saved DOCX is byte-for-byte unaffected; authored colors are preserved as written.
 - Printing always uses a white page with black text, regardless of `colorMode`.
@@ -54,7 +54,6 @@ The light theme is unchanged when `colorMode` is `'light'`.
 ## Reporting issues
 
 Dark mode covers a large surface, and the canvas transform is heuristic. If you find a control that doesn't theme correctly, text that's hard to read, or a color that transforms badly, please open an issue at [github.com/eigenpal/docx-editor/issues](https://github.com/eigenpal/docx-editor/issues). Mention `colorMode` and include a screenshot.
-
 
 ## Next steps
 

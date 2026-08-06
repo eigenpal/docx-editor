@@ -33,7 +33,7 @@ import { de } from '@docx-editor.dev/i18n';
 </LocaleProvider>;
 ```
 
-Chrome you write yourself reads the same catalogue through `useTranslation()`.
+Chrome you write yourself reads the same catalog through `useTranslation()`.
 
 Mix a community locale with custom overrides:
 
@@ -66,7 +66,10 @@ Keys set to `null` in any locale fall back to English.
 | ------- | ------ | ------------------- |
 | `en`    | `en`   | English (source)    |
 | `de`    | `de`   | German              |
+| `fr`    | `fr`   | French              |
 | `he`    | `he`   | Hebrew              |
+| `hi`    | `hi`   | Hindi               |
+| `id`    | `id`   | Indonesian          |
 | `pl`    | `pl`   | Polish              |
 | `pt-BR` | `ptBR` | Portuguese (Brazil) |
 | `tr`    | `tr`   | Turkish             |
@@ -74,9 +77,12 @@ Keys set to `null` in any locale fall back to English.
 
 BCP-47 codes (`pt-BR`, `zh-CN`) use camelCase JS identifiers (`ptBR`, `zhCN`). For runtime lookup by tag:
 
-```ts
+```tsx
 import { locales } from '@docx-editor.dev/i18n';
-<DocxEditor i18n={locales[userPreferredLocale]} />
+
+<LocaleProvider i18n={locales[userPreferredLocale]}>
+  <DocxEditor document={bytes} />
+</LocaleProvider>;
 ```
 
 > Importing `locales` pulls every locale into your bundle. For a smaller bundle, import only the ones you need by name; `sideEffects: false` lets the rest tree-shake.
@@ -93,7 +99,7 @@ import pl from '@docx-editor.dev/i18n/pl';
 const pl = (await import('@docx-editor.dev/i18n/pl')).default;
 ```
 
-Subpaths ship for every locale: `/en`, `/de`, `/he`, `/pl`, `/pt-BR`, `/tr`, `/zh-CN`. Each also exports its locale as a named binding (`import { pl } from '@docx-editor.dev/i18n/pl'`) for callers that prefer non-default imports.
+Subpaths ship for every locale: `/en`, `/de`, `/fr`, `/he`, `/hi`, `/id`, `/pl`, `/pt-BR`, `/tr`, `/zh-CN`. Each also exports its locale as a named binding (`import { pl } from '@docx-editor.dev/i18n/pl'`) for callers that prefer non-default imports.
 
 ## Types
 

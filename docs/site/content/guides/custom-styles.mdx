@@ -1,7 +1,7 @@
 ---
 title: 'Custom styles & branding'
 description: 'Use a branded DOCX template to control headings, fonts, and table styles. Documents inherit your styles automatically and preserve them when saved.'
-category: "Guides"
+category: 'Guides'
 seoTitle: 'Custom styles, fonts, and branded DOCX templates'
 ---
 
@@ -43,7 +43,7 @@ export function BrandedEditor() {
 ### Use a word processor
 
 1. Create a document with your desired styles.
-2. Configure a default table style (see [Tables](#tables)).
+2. Define any table styles you use (see [Tables](#tables)).
 3. Remove the document content.
 4. Save the file as your template.
 
@@ -55,36 +55,30 @@ Set `w:qFormat` to surface a style in the dropdown, and `w:semiHidden` or `w:hid
 
 ## Tables
 
-New tables use the document's default table style. To apply branded borders, shading, and header formatting automatically, define a table style and set it as the default:
+Table styles defined in the document (borders, shading, banded rows, header-row formatting) render through the style cascade, including `basedOn` inheritance, and survive a round trip.
 
-```xml
-<!-- word/settings.xml -->
-<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:defaultTableStyle w:val="BrandGrid"/>
-</w:settings>
-```
-
-If no default table style is configured, inserted tables use a basic single-border style.
+Newly inserted tables do not pick up a document default table style: Insert → Table authors an even grid with explicit single-line borders, so it renders the same in every document. Restyle it afterwards with the table border and fill controls.
 
 ## Fonts
 
-The recommended way to provide custom fonts is the editor's `fonts` prop. Each entry registers an `@font-face` rule, allowing the editor to render and measure the font without additional setup. The font picker offers the families the document declares plus the ones you configure.
+Provide brand fonts through the editor's `fonts` prop. `loadFonts` fetches the URLs you list and returns a fragment the editor both measures and paints with:
 
 ```tsx
-const FONTS = [
-  { family: 'Custom Sans', src: '/fonts/CustomSans-Regular.woff2' },
-  { family: 'Custom Sans', src: '/fonts/CustomSans-Bold.woff2', weight: 700 },
-];
+import { loadFonts } from '@docx-editor.dev/react';
 
-<DocxEditor
-  document={template}
-  fonts={FONTS}
-/>;
+const brand = await loadFonts({
+  sources: [
+    { url: '/fonts/CustomSans-Regular.ttf', family: 'Custom Sans', weight: 400, style: 'normal' },
+    { url: '/fonts/CustomSans-Bold.ttf', family: 'Custom Sans', weight: 700, style: 'normal' },
+  ],
+});
+
+<DocxEditor document={template} fonts={brand} />;
 ```
 
-See [React props: Fonts](/docs/2.x/react/props#fonts) for the full API.
+The font picker offers the families the document declares plus the ones you configure. See [React props: Fonts](/docs/2.x/react/props#fonts) for the prop and [Fonts and measurement](/docs/2.x/guides/fonts) for hashes, failure handling, and on-demand loading.
 
-Alternatively, fonts can be installed on the user's system or loaded using your own `@font-face` rules. The editor renders fonts by name, so any font available to the browser can be used.
+A font that is only installed on the user's system or registered through your own `@font-face` rules affects painting, not measurement: the editor measures with the bytes you hand it and falls back to estimated metrics for families it has no bytes for.
 
 Fonts embedded inside a `.docx` are loaded automatically: the editor de-obfuscates the embedded faces, renders with them, and lists them in the font picker. They are also preserved when saving.
 
@@ -92,9 +86,8 @@ Fonts embedded inside a `.docx` are loaded automatically: the editor de-obfuscat
 
 The editor preserves existing style files (`styles.xml`, `theme1.xml`, `settings.xml`) rather than regenerating them. Custom styles, themes, fonts, and table defaults survive a full edit-and-save round trip.
 
-
 ## Next steps
 
-- [Fonts and measurement](/docs/2.x/guides/fonts): the three font sources and how they compose
+- [Fonts and measurement](/docs/2.x/guides/fonts): font sources and how they compose
 - [Word fidelity](/docs/2.x/word-fidelity): what survives a round trip
 - [Props](/docs/2.x/react/props): `fonts` and the rest of the root props

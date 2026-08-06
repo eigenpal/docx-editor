@@ -26,10 +26,10 @@ already has open in a page.
 npm install @docx-editor.dev/editor-api
 ```
 
-## On a server, from bytes
+## On a server
 
-No browser, no framework, nothing to mount. This half of the package opens DOCX bytes, edits
-them, and hands them back.
+The default entry needs no browser and nothing to mount. It opens DOCX bytes, edits them, and
+hands them back.
 
 ```ts
 import { readFile, writeFile } from 'node:fs/promises';
@@ -55,12 +55,11 @@ try {
 }
 ```
 
-## In a page, on a document already open
+## In the browser
 
-The browser entry takes an editor the host already created — from `@docx-editor.dev/react`,
-`@docx-editor.dev/react` or a plain page — and drives it in place, so edits land in the open
-document with the reader's undo stack intact. There is no `save()`: the host saves as it already
-did.
+The browser entry takes an editor the host already created, from `@docx-editor.dev/react` or a
+plain page, and drives it in place. Edits land in the open document with the reader's undo
+stack intact. There is no `save()`: the host saves as it already did.
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
@@ -79,20 +78,20 @@ await runtime.run(async (context) => {
 Import it from `/browser` deliberately: reaching a live editor means reaching the painted engine,
 and a server holding bytes should not pay for that.
 
-## The four rules
+## Programming model
 
-- **Read what you asked for.** A property you did not `load()` throws instead of answering
-  `undefined`, so a typo fails at the read rather than producing a wrong document later.
-- **`sync()` is the only round trip.** Everything queued between two syncs is one ordered batch,
+- A property you did not `load()` throws instead of answering `undefined`, so a typo fails at
+  the read rather than producing a wrong document later.
+- `sync()` is the only round trip. Everything queued between two syncs is one ordered batch,
   applied atomically.
-- **Objects live inside `run`.** They are proxies into a document the runtime owns. Keeping one
-  past the callback, or past `dispose()`, is an error rather than a stale read — to keep one
-  across syncs deliberately, hand it to `context.trackedObjects`.
-- **Ask before you assume.** `getFirstOrNullObject` / `getLastOrNullObject` answer an object whose
-  `isNullObject` is `true`, which is the difference between "no such heading" and a crash.
+- Objects are proxies into a document the runtime owns and live inside `run`. Keeping one past
+  the callback, or past `dispose()`, is an error rather than a stale read; to keep one across
+  syncs deliberately, hand it to `context.trackedObjects`.
+- `getFirstOrNullObject` / `getLastOrNullObject` answer an object whose `isNullObject` is
+  `true`, which is the difference between "no such heading" and a crash.
 
-`runtime.capabilities` says what the host behind a runtime can do — `save` is false in the
-browser; `selection`, `scrolling` and `layout` are false on a server — and it is frozen for the
+`runtime.capabilities` says what the host behind a runtime can do: `save` is false in the
+browser; `selection`, `scrolling` and `layout` are false on a server. It is frozen for the
 life of the runtime, so one read stays true.
 
 ## Entries
@@ -105,15 +104,15 @@ life of the runtime, so one read stays true.
 Both entries export the same vocabulary — the lifecycle types, the object model and the error
 type — so consumer code compiles against either. They differ by one member: `createBrowser`.
 
-## What this is, and is not
+## Office.js compatibility
 
-The Office.js Word-shaped DocxEditor API is compatible with a documented subset of Word's
-JavaScript object model, so a call site written against that vocabulary compiles here. It is not
-Office.js, does not run in an Office add-in host, and depends on no Microsoft package. Every type
-in the surface is authored in this repository.
+The API is compatible with a documented subset of Word's JavaScript object model, so a call
+site written against that vocabulary compiles here. It is not Office.js: it does not run in an
+Office add-in host and depends on no Microsoft package. Every type in the surface is authored
+in this repository.
 
-The supported subset and its documented omissions — tables, images, repeating sections, custom
-XML mapping — are listed in
+The supported subset and its documented omissions (tables, images, repeating sections, custom
+XML mapping) are listed in
 [the Word API compatibility page](https://www.docx-editor.dev/docs/1.x/editor-api/word-js-api).
 
 Upgrading from the reviewer/bridge/MCP/chat surfaces this package used to ship? See
