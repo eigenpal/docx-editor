@@ -2120,7 +2120,13 @@ export function mountPaginatedSurface(
     // carried out. `restoreSelection` raises the flag and only `flushLayout` takes it down, so
     // `undo` on an empty history left it up and disarmed the NEXT repaint, whenever it came.
     selectionSync.noteSelectionSettled();
-    selectionSync.mirrorToDom();
+    // CLAIMED: this is the programmatic entry point — a host's `setSelection`, an opened
+    // review card, an outline jump. The plain write refuses whenever the browser's selection
+    // sits outside these pages, which is exactly the case when the request came from the
+    // host's own chrome (a rail card takes focus on mousedown), and the range the caller
+    // asked to SHOW then highlighted nothing at all. A pointer or keyboard move already owns
+    // the selection, so claiming changes nothing for them. Focus is never moved.
+    selectionSync.mirrorToDom(true);
     followCaretIntoView(true);
     renderOverlay();
     // A dismissal is dismissed for where the caret WAS; any move re-asks the question, which
