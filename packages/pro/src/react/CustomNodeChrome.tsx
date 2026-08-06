@@ -129,16 +129,37 @@ export function CustomNodeChrome(props: CustomNodeChromeProps): null {
   // (post-`fromDocx` attrs; text/nodeId when the review module can resolve them), so a
   // hook written against the review rail's attrs shape sees the same shape from the chip.
   useEffect(() => {
-    const onClick = (event: MouseEvent) => {
-      // Resolve from the click POINT when the target does not answer. Pressing a chip moves
-      // the caret into it, which repaints the control — so the boundary the press landed on
-      // is gone by mouseup, and the browser dispatches `click` on the nearest surviving
-      // ancestor (the pages layer) instead. `elementFromPoint` sees the repainted boundary
-      // that is there now, and a drag that ends elsewhere still resolves to nothing.
-      const resolved =
-        resolveCustomNodeActivation(event.target, nodes) ??
-        resolveCustomNodeActivation(document.elementFromPoint(event.clientX, event.clientY), nodes);
-      if (!resolved) return;
+    // NOT `click`. Pressing a chip moves the caret into it, which repaints the control and
+    // replaces the boundary the press landed on. The browser dispatches `click` on the nearest
+    // common ancestor of the down and up targets — and when the down target has left the
+    // document there is none, so no `click` is fired AT ALL. Hosts saw chip clicks that
+    // silently did nothing, intermittently, depending on whether that repaint reused the
+    // element. A press and a release over the same control is the activation instead, which no
+    // repaint can take away.
+    let pressedControl: string | null = null;
+    let pressedTag: string | null = null;
+    // By point, not by target: the element under the pointer is the one that survived the
+    // repaint, whereas the event's own target may already be detached.
+    const controlAt = (event: PointerEvent) =>
+      resolveCustomNodeActivation(document.elementFromPoint(event.clientX, event.clientY), nodes);
+    const onDown = (event: PointerEvent) => {
+      // Primary button only: a right-click belongs to the context menu, not to activation.
+      const resolved = event.button === 0 ? controlAt(event) : null;
+      pressedControl = resolved?.controlId ?? null;
+      pressedTag = resolved?.node.tag ?? null;
+    };
+    const onUp = (event: PointerEvent) => {
+      const wasControl = pressedControl;
+      const wasTag = pressedTag;
+      pressedControl = null;
+      pressedTag = null;
+      if (wasTag === null) return;
+      const resolved = controlAt(event);
+      // Same control, so a drag that starts on a chip and ends elsewhere activates nothing.
+      // `controlId` is the identity when the engine gives one; the tag carries the rest, and a
+      // rewrite between press and release changes it, which is a different node either way.
+      if (!resolved || resolved.node.tag !== wasTag) return;
+      if (wasControl !== null && resolved.controlId !== wasControl) return;
       const node = activatedCustomNodeOf(resolved, editor);
       if (!node) return;
       resolved.definition.onClick?.(node);
@@ -154,10 +175,12 @@ export function CustomNodeChrome(props: CustomNodeChromeProps): null {
       resolved.definition.onHover?.(node);
       onNodeHover?.(node);
     };
-    document.addEventListener('click', onClick);
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('pointerup', onUp, true);
     document.addEventListener('mouseover', onOver);
     return () => {
-      document.removeEventListener('click', onClick);
+      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('pointerup', onUp, true);
       document.removeEventListener('mouseover', onOver);
     };
   }, [nodes, editor, onNodeClick, onNodeHover]);

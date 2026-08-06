@@ -5,7 +5,7 @@
 // beside each other because they all speak the same schema — the definition is the only
 // place the shape is written down.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { z } from 'zod';
 import { useDocxEditor, type EditorCaret } from '@docx-editor.dev/react';
@@ -113,6 +113,21 @@ export function CitationPopover({
     if (card?.mode !== 'open') onOpen(next);
   };
   const { ref } = useChipPopover<HTMLDivElement>(card?.controlId, onClose);
+  // A preview follows the pointer, so it leaves when the pointer does. Without this the card
+  // that hover opened stayed on screen until something else was clicked. A card a CLICK pinned
+  // is not a preview and stays until it is dismissed.
+  const previewing = card?.mode === 'preview';
+  useEffect(() => {
+    if (!previewing) return;
+    const onOver = (event: Event): void => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('[popover]') || target.closest('[data-docx-content-control]')) return;
+      onClose();
+    };
+    document.addEventListener('pointerover', onOver, true);
+    return () => document.removeEventListener('pointerover', onOver, true);
+  }, [previewing, onClose]);
   const citation = card ? DEMO_CITATION.dataOf(card) : undefined;
   return (
     <>

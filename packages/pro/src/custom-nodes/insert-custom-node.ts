@@ -121,7 +121,6 @@ const CALLER_FIXABLE: ReadonlySet<string> = new Set([
  * @public
  */
 export interface CustomNodeInput<
-   
   // `CustomNodeDefinition` defaults to `any`: without it the obvious wrapper annotation,
   // `function add(input: CustomNodeInput) { insertCustomNode(editor, Citation, input) }`, fails
   // with an error naming the DEFINITION rather than the annotation that caused it.
