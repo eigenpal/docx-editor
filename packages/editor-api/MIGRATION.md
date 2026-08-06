@@ -125,4 +125,4 @@ so a call site written against that vocabulary compiles here. It is not Office.j
 in an Office add-in host, and it depends on no Microsoft package — every type in the surface is
 authored in this repository. The supported subset and its omissions (tables, images, repeating
 sections, custom XML mapping) are listed on
-[the Word API compatibility page](https://www.docx-editor.dev/docs/1.x/editor-api/word-js-api).
+[the Office.js compatibility page](https://www.docx-editor.dev/docs/latest/editor-api/office-js-api).

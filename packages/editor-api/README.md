@@ -113,7 +113,7 @@ in this repository.
 
 The supported subset and its documented omissions (tables, images, repeating sections, custom
 XML mapping) are listed in
-[the Word API compatibility page](https://www.docx-editor.dev/docs/1.x/editor-api/word-js-api).
+[the Office.js compatibility page](https://www.docx-editor.dev/docs/latest/editor-api/office-js-api).
 
 Upgrading from the reviewer/bridge/MCP/chat surfaces this package used to ship? See
 [MIGRATION.md](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/MIGRATION.md).

@@ -89,4 +89,4 @@ Every type in the surface is authored in this repository.
 
 The supported subset, and the omissions that matter (tables, images, repeating sections and
 custom XML mapping), are listed in
-[`docs/site/content/editor-api/word-js-api.mdx`](../../docs/site/content/editor-api/word-js-api.mdx).
+[`docs/site/content/editor-api/office-js-api.mdx`](../../docs/site/content/editor-api/office-js-api.mdx).

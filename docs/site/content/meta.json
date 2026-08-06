@@ -31,7 +31,7 @@
     "pro/custom-nodes",
     "---Editing API---",
     "editor-api/index",
-    "editor-api/word-js-api",
+    "editor-api/office-js-api",
     "---Reference---",
     "core",
     "i18n"
