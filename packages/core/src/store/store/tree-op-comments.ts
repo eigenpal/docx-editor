@@ -17,10 +17,10 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
-import {
-  contentControlContentNodeOf,
-  isContentControlNode,
-} from '../package/content-control-nodes.ts';
+// The SAME predicate and accessor the offset authority walks with. A second pair that
+// disagreed — `content-control-nodes.ts` matches only a TYPED control, while the authority
+// also measures a demoted generic `w:sdt` — would refuse offsets the authority hands out.
+import { contentControlContentOf, isContentControlNode } from './tree-op-nodes.ts';
 import { paragraphOffsetIndex } from './tree-op-segments.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import { splitRunsAt } from './tree-op-apply.ts';
@@ -50,6 +50,38 @@ function locateOffset(
   const span =
     container.id === paragraph.id ? { start: 0, end: index.length } : index.spanOf(container);
   if (!span) return null;
+  // Nodes an atom swallowed: a complex field is one offset unit spread over its begin, its
+  // instruction, its separator, its cached result and its end. Each of those after the first
+  // measures zero, so a boundary would otherwise match INSIDE the group — between the field's
+  // begin and its instruction — where Word drops the marker the next time it rebuilds the
+  // field. The boundary belongs after the whole group.
+  // `removeNodeIds` names the field's INNER nodes (`w:fldChar`, `w:instrText`), so the set is
+  // mapped up to the container's own children — the runs holding them — before it is useful
+  // here. Built only when a multi-node atom is present, which is the only case it changes.
+  const swallowed = new Set<string>();
+  const atomInnerIds = new Set<string>();
+  for (const segment of index.segments) {
+    if ((segment.removeNodeIds?.length ?? 0) < 2) continue;
+    for (const id of segment.removeNodeIds ?? []) atomInnerIds.add(id);
+  }
+  if (atomInnerIds.size > 0) {
+    const holdsAtomInner = (node: OoxmlNode, depth: number): boolean => {
+      if (atomInnerIds.has(node.id)) return true;
+      if (node.kind === 'textValue' || depth > 8) return false;
+      return node.children.some((inner) => holdsAtomInner(inner, depth + 1));
+    };
+    // The FIRST child of the group still owns the atom's own offset, so it stays matchable;
+    // only the zero-length remainder is skipped past.
+    let seenGroupStart = false;
+    for (const child of container.children) {
+      if (child.kind === 'textValue' || !holdsAtomInner(child, 0)) {
+        seenGroupStart = false;
+        continue;
+      }
+      if (seenGroupStart) swallowed.add(child.id);
+      seenGroupStart = true;
+    }
+  }
   let cursor = span.start;
   for (let position = 0; position < container.children.length; position += 1) {
     const child = container.children[position]!;
@@ -57,7 +89,9 @@ function locateOffset(
     // AFTER the properties rather than before them. Inserting ahead of `w:pPr` produces a
     // paragraph the tree invariants reject, which is the invariant doing its job.
     const isProperties = child.kind === 'paragraphProperties' || child.kind === 'runProperties';
-    if (cursor === offset && !isProperties) return { containerId: container.id, index: position };
+    if (cursor === offset && !isProperties && !swallowed.has(child.id)) {
+      return { containerId: container.id, index: position };
+    }
     if (child.kind === 'textValue') continue;
     const length = index.lengthOf(child);
     // A container the offset falls STRICTLY inside is descended into, so the marker lands
@@ -96,7 +130,7 @@ function descendableContainer(child: OoxmlNode): OoxmlElement | null {
   }
   // An inline content control holds its content in `w:sdtContent`; the wrapper's other
   // children (`w:sdtPr`, `w:sdtEndPr`) are properties a marker must never land among.
-  if (isContentControlNode(child)) return contentControlContentNodeOf(child) ?? null;
+  if (isContentControlNode(child)) return contentControlContentOf(child) ?? null;
   return null;
 }
 

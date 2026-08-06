@@ -141,6 +141,20 @@ describe('a marker lands at the offset it was asked for', () => {
       name: 'a footnote mark leading the paragraph',
       body: `<w:p><w:r><w:footnoteRef/></w:r>${run('note text')}</w:p>`,
     },
+    { name: 'an inline content control', body: `<w:p>${INLINE_SDT}${run('cd')}</w:p>` },
+    {
+      name: 'a control holding two runs',
+      body:
+        `<w:p><w:sdt><w:sdtPr><w:tag w:val="t"/></w:sdtPr><w:sdtContent>` +
+        `${run('AB')}${run('CD')}</w:sdtContent></w:sdt>${run('ef')}</w:p>`,
+    },
+    {
+      name: 'a link inside a tracked insertion inside a control',
+      body:
+        `<w:p><w:sdt><w:sdtPr><w:tag w:val="t"/></w:sdtPr><w:sdtContent>` +
+        `<w:ins w:id="9" w:author="A" w:date="D"><w:hyperlink>${run('link')}</w:hyperlink></w:ins>` +
+        `</w:sdtContent></w:sdt>${run('after')}</w:p>`,
+    },
   ];
 
   for (const { name, body } of cases) {
@@ -148,11 +162,9 @@ describe('a marker lands at the offset it was asked for', () => {
       const length = lengthOfBody(body);
       expect(length).toBeGreaterThan(0);
       for (let offset = 0; offset <= length; offset += 1) {
-        // A refusal is a legitimate answer for an offset inside something indivisible (the
-        // middle of a drawing is not a place). Landing SOMEWHERE ELSE never is.
-        const landed = markerOffset(body, offset);
-        if (landed === null) continue;
-        expect({ offset, landed }).toEqual({ offset, landed: offset });
+        // LANDS, at the offset asked for. Not "does not land wrong": a skipped refusal is
+        // how the first version of this test managed to assert nothing at all.
+        expect({ offset, landed: markerOffset(body, offset) }).toEqual({ offset, landed: offset });
       }
     });
   }
@@ -170,5 +182,38 @@ describe('a marker lands at the offset it was asked for', () => {
     const body = `<w:p>${run('ab')}${DRAWING}${run('cd')}</w:p>`;
     expect(lengthOfBody(body)).toBe(5);
     expect(markerOffset(body, 5)).toBe(5);
+  });
+});
+
+describe('a marker never lands inside an indivisible group', () => {
+  test('an offset after a complex field clears the whole field, not just its begin', () => {
+    // A complex field is ONE offset unit spread over five nodes, four of which measure
+    // nothing. A boundary that matched the first zero-length sibling put the marker between
+    // the field's begin and its instruction — a place Word discards the next time it
+    // rebuilds the field, so the comment silently disappeared on a round trip.
+    const body = `<w:p>${COMPLEX_FIELD}${run('cd')}</w:p>`;
+    const store = storeOf(body);
+    const paragraph = firstParagraph(store);
+    const applied = store.transact((ctx) => {
+      ctx.apply({
+        op: 'insertCommentMarker',
+        paragraphId: paragraph.id,
+        offset: 1,
+        commentId: '1',
+        marker: 'start',
+      });
+    });
+    expect(applied.ok).toBe(true);
+
+    const after = firstParagraph(store);
+    const kinds = after.children.map((child) => child.kind);
+    const marker = kinds.indexOf('commentRangeStart');
+    expect(marker).toBeGreaterThan(-1);
+    // Everything before the marker that belongs to the field is present: the marker sits
+    // after the field's `end`, not among its parts.
+    const fieldChars = after.children
+      .slice(0, marker)
+      .filter((child) => child.kind === 'run').length;
+    expect(fieldChars).toBe(5);
   });
 });

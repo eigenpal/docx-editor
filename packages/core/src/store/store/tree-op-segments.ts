@@ -309,7 +309,13 @@ function walkParagraph(
     if (isContentControlNode(child) && depth < MAX_CONTENT_CONTROL_NESTING) {
       const content = contentControlContentOf(child);
       if (content) {
+        const contentStart = offset;
         for (const inner of content.children) visitInline(inner, depth + 1);
+        // The CONTENT node owns the span its children contributed, not only the wrapper.
+        // Without this a caller that descends into `w:sdtContent` — placing a comment
+        // marker inside a control, which the schema allows — asks for its span, gets null,
+        // and refuses every offset inside the control.
+        spans?.set(content.id, { start: contentStart, end: offset });
       }
     }
     record(child, start);

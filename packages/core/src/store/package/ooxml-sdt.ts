@@ -264,6 +264,12 @@ export function validContentControlContentChildren(children: readonly OoxmlNode[
       child.kind === 'hyperlink' ||
       child.kind === 'bookmarkStart' ||
       child.kind === 'bookmarkEnd' ||
+      // Comment range markers belong to `EG_RangeMarkupElements` exactly as the bookmark
+      // markers above do, and `CT_SdtContentRun` is `EG_PContent`, which includes that
+      // group. Admitting the bookmarks and not these refused a comment anchored inside a
+      // content control — legal markup the schema has always allowed.
+      child.kind === 'commentRangeStart' ||
+      child.kind === 'commentRangeEnd' ||
       child.kind === 'generic'
   );
 }
