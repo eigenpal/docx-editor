@@ -121,6 +121,30 @@ export interface CustomNodeDefinition<
   /** Tag prefix this definition claims (`acme` claims `acme:*`). No colons. */
   readonly tagPrefix: string;
   /**
+   * The WRITE counterpart of {@link CustomNodeDefinition.fromDocx}: what the document should
+   * say, derived from the payload.
+   *
+   * Declare it and a node has ONE representation. `insertCustomNode(editor, Citation, { data })`
+   * is then the whole call: the `w:tag` attrs and the text a reader sees are both computed here,
+   * so they cannot drift from the payload or from each other. Without it a caller passes all
+   * three and is responsible for keeping them consistent — which nothing checks.
+   *
+   * `attrs` still has to fit the 64-character `w:tag` cap, so return the IDENTITY there and let
+   * everything else live in the payload. `text` is what Word paints and what a reader without
+   * this library sees.
+   *
+   * ```ts
+   * toDocx: (data) => ({
+   *   attrs: { sourceId: data.sourceId },
+   *   text: `(${data.authors[0]} ${data.year})`,
+   * }),
+   * ```
+   */
+  readonly toDocx?: (data: InferSchemaOutput<Schema>) => {
+    readonly attrs: Readonly<Record<string, string>>;
+    readonly text: string;
+  };
+  /**
    * Recognition hook. Receives the decoded attrs and the SDT's literal text
    * (so label drift from Word edits is visible) and returns the attrs the node
    * should carry — or null to leave this SDT unrecognized and literal.

@@ -10,7 +10,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { DocxEditor, useDocxEditor } from '@docx-editor.dev/react';
 import { customNodesModule, insertCustomNode, updateCustomNode } from '@docx-editor.dev/pro';
 import { CustomNodeChrome, CustomNodeContextMenu } from '@docx-editor.dev/pro/react';
-import { Citation, CitationData, citationText, type CitationAttrs } from './citation.ts';
+import { Citation, CitationData } from './citation.ts';
 
 /**
  * Module registration is construction-time, like `mode`. One stable array, built outside
@@ -24,7 +24,6 @@ type FormState =
   | {
       readonly mode: 'edit';
       readonly nodeId: string;
-      readonly attrs: CitationAttrs;
       /** The node's payload, so the form starts from what the document says. */
       readonly data: unknown;
     };
@@ -69,7 +68,6 @@ export function App() {
                       ? setForm({
                           mode: 'edit',
                           nodeId: node.nodeId,
-                          attrs: { sourceId: node.attrs['sourceId'] ?? '' },
                           // `unknown` here: the activation carries every definition's nodes, so
                           // the form parses it against the schema it knows.
                           data: node.data,
@@ -138,7 +136,7 @@ function CitationForm({ state, onClose }: { state: FormState; onClose: () => voi
   const carried = state.mode === 'edit' ? CitationData.safeParse(state.data) : null;
   const initial = carried?.success
     ? carried.data
-    : { sourceId: state.mode === 'edit' ? state.attrs.sourceId : '', page: '', quote: '' };
+    : { sourceId: '', page: '', quote: '' };
   const [sourceId, setSourceId] = useState(initial.sourceId);
   const [page, setPage] = useState(initial.page);
   const [quote, setQuote] = useState(initial.quote);
@@ -153,15 +151,11 @@ function CitationForm({ state, onClose }: { state: FormState; onClose: () => voi
     if (!editor) return;
     // Only the identity goes in the tag; the record goes in the payload beside it, in the same
     // transaction, checked against the schema on the way in.
-    const attrs: CitationAttrs = { sourceId };
     const data = { sourceId, page, quote };
     const result =
       state.mode === 'edit'
-        ? updateCustomNode(editor, Citation, state.nodeId, attrs, citationText(data), { data })
-        : insertCustomNode(editor, Citation, attrs, citationText(data), {
-            alias: 'Citation',
-            data,
-          });
+        ? updateCustomNode(editor, Citation, state.nodeId, { data })
+        : insertCustomNode(editor, Citation, { data, alias: 'Citation' });
     // Writes report refusal instead of throwing: a locked range, no caret, no document.
     if (!result.ok) {
       console.warn(`citation ${state.mode} refused: ${result.reason}`);

@@ -131,11 +131,9 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
       // small number in the tag where it fits.
       const data = payloadFor(kind, attrs);
       report(
-        insertCustomNode(editor, definition, tagAttrsFor(kind, attrs), label, {
-          alias: definition.label ?? definition.name,
+        insertCustomNode(editor, definition, { attrs: tagAttrsFor(kind, attrs), text: label, alias: definition.label ?? definition.name,
           ...(data ? { data } : {}),
-          ...(at ? { at } : {}),
-        }),
+          ...(at ? { at } : {}) }),
         kind === 'iceberg' ? 'A berg calved into the paragraph.' : 'An igloo went up.'
       );
     },
@@ -189,14 +187,7 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
         return;
       }
       const attrs = { blocks: String(blocks) };
-      const result = updateCustomNode(
-        editor,
-        definitionOf('igloo'),
-        node.nodeId,
-        attrs,
-        labelFor('igloo', attrs),
-        { alias: 'Igloo' }
-      );
+      const result = updateCustomNode(editor, definitionOf('igloo'), node.nodeId, { attrs: attrs, text: labelFor('igloo', attrs), alias: 'Igloo' });
       if (!result.ok) {
         report(result, '');
         return;
@@ -231,14 +222,7 @@ export function SpecimenProvider({ children }: { children: ReactNode }) {
         const definition = definitionOf(next.kind);
         const data = payloadFor(next.kind, next.attrs);
         report(
-          updateCustomNode(
-            editor,
-            definition,
-            next.nodeId,
-            tagAttrsFor(next.kind, next.attrs),
-            next.label,
-            { alias: definition.label ?? definition.name, ...(data ? { data } : {}) }
-          ),
+          updateCustomNode(editor, definition, next.nodeId, { attrs: tagAttrsFor(next.kind, next.attrs), text: next.label, alias: definition.label ?? definition.name, ...(data ? { data } : {}) }),
           'Re-carved.'
         );
       }

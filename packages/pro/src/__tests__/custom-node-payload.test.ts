@@ -123,7 +123,9 @@ function recognized(
 describe('a payload larger than w:tag, declared by a schema', () => {
   test('it is written, survives a save and reopen, and comes back typed', async () => {
     const editor = mount(docx('<w:p><w:r><w:t>before after</w:t></w:r></w:p>'));
-    const result = insertCustomNode(editor, citation, { sourceId: 'src_9f3' }, '(Smith 2024)', {
+    const result = insertCustomNode(editor, citation, {
+      attrs: { sourceId: 'src_9f3' },
+      text: '(Smith 2024)',
       at: { paragraphId: firstParagraphId(editor), offset: 7 },
       data: CITATION,
     });
@@ -145,7 +147,9 @@ describe('a payload larger than w:tag, declared by a schema', () => {
 
   test('the payload is far past what the tag could have carried', () => {
     const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
-    insertCustomNode(editor, citation, { sourceId: 'src_9f3' }, '(Smith 2024)', {
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 'src_9f3' },
+      text: '(Smith 2024)',
       at: { paragraphId: firstParagraphId(editor), offset: 1 },
       data: CITATION,
     });
@@ -155,7 +159,9 @@ describe('a payload larger than w:tag, declared by a schema', () => {
 
   test('a payload that does not match the schema is refused, and nothing is written', () => {
     const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
-    const result = insertCustomNode(editor, citation, { sourceId: 's' }, 'label', {
+    const result = insertCustomNode(editor, citation, {
+      attrs: { sourceId: 's' },
+      text: 'label',
       at: { paragraphId: firstParagraphId(editor), offset: 1 },
       // The `@ts-expect-error` IS the first half of this test: `data` is typed by the
       // definition's schema, so a host writing this gets a compile error. The runtime refusal
@@ -171,19 +177,18 @@ describe('a payload larger than w:tag, declared by a schema', () => {
 
   test('an update writes the label and the payload together', () => {
     const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
-    insertCustomNode(editor, citation, { sourceId: 'src_9f3' }, '(Smith 2024)', {
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 'src_9f3' },
+      text: '(Smith 2024)',
       at: { paragraphId: firstParagraphId(editor), offset: 1 },
       data: CITATION,
     });
     const [before] = recognized(editor);
-    const updated = updateCustomNode(
-      editor,
-      citation,
-      before!.nodeId,
-      { sourceId: 'src_2' },
-      '(Jones 2025)',
-      { data: { ...CITATION, sourceId: 'src_2', year: 2025 } }
-    );
+    const updated = updateCustomNode(editor, citation, before!.nodeId, {
+      attrs: { sourceId: 'src_2' },
+      text: '(Jones 2025)',
+      data: { ...CITATION, sourceId: 'src_2', year: 2025 },
+    });
     expect(updated).toEqual({ ok: true, changed: true });
     const [after] = recognized(editor);
     expect(after?.text).toBe('(Jones 2025)');
@@ -197,7 +202,9 @@ describe('a payload larger than w:tag, declared by a schema', () => {
 describe('a payload the file got wrong', () => {
   test('it is reported and the node still renders', async () => {
     const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
-    insertCustomNode(editor, citation, { sourceId: 'src_9f3' }, '(Smith 2024)', {
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 'src_9f3' },
+      text: '(Smith 2024)',
       at: { paragraphId: firstParagraphId(editor), offset: 1 },
       data: CITATION,
     });
@@ -226,7 +233,9 @@ describe('a payload the file got wrong', () => {
 describe('a payload does not outlive its control', () => {
   test('deleting the chip removes the payload in the same transaction', () => {
     const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
-    insertCustomNode(editor, citation, { sourceId: 'src_9f3' }, '(Smith 2024)', {
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 'src_9f3' },
+      text: '(Smith 2024)',
       at: { paragraphId: firstParagraphId(editor), offset: 1 },
       data: CITATION,
     });
@@ -239,7 +248,9 @@ describe('a payload does not outlive its control', () => {
 
   test('a payload whose control was deleted in Word is collected on open', async () => {
     const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
-    insertCustomNode(editor, citation, { sourceId: 'src_9f3' }, '(Smith 2024)', {
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 'src_9f3' },
+      text: '(Smith 2024)',
       at: { paragraphId: firstParagraphId(editor), offset: 1 },
       data: CITATION,
     });
@@ -258,7 +269,9 @@ describe('a payload does not outlive its control', () => {
   test('a store no module claims is left alone', async () => {
     // Word's own Cover Page Properties store rides in most templates. Nothing here claims it.
     const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
-    insertCustomNode(editor, citation, { sourceId: 'src_9f3' }, '(Smith 2024)', {
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 'src_9f3' },
+      text: '(Smith 2024)',
       at: { paragraphId: firstParagraphId(editor), offset: 1 },
       data: CITATION,
     });
@@ -278,7 +291,9 @@ describe('a payload does not outlive its control', () => {
 describe('preserveOnExport', () => {
   async function documentWith(definition: AnyCustomNodeDefinition): Promise<Uint8Array> {
     const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'), [definition]);
-    insertCustomNode(editor, definition, { k: 'v' }, 'the words', {
+    insertCustomNode(editor, definition, {
+      attrs: { k: 'v' },
+      text: 'the words',
       at: { paragraphId: firstParagraphId(editor), offset: 1 },
       data: { body: 'private' },
     });
@@ -317,7 +332,9 @@ describe('preserveOnExport', () => {
 
   test('the default leaves everything where it was', async () => {
     const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
-    insertCustomNode(editor, citation, { sourceId: 'src_9f3' }, '(Smith 2024)', {
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 'src_9f3' },
+      text: '(Smith 2024)',
       at: { paragraphId: firstParagraphId(editor), offset: 1 },
       data: CITATION,
     });
@@ -378,11 +395,15 @@ describe('the failures a payload store can hide', () => {
     // store only when nothing binds it meant the surviving figure kept the removed node's
     // payload alive — the export said ok and shipped the data it was called to remove.
     const editor = mount(docx('<w:p><w:r><w:t>xy</w:t></w:r></w:p>'), [secret, shared]);
-    insertCustomNode(editor, shared, { n: '1' }, 'Figure 1', {
+    insertCustomNode(editor, shared, {
+      attrs: { n: '1' },
+      text: 'Figure 1',
       at: { paragraphId: firstParagraphId(editor), offset: 0 },
       data: { n: '1' },
     });
-    insertCustomNode(editor, secret, { k: 'v' }, 'classified', {
+    insertCustomNode(editor, secret, {
+      attrs: { k: 'v' },
+      text: 'classified',
       at: { paragraphId: firstParagraphId(editor), offset: 9 },
       data: { body: 'SHOULD-NOT-SHIP' },
     });
@@ -401,7 +422,9 @@ describe('the failures a payload store can hide', () => {
 
   test('a payload a header binds is not swept away when the document opens', async () => {
     const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
-    insertCustomNode(editor, citation, { sourceId: 'src_9f3' }, '(Smith 2024)', {
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 'src_9f3' },
+      text: '(Smith 2024)',
       at: { paragraphId: firstParagraphId(editor), offset: 1 },
       data: CITATION,
     });
@@ -434,19 +457,18 @@ describe('the failures a payload store can hide', () => {
 
   test('an update that only changes the label keeps the payload', () => {
     const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
-    insertCustomNode(editor, citation, { sourceId: 'src_9f3' }, '(Smith 2024)', {
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 'src_9f3' },
+      text: '(Smith 2024)',
       at: { paragraphId: firstParagraphId(editor), offset: 1 },
       data: CITATION,
     });
     const [before] = recognized(editor);
     // The commonest update there is, and the one shape that used to delete the payload.
-    const updated = updateCustomNode(
-      editor,
-      citation,
-      before!.nodeId,
-      { sourceId: 'src_9f3' },
-      '(Smith 2024, p. 42)'
-    );
+    const updated = updateCustomNode(editor, citation, before!.nodeId, {
+      attrs: { sourceId: 'src_9f3' },
+      text: '(Smith 2024, p. 42)',
+    });
     expect(updated).toEqual({ ok: true, changed: true });
     const [after] = recognized(editor);
     expect(after?.text).toBe('(Smith 2024, p. 42)');
@@ -455,13 +477,17 @@ describe('the failures a payload store can hide', () => {
 
   test('passing data: null removes the payload deliberately', () => {
     const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
-    insertCustomNode(editor, citation, { sourceId: 'src_9f3' }, '(Smith 2024)', {
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 'src_9f3' },
+      text: '(Smith 2024)',
       at: { paragraphId: firstParagraphId(editor), offset: 1 },
       data: CITATION,
     });
     const [before] = recognized(editor);
     expect(
-      updateCustomNode(editor, citation, before!.nodeId, { sourceId: 's' }, 'plain', {
+      updateCustomNode(editor, citation, before!.nodeId, {
+        attrs: { sourceId: 's' },
+        text: 'plain',
         data: null,
       }).ok
     ).toBe(true);
@@ -475,7 +501,9 @@ describe('the failures a payload store can hide', () => {
     // The item exists so the chip's own surfaces can read it; the rail leaves it out.
     const bare = defineCustomNode({ name: 'citation', tagPrefix: 'acme', schema: Citation });
     const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'), [bare]);
-    insertCustomNode(editor, bare, { sourceId: 'src_9f3' }, '(Smith 2024)', {
+    insertCustomNode(editor, bare, {
+      attrs: { sourceId: 'src_9f3' },
+      text: '(Smith 2024)',
       at: { paragraphId: firstParagraphId(editor), offset: 1 },
       data: CITATION,
     });
@@ -498,7 +526,9 @@ describe('the failures a payload store can hide', () => {
 
   test('a binding naming a node the store lost is reported, not silent', async () => {
     const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
-    insertCustomNode(editor, citation, { sourceId: 'src_9f3' }, '(Smith 2024)', {
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 'src_9f3' },
+      text: '(Smith 2024)',
       at: { paragraphId: firstParagraphId(editor), offset: 1 },
       data: CITATION,
     });
@@ -560,5 +590,113 @@ describe('the failures a payload store can hide', () => {
       expect(second.reason).toBe('store-not-authored');
       expect(second.detail).toContain('storeB');
     }
+  });
+});
+
+describe('one payload, derived into the document', () => {
+  const Derived = defineCustomNode({
+    name: 'citation',
+    tagPrefix: 'acme',
+    schema: Citation,
+    // The whole node, computed from the payload — so attrs, text and data cannot disagree.
+    toDocx: (data) => ({
+      attrs: { sourceId: data.sourceId },
+      text: `(${data.authors[0] ?? 'Anon'} ${String(data.year)})`,
+    }),
+  });
+
+  test('an insert takes the payload alone', () => {
+    const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'), [Derived]);
+    const result = insertCustomNode(editor, Derived, {
+      data: CITATION,
+      at: { paragraphId: firstParagraphId(editor), offset: 1 },
+    });
+    expect(result).toEqual({ ok: true, changed: true });
+    const [node] = recognized(editor, [Derived]);
+    expect(node?.text).toBe('(Smith, J. 2024)');
+    expect(node?.attrs['sourceId']).toBe('src_9f3');
+    expect(node?.data).toEqual(CITATION);
+  });
+
+  test('an update re-derives the text from the new payload', () => {
+    const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'), [Derived]);
+    insertCustomNode(editor, Derived, {
+      data: CITATION,
+      at: { paragraphId: firstParagraphId(editor), offset: 1 },
+    });
+    const [before] = recognized(editor, [Derived]);
+    expect(
+      updateCustomNode(editor, Derived, before!.nodeId, {
+        data: { ...CITATION, authors: ['Jones, P.'], year: 2025 },
+      }).ok
+    ).toBe(true);
+    const [after] = recognized(editor, [Derived]);
+    // The document text moved with the payload — nothing had to be passed twice.
+    expect(after?.text).toBe('(Jones, P. 2025)');
+  });
+
+  test('an explicit text overrides the derivation', () => {
+    // A label a user edited by hand must not be recomputed out from under them.
+    const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'), [Derived]);
+    insertCustomNode(editor, Derived, {
+      data: CITATION,
+      attrs: { sourceId: 'src_9f3' },
+      text: 'ibid.',
+      at: { paragraphId: firstParagraphId(editor), offset: 1 },
+    });
+    expect(recognized(editor, [Derived])[0]?.text).toBe('ibid.');
+  });
+
+  test('a definition with no toDocx and no text is refused, and says which', () => {
+    const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
+    const result = insertCustomNode(editor, citation, { data: CITATION });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toContain('toDocx');
+  });
+});
+
+describe('a refused payload names the field, not just the sentence', () => {
+  test('the issues carry the path an edit form needs', () => {
+    const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
+    const result = insertCustomNode(editor, citation, {
+      attrs: { sourceId: 's' },
+      text: 'label',
+      at: { paragraphId: firstParagraphId(editor), offset: 1 },
+      // @ts-expect-error -- year is a number in the schema
+      data: { ...CITATION, year: '2024', authors: [1] },
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe('invalidArgs');
+    const pointers = (result.issues ?? []).map((issue) => issue.pointer);
+    // A form highlights `year` and `authors.0` from these — no string parsing.
+    expect(pointers).toContain('year');
+    expect(pointers).toContain('authors.0');
+    expect(result.issues?.[0]?.path[0]).toBeDefined();
+  });
+});
+
+describe('the copy you keep and the copy that leaves', () => {
+  test('an internal destination answers the bytes untouched', async () => {
+    const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'), [ephemeral]);
+    insertCustomNode(editor, ephemeral, {
+      attrs: { k: 'v' },
+      text: 'the words',
+      at: { paragraphId: firstParagraphId(editor), offset: 1 },
+      data: { body: 'private' },
+    });
+    const saved = new Uint8Array(await editor.save());
+
+    const kept = exportCustomNodes(saved, [ephemeral], { destination: 'internal' });
+    expect(kept.ok).toBe(true);
+    if (!kept.ok) return;
+    // Byte-identical: an internal save must be what the editor produced, not a re-serialization.
+    expect(kept.bytes).toBe(saved);
+    expect(kept).toMatchObject({ unwrapped: 0, removed: 0 });
+    // And it still opens with its chips, which is the point of keeping it.
+    expect(recognized(mount(kept.bytes, [ephemeral]), [ephemeral])).toHaveLength(1);
+
+    const leaving = exportCustomNodes(saved, [ephemeral], { destination: 'external' });
+    expect(leaving.ok && leaving.unwrapped).toBe(1);
   });
 });

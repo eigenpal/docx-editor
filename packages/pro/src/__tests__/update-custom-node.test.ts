@@ -52,7 +52,9 @@ function mountWithChip(): { editor: DocxEditorInstance; nodeId: string } {
   });
   const fragment = editor.surface!.layout().pages[0]!.fragments[0]!;
   if (fragment.kind !== 'paragraph') throw new Error('expected a paragraph');
-  insertCustomNode(editor, citation, { sourceId: 's1', locator: 'p.1' }, 'OLD', {
+  insertCustomNode(editor, citation, {
+    attrs: { sourceId: 's1', locator: 'p.1' },
+    text: 'OLD',
     at: { paragraphId: fragment.paragraphId, offset: 7 },
   });
   const [node] = recognizeCustomNodes(editor.surface!.session.part(), [citation]);
@@ -62,14 +64,11 @@ function mountWithChip(): { editor: DocxEditorInstance; nodeId: string } {
 describe('updateCustomNode', () => {
   test('rewrites attrs and text in place, one undo step', () => {
     const { editor, nodeId } = mountWithChip();
-    const result = updateCustomNode(
-      editor,
-      citation,
-      nodeId,
-      { sourceId: 's2', locator: 'p.9' },
-      'NEW',
-      { alias: 'Citation' }
-    );
+    const result = updateCustomNode(editor, citation, nodeId, {
+      attrs: { sourceId: 's2', locator: 'p.9' },
+      text: 'NEW',
+      alias: 'Citation',
+    });
     expect(result).toEqual({ ok: true, changed: true });
     const [node] = recognizeCustomNodes(editor.surface!.session.part(), [citation]);
     expect(node?.attrs).toEqual({ sourceId: 's2', locator: 'p.9' });
@@ -85,7 +84,7 @@ describe('updateCustomNode', () => {
 
   test('an unknown node id is refused, not silently inserted', () => {
     const { editor } = mountWithChip();
-    const result = updateCustomNode(editor, citation, 'no-such-node', {}, 'X');
+    const result = updateCustomNode(editor, citation, 'no-such-node', { text: 'X' });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.code).toBe('notFound');
   });

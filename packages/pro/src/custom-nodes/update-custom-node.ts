@@ -9,7 +9,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // one undo step — the tag codec has no in-place rewrite, and pretending it did would put
 // a second write path beside `insertInlineContentControl`.
 
-import type { Editor, ExecResult } from '@docx-editor.dev/core/contracts/editor';
+import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import type { PaginatedSurface } from '@docx-editor.dev/core/editor';
 import {
   customNodePayloadsByControl,
@@ -22,8 +22,13 @@ import {
 } from '@docx-editor.dev/core/store';
 import type { AnyCustomNodeDefinition, CustomNodeDefinition } from './define-custom-node.ts';
 import { CUSTOM_NODE_STORE_ROOT, customNodeNamespace } from './node-payload.ts';
-import type { InferSchemaInput, StandardSchemaV1 } from './data-schema.ts';
-import { payloadFor, refusalOf } from './insert-custom-node.ts';
+import { payloadFor, projectionOf, refusalOf, type CustomNodeInput } from './insert-custom-node.ts';
+import {
+  parseCustomNodeData,
+  type InferSchemaInput,
+  type StandardSchemaV1,
+} from './data-schema.ts';
+import { invalidPayload, type CustomNodeWriteOutcome } from './node-write-result.ts';
 import { encodeCustomNodeTag } from './tag-codec.ts';
 
 /** Instance-only surface on the concrete facade, the same escape hatch chrome uses. */
@@ -94,7 +99,7 @@ function spanOf(
  * The default `contentLocked` chip deletes fine (the lock guards its characters, not its
  * existence); a `sdtLocked`/`sdtContentLocked` wrapper refuses with the engine's reason.
  */
-export function removeCustomNode(editor: Editor, nodeId: string): ExecResult {
+export function removeCustomNode(editor: Editor, nodeId: string): CustomNodeWriteOutcome {
   const surface = surfaceOf(editor);
   if (!surface) return { ok: false, code: 'notFound', reason: 'no document is mounted' };
   // The control AND the payload it bound, in one transaction. The orphan sweep would collect
@@ -108,13 +113,14 @@ export function removeCustomNode(editor: Editor, nodeId: string): ExecResult {
 /**
  * How {@link updateCustomNode} rewrites the control it replaces.
  *
+ * The same shape {@link CustomNodeInput} takes, minus `at` — an update happens where the node
+ * already is — and with `data` able to be `null`.
+ *
  * @public
  */
-export interface UpdateCustomNodeOptions<Schema extends StandardSchemaV1 | undefined = undefined> {
-  /** `w:alias` for the rewritten control. */
-  readonly alias?: string;
-  /** `w:lock` for the rewritten control. Defaults to `contentLocked`, like the insert. */
-  readonly lock?: false | 'sdtLocked' | 'sdtContentLocked' | 'contentLocked';
+export interface CustomNodeUpdate<
+  Schema extends StandardSchemaV1 | undefined = undefined,
+> extends Omit<CustomNodeInput<Schema>, 'at' | 'data'> {
   /**
    * The payload the rewritten node carries.
    *
@@ -124,73 +130,99 @@ export interface UpdateCustomNodeOptions<Schema extends StandardSchemaV1 | undef
    *
    * OMITTING IT KEEPS THE PAYLOAD the node already had. That is the important default: the
    * commonest update is a label edit, and an omission that dropped the citation's authors and
-   * year would be data loss the caller never asked for and could not see. Pass `null` to
-   * remove the payload deliberately.
+   * year would be data loss the caller never asked for and could not see. Pass `null` to remove
+   * the payload deliberately.
+   *
+   * A definition with `toDocx` re-derives its attrs and text from whichever payload ends up
+   * being written, so `updateCustomNode(editor, def, id, { data })` rewrites all three together.
    */
   readonly data?: InferSchemaInput<Schema> | null;
 }
 
 /**
- * Replace one custom node's attrs and text in place: the node is removed and a fresh one
- * with the new tag and label is inserted at its own span — ONE transaction, one undo step,
- * recognized by construction like `insertCustomNode`.
+ * Replace one custom node in place: the node is removed and a fresh one is inserted at its own
+ * span — ONE transaction, one undo step, recognized by construction like `insertCustomNode`.
  *
  * ```ts
- * updateCustomNode(editor, citation, node.nodeId, { sourceId: 'src_2' }, '(Jones 2025)');
+ * updateCustomNode(editor, citation, node.nodeId, { data: { ...citation, year: 2025 } });
  * ```
  */
 export function updateCustomNode<Schema extends StandardSchemaV1 | undefined = undefined>(
   editor: Editor,
   definition: CustomNodeDefinition<Schema>,
   nodeId: string,
-  attrs: Readonly<Record<string, string>>,
-  text: string,
-  options: UpdateCustomNodeOptions<Schema> = {}
-): ExecResult {
+  update: CustomNodeUpdate<Schema> = {}
+): CustomNodeWriteOutcome {
   const surface = surfaceOf(editor);
   if (!surface) return { ok: false, code: 'notFound', reason: 'no document is mounted' };
-  const encoded = encodeCustomNodeTag(definition.tagPrefix, definition.name, attrs);
-  if (!encoded.ok) {
-    return {
-      ok: false,
-      code: 'invalidArgs',
-      reason: `the encoded tag is ${encoded.length} characters; Word caps w:tag at 64 — shorten the attrs`,
-    };
-  }
   const part = surface.session.part();
   const paragraph = paragraphHolding(part, nodeId);
   const span = paragraph ? spanOf(paragraph, nodeId) : null;
   if (!paragraph || !span) {
     return { ok: false, code: 'notFound', reason: 'no custom node with that id' };
   }
-  // The payload keeps the id the node already had, so an update is an upsert in the store
-  // rather than a new entry beside the old one.
+
+  // The payload the node already has, so an omitted `data` carries it forward and a definition
+  // with `toDocx` can re-derive its text from it.
   const bound = boundPayloadOf(surface, nodeId);
-  const payload =
-    options.data === undefined
-      ? // CARRIED FORWARD. The node is removed and reinserted, so a payload nobody mentioned
-        // would otherwise be dropped by an update that only meant to fix a label. The LABEL is
-        // still the new one — that is the half an update is always about.
-        carriedPayload(definition, bound, text)
-      : options.data === null
-        ? null
-        : payloadFor(surface, definition, options.data, text, bound?.nodeId);
-  if (payload && 'reason' in payload) {
-    return { ok: false, code: 'invalidArgs', reason: payload.reason };
+  const carried = update.data === undefined ? parsedPayload(definition, bound) : update.data;
+  const projected = projectionOf(definition, {
+    ...(update.attrs === undefined ? {} : { attrs: update.attrs }),
+    ...(update.text === undefined ? {} : { text: update.text }),
+    ...(carried === undefined || carried === null ? {} : { data: carried }),
+  });
+  if ('reason' in projected) {
+    return { ok: false, code: 'invalidArgs', reason: projected.reason };
   }
-  const lock = options.lock === undefined ? 'contentLocked' : options.lock;
+
+  const encoded = encodeCustomNodeTag(definition.tagPrefix, definition.name, projected.attrs);
+  if (!encoded.ok) {
+    return {
+      ok: false,
+      code: 'invalidArgs',
+      reason: `the encoded tag is ${encoded.length} characters; Word caps w:tag at 64 — move what does not fit into the payload (\`data\`), or shorten the attrs`,
+    };
+  }
+
+  // The payload keeps the id the node already had, so an update is an upsert in the store rather
+  // than a new entry beside the old one.
+  const payload =
+    update.data === null
+      ? null
+      : update.data === undefined
+        ? carriedPayload(definition, bound, projected.text)
+        : payloadFor(surface, definition, update.data, projected.text, bound?.nodeId);
+  if (payload && 'reason' in payload) return invalidPayload(payload.reason, payload.issues);
+
+  const lock = update.lock === undefined ? 'contentLocked' : update.lock;
   const written = surface.session.insertCustomNode({
     replaceControlId: nodeId,
     paragraphId: paragraph.id,
     offset: span.start,
     tag: encoded.tag,
-    text,
-    ...(options.alias === undefined ? {} : { alias: options.alias }),
+    text: projected.text,
+    ...(update.alias === undefined ? {} : { alias: update.alias }),
     ...(lock === false ? {} : { lock }),
     ...(payload ? { payload: payload.value } : {}),
   });
   if (!written.ok) return refusalOf(written);
   return { ok: true, changed: true };
+}
+
+/**
+ * The node's existing payload as a VALUE, for a definition that needs to re-derive from it.
+ *
+ * Parsed without the schema: it came out of the store, so it has already been through one on the
+ * way in, and a schema that tightened since the document was written must not make a label edit
+ * impossible.
+ */
+function parsedPayload(
+  definition: AnyCustomNodeDefinition,
+  bound: CustomNodePayloadRead | undefined
+): unknown {
+  if (!bound || !definition.toDocx) return undefined;
+  const parsed = parseCustomNodeData(undefined, bound.data);
+  return parsed.ok ? parsed.value : undefined;
 }
 
 /** The payload this control already binds, so a rewrite can reuse both its id and its data. */

@@ -21,7 +21,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { customNodePayloadsOf } from '@docx-editor.dev/core/store';
 import type { OoxmlPackage } from '@docx-editor.dev/core/store';
 import type { AnyCustomNodeDefinition } from './define-custom-node.ts';
-import { parseCustomNodeData, serializeCustomNodeData } from './data-schema.ts';
+import { serializeCustomNodeData, type StandardSchemaV1 } from './data-schema.ts';
+import { customNodeIssueOf, type CustomNodeIssue } from './node-write-result.ts';
 
 /** The local name of every payload store this library authors. */
 export const CUSTOM_NODE_STORE_ROOT = 'docxEditor';
@@ -58,10 +59,10 @@ export function nextCustomNodeId(
   return `cx${String(highest + 1)}`;
 }
 
-/** A payload ready to be written, or why it was refused. */
+/** A payload ready to be written, or why it was refused — with the fields that were wrong. */
 export type CustomNodeDataResult =
   | { readonly ok: true; readonly data: string }
-  | { readonly ok: false; readonly reason: string };
+  | { readonly ok: false; readonly reason: string; readonly issues: readonly CustomNodeIssue[] };
 
 /**
  * Validate a payload against the definition's schema and serialize it.
@@ -82,18 +83,42 @@ export function customNodeDataFor(
     return {
       ok: false,
       reason: `the payload cannot be serialized: ${serialized.issues.join(', ')}`,
+      issues: [],
     };
   }
   if (!definition.schema) return { ok: true, data: serialized.value };
   // Through the same parse the READ path uses, against the serialized form: a value that
   // survives `JSON.stringify` and then fails the schema is one the reader would have refused,
   // and finding that out at the insert is the whole point of checking here.
-  const parsed = parseCustomNodeData(definition.schema, serialized.value);
-  if (!parsed.ok) {
+  // Validated against the SCHEMA ITSELF rather than through the read path's string form, so the
+  // issues keep their `path` — which is the whole reason a host declared a schema.
+  // Annotated because the definition is held as `AnyCustomNodeDefinition` here, so its schema —
+  // and everything the validator returns — would otherwise be `any`.
+  const schema: StandardSchemaV1 = definition.schema;
+  const validated = schema['~standard'].validate(JSON.parse(serialized.value) as unknown);
+  if (isThenable(validated)) {
     return {
       ok: false,
-      reason: `the payload does not match ${definition.name}'s schema: ${parsed.issues.join(', ')}`,
+      reason: `${definition.name}'s schema validates asynchronously, which a write cannot await`,
+      issues: [],
+    };
+  }
+  if (validated.issues) {
+    const issues = validated.issues.map(customNodeIssueOf);
+    return {
+      ok: false,
+      reason:
+        `the payload does not match ${definition.name}'s schema: ` +
+        issues
+          .map((issue) => (issue.pointer ? `${issue.pointer}: ` : '') + issue.message)
+          .join(', '),
+      issues,
     };
   }
   return { ok: true, data: serialized.value };
+}
+
+/** Thenable rather than `instanceof Promise`, for the same cross-realm reason `parseCustomNodeData` is. */
+function isThenable<T>(value: T | Promise<T>): value is Promise<T> {
+  return typeof (value as { then?: unknown }).then === 'function';
 }

@@ -53,6 +53,35 @@ export type ExportCustomNodesResult =
   | { readonly ok: false; readonly reason: string };
 
 /**
+ * Where this copy of the document is going.
+ *
+ * The distinction the whole option exists for, made explicit at the call site so a host writes
+ * intent rather than remembering which function strips:
+ *
+ *  - `internal` — the copy you keep. Your own storage, your own system, a draft a user will
+ *    reopen HERE. Nothing is stripped, because a stripped copy reopens as plain text and the
+ *    chips are gone for good.
+ *  - `external` — the copy that leaves. A download, an email attachment, a hand-off to someone
+ *    who does not run this library. `preserveOnExport` decides what travels.
+ *
+ * A UI with one Download button and a "keep our markup" checkbox drives both from one call.
+ *
+ * @public
+ */
+export type DocumentDestination = 'internal' | 'external';
+
+/** How {@link exportCustomNodes} treats this copy. */
+export interface ExportCustomNodesOptions {
+  /**
+   * Defaults to `external`, because that is what calling an export function means.
+   *
+   * `internal` answers the bytes unchanged — the identity case, present so a caller with one
+   * code path and a runtime choice does not need two.
+   */
+  readonly destination?: DocumentDestination;
+}
+
+/**
  * Apply every definition's `preserveOnExport` to a document, and answer the bytes to ship.
  *
  * `true` (the default) leaves a node untouched. `'text'` unwraps the control, keeping the words
@@ -60,14 +89,27 @@ export type ExportCustomNodesResult =
  * A tag no definition claims is never touched — this is a host applying its own policy to its
  * own markup, not a scrub of the document.
  *
+ * ```ts
+ * const bytes = new Uint8Array(await editor.save());   // the copy you keep
+ * const outgoing = exportCustomNodes(bytes, [Citation]); // the copy that leaves
+ * ```
+ *
  * Applied to EVERY story, so a chip in a header is treated like a chip in the body. The payload
  * stores hang off the main document part, which is where Word enumerates its data store from, so
  * that is the only part they are cleaned up against.
  */
 export function exportCustomNodes(
   bytes: Uint8Array,
-  definitions: readonly AnyCustomNodeDefinition[]
+  definitions: readonly AnyCustomNodeDefinition[],
+  options: ExportCustomNodesOptions = {}
 ): ExportCustomNodesResult {
+  // THE COPY YOU KEEP. Answered before anything is parsed: an internal save must be the bytes
+  // the editor produced, not a re-serialization of them, so a round trip through here cannot
+  // become a way for the export path to touch a document it was told to leave alone.
+  if (options.destination === 'internal') {
+    return { ok: true, bytes, unwrapped: 0, removed: 0 };
+  }
+
   const read = readOoxmlPackage(bytes);
   if (!read.ok) return { ok: false, reason: `the document could not be read: ${read.reason}` };
 

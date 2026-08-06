@@ -537,15 +537,11 @@ function CitationDialog({ form, onClose }: { form: CitationFormState; onClose: (
             ...(url.trim() ? { url: url.trim() } : {}),
           };
           const result = editing
-            ? updateCustomNode(editor, DEMO_CITATION, form.nodeId, { sourceId }, label, {
-                alias: 'Citation',
+            ? updateCustomNode(editor, DEMO_CITATION, form.nodeId, { attrs: { sourceId }, text: label, alias: 'Citation',
+                data })
+            : insertCustomNode(editor, DEMO_CITATION, { attrs: { sourceId }, text: label, alias: 'Citation',
                 data,
-              })
-            : insertCustomNode(editor, DEMO_CITATION, { sourceId }, label, {
-                alias: 'Citation',
-                data,
-                ...(form.at ? { at: form.at } : {}),
-              });
+                ...(form.at ? { at: form.at } : {}) });
           if (!result.ok) window.alert(`${editing ? 'Edit' : 'Insert'} refused: ${result.reason}`);
           onClose();
         }}

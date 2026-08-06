@@ -62,13 +62,11 @@ function firstParagraphId(editor: DocxEditorInstance): string {
 describe('insertCustomNode', () => {
   test('inserts a recognized-by-construction node at an offset', () => {
     const editor = mount('<w:p><w:r><w:t>before after</w:t></w:r></w:p>');
-    const result = insertCustomNode(
-      editor,
-      citation,
-      { sourceId: 'src_9f3', locator: 'p.42' },
-      '(Smith 2024, p. 42)',
-      { at: { paragraphId: firstParagraphId(editor), offset: 7 } }
-    );
+    const result = insertCustomNode(editor, citation, {
+      attrs: { sourceId: 'src_9f3', locator: 'p.42' },
+      text: '(Smith 2024, p. 42)',
+      at: { paragraphId: firstParagraphId(editor), offset: 7 },
+    });
     expect(result).toEqual({ ok: true, changed: true });
     const [node] = recognizeCustomNodes(editor.surface!.session.part(), [citation]);
     expect(node?.attrs).toEqual({ sourceId: 'src_9f3', locator: 'p.42' });
@@ -78,7 +76,9 @@ describe('insertCustomNode', () => {
 
   test('writes contentLocked by default and survives save/reopen', async () => {
     const editor = mount('<w:p><w:r><w:t>text</w:t></w:r></w:p>');
-    insertCustomNode(editor, citation, { sourceId: 's1' }, 'label', {
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 's1' },
+      text: 'label',
       at: { paragraphId: firstParagraphId(editor), offset: 4 },
     });
     const saved = new Uint8Array(await editor.save());
@@ -103,7 +103,9 @@ describe('insertCustomNode', () => {
   test('one undo removes the whole node', () => {
     const editor = mount('<w:p><w:r><w:t>text</w:t></w:r></w:p>');
     const bodyBefore = editor.surface!.session.bodyText();
-    insertCustomNode(editor, citation, { sourceId: 's1' }, 'label', {
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 's1' },
+      text: 'label',
       at: { paragraphId: firstParagraphId(editor), offset: 4 },
     });
     expect(editor.exec({ type: 'undo' }).ok).toBe(true);
@@ -113,7 +115,9 @@ describe('insertCustomNode', () => {
 
   test('typing at the chip edge stays OUTSIDE the control', () => {
     const editor = mount('<w:p><w:r><w:t>before after</w:t></w:r></w:p>');
-    insertCustomNode(editor, citation, { sourceId: 's1' }, 'LABEL', {
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 's1' },
+      text: 'LABEL',
       at: { paragraphId: firstParagraphId(editor), offset: 7 },
     });
     // Caret right after the label's last character = the control's outer edge.
@@ -129,7 +133,9 @@ describe('insertCustomNode', () => {
 
   test('typing after a locked chip that ENDS the paragraph lands beside it', () => {
     const editor = mount('<w:p><w:r><w:t>before </w:t></w:r></w:p>');
-    insertCustomNode(editor, citation, { sourceId: 's1' }, 'LABEL', {
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 's1' },
+      text: 'LABEL',
       at: { paragraphId: firstParagraphId(editor), offset: 7 },
     });
     // "before LABEL" — the chip is the LAST thing in the paragraph. The caret at its
@@ -149,7 +155,9 @@ describe('insertCustomNode', () => {
     // Word's rule: at a control's leading edge the insertion enters the control, and the
     // content lock refuses it. One caret-step left types normally.
     const editor = mount('<w:p><w:r><w:t>before </w:t></w:r></w:p>');
-    insertCustomNode(editor, citation, { sourceId: 's1' }, 'LABEL', {
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 's1' },
+      text: 'LABEL',
       at: { paragraphId: firstParagraphId(editor), offset: 7 },
     });
     editor.surface!.setSelection({
@@ -164,7 +172,9 @@ describe('insertCustomNode', () => {
 
   test('Backspace after the chip deletes the WHOLE node', () => {
     const editor = mount('<w:p><w:r><w:t>before after</w:t></w:r></w:p>');
-    insertCustomNode(editor, citation, { sourceId: 's1' }, 'LABEL', {
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 's1' },
+      text: 'LABEL',
       at: { paragraphId: firstParagraphId(editor), offset: 7 },
     });
     // Caret at the chip's outer right edge — the atomic half of ledger 4.6: the key takes
@@ -185,7 +195,9 @@ describe('insertCustomNode', () => {
 
   test('Delete before the chip removes the whole node too', () => {
     const editor = mount('<w:p><w:r><w:t>before after</w:t></w:r></w:p>');
-    insertCustomNode(editor, citation, { sourceId: 's1' }, 'LABEL', {
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 's1' },
+      text: 'LABEL',
       at: { paragraphId: firstParagraphId(editor), offset: 7 },
     });
     editor.surface!.setSelection({
@@ -199,7 +211,9 @@ describe('insertCustomNode', () => {
 
   test('typing INSIDE the node is refused — the label only changes through the edit flow', () => {
     const editor = mount('<w:p><w:r><w:t>before after</w:t></w:r></w:p>');
-    insertCustomNode(editor, citation, { sourceId: 's1' }, 'LABEL', {
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 's1' },
+      text: 'LABEL',
       at: { paragraphId: firstParagraphId(editor), offset: 7 },
     });
     // Caret in the middle of the label: `contentLocked` refuses the edit, so the
@@ -215,7 +229,9 @@ describe('insertCustomNode', () => {
 
   test('a tag past the Word cap is refused with the data-part hint', () => {
     const editor = mount('<w:p><w:r><w:t>text</w:t></w:r></w:p>');
-    const result = insertCustomNode(editor, citation, { payload: 'x'.repeat(80) }, 'label', {
+    const result = insertCustomNode(editor, citation, {
+      attrs: { payload: 'x'.repeat(80) },
+      text: 'label',
       at: { paragraphId: firstParagraphId(editor), offset: 0 },
     });
     expect(result.ok).toBe(false);
@@ -225,7 +241,9 @@ describe('insertCustomNode', () => {
   test('an XML-hostile attr value round-trips escaped, never as markup', async () => {
     const editor = mount('<w:p><w:r><w:t>text</w:t></w:r></w:p>');
     const hostile = '"&<x>';
-    const inserted = insertCustomNode(editor, citation, { q: hostile }, 'label', {
+    const inserted = insertCustomNode(editor, citation, {
+      attrs: { q: hostile },
+      text: 'label',
       at: { paragraphId: firstParagraphId(editor), offset: 0 },
     });
     expect(inserted.ok).toBe(true);

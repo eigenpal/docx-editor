@@ -46,6 +46,8 @@ export {
 } from './custom-nodes/define-custom-node.ts';
 export {
   exportCustomNodes,
+  type DocumentDestination,
+  type ExportCustomNodesOptions,
   type ExportCustomNodesResult,
 } from './custom-nodes/export-custom-nodes.ts';
 export { CUSTOM_NODE_STORE_ROOT, customNodeNamespace } from './custom-nodes/node-payload.ts';
@@ -68,14 +70,15 @@ export {
   type DecodedCustomNodeTag,
   type EncodeTagResult,
 } from './custom-nodes/tag-codec.ts';
+export { insertCustomNode, type CustomNodeInput } from './custom-nodes/insert-custom-node.ts';
 export {
-  insertCustomNode,
-  type InsertCustomNodeOptions,
-} from './custom-nodes/insert-custom-node.ts';
+  type CustomNodeIssue,
+  type CustomNodeWriteOutcome,
+} from './custom-nodes/node-write-result.ts';
 export {
   removeCustomNode,
   updateCustomNode,
-  type UpdateCustomNodeOptions,
+  type CustomNodeUpdate,
 } from './custom-nodes/update-custom-node.ts';
 export {
   customNodeXml,

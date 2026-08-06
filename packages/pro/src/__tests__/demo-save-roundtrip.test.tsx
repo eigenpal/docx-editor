@@ -65,13 +65,12 @@ test('a chip inserted through the mounted adapter survives save', async () => {
   await act(async () => {
     // The demo captures the caret; the default head works the same way here.
     const at = editor.surface!.state().selection.head;
-    const result = insertCustomNode(
-      editor,
-      citation,
-      { sourceId: 'src_repro', locator: 'p.42' },
-      '(Smith 2024, p. 42)',
-      { alias: 'Citation', at }
-    );
+    const result = insertCustomNode(editor, citation, {
+      attrs: { sourceId: 'src_repro', locator: 'p.42' },
+      text: '(Smith 2024, p. 42)',
+      alias: 'Citation',
+      at,
+    });
     expect(result.ok).toBe(true);
   });
   const saved = new Uint8Array(await editor.save());

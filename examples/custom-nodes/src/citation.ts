@@ -16,17 +16,6 @@ import { defineCustomNode } from '@docx-editor.dev/pro';
 import { z } from 'zod';
 
 /**
- * The only attribute that rides in the tag: which source this is.
- *
- * The index signature is what the authoring calls take — attributes are string-to-string on the
- * wire, because that is all a `w:tag` can hold.
- */
-export interface CitationAttrs {
-  readonly [key: string]: string;
-  readonly sourceId: string;
-}
-
-/**
  * What a citation carries, as an ordinary zod schema.
  *
  * Declaring it means the payload is parsed and checked ONCE, at the read boundary — a `.docx` is
@@ -61,8 +50,20 @@ export const Citation = defineCustomNode({
     return { ...attrs, label: text };
   },
 
-  /** The payload's shape. Checked on the way in and on the way back out of a file. */
+  /** The payload's shape. Checked writing it and reading it back out of a file. */
   schema: CitationData,
+
+  /**
+   * What the DOCUMENT says, derived from the payload.
+   *
+   * With this declared a citation has ONE representation: `insertCustomNode(editor, Citation,
+   * { data })` computes the tag and the text, so the three can never disagree. The tag gets the
+   * identity and nothing else — 64 characters is not a bibliography.
+   */
+  toDocx: (data) => ({
+    attrs: { sourceId: data.sourceId },
+    text: data.page ? `(${data.sourceId}, p. ${data.page})` : `(${data.sourceId})`,
+  }),
 
   /**
    * A card in the review sidebar for every citation in the document.
@@ -76,8 +77,3 @@ export const Citation = defineCustomNode({
     detail: data?.quote || text || (attrs['label'] ?? ''),
   }),
 });
-
-/** How a citation reads in the document body. */
-export function citationText(data: CitationData): string {
-  return data.page ? `(${data.sourceId}, p. ${data.page})` : `(${data.sourceId})`;
-}
