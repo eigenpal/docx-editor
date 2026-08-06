@@ -12,11 +12,15 @@ DrawingML pictures (`w:drawing` with `pic:pic`) lay out, paint, and round-trip t
 | Format                                      | Insert (React)                       | Layout & paint                      | Round-trip                                |
 | ------------------------------------------- | ------------------------------------ | ----------------------------------- | ----------------------------------------- |
 | PNG, JPEG, GIF                              | Yes, `normalizeImageBytes` preflight | Full decode at authored `wp:extent` | Byte-identical media unless replaced      |
+| BMP, WebP                                   | No insert                            | Full decode at authored `wp:extent` | Byte-identical media                      |
 | SVG                                         | No insert                            | Painted at authored `wp:extent`     | Byte-identical media                      |
 | TIFF, EMF, WMF                              | No insert                            | Converted to a raster and painted   | Preserved; no zero-click fetch            |
 | External `r:link` / `TargetMode="External"` | No auto-load                         | Placeholder + preserved rel         | Preserved; explicit user gesture to embed |
 
 Insert accepts PNG/JPEG/GIF only. Other payloads stay in the package and participate in pagination through their authored extent.
+
+BMP and WebP decode natively in the browser and paint like PNG or JPEG. BMP is what older
+documents tend to carry; WebP is what current Word writes.
 
 TIFF, EMF and WMF are rasterized in the browser and painted like any other image. The original
 bytes stay in the package untouched, so saving round-trips them unchanged. A file that cannot be

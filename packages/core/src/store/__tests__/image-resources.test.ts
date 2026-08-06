@@ -10,14 +10,28 @@ import {
   MAX_SVG_SNIFF_BYTES,
   resolveSvgIntrinsicSize,
   sniffImageMime,
+  validateBmpHeader,
   validateGifHeader,
   validateJpegHeader,
   validatePngHeader,
   validateRasterHeader,
   validateTiffHeader,
+  validateWebpHeader,
   type ImageDecodePort,
   type ImageResourceState,
 } from '../package/image-resources.ts';
+import {
+  bmp24,
+  bmpCore,
+  bmpWithBitCount,
+  bmpWithDibSize,
+  bmpWithPlanes,
+  webpExtended,
+  webpLossless,
+  webpLossy,
+  webpLossyWithoutStartCode,
+  webpUnknownChunk,
+} from './raster-format-bytes.ts';
 import {
   baselineRgbTiff,
   buildTiff,
@@ -115,6 +129,8 @@ function contentTypes(extra = ''): string {
     '<Default Extension="jpg" ContentType="image/jpeg"/>' +
     '<Default Extension="jpeg" ContentType="image/jpeg"/>' +
     '<Default Extension="gif" ContentType="image/gif"/>' +
+    '<Default Extension="bmp" ContentType="image/bmp"/>' +
+    '<Default Extension="webp" ContentType="image/webp"/>' +
     '<Default Extension="svg" ContentType="image/svg+xml"/>' +
     '<Default Extension="tif" ContentType="image/tiff"/>' +
     '<Default Extension="emf" ContentType="image/x-emf"/>' +
@@ -388,9 +404,96 @@ describe('image resource validation and cache (task 4)', () => {
     ] as const)('TIFF header rejects %s', (_label, bytes) => {
       expect(validateTiffHeader(bytes)).toBeNull();
     });
+
+    test('BMP reads its extent from either DIB header', () => {
+      expect(validateBmpHeader(bmp24(4, 3))).toEqual({ pixelWidth: 4, pixelHeight: 3 });
+      expect(validateBmpHeader(bmpCore(3, 5))).toEqual({ pixelWidth: 3, pixelHeight: 5 });
+    });
+
+    test('a top-down BMP has a negative height, not a malformed one', () => {
+      // Word-era encoders write these routinely; read as unsigned it is ~4 billion tall.
+      expect(validateBmpHeader(bmp24(4, -3))).toEqual({ pixelWidth: 4, pixelHeight: 3 });
+    });
+
+    test.each([
+      ['not a bitmap', Uint8Array.from([0x42, 0x4e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])],
+      ['truncated before the DIB header', bmp24(4, 3).slice(0, 20)],
+      ['a zero extent', bmp24(0, 3)],
+      ['an unknown DIB header size', bmpWithDibSize(24)],
+      ['a bit count no BMP defines', bmpWithBitCount(7)],
+      ['a plane count other than one', bmpWithPlanes(2)],
+    ] as const)('BMP header rejects %s', (_label, bytes) => {
+      expect(validateBmpHeader(bytes)).toBeNull();
+    });
+
+    test.each([
+      ['lossy VP8', webpLossy(32, 16), { pixelWidth: 32, pixelHeight: 16 }],
+      ['lossless VP8L', webpLossless(16, 8), { pixelWidth: 16, pixelHeight: 8 }],
+      ['extended VP8X', webpExtended(100, 50), { pixelWidth: 100, pixelHeight: 50 }],
+    ] as const)('WebP reads its extent from %s', (_label, bytes, expected) => {
+      expect(validateWebpHeader(bytes)).toEqual(expected);
+    });
+
+    test.each([
+      ['a truncated container', webpLossy().slice(0, 20)],
+      ['an unknown body chunk', webpUnknownChunk()],
+      ['a lossy frame with no start code', webpLossyWithoutStartCode()],
+    ] as const)('WebP header rejects %s', (_label, bytes) => {
+      expect(validateWebpHeader(bytes)).toBeNull();
+    });
+
+    test('sniffing recognizes both without help from the content type', () => {
+      expect(sniffImageMime(bmp24())).toBe('image/bmp');
+      expect(sniffImageMime(webpLossy())).toBe('image/webp');
+      expect(sniffImageMime(webpLossless())).toBe('image/webp');
+      // `RIFF` alone is not WebP — it is also WAV and AVI.
+      const riffOnly = Uint8Array.from(webpLossy());
+      riffOnly[8] = 0x57;
+      riffOnly[9] = 0x41;
+      riffOnly[10] = 0x56;
+      riffOnly[11] = 0x45;
+      expect(sniffImageMime(riffOnly)).toBe('unknown');
+    });
+
+    test('validateRasterHeader dispatches the new formats', () => {
+      expect(validateRasterHeader(bmp24(4, 3), 'image/bmp')).toEqual({
+        pixelWidth: 4,
+        pixelHeight: 3,
+      });
+      expect(validateRasterHeader(webpLossless(16, 8), 'image/webp')).toEqual({
+        pixelWidth: 16,
+        pixelHeight: 8,
+      });
+    });
   });
 
   describe('embedded resolve', () => {
+    test.each([
+      ['bmp', bmp24(4, 3), 'image/bmp', { width: 4, height: 3 }],
+      ['webp', webpLossless(16, 8), 'image/webp', { width: 16, height: 8 }],
+    ] as const)(
+      'an embedded %s resolves ready through the ordinary raster path',
+      async (extension, bytes, mime, extent) => {
+        const part = `word/media/image1.${extension}`;
+        const loaded = buildPackage({
+          includeDefaultMedia: false,
+          media: { [part]: bytes },
+          docRels:
+            `<Relationships xmlns="${REL_NS}">` +
+            `<Relationship Id="rId2" Type="${IMAGE_REL}" Target="media/image1.${extension}"/>` +
+            '</Relationships>',
+        });
+        if (!loaded.ok) throw new Error(loaded.reason);
+        const cache = createImageResourceCache(loaded.package, { decodePort: mockDecodePort() });
+        const state = await cache.resolveEmbedded('/word/document.xml', 'rId2');
+        expect(state.kind).toBe('ready');
+        if (state.kind !== 'ready') return;
+        expect(state.mime).toBe(mime);
+        expect(state.pixelWidth).toBe(extent.width);
+        expect(state.pixelHeight).toBe(extent.height);
+      }
+    );
+
     test('content-type spoofing yields signature-mismatch', async () => {
       const loaded = buildPackage({ media: { 'word/media/image1.png': JPEG_1X1 } });
       if (!loaded.ok) throw new Error(loaded.reason);

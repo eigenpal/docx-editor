@@ -32,12 +32,16 @@ const MIME_TO_CONTENT_TYPE: Readonly<Record<SupportedImageMime, string>> = Objec
   'image/png': 'image/png',
   'image/jpeg': 'image/jpeg',
   'image/gif': 'image/gif',
+  'image/bmp': 'image/bmp',
+  'image/webp': 'image/webp',
 });
 
 const MIME_TO_EXTENSION: Readonly<Record<SupportedImageMime, string>> = Object.freeze({
   'image/png': 'png',
   'image/jpeg': 'jpeg',
   'image/gif': 'gif',
+  'image/bmp': 'bmp',
+  'image/webp': 'webp',
 });
 
 const IMAGE_CONTENT_TYPES: ReadonlySet<string> = new Set([
@@ -45,6 +49,10 @@ const IMAGE_CONTENT_TYPES: ReadonlySet<string> = new Set([
   'image/jpeg',
   'image/jpg',
   'image/gif',
+  'image/bmp',
+  'image/x-ms-bmp',
+  'image/x-bmp',
+  'image/webp',
   'image/svg+xml',
   'image/tiff',
   'image/x-emf',

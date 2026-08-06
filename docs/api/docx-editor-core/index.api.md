@@ -2521,7 +2521,7 @@ export interface StyleDefinitions {
 }
 
 // @public
-export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif';
+export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/bmp' | 'image/webp';
 
 // @public
 export interface SurfaceHyperlink {

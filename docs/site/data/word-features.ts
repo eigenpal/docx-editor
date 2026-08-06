@@ -445,6 +445,18 @@ export const wordFeatures: WordFeature[] = [
       'Nine wrap choices, exclusion reflow, z-order, and anchored drag/resize in React. Vue wrap/alt/properties chrome deferred; engine setImageWrapType and toolbarCommandState are shared.',
   },
   {
+    id: 'images.bmp-webp',
+    name: 'BMP and WebP images',
+    category: 'images',
+    editing: 'none',
+    rendering: 'full',
+    roundTrip: 'full',
+    tier: 'community',
+    docsLink: '/docs/2.x/guides/images',
+    notes:
+      'Decoded natively by the browser and painted at the authored size, like PNG or JPEG. BMP covers what older documents carry (including top-down bitmaps and the 12-byte BITMAPCOREHEADER); WebP covers lossy, lossless and extended containers. Inserting a new one is not supported yet.',
+  },
+  {
     id: 'images.svg',
     name: 'SVG images',
     category: 'images',

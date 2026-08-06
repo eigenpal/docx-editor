@@ -1728,7 +1728,7 @@ export function sniffImageMime(bytes: Uint8Array): RenderableImageMime | Preserv
 export function sourceCropFromCropPercent(crop: ImageCropPercent): SourceCrop;
 
 // @public
-export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif';
+export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/bmp' | 'image/webp';
 
 // @public
 export interface SurfaceExtent {

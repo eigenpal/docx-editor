@@ -23,8 +23,19 @@ import {
   type ImageResourceLimits,
 } from '../runtime/limits.ts';
 
-/** Raster media the decode port measures and any authoring path may write. */
-export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif';
+/**
+ * Raster media the decode port measures and any authoring path may write.
+ *
+ * BMP and WebP are here for the same reason the other three are: an `<img>` decodes them
+ * natively, so they need a signature and a structural header and nothing else. BMP is what
+ * older documents carry; WebP is what current Word writes.
+ */
+export type SupportedImageMime =
+  | 'image/png'
+  | 'image/jpeg'
+  | 'image/gif'
+  | 'image/bmp'
+  | 'image/webp';
 /**
  * Vector media painted straight from validated bytes. An `<img>` renders SVG in the
  * browser's secure static mode — no script, no external subresource loads — so there is
@@ -140,6 +151,11 @@ const CONTENT_TYPE_TO_MIME: Readonly<Record<string, RenderableImageMime | Preser
     'image/jpeg': 'image/jpeg',
     'image/jpg': 'image/jpeg',
     'image/gif': 'image/gif',
+    // `image/bmp` is the registered type; Word and older producers also write these two.
+    'image/bmp': 'image/bmp',
+    'image/x-ms-bmp': 'image/bmp',
+    'image/x-bmp': 'image/bmp',
+    'image/webp': 'image/webp',
     'image/svg+xml': 'image/svg+xml',
     'image/tiff': 'image/tiff',
     'image/x-emf': 'image/x-emf',
@@ -197,7 +213,13 @@ export function hasBoundedSvgRoot(bytes: Uint8Array): boolean {
 }
 
 function isRasterSupportedMime(mime: string): mime is SupportedImageMime {
-  return mime === 'image/png' || mime === 'image/jpeg' || mime === 'image/gif';
+  return (
+    mime === 'image/png' ||
+    mime === 'image/jpeg' ||
+    mime === 'image/gif' ||
+    mime === 'image/bmp' ||
+    mime === 'image/webp'
+  );
 }
 
 function isPreservedMime(mime: string): mime is PreservedImageMime {
@@ -211,6 +233,24 @@ export function sniffImageMime(
   if (bytesStartWith(bytes, PNG_SIGNATURE)) return 'image/png';
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
     return 'image/jpeg';
+  }
+  // `BM` — the only file type BITMAPFILEHEADER declares. The DIB header behind it is what
+  // `validateBmpHeader` reads; two bytes alone are a weak signature, which is exactly why
+  // nothing downstream trusts the sniff on its own.
+  if (bytes.length >= 2 && bytes[0] === 0x42 && bytes[1] === 0x4d) return 'image/bmp';
+  // RIFF container with a `WEBP` form type: `RIFF....WEBP`.
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return 'image/webp';
   }
   if (
     bytes.length >= 6 &&
@@ -364,6 +404,76 @@ export function validateJpegHeader(bytes: Uint8Array): ValidatedRasterHeader | n
       return { pixelWidth, pixelHeight };
     }
     offset = segmentEnd;
+  }
+  return null;
+}
+
+/** `BITMAPCOREHEADER` is 12 bytes and 16-bit; every later DIB header is 40 or more and 32-bit. */
+const BMP_CORE_HEADER_SIZE = 12;
+const BMP_INFO_HEADER_SIZE = 40;
+/** Bit depths BITMAPINFOHEADER defines. Anything else is not a bitmap this file claims to be. */
+const BMP_BIT_COUNTS: ReadonlySet<number> = new Set([0, 1, 4, 8, 16, 24, 32]);
+
+/**
+ * Structural BMP validation: file header, DIB header size, and the extent it declares.
+ *
+ * Height is SIGNED — a negative one is a top-down bitmap, which is ordinary and must not be
+ * read as a malformed file or as a huge unsigned number.
+ */
+export function validateBmpHeader(bytes: Uint8Array): ValidatedRasterHeader | null {
+  if (bytes.length < 26) return null;
+  if (bytes[0] !== 0x42 || bytes[1] !== 0x4d) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const dibSize = view.getUint32(14, true);
+  if (dibSize === BMP_CORE_HEADER_SIZE) {
+    const pixelWidth = view.getUint16(18, true);
+    const pixelHeight = view.getUint16(20, true);
+    if (pixelWidth === 0 || pixelHeight === 0) return null;
+    return { pixelWidth, pixelHeight };
+  }
+  // 40 (INFO), 52/56 (V2/V3), 108 (V4), 124 (V5) all share the first 16 bytes.
+  if (dibSize < BMP_INFO_HEADER_SIZE || dibSize > 1024) return null;
+  if (bytes.length < 14 + BMP_INFO_HEADER_SIZE) return null;
+  const pixelWidth = view.getInt32(18, true);
+  const signedHeight = view.getInt32(22, true);
+  const pixelHeight = Math.abs(signedHeight);
+  if (pixelWidth <= 0 || pixelHeight === 0) return null;
+  if (view.getUint16(26, true) !== 1) return null; // planes: always 1
+  if (!BMP_BIT_COUNTS.has(view.getUint16(28, true))) return null;
+  return { pixelWidth, pixelHeight };
+}
+
+/**
+ * Structural WebP validation across the three body chunks: `VP8 ` lossy, `VP8L` lossless,
+ * and `VP8X` extended (animated or with alpha/ICC, where the canvas size is authoritative).
+ *
+ * Each stores its extent differently and none of them stores it in the RIFF header, so all
+ * three are read rather than assuming the common case.
+ */
+export function validateWebpHeader(bytes: Uint8Array): ValidatedRasterHeader | null {
+  if (bytes.length < 30) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const chunk = String.fromCharCode(bytes[12]!, bytes[13]!, bytes[14]!, bytes[15]!);
+  if (chunk === 'VP8 ') {
+    // Key-frame start code, then 14-bit width and height.
+    if (bytes[23] !== 0x9d || bytes[24] !== 0x01 || bytes[25] !== 0x2a) return null;
+    const pixelWidth = view.getUint16(26, true) & 0x3fff;
+    const pixelHeight = view.getUint16(28, true) & 0x3fff;
+    if (pixelWidth === 0 || pixelHeight === 0) return null;
+    return { pixelWidth, pixelHeight };
+  }
+  if (chunk === 'VP8L') {
+    if (bytes[20] !== 0x2f) return null; // lossless signature byte
+    const packed = view.getUint32(21, true);
+    const pixelWidth = (packed & 0x3fff) + 1;
+    const pixelHeight = ((packed >>> 14) & 0x3fff) + 1;
+    return { pixelWidth, pixelHeight };
+  }
+  if (chunk === 'VP8X') {
+    // Canvas extent as two 24-bit little-endian "minus one" values.
+    const pixelWidth = (bytes[24]! | (bytes[25]! << 8) | (bytes[26]! << 16)) + 1;
+    const pixelHeight = (bytes[27]! | (bytes[28]! << 8) | (bytes[29]! << 16)) + 1;
+    return { pixelWidth, pixelHeight };
   }
   return null;
 }
@@ -595,6 +705,10 @@ export function validateRasterHeader(
       return validateGifHeader(bytes);
     case 'image/jpeg':
       return validateJpegHeader(bytes);
+    case 'image/bmp':
+      return validateBmpHeader(bytes);
+    case 'image/webp':
+      return validateWebpHeader(bytes);
     default:
       return null;
   }

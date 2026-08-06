@@ -3610,7 +3610,7 @@ export interface StyleIndexEntry {
 export function stylesPartOf(pkg: OoxmlPackage): OoxmlPart | undefined;
 
 // @public
-export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif';
+export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/bmp' | 'image/webp';
 
 // @public
 export function sweepCustomNodePayloads(pkg: OoxmlPackage, storyPartName: string, namespaces: readonly string[]): CustomNodeSweepResult;
