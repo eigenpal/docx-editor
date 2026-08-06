@@ -14,9 +14,18 @@ import {
   validateJpegHeader,
   validatePngHeader,
   validateRasterHeader,
+  validateTiffHeader,
   type ImageDecodePort,
   type ImageResourceState,
 } from '../package/image-resources.ts';
+import {
+  baselineRgbTiff,
+  buildTiff,
+  extentOnlyTiff,
+  TIFF_FIELD_LONG,
+  TIFF_FIELD_RATIONAL,
+  TIFF_FIELD_SHORT,
+} from './tiff-test-bytes.ts';
 import {
   readOoxmlPackage,
   writeOoxmlPackage,
@@ -309,6 +318,75 @@ describe('image resource validation and cache (task 4)', () => {
       const state = await cache.resolveEmbedded('/word/document.xml', 'rId2');
       expect(state.kind).toBe('unrenderable');
       expect(decode.calls).toBe(0);
+    });
+
+    test.each([true, false] as const)(
+      'TIFF first-directory extent reads in %s byte order',
+      (littleEndian) => {
+        expect(validateTiffHeader(baselineRgbTiff(96, 64, littleEndian))).toEqual({
+          pixelWidth: 96,
+          pixelHeight: 64,
+        });
+        expect(validateTiffHeader(extentOnlyTiff(7, 300, littleEndian))).toEqual({
+          pixelWidth: 7,
+          pixelHeight: 300,
+        });
+      }
+    );
+
+    test('TIFF extent tags may be SHORT as well as LONG', () => {
+      const bytes = buildTiff({
+        entries: [
+          { tag: 256, fieldType: TIFF_FIELD_SHORT, count: 1, value: 640 },
+          { tag: 257, fieldType: TIFF_FIELD_SHORT, count: 1, value: 480 },
+        ],
+      });
+      expect(validateTiffHeader(bytes)).toEqual({ pixelWidth: 640, pixelHeight: 480 });
+    });
+
+    test.each([
+      [
+        'a signature with no directory',
+        new Uint8Array([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00]),
+      ],
+      ['an unknown byte-order mark', buildTiff({ byteOrderMark: 'XX', entries: [] })],
+      ['BigTIFF, whose directory layout differs', buildTiff({ magic: 43, entries: [] })],
+      ['a directory offset past the end', buildTiff({ entries: [], directoryOffset: 0xffff })],
+      ['a directory offset inside the header', buildTiff({ entries: [], directoryOffset: 4 })],
+      ['an empty directory', buildTiff({ entries: [] })],
+      ['an entry count beyond the ceiling', buildTiff({ entries: [], entryCount: 5000 })],
+      [
+        'an entry count the file cannot back',
+        buildTiff({
+          entries: [{ tag: 256, fieldType: TIFF_FIELD_LONG, count: 1, value: 4 }],
+          entryCount: 40,
+        }),
+      ],
+      [
+        'no height tag',
+        buildTiff({ entries: [{ tag: 256, fieldType: TIFF_FIELD_LONG, count: 1, value: 4 }] }),
+      ],
+      ['a zero extent', extentOnlyTiff(0, 4)],
+      [
+        'a multi-valued extent tag',
+        buildTiff({
+          entries: [
+            { tag: 256, fieldType: TIFF_FIELD_LONG, count: 2, value: 4 },
+            { tag: 257, fieldType: TIFF_FIELD_LONG, count: 1, value: 4 },
+          ],
+        }),
+      ],
+      [
+        'an extent tag of a non-integer field type',
+        buildTiff({
+          entries: [
+            { tag: 256, fieldType: TIFF_FIELD_RATIONAL, count: 1, value: 4 },
+            { tag: 257, fieldType: TIFF_FIELD_LONG, count: 1, value: 4 },
+          ],
+        }),
+      ],
+    ] as const)('TIFF header rejects %s', (_label, bytes) => {
+      expect(validateTiffHeader(bytes)).toBeNull();
     });
   });
 

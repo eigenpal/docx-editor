@@ -105,10 +105,13 @@ describe('React tree-lane wiring (phase 3)', () => {
   });
 
   test('the container carries the shared style-scope and surface classes', () => {
-    // ep-root scopes every --doc-* token; docx-paginated-surface carries the engine
-    // surface's paper styling. Without either, pages paint unstyled.
-    expect(editorSource).toContain('ep-root');
-    expect(editorSource).toContain('docx-paginated-surface');
+    // docx-editor scopes every --doc-* token AND every compiled Tailwind utility;
+    // docx-paginated-surface carries the engine surface's paper styling. Without either,
+    // pages paint unstyled. Matched as a CLASS rather than a substring: the package name
+    // `@docx-editor.dev/...` contains the scope name, so a plain `toContain` passes even
+    // when nothing puts the class on an element.
+    expect(editorSource).toMatch(/className=[^\n]*\bdocx-editor\b/);
+    expect(editorSource).toMatch(/className=[^\n]*\bdocx-paginated-surface\b/);
   });
 
   test('zoom flows through setZoom, never a remount', () => {

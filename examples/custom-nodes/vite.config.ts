@@ -57,7 +57,7 @@ export default defineConfig({
       },
     ],
   },
-  // The library's chrome is Tailwind scoped to `.ep-root`, so a host embedding it
+  // The library's chrome is Tailwind scoped to `.docx-editor`, so a host embedding it
   // must run the same layer or half the packaged controls render unstyled.
   css: {
     postcss: {

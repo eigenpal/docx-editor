@@ -103,6 +103,7 @@ export {
   commentBodyText,
   commentInitials,
   commentItemsOf,
+  deepParagraphOrderOfPart,
   firstReviewRange,
   linkRevisionReplies,
   locateSites,

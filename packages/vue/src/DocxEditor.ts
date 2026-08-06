@@ -155,7 +155,7 @@ export default defineComponent({
     };
     expose(api);
 
-    // `ep-root` scopes every --doc-* token; the viewport is the sole scroll container;
+    // `docx-editor` scopes every --doc-* token; the viewport is the sole scroll container;
     // `docx-paginated-surface` carries the engine surface's paper styling. The facade
     // mounts its pages inside the inner element and owns that subtree.
     return () =>
@@ -163,7 +163,7 @@ export default defineComponent({
         'div',
         {
           'data-testid': 'docx-editor-scroll',
-          class: 'ep-root ep-one-surface ep-one-surface__viewport',
+          class: 'docx-editor ep-one-surface ep-one-surface__viewport',
         },
         [
           h('div', {

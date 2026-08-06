@@ -387,11 +387,11 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
         ref={attach}
         role="toolbar"
         data-testid="docx-toolbar"
-        // `ep-root` self-emitted: chrome CSS and --doc-* tokens are scoped under it, and
+        // `docx-editor` self-emitted: chrome CSS and --doc-* tokens are scoped under it, and
         // `Root` renders no DOM — same pattern as `DocxEditorLoading`/`DocxEditorViewport`,
         // so a composed toolbar is styled wherever the host puts it. Nesting under the
         // packaged wrapper is fine; the stylesheet re-applies dark tokens to nested roots.
-        className={`ep-root docx-toolbar${className ? ` ${className}` : ''}`}
+        className={`docx-editor docx-toolbar${className ? ` ${className}` : ''}`}
         // One row when the bar measures itself, wrapping when it does not: the stylesheet
         // reads this rather than guessing from a breakpoint.
         {...(measuring ? { 'data-overflow': '' } : {})}

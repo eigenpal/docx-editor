@@ -9,14 +9,19 @@ DrawingML pictures (`w:drawing` with `pic:pic`) lay out, paint, and round-trip t
 
 ## Supported formats
 
-| Format                                      | Insert (React)                       | Layout & paint                       | Round-trip                                |
-| ------------------------------------------- | ------------------------------------ | ------------------------------------ | ----------------------------------------- |
-| PNG, JPEG, GIF                              | Yes, `normalizeImageBytes` preflight | Full decode at authored `wp:extent`  | Byte-identical media unless replaced      |
-| SVG                                         | No insert                            | Painted at authored `wp:extent`      | Byte-identical media                      |
-| TIFF, EMF, WMF                              | No insert                            | Extent reserved; labeled placeholder | Preserved; no zero-click fetch            |
-| External `r:link` / `TargetMode="External"` | No auto-load                         | Placeholder + preserved rel          | Preserved; explicit user gesture to embed |
+| Format                                      | Insert (React)                       | Layout & paint                      | Round-trip                                |
+| ------------------------------------------- | ------------------------------------ | ----------------------------------- | ----------------------------------------- |
+| PNG, JPEG, GIF                              | Yes, `normalizeImageBytes` preflight | Full decode at authored `wp:extent` | Byte-identical media unless replaced      |
+| SVG                                         | No insert                            | Painted at authored `wp:extent`     | Byte-identical media                      |
+| TIFF, EMF, WMF                              | No insert                            | Converted to a raster and painted   | Preserved; no zero-click fetch            |
+| External `r:link` / `TargetMode="External"` | No auto-load                         | Placeholder + preserved rel         | Preserved; explicit user gesture to embed |
 
 Insert accepts PNG/JPEG/GIF only. Other payloads stay in the package and participate in pagination through their authored extent.
+
+TIFF, EMF and WMF are rasterized in the browser and painted like any other image. The original
+bytes stay in the package untouched, so saving round-trips them unchanged. A file that cannot be
+rasterized — an exotic TIFF flavour, a corrupt metafile — reserves its extent and paints a
+labeled placeholder rather than collapsing the layout.
 
 SVG is painted through an `<img>`, which puts the browser in secure static mode: scripts in the
 file never run and external references in it are never fetched. Its intrinsic size is read from
@@ -96,7 +101,7 @@ Not edited or raster-rendered in this release:
   fields inside header/footer text boxes evaluate per page); inline text boxes, linked
   chains, autofit, and rotation stay placeholders
 - `w:object` / `w:altChunk`: generic preservation with diagnostics
-- Artistic effects (`a:effectLst`), TIFF/EMF/WMF rasterization
+- Artistic effects (`a:effectLst`)
 - Tracked-change accept/reject on drawings
 
 ## Next steps

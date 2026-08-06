@@ -1212,6 +1212,7 @@ export interface Editor {
     setActiveScope(scope: ViewScope): void;
     // (undocumented)
     setEditingMode(mode: DocumentEditingMode): ExecResult;
+    setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null): void;
     setTableInteractionLabel(resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string): void;
     setZoom(zoom: number): ExecResult;
     // (undocumented)

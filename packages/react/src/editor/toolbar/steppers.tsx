@@ -303,7 +303,7 @@ function ToolbarFontSizeImpl({ className, hidden }: ToolbarSlotPartProps) {
  * in the toolbar, so the next keystroke went to the box rather than the document.
  */
 function editorFocus(from: HTMLElement | null): void {
-  // NOT a bare `closest('.ep-root')`: the toolbar's own root self-emits that class and
+  // NOT a bare `closest('.docx-editor')`: the toolbar's own root self-emits that class and
   // contains no pages, so the scope must be the instance container around both.
   const root = editorScopeFor(from) ?? from?.ownerDocument?.body;
   const pages = root?.querySelector<HTMLElement>('.docx-pages');

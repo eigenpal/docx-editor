@@ -221,7 +221,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
 
   const tree = chrome ? (
     <div
-      className={`ep-root${isDark ? ' dark' : ''}${className ? ` ${className}` : ''}`}
+      className={`docx-editor${isDark ? ' dark' : ''}${className ? ` ${className}` : ''}`}
       style={CONTAINER_STYLE}
     >
       <div style={TITLE_BAR_STYLE}>

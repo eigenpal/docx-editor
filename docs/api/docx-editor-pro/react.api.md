@@ -145,13 +145,13 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
 
 // @public
 export interface UseReviewReturn {
-    readonly accept: (item: ReviewItemView) => void;
+    readonly accept: (item: ReviewItemView) => boolean;
     readonly activeKey: string | null;
     readonly comment: (text: string, author?: string) => boolean;
     readonly items: readonly ReviewItemView[];
     readonly paneOpen: boolean;
     readonly ready: boolean;
-    readonly reject: (item: ReviewItemView) => void;
+    readonly reject: (item: ReviewItemView) => boolean;
     readonly remove: (item: ReviewItemView) => boolean;
     readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
     readonly selectionAnchorY: number | null;

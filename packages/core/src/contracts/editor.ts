@@ -565,6 +565,15 @@ export interface Editor {
   setActiveReviewItem(key: string | null): void;
 
   /**
+   * Revision kinds the caret must never activate, or null for none.
+   *
+   * A host rail that hides some kinds (structural and format cards, typically) tells the
+   * engine here, so a click on tracked text cannot activate a card the rail does not
+   * render — the band would light and nothing on screen would answer it.
+   */
+  setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null): void;
+
+  /**
    * Accept or reject the revision behind a card.
    *
    * Every site carrying the revision's `(id, author, date)` triple resolves in ONE transaction

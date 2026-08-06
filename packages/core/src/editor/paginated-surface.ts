@@ -6,6 +6,7 @@
 import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core/binding';
 import {
   TOC_MAX_PAGE_PASSES,
+  deepParagraphOrderOfPart,
   detectBodyTocs,
   findNode,
   hyperlinkTargetOf,
@@ -2119,7 +2120,13 @@ export function mountPaginatedSurface(
     // carried out. `restoreSelection` raises the flag and only `flushLayout` takes it down, so
     // `undo` on an empty history left it up and disarmed the NEXT repaint, whenever it came.
     selectionSync.noteSelectionSettled();
-    selectionSync.mirrorToDom();
+    // CLAIMED: this is the programmatic entry point — a host's `setSelection`, an opened
+    // review card, an outline jump. The plain write refuses whenever the browser's selection
+    // sits outside these pages, which is exactly the case when the request came from the
+    // host's own chrome (a rail card takes focus on mousedown), and the range the caller
+    // asked to SHOW then highlighted nothing at all. A pointer or keyboard move already owns
+    // the selection, so claiming changes nothing for them. Focus is never moved.
+    selectionSync.mirrorToDom(true);
     followCaretIntoView(true);
     renderOverlay();
     // A dismissal is dismissed for where the caret WAS; any move re-asks the question, which
@@ -2363,26 +2370,51 @@ export function mountPaginatedSurface(
   }
 
   /**
-   * Paragraph id to document position, memoized per layout AND per open story.
+   * Paragraph id to document position over EVERY story the review queue lists — body
+   * first, then each furniture part — memoized per package revision and body root.
    *
-   * `paragraphOrder` publishes the ids in order; the containment test needs to compare two
-   * paragraphs, which an array cannot do without a scan per comparison. The story is part of
-   * the key because entering a header or a note changes the order without changing the
-   * layout, and a cache keyed on the layout alone would answer with the body's positions.
+   * Deliberately NOT the open story's scoped order: `rangeCovers` looks the caret's and an
+   * item's paragraphs up here, and an id the index cannot see is an item that can never
+   * become active. Scoping to the open story made every header item unactivatable from
+   * the body, every body item unactivatable while a header was open, and every textbox
+   * item unactivatable always (the shallow order stops at the host paragraph) — the DEEP
+   * order descends into `w:txbxContent`. Containment only ever compares positions within
+   * one story, and furniture ranks after the body, so the merge cannot invent a cover.
    */
-  const documentOrderIndexCache = new WeakMap<SemanticLayout, Map<string, Map<string, number>>>();
-  function documentOrderIndexOf(layout: SemanticLayout): Map<string, number> {
-    const scopeKey = `${hfScope?.getActive()?.scope.rId ?? ''}\u0000${noteScopeId() ?? ''}`;
-    let byScope = documentOrderIndexCache.get(layout);
-    if (!byScope) {
-      byScope = new Map();
-      documentOrderIndexCache.set(layout, byScope);
+  let reviewOrderIndexCache: {
+    readonly packageRevision: number;
+    readonly bodyRoot: object;
+    readonly index: Map<string, number>;
+  } | null = null;
+  function reviewOrderIndex(): Map<string, number> {
+    const packageRevision = session.packageRevision();
+    const bodyRoot = session.part().root;
+    if (
+      reviewOrderIndexCache &&
+      reviewOrderIndexCache.packageRevision === packageRevision &&
+      reviewOrderIndexCache.bodyRoot === bodyRoot
+    ) {
+      return reviewOrderIndexCache.index;
     }
-    const cached = byScope.get(scopeKey);
-    if (cached) return cached;
     const index = new Map<string, number>();
-    for (const [position, id] of paragraphOrder().entries()) index.set(id, position);
-    byScope.set(scopeKey, index);
+    const append = (order: ReadonlyMap<string, number>): void => {
+      const base = index.size;
+      for (const [id, position] of order) {
+        if (!index.has(id)) index.set(id, base + position);
+      }
+    };
+    append(deepParagraphOrderOfPart(session.part()));
+    const seenParts = new Set<unknown>([session.part()]);
+    for (const section of session.headerFooterPartsBySection()) {
+      for (const slots of [section.headers, section.footers]) {
+        for (const part of slots.values()) {
+          if (seenParts.has(part)) continue;
+          seenParts.add(part);
+          append(deepParagraphOrderOfPart(part));
+        }
+      }
+    }
+    reviewOrderIndexCache = { packageRevision, bodyRoot, index };
     return index;
   }
 
@@ -2396,19 +2428,30 @@ export function mountPaginatedSurface(
    */
   let dismissedReviewKey: string | null = null;
 
+  /**
+   * Revision kinds the caret must not activate — the host rail's own exclusion filter,
+   * mirrored here so the band and the visible cards stay one answer. Null means none.
+   */
+  let reviewActivationExclusions: ReadonlySet<ReviewRevisionKind> | null = null;
+
   function activeReviewAtCaret(): ReviewItem | null {
     const at = selection?.head;
     if (!at) return null;
     // The covering items, innermost first, minus the one the reader dismissed. Returning
     // null for a dismissed innermost item hid every item under it too: dismissing a comment
     // that wraps a revision meant the revision could never become active either.
-    const covering = reviewItemsAt(
-      session.reviewItems(),
-      at,
-      documentOrderIndexOf(currentLayout)
-    ).filter(
+    const covering = reviewItemsAt(session.reviewItems(), at, reviewOrderIndex()).filter(
       (item) =>
-        !(item.kind === 'comment' && item.resolved) && reviewItemKey(item) !== dismissedReviewKey
+        !(item.kind === 'comment' && item.resolved) &&
+        reviewItemKey(item) !== dismissedReviewKey &&
+        // Kinds the host's rail hides must not become active from a click: the band
+        // would light a card nothing on screen renders (see the contract note on
+        // `setReviewActivationExclusions`).
+        !(
+          item.kind === 'revision' &&
+          reviewActivationExclusions !== null &&
+          reviewActivationExclusions.has(item.revisionKind)
+        )
     );
     const found = covering[0];
     if (!found) return null;
@@ -3248,6 +3291,20 @@ export function mountPaginatedSurface(
       return scrollToContentY(page.box.y + caret.y, caret.height, options);
     },
 
+    revealPosition(position, options) {
+      flushLayout();
+      const caret = caretAt(currentLayout, position);
+      if (!caret) return false;
+      const page = currentLayout.pages.find((entry) => entry.index === caret.pageIndex);
+      if (!page) return false;
+      // 'nearest' by default: callers reveal on every activation, and a target already in
+      // view must not yank the viewport.
+      return scrollToContentY(page.box.y + caret.y, caret.height, {
+        block: 'nearest',
+        ...options,
+      });
+    },
+
     setEditable(editable) {
       // The DOM affordance, not the document's own editability: `session.editable` says
       // whether the FILE can be round-tripped, and this says whether the user may type into
@@ -3330,7 +3387,14 @@ export function mountPaginatedSurface(
           // and the flush above consumed it — so the render that follows read the stale DOM
           // selection back over the clamp and the caret jumped to the paragraph start.
           selectionSync.noteModelMoved();
-          return clampedToDocument(currentLayout, session.paragraphIds(), selection);
+          // Clamped within the story the READER is in, for the reason `applyAutomationOps`
+          // states below: the body's paragraph list is the wrong ruler while a header or a
+          // note is open, and clamping to it moved the caret into the document while the
+          // scope stayed on the furniture — after which every keystroke was refused as
+          // `unknown-paragraph`. Accepting a header card is exactly that situation.
+          const order = paragraphOrder();
+          if (order.length === 0) return null;
+          return clampedToDocument(currentLayout, order, selection);
         }
       ),
 
@@ -3408,6 +3472,14 @@ export function mountPaginatedSurface(
       // The old refusal described the old mode. Left standing, a host rendering it showed
       // "the document is open for viewing" over a document that had just become editable.
       lastRejection = null;
+      options.onChange?.(currentState());
+    },
+
+    setReviewActivationExclusions(kinds) {
+      reviewActivationExclusions = kinds === null ? null : new Set(kinds);
+      // The active answer may have just changed with no caret move: repaint the bands and
+      // tell the host, exactly as dismissing does.
+      renderCommentHighlights();
       options.onChange?.(currentState());
     },
 
@@ -3537,7 +3609,25 @@ export function mountPaginatedSurface(
       }
       return { ok: true, changed: true };
     },
-    enterHeaderFooter: (args) => hfScope!.enterHeaderFooter(args),
+    enterHeaderFooter: (args) => {
+      const entered = hfScope!.enterHeaderFooter(args);
+      if (!entered) return entered;
+      // A PROGRAMMATIC enter (review card, automation) must bring the band into view —
+      // `followCaretIntoView` deliberately sits out while a furniture scope is open, and
+      // the pointer path enters from a double-click that is by definition already on
+      // screen. 'nearest' makes this a no-op in that already-visible case.
+      const active = hfScope!.getActive();
+      const page = active ? currentLayout.pages[active.pageIndex] : undefined;
+      if (active && page) {
+        const story = active.kind === 'header' ? page.header : page.footer;
+        const bandY =
+          story?.box.y ??
+          (active.kind === 'header' ? page.box.y : page.box.y + page.box.height - 1);
+        const bandHeight = story?.box.height ?? 1;
+        scrollToContentY(bandY, bandHeight, { block: 'nearest' });
+      }
+      return entered;
+    },
     exitHeaderFooter: () => hfScope!.exitHeaderFooter(),
     headerFooterState: () => hfScope!.headerFooterStateStable(session.packageRevision()),
     ...createHeaderFooterOps({

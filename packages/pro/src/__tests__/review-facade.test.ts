@@ -1148,19 +1148,28 @@ describe('activating a card', () => {
     expect(editor.getReviewItems()[0]!.isActive).toBe(true);
   });
 
-  test('opening a card places the CARET, and never selects the text', () => {
+  test('opening a card selects its span and suppresses the comment affordance', () => {
     const editor = mount({ body: COMMENTED, comments: COMMENT_PART });
     const [card] = editor.getReviewItems();
     editor.setActiveReviewItem(card!.key);
 
     const selection = editor.surface!.state().selection;
-    // Collapsed. A range selection turned the text grey and made the "comment on this"
-    // affordance offer a second comment on top of the one just opened.
-    expect(selection.anchor.paragraphId).toBe(selection.head.paragraphId);
-    expect(selection.anchor.offset).toBe(selection.head.offset);
+    // The item's whole range, HEAD AT THE START: the selection overlay is the visible
+    // highlight and the head is what the reveal scrolls to. The old regression this used
+    // to guard — a range selection made "comment on this" offer a second comment on top
+    // of the card just opened — is held off by `getSelectionPlacement` sitting out for
+    // the review-driven selection, asserted right here.
+    expect(selection.anchor.offset).toBeGreaterThan(selection.head.offset);
     expect(editor.getSelectionPlacement()).toBeNull();
     // And the card is open, which is the point of activating it.
     expect(editor.getReviewItems()[0]!.isActive).toBe(true);
+
+    // A selection the USER makes still gets the affordance.
+    editor.surface!.setSelection({
+      anchor: { paragraphId: selection.head.paragraphId, offset: 0 },
+      head: { paragraphId: selection.head.paragraphId, offset: 3 },
+    });
+    expect(editor.getSelectionPlacement()).not.toBeNull();
   });
 
   test('selects the range the card is about, so the document shows what is meant', () => {
@@ -1314,6 +1323,81 @@ describe('tracked changes in headers', () => {
     expect(editor.getHeaderFooterState()?.editing).toBe('header');
   });
 
+  test('the header card lights up, rather than only opening the scope', () => {
+    // Entering the scope used to `return` before announcing, so the rail never
+    // re-rendered: the reader clicked a header card, the document scope changed under
+    // them, and no card looked open.
+    const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
+    const header = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
+    editor.setActiveReviewItem(header.key);
+    const active = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
+    expect(active.isActive).toBe(true);
+  });
+
+  test('accepting a header card leaves the caret inside the header, still typable', () => {
+    // The post-commit clamp used the BODY's paragraph list, so resolving a header card
+    // threw the caret into the document while the scope stayed on the header — and every
+    // keystroke after it was refused as `unknown-paragraph`. The reader typed and nothing
+    // happened.
+    const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
+    const header = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
+    editor.setActiveReviewItem(header.key);
+    expect(editor.surface!.activeScope()).toEqual({ kind: 'headerFooter', rId: 'rIdH' });
+
+    expect(editor.acceptReviewItem(header.key)).toEqual({ ok: true, changed: true });
+    const caret = editor.surface!.state().selection.head.paragraphId;
+    const bodyParagraphs = editor.surface!.session.paragraphIds();
+    expect(bodyParagraphs).not.toContain(caret);
+  });
+
+  test('replying to a header card lands, rather than being refused every time', () => {
+    // The reply was always written against the body store, so a header anchor named a
+    // paragraph that store had never heard of and the transaction was rejected: the reply
+    // box accepted text and threw it away.
+    const HEADER_COMMENT =
+      `<w:p><w:commentRangeStart w:id="7"/><w:r><w:t>letterhead</w:t></w:r>` +
+      `<w:commentRangeEnd w:id="7"/><w:r><w:commentReference w:id="7"/></w:r></w:p>`;
+    const editor = mount({
+      body: INSERTION,
+      header: HEADER_COMMENT,
+      comments:
+        `<w:comment w:id="7" w:author="Margaret Hamilton" w:date="2026-03-04T05:06:07Z">` +
+        `<w:p><w:r><w:t>Wrong wordmark.</w:t></w:r></w:p></w:comment>`,
+    });
+    const card = editor.getReviewItems().find((item) => item.kind === 'comment')!;
+    expect(editor.replyToReviewItem(card.key, 'Fixed in the new template.')).toEqual({
+      ok: true,
+      changed: true,
+    });
+    const replies = editor
+      .getReviewItems()
+      .filter((item) => item.kind === 'comment' && item.text.includes('Fixed in the new template'));
+    expect(replies.length).toBeGreaterThan(0);
+  });
+
+  test('walking header card then body card re-activates the BODY', () => {
+    // The traversal a reviewer actually performs. The body branch never left the header
+    // scope, so the caret stayed clamped inside the header story and no body card could
+    // become active again — the rail went dead from the first header change onward.
+    const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
+    const header = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
+    const body = editor.getReviewItems().find((card) => card.author === 'Ada Lovelace')!;
+
+    editor.setActiveReviewItem(header.key);
+    expect(editor.surface!.activeScope()).toEqual({ kind: 'headerFooter', rId: 'rIdH' });
+
+    editor.setActiveReviewItem(body.key);
+    expect(editor.surface!.activeScope()).toEqual({ kind: 'body' });
+    expect(editor.getHeaderFooterState()?.editing ?? null).toBeNull();
+    const cards = editor.getReviewItems();
+    expect(cards.find((card) => card.author === 'Ada Lovelace')!.isActive).toBe(true);
+    expect(cards.find((card) => card.author === 'Margaret Hamilton')!.isActive).toBe(false);
+
+    // And back again, so the walk is not a one-way door.
+    editor.setActiveReviewItem(header.key);
+    expect(editor.surface!.activeScope()).toEqual({ kind: 'headerFooter', rId: 'rIdH' });
+  });
+
   test('deleting a header comment strips its markers even after the header was opened', () => {
     const HEADER_COMMENT =
       `<w:p><w:commentRangeStart w:id="7"/><w:r><w:t>letterhead</w:t></w:r>` +
@@ -1345,5 +1429,84 @@ describe('tracked changes in headers', () => {
     expect(headerXml).not.toContain('commentRangeStart');
     expect(headerXml).not.toContain('commentReference');
     expect(headerXml).toContain('letterhead');
+  });
+});
+
+// Clicking tracked text is how a reviewer opens its card — there is no click handler, the
+// CARET decides. Everything that stops the caret's answer from reaching the rail reads to
+// the user as "clicking the change does nothing".
+describe('the caret activates the card the rail actually renders', () => {
+  const REPLACEMENT_DAYS_APART =
+    `<w:p><w:r><w:t xml:space="preserve">keep </w:t></w:r>` +
+    `<w:del w:id="11" w:author="Ada Lovelace" w:date="2026-01-01T10:00:00Z">` +
+    `<w:r><w:delText>old</w:delText></w:r></w:del>` +
+    `<w:ins w:id="12" w:author="Ada Lovelace" w:date="2026-01-02T09:00:00Z">` +
+    `<w:r><w:t>new</w:t></w:r></w:ins></w:p>`;
+
+  function caretAt(editor: DocxEditorInstance, offset: number): void {
+    const fragment = editor.surface!.layout().pages[0]!.fragments[0]!;
+    if (fragment.kind !== 'paragraph') throw new Error('expected a paragraph fragment');
+    editor.surface!.setSelection({
+      anchor: { paragraphId: fragment.paragraphId, offset },
+      head: { paragraphId: fragment.paragraphId, offset },
+    });
+  }
+
+  test('a caret in either half of a replacement opens the ONE paired card', () => {
+    const editor = mount({ body: REPLACEMENT_DAYS_APART });
+    const cards = editor.getReviewItems();
+    expect(cards).toHaveLength(1);
+    expect(cards[0]!.kind === 'revision' && cards[0]!.revisionKind).toBe('replace');
+
+    // "keep " is 5 characters, then the struck "old", then the typed "new".
+    caretAt(editor, 6);
+    expect(editor.getReviewItems()[0]!.isActive).toBe(true);
+    caretAt(editor, 0);
+    expect(editor.getReviewItems()[0]!.isActive).toBe(false);
+    caretAt(editor, 9);
+    expect(editor.getReviewItems()[0]!.isActive).toBe(true);
+  });
+
+  test('an excluded kind cannot take the activation from a kind the rail shows', () => {
+    // A format change wrapping text the rail hides used to win the innermost-covering
+    // test and open a card nothing renders — the click looked ignored.
+    const editor = mount({ body: FORMAT_AND_INSERT });
+    const formatCard = editor
+      .getReviewItems()
+      .find((card) => card.kind === 'revision' && card.revisionKind === 'format')!;
+    expect(formatCard).toBeDefined();
+
+    const formatParagraph = editor.surface!.layout().pages[0]!.fragments[0]!;
+    if (formatParagraph.kind !== 'paragraph') throw new Error('expected a paragraph');
+    const intoFormat = { paragraphId: formatParagraph.paragraphId, offset: 2 };
+    editor.surface!.setSelection({ anchor: intoFormat, head: intoFormat });
+    expect(editor.surface!.activeReviewKey()).toBe(formatCard.key);
+
+    // The rail hides format cards by default; told so, the engine stops activating them.
+    editor.setReviewActivationExclusions(['format', 'structural']);
+    expect(editor.surface!.activeReviewKey()).toBeNull();
+
+    // And clearing the filter restores the engine's own answer.
+    editor.setReviewActivationExclusions(null);
+    expect(editor.surface!.activeReviewKey()).toBe(formatCard.key);
+  });
+
+  test('activating a card ANNOUNCES it, so a pull-only host cannot miss the change', () => {
+    // The regression this guards is invisible to `getReviewItems()`: a snapshot read is a
+    // PULL, and every adapter renders off the pushed event. A `setActive` that updated
+    // state without emitting left the rail showing the previously open card.
+    const editor = mount({ body: INSERTION });
+    let announced = 0;
+    const stop = editor.on('selectionChange', () => {
+      announced += 1;
+    });
+    const [card] = editor.getReviewItems();
+    editor.setActiveReviewItem(card!.key);
+    expect(announced).toBeGreaterThan(0);
+
+    const afterOpen = announced;
+    editor.setActiveReviewItem(null);
+    expect(announced).toBeGreaterThan(afterOpen);
+    stop();
   });
 });

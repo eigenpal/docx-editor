@@ -240,7 +240,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       // an unrelated field, and two mounted editors both answer one keypress. The shortcut
       // belongs to the editor the user is actually in: the chrome, the painted surface, or
       // anything else under this instance's root.
-      // `editorScopeFor` finds the instance container — the `.ep-root` that holds the
+      // `editorScopeFor` finds the instance container — the `.docx-editor` that holds the
       // painted pages, NOT the bar's own self-emitted styling root — so one containment
       // test covers the bar AND the document. A composition with no such container falls
       // back to the bar's own subtree, which is narrow but never wrong.
@@ -330,9 +330,9 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
           catalogT('titleBar.menuBarAriaLabel' as TranslationKey)
         }
         data-testid="docx-menubar"
-        // `ep-root` self-emitted so a composed menu bar is styled outside the packaged
+        // `docx-editor` self-emitted so a composed menu bar is styled outside the packaged
         // wrapper, as `DocxEditorLoading` and `DocxEditorViewport` already do.
-        className={`ep-root docx-menubar${className ? ` ${className}` : ''}`}
+        className={`docx-editor docx-menubar${className ? ` ${className}` : ''}`}
         // Container-level caret guard (CLAUDE.md focus-stealing pitfall): a disabled row
         // never receives mousedown, so per-row handlers cannot cover it.
         onMouseDown={guardToolbarMousedown}

@@ -654,7 +654,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
 
   return (
     <div
-      className={`ep-root demo-app${colorMode === 'dark' ? ' dark' : ''}`}
+      className={`docx-editor demo-app${colorMode === 'dark' ? ' dark' : ''}`}
       data-testid="composed-mount"
     >
       {bytes ? (

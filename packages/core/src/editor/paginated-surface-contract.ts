@@ -18,6 +18,7 @@ import type {
   NavigationCommand,
   SectionProperties,
   SemanticLayout,
+  SemanticPosition,
   SemanticSelection,
   TextMeasurer,
 } from '@docx-editor.dev/core/layout';
@@ -464,6 +465,13 @@ export interface PaginatedSurface {
    */
   revealPage(pageIndex: number, options?: RevealOptions): boolean;
   revealParagraph(paragraphId: string, options?: RevealOptions): boolean;
+  /**
+   * Scroll an exact position into view — `revealParagraph` for a caret that is not at
+   * offset 0. Focus-independent and virtualization-safe like every reveal: geometry
+   * comes from the layout and the target page is materialized on the way. Defaults to
+   * `block: 'nearest'`, so an already-visible target never yanks the viewport.
+   */
+  revealPosition(position: SemanticPosition, options?: RevealOptions): boolean;
   /** Set the selection directly, for a host driving the surface programmatically. */
   setSelection(next: SemanticSelection): void;
   /**
@@ -697,6 +705,18 @@ export interface PaginatedSurface {
    * around the page, so nothing else would ever put the item away.
    */
   dismissActiveReview(): void;
+  /**
+   * Revision kinds the CARET must not activate, or null for none.
+   *
+   * The review rail filters what it renders (structural and format cards are hidden by
+   * default), but {@link activeReviewKey} used to compute over the unfiltered queue — a
+   * click on tracked text under a format change activated a card the rail does not draw,
+   * and nothing on screen lit up. A host that filters its list tells the surface, so the
+   * band and the visible cards stay one answer.
+   */
+  setReviewActivationExclusions(
+    kinds: readonly import('@docx-editor.dev/core/store').ReviewRevisionKind[] | null
+  ): void;
   /**
    * `bookmarkName -> position` over the current revision, for resolving an internal link.
    * First in document order wins a duplicate name, matching Word.

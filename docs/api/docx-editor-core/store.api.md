@@ -953,6 +953,9 @@ export const DATASTORE_NAMESPACE_URI = "http://schemas.openxmlformats.org/office
 export function datastoreItemIdFor(seed: string): string;
 
 // @public
+export function deepParagraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, number>;
+
+// @public
 export const DEFAULT_ENDNOTE_PROPERTIES: ResolvedEndnoteProperties;
 
 // @public
@@ -1523,7 +1526,7 @@ export const IMAGE_WRAP_TARGETS: readonly ImageWrapTarget[];
 
 // @public
 export interface ImageDecodePort {
-    convertMetafile?(bytes: Uint8Array, mime: MetafileImageMime, limits: ImageResourceLimits): Promise<Readonly<{
+    convertPreserved?(bytes: Uint8Array, mime: PreservedImageMime, limits: ImageResourceLimits): Promise<Readonly<{
         bytes: Uint8Array;
         mime: SupportedImageMime;
     }> | null>;

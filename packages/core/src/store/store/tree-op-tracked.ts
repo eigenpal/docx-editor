@@ -378,6 +378,18 @@ export function applyInsertTracked(
         out.push(node);
         continue;
       }
+      // `w:pPr` IS a child of the paragraph, it measures nothing, and §17.3.1.26 requires it
+      // FIRST — so it is never a place to put words. Without this it took every insertion
+      // aimed at offset 0 (the boundary rule below fires for anything that is not a run) and
+      // wrote `<w:p><w:ins/><w:pPr/></w:p>`, which the paragraph invariant refuses. Every
+      // keystroke in an empty paragraph that carries properties — the one Enter has just
+      // made, a list item, a styled blank line — was rejected, so suggesting mode looked
+      // dead from the moment the caret landed in a new paragraph.
+      if (node.kind !== 'textValue' && node.kind === 'paragraphProperties') {
+        out.push(node);
+        continue;
+      }
+
       const length = offsets.lengthOf(node);
       const start = cursor.offset;
       const end = start + length;

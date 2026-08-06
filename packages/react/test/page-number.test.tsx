@@ -77,7 +77,7 @@ describe('DocxEditor.PageNumber', () => {
     const status = view.getByRole('status');
     expect(status.textContent).toBe('2 of 3');
     expect(status.getAttribute('data-visible')).toBe('true');
-    expect(status.classList.contains('ep-root')).toBe(true);
+    expect(status.classList.contains('docx-editor')).toBe(true);
     expect(status.classList.contains('host-page-number')).toBe(true);
     expect((status as HTMLElement).style.right).toBe('32px');
 

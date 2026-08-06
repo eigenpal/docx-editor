@@ -98,6 +98,8 @@ export function createSurfaceCaret(
   // Dark mode inverts `.docx-page-content` wholesale to get Word's dark page. The caret is
   // painted inside that subtree, so it counter-inverts the way images and highlights
   // already do — otherwise the dark theme's light `--doc-caret` inverts to dark-on-dark.
+  // The stylesheet's contrast ring rides through the same inversion as the core it rings,
+  // so the two stay complementary in both themes.
   element.dataset.noColorInvert = '';
   // Inline, like every other painted canvas element: the document canvas is not themed and
   // is not covered by the library's scoped utilities, so anything load-bearing for the

@@ -52,6 +52,72 @@ const GIF_1X1 = Buffer.from([
 ]);
 const SVG_MIN = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>');
 const TIFF_MIN = Buffer.from([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00]);
+
+/**
+ * A real, decodable TIFF: baseline uncompressed RGB, one strip, deterministic pixels.
+ *
+ * `TIFF_MIN` above is only a signature — enough to exercise the placeholder path, not
+ * enough to decode. Both byte orders are generated because the byte-order mark drives
+ * every subsequent read in the header validator.
+ */
+function tiffRgb(width, height, littleEndian) {
+  const pixels = Buffer.alloc(width * height * 3);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const at = (y * width + x) * 3;
+      // Four quadrants, so a wrong stride or byte order is visible rather than subtle.
+      pixels[at] = x * 2 < width ? 0xe0 : 0x20;
+      pixels[at + 1] = y * 2 < height ? 0xc0 : 0x30;
+      pixels[at + 2] = (x + y) % 16 < 8 ? 0xa0 : 0x40;
+    }
+  }
+
+  // Header (8) | pixels | IFD | out-of-line tag values.
+  const pixelsAt = 8;
+  const ifdAt = pixelsAt + pixels.length;
+  const entries = [
+    [256, 4, 1, width], // ImageWidth (LONG)
+    [257, 4, 1, height], // ImageLength (LONG)
+    [258, 3, 3, null], // BitsPerSample — three SHORTs do not fit inline
+    [259, 3, 1, 1], // Compression: none
+    [262, 3, 1, 2], // PhotometricInterpretation: RGB
+    [273, 4, 1, pixelsAt], // StripOffsets
+    [277, 3, 1, 3], // SamplesPerPixel
+    [278, 4, 1, height], // RowsPerStrip: the whole image
+    [279, 4, 1, pixels.length], // StripByteCounts
+    [296, 3, 1, 2], // ResolutionUnit: inch
+  ];
+  const valuesAt = ifdAt + 2 + entries.length * 12 + 4;
+  const bitsPerSample = Buffer.alloc(6);
+  const ifd = Buffer.alloc(2 + entries.length * 12 + 4);
+  const write16 = (buffer, at, value) =>
+    littleEndian ? buffer.writeUInt16LE(value, at) : buffer.writeUInt16BE(value, at);
+  const write32 = (buffer, at, value) =>
+    littleEndian ? buffer.writeUInt32LE(value, at) : buffer.writeUInt32BE(value, at);
+
+  for (let index = 0; index < 3; index += 1) write16(bitsPerSample, index * 2, 8);
+  write16(ifd, 0, entries.length);
+  entries.forEach(([tag, fieldType, count, value], index) => {
+    const at = 2 + index * 12;
+    write16(ifd, at, tag);
+    write16(ifd, at + 2, fieldType);
+    write32(ifd, at + 4, count);
+    if (value === null) write32(ifd, at + 8, valuesAt);
+    // A SHORT that fits inline sits in the first half of the value field, not right-aligned.
+    else if (fieldType === 3) write16(ifd, at + 8, value);
+    else write32(ifd, at + 8, value);
+  });
+  write32(ifd, 2 + entries.length * 12, 0); // no next IFD
+
+  const header = Buffer.alloc(8);
+  header.write(littleEndian ? 'II' : 'MM', 0, 'latin1');
+  write16(header, 2, 42);
+  write32(header, 4, ifdAt);
+  return Buffer.concat([header, pixels, ifd, bitsPerSample]);
+}
+
+const TIFF_RGB_LE = tiffRgb(96, 64, true);
+const TIFF_RGB_BE = tiffRgb(96, 64, false);
 const EMF_MIN = Buffer.from([0x01, 0x00, 0x00, 0x00, ...new Array(40).fill(0)]);
 const WMF_MIN = Buffer.from([0xd7, 0xcd, 0xc6, 0x9a, ...new Array(40).fill(0)]);
 
@@ -516,12 +582,53 @@ function buildImagesDrawingmlWatermark() {
   return basePackage(body, rels, { 'word/media/watermark.png': PNG_1X1 });
 }
 
+/**
+ * Decodable TIFF in both byte orders, next to the truncated one. A host with a TIFF
+ * converter renders the first two and leaves the third a labelled placeholder.
+ */
+function buildImagesTiff() {
+  const sources = [
+    ['tiff little-endian', 'rIdTiffLe', 'tiff-le.tif', TIFF_RGB_LE],
+    ['tiff big-endian', 'rIdTiffBe', 'tiff-be.tif', TIFF_RGB_BE],
+    ['tiff truncated', 'rIdTiffBad', 'tiff-bad.tif', TIFF_MIN],
+  ];
+  let bodyInner = '';
+  const rels = [
+    `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`,
+  ];
+  const media = {};
+  let id = 1;
+  for (const [name, relId, file, bytes] of sources) {
+    media[`word/media/${file}`] = bytes;
+    rels.push(`<Relationship Id="${relId}" Type="${IMAGE_REL}" Target="media/${file}"/>`);
+    bodyInner += paragraph(
+      name,
+      inlineDrawing({
+        id,
+        name,
+        blip: pictureBlip({ embed: relId, cNvPrId: id }),
+        // 96x64 at 96 dpi, in EMU, so the painted box matches the decoded raster.
+        extent: 'cx="914400" cy="609600"',
+      })
+    );
+    id += 1;
+  }
+  rels.push(`</Relationships>`);
+  const body =
+    `<w:document xmlns:w="${W}" xmlns:r="${R}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}"><w:body>` +
+    bodyInner +
+    SECT +
+    `</w:body></w:document>`;
+  return basePackage(body, rels.join(''), media);
+}
+
 const GENERATED = {
   'images-external.docx': buildImagesExternal,
   'images-wrap-sides.docx': buildImagesWrapSides,
   'images-crop.docx': buildImagesCrop,
   'images-zorder.docx': buildImagesZorder,
   'images-formats.docx': buildImagesFormats,
+  'images-tiff.docx': buildImagesTiff,
   'images-header.docx': buildImagesHeader,
   'images-nonpicture.docx': buildImagesNonpicture,
   'images-transform.docx': buildImagesTransform,
@@ -596,6 +703,24 @@ const EXISTING = [
     wordEvidence: 'pending (9.5)',
     tolerance: 'pending Word comparison',
   },
+  {
+    file: 'footer-textbox-page-fields.docx',
+    source:
+      'Word-authored, sanitized (length-preserving text scramble, neutral metadata and media)',
+    version: 'Microsoft Word (repository fixture)',
+    features: [
+      '42 sections',
+      'anchored page-positioned footer textboxes',
+      'PAGE and NUMPAGES fields inside textbox stories',
+      'stale cached field results',
+      'mc:AlternateContent wps/VML pairs',
+    ],
+    geometry: 'A4; page-relative posOffset anchors in footers 1, 2 and 4',
+    branch: 'textbox story layout',
+    refusal: 'cached field text never painted',
+    wordEvidence: 'pending (9.5)',
+    tolerance: 'fingerprint + digest equality',
+  },
 ];
 
 const GENERATED_META = [
@@ -604,6 +729,7 @@ const GENERATED_META = [
   ['images-crop.docx', 'non-empty a:srcRect', 'inline crop', 'crop permille preserved'],
   ['images-zorder.docx', 'relativeHeight, behindDoc, allowOverlap=0', 'two overlapping anchors', 'layer metadata'],
   ['images-formats.docx', 'PNG/JPEG/GIF/SVG/TIFF/EMF/WMF', 'seven inline drawings', 'ready vs placeholder'],
+  ['images-tiff.docx', 'baseline RGB TIFF, both byte orders, truncated', 'three inline drawings', 'converted raster vs placeholder'],
   ['images-header.docx', 'page-relative header anchor', 'HF furniture anchor', 'header flow height unchanged'],
   ['images-nonpicture.docx', 'chart, group, textbox', 'extent placeholders', 'non-picture refusal'],
   ['images-transform.docx', 'rotation, flipH, flipV', 'three inline drawings', 'transform paint metadata'],
@@ -645,7 +771,9 @@ async function main() {
   const manifestJson = JSON.stringify({ version: 1, entries }, null, 2);
   const md =
     `# Drawings fixture manifest\n\n` +
-    `Sixteen inputs for typed-drawings-and-images Task 17: six Word-authored repository fixtures plus ten deterministic builder outputs.\n\n` +
+    // Counted, not spelled out: a hand-written total silently goes stale the next time
+    // a fixture is added, and the manifest is the thing tests count against.
+    `${entries.length} inputs: ${EXISTING.length} Word-authored repository fixtures and ${GENERATED_META.length} deterministic builder outputs.\n\n` +
     `Regenerate focused fixtures:\n\n\`\`\`bash\nbun e2e/fixtures/build-drawing-fixtures.mjs\n\`\`\`\n\n` +
     `## Evidence status\n\n` +
     `- **9.5 Word visual comparison:** blocked — Microsoft Word desktop not available in CI/dev; \`screenshots/typed-drawings-word-comparison/\` holds editor output only, labeled NOT Word reference.\n` +

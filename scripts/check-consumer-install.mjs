@@ -6,7 +6,7 @@
 // This is the only check that reads a published manifest rather than a workspace one, so
 // it is the only place a `workspace:` range, a missing `exports` subpath or a `files` list
 // that drops a needed file can fail before a user hits it.
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -159,7 +159,37 @@ export default defineConfig({ plugins: [react()] });
     { cwd: reactAppDir }
   );
   run('npm', ['run', 'build'], { cwd: reactAppDir });
-  console.log('Fresh React consumer install/build passed.');
+
+  // The consumer has NO Tailwind and no PostCSS — exactly the host the shipped
+  // stylesheet must carry on its own. Assert the CSS vite emitted is the compiled,
+  // `.docx-editor`-scoped artifact: a raw `@tailwind` directive here means the chrome
+  // ships unstyled to Tailwind-less hosts and doubly-styled to Tailwind hosts.
+  const assetsDir = path.join(reactAppDir, 'dist', 'assets');
+  const emittedCss = readdirSync(assetsDir)
+    .filter((name) => name.endsWith('.css'))
+    .map((name) => readFileSync(path.join(assetsDir, name), 'utf8'))
+    .join('\n');
+  if (emittedCss.length === 0) {
+    throw new Error('consumer build emitted no CSS asset');
+  }
+  // The emitted CSS is MINIFIED: quotes drop from attribute selectors and the file is
+  // one line, so every check below is written against the minified shape.
+  const minified = emittedCss.replace(/\/\*[\s\S]*?\*\//g, '');
+  if (/@tailwind\b/.test(minified)) {
+    throw new Error('consumer CSS still contains a raw @tailwind directive');
+  }
+  if (!/\.docx-editor \.flex\b/.test(minified)) {
+    throw new Error('consumer CSS is missing .docx-editor-scoped utilities');
+  }
+  if (!/\.docx-editor \[contenteditable=["']?true["']?\]/.test(minified)) {
+    throw new Error('consumer CSS is missing the scoped [contenteditable] caret rule');
+  }
+  // A selector STARTING with [contenteditable (after {, }, comma, or file start)
+  // would reach every rich-text field in a host app.
+  if (/(^|[{},])\s*\[contenteditable/.test(minified)) {
+    throw new Error('consumer CSS contains an unscoped [contenteditable] rule');
+  }
+  console.log('Fresh React consumer install/build passed (CSS compiled and scoped).');
 } finally {
   if (process.env.KEEP_CONSUMER_INSTALL_TEMP !== '1') {
     rmSync(tempRoot, { recursive: true, force: true });

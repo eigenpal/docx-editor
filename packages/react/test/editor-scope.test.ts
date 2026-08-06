@@ -1,6 +1,6 @@
 // `editorScopeFor`: the instance scope, distinct from the styling scope.
 //
-// The chrome parts self-emit `.ep-root` (styling), so a bare `closest('.ep-root')` from
+// The chrome parts self-emit `.docx-editor` (styling), so a bare `closest('.docx-editor')` from
 // inside the toolbar or menu bar matches the part's own root — which contains no pages —
 // and Cmd+S scoping and focus-return silently broke. This pins the climb: past
 // styling-only roots to the container that actually holds the painted pages.
@@ -24,11 +24,11 @@ afterEach(() => {
 
 describe('editorScopeFor', () => {
   test('climbs past a self-scoped chrome root to the instance container', () => {
-    // The packaged arrangement: wrapper(.ep-root) > [toolbar(.ep-root), viewport(.ep-root) > pages]
-    const wrapper = el('ep-root', document.body);
-    const toolbar = el('ep-root docx-toolbar', wrapper);
+    // The packaged arrangement: wrapper(.docx-editor) > [toolbar(.docx-editor), viewport(.docx-editor) > pages]
+    const wrapper = el('docx-editor', document.body);
+    const toolbar = el('docx-editor docx-toolbar', wrapper);
     const button = el('docx-toolbar__button', toolbar);
-    const viewport = el('ep-root docx-editor-viewport', wrapper);
+    const viewport = el('docx-editor docx-editor-viewport', wrapper);
     el('docx-pages', viewport);
 
     // From inside the toolbar: NOT the toolbar's own styling root — the wrapper.
@@ -39,7 +39,7 @@ describe('editorScopeFor', () => {
   });
 
   test('a bare composition with no instance container resolves to null', () => {
-    const toolbar = el('ep-root docx-toolbar', document.body);
+    const toolbar = el('docx-editor docx-toolbar', document.body);
     const button = el('docx-toolbar__button', toolbar);
     expect(editorScopeFor(button)).toBeNull();
     expect(editorScopeFor(null)).toBeNull();

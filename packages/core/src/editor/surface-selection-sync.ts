@@ -102,8 +102,17 @@ export interface SurfaceSelectionSync {
   noteModelMoved(): void;
   /** Record that the two agree again, because the model's selection is being written out. */
   noteSelectionSettled(): void;
-  /** Write the model selection into the browser's own. */
-  mirrorToDom(): void;
+  /**
+   * Write the model selection into the browser's own.
+   *
+   * `claim` is for a DELIBERATE programmatic move — a host calling `setSelection`, a review
+   * card being opened — where the point of the call is to show the reader this range. The
+   * ordinary write refuses whenever the DOM selection lives outside these pages, which is
+   * the normal state when the request came from the host's own chrome: the caret moved and
+   * the model held a range that nothing on screen highlighted. Claiming writes the range
+   * anyway; it never moves FOCUS, so the host's own control keeps it.
+   */
+  mirrorToDom(claim?: boolean): void;
   /** Whether an IME is composing, which suspends repainting. */
   isComposing(): boolean;
   readonly onSelectionChange: () => void;
@@ -267,14 +276,15 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       modelMoved = false;
     },
 
-    mirrorToDom() {
+    mirrorToDom(claim = false) {
       // Ahead of the ownership guard: the caret is this engine's own, painted whether or not
       // the browser's selection lives here.
       deps.updateCaret();
       // Only when this surface owns the selection. A render runs on mount and on every commit
       // — including one from another editor sharing the store — and writing unconditionally
-      // yanked the caret out of whatever the user was actually typing in.
-      if (!ownsSelection()) return;
+      // yanked the caret out of whatever the user was actually typing in. A CLAIMED write is
+      // the exception: someone asked for this range on purpose.
+      if (!claim && !ownsSelection()) return;
       applyingSelection = true;
       const began = deps.now();
       applySelectionToDom(

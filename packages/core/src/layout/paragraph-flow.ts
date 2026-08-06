@@ -234,6 +234,34 @@ function wordBoundaries(text: string): number[] {
  * Measure text following a tab until the next tab or hard break, across mixed-style pieces.
  * Also reports the advance to the first decimal point for decimal-aligned stops.
  */
+/**
+ * Whether anything that occupies space still follows this tab on its own line.
+ *
+ * A TRAILING tab does not wrap in Word — same rule as a trailing space. Header lines are
+ * routinely authored as `LEFT<tab><tab><tab>RIGHT<tab><tab>`, and treating the last tabs
+ * as wrappable opened a new line per tab: the header grew by several lines, and because a
+ * header's flow height sets the body's effective top margin, the body was pushed down the
+ * page. Stops at a hard break, which ends the line anyway, and skips further tabs and
+ * spaces, which are themselves trimmed at the line end.
+ */
+function placeableContentFollows(
+  pieces: readonly Piece[],
+  pieceIndex: number,
+  offsetInPiece: number
+): boolean {
+  for (let index = pieceIndex; index < pieces.length; index += 1) {
+    const piece = pieces[index]!;
+    if (piece.inlineDrawing) return true;
+    const from = index === pieceIndex ? offsetInPiece : 0;
+    for (let cursor = from; cursor < piece.text.length; cursor += 1) {
+      const ch = piece.text[cursor]!;
+      if (ch === '\n' || ch === PAGE_BREAK_CHAR) return false;
+      if (ch !== '\t' && ch !== ' ') return true;
+    }
+  }
+  return false;
+}
+
 function measureFollowingTabSegment(
   pieces: readonly Piece[],
   pieceIndex: number,
@@ -1072,6 +1100,20 @@ export function breakParagraph(
     (line.drawings as InlineDrawingRecord[]).splice(0, line.drawings.length, ...repositioned);
   };
 
+  /**
+   * Height of the line's text band alone — the span an `auto` multiple scales.
+   *
+   * Recomputed from the spans rather than tracked alongside `line.height`, because it is only
+   * ever read on a line that also carries an inline drawing.
+   */
+  const textBandHeight = (fallback: number): number => {
+    let height = 0;
+    for (const span of line.spans) {
+      height = Math.max(height, measurer.lineMetrics(span.style).height);
+    }
+    return height > 0 ? height : fallback;
+  };
+
   const growLineHeightForDrawingExtent = (): void => {
     if (line.drawings.length === 0) return;
     const drawingExtent = Math.max(
@@ -1129,10 +1171,19 @@ export function breakParagraph(
     // Line spacing applies to the finished box, once, so a paragraph's rule governs every
     // line it produced regardless of which run happened to be tallest.
     const naturalHeight = line.height;
-    const spaced = applyLineSpacing(lineSpacing, naturalHeight, line.baseline);
-    line.baseline = spaced.baseline;
+    // `w:lineRule="auto"` is a multiple of the TEXT line (17.3.1.33), not of whatever height
+    // an inline drawing gave the box. Word grows an image line to contain the image and stops
+    // there; scaling the image's own extent by the multiple leaves a band of dead space under
+    // it — a content-width picture under the 279/240 Word writes by default picks up most of
+    // an inch. `growLineHeightForDrawingExtent` below is what re-imposes the drawing as a
+    // floor, so a multiple tall enough to exceed the image still wins, and the baseline is
+    // left alone because it is already the drawing's bottom rather than a text baseline.
+    const scalesTextBandOnly = lineSpacing.rule === 'auto' && line.drawings.length > 0;
+    const spacingBase = scalesTextBandOnly ? textBandHeight(metrics.height) : naturalHeight;
+    const spaced = applyLineSpacing(lineSpacing, spacingBase, line.baseline);
+    if (!scalesTextBandOnly) line.baseline = spaced.baseline;
     // Space ABOVE the glyph band only (exact centering, not auto/atLeast). Never negative.
-    line.leading = Math.max(0, spaced.baseline - glyphBaseline);
+    line.leading = Math.max(0, line.baseline - glyphBaseline);
     line.height = spaced.height;
     // Baseline shifts from line spacing must move inline drawings too, or authored distT/distB
     // and the text baseline drift apart. For `exact`, keep the authored box — tall drawings
@@ -1313,8 +1364,14 @@ export function breakParagraph(
 
       if (candidate === '\t') {
         // A tab that cannot advance on this line wraps first, then reapplies — matching
-        // Word's "tab past the right margin starts a new line" behaviour.
-        if ((line.spans.length > 0 || line.drawings.length > 0) && line.width >= lineAvailable())
+        // Word's "tab past the right margin starts a new line" behaviour. Unless it is
+        // TRAILING: a tab with nothing placeable after it ends the line rather than
+        // starting one, exactly as a trailing space does.
+        if (
+          (line.spans.length > 0 || line.drawings.length > 0) &&
+          line.width >= lineAvailable() &&
+          placeableContentFollows(pieces, pieceIndex, boundary)
+        )
           closeLine();
         const currentX = lineOrigin() + line.width;
         const segment = measureFollowingTabSegment(pieces, pieceIndex, boundary, measurer);

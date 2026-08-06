@@ -76,6 +76,10 @@ const ins = (id: string, inner: string, author = 'QA') =>
   `<w:ins w:id="${id}" w:author="${author}" w:date="D">${inner}</w:ins>`;
 const del = (id: string, inner: string, author = 'Dev') =>
   `<w:del w:id="${id}" w:author="${author}" w:date="D">${inner}</w:del>`;
+const insAt = (id: string, inner: string, date: string, author = 'QA') =>
+  `<w:ins w:id="${id}" w:author="${author}" w:date="${date}">${inner}</w:ins>`;
+const delAt = (id: string, inner: string, date: string, author = 'QA') =>
+  `<w:del w:id="${id}" w:author="${author}" w:date="${date}">${inner}</w:del>`;
 const cStart = (id: string) => `<w:commentRangeStart w:id="${id}"/>`;
 const cEnd = (id: string) =>
   `<w:commentRangeEnd w:id="${id}"/><w:r><w:commentReference w:id="${id}"/></w:r>`;
@@ -225,6 +229,111 @@ describe('a replacement says where its halves divide', () => {
     const part = story(`<w:p>${ins('1', run('new'))}</w:p>`);
     const item = revisionsOf(collectReviewItems({ storyPart: part }))[0]!;
     expect(item.replacedRangeCount).toBeUndefined();
+  });
+
+  test('halves stamped a day apart still pair — Word pairs on adjacency, not time', () => {
+    // Foreign files routinely hold a deletion struck one day and its replacement typed the
+    // next. One author, end to start: one Replaced card.
+    const part = story(
+      `<w:p>${run('keep ')}${delAt('2', delRun('old'), '2024-01-01T10:00:00Z')}` +
+        `${insAt('1', run('new'), '2024-01-02T09:00:00Z')}</w:p>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.revisionKind).toBe('replace');
+    expect(items[0]!.addresses).toHaveLength(2);
+    expect(items[0]!.replacedRangeCount).toBe(1);
+  });
+
+  test('the paired card is dated when the replacement was completed', () => {
+    const part = story(
+      `<w:p>${delAt('2', delRun('old'), '2024-01-01T10:00:00Z')}` +
+        `${insAt('1', run('new'), '2024-01-02T09:00:00Z')}</w:p>`
+    );
+    const item = revisionsOf(collectReviewItems({ storyPart: part }))[0]!;
+    expect(item.date).toBe('2024-01-02T09:00:00Z');
+  });
+
+  test('adjacent halves by different authors stay two cards', () => {
+    const part = story(
+      `<w:p>${delAt('2', delRun('old'), '2024-01-01T10:00:00Z', 'Ada')}` +
+        `${insAt('1', run('new'), '2024-01-01T10:00:00Z', 'Grace')}</w:p>`
+    );
+    const kinds = revisionsOf(collectReviewItems({ storyPart: part }))
+      .map((item) => item.revisionKind)
+      .sort();
+    expect(kinds).toEqual(['delete', 'insert']);
+  });
+
+  test('a word struck in three gestures pairs whole against its replacement', () => {
+    // Three sibling `w:del` elements under three ids, then the insertion typed a day later:
+    // one decision, one card — never `Deleted "mor"`, `Deleted "ni"`, `Deleted "ng"`,
+    // `Added "evening"`.
+    const part = story(
+      `<w:p>${run('at ')}${delAt('3', delRun('mor'), '2024-01-01T10:00:00Z')}` +
+        `${delAt('4', delRun('ni'), '2024-01-01T10:00:00Z')}` +
+        `${delAt('5', delRun('ng'), '2024-01-01T10:00:01Z')}` +
+        `${insAt('6', run('evening'), '2024-01-02T09:00:00Z')}</w:p>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.revisionKind).toBe('replace');
+    expect(items[0]!.replacedText).toBe('morning');
+    expect(items[0]!.text).toBe('evening');
+    expect(items[0]!.addresses).toHaveLength(4);
+    expect(items[0]!.replacedRangeCount).toBe(3);
+  });
+
+  test('adjacent same-author deletions with no insertion are one Deleted card', () => {
+    const part = story(
+      `<w:p>${run('keep ')}${delAt('3', delRun('mor'), '2024-01-01T10:00:00Z')}` +
+        `${delAt('4', delRun('ning'), '2024-01-01T10:00:05Z')}</w:p>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.revisionKind).toBe('delete');
+    expect(items[0]!.text).toBe('morning');
+    expect(items[0]!.addresses).toHaveLength(2);
+    expect(items[0]!.date).toBe('2024-01-01T10:00:05Z');
+  });
+
+  test('an untracked character between two deletions keeps them apart', () => {
+    const part = story(
+      `<w:p>${delAt('3', delRun('one'), '2024-01-01T10:00:00Z')}${run('x')}` +
+        `${delAt('4', delRun('two'), '2024-01-01T10:00:00Z')}</w:p>`
+    );
+    expect(revisionsOf(collectReviewItems({ storyPart: part }))).toHaveLength(2);
+  });
+
+  test('a zero-width insertion does not steal the pairing from the real one', () => {
+    // An inserted run carrying only run properties covers no characters, and it starts at
+    // exactly the offset the deletion ends at. Pairing with it produced a card that read
+    // Replaced "old" with nothing, and orphaned the words that actually replaced it.
+    const part = story(
+      `<w:p>${run('keep ')}${delAt('2', delRun('old'), '2024-01-01T10:00:00Z')}` +
+        `<w:ins w:id="3" w:author="QA" w:date="2024-01-01T10:00:00Z">` +
+        `<w:r><w:rPr><w:b/></w:rPr></w:r></w:ins>` +
+        `${insAt('4', run('new'), '2024-01-02T09:00:00Z')}</w:p>`
+    );
+    const replaced = revisionsOf(collectReviewItems({ storyPart: part })).find(
+      (item) => item.revisionKind === 'replace'
+    );
+    expect(replaced).toBeDefined();
+    expect(replaced!.replacedText).toBe('old');
+    expect(replaced!.text).toBe('new');
+  });
+
+  test('an insertion followed by a deletion stays two cards', () => {
+    // This engine only ever writes delete-then-insert; the reverse order in a foreign file
+    // is two edits, and folding them would be an invention.
+    const part = story(
+      `<w:p>${insAt('1', run('new'), '2024-01-01T10:00:00Z')}` +
+        `${delAt('2', delRun('old'), '2024-01-01T10:00:00Z')}</w:p>`
+    );
+    const kinds = revisionsOf(collectReviewItems({ storyPart: part }))
+      .map((item) => item.revisionKind)
+      .sort();
+    expect(kinds).toEqual(['delete', 'insert']);
   });
 });
 

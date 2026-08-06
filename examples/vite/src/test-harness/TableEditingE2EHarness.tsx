@@ -34,7 +34,7 @@ export function TableEditingE2EHarness({ fixtureUrl }: { fixtureUrl: string }) {
   });
 
   return (
-    <div className="ep-root demo-app" data-testid="table-editing-e2e-mount">
+    <div className="docx-editor demo-app" data-testid="table-editing-e2e-mount">
       {bytes ? (
         <DocxEditor.Root document={bytes} {...(fonts ? { fonts } : {})}>
           <E2EBridge />

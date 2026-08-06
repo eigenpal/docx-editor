@@ -59,7 +59,7 @@ export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
   const { document: bytes, fonts, error } = useDocxSource(fixtureUrl, { fonts: defaultFonts });
 
   return (
-    <div className="ep-root igloo-shell">
+    <div className="docx-editor igloo-shell">
       {/* The sea, behind everything and not scrolling with the page. */}
       <IceSea />
       {blizzard ? <Blizzard /> : null}

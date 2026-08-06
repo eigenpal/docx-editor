@@ -70,9 +70,12 @@ describe('Vue tree-lane wiring (phase 3)', () => {
   });
 
   test('both adapters mount the surface into the same shared container classes', () => {
+    // Matched as a CLASS, not a substring: `@docx-editor.dev/...` import specifiers
+    // contain the scope name, so `toContain('docx-editor')` passes even when no element
+    // carries it — which is the one thing this test exists to catch.
     for (const source of [editorSource, reactEditorSource]) {
-      expect(source).toContain('ep-root');
-      expect(source).toContain('docx-paginated-surface');
+      expect(source).toMatch(/class(Name)?[^\n]*\bdocx-editor\b/);
+      expect(source).toMatch(/class(Name)?[^\n]*\bdocx-paginated-surface\b/);
     }
   });
 

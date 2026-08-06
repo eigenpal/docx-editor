@@ -324,14 +324,22 @@ export interface TreeDocxSession {
    */
   hasReviewContent(): boolean;
 
-  /** Reply to a comment, or add one over a revision's range. Returns the new comment's id. */
+  /**
+   * Reply to a comment, or add one over a revision's range. Returns the new comment's id.
+   *
+   * `scope` names the story the anchor lives in and defaults to the body. A header or
+   * footer anchor written against the body store addresses a paragraph that store has
+   * never heard of, so the transaction is refused and the reply is lost — which is what
+   * replying to a header card did.
+   */
   replyToComment(
     parentCommentId: string | null,
     anchor: { paragraphId: string; start: number; end: number; endParagraphId?: string },
     text: string,
     author: string,
     /** ISO-8601. Omitted writes no `@w:date`, because inventing one is a content change. */
-    date?: string
+    date?: string,
+    scope?: StoryScope
   ): string | null;
   /**
    * Resolve a comment thread, or reopen it. False when the document holds no such comment.
@@ -1175,8 +1183,11 @@ export function openTreeSession(
         return reviewContentCache.present;
       },
 
-      replyToComment(parentCommentId, anchor, text, author, date) {
-        const store = bodyStore();
+      replyToComment(parentCommentId, anchor, text, author, date, scope = BODY_SCOPE) {
+        // The story that OWNS the anchor. Resolving a refused scope falls back to the body
+        // rather than throwing: the caller's next check is the null return either way.
+        const resolved = scope.kind === 'body' ? null : packageStore.resolveStory(scope);
+        const store = resolved?.ok ? resolved.store : bodyStore();
         // Captured BEFORE the graft, so the undo unit spans exactly what this write changed.
         const beforePackage = packageStore.currentPackage();
         const checkpoint = store.checkpoint();

@@ -238,11 +238,11 @@ export function PaginatedDocxEditorShell({
 
   return (
     <div
-      // `ep-root` is never dropped: the whole dark palette is scoped to `.ep-root.dark`, so
+      // `docx-editor` is never dropped: the whole dark palette is scoped to `.docx-editor.dark`, so
       // a host className that replaced it left the element carrying `dark` while every token
       // silently resolved light.
       className={[
-        'ep-root docx-editor docx-paginated-shell',
+        'docx-editor docx-paginated-shell',
         colorMode === 'dark' ? 'dark' : '',
         className ?? '',
       ]

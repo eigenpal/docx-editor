@@ -217,8 +217,8 @@ const INERT_RAIL: ReviewRailValue = {
     items: [],
     activeKey: null,
     setActive: () => {},
-    accept: () => {},
-    reject: () => {},
+    accept: () => false,
+    reject: () => false,
     remove: () => false,
     reply: () => false,
     selectionAnchorY: null,
@@ -375,6 +375,15 @@ function ReviewRoot({
     () => (excludeRevisionKinds ? { excludeRevisionKinds } : undefined),
     [excludeRevisionKinds]
   );
+
+  // What the rail hides, the caret must not activate: without this, clicking tracked
+  // text under a format or structural change activated a card this rail never renders,
+  // and nothing on screen lit up. Cleared on unmount so a rail-less host keeps the
+  // engine's unfiltered activation.
+  useEffect(() => {
+    editor?.setReviewActivationExclusions(excludeRevisionKinds ?? null);
+    return () => editor?.setReviewActivationExclusions(null);
+  }, [editor, excludeRevisionKinds]);
 
   const allReview = useReview(NO_PLACEMENT_REVIEW_QUERY);
   const review = useReview(railQuery);

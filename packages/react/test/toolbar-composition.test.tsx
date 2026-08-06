@@ -176,8 +176,8 @@ describe('the default arrangement', () => {
     // provide, since they resolve through the same catalogue as the code under test.
     expect(toolbar.textContent).not.toContain('toolbar.');
     expect(toolbar.textContent).not.toContain('formattingBar.');
-    // The bar self-emits the ep-root styling scope, like Loading and Viewport.
-    expect(toolbar.classList.contains('ep-root')).toBe(true);
+    // The bar self-emits the docx-editor styling scope, like Loading and Viewport.
+    expect(toolbar.classList.contains('docx-editor')).toBe(true);
   });
 
   test('LocaleProvider localizes a bare composed toolbar', () => {

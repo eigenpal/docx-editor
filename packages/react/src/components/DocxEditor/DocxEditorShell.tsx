@@ -140,7 +140,7 @@ export function DocxEditorShell({
         <ErrorBoundary onError={onEditorError}>
           <div
             ref={containerRef}
-            className={cn('ep-root docx-editor', isDark && 'dark', className)}
+            className={cn('docx-editor', isDark && 'dark', className)}
             style={containerStyle}
             data-testid="docx-editor"
           >

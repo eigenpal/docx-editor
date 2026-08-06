@@ -4,7 +4,7 @@ const monorepoRoot = path.resolve(__dirname, '../..');
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: ['class'],
-  important: '.ep-root',
+  important: '.docx-editor',
   content: [path.join(monorepoRoot, 'packages/react/src/**/*.{ts,tsx}')],
   theme: {
     extend: {

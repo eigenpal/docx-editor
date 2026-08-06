@@ -37,7 +37,10 @@ export function App() {
   }, []);
 
   return (
-    <div className="ep-root" style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div
+      className="docx-editor"
+      style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}
+    >
       <header style={BAR}>
         <input
           type="file"

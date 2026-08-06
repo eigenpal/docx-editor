@@ -234,15 +234,21 @@ export function revisionItemsOf(part: OoxmlPart): readonly ReviewRevisionItem[] 
   const cacheable = part.root.kind !== 'paragraph';
   if (cacheable) {
     const cached = revisionItemsCache.get(part.root);
-    if (cached) return cached;
+    // The name rides along because the items embed it (`ranges[*].partName`): a root is
+    // the cache key, and serving one part's items to another part that shares the root
+    // under a different name would stamp every range with the wrong part.
+    if (cached && cached.name === part.name) return cached.items;
   }
   const items = computeRevisionItemsOf(part);
-  if (cacheable) revisionItemsCache.set(part.root, items);
+  if (cacheable) revisionItemsCache.set(part.root, { name: part.name, items });
   return items;
 }
 
 /** Revision cards per part root, bounded like the site index above. */
-const revisionItemsCache = createRecentRootCache<readonly ReviewRevisionItem[]>(8);
+const revisionItemsCache = createRecentRootCache<{
+  readonly name: string;
+  readonly items: readonly ReviewRevisionItem[];
+}>(8);
 
 function computeRevisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
   const located = locateSites(part);
@@ -378,13 +384,19 @@ function computeRevisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
  * mints separate ids for the halves — so the pairing is done on ADJACENCY here rather than
  * on identity, which is the only thing that works for a file this engine did not write.
  *
- * Both addresses ride along, so accept and reject resolve the pair in one transaction.
+ * The same argument folds runs of one KIND first: a word struck in three gestures is three
+ * `w:del` elements under three ids, and listing `Deleted "Le"`, `Deleted "gor"`, `Deleted
+ * "a"` reads one edit as three. Adjacent same-kind, same-author items merge into one card
+ * before the halves pair, so the pair is whole-word against whole-word.
+ *
+ * Every address rides along, so accept and reject resolve the pair in one transaction.
  * Resolving half a replacement is never what the reviewer meant.
  */
 function pairReplacements(
-  items: readonly ReviewRevisionItem[],
+  allItems: readonly ReviewRevisionItem[],
   order: ReadonlyMap<string, number>
 ): ReviewRevisionItem[] {
+  const items = mergeAdjacentSameKindEdits(allItems);
   // Not `ranges.length === 1`. One tracked edit becomes SEVERAL `w:del` elements whenever the
   // struck text crosses something that is not text — an endnote or footnote reference, a
   // field, a break — because those cannot go inside the same wrapper. Requiring a single range
@@ -422,28 +434,40 @@ function pairReplacements(
     // The deletion's LAST range end: the end that actually meets the insertion's first
     // start when the halves span more than one range each.
     const end = deletion.ranges[deletion.ranges.length - 1]!.end;
-    const candidates = insertionsByStart.get(`${end.paragraphId} ${end.offset}`) ?? [];
+    const bucket = insertionsByStart.get(`${end.paragraphId} ${end.offset}`) ?? [];
+    // A ZERO-WIDTH insertion is not the replacement, even when it starts exactly here.
+    // Several legal shapes cover no characters: an empty run carrying only run properties,
+    // a comment reference, a bookmark pair. Taking the first candidate in the bucket paired
+    // the deletion with one of those, so the card read Replaced-old-with-nothing while the
+    // real insertion beside it was orphaned into an Inserted card of its own. Text-bearing
+    // candidates go first; order within each group is preserved.
+    const candidates =
+      bucket.length > 1
+        ? [...bucket].sort((a, b) => (a.text.length > 0 ? 0 : 1) - (b.text.length > 0 ? 0 : 1))
+        : bucket;
     for (const insertion of candidates) {
       if (taken.has(insertion.id)) continue;
+      // Same AUTHOR is the whole predicate, deliberately. A time window used to sit here
+      // too, but Word itself pairs on adjacency alone: a reviewer who strikes text one day
+      // and types its replacement the next still sees one `Replaced` card in Word, and the
+      // halves of a foreign file routinely carry timestamps hours or days apart. Splitting
+      // those into a Deleted and an Inserted card misread one edit as two.
       if (insertion.author !== deletion.author) continue;
-      // Same MOMENT, not just the same author. Adjacency alone folded two edits an hour
-      // apart into one card, and accepting it then resolved a revision the reviewer was not
-      // looking at. The window matches the write side's.
-      if (!sameMoment(deletion.date, insertion.date)) continue;
       taken.add(deletion.id);
       taken.add(insertion.id);
       // Anchored at whichever half comes FIRST, so the card sits where the edit starts.
       const first = before(deletion.ranges[0]!, insertion.ranges[0]!, order) ? deletion : insertion;
+      // The card is dated when the replacement was COMPLETED: the later half's stamp.
+      const date = replacementDate(deletion.date, insertion.date);
       replacements.set(deletion.id, {
         ...first,
         id: `replace-${deletion.id}-${insertion.id}`,
         revisionKind: 'replace',
+        ...(date === undefined ? {} : { date }),
         // DEDUPED: when this engine wrote the replacement both halves share one identity,
         // and applying the same `acceptRevision` twice in one transaction refuses the second
         // — which refused the whole thing and left the replacement unresolved.
-        addresses: sameAddress(deletion.address, insertion.address)
-          ? [deletion.address]
-          : [deletion.address, insertion.address],
+        addresses: dedupeAddresses([...deletion.addresses, ...insertion.addresses]),
         text: insertion.text,
         replacedText: deletion.text,
         ranges: [...deletion.ranges, ...insertion.ranges],
@@ -467,21 +491,128 @@ function pairReplacements(
   return out;
 }
 
+/**
+ * Fold chains of ADJACENT items of one kind by one author into single cards.
+ *
+ * A word struck in several gestures — or re-struck around something a `w:del` cannot
+ * contain — lands in the file as several sibling elements under distinct ids. They are one
+ * decision to the reviewer, and Word shows them as one. Adjacency is the same exact
+ * end-to-start test the replacement pairing uses, so an untracked character between two
+ * deletions keeps them apart.
+ */
+function mergeAdjacentSameKindEdits(
+  items: readonly ReviewRevisionItem[]
+): readonly ReviewRevisionItem[] {
+  const mergeable = items.filter(
+    (item) =>
+      (item.revisionKind === 'insert' || item.revisionKind === 'delete') &&
+      !item.readOnly &&
+      item.ranges.length > 0
+  );
+  if (mergeable.length < 2) return items;
+
+  const keyOf = (item: ReviewRevisionItem, position: ReviewPosition): string =>
+    `${item.revisionKind} ${item.author} ${position.paragraphId} ${position.offset}`;
+  const byStart = new Map<string, ReviewRevisionItem>();
+  const endKeys = new Set<string>();
+  for (const item of mergeable) {
+    byStart.set(keyOf(item, item.ranges[0]!.start), item);
+    endKeys.add(keyOf(item, item.ranges[item.ranges.length - 1]!.end));
+  }
+
+  const consumed = new Set<string>();
+  const merged = new Map<string, ReviewRevisionItem>();
+  for (const head of mergeable) {
+    if (consumed.has(head.id)) continue;
+    // A chain is walked from its HEAD only — an item whose start some sibling's end meets
+    // is a tail, and walking it early would split the chain in two.
+    if (endKeys.has(keyOf(head, head.ranges[0]!.start))) continue;
+    const chain = [head];
+    let current = head;
+    for (;;) {
+      const next = byStart.get(keyOf(current, current.ranges[current.ranges.length - 1]!.end));
+      if (!next || next === current || consumed.has(next.id)) break;
+      consumed.add(next.id);
+      chain.push(next);
+      current = next;
+    }
+    if (chain.length > 1) merged.set(head.id, foldChain(chain));
+  }
+  if (merged.size === 0) return items;
+
+  const out: ReviewRevisionItem[] = [];
+  for (const item of items) {
+    if (consumed.has(item.id)) continue;
+    out.push(merged.get(item.id) ?? item);
+  }
+  return out;
+}
+
+/** One card from a chain of adjacent same-kind halves, in document order. */
+function foldChain(chain: readonly ReviewRevisionItem[]): ReviewRevisionItem {
+  const first = chain[0]!;
+  const addresses = [...first.addresses];
+  const ranges = [...first.ranges];
+  let text = first.text;
+  let date = first.date;
+  for (const next of chain.slice(1)) {
+    for (const address of next.addresses) {
+      if (!addresses.some((known) => sameAddress(known, address))) addresses.push(address);
+    }
+    for (const range of next.ranges) ranges.push(range);
+    text += next.text;
+    date = laterStamp(date, next.date);
+  }
+  return {
+    ...first,
+    id: chain.map((item) => item.id).join('+'),
+    addresses,
+    ranges,
+    text,
+    ...(date === undefined ? {} : { date }),
+  };
+}
+
+/** The later of two stamps; the first one when they cannot be compared. */
+function laterStamp(a: string | undefined, b: string | undefined): string | undefined {
+  if (a === undefined) return b;
+  if (b === undefined) return a;
+  const first = Date.parse(a);
+  const second = Date.parse(b);
+  if (Number.isNaN(first) || Number.isNaN(second)) return a;
+  return second > first ? b : a;
+}
+
+/** Every address once, keeping first-seen order. */
+function dedupeAddresses(addresses: readonly RevisionAddress[]): RevisionAddress[] {
+  const out: RevisionAddress[] = [];
+  for (const address of addresses) {
+    if (!out.some((known) => sameAddress(known, address))) out.push(address);
+  }
+  return out;
+}
+
 /** Two addresses naming one revision. */
 function sameAddress(a: RevisionAddress, b: RevisionAddress): boolean {
   return a.id === b.id && a.author === b.author && (a.date ?? '') === (b.date ?? '');
 }
 
-/** The same editing moment, by the same rule the writer coalesces on. */
-function sameMoment(a: string | undefined, b: string | undefined): boolean {
-  if (a === undefined || b === undefined) return a === b;
-  const from = Date.parse(a);
-  const to = Date.parse(b);
-  if (Number.isNaN(from) || Number.isNaN(to)) return a === b;
-  return Math.abs(to - from) <= PAIR_WINDOW_MS;
+/**
+ * When the replacement was completed: the later of the two halves' stamps. Preference goes
+ * to the insertion whenever the stamps cannot be compared — the inserted text is the half
+ * the reviewer reads as "the edit", and typing it is the gesture that finished the change.
+ */
+function replacementDate(
+  deletion: string | undefined,
+  insertion: string | undefined
+): string | undefined {
+  if (insertion === undefined) return deletion;
+  if (deletion === undefined) return insertion;
+  const struck = Date.parse(deletion);
+  const typed = Date.parse(insertion);
+  if (Number.isNaN(struck) || Number.isNaN(typed)) return insertion;
+  return struck > typed ? deletion : insertion;
 }
-
-const PAIR_WINDOW_MS = 60_000;
 
 /** Document order of two ranges' starts. */
 function before(a: ReviewRange, b: ReviewRange, order: ReadonlyMap<string, number>): boolean {
@@ -653,8 +784,10 @@ export function collectReviewItems(input: ReviewModelInput): ReviewItem[] {
   const order: ReadonlyMap<string, number> =
     parts.length === 1 ? paragraphOrderOfPart(parts[0]!) : new Map<string, number>();
   for (const part of parts) {
-    revisions.push(...revisionItemsOf(part));
-    anchors.push(...commentAnchorsOfStory(part));
+    // Loops, not `push(...spread)`: a heavily tracked part yields tens of thousands of
+    // items, and spreading them as call arguments overflows the engine's argument limit.
+    for (const item of revisionItemsOf(part)) revisions.push(item);
+    for (const anchor of commentAnchorsOfStory(part)) anchors.push(anchor);
     if (parts.length === 1) continue;
     const merged = order as Map<string, number>;
     const base = merged.size;
@@ -846,6 +979,32 @@ export function paragraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, numbe
 
 /** The paragraph order index per part root, bounded like {@link locatedSitesCache}. */
 const paragraphOrderCache = createRecentRootCache<Map<string, number>>(8);
+
+/**
+ * Like {@link paragraphOrderOfPart}, but descends INTO paragraphs, so paragraphs nested
+ * in a run's content — a textbox's `w:txbxContent` — rank right after their host.
+ *
+ * A separate function on purpose: the shallow order feeds the review queue's card
+ * ordering, and re-ranking nested paragraphs there would move cards. This one exists for
+ * position containment tests ("is the caret inside this range"), where a paragraph the
+ * shallow order cannot see is a position that can never match.
+ */
+export function deepParagraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, number> {
+  const cached = deepParagraphOrderCache.get(part.root);
+  if (cached) return cached;
+  const order = new Map<string, number>();
+  const walk = (node: OoxmlNode, depth: number): void => {
+    if (node.kind === 'textValue' || depth > 64) return;
+    if (node.kind === 'paragraph' && !order.has(node.id)) order.set(node.id, order.size);
+    for (const child of node.children) walk(child, depth + 1);
+  };
+  walk(part.root, 0);
+  deepParagraphOrderCache.set(part.root, order);
+  return order;
+}
+
+/** The deep paragraph order per part root, bounded like the shallow one above. */
+const deepParagraphOrderCache = createRecentRootCache<Map<string, number>>(8);
 
 /** Paragraph ids of one table subtree, in reading order, per immutable table node. */
 const tableParagraphIdsCache = new WeakMap<OoxmlNode, readonly string[]>();

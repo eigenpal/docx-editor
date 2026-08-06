@@ -456,7 +456,7 @@ export function DocxEditorContextMenu({
               // One tab stop for the whole panel, which is the menu pattern: rows are
               // reached with the arrows, never with Tab.
               tabIndex={-1}
-              className={`ep-root docx-toolbar__menu docx-contextmenu${className ? ` ${className}` : ''}`}
+              className={`docx-editor docx-toolbar__menu docx-contextmenu${className ? ` ${className}` : ''}`}
               style={style}
               onKeyDown={(event) => {
                 const panel = panelRef.current;

@@ -40,7 +40,7 @@ function docx(): Uint8Array {
 }
 
 /** A mounted editor inside a real scroll container, sized so pages fall out of view. */
-function mount(): { editor: DocxEditorInstance; scroller: HTMLElement } {
+function mount(): { editor: DocxEditorInstance; scroller: HTMLElement; host: HTMLElement } {
   const scroller = document.createElement('div');
   scroller.className = 'docx-editor__scroll-container';
   const container = document.createElement('div');
@@ -63,7 +63,9 @@ function mount(): { editor: DocxEditorInstance; scroller: HTMLElement } {
   }) as HTMLElement['scrollTo'];
   const editor = createDocxEditor({ container, document: docx() });
   if (!editor.surface) throw new Error('surface failed to mount');
-  return { editor, scroller };
+  // The mounted container rides along so DOM queries stay scoped to THIS editor: a
+  // document-wide query picks up a surface an earlier test in the same process left behind.
+  return { editor, scroller, host: container };
 }
 
 describe('scrollToPage / scrollToBlock actually scroll', () => {
@@ -114,6 +116,80 @@ describe('scrollToPage / scrollToBlock actually scroll', () => {
     document.body.append(container);
     const editor = createDocxEditor({ container, document: docx() });
     expect(editor.scrollToPage(2)).toBe(false);
+    editor.destroy();
+  });
+});
+
+describe('revealPosition and the setSelection command scroll without focus', () => {
+  test('revealPosition scrolls to an exact offset and refuses an unknown paragraph', () => {
+    const { editor, scroller } = mount();
+    const ids = editor.surface!.session.paragraphIds();
+    const last = ids[ids.length - 1]!;
+    expect(editor.surface!.revealPosition({ paragraphId: last, offset: 3 })).toBe(true);
+    expect(scroller.scrollTop).toBeGreaterThan(0);
+    expect(editor.surface!.revealPosition({ paragraphId: 'no-such-paragraph', offset: 0 })).toBe(
+      false
+    );
+    editor.destroy();
+  });
+
+  test('a programmatic selection paints its highlight even with focus outside the pages', () => {
+    // The highlight IS the browser's own selection, and the mirror refuses to write it
+    // whenever the DOM selection lives outside these pages — the normal state when the
+    // request came from the host's chrome (a review card takes focus on mousedown). The
+    // model then held a range that nothing on screen showed, which is "setSelection does
+    // not highlight" as a user sees it.
+    const { editor, host } = mount();
+    // The host's own chrome holds BOTH focus and the browser's selection — the state a
+    // review card leaves behind when it focuses itself on mousedown.
+    const outside = document.createElement('div');
+    outside.textContent = 'host chrome';
+    outside.tabIndex = 0;
+    document.body.append(outside);
+    outside.focus();
+    const hostRange = document.createRange();
+    hostRange.selectNodeContents(outside);
+    const domSelection = document.getSelection()!;
+    domSelection.removeAllRanges();
+    domSelection.addRange(hostRange);
+    expect(domSelection.anchorNode && outside.contains(domSelection.anchorNode)).toBe(true);
+
+    const ids = editor.surface!.session.paragraphIds();
+    const target = ids[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: target, offset: 0 },
+      head: { paragraphId: target, offset: 5 },
+    });
+
+    const dom = document.getSelection()!;
+    expect(dom.rangeCount).toBeGreaterThan(0);
+    // The selection has to have MOVED into THIS editor's pages — left in the host's chrome
+    // it highlights the host's own text and the document shows nothing.
+    expect(dom.anchorNode && host.contains(dom.anchorNode)).toBe(true);
+    expect(dom.isCollapsed).toBe(false);
+
+    outside.remove();
+    editor.destroy();
+  });
+
+  test('the setSelection command reveals its head even with focus outside the pages', () => {
+    const { editor, scroller } = mount();
+    // The realistic host state: a toolbar button or automation call holds focus, which is
+    // exactly what kept the caret-follow scroll from ever firing for this command.
+    expect(document.activeElement?.closest('.docx-pages') ?? null).toBeNull();
+    const ids = editor.surface!.session.paragraphIds();
+    const last = ids[ids.length - 1]!;
+    const result = editor.exec({
+      type: 'setSelection',
+      range: {
+        anchor: { paragraphId: last, offset: 0 },
+        head: { paragraphId: last, offset: 4 },
+      },
+    });
+    expect(result.ok).toBe(true);
+    // A RANGE selection: the internal caret-follow explicitly sits those out, so a moved
+    // viewport proves the command scrolled on its own.
+    expect(scroller.scrollTop).toBeGreaterThan(0);
     editor.destroy();
   });
 });

@@ -16,9 +16,9 @@
 // bytes and of font faces. It is optional — the default already covers a `Root` mounted
 // while its document is still on the way, which is the common shape.
 //
-// SELF-SUFFICIENT STYLING. The `--doc-*` tokens are defined on `.ep-root`, and `Root`
+// SELF-SUFFICIENT STYLING. The `--doc-*` tokens are defined on `.docx-editor`, and `Root`
 // renders no DOM — so a part placed as a sibling of the Viewport would sit outside any
-// token scope and paint an unresolved, contrast-free ring. This emits `ep-root` itself,
+// token scope and paint an unresolved, contrast-free ring. This emits `docx-editor` itself,
 // exactly as `DocxEditorViewport` does, so it looks right wherever it is composed.
 
 import type { CSSProperties, ReactNode } from 'react';
@@ -43,7 +43,7 @@ export interface DocxEditorLoadingProps {
    * provider only after those resolve.
    */
   when?: boolean;
-  /** Appended after the load-bearing `ep-root docx-editor__loading` classes. */
+  /** Appended after the load-bearing `docx-editor docx-editor__loading` classes. */
   className?: string;
   /** Inline styles for the loading container, as on `DocxEditor.Viewport`. */
   style?: CSSProperties;
@@ -92,7 +92,7 @@ function DocxEditorLoadingImpl({
 
   return (
     <div
-      className={`ep-root docx-editor__loading${className ? ` ${className}` : ''}`}
+      className={`docx-editor docx-editor__loading${className ? ` ${className}` : ''}`}
       style={style}
       role="status"
       aria-live="polite"
@@ -146,7 +146,7 @@ export interface DocxEditorLoadingComponent {
  * report otherwise — the same rule `useEditorState` documents for a null editor. Place
  * it inside the provider unless a permanently-visible placeholder is what you want.
  *
- * Carries its own `ep-root`, so the theme tokens resolve wherever it is composed.
+ * Carries its own `docx-editor`, so the theme tokens resolve wherever it is composed.
  *
  * @public
  */

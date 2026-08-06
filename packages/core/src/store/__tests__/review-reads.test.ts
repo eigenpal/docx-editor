@@ -17,7 +17,9 @@ import {
   commentBodyText,
   commentPartNameOf,
   commentsExtendedPartNameOf,
+  deepParagraphOrderOfPart,
   locateSites,
+  paragraphOrderOfPart,
   readOoxmlPackage,
   readOoxmlPart,
   revisionItemsOf,
@@ -140,5 +142,66 @@ describe('tracked rows inside a textbox keep their anchors', () => {
     expect(card!.ranges[0]!.start.paragraphId).toBe(boxParagraphId);
     // The memoized index answers repeat reads with the same instance.
     expect(locateSites(part)).toBe(located);
+  });
+});
+
+describe('the deep paragraph order reaches paragraphs the shallow one cannot', () => {
+  // A position the order index cannot see is an item that can never become active: the
+  // surface resolves both the caret's and a range's paragraphs through it. The shallow
+  // order stops at the host paragraph, so a tracked change inside a textbox was
+  // permanently unactivatable.
+  test('a textbox paragraph is ordered right after its host, and never reorders the body', () => {
+    const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const result = readOoxmlPart(
+      `<w:document xmlns:w="${W_NS}" xmlns:v="urn:schemas-microsoft-com:vml"><w:body>` +
+        `<w:p><w:r><w:t>first</w:t></w:r></w:p>` +
+        `<w:p><w:r><w:pict><v:textbox><w:txbxContent>` +
+        `<w:p><w:r><w:t>in the box</w:t></w:r></w:p>` +
+        `</w:txbxContent></v:textbox></w:pict></w:r></w:p>` +
+        `<w:p><w:r><w:t>last</w:t></w:r></w:p>` +
+        `</w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!result.ok) throw new Error(result.reason);
+    const part = result.part;
+
+    const shallow = paragraphOrderOfPart(part);
+    const deep = deepParagraphOrderOfPart(part);
+    expect(deep.size).toBe(shallow.size + 1);
+    for (const id of shallow.keys()) expect(deep.has(id)).toBe(true);
+
+    // The nested paragraph sits between its host and the block after it.
+    const hostId = [...shallow.keys()][1]!;
+    const afterId = [...shallow.keys()][2]!;
+    const nestedId = [...deep.keys()].find((id) => !shallow.has(id))!;
+    expect(deep.get(nestedId)!).toBeGreaterThan(deep.get(hostId)!);
+    expect(deep.get(nestedId)!).toBeLessThan(deep.get(afterId)!);
+
+    // Repeat reads are memoized on the immutable root.
+    expect(deepParagraphOrderOfPart(part)).toBe(deep);
+  });
+});
+
+describe('the revision-card memo is keyed on the part, not just its root', () => {
+  test('two parts sharing one root under different names each get their own part name', () => {
+    const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const result = readOoxmlPart(
+      `<w:document xmlns:w="${W_NS}"><w:body>` +
+        `<w:p><w:ins w:id="1" w:author="QA" w:date="2024-01-01T00:00:00Z">` +
+        `<w:r><w:t>alpha</w:t></w:r></w:ins></w:p>` +
+        `</w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!result.ok) throw new Error(result.reason);
+    const part = result.part;
+    // The items embed `ranges[*].partName`; a root-only cache key would hand the second
+    // part the first part's stamped ranges.
+    const first = revisionItemsOf(part);
+    expect(first[0]!.ranges[0]!.partName).toBe('/word/document.xml');
+    const renamed = revisionItemsOf({ ...part, name: '/word/header1.xml' });
+    expect(renamed[0]!.ranges[0]!.partName).toBe('/word/header1.xml');
+    // And the original still answers with its own name (recomputed or re-cached — either
+    // way, never the other part's).
+    expect(revisionItemsOf(part)[0]!.ranges[0]!.partName).toBe('/word/document.xml');
   });
 });
