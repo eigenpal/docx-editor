@@ -39,6 +39,23 @@ try {
 The first sync retrieves the collection's items. Only then are the individual paragraphs
 available to ask for their text, so the second sync retrieves those property values.
 
+Bookmarks are discoverable from the story that owns them, without searching for target text first:
+
+```ts
+await runtime.run(async (context) => {
+  const bookmarks = context.document.body.bookmarks;
+  bookmarks.load();
+  await context.sync();
+
+  for (const bookmark of bookmarks.items) bookmark.load('name');
+  await context.sync();
+  console.log(bookmarks.items.map(({ name }) => name));
+});
+```
+
+That collection covers the main body story only. Header and footer bodies have separate bookmark
+collections; there is no document-wide aggregation.
+
 Four rules carry most of the API:
 
 - **Read what you asked for.** A property you did not `load()` throws instead of answering

@@ -127,6 +127,13 @@ The following APIs are absent from the public types, so code that uses them fail
   await context.sync();
   ```
 
+DocxEditor also adds the read-only `ContentControl.isBound` boolean. Load it before choosing a
+control for `setValue()` to skip controls whose value is mapped through OOXML `w:dataBinding`.
+The flag exposes presence only: it never returns the XPath, namespace mappings, custom XML store
+identifier, or custom XML content, and it never resolves or fetches the target. It is advisory
+preflight rather than a race-free guarantee. The atomic write at `sync()` rechecks the current
+document and still refuses a bound control if the file changed after `isBound` was loaded.
+
 ## Migrating an add-in
 
 1. Replace `Word.run(async (context) => { … })` with a runtime you construct: `DocxEditor.createServer(bytes)` on a server, `DocxEditor.createBrowser(editor)` in a page. The callback body is the part that stays the same.

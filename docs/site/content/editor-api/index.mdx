@@ -92,6 +92,10 @@ to keep that browser code out of the bundle.
   `runtime.run(object, callback)` for adoption. No proxy survives `dispose()`.
 - `getFirstOrNullObject` and `getLastOrNullObject` answer an object whose `isNullObject` is `true` after the sync, which is the difference between "no such heading" and a crash.
 
+For content-control writes, load `isBound` with the other properties and skip controls where it is
+true. That boolean is safe preflight metadata, not a write guarantee: `sync()` always checks the
+current document again and atomically refuses the batch if a control is bound by then.
+
 ## Capabilities
 
 `runtime.capabilities` reports host differences. `save` is false in the browser; `selection`,
