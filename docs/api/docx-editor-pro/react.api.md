@@ -97,6 +97,11 @@ export interface ReviewActionProps extends ReviewPartProps {
 }
 
 // @public
+export interface ReviewActivationOptions {
+    readonly reveal?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' | false;
+}
+
+// @public
 export type ReviewItemView = ReviewItemPlacement;
 
 // @public
@@ -173,7 +178,7 @@ export interface UseReviewReturn {
     readonly remove: (item: ReviewItemView) => boolean;
     readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
     readonly selectionAnchorY: number | null;
-    readonly setActive: (key: string | null) => boolean;
+    readonly setActive: (key: string | null, options?: ReviewActivationOptions) => boolean;
     readonly setPaneOpen: (open: boolean) => void;
 }
 
