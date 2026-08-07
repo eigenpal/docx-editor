@@ -1,0 +1,29 @@
+{
+  "name": "docx-editor-example-agent",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3003",
+    "build": "next build",
+    "start": "next start --port 3003"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^3.0.54",
+    "@ai-sdk/react": "^3.0.171",
+    "@docx-editor.dev/core": "workspace:*",
+    "@docx-editor.dev/editor-api": "workspace:*",
+    "@docx-editor.dev/pro": "workspace:*",
+    "@docx-editor.dev/react": "workspace:*",
+    "ai": "^6.0.169",
+    "fflate": "^0.8.2",
+    "next": "^16.2.7",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^6.0.3"
+  }
+}
