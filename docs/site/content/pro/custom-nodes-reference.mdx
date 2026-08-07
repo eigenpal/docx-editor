@@ -36,13 +36,13 @@ What the node carries and shows:
 
 Presentation and interaction:
 
-| Parameter             | Type                                                   | Description                                  |
-| --------------------- | ------------------------------------------------------ | -------------------------------------------- |
-| `label`               | `string`                                               | Display name for chrome. Defaults to `name`. |
-| `chrome.color`        | `string`                                               | Chip tint and border.                        |
-| `reviewCard`          | `({ attrs, text, data }) => { title, detail } \| null` | Contributes a sidebar card per node.         |
-| `onClick` / `onHover` | `(node: ActivatedCustomNode) => void`                  | Pointer events on the painted chip.          |
-| `onEdit`              | `(node: ActivatedCustomNode) => void`                  | The context menu's "Edit \{label}" row.      |
+| Parameter             | Type                                                         | Description                                                                                 |
+| --------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `label`               | `string`                                                     | Display name for chrome. Defaults to `name`.                                                |
+| `chrome.color`        | `string`                                                     | Chip tint and border.                                                                       |
+| `reviewCard`          | `({ attrs, text, data }) => { title, detail, icon } \| null` | Contributes a sidebar card per node. `icon` is an SVG path for the collapsed rail's marker. |
+| `onClick` / `onHover` | `(node: ActivatedCustomNode) => void`                        | Pointer events on the painted chip.                                                         |
+| `onEdit`              | `(node: ActivatedCustomNode) => void`                        | The context menu's "Edit \{label}" row.                                                     |
 
 Advanced:
 

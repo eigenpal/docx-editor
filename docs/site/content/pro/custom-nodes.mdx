@@ -314,6 +314,18 @@ function CitationActions() {
 
 This needs the review module registered alongside the custom-nodes module.
 
+Return `icon` too — an SVG path in a `0 -960 960 960` viewBox — and it becomes this node's marker
+in the gutter when the pane is closed. Without one every marker is the generic comment bubble, so a
+citation and a tracked deletion look the same until the pane is opened. Host-authored: the path
+lands in an SVG `d` attribute, so never build it from `attrs` or `text`.
+
+```ts
+reviewCard: ({ data }) => ({
+  title: `Citation — ${data?.sourceId ?? 'unknown source'}`,
+  icon: 'M300-80q-58 0-99-41t-41-99v-520q0-58 41-99t99-41h500v600q-25 0…',
+}),
+```
+
 ## Next steps
 
 - [Custom nodes reference](/docs/2.x/pro/custom-nodes-reference): every parameter, every error code,
