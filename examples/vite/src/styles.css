@@ -310,6 +310,10 @@
   pointer-events: none;
 }
 
+.server-automation {
+  left: 220px;
+}
+
 /* Mobile responsive overrides */
 @media (max-width: 768px) {
   /* The toolbar collapses its groups into More instead of wrapping. It must not become a
@@ -329,6 +333,10 @@
      small screens. */
   .demo-vruler {
     display: none;
+  }
+
+  .server-automation {
+    left: 174px;
   }
 }
 

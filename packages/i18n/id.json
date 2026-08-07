@@ -582,6 +582,22 @@
     "convertAllEndnotes": "Konversi semua catatan akhir ke catatan kaki",
     "inheritedValue": "(diwarisi)"
   },
+  "serverAutomation": {
+    "badge": null,
+    "failed": null,
+    "hide": null,
+    "idle": null,
+    "load": null,
+    "loaded": null,
+    "prepare": null,
+    "prepared": null,
+    "query": null,
+    "result": null,
+    "running": null,
+    "show": null,
+    "subtitle": null,
+    "title": null
+  },
   "review": {
     "accept": "Terima",
     "ariaLabel": "Tinjau",
