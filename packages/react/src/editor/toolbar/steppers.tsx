@@ -362,12 +362,7 @@ function ToolbarZoomImpl({ className, hidden }: ToolbarSlotPartProps) {
   const autoSelected = sameZoomMode(mode, AUTO_ZOOM_MODE);
   const fitWidthSelected = sameZoomMode(mode, FIT_WIDTH_ZOOM_MODE);
   return (
-    <span
-      ref={rootRef}
-      className="docx-toolbar__zoom"
-      data-slot="zoom.level"
-      {...(isFit ? { 'data-fit': '' } : {})}
-    >
+    <span ref={rootRef} className="docx-toolbar__zoom" data-slot="zoom.level">
       <StepperShell
         className={className}
         groupLabel={label('zoom.zoomLevel')}

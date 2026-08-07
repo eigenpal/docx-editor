@@ -18,6 +18,9 @@ import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { useZoom, type UseZoomResult } from '../src/editor/useZoom.ts';
 import { navigationShift } from '../src/editor/navigation/navigation-geometry.ts';
+import { selectPaneGeometry } from '../src/editor/navigation/useNavigationPane.ts';
+import { LOADING_SNAPSHOT } from '../src/editor/loading-snapshot.ts';
+import type { ZoomMode } from '@docx-editor.dev/core/contracts/editor';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -58,6 +61,20 @@ class WidthObserver {
 }
 
 let observers: WidthObserver[] = [];
+
+
+const AUTO: ZoomMode = { type: 'fit', fit: 'pageWidth', minZoom: 0.5, maxZoom: 1 };
+const FIXED: ZoomMode = { type: 'fixed' };
+
+/**
+ * What `useNavigationPane` would pass as `docked` for this snapshot.
+ *
+ * Reads the hook's own selector rather than restating its rule, so a change to the predicate
+ * moves this test instead of leaving it agreeing with a stale copy.
+ */
+function paneDocking(zoom: number, mode: ZoomMode): boolean {
+  return selectPaneGeometry({ ...LOADING_SNAPSHOT, zoom, zoomMode: mode }).fitting;
+}
 
 function Probe({ onRender }: { onRender: (zoom: UseZoomResult) => void }) {
   onRender(useZoom());
@@ -142,7 +159,7 @@ describe('useZoom', () => {
 
   test('the steppers walk the same ladder the toolbar shows', async () => {
     const mounted = mount();
-    expect(mounted.zoom().levels).toEqual([0.5, 0.75, 1, 1.25, 1.5, 2]);
+    expect(mounted.zoom().levels).toEqual([0.25, 0.5, 0.75, 1, 1.25, 1.5, 2]);
 
     await act(async () => mounted.zoom().zoomIn());
     expect(mounted.zoom().zoom).toBe(1.25);
@@ -163,7 +180,7 @@ describe('useZoom', () => {
 
     await act(async () => mounted.zoom().zoomIn());
 
-    expect([0.5, 0.75, 1, 1.25, 1.5, 2]).toContain(mounted.zoom().zoom);
+    expect([0.25, 0.5, 0.75, 1, 1.25, 1.5, 2]).toContain(mounted.zoom().zoom);
     expect(mounted.zoom().isFit).toBe(false);
   });
 
@@ -173,7 +190,51 @@ describe('useZoom', () => {
   });
 });
 
-describe('the navigation pane under a fit', () => {
+describe('useZoom with no editor', () => {
+  // The hook promises a control can render unconditionally. Rendered outside a Root there is
+  // no instance, so every action has to be a no-op rather than a throw.
+  test('reports a plain 100% and refuses to throw', () => {
+    let seen: UseZoomResult | null = null;
+    render(
+      <Probe
+        onRender={(next) => {
+          seen = next;
+        }}
+      />
+    );
+
+    const zoom = seen! as UseZoomResult;
+    expect(zoom.zoom).toBe(1);
+    expect(zoom.isFit).toBe(false);
+    expect(zoom.canZoomIn).toBe(false);
+    expect(zoom.canZoomOut).toBe(false);
+    expect(() => {
+      zoom.setZoom(1.5);
+      zoom.auto();
+      zoom.reset();
+    }).not.toThrow();
+  });
+});
+
+describe('the navigation pane under a fit, through the hook', () => {
+  // The pure function was covered; the PREDICATE that decides which branch it takes was not.
+  // Both bounds matter: a fit resting against either has a fixed-width page and belongs on
+  // the proportional branch, and only the space between them makes the width follow padding.
+  const cases = [
+    { name: 'a fit at its cap is not docked', zoom: 1, mode: AUTO, docked: false },
+    { name: 'a fit at its floor is not docked', zoom: 0.5, mode: AUTO, docked: false },
+    { name: 'a fit between its bounds is docked', zoom: 0.79, mode: AUTO, docked: true },
+    { name: 'a fixed scale is never docked', zoom: 0.79, mode: FIXED, docked: false },
+  ] as const;
+
+  for (const entry of cases) {
+    test(entry.name, () => {
+      expect(paneDocking(entry.zoom, entry.mode)).toBe(entry.docked);
+    });
+  }
+});
+
+describe('the navigation shift itself', () => {
   // Without this the two chase each other every frame: a partial shift narrows the page,
   // which widens the gutter, which asks for a smaller shift, which widens the page again.
   test('docks fully instead of taking the proportional shift', () => {

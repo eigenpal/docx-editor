@@ -100,8 +100,9 @@ export function useZoom(): UseZoomResult {
       fitToWidth: () => setMode(FIT_WIDTH_ZOOM_MODE),
       auto: () => setMode('auto'),
       reset: () => {
-        // Mode first: `setZoom` already leaves a fit, and doing it in this order means a
-        // reset from a fit that had resolved to exactly 1 still ends up fixed.
+        // Either order lands on fixed 100% — `setZoom` leaves a fit on its own, even when the
+        // fit had already resolved to 1. Mode first anyway, so the one publish a caller sees
+        // carries both halves of the change rather than a scale beside a mode about to move.
         setMode(FIXED);
         setZoom(1);
       },

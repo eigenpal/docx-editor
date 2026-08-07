@@ -135,3 +135,33 @@ Under a fixed scale a centred page of unchanging width moves by half the padding
 
 - **WHEN** the gutter is narrower than the pane needs and the editor is fitting
 - **THEN** the displacement is the pane's full reservation, and it does not change as the fit resolves
+
+### Requirement: A host can read and drive the whole zoom lifecycle
+
+The React adapter SHALL expose the zoom as one hook giving the resolved scale, the mode, whether the mode is a fit, and the actions that move either: a fixed scale, a mode, the two named fits, a reset, and steps along the preset ladder with their availability.
+
+The hook SHALL hold no zoom state of its own — every read comes from the engine's snapshot and every action calls the engine — so a control built on it cannot disagree with the painted pages.
+
+Outside an editor it SHALL report a plain, untracked 100% and every action SHALL be a no-op, so a control renders unconditionally rather than guarding.
+
+The preset ladder SHALL carry a rung below the default fit's floor. A ladder that stopped where the fit stops would disable every zoom-out affordance in exactly the case the floor exists for.
+
+#### Scenario: A control renders before there is an editor
+
+- **WHEN** the hook is called outside a provider
+- **THEN** it reports 100%, not a fit, neither step available, and calling any action does nothing
+
+#### Scenario: A zoom control shows the mode, not the percentage
+
+- **WHEN** the editor is in a fit that has resolved to exactly 100%
+- **THEN** a menu built on the hook marks the FIT as chosen and does not mark the 100% level
+
+#### Scenario: A mode the control cannot offer is not misrepresented
+
+- **WHEN** the editor is in a fit whose bounds the control has no entry for
+- **THEN** no entry is marked chosen, rather than one whose selection would silently replace those bounds
+
+#### Scenario: The floor is not the end of the road
+
+- **WHEN** a fit has come to rest on its floor
+- **THEN** the zoom-out step is still available and moves to the rung below it

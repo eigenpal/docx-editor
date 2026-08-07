@@ -264,8 +264,10 @@ export type ZoomFitTarget = 'pageWidth';
  * recomputes whenever the room beside the page changes — a resized window, an opened comments
  * rail, a docked navigation pane — bounded by `minZoom`/`maxZoom`.
  *
- * The bounds are what make one mode serve both cases. The default, `'auto'`, is this fit with
- * `maxZoom: 1`: it shrinks a page that does not fit and leaves a page that does at 100%.
+ * The bounds are what make one mode serve both cases. The default, `'auto'`, is this fit
+ * bounded at both ends: it leaves a page that fits at 100%, shrinks one that does not, and
+ * stops at 50% — past which it would be trading a scrollbar nobody minds for a page nobody
+ * can read.
  */
 export type ZoomMode =
   | { readonly type: 'fixed' }
@@ -700,10 +702,11 @@ export interface Editor {
   /**
    * Choose between holding a scale and tracking the viewport.
    *
-   * `'auto'` is the shorthand for {@link ZoomMode}'s capped page-width fit and the default
+   * `'auto'` is the shorthand for {@link ZoomMode}'s bounded page-width fit and the default
    * for a new editor: a window wide enough for the sheet stays at 100%, and a narrower one
-   * shrinks instead of growing a horizontal scrollbar. Refused (`invalidArgs`) for a value
-   * that is not a mode, in the same spirit as `setZoom`.
+   * shrinks rather than growing a horizontal scrollbar — down to 50%, past which the page
+   * keeps a legible size and the scrollbar is the better trade. Refused (`invalidArgs`) for a
+   * value that is not a mode, in the same spirit as `setZoom`.
    *
    * A fit tracks the scroller's CONTENT box, so anything that reserves width beside the page
    * — an open comments rail, a docked navigation pane — shrinks the document by exactly what

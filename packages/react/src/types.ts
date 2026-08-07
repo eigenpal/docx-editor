@@ -159,9 +159,10 @@ export interface DocxEditorProps {
   /** A fixed scale. Supplying one also makes the mode fixed unless `zoomMode` says otherwise. */
   zoom?: number;
   /**
-   * Where the scale comes from. Defaults to `'auto'`: fit the page width, never past 100%.
-   * A fit tracks the room beside the page, so opening comments shrinks the document instead
-   * of pushing it off screen. `{ type: 'fixed' }` opts out.
+   * Where the scale comes from. Defaults to `'auto'`: fit the page width, between 50% and
+   * 100%. A fit tracks the room beside the page, so opening comments shrinks the document
+   * instead of pushing it off screen; past the floor it scrolls sideways instead.
+   * `{ type: 'fixed' }` opts out.
    */
   zoomMode?: ZoomMode | 'auto';
   locale?: string;

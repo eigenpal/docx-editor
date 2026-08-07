@@ -14,8 +14,10 @@ interface Harness {
   readonly lane: ReturnType<typeof createZoomLane>;
   readonly bumps: () => number;
   readonly emits: () => number;
-  /** Make the next and every later rescale fail, as a surface that cannot lay out would. */
-  readonly refuseRescale: () => void;
+  /** Whether the surface accepts a rescale, as one that cannot lay out would not. */
+  readonly setRescaleAccepted: (accepted: boolean) => void;
+  /** The scale the surface was last asked for, so the points-to-pixels factor is pinned. */
+  readonly lastScale: () => number | null;
 }
 
 /**
@@ -29,8 +31,13 @@ function harness(config: Parameters<typeof createZoomLane>[0] = {}): Harness {
   let bumps = 0;
   let emits = 0;
   let accept = true;
+  let lastScale: number | null = null;
   const surface = {
-    setScale: () => accept,
+    setScale: (scale: number) => {
+      if (!accept) return false;
+      lastScale = scale;
+      return true;
+    },
     layout: () => ({ pages: [] }),
   } as unknown as PaginatedSurface;
   const host: ZoomLaneHost = {
@@ -47,9 +54,10 @@ function harness(config: Parameters<typeof createZoomLane>[0] = {}): Harness {
     lane: createZoomLane(config, host),
     bumps: () => bumps,
     emits: () => emits,
-    refuseRescale: () => {
-      accept = false;
+    setRescaleAccepted: (next) => {
+      accept = next;
     },
+    lastScale: () => lastScale,
   };
 }
 
@@ -60,10 +68,10 @@ describe('a rescale the surface refuses', () => {
   // kept "Automatic" ticked over an editor that had silently stopped tracking, and the caller
   // had been told `ok: false` so had no reason to re-assert anything.
   test('leaves the mode exactly where it was', () => {
-    const { lane, refuseRescale } = harness();
+    const { lane, setRescaleAccepted } = harness();
     expect(lane.mode()).toEqual(AUTO_ZOOM_MODE);
 
-    refuseRescale();
+    setRescaleAccepted(false);
     const result = lane.setZoom(1.5);
 
     expect(result).toMatchObject({ ok: false, code: 'unsupported' });
@@ -72,8 +80,8 @@ describe('a rescale the surface refuses', () => {
   });
 
   test('publishes nothing, because nothing changed', () => {
-    const { lane, refuseRescale, bumps, emits } = harness();
-    refuseRescale();
+    const { lane, setRescaleAccepted, bumps, emits } = harness();
+    setRescaleAccepted(false);
 
     lane.setZoom(1.5);
 
@@ -81,14 +89,26 @@ describe('a rescale the surface refuses', () => {
     expect(emits()).toBe(0);
   });
 
-  test('a later attempt that succeeds still ends the fit', () => {
-    const { lane, refuseRescale } = harness();
-    refuseRescale();
-    lane.setZoom(1.5);
+  // The SAME lane recovers. Building a second one proved nothing about the first: what has to
+  // hold is that a refusal leaves no residue behind it.
+  test('a retry on the same lane succeeds and ends the fit', () => {
+    const { lane, setRescaleAccepted } = harness();
+    setRescaleAccepted(false);
+    expect(lane.setZoom(1.5).ok).toBe(false);
 
-    const retry = harness();
-    expect(retry.lane.setZoom(1.5)).toEqual({ ok: true, changed: true });
-    expect(retry.lane.mode()).toEqual({ type: 'fixed' });
+    setRescaleAccepted(true);
+
+    expect(lane.setZoom(1.5)).toEqual({ ok: true, changed: true });
+    expect(lane.zoom()).toBe(1.5);
+    expect(lane.mode()).toEqual({ type: 'fixed' });
+  });
+
+  // Points to CSS pixels at 96dpi. The stub used to ignore its argument, so nothing pinned
+  // that the lane converts rather than handing the raw zoom to the surface.
+  test('the surface is asked for the CSS scale, not the zoom', () => {
+    const { lane, lastScale } = harness();
+    lane.setZoom(1.5);
+    expect(lastScale()).toBeCloseTo(1.5 * (96 / 72), 10);
   });
 });
 
@@ -135,7 +155,28 @@ describe('the default mode', () => {
     expect(harness({ zoom: 1.5 }).lane.zoom()).toBe(1.5);
   });
 
-  test('an out-of-range configured zoom falls back to 100% rather than being applied', () => {
-    expect(harness({ zoom: 42 }).lane.zoom()).toBe(1);
+  // The number AND the pin. Reading only "a `zoom` key was present" made `zoom={42}` open
+  // fixed at 100%: the bad value discarded, but the default fit discarded with it, so one bad
+  // prop silently opted the editor out of fitting altogether.
+  test('an out-of-range configured zoom is not a pin, so the default fit still applies', () => {
+    for (const zoom of [42, 0, Number.NaN]) {
+      const { lane } = harness({ zoom });
+      expect(lane.zoom()).toBe(1);
+      expect(lane.mode()).toEqual(AUTO_ZOOM_MODE);
+    }
+  });
+
+  // `Object.is`, not `===`: a bound that arrived as NaN is not equal to itself, so an
+  // unchanged prop reported as a change on every render.
+  test('a NaN bound does not make an unchanged mode look changed', () => {
+    const { lane, bumps } = harness();
+    const withNaN = { type: 'fit', fit: 'pageWidth', maxZoom: Number.NaN } as const;
+
+    expect(lane.setZoomMode(withNaN).changed).toBe(true);
+    const held = lane.mode();
+    expect(lane.setZoomMode({ ...withNaN })).toEqual({ ok: true, changed: false });
+
+    expect(lane.mode()).toBe(held);
+    expect(bumps()).toBe(1);
   });
 });

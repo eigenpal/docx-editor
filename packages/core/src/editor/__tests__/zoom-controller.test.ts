@@ -59,6 +59,8 @@ interface Harness {
   resize(width: number): void;
   /** Reserve room at the inline end, exactly as the open comments rail's padding does. */
   reserve(px: number): void;
+  /** Reserve room at the inline start, as the docked navigation pane's padding does. */
+  reserveStart(px: number): void;
   /** Deliver the resize callback and let the coalescing frame run. */
   settle(): Promise<void>;
 }
@@ -82,6 +84,9 @@ function mount(options: Parameters<typeof createDocxEditor>[0] = {}): Harness {
     },
     reserve(px) {
       scroller.style.paddingRight = `${px}px`;
+    },
+    reserveStart(px) {
+      scroller.style.paddingLeft = `${px}px`;
     },
     async settle() {
       for (const callback of [...observerCallbacks]) callback();
@@ -165,6 +170,20 @@ describe('tracking the viewport', () => {
     expect(harness.editor.getZoom()).toBeLessThan(wide);
   });
 
+  // The other half of the "PHYSICAL, not logical" rule in `availableWidth`: the navigation
+  // pane reserves with `padding-inline-start`, which computed style resolves to `paddingLeft`.
+  test('a reservation at the inline start shrinks the document too', async () => {
+    const harness = mount();
+    harness.resize(1100);
+    await harness.settle();
+    const wide = harness.editor.getZoom();
+
+    harness.reserveStart(328);
+    await harness.settle();
+
+    expect(harness.editor.getZoom()).toBeLessThan(wide);
+  });
+
   test('a refit is PUBLISHED, not just readable', async () => {
     const harness = mount();
     const seen: number[] = [];
@@ -198,9 +217,73 @@ describe('tracking the viewport', () => {
 
   test('an unmeasurable viewport leaves the scale alone rather than guessing', async () => {
     const harness = mount();
+    // Fit to something OTHER than 1 first. Asserting 1 from a standing start passes for an
+    // implementation that resolves an unmeasurable viewport to 1 — the exact guess `fitZoom`
+    // returns null to avoid.
+    harness.resize(700);
+    await harness.settle();
+    const fitted = harness.editor.getZoom();
+    expect(fitted).toBeLessThan(1);
+
     harness.resize(0);
     await harness.settle();
-    expect(harness.editor.getZoom()).toBe(1);
+
+    expect(harness.editor.getZoom()).toBe(fitted);
+  });
+});
+
+describe('a page that changes size', () => {
+  // The other numerator. A fit is page-against-room, and turning the paper landscape moves
+  // the page by 25% with the room untouched.
+  test('turning the page landscape refits', () => {
+    const harness = mount();
+    harness.resize(1100);
+    const before = harness.editor.getZoom();
+
+    harness.editor.exec({ type: 'setPageSetup', orientation: 'landscape' });
+
+    expect(harness.editor.getZoom()).toBeLessThan(before);
+  });
+
+  // UNDO reaches the surface without passing any command hook — the keymap calls
+  // `surface.undo()` directly, and `exec({type:'undo'})` carries type 'undo'. Hooking only
+  // `setPageSetup` left the document rendered at the landscape scale with a portrait page.
+  test('undoing it refits back', () => {
+    const harness = mount();
+    harness.resize(1100);
+    const portrait = harness.editor.getZoom();
+    harness.editor.exec({ type: 'setPageSetup', orientation: 'landscape' });
+    expect(harness.editor.getZoom()).not.toBe(portrait);
+
+    harness.editor.exec({ type: 'undo' });
+
+    expect(harness.editor.getZoom()).toBe(portrait);
+  });
+
+  // The guard that makes the commit hook affordable: a commit that only moved text must not
+  // pay for a DOM measurement.
+  test('typing does not refit', async () => {
+    const harness = mount();
+    harness.resize(700);
+    await harness.settle();
+    const before = harness.editor.snapshot();
+
+    harness.editor.surface!.type('x');
+
+    expect(harness.editor.getZoom()).toBe(before.zoom);
+  });
+});
+
+describe('the floor', () => {
+  // A phone with the 316px comments rail open leaves the page a sliver. Fitting into it is a
+  // document nobody can read, traded for a scrollbar nobody minds.
+  test('auto stops shrinking and lets the container overflow', async () => {
+    const harness = mount();
+    harness.resize(420);
+    harness.reserve(316);
+    await harness.settle();
+
+    expect(harness.editor.getZoom()).toBe(0.5);
   });
 });
 
@@ -261,31 +344,39 @@ describe('lifecycle', () => {
   // element the editor no longer used — keeping it alive if the host had dropped it.
   test('moving to a new container after a failed load drops the old observer', () => {
     const harness = mount();
+    // A load that cannot parse leaves no surface and no pending bytes, so `attach` takes the
+    // do-nothing branch and installs nothing. The observer on the OLD scroller has to go
+    // anyway — asserting "no new observer" would pass with the teardown deleted.
     harness.editor.load(new Uint8Array([1, 2, 3]));
-    observerCallbacks = [];
+    expect(observerCallbacks).toHaveLength(1);
 
     harness.editor.attach(document.createElement('div'));
 
     expect(observerCallbacks).toHaveLength(0);
   });
 
+  // On the OBSERVER, not on the resulting zoom: `detach` and `destroy` also null the container,
+  // so a refit early-returns either way and a zoom assertion passes with the teardown deleted.
+  // What these guard is a lifetime — an observer left running on an element the editor no
+  // longer uses, holding it alive.
   test('detach stops the observer, so a detached editor is not re-fitted', async () => {
     const harness = mount();
+    expect(observerCallbacks).toHaveLength(1);
+
     harness.editor.detach();
 
+    expect(observerCallbacks).toHaveLength(0);
     harness.resize(400);
     await harness.settle();
-
     expect(harness.editor.getZoom()).toBe(1);
   });
 
-  test('destroy stops it too', async () => {
+  test('destroy stops it too', () => {
     const harness = mount();
+    expect(observerCallbacks).toHaveLength(1);
+
     harness.editor.destroy();
 
-    harness.resize(400);
-    await harness.settle();
-
-    expect(harness.editor.getZoom()).toBe(1);
+    expect(observerCallbacks).toHaveLength(0);
   });
 });

@@ -81,8 +81,8 @@ export interface DocxEditorConfig {
    */
   zoom?: number;
   /**
-   * Where the scale comes from. Defaults to `'auto'` — fit the page width, never past 100% —
-   * unless {@link DocxEditorConfig.zoom} is supplied, which means fixed.
+   * Where the scale comes from. Defaults to `'auto'` — fit the page width, between 50% and
+   * 100% — unless {@link DocxEditorConfig.zoom} is supplied, which means fixed.
    *
    * `'auto'` leaves a window wide enough for the sheet exactly where it is today and shrinks
    * a narrower one instead of growing a horizontal scrollbar. Pass `{ type: 'fixed' }` for

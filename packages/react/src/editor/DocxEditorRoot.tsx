@@ -22,7 +22,12 @@ import type {
   FontConfiguration,
   ZoomMode,
 } from '@docx-editor.dev/core/contracts/editor';
-import { createDocxEditor, defaultTableLabel } from '@docx-editor.dev/core/editor';
+import {
+  createDocxEditor,
+  defaultTableLabel,
+  resolveZoomMode,
+  sameZoomMode,
+} from '@docx-editor.dev/core/editor';
 import type { EditorModule } from '@docx-editor.dev/core/editor';
 import type {
   DocxEditorInstance,
@@ -78,9 +83,9 @@ export interface DocxEditorRootProps {
    */
   zoom?: number;
   /**
-   * Where the scale comes from. Defaults to `'auto'`: fit the page width, never past 100%,
-   * so a window with room for the sheet renders at 100% and a narrower one shrinks instead
-   * of growing a horizontal scrollbar.
+   * Where the scale comes from. Defaults to `'auto'`: fit the page width, between 50% and
+   * 100%, so a window with room for the sheet renders at 100% and a narrower one shrinks
+   * rather than growing a horizontal scrollbar — down to the floor, past which it scrolls.
    *
    * A fit tracks the room beside the page, so opening the comments rail or docking the
    * navigation pane shrinks the document by what it took. Pass `{ type: 'fixed' }` to opt out.
@@ -101,6 +106,20 @@ export interface DocxEditorRootProps {
   /** Optional decode port for embedded image insertion and paint in tests or custom hosts. */
   imageDecodePort?: ImageDecodePort;
   children?: ReactNode;
+}
+
+/**
+ * Whether two `zoomMode` props say the same thing, `'auto'` shorthand included.
+ *
+ * By VALUE, because the prop is an object and a host writing it inline hands over a new one
+ * on every render. Resolving both first makes `'auto'` and its long form compare equal, which
+ * is what a host switching between the two spellings would expect.
+ */
+function sameZoomProp(a: ZoomMode | 'auto', b: ZoomMode | 'auto'): boolean {
+  if (a === b) return true;
+  const left = resolveZoomMode(a);
+  const right = resolveZoomMode(b);
+  return left !== null && right !== null && sameZoomMode(left, right);
 }
 
 /**
@@ -175,9 +194,37 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   // MODE AFTER LEVEL, and both in one effect. `setZoom` leaves any fit mode by design, so
   // running these in two effects let the order decide the outcome: a host passing both
   // `zoom={1.5}` and `zoomMode="auto"` would get whichever ran last.
+  //
+  // RE-ASSERTED ONLY WHEN THE PROP ITSELF MOVES, which is what these refs are for.
+  // `zoomMode` is an object, and the documented spelling — `zoomMode={{ type: 'fit', fit:
+  // 'pageWidth' }}` — is a fresh literal on every parent render, so an identity dependency
+  // re-ran this on renders that changed nothing about the zoom. That is not a wasted call: a
+  // reader who had picked 150% from the toolbar was pushed back to the fit by the host's next
+  // unrelated re-render, and a host passing both props relayouts the document twice per render
+  // forever. A declarative prop means "this is the value", not "apply this again now".
+  const applied = useRef<{
+    editor: DocxEditorInstance | null;
+    zoom: number | undefined;
+    mode: ZoomMode | 'auto' | undefined;
+  }>({ editor: null, zoom: undefined, mode: undefined });
   useEffect(() => {
-    if (zoom !== undefined) editor?.setZoom(zoom);
-    if (zoomMode !== undefined) editor?.setZoomMode(zoomMode);
+    if (!editor) return;
+    // A new instance has none of this yet, whatever the previous one was told.
+    const fresh = applied.current.editor !== editor;
+    if (fresh) applied.current = { editor, zoom: undefined, mode: undefined };
+
+    if (zoom !== undefined && zoom !== applied.current.zoom) {
+      applied.current.zoom = zoom;
+      editor.setZoom(zoom);
+    }
+    const previousMode = applied.current.mode;
+    if (
+      zoomMode !== undefined &&
+      (previousMode === undefined || !sameZoomProp(previousMode, zoomMode))
+    ) {
+      applied.current.mode = zoomMode;
+      editor.setZoomMode(zoomMode);
+    }
   }, [editor, zoom, zoomMode]);
 
   // Table furniture labels follow the live locale resolver without remounting the editor.

@@ -24,9 +24,6 @@ export function applyThemeShade(hex: string, keep: number): string;
 export function applyThemeTint(hex: string, keep: number): string;
 
 // @public
-export const AUTO_ZOOM_FLOOR = 0.5;
-
-// @public
 export const AUTO_ZOOM_MODE: ZoomMode;
 
 // @public
@@ -870,27 +867,7 @@ export function finalizeImageOverlayInteraction(options: {
 }): FinalizedImageOverlayInteraction;
 
 // @public
-export const FIT_GUTTER_PX = 24;
-
-// @public
 export const FIT_WIDTH_ZOOM_MODE: ZoomMode;
-
-// @public
-export function fitZoom(input: FitZoomInput): number | null;
-
-// @public
-export interface FitZoomInput {
-    readonly availableWidthPx: number;
-    readonly gutterPx?: number;
-    // (undocumented)
-    readonly maxZoom?: number;
-    // (undocumented)
-    readonly minZoom?: number;
-    readonly pageWidthPx: number;
-}
-
-// @public
-export const FIXED_ZOOM_MODE: ZoomMode;
 
 // @public
 export interface FontConfigurationBase extends FontConfigurationFragment {
@@ -1136,11 +1113,6 @@ export interface ImageResourceLimits {
 
 // @public
 export type ImageWrapTarget = 'inline' | 'square' | 'squareLeft' | 'squareRight' | 'tight' | 'through' | 'topAndBottom' | 'behind' | 'inFront';
-
-// @public
-export function isFitMode(mode: ZoomMode): mode is Extract<ZoomMode, {
-    type: 'fit';
-}>;
 
 // @public
 export function isStaleImageInteractionCommit(editor: Pick<DocxEditorInstance, 'surface' | 'mountGeneration'>, session: ImageInteractionSession): ExecResult | null;
@@ -2003,7 +1975,7 @@ export type VectorImageMime = 'image/svg+xml';
 // @public
 export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'];
 
-// @public (undocumented)
+// @public
 export const ZOOM_MAX = 5;
 
 // @public

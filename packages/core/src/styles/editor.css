@@ -471,10 +471,19 @@
   scrollbar-color: var(--doc-scrollbar-thumb) var(--doc-scrollbar-track);
 }
 
-.docx-editor .docx-editor__scroll-container {
+/* Descendant AND self: `DocxEditor.Viewport` puts `docx-editor` on the scroll container
+   itself when no ancestor is scoped (the Root + Viewport composition), and the descendant
+   combinator alone misses that element. */
+.docx-editor .docx-editor__scroll-container,
+.docx-editor.docx-editor__scroll-container {
   /* `both-edges` reserves a symmetric gutter so the centered page stays centered
       on classic-scrollbar platforms (single-edge nudges it ~7px left). Matches
-      the Vue viewport (DocxEditor.css `__pages-viewport`). */
+      the Vue viewport (DocxEditor.css `__pages-viewport`).
+
+      LOAD-BEARING for fit-to-viewport zoom as well as centring: the fit measures this
+      element's content box, and without a reserved gutter, fitting a document down far
+      enough to remove the vertical scrollbar widens that box, which fits larger, which
+      brings the scrollbar back. */
   scrollbar-gutter: stable both-edges;
 }
 
@@ -2141,19 +2150,6 @@ a.docx-hyperlink:focus-visible {
   position: relative;
   overflow: auto;
   overscroll-behavior: contain;
-}
-
-/* Load-bearing for fit-to-viewport zoom, not cosmetic. A fit measures the content box of the
- * scroll container, and without a stable gutter, fitting a document down far enough to remove
- * the vertical scrollbar widens that box, which fits larger, which brings the scrollbar back.
- * Reserving it in both states takes the scrollbar out of the measurement.
- *
- * On `.docx-editor__scroll-container`, which is the class `surfaceScroller` finds and the fit
- * therefore measures. The packaged viewport happens to carry both classes, so keying this off
- * the other one worked there and left a host that supplies its own scroll container — the
- * engine's documented discovery contract — with the oscillation this prevents. */
-.docx-editor__scroll-container {
-  scrollbar-gutter: stable;
 }
 
 /* The page stack is the engine's content origin: the engine publishes page 0 at

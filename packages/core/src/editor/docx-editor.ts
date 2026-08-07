@@ -478,12 +478,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     mountGeneration += 1;
   }
 
-  /**
-   * The scale, the mode, and the fit that keeps them agreeing. Reads the surface and the
-   * container through callbacks because both are replaced under it — a load rebuilds the
-   * surface, `attach` replaces the container — and a lane handed either one directly would go
-   * on rescaling the previous one.
-   */
+  // The scale, the mode, and the fit that keeps them agreeing. Callbacks rather than values,
+  // because both are replaced under it — a load rebuilds the surface, `attach` replaces the
+  // container — and a lane handed either directly would go on rescaling the previous one.
   const zoomLane = createZoomLane(config, {
     container: () => container,
     surface: () => surface,
@@ -617,11 +614,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       surface.setReviewActivationExclusions(reviewActivationExclusions);
     }
     lastSelection = surface.state().selection;
-    // The page's size is only knowable now — it comes from this document's section properties
-    // — so a fit mode resolves here, after the mount and before the emits below. Synchronous
-    // on purpose: it lands in the same task as the mount, so the browser paints once, at the
-    // fitted scale, rather than painting 100% and correcting on the next frame.
-    zoomLane.attach();
     unsubscribeSession = surface.session.subscribe((change) => {
       const documentChange: DocumentChange = {
         revision: change.toRevision,
@@ -629,10 +621,23 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         deleted: change.deleted,
         dirty: change.dirty,
       };
+      // A commit can move a fit's numerator: `setPageSetup` directly, and undo by both of its
+      // routes (the keymap's `surface.undo()` and `exec`), neither of which passes a command
+      // hook. Guarded on the authored page width, so a keystroke pays one comparison.
+      zoomLane.refitIfPageResized();
       // Bump BEFORE dispatch, so a handler reading `snapshot()` sees the new state.
       bump();
       emitDocumentChange(documentChange);
     });
+    // The page's size is only knowable now — it comes from this document's section properties
+    // — so a fit mode resolves here. Synchronous on purpose: it lands in the same task as the
+    // mount, so the browser paints once at the fitted scale rather than painting 100% and
+    // correcting on the next frame.
+    //
+    // AFTER the subscription above, because a fit that moves the scale EMITS, and a host
+    // handler that throws from that emit would otherwise abort this function with the surface
+    // assigned but `unsubscribeSession` unset — an editor that types but never re-renders.
+    zoomLane.attach();
     // The document arrived: an external store subscribed to `change`/`selectionChange`
     // must learn about it, exactly as it learns about any later commit. Without these a
     // store bound before `load()` never re-reads and keeps rendering "no document".
@@ -1935,12 +1940,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         ...(gated.tablePlan ? { admittedTablePlan: gated.tablePlan } : {}),
         editor,
       });
-      // A fit is a ratio between the page and the viewport, and this is the one command that
-      // moves the numerator: a Letter page turned landscape is 25% wider and no longer fits
-      // what it fitted a moment ago. Hooked HERE rather than on every commit because a refit
-      // reads `clientWidth` and computed style, which forces layout — paying that per
-      // keystroke to catch a command nobody ran would be a poor trade.
-      if (command.type === 'setPageSetup') zoomLane.refit();
       if (result) return result;
       // `changed` is read from the model, not assumed: reporting `changed: true` where the
       // document did not move would be a lie. It answers for the DOCUMENT, not for

@@ -69,7 +69,9 @@ function ZoomControl() {
 
 Render the selected state from `mode`, not from `zoom`. A menu that ticks the level matching the percentage will light up "75%" while the editor is tracking the viewport and about to move off it.
 
-The packaged toolbar's zoom control already does all of this: **Automatic** and **Fit width** sit above the preset levels, and the tick follows the mode.
+The packaged toolbar's zoom control already does all of this: **Automatic** and **Fit width** sit above the preset levels, and the tick follows the mode rather than the percentage.
+
+It ticks those two modes and the preset levels — the things it can put a reader into. A fit with bounds of your own is not one of them, so the menu shows the resolved percentage with nothing ticked, rather than lighting up a row that would silently replace your bounds when clicked.
 
 ## Comments, and narrow screens
 
@@ -89,9 +91,11 @@ Zoom lives in the engine, so every host reaches it the same way:
 
 ```ts
 editor.setZoomMode('auto');
+editor.getZoom(); // 0.79 on a container too narrow for the page
+editor.getZoomMode(); // { type: 'fit', fit: 'pageWidth', minZoom: 0.5, maxZoom: 1 }
+
 editor.setZoom(1.5); // leaves the fit
-editor.getZoom(); // 0.79
-editor.getZoomMode(); // { type: 'fit', fit: 'pageWidth', maxZoom: 1 }
+editor.getZoomMode(); // { type: 'fixed' }
 ```
 
 `snapshot()` carries `zoom` and `zoomMode`, and both fire on `selectionChange` — including when the editor refits itself after a resize, so a subscriber never shows a stale percentage.

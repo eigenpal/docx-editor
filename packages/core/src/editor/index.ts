@@ -185,21 +185,19 @@ export {
   type SelectedDrawingOverlayTarget,
 } from './docx-editor-images.ts';
 export { surfaceExtent, type SurfaceExtent } from './surface-pages.ts';
-// The fit's vocabulary. Adapters need the constants to render a zoom control that agrees
-// with the engine (the ladder, the default mode) without hard-coding either.
+// The fit's vocabulary — only the part an adapter actually needs, so the published surface
+// stays something we can keep. The two canonical modes, because a zoom control has to render
+// its own selected state and must not respell a mode the engine already names; the two
+// comparisons, because that state is a value comparison and re-deriving it per adapter is how
+// a menu ends up ticking a row the editor is not in; and the range, because chrome bounds its
+// own inputs. Everything else here is internal until something outside core asks for it.
 export {
-  AUTO_ZOOM_FLOOR,
   AUTO_ZOOM_MODE,
-  FIT_GUTTER_PX,
   FIT_WIDTH_ZOOM_MODE,
-  FIXED_ZOOM_MODE,
   ZOOM_MAX,
   ZOOM_MIN,
-  fitZoom,
-  isFitMode,
   resolveZoomMode,
   sameZoomMode,
-  type FitZoomInput,
 } from './zoom-fit.ts';
 export {
   computeImageResizeResult,

@@ -48,6 +48,8 @@ export interface ZoomLane {
   detach(): void;
   /** Recompute now, for a change to the page's own size. */
   refit(): void;
+  /** Recompute only if the page's own width moved. Cheap enough for the commit path. */
+  refitIfPageResized(): void;
 }
 
 export interface ZoomLaneConfig {
@@ -56,23 +58,32 @@ export interface ZoomLaneConfig {
 }
 
 export function createZoomLane(config: ZoomLaneConfig, host: ZoomLaneHost): ZoomLane {
-  let zoom =
+  /**
+   * A configured scale, or null when there is none the contract would accept.
+   *
+   * NULL for an out-of-range or non-finite value, and that answer feeds the mode below as
+   * well as the scale. Reading only "was a `zoom` key present" made `zoom={42}` open FIXED at
+   * 100% — the number thrown away, but the fit thrown away with it, so a bad prop silently
+   * opted the editor out of the default. A `zoom` the contract refuses is not a pin.
+   */
+  const pinnedZoom =
     config.zoom !== undefined &&
     Number.isFinite(config.zoom) &&
     config.zoom >= ZOOM_MIN &&
     config.zoom <= ZOOM_MAX
       ? config.zoom
-      : 1;
+      : null;
+  let zoom = pinnedZoom ?? 1;
   /**
-   * Where the scale comes from. A configured `zoom` and no configured `zoomMode` means the
-   * embedder pinned a number, so honour it: only an editor that asked for neither gets the
+   * Where the scale comes from. A pinned `zoom` and no configured `zoomMode` means the
+   * embedder chose a number, so honour it: only an editor that asked for neither gets the
    * `'auto'` default.
    *
    * The lane HOLDS this object and only replaces it when `sameZoomMode` says the value moved,
    * which is what makes `snapshotsEqual`'s identity compare of `zoomMode` correct.
    */
   let mode: ZoomMode =
-    resolveZoomMode(config.zoomMode ?? (config.zoom !== undefined ? FIXED_ZOOM_MODE : 'auto')) ??
+    resolveZoomMode(config.zoomMode ?? (pinnedZoom !== null ? FIXED_ZOOM_MODE : 'auto')) ??
     AUTO_ZOOM_MODE;
 
   /**
@@ -115,6 +126,9 @@ export function createZoomLane(config: ZoomLaneConfig, host: ZoomLaneHost): Zoom
       const box = host.surface()?.layout().pages[0]?.box;
       return box ? box.width * (96 / 72) : null;
     },
+    // Model state, not layout: this is the cheap guard the commit path compares, and reading
+    // it must not flush a layout from inside the session's own notification.
+    pageWidthTwips: () => host.surface()?.sectionProperties().pageSize.widthTwips ?? null,
     zoom: () => zoom,
     applyZoom: (next) => {
       applyZoom(next);
@@ -132,6 +146,7 @@ export function createZoomLane(config: ZoomLaneConfig, host: ZoomLaneHost): Zoom
     },
     detach: () => controller.detach(),
     refit: () => controller.refit(),
+    refitIfPageResized: () => controller.refitIfPageResized(),
 
     setZoom(next: number): ExecResult {
       // Refused rather than clamped: a caller that asked for

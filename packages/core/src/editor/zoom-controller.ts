@@ -23,6 +23,16 @@ export interface ZoomControllerHost {
   mode(): ZoomMode;
   /** One page's width at 100%, in CSS pixels, or null before the first layout. */
   pageWidthPx(): number | null;
+  /**
+   * The authored page width in twips, or null with no document.
+   *
+   * The guard `refitIfPageResized` compares, and deliberately NOT `pageWidthPx`. That one
+   * reads the laid-out page, which means flushing pending layout — safe from a resize
+   * callback, but this guard runs inside the session's commit notification, and forcing a
+   * flush there re-enters the surface mid-transaction. Section properties are model state and
+   * answer the same question: the page is a different size exactly when they say so.
+   */
+  pageWidthTwips(): number | null;
   /** The scale in force right now. */
   zoom(): number;
   /** Apply a fitted scale. The editor routes this through the same path as `setZoom`. */
@@ -34,6 +44,15 @@ export interface ZoomController {
   attach(): void;
   /** Recompute now — after a load, a page-setup change, or a mode change. */
   refit(): void;
+  /**
+   * Recompute ONLY if the page is a different width than the last fit was computed against.
+   *
+   * The cheap hook for the commit path. `refit` reads `clientWidth` and computed style, which
+   * forces layout — too much to pay per keystroke — but the page width comes from a layout
+   * that has already flushed, so this costs a number comparison on a commit that moved text
+   * and a real refit only on one that moved the page.
+   */
+  refitIfPageResized(): void;
   /** Stop observing and cancel any pending frame. */
   detach(): void;
 }
@@ -76,6 +95,8 @@ export function createZoomController(host: ZoomControllerHost): ZoomController {
   let observer: ResizeObserver | null = null;
   let observed: HTMLElement | null = null;
   let frame: number | null = null;
+  /** The authored page width the last fit was computed against; see `refitIfPageResized`. */
+  let fittedPageWidthTwips: number | null = null;
 
   function cancelFrame(): void {
     if (frame === null) return;
@@ -93,6 +114,7 @@ export function createZoomController(host: ZoomControllerHost): ZoomController {
     if (width === null) return;
     const pageWidthPx = host.pageWidthPx();
     if (pageWidthPx === null) return;
+    fittedPageWidthTwips = host.pageWidthTwips();
 
     const next = fitZoom({
       availableWidthPx: width,
@@ -120,6 +142,12 @@ export function createZoomController(host: ZoomControllerHost): ZoomController {
   }
 
   return {
+    refitIfPageResized(): void {
+      const twips = host.pageWidthTwips();
+      if (twips === null || twips === fittedPageWidthTwips) return;
+      refit();
+    },
+
     attach(): void {
       this.detach();
       const container = host.container();
@@ -141,6 +169,9 @@ export function createZoomController(host: ZoomControllerHost): ZoomController {
       observer?.disconnect();
       observer = null;
       observed = null;
+      // The next document may be any size; a width carried over from the last one would make
+      // the guard above answer "unchanged" for a page that changed completely.
+      fittedPageWidthTwips = null;
     },
   };
 }

@@ -11,8 +11,9 @@
 
 import type { ZoomMode } from '../contracts/editor.ts';
 
-/** The narrowest and widest scale the editor contract accepts. One definition, both users. */
+/** The narrowest scale the editor contract accepts. One definition, every user. */
 export const ZOOM_MIN = 0.1;
+/** The widest scale the editor contract accepts. */
 export const ZOOM_MAX = 5;
 
 /**
@@ -33,8 +34,9 @@ export const FIT_GUTTER_PX = 24;
  * avoid a scrollbar nobody minds. Below this the page keeps a legible size and the container
  * scrolls sideways, which is the ordinary answer to "this does not fit".
  *
- * The lowest rung on the zoom ladder, so a reader who wants to go further has a control that
- * does it.
+ * The ladder carries a rung below this, so a reader who wants to go smaller still has a
+ * control that does it — a floor at the ladder's own bottom would leave every zoom-out
+ * affordance greyed out in exactly the case the floor exists for.
  */
 export const AUTO_ZOOM_FLOOR = 0.5;
 
@@ -97,7 +99,11 @@ export function sameZoomMode(a: ZoomMode, b: ZoomMode): boolean {
   if (a === b) return true;
   if (a.type !== b.type) return false;
   if (a.type !== 'fit' || b.type !== 'fit') return true;
-  return a.fit === b.fit && a.minZoom === b.minZoom && a.maxZoom === b.maxZoom;
+  // `Object.is`, not `===`: a bound that arrived as `NaN` — `maxZoom: Number(props.cap)` with
+  // nothing in `cap` — is not equal to itself under `===`, so an unchanged prop reported as a
+  // change on every render and took the observer, the refit and every consumer's re-render
+  // with it. `fitZoom` treats a non-finite bound as absent, so the two really are one mode.
+  return a.fit === b.fit && Object.is(a.minZoom, b.minZoom) && Object.is(a.maxZoom, b.maxZoom);
 }
 
 /** Whether a mode makes the engine track the viewport rather than hold a number. */

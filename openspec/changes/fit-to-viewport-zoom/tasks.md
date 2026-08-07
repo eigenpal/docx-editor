@@ -9,7 +9,7 @@
 - [x] 1.5 Wire into `docx-editor.ts`: default from `config.zoom`/`config.zoomMode`, attach after mount, detach on detach/destroy, refit on `setPageSetup`, both members on the facade, `zoomMode` in the snapshot.
 - [x] 1.6 `docx-editor-support.ts`: `zoomMode` in `snapshotsEqual`.
 - [x] 1.7 `styles/editor.css`: `scrollbar-gutter: stable` on the viewport.
-- [x] 1.8 Tests: `zoom-fit.test.ts` (rounding direction, clamps, auto cap, null, gutter) and `zoom-controller.test.ts` (mount-time fit, resize, gutter reservation, published refit, deadband, leaving and re-entering the fit, detach/destroy).
+- [x] 1.8 Tests: `zoom-fit.test.ts` (rounding direction, clamps, auto bounds, null, gutter), `zoom-controller.test.ts` (mount-time fit, resize, reservation at either edge, published refit, deadband, page-size change and undo, the floor, leaving and re-entering the fit, observer lifetime) and `zoom-lane.test.ts` (a surface that refuses a rescale, value-compared modes, the configured-zoom rules).
 
 ## 2. The zoom lifecycle (React)
 

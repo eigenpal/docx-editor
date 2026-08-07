@@ -2,7 +2,9 @@
 
 The display scale is a number nobody recomputes. `createDocxEditor` opens at 100% and stays there, so a Letter page — 816 CSS pixels — overflows any container narrower than that, and the reader gets a horizontal scrollbar instead of a document. Nothing reacts to a resized window, and nothing reacts to chrome taking the width away.
 
-That second half is the sharper problem, because the editor does it to itself. Opening the review pane puts `padding-right: 316px` on the scroll container. On a 1100px viewport that leaves 784px for an 816px page: the document does not shrink to make room for the comments, it just stops fitting. On a 420px viewport the rail reserves 316px of it, so the button labelled "show comments" is the button that makes the document unfit for reading.
+That second half is the sharper problem, because the editor does it to itself. Opening the review pane puts `padding-right: 316px` on the scroll container. On a 1100px viewport that leaves 784px for an 816px page: the document does not shrink to make room for the comments, it just stops fitting.
+
+There is a width where fitting stops being the answer. On a 420px viewport the rail takes 316px, and a page fitted into what is left is unreadable. That case wants the scrollbar — so the fit is bounded, and past the bound the page keeps a legible size and the container scrolls. Fitting is worth doing exactly as far as it produces something better than scrolling.
 
 The pieces to fix it already exist and are already in the right places. Zoom is engine-owned precisely so the toolbar's percentage, the scale the surface paints at, and the factor hit testing divides by cannot disagree. `Editor.getPageGeometry()` reports the page at 100% in the same CSS pixels a fit needs. And the room beside the page is not something to be modelled at all — it is the scroll container's content box, which every piece of chrome already reduces with padding. What is missing is a mode that says "recompute", something to watch, and a floor that knows when fitting has stopped helping.
 
