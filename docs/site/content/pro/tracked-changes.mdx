@@ -87,6 +87,18 @@ Each card is a compound you can take apart:
 
 Every part takes `className`, `asChild`, and `hidden`. The action parts (`Accept`, `Reject`, `Delete`, `Reply`) also take `icon`.
 
+`Markers` takes an `icon` too, but as a function of the item. One `Markers` draws every marker in the gutter, so a single node would put one shape on all of them. Left alone it already draws a glyph per kind: a pencil for an insertion, a strikethrough for a deletion, a brush for a formatting change, a bubble for a comment, and a custom node's own `reviewCard` `icon` where it named one.
+
+```tsx
+<DocxEditorReview>
+  <DocxEditorReview.Markers
+    icon={(item) => (item.kind === 'comment' ? <SpeechIcon /> : <EditIcon />)}
+  />
+</DocxEditorReview>
+```
+
+An override inherits the geometry the rail computed for it, so pass only what you are changing.
+
 `Delete` is the destructive one, and it is on both kinds of card: on a comment it deletes the thread, and on a tracked change it discards the suggestion. `Replies` draws a Delete control per reply as well, so a single answer can be taken back without deleting the conversation it belongs to. Delete is absent on a card with nothing to discard.
 
 The stylesheet reveals it on hover of the one node it deletes, and on keyboard focus. A rail where every card offers to throw a remark away invites clicking one by mistake, and a reply that lit up its parent's control at the same time is how a reader deletes the wrong one. Restyle it like any other part; if you want it always visible, `visibility: visible` on `[data-testid='review-delete']` is the whole override.
@@ -162,19 +174,19 @@ function ChangeList() {
 }
 ```
 
-| Member                          | What it does                                                                                                                             |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `items`                         | Every pending decision, in reading order.                                                                                                |
-| `activeKey` / `setActive`       | Which item the caret is in; setting selects its range and scrolls to it, entering or leaving a header/footer story as the item requires. |
-| `accept(item)` / `reject(item)` | Resolve a revision. No-ops on an item whose `readOnly` is true.                                                                          |
-| `reply(item, text, author?)`    | Reply to a change. Returns whether it landed.                                                                                            |
-| `remove(item)`                  | Delete a comment thread, or discard a suggestion. Returns whether it landed.                                                             |
-| `comment(text, author?)`        | Comment on the current selection. Returns whether it landed.                                                                             |
-| `selectionAnchorY`              | Where a comment on the selection would sit, or `null`.                                                                                   |
-| `paneOpen` / `setPaneOpen`      | The same toggle the toolbar's comments button runs.                                                                                      |
-| `ready`                         | False while no document is loaded.                                                                                                       |
+| Member                          | What it does                                                                                                                                                                           |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `items`                         | Every pending decision, in reading order.                                                                                                                                              |
+| `activeKey` / `setActive`       | Which item the caret is in; setting selects its range and scrolls to it, entering or leaving a header/footer story as the item requires. Returns whether it landed; see `activatable`. |
+| `accept(item)` / `reject(item)` | Resolve a revision. Returns whether it landed; false on an item whose `readOnly` is true, and on a document open for viewing.                                                          |
+| `reply(item, text, author?)`    | Reply to a change. Returns whether it landed.                                                                                                                                          |
+| `remove(item)`                  | Delete a comment thread, or discard a suggestion. Returns whether it landed.                                                                                                           |
+| `comment(text, author?)`        | Comment on the current selection. Returns whether it landed.                                                                                                                           |
+| `selectionAnchorY`              | Where a comment on the selection would sit, or `null`.                                                                                                                                 |
+| `paneOpen` / `setPaneOpen`      | The same toggle the toolbar's comments button runs.                                                                                                                                    |
+| `ready`                         | False while no document is loaded.                                                                                                                                                     |
 
-Each item carries `key`, `id`, `author`, `initials`, `date`, `text`, `replyIds`, `readOnly`, `anchorY`, `pageIndex`, and `isActive`. Revision items add `kind: 'revision'`, a `revisionKind`, and `replacedText` for replacements, so a card can say _Replaced "x" with "y"_.
+Each item carries `key`, `id`, `author`, `initials`, `date`, `text`, `replyIds`, `readOnly`, `activatable`, `anchorY`, `pageIndex`, and `isActive`. Revision items add `kind: 'revision'`, a `revisionKind`, and `replacedText` for replacements, so a card can say _Replaced "x" with "y"_.
 
 `replyIds` is on revisions too, not only comments. OOXML gives `w:ins` and `w:del` no body, so replying to a tracked change writes a comment over that change's range. The reply belongs inside the change's card, and the comment carries `parentRevisionId` naming it. A surface listing top-level cards must skip a comment with either `parentId` or `parentRevisionId`, or it will draw the reply twice.
 
@@ -185,6 +197,8 @@ Two things the hook gives you that you should not recompute. Items come from the
 `useReview(query)` narrows the set. `excludeRevisionKinds` drops kinds you do not want to show, and `placement: false` skips layout geometry when you only need the metadata. `useReviewOf(editor, query)` is the same hook against an editor you already hold.
 
 A hand-built rail that hides kinds should tell the engine as well: `editor.setReviewActivationExclusions(['format', 'structural'])`. Activation is caret-driven, so without it a click on text under a hidden change opens a card your rail never draws, and the click reads as ignored. `DocxEditor.Review` does this for you from its own `structural` and `formatting` props.
+
+`items` still lists what you excluded, because it answers what the document holds rather than what may be clicked. Each one carries `activatable` to tell the two apart. Draw a card with `activatable: false` disabled rather than discovering the refusal on click; `setActive` returns `false` for it either way.
 
 ## Accept or reject in bulk
 
