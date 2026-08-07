@@ -165,11 +165,12 @@ describe('a revision around the WHOLE field', () => {
     expect(attributionOf(project(inserted), 'Section 3')).toEqual(['insert:Author']);
   });
 
-  test('nesting is kept whole, outermost first', () => {
-    // A wrapper around the whole field means `atomicFieldSpansOf` — which does not descend into
-    // revision wrappers — never forms an atom, so the result is ordinary buffered content and
-    // carries the full stack exactly as a plain run would. The outer decides whether the text
-    // exists at all; the inner is still someone's pending decision about it.
+  test('the field-level revision is the atom’s, not an inner one', () => {
+    // A wrapper around the whole field forms an ATOM — one model offset, one decision to accept
+    // or reject — so it takes the attribution of the wrapper that owns the field. An inner
+    // revision on the cached result is a decision about text inside a unit that cannot be
+    // split, and reporting that instead would point the review card at the wrong author for the
+    // only thing a reviewer can actually act on.
     const nested =
       '<w:p>' +
       `<w:ins w:id="4" w:author="Outer" w:date="2026-07-07T20:18:00Z">${FIELD_CHROME}` +
@@ -177,7 +178,22 @@ describe('a revision around the WHOLE field', () => {
       '<w:r><w:t>Section 4</w:t></w:r></w:ins>' +
       '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:ins>' +
       '</w:p>';
-    expect(attributionOf(project(nested), 'Section 4')).toEqual(['insert:Outer', 'insert:Inner']);
+    expect(attributionOf(project(nested), 'Section 4')).toEqual(['insert:Outer']);
+  });
+
+  test('an inserted field is absent from the original view', () => {
+    // The atom resolves its own visibility at flush, from the stack captured at `begin`. A
+    // SUPPRESSED result run never reaches the donation further down — it is skipped before it
+    // gets there — so without that capture an inserted page number painted its digits into the
+    // one view that must show the document before the insertion.
+    const inserted =
+      '<w:p>' +
+      `<w:ins w:id="6" w:author="Author" w:date="2026-07-07T20:18:00Z">${FIELD_CHROME}` +
+      '<w:r><w:t>Section 7</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:ins>' +
+      '</w:p>';
+    expect(project(inserted, 'original').map((piece) => piece.text)).toEqual([]);
+    expect(project(inserted).map((piece) => piece.text)).toContain('Section 7');
   });
 });
 

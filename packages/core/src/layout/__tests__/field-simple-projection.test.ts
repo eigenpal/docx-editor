@@ -138,6 +138,38 @@ describe('a simple PAGE field', () => {
     }
   });
 
+  test('a deleted simple PAGE is gone from the proposed result', () => {
+    // The live page-field branch does not go through the text collector, so its visibility has
+    // to be resolved before it — otherwise a deleted footer number painted straight into the
+    // accepted view, evaluated and current, as if nobody had struck it.
+    const deleted = `<w:p><w:del w:id="1" w:author="A">${page.slice(5, -6)}</w:del></w:p>`;
+    const pieces = piecesOfParagraph(
+      paragraphOf(deleted),
+      [],
+      { pageNumber: 7, pageCount: 9 },
+      undefined,
+      undefined,
+      undefined,
+      'proposed'
+    );
+    expect(pieces.map((piece) => piece.text).join('')).toBe('');
+  });
+
+  test('a complex PAGE nested inside a non-page simple field is still found', () => {
+    // `STYLEREF` wrapping a `PAGE` is ordinary in a running header. Returning early for every
+    // simple field hid the inner one: the story reported no page fields, its context token
+    // stayed empty, one layout served every sheet, and the number showed page one everywhere —
+    // the same failure this detection exists to prevent, one level down.
+    const nested =
+      '<w:p><w:fldSimple w:instr=" STYLEREF 1 ">' +
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText> PAGE </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:t>1</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:fldSimple></w:p>';
+    expect(detectStoryPageFields(partOf(nested).root).hasPage).toBe(true);
+  });
+
   test('is detected, so furniture gets a per-sheet context at all', () => {
     // Without detection the story's page-field key stays empty and one layout is reused for
     // every sheet, so evaluation never gets the chance to differ.

@@ -207,6 +207,34 @@ describe('the readback over a paragraph containing a field', () => {
     expect(paragraphReplacePlan('p1', FIELD_MODEL_TEXT, FIELD_MODEL_TEXT)).toBeNull();
   });
 
+  test('a result broken across spans contributes its model range ONCE', () => {
+    // Line breaking splits a field's result at its spaces and every resulting span republishes
+    // the SAME model range. Emitting the model slice per span repeated the field's characters,
+    // so a four-word result read back as four `￼` where the model has one — and the diff then
+    // inserted the extras into the document as literal object-replacement characters.
+    const root = document.createElement('div');
+    const line = document.createElement('div');
+    line.className = 'docx-line';
+    const add = (text: string, start: number, end: number, projected = false): void => {
+      const span = document.createElement('span');
+      span.dataset.paragraphId = 'p1';
+      span.dataset.start = String(start);
+      span.dataset.end = String(end);
+      if (projected) span.dataset.docxField = '';
+      span.textContent = text;
+      line.append(span);
+    };
+    add('a potential ', 0, 12);
+    add('Scope ', 12, 13, true);
+    add('of the ', 12, 13, true);
+    add('discussions', 12, 13, true);
+    add(' (the ', 13, 19);
+    root.append(line);
+
+    expect(paintedTextOf(root, 'p1', FIELD_MODEL_TEXT)).toBe(FIELD_MODEL_TEXT);
+    expect(paragraphReplacePlan('p1', FIELD_MODEL_TEXT, FIELD_MODEL_TEXT)).toBeNull();
+  });
+
   test('a real edit elsewhere in the paragraph is still recovered', () => {
     // The whole point of this path: text the browser wrote that the surface could not
     // intercept. Keying the field off "the lengths disagree" would have swallowed this,

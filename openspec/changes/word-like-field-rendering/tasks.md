@@ -100,6 +100,35 @@ assumed 1:1 broke, each in its own way, and each was found only when a user hit 
       count at the base commit, pinned so it cannot grow. Lowering it is a content-control change
       and wants its own proposal
 
+## 6d. Second review round
+
+Eight more, six of them introduced by the fixes above — which is the honest cost of widening a
+walk that other code had been reasoning about. Each reproduced before being changed.
+
+- [x] 6d.1 **The readback repeated a field's model characters.** The fix in 6c.3 emitted the model
+      slice once per SPAN, and a result broken at word boundaries republishes one range across
+      several spans — so a four-word field read back as four `￼` and the diff inserted the extras
+      as literal object-replacement characters. Exactly the multi-span trap 6b.2 fixed elsewhere,
+      reintroduced two commits later. Contribute each range once
+- [x] 6d.2 A deleted simple `PAGE` painted its evaluated number into the proposed result: the
+      live page-field branch bypasses the text collector where visibility was resolved
+- [x] 6d.3 An inserted complex field painted in the ORIGINAL view. Latent until 6b/6c made
+      `atomicFieldSpansOf` descend into revision wrappers, at which point such a field forms an
+      atom and reaches a flush that never asked about visibility. The suppressed result run is
+      skipped before it can donate its stack, so the capture has to happen at `begin`
+- [x] 6d.4 The new `w:fldSimple` arm in the page-field detector returned for EVERY simple field,
+      so a complex `PAGE` inside a `STYLEREF` stopped being found — the same failure the arm was
+      added to prevent, one level down. Return early only when it is a page field
+- [x] 6d.5 The `resultRevisions` doc still explained the design in terms of wrapped fields never
+      forming atoms, which this change had already made untrue — and that stale reasoning is what
+      hid 6d.3
+- [x] 6d.6 `projectSimpleField` advanced an offset without recording a deleted range, so the caret
+      was never told to step over a struck simple field
+- [x] 6d.7 An orphaned doc comment had drifted onto the wrong function
+- [x] 6d.8 `collapsedCaretPosition` promised more than it tested (focus, IME). Corrected the
+      contract rather than the behaviour: Word keeps a field shaded while the caret is in it, and
+      dropping the shading on every blur would flicker it away whenever the toolbar is used
+
 ## 7. Gates
 
 - [x] 7.1 `bun run typecheck`, `bun run lint` (0 errors — the cap is the only thing that checks the extractions)

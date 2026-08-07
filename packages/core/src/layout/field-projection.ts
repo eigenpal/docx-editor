@@ -258,11 +258,13 @@ interface PendingFieldProjection {
    * to nothing at all, and it painted as ordinary unchanged text — a deletion with no strike,
    * an insertion with no underline.
    *
-   * This is the shape where a `w:del` wraps only the RESULT run and `begin`/`end` sit outside
-   * it, which is how Word records a form field whose filled-in value was replaced. A wrapper
-   * around the whole `begin`…`end` sequence takes a different route: `atomicFieldSpansOf` does
-   * not descend into revision wrappers, so such a field never forms an atom at all — it demotes,
-   * and its result is buffered as ordinary content carrying the live stack directly.
+   * Both shapes reach here: a `w:del` around only the RESULT run with `begin`/`end` outside it
+   * (how Word records a form field whose value was replaced), and a wrapper around the whole
+   * `begin`…`end` sequence. The second used to demote instead — `atomicFieldSpansOf` did not
+   * descend into revision wrappers — until that walk was widened so the store and layout would
+   * stop disagreeing about what such a field is worth. Anything reasoning about "a wrapped field
+   * never forms an atom" is out of date; `commitAtomicField` now has to resolve visibility
+   * itself, because it can be reached with a stack that the display mode resolves away.
    *
    * A field whose result runs carry DIFFERENT stacks collapses to the first: the atom is one
    * model unit and Word treats a field as one decision, so splitting it would invent a boundary
@@ -419,6 +421,20 @@ export function piecesOfParagraph(
     }
     // The walk has already left any wrapper around this field, so its attribution comes from
     // what was captured on the way in rather than from the live stack.
+    //
+    // Which is also why VISIBILITY has to be asked of the captured stack here rather than left
+    // to the emitters: a field wrapped whole in `w:ins`/`w:del` used never to form an atom at
+    // all, so this path could not meet one — until `atomicFieldSpansOf` learned to descend into
+    // revision wrappers. Without this, an inserted page number painted its digits in the
+    // ORIGINAL view, which is the one view that must show the document before that insertion.
+    if (!revisionsVisible(pending.resultRevisions, displayMode)) {
+      if (deletedRanges && revisionsAreDeletion(pending.resultRevisions)) {
+        appendModelRange(deletedRanges, start, end);
+      }
+      pending = null;
+      openAtomicBeginId = null;
+      return;
+    }
     const carried = {
       ...(pending.resultRevisions.length > 0 ? { revisionsOverride: pending.resultRevisions } : {}),
       ...(pending.resultLink ? { linkOverride: pending.resultLink } : {}),
@@ -624,8 +640,15 @@ export function piecesOfParagraph(
             cachedText: '',
             buffered: [],
             bufferOffset: offset,
-            resultRevisions: NO_REVISIONS,
-            capturedResultRevisions: false,
+            // A wrapper around the BEGIN marker wraps the whole field, and since
+            // `atomicFieldSpansOf` learned to descend into revision wrappers such a field forms
+            // an atom rather than demoting. Capturing here is what makes the flush able to
+            // resolve visibility at all: a suppressed result run never reaches the donation
+            // below — it is skipped before it gets there — so without this an inserted page
+            // number painted its digits into the ORIGINAL view, with nothing recording that the
+            // insertion was what put them there.
+            resultRevisions: revisions,
+            capturedResultRevisions: revisions.length > 0,
             formField: hasLegacyFormFieldData(grand),
             ...(currentLink ? { resultLink: currentLink } : {}),
           };
@@ -822,6 +845,19 @@ export function piecesOfParagraph(
     const start = offset;
     offset += 1;
     if (simple.kind === 'textValue') return;
+
+    // The atom is one model offset whatever it paints, so a revision enclosing the WHOLE field
+    // is answered here, once, before any of the branches below — including the live page-field
+    // one, which does not go through `collect` and so would otherwise paint a deleted footer
+    // number straight into the accepted view.
+    //
+    // The deleted range is recorded whether or not it was laid out, exactly as the complex path
+    // and inline drawings do: the offset exists in every display mode and the caret has to step
+    // over it in every mode.
+    if (revisionsAreDeletion(revisions) && deletedRanges) {
+      appendModelRange(deletedRanges, start, start + 1);
+    }
+    if (!revisionsVisible(revisions, displayMode)) return;
 
     let text = '';
     let resultProps: readonly OoxmlProperty[] | undefined;

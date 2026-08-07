@@ -524,14 +524,13 @@ export function mountPaginatedSurface(
   const drawingStrings: DrawingPaintStrings =
     options.drawingStrings ?? DEFAULT_DRAWING_PAINT_STRINGS;
   /**
-   * `w:doNotShadeFormData`, memoized per package revision.
+   * The insertion point, or null when the selection is not collapsed — a range has two ends
+   * and is not "inside" anything, and a second background under one of them would read as a
+   * second selection.
    *
-   * Read on every paint otherwise, and paint runs far more often than `settings.xml` changes —
-   * the same reason every other settings read in the engine is revision-keyed.
-   */
-  /**
-   * The insertion point, or null when there is not one — a range selection has two ends and
-   * is not "inside" anything.
+   * Collapsed-ness ONLY. Focus and IME composition are the painted caret's own state, held in
+   * `surface-caret.ts`, and are not consulted here — so field shading stays lit across a blur
+   * and through a composition, which is what Word does with a field the caret is in.
    */
   const collapsedCaretPosition = (): { paragraphId: string; offset: number } | null => {
     if (
@@ -542,6 +541,12 @@ export function mountPaginatedSurface(
     }
     return { paragraphId: selection.head.paragraphId, offset: selection.head.offset };
   };
+  /**
+   * `w:doNotShadeFormData`, memoized per package revision.
+   *
+   * Read on every paint otherwise, and paint runs far more often than `settings.xml` changes —
+   * the same reason every other settings read in the engine is revision-keyed.
+   */
   let formFieldShadingRevision = -1;
   let formFieldShading = true;
   const shadeFormFields = (): boolean => {

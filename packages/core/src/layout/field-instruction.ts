@@ -353,8 +353,15 @@ export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
     // A wrong number is not a smaller error than a missing one, it is a quieter one.
     if (isFldSimple(node)) {
       const kind = allowlistedPageField(fldSimpleInstr(node) ?? '');
-      if (kind) note(kind);
-      return;
+      if (kind) {
+        note(kind);
+        return;
+      }
+      // NOT a page field — fall through and keep walking. A simple field's cached result can
+      // hold a complex one (`STYLEREF` wrapping a `PAGE` is ordinary in a running header), and
+      // returning here hid it: the story reported no page fields, its context token stayed
+      // empty, one layout served every sheet, and the number inside showed page one everywhere.
+      // Exactly the failure this arm was added to prevent, one level down.
     }
 
     for (const child of node.children) {

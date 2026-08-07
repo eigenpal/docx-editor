@@ -430,12 +430,21 @@ export function paintedTextOf(
 ): string | null {
   const spans = pagesLayer.querySelectorAll('[data-paragraph-id][data-start]');
   const pieces: { start: number; text: string }[] = [];
+  /** Model ranges already contributed by a projected span, keyed by start. */
+  const projectedRanges = new Set<number>();
   for (const span of spans) {
     const element = span as HTMLElement;
     if (element.dataset.paragraphId !== paragraphId) continue;
     const start = Number(element.dataset.start);
     if (!Number.isInteger(start)) continue;
     if (element.dataset.docxField !== undefined) {
+      // ONCE per range, not once per span. Line breaking splits a field's result at its
+      // spaces and every resulting span republishes the SAME model range, so emitting the
+      // slice per span repeated the field's model characters — a four-word result read back
+      // as four `￼` where the model has one, and the diff then inserted the extras as
+      // literal object-replacement characters.
+      if (projectedRanges.has(start)) continue;
+      projectedRanges.add(start);
       const rawEnd = element.dataset.end;
       const end =
         rawEnd !== undefined && /^\d{1,9}$/.test(rawEnd) && Number(rawEnd) >= start

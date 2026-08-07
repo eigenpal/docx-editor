@@ -22,9 +22,11 @@ export interface FieldShadingCaret {
 /**
  * Move the "caret is in this field" mark to whichever field atom holds `caret`.
  *
- * `caret` is null when there is no collapsed insertion point — no focus, a range selection, an
- * IME composition — and every mark comes off. A range selection draws its own highlight, and a
- * second background under one end of it reads as a second selection.
+ * `caret` is null when the selection is not collapsed, and every mark then comes off: a range
+ * draws its own highlight, and a second background under one end of it reads as a second
+ * selection. Focus and IME composition are deliberately NOT part of that test — Word keeps a
+ * field shaded while the caret is in it, and losing the shading on every blur would flicker it
+ * away each time the user reached for the toolbar.
  */
 export function syncActiveFieldShading(
   pagesLayer: HTMLElement,
