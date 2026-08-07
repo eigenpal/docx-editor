@@ -40,6 +40,7 @@ import {
   NavigationTitle,
   NavigationToggle,
 } from './parts';
+import { useScopeClassName } from '../scope-context';
 
 /** Props for `DocxEditor.Navigation`. @public */
 export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
@@ -69,6 +70,8 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
  * @public
  */
 export function DocxEditorNavigation(props: DocxEditorNavigationProps): ReactElement {
+  // Skip the scope class when the packaged wrapper already carries it.
+  const scopeClassName = useScopeClassName();
   const { t: hostT, toggle = true, className, style, children, ...paneOptions } = props;
 
   const pane = useNavigationPane(paneOptions);
@@ -98,7 +101,7 @@ export function DocxEditorNavigation(props: DocxEditorNavigationProps): ReactEle
   return (
     <NavigationContext.Provider value={value}>
       <div
-        className={`docx-editor docx-nav${pane.open ? ' docx-nav--open' : ''}${className ? ` ${className}` : ''}`}
+        className={`${scopeClassName}docx-nav${pane.open ? ' docx-nav--open' : ''}${className ? ` ${className}` : ''}`}
         data-open={pane.open ? 'true' : 'false'}
         style={
           {

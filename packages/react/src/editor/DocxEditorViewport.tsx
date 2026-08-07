@@ -15,6 +15,7 @@ import { ReviewRailContext, useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
 import { zoomLevelForShortcut } from './zoom-levels';
+import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
 
 const selectPaneOpen = (snapshot: EditorSnapshot): boolean => snapshot.reviewPaneOpen ?? true;
 
@@ -33,6 +34,7 @@ export interface DocxEditorViewportProps {
  * @public
  */
 export function DocxEditorViewport({ className, style, children }: DocxEditorViewportProps) {
+  const scopeClassName = useScopeClassName();
   const editor = useDocxEditor();
   // The open pane is given its own gutter rather than allowed to overlap: the page centres
   // inside the padding box, so reserving the rail's width shifts the sheet left by half of
@@ -81,12 +83,16 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
       data-testid="docx-editor-scroll"
       onKeyDownCapture={onKeyDownCapture}
       {...(reserve ? { 'data-review-pane': paneOpen ? 'open' : 'closed' } : {})}
-      className={`docx-editor docx-editor-one-surface docx-editor-one-surface__viewport docx-editor__scroll-container${
+      className={`${scopeClassName}docx-editor-one-surface docx-editor-one-surface__viewport docx-editor__scroll-container${
         className ? ` ${className}` : ''
       }`}
       style={{ ...style, ['--docx-nav-shift' as string]: `${shift}px` } as CSSProperties}
     >
-      {children}
+      {/* Everything below this div has a scoped ancestor: either the packaged
+          wrapper above us, or this element, which scoped itself just now. Say
+          so, or parts inside repeat the class under `chrome={false}` and in the
+          Root + Viewport composition path. */}
+      <ScopedByAncestorContext.Provider value={true}>{children}</ScopedByAncestorContext.Provider>
     </div>
   );
 }

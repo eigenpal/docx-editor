@@ -174,18 +174,17 @@ function ChangeList() {
 }
 ```
 
-| Member                          | What it does                                                                                                                                  |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `items`                         | Every pending decision selected by the query, in reading order.                                                                               |
-| `activeKey`                     | The key of the item that contains the caret, or `null`.                                                                                       |
-| `setActive(key)`                | Select an item's range, scroll to it, and enter its story when needed. Returns `false` when the engine refuses activation. See `activatable`. |
-| `accept(item)` / `reject(item)` | Resolve a revision. Returns whether it landed; false on an item whose `readOnly` is true, and on a document open for viewing.                 |
-| `reply(item, text, author?)`    | Reply to a change. Returns whether it landed.                                                                                                 |
-| `remove(item)`                  | Delete a comment thread, or discard a suggestion. Returns whether it landed.                                                                  |
-| `comment(text, author?)`        | Comment on the current selection. Returns whether it landed.                                                                                  |
-| `selectionAnchorY`              | Where a comment on the selection would sit, or `null`.                                                                                        |
-| `paneOpen` / `setPaneOpen`      | The same toggle the toolbar's comments button runs.                                                                                           |
-| `ready`                         | False while no document is loaded.                                                                                                            |
+| Member                          | What it does                                                                                                                                                                                                                        |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `items`                         | Every pending decision selected by the query, in reading order.                                                                                                                                                                     |
+| `activeKey` / `setActive`       | Which item the caret is in; setting selects its range and scrolls to it, entering or leaving a header/footer story as the item requires. Returns whether it landed; see `activatable`. Takes `{ reveal }` to choose where it lands. |
+| `accept(item)` / `reject(item)` | Resolve a revision. Returns whether it landed; false on an item whose `readOnly` is true, and on a document open for viewing.                                                                                                       |
+| `reply(item, text, author?)`    | Reply to a change. Returns whether it landed.                                                                                                                                                                                       |
+| `remove(item)`                  | Delete a comment thread, or discard a suggestion. Returns whether it landed.                                                                                                                                                        |
+| `comment(text, author?)`        | Comment on the current selection. Returns whether it landed.                                                                                                                                                                        |
+| `selectionAnchorY`              | Where a comment on the selection would sit, or `null`.                                                                                                                                                                              |
+| `paneOpen` / `setPaneOpen`      | The same toggle the toolbar's comments button runs.                                                                                                                                                                                 |
+| `ready`                         | False while no document is loaded.                                                                                                                                                                                                  |
 
 Each item carries `key`, `id`, `author`, `initials`, `date`, `text`, `replyIds`, `readOnly`, `activatable`, `anchorY`, `pageIndex`, and `isActive`. Revision items add `kind: 'revision'`, a `revisionKind`, and `replacedText` for replacements, so a card can say _Replaced "x" with "y"_.
 
@@ -202,6 +201,22 @@ Two things the hook gives you that you should not recompute. Items come from the
 3. A custom rail that hides revision kinds must also call `editor.setReviewActivationExclusions([...])`. `DocxEditorReview` sets these exclusions from its `structural` and `formatting` props and clears them when it unmounts.
 4. Engine activation exclusions do not remove entries from an unfiltered queue. Those entries remain in `items` with `activatable: false`.
 5. `activatable` is also false when an item has no selectable range. `setActive` returns `false` without moving the selection when activation is excluded or no range exists. It can also return `false` when the item's story cannot open.
+
+### Where an activated item lands
+
+`setActive` centres an item it has to scroll to, and leaves one that is already on screen alone.
+Pass `reveal` to choose something else:
+
+```tsx
+setActive(item.key, { reveal: 'start' }); // near the top, the way a jump to a heading reads
+setActive(item.key, { reveal: 'nearest' }); // the minimum scroll, so it lands against an edge
+setActive(item.key, { reveal: false }); // select it, but leave the viewport alone
+```
+
+`reveal: false` is for a host whose own list already drives the scroll, so the engine is not
+competing with it for the viewport. It governs the item: activating a change in a header, a footer
+or a note still opens that story and brings its band into view, because a story the reader cannot
+see is one they cannot read the change in.
 
 ## Accept or reject in bulk
 
