@@ -48,6 +48,23 @@ This SHALL be checked against real documents rather than only hand-written marku
 - **WHEN** the fixture corpus is laid out in all-markup and each revision's tree-declared text is compared with the text attributed to it
 - **THEN** no revision is missing any of its characters
 
+### Requirement: The store and layout agree on a tracked field's length
+
+A field's atom is worth ONE model offset and swallows its result. `w:delText` in a result run is still that field's own text and SHALL be swallowed with it, and the offset walk SHALL descend into content-revision wrappers to reach it, exactly as it descends into `w:hyperlink`.
+
+Counting those characters again as ordinary paragraph text makes the paragraph longer than anything laid out from it. That is not a cosmetic disagreement: the caret paints at layout's offset and the keystroke applies at the store's, so a click lands the cursor in one place and typing appears somewhere else entirely — displaced by the length of the deleted words, for every position after the field.
+
+#### Scenario: A struck field result costs one offset, not two
+
+- **WHEN** a paragraph holds a complex field whose result run is enclosed by `w:del`
+- **THEN** the paragraph's model text carries one field-atom character for it and none of the deleted characters
+- **AND** the paragraph's length equals the end of the last piece laid out from it
+
+#### Scenario: Offsets after the field are undisplaced
+
+- **WHEN** the caret is placed after such a field and text is typed
+- **THEN** the text appears where the caret was painted
+
 ### Requirement: A deleted field occupies a real deleted range
 
 The model range a deletion publishes for an atomic field SHALL be the single unit that field reserved, in every display mode, and SHALL never begin before the paragraph does. Deleted ranges SHALL be recorded whether or not the deletion was laid out, because the characters occupy model offsets in every mode and the caret has to step over them in every mode.

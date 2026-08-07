@@ -26,6 +26,15 @@
 - [x] 3.5 Attach the live stack and link inline on the demoted path, where the walk is still inside the wrapper
 - [x] 3.6 Tests for both shapes, nesting, the untracked case, the hyperlink case, and the proposed/original views
 
+## 3b. The offset the store and layout disagreed on
+
+- [x] 3b.1 Reported from the browser: clicking in the affected paragraph painted the caret in one place while typing landed elsewhere
+- [x] 3b.2 Measure it — that paragraph read `modelLen=155` against `lastEnd=138`, a 17-character shortfall exactly the length of the deleted words; confirmed byte-identical at the base commit, so pre-existing rather than introduced here
+- [x] 3b.3 Root cause: `atomicFieldSpansOf` did not descend into revision wrappers, so the struck result run never reached the scan, AND `deletedText` was missing from the result-content kinds an atom swallows. `walkParagraph` builds `covered` from `removeNodeIds`, so it counted those characters a second time as ordinary text
+- [x] 3b.4 Descend into content-revision wrappers, as the walk already does for `w:hyperlink`
+- [x] 3b.5 Add `deletedText` to the result-content kinds
+- [x] 3b.6 Assert `paragraphTextOf(...).length` equals the last laid-out offset for the wrapped-result shape — the test fails without either half of the fix
+
 ## 4. The deleted range
 
 - [x] 4.1 Use the reserved `[atomStart, atomStart + 1)` on the atomic path instead of deriving from the running offset

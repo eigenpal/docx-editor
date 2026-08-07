@@ -11,7 +11,7 @@
 // contribute nothing and interior result text remains visible/addressable so content
 // never disappears.
 
-import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
+import { isContentRevisionKind, WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type {
   OoxmlFldCharNode,
   OoxmlFldSimpleNode,
@@ -264,7 +264,17 @@ export function atomicFieldSpansOf(
       }
       return;
     }
-    if (child.kind === 'hyperlink') {
+    if (
+      child.kind !== 'textValue' &&
+      (child.kind === 'hyperlink' || isContentRevisionKind(child.kind))
+    ) {
+      // Revision wrappers are run containers like `w:hyperlink` is. Not descending made a
+      // field whose RESULT is wrapped in `w:del` disagree with itself: the begin/end markers
+      // formed an atom worth one offset, but the struck result run was not among the nodes
+      // that atom swallowed, so the paragraph counted its characters a SECOND time as
+      // ordinary text. Layout folds them into the atom, the store did not, and every offset
+      // after the field was out by the length of the deleted words — the caret painted in one
+      // place and typing landed elsewhere.
       for (const inner of child.children) visitInline(inner);
     }
   };
@@ -339,6 +349,12 @@ export function atomicFieldSpansOf(
         if (phase === 'result' && nesting === 1) {
           if (
             node.kind === 'text' ||
+            // `w:delText` is result content that a tracked deletion struck — still the field's
+            // own text, and still swallowed by the one offset the atom is worth. Leaving it out
+            // let the paragraph count those characters a SECOND time as ordinary text while
+            // layout folded them into the atom, so every offset after such a field was out by
+            // the length of the deleted words.
+            node.kind === 'deletedText' ||
             node.kind === 'tab' ||
             node.kind === 'hardBreak' ||
             node.kind === 'textValue'
