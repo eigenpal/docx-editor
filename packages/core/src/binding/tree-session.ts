@@ -346,7 +346,7 @@ export interface TreeDocxSession {
    * `commentsExtended.xml`, a part a document with no thread does not have, so the state and the
    * part that records it commit together.
    */
-  setCommentResolved(commentId: string, resolved: boolean): boolean;
+  setCommentResolved(commentId: string, resolved: boolean, scope?: StoryScope): boolean;
   /**
    * Delete a comment thread outright — body, thread state and story markers.
    *
@@ -1263,8 +1263,10 @@ export function openTreeSession(
         return result.commentId;
       },
 
-      setCommentResolved(commentId, resolved) {
-        const store = bodyStore();
+      setCommentResolved(commentId, resolved, scope = BODY_SCOPE) {
+        const resolvedStory = scope.kind === 'body' ? null : packageStore.resolveStory(scope);
+        if (resolvedStory && !resolvedStory.ok) return false;
+        const store = resolvedStory?.ok ? resolvedStory.store : bodyStore();
         const beforePackage = packageStore.currentPackage();
         const checkpoint = store.checkpoint();
         // Grafted and republished for the same reason a reply is: the story store's package does

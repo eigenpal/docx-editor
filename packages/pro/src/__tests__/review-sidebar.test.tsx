@@ -17,13 +17,17 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot, DocxEditorViewport, DocxEditorContent } from '@docx-editor.dev/react';
-import { DocxEditorReview } from '../react/index.ts';
+import { DocxEditorReview, useReview } from '../react/index.ts';
 import { reviewModule } from '../index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+const COMMENTS_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
+const COMMENTS_EXTENDED_REL =
+  'http://schemas.microsoft.com/office/2011/relationships/commentsExtended';
+const W15 = 'http://schemas.microsoft.com/office/word/2012/wordml';
 
 function docx(body: string): Uint8Array {
   return zipSync({
@@ -43,6 +47,44 @@ function docx(body: string): Uint8Array {
 }
 
 const SOURCE = docx('<w:p><w:r><w:t>hello world</w:t></w:r></w:p>');
+const COMMENTED_SOURCE = zipSync({
+  '[Content_Types].xml': strToU8(
+    `<Types xmlns="${CT}">` +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' +
+      '<Override PartName="/word/commentsExtended.xml" ContentType="application/vnd.ms-word.commentsExtended+xml"/>' +
+      '</Types>'
+  ),
+  '_rels/.rels': strToU8(
+    `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+  ),
+  'word/document.xml': strToU8(
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:commentRangeStart w:id="7"/>` +
+      '<w:r><w:t>hello</w:t></w:r><w:commentRangeEnd w:id="7"/>' +
+      '<w:r><w:commentReference w:id="7"/></w:r></w:p></w:body></w:document>'
+  ),
+  'word/comments.xml': strToU8(
+    `<w:comments xmlns:w="${W}" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml">` +
+      '<w:comment w:id="7" w:author="Ada" w14:paraId="A0000001"><w:p><w:r><w:t>Check this.</w:t></w:r></w:p></w:comment>' +
+      '</w:comments>'
+  ),
+  'word/commentsExtended.xml': strToU8(
+    `<w15:commentsEx xmlns:w15="${W15}"><w15:commentEx w15:paraId="A0000001" w15:done="0"/></w15:commentsEx>`
+  ),
+  'word/_rels/document.xml.rels': strToU8(
+    `<Relationships xmlns="${REL}">` +
+      `<Relationship Id="rIdC" Type="${COMMENTS_REL}" Target="comments.xml"/>` +
+      `<Relationship Id="rIdCE" Type="${COMMENTS_EXTENDED_REL}" Target="commentsExtended.xml"/>` +
+      '</Relationships>'
+  ),
+});
+
+function commentOf(editor: DocxEditorInstance) {
+  const comment = editor.getReviewItems().find((item) => item.kind === 'comment');
+  if (!comment || comment.kind !== 'comment') throw new Error('expected a comment');
+  return comment;
+}
 
 afterEach(() => {
   cleanup();
@@ -280,6 +322,104 @@ describe('the review sidebar', () => {
     fireEvent.click(actions[0]!);
     expect(view.getAllByTestId('review-card')).toHaveLength(1);
     expect(editor.surface!.session.bodyText()).toBe('base added');
+  });
+
+  test('resolves and reopens a comment from the packaged card', async () => {
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={COMMENTED_SOURCE}
+        modules={[reviewModule()]}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const editor = instance!;
+    expect(view.getByTestId('review-resolve')).toBeDefined();
+    expect(view.queryByTestId('review-reopen')).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(view.getByTestId('review-resolve'));
+    });
+    expect(commentOf(editor).resolved).toBe(true);
+    expect(view.getByTestId('review-card').hasAttribute('data-resolved')).toBe(true);
+    expect(view.queryByTestId('review-resolve')).toBeNull();
+    expect(view.getByTestId('review-reopen')).toBeDefined();
+
+    await act(async () => {
+      fireEvent.click(view.getByTestId('review-reopen'));
+    });
+    expect(commentOf(editor).resolved).toBe(false);
+    expect(view.getByTestId('review-resolve')).toBeDefined();
+  });
+
+  test('gives custom comment cards actions and the engine viewing refusal', async () => {
+    let instance: DocxEditorInstance | null = null;
+
+    function HostCommentCard() {
+      const review = useReview();
+      const item = review.items.find((entry) => entry.kind === 'comment');
+      if (!item) return null;
+      return (
+        <div>
+          <output data-testid="host-resolution-reason">
+            {review.commentResolutionDisabledReason ?? ''}
+          </output>
+          <button
+            data-testid="host-resolve"
+            disabled={review.commentResolutionDisabledReason !== null}
+            onClick={() => review.resolve(item)}
+          >
+            Resolve
+          </button>
+          <button
+            data-testid="host-reopen"
+            disabled={review.commentResolutionDisabledReason !== null}
+            onClick={() => review.reopen(item)}
+          >
+            Reopen
+          </button>
+        </div>
+      );
+    }
+
+    const view = render(
+      <DocxEditorRoot
+        document={COMMENTED_SOURCE}
+        modules={[reviewModule()]}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <HostCommentCard />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const editor = instance!;
+
+    await act(async () => {
+      fireEvent.click(view.getByTestId('host-resolve'));
+    });
+    expect(commentOf(editor).resolved).toBe(true);
+
+    await act(async () => {
+      editor.exec({ type: 'setEditingMode', mode: 'viewing' });
+    });
+    expect((view.getByTestId('host-resolve') as HTMLButtonElement).disabled).toBe(true);
+    expect((view.getByTestId('host-reopen') as HTMLButtonElement).disabled).toBe(true);
+    expect(view.getByTestId('host-resolution-reason').textContent).toBe(
+      'the document is open for viewing'
+    );
+    fireEvent.click(view.getByTestId('host-reopen'));
+    expect(commentOf(editor).resolved).toBe(true);
   });
 
   test('hides the read-only structural cards by default, and shows them on request', () => {

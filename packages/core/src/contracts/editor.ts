@@ -595,6 +595,15 @@ export interface Editor {
   rejectReviewItem(key: string): ExecResult;
 
   /**
+   * Resolve or reopen the comment thread behind a review card.
+   *
+   * The thread state is written through the same package transaction as every other comment
+   * mutation, so `commentsExtended.xml`, Undo and save/reopen cannot disagree. Repeating the
+   * state already on the item succeeds without adding an undo entry.
+   */
+  setCommentResolved(key: string, resolved: boolean): ExecResult;
+
+  /**
    * Discard the item behind a card: the destructive half of the review verbs.
    *
    * On a COMMENT it deletes the thread — the `w:comment` body, the `w15:commentEx` record and

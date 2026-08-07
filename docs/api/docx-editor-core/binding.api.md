@@ -175,7 +175,7 @@ export interface TreeDocxSession {
     revision(): number;
     revisionFor(scope: StoryScope): number | null;
     save(): Uint8Array;
-    setCommentResolved(commentId: string, resolved: boolean): boolean;
+    setCommentResolved(commentId: string, resolved: boolean, scope?: StoryScope): boolean;
     settingsRoot(): OoxmlElement | null;
     storyText(scope: StoryScope): string | null;
     stylesRoot(): OoxmlElement | null;

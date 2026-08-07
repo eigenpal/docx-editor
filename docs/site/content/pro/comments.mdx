@@ -145,6 +145,38 @@ Comment items add `resolved` (whether `w15:commentsEx` marks the thread done) an
 
 For a document-level read without the review module, `editor.getComments()` returns `{ id, text, resolved }` per thread.
 
+## Resolving and reopening
+
+The packaged card renders `<DocxEditorReview.Resolve />` on an open comment and
+`<DocxEditorReview.Reopen />` on a resolved one. Custom cards use the matching hook actions:
+
+```tsx
+function CommentDecision({ item }: { item: ReviewItemView }) {
+  const { resolve, reopen, commentResolutionDisabledReason } = useReview();
+  if (item.kind !== 'comment') return null;
+
+  return (
+    <button
+      disabled={commentResolutionDisabledReason !== null}
+      title={commentResolutionDisabledReason ?? undefined}
+      onClick={() => (item.resolved ? reopen(item) : resolve(item))}
+    >
+      {item.resolved ? 'Reopen' : 'Resolve'}
+    </button>
+  );
+}
+```
+
+Both actions return whether the request was accepted. A stale or non-comment item returns false.
+Repeating Resolve on a resolved thread, or Reopen on an open one, succeeds without dirtying the
+document or adding an Undo entry. Resolving writes the whole thread in one transaction; one Undo
+restores its previous state, and save/reopen preserves it.
+
+In viewing mode both actions are disabled. `commentResolutionDisabledReason` is the engine's
+`the document is open for viewing` refusal, so host-composed controls can explain the exact gate.
+Editing and suggesting modes both allow thread-state changes; resolving a discussion is metadata,
+not a tracked document edit.
+
 ## Writes emit changes
 
 Writing a comment or a reply fires the editor's `change` event, so autosave and dirty tracking pick it up like any other edit:

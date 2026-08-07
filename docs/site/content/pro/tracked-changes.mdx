@@ -174,17 +174,19 @@ function ChangeList() {
 }
 ```
 
-| Member                          | What it does                                                                                                                                                                                                                        |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `items`                         | Every pending decision selected by the query, in reading order.                                                                                                                                                                     |
-| `activeKey` / `setActive`       | Which item the caret is in; setting selects its range and scrolls to it, entering or leaving a header/footer story as the item requires. Returns whether it landed; see `activatable`. Takes `{ reveal }` to choose where it lands. |
-| `accept(item)` / `reject(item)` | Resolve a revision. Returns whether it landed; false on an item whose `readOnly` is true, and on a document open for viewing.                                                                                                       |
-| `reply(item, text, author?)`    | Reply to a change. Returns whether it landed.                                                                                                                                                                                       |
-| `remove(item)`                  | Delete a comment thread, or discard a suggestion. Returns whether it landed.                                                                                                                                                        |
-| `comment(text, author?)`        | Comment on the current selection. Returns whether it landed.                                                                                                                                                                        |
-| `selectionAnchorY`              | Where a comment on the selection would sit, or `null`.                                                                                                                                                                              |
-| `paneOpen` / `setPaneOpen`      | The same toggle the toolbar's comments button runs.                                                                                                                                                                                 |
-| `ready`                         | False while no document is loaded.                                                                                                                                                                                                  |
+| Member                            | What it does                                                                                                                                                                                                                        |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `items`                           | Every pending decision selected by the query, in reading order.                                                                                                                                                                     |
+| `activeKey` / `setActive`         | Which item the caret is in; setting selects its range and scrolls to it, entering or leaving a header/footer story as the item requires. Returns whether it landed; see `activatable`. Takes `{ reveal }` to choose where it lands. |
+| `accept(item)` / `reject(item)`   | Resolve a revision. Returns whether it landed; false on an item whose `readOnly` is true, and on a document open for viewing.                                                                                                       |
+| `resolve(item)` / `reopen(item)`  | Resolve or reopen a comment thread. Repeating its current state succeeds without a write.                                                                                                                                           |
+| `commentResolutionDisabledReason` | The engine refusal that disables both comment-resolution actions, or `null`.                                                                                                                                                        |
+| `reply(item, text, author?)`      | Reply to a change. Returns whether it landed.                                                                                                                                                                                       |
+| `remove(item)`                    | Delete a comment thread, or discard a suggestion. Returns whether it landed.                                                                                                                                                        |
+| `comment(text, author?)`          | Comment on the current selection. Returns whether it landed.                                                                                                                                                                        |
+| `selectionAnchorY`                | Where a comment on the selection would sit, or `null`.                                                                                                                                                                              |
+| `paneOpen` / `setPaneOpen`        | The same toggle the toolbar's comments button runs.                                                                                                                                                                                 |
+| `ready`                           | False while no document is loaded.                                                                                                                                                                                                  |
 
 Each item carries `key`, `id`, `author`, `initials`, `date`, `text`, `replyIds`, `readOnly`, `activatable`, `anchorY`, `pageIndex`, and `isActive`. Revision items add `kind: 'revision'`, a `revisionKind`, and `replacedText` for replacements, so a card can say _Replaced "x" with "y"_.
 
@@ -194,9 +196,10 @@ Two things the hook gives you that you should not recompute. Items come from the
 
 `readOnly` marks a decision the engine cannot resolve structurally. Do not offer Accept and Reject on those: a card offering a button the engine will refuse is worse than one that explains why it cannot.
 
-In viewing mode, the packaged Accept, Reject, and Delete controls remain visible but disabled, with
-`Read-only, no edits` as their title. The decision stays available to inspect and activate without
-presenting a live control whose write the engine will refuse.
+In viewing mode, the packaged Accept, Reject, Delete, Resolve, and Reopen controls remain visible
+but disabled. Comment resolution uses the engine's `the document is open for viewing` reason
+verbatim; the decision stays available to inspect and activate without presenting a live control
+whose write the engine will refuse.
 
 `useReviewOf(editor, query)` applies the same behavior to an editor you already hold. Filtering and activation follow these rules:
 

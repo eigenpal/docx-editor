@@ -45,7 +45,7 @@ export type ReviewItemView = ReviewItemPlacement;
 export type { ReviewActivationOptions };
 
 /**
- * What {@link useReview} returns: the review rail's data and the four things a card can do.
+ * What {@link useReview} returns: the review rail's data and the things a card can do.
  *
  * @public
  */
@@ -78,6 +78,17 @@ export interface UseReviewReturn {
   readonly accept: (item: ReviewItemView) => boolean;
   /** Reject a revision. Reports whether it landed, on the same terms as {@link accept}. */
   readonly reject: (item: ReviewItemView) => boolean;
+  /** Resolve a comment thread. Repeating this on a resolved thread succeeds without a write. */
+  readonly resolve: (item: ReviewItemView) => boolean;
+  /** Reopen a resolved comment thread. Repeating this on an open thread is likewise idempotent. */
+  readonly reopen: (item: ReviewItemView) => boolean;
+  /**
+   * Why Resolve and Reopen are unavailable, or null.
+   *
+   * This is the engine's refusal text, so custom card UI can disable the actions without
+   * paraphrasing a viewing-mode policy that belongs to the editor.
+   */
+  readonly commentResolutionDisabledReason: string | null;
   /**
    * Discard the item: delete a comment thread, or reject a tracked change.
    *
@@ -146,7 +157,9 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
 
   const version = useSyncExternalStore(
     subscribe,
-    () => (editor ? `${editor.getReviewRevision()}` : 'none'),
+    // Editing mode is part of the public action state even when the queue itself is unchanged:
+    // switching to viewing must disable Resolve/Reopen in a host-composed card immediately.
+    () => (editor ? `${editor.getReviewRevision()}:${editor.getEditingMode()}` : 'none'),
     () => 'none'
   );
 
@@ -195,6 +208,25 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     },
     [editor]
   );
+
+  const resolve = useCallback(
+    (item: ReviewItemView): boolean => {
+      if (!editor || item.kind !== 'comment') return false;
+      return editor.setCommentResolved(item.key, true).ok;
+    },
+    [editor]
+  );
+
+  const reopen = useCallback(
+    (item: ReviewItemView): boolean => {
+      if (!editor || item.kind !== 'comment') return false;
+      return editor.setCommentResolved(item.key, false).ok;
+    },
+    [editor]
+  );
+
+  const commentResolutionDisabledReason =
+    editor?.getEditingMode() === 'viewing' ? 'the document is open for viewing' : null;
 
   const remove = useCallback(
     (item: ReviewItemView): boolean => {
@@ -256,6 +288,9 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       setActive,
       accept,
       reject,
+      resolve,
+      reopen,
+      commentResolutionDisabledReason,
       remove,
       reply,
       selectionAnchorY,
@@ -277,6 +312,9 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       setActive,
       accept,
       reject,
+      resolve,
+      reopen,
+      commentResolutionDisabledReason,
       remove,
       reply,
       selectionAnchorY,

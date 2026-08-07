@@ -134,6 +134,8 @@ export const PACKAGES = [
           'ReviewList',
           'ReviewMarkers',
           'ReviewReject',
+          'ReviewReopen',
+          'ReviewResolve',
           'ReviewReplies',
           'ReviewReply',
           'ReviewRoot',
