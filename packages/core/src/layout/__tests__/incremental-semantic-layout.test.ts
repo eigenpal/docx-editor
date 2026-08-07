@@ -18,7 +18,8 @@ import {
   type PageGeometry,
   type SemanticLayout,
 } from '../index.ts';
-import { fragmentSignature } from '../semantic-fragment-signature.ts';
+import { fragmentSignature, sameFragments } from '../semantic-fragment-signature.ts';
+import type { BlockFragmentRecord } from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -255,5 +256,41 @@ describe('the cache and the session compose (tasks 9.2, 9.3)', () => {
 
     const same = { ...base, rows: [...base.rows] };
     expect(fragmentSignature(same)).toBe(fragmentSignature(base));
+  });
+
+  test('an inline drawing resource transition changes the open-page fragment signature', () => {
+    const base = lay(load(paragraph('open page')), 1).pages[0]!.fragments[0]!;
+    expect(base.kind).toBe('paragraph');
+    if (base.kind !== 'paragraph') return;
+
+    const withResource = (resource: object): BlockFragmentRecord =>
+      ({
+        ...base,
+        lines: base.lines.map((line, index) =>
+          index === 0
+            ? {
+                ...line,
+                drawings: [
+                  {
+                    kind: 'inlineDrawing',
+                    drawingNodeId: 'drawing-1',
+                    resource,
+                  },
+                ],
+              }
+            : line
+        ),
+      }) as BlockFragmentRecord;
+
+    const pending = withResource({ kind: 'pending', resourceKey: 'drawing-1' });
+    const samePending = withResource({ kind: 'pending', resourceKey: 'drawing-1' });
+    const ready = withResource({
+      kind: 'ready',
+      resourceKey: 'drawing-1-ready',
+      contentId: 'content-1',
+    });
+
+    expect(sameFragments([pending], [samePending])).toBe(true);
+    expect(sameFragments([pending], [ready])).toBe(false);
   });
 });

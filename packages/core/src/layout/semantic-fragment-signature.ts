@@ -58,6 +58,10 @@ export function fragmentSignature(fragment: BlockFragmentRecord): string {
             line.contentX,
             line.baseline,
             line.spans,
+            // Resource resolution changes paint state without moving the line. If drawings
+            // are omitted, pending→ready can falsely converge on an open page and replace
+            // the freshly rebuilt fragment with the previous page's pending record.
+            line.drawings,
           ]),
         ]);
   signatures.set(fragment, signature);
