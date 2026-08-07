@@ -50,6 +50,16 @@ expansion is not supported yet. A non-empty `expand` is rejected immediately wit
 `InvalidArgument` targeting the object's `.expand` option; omit it or pass `expand: []`. Load a
 navigation object or collection explicitly and sync it in the usual way.
 
+Review dates are file-authored rather than synthesized. `Comment.creationDate`,
+`CommentReply.creationDate`, and `Revision.date` return `Date | null`: a missing or invalid OOXML
+date becomes `null`, so strict TypeScript consumers must narrow it before calling `Date` methods.
+This is a deliberate source-shape divergence from Office.js, whose declarations say only `Date`.
+
+Font reads are nullable for the same fidelity reason. `Font.bold`, `italic`, `color`, `name`, and
+`size` return `boolean | null`, `string | null`, or `number | null` when a range has mixed or
+unspecified formatting. Setters still accept only concrete values, so consumers narrow a read before
+reusing it as a write.
+
 ## Omissions
 
 The following APIs are absent from the public types, so code that uses them fails to compile:

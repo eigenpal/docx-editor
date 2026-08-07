@@ -104,9 +104,9 @@ abstract class CommentBase extends ModelObject implements PromisedItem {
     return this.loadedProperty<string>('authorName');
   }
 
-  /** When it was written, or `null` where the file recorded no date. */
-  get creationDate(): Date {
-    return this.loadedProperty<Date>('creationDate');
+  /** When it was written, or `null` where the file recorded no valid date. */
+  get creationDate(): Date | null {
+    return this.loadedProperty<Date | null>('creationDate');
   }
 
   /** The document's own id for it (`w:id` in the comments part). */
@@ -449,9 +449,9 @@ export class Revision extends ModelObject implements PromisedItem {
     return this.loadedProperty<string>('author');
   }
 
-  /** When they proposed it, or `null` where the file recorded no date. */
-  get date(): Date {
-    return this.loadedProperty<Date>('date');
+  /** When they proposed it, or `null` where the file recorded no valid date. */
+  get date(): Date | null {
+    return this.loadedProperty<Date | null>('date');
   }
 
   /** What kind of change it is, by Word's own name for it. */

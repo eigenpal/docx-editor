@@ -89,6 +89,9 @@ and a server holding bytes should not pay for that.
   syncs deliberately, hand it to `context.trackedObjects`.
 - `getFirstOrNullObject` / `getLastOrNullObject` answer an object whose `isNullObject` is
   `true`, which is the difference between "no such heading" and a crash.
+- Review timestamps come from untrusted, optional OOXML attributes. `Comment.creationDate`,
+  `CommentReply.creationDate`, and `Revision.date` are `Date | null`; narrow `null` before calling
+  `Date` methods.
 
 `runtime.capabilities` says what the host behind a runtime can do: `save` is false in the
 browser; `selection`, `scrolling` and `layout` are false on a server. It is frozen for the

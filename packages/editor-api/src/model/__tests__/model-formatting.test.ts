@@ -25,7 +25,8 @@ import { docx, mainXmlOf, orNull, p, reopen, serverRuntime } from './support/doc
 
 /** Two runs that disagree, then one that does not. */
 const MIXED = docx(
-  '<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>bold</w:t></w:r>' +
+  '<w:p><w:r><w:rPr><w:b/><w:i/><w:sz w:val="28"/><w:color w:val="FF0000"/>' +
+    '<w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/></w:rPr><w:t>bold</w:t></w:r>' +
     '<w:r><w:t xml:space="preserve"> plain</w:t></w:r></w:p>' +
     '<w:p><w:r><w:rPr><w:b/><w:i/><w:sz w:val="28"/><w:color w:val="FF0000"/>' +
     '<w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/></w:rPr><w:t>all of it</w:t></w:r></w:p>'
@@ -70,18 +71,30 @@ describe('reading a font', () => {
     runtime.dispose();
   });
 
-  test('a paragraph whose runs disagree answers null for the property they disagree about', async () => {
+  test('a paragraph whose runs disagree answers null for every mixed property', async () => {
     const runtime = await serverRuntime(MIXED);
     const read = await runtime.run(async (context) => {
       const paragraphs = context.document.body.paragraphs;
       paragraphs.load();
       await context.sync();
       const font = paragraphs.items[0]!.font;
-      font.load('bold');
+      font.load();
       await context.sync();
-      return orNull(font.bold);
+      return {
+        bold: orNull(font.bold),
+        italic: orNull(font.italic),
+        name: orNull(font.name),
+        size: orNull(font.size),
+        color: orNull(font.color),
+      };
     });
-    expect(read).toBe(null);
+    expect(read).toEqual({
+      bold: null,
+      italic: null,
+      name: null,
+      size: null,
+      color: null,
+    });
     runtime.dispose();
   });
 
@@ -121,9 +134,21 @@ describe('reading a font', () => {
       const font = paragraphs.items[0]!.font;
       font.load();
       await context.sync();
-      return { bold: orNull(font.bold), size: orNull(font.size) };
+      return {
+        bold: orNull(font.bold),
+        italic: orNull(font.italic),
+        name: orNull(font.name),
+        size: orNull(font.size),
+        color: orNull(font.color),
+      };
     });
-    expect(read).toEqual({ bold: null, size: null });
+    expect(read).toEqual({
+      bold: null,
+      italic: null,
+      name: null,
+      size: null,
+      color: null,
+    });
     runtime.dispose();
   });
 });
@@ -208,6 +233,22 @@ describe('writing a font', () => {
       return 'accepted';
     });
     expect(code).toBe('InvalidArgument');
+    runtime.dispose();
+  });
+
+  test('null remains invalid for every setter', async () => {
+    const runtime = await serverRuntime(MIXED);
+    await runtime.run(async (context) => {
+      const paragraphs = context.document.body.paragraphs;
+      paragraphs.load();
+      await context.sync();
+      const font = paragraphs.items[0]!.font as unknown as Record<string, unknown>;
+      for (const field of ['bold', 'italic', 'color', 'name', 'size']) {
+        expect(() => {
+          font[field] = null;
+        }).toThrow();
+      }
+    });
     runtime.dispose();
   });
 });

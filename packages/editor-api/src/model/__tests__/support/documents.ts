@@ -66,6 +66,7 @@ const STYLES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relati
 const HEADER_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
 const FOOTER_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
 const NOTES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes';
+const COMMENTS_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
 const OFFICE_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
 /**
@@ -116,6 +117,58 @@ export const WITH_FURNITURE: Uint8Array = zipSync({
       '</w:footnotes>'
   ),
 });
+
+/** Valid, absent, and invalid file-authored dates on comments, replies, and revisions. */
+export const WITH_REVIEW_DATE_CASES: Uint8Array = (() => {
+  const comment = (id: string, parentId: string | undefined, date: string | undefined): string =>
+    `<w:comment w:id="${id}" w:author="Reviewer" w:initials="R"` +
+    (parentId === undefined ? '' : ` w16cid:parentId="${parentId}"`) +
+    (date === undefined ? '' : ` w:date="${date}"`) +
+    `><w:p><w:r><w:t>comment ${id}</w:t></w:r></w:p></w:comment>`;
+  const anchored = (id: string): string =>
+    `<w:p><w:commentRangeStart w:id="${id}"/><w:r><w:t>anchor ${id}</w:t></w:r>` +
+    `<w:commentRangeEnd w:id="${id}"/><w:r><w:commentReference w:id="${id}"/></w:r></w:p>`;
+  const revision = (id: string, date: string | undefined): string =>
+    `<w:p><w:ins w:id="${id}" w:author="Reviewer"` +
+    (date === undefined ? '' : ` w:date="${date}"`) +
+    `><w:r><w:t>revision ${id}</w:t></w:r></w:ins></w:p>`;
+
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdComments" Type="${COMMENTS_REL}" Target="comments.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>` +
+        anchored('1') +
+        anchored('3') +
+        anchored('5') +
+        revision('11', '2026-03-01T10:00:00Z') +
+        revision('12', undefined) +
+        revision('13', 'not-a-date') +
+        '</w:body></w:document>'
+    ),
+    'word/comments.xml': strToU8(
+      `<w:comments xmlns:w="${W}" xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid">` +
+        comment('1', undefined, '2026-01-01T10:00:00Z') +
+        comment('2', '1', '2026-01-02T10:00:00Z') +
+        comment('3', undefined, undefined) +
+        comment('4', '3', undefined) +
+        comment('5', undefined, 'not-a-date') +
+        comment('6', '5', 'also-not-a-date') +
+        '</w:comments>'
+    ),
+  });
+})();
 
 /**
  * A document awkward enough to compare two hosts over: a style cascade, a table with cell

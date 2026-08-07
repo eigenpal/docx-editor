@@ -80,8 +80,8 @@ export class Font extends ModelObject {
   }
 
   /** Whether every character agrees it is bold, or `null` where they do not. */
-  get bold(): boolean {
-    return this.loadedProperty<boolean>('bold');
+  get bold(): boolean | null {
+    return this.loadedProperty<boolean | null>('bold');
   }
 
   set bold(value: boolean) {
@@ -89,8 +89,8 @@ export class Font extends ModelObject {
   }
 
   /** Whether every run in range is italic. `null` where they disagree or none says. */
-  get italic(): boolean {
-    return this.loadedProperty<boolean>('italic');
+  get italic(): boolean | null {
+    return this.loadedProperty<boolean | null>('italic');
   }
 
   set italic(value: boolean) {
@@ -98,8 +98,8 @@ export class Font extends ModelObject {
   }
 
   /** `#RRGGBB`. `null` where the characters disagree, or where the colour is `auto`. */
-  get color(): string {
-    return this.loadedProperty<string>('color');
+  get color(): string | null {
+    return this.loadedProperty<string | null>('color');
   }
 
   set color(value: string) {
@@ -107,8 +107,8 @@ export class Font extends ModelObject {
   }
 
   /** The typeface name the characters state, or `null` where they do not agree on one. */
-  get name(): string {
-    return this.loadedProperty<string>('name');
+  get name(): string | null {
+    return this.loadedProperty<string | null>('name');
   }
 
   set name(value: string) {
@@ -116,8 +116,8 @@ export class Font extends ModelObject {
   }
 
   /** Points. */
-  get size(): number {
-    return this.loadedProperty<number>('size');
+  get size(): number | null {
+    return this.loadedProperty<number | null>('size');
   }
 
   set size(value: number) {

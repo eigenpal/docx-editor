@@ -14,7 +14,13 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { describe, expect, test } from 'bun:test';
 import { createServer } from '../../runtime/server.ts';
 import { isDocxEditorError } from '../../runtime/errors.ts';
-import { docx, reopen, serverRuntime, WITH_FURNITURE } from './support/documents.ts';
+import {
+  docx,
+  reopen,
+  serverRuntime,
+  WITH_FURNITURE,
+  WITH_REVIEW_DATE_CASES,
+} from './support/documents.ts';
 
 const numbered = (text: string, numId: string, level = 0): string =>
   `<w:p><w:pPr><w:numPr><w:ilvl w:val="${String(level)}"/><w:numId w:val="${numId}"/></w:numPr></w:pPr>` +
@@ -264,6 +270,39 @@ describe('a section is the page a story is laid out on', () => {
 });
 
 describe('comments and tracked changes are what a document says about itself', () => {
+  test('review dates preserve valid stamps and null absent or invalid OOXML values', async () => {
+    const runtime = await serverRuntime(WITH_REVIEW_DATE_CASES);
+    const dates = await runtime.run(async (context) => {
+      const comments = context.document.comments;
+      const revisions = context.document.revisions;
+      comments.load('items');
+      revisions.load('items');
+      await context.sync();
+
+      for (const comment of comments.items) {
+        comment.load('creationDate');
+        comment.replies.load('items');
+      }
+      for (const revision of revisions.items) revision.load('date');
+      await context.sync();
+
+      for (const comment of comments.items) {
+        for (const reply of comment.replies.items) reply.load('creationDate');
+      }
+      await context.sync();
+
+      return {
+        comments: comments.items.map((comment) => comment.creationDate),
+        replies: comments.items.map((comment) => comment.replies.items[0]!.creationDate),
+        revisions: revisions.items.map((revision) => revision.date),
+      };
+    });
+
+    expect(dates.comments).toEqual([new Date('2026-01-01T10:00:00Z'), null, null]);
+    expect(dates.replies).toEqual([new Date('2026-01-02T10:00:00Z'), null, null]);
+    expect(dates.revisions).toEqual([new Date('2026-03-01T10:00:00Z'), null, null]);
+  });
+
   test('a tracked insertion is a decision a script can read and accept', async () => {
     const runtime = await serverRuntime(TRACKED);
     const before = await runtime.run(async (context) => {
