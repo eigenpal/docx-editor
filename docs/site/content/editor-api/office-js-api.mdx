@@ -67,6 +67,34 @@ each operation owns its reveal and verifies selection again at `sync()`. The rev
 layout coordinates, so it works when the target page is virtualized and has no painted element yet.
 A server runtime refuses either `select()` with `NotSupported` because it has no reader or viewport.
 
+`Comment.reply()` uses the explicit runtime author: pass `{ author: 'Demo Reviewer' }` to either
+`createBrowser` or `createServer`. A missing or blank author refuses with `NotSupported` before the
+write is queued. In a browser, the Pro review module and a writable editing mode are also required.
+There is deliberately no static comment-write capability because those conditions can change; a
+typed refusal from the call or `sync()` is authoritative.
+
+`Comment.delete()` removes the top-level comment, every reply in its thread, and the OOXML anchors
+as one package transaction. `CommentReply.delete()` removes only that reply; its parent and sibling
+replies remain. Queue several `delete()` calls before one `sync()` to make them one atomic edit and
+one browser Undo unit:
+
+```ts
+comments.load('items');
+await context.sync();
+
+comments.items[1]?.replies.load('items');
+await context.sync();
+
+comments.items[0]?.delete();
+comments.items[1]?.replies.items[0]?.delete();
+await context.sync(); // one deletion transaction; one Undo restores both
+```
+
+In a browser these operations require the Pro review module and a writable, attached editor.
+Server deletion is available through the Pro-licensed `editor-api` runtime itself. A stale object,
+missing id, detached editor, viewing mode, or missing browser module refuses the sync without a
+partial deletion.
+
 Review dates are file-authored rather than synthesized. `Comment.creationDate`,
 `CommentReply.creationDate`, and `Revision.date` return `Date | null`: a missing or invalid OOXML
 date becomes `null`, so strict TypeScript consumers must narrow it before calling `Date` methods.
@@ -90,7 +118,7 @@ The following APIs are absent from the public types, so code that uses them fail
 | Custom XML mapping (`ContentControl.xmlMapping`)           | A control bound to custom XML refuses writes because the API cannot maintain its binding.                                         |
 | Standalone hyperlinks (`Hyperlink`, `HyperlinkCollection`) | `Range.hyperlink` reads and writes a range's hyperlink. The API does not expose standalone hyperlink objects.                     |
 | `getHtml`, `getOoxml`, `getText`, `exists`                 | The API does not expose these methods or their `ClientResult` shapes. `Body.text` and `Paragraph.text` support loaded text reads. |
-| Creating and deleting comments                             | The API reads comments and supports replies and resolution. This release does not create or delete them.                          |
+| Creating comments                                          | Comments can be read, replied to, resolved, and deleted. This release does not create them.                                       |
 
 ## Divergences
 
@@ -136,7 +164,7 @@ document and still refuses a bound control if the file changed after `isBound` w
 
 ## Migrating an add-in
 
-1. Replace `Word.run(async (context) => { … })` with a runtime you construct: `DocxEditor.createServer(bytes)` on a server, `DocxEditor.createBrowser(editor)` in a page. The callback body is the part that stays the same.
+1. Replace `Word.run(async (context) => { … })` with a runtime you construct: `DocxEditor.createServer(bytes, { author })` on a server, `DocxEditor.createBrowser(editor, { author })` in a page when the script replies to comments. The callback body is the part that stays the same.
 2. Expect the same load/sync discipline you already write. Reads still have to be declared, and a property you did not load still fails.
 3. Add the syncs the divergences above describe. The statements stay the same; a batch that reaches an item accessor or a collection's item properties needs one more round trip than it does in an add-in.
 4. Check the omissions above. If your add-in walks tables or inserts pictures, that work has no equivalent here yet.

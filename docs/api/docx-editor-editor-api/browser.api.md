@@ -246,6 +246,11 @@ export type ContentControlValue = {
 };
 
 // @public
+export interface CreateBrowserOptions {
+    readonly author?: string;
+}
+
+// @public
 export interface CreateServerOptions {
     readonly author?: string;
     readonly limits?: DocumentLimits;
@@ -371,7 +376,7 @@ export interface DocxEditorErrorInit {
 
 // @public
 export interface DocxEditorNamespace {
-    createBrowser(editor: DocxEditorInstance): DocxEditorRuntime;
+    createBrowser(editor: DocxEditorInstance, options?: CreateBrowserOptions): DocxEditorRuntime;
     createServer(bytes: Uint8Array, options?: CreateServerOptions): Promise<DocxEditorServerRuntime>;
 }
 

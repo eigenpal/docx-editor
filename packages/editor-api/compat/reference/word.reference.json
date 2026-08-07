@@ -285,6 +285,17 @@
             }
           ]
         },
+        "delete": {
+          "uid": "Word.Comment#delete",
+          "kind": "method",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
         "getRange": {
           "uid": "Word.Comment#getRange",
           "kind": "method",
@@ -405,6 +416,17 @@
             {
               "params": [],
               "returns": "Date"
+            }
+          ]
+        },
+        "delete": {
+          "uid": "Word.CommentReply#delete",
+          "kind": "method",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
             }
           ]
         },

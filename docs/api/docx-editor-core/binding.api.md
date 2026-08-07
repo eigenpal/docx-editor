@@ -118,6 +118,10 @@ export interface TreeDocxSession {
     canUndo(): boolean;
     currentPackage(): OoxmlPackage;
     deleteComment(commentId: string): boolean;
+    deleteComments(comments: readonly {
+        readonly commentId: string;
+        readonly parentCommentId?: string;
+    }[]): boolean;
     deleteImage(scope: StoryScope, drawingNodeId: string): ImageIntentResult;
     documentFonts(): readonly string[];
     documentOutline(): readonly DocumentOutlineEntry[];

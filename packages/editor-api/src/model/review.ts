@@ -14,9 +14,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // and initials, and Word's own address comes from `people.xml`, a part this slice does not read.
 // `content` as a WRITABLE property would need a comment body rewrite, which no canonical operation
 // offers — a read-only `content` would be a different contract from upstream's, so the member is
-// omitted and the text is published as DocxEditor's own `text`. `delete` would have to remove the
-// markers and the record together, likewise unbacked. All three are recorded in
-// `compat/manifest.json`.
+// omitted and the text is published as DocxEditor's own `text`.
 //
 // A TRACKED CHANGE IS A DECISION THE ENGINE CAN MAKE. Structural revisions — a row, a cell, a
 // section, the table grid — are ones it refuses to resolve, so they are not answered as objects at
@@ -123,6 +121,18 @@ abstract class CommentBase extends ModelObject implements PromisedItem {
    */
   get text(): string {
     return this.loadedProperty<string>('text');
+  }
+
+  /**
+   * Delete this comment object.
+   *
+   * On a top-level comment this removes the whole thread and its anchors. On a reply it removes
+   * only that reply, preserving the parent and siblings. Several deletes queued before one
+   * `sync()` commit atomically as one undo unit.
+   */
+  delete(): void {
+    const comment = this.commentHandle();
+    this.command('delete', () => ({ op: 'deleteComment', comment }));
   }
 
   protected loadCommentFields(request: ResolvedLoadOptions, extra: readonly string[]): void {
@@ -252,10 +262,10 @@ export class CommentReplyCollection extends HandleCollection<CommentReply> {
  * assigning `resolved` marks this comment and everything answering it, which is what Word's own
  * pane does.
  *
- * `authorEmail`, a writable `content`, and `delete` are absent: `CT_Comment` records only an
- * author and initials (Word's addresses live in `people.xml`, which this API does not read), and
- * neither a body rewrite nor a marker-pair removal is an operation the canonical write path
- * offers. The comment's text is published as `text`.
+ * `authorEmail` and a writable `content` are absent: `CT_Comment` records only an author and
+ * initials (Word's addresses live in `people.xml`, which this API does not read), and a body
+ * rewrite is not an operation the canonical write path offers. The comment's text is published
+ * as `text`.
  *
  * @public
  */

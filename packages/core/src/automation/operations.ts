@@ -476,6 +476,14 @@ export type AutomationOperation =
       readonly date?: string;
     }
   /**
+   * Delete one comment object.
+   *
+   * A top-level comment removes its whole thread and anchors. A reply removes only that reply;
+   * its parent and siblings remain. Several delete operations may share one batch and commit as
+   * one package transaction and one undo unit, but they cannot share a batch with any other write.
+   */
+  | { readonly op: 'deleteComment'; readonly comment: AutomationHandle }
+  /**
    * The tracked changes of a story, in document order.
    *
    * The ones this engine can RESOLVE. A structural revision — a row, a cell, a section, the table
@@ -780,6 +788,7 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
   'setHyperlink',
   'setCommentResolved',
   'replyToComment',
+  'deleteComment',
   'acceptRevision',
   'rejectRevision',
   'acceptAllRevisions',

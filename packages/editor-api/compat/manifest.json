@@ -156,13 +156,22 @@
       "members": ["body", "type", "delete", "getNext"]
     },
     "Comment": {
-      "members": ["authorName", "creationDate", "id", "replies", "resolved", "getRange", "reply"]
+      "members": [
+        "authorName",
+        "creationDate",
+        "id",
+        "replies",
+        "resolved",
+        "delete",
+        "getRange",
+        "reply"
+      ]
     },
     "CommentCollection": {
       "members": ["items", "getFirst"]
     },
     "CommentReply": {
-      "members": ["authorName", "creationDate", "id"]
+      "members": ["authorName", "creationDate", "id", "delete"]
     },
     "CommentReplyCollection": {
       "members": ["items", "getFirst"]
@@ -367,16 +376,8 @@
       "reason": "Assignable upstream: writing it REPLACES a comment's body. A comment's body is a story of its own in comments.xml, and this subset transacts one story per batch \u2014 the story the comment is anchored in \u2014 so replacing the body is a write the canonical path does not yet express. Reading a body stays available as DocxEditor's own read-only Comment#text (recorded below), so a script that reports on comments is unaffected; only rewriting somebody else's comment is."
     },
     {
-      "uid": "Word.Comment#delete",
-      "reason": "Deleting a comment means removing its entry from comments.xml, its w15:commentEx entry, and the w:commentRangeStart/End plus w:commentReference in the story \u2014 as one transaction. `addComment` exists in the store lane and its inverse does not, so this would be a partial delete or a second write path. Resolving a thread (Word.Comment#resolved, implemented) is the operation that hides it from a reviewer without losing what was said."
-    },
-    {
       "uid": "Word.CommentReply#content",
       "reason": "See Word.Comment#content."
-    },
-    {
-      "uid": "Word.CommentReply#delete",
-      "reason": "See Word.Comment#delete."
     },
     {
       "uid": "Word.CommentReply#authorEmail",
@@ -435,6 +436,10 @@
     {
       "uid": "Word.Revision#date",
       "note": "Office.js declares Date, while CT_TrackChange permits an absent w:date and untrusted input can contain an invalid one. DocxEditor returns Date | null and the compatibility assertion verifies that excluding the documented null leaves the upstream Date shape."
+    },
+    {
+      "uid": "Word.Comment#reply",
+      "note": "Office.js supplies the signed-in author through its host. DocxEditor has no ambient account identity, so createServer(bytes, { author }) and createBrowser(editor, { author }) carry the author explicitly. A missing or blank author refuses with NotSupported before queuing; browser sync can also refuse when the Pro review module, current editing mode, or live host does not permit the write. No static comment-write capability is published because those browser conditions are dynamic."
     },
     {
       "uid": "Word.Revision#type",

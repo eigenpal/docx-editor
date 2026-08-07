@@ -54,7 +54,7 @@ import type {
   AutomationSearchOptions,
   AutomationSelectionMode,
 } from './operations.ts';
-import { isAutomationCommand, isSolitaryAutomationCommand } from './operations.ts';
+import { createBatchCommandPolicy } from './batch-command-policy.ts';
 import type {
   AutomationCapabilities,
   AutomationError,
@@ -492,20 +492,13 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
 
   const selections: { readonly range: ResolvedRange; readonly mode: AutomationSelectionMode }[] =
     [];
-  let hasCommands = false;
-  /** Whether a package-level command has been planned; it may have no company. */
-  let solitaryPlanned = false;
+  const commandPolicy = createBatchCommandPolicy();
   /** The one story this batch writes into, pinned by its first command. */
   let writeStory: StoryPlan | null = null;
 
   /**
-   * Claim the batch's single write story, or refuse a second one.
-   *
-   * A batch is one transaction and a transaction is scoped to one story: `TreePackageStore`
-   * commits per story, so writing a body paragraph and a header paragraph in one batch is two
-   * commits — two revisions, two undo units, and a moment where half the request is published.
-   * The caller sequences them across two syncs, which is exactly what the same rule already
-   * asks of two structural edits to one paragraph.
+   * Claim the batch's single write story, or refuse a second one. `TreePackageStore` commits per
+   * story, so crossing stories would create two revisions, two undo units, and partial publication.
    */
   const pinWrite = (plan: StoryPlan): PlannedOperation | null => {
     if (writeStory === null) {
@@ -2326,6 +2319,24 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         };
       }
 
+      case 'deleteComment': {
+        const found = commentAt(operation.comment);
+        if (!found.ok) return found.planned;
+        const conflict = pinWrite(planFor(found.reads));
+        if (conflict) return conflict;
+        return {
+          ok: true,
+          kind: 'commentWrite',
+          write: {
+            kind: 'delete',
+            commentId: found.item.id,
+            ...(found.item.parentId === undefined ? {} : { parentCommentId: found.item.parentId }),
+          },
+          story: found.reads.story,
+          answer: () => APPLIED,
+        };
+      }
+
       case 'getRevisions': {
         const story = storyOfHandle(operation.body, 'body', handles, packageReads);
         if (!story.ok) return refuse(story.code, 'that handle does not name a body', story.detail);
@@ -2830,26 +2841,14 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
 
   return {
     plan(operation) {
-      // ONE PACKAGE TRANSACTION PER BATCH, checked before the operation is even planned: a
-      // lifecycle command beside anything else is two commits, and half a batch published on its
-      // own is the partial application the batch rule exists to prevent.
-      const solitary = isSolitaryAutomationCommand(operation);
-      if ((solitary && hasCommands) || (solitaryPlanned && isAutomationCommand(operation))) {
-        return refuse(
-          'conflicting-operations',
-          'that command commits on its own and cannot share a batch',
-          operation.op
-        );
-      }
+      const conflict = commandPolicy.conflict(operation);
+      if (conflict) return refuse('conflicting-operations', conflict.message, conflict.detail);
       const planned = plan(operation);
-      if (planned.ok && isAutomationCommand(operation)) {
-        hasCommands = true;
-        if (solitary) solitaryPlanned = true;
-      }
+      if (planned.ok) commandPolicy.note(operation);
       return planned;
     },
     get hasCommands() {
-      return hasCommands;
+      return commandPolicy.hasCommands;
     },
     get writeScope() {
       return writeStory?.reads.scope ?? null;

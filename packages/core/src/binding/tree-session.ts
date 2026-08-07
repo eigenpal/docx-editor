@@ -34,7 +34,7 @@ import {
   type CustomNodeWriteResult,
   type InsertCustomNodeWrite,
 } from '../store/store/custom-node-writes.ts';
-import { deleteCommentThread } from '../store/package/comment-lifecycle.ts';
+import { deleteCommentReply, deleteCommentThread } from '../store/package/comment-lifecycle.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import {
   ORIGIN_IDS,
@@ -354,6 +354,15 @@ export interface TreeDocxSession {
    * False when the document holds no such comment, or when the removal was refused.
    */
   deleteComment(commentId: string): boolean;
+  /**
+   * Delete several comment objects as one package transaction and one undo unit.
+   *
+   * A root removes its thread; a reply removes only itself and reparents any foreign nested
+   * descendants to its parent.
+   */
+  deleteComments(
+    comments: readonly { readonly commentId: string; readonly parentCommentId?: string }[]
+  ): boolean;
   /**
    * Insert a custom node, with the payload it carries, as ONE transaction.
    *
@@ -1274,6 +1283,11 @@ export function openTreeSession(
       },
 
       deleteComment(commentId) {
+        return this.deleteComments([{ commentId }]);
+      },
+
+      deleteComments(comments) {
+        if (comments.length === 0) return false;
         const store = bodyStore();
         const beforePackage = packageStore.currentPackage();
         const checkpoint = store.checkpoint();
@@ -1288,12 +1302,19 @@ export function openTreeSession(
           // record and the story markers are three places describing one remark, and a
           // transaction that took them separately could commit a body with no markers.
           ctx.applyPackage((current) => {
-            const next = deleteCommentThread(current, commentId);
-            if (next === null) {
-              refused = true;
-              return current;
+            let next = current;
+            for (const comment of comments) {
+              const deleted =
+                comment.parentCommentId === undefined
+                  ? deleteCommentThread(next, comment.commentId)
+                  : deleteCommentReply(next, comment.commentId, comment.parentCommentId);
+              if (deleted === null) {
+                refused = true;
+                return current;
+              }
+              removed ||= deleted !== next;
+              next = deleted;
             }
-            removed = next !== current;
             return next;
           });
         });

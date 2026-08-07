@@ -462,6 +462,57 @@ describe('comments and tracked changes are what a document says about itself', (
     expect(dates.revisions).toEqual([new Date('2026-03-01T10:00:00Z'), null, null]);
   });
 
+  test('deleting a reply removes only that reply and makes its proxy stale', async () => {
+    const runtime = await serverRuntime(WITH_REVIEW_DATE_CASES);
+    const stale = await runtime.run(async (context) => {
+      const comments = context.document.comments;
+      comments.load('items');
+      await context.sync();
+      const root = comments.items[0]!;
+      root.replies.load('items');
+      await context.sync();
+      const reply = root.replies.items[0]!;
+      reply.delete();
+      await context.sync();
+      return reply;
+    });
+
+    const remaining = await runtime.run(async (context) => {
+      const comments = context.document.comments;
+      comments.load('items');
+      await context.sync();
+      comments.items[0]!.replies.load('items');
+      await context.sync();
+      return { roots: comments.items.length, replies: comments.items[0]!.replies.items.length };
+    });
+    expect(remaining).toEqual({ roots: 3, replies: 0 });
+    await expect(
+      runtime.run(stale, async (context) => {
+        stale.load('id');
+        await context.sync();
+      })
+    ).rejects.toMatchObject({ code: 'InvalidObjectPath' });
+  });
+
+  test('deleting roots is batched atomically and removes their threads', async () => {
+    const runtime = await serverRuntime(WITH_REVIEW_DATE_CASES);
+    await runtime.run(async (context) => {
+      const comments = context.document.comments;
+      comments.load('items');
+      await context.sync();
+      comments.items[0]!.delete();
+      comments.items[1]!.delete();
+      await context.sync();
+    });
+    const remaining = await runtime.run(async (context) => {
+      const comments = context.document.comments;
+      comments.load('items');
+      await context.sync();
+      return comments.items.length;
+    });
+    expect(remaining).toBe(1);
+  });
+
   test('a tracked insertion is a decision a script can read and accept', async () => {
     const runtime = await serverRuntime(TRACKED);
     const before = await runtime.run(async (context) => {
