@@ -15,7 +15,7 @@ import { ReviewRailContext, useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
 import { zoomLevelForShortcut } from './zoom-levels';
-import { useScopeClassName } from './scope-context';
+import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
 
 const selectPaneOpen = (snapshot: EditorSnapshot): boolean => snapshot.reviewPaneOpen ?? true;
 
@@ -88,7 +88,11 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
       }`}
       style={{ ...style, ['--docx-nav-shift' as string]: `${shift}px` } as CSSProperties}
     >
-      {children}
+      {/* Everything below this div has a scoped ancestor: either the packaged
+          wrapper above us, or this element, which scoped itself just now. Say
+          so, or parts inside repeat the class under `chrome={false}` and in the
+          Root + Viewport composition path. */}
+      <ScopedByAncestorContext.Provider value={true}>{children}</ScopedByAncestorContext.Provider>
     </div>
   );
 }
