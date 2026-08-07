@@ -61,6 +61,19 @@
 - [x] 6.7 `surface-field-shading.ts` moves one class as the caret moves; compare the paragraph id in JS rather than interpolating it into a selector
 - [x] 6.8 Tests: the two rules, all three modes, the print rule's selectors, the revision-wins ordering, caret entry/exit, range selections, and a paragraph id carrying selector syntax
 
+## 6b. Review findings
+
+Each reproduced with a throwaway probe before changing anything, and each now pinned by a test.
+
+- [x] 6b.1 **The caret could overrule paint.** `syncActiveFieldShading` keyed off `data-field-atom`, which paint emits for every field, while the class it emits only where shading is enabled. Since the stylesheet paints `--active` unconditionally, entering a field defeated both `fieldShading: 'never'` and the document's `w:doNotShadeFormData`. Key off `.docx-field-atom` — which also makes it a class match rather than an attribute match on the keystroke path (6b.8)
+- [x] 6b.2 **Only the first span was marked.** A result splits at its spaces and every span publishes the same one-unit range, so `when-selected` shaded half a cross-reference while `always` shaded all of it. Mark every match
+- [x] 6b.3 **A hyperlink holding a `w:fldSimple` demoted whole.** `w:fldSimple` is an `EG_PContent` member and the link's allowed children omitted it, so the link went generic — and layout drops a generic paragraph child entire. A contents entry lost its words as well as its number. Pre-existing, but only reachable now that simple fields render
+- [x] 6b.4 **The schema justification was wrong.** `w:fldSimple` is in `EG_PContent`, not the `EG_ContentRunContent` that `CT_RunTrackChange` takes, and the same file said so correctly 60 lines away. The permissiveness is right — Word writes the shape — but it is deliberate width, not schema compliance, and now says so
+- [x] 6b.5 **An untracked first result run did not lock the capture.** Guarding on an empty stack let a later tracked run donate its revision to the whole atom, so `Section <w:del>3</w:del>` painted struck through entire. Lock on its own flag: empty is a real answer
+- [x] 6b.6 **`deletedRanges` was still gated on the non-atomic branch**, against a comment promising otherwise. A visible deletion inside a demoted field was absent from the ranges, so the caret could walk into deleted content
+- [x] 6b.7 **A simple `PAGE` field painted the producer's cached number on every sheet.** `detectStoryPageFields` ignored `w:fldSimple` — harmless while they painted nothing, wrong once they paint — so the story's page key never varied. Detect them and evaluate live; a wrong page number is quieter than a blank, not smaller
+- [x] 6b.8 Query cost on the keystroke path: addressed by 6b.1's class selector. Scoping further to the caret's own page would need the page index threaded in; not worth the coupling at this size
+
 ## 7. Gates
 
 - [x] 7.1 `bun run typecheck`, `bun run lint` (0 errors — the cap is the only thing that checks the extractions)

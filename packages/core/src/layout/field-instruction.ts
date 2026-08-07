@@ -11,7 +11,9 @@
 // Callers reset state at paragraph boundaries so malformed cross-paragraph fields stay inert.
 
 import {
+  fldSimpleInstr,
   isFldChar as isFldCharHelper,
+  isFldSimple,
   isInstrText as isInstrTextHelper,
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
@@ -340,6 +342,18 @@ export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
     if (node.kind === 'run') {
       // Shared field state across sibling runs (and nested run containers) in this paragraph.
       scanRun(node, depth);
+      return;
+    }
+
+    // `w:fldSimple` carries its instruction in an ATTRIBUTE, so none of the marker machine
+    // above ever sees it. It was ignored while simple fields painted nothing — harmless then,
+    // because the sheet showed a blank either way. Now that the cached result paints, ignoring
+    // it is worse than the blank was: the story's page-context key stays empty, one layout is
+    // reused for every sheet, and a footer `PAGE` shows page one's number on every page.
+    // A wrong number is not a smaller error than a missing one, it is a quieter one.
+    if (isFldSimple(node)) {
+      const kind = allowlistedPageField(fldSimpleInstr(node) ?? '');
+      if (kind) note(kind);
       return;
     }
 

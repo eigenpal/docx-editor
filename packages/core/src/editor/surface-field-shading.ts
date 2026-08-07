@@ -10,6 +10,8 @@
 // class removal and one query per caret move, against a document that never relayouts.
 
 const ACTIVE_CLASS = 'docx-field-atom--active';
+/** What paint adds only where shading is enabled for that field. */
+const SHADABLE_CLASS = 'docx-field-atom';
 
 /** Where the caret is, in the model's own addressing. */
 export interface FieldShadingCaret {
@@ -33,12 +35,21 @@ export function syncActiveFieldShading(
   }
   if (!caret) return;
 
+  // `.docx-field-atom`, NOT `[data-field-atom]`. The attribute marks every field result so a
+  // host can find them; the CLASS is what paint adds only where shading is actually enabled.
+  // Keying off the attribute meant the caret shaded a field that `fieldShading: 'never'` — or
+  // the document's own `w:doNotShadeFormData` — had just said never to shade, because the
+  // stylesheet paints `--active` unconditionally. The caret must not be able to overrule the
+  // decision paint already made.
+  //
+  // It is also the cheaper selector. This runs on the keystroke path, and a class match is
+  // what browsers optimise; an attribute match over every materialized page is not.
+  //
   // The paragraph id is compared in JS rather than written into the selector. It is
   // engine-minted, but it is built from a PART NAME, and part names come out of the file — so
   // it is attacker-influenced text, and the only way to interpolate it safely into a selector
-  // is not to. Selecting on the attribute's presence and filtering here has no escaping
-  // question at all, and only materialized pages are in the layer to walk.
-  const candidates = pagesLayer.querySelectorAll<HTMLElement>('[data-field-atom]');
+  // is not to.
+  const candidates = pagesLayer.querySelectorAll<HTMLElement>(`.${SHADABLE_CLASS}`);
   for (const candidate of candidates) {
     if (candidate.dataset.paragraphId !== caret.paragraphId) continue;
     const start = Number(candidate.dataset.start);
@@ -48,7 +59,9 @@ export function syncActiveFieldShading(
     // resting at either edge is a caret Word considers inside it. Excluding the trailing edge
     // made the shading flicker off as the caret arrived at the field from the left.
     if (caret.offset < start || caret.offset > end) continue;
+    // Every span, not the first. Line breaking splits a field's result at its spaces like any
+    // other text, and all of them publish the same model range — marking one shaded half a
+    // cross-reference while `always` (resolved in paint, per span) shaded all of it.
     candidate.classList.add(ACTIVE_CLASS);
-    return;
   }
 }

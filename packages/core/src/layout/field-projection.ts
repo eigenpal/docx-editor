@@ -17,6 +17,7 @@
 
 import {
   atomicFieldSpansOf,
+  fldSimpleInstr,
   hardBreakKind,
   hardBreakText,
   hasLegacyFormFieldData,
@@ -268,6 +269,8 @@ interface PendingFieldProjection {
    * the model does not have.
    */
   resultRevisions: readonly RevisionAttribution[];
+  /** Whether {@link resultRevisions} has been donated yet — an EMPTY stack is a real answer. */
+  capturedResultRevisions: boolean;
   /** `w:ffData` on the begin marker — a legacy form field, which Word shades on its own rule. */
   formField: boolean;
   /**
@@ -622,6 +625,7 @@ export function piecesOfParagraph(
             buffered: [],
             bufferOffset: offset,
             resultRevisions: NO_REVISIONS,
+            capturedResultRevisions: false,
             formField: hasLegacyFormFieldData(grand),
             ...(currentLink ? { resultLink: currentLink } : {}),
           };
@@ -691,7 +695,10 @@ export function piecesOfParagraph(
         if (fieldDeleted && deletedRanges) {
           if (pending.atomic) {
             appendModelRange(deletedRanges, pending.atomStart, pending.atomStart + 1);
-          } else if (fieldSuppressed) {
+          } else {
+            // Unconditional on this branch too. Gating it on suppression left an all-markup
+            // deletion inside a DEMOTED field out of the ranges — visible, and so the one case
+            // where the caret could walk into deleted content it is meant to step over.
             appendModelRange(deletedRanges, offset, offset + text.length);
           }
         }
@@ -715,8 +722,14 @@ export function piecesOfParagraph(
           // The first result run that survives to be displayed donates the attribution the
           // flush will replay, because by then the walk has left the wrapper. See
           // `resultRevisions` for why first wins.
-          if (pending.resultRevisions.length === 0) {
+          //
+          // Locked by its own flag, not by the stack being non-empty: an UNTRACKED first run
+          // leaves the stack empty, and testing emptiness let a later tracked run donate its
+          // revision to the whole atom. `Section <w:del>3</w:del>` then painted "Section 3"
+          // struck through entire — the engine claiming a deletion over words nobody deleted.
+          if (!pending.capturedResultRevisions) {
             pending.resultRevisions = revisions;
+            pending.capturedResultRevisions = true;
             if (!pending.resultLink && currentLink) pending.resultLink = currentLink;
           }
           pending.cachedText += text;
@@ -857,6 +870,23 @@ export function piecesOfParagraph(
       }
     };
     collect(simple, depth, revisions);
+
+    // A simple PAGE/NUMPAGES/SECTIONPAGES field is evaluated like its complex twin when the
+    // caller supplies a page context. The CACHED result is whatever sheet the producer last
+    // saved from, so painting it verbatim would put that page's number on every page —
+    // `detectStoryPageFields` now reports these so furniture actually gets a per-sheet context
+    // to evaluate against.
+    const pageKind = allowlistedPageField(fldSimpleInstr(simple) ?? '');
+    if (pageKind && pageContext) {
+      const live = projectPageFieldValue(pageKind, pageContext);
+      const style = resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+      if (!style.hidden) {
+        push(live, resultProps ?? inheritedRunProperties, style, true, start, start + 1, {
+          fieldAtom: { formField: false },
+        });
+      }
+      return;
+    }
 
     if (text.length === 0 || !resultStyle || resultStyle.hidden) return;
     // `w:ffData` is a `w:fldChar` payload, so a simple field is never a legacy form field.

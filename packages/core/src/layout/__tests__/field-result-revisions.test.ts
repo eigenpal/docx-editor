@@ -181,6 +181,24 @@ describe('a revision around the WHOLE field', () => {
   });
 });
 
+describe('a field whose result is only PARTLY tracked', () => {
+  test('an untracked first run keeps the atom untracked', () => {
+    // The capture locks on the first DISPLAYED result run, tracked or not. Testing the stack
+    // for emptiness instead let a later tracked run donate its revision to the whole atom, so
+    // "Section 3" painted struck through entire — the engine claiming a deletion over words
+    // nobody deleted.
+    const body =
+      '<w:p>' +
+      `${FIELD_CHROME}<w:r><w:t xml:space="preserve">Section </w:t></w:r>` +
+      '<w:del w:id="9" w:author="Reviewer" w:date="2026-08-05T08:12:15Z">' +
+      '<w:r><w:delText>3</w:delText></w:r></w:del>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+      '</w:p>';
+    const piece = project(body).find((candidate) => candidate.text.startsWith('Section'));
+    expect(piece?.revisions).toBeUndefined();
+  });
+});
+
 describe('a field result inside a hyperlink', () => {
   test('keeps the link every other run in that link keeps', () => {
     const body =

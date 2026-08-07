@@ -24,13 +24,20 @@ function build(): void {
     paragraphId: string,
     start: number,
     end: number,
-    field: string | null
+    field: string | null,
+    // Paint adds the CLASS only where shading is enabled for that field, and adds the
+    // attribute regardless. The sync keys off the class, so a field the host or the document
+    // turned shading off for carries the attribute and no class — see the test below.
+    shadable = true
   ): HTMLElement => {
     const span = document.createElement('span');
     span.dataset.paragraphId = paragraphId;
     span.dataset.start = String(start);
     span.dataset.end = String(end);
-    if (field) span.dataset.fieldAtom = field;
+    if (field) {
+      span.dataset.fieldAtom = field;
+      if (shadable) span.classList.add('docx-field-atom');
+    }
     layer.append(span);
     return span;
   };
@@ -94,9 +101,44 @@ describe('the caret marks the field it sits in', () => {
     hostile.dataset.start = '0';
     hostile.dataset.end = '1';
     hostile.dataset.fieldAtom = 'field';
+    hostile.classList.add('docx-field-atom');
     layer.append(hostile);
     syncActiveFieldShading(layer, { paragraphId: 'p"] , [data-field-atom', offset: 0 });
     expect(activeSpans()).toHaveLength(1);
     expect(activeSpans()[0]).toBe(hostile);
+  });
+
+  test('the caret cannot shade a field paint decided not to shade', () => {
+    // `fieldShading: 'never'`, and a document's own `w:doNotShadeFormData`, are both resolved
+    // in paint — which then omits the class. Keying the caret off the ATTRIBUTE instead let it
+    // shade the field anyway the moment the caret arrived, because the stylesheet paints
+    // `--active` unconditionally. The caret must not be able to overrule that decision.
+    layer = document.createElement('div');
+    const span = document.createElement('span');
+    span.dataset.paragraphId = 'p1';
+    span.dataset.start = '0';
+    span.dataset.end = '1';
+    span.dataset.fieldAtom = 'form';
+    layer.append(span);
+    syncActiveFieldShading(layer, { paragraphId: 'p1', offset: 0 });
+    expect(activeSpans()).toHaveLength(0);
+  });
+
+  test('every span a wrapped result broke into is marked', () => {
+    // Line breaking splits a field's result at its spaces, and all of those spans publish the
+    // same one-unit model range. Stopping at the first shaded half a cross-reference, while
+    // `always` — resolved per span in paint — shaded all of it.
+    layer = document.createElement('div');
+    for (let i = 0; i < 3; i += 1) {
+      const span = document.createElement('span');
+      span.dataset.paragraphId = 'p1';
+      span.dataset.start = '5';
+      span.dataset.end = '6';
+      span.dataset.fieldAtom = 'field';
+      span.classList.add('docx-field-atom');
+      layer.append(span);
+    }
+    syncActiveFieldShading(layer, { paragraphId: 'p1', offset: 5 });
+    expect(activeSpans()).toHaveLength(3);
   });
 });

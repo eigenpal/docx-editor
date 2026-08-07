@@ -77,13 +77,20 @@ The model range a deletion publishes for an atomic field SHALL be the single uni
 
 ### Requirement: A revision wrapping a simple field stays a revision
 
-`w:fldSimple` is a member of `EG_ContentRunContent`, which `CT_RunTrackChange` admits, so a content-revision wrapper SHALL accept it as a child and SHALL remain typed as a revision. Demoting the wrapper because of its child removes the revision itself, taking the content off the page and out of the review surface at once.
+A content-revision wrapper SHALL accept `w:fldSimple` as a child and SHALL remain typed as a revision. This is deliberately wider than the schema — `CT_RunTrackChange` takes `EG_ContentRunContent`, which does not list `w:fldSimple` — because Word writes an inserted cross-reference that way, and demoting the wrapper removes the revision itself, taking the content off the page and out of the review surface at once.
+
+A `w:hyperlink` SHALL likewise accept `w:fldSimple`, which `EG_PContent` does list. A linked heading followed by its page number is how a table-of-contents entry is written, and demoting the link there loses the entry's words as well as its number.
 
 #### Scenario: An inserted simple field is still an insertion
 
 - **WHEN** a `w:ins` contains a `w:fldSimple`
 - **THEN** the wrapper types as an insertion carrying its provenance
 - **AND** the field inside it stays a typed simple field
+
+#### Scenario: A contents entry keeps its words and its number
+
+- **WHEN** a `w:hyperlink` holds a run of heading text followed by a `w:fldSimple` page number
+- **THEN** the link stays typed and both the heading text and the number paint
 
 ### Requirement: A simple field paints its cached result
 

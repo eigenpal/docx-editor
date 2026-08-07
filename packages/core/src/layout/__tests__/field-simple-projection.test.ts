@@ -11,7 +11,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlNode, type OoxmlPart } from '@docx-editor.dev/core/store';
-import { piecesOfParagraph } from '../field-projection.ts';
+import { detectStoryPageFields, piecesOfParagraph } from '../field-projection.ts';
 import type { RevisionDisplayMode } from '../revision-projection.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -103,6 +103,57 @@ describe('a simple field', () => {
     );
     expect(pieces.map((piece) => piece.text)).toEqual(['A', 'B']);
     expect(pieces[1]).toMatchObject({ start: 2, end: 3 });
+  });
+});
+
+describe('a simple field inside a hyperlink', () => {
+  test('the link keeps both its words and its field', () => {
+    // A linked heading followed by its page number is how a contents entry is written. The
+    // link's allowed children omitted `w:fldSimple`, so the LINK demoted to generic — and
+    // layout drops a generic paragraph child whole, so the entry's words disappeared along
+    // with its number.
+    const pieces = project(
+      '<w:p><w:hyperlink w:anchor="a"><w:r><w:t>Heading</w:t></w:r>' +
+        '<w:fldSimple w:instr=" PAGEREF a "><w:r><w:t>7</w:t></w:r></w:fldSimple>' +
+        '</w:hyperlink></w:p>'
+    );
+    expect(pieces.map((piece) => piece.text).join('')).toBe('Heading7');
+  });
+});
+
+describe('a simple PAGE field', () => {
+  const page = '<w:p><w:fldSimple w:instr=" PAGE "><w:r><w:t>1</w:t></w:r></w:fldSimple></w:p>';
+
+  test('evaluates per sheet rather than painting the cached number', () => {
+    // The cached result is whatever sheet the producer last saved from. Painting it verbatim
+    // put that number on every page — a wrong page number is quieter than a blank one, not
+    // smaller.
+    for (const [pageNumber, expected] of [
+      [1, '1'],
+      [2, '2'],
+      [7, '7'],
+    ] as const) {
+      const pieces = piecesOfParagraph(paragraphOf(page), [], { pageNumber, pageCount: 9 });
+      expect(pieces.map((piece) => piece.text).join('')).toBe(expected);
+    }
+  });
+
+  test('is detected, so furniture gets a per-sheet context at all', () => {
+    // Without detection the story's page-field key stays empty and one layout is reused for
+    // every sheet, so evaluation never gets the chance to differ.
+    expect(detectStoryPageFields(partOf(page).root)).toEqual({
+      hasPage: true,
+      hasNumPages: false,
+      hasSectionPages: false,
+    });
+  });
+
+  test('falls back to the cached result with no page context', () => {
+    expect(
+      project(page)
+        .map((piece) => piece.text)
+        .join('')
+    ).toBe('1');
   });
 });
 
