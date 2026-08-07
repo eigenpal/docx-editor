@@ -79,15 +79,20 @@ Import it from `/browser` deliberately: reaching a live editor means reaching th
 and a server holding bytes should not pay for that.
 
 `author` is optional for source compatibility and ordinary edits, but required by
-`Comment.reply()`. A missing identity refuses with `NotSupported`; a live reply also requires the
-Pro review module and a writable editing mode. There is no static comment-write capability because
-those conditions are dynamic, so callers should handle the typed refusal from the call or `sync()`.
+`Range.insertComment()` and `Comment.reply()`. A missing identity refuses with `NotSupported`; a
+live comment write also requires the Pro review module and a writable editing mode. There is no
+static comment-write capability because those conditions are dynamic, so callers should handle the
+typed refusal from the call or `sync()`.
+
+`range.insertComment(text)` creates a top-level comment over that exact range and returns the new
+`Comment`. Collapsed ranges create insertion-point comments. Empty text and ranges crossing table
+cells are refused; duplicate author names are ordinary OOXML and are not deduplicated.
 
 `Comment.delete()` removes a root comment, its replies, and its anchors. `CommentReply.delete()`
 removes only that reply and preserves the parent and siblings. Several deletes queued before one
-`sync()` are one atomic transaction and one browser Undo unit. Browser deletion requires the Pro
-review module and a writable, attached editor; server deletion is provided by this Pro-licensed
-runtime. Comment creation remains absent.
+`sync()` are one atomic transaction and one browser Undo unit. Browser comment writes require the
+Pro review module and a writable, attached editor; server writes are provided by this Pro-licensed
+runtime. Root creation follows the same browser gate and is one Undo unit.
 
 ## Programming model
 
@@ -149,8 +154,8 @@ The editor packages above are Apache 2.0. This one is not — see below.
 This package is licensed under the
 [EigenPal Pro Evaluation License 1.0](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/LICENSE.md).
 You may read, run and modify it internally, free of charge, to evaluate whether it fits your
-application. Browser comment replies and deletions also require `@docx-editor.dev/pro`, under the same
-evaluation-only production boundary. Production use — a live or customer-facing environment, live
+application. Browser comment creation, replies, and deletions also require `@docx-editor.dev/pro`,
+under the same evaluation-only production boundary. Production use — a live or customer-facing environment, live
 or business-operational data, or either package embedded in something you offer to others —
 requires a written commercial agreement, and so does redistribution.
 

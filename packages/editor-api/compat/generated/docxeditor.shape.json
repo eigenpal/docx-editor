@@ -1424,6 +1424,22 @@
             }
           ]
         },
+        "insertComment": {
+          "uid": "DocxEditor.Range#insertComment",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "commentText",
+                  "type": "string"
+                }
+              ],
+              "returns": "Comment"
+            }
+          ]
+        },
         "insertParagraph": {
           "uid": "DocxEditor.Range#insertParagraph",
           "kind": "method",

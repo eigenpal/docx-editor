@@ -44,6 +44,7 @@ import {
 } from './locations.ts';
 import { ModelObject } from './model-object.ts';
 import { Paragraph } from './paragraph.ts';
+import { Comment } from './review.ts';
 import { searchOptions, type SearchOptions } from './search-options.ts';
 
 /**
@@ -215,6 +216,35 @@ export class Range extends ModelObject implements PromisedItem {
             },
       (value) => {
         created.hydrateAddress({ kind: 'span', span: hydratedSpan(value, target) });
+      }
+    );
+    return created;
+  }
+
+  /**
+   * Create a top-level comment anchored to exactly this range.
+   *
+   * The author is the identity the runtime was opened with. Empty comment text, a missing author,
+   * stale endpoints, and ranges crossing a table-cell boundary are refused rather than authored
+   * approximately. A collapsed range creates an insertion-point comment.
+   */
+  insertComment(commentText: string): Comment {
+    const target = `${this.path.label}.insertComment`;
+    if (typeof commentText !== 'string' || commentText.length === 0) {
+      fail({ code: 'InvalidArgument', target });
+    }
+    const author = this.internals.author;
+    if (typeof author !== 'string' || author.trim().length === 0) {
+      fail({ code: 'NotSupported', target });
+    }
+    const span = this.#span();
+    const created = Comment.promised(this.context, target, false);
+    this.commandAnswering(
+      target,
+      () => ({ op: 'insertComment', span, text: commentText, author }),
+      (value) => {
+        if (value.kind !== 'handle') fail({ code: 'GeneralException', target });
+        created.hydrateAddress(value);
       }
     );
     return created;

@@ -160,6 +160,11 @@ const bodyHasBookmarks: Satisfies<Body['bookmarks'], BookmarkCollection> = true;
 
 const rangeTextIsAString: Satisfies<Pick<Range, 'text'>, Pick<Declared.Range, 'text'>> = true;
 const rangeSelects: Satisfies<Pick<Range, 'select'>, Pick<Declared.Range, 'select'>> = true;
+const rangeComments: TakesTheSameArguments<
+  Range['insertComment'],
+  Declared.Range['insertComment']
+> = true;
+const rangeCommentIsAComment: Satisfies<ReturnType<Range['insertComment']>, Comment> = true;
 const rangeInsertsText: TakesTheSameArguments<Range['insertText'], Declared.Range['insertText']> =
   true;
 const rangeInsertsAParagraph: TakesTheSameArguments<
@@ -482,6 +487,8 @@ void bookmarkRangeIsARange;
 void bookmarkItemsAreBookmarks;
 void rangeReachesItsBookmarks;
 void rangeHyperlinkMatches;
+void rangeComments;
+void rangeCommentIsAComment;
 void pageSetupMatchesTheDeclaredPageSetup;
 void sectionFurnitureTakesTheDeclaredVariant;
 void sectionAnswersItsOwnObjects;

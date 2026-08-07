@@ -67,11 +67,18 @@ each operation owns its reveal and verifies selection again at `sync()`. The rev
 layout coordinates, so it works when the target page is virtualized and has no painted element yet.
 A server runtime refuses either `select()` with `NotSupported` because it has no reader or viewport.
 
-`Comment.reply()` uses the explicit runtime author: pass `{ author: 'Demo Reviewer' }` to either
-`createBrowser` or `createServer`. A missing or blank author refuses with `NotSupported` before the
-write is queued. In a browser, the Pro review module and a writable editing mode are also required.
-There is deliberately no static comment-write capability because those conditions can change; a
-typed refusal from the call or `sync()` is authoritative.
+`Range.insertComment(text)` creates a top-level comment over that range and returns the new
+`Comment`; `Comment.reply()` adds to its thread. Both use the explicit runtime author: pass
+`{ author: 'Demo Reviewer' }` to either `createBrowser` or `createServer`. A missing or blank author
+refuses with `NotSupported` before the write is queued. In a browser, the Pro review module and a
+writable, attached editor are also required. There is deliberately no static comment-write
+capability because those conditions can change; a typed refusal from the call or `sync()` is
+authoritative.
+
+A collapsed range creates an insertion-point comment. A range may cross paragraphs in one story,
+but a range whose endpoints are in different table cells is refused because the engine cannot
+preserve that anchor safely. Empty text and line-breaking comment bodies are refused; repeated
+author names are preserved as ordinary OOXML author values.
 
 `Comment.delete()` removes the top-level comment, every reply in its thread, and the OOXML anchors
 as one package transaction. `CommentReply.delete()` removes only that reply; its parent and sibling
@@ -118,7 +125,6 @@ The following APIs are absent from the public types, so code that uses them fail
 | Custom XML mapping (`ContentControl.xmlMapping`)           | A control bound to custom XML refuses writes because the API cannot maintain its binding.                                         |
 | Standalone hyperlinks (`Hyperlink`, `HyperlinkCollection`) | `Range.hyperlink` reads and writes a range's hyperlink. The API does not expose standalone hyperlink objects.                     |
 | `getHtml`, `getOoxml`, `getText`, `exists`                 | The API does not expose these methods or their `ClientResult` shapes. `Body.text` and `Paragraph.text` support loaded text reads. |
-| Creating comments                                          | Comments can be read, replied to, resolved, and deleted. This release does not create them.                                       |
 
 ## Divergences
 

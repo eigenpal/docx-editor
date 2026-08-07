@@ -32,6 +32,6 @@
     "WordApiDesktop 1.3",
     "WordApiDesktop 1.4"
   ],
-  "fetchedAt": "2026-08-07T13:03:11.774Z",
+  "fetchedAt": "2026-08-07T13:34:36.695Z",
   "fetchedBy": "packages/editor-api/scripts/fetch-office-reference.mjs"
 }

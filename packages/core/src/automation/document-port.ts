@@ -17,8 +17,20 @@ import type { StoryScope } from '../store/store/tree-package-store.ts';
 
 export type { InsertCustomNodeWrite };
 
-/** What a comment write asks for: a reply, thread state, or one lifecycle deletion. */
+/** What a comment write asks for: a root, reply, thread state, or one lifecycle deletion. */
 export type AutomationCommentWrite =
+  | {
+      readonly kind: 'create';
+      readonly anchor: {
+        readonly paragraphId: string;
+        readonly start: number;
+        readonly end: number;
+        readonly endParagraphId?: string;
+      };
+      readonly text: string;
+      readonly author: string;
+      readonly date?: string;
+    }
   | {
       readonly kind: 'reply';
       readonly parentCommentId: string;

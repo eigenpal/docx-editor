@@ -60,6 +60,26 @@ async function replyToFirstComment(
   });
 }
 
+async function commentOnText(
+  runtime: DocxEditorRuntime,
+  anchorText: string,
+  commentText = 'Created by automation.'
+): Promise<{ authorName: string; text: string; anchorText: string }> {
+  return runtime.run(async (context) => {
+    const matches = context.document.body.search(anchorText);
+    matches.load('items');
+    await context.sync();
+    const comment = matches.items[0]!.insertComment(commentText);
+    await context.sync();
+    comment.load(['authorName', 'text']);
+    const range = comment.getRange();
+    await context.sync();
+    range.load('text');
+    await context.sync();
+    return { authorName: comment.authorName, text: comment.text, anchorText: range.text };
+  });
+}
+
 describe('DocxEditor.createServer', () => {
   test('opens bytes into a runtime that reads, writes and saves', async () => {
     const runtime = await DocxEditor.createServer(docx(p('server')));
@@ -76,6 +96,37 @@ describe('DocxEditor.createServer', () => {
     const saved = await runtime.save();
     const reopened = await DocxEditor.createServer(saved);
     expect(await bodyText(reopened)).toBe('the server');
+    runtime.dispose();
+    reopened.dispose();
+  });
+
+  test('creates a root comment over a range and preserves it through save and reopen', async () => {
+    const runtime = await DocxEditor.createServer(docx(p('server anchor')), {
+      author: 'Server Reviewer',
+    });
+    expect(await commentOnText(runtime, 'anchor')).toEqual({
+      authorName: 'Server Reviewer',
+      text: 'Created by automation.',
+      anchorText: 'anchor',
+    });
+
+    const reopened = await DocxEditor.createServer(await runtime.save(), {
+      author: 'Server Reviewer',
+    });
+    expect(
+      await reopened.run(async (context) => {
+        const comments = context.document.comments;
+        comments.load('items');
+        await context.sync();
+        comments.items[0]!.load(['authorName', 'text']);
+        await context.sync();
+        return {
+          count: comments.items.length,
+          authorName: comments.items[0]!.authorName,
+          text: comments.items[0]!.text,
+        };
+      })
+    ).toEqual({ count: 1, authorName: 'Server Reviewer', text: 'Created by automation.' });
     runtime.dispose();
     reopened.dispose();
   });
@@ -135,6 +186,21 @@ describe('DocxEditor.createBrowser', () => {
   function mount(): { editor: ReturnType<typeof createDocxEditor>; container: HTMLElement } {
     const container = document.createElement('div');
     const editor = createDocxEditor({ container, document: TWO_PARAGRAPHS });
+    if (!editor.surface) throw new Error('surface failed to mount');
+    return { editor, container };
+  }
+
+  function mountReviewable(options: { viewing?: boolean } = {}): {
+    editor: ReturnType<typeof createDocxEditor>;
+    container: HTMLElement;
+  } {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: TWO_PARAGRAPHS,
+      modules: [reviewModule()],
+      ...(options.viewing ? { mode: 'view' as const } : {}),
+    });
     if (!editor.surface) throw new Error('surface failed to mount');
     return { editor, container };
   }
@@ -264,6 +330,73 @@ describe('DocxEditor.createBrowser', () => {
 
     runtime.dispose();
     editor.destroy();
+  });
+
+  test('a browser-created root comment is one edit and Undo removes it', async () => {
+    const { editor } = mountReviewable();
+    const runtime = DocxEditorBrowser.createBrowser(editor, { author: 'Demo Reviewer' });
+    let changes = 0;
+    editor.on('change', () => {
+      changes += 1;
+    });
+
+    expect(await commentOnText(runtime, 'alpha', 'Review alpha.')).toEqual({
+      authorName: 'Demo Reviewer',
+      text: 'Review alpha.',
+      anchorText: 'alpha',
+    });
+    expect(changes).toBe(1);
+    expect(editor.exec({ type: 'undo' })).toMatchObject({ ok: true, changed: true });
+    expect(
+      await runtime.run(async (context) => {
+        const comments = context.document.comments;
+        comments.load('items');
+        await context.sync();
+        return comments.items.length;
+      })
+    ).toBe(0);
+    runtime.dispose();
+    editor.destroy();
+  });
+
+  test('browser creation requires the review module, writable mode, and an attached document', async () => {
+    const plain = mount();
+    const plainRuntime = DocxEditorBrowser.createBrowser(plain.editor, { author: 'Demo Reviewer' });
+    await expect(commentOnText(plainRuntime, 'alpha')).rejects.toMatchObject({
+      code: 'GeneralException',
+      target: 'document.body.search.items[0].insertComment',
+    });
+    plainRuntime.dispose();
+    plain.editor.destroy();
+
+    const viewing = mountReviewable({ viewing: true });
+    const viewingRuntime = DocxEditorBrowser.createBrowser(viewing.editor, {
+      author: 'Demo Reviewer',
+    });
+    await expect(commentOnText(viewingRuntime, 'alpha')).rejects.toMatchObject({
+      code: 'GeneralException',
+      target: 'document.body.search.items[0].insertComment',
+    });
+    viewingRuntime.dispose();
+    viewing.editor.destroy();
+
+    const attached = mountReviewable();
+    const runtime = DocxEditorBrowser.createBrowser(attached.editor, { author: 'Demo Reviewer' });
+    await expect(
+      runtime.run(async (context) => {
+        const matches = context.document.body.search('alpha');
+        matches.load('items');
+        await context.sync();
+        const range = matches.items[0]!;
+        attached.editor.destroy();
+        range.insertComment('detached');
+        await context.sync();
+      })
+    ).rejects.toMatchObject({
+      code: 'DocumentUnavailable',
+      target: 'document.body.search.items[0].insertComment',
+    });
+    runtime.dispose();
   });
 
   test('root deletion is one editor transaction, removes the thread, and Undo restores it', async () => {

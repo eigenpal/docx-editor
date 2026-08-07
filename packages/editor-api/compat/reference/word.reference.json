@@ -1424,6 +1424,22 @@
             }
           ]
         },
+        "insertComment": {
+          "uid": "Word.Range#insertComment",
+          "kind": "method",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "commentText",
+                  "type": "string"
+                }
+              ],
+              "returns": "Comment"
+            }
+          ]
+        },
         "insertParagraph": {
           "uid": "Word.Range#insertParagraph",
           "kind": "method",
