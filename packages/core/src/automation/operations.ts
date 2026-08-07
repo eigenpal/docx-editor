@@ -562,6 +562,13 @@ export type AutomationOperation =
   | { readonly op: 'getContentControlSubtype'; readonly contentControl: AutomationHandle }
   /** The `ST_Lock` in force, INCLUDING what an enclosing control imposes. */
   | { readonly op: 'getContentControlLock'; readonly contentControl: AutomationHandle }
+  /**
+   * Whether the control declares `w:dataBinding`.
+   *
+   * Presence only: no XPath, namespace mapping, store id, or custom XML content crosses this
+   * protocol boundary, and the binding target is never resolved or fetched.
+   */
+  | { readonly op: 'getContentControlIsBound'; readonly contentControl: AutomationHandle }
   /** Whether the control is showing its placeholder rather than a value (`w:showingPlcHdr`). */
   | { readonly op: 'getContentControlPlaceholderShown'; readonly contentControl: AutomationHandle }
   /** Whether the control removes itself on the first edit (`w:temporary`). */
@@ -738,6 +745,7 @@ export const AUTOMATION_QUERY_OPERATIONS = [
   'getContentControlFileId',
   'getContentControlSubtype',
   'getContentControlLock',
+  'getContentControlIsBound',
   'getContentControlPlaceholderShown',
   'getContentControlTemporary',
   'getContentControlText',

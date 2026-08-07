@@ -59,6 +59,15 @@ const AMBIGUOUS = docx(
     `<w:p><w:r><w:t>c</w:t></w:r></w:p></w:sdtContent></w:sdt>`
 );
 
+const BOUND_MIXED = docx(
+  `<w:sdt><w:sdtPr><w:tag w:val="open"/><w:text/></w:sdtPr><w:sdtContent>` +
+    `<w:p><w:r><w:t>open</w:t></w:r></w:p></w:sdtContent></w:sdt>` +
+    `<w:sdt><w:sdtPr><w:tag w:val="bound"/>` +
+    `<w:dataBinding w:prefixMappings="xmlns:x='urn:secret'" w:xpath="/x:root/private" ` +
+    `w:storeItemID="{SECRET-ID}"/><w:group/></w:sdtPr><w:sdtContent>` +
+    `<w:p><w:r><w:t>bound</w:t></w:r></w:p></w:sdtContent></w:sdt>`
+);
+
 async function codeOf(call: () => Promise<unknown>): Promise<string> {
   try {
     await call();
@@ -163,6 +172,63 @@ describe('a control says what the document says about it', () => {
       temporary: true,
       text: 'Click here to enter text.',
     });
+  });
+
+  test('isBound is a loadable boolean across a mixed collection and every subtype', async () => {
+    const runtime = await serverRuntime(BOUND_MIXED);
+    const state = await runtime.run(async (context) => {
+      const controls = context.document.contentControls;
+      controls.load();
+      await context.sync();
+      for (const control of controls.items) control.load(['tag', 'subtype', 'isBound']);
+      await context.sync();
+      return controls.items.map((control) => ({
+        tag: control.tag,
+        subtype: control.subtype,
+        isBound: control.isBound,
+      }));
+    });
+    expect(state).toEqual([
+      { tag: 'open', subtype: 'plainText', isBound: false },
+      { tag: 'bound', subtype: 'group', isBound: true },
+    ]);
+    expect(JSON.stringify(state)).not.toContain('private');
+    expect(JSON.stringify(state)).not.toContain('SECRET-ID');
+    expect(JSON.stringify(state)).not.toContain('urn:secret');
+  });
+
+  test('isBound follows unloaded and detached proxy rules', async () => {
+    const runtime = await serverRuntime(BOUND_MIXED);
+    const escaped = await runtime.run(async (context) => {
+      const controls = context.document.contentControls;
+      controls.load();
+      await context.sync();
+      expect(() => controls.items[0]!.isBound).toThrowError(
+        expect.objectContaining({ code: 'PropertyNotLoaded' })
+      );
+      controls.items[1]!.load('isBound');
+      await context.sync();
+      return { loaded: controls.items[1]!, unloaded: controls.items[0]! };
+    });
+    expect(escaped.loaded.isBound).toBe(true);
+    expect(() => escaped.unloaded.isBound).toThrowError(
+      expect.objectContaining({ code: 'InvalidObjectPath' })
+    );
+  });
+
+  test('a stale control cannot refresh binding state after deletion', async () => {
+    const runtime = await serverRuntime(BOUND_MIXED);
+    const code = await codeOf(() =>
+      runtime.run(async (context) => {
+        const control = context.document.contentControls.getFirst();
+        await context.sync();
+        control.delete(false);
+        await context.sync();
+        control.load('isBound');
+        await context.sync();
+      })
+    );
+    expect(code).toBe('InvalidObjectPath');
   });
 
   test('a control’s range reads the characters it holds', async () => {
@@ -366,6 +432,23 @@ describe('a control is written through the document’s own write path', () => {
     expect(await mainXmlOf(runtime)).toBe(before);
   });
 
+  test('a bound value still refuses the whole mixed batch at sync', async () => {
+    const runtime = await serverRuntime(BOUND_MIXED);
+    const before = await mainXmlOf(runtime);
+    const code = await codeOf(() =>
+      runtime.run(async (context) => {
+        const controls = context.document.contentControls;
+        controls.load();
+        await context.sync();
+        controls.items[0]!.setValue({ kind: 'text', text: 'would apply' });
+        controls.items[1]!.setValue({ kind: 'text', text: 'must refuse' });
+        await context.sync();
+      })
+    );
+    expect(code).not.toBe('');
+    expect(await mainXmlOf(runtime)).toBe(before);
+  });
+
   // The three locations source-compatible code writes. `Replace` takes the control's value path;
   // the edges are insertions at the ends of what it holds. The range that comes back names the
   // TEXT THAT WAS WRITTEN in every case, not the control's whole content.
@@ -509,10 +592,10 @@ describe('a control is written through the document’s own write path', () => {
 describe('both hosts answer the same document', () => {
   test('the browser host reads the controls the server host reads', async () => {
     const container = globalThis.document.createElement('div');
-    const editor = createDocxEditor({ container, document: CONTROLS });
+    const editor = createDocxEditor({ container, document: BOUND_MIXED });
     if (!editor.surface) throw new Error('surface failed to mount');
     const browser: DocxEditorRuntime = createBrowser(editor);
-    const server = await serverRuntime(CONTROLS);
+    const server = await serverRuntime(BOUND_MIXED);
 
     const script = async (runtime: DocxEditorRuntime): Promise<unknown> =>
       runtime.run(async (context) => {
@@ -520,7 +603,7 @@ describe('both hosts answer the same document', () => {
         controls.load();
         await context.sync();
         for (const control of controls.items) {
-          control.load(['id', 'tag', 'title', 'subtype', 'text']);
+          control.load(['id', 'tag', 'title', 'subtype', 'isBound', 'text']);
         }
         await context.sync();
         return controls.items.map((control) => ({
@@ -528,6 +611,7 @@ describe('both hosts answer the same document', () => {
           tag: control.tag,
           title: control.title,
           subtype: control.subtype,
+          isBound: control.isBound,
           text: control.text,
         }));
       });

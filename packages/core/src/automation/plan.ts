@@ -2518,17 +2518,18 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         return query({ kind: 'text', text: text ?? '' });
       }
 
+      case 'getContentControlIsBound':
       case 'getContentControlPlaceholderShown':
       case 'getContentControlTemporary': {
         const found = controlOf(operation.contentControl);
         if (!('control' in found)) return found;
-        return query({
-          kind: 'flag',
-          value:
-            operation.op === 'getContentControlPlaceholderShown'
+        const value =
+          operation.op === 'getContentControlIsBound'
+            ? found.control.properties.dataBinding !== undefined
+            : operation.op === 'getContentControlPlaceholderShown'
               ? found.control.properties.showingPlaceholder
-              : found.control.properties.temporary,
-        });
+              : found.control.properties.temporary;
+        return query({ kind: 'flag', value });
       }
 
       case 'getContentControlText': {
