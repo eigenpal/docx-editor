@@ -173,6 +173,49 @@ describe('a proxy dies with its run unless something kept it', () => {
   });
 });
 
+describe('the other half of InvalidObjectPath: an object that is not addressable YET', () => {
+  // One code covers two states, and only one of them is fixed by tracking. A consumer who reached
+  // a paragraph through a search hit's `getFirst()` was told "the object is no longer usable …
+  // unless context.trackedObjects.add(...) kept them", which describes the state they were not in
+  // — so they tracked an object that had never been released and it did not help. The state they
+  // were in is fixed by one more `sync()`, and the sentence has to say so.
+  test('a promised object refuses, and the refusal names the sync that fixes it', async () => {
+    const runtime = createRuntime({ host: openHost(docx(p('find me'))), save: true });
+    await runtime.run(async (context) => {
+      const found = context.document.body.search('me');
+      found.load();
+      await context.sync();
+
+      const promised = found.items[0]!.paragraphs.getFirst();
+      // Not released: nothing has ended. Not addressable either, until the read answers.
+      let refusal: { code?: unknown; message?: string } = {};
+      try {
+        promised.load('text');
+      } catch (error) {
+        refusal = error as { code?: unknown; message?: string };
+      }
+      expect(refusal.code).toBe('InvalidObjectPath');
+      expect(refusal.message).toContain('context.sync()');
+
+      // And the fix the message names is the fix: one sync, then the object works.
+      await context.sync();
+      promised.load('text');
+      await context.sync();
+      expect(promised.text).toBe('find me');
+    });
+    runtime.dispose();
+  });
+
+  test('the released half still says what keeps an object alive', async () => {
+    const runtime = createRuntime({ host: openHost(), save: true });
+    const escaped = await firstParagraph(runtime, { track: false });
+    expect(() => escaped.load('text')).toThrowError(
+      expect.objectContaining({ message: expect.stringContaining('trackedObjects.add') })
+    );
+    runtime.dispose();
+  });
+});
+
 describe('a callback that throws', () => {
   test('rejects with what was thrown, applies nothing, and releases the objects', async () => {
     const spy = spyHost(openHost(docx(p('untouched'))));

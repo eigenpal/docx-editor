@@ -30,7 +30,14 @@ export type DocxEditorErrorCode =
   | 'PropertyNotLoaded'
   /** A `ClientResult` value was read before the sync that fills it. */
   | 'ValueNotLoaded'
-  /** The object is no longer addressable: its run ended and it was not tracked. */
+  /**
+   * The object cannot be addressed, in either of the two ways that happens.
+   *
+   * NOT YET: an item accessor answers a proxy the read that names it has not answered for, and it
+   * becomes usable at the next `sync()`. NOT ANY MORE: its run ended and nothing tracked it, which
+   * is terminal. One code because from a consumer's side both are "this object cannot be used
+   * here"; the message says which one, because the fix for one is not the fix for the other.
+   */
   | 'InvalidObjectPath'
   /** The object still belongs to a run that has not finished, so it cannot be handed over. */
   | 'ObjectInUse'
@@ -79,8 +86,9 @@ const MESSAGES: Readonly<Record<DocxEditorErrorCode, string>> = Object.freeze({
     'the property has not been loaded. Call load(...) and await context.sync() before reading it.',
   ValueNotLoaded: 'the result has not been filled in yet. Await context.sync() before reading it.',
   InvalidObjectPath:
-    'the object is no longer usable. Objects are released when their run ends unless ' +
-    'context.trackedObjects.add(...) kept them.',
+    'the object cannot be addressed. An object an item accessor answered is usable after the ' +
+    'next await context.sync(); an object whose run has ended is released for good, unless ' +
+    'context.trackedObjects.add(...) kept it.',
   ObjectInUse:
     'the object still belongs to a run that has not finished. Await that run before passing the ' +
     'object to another one.',
