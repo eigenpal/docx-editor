@@ -89,6 +89,55 @@ function reviewed(): AutomationHost {
   );
 }
 
+function twoReviewedComments(): AutomationHost {
+  return open(
+    richDocx({
+      body:
+        `<w:p><w:commentRangeStart w:id="1"/><w:r><w:t>first</w:t></w:r>` +
+        `<w:commentRangeEnd w:id="1"/><w:r><w:commentReference w:id="1"/></w:r></w:p>` +
+        `<w:p><w:commentRangeStart w:id="3"/><w:r><w:t>second</w:t></w:r>` +
+        `<w:commentRangeEnd w:id="3"/><w:r><w:commentReference w:id="3"/></w:r></w:p>`,
+      rels: [{ id: 'rId5', type: REL_TYPES.comments, target: 'comments.xml' }],
+      parts: [
+        commentsPart(
+          comment('1', 'Ada', '11111111', 'first remark') +
+            comment('3', 'Grace', '33333333', 'second remark')
+        ),
+      ],
+    })
+  );
+}
+
+function nestedReviewedComment(): AutomationHost {
+  return open(
+    richDocx({
+      body:
+        `<w:p><w:commentRangeStart w:id="1"/><w:r><w:t>nested</w:t></w:r>` +
+        `<w:commentRangeEnd w:id="1"/><w:r><w:commentReference w:id="1"/></w:r></w:p>`,
+      rels: [
+        { id: 'rId5', type: REL_TYPES.comments, target: 'comments.xml' },
+        {
+          id: 'rId6',
+          type: 'http://schemas.microsoft.com/office/2011/relationships/commentsExtended',
+          target: 'commentsExtended.xml',
+        },
+      ],
+      parts: [
+        commentsPart(
+          comment('1', 'Ada', '11111111', 'root') +
+            comment('2', 'Grace', '22222222', 'reply') +
+            comment('4', 'Linus', '44444444', 'nested reply')
+        ),
+        commentsExtendedPart(
+          `<w15:commentEx w15:paraId="11111111"/>` +
+            `<w15:commentEx w15:paraId="22222222" w15:paraIdParent="11111111"/>` +
+            `<w15:commentEx w15:paraId="44444444" w15:paraIdParent="22222222"/>`
+        ),
+      ],
+    })
+  );
+}
+
 function commentsOf(host: AutomationHost, body: AutomationHandle): readonly AutomationHandle[] {
   return handlesAt(host.execute({ operations: [{ op: 'getComments', scope: { body } }] }), 0);
 }
@@ -193,6 +242,93 @@ describe('a document holds its comments, and a script reads the same ones the ra
     expect(
       textAt(host.execute({ operations: [{ op: 'getCommentText', comment: replies[0]! }] }), 0)
     ).toBe('a reply');
+  });
+
+  test('deleting a reply preserves its parent', () => {
+    const host = reviewed();
+    const { body } = roots(host);
+    const [root] = commentsOf(host, body) as [AutomationHandle];
+    const [reply] = handlesAt(
+      host.execute({ operations: [{ op: 'getCommentReplies', comment: root }] }),
+      0
+    ) as [AutomationHandle];
+    expect(host.execute({ operations: [{ op: 'deleteComment', comment: reply }] }).ok).toBe(true);
+
+    const next = reopen(host);
+    const [kept] = commentsOf(next.host, next.body) as [AutomationHandle];
+    expect(
+      handlesAt(next.host.execute({ operations: [{ op: 'getCommentReplies', comment: kept }] }), 0)
+    ).toEqual([]);
+    expect(
+      textAt(next.host.execute({ operations: [{ op: 'getCommentText', comment: kept }] }), 0)
+    ).toBe('the remark');
+  });
+
+  test('deleting a nested parent reparents descendants instead of deleting them', () => {
+    const host = nestedReviewedComment();
+    const { body } = roots(host);
+    const [root] = commentsOf(host, body) as [AutomationHandle];
+    const [reply] = handlesAt(
+      host.execute({ operations: [{ op: 'getCommentReplies', comment: root }] }),
+      0
+    ) as [AutomationHandle];
+    expect(host.execute({ operations: [{ op: 'deleteComment', comment: reply }] }).ok).toBe(true);
+
+    const next = reopen(host);
+    const [keptRoot] = commentsOf(next.host, next.body) as [AutomationHandle];
+    const [reparented] = handlesAt(
+      next.host.execute({ operations: [{ op: 'getCommentReplies', comment: keptRoot }] }),
+      0
+    ) as [AutomationHandle];
+    expect(
+      textAt(next.host.execute({ operations: [{ op: 'getCommentText', comment: reparented }] }), 0)
+    ).toBe('nested reply');
+  });
+
+  test('deleting a root removes the thread and story anchors', () => {
+    const host = reviewed();
+    const { body } = roots(host);
+    const [root] = commentsOf(host, body) as [AutomationHandle];
+    expect(host.execute({ operations: [{ op: 'deleteComment', comment: root }] }).ok).toBe(true);
+    const next = reopen(host);
+    expect(commentsOf(next.host, next.body)).toEqual([]);
+    expect(savedPartBytes(host, 'word/document.xml')).not.toContain('commentRange');
+  });
+
+  test('several queued deletions share one batch, while mixed writes are refused', () => {
+    const host = twoReviewedComments();
+    const { body } = roots(host);
+    const [first, second] = commentsOf(host, body) as [AutomationHandle, AutomationHandle];
+    const deleted = host.execute({
+      operations: [
+        { op: 'deleteComment', comment: first },
+        { op: 'deleteComment', comment: second },
+      ],
+    });
+    expect(deleted.ok).toBe(true);
+    const next = reopen(host);
+    expect(commentsOf(next.host, next.body)).toEqual([]);
+
+    const mixed = reviewed();
+    const mixedRoots = roots(mixed);
+    const [commentHandle] = commentsOf(mixed, mixedRoots.body) as [AutomationHandle];
+    const response = mixed.execute({
+      operations: [
+        { op: 'deleteComment', comment: commentHandle },
+        { op: 'setCommentResolved', comment: commentHandle, resolved: true },
+      ],
+    });
+    expect(response.ok).toBe(false);
+    expect(refusal(response)).toBe('conflicting-operations');
+    expect(commentsOf(mixed, mixedRoots.body)).toHaveLength(1);
+  });
+
+  test('a stale comment handle is refused before deletion reaches the store', () => {
+    const host = reviewed();
+    const { body } = roots(host);
+    const [root] = commentsOf(host, body) as [AutomationHandle];
+    expect(host.execute({ operations: [{ op: 'deleteComment', comment: root }] }).ok).toBe(true);
+    expect(host.execute({ operations: [{ op: 'deleteComment', comment: root }] }).ok).toBe(false);
   });
 
   test('a comment answers who wrote it, when, and what it says', () => {

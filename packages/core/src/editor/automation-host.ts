@@ -132,23 +132,50 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       if (result.rejected) return { ok: false, reason: String(result.reason ?? 'refused') };
       return { ok: true, changed: result.committed };
     },
-    applyCommentWrite(write, scope): AutomationCommentWriteResult {
+    applyCommentWrites(writes, scope): AutomationCommentWriteResult {
       const surface = editor.surface;
       const session = sync();
       if (!surface || !session) return { ok: false, reason: 'no-document' };
+      if (writes.length === 0) return { ok: true, changed: false };
       // THE BODY'S COMMENTS, for as long as the session's comment lane is the body store's: the
       // scope is carried so this refuses a story it cannot write rather than silently commenting
       // on the wrong one.
       if (scope.kind !== 'body') return { ok: false, reason: 'unsupported-story' };
+      const review = editor.can({ type: 'toggleReviewPane' });
+      if (!review.ok) return { ok: false, reason: review.reason ?? 'review-module-required' };
       let outcome: AutomationCommentWriteResult = { ok: false, reason: 'refused' };
       // `commitReviewOps` is the gate a comment goes through in the editor: viewing refuses, and
       // the pages and the rail repaint from the commit. Reaching past it would let a script
       // comment on a document open for reading.
       surface.commitReviewOps(() => {
+        if (writes.every((write) => write.kind === 'delete')) {
+          const done = session.deleteComments(
+            writes.map((write) => {
+              if (write.kind !== 'delete') throw new Error('unreachable mixed comment write');
+              return {
+                commentId: write.commentId,
+                ...(write.parentCommentId === undefined
+                  ? {}
+                  : { parentCommentId: write.parentCommentId }),
+              };
+            })
+          );
+          outcome = done ? { ok: true, changed: true } : { ok: false, reason: 'unknown-comment' };
+          return { committed: done };
+        }
+        if (writes.length !== 1) {
+          outcome = { ok: false, reason: 'mixed-comment-writes' };
+          return { committed: false };
+        }
+        const write = writes[0]!;
         if (write.kind === 'resolve') {
           const done = session.setCommentResolved(write.commentId, write.resolved);
           outcome = done ? { ok: true, changed: true } : { ok: false, reason: 'unknown-comment' };
           return { committed: done };
+        }
+        if (write.kind !== 'reply') {
+          outcome = { ok: false, reason: 'unsupported-comment-write' };
+          return { committed: false };
         }
         const created = session.replyToComment(
           write.parentCommentId,

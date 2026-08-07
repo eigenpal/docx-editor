@@ -22,10 +22,11 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { caretAt } from '@docx-editor.dev/core/layout';
+import { reviewModule } from '../../../../pro/src/review/review-module.ts';
 import { DocxEditor } from '../../index.ts';
-import { DocxEditor as DocxEditorBrowser } from '../../browser.ts';
-import type { DocxEditorRuntime } from '../runtime.ts';
-import { docx, p, TWO_PARAGRAPHS } from './support/docx.ts';
+import { DocxEditor as DocxEditorBrowser, type CreateBrowserOptions } from '../../browser.ts';
+import type { DocxEditorRuntime } from '../public.ts';
+import { commentedDocx, docx, p, TWO_PARAGRAPHS } from './support/docx.ts';
 
 /**
  * The story's text, over either runtime.
@@ -40,6 +41,22 @@ function bodyText(runtime: DocxEditorRuntime): Promise<string> {
     body.load('text');
     await context.sync();
     return body.text;
+  });
+}
+
+async function replyToFirstComment(
+  runtime: DocxEditorRuntime,
+  text = 'Checked against the schedule.'
+): Promise<{ authorName: string; text: string }> {
+  return runtime.run(async (context) => {
+    const comments = context.document.comments;
+    comments.load('items');
+    await context.sync();
+    const reply = comments.items[0]!.reply(text);
+    await context.sync();
+    reply.load(['authorName', 'text']);
+    await context.sync();
+    return { authorName: reply.authorName, text: reply.text };
   });
 }
 
@@ -122,6 +139,21 @@ describe('DocxEditor.createBrowser', () => {
     return { editor, container };
   }
 
+  function mountCommented(options: { viewing?: boolean } = {}): {
+    editor: ReturnType<typeof createDocxEditor>;
+    container: HTMLElement;
+  } {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: commentedDocx(),
+      modules: [reviewModule()],
+      ...(options.viewing ? { mode: 'view' as const } : {}),
+    });
+    if (!editor.surface) throw new Error('surface failed to mount');
+    return { editor, container };
+  }
+
   function mountScrollable(bookmarked = false): {
     editor: ReturnType<typeof createDocxEditor>;
     scroller: HTMLElement;
@@ -162,6 +194,256 @@ describe('DocxEditor.createBrowser', () => {
     const runtime = DocxEditorBrowser.createBrowser(editor);
     expect(await bodyText(runtime)).toBe('alpha\rbeta');
     runtime.dispose();
+  });
+
+  test('passes an explicit browser author through the public factory, matching server replies', async () => {
+    const options: CreateBrowserOptions = { author: 'Demo Reviewer' };
+    const { editor } = mountCommented();
+    const browser = DocxEditorBrowser.createBrowser(editor, options);
+    const server = await DocxEditor.createServer(commentedDocx(), options);
+
+    expect(await replyToFirstComment(browser)).toEqual({
+      authorName: 'Demo Reviewer',
+      text: 'Checked against the schedule.',
+    });
+    expect(await replyToFirstComment(server)).toEqual({
+      authorName: 'Demo Reviewer',
+      text: 'Checked against the schedule.',
+    });
+
+    browser.dispose();
+    server.dispose();
+    editor.destroy();
+  });
+
+  test('refuses a browser reply without an author before anything is queued', async () => {
+    const { editor } = mountCommented();
+    const runtime = DocxEditorBrowser.createBrowser(editor);
+
+    await expect(replyToFirstComment(runtime)).rejects.toMatchObject({
+      code: 'NotSupported',
+      target: 'document.comments.items[0].reply',
+    });
+
+    runtime.dispose();
+    editor.destroy();
+  });
+
+  test('keeps editing-mode refusal dynamic and typed', async () => {
+    const { editor } = mountCommented({ viewing: true });
+    const runtime = DocxEditorBrowser.createBrowser(editor, { author: 'Demo Reviewer' });
+    await expect(replyToFirstComment(runtime)).rejects.toMatchObject({
+      code: 'GeneralException',
+      target: 'document.comments.items[0].reply',
+    });
+    runtime.dispose();
+    editor.destroy();
+  });
+
+  test('a browser reply is one editor transaction and one undo unit', async () => {
+    const { editor } = mountCommented();
+    const runtime = DocxEditorBrowser.createBrowser(editor, { author: 'Demo Reviewer' });
+    let changes = 0;
+    editor.on('change', () => {
+      changes += 1;
+    });
+
+    await replyToFirstComment(runtime, 'Undo this reply.');
+    expect(changes).toBe(1);
+    expect(editor.exec({ type: 'undo' })).toMatchObject({ ok: true, changed: true });
+
+    const replyCount = await runtime.run(async (context) => {
+      const comments = context.document.comments;
+      comments.load('items');
+      await context.sync();
+      comments.items[0]!.replies.load('items');
+      await context.sync();
+      return comments.items[0]!.replies.items.length;
+    });
+    expect(replyCount).toBe(0);
+
+    runtime.dispose();
+    editor.destroy();
+  });
+
+  test('root deletion is one editor transaction, removes the thread, and Undo restores it', async () => {
+    const { editor } = mountCommented();
+    const runtime = DocxEditorBrowser.createBrowser(editor);
+    let changes = 0;
+    editor.on('change', () => {
+      changes += 1;
+    });
+
+    await runtime.run(async (context) => {
+      const comments = context.document.comments;
+      comments.load('items');
+      await context.sync();
+      comments.items[0]!.delete();
+      await context.sync();
+    });
+    expect(changes).toBe(1);
+    expect(
+      await runtime.run(async (context) => {
+        const comments = context.document.comments;
+        comments.load('items');
+        await context.sync();
+        return comments.items.length;
+      })
+    ).toBe(0);
+
+    expect(editor.exec({ type: 'undo' })).toMatchObject({ ok: true, changed: true });
+    expect(
+      await runtime.run(async (context) => {
+        const comments = context.document.comments;
+        comments.load('items');
+        await context.sync();
+        return comments.items.length;
+      })
+    ).toBe(1);
+    runtime.dispose();
+    editor.destroy();
+  });
+
+  test('queued reply and root deletions are one undo unit', async () => {
+    const { editor } = mountCommented();
+    const runtime = DocxEditorBrowser.createBrowser(editor, { author: 'Demo Reviewer' });
+    await replyToFirstComment(runtime, 'keep until the delete batch');
+    let changes = 0;
+    editor.on('change', () => {
+      changes += 1;
+    });
+
+    await runtime.run(async (context) => {
+      const comments = context.document.comments;
+      comments.load('items');
+      await context.sync();
+      const root = comments.items[0]!;
+      root.replies.load('items');
+      await context.sync();
+      root.replies.items[0]!.delete();
+      root.delete();
+      await context.sync();
+    });
+    expect(changes).toBe(1);
+    expect(editor.exec({ type: 'undo' })).toMatchObject({ ok: true, changed: true });
+    const restored = await runtime.run(async (context) => {
+      const comments = context.document.comments;
+      comments.load('items');
+      await context.sync();
+      comments.items[0]!.replies.load('items');
+      await context.sync();
+      return { roots: comments.items.length, replies: comments.items[0]!.replies.items.length };
+    });
+    expect(restored).toEqual({ roots: 1, replies: 1 });
+    runtime.dispose();
+    editor.destroy();
+  });
+
+  test('comment deletion requires the Pro module and a writable attached editor', async () => {
+    const container = document.createElement('div');
+    const withoutPro = createDocxEditor({ container, document: commentedDocx() });
+    const noProRuntime = DocxEditorBrowser.createBrowser(withoutPro);
+    await expect(
+      noProRuntime.run(async (context) => {
+        const comments = context.document.comments;
+        comments.load('items');
+        await context.sync();
+        comments.items[0]!.delete();
+        await context.sync();
+      })
+    ).rejects.toMatchObject({ code: 'GeneralException' });
+    noProRuntime.dispose();
+    withoutPro.destroy();
+
+    const viewing = mountCommented({ viewing: true });
+    const viewingRuntime = DocxEditorBrowser.createBrowser(viewing.editor);
+    await expect(
+      viewingRuntime.run(async (context) => {
+        const comments = context.document.comments;
+        comments.load('items');
+        await context.sync();
+        comments.items[0]!.delete();
+        await context.sync();
+      })
+    ).rejects.toMatchObject({ code: 'GeneralException' });
+    viewingRuntime.dispose();
+    viewing.editor.destroy();
+
+    const detached = mountCommented();
+    const detachedRuntime = DocxEditorBrowser.createBrowser(detached.editor);
+    const comment = await detachedRuntime.run(async (context) => {
+      const comments = context.document.comments;
+      comments.load('items');
+      await context.sync();
+      const first = comments.items[0]!;
+      context.trackedObjects.add(first);
+      return first;
+    });
+    detached.editor.detach();
+    await expect(
+      detachedRuntime.run(comment, async (context) => {
+        comment.delete();
+        await context.sync();
+      })
+    ).rejects.toMatchObject({ code: 'DocumentUnavailable' });
+    detachedRuntime.dispose();
+    detached.editor.destroy();
+  });
+
+  test('server and browser delete resolved comments with the same public script', async () => {
+    const removeResolved = async (runtime: DocxEditorRuntime): Promise<number> =>
+      runtime.run(async (context) => {
+        const comments = context.document.comments;
+        comments.load('items');
+        await context.sync();
+        const first = comments.items[0]!;
+        first.resolved = true;
+        await context.sync();
+        first.delete();
+        await context.sync();
+        comments.load('items');
+        await context.sync();
+        return comments.items.length;
+      });
+
+    const mounted = mountCommented();
+    const browser = DocxEditorBrowser.createBrowser(mounted.editor);
+    const server = await DocxEditor.createServer(commentedDocx());
+    expect(await removeResolved(browser)).toBe(0);
+    expect(await removeResolved(server)).toBe(0);
+    browser.dispose();
+    server.dispose();
+    mounted.editor.destroy();
+  });
+
+  test('a reply cannot share a batch with another write, and neither write lands', async () => {
+    const { editor } = mountCommented();
+    const runtime = DocxEditorBrowser.createBrowser(editor, { author: 'Demo Reviewer' });
+
+    await runtime.run(async (context) => {
+      const comments = context.document.comments;
+      const paragraphs = context.document.body.paragraphs;
+      comments.load('items');
+      paragraphs.load('items');
+      await context.sync();
+      comments.items[0]!.reply('Must remain atomic.');
+      paragraphs.items[0]!.insertText('changed ', 'Start');
+      await expect(context.sync()).rejects.toMatchObject({ code: 'ConflictingChanges' });
+    });
+
+    expect(await bodyText(runtime)).toBe('commented words');
+    const replyCount = await runtime.run(async (context) => {
+      const comments = context.document.comments;
+      comments.load('items');
+      await context.sync();
+      comments.items[0]!.replies.load('items');
+      await context.sync();
+      return comments.items[0]!.replies.items.length;
+    });
+    expect(replyCount).toBe(0);
+
+    runtime.dispose();
+    editor.destroy();
   });
 
   test('a batch through the runtime lands in the editor and repaints it', async () => {

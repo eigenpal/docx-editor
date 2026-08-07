@@ -161,8 +161,9 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     const stages: ((relate: (url: string) => string | null) => readonly TreeDocOp[] | null)[] = [];
     /** The one package-level op a batch may hold, which travels alone. See the planner. */
     let lifecycle: TreeDocOp | null = null;
-    /** The one comment write a batch may hold, likewise solitary and likewise its own commit. */
-    let commentWrite: { write: AutomationCommentWrite; scope: StoryScope } | null = null;
+    /** Comment deletes can batch; reply/resolve remain solitary by planner rule. */
+    const commentWrites: AutomationCommentWrite[] = [];
+    let commentWriteScope: StoryScope | null = null;
     /** The id the comment write minted, which only the port can say. */
     let mintedComment: string | undefined;
     /** The one custom-node write a batch may hold, solitary and its own commit for the same reason. */
@@ -187,7 +188,8 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
         }
       } else if (step.kind === 'commentWrite') {
         if (firstCommand < 0) firstCommand = index;
-        commentWrite = { write: step.write, scope: planner.writeScope ?? { kind: 'body' } };
+        commentWrites.push(step.write);
+        commentWriteScope = planner.writeScope ?? { kind: 'body' };
       } else if (step.kind === 'customNodeWrite') {
         if (firstCommand < 0) firstCommand = index;
         customNodeWrite = { write: step.write, scope: planner.writeScope ?? { kind: 'body' } };
@@ -195,8 +197,8 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     }
 
     let changed = false;
-    if (commentWrite) {
-      const applied = port.applyCommentWrite(commentWrite.write, commentWrite.scope);
+    if (commentWrites.length > 0) {
+      const applied = port.applyCommentWrites(commentWrites, commentWriteScope ?? { kind: 'body' });
       if (!applied.ok) {
         return refuse(
           operations,

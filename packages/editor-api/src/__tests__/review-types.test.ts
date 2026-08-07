@@ -22,6 +22,8 @@ test('both public entries require nullable review dates to be narrowed', () => {
   expectTypeOf<ServerComment['creationDate']>().toEqualTypeOf<Date | null>();
   expectTypeOf<ServerCommentReply['creationDate']>().toEqualTypeOf<Date | null>();
   expectTypeOf<ServerRevision['date']>().toEqualTypeOf<Date | null>();
+  expectTypeOf<ServerComment['delete']>().toEqualTypeOf<() => void>();
+  expectTypeOf<ServerCommentReply['delete']>().toEqualTypeOf<() => void>();
 
   const revision = { date: null } as unknown as ServerRevision;
   if (false) {

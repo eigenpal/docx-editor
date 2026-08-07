@@ -9,7 +9,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * ```ts
  * import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
  *
- * const runtime = DocxEditor.createBrowser(editor);
+ * const runtime = DocxEditor.createBrowser(editor, { author: 'Demo Reviewer' });
  * await runtime.run(async (context) => { … });
  * ```
  *
@@ -26,7 +26,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * @public
  */
 
-import { createBrowser, type DocxEditorInstance } from './runtime/browser.ts';
+import {
+  createBrowser,
+  type CreateBrowserOptions,
+  type DocxEditorInstance,
+} from './runtime/browser.ts';
 import { createServer } from './runtime/server.ts';
 import type {
   CreateServerOptions,
@@ -35,6 +39,7 @@ import type {
 } from './runtime/public.ts';
 
 export * from './runtime/public.ts';
+export type { CreateBrowserOptions } from './runtime/browser.ts';
 
 /**
  * The entry point, with the editor-bound factory. A superset of the one at the package root.
@@ -42,8 +47,13 @@ export * from './runtime/public.ts';
  * @public
  */
 export interface DocxEditorNamespace {
-  /** A runtime over an editor that is already open. The editor keeps its own lifetime. */
-  createBrowser(editor: DocxEditorInstance): DocxEditorRuntime;
+  /**
+   * A runtime over an editor that is already open. The editor keeps its own lifetime.
+   *
+   * Pass `author` when the runtime may reply to comments. Identity is explicit because the editor
+   * does not publish a signed-in user; without one, comment writes refuse with `NotSupported`.
+   */
+  createBrowser(editor: DocxEditorInstance, options?: CreateBrowserOptions): DocxEditorRuntime;
   /** A runtime over DOCX bytes. Additionally offers `save()`. */
   createServer(bytes: Uint8Array, options?: CreateServerOptions): Promise<DocxEditorServerRuntime>;
 }
@@ -59,7 +69,7 @@ export interface DocxEditorNamespace {
  * ```ts
  * import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
  *
- * const runtime = DocxEditor.createBrowser(editor);
+ * const runtime = DocxEditor.createBrowser(editor, { author: 'Demo Reviewer' });
  * await runtime.run(async (context) => {
  *   const paragraphs = context.document.paragraphs;
  *   paragraphs.load('items');
@@ -73,7 +83,7 @@ export interface DocxEditorNamespace {
  * @public
  */
 export const DocxEditor: DocxEditorNamespace = Object.freeze({
-  /** A runtime over an editor that is already open. The editor keeps its own lifetime. */
+  /** A runtime over an editor that is already open. Pass an author for comment replies. */
   createBrowser,
   /** A runtime over DOCX bytes. Additionally offers `save()`. */
   createServer,

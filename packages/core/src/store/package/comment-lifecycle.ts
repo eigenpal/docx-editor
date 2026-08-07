@@ -22,7 +22,7 @@
 // wrong — losing only the `w:commentRangeStart` does not either: the `w:commentReference` is
 // what places a comment, and Word keeps one whose reference and words are still there.
 
-import { findNode, removeNode } from './ooxml-edit.ts';
+import { findNode, removeNode, replaceNode } from './ooxml-edit.ts';
 import { withPart, type OoxmlPackage } from './ooxml-package.ts';
 import {
   WML_NAMESPACE_URI,
@@ -242,6 +242,43 @@ function removeFromPart(
   return current === part ? pkg : withPart(pkg, current);
 }
 
+/** Replace one namespaced attribute value on every matching element in a part. */
+function replaceAttributeValues(
+  pkg: OoxmlPackage,
+  partName: string,
+  replacements: ReadonlyMap<string, string>,
+  namespaceUri: string,
+  localName: string
+): OoxmlPackage | null {
+  const part = pkg.parts.get(partName);
+  if (!part || replacements.size === 0) return pkg;
+  let current = part;
+  for (const [nodeId, value] of replacements) {
+    const node = findNode(current, nodeId);
+    if (!node || node.kind === 'textValue') continue;
+    let changed = false;
+    const attributes = node.attributes.map((entry) => {
+      if (
+        entry.kind !== 'genericExtension' ||
+        entry.namespaceUri !== namespaceUri ||
+        entry.localName !== localName
+      ) {
+        return entry;
+      }
+      changed = entry.value !== value;
+      return changed ? { ...entry, value } : entry;
+    });
+    if (!changed) continue;
+    // Only generic-extension attributes are rewritten above. The cast restores the discriminated
+    // node union after mapping its attribute union; the node kind and every attribute kind survive.
+    const replacement = { ...node, attributes } as OoxmlElement;
+    const replaced = replaceNode(current, nodeId, replacement, { deferValidation: true });
+    if (!replaced.ok) return null;
+    current = replaced.part;
+  }
+  return current === part ? pkg : withPart(pkg, current);
+}
+
 /**
  * Strip every `w:commentRangeStart` / `w:commentRangeEnd` / `w:commentReference` naming one of
  * `commentIds`, from every story in the package.
@@ -359,6 +396,115 @@ export function deleteCommentThread(pkg: OoxmlPackage, commentId: string): Ooxml
     next = removed;
   }
 
+  return next;
+}
+
+/**
+ * Delete one reply while preserving its parent, siblings and descendants.
+ *
+ * Descendants are reparented to the deleted reply's parent before its record is removed. Office's
+ * public reply model is flat, but foreign files can carry nested `w15:paraIdParent` or
+ * `w16cid:parentId` links; leaving either link pointed at a missing record would orphan comments
+ * this operation did not ask to delete.
+ *
+ * Returns the package unchanged when either id no longer names a comment, and null when any
+ * rewrite is refused.
+ */
+export function deleteCommentReply(
+  pkg: OoxmlPackage,
+  commentId: string,
+  parentCommentId: string
+): OoxmlPackage | null {
+  const records = commentRecords(pkg);
+  const record = records.get(commentId);
+  const parent = records.get(parentCommentId);
+  if (!record || !parent || commentId === parentCommentId) return pkg;
+
+  const replyParaId = paraIdOf(record.node);
+  const parentParaId = paraIdOf(parent.node);
+  const childRecordUpdates = new Map<string, Map<string, string>>();
+  for (const candidate of records.values()) {
+    if (attribute(candidate.node, W16CID_NAMESPACE_URI, 'parentId') !== commentId) continue;
+    let updates = childRecordUpdates.get(candidate.partName);
+    if (!updates) {
+      updates = new Map();
+      childRecordUpdates.set(candidate.partName, updates);
+    }
+    updates.set(candidate.node.id, parentCommentId);
+  }
+
+  let next = pkg;
+  for (const [partName, updates] of childRecordUpdates) {
+    const replaced = replaceAttributeValues(
+      next,
+      partName,
+      updates,
+      W16CID_NAMESPACE_URI,
+      'parentId'
+    );
+    if (replaced === null) return null;
+    next = replaced;
+  }
+
+  if (replyParaId !== null && parentParaId !== null) {
+    const extendedUpdates = new Map<string, Map<string, string>>();
+    for (const entry of extendedEntries(next)) {
+      const linked = attribute(entry.node, W15_NAMESPACE_URI, 'paraIdParent');
+      if (linked?.toUpperCase() !== replyParaId) continue;
+      let updates = extendedUpdates.get(entry.partName);
+      if (!updates) {
+        updates = new Map();
+        extendedUpdates.set(entry.partName, updates);
+      }
+      updates.set(entry.node.id, parentParaId);
+    }
+    for (const [partName, updates] of extendedUpdates) {
+      const replaced = replaceAttributeValues(
+        next,
+        partName,
+        updates,
+        W15_NAMESPACE_URI,
+        'paraIdParent'
+      );
+      if (replaced === null) return null;
+      next = replaced;
+    }
+  }
+
+  const stripped = stripMarkers(next, new Set([commentId]));
+  if (stripped === null) return null;
+  next = stripped;
+  const withoutRecord = removeFromPart(next, record.partName, [record.node.id]);
+  if (withoutRecord === null) return null;
+  next = withoutRecord;
+
+  if (replyParaId === null) return next;
+  const doomedByPart = new Map<string, string[]>();
+  for (const part of next.parts.values()) {
+    if (!part.name.endsWith('.xml')) continue;
+    const doomed: string[] = [];
+    const visit = (node: OoxmlNode, depth: number): void => {
+      if (node.kind === 'textValue' || depth > 64) return;
+      const keyed =
+        (node.namespaceUri === W15_NAMESPACE_URI && node.localName === 'commentEx') ||
+        (node.namespaceUri === W16CID_NAMESPACE_URI && node.localName === 'commentId');
+      if (keyed) {
+        const paraId =
+          attribute(node, W15_NAMESPACE_URI, 'paraId') ??
+          attribute(node, W16CID_NAMESPACE_URI, 'paraId');
+        if (paraId?.toUpperCase() === replyParaId) doomed.push(node.id);
+        return;
+      }
+      for (const child of node.children) visit(child, depth + 1);
+    };
+    visit(part.root, 0);
+    if (doomed.length > 0) doomedByPart.set(part.name, doomed);
+  }
+  for (const [partName, nodeIds] of doomedByPart) {
+    const removed = removeFromPart(next, partName, nodeIds);
+    if (removed === null) return null;
+    next = removed;
+  }
   return next;
 }
 

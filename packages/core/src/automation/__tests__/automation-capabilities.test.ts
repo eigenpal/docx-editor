@@ -79,7 +79,7 @@ function fixture(
       state.applied += 1;
       return { ok: true, changed: true };
     },
-    applyCommentWrite: () => {
+    applyCommentWrites: () => {
       state.applied += 1;
       return { ok: true, changed: true, commentId: '1' };
     },
@@ -212,6 +212,7 @@ describe('the operation vocabulary declares which operations write', () => {
       'setHyperlink',
       'setCommentResolved',
       'replyToComment',
+      'deleteComment',
       'acceptRevision',
       'rejectRevision',
       'acceptAllRevisions',

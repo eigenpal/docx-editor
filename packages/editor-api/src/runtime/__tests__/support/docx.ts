@@ -18,6 +18,8 @@ const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/
 
 const STYLES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
 const STYLES_CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml';
+const COMMENTS_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
+const COMMENTS_CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml';
 
 /**
  * A package, optionally with a styles part.
@@ -49,6 +51,33 @@ export function docx(body: string, styles?: string): Uint8Array {
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
     ),
+  });
+}
+
+/** A package with one top-level comment anchored to "commented words". */
+export function commentedDocx(): Uint8Array {
+  const body =
+    `<w:p><w:commentRangeStart w:id="7"/><w:r><w:t>commented words</w:t></w:r>` +
+    `<w:commentRangeEnd w:id="7"/><w:r><w:commentReference w:id="7"/></w:r></w:p>`;
+  const comment =
+    `<w:comment w:id="7" w:author="Ada Lovelace" w:initials="AL">` +
+    `<w:p><w:r><w:t>Is this the right clause?</w:t></w:r></w:p></w:comment>`;
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>` +
+        `<Override PartName="/word/comments.xml" ContentType="${COMMENTS_CT}"/></Types>`
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdC" Type="${COMMENTS_REL}" Target="comments.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
+    ),
+    'word/comments.xml': strToU8(`<w:comments xmlns:w="${W}">${comment}</w:comments>`),
   });
 }
 

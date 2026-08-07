@@ -20,12 +20,35 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { createBrowserAutomationHost, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { createRuntime, type DocxEditorRuntime } from './runtime.ts';
 
+/**
+ * How `DocxEditor.createBrowser` borrows a live editor.
+ *
+ * @public
+ */
+export interface CreateBrowserOptions {
+  /**
+   * Who comments this runtime writes are recorded as.
+   *
+   * Required to reply to a comment: `CT_TrackChange` makes `@w:author` mandatory, and the editor
+   * does not expose a signed-in identity to automation. Omitted means comment writes refuse with
+   * `NotSupported`; ordinary document reads and writes are unaffected.
+   */
+  readonly author?: string;
+}
+
 // The editor instance, not the narrower `Editor` a document command programs against: the host
 // adapter reads `editor.surface`, so an editor that only satisfies `Editor` would answer
 // `document-unavailable` to every operation. Re-exported so the entry can write the signature
 // down without naming the editor lane a second time.
 export type { DocxEditorInstance };
 
-export function createBrowser(editor: DocxEditorInstance): DocxEditorRuntime {
-  return createRuntime({ host: createBrowserAutomationHost(editor), save: false });
+export function createBrowser(
+  editor: DocxEditorInstance,
+  options: CreateBrowserOptions = {}
+): DocxEditorRuntime {
+  return createRuntime({
+    host: createBrowserAutomationHost(editor),
+    save: false,
+    ...(options.author === undefined ? {} : { author: options.author }),
+  });
 }

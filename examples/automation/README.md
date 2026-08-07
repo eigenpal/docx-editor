@@ -101,6 +101,11 @@ at all: the file format makes the author mandatory, a server has no signed-in us
 runtime opened without a name refuses the write rather than putting a placeholder into someone
 else's document.
 
+Deletion needs no author. `Comment.delete()` removes the root thread and anchors;
+`CommentReply.delete()` removes only that reply. Queue several calls before one `sync()` to make
+them one atomic edit and one Undo unit in a browser. Browser comment writes require the Pro review
+module and a writable, attached editor; creating a new root comment is not part of editor-api.
+
 Not every host can do everything, and `runtime.capabilities` says which — `save` is false for a
 browser runtime, `selection`, `scrolling` and `layout` are false for a server one. Branch on it
 rather than on which entry you imported; it is frozen for the life of the runtime, so one read

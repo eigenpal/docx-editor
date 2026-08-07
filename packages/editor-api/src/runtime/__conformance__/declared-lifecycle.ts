@@ -369,8 +369,8 @@ const notesAreReachable: Satisfies<
 // A comment: who wrote it, when, whether the thread is settled, and answering it. OOXML may omit
 // or corrupt the date, so the runtime's nullable read is checked separately from the upstream shape.
 const commentMatchesTheDeclaredComment: Satisfies<
-  Pick<Comment, 'authorName' | 'id' | 'resolved'>,
-  Pick<Declared.Comment, 'authorName' | 'id' | 'resolved'>
+  Pick<Comment, 'authorName' | 'id' | 'resolved' | 'delete'>,
+  Pick<Declared.Comment, 'authorName' | 'id' | 'resolved' | 'delete'>
 > = true;
 const commentDateMatchesAfterDocumentedNull: Satisfies<
   WithoutNull<Pick<Comment, 'creationDate'>>,
@@ -383,8 +383,8 @@ const commentAnswersItsOwnObjects: Satisfies<
   [CommentReplyCollection, Range, CommentReply]
 > = true;
 const replyMatchesTheDeclaredReply: Satisfies<
-  Pick<CommentReply, 'authorName' | 'id'>,
-  Pick<Declared.CommentReply, 'authorName' | 'id'>
+  Pick<CommentReply, 'authorName' | 'id' | 'delete'>,
+  Pick<Declared.CommentReply, 'authorName' | 'id' | 'delete'>
 > = true;
 const replyDateMatchesAfterDocumentedNull: Satisfies<
   WithoutNull<Pick<CommentReply, 'creationDate'>>,

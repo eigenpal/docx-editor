@@ -285,6 +285,17 @@
             }
           ]
         },
+        "delete": {
+          "uid": "DocxEditor.Comment#delete",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
         "getRange": {
           "uid": "DocxEditor.Comment#getRange",
           "kind": "method",
@@ -405,6 +416,17 @@
             {
               "params": [],
               "returns": "Date"
+            }
+          ]
+        },
+        "delete": {
+          "uid": "DocxEditor.CommentReply#delete",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
             }
           ]
         },
