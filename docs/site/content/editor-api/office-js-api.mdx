@@ -5,42 +5,64 @@ category: 'Editing API'
 order: 53
 ---
 
-`@docx-editor.dev/editor-api` is Office.js-compatible: it implements the same object model, so `context.document.body.paragraphs`, `load()` then `sync()`, `search(text, options)`, `getFirstOrNullObject()` and `isNullObject` all mean here what they mean in an add-in. Word add-in code ports by changing how the batch is opened.
+`@docx-editor.dev/editor-api` implements an Office.js-compatible object model.
+`context.document.body.paragraphs`, `load()` then `sync()`, `search(text, options)`,
+`getFirstOrNullObject()` and `isNullObject` work as they do in an add-in. To port Word add-in code,
+change how the batch opens.
 
-The exact scope of that claim:
+## Compatibility boundaries
 
-- **Compatible, not hosted.** It does not run inside an Office add-in host, so there is no `Office.onReady` and no `Word.run`: a batch is opened by a runtime you construct, with `DocxEditor.createServer(bytes)` or `DocxEditor.createBrowser(editor)`. Everything inside the callback is the same code.
-- **No Microsoft dependency.** Every type in the public surface is authored in this repository. Nothing is vendored, copied, or code-generated from Microsoft's declarations.
-- **A subset.** The omissions are listed below.
+- The API runs outside the Office add-in host. It does not provide `Office.onReady` or `Word.run`.
+  Open a batch with `DocxEditor.createServer(bytes)` or `DocxEditor.createBrowser(editor)`. The
+  callback uses the same object model.
+- This repository authors every public type. The package does not vendor, copy or generate code
+  from Microsoft's declarations.
+- The API implements the subset listed below.
 
 ## How compatibility is verified
 
-Microsoft's published declarations are used as reference-only conformance input, never as a dependency. A checked-in manifest allowlists which symbols and members the surface is measured against; a network-capable maintainer script reads a pinned `@types/office-js` release into a normalized fixture of names and call shapes; and the repository's own hand-authored declarations are compared against that fixture two independent ways: a strict per-overload comparison, and generated TypeScript assertions that the real compiler checks. Representative Word samples, rewritten only in their namespace, have to type-check against the authored declarations.
+Microsoft's published declarations provide reference-only conformance input. A maintainer script
+normalizes names and call shapes from a pinned `@types/office-js` release into a checked-in fixture.
+A checked-in manifest selects the symbols and members covered by compatibility checks.
 
-None of that runs at install, test or build time. Everything CI gates on reads files already in the repository, and the published package contains no reference data at all.
+CI verifies:
+
+- every allowed overload against the normalized fixture;
+- generated TypeScript assertions with the TypeScript compiler;
+- representative Word samples, changing only their namespace, against the authored declarations.
+
+These checks read only repository files. Package installation, tests and builds do not fetch the
+reference declarations, and the published package contains no reference data.
 
 ## What is implemented
 
 The document, its body, paragraphs, ranges and the collections over them; search with `matchCase` / `matchWholeWord`; character formatting through `font`; paragraph formatting (style, alignment, indents, spacing); lists and list items; bookmarks; sections and page setup; footnotes and endnotes; comments with replies and a resolved flag; revisions with accept and reject, individually or all at once; and content controls, addressed by id, tag or title.
 
-The lifecycle around them carries over unchanged: `load()` declares reads, `sync()` is the only round trip, `getFirstOrNullObject` / `getLastOrNullObject` answer an object rather than throwing, and `context.trackedObjects` keeps a proxy alive across syncs.
+The lifecycle around them carries over unchanged: `load()` declares reads, `sync()` is the only
+round trip, and `getFirstOrNullObject` / `getLastOrNullObject` answer an object rather than throwing.
+A proxy survives every `sync()` inside the `run` that created it. To use it in a later `run`, add it
+to `context.trackedObjects`, return it, then adopt it with `runtime.run(object, callback)`. A proxy
+that is not tracked is released when its `run` ends.
 
-## What is omitted
+## Omissions
 
-Omitted means absent rather than stubbed: there is no type in this surface shaped like the ones below, so a call site that needs one fails to compile rather than compiling and doing nothing.
+The following APIs are absent from the public types, so code that uses them fails to compile:
 
-| Omitted                                                    | Why                                                                                                                                              |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Tables (`Table`, `TableCollection`, `TableCell`)           | The engine's table lane is not addressable from this API yet. Tables are read, laid out and painted by the editor; they are not scriptable here. |
-| Images (`InlinePicture`, and picture list levels)          | Same: no image lane targets this API yet.                                                                                                        |
-| Floating shapes and canvases (`Shape`)                     | Out of scope for the published subset.                                                                                                           |
-| Repeating sections and picture content controls            | The control kinds this lane defers. Every other control kind is readable and writable.                                                           |
-| Custom XML mapping (`ContentControl.xmlMapping`)           | A control bound to custom XML refuses writes rather than editing content whose binding it cannot maintain. Mapping is a separate lane.           |
-| Standalone hyperlinks (`Hyperlink`, `HyperlinkCollection`) | `Range.hyperlink` covers reading and writing a range's hyperlink; the standalone object model is deferred.                                       |
-| `getHtml`, `getOoxml`, `getText`, `exists`                 | Deferred with their `ClientResult` shapes; `Body.text` and `Paragraph.text` cover the loaded-read case.                                          |
-| Creating and deleting comments                             | Comments can be read, replied to and resolved. Creating one is not in this release.                                                              |
+| Omitted                                                    | Current behavior                                                                                                                  |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Tables (`Table`, `TableCollection`, `TableCell`)           | The editor reads, lays out and paints tables, but this API cannot script them.                                                    |
+| Images (`InlinePicture`, and picture list levels)          | This API does not expose image operations.                                                                                        |
+| Floating shapes and canvases (`Shape`)                     | The published subset does not expose shapes or canvases.                                                                          |
+| Repeating sections and picture content controls            | Other content-control kinds are readable and writable.                                                                            |
+| Custom XML mapping (`ContentControl.xmlMapping`)           | A control bound to custom XML refuses writes because the API cannot maintain its binding.                                         |
+| Standalone hyperlinks (`Hyperlink`, `HyperlinkCollection`) | `Range.hyperlink` reads and writes a range's hyperlink. The API does not expose standalone hyperlink objects.                     |
+| `getHtml`, `getOoxml`, `getText`, `exists`                 | The API does not expose these methods or their `ClientResult` shapes. `Body.text` and `Paragraph.text` support loaded text reads. |
+| Creating and deleting comments                             | The API reads comments and supports replies and resolution. This release does not create or delete them.                          |
 
-A few members are implemented but deliberately shaped differently from upstream. A content control's id is a string because the file format lets a document repeat it and leave it out, and its type is reported in the file format's own vocabulary rather than Word's UI wording. Where that happens it is recorded as a divergence rather than quietly re-shaped.
+## Divergences
+
+- `ContentControl.id` is a string because DOCX files can repeat or omit the value.
+- `ContentControl.subtype` reports the file format's terms.
 
 ## Migrating an add-in
 

@@ -1,6 +1,6 @@
 ---
 title: 'Headers & footers'
-description: 'Edit DOCX headers and footers in place, insert PAGE and NUMPAGES fields, use per-section first-page and even-page variants, and add watermarks.'
+description: 'Edit DOCX headers and footers in place, insert page fields, and use per-section first-page and even-page variants.'
 category: 'Guides'
 seoTitle: 'Headers, footers, and watermarks'
 ---
@@ -38,21 +38,12 @@ Documents using any of these render and round-trip correctly; editing a header e
 
 ## Watermarks
 
-Watermarks live in headers (that is how Word models them) and render behind the body content on every page.
+Word stores watermarks as VML or drawings in header parts. The editor does not currently render or
+edit them as watermarks. `Editor.getWatermark()` is a stub, and no public interactive or headless
+API authors them.
 
-### In the editor
-
-Insert → Watermark opens a dialog with three states:
-
-- **No watermark** removes the current one.
-- **Text watermark**: preset (like DRAFT or CONFIDENTIAL) or custom text, font, size (or Auto), color, diagonal or horizontal layout, and a semitransparent toggle.
-- **Picture watermark**: pick an image, set scale, and optionally apply washout.
-
-Watermarks in opened documents render as Word shows them, and edits round-trip to valid OOXML. Sections with first-page or even-page headers get the watermark there too: missing header parts are created without disturbing existing header inheritance, and picture watermarks keep their aspect ratio.
-
-### Headless
-
-To stamp a watermark on a server, drive the document through [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api). The editor's own watermark chrome is the interactive path.
+The save pipeline can preserve existing structural markup in a header part, but watermark support
+remains planned. Do not rely on the editor to display, modify or create text or picture watermarks.
 
 ## Next steps
 

@@ -83,11 +83,11 @@ Each card is a compound you can take apart:
 </DocxEditorReview>
 ```
 
-`Markers` is the collapsed sidebar shown when the pane is closed; `Balloon` is the decision popover you get by clicking a format or structural change in the page; `AddComment` and `Draft` are the comment affordances.
+`Markers` renders one gutter marker per top-level item while the pane is closed. Clicking a marker opens the pane on that item. `Balloon` is the decision popover for a format or structural change. `AddComment` and `Draft` provide comment authoring.
 
 Every part takes `className`, `asChild`, and `hidden`. The action parts (`Accept`, `Reject`, `Delete`, `Reply`) also take `icon`.
 
-`Markers` takes an `icon` too, but as a function of the item. One `Markers` draws every marker in the gutter, so a single node would put one shape on all of them. Left alone it already draws a glyph per kind: a pencil for an insertion, a strikethrough for a deletion, a brush for a formatting change, a bubble for a comment, and a custom node's own `reviewCard` `icon` where it named one.
+`Markers` accepts an `icon` function because one component draws every gutter marker. Return a node for an item to replace its packaged glyph, or return `null` or `undefined` to keep that glyph. The packaged glyph reflects the item kind, including a custom node's `reviewCard` icon when provided.
 
 ```tsx
 <DocxEditorReview>
@@ -97,7 +97,7 @@ Every part takes `className`, `asChild`, and `hidden`. The action parts (`Accept
 </DocxEditorReview>
 ```
 
-An override inherits the geometry the rail computed for it, so pass only what you are changing.
+An override inherits the rail's scale, offset, and visible window, so pass only the props you want to change.
 
 `Delete` is the destructive one, and it is on both kinds of card: on a comment it deletes the thread, and on a tracked change it discards the suggestion. `Replies` draws a Delete control per reply as well, so a single answer can be taken back without deleting the conversation it belongs to. Delete is absent on a card with nothing to discard.
 
@@ -123,7 +123,7 @@ The props on `DocxEditorReview` decide which decisions appear and how they stack
 <DocxEditorReview filter={(item) => item.kind === 'comment'} gap={12} furniture={<MyFilters />} />
 ```
 
-With `preset={false}` you keep the subscription and the anchoring and render the cards yourself. `useStackedReviewPositions(items, heights, { gap, scale })` is the packaged stacking math if you want the same behavior. Pass `scale` — the editor's render scale, from `editor.getRenderScale()`. Card heights are CSS pixels and anchors are document points, so leaving it at its `1` default spaces the run by roughly a third too much.
+With `preset={false}` you keep the subscription and the anchoring and render the cards yourself. `useStackedReviewPositions(items, heights, { gap, scale })` is the packaged stacking math if you want the same behavior. Pass `scale`, the editor's render scale from `editor.getRenderScale()`. Card heights are CSS pixels and anchors are document points, so leaving it at its `1` default spaces the run by roughly a third too much.
 
 ## Host content inside a card
 
@@ -174,17 +174,18 @@ function ChangeList() {
 }
 ```
 
-| Member                          | What it does                                                                                                                                                                           |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `items`                         | Every pending decision, in reading order.                                                                                                                                              |
-| `activeKey` / `setActive`       | Which item the caret is in; setting selects its range and scrolls to it, entering or leaving a header/footer story as the item requires. Returns whether it landed; see `activatable`. |
-| `accept(item)` / `reject(item)` | Resolve a revision. Returns whether it landed; false on an item whose `readOnly` is true, and on a document open for viewing.                                                          |
-| `reply(item, text, author?)`    | Reply to a change. Returns whether it landed.                                                                                                                                          |
-| `remove(item)`                  | Delete a comment thread, or discard a suggestion. Returns whether it landed.                                                                                                           |
-| `comment(text, author?)`        | Comment on the current selection. Returns whether it landed.                                                                                                                           |
-| `selectionAnchorY`              | Where a comment on the selection would sit, or `null`.                                                                                                                                 |
-| `paneOpen` / `setPaneOpen`      | The same toggle the toolbar's comments button runs.                                                                                                                                    |
-| `ready`                         | False while no document is loaded.                                                                                                                                                     |
+| Member                          | What it does                                                                                                                                  |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `items`                         | Every pending decision selected by the query, in reading order.                                                                               |
+| `activeKey`                     | The key of the item that contains the caret, or `null`.                                                                                       |
+| `setActive(key)`                | Select an item's range, scroll to it, and enter its story when needed. Returns `false` when the engine refuses activation. See `activatable`. |
+| `accept(item)` / `reject(item)` | Resolve a revision. Returns whether it landed; false on an item whose `readOnly` is true, and on a document open for viewing.                 |
+| `reply(item, text, author?)`    | Reply to a change. Returns whether it landed.                                                                                                 |
+| `remove(item)`                  | Delete a comment thread, or discard a suggestion. Returns whether it landed.                                                                  |
+| `comment(text, author?)`        | Comment on the current selection. Returns whether it landed.                                                                                  |
+| `selectionAnchorY`              | Where a comment on the selection would sit, or `null`.                                                                                        |
+| `paneOpen` / `setPaneOpen`      | The same toggle the toolbar's comments button runs.                                                                                           |
+| `ready`                         | False while no document is loaded.                                                                                                            |
 
 Each item carries `key`, `id`, `author`, `initials`, `date`, `text`, `replyIds`, `readOnly`, `activatable`, `anchorY`, `pageIndex`, and `isActive`. Revision items add `kind: 'revision'`, a `revisionKind`, and `replacedText` for replacements, so a card can say _Replaced "x" with "y"_.
 
@@ -194,11 +195,13 @@ Two things the hook gives you that you should not recompute. Items come from the
 
 `readOnly` marks a decision the engine cannot resolve structurally. Do not offer Accept and Reject on those: a card offering a button the engine will refuse is worse than one that explains why it cannot.
 
-`useReview(query)` narrows the set. `excludeRevisionKinds` drops kinds you do not want to show, and `placement: false` skips layout geometry when you only need the metadata. `useReviewOf(editor, query)` is the same hook against an editor you already hold.
+`useReviewOf(editor, query)` applies the same behavior to an editor you already hold. Filtering and activation follow these rules:
 
-A hand-built rail that hides kinds should tell the engine as well: `editor.setReviewActivationExclusions(['format', 'structural'])`. Activation is caret-driven, so without it a click on text under a hidden change opens a card your rail never draws, and the click reads as ignored. `DocxEditor.Review` does this for you from its own `structural` and `formatting` props.
-
-`items` still lists what you excluded, because it answers what the document holds rather than what may be clicked. Each one carries `activatable` to tell the two apart. Draw a card with `activatable: false` disabled rather than discovering the refusal on click; `setActive` returns `false` for it either way.
+1. `excludeRevisionKinds` removes those revision kinds from the hook's `items`. `placement: false` keeps the same metadata and sets `anchorY` and `pageIndex` to `null`.
+2. A query filters returned data only. It does not change what caret-driven activation may open.
+3. A custom rail that hides revision kinds must also call `editor.setReviewActivationExclusions([...])`. `DocxEditorReview` sets these exclusions from its `structural` and `formatting` props and clears them when it unmounts.
+4. Engine activation exclusions do not remove entries from an unfiltered queue. Those entries remain in `items` with `activatable: false`.
+5. `activatable` is also false when an item has no selectable range. `setActive` returns `false` without moving the selection when activation is excluded or no range exists. It can also return `false` when the item's story cannot open.
 
 ## Accept or reject in bulk
 

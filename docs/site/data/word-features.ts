@@ -48,7 +48,7 @@ export interface WordFeature {
   roundTrip: FeatureStatus;
   tier: FeatureTier;
   notes?: string;
-  /** Docs page that covers the feature, e.g. '/docs/2.x/guides/tracked-changes'. */
+  /** Docs page that covers the feature, e.g. '/docs/2.x/pro/tracked-changes'. */
   docsLink?: string;
 }
 
@@ -201,7 +201,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Space before/after and line spacing (single, multiple, exactly, at least) all reach pagination, so a 1.5- or double-spaced document breaks pages where Word breaks them. Font external leading is excluded from line boxes, and trailing auto-spacing may cross the bottom text margin when the glyphs fit, matching Word’s vertical pagination. The paragraph mark’s w:sz participates in the last line’s metrics, matching Word when a cover-page mark is taller than the visible runs. Contextual spacing drops the gap between same-style neighbours, the way Word’s List Paragraph style intends. Automatic spacing (w:beforeAutospacing / w:afterAutospacing, which Word writes on documents from its HTML filter) resolves to Word’s 14pt, or to nothing inside a list item or table cell, rather than to the measurement the flag replaces.',
+      'Space before/after and line spacing (single, multiple, exactly, at least) all reach pagination, so a 1.5- or double-spaced document breaks pages where Word breaks them. Font external leading is excluded from line boxes, and trailing auto-spacing may cross the bottom text margin when the glyphs fit, matching Word’s vertical pagination. The paragraph mark’s w:sz participates in the last line’s metrics, matching Word when a cover-page mark is taller than the visible runs. Contextual spacing drops the gap between same-style neighbours, the way Word’s List Paragraph style intends. Automatic spacing (w:beforeAutospacing / w:afterAutospacing) replaces the authored measurement with 14pt in body paragraphs and 0pt in list items and table cells.',
   },
   {
     id: 'paragraphs.indentation',
@@ -737,7 +737,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes:
       'Full revision model incl. structural changes (paragraph breaks, paragraph props, table rows/cells). Opens cleanly in Word’s review pane.',
-    docsLink: '/docs/2.x/guides/tracked-changes',
+    docsLink: '/docs/2.x/pro/tracked-changes',
   },
   {
     id: 'review.accept-reject',
@@ -749,7 +749,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes:
       'Per-change accept/reject in the sidebar and through acceptReviewItem/rejectReviewItem, plus revision.accept()/reject() and whole-document revisions.acceptAll()/rejectAll() through the automation object model. The sidebar itself offers no bulk control: resolve the queue with the per-item call over every item.',
-    docsLink: '/docs/2.x/guides/tracked-changes',
+    docsLink: '/docs/2.x/pro/tracked-changes',
   },
   {
     id: 'review.comments',
@@ -759,7 +759,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    docsLink: '/docs/2.x/guides/comments',
+    docsLink: '/docs/2.x/pro/comments',
   },
   {
     id: 'review.ai-redlining',
@@ -955,7 +955,6 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes: 'Live cursors, presence, comment sync, per-author tracked-change attribution.',
-    docsLink: '/docs/2.x/realtime-collaboration',
   },
   {
     id: 'collab.find-replace',
