@@ -480,6 +480,7 @@ export class NoteItem extends ModelObject implements PromisedItem {
     protected onLoad(request: ResolvedLoadOptions): void;
     // @internal
     static promised(context: RequestContext, label: string, nullable: boolean): NoteItem;
+    get text(): string;
     get type(): NoteItemType;
 }
 

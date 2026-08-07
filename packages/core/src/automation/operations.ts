@@ -316,6 +316,13 @@ export type AutomationOperation =
   | { readonly op: 'getNotes'; readonly document: AutomationHandle; readonly noteKind: NoteKind }
   /** One note's story, as a BODY. Two notes in one part are two stories. */
   | { readonly op: 'getNoteBody'; readonly note: AutomationHandle }
+  /**
+   * One note's story as plain text.
+   *
+   * Exactly the same projection as reading `getText` from the body returned by `getNoteBody`,
+   * without requiring that intermediate handle: paragraphs joined by one `\r` paragraph mark.
+   */
+  | { readonly op: 'getNoteText'; readonly note: AutomationHandle }
   /** Whether a note is a footnote or an endnote. */
   | { readonly op: 'getNoteKind'; readonly note: AutomationHandle }
   /**
@@ -712,6 +719,7 @@ export const AUTOMATION_QUERY_OPERATIONS = [
   'getFurniture',
   'getNotes',
   'getNoteBody',
+  'getNoteText',
   'getNoteKind',
   'getLists',
   'getListId',

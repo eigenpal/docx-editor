@@ -371,6 +371,24 @@ describe('a footnote is a story too', () => {
     ]);
   });
 
+  test('a note text read is exactly its body text without an intermediate body handle', () => {
+    const host = withFootnotes();
+    const notes = handlesAt(
+      host.execute({
+        operations: [{ op: 'getNotes', document: documentOf(host), noteKind: 'footnote' }],
+      }),
+      0
+    );
+    const direct = notes.map((note) =>
+      textAt(host.execute({ operations: [{ op: 'getNoteText', note }] }), 0)
+    );
+    const throughBody = notes.map((note) => {
+      const body = handleAt(host.execute({ operations: [{ op: 'getNoteBody', note }] }), 0);
+      return textAt(host.execute({ operations: [{ op: 'getText', target: body }] }), 0);
+    });
+    expect(direct).toEqual(throughBody);
+  });
+
   test('the reserved separators are not notes a caller can reach', () => {
     // `w:id="-1"` and `w:id="0"` are the separator and continuation-separator Word writes into
     // every notes part. Listing them would report a document with two more footnotes than it has.
@@ -534,6 +552,9 @@ describe('a footnote is a story too', () => {
     );
     host.execute({ operations: [{ op: 'deleteNote', note: notes[0]! }] });
     expect(errorAt(host.execute({ operations: [{ op: 'getNoteBody', note: notes[0]! }] }), 0)).toBe(
+      'invalid-handle'
+    );
+    expect(errorAt(host.execute({ operations: [{ op: 'getNoteText', note: notes[0]! }] }), 0)).toBe(
       'invalid-handle'
     );
   });

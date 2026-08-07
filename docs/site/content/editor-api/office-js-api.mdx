@@ -56,6 +56,11 @@ document-wide union of headers, footers, and notes. Office.js exposes `Range.boo
 equivalent body-level discovery member, so this additive accessor is recorded as a DocxEditor
 extension rather than an Office.js conformance claim.
 
+`NoteItem.text` is another read-only DocxEditor extension. After loading a footnote or endnote
+collection, load `text` on every item and one more `sync()` returns all note text. Its value is
+exactly `note.body.text`, including carriage returns between paragraphs; `note.body` remains the
+structured story for traversal and edits.
+
 In a browser runtime, `Range.select()` and `Bookmark.select()` also navigate the editor viewport to
 the selected content, matching Word's contract. Selection capability is the only preflight required:
 each operation owns its reveal and verifies selection again at `sync()`. The reveal uses paginated

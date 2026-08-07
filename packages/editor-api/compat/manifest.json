@@ -391,6 +391,10 @@
       "reason": "See Word.Comment#text."
     },
     {
+      "uid": "Word.NoteItem#text",
+      "reason": "Implemented by DocxEditor's object model as a read-only shortcut to the exact plain text returned by NoteItem#body.text. Upstream has no such member to select for exact conformance, so it is recorded as a DocxEditor extension rather than added to the reference shape. The body remains available for structured traversal and edits."
+    },
+    {
       "uid": "Word.Body#revisions",
       "reason": "See Word.Document#revisions."
     },

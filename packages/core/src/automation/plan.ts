@@ -1972,20 +1972,20 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         });
       }
 
-      case 'getNoteBody': {
+      case 'getNoteBody':
+      case 'getNoteText': {
         const target = handles.resolve(operation.note, 'note');
         if (!target || target.kind !== 'note')
           return refuse('invalid-handle', 'that handle does not name a note', 'note');
-        const story: AutomationStoryId = {
-          kind: 'note',
-          noteKind: target.noteKind,
-          noteId: target.noteId,
-        };
+        const story: AutomationStoryId = target;
         // A note DELETED since the handle was minted has no story, and saying so is the point:
-        // answering an empty body would let a script write into a note the document lost.
-        if (!packageReads.story(story))
+        // answering empty text or a body would hide that the document lost it.
+        const reads = packageReads.story(story);
+        if (!reads)
           return refuse('invalid-handle', 'that note is not in this document', storyKey(story));
-        return query({ kind: 'handle', handle: handles.body(story) });
+        return operation.op === 'getNoteText'
+          ? query({ kind: 'text', text: reads.text() })
+          : query({ kind: 'handle', handle: handles.body(story) });
       }
 
       case 'getNoteKind': {
