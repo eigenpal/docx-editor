@@ -4795,10 +4795,23 @@ a.docx-hyperlink:focus-visible {
 
 /* The page column moves ONLY by what the adapter computed, and only while a pane
  * is open. Absent (no pane mounted, pane closed, gutter wide enough) the custom
- * property falls back to 0 and this rule is inert. */
-.docx-editor .docx-editor__scroll-container {
+ * property falls back to 0 and this rule is inert.
+ *
+ * Descendant AND self: `DocxEditor.Viewport` puts `docx-editor` on the scroll
+ * container itself when no ancestor is scoped (Root + Viewport composition /
+ * `chrome={false}`), so the self-scoped selector is load-bearing — same pattern
+ * as scrollbar-gutter above. */
+.docx-editor .docx-editor__scroll-container,
+.docx-editor.docx-editor__scroll-container {
   padding-inline-start: var(--docx-nav-shift, 0px);
   transition: padding-inline-start 0.2s ease;
+}
+
+/* Under a fit the page width follows the padded box. Animating the padding would
+ * publish intermediate widths and the fit would chase them every frame. Jump. */
+.docx-editor .docx-editor__scroll-container[data-zoom-fit],
+.docx-editor.docx-editor__scroll-container[data-zoom-fit] {
+  transition: none;
 }
 
 /* Positioning frame: the gutter strip to the left of the page. `pointer-events`
@@ -5671,7 +5684,8 @@ a.docx-hyperlink:focus-visible {
 
 /* Reduced motion: the page still moves when it has to, it just does not glide. */
 @media (prefers-reduced-motion: reduce) {
-  .docx-editor .docx-editor__scroll-container {
+  .docx-editor .docx-editor__scroll-container,
+  .docx-editor.docx-editor__scroll-container {
     transition-duration: 0s;
   }
 }

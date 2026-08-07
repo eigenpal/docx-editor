@@ -999,6 +999,17 @@ export const wordFeatures: WordFeature[] = [
     docsLink: '/docs/2.x/i18n',
   },
   {
+    id: 'collab.zoom-fit',
+    name: 'Automatic fit / responsive zoom',
+    category: 'collaboration',
+    editing: 'full',
+    rendering: 'full',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      "Default zoom mode is `auto`: fit the page width between 50% and 100% so a container narrower than a Letter sheet shrinks the document instead of overflowing. Opening chrome that pads the scroll container (navigation pane, review rail) recomputes the fit from the content box. Hosts can pin a fixed scale with `zoom` alone or `zoomMode={{ type: 'fixed' }}`, or ask for uncapped fit-width. Toolbar Automatic / Fit width / percentage ladder and Ctrl/Cmd+= shortcuts share the same engine-owned mode.",
+  },
+  {
     id: 'collab.agent-tools',
     name: 'Document automation object model',
     category: 'collaboration',

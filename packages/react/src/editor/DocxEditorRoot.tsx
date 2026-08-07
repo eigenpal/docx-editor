@@ -195,13 +195,13 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   // running these in two effects let the order decide the outcome: a host passing both
   // `zoom={1.5}` and `zoomMode="auto"` would get whichever ran last.
   //
-  // RE-ASSERTED ONLY WHEN THE PROP ITSELF MOVES, which is what these refs are for.
-  // `zoomMode` is an object, and the documented spelling — `zoomMode={{ type: 'fit', fit:
+  // RE-ASSERTED WHEN THE PROP ITSELF MOVES, which is what these refs are for — and ALSO
+  // after a zoom-prop update while the host still declares a fit/`auto` mode. `setZoom`
+  // exits fit; skipping `setZoomMode` because the mode prop is unchanged would leave the
+  // editor fixed despite the declared mode. Unrelated re-renders still do not re-apply:
+  // mode is an object, and the documented spelling — `zoomMode={{ type: 'fit', fit:
   // 'pageWidth' }}` — is a fresh literal on every parent render, so an identity dependency
-  // re-ran this on renders that changed nothing about the zoom. That is not a wasted call: a
-  // reader who had picked 150% from the toolbar was pushed back to the fit by the host's next
-  // unrelated re-render, and a host passing both props relayouts the document twice per render
-  // forever. A declarative prop means "this is the value", not "apply this again now".
+  // would push a toolbar-picked 150% back to the fit on the host's next keystroke.
   const applied = useRef<{
     editor: DocxEditorInstance | null;
     zoom: number | undefined;
@@ -213,17 +213,23 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     const fresh = applied.current.editor !== editor;
     if (fresh) applied.current = { editor, zoom: undefined, mode: undefined };
 
+    let zoomChanged = false;
     if (zoom !== undefined && zoom !== applied.current.zoom) {
       applied.current.zoom = zoom;
       editor.setZoom(zoom);
+      zoomChanged = true;
     }
     const previousMode = applied.current.mode;
-    if (
+    const modeMoved =
       zoomMode !== undefined &&
-      (previousMode === undefined || !sameZoomProp(previousMode, zoomMode))
-    ) {
-      applied.current.mode = zoomMode;
-      editor.setZoomMode(zoomMode);
+      (previousMode === undefined || !sameZoomProp(previousMode, zoomMode));
+    // Preserve a declared fit after `setZoom` tore it down. Fixed declarations stay fixed.
+    const resolved = zoomMode === undefined ? null : resolveZoomMode(zoomMode);
+    const reassertDeclaredFit =
+      zoomChanged && zoomMode !== undefined && resolved !== null && resolved.type === 'fit';
+    if (modeMoved || reassertDeclaredFit) {
+      applied.current.mode = zoomMode!;
+      editor.setZoomMode(zoomMode!);
     }
   }, [editor, zoom, zoomMode]);
 

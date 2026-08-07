@@ -20,7 +20,7 @@ const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
 
-function docx(body: string): Uint8Array {
+function docx(_body?: string): Uint8Array {
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +

@@ -18,6 +18,8 @@ import { zoomLevelForShortcut } from './zoom-levels';
 import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
 
 const selectPaneOpen = (snapshot: EditorSnapshot): boolean => snapshot.reviewPaneOpen ?? true;
+/** Fit modes must not animate nav padding: intermediate widths chase the page forever. */
+const selectZoomFitting = (snapshot: EditorSnapshot): boolean => snapshot.zoomMode?.type === 'fit';
 
 /** Props for `DocxEditor.Viewport`. @public */
 export interface DocxEditorViewportProps {
@@ -44,6 +46,7 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
   // whole placement derivation — anchors and all — inside the parent of the painted document,
   // on every selection change, to learn one boolean.
   const paneOpen = useEditorState(selectPaneOpen);
+  const fitting = useEditorState(selectZoomFitting);
   const rail = useContext(ReviewRailContext);
   const reserve = (rail?.mounted ?? 0) > 0;
   // The navigation pane needs this element's width to decide whether it has to move the
@@ -83,6 +86,7 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
       data-testid="docx-editor-scroll"
       onKeyDownCapture={onKeyDownCapture}
       {...(reserve ? { 'data-review-pane': paneOpen ? 'open' : 'closed' } : {})}
+      {...(fitting ? { 'data-zoom-fit': '' } : {})}
       className={`${scopeClassName}docx-editor-one-surface docx-editor-one-surface__viewport docx-editor__scroll-container${
         className ? ` ${className}` : ''
       }`}

@@ -62,7 +62,6 @@ class WidthObserver {
 
 let observers: WidthObserver[] = [];
 
-
 const AUTO: ZoomMode = { type: 'fit', fit: 'pageWidth', minZoom: 0.5, maxZoom: 1 };
 const FIXED: ZoomMode = { type: 'fixed' };
 
@@ -132,7 +131,12 @@ describe('useZoom', () => {
     const mounted = mount();
     expect(mounted.zoom().zoom).toBe(1);
     expect(mounted.zoom().isFit).toBe(true);
-    expect(mounted.zoom().mode).toEqual({ type: 'fit', fit: 'pageWidth', minZoom: 0.5, maxZoom: 1 });
+    expect(mounted.zoom().mode).toEqual({
+      type: 'fit',
+      fit: 'pageWidth',
+      minZoom: 0.5,
+      maxZoom: 1,
+    });
   });
 
   test('a level ends the fit; auto goes back to it', async () => {
@@ -187,6 +191,56 @@ describe('useZoom', () => {
   test('a host prop opens in the mode it asks for', () => {
     const mounted = mount({ zoomMode: { type: 'fixed' } });
     expect(mounted.zoom().isFit).toBe(false);
+  });
+
+  // `setZoom` leaves fit by design. A host that keeps declaring `zoomMode="auto"` while
+  // updating `zoom` must not be stuck in fixed mode after the level is applied — mode after
+  // level, and the declared fit re-asserted.
+  test('updating zoom keeps a declared auto fit, and resizes still move it', async () => {
+    let instance: DocxEditorInstance | null = null;
+    let zoom: UseZoomResult | null = null;
+    const tree = (level: number) => (
+      <DocxEditorRoot
+        document={SOURCE}
+        zoom={level}
+        zoomMode="auto"
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <Probe
+            onRender={(next) => {
+              zoom = next;
+            }}
+          />
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const view = render(tree(1));
+    const scroll = view.container.querySelector(
+      '[data-testid="docx-editor-scroll"]'
+    ) as HTMLElement;
+    Object.defineProperty(scroll, 'clientWidth', { get: () => viewportWidth, configurable: true });
+    expect(instance).not.toBeNull();
+    expect(zoom!.isFit).toBe(true);
+    expect(scroll.hasAttribute('data-zoom-fit')).toBe(true);
+
+    await act(async () => {
+      view.rerender(tree(0.8));
+    });
+    expect(zoom!.isFit).toBe(true);
+    expect(instance!.getZoomMode().type).toBe('fit');
+    expect(scroll.hasAttribute('data-zoom-fit')).toBe(true);
+
+    viewportWidth = 700;
+    await act(async () => {
+      for (const observer of [...observers]) observer.fire();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+    expect(zoom!.isFit).toBe(true);
+    expect(zoom!.zoom).toBeLessThan(1);
   });
 });
 
