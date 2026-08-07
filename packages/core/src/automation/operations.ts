@@ -504,6 +504,17 @@ export type AutomationOperation =
       readonly mode: AutomationSelectionMode;
     }
   /**
+   * Put the reader's selection on the range a bookmark currently encloses.
+   *
+   * The bookmark is resolved inside the batch so callers do not need a separate round trip to
+   * obtain an addressable range. Requires the `selection` capability, like `selectSpan`.
+   */
+  | {
+      readonly op: 'selectBookmark';
+      readonly bookmark: AutomationHandle;
+      readonly mode: AutomationSelectionMode;
+    }
+  /**
    * The content controls a scope holds, outermost first and in document order.
    *
    * A control INSIDE another is reached through the one that holds it, never listed beside it:
@@ -742,6 +753,7 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
   'splitParagraph',
   'deleteParagraph',
   'selectSpan',
+  'selectBookmark',
   'setFont',
   'setParagraphFormat',
   'setStyle',

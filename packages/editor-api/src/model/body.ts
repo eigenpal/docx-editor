@@ -27,6 +27,7 @@ import {
   type RequestContext,
   type ResolvedLoadOptions,
 } from '../runtime/model-support.ts';
+import { BookmarkCollection } from './bookmarks.ts';
 import { ParagraphCollection, RangeCollection } from './collections.ts';
 import { ContentControlCollection } from './content-controls.ts';
 import { ListCollection } from './lists.ts';
@@ -57,6 +58,7 @@ import { searchOptions, type SearchOptions } from './search-options.ts';
  */
 export class Body extends ModelObject {
   #paragraphs: ParagraphCollection | undefined;
+  #bookmarks: BookmarkCollection | undefined;
   #font: Font | undefined;
   #lists: ListCollection | undefined;
   #contentControls: ContentControlCollection | undefined;
@@ -102,6 +104,24 @@ export class Body extends ModelObject {
   get paragraphs(): ParagraphCollection {
     this.#paragraphs ??= this.paragraphsUnder(`${this.path.label}.paragraphs`);
     return this.#paragraphs;
+  }
+
+  /**
+   * Every bookmark declared in this story, in document order.
+   *
+   * This is story-scoped: `document.body.bookmarks` covers only the main body story. A header,
+   * footer or note body answers its own bookmarks through that body's accessor; this collection
+   * does not aggregate bookmarks from other stories.
+   */
+  get bookmarks(): BookmarkCollection {
+    const handle = this.#handle();
+    this.#bookmarks ??= BookmarkCollection.of(
+      this.context,
+      `${this.path.label}.bookmarks`,
+      this.path,
+      () => ({ op: 'getBookmarks', scope: { body: handle } })
+    );
+    return this.#bookmarks;
   }
 
   /** The character formatting of the whole story: what all of it agrees on, and what a write sets. */

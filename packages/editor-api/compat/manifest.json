@@ -413,6 +413,10 @@
     {
       "uid": "Word.Body#revisions",
       "reason": "Implemented by DocxEditor's object model \u2014 a header or a footnote can carry tracked changes of its own, and a review pass over one story is the natural way to reach them \u2014 but not selected for exact conformance: upstream declares revisions on Document (selected here), not on Body, so there is no reference shape for the story-scoped accessor. Recorded so the extra member is a decision rather than drift."
+    },
+    {
+      "uid": "Word.Body#bookmarks",
+      "reason": "Implemented by DocxEditor's object model as a story-scoped discovery accessor over the same BookmarkCollection that Word exposes on Range. Upstream has no Body#bookmarks member to select for exact conformance, while putting this collection on Document would falsely imply aggregation across the main body, headers, footers and notes. Each Body answers only the bookmarks declared in that body's own story."
     }
   ],
   "divergences": [

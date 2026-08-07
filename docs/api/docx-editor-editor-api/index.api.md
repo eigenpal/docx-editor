@@ -16,6 +16,7 @@ export type BesideLocation = Extract<InsertLocation, 'Before' | 'After'>;
 
 // @public
 class Body_2 extends ModelObject {
+    get bookmarks(): BookmarkCollection;
     clear(): void;
     get contentControls(): ContentControlCollection;
     get font(): Font;

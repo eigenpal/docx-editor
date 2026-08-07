@@ -246,11 +246,16 @@ export class Range extends ModelObject implements PromisedItem {
   }
 
   /**
-   * Put the reader's selection on this range.
+   * Put the reader's selection on this range and navigate the editor viewport to it.
+   *
+   * The whole range is selected by default. `Start` and `End` instead collapse the caret to that
+   * endpoint and reveal it. An already-visible endpoint stays still; an offscreen one is brought
+   * into view from the editor's layout, including when its page has not been materialized yet.
    *
    * Refused with `NotSupported` where there is no reader — a document opened from bytes on a
-   * server has no caret, and moving one would be a claim about a screen nobody is looking at. The
-   * check is at the CALL rather than at the sync, so the mistake is reported where it was made.
+   * server has no caret or viewport, and moving one would be a claim about a screen nobody is
+   * looking at. The check is at the CALL rather than at the sync, so the mistake is reported where
+   * it was made.
    */
   select(selectionMode_?: SelectionMode): void {
     const target = `${this.path.label}.select`;

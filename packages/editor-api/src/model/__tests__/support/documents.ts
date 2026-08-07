@@ -171,6 +171,36 @@ export const WITH_REVIEW_DATE_CASES: Uint8Array = (() => {
 })();
 
 /**
+ * Bookmarks in two stories, including a repeated name in the main story.
+ *
+ * `w:id` and bookmark names are story-scoped. Reusing both in the header is intentional: a
+ * story-owned accessor must neither flatten that bookmark into the main body nor confuse the two
+ * ranges.
+ */
+export const WITH_BOOKMARKED_STORIES: Uint8Array = (() => {
+  const parts = unzipSync(WITH_FURNITURE);
+  const main = strFromU8(parts['word/document.xml'] as Uint8Array).replace(
+    '<w:r><w:t>in the body</w:t></w:r>',
+    '<w:bookmarkStart w:id="1" w:name="First"/><w:r><w:t>first</w:t></w:r>' +
+      '<w:bookmarkEnd w:id="1"/>' +
+      '<w:bookmarkStart w:id="2" w:name="Duplicate"/><w:r><w:t>kept</w:t></w:r>' +
+      '<w:bookmarkEnd w:id="2"/>' +
+      '<w:bookmarkStart w:id="3" w:name="Duplicate"/><w:r><w:t>ignored</w:t></w:r>' +
+      '<w:bookmarkEnd w:id="3"/>'
+  );
+  const header = strFromU8(parts['word/header1.xml'] as Uint8Array).replace(
+    '<w:r><w:t>in the header</w:t></w:r>',
+    '<w:bookmarkStart w:id="1" w:name="Duplicate"/><w:r><w:t>header</w:t></w:r>' +
+      '<w:bookmarkEnd w:id="1"/>'
+  );
+  return zipSync({
+    ...parts,
+    'word/document.xml': strToU8(main),
+    'word/header1.xml': strToU8(header),
+  });
+})();
+
+/**
  * A document awkward enough to compare two hosts over: a style cascade, a table with cell
  * paragraphs, inline furniture (a tab and a break), and section properties.
  *

@@ -195,14 +195,23 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
     // offsets — the same vocabulary `SemanticSelection` already uses — so nothing is translated
     // and there is no second coordinate space that could drift. Collapsing to one end is done
     // by pointing both ends at it, which is what a caret IS to the surface.
+    //
+    // THROUGH THE EDITOR COMMAND, not `surface.setSelection` directly. The public Office-shaped
+    // contract says selecting also navigates the reader to the range, and `setSelection` is the
+    // canonical focus-independent path that installs the logical selection and reveals its head
+    // from layout geometry. That keeps virtualized pages viable: the target usually has no DOM
+    // node to measure yet, and the reveal materializes it on the way.
     select(range, mode) {
       const surface = editor.surface;
       if (!surface) return;
       const anchor = mode === 'end' ? range.end : range.start;
       const head = mode === 'start' ? range.start : range.end;
-      surface.setSelection({
-        anchor: { paragraphId: anchor.paragraphId, offset: anchor.offset },
-        head: { paragraphId: head.paragraphId, offset: head.offset },
+      editor.exec({
+        type: 'setSelection',
+        range: {
+          anchor: { paragraphId: anchor.paragraphId, offset: anchor.offset },
+          head: { paragraphId: head.paragraphId, offset: head.offset },
+        },
       });
     },
     // The EDITOR's change event, not the session's: the facade re-subscribes to each new

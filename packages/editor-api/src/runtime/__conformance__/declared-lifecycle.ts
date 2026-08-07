@@ -152,6 +152,7 @@ const bodyAnswersItsOwnObjects: Satisfies<
   [Range, Paragraph, RangeCollection]
 > = true;
 const bodyHasParagraphs: Satisfies<Body['paragraphs'], ParagraphCollection> = true;
+const bodyHasBookmarks: Satisfies<Body['bookmarks'], BookmarkCollection> = true;
 
 // ---------------------------------------------------------------------------
 // Ranges and paragraphs
@@ -444,6 +445,7 @@ void bodyInsertsAParagraph;
 void bodySearches;
 void bodyAnswersItsOwnObjects;
 void bodyHasParagraphs;
+void bodyHasBookmarks;
 void rangeTextIsAString;
 void rangeSelects;
 void rangeInsertsText;
