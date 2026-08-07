@@ -98,6 +98,12 @@ function bodyTextOf(editor: DocxEditorInstance): string {
   return editor.surface!.session.bodyText();
 }
 
+function commentOf(editor: DocxEditorInstance) {
+  const comment = editor.getReviewItems().find((item) => item.kind === 'comment');
+  if (!comment || comment.kind !== 'comment') throw new Error('expected a comment');
+  return comment;
+}
+
 function mount(parts: DocxParts): DocxEditorInstance {
   const container = document.createElement('div');
   const editor = createDocxEditor({
@@ -1390,6 +1396,25 @@ describe('tracked changes in headers', () => {
       .getReviewItems()
       .filter((item) => item.kind === 'comment' && item.text.includes('Fixed in the new template'));
     expect(replies.length).toBeGreaterThan(0);
+  });
+
+  test('resolving a header comment writes its owning story state', () => {
+    const header =
+      `<w:p><w:commentRangeStart w:id="7"/><w:r><w:t>letterhead</w:t></w:r>` +
+      `<w:commentRangeEnd w:id="7"/><w:r><w:commentReference w:id="7"/></w:r></w:p>`;
+    const editor = mount({
+      body: INSERTION,
+      header,
+      comments:
+        `<w:comment w:id="7" w:author="Margaret Hamilton" w:date="2026-03-04T05:06:07Z">` +
+        `<w:p><w:r><w:t>Wrong wordmark.</w:t></w:r></w:p></w:comment>`,
+    });
+    const card = commentOf(editor);
+
+    expect(editor.setCommentResolved(card.key, true)).toEqual({ ok: true, changed: true });
+    expect(commentOf(editor).resolved).toBe(true);
+    editor.surface!.undo();
+    expect(commentOf(editor).resolved).toBe(false);
   });
 
   test('walking header card then body card re-activates the BODY', () => {

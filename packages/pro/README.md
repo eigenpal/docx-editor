@@ -67,7 +67,7 @@ Word-like cards out of the box, or the hook to render your own markup.
 import { useReview } from '@docx-editor.dev/pro/react';
 
 function ChangeList() {
-  const { items, accept, reject, ready } = useReview();
+  const { items, accept, reject, resolve, reopen, ready } = useReview();
   if (!ready) return null;
 
   return (
@@ -76,11 +76,16 @@ function ChangeList() {
         <li key={item.key}>
           {/* File-derived. Render as text, never as markup. */}
           {item.text} — {item.author}
-          {!item.readOnly && (
+          {item.kind === 'revision' && !item.readOnly && (
             <>
               <button onClick={() => accept(item)}>Accept</button>
               <button onClick={() => reject(item)}>Reject</button>
             </>
+          )}
+          {item.kind === 'comment' && (
+            <button onClick={() => (item.resolved ? reopen(item) : resolve(item))}>
+              {item.resolved ? 'Reopen' : 'Resolve'}
+            </button>
           )}
         </li>
       ))}

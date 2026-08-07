@@ -66,9 +66,13 @@ export interface DocxEditorReviewNamespace {
     // (undocumented)
     readonly Reject: typeof ReviewReject;
     // (undocumented)
+    readonly Reopen: typeof ReviewReopen;
+    // (undocumented)
     readonly Replies: typeof ReviewReplies;
     // (undocumented)
     readonly Reply: typeof ReviewReply;
+    // (undocumented)
+    readonly Resolve: typeof ReviewResolve;
     // (undocumented)
     readonly Summary: typeof ReviewSummary;
     // (undocumented)
@@ -171,12 +175,15 @@ export interface UseReviewReturn {
     readonly accept: (item: ReviewItemView) => boolean;
     readonly activeKey: string | null;
     readonly comment: (text: string, author?: string) => boolean;
+    readonly commentResolutionDisabledReason: string | null;
     readonly items: readonly ReviewItemView[];
     readonly paneOpen: boolean;
     readonly ready: boolean;
     readonly reject: (item: ReviewItemView) => boolean;
     readonly remove: (item: ReviewItemView) => boolean;
+    readonly reopen: (item: ReviewItemView) => boolean;
     readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
+    readonly resolve: (item: ReviewItemView) => boolean;
     readonly selectionAnchorY: number | null;
     readonly setActive: (key: string | null, options?: ReviewActivationOptions) => boolean;
     readonly setPaneOpen: (open: boolean) => void;

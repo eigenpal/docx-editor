@@ -215,6 +215,13 @@ function useReviewLabel(): (key: TranslationKey) => string {
   return useCallback((key: TranslationKey) => hostT?.(key) ?? t(key), [hostT, t]);
 }
 
+const { ReviewResolve, ReviewReopen } = createCommentResolutionParts({
+  useReview: () => useRail().review,
+  useItem: () => useContext(ReviewItemContext),
+  useLabel: useReviewLabel,
+  guardMousedown,
+});
+
 const INERT_RAIL: ReviewRailValue = {
   t: undefined,
   cardClassName: undefined,
@@ -225,6 +232,9 @@ const INERT_RAIL: ReviewRailValue = {
     setActive: () => false,
     accept: () => false,
     reject: () => false,
+    resolve: () => false,
+    reopen: () => false,
+    commentResolutionDisabledReason: null,
     remove: () => false,
     reply: () => false,
     selectionAnchorY: null,
@@ -327,6 +337,8 @@ import {
   icon,
   markerIconPath,
 } from './review-icons.tsx';
+import { createCommentResolutionParts } from './review-comment-resolution.tsx';
+import { revisionLabelKey } from './review-labels.ts';
 
 /**
  * The review rail.
@@ -1587,6 +1599,8 @@ function ReviewCardPreset({ children }: { children?: ReactNode }) {
           <div className="docx-review__actions">
             {take('Accept', <ReviewAccept />)}
             {take('Reject', <ReviewReject />)}
+            {take('Resolve', <ReviewResolve />)}
+            {take('Reopen', <ReviewReopen />)}
             {take('Delete', <ReviewDelete />)}
           </div>
         ) : null}
@@ -1754,27 +1768,6 @@ function ReviewSummary({ className, asChild, hidden, children }: ReviewPartProps
   );
 }
 ReviewSummary.docxReviewPart = 'Summary' as const;
-
-function revisionLabelKey(kind: ReviewRevisionKind): TranslationKey {
-  switch (kind) {
-    case 'insert':
-      return 'review.inserted';
-    case 'delete':
-      return 'review.deleted';
-    case 'replace':
-      return 'review.replaced';
-    case 'moveFrom':
-      return 'review.movedFrom';
-    case 'moveTo':
-      return 'review.movedTo';
-    case 'format':
-      return 'revisions.runPropertiesChanged';
-    case 'paragraphMark':
-      return 'revisions.paragraphMarkInserted';
-    default:
-      return 'review.structural';
-  }
-}
 
 /** Accept the revision behind this card. @public */
 function ReviewAccept({ className, asChild, hidden, children, icon: glyph }: ReviewActionProps) {
@@ -2033,6 +2026,8 @@ export interface DocxEditorReviewNamespace {
   readonly Summary: typeof ReviewSummary;
   readonly Accept: typeof ReviewAccept;
   readonly Reject: typeof ReviewReject;
+  readonly Resolve: typeof ReviewResolve;
+  readonly Reopen: typeof ReviewReopen;
   /** Discard the card: delete a comment thread, or reject a tracked change. */
   readonly Delete: typeof ReviewDelete;
   readonly Replies: typeof ReviewReplies;
@@ -2081,6 +2076,8 @@ export const DocxEditorReview: DocxEditorReviewNamespace = Object.assign(ReviewR
   Summary: ReviewSummary,
   Accept: ReviewAccept,
   Reject: ReviewReject,
+  Resolve: ReviewResolve,
+  Reopen: ReviewReopen,
   Delete: ReviewDelete,
   Replies: ReviewReplies,
   Reply: ReviewReply,

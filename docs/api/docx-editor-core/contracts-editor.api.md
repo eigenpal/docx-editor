@@ -598,6 +598,7 @@ export interface Editor {
     setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
     // (undocumented)
     setActiveScope(scope: ViewScope): void;
+    setCommentResolved(key: string, resolved: boolean): ExecResult;
     // (undocumented)
     setEditingMode(mode: DocumentEditingMode): ExecResult;
     setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null): void;
