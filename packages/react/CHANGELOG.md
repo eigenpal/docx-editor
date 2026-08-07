@@ -1,5 +1,12 @@
 # @eigenpal/docx-js-editor
 
+## 2.1.2
+
+### Patch Changes
+
+- 4fa91bd: Under the packaged `<DocxEditor>`, `.docx-editor` is now on the editor root and nowhere else. The toolbar, menu bar, navigation pane, context menu, viewport and page-number chip each added the class as their own Tailwind scope, which they only need when there is no scoped ancestor. A host rule like `.my-shell .docx-editor { height: 100% }` therefore also matched the toolbar. Composing from `DocxEditor.Root`, which renders no element, is unchanged: the parts still scope themselves.
+  - @docx-editor.dev/i18n@2.1.2
+
 ## 2.1.1
 
 ### Patch Changes
