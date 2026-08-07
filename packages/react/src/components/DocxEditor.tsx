@@ -116,13 +116,49 @@ const VERTICAL_RULER_STYLE: CSSProperties = {
   pointerEvents: 'none',
 };
 
+/**
+ * The chrome band: title bar and toolbar on ONE `--doc-surface` surface, closed by a
+ * seam (hairline + soft shadow) directly under the toolbar. The ruler row and the
+ * workspace below sit on the gray `--doc-bg`, which is what makes the band read as a
+ * single piece of chrome rather than a white title bar with a toolbar loose on the
+ * workspace.
+ *
+ * The seam belongs HERE and not on the title bar: a border under the title bar cuts
+ * the band in two and leaves the toolbar with no ground of its own.
+ *
+ * `z-index` lifts the seam's shadow over the workspace, and the menus that open from
+ * this row stack inside its context, above everything below.
+ */
+const CHROME_BAND_STYLE: CSSProperties = {
+  flex: 'none',
+  display: 'flex',
+  flexDirection: 'column',
+  position: 'relative',
+  zIndex: 30,
+  backgroundColor: 'var(--doc-surface)',
+  // Longhand on purpose: the `border-bottom` shorthand does not survive a var()
+  // in every DOM implementation the suite runs against.
+  borderBottomWidth: 1,
+  borderBottomStyle: 'solid',
+  borderBottomColor: 'var(--doc-border)',
+  boxShadow: '0 1px 3px var(--doc-shadow-subtle)',
+};
+
+/**
+ * Insets the toolbar inside the band. The toolbar paints its own pill
+ * (`.docx-toolbar` is a rounded `--doc-bg-subtle` slab); flush against the band's
+ * edges that pill has nothing to sit on and its radius never shows, so the row reads
+ * as a second flat bar under the title.
+ */
+const TOOLBAR_ROW_STYLE: CSSProperties = {
+  padding: '8px 12px',
+};
+
 const TITLE_BAR_STYLE: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 8,
-  padding: '6px 12px',
-  borderBottom: '1px solid var(--doc-border)',
-  backgroundColor: 'var(--doc-surface)',
+  padding: '8px 12px 0',
   color: 'var(--doc-text)',
 };
 
@@ -264,44 +300,50 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
       className={`docx-editor${isDark ? ' dark' : ''}${className ? ` ${className}` : ''}`}
       style={CONTAINER_STYLE}
     >
-      <div style={TITLE_BAR_STYLE}>
-        {renderTitleBarLeft?.()}
-        <div style={TITLE_BLOCK_STYLE}>
-          {onTitleChange ? (
-            <input
-              aria-label={translate('titleBar.documentNameAriaLabel')}
-              value={title ?? ''}
-              placeholder={translate('titleBar.untitled')}
-              onChange={(event) => onTitleChange(event.target.value)}
-              style={TITLE_INPUT_STYLE}
-            />
-          ) : (
-            <span style={{ minWidth: 0, padding: '2px 6px' }}>
-              {title ?? translate('titleBar.untitled')}
-            </span>
-          )}
-          {/* File · Format · Insert · Help. Every row is a chrome slot, so it shares its
-              label, icon and enabled state with the toolbar control for the same
-              capability. Open and Save work with no configuration; `onOpen`/`onSave`
-              replace them. */}
-          {menu !== false ? (
-            <DocxEditorMenu
-              t={translate}
-              {...(title !== undefined ? { fileName: title } : {})}
-              {...(onOpen ? { onOpen } : {})}
-              {...(onSave ? { onSave } : {})}
-              // An object `menu` is menu props, spread LAST so a host's own handler wins
-              // over the ones derived from the top-level props above.
-              {...(typeof menu === 'object' ? menu : {})}
-            />
-          ) : null}
+      {/* Title bar and toolbar share one surface, closed by the seam under the
+          toolbar — see CHROME_BAND_STYLE. */}
+      <div style={CHROME_BAND_STYLE}>
+        <div style={TITLE_BAR_STYLE}>
+          {renderTitleBarLeft?.()}
+          <div style={TITLE_BLOCK_STYLE}>
+            {onTitleChange ? (
+              <input
+                aria-label={translate('titleBar.documentNameAriaLabel')}
+                value={title ?? ''}
+                placeholder={translate('titleBar.untitled')}
+                onChange={(event) => onTitleChange(event.target.value)}
+                style={TITLE_INPUT_STYLE}
+              />
+            ) : (
+              <span style={{ minWidth: 0, padding: '2px 6px' }}>
+                {title ?? translate('titleBar.untitled')}
+              </span>
+            )}
+            {/* File · Format · Insert · Help. Every row is a chrome slot, so it shares its
+                label, icon and enabled state with the toolbar control for the same
+                capability. Open and Save work with no configuration; `onOpen`/`onSave`
+                replace them. */}
+            {menu !== false ? (
+              <DocxEditorMenu
+                t={translate}
+                {...(title !== undefined ? { fileName: title } : {})}
+                {...(onOpen ? { onOpen } : {})}
+                {...(onSave ? { onSave } : {})}
+                // An object `menu` is menu props, spread LAST so a host's own handler wins
+                // over the ones derived from the top-level props above.
+                {...(typeof menu === 'object' ? menu : {})}
+              />
+            ) : null}
+          </div>
+          {renderTitleBarRight?.()}
         </div>
-        {renderTitleBarRight?.()}
+        {/* Save is deliberately absent here: the registry marks the `file` group contextual,
+            so `defaultChromeGroups()` filters it out and only explicit composition mounts it.
+            File -> Save in the menu bar carries it. */}
+        <div style={TOOLBAR_ROW_STYLE}>
+          <DocxEditorToolbar t={translate} />
+        </div>
       </div>
-      {/* Save is deliberately absent here: the registry marks the `file` group contextual,
-          so `defaultChromeGroups()` filters it out and only explicit composition mounts it.
-          File -> Save in the menu bar carries it. */}
-      <DocxEditorToolbar t={translate} />
       {/* The ruler belongs to the packaged frame: every editor this component is
           modelled on shows one, and a host that had to mount it by hand got the
           placement wrong — the part compensates for the review gutter itself, so
