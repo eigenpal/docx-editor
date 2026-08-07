@@ -11,8 +11,9 @@
 // (`field-projection` re-exports these so existing importers keep one import site), so the two
 // shared types live here rather than there.
 
-import type { StoryPageFieldNeeds } from './field-instruction.ts';
+import type { AllowlistedPageField, StoryPageFieldNeeds } from './field-instruction.ts';
 import { NO_STORY_PAGE_FIELDS } from './field-instruction.ts';
+import { formatDecimal, formatNumFmt } from './numbering-format.ts';
 import type { HeaderFooterStoryRecord, PageRecord, SemanticLayout } from './semantic-records.ts';
 
 /**
@@ -29,6 +30,35 @@ export interface FieldPageContext {
   readonly sectionPageCount?: number;
   /** Authored ST_NumberFormat for PAGE; absent → decimal. */
   readonly format?: string;
+}
+
+/**
+ * Format a displayed PAGE value through the shared ST_NumberFormat resolver.
+ *
+ * Unknown / script-specific formats fall back to decimal (same convention as list markers).
+ * `none` / `bullet` are meaningless for page numbers and also fall back to decimal so a
+ * hostile fmt cannot blank the furniture.
+ */
+export function formatPageNumber(value: number, format: string | undefined): string {
+  if (!Number.isFinite(value) || value < 0) return '';
+  const n = Math.floor(value);
+  const fmt = format && format.length > 0 ? format : 'decimal';
+  if (fmt === 'none' || fmt === 'bullet') return formatDecimal(n);
+  const text = formatNumFmt(fmt, n);
+  return text.length > 0 ? text : formatDecimal(n);
+}
+
+/** Digit / formatted string for an allowlisted page field under a page context. */
+export function projectPageFieldValue(
+  kind: AllowlistedPageField,
+  context: FieldPageContext
+): string {
+  if (kind === 'PAGE') return formatPageNumber(context.pageNumber, context.format);
+  const value =
+    kind === 'NUMPAGES' ? context.pageCount : (context.sectionPageCount ?? context.pageCount);
+  // Layout-derived counts are already bounded by pagination; still refuse non-finite junk.
+  if (!Number.isFinite(value) || value < 0) return '';
+  return formatDecimal(Math.floor(value));
 }
 
 /**

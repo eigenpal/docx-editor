@@ -33,12 +33,12 @@ export const MAX_STORY_FIELD_SCAN_DEPTH = 64;
 export type AllowlistedPageField = 'PAGE' | 'NUMPAGES' | 'SECTIONPAGES';
 
 /**
- * Which allowlisted complex page fields a header/footer story actually contains.
+ * Which allowlisted page fields a header/footer story actually contains.
  *
  * Drives layout reuse: no fields → one baseline; NUMPAGES only → one layout per page count;
  * SECTIONPAGES only → one layout per section page count; PAGE (alone or combined) → per
- * distinct evaluated values with a bounded cache. `w:fldSimple` never counts — it stays
- * layout-inert.
+ * distinct evaluated values with a bounded cache. Counts both complex markers and
+ * `w:fldSimple` (including an allowlisted page field nested inside a non-page simple field).
  */
 export interface StoryPageFieldNeeds {
   readonly hasPage: boolean;
@@ -250,13 +250,14 @@ export function isInsideFieldResult(state: ComplexFieldParseState): boolean {
 }
 
 /**
- * Bounded scan for allowlisted complex page fields in a header/footer part.
+ * Bounded scan for allowlisted page fields in a header/footer part.
  *
  * Walks the part tree with node/depth caps. Field state spans runs in document order within
  * each paragraph — the same machine paragraph projection uses — and resets at paragraph
- * boundaries so malformed cross-paragraph fields never count. Generic `w:fldSimple` is ignored
- * so detection cannot re-enable deferred body-style simple fields in furniture either.
- * Instruction text is extracted iteratively under the same node/depth/character budgets.
+ * boundaries so malformed cross-paragraph fields never count. Allowlisted `w:fldSimple`
+ * instructions count too, and a non-page simple field is still descended so a nested complex
+ * PAGE inside it is not missed. Instruction text is extracted iteratively under the same
+ * node/depth/character budgets.
  */
 export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
   let hasPage = false;

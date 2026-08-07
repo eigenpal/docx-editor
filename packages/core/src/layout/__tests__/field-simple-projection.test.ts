@@ -170,6 +170,42 @@ describe('a simple PAGE field', () => {
     expect(detectStoryPageFields(partOf(nested).root).hasPage).toBe(true);
   });
 
+  test('a complex PAGE nested inside a non-page simple field evaluates per sheet', () => {
+    // Detection alone is not enough: projectSimpleField used to concatenate the nested
+    // field's cached digits, so every sheet still painted page one after furniture finally
+    // supplied a context. Assert the live value under two different page contexts.
+    const nested =
+      '<w:p><w:fldSimple w:instr=" STYLEREF 1 ">' +
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText> PAGE </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:t>1</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:fldSimple></w:p>';
+    const paragraph = paragraphOf(nested);
+    expect(
+      piecesOfParagraph(paragraph, [], { pageNumber: 2, pageCount: 9 })
+        .map((piece) => piece.text)
+        .join('')
+    ).toBe('2');
+    expect(
+      piecesOfParagraph(paragraph, [], { pageNumber: 7, pageCount: 9 })
+        .map((piece) => piece.text)
+        .join('')
+    ).toBe('7');
+  });
+
+  test('a simple PAGE nested inside a non-page simple field evaluates per sheet', () => {
+    const nested =
+      '<w:p><w:fldSimple w:instr=" STYLEREF 1 ">' +
+      '<w:fldSimple w:instr=" PAGE "><w:r><w:t>1</w:t></w:r></w:fldSimple>' +
+      '</w:fldSimple></w:p>';
+    expect(
+      piecesOfParagraph(paragraphOf(nested), [], { pageNumber: 4, pageCount: 9 })
+        .map((piece) => piece.text)
+        .join('')
+    ).toBe('4');
+  });
+
   test('is detected, so furniture gets a per-sheet context at all', () => {
     // Without detection the story's page-field key stays empty and one layout is reused for
     // every sheet, so evaluation never gets the chance to differ.

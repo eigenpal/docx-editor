@@ -9,9 +9,12 @@
 // (aligned with `paragraphTextOf` / `segmentsOf`). Cached result text is not independently
 // editable. Malformed fields demote so interior content never disappears.
 //
-// Shipped scope is furniture-only for live page-number evaluation. `w:fldSimple` advances
-// the model offset but stays layout-inert for page-field evaluation (body simple fields
-// remain deferred).
+// Shipped scope is furniture-only for live page-number evaluation. A simple PAGE /
+// NUMPAGES / SECTIONPAGES field evaluates like its complex twin when a page context is
+// supplied; a non-page `w:fldSimple` still contributes one model unit and paints its
+// cached result, except that allowlisted page fields nested inside that result (complex
+// or simple) are evaluated per sheet rather than concatenated from the saved cache.
+// Other nested field instructions stay inert. Body-side evaluation beyond that is deferred.
 //
 // Projection is a layout concern (span geometry + tab alignment), not paint-time substitution.
 
@@ -21,7 +24,6 @@ import {
   hardBreakKind,
   hardBreakText,
   hasLegacyFormFieldData,
-  isFieldChrome,
   isFldSimple,
   type OoxmlNode,
   type OoxmlParagraphNode,
@@ -55,11 +57,14 @@ import {
 import {
   fieldPageContextToken,
   finalizePageFieldProjection,
+  formatPageNumber,
+  projectPageFieldValue,
   storyNeedsPageFields,
   withPageFieldSources,
   type FieldPageContext,
   type PageFieldSource,
 } from './field-page-furniture.ts';
+import { collectSimpleFieldDisplay } from './field-simple-result.ts';
 import {
   appendModelRange,
   positionalTabOf,
@@ -69,7 +74,6 @@ import {
   type MutableModelRange,
   type PositionalTab,
 } from './field-pieces.ts';
-import { formatDecimal, formatNumFmt } from './numbering-format.ts';
 import type { InlineDrawingLayoutContext, InlineDrawingLayoutInput } from './drawing-layout.ts';
 import { isRunLevelMcAlternateContent } from '../store/package/drawing-projection.ts';
 import {
@@ -121,6 +125,8 @@ export {
 export {
   fieldPageContextToken,
   finalizePageFieldProjection,
+  formatPageNumber,
+  projectPageFieldValue,
   storyNeedsPageFields,
   withPageFieldSources,
   type FieldPageContext,
@@ -153,35 +159,6 @@ export type RunPropertyCascader = (
  * the right degradation: text is never lost for want of a target.
  */
 export type HyperlinkProjector = (link: OoxmlNode) => SpanLinkRecord | null;
-
-/**
- * Format a displayed PAGE value through the shared ST_NumberFormat resolver.
- *
- * Unknown / script-specific formats fall back to decimal (same convention as list markers).
- * `none` / `bullet` are meaningless for page numbers and also fall back to decimal so a
- * hostile fmt cannot blank the furniture.
- */
-export function formatPageNumber(value: number, format: string | undefined): string {
-  if (!Number.isFinite(value) || value < 0) return '';
-  const n = Math.floor(value);
-  const fmt = format && format.length > 0 ? format : 'decimal';
-  if (fmt === 'none' || fmt === 'bullet') return formatDecimal(n);
-  const text = formatNumFmt(fmt, n);
-  return text.length > 0 ? text : formatDecimal(n);
-}
-
-/** Digit / formatted string for an allowlisted page field under a page context. */
-export function projectPageFieldValue(
-  kind: AllowlistedPageField,
-  context: FieldPageContext
-): string {
-  if (kind === 'PAGE') return formatPageNumber(context.pageNumber, context.format);
-  const value =
-    kind === 'NUMPAGES' ? context.pageCount : (context.sectionPageCount ?? context.pageCount);
-  // Layout-derived counts are already bounded by pagination; still refuse non-finite junk.
-  if (!Number.isFinite(value) || value < 0) return '';
-  return formatDecimal(Math.floor(value));
-}
 
 function runPropertiesOf(
   run: OoxmlNode,
@@ -294,8 +271,9 @@ interface PendingFieldProjection {
  * is never independently editable. Malformed fields demote: markers contribute nothing and
  * interior result text stays visible at its natural length.
  *
- * `w:fldSimple` advances the model offset by one but stays layout-inert for page-field
- * evaluation (body simple fields remain deferred) — no piece is emitted for the atom.
+ * `w:fldSimple` advances the model offset by one and paints its result as a single projected
+ * piece (live page value when allowlisted and a page context is supplied; otherwise cached
+ * text, with nested allowlisted page fields evaluated live under that same context).
  *
  * Hidden runs (`w:vanish`) emit no piece while still advancing offsets.
  */
@@ -804,8 +782,8 @@ export function piecesOfParagraph(
    *
    * Typed runs contribute measurable / selectable text. Generic siblings stay structurally
    * preserved but layout-inert for page-field evaluation; typed/generic `w:fldSimple` advances
-   * one model unit (atomic) without emitting a piece. The exceptions are the two containers
-   * that are not content themselves but hold runs that are:
+   * one model unit and paints through {@link projectSimpleField}. The exceptions are the
+   * containers that are not content themselves but hold runs that are:
    *
    *   - `w:hyperlink`. Skipping it is what made every link's words vanish from the painted
    *     page while still occupying model offsets.
@@ -826,17 +804,14 @@ export function piecesOfParagraph(
   const paragraphScope = emptyNamespaceScope();
 
   /**
-   * Paint the cached result of a `w:fldSimple` (§17.16.19).
+   * Paint a `w:fldSimple` (§17.16.19) as one projected model unit.
    *
-   * A simple field carries its instruction in `@w:instr` and its last-computed result as child
-   * runs, so there is no `separate` marker to switch phase on and none of the complex-field
-   * machine applies. The element was previously advanced past with `offset += 1` and no piece,
-   * which kept the offset contract but painted the result as nothing — a document using simple
-   * fields for its cross-references showed blanks where Word shows text.
-   *
-   * The single model unit is preserved: the whole result is one projected piece spanning
-   * `[start, start + 1)`, exactly as a well-formed complex field's is, so `paragraphTextOf` and
-   * every offset after it stay aligned and the caret still treats the field as one thing.
+   * The instruction lives in `@w:instr` and the last-computed result as child runs — there is
+   * no `separate` marker on the outer field itself. Allowlisted PAGE / NUMPAGES / SECTIONPAGES
+   * evaluate from the page context when one is supplied. Every other instruction paints its
+   * cached result, but nested allowlisted page fields inside that cache still evaluate live
+   * (see {@link collectSimpleFieldDisplay}) so a `STYLEREF` wrapping `PAGE` does not stamp the
+   * saved sheet's number onto every page.
    *
    * Attribution comes from `push` reading the live stack — a `w:fldSimple` inside `w:ins` is
    * still inside it here, unlike a complex field's deferred flush.
@@ -848,8 +823,8 @@ export function piecesOfParagraph(
 
     // The atom is one model offset whatever it paints, so a revision enclosing the WHOLE field
     // is answered here, once, before any of the branches below — including the live page-field
-    // one, which does not go through `collect` and so would otherwise paint a deleted footer
-    // number straight into the accepted view.
+    // one, which does not go through result collection and so would otherwise paint a deleted
+    // footer number straight into the accepted view.
     //
     // The deleted range is recorded whether or not it was laid out, exactly as the complex path
     // and inline drawings do: the offset exists in every display mode and the caret has to step
@@ -859,53 +834,17 @@ export function piecesOfParagraph(
     }
     if (!revisionsVisible(revisions, displayMode)) return;
 
-    let text = '';
-    let resultProps: readonly OoxmlProperty[] | undefined;
-    let resultStyle: ResolvedRunStyle | undefined;
-
-    const collect = (node: OoxmlNode, nodeDepth: number, local: readonly RevisionAttribution[]) => {
-      if (node.kind === 'textValue' || nodeDepth > MAX_STORY_FIELD_SCAN_DEPTH) return;
-      for (const child of node.children) {
-        if (child.kind === 'textValue') continue;
-        if (!consumeScanNode(budget)) return;
-        if (child.kind === 'run') {
-          const props = runPropertiesOf(child, inheritedRunProperties, cascadeRuns);
-          const style = resolveRunStyle(props, themeFonts);
-          for (const grand of child.children) {
-            if (grand.kind === 'runProperties') continue;
-            // A nested field's markers and instruction are not result text.
-            if (isFieldChrome(grand)) continue;
-            const value = modelTextOfRunChild(grand);
-            if (value.length === 0) continue;
-            const deleted = revisionsAreDeletion(local);
-            if (
-              style.hidden ||
-              !revisionsVisible(local, displayMode) ||
-              (grand.kind === 'deletedText' && !deleted)
-            ) {
-              continue;
-            }
-            if (!resultProps) {
-              resultProps = props;
-              resultStyle = style;
-            }
-            text += value;
-          }
-          continue;
-        }
-        if (child.kind === 'hyperlink') {
-          collect(child, nodeDepth + 1, local);
-          continue;
-        }
-        if (isRevisionWrapper(child) && local.length < MAX_REVISION_DEPTH) {
-          const attribution = revisionAttributionOf(child);
-          collect(child, nodeDepth + 1, attribution ? withRevision(local, attribution) : local);
-          continue;
-        }
-        collect(child, nodeDepth + 1, local);
-      }
-    };
-    collect(simple, depth, revisions);
+    const display = collectSimpleFieldDisplay({
+      simple,
+      depth,
+      pageContext,
+      budget,
+      revisions,
+      displayMode,
+      inheritedRunProperties,
+      cascadeRuns,
+      themeFonts,
+    });
 
     // A simple PAGE/NUMPAGES/SECTIONPAGES field is evaluated like its complex twin when the
     // caller supplies a page context. The CACHED result is whatever sheet the producer last
@@ -915,20 +854,32 @@ export function piecesOfParagraph(
     const pageKind = allowlistedPageField(fldSimpleInstr(simple) ?? '');
     if (pageKind && pageContext) {
       const live = projectPageFieldValue(pageKind, pageContext);
-      const style = resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+      const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
       if (!style.hidden) {
-        push(live, resultProps ?? inheritedRunProperties, style, true, start, start + 1, {
+        push(live, display.resultProps ?? inheritedRunProperties, style, true, start, start + 1, {
           fieldAtom: { formField: false },
         });
       }
       return;
     }
 
-    if (text.length === 0 || !resultStyle || resultStyle.hidden) return;
+    if (display.text.length === 0) return;
+    // Nested live PAGE may replace an empty cached result and leave no donor run; fall back
+    // to inherited properties the same way a top-level simple PAGE does.
+    const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+    if (style.hidden) return;
     // `w:ffData` is a `w:fldChar` payload, so a simple field is never a legacy form field.
-    push(text, resultProps ?? [], resultStyle, true, start, start + 1, {
-      fieldAtom: { formField: false },
-    });
+    push(
+      display.text,
+      display.resultProps ?? inheritedRunProperties,
+      style,
+      true,
+      start,
+      start + 1,
+      {
+        fieldAtom: { formField: false },
+      }
+    );
   };
 
   const processInline = (

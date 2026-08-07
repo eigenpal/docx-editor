@@ -738,7 +738,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Full revision model incl. structural changes (paragraph breaks, paragraph props, table rows/cells). Opens cleanly in Word’s review pane.',
+      'Full revision model incl. structural changes (paragraph breaks, paragraph props, table rows/cells). Tracked insertions and deletions around a field result (cross-reference, page number, form field) paint as tracked, not as ordinary text. Opens cleanly in Word’s review pane.',
     docsLink: '/docs/2.x/pro/tracked-changes',
   },
   {
@@ -821,7 +821,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Allowlisted complex PAGE, NUMPAGES, and SECTIONPAGES project in headers/footers at layout time (PAGE respects section pgNumType start/fmt), including fields hosted inside anchored header/footer text boxes. Insertable from React header/footer chrome (including Page X of Y). Other field instructions stay inert; body field evaluation is deferred.',
+      'Allowlisted PAGE, NUMPAGES, and SECTIONPAGES (complex or w:fldSimple) project in headers/footers at layout time (PAGE respects section pgNumType start/fmt), including fields hosted inside anchored header/footer text boxes and allowlisted page fields nested inside a non-page simple field such as STYLEREF. Insertable from React header/footer chrome (including Page X of Y). Other field instructions stay inert; body field evaluation is deferred.',
   },
   {
     id: 'fields.toc',
@@ -842,7 +842,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Last-computed field results display; the field codes themselves round-trip untouched.',
+    notes:
+      'Last-computed field results display for complex fields and w:fldSimple; the field codes themselves round-trip untouched. Painted results carry Word-like grey field shading (always for legacy form fields unless w:doNotShadeFormData; otherwise per the fieldShading option: never / when-selected / always). Field instructions are never executed.',
   },
   {
     id: 'fields.citations',
@@ -864,7 +865,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'The field result shows as static text; w:ffData, including checkbox state and constraints, is preserved but the control is not interactive.',
+      'The field result shows as static text with Word-like form-field shading unless the document sets w:doNotShadeFormData; w:ffData, including checkbox state and constraints, is preserved but the control is not interactive.',
   },
 
   // --- Document structure & content controls ---------------------------------
