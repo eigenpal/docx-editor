@@ -27,6 +27,7 @@ import { DocxEditorContentControl } from '../editor/DocxEditorContentControl';
 import { useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
+import { ScopedByAncestorContext } from '../editor/scope-context';
 
 /**
  * React host for the docx editor: the batteries-included entry point.
@@ -220,6 +221,8 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
   );
 
   const tree = chrome ? (
+    // This wrapper carries the scope class, so the chrome parts below it must
+    // not add their own — see editor/scope-context.ts.
     <div
       className={`docx-editor${isDark ? ' dark' : ''}${className ? ` ${className}` : ''}`}
       style={CONTAINER_STYLE}
@@ -321,7 +324,9 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
       {...(onFontError ? { onFontError } : {})}
     >
       <DocxEditorRefBridge forwardedRef={ref} />
-      {tree}
+      {/* Only the chrome branch renders a wrapper carrying `.docx-editor`.
+          With `chrome={false}` there is none, so the parts must self-scope. */}
+      <ScopedByAncestorContext.Provider value={chrome}>{tree}</ScopedByAncestorContext.Provider>
     </DocxEditorRoot>
   );
 });
