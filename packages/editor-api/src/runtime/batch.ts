@@ -64,6 +64,7 @@ const HOST_CODES: Readonly<Record<AutomationErrorCode, DocxEditorErrorCode>> = O
   'transaction-refused': 'GeneralException',
   'unknown-operation': 'NotSupported',
   'unsupported-content': 'InvalidArgument',
+  'unsupported-revision': 'NotImplemented',
   'conflicting-operations': 'ConflictingChanges',
   'document-unavailable': 'DocumentUnavailable',
 });

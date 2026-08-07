@@ -94,6 +94,12 @@ removes only that reply and preserves the parent and siblings. Several deletes q
 Pro review module and a writable, attached editor; server writes are provided by this Pro-licensed
 runtime. Root creation follows the same browser gate and is one Undo unit.
 
+`document.revisions.items` contains only revisions whose individual `accept()` and `reject()` are
+supported. Structural tracked changes remain preserved in the file and are not presented as
+actionable objects. `acceptAll()` and `rejectAll()` still inspect the whole document and refuse
+atomically if unsupported structural markup remains; they never resolve only the listed subset.
+Browser decisions join the editor's Undo stack, with one collection decision as one Undo unit.
+
 ## Programming model
 
 - A property you did not `load()` throws instead of answering `undefined`, so a typo fails at

@@ -787,6 +787,20 @@ describe('two notes share one part, and neither reviews the other', () => {
     void second;
   });
 
+  test('accepting a story collection resolves that story, not the main body', () => {
+    const host = twoReviewedNotes();
+    const [first, second] = noteBodies(host);
+    const response = host.execute({ operations: [{ op: 'acceptAllRevisions', body: first }] });
+    expect(response.ok).toBe(true);
+
+    const next = reopen(host);
+    const [afterFirst, afterSecond] = noteBodies(next.host);
+    expect(authorsOfRevisions(next.host, afterFirst)).toEqual([]);
+    expect(authorsOfRevisions(next.host, afterSecond)).toEqual(['Grace']);
+    expect(authorsOfRevisions(next.host, next.body)).toEqual(['Linus']);
+    void second;
+  });
+
   test('the body’s changes are not the note’s, and the note’s are not the body’s', () => {
     const host = twoReviewedNotes();
     const { body } = roots(host);

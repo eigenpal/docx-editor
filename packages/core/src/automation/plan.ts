@@ -92,6 +92,7 @@ import { paragraphStyleName, styleIdFor } from './styles.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 import type { AutomationCommentWrite } from './document-port.ts';
 import { commentReads, revisionReads, type AutomationRevisionRead } from './review.ts';
+import { revisionCollectionOps, revisionDecisionTarget } from './revision-operations.ts';
 import type { ReviewCommentItem } from '../store/store/review-reads.ts';
 import { planInsertComment } from './comment-create-plan.ts';
 import {
@@ -2401,26 +2402,23 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
 
       case 'acceptAllRevisions':
       case 'rejectAllRevisions': {
-        if (!handles.resolve(operation.document, 'document'))
-          return refuse('invalid-handle', 'that handle does not name a document', 'document');
-        const reads = packageReads.body;
-        if (!reads) return refuse('document-unavailable', 'this host holds no document');
-        const plan = planFor(reads);
+        const target = revisionDecisionTarget(operation, handles, packageReads);
+        if (!target.ok) return refuse(target.code, target.message, target.detail);
+        const plan = planFor(target.reads);
         const conflict = pinWrite(plan);
         if (conflict) return conflict;
-        // The store's own whole-part op, not a loop: one decision, one undo unit. It refuses
-        // outright if the part holds a change the engine cannot resolve, which is the honest
-        // answer — accepting the resolvable ones and silently leaving the rest would report a
-        // document as reviewed while it still carries pending changes.
+        const ops = revisionCollectionOps(operation, target.reads, target.storyScoped);
+        if (!ops) {
+          return refuse(
+            'unsupported-revision',
+            'that story contains a tracked change this engine cannot resolve'
+          );
+        }
         return {
           ok: true,
           kind: 'command',
-          story: reads.story,
-          ops: [
-            operation.op === 'acceptAllRevisions'
-              ? ({ op: 'acceptAllRevisions' } as const)
-              : ({ op: 'rejectAllRevisions' } as const),
-          ],
+          story: target.reads.story,
+          ops,
           answer: () => APPLIED,
         };
       }

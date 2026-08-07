@@ -14,6 +14,7 @@
 
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
+import type { TreeDocOp } from '../store/store/tree-op-types.ts';
 import {
   commentAnchorsOfStory,
   commentsOfPart,
@@ -92,6 +93,25 @@ export interface AutomationRevisionRead {
   readonly item: ReviewRevisionItem;
 }
 
+/** Every tracked-change item that belongs to one story, including unsupported structural ones. */
+export function revisionItemsInStory(reads: AutomationStoryReads): readonly ReviewRevisionItem[] {
+  return Object.freeze(revisionItemsOf(reads.part).filter((item) => inStory(reads, item.ranges)));
+}
+
+/** Atomic ops for a story collection, or `null` when any item cannot be resolved safely. */
+export function revisionDecisionOps(
+  reads: AutomationStoryReads,
+  accept: boolean
+): readonly TreeDocOp[] | null {
+  const items = revisionItemsInStory(reads);
+  if (items.some((item) => item.readOnly || item.revisionKind === 'structural')) return null;
+  return items.flatMap((item) =>
+    item.addresses.map((revision) =>
+      accept ? { op: 'acceptRevision', revision } : { op: 'rejectRevision', revision }
+    )
+  );
+}
+
 /**
  * The decisions of one story, in document order.
  *
@@ -100,9 +120,8 @@ export interface AutomationRevisionRead {
  */
 export function revisionReads(reads: AutomationStoryReads): readonly AutomationRevisionRead[] {
   const found: AutomationRevisionRead[] = [];
-  for (const item of revisionItemsOf(reads.part)) {
+  for (const item of revisionItemsInStory(reads)) {
     if (item.readOnly || item.revisionKind === 'structural') continue;
-    if (!inStory(reads, item.ranges)) continue;
     const type = REVISION_TYPES[item.revisionKind as keyof typeof REVISION_TYPES];
     if (type === undefined) continue;
     found.push(

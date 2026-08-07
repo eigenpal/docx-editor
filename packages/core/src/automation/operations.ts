@@ -523,9 +523,29 @@ export type AutomationOperation =
    */
   | { readonly op: 'acceptRevision'; readonly revision: AutomationHandle }
   | { readonly op: 'rejectRevision'; readonly revision: AutomationHandle }
-  /** Accept every change in the main story, as ONE decision and one undo unit. */
-  | { readonly op: 'acceptAllRevisions'; readonly document: AutomationHandle }
-  | { readonly op: 'rejectAllRevisions'; readonly document: AutomationHandle }
+  /**
+   * Accept every change in one story, as ONE decision and one undo unit.
+   *
+   * The document-handle form is retained for protocol compatibility and names the main story.
+   * Story-scoped collections use the body-handle form so a note or header never resolves the main
+   * body's changes by accident.
+   */
+  | {
+      readonly op: 'acceptAllRevisions';
+      readonly body: AutomationHandle;
+    }
+  | {
+      readonly op: 'acceptAllRevisions';
+      readonly document: AutomationHandle;
+    }
+  | {
+      readonly op: 'rejectAllRevisions';
+      readonly body: AutomationHandle;
+    }
+  | {
+      readonly op: 'rejectAllRevisions';
+      readonly document: AutomationHandle;
+    }
   /**
    * Put the reader's selection on a span. Requires the `selection` capability, so a headless
    * host refuses it rather than pretending to have a caret.
