@@ -88,6 +88,34 @@ const WORKSPACE_STYLE: CSSProperties = {
   minWidth: 0,
 };
 
+/**
+ * The ruler's row. It sits between the toolbar and the scroll container, which
+ * is the only place the part measures correctly: it applies the navigation
+ * shift and the review gutter itself, so it has to be OUTSIDE the viewport that
+ * already reserves them.
+ *
+ * `min-height` holds the row open before a document is loaded — the ruler draws
+ * nothing without a page, and letting the row collapse made the page stack jump
+ * when the ticks appeared.
+ */
+const RULER_ROW_STYLE: CSSProperties = {
+  display: 'flex',
+  justifyContent: 'center',
+  flex: 'none',
+  minHeight: 34,
+  padding: '6px 0 2px',
+  overflow: 'hidden',
+  backgroundColor: 'var(--doc-bg)',
+};
+
+const VERTICAL_RULER_STYLE: CSSProperties = {
+  position: 'absolute',
+  top: 40,
+  left: 0,
+  zIndex: 10,
+  pointerEvents: 'none',
+};
+
 const TITLE_BAR_STYLE: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -161,6 +189,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
     contextMenu = true,
     menu = true,
     navigation = true,
+    rulers = true,
   } = props;
 
   // Chrome colour mode: 'system' subscribes to the OS setting. Only the chrome
@@ -216,6 +245,14 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
         />
       )}
       <DocxEditorContentControl />
+      {/* The vertical ruler scrolls WITH the document, so unlike its horizontal
+          twin it belongs inside the scroller. aria-hidden: it carries no
+          operable handles, unlike the horizontal one's indent sliders. */}
+      {rulers && chrome ? (
+        <div style={VERTICAL_RULER_STYLE} aria-hidden="true">
+          <DocxEditorVerticalRuler />
+        </div>
+      ) : null}
       {props.children}
     </DocxEditorViewport>
   );
@@ -259,29 +296,23 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
             />
           ) : null}
         </div>
-        {onSave ? (
-          <button
-            type="button"
-            onClick={() => onSave()}
-            style={{
-              font: 'inherit',
-              color: 'inherit',
-              backgroundColor: 'var(--doc-bg-input)',
-              border: '1px solid var(--doc-border-input)',
-              borderRadius: 4,
-              padding: '2px 10px',
-              cursor: 'pointer',
-            }}
-          >
-            {translate('common.save')}
-          </button>
-        ) : null}
         {renderTitleBarRight?.()}
       </div>
       {/* Save is deliberately absent here: the registry marks the `file` group contextual,
           so `defaultChromeGroups()` filters it out and only explicit composition mounts it.
-          The title bar above carries the save control instead. */}
+          File -> Save in the menu bar carries it. */}
       <DocxEditorToolbar t={translate} />
+      {/* The ruler belongs to the packaged frame: every editor this component is
+          modelled on shows one, and a host that had to mount it by hand got the
+          placement wrong — the part compensates for the review gutter itself, so
+          inside the scroll container that reservation is counted twice and the
+          ticks drift off the page they measure. It has to sit ABOVE the
+          scroller, which is a slot only this component can offer. */}
+      {rulers ? (
+        <div style={RULER_ROW_STYLE}>
+          <DocxEditorHorizontalRuler />
+        </div>
+      ) : null}
       {/* Word's font compatibility bar: shown when the document's declared faces render
           in substitutes, dismissible per set of missing families. */}
       <DocxEditorFontNotice t={translate} />

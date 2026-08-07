@@ -29,7 +29,7 @@ const REACT_PROPS_NOT_YET_IN_VUE = new Set([
   // M6V.1 chrome props, React-only until 10V.1 ports the chrome to Vue.
   //
   // These are NOT idiomatic-framework divergences like the three above — they are a
-  // deliberate, time-boxed gap with a named closing task. 10V.1 MUST remove all five
+  // deliberate, time-boxed gap with a named closing task. 10V.1 MUST remove all six
   // entries; a divergence with no closing task is how a gate quietly stops meaning
   // anything.
   't',
@@ -37,6 +37,11 @@ const REACT_PROPS_NOT_YET_IN_VUE = new Set([
   'title',
   'onTitleChange',
   'onSave',
+  // Same gap, same closing task: the ruler chrome is part of the React frame,
+  // and Vue has no ruler slot yet, so there is no toggle for it to expose. The
+  // ENGINE half is shared — page setup, zoom and the margin/indent commands all
+  // come from core — so this is the chrome, not the capability.
+  'rulers',
   // The link popover is part of the provider/hooks layer, which landed React-first: it is
   // a context-backed hook plus a compound over it, and its Vue twin is the composable form
   // that lands with the rest of that layer. The ENGINE half is already shared — typed

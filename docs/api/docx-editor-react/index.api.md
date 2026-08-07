@@ -636,6 +636,7 @@ export interface DocxEditorProps {
     readonly renderTitleBarLeft?: () => ReactNode;
     // (undocumented)
     readonly renderTitleBarRight?: () => ReactNode;
+    rulers?: boolean;
     t?: (key: string, params?: Record<string, string | number>) => string;
     title?: string;
     // (undocumented)
