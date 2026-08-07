@@ -170,6 +170,18 @@ export class ContentControl extends ModelObject implements PromisedItem {
   }
 
   /**
+   * Whether the control currently declares an OOXML data binding.
+   *
+   * This is advisory preflight for callers choosing controls to write. A document can change
+   * after this property is loaded, so the atomic sync-time refusal remains the final authority.
+   * Only binding presence is exposed: XPath, namespace mappings, store ids, and custom XML
+   * content remain inside the untrusted-document boundary.
+   */
+  get isBound(): boolean {
+    return this.loadedProperty<boolean>('isBound');
+  }
+
+  /**
    * Whether the control refuses to be deleted.
    *
    * Reads the lock IN FORCE, so a control an enclosing one protects reports true even when its
@@ -259,7 +271,9 @@ export class ContentControl extends ModelObject implements PromisedItem {
    *
    * The refusals belong to the document, not to this method: a locked control, a control the file
    * bound to custom XML, and a value the control's type does not accept are all refused by the
-   * engine's single write path, which is the same path a keystroke takes.
+   * engine's single write path, which is the same path a keystroke takes. {@link isBound} is an
+   * advisory preflight only; this sync-time check remains authoritative if the document changed
+   * after the flag was loaded.
    */
   setValue(value: ContentControlValue): void {
     const target = `${this.path.label}.setValue`;
@@ -323,6 +337,7 @@ export class ContentControl extends ModelObject implements PromisedItem {
       'tag',
       'title',
       'subtype',
+      'isBound',
       'text',
       'cannotDelete',
       'cannotEdit',
@@ -341,6 +356,16 @@ export class ContentControl extends ModelObject implements PromisedItem {
     }
     if (selected.includes('subtype')) {
       this.loadTextInto('subtype', () => ({ op: 'getContentControlSubtype', contentControl }));
+    }
+    if (selected.includes('isBound')) {
+      const label = `${this.path.label}.isBound`;
+      this.read(
+        label,
+        () => ({ op: 'getContentControlIsBound', contentControl }),
+        (value) => {
+          this.setLoadedProperty('isBound', hydratedFlag(value, label));
+        }
+      );
     }
     if (selected.includes('text')) {
       this.loadTextInto('text', () => ({ op: 'getContentControlText', contentControl }));

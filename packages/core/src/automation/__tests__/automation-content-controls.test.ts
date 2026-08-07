@@ -74,6 +74,16 @@ function metadata(host: AutomationHost, control: AutomationHandle, op: string): 
   );
 }
 
+function bindingState(host: AutomationHost, control: AutomationHandle): boolean {
+  const result = host.execute({
+    operations: [{ op: 'getContentControlIsBound', contentControl: control }],
+  }).results[0];
+  if (result?.status !== 'ok' || result.value.kind !== 'flag') {
+    throw new Error('the binding-state read did not answer a flag');
+  }
+  return result.value.value;
+}
+
 describe('a control answers what the document says about it', () => {
   test('a story lists its controls in document order', () => {
     const host = withControls();
@@ -104,6 +114,34 @@ describe('a control answers what the document says about it', () => {
     });
     expect(textAt(locks, 0)).toBe('sdtLocked');
     expect(textAt(locks, 1)).toBe('unlocked');
+  });
+
+  test('binding state reports presence only across mixed and custom control kinds', () => {
+    const secretXpath = '/attacker/private[1]';
+    const secretMappings = "xmlns:evil='urn:attacker-secret'";
+    const host = open(
+      docx(
+        `<w:sdt><w:sdtPr><w:tag w:val="plain"/><w:text/></w:sdtPr><w:sdtContent>` +
+          `<w:p><w:r><w:t>open</w:t></w:r></w:p></w:sdtContent></w:sdt>` +
+          `<w:sdt><w:sdtPr><w:tag w:val="custom"/>` +
+          `<w:dataBinding w:prefixMappings="${secretMappings}" w:xpath="${secretXpath}" ` +
+          `w:storeItemID="{ATTACKER-ID}"/><w:group/></w:sdtPr><w:sdtContent>` +
+          `<w:p><w:r><w:t>bound</w:t></w:r></w:p></w:sdtContent></w:sdt>`
+      )
+    );
+    const controls = controlsOf(host, roots(host).body);
+    const response = host.execute({
+      operations: controls.map((contentControl) => ({
+        op: 'getContentControlIsBound' as const,
+        contentControl,
+      })),
+    });
+    expect(bindingState(host, controls[0]!)).toBe(false);
+    expect(bindingState(host, controls[1]!)).toBe(true);
+    expect(response.results.map((result) => result.status)).toEqual(['ok', 'ok']);
+    expect(JSON.stringify(response)).not.toContain(secretXpath);
+    expect(JSON.stringify(response)).not.toContain(secretMappings);
+    expect(JSON.stringify(response)).not.toContain('ATTACKER-ID');
   });
 
   test('a control names the paragraphs it holds and the range they cover', () => {

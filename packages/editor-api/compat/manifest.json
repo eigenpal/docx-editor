@@ -296,7 +296,7 @@
     },
     {
       "uid": "Word.ContentControl#xmlMapping",
-      "reason": "Custom-XML-bound content control writes are refused until XML mapping is a separate supported lane (per the redesign plan); the mapping object itself is out of scope here."
+      "reason": "Custom-XML-bound content control writes are refused until XML mapping is a separate supported lane (per the redesign plan); the mapping object itself is out of scope here. DocxEditor's own read-only isBound boolean exposes binding presence for advisory preflight without exposing XPath, namespace mappings, store ids, or custom XML content."
     },
     {
       "uid": "Word.Range#start",
@@ -450,7 +450,7 @@
     },
     {
       "uid": "Word.ContentControlCollection",
-      "note": "getByTag, getByTitle, getFirst, getFirstOrNullObject and ContentControl#setValue are implemented and are NOT in this list's frozen reference fixture, so they are published as DocxEditor's own additions rather than as conformance-checked members. setValue exists because a control's value is not its characters: a dropdown takes a declared item, a date an ISO instant, a checkbox a state, and upstream spreads those over five sibling objects this subset does not ship."
+      "note": "getByTag, getByTitle, getFirst, getFirstOrNullObject, ContentControl#setValue and ContentControl#isBound are implemented and are NOT in this list's frozen reference fixture, so they are published as DocxEditor's own additions rather than as conformance-checked members. setValue exists because a control's value is not its characters: a dropdown takes a declared item, a date an ISO instant, a checkbox a state, and upstream spreads those over five sibling objects this subset does not ship. isBound is a presence-only advisory preflight; sync-time refusal remains authoritative."
     },
     {
       "uid": "Word.Section#getHeader / #getFooter",

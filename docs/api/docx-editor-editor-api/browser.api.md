@@ -188,6 +188,7 @@ export class ContentControl extends ModelObject implements PromisedItem {
     hydrateNull(): void;
     get id(): string;
     insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range_2;
+    get isBound(): boolean;
     // @internal
     protected onLoad(request: ResolvedLoadOptions): void;
     get paragraphs(): ParagraphCollection;
