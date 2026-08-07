@@ -1207,7 +1207,7 @@ export interface Editor {
     scrollToBlock(blockId: string): boolean;
     scrollToPage(pageNumber: number): boolean;
     selectMatch(match: TextMatch): ExecResult;
-    setActiveReviewItem(key: string | null): ExecResult;
+    setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
     // (undocumented)
     setActiveScope(scope: ViewScope): void;
     // (undocumented)
@@ -2131,6 +2131,11 @@ export interface ResolvedNoteNumbering {
     readonly numStart: number;
     // (undocumented)
     readonly pos: string;
+}
+
+// @public
+export interface ReviewActivationOptions {
+    readonly reveal?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' | false;
 }
 
 // @public

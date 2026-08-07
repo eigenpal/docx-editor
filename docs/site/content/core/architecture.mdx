@@ -45,9 +45,9 @@ Selection maps through paragraph identity and offsets, never through DOM travers
 
 ## Saving
 
-Modeled parts are re-emitted normalized from the tree. Everything else (custom XML, embedded fonts, media, extensions the engine has never seen) is repacked from the original file untouched.
+Every parsed XML part is re-emitted from the canonical tree with structural fidelity, including custom XML and unknown extensions. Package payloads such as embedded fonts, media, and VBA binaries pass through untouched.
 
-That is what "structural fidelity" means here: the editor rewrites what it understands and preserves the rest byte-for-byte. Two oracles gate it in CI: a canonical fingerprint over the tree, and a save-and-reopen semantic digest.
+That is what "structural fidelity" means here: unsupported XML and package payloads survive editing and save without loss. Two oracles gate it in CI: a canonical fingerprint over the tree, and a save-and-reopen semantic digest.
 
 ## Adapters
 

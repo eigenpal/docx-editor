@@ -8,7 +8,7 @@ seoTitle: 'DOCX Editor for React'
 
 `docx-editor` is an open-source WYSIWYG DOCX editor for React. It parses OOXML in the browser, paints real paginated pages, and serializes the current document back to `.docx`. You do not need an upload service or a conversion backend for normal browser editing.
 
-Saving is lossless. Everything you do not edit comes back byte for byte, including the parts the editor does not understand. Opening a document here cannot quietly destroy it.
+Saving has a lossless semantic round-trip: untouched content, unsupported OOXML, and package payloads survive editing and save. Opening a document here cannot quietly destroy it.
 
 <Cards>
   <Card title="Get it running" href="/docs/2.x/quickstart">
@@ -72,15 +72,15 @@ Feature-by-feature coverage and known limits: [Word fidelity](/docs/2.x/word-fid
 
 ## Lossless round-trip
 
-Open a document, edit one word, save it. Everything you did not touch comes back byte for
-byte: custom XML, embedded fonts, macros, media, VBA, Smart Tags, and markup from add-ins the
-editor has never heard of.
+Open a document, edit one word, save it. Everything you did not touch survives: custom XML,
+embedded fonts, macros, media, VBA, Smart Tags, and markup from add-ins the editor has never
+heard of.
 
 The mechanism is the canonical tree. Parsing types a node only where layout needs it and keeps
-everything else generic, holding the original element verbatim. On save, typed parts
-re-serialize and the rest is repacked from the source file. An element the parser cannot type
-(unknown, or known but in an invalid position) becomes a generic node instead of being dropped,
-so unrecognized markup never blocks editing.
+everything else generic. On save, the tree serializes with structural fidelity and package
+payloads such as media, fonts, and VBA binaries pass through untouched. An element the parser
+cannot type (unknown, or known but in an invalid position) becomes a generic node instead of
+being dropped, so unrecognized markup never blocks editing.
 
 CI checks this on a corpus of real documents with two oracles: a canonical fingerprint over the
 tree, and a semantic digest compared across save and reopen. A change that drops content fails

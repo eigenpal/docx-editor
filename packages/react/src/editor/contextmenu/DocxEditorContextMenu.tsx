@@ -54,6 +54,7 @@ import {
   ContextMenuRefreshTocPageNumbers,
   useTableContextMenuVisible,
 } from './parts';
+import { useScopeClassName } from '../scope-context';
 
 /** Distance kept between the panel and the window edge when it flips. @internal */
 const VIEWPORT_INSET = 8;
@@ -251,6 +252,8 @@ export function DocxEditorContextMenu({
   onOpenChange,
   children,
 }: DocxEditorContextMenuProps) {
+  // Skip the scope class when the packaged wrapper already carries it.
+  const scopeClassName = useScopeClassName();
   const editor = useDocxEditor();
   const { t: catalogT } = useTranslation();
   const tableContextVisible = useTableContextMenuVisible();
@@ -456,7 +459,7 @@ export function DocxEditorContextMenu({
               // One tab stop for the whole panel, which is the menu pattern: rows are
               // reached with the arrows, never with Tab.
               tabIndex={-1}
-              className={`docx-editor docx-toolbar__menu docx-contextmenu${className ? ` ${className}` : ''}`}
+              className={`${scopeClassName}docx-toolbar__menu docx-contextmenu${className ? ` ${className}` : ''}`}
               style={style}
               onKeyDown={(event) => {
                 const panel = panelRef.current;

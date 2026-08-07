@@ -20,6 +20,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import type {
   Editor,
+  ReviewActivationOptions,
   ReviewItemPlacement,
   ReviewItemQuery,
 } from '@docx-editor.dev/core/contracts/editor';
@@ -34,6 +35,14 @@ import { useDocxEditor } from '@docx-editor.dev/react';
  * to be written once per framework.
  */
 export type ReviewItemView = ReviewItemPlacement;
+
+/**
+ * Where activating an item puts it in the viewport. The engine's own options, unchanged.
+ *
+ * Re-exported here so a host taking this hook can name what it passes without reaching past
+ * the adapter into the engine's contract module.
+ */
+export type { ReviewActivationOptions };
 
 /**
  * What {@link useReview} returns: the review rail's data and the four things a card can do.
@@ -53,8 +62,12 @@ export interface UseReviewReturn {
    * for a story that will not open. A queue walked with next/previous controls has no other
    * way to tell a step that did nothing from one that worked, and skipping to the next item
    * is only possible if you can find out.
+   *
+   * `options.reveal` picks where the item lands, or turns the engine's scroll off entirely
+   * for a host whose own list already drives it. Default is centred when it has to travel,
+   * still when it is already on screen.
    */
-  readonly setActive: (key: string | null) => boolean;
+  readonly setActive: (key: string | null, options?: ReviewActivationOptions) => boolean;
   /**
    * Accept a revision. Reports whether it landed.
    *
@@ -156,9 +169,9 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
   const activeKey = useMemo(() => items.find((entry) => entry.isActive)?.key ?? null, [items]);
 
   const setActive = useCallback(
-    (key: string | null): boolean => {
+    (key: string | null, options?: ReviewActivationOptions): boolean => {
       if (!editor) return false;
-      return editor.setActiveReviewItem(key).ok;
+      return editor.setActiveReviewItem(key, options).ok;
     },
     [editor]
   );

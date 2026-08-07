@@ -439,6 +439,10 @@
     {
       "uid": "Word.Section#getHeader / #getFooter",
       "note": "A section that declares no header of its own INHERITS the previous section's, which is what Word paints, and this is what these members answer. Upstream's own behaviour additionally MINTS an empty header part when none exists anywhere; this subset refuses instead (ItemNotFound), because a read that adds a part to the package is a write, and a getter that writes cannot be batched with reads under one transaction. Shape conformance is unaffected; the divergence is behavioural and recorded here."
+    },
+    {
+      "uid": "Word.ParagraphCollection#getFirst / #getLast, Word.RangeCollection#getFirst, Word.CommentCollection#getFirst, Word.ListCollection#getFirst and every other item accessor",
+      "note": "The object an item accessor answers needs ONE await context.sync() before it can be loaded, written to or passed anywhere — upstream's needs none. Which object the accessor names is the answer to a read, a host handle is DATA in the batch request, and so an operation targeting that object cannot be in the same batch that resolves it. Resolving it in place would mean sending several batches per sync() and giving up 'one sync is one atomic batch', which is the property this runtime exists to guarantee. Source compatibility is unaffected and is held in place by src/runtime/__tests__/runtime-examples.test.ts, which runs a Word sample's own statements and names the extra sync as the only added line; what differs is the number of round trips at runtime. Using the object early is refused (InvalidObjectPath) rather than guessed, and the message names the sync."
     }
   ],
   "$divergencesComment": "Members that ARE selected and DO conform in shape, but whose behaviour differs from upstream in a way a caller can observe. Kept apart from \"omissions\" on purpose: an omission is a member this subset does not publish, and one of these is a member it publishes and answers differently. Nothing in the tooling reads this list; it is the record that each difference was decided."

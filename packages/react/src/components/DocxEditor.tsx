@@ -27,6 +27,7 @@ import { DocxEditorContentControl } from '../editor/DocxEditorContentControl';
 import { useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
+import { ScopedByAncestorContext } from '../editor/scope-context';
 
 /**
  * React host for the docx editor: the batteries-included entry point.
@@ -87,13 +88,77 @@ const WORKSPACE_STYLE: CSSProperties = {
   minWidth: 0,
 };
 
+/**
+ * The ruler's row. It sits between the toolbar and the scroll container, which
+ * is the only place the part measures correctly: it applies the navigation
+ * shift and the review gutter itself, so it has to be OUTSIDE the viewport that
+ * already reserves them.
+ *
+ * `min-height` holds the row open before a document is loaded — the ruler draws
+ * nothing without a page, and letting the row collapse made the page stack jump
+ * when the ticks appeared.
+ */
+const RULER_ROW_STYLE: CSSProperties = {
+  display: 'flex',
+  justifyContent: 'center',
+  flex: 'none',
+  minHeight: 34,
+  padding: '6px 0 2px',
+  overflow: 'hidden',
+  backgroundColor: 'var(--doc-bg)',
+};
+
+const VERTICAL_RULER_STYLE: CSSProperties = {
+  position: 'absolute',
+  top: 40,
+  left: 0,
+  zIndex: 10,
+  pointerEvents: 'none',
+};
+
+/**
+ * The chrome band: title bar and toolbar on ONE `--doc-surface` surface, closed by a
+ * seam (hairline + soft shadow) directly under the toolbar. The ruler row and the
+ * workspace below sit on the gray `--doc-bg`, which is what makes the band read as a
+ * single piece of chrome rather than a white title bar with a toolbar loose on the
+ * workspace.
+ *
+ * The seam belongs HERE and not on the title bar: a border under the title bar cuts
+ * the band in two and leaves the toolbar with no ground of its own.
+ *
+ * `z-index` lifts the seam's shadow over the workspace, and the menus that open from
+ * this row stack inside its context, above everything below.
+ */
+const CHROME_BAND_STYLE: CSSProperties = {
+  flex: 'none',
+  display: 'flex',
+  flexDirection: 'column',
+  position: 'relative',
+  zIndex: 30,
+  backgroundColor: 'var(--doc-surface)',
+  // Longhand on purpose: the `border-bottom` shorthand does not survive a var()
+  // in every DOM implementation the suite runs against.
+  borderBottomWidth: 1,
+  borderBottomStyle: 'solid',
+  borderBottomColor: 'var(--doc-border)',
+  boxShadow: '0 1px 3px var(--doc-shadow-subtle)',
+};
+
+/**
+ * Insets the toolbar inside the band. The toolbar paints its own pill
+ * (`.docx-toolbar` is a rounded `--doc-bg-subtle` slab); flush against the band's
+ * edges that pill has nothing to sit on and its radius never shows, so the row reads
+ * as a second flat bar under the title.
+ */
+const TOOLBAR_ROW_STYLE: CSSProperties = {
+  padding: '8px 12px',
+};
+
 const TITLE_BAR_STYLE: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 8,
-  padding: '6px 12px',
-  borderBottom: '1px solid var(--doc-border)',
-  backgroundColor: 'var(--doc-surface)',
+  padding: '8px 12px 0',
   color: 'var(--doc-text)',
 };
 
@@ -160,6 +225,7 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
     contextMenu = true,
     menu = true,
     navigation = true,
+    rulers = true,
   } = props;
 
   // Chrome colour mode: 'system' subscribes to the OS setting. Only the chrome
@@ -215,70 +281,80 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
         />
       )}
       <DocxEditorContentControl />
+      {/* The vertical ruler scrolls WITH the document, so unlike its horizontal
+          twin it belongs inside the scroller. aria-hidden: it carries no
+          operable handles, unlike the horizontal one's indent sliders. */}
+      {rulers && chrome ? (
+        <div style={VERTICAL_RULER_STYLE} aria-hidden="true">
+          <DocxEditorVerticalRuler />
+        </div>
+      ) : null}
       {props.children}
     </DocxEditorViewport>
   );
 
   const tree = chrome ? (
+    // This wrapper carries the scope class, so the chrome parts below it must
+    // not add their own — see editor/scope-context.ts.
     <div
       className={`docx-editor${isDark ? ' dark' : ''}${className ? ` ${className}` : ''}`}
       style={CONTAINER_STYLE}
     >
-      <div style={TITLE_BAR_STYLE}>
-        {renderTitleBarLeft?.()}
-        <div style={TITLE_BLOCK_STYLE}>
-          {onTitleChange ? (
-            <input
-              aria-label={translate('titleBar.documentNameAriaLabel')}
-              value={title ?? ''}
-              placeholder={translate('titleBar.untitled')}
-              onChange={(event) => onTitleChange(event.target.value)}
-              style={TITLE_INPUT_STYLE}
-            />
-          ) : (
-            <span style={{ minWidth: 0, padding: '2px 6px' }}>
-              {title ?? translate('titleBar.untitled')}
-            </span>
-          )}
-          {/* File · Format · Insert · Help. Every row is a chrome slot, so it shares its
-              label, icon and enabled state with the toolbar control for the same
-              capability. Open and Save work with no configuration; `onOpen`/`onSave`
-              replace them. */}
-          {menu !== false ? (
-            <DocxEditorMenu
-              t={translate}
-              {...(title !== undefined ? { fileName: title } : {})}
-              {...(onOpen ? { onOpen } : {})}
-              {...(onSave ? { onSave } : {})}
-              // An object `menu` is menu props, spread LAST so a host's own handler wins
-              // over the ones derived from the top-level props above.
-              {...(typeof menu === 'object' ? menu : {})}
-            />
-          ) : null}
+      {/* Title bar and toolbar share one surface, closed by the seam under the
+          toolbar — see CHROME_BAND_STYLE. */}
+      <div style={CHROME_BAND_STYLE}>
+        <div style={TITLE_BAR_STYLE}>
+          {renderTitleBarLeft?.()}
+          <div style={TITLE_BLOCK_STYLE}>
+            {onTitleChange ? (
+              <input
+                aria-label={translate('titleBar.documentNameAriaLabel')}
+                value={title ?? ''}
+                placeholder={translate('titleBar.untitled')}
+                onChange={(event) => onTitleChange(event.target.value)}
+                style={TITLE_INPUT_STYLE}
+              />
+            ) : (
+              <span style={{ minWidth: 0, padding: '2px 6px' }}>
+                {title ?? translate('titleBar.untitled')}
+              </span>
+            )}
+            {/* File · Format · Insert · Help. Every row is a chrome slot, so it shares its
+                label, icon and enabled state with the toolbar control for the same
+                capability. Open and Save work with no configuration; `onOpen`/`onSave`
+                replace them. */}
+            {menu !== false ? (
+              <DocxEditorMenu
+                t={translate}
+                {...(title !== undefined ? { fileName: title } : {})}
+                {...(onOpen ? { onOpen } : {})}
+                {...(onSave ? { onSave } : {})}
+                // An object `menu` is menu props, spread LAST so a host's own handler wins
+                // over the ones derived from the top-level props above.
+                {...(typeof menu === 'object' ? menu : {})}
+              />
+            ) : null}
+          </div>
+          {renderTitleBarRight?.()}
         </div>
-        {onSave ? (
-          <button
-            type="button"
-            onClick={() => onSave()}
-            style={{
-              font: 'inherit',
-              color: 'inherit',
-              backgroundColor: 'var(--doc-bg-input)',
-              border: '1px solid var(--doc-border-input)',
-              borderRadius: 4,
-              padding: '2px 10px',
-              cursor: 'pointer',
-            }}
-          >
-            {translate('common.save')}
-          </button>
-        ) : null}
-        {renderTitleBarRight?.()}
+        {/* Save is deliberately absent here: the registry marks the `file` group contextual,
+            so `defaultChromeGroups()` filters it out and only explicit composition mounts it.
+            File -> Save in the menu bar carries it. */}
+        <div style={TOOLBAR_ROW_STYLE}>
+          <DocxEditorToolbar t={translate} />
+        </div>
       </div>
-      {/* Save is deliberately absent here: the registry marks the `file` group contextual,
-          so `defaultChromeGroups()` filters it out and only explicit composition mounts it.
-          The title bar above carries the save control instead. */}
-      <DocxEditorToolbar t={translate} />
+      {/* The ruler belongs to the packaged frame: every editor this component is
+          modelled on shows one, and a host that had to mount it by hand got the
+          placement wrong — the part compensates for the review gutter itself, so
+          inside the scroll container that reservation is counted twice and the
+          ticks drift off the page they measure. It has to sit ABOVE the
+          scroller, which is a slot only this component can offer. */}
+      {rulers ? (
+        <div style={RULER_ROW_STYLE}>
+          <DocxEditorHorizontalRuler />
+        </div>
+      ) : null}
       {/* Word's font compatibility bar: shown when the document's declared faces render
           in substitutes, dismissible per set of missing families. */}
       <DocxEditorFontNotice t={translate} />
@@ -321,7 +397,9 @@ const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxE
       {...(onFontError ? { onFontError } : {})}
     >
       <DocxEditorRefBridge forwardedRef={ref} />
-      {tree}
+      {/* Only the chrome branch renders a wrapper carrying `.docx-editor`.
+          With `chrome={false}` there is none, so the parts must self-scope. */}
+      <ScopedByAncestorContext.Provider value={chrome}>{tree}</ScopedByAncestorContext.Provider>
     </DocxEditorRoot>
   );
 });

@@ -140,3 +140,45 @@ describe('activation reports what it did', () => {
     editor.destroy();
   });
 });
+
+describe('activation takes an alignment', () => {
+  /** A document long enough that a far item is genuinely off screen. */
+  const LONG = mount(
+    Array.from(
+      { length: 200 },
+      (_, i) =>
+        `<w:p><w:r><w:t>line ${i}</w:t></w:r>` +
+        (i === 180
+          ? `<w:ins w:id="9" w:author="Ada Lovelace" w:date="2026-01-02T03:04:05Z">` +
+            `<w:r><w:t>far change</w:t></w:r></w:ins>`
+          : '') +
+        `</w:p>`
+    ).join('')
+  );
+
+  test('reveal: false selects the item without moving the viewport', () => {
+    const editor = LONG;
+    const card = editor.getReviewItems().find((c) => c.kind === 'revision')!;
+    expect(card).toBeDefined();
+
+    const landed = editor.setActiveReviewItem(card.key, { reveal: false });
+    expect(landed.ok).toBe(true);
+    // The SELECTION still moved — turning the scroll off must not turn activation off.
+    const selection = editor.surface!.state().selection;
+    const item = card.item;
+    if (item.kind !== 'revision') throw new Error('expected a revision item');
+    expect(selection.head.paragraphId).toBe(item.ranges[0]!.start.paragraphId);
+    editor.destroy();
+  });
+
+  test('an explicit alignment is accepted and still reports', () => {
+    const editor = mount(INSERTION);
+    const card = editor.getReviewItems()[0]!;
+    for (const reveal of ['start', 'center', 'centerIfNeeded', 'nearest'] as const) {
+      expect(editor.setActiveReviewItem(card.key, { reveal }).ok).toBe(true);
+    }
+    // A refusal is still a refusal whatever the alignment says.
+    expect(editor.setActiveReviewItem('no-such-key', { reveal: 'center' }).ok).toBe(false);
+    editor.destroy();
+  });
+});

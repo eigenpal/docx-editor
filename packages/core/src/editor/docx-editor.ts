@@ -66,6 +66,7 @@ import {
 } from '../layout/index.ts';
 import type {
   DocumentEditingMode,
+  ReviewActivationOptions,
   ReviewItemPlacement,
   ReviewItemQuery,
   ReviewRevisionKind,
@@ -2197,7 +2198,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     getReviewRevision: () => reviewRevision(),
 
-    setActiveReviewItem(key: string | null): ExecResult {
+    setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult {
       // Dismissing is the only thing a key of `null` can mean here: the caret decides which
       // card is open, and a card the reader closed stays closed until the caret next moves.
       if (key === null) {
@@ -2291,11 +2292,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         lastReviewSelection = { key, from: span.start, to: span.end };
         // Focus-independent by design: the rail card focused itself on mousedown, which is
         // exactly what keeps the caret-follow scroll from ever firing here.
-        // `centerIfNeeded`, not `nearest`: opening a card the reader can already see must
-        // not yank the page, but a card 20 pages away scrolled the MINIMUM distance parked
-        // the change flush against the bottom edge — the reader arrived looking at the last
-        // line of the window rather than at the edit they had just asked to see.
-        surface.revealPosition?.(span.start, { block: 'centerIfNeeded' });
+        // `centerIfNeeded` by default, not `nearest`: opening a card the reader can already
+        // see must not yank the page, but a card 20 pages away scrolled the MINIMUM distance
+        // parked the change flush against the bottom edge — the reader arrived looking at the
+        // last line of the window rather than at the edit they had just asked to see. A host
+        // whose own list drives the scroll passes `reveal: false` and gets the selection
+        // without the engine competing for the viewport.
+        const reveal = options?.reveal ?? 'centerIfNeeded';
+        if (reveal !== false) surface.revealPosition?.(span.start, { block: reveal });
       }
       // ANNOUNCED, exactly as dismissing is. Opening a card is observable state of its own,
       // and the surface's `onChange` deliberately stays quiet when the caret did not move —

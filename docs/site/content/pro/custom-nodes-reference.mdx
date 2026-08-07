@@ -10,31 +10,31 @@ built one yet.
 
 A node stores what it knows in two places:
 
-| Location    | Holds               | Limit                                        |
-| ----------- | ------------------- | -------------------------------------------- |
-| `w:tag`     | The node's identity | 64 characters, including the prefix and name |
-| The payload | Everything else     | 256 KB                                       |
+| Location    | Holds               | Limit                                              |
+| ----------- | ------------------- | -------------------------------------------------- |
+| `w:tag`     | The node's identity | 64 characters, including the prefix and name       |
+| The payload | Everything else     | 262,144 UTF-16 code units, about 256 KiB for ASCII |
 
 The payload is a customXml data part that the control binds to through `w:dataBinding`. Word
 preserves both.
 
 ## defineCustomNode
 
-Required:
+### Identity
 
 | Parameter   | Type     | Description                                                |
 | ----------- | -------- | ---------------------------------------------------------- |
 | `name`      | `string` | Node type name. The second segment of the tag.             |
 | `tagPrefix` | `string` | The prefix this definition claims. `docx` claims `docx:*`. |
 
-What the node carries and shows:
+### Payload and text
 
 | Parameter | Type                                                       | Description                                                                                                  |
 | --------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `schema`  | zod (or any [Standard Schema](https://standardschema.dev)) | Shape of the payload. Nothing is bundled; bring your own. A schema that validates asynchronously is refused. |
 | `text`    | `(data) => string`                                         | What the document shows, from the payload. Reads the schema's output type.                                   |
 
-Presentation and interaction:
+### Chrome
 
 | Parameter             | Type                                                   | Description                                  |
 | --------------------- | ------------------------------------------------------ | -------------------------------------------- |
@@ -44,11 +44,11 @@ Presentation and interaction:
 | `onClick` / `onHover` | `(node: ActivatedCustomNode) => void`                  | Pointer events on the painted chip.          |
 | `onEdit`              | `(node: ActivatedCustomNode) => void`                  | The context menu's "Edit \{label}" row.      |
 
-Advanced:
+### Export and interoperability
 
 | Parameter          | Type                                       | When                                                                                                                                                                        |
 | ------------------ | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `preserveOnExport` | `boolean \| 'text'`                        | The node should not travel intact. See [preserveOnExport](#preserveonexport).                                                                                               |
+| `preserveOnExport` | `boolean \| 'text'`                        | Controls whether export keeps, unwraps or removes the node. See [preserveOnExport](#preserveonexport).                                                                      |
 | `tagAttrs`         | `(data) => Record<string, string>`         | A reader without the payload store should still identify the node.                                                                                                          |
 | `payloadNamespace` | `string`                                   | You need a specific customXml namespace. Defaults to one from `tagPrefix`. It goes into an XPath prefix declaration, so quotes, angle brackets and ampersands are rejected. |
 | `fromDocx`         | `({ attrs, text, data }) => attrs \| null` | The node has **no** schema and keeps its data in the tag, or you need to disown a control by returning `null`.                                                              |
@@ -158,26 +158,17 @@ const cards = editor.getReviewItems().filter((entry) => entry.item.kind === 'cus
 
 ## Export
 
-| The file is going to | Call                    | Custom nodes                                  |
-| -------------------- | ----------------------- | --------------------------------------------- |
-| Your own storage     | `editor.save()`         | Kept, always.                                 |
-| Anyone else          | `saveForExport(editor)` | Each definition's `preserveOnExport` decides. |
+| Destination      | Call                    | Custom nodes                                  |
+| ---------------- | ----------------------- | --------------------------------------------- |
+| Internal storage | `editor.save()`         | Kept intact.                                  |
+| External copy    | `saveForExport(editor)` | Each definition's `preserveOnExport` decides. |
 
-```mermaid
-flowchart TD
-    doc["one document"]
-    doc -- "editor.save()" --> keep["your storage<br/>reopens here with the chips working"]
-    doc -- "saveForExport(editor)" --> send["the user's download<br/>an ordinary .docx"]
-```
+`saveForExport` calls `editor.save()`, then applies every definition registered in `modules`.
+`options.nodes` narrows the definitions and leaves all others untouched. The result reports how many
+controls each policy changed in `unwrapped` and `removed`. A refusal returns a `reason` and no bytes.
 
-`saveForExport` calls `editor.save()`, then applies every definition registered in `modules`. There
-is no list to pass and no list to get wrong. Pass `nodes` to narrow it.
-
-`unwrapped` and `removed` count the controls each policy touched. A refusal returns no bytes, only a
-`reason`.
-
-Pass `destination` when the choice is made at runtime. `'internal'` returns the saved bytes
-unchanged, so one code path covers both:
+`destination` defaults to `'external'`. Set it to `'internal'` to return the saved bytes unchanged
+when one code path handles both destinations:
 
 ```ts
 const copy = await saveForExport(editor, {
@@ -185,38 +176,36 @@ const copy = await saveForExport(editor, {
 });
 ```
 
-Store the saved bytes, not the exported ones. What the export stripped is gone: unwrapped text does
-not become a node again.
-
 ### preserveOnExport
 
-Declared on the definition, applied only when you export. `editor.save()` ignores it.
+`preserveOnExport` applies per definition. `editor.save()` always keeps nodes intact.
 
-| Value            | The recipient gets                                              | Use for                                                         |
-| ---------------- | --------------------------------------------------------------- | --------------------------------------------------------------- |
-| `true` (default) | The node, whole. Tag, binding and payload all travel.           | Nodes the recipient is meant to keep working with.              |
-| `'text'`         | The words only. The control, binding and payload are unwrapped. | A citation, where the reader needs the text but not the markup. |
-| `false`          | Nothing. The node is removed with its content.                  | Internal annotations that must not leave.                       |
+| Value            | External export result                                                  |
+| ---------------- | ----------------------------------------------------------------------- |
+| `true` (default) | Keeps the control, tag, binding, payload and text.                      |
+| `'text'`         | Keeps the text and removes the control, binding and associated payload. |
+| `false`          | Removes the control and its content, including the associated payload.  |
 
-The default is `true`, and for most node types it is the right answer: the recipient gets a valid
-`.docx` that opens anywhere, and the node still works if the file comes back to you. Stripping is
-the opt-in, per definition:
+Use `'text'` when recipients need the visible value without your custom-node markup:
 
 ```ts
-const Citation = defineCustomNode({ name: 'citation', /* … */ preserveOnExport: 'text' });
-const InternalNote = defineCustomNode({ name: 'note', /* … */ preserveOnExport: false });
-const MergeField = defineCustomNode({ name: 'merge' /* … */ }); // true, the default
+const Citation = defineCustomNode({
+  name: 'citation',
+  tagPrefix: 'docx',
+  preserveOnExport: 'text',
+});
 ```
 
-One document can hold nodes with all three settings and each is decided independently. A tag no
-definition claims is never touched: this applies your own policy to your own markup, it is not a
-scrub of the document.
+One document can use all three settings. Export applies each definition independently and never
+touches a tag that no supplied definition claims.
 
 A node that leaves takes its payload with it, even when other nodes in the same store remain. When
 the last node for a namespace is gone, both `customXml` parts, both relationships and the
 content-type override are removed.
 
 Every story is covered, so a chip in a header is treated like a chip in the body.
+
+Store the saved bytes, not the exported bytes. Exported text does not become a node again.
 
 This removes markup written by this library. It does not touch `docProps/app.xml`,
 `docProps/core.xml`, comment and revision authors, rsids, or custom document properties. It does not
@@ -240,8 +229,8 @@ await email.attach(outgoing.bytes);
 List every definition whose nodes might be in the document. **A definition you do not pass is not
 touched**, and an untouched node travels whole.
 
-`packages/pro/src/__tests__/custom-node-server.test.ts` runs the whole path, author then store then
-strip, with the DOM globals deleted.
+`customNodeXml` and `prepareForExport` run without DOM globals, so a backend can author, store and
+strip custom nodes in Node.
 
 ## Server-side authoring
 
@@ -260,9 +249,9 @@ if (built.ok) {
 }
 ```
 
-`built.store` returns the parts you have to add: both `customXml` parts, both relationships, and the
-content-type override. All five are required. A control whose binding names a store that is not
-there is a document Word offers to repair.
+For a payload-bearing node, `built.store` returns both `customXml` parts, both relationships and the
+content-type override. Add every item to the package. Word offers to repair a document when a
+control's binding names a missing store.
 
 `encodeCustomNodeTag` and `decodeCustomNodeTag` are the tag codec if you need to read or write the
 identity yourself. Tags are capped at `MAX_TAG_LENGTH`.

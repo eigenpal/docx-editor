@@ -9,23 +9,23 @@ DrawingML pictures (`w:drawing` with `pic:pic`) lay out, paint, and round-trip t
 
 ## Supported formats
 
-| Format                                      | Insert (React)                       | Layout & paint                      | Round-trip                                |
-| ------------------------------------------- | ------------------------------------ | ----------------------------------- | ----------------------------------------- |
-| PNG, JPEG, GIF                              | Yes, `normalizeImageBytes` preflight | Full decode at authored `wp:extent` | Byte-identical media unless replaced      |
-| BMP, WebP                                   | No insert                            | Full decode at authored `wp:extent` | Byte-identical media                      |
-| SVG                                         | No insert                            | Painted at authored `wp:extent`     | Byte-identical media                      |
-| TIFF, EMF, WMF                              | No insert                            | Converted to a raster and painted   | Preserved; no zero-click fetch            |
-| External `r:link` / `TargetMode="External"` | No auto-load                         | Placeholder + preserved rel         | Preserved; explicit user gesture to embed |
+| Format                                      | Insert (React)                       | Layout & paint                                                     | Round-trip                                |
+| ------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------ | ----------------------------------------- |
+| PNG, JPEG, GIF                              | Yes, `normalizeImageBytes` preflight | Full decode at authored `wp:extent`                                | Original media preserved unless replaced  |
+| BMP, WebP                                   | No insert                            | Full decode at authored `wp:extent`                                | Original media preserved                  |
+| SVG                                         | No insert                            | Painted at authored `wp:extent`                                    | Original media preserved                  |
+| TIFF, EMF, WMF                              | No insert                            | Rasterized when conversion succeeds; labeled placeholder otherwise | Preserved; no zero-click fetch            |
+| External `r:link` / `TargetMode="External"` | No auto-load                         | Placeholder + preserved rel                                        | Preserved; explicit user gesture to embed |
 
 Insert accepts PNG/JPEG/GIF only. Other payloads stay in the package and participate in pagination through their authored extent.
 
-BMP and WebP decode natively in the browser and paint like PNG or JPEG. BMP is what older
-documents tend to carry; WebP is what current Word writes.
+BMP and WebP decode in the browser and paint like PNG or JPEG. BMP support includes top-down
+bitmaps and the 12-byte `BITMAPCOREHEADER`. WebP support includes lossy, lossless, and extended
+containers.
 
-TIFF, EMF and WMF are rasterized in the browser and painted like any other image. The original
-bytes stay in the package untouched, so saving round-trips them unchanged. A file that cannot be
-rasterized — an exotic TIFF flavour, a corrupt metafile — reserves its extent and paints a
-labeled placeholder rather than collapsing the layout.
+TIFF, EMF, and WMF paint when conversion to a validated raster succeeds. The original media stays
+unchanged in the package through save. When conversion is unavailable, declined, or fails, the
+image keeps its extent and shows a labeled placeholder.
 
 SVG is painted through an `<img>`, which puts the browser in secure static mode: scripts in the
 file never run and external references in it are never fetched. Its intrinsic size is read from
@@ -95,18 +95,24 @@ Alt text uses `@descr`, then `@title`; `@name` is never announced. A picture wit
 - Hyperlinks on drawings (`a:hlinkClick`) require an explicit gesture and pass through `sanitizeHref`.
 - Optional explicit download-and-embed path for external targets is user-initiated only (bounded size/content-type).
 
-## Explicitly unsupported (preserved inertly)
+## Current limits
 
-Not edited or raster-rendered in this release:
+Partially rendered:
 
-- VML (`w:pict`), except watermarks
 - Charts, SmartArt, groups, canvases: extent + labeled placeholder
 - Anchored text boxes render their story read-only, clipped to the extent (page-number
   fields inside header/footer text boxes evaluate per page); inline text boxes, linked
   chains, autofit, and rotation stay placeholders
+
+Preserved inertly:
+
+- VML (`w:pict`); watermark rendering and editing remain planned
 - `w:object` / `w:altChunk`: generic preservation with diagnostics
-- Artistic effects (`a:effectLst`)
 - Tracked-change accept/reject on drawings
+
+Not rendered and not guaranteed to round-trip:
+
+- Artistic effects (`a:effectLst`)
 
 ## Next steps
 

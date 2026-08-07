@@ -139,6 +139,18 @@ export interface DocxEditorProps {
    * `useNavigationPane` / `useDocumentOutline` / `useDocumentSearch`, for a different one.
    */
   navigation?: boolean;
+  /**
+   * Horizontal and vertical rulers, on by default with the packaged chrome.
+   *
+   * They are part of the frame rather than an extra: every editor this
+   * component is modelled on shows them, and the placement is not something a
+   * host can get right from outside. The horizontal ruler applies the
+   * navigation shift and the review gutter itself, so it has to sit ABOVE the
+   * scroll container — mounted inside it, the gutter is counted twice and the
+   * ticks drift off the page. Set `false` for a bare page, or compose
+   * `DocxEditor.HorizontalRuler` / `DocxEditor.VerticalRuler` yourself.
+   */
+  rulers?: boolean;
   /** A document to load: DOCX bytes or an existing handle. */
   document?: DocumentSource;
   /** 'edit' (default) or 'view' (read-only). Applied at mount only — not reactive; remount to change. */
