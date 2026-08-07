@@ -101,6 +101,14 @@ export default defineConfig(async () => {
       alias: usePublished
         ? [
             {
+              find: /^@docx-editor\.dev\/editor-api\/browser$/,
+              replacement: path.join(monorepoRoot, 'packages/editor-api/dist/browser.mjs'),
+            },
+            {
+              find: /^@docx-editor\.dev\/editor-api$/,
+              replacement: path.join(monorepoRoot, 'packages/editor-api/dist/index.mjs'),
+            },
+            {
               find: /^@docx-editor\.dev\/react$/,
               replacement: path.join(monorepoRoot, 'packages/react/dist/index.mjs'),
             },
@@ -109,6 +117,14 @@ export default defineConfig(async () => {
         : [
             // Resolve package imports to source for live development
             // Order matters: more-specific prefixes before less-specific ones
+            {
+              find: /^@docx-editor\.dev\/editor-api\/browser$/,
+              replacement: path.join(monorepoRoot, 'packages/editor-api/src/browser.ts'),
+            },
+            {
+              find: /^@docx-editor\.dev\/editor-api$/,
+              replacement: path.join(monorepoRoot, 'packages/editor-api/src/index.ts'),
+            },
             {
               find: '@docx-editor.dev/react',
               replacement: path.join(monorepoRoot, 'packages/react/src/index.ts'),

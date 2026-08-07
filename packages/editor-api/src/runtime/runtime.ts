@@ -92,7 +92,11 @@ export interface DocxEditorRuntime {
  * @public
  */
 export interface DocxEditorServerRuntime extends DocxEditorRuntime {
-  /** The current document as DOCX bytes. */
+  /**
+   * The current document as a fresh, caller-owned DOCX byte array.
+   *
+   * Mutating or transferring the returned array does not change this runtime or a later save.
+   */
   save(): Promise<Uint8Array>;
 }
 

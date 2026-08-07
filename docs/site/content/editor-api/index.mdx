@@ -42,6 +42,26 @@ try {
 }
 ```
 
+`createServer` completes its bounded parse before it resolves and does not retain the input
+`Uint8Array`; the caller may reuse or transfer that buffer afterward. Each `save()` returns a fresh,
+caller-owned `Uint8Array`. Mutating or transferring one save result cannot change the runtime or a
+later save.
+
+The server runtime is detached from every live editor. To hand its result back to a reader, make
+that replacement explicit:
+
+```ts
+const source = new Uint8Array(await editor.save());
+const detached = await DocxEditor.createServer(source);
+try {
+  // inspect, search, and edit with detached.run(...)
+  const result = await detached.save();
+  editor.load(result); // the live document changes only here
+} finally {
+  detached.dispose();
+}
+```
+
 To discover bookmarks without first knowing their text, enumerate the story that owns them:
 
 ```ts

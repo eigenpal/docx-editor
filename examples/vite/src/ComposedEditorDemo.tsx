@@ -35,6 +35,7 @@ import { BrandLogo } from '../../shared/BrandLogo';
 import { ExampleSwitcher } from '../../shared/ExampleSwitcher';
 import { ThemeToggle } from './ThemeToggle';
 import { DrawingsE2eBridge } from './DrawingsE2eBridge';
+import { ServerAutomationRecipe } from './ServerAutomationRecipe';
 import { DEMO_BUTTON, DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON, keepCaret } from './demoButtons';
 import {
   citationCardAt,
@@ -739,6 +740,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
             <DocxEditor.PageNumber />
             {/* Floating diagnostics chrome, above the overlay panels. */}
             <PerfHud />
+            <ServerAutomationRecipe />
             <CitationPopover
               card={citationCard}
               onOpen={setCitationCard}

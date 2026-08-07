@@ -61,6 +61,9 @@ export interface DocumentLimits {
  * they did not author gets "not a document this API can open", so a probe cannot use the error to
  * learn the reader's limits.
  *
+ * The bounded parse is complete when this promise resolves. The runtime does not retain the
+ * caller's `Uint8Array`, so the caller may reuse or transfer that input buffer afterward.
+ *
  * @public
  */
 export interface CreateServerOptions {

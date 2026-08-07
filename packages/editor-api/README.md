@@ -55,6 +55,12 @@ try {
 }
 ```
 
+`createServer` finishes its bounded parse before its promise resolves and does not retain the input
+`Uint8Array`; you may reuse or transfer that buffer afterward. Every `save()` returns a fresh,
+caller-owned `Uint8Array`, so transferring or mutating one result does not affect the runtime or a
+later save. Detached edits remain detached until your application explicitly loads the returned
+bytes into a live editor.
+
 ## In the browser
 
 The browser entry takes an editor the host already created, from `@docx-editor.dev/react` or a

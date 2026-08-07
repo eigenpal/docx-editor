@@ -17,9 +17,8 @@ export default defineConfig({
   dts: { resolve: true },
   tsconfig: 'tsconfig.json',
   // Off on purpose. With splitting, "what is in the server bundle" becomes a question about a
-  // graph of shared chunks; off, `dist/index.mjs` is one self-contained file and
-  // `scripts/pack-smoke.mjs` can answer it by reading that file. The editor lane is duplicated
-  // into `dist/browser.mjs` as a result, and a consumer only ever loads one of the two.
+  // graph of shared chunks; off, `scripts/pack-smoke.mjs` can answer it by reading one entry file.
+  // Core remains an external dependency below: that is required for one engine copy in a browser.
   splitting: false,
   sourcemap: false,
   clean: true,
@@ -32,9 +31,9 @@ export default defineConfig({
   // esbuild inlined is the record of the third-party code this package
   // redistributes on its own account.
   metafile: true,
-  // `@docx-editor.dev/core` stays external. It is a published package and a declared
-  // dependency, so the consumer resolves one copy of the engine. Inlining it here would
-  // give a page running this alongside the adapter two engines.
+  // `@docx-editor.dev/core` stays external by tsup's workspace-package behavior. It is a published
+  // package and a declared dependency, so the consumer resolves one copy of the engine. Inlining
+  // it here would give a page running this alongside an adapter two engines.
   // `harfbuzzjs` is external to get the build to RESOLVE, not because the output needs it.
   //
   // The browser entry reaches the editor lane, whose layout pass loads the font shaper through
@@ -42,11 +41,8 @@ export default defineConfig({
   // it drops anything — and the shaper's wasm wrapper needs Node's `module` and a top-level
   // `await`, so resolving it fails the CJS build outright. Externalizing skips the resolve.
   //
-  // Nothing then survives into the emitted bundles: neither output mentions `harfbuzzjs`, because
-  // the code path that would load it is unreachable from these entries — `createBrowserAutomationHost`
-  // takes an editor the host already created, so this package needs the host adapter and not the
-  // pass that measures text. That is why the package declares no runtime dependency, and why
-  // `scripts/pack-smoke.mjs` asserts ZERO bare imports in the tarball's bundles rather than
-  // trusting this list: an external import that did survive would be one a consumer cannot resolve.
+  // Nothing then mentions `harfbuzzjs`: `createBrowserAutomationHost` takes an editor the host
+  // already created, so this package needs the host adapter and not the text-measurement pass.
+  // `scripts/pack-smoke.mjs` allows only the declared core dependency to remain bare.
   external: ['harfbuzzjs'],
 });
