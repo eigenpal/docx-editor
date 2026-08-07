@@ -594,6 +594,11 @@ export function enumerateDocumentSectionsBounded(part: OoxmlPart, displayMode?: 
 export function expandLvlText(lvlText: string, counters: readonly number[], formats: readonly string[]): string;
 
 // @public
+export interface FieldAtomMarker {
+    readonly formField: boolean;
+}
+
+// @public
 export function filterRefsOnPage(page: PageRecord, allRefs: readonly PageRefHit[], refIndex?: PageRefIndex): readonly PageRefHit[];
 
 // @public
@@ -2868,6 +2873,7 @@ export interface StyleSpanRecord {
     // (undocumented)
     readonly box: LayoutBox;
     readonly caretEdges?: readonly number[];
+    readonly fieldAtom?: FieldAtomMarker;
     readonly link?: SpanLinkRecord;
     readonly noteNav?: {
         readonly scopeId: string;

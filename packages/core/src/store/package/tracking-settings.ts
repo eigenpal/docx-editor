@@ -25,8 +25,13 @@
 // Every value is `ST_OnOff` and every element is optional, so absence is the answer rather
 // than an error.
 
-import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
-import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
+import {
+  isSettingsElement as isElement,
+  settingsAttributeValue as attributeValue,
+  settingsChildNamed as childNamed,
+  settingsOnOff as onOff,
+} from './settings-onoff.ts';
+import type { OoxmlNode } from './ooxml-tree.ts';
 
 /** What the document asks for. Every field defaults to "the document said nothing". */
 export interface DocumentTrackingSettings {
@@ -51,41 +56,6 @@ export const NO_TRACKING_SETTINGS: DocumentTrackingSettings = Object.freeze({
   doNotTrackMoves: false,
   doNotTrackFormatting: false,
 });
-
-function isElement(node: OoxmlNode | null | undefined): node is OoxmlElement {
-  return node !== null && node !== undefined && node.kind !== 'textValue';
-}
-
-function childNamed(parent: OoxmlElement, localName: string): OoxmlElement | null {
-  for (const child of parent.children) {
-    if (child.kind === 'textValue') continue;
-    if (child.namespaceUri === WML_NAMESPACE_URI && child.localName === localName) return child;
-  }
-  return null;
-}
-
-function attributeValue(element: OoxmlElement, localName: string): string | undefined {
-  for (const attribute of element.attributes) {
-    if (attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === localName) {
-      return attribute.value;
-    }
-  }
-  return undefined;
-}
-
-/**
- * An `ST_OnOff` toggle element: present means on unless `@w:val` spells a false.
- *
- * `<w:trackRevisions w:val="0"/>` means the document asked for tracking to be OFF, and reading
- * the element's mere presence as true would turn it back on.
- */
-function onOff(parent: OoxmlElement, localName: string): boolean {
-  const element = childNamed(parent, localName);
-  if (!element) return false;
-  const value = attributeValue(element, 'val');
-  if (value === undefined) return true;
-  return value !== '0' && value !== 'false' && value !== 'off';
-}
 
 /** Read the tracking settings from a `settings.xml` root, or the defaults when it has none. */
 export function readTrackingSettings(

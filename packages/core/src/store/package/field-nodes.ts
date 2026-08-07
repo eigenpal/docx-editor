@@ -157,6 +157,28 @@ export function isFieldChrome(node: OoxmlNode): boolean {
 }
 
 /**
+ * True when a `w:fldChar` carries `w:ffData` — a LEGACY FORM FIELD (§17.16.17).
+ *
+ * FORMTEXT, FORMCHECKBOX and FORMDROPDOWN are what a fillable Word form is made of, and Word
+ * shades them on sight so a reader can find the blanks. That is the only reason to ask: it is a
+ * presentation question, answered by the element's presence alone.
+ *
+ * Presence ONLY. `w:ffData` can carry entry and exit MACRO names, and the canonical tree keeps
+ * its whole subtree generic and inert on purpose. Walking into it to read a name or a default
+ * would be reading attacker-supplied script references for no gain — the shading does not
+ * depend on what the form field says, only on it being one.
+ */
+export function hasLegacyFormFieldData(node: OoxmlNode): boolean {
+  if (node.kind === 'textValue') return false;
+  if (fldCharType(node) === null) return false;
+  for (const child of node.children) {
+    if (child.kind === 'textValue') continue;
+    if (child.localName === 'ffData' && isWml(child, 'ffData')) return true;
+  }
+  return false;
+}
+
+/**
  * One atomic field span inside a paragraph for caret / delete / selection.
  *
  * `removeNodeIds` lists every node that must leave with the unit (begin…end chrome and

@@ -14,6 +14,7 @@ import {
   fieldOnOffAttribute,
   fldCharType,
   fldSimpleInstr,
+  hasLegacyFormFieldData,
   instrTextValue,
   isFldCharNode,
   isFldSimpleNode,
@@ -432,6 +433,24 @@ describe('inertness and security', () => {
     // No fetch / execution surface: projection still only reads fldCharType + instrText.
     const pieces = piecesOfParagraph(paragraphOf(part), [], { pageNumber: 4, pageCount: 4 });
     expect(pieces.map((p) => p.text)).toEqual(['4']);
+    // Recognised as a form field for SHADING — from the element's presence alone. Nothing
+    // reads into it, which is the point: the payload is macro names.
+    expect(pieces[0]?.fieldAtom).toEqual({ formField: true });
+  });
+
+  test('hasLegacyFormFieldData asks only whether ffData is there', () => {
+    const withData = parse(
+      `<w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="Text1"/></w:ffData>` +
+        `</w:fldChar></w:r></w:p>`
+    );
+    const without = parse(`<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r></w:p>`);
+    const beginOf = (part: OoxmlPart): OoxmlElement =>
+      (paragraphOf(part).children[0] as OoxmlElement).children[0] as OoxmlElement;
+    expect(hasLegacyFormFieldData(beginOf(withData))).toBe(true);
+    expect(hasLegacyFormFieldData(beginOf(without))).toBe(false);
+    // Not a `w:fldChar` at all, so not a form field however its children look.
+    const run = paragraphOf(withData).children[0] as OoxmlElement;
+    expect(hasLegacyFormFieldData(run)).toBe(false);
   });
 
   test('package save/reopen keeps complex fields and performs no network fetch', () => {

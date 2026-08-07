@@ -317,6 +317,12 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
         (child) =>
           child.kind === 'run' ||
           child.kind === 'drawing' ||
+          // `CT_RunTrackChange` admits `EG_ContentRunContent`, and `w:fldSimple` is a member of
+          // it — Word writes an inserted cross-reference exactly that way. Leaving it out
+          // demoted the WRAPPER, not the field: the revision stopped being a revision, so the
+          // insertion vanished from the page and from the review surface at once. Demotion is
+          // a safe fallback only where the thing demoted is the odd one out.
+          child.kind === 'fldSimple' ||
           isContentRevisionKind(child.kind) ||
           isPreservedChild(child)
       );

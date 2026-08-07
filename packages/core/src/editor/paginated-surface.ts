@@ -15,6 +15,7 @@ import {
   isContentControl,
   parseTocInstruction,
   planTocEntries,
+  readViewSettings,
   resolveTocRowHeadings,
   validateTreeOp,
   type DetectedToc,
@@ -23,6 +24,7 @@ import {
   type StoryScope,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
+import { syncActiveFieldShading } from './surface-field-shading.ts';
 import {
   createLayoutScheduler,
   createLayoutSession,
@@ -521,6 +523,36 @@ export function mountPaginatedSurface(
   });
   const drawingStrings: DrawingPaintStrings =
     options.drawingStrings ?? DEFAULT_DRAWING_PAINT_STRINGS;
+  /**
+   * `w:doNotShadeFormData`, memoized per package revision.
+   *
+   * Read on every paint otherwise, and paint runs far more often than `settings.xml` changes —
+   * the same reason every other settings read in the engine is revision-keyed.
+   */
+  /**
+   * The insertion point, or null when there is not one — a range selection has two ends and
+   * is not "inside" anything.
+   */
+  const collapsedCaretPosition = (): { paragraphId: string; offset: number } | null => {
+    if (
+      selection.anchor.paragraphId !== selection.head.paragraphId ||
+      selection.anchor.offset !== selection.head.offset
+    ) {
+      return null;
+    }
+    return { paragraphId: selection.head.paragraphId, offset: selection.head.offset };
+  };
+  let formFieldShadingRevision = -1;
+  let formFieldShading = true;
+  const shadeFormFields = (): boolean => {
+    const revision = session.packageRevision();
+    if (formFieldShadingRevision !== revision) {
+      formFieldShadingRevision = revision;
+      // Inverted at the read: the setting says what NOT to do, the painter wants what to do.
+      formFieldShading = !readViewSettings(session.settingsRoot()).doNotShadeFormData;
+    }
+    return formFieldShading;
+  };
   const paintImageUrlPort = createBrowserPaintImageUrlPort({
     mintValidatedBytes: (handle, expectedContentId) =>
       drawingBundle.mintValidatedBytes(handle, expectedContentId),
@@ -1737,6 +1769,8 @@ export function mountPaginatedSurface(
       materialize: materializedSet,
       ariaHidden: false,
       drawingStrings,
+      ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),
+      shadeFormFields: shadeFormFields(),
       ...(paintImageUrlPort ? { imageUrlPort: paintImageUrlPort } : {}),
       ...(activeHf
         ? {
@@ -1746,6 +1780,8 @@ export function mountPaginatedSurface(
         : {}),
       ...(contentControlChrome ? { contentControlChrome } : {}),
     });
+    // Paint just rebuilt every span, so the caret's field lost its mark with the old DOM.
+    syncActiveFieldShading(pagesLayer, collapsedCaretPosition());
     setHeaderFooterEditingChrome(container, pagesLayer, activeHf != null);
     // Viewing mode hides write affordances the painter cannot know about — today the
     // blank header/footer "double-click to add" band.
@@ -2174,7 +2210,10 @@ export function mountPaginatedSurface(
     commit: (run) => commit(run),
     render: () => render(),
     flushLayout: () => flushLayout(),
-    updateCaret: () => caret.update(),
+    updateCaret: () => {
+      caret.update();
+      syncActiveFieldShading(pagesLayer, collapsedCaretPosition());
+    },
     textOf: (paragraphId) => textOf(paragraphId),
     pendingFormatOps: (paragraphId, offset, length) =>
       consumePendingFormatOps(paragraphId, offset, length),

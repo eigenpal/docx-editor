@@ -14,7 +14,12 @@
 // The semantic-layout painter for the paginated surface. Consumes semantic layout
 // records only; never rederives geometry or interprets CSS.
 
-export { paintSemanticLayout, type PaintOptions } from './semantic-paint.ts';
+export {
+  DEFAULT_FIELD_SHADING,
+  paintSemanticLayout,
+  type FieldShadingMode,
+  type PaintOptions,
+} from './semantic-paint.ts';
 export {
   paintSelectionOverlay,
   type OverlayRect,
