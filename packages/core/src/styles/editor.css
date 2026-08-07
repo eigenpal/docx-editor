@@ -192,6 +192,29 @@
   --doc-focus-ring: rgba(26, 115, 232, 0.4);
   --doc-selection: rgba(26, 115, 232, 0.3);
 
+  /* ----------------------------------------------------------------------
+    * Chrome layering.
+    *
+    * Two bands, and the order between them is the whole point: something the
+    * user just OPENED must paint over furniture that was already there. Before
+    * these tokens the popups sat at 30 and the gutter at 40, so the File menu
+    * opened underneath the navigation toggle.
+    *
+    *   --doc-z-chrome    ambient furniture that is always on screen: the
+    *                     navigation gutter, table chrome, the outline toggle.
+    *   --doc-z-overlay   anything transient the user summoned: menus, popovers,
+    *                     colour pickers, the toolbar overflow panel.
+    *   --doc-z-context   the context menu, which is raised over a selection
+    *                     that may already have an overlay open, so it outranks
+    *                     every other overlay.
+    *
+    * Add a new floating surface by picking the band, never a fresh number.
+    * `chrome-layering.test.ts` fails the build if a band inverts.
+    * -------------------------------------------------------------------- */
+  --doc-z-chrome: 40;
+  --doc-z-overlay: 50;
+  --doc-z-context: 55;
+
   /* The page sheet itself — the paper.
    *
    * Declared here for the DEFAULT theme, which it was not: `--doc-page-bg` existed only
@@ -1214,7 +1237,7 @@ a.docx-hyperlink:focus-visible {
 
 .docx-table-chrome__panel {
   position: absolute;
-  z-index: 40;
+  z-index: var(--doc-z-chrome);
   top: calc(100% + 6px);
   right: 0;
   min-width: 150px;
@@ -2908,7 +2931,7 @@ a.docx-hyperlink:focus-visible {
   position: absolute;
   left: 26px;
   top: 44px;
-  z-index: 31;
+  z-index: var(--doc-z-chrome);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3339,7 +3362,7 @@ a.docx-hyperlink:focus-visible {
   position: absolute;
   top: calc(100% + 6px);
   inset-inline-end: 0;
-  z-index: 60;
+  z-index: var(--doc-z-overlay);
   box-sizing: border-box;
   inline-size: min(340px, calc(100vw - 16px));
   min-inline-size: min(260px, calc(100vw - 16px));
@@ -3740,7 +3763,7 @@ a.docx-hyperlink:focus-visible {
   position: absolute;
   top: 100%;
   left: 0;
-  z-index: 30;
+  z-index: var(--doc-z-overlay);
   margin-top: 4px;
   min-width: 72px;
   max-height: 280px;
@@ -3771,7 +3794,7 @@ a.docx-hyperlink:focus-visible {
   position: absolute;
   top: 100%;
   left: 0;
-  z-index: 30;
+  z-index: var(--doc-z-overlay);
   margin-top: 4px;
   min-width: 232px;
 }
@@ -3808,7 +3831,7 @@ a.docx-hyperlink:focus-visible {
   position: absolute;
   top: 100%;
   left: 0;
-  z-index: 30;
+  z-index: var(--doc-z-overlay);
   margin-top: 4px;
   min-width: 96px;
 }
@@ -3831,7 +3854,7 @@ a.docx-hyperlink:focus-visible {
   position: absolute;
   top: 100%;
   left: 0;
-  z-index: 30;
+  z-index: var(--doc-z-overlay);
   margin-top: 4px;
   display: flex;
   gap: 2px;
@@ -3906,7 +3929,7 @@ a.docx-hyperlink:focus-visible {
   position: absolute;
   top: 100%;
   left: 0;
-  z-index: 30;
+  z-index: var(--doc-z-overlay);
   margin-top: 4px;
   padding: 10px;
   display: flex;
@@ -4421,7 +4444,7 @@ a.docx-hyperlink:focus-visible {
   position: absolute;
   top: 100%;
   left: 0;
-  z-index: 30;
+  z-index: var(--doc-z-overlay);
   margin-top: 4px;
   display: flex;
   gap: 2px;
@@ -4491,7 +4514,7 @@ a.docx-hyperlink:focus-visible {
  */
 .docx-hyperlink-popup {
   position: absolute;
-  z-index: 30;
+  z-index: var(--doc-z-overlay);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -4772,7 +4795,7 @@ a.docx-hyperlink:focus-visible {
   inset-block: 0;
   inset-inline-start: 0;
   width: var(--docx-nav-reservation, 328px);
-  z-index: 40;
+  z-index: var(--doc-z-chrome);
   pointer-events: none;
   font-size: 13px;
   color: var(--doc-text);
@@ -5485,7 +5508,7 @@ a.docx-hyperlink:focus-visible {
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  z-index: 40;
+  z-index: var(--doc-z-overlay);
   display: flex;
   min-width: 260px;
   flex-direction: column;
@@ -5698,7 +5721,7 @@ a.docx-hyperlink:focus-visible {
   position: absolute;
   top: 100%;
   left: 0;
-  z-index: 30;
+  z-index: var(--doc-z-overlay);
   margin-top: 4px;
   min-width: 220px;
 }
@@ -5846,7 +5869,7 @@ a.docx-hyperlink:focus-visible {
  * and dropdowns (z-index 40) because it is opened ON them as often as on the page. */
 .docx-editor .docx-contextmenu,
 .docx-contextmenu {
-  z-index: 45;
+  z-index: var(--doc-z-context);
   min-width: 240px;
   /* A menu longer than the window scrolls rather than overflowing it. The flip in
    * `DocxEditorContextMenu` clamps the panel to the top inset when it cannot fit; without
@@ -5970,7 +5993,7 @@ a.docx-hyperlink:focus-visible {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  z-index: 40;
+  z-index: var(--doc-z-overlay);
   min-width: 220px;
   padding: 4px 0;
   background: var(--doc-surface);
@@ -6008,7 +6031,7 @@ a.docx-hyperlink:focus-visible {
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  z-index: 40;
+  z-index: var(--doc-z-overlay);
   width: 280px;
   padding: 12px;
   background: var(--doc-surface);

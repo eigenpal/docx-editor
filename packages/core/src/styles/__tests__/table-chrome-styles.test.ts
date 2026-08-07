@@ -92,6 +92,8 @@ describe('table chrome stylesheet contract (Task 9 fix round 2)', () => {
     expect(declarations.get('position')).toBe('absolute');
     expect(declarations.get('top')).toBe('calc(100% + 6px)');
     expect(declarations.get('right')).toBe('0');
-    expect(Number(declarations.get('z-index'))).toBeGreaterThan(0);
+    // The panel is ambient chrome, so it takes the chrome band rather than a
+    // literal. The band ordering itself is covered by chrome-layering.test.ts.
+    expect(declarations.get('z-index')).toBe('var(--doc-z-chrome)');
   });
 });
