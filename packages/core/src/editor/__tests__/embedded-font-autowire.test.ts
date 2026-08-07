@@ -211,6 +211,37 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
     editor.destroy();
   });
 
+  test('a pre-resolution programmatic range survives the shaped remount', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({
+      container,
+      document: docxWithEmbeds(p('select this text'), EMBED_BOTH),
+    });
+    const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+    const paraId = editor.surface!.session.paraIdOf(paragraphId)!;
+    const range = {
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 'select this text'.length },
+    };
+
+    editor.setEditingMode('suggesting');
+    expect(
+      editor.exec({
+        type: 'setSelection',
+        range: { from: { paraId }, to: { paraId } },
+      })
+    ).toEqual({ ok: true, changed: false });
+    expect(document.getSelection()!.isCollapsed).toBe(false);
+    await fontsSettled(editor);
+
+    expect(editor.surface!.state().selection).toEqual(range);
+    expect(document.getSelection()!.isCollapsed).toBe(false);
+    expect(document.getSelection()!.toString()).toBe('select this text');
+    editor.destroy();
+    container.remove();
+  });
+
   test('bold-italic slot resolves bold+italic runs (style-slot mapping)', async () => {
     const container = document.createElement('div');
     const errors: EditorFontError[] = [];
