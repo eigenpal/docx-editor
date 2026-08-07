@@ -23,11 +23,6 @@
 //    `conflicting-operations` — refused, never guessed at. It costs nothing real: the common
 //    shape, one structural edit per paragraph per sync, is untouched.
 //
-// STRUCTURAL COMMANDS ANSWER AFTER THE COMMIT, because the paragraph they name does not exist
-// until then. Every such command leaves a SLOT in a symbolic picture of the story's order; when
-// the transaction lands, the ids the engine actually created are matched to those slots in
-// reading order. No index is ever handed back to a consumer and no DOM is consulted.
-
 import type { OoxmlProperty, TreeDocOp } from '../store/store/tree-ops.ts';
 import {
   findOccurrences,
@@ -98,6 +93,7 @@ import type { StoryScope } from '../store/store/tree-package-store.ts';
 import type { AutomationCommentWrite } from './document-port.ts';
 import { commentReads, revisionReads, type AutomationRevisionRead } from './review.ts';
 import type { ReviewCommentItem } from '../store/store/review-reads.ts';
+import { planInsertComment } from './comment-create-plan.ts';
 import {
   contentControlNodeOf,
   contentControlReadOf,
@@ -512,6 +508,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       `${storyKey(writeStory.reads.story)} then ${storyKey(plan.reads.story)}`
     );
   };
+  const pinCommentStory = (reads: AutomationStoryReads): PlannedOperation | null =>
+    pinWrite(planFor(reads));
 
   /**
    * The comments of one story, or null when the document is gone.
@@ -2255,6 +2253,9 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         if (!found.ok) return found.planned;
         return query({ kind: 'flag', value: found.item.resolved });
       }
+
+      case 'insertComment':
+        return planInsertComment(operation, handles, packageReads, pinCommentStory);
 
       case 'setCommentResolved': {
         const found = commentAt(operation.comment);

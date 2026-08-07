@@ -63,6 +63,7 @@
         "bookmarks",
         "hyperlink",
         "style",
+        "insertComment",
         "insertText",
         "insertParagraph",
         "search",

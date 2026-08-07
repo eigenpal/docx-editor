@@ -229,17 +229,24 @@ function packageStorePort(store: TreePackageStore): AutomationDocumentPort {
       if (writes.length !== 1) return { ok: false, reason: 'mixed-comment-writes' };
       const write = writes[0]!;
       const result =
-        write.kind === 'reply'
+        write.kind === 'create'
           ? addComment(story.store, {
               anchor: write.anchor,
               author: write.author,
               text: write.text,
               ...(write.date === undefined ? {} : { date: write.date }),
-              replyToCommentId: write.parentCommentId,
             })
-          : write.kind === 'resolve'
-            ? setCommentResolved(story.store, write.commentId, write.resolved)
-            : null;
+          : write.kind === 'reply'
+            ? addComment(story.store, {
+                anchor: write.anchor,
+                author: write.author,
+                text: write.text,
+                ...(write.date === undefined ? {} : { date: write.date }),
+                replyToCommentId: write.parentCommentId,
+              })
+            : write.kind === 'resolve'
+              ? setCommentResolved(story.store, write.commentId, write.resolved)
+              : null;
       if (result === null) return { ok: false, reason: 'unsupported-comment-write' };
       if (!result.ok) return { ok: false, reason: result.reason };
       store.replacePackageShell(story.store.package);

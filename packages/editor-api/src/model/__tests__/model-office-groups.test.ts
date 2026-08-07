@@ -547,17 +547,44 @@ describe('comments and tracked changes are what a document says about itself', (
   });
 
   test('a runtime with no author refuses to write a comment rather than inventing one', async () => {
-    // Nothing to reply to in this fixture; the refusal is about the runtime, and it happens at the
-    // call rather than at the sync, which is where the mistake was made.
-    const runtime = await serverRuntime(TRACKED);
+    const runtime = await serverRuntime(docx(p('target')));
     const code = await codeOf(async () =>
       runtime.run(async (context) => {
-        const comments = context.document.comments;
-        comments.load('items');
+        const matches = context.document.body.search('target');
+        matches.load('items');
         await context.sync();
-        return comments.items.length;
+        matches.items[0]!.insertComment('needs an author');
       })
     );
-    expect(code).toBe('no-error');
+    expect(code).toBe('NotSupported');
+  });
+
+  test('empty text is invalid, and a range whose paragraph was deleted becomes stale', async () => {
+    const runtime = await createServer(docx(p('target') + p('survivor')), { author: 'Reviewer' });
+    const empty = await codeOf(async () =>
+      runtime.run(async (context) => {
+        const matches = context.document.body.search('target');
+        matches.load('items');
+        await context.sync();
+        matches.items[0]!.insertComment('');
+      })
+    );
+    expect(empty).toBe('InvalidArgument');
+
+    const stale = await codeOf(async () =>
+      runtime.run(async (context) => {
+        const matches = context.document.body.search('target');
+        const paragraphs = context.document.body.paragraphs;
+        matches.load('items');
+        paragraphs.load('items');
+        await context.sync();
+        const range = matches.items[0]!;
+        paragraphs.items[0]!.delete();
+        await context.sync();
+        range.insertComment('too late');
+        await context.sync();
+      })
+    );
+    expect(stale).toBe('InvalidObjectPath');
   });
 });

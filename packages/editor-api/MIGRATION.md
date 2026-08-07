@@ -83,15 +83,15 @@ const runtime = DocxEditor.createBrowser(editor);
 
 ## Comments and tracked changes
 
-| Before                                   | After                                                                                                      |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `reviewer.getComments(filter)`           | `document.comments` / `body.getComments()`, then `load()` and read `items`                                 |
-| `reviewer.replyTo(id, text)`             | `comment.reply(text)`                                                                                      |
-| `reviewer.getChanges(filter)`            | `document.revisions` / `body.revisions`                                                                    |
-| `reviewer.acceptChange` / `rejectChange` | `revision.accept()` / `revision.reject()`                                                                  |
-| `reviewer.acceptAll` / `rejectAll`       | `revisions.acceptAll()` / `revisions.rejectAll()`                                                          |
-| `reviewer.addComment(...)`               | **no equivalent yet.** Comments can be read, replied to and resolved; creating one is not in this release. |
-| `reviewer.removeComment(id)`             | **no equivalent yet.** Resolve it (`comment.resolved = true`) or leave it.                                 |
+| Before                                   | After                                                                                            |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `reviewer.getComments(filter)`           | `document.comments` / `body.getComments()`, then `load()` and read `items`                       |
+| `reviewer.replyTo(id, text)`             | `comment.reply(text)`                                                                            |
+| `reviewer.getChanges(filter)`            | `document.revisions` / `body.revisions`                                                          |
+| `reviewer.acceptChange` / `rejectChange` | `revision.accept()` / `revision.reject()`                                                        |
+| `reviewer.acceptAll` / `rejectAll`       | `revisions.acceptAll()` / `revisions.rejectAll()`                                                |
+| `reviewer.addComment(...)`               | Find or obtain a `Range`, then call `range.insertComment(text)`. The runtime's `author` is used. |
+| `reviewer.removeComment(id)`             | **no equivalent yet.** Resolve it (`comment.resolved = true`) or leave it.                       |
 
 Filters are gone as arguments: load the collection and filter `items` yourself, which is one less
 vocabulary to learn and the same number of round trips.

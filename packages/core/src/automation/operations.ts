@@ -447,6 +447,23 @@ export type AutomationOperation =
   /** Whether the thread is resolved (`w15:commentEx/@w15:done`). */
   | { readonly op: 'getCommentResolved'; readonly comment: AutomationHandle }
   /**
+   * Create a top-level comment anchored to a span.
+   *
+   * Empty spans are valid insertion-point comments. A span may cross paragraphs in one story,
+   * but not table-cell boundaries: range markers cannot safely open in one cell and close in
+   * another. `author` and non-empty, single-paragraph `text` are required by this slice.
+   *
+   * Answers the NEW comment whose id is minted inside the package transaction.
+   */
+  | {
+      readonly op: 'insertComment';
+      readonly span: AutomationSpanRef;
+      readonly text: string;
+      readonly author: string;
+      /** ISO-8601. Omitted writes no `@w:date` — inventing one is a content change. */
+      readonly date?: string;
+    }
+  /**
    * Resolve a comment thread, or reopen it.
    *
    * A THREAD: the comment and its replies together, which is what resolving means in Word. Marking
@@ -786,6 +803,7 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
   'setListLevel',
   'insertListParagraph',
   'setHyperlink',
+  'insertComment',
   'setCommentResolved',
   'replyToComment',
   'deleteComment',
@@ -812,6 +830,7 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
  */
 export const AUTOMATION_SOLITARY_OPERATIONS = [
   'deleteNote',
+  'insertComment',
   'setCommentResolved',
   'replyToComment',
   // A payload write is a package transaction of its own — the data part, the node inside it and

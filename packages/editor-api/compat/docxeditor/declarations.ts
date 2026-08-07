@@ -132,6 +132,7 @@ export declare namespace DocxEditor {
     readonly paragraphs: ParagraphCollection;
     style: string;
     readonly text: string;
+    insertComment(commentText: string): Comment;
     insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;
     insertText(
       text: string,

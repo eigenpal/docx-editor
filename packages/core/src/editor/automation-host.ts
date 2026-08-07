@@ -173,12 +173,12 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
           outcome = done ? { ok: true, changed: true } : { ok: false, reason: 'unknown-comment' };
           return { committed: done };
         }
-        if (write.kind !== 'reply') {
+        if (write.kind !== 'create' && write.kind !== 'reply') {
           outcome = { ok: false, reason: 'unsupported-comment-write' };
           return { committed: false };
         }
         const created = session.replyToComment(
-          write.parentCommentId,
+          write.kind === 'reply' ? write.parentCommentId : null,
           write.anchor,
           write.text,
           write.author,

@@ -543,6 +543,90 @@ describe('a document holds its comments, and a script reads the same ones the ra
   });
 });
 
+describe('a range creates a root comment through the package transaction', () => {
+  test('a collapsed range is preserved, and author names need not be unique', () => {
+    const host = open(richDocx({ body: `<w:p><w:r><w:t>plain</w:t></w:r></w:p>` }));
+    const { body } = roots(host);
+    const paragraph = handlesAt(
+      host.execute({ operations: [{ op: 'getParagraphs', body }] }),
+      0
+    )[0]!;
+    const span = {
+      start: { paragraph, offset: 2 },
+      end: { paragraph, offset: 2 },
+    } as const;
+
+    for (const text of ['first', 'second']) {
+      expect(
+        host.execute({
+          operations: [{ op: 'insertComment', span, text, author: 'Same Reviewer' }],
+        }).results[0]?.status
+      ).toBe('ok');
+    }
+
+    const comments = commentsOf(host, body);
+    expect(comments).toHaveLength(2);
+    for (const item of comments) {
+      expect(
+        spanAt(host.execute({ operations: [{ op: 'getCommentRange', comment: item }] }), 0)
+      ).toEqual({ start: { paragraph, offset: 2 }, end: { paragraph, offset: 2 } });
+      expect(
+        textAt(host.execute({ operations: [{ op: 'getCommentAuthor', comment: item }] }), 0)
+      ).toBe('Same Reviewer');
+    }
+  });
+
+  test('empty text and a range crossing table cells are refused without writing', () => {
+    const host = open(
+      richDocx({
+        body:
+          `<w:tbl><w:tr><w:tc><w:p><w:r><w:t>left</w:t></w:r></w:p></w:tc>` +
+          `<w:tc><w:p><w:r><w:t>right</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`,
+      })
+    );
+    const { body } = roots(host);
+    const paragraphs = handlesAt(host.execute({ operations: [{ op: 'getParagraphs', body }] }), 0);
+    const before = savedPartBytes(host, 'word/document.xml');
+
+    expect(
+      refusal(
+        host.execute({
+          operations: [
+            {
+              op: 'insertComment',
+              span: {
+                start: { paragraph: paragraphs[0]!, offset: 0 },
+                end: { paragraph: paragraphs[0]!, offset: 1 },
+              },
+              text: '',
+              author: 'Reviewer',
+            },
+          ],
+        })
+      )
+    ).toBe('unsupported-content');
+    expect(
+      refusal(
+        host.execute({
+          operations: [
+            {
+              op: 'insertComment',
+              span: {
+                start: { paragraph: paragraphs[0]!, offset: 0 },
+                end: { paragraph: paragraphs[1]!, offset: 1 },
+              },
+              text: 'unsafe anchor',
+              author: 'Reviewer',
+            },
+          ],
+        })
+      )
+    ).toBe('unsupported-content');
+    expect(savedPartBytes(host, 'word/document.xml')).toBe(before);
+    expect(commentsOf(host, body)).toEqual([]);
+  });
+});
+
 describe('a tracked change is a decision, and the ones offered are the ones the engine can make', () => {
   test('a story answers its pending changes, each with its author, date and kind', () => {
     const host = reviewed();
