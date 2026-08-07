@@ -21,6 +21,7 @@ import {
   serverRuntime,
   WITH_BOOKMARKED_STORIES,
   WITH_FURNITURE,
+  WITH_NOTE_TEXT_CASES,
   WITH_REVIEW_DATE_CASES,
 } from './support/documents.ts';
 
@@ -356,6 +357,74 @@ describe('a section is the page a story is laid out on', () => {
       return { type: note.type, text: body.text, count: notes.items.length };
     });
     expect(found).toEqual({ type: 'Footnote', text: 'in the footnote', count: 1 });
+  });
+
+  test('note text is unloaded until one post-listing load round fills every item', async () => {
+    const runtime = await createServer(WITH_NOTE_TEXT_CASES);
+    const found = await runtime.run(async (context) => {
+      const footnotes = context.document.footnotes;
+      const endnotes = context.document.endnotes;
+      footnotes.load();
+      endnotes.load();
+      await context.sync();
+
+      const notes = [...footnotes.items, ...endnotes.items];
+      for (const note of notes) {
+        expect(() => note.text).toThrowError(
+          expect.objectContaining({
+            code: 'PropertyNotLoaded',
+            target: expect.stringContaining('.text'),
+          })
+        );
+        note.load(['text', 'type']);
+      }
+      await context.sync();
+      return notes.map((note) => ({ type: note.type, text: note.text }));
+    });
+    expect(found).toEqual([
+      { type: 'Footnote', text: '' },
+      { type: 'Footnote', text: 'first\t<unsafe>\nline\rsecond' },
+      { type: 'Endnote', text: 'end note' },
+    ]);
+  });
+
+  test('direct note text is exactly the note body text', async () => {
+    const runtime = await createServer(WITH_NOTE_TEXT_CASES);
+    const found = await runtime.run(async (context) => {
+      const notes = context.document.footnotes;
+      notes.load();
+      await context.sync();
+
+      for (const note of notes.items) {
+        note.load('text');
+        void note.body;
+      }
+      await context.sync();
+      for (const note of notes.items) note.body.load('text');
+      await context.sync();
+      return notes.items.map((note) => [note.text, note.body.text]);
+    });
+    expect(found).toEqual([
+      ['', ''],
+      ['first\t<unsafe>\nline\rsecond', 'first\t<unsafe>\nline\rsecond'],
+    ]);
+  });
+
+  test('a deleted note refuses a later direct text load', async () => {
+    const runtime = await createServer(WITH_NOTE_TEXT_CASES);
+    const code = await codeOf(() =>
+      runtime.run(async (context) => {
+        const notes = context.document.footnotes;
+        notes.load();
+        await context.sync();
+        const note = notes.items[0]!;
+        note.delete();
+        await context.sync();
+        note.load('text');
+        await context.sync();
+      })
+    );
+    expect(code).toBe('InvalidObjectPath');
   });
 });
 

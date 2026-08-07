@@ -87,6 +87,17 @@ export class NoteItem extends ModelObject implements PromisedItem {
     return this.loadedProperty<NoteItemType>('type');
   }
 
+  /**
+   * The note's plain text.
+   *
+   * This is the same value as loading `text` from {@link NoteItem.body}: every paragraph in the
+   * note story, in reading order, joined by one carriage return per paragraph mark. Load it
+   * directly when structured traversal or editing through {@link NoteItem.body} is not needed.
+   */
+  get text(): string {
+    return this.loadedProperty<string>('text');
+  }
+
   /** The note's own story. */
   get body(): Body {
     if (this.#body) return this.#body;
@@ -148,18 +159,24 @@ export class NoteItem extends ModelObject implements PromisedItem {
 
   /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
-    if (!this.selection(request, ['type']).includes('type')) return;
-    const label = `${this.path.label}.type`;
-    const note = this.#handle();
-    this.read(
-      label,
-      () => ({ op: 'getNoteKind', note }),
-      (value) => {
-        // Word's spelling on this side, OOXML's on the engine's — the mapping lives here and in
-        // `getNext`, and nowhere else.
-        this.setLoadedProperty('type', kindOf(hydratedText(value, label)));
-      }
-    );
+    const selected = this.selection(request, ['text', 'type']);
+    if (selected.includes('text')) {
+      const note = this.#handle();
+      this.loadTextInto('text', () => ({ op: 'getNoteText', note }));
+    }
+    if (selected.includes('type')) {
+      const label = `${this.path.label}.type`;
+      const note = this.#handle();
+      this.read(
+        label,
+        () => ({ op: 'getNoteKind', note }),
+        (value) => {
+          // Word's spelling on this side, OOXML's on the engine's — the mapping lives here and in
+          // `getNext`, and nowhere else.
+          this.setLoadedProperty('type', kindOf(hydratedText(value, label)));
+        }
+      );
+    }
   }
 
   #handle(): AutomationHandle {

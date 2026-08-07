@@ -16,6 +16,7 @@ import { createRuntime } from '../runtime.ts';
 import { resolveLoadOption, type LoadOption } from '../load-options.ts';
 import { openHost, spyHost } from './support/hosts.ts';
 import { docx, p } from './support/docx.ts';
+import { WITH_NOTE_TEXT_CASES } from '../../model/__tests__/support/documents.ts';
 
 const FOUR = docx(`${p('one')}${p('two')}${p('three')}${p('four')}`);
 
@@ -57,6 +58,36 @@ describe('a property is only readable once a sync has filled it', () => {
       first.load('text');
       await context.sync();
       expect(first.text).toBe('alpha');
+    });
+    runtime.dispose();
+  });
+
+  test('all listed note texts load in one following host round', async () => {
+    const spy = spyHost(openHost(WITH_NOTE_TEXT_CASES));
+    const runtime = createRuntime({ host: spy.host, save: true });
+    await runtime.run(async (context) => {
+      const footnotes = context.document.footnotes;
+      const endnotes = context.document.endnotes;
+      footnotes.load();
+      endnotes.load();
+      await context.sync();
+      spy.reset();
+
+      const notes = [...footnotes.items, ...endnotes.items];
+      for (const note of notes) note.load('text');
+      await context.sync();
+
+      expect(spy.requests).toHaveLength(1);
+      expect(spy.requests[0]!.operations.map((operation) => operation.op)).toEqual([
+        'getNoteText',
+        'getNoteText',
+        'getNoteText',
+      ]);
+      expect(notes.map((note) => note.text)).toEqual([
+        '',
+        'first\t<unsafe>\nline\rsecond',
+        'end note',
+      ]);
     });
     runtime.dispose();
   });
