@@ -52,8 +52,8 @@ describe('useChromeTranslate', () => {
 
   test('params interpolate through the catalogue path', () => {
     const t = resolve();
-    const counter = t('dialogs.findReplace.matchCount', { current: 3, total: 15 });
-    expect(counter).toBe('3 of 15 matches');
+    const counter = t('navigation.find.counter', { current: 3, total: 15 });
+    expect(counter).toBe('Result 3 of 15');
     expect(counter).not.toContain('{current}');
   });
 
@@ -74,5 +74,27 @@ describe('useChromeTranslate', () => {
     expect(t('toolbar.file')).toBe('Datei');
     // Keys the locale leaves out fall through to English, not to the raw key.
     expect(t('toolbar.insert')).toBe('Insert');
+  });
+
+  test('a nested LocaleProvider composes with the one above it', () => {
+    // It used to merge onto bundled English, so a provider inside a provider threw the
+    // outer catalogue away — and one with no `i18n` reverted the subtree to English.
+    const de = { _lang: 'de', toolbar: { file: 'Datei', insert: 'Einfügen' } } as Translations;
+    const scoped = { toolbar: { insert: 'Hinzufügen' } } as Translations;
+
+    const nested = resolve(undefined, (probe) => (
+      <LocaleProvider i18n={de}>
+        <LocaleProvider i18n={scoped}>{probe}</LocaleProvider>
+      </LocaleProvider>
+    ));
+    expect(nested('toolbar.insert')).toBe('Hinzufügen');
+    expect(nested('toolbar.file')).toBe('Datei');
+
+    const bare = resolve(undefined, (probe) => (
+      <LocaleProvider i18n={de}>
+        <LocaleProvider>{probe}</LocaleProvider>
+      </LocaleProvider>
+    ));
+    expect(bare('toolbar.file')).toBe('Datei');
   });
 });

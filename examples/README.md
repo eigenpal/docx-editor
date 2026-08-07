@@ -8,6 +8,7 @@ bun run dev
 
 # Pick one
 bun run dev:react   # examples/vite
+bun run dev:agent   # examples/agent (needs OPENAI_API_KEY)
 bun run dev:igloo   # examples/igloo
 bun run dev:vue     # examples/vue
 bun run dev:nextjs  # examples/nextjs
@@ -30,6 +31,7 @@ bun run dev:astro   # examples/astro
 | `collaboration/` | Real-time collab proof-of-concept.                                                                                                                                                                                                                 |
 | `parity/`        | Single deployment serving React + Vue adapters with a switcher pill. Used by `bun run preview`.                                                                                                                                                    |
 | `automation/`    | `@docx-editor.dev/editor-api` driving a document with no browser and no framework: a template filled from a script, plus what the browser subpath adds.                                                                                            |
+| `agent/`         | An LLM agent reading and commenting on the live document. Tool calls run in the browser through `editor-api/browser`; comments land through pro's review API. Point people here who ask "how do I plug a model into this?"                         |
 | `shared/`        | Shared switcher widgets + the demo `sample.docx`. Not a runnable example; imported by `vite/` and `vue/`.                                                                                                                                          |
 | `dev-all.sh`     | Spins up several adapters at once for cross-adapter dogfooding. Backs `bun run dev:demo`.                                                                                                                                                          |
 

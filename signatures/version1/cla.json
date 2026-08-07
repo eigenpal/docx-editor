@@ -209,6 +209,12 @@
       "id": 205565135,
       "signed_at": "2026-06-25T02:13:56Z",
       "pull_request_no": 1027
+    },
+    {
+      "name": "Nagi-ovo",
+      "id": 101612750,
+      "signed_at": "2026-08-07T17:36:58Z",
+      "pull_request_no": 251
     }
   ]
 }

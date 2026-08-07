@@ -23,7 +23,7 @@ export type ChromeTranslate = (key: string, params?: Record<string, string | num
  * English by default), with `overrides` consulted first for key-level renames.
  *
  * ```tsx
- * const MY_LABELS = new Map([['toolbar.bold', 'Heavy']]); // module-level: stable identity
+ * const MY_LABELS = new Map([['formattingBar.bold', 'Heavy']]); // module-level: stable identity
  *
  * const t = useChromeTranslate(MY_LABELS);
  * <DocxEditor.Toolbar t={t} />
