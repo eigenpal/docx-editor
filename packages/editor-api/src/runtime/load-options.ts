@@ -33,7 +33,10 @@ import { fail } from './errors.ts';
 export interface LoadQueryOptions {
   /** Which properties to load. */
   readonly select?: string | readonly string[];
-  /** Which navigation properties to load along with them. */
+  /**
+   * Reserved for Office.js source compatibility. Navigation-property expansion is not supported
+   * yet: a non-empty value is refused as `InvalidArgument`. Omit it or pass an empty array.
+   */
   readonly expand?: string | readonly string[];
   /** For a collection: at most this many items. */
   readonly top?: number;
@@ -49,8 +52,11 @@ export interface LoadQueryOptions {
  * ```ts
  * paragraph.load('text');
  * paragraph.load(['text', 'style']);
- * paragraphs.load({ select: ['text'], top: 5 });
+ * paragraphs.load({ select: 'items', top: 5 });
  * ```
+ *
+ * Collections load their `items`; properties such as `text` are loaded on each item after the
+ * collection has been synced.
  *
  * @public
  */
@@ -59,7 +65,6 @@ export type LoadOption = string | readonly string[] | LoadQueryOptions;
 export interface ResolvedLoadOptions {
   /** Selected property names. Empty means "this object's default set". */
   readonly select: readonly string[];
-  readonly expand: readonly string[];
   readonly top?: number;
   readonly skip?: number;
 }
@@ -96,6 +101,13 @@ function count(value: unknown, target: string): number {
   return value;
 }
 
+function refuseExpand(value: unknown, target: string): void {
+  if (value === undefined || (Array.isArray(value) && value.length === 0)) return;
+  // Expansion is deliberately refused before parsing its names. In particular, nested or very
+  // large attacker-controlled values cannot drive recursion or an output allocation here.
+  fail({ code: 'InvalidArgument', target });
+}
+
 /**
  * One resolved record from any accepted call shape.
  *
@@ -106,9 +118,9 @@ export function resolveLoadOption(
   option: LoadOption | undefined,
   target: string
 ): ResolvedLoadOptions {
-  if (option === undefined) return { select: [], expand: [] };
+  if (option === undefined) return { select: [] };
   if (typeof option === 'string' || Array.isArray(option)) {
-    return { select: names(option as string | readonly string[], target), expand: [] };
+    return { select: names(option as string | readonly string[], target) };
   }
   if (typeof option !== 'object' || option === null) fail({ code: 'InvalidArgument', target });
 
@@ -116,9 +128,9 @@ export function resolveLoadOption(
   for (const key of Object.keys(query)) {
     if (!KNOWN_KEYS.has(key)) fail({ code: 'InvalidArgument', target: `${target}.${key}` });
   }
+  refuseExpand(query.expand, `${target}.expand`);
   return {
     select: names(query.select, `${target}.select`),
-    expand: names(query.expand, `${target}.expand`),
     ...(query.top === undefined ? {} : { top: count(query.top, `${target}.top`) }),
     ...(query.skip === undefined ? {} : { skip: count(query.skip, `${target}.skip`) }),
   };

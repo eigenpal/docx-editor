@@ -43,11 +43,18 @@ import { SectionCollection } from './sections.ts';
  * ```ts
  * await runtime.run(async (context) => {
  *   const paragraphs = context.document.paragraphs;
- *   paragraphs.load('text');
+ *   paragraphs.load('items');
  *   await context.sync();
+ *
+ *   for (const paragraph of paragraphs.items) paragraph.load('text');
+ *   await context.sync();
+ *
  *   for (const paragraph of paragraphs.items) console.log(paragraph.text);
  * });
  * ```
+ *
+ * The first sync retrieves the collection's items. Once those items are available, the second
+ * sync retrieves each paragraph's text.
  *
  * @public
  */

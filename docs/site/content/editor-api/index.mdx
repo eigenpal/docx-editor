@@ -66,6 +66,8 @@ to keep that browser code out of the bundle.
 ## Programming model
 
 - Reading a property you did not `load()` throws. This catches typos before they affect later writes.
+- Navigation-property expansion is not supported yet. A non-empty `LoadQueryOptions.expand` is
+  rejected with `InvalidArgument`; load the navigation object or collection explicitly instead.
 - `sync()` is the only round trip. Everything queued between two syncs is one ordered transaction. If any operation in it is refused, none of them happened.
 - Objects are proxies into a document the runtime owns. They survive `sync()` calls within one
   `run`. To carry one into a later `run`, track it and pass it to

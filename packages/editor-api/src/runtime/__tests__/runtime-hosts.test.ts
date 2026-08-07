@@ -71,6 +71,7 @@ describe('DocxEditor.createServer', () => {
       scrolling: false,
       layout: false,
     });
+    expect(typeof runtime.save).toBe('function');
     runtime.dispose();
   });
 
@@ -128,7 +129,21 @@ describe('DocxEditor.createBrowser', () => {
     // "what is the current document".
     const { editor } = mount();
     const runtime = DocxEditorBrowser.createBrowser(editor);
-    expect(runtime.capabilities).toMatchObject({ selection: true, scrolling: true, layout: true });
+    expect(runtime.capabilities).toMatchObject({
+      document: true,
+      save: false,
+      selection: true,
+      scrolling: true,
+      layout: true,
+    });
+    expect(Object.keys(runtime.capabilities).sort()).toEqual([
+      'document',
+      'events',
+      'layout',
+      'save',
+      'scrolling',
+      'selection',
+    ]);
     expect('save' in runtime).toBe(false);
     runtime.dispose();
   });

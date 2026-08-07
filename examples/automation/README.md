@@ -17,14 +17,18 @@ const runtime = await DocxEditor.createServer(bytes, { author: 'Payroll bot' });
 try {
   await runtime.run(async (context) => {
     const paragraphs = context.document.body.paragraphs;
-    paragraphs.load('text'); //   1. queue what you want to read
-    await context.sync(); //       2. one round trip
+    paragraphs.load('items'); // 1. ask for the collection's items
+    await context.sync(); //      2. receive those items
 
     for (const paragraph of paragraphs.items) {
-      // 3. queue writes against the objects you now hold
+      paragraph.load('text'); // 3. ask for each item's text
+    }
+    await context.sync(); //      4. receive the text
+
+    for (const paragraph of paragraphs.items) {
       if (paragraph.text.includes('{{name}}')) paragraph.insertText('Ada Lovelace', 'Replace');
     }
-    await context.sync(); //       4. one more round trip, applied all-or-nothing
+    await context.sync(); //      5. apply the edits all-or-nothing
   });
   await Bun.write('out.docx', await runtime.save());
 } finally {
@@ -32,10 +36,15 @@ try {
 }
 ```
 
+The first sync retrieves the collection's items. Only then are the individual paragraphs
+available to ask for their text, so the second sync retrieves those property values.
+
 Four rules carry most of the API:
 
 - **Read what you asked for.** A property you did not `load()` throws instead of answering
   `undefined`, so a typo is a failure at the read and not a wrong document three steps later.
+  Navigation-property `expand` is not supported yet: non-empty values fail with
+  `InvalidArgument`, so load the navigation object or collection explicitly.
 - **`sync()` is the only round trip.** Everything between two syncs is one ordered batch that
   either applies whole or not at all.
 - **Objects live inside `run`.** They are proxies into a document the runtime owns; keeping one

@@ -62,7 +62,10 @@ export interface DocxEditorNamespace {
  * const runtime = DocxEditor.createBrowser(editor);
  * await runtime.run(async (context) => {
  *   const paragraphs = context.document.paragraphs;
- *   paragraphs.load('text');
+ *   paragraphs.load('items');
+ *   await context.sync();
+ *
+ *   for (const paragraph of paragraphs.items) paragraph.load('text');
  *   await context.sync();
  * });
  * ```

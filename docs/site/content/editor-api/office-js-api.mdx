@@ -45,6 +45,11 @@ A proxy survives every `sync()` inside the `run` that created it. To use it in a
 to `context.trackedObjects`, return it, then adopt it with `runtime.run(object, callback)`. A proxy
 that is not tracked is released when its `run` ends.
 
+`LoadQueryOptions.expand` remains in the public type for source compatibility, but navigation-property
+expansion is not supported yet. A non-empty `expand` is rejected immediately with
+`InvalidArgument` targeting the object's `.expand` option; omit it or pass `expand: []`. Load a
+navigation object or collection explicitly and sync it in the usual way.
+
 ## Omissions
 
 The following APIs are absent from the public types, so code that uses them fails to compile:

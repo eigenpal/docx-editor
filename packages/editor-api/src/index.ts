@@ -21,7 +21,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * try {
  *   await runtime.run(async (context) => {
  *     const paragraphs = context.document.body.paragraphs;
- *     paragraphs.load('text');
+ *     paragraphs.load('items');
+ *     await context.sync();
+ *
+ *     for (const paragraph of paragraphs.items) paragraph.load('text');
  *     await context.sync();
  *
  *     for (const paragraph of paragraphs.items) {
