@@ -35,6 +35,88 @@ const LINE = [
   { text: 'world', paragraphId: 'p1', start: 6 },
 ];
 
+/**
+ * A field's result: many painted glyphs over ONE model offset.
+ *
+ * `[before][field: 1 unit, 24 glyphs][after]`, which is how a `FORMTEXT` blank or a `REF`
+ * cross-reference is laid out.
+ */
+function paintedFieldLine(): HTMLElement {
+  const root = document.createElement('div');
+  const line = document.createElement('div');
+  line.className = 'docx-line';
+  const add = (text: string, start: number, end: number): void => {
+    const element = document.createElement('span');
+    element.dataset.paragraphId = 'p1';
+    element.dataset.start = String(start);
+    element.dataset.end = String(end);
+    element.textContent = text;
+    line.append(element);
+  };
+  add('a potential ', 0, 12);
+  add('Scope of the discussions', 12, 13);
+  add(' (the ', 13, 19);
+  root.append(line);
+  return root;
+}
+
+describe('a span whose painted text is wider than its model range', () => {
+  // A field paints its whole result but occupies one offset. Deriving an endpoint from the
+  // painted text handed back an offset the paragraph does not have, so the op built from it
+  // was refused — a caret placed just after such a field could not type at all.
+  test('an offset inside the field clamps to its own range', () => {
+    const root = paintedFieldLine();
+    const field = root.querySelectorAll('span')[1]!;
+    // Character 20 of 24 painted — but the field is one unit, so the furthest real position
+    // inside it is its end.
+    expect(positionFromDomPoint(field.firstChild!, 20, root)).toEqual({
+      paragraphId: 'p1',
+      offset: 13,
+    });
+  });
+
+  test('the end of the field is the start of what follows it', () => {
+    const root = paintedFieldLine();
+    const field = root.querySelectorAll('span')[1]!;
+    const after = root.querySelectorAll('span')[2]!;
+    expect(positionFromDomPoint(field.firstChild!, 24, root)).toEqual({
+      paragraphId: 'p1',
+      offset: 13,
+    });
+    expect(positionFromDomPoint(after.firstChild!, 0, root)).toEqual({
+      paragraphId: 'p1',
+      offset: 13,
+    });
+  });
+
+  test('the field as an element endpoint reports its range, not its glyph count', () => {
+    const root = paintedFieldLine();
+    const field = root.querySelectorAll('span')[1]!;
+    expect(positionFromDomPoint(field, 1, root)).toEqual({ paragraphId: 'p1', offset: 13 });
+    expect(positionFromDomPoint(field, 0, root)).toEqual({ paragraphId: 'p1', offset: 12 });
+  });
+
+  test('a caret just after the field round-trips back into the DOM', () => {
+    // The reverse direction has the mirrored trap: the DOM offset is in PAINTED characters,
+    // so a model position must not be handed to a text node as if the two agreed.
+    const root = paintedFieldLine();
+    document.body.append(root);
+    const caret = { paragraphId: 'p1', offset: 13 };
+    expect(applySelectionToDom(root, { anchor: caret, head: caret }, getSelection())).toBe(true);
+    expect(semanticSelectionFromDom(root, getSelection())).toEqual({ anchor: caret, head: caret });
+    root.remove();
+  });
+
+  test('ordinary runs are unaffected', () => {
+    const root = paintedLine(LINE);
+    const span = root.querySelectorAll('span')[1]!;
+    expect(positionFromDomPoint(span.firstChild!, 3, root)).toEqual({
+      paragraphId: 'p1',
+      offset: 9,
+    });
+  });
+});
+
 describe('a DOM endpoint becomes a model position', () => {
   test('an offset inside a span adds to the span start', () => {
     const root = paintedLine(LINE);

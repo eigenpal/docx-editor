@@ -11,6 +11,11 @@
 // contribute nothing and interior result text remains visible/addressable so content
 // never disappears.
 
+import {
+  contentControlContentChildren,
+  isContentControl,
+  MAX_CONTENT_CONTROL_NESTING,
+} from './content-control-walk.ts';
 import { isContentRevisionKind, WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type {
   OoxmlFldCharNode,
@@ -246,7 +251,7 @@ export function atomicFieldSpansOf(
     return ids;
   };
 
-  const visitInline = (child: OoxmlNode): void => {
+  const visitInline = (child: OoxmlNode, sdtDepth = 0): void => {
     if (child.kind === 'fldSimple' || (child.kind === 'generic' && isFldSimple(child))) {
       spans.push({
         kind: 'simple',
@@ -264,6 +269,18 @@ export function atomicFieldSpansOf(
       }
       return;
     }
+    // An inline content control flattens into the paragraph's run stream, so a field inside
+    // one is an ordinary field. Layout descends here and this walk did not, so a `w:fldSimple`
+    // in an `w:sdt` was worth one offset to layout and nothing to the store — the same
+    // disagreement, in the same direction, as the revision wrappers below.
+    if (isContentControl(child)) {
+      if (sdtDepth < MAX_CONTENT_CONTROL_NESTING) {
+        for (const inner of contentControlContentChildren(child)) {
+          visitInline(inner, sdtDepth + 1);
+        }
+      }
+      return;
+    }
     if (
       child.kind !== 'textValue' &&
       (child.kind === 'hyperlink' || isContentRevisionKind(child.kind))
@@ -275,7 +292,7 @@ export function atomicFieldSpansOf(
       // ordinary text. Layout folds them into the atom, the store did not, and every offset
       // after the field was out by the length of the deleted words — the caret painted in one
       // place and typing landed elsewhere.
-      for (const inner of child.children) visitInline(inner);
+      for (const inner of child.children) visitInline(inner, sdtDepth);
     }
   };
   for (const child of paragraph.children) visitInline(child);

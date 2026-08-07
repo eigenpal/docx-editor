@@ -74,6 +74,32 @@ Each reproduced with a throwaway probe before changing anything, and each now pi
 - [x] 6b.7 **A simple `PAGE` field painted the producer's cached number on every sheet.** `detectStoryPageFields` ignored `w:fldSimple` — harmless while they painted nothing, wrong once they paint — so the story's page key never varied. Detect them and evaluate live; a wrong page number is quieter than a blank, not smaller
 - [x] 6b.8 Query cost on the keystroke path: addressed by 6b.1's class selector. Scoping further to the caret's own page would need the page index threaded in; not worth the coupling at this size
 
+## 6c. The class, not the instances
+
+Three separate bugs turned out to be one unstated invariant: **a painted span's text length is
+not its model range.** A field is one offset and paints its whole result. Every consumer that
+assumed 1:1 broke, each in its own way, and each was found only when a user hit it.
+
+- [x] 6c.1 Sweep every offset-from-text-length site. The layout lane already guarded it
+      (`semantic-hit-test.ts`, `semantic-interaction.ts` both compare against the range); the DOM
+      lane did not
+- [x] 6c.2 `dom-selection.ts` derived endpoints as `start + textContent.length` in four places,
+      handing back offsets the paragraph does not have — a caret just after a field could not
+      type. Carry the model `end` on `SpanIdentity` and clamp to the RANGE
+- [x] 6c.3 The composition readback joined PAINTED text and diffed it against the model, so any
+      IME edit in a field-bearing paragraph planned `deleteText` over the field plus `insertText`
+      of its own rendering. Destructive, silent, permanent. Reconstruct model-space text from
+      `data-docx-field`, which paint already emits — and NOT from the lengths disagreeing, which
+      is what a real browser edit also looks like
+- [x] 6c.4 `atomicFieldSpansOf` did not descend into inline content controls either, so a
+      `w:fldSimple` in a `w:sdt` was one offset to layout and none to the store
+- [x] 6c.5 State the invariant as a corpus oracle — `paragraph-offset-coverage.test.ts`: no span
+      claims an offset the paragraph lacks, no ranges overlap, layout reaches the paragraph's end,
+      and an unprojected span is 1:1 with its range
+- [x] 6c.6 Baseline it honestly at 31 pre-existing content-control off-by-ones, identical to the
+      count at the base commit, pinned so it cannot grow. Lowering it is a content-control change
+      and wants its own proposal
+
 ## 7. Gates
 
 - [x] 7.1 `bun run typecheck`, `bun run lint` (0 errors — the cap is the only thing that checks the extractions)
