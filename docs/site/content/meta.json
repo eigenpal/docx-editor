@@ -29,6 +29,7 @@
     "pro/tracked-changes",
     "pro/comments",
     "pro/custom-nodes",
+    "pro/custom-nodes-reference",
     "---Editing API---",
     "editor-api/index",
     "editor-api/office-js-api",

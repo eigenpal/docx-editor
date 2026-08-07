@@ -1,4 +1,4 @@
 {
   "title": "Pro",
-  "pages": ["index", "tracked-changes", "comments", "custom-nodes"]
+  "pages": ["index", "tracked-changes", "comments", "custom-nodes", "custom-nodes-reference"]
 }
