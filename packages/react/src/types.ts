@@ -16,6 +16,7 @@ import type {
   FontConfigurationFragment,
   FontResolver,
 } from '@docx-editor.dev/core/editor';
+import type { Translations } from '@docx-editor.dev/i18n';
 import type { DocxEditorMenuProps } from './editor/menu';
 import type { DocxEditorContextMenuProps } from './editor/contextmenu';
 export { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
@@ -71,6 +72,27 @@ export interface DocxEditorProps {
    * them renders the raw placeholders for those labels.
    */
   t?: (key: string, params?: Record<string, string | number>) => string;
+  /**
+   * The chrome's language: a locale from `@docx-editor.dev/i18n` (or your own partial
+   * over English). Keys the locale leaves out fall back to English rather than showing
+   * the key.
+   *
+   * ```tsx
+   * import { de } from '@docx-editor.dev/i18n';
+   * <DocxEditor i18n={de} />
+   * ```
+   *
+   * Equivalent to wrapping this editor in `<LocaleProvider i18n={de}>`, which is still
+   * the way to set one language for several editors at once — this prop overrides such a
+   * provider for this editor only. Unlike `locale`, which tells the ENGINE what language
+   * the document is in, this decides what the buttons say.
+   *
+   * Hold it at a stable identity: a catalogue written inline (`i18n={{ toolbar: … }}`) is
+   * a new object every render, and the merged catalogue behind it is what the chrome
+   * memoizes its labels on — so an inline one re-renders every toolbar control on each
+   * render of the host. Put your overrides in a module constant, or memoize them.
+   */
+  i18n?: Translations;
   /**
    * Renders the packaged chrome — title bar and toolbar — around the document.
    * Default `true`. Set `false` for the painted surface alone when the host supplies

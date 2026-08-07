@@ -2,24 +2,10 @@
   "_lang": "hi",
   "common": {
     "cancel": "रद्द करें",
-    "insert": "डालें",
     "apply": "लागू करें",
     "close": "बंद करें",
-    "delete": "हटाएं",
-    "update": "अपडेट करें",
-    "save": "सहेजें",
-    "retry": "पुनः प्रयास करें",
-    "send": "भेजें",
-    "edit": "संपादित करें",
     "comment": "टिप्पणी",
-    "reply": "जवाब दें",
-    "accept": "स्वीकार करें",
-    "reject": "अस्वीकार करें",
-    "dismiss": "खारिज करें",
-    "change": "बदलें",
-    "clear": "साफ करें",
-    "px": "px",
-    "closeDialog": "डायलॉग बंद करें"
+    "dismiss": "खारिज करें"
   },
   "toolbar": {
     "ariaLabel": "प्रारूपण टूलबार",
@@ -39,7 +25,6 @@
     "table": "तालिका",
     "pageBreak": "पेज ब्रेक",
     "tableOfContents": "विषय-सूची",
-    "symbol": "प्रतीक",
     "help": "सहायता",
     "reportIssue": "समस्या की रिपोर्ट करें",
     "watermark": "वॉटरमार्क",
@@ -60,9 +45,7 @@
       "alignment": "संरेखण",
       "listFormatting": "सूची प्रारूपण",
       "image": "चित्र",
-      "table": "तालिका",
-      "insert": "सम्मिलित करें",
-      "contentControl": "सामग्री नियंत्रण"
+      "table": "तालिका"
     },
     "undo": "पूर्ववत करें",
     "undoShortcut": "पूर्ववत करें (Ctrl+Z)",
@@ -87,7 +70,6 @@
     "imagePropertiesShortcut": "चित्र की विशेषताएँ (ऑल्ट टेक्स्ट, बॉर्डर)...",
     "clearFormatting": "प्रारूपण साफ करें",
     "commentsAndChanges": "टिप्पणियाँ और परिवर्तन",
-    "moreItems": "{count, plural, one {# और आइटम} other {# और आइटम}}",
     "unavailableInPreview": "इस पूर्वावलोकन बिल्ड में उपलब्ध नहीं है",
     "more": "अधिक",
     "altText": "वैकल्पिक पाठ",
@@ -137,7 +119,6 @@
     "sansSerif": "Sans Serif",
     "serif": "Serif",
     "monospace": "Monospace",
-    "other": "अन्य",
     "documentFonts": "दस्तावेज़ फ़ॉन्ट"
   },
   "fontSize": {
@@ -153,7 +134,6 @@
     "zoomOut": "ज़ूम आउट"
   },
   "colorPicker": {
-    "ariaLabel": "{type} रंग पिकर",
     "highlightColors": "हाइलाइट रंग",
     "customColor": "कस्टम रंग",
     "noColor": "कोई रंग नहीं",
@@ -169,41 +149,16 @@
       "darkYellow": "गहरा पीला",
       "green": "हरा",
       "darkGreen": "गहरा हरा",
-      "teal": "टील",
-      "darkTeal": "गहरा टील",
       "blue": "नीला",
       "darkBlue": "गहरा नीला",
       "purple": "बैंगनी",
-      "darkPurple": "गहरा बैंगनी",
-      "brown": "भूरा",
-      "grey50": "ग्रे 50%",
-      "grey25": "ग्रे 25%",
-      "grey10": "ग्रे 10%",
       "white": "सफ़ेद",
-      "lightRed": "हल्का लाल",
-      "lightOrange": "हल्का नारंगी",
-      "lightYellow": "हल्का पीला",
       "lightGreen": "हल्का हरा",
       "lightBlue": "हल्का नीला",
-      "lightPurple": "हल्का बैंगनी",
-      "pink": "गुलाबी",
-      "rose": "रोज़",
-      "gold": "सुनहरा",
-      "aqua": "एक्वा",
-      "lavender": "लैवेंडर",
-      "silver": "चांदी",
-      "darkOrange": "गहरा नारंगी",
       "darkGray": "गहरा ग्रे",
-      "gray": "ग्रे",
       "cyan": "स्यान",
       "magenta": "मैजेंटा",
-      "paleGreen": "हल्का हरा",
-      "lightCyan": "हल्का स्यान",
-      "skyBlue": "आसमानी नीला",
-      "lightBlue2": "हल्का नीला 2",
-      "lightMagenta": "हल्का मैजेंटा",
       "brightGreen": "चमकीला हरा",
-      "violet": "बैंगनी",
       "darkCyan": "गहरा स्यान",
       "darkMagenta": "गहरा मैजेंटा",
       "lightGray": "हल्का ग्रे"
@@ -218,182 +173,22 @@
       "accent6": "एक्सेंट 6",
       "background1": "पृष्ठभूमि 1",
       "background2": "पृष्ठभूमि 2",
-      "darker25": "गहरा 25%",
-      "darker50": "गहरा 50%",
-      "lighter40": "हल्का 40%",
-      "lighter60": "हल्का 60%",
-      "lighter80": "हल्का 80%",
       "text1": "पाठ 1",
-      "text2": "पाठ 2",
-      "lighter50": "हल्का 50%",
-      "lighter35": "हल्का 35%",
-      "lighter25": "हल्का 25%",
-      "lighter15": "हल्का 15%",
-      "lighter5": "हल्का 5%",
-      "darker5": "गहरा 5%",
-      "darker10": "गहरा 10%",
-      "darker15": "गहरा 15%",
-      "darker35": "गहरा 35%",
-      "darker75": "गहरा 75%",
-      "darker90": "गहरा 90%"
+      "text2": "पाठ 2"
     }
   },
   "dialogs": {
-    "findReplace": {
-      "titleFind": "खोजें",
-      "titleFindReplace": "खोजें और बदलें",
-      "findLabel": "खोजें:",
-      "findPlaceholder": "खोजने के लिए टेक्स्ट दर्ज करें...",
-      "findAriaLabel": "टेक्स्ट खोजें",
-      "findPrevious": "पिछला खोजें",
-      "findPreviousTitle": "पिछला खोजें (Shift+Enter)",
-      "findNext": "अगला खोजें",
-      "findNextTitle": "अगला खोजें (Enter)",
-      "matchCount": "{total} में से {current} मिलान",
-      "noResults": "कोई परिणाम नहीं मिला",
-      "replaceLabel": "इससे बदलें:",
-      "replacePlaceholder": "बदलने के लिए टेक्स्ट दर्ज करें...",
-      "replaceAriaLabel": "टेक्स्ट बदलें",
-      "replaceButton": "बदलें",
-      "replaceCurrentTitle": "वर्तमान मिलान को बदलें",
-      "replaceAllButton": "सभी बदलें",
-      "replaceAllTitle": "सभी मिलान बदलें",
-      "matchCase": "केस संवेदनशील",
-      "wholeWords": "पूरा शब्द",
-      "matchesFound": "{total} मिलान मिले",
-      "toggleReplace": "+ बदलें"
-    },
-    "hyperlink": {
-      "titleEdit": "हाइपरलिंक संपादित करें",
-      "titleInsert": "हाइपरलिंक डालें",
-      "tabWebAddress": "वेब पता",
-      "tabBookmark": "बुकमार्क",
-      "urlLabel": "URL",
-      "urlPlaceholder": "https://example.com",
-      "urlHint": "वेब पता, ईमेल (mailto:) या फ़ोन (tel:) दर्ज करें",
-      "bookmarkLabel": "बुकमार्क",
-      "bookmarkPlaceholder": "बुकमार्क चुनें...",
-      "displayTextLabel": "दिखाया जाने वाला टेक्स्ट",
-      "displayTextPlaceholder": "दिखाने के लिए टेक्स्ट (वैकल्पिक)",
-      "displayTextHint": "चयनित टेक्स्ट का उपयोग करने के लिए खाली छोड़ दें",
-      "tooltipLabel": "टूलटिप (वैकल्पिक)",
-      "tooltipPlaceholder": "होवर करने पर दिखने वाला टेक्स्ट",
-      "removeLink": "लिंक हटाएं",
-      "invalidUrl": "कृपया एक वैध URL दर्ज करें",
-      "urlRequired": "URL आवश्यक है"
-    },
-    "insertTable": {
-      "title": "तालिका डालें",
-      "hoverToSelect": "आकार चुनने के लिए होवर करें",
-      "tableSize": "{cols} x {rows} तालिका",
-      "orSpecifySize": "या आकार निर्दिष्ट करें",
-      "rowsLabel": "पंक्तियाँ:",
-      "columnsLabel": "स्तंभ:",
-      "insertButton": "तालिका डालें",
-      "sizeSelector": "तालिका आकार चयनकर्ता",
-      "columnWidthLabel": "स्तंभ की चौड़ाई",
-      "fixedWidth": "निश्चित",
-      "autofit": "सामग्री के अनुसार स्वतः फिट करें",
-      "tableStyleLabel": "तालिका शैली",
-      "validationHint": "पंक्तियाँ: {minRows}-{maxRows}, स्तंभ: {minCols}-{maxCols}"
-    },
-    "splitCell": {
-      "title": "सेल विभाजित करें",
-      "description": "सेट करें कि चयनित सेल को कितनी पंक्तियों और स्तंभों में विभाजित करना है।",
-      "rowsLabel": "पंक्तियाँ:",
-      "columnsLabel": "स्तंभ:",
-      "currentMinimum": "वर्तमान विस्तार से न्यूनतम: {rows} पंक्ति x {cols} स्तंभ",
-      "minValue": "कम से कम {rows} पंक्ति और {cols} स्तंभ का उपयोग करें।",
-      "notOneByOne": "कम से कम दो परिणामी सेल चुनें।"
-    },
-    "insertImage": {
-      "title": "चित्र डालें",
-      "uploadAriaLabel": "चित्र अपलोड करने के लिए क्लिक करें या खींचें",
-      "uploadText": "चुनने के लिए क्लिक करें या चित्र को यहां खींचकर छोड़ें",
-      "uploadSubtext": "10MB तक PNG, JPG, GIF",
-      "dimensions": "आयाम",
-      "widthLabel": "चौड़ाई:",
-      "heightLabel": "ऊंचाई:",
-      "aspectRatioLocked": "पहलू अनुपात लॉक किया गया",
-      "aspectRatioUnlocked": "पहलू अनुपात अनलॉक किया गया",
-      "altTextLabel": "वैकल्पिक टेक्स्ट (वैकल्पिक)",
-      "altTextPlaceholder": "पहुंच-योग्यता के लिए चित्र का वर्णन करें",
-      "insertButton": "चित्र डालें",
-      "invalidFile": "कृपया एक वैध चित्र फ़ाइल चुनें",
-      "fileTooLarge": "चित्र फ़ाइल बहुत बड़ी है (अधिकतम 10MB)",
-      "readFailed": "चित्र फ़ाइल पढ़ने में विफल",
-      "loadFailed": "चित्र लोड करने में विफल",
-      "preview": "पूर्वावलोकन"
-    },
-    "insertSymbol": {
-      "title": "प्रतीक डालें",
-      "searchPlaceholder": "प्रतीक खोजें (वर्ण या यूनिकोड)...",
-      "noResultsEmpty": "कोई प्रतीक नहीं मिला",
-      "noResults": "\"{query}\" के लिए कोई प्रतीक नहीं मिला",
-      "decimal": "दशमलव: {value}",
-      "recent": "हाल का:",
-      "categories": {
-        "common": "सामान्य",
-        "arrows": "तीर",
-        "math": "गणित",
-        "greek": "ग्रीक",
-        "shapes": "आकृतियाँ",
-        "punctuation": "विराम चिह्न",
-        "currency": "मुद्रा",
-        "music": "संगीत",
-        "emoji": "इमोजी"
-      }
-    },
     "imageProperties": {
       "title": "चित्र की विशेषताएँ",
       "altText": "वैकल्पिक टेक्स्ट",
       "altTextPlaceholder": "पहुंच-योग्यता के लिए इस चित्र का वर्णन करें...",
-      "border": "बॉर्डर",
-      "width": "चौड़ाई",
-      "style": "शैली",
-      "color": "रंग",
-      "preview": "पूर्वावलोकन",
       "textWrapping": "टेक्स्ट रैपिंग",
       "dimensions": "आयाम",
       "widthLabel": "चौड़ाई:",
       "heightLabel": "ऊंचाई:",
-      "lockAspectRatio": "पहलू अनुपात लॉक करें",
-      "wrapOptions": {
-        "inline": "टेक्स्ट के साथ इनलाइन",
-        "wrapRight": "टेक्स्ट रैप करें, बाईं ओर तैरें",
-        "wrapLeft": "टेक्स्ट रैप करें, दाईं ओर तैरें",
-        "topAndBottom": "ऊपर और नीचे",
-        "behind": "टेक्स्ट के पीछे",
-        "inFront": "टेक्स्ट के सामने"
-      },
-      "borderKinds": {
-        "solid": "ठोस",
-        "dashed": "डैशयुक्त",
-        "dotted": "बिंदुदार",
-        "double": "दोगुना",
-        "groove": "ग्रूव",
-        "ridge": "रिज",
-        "inset": "इनसेट",
-        "outset": "आउटसेट"
-      }
+      "lockAspectRatio": "पहलू अनुपात लॉक करें"
     },
     "imagePosition": {
-      "title": "चित्र की स्थिति",
-      "horizontal": "क्षैतिज",
-      "vertical": "लंबवत",
-      "position": "स्थिति",
-      "alignment": "संरेखण",
-      "offset": "ऑफ़सेट",
-      "offsetPx": "ऑफ़सेट (px)",
-      "align": "संरेखित करें",
-      "relativeTo": "के सापेक्ष",
-      "alignOptions": {
-        "left": "बाएं",
-        "center": "केंद्र",
-        "right": "दाएं",
-        "top": "ऊपर",
-        "bottom": "नीचे"
-      },
       "relativeOptions": {
         "page": "पेज",
         "column": "स्तंभ",
@@ -429,46 +224,12 @@
       "applyToDocument": "संपूर्ण दस्तावेज़",
       "applyToSection": "यह अनुभाग"
     },
-    "tableProperties": {
-      "title": "तालिका की विशेषताएँ",
-      "widthType": "चौड़ाई का प्रकार",
-      "widthLabel": "चौड़ाई",
-      "alignmentLabel": "संरेखण",
-      "widthTypes": {
-        "auto": "स्वतः",
-        "fixed": "निश्चित (twips)",
-        "percentage": "प्रतिशत"
-      },
-      "units": {
-        "fiftiethsPercent": "(% का 50वां भाग)",
-        "twips": "tw"
-      },
-      "alignOptions": {
-        "left": "बाएं",
-        "center": "केंद्र",
-        "right": "दाएं"
-      }
-    },
-    "pasteSpecial": {
-      "title": "विशेष रूप से पेस्ट करें",
-      "keepFormatting": "स्रोत प्रारूपण बनाए रखें",
-      "keepFormattingDescription": "मूल प्रारूपण के साथ पेस्ट करें",
-      "keepFormattingShortcut": "Ctrl+V",
-      "plainText": "सादे टेक्स्ट के रूप में पेस्ट करें",
-      "plainTextDescription": "बिना किसी प्रारूपण के पेस्ट करें",
-      "plainTextShortcut": "Ctrl+Shift+V",
-      "readingClipboard": "क्लिपबोर्ड पढ़ रहा है...",
-      "preview": "पूर्वावलोकन:",
-      "noContent": "पेस्ट करने के लिए कोई सामग्री उपलब्ध नहीं है",
-      "clipboardError": "क्लिपबोर्ड पढ़ने में असमर्थ। कृपया पेस्ट करने के लिए Ctrl+V का उपयोग करें।"
-    },
     "footnoteProperties": {
       "title": "पाद-टिप्पणी और अंत-टिप्पणी की विशेषताएँ",
       "footnotes": "पाद-टिप्पणियाँ",
       "endnotes": "अंत-टिप्पणियाँ",
       "position": "स्थिति",
       "numberFormat": "संख्या प्रारूप",
-      "startAt": "यहाँ से शुरू करें",
       "numbering": "क्रमांकन",
       "footnotePositions": {
         "bottomOfPage": "पेज के नीचे",
@@ -486,178 +247,27 @@
       "formats": {
         "decimal": "1, 2, 3, ...",
         "lowerRoman": "i, ii, iii, ...",
-        "upperRoman": "I, II, III, ...",
-        "symbols": "*, †, ‡, ..."
+        "upperRoman": "I, II, III, ..."
       }
-    },
-    "keyboardShortcuts": {
-      "ariaLabel": "कीबोर्ड शॉर्टकट",
-      "searchPlaceholder": "शॉर्टकट खोजें...",
-      "categories": {
-        "editing": "संपादन",
-        "formatting": "प्रारूपण",
-        "navigation": "नेविगेशन",
-        "clipboard": "क्लिपबोर्ड",
-        "selection": "चयन",
-        "view": "देखें",
-        "file": "फ़ाइल",
-        "other": "अन्य"
-      },
-      "shortcuts": {
-        "save": "सहेजें",
-        "saveDescription": "दस्तावेज़ सहेजें",
-        "print": "प्रिंट करें",
-        "printDescription": "दस्तावेज़ प्रिंट करें",
-        "undo": "पूर्ववत करें",
-        "undoDescription": "पिछली क्रिया को पूर्ववत करें",
-        "redo": "पुनः करें",
-        "redoDescription": "पिछली क्रिया को पुनः करें",
-        "delete": "हटाएं",
-        "deleteDescription": "चयनित टेक्स्ट हटाएं",
-        "find": "खोजें",
-        "findDescription": "दस्तावेज़ में टेक्स्ट खोजें",
-        "findReplace": "खोजें और बदलें",
-        "findReplaceDescription": "टेक्स्ट खोजें और बदलें",
-        "cut": "काटें",
-        "cutDescription": "चयनित टेक्स्ट काटें",
-        "copy": "कॉपी करें",
-        "copyDescription": "चयनित टेक्स्ट कॉपी करें",
-        "paste": "पेस्ट करें",
-        "pasteDescription": "क्लिपबोर्ड से पेस्ट करें",
-        "pastePlainText": "सादे टेक्स्ट के रूप में पेस्ट करें",
-        "pastePlainTextDescription": "बिना प्रारूपण के पेस्ट करें",
-        "bold": "बोल्ड",
-        "boldDescription": "बोल्ड प्रारूपण टॉगल करें",
-        "italic": "इटैलिक",
-        "italicDescription": "इटैलिक प्रारूपण टॉगल करें",
-        "underline": "रेखांकित",
-        "underlineDescription": "रेखांकित प्रारूपण टॉगल करें",
-        "strikethrough": "बीच से काटें",
-        "strikethroughDescription": "बीच से काटना टॉगल करें",
-        "subscript": "सबस्क्रिप्ट",
-        "subscriptDescription": "सबस्क्रिप्ट टॉगल करें",
-        "superscript": "सुपरस्क्रिप्ट",
-        "superscriptDescription": "सुपरस्क्रिप्ट टॉगल करें",
-        "alignLeft": "बाएं संरेखित करें",
-        "alignLeftDescription": "पैराग्राफ को बाएं संरेखित करें",
-        "alignCenter": "केंद्रित करें",
-        "alignCenterDescription": "पैराग्राफ को केंद्रित करें",
-        "alignRight": "दाएं संरेखित करें",
-        "alignRightDescription": "पैराग्राफ को दाएं संरेखित करें",
-        "justify": "दोनों ओर संरेखित करें",
-        "justifyDescription": "पैराग्राफ को दोनों ओर संरेखित करें",
-        "increaseIndent": "इंडेंट बढ़ाएं",
-        "increaseIndentDescription": "पैराग्राफ इंडेंट बढ़ाएं",
-        "decreaseIndent": "इंडेंट कम करें",
-        "decreaseIndentDescription": "पैराग्राफ इंडेंट कम करें",
-        "selectAll": "सभी चुनें",
-        "selectAllDescription": "सभी सामग्री चुनें",
-        "selectWord": "शब्द चुनें",
-        "selectWordDescription": "वर्तमान शब्द चुनें",
-        "selectParagraph": "पैराग्राफ चुनें",
-        "selectParagraphDescription": "वर्तमान पैराग्राफ चुनें",
-        "extendSelectionByWord": "शब्द द्वारा चयन बढ़ाएं",
-        "extendSelectionByWordDescription": "अगले/पिछले शब्द तक चयन बढ़ाएं",
-        "extendSelectionToLineEdge": "लाइन के अंत तक चयन बढ़ाएं",
-        "extendSelectionToLineEdgeDescription": "लाइन के प्रारंभ/अंत तक चयन बढ़ाएं",
-        "moveByWord": "शब्द द्वारा आगे बढ़ें",
-        "moveByWordDescription": "कर्सर को अगले/पिछले शब्द पर ले जाएं",
-        "moveToLineStart": "लाइन के प्रारंभ में जाएं",
-        "moveToLineStartDescription": "कर्सर को लाइन के प्रारंभ में ले जाएं",
-        "moveToLineEnd": "लाइन के अंत में जाएं",
-        "moveToLineEndDescription": "कर्सर को लाइन के अंत में ले जाएं",
-        "moveToDocumentStart": "दस्तावेज़ के प्रारंभ में जाएं",
-        "moveToDocumentStartDescription": "कर्सर को दस्तावेज़ के प्रारंभ में ले जाएं",
-        "moveToDocumentEnd": "दस्तावेज़ के अंत में जाएं",
-        "moveToDocumentEndDescription": "कर्सर को दस्तावेज़ के अंत में ले जाएं",
-        "pageUp": "पेज ऊपर",
-        "pageUpDescription": "एक पेज ऊपर स्क्रॉल करें",
-        "pageDown": "पेज नीचे",
-        "pageDownDescription": "एक पेज नीचे स्क्रॉल करें",
-        "zoomIn": "ज़ूम इन",
-        "zoomInDescription": "ज़ूम स्तर बढ़ाएं",
-        "zoomOut": "ज़ूम आउट",
-        "zoomOutDescription": "ज़ूम स्तर घटाएं",
-        "resetZoom": "ज़ूम रीसेट करें",
-        "resetZoomDescription": "ज़ूम को 100% पर रीसेट करें",
-        "keyboardShortcuts": "कीबोर्ड शॉर्टकट",
-        "keyboardShortcutsDescription": "यह सहायता संवाद दिखाएं",
-        "insertLink": "लिंक डालें",
-        "insertLinkDescription": "हाइपरलिंक डालें या संपादित करें"
-      },
-      "noResults": "\"{query}\" से मेल खाने वाला कोई शॉर्टकट नहीं मिला",
-      "pressEscToClose": "बंद करने के लिए {key} दबाएं",
-      "or": "या"
-    },
-    "watermark": {
-      "applyButton": "लागू करें",
-      "cancelButton": "रद्द करें",
-      "colorLabel": "रंग",
-      "diagonal": "विकर्ण",
-      "fontLabel": "फ़ॉन्ट",
-      "horizontal": "क्षैतिज",
-      "layoutLabel": "लेआउट",
-      "noWatermark": "कोई वॉटरमार्क नहीं",
-      "picture": "चित्र वॉटरमार्क",
-      "presetLabel": "प्रीसेट",
-      "scale": "स्केल",
-      "selectPicture": "चित्र चुनें…",
-      "semitransparent": "अर्धपारदर्शी",
-      "sizeAuto": "स्वतः",
-      "sizeLabel": "आकार",
-      "text": "टेक्स्ट वॉटरमार्क",
-      "textLabel": "टेक्स्ट",
-      "title": "वॉटरमार्क",
-      "washout": "धुंधला"
     }
   },
   "comments": {
-    "resolved": "सुलझाया गया",
-    "resolve": "सुलझाएं",
-    "reopen": "फिर से खोलें",
-    "moreOptions": "अधिक विकल्प",
     "unknown": "अज्ञात",
     "addComment": "एक टिप्पणी जोड़ें...",
-    "replyPlaceholder": "जवाब दें या @ के साथ दूसरों को जोड़ें",
-    "replyCount": "{count, plural, one {# जवाब} other {# जवाब}}"
-  },
-  "trackedChanges": {
-    "unknown": "अज्ञात",
-    "replaced": "प्रतिस्थापित किया गया",
-    "with": "के साथ",
-    "added": "जोड़ा गया",
-    "deleted": "हटाया गया"
+    "replyPlaceholder": "जवाब दें या @ के साथ दूसरों को जोड़ें"
   },
   "contextMenu": {
     "ariaLabel": "AI क्रियाएँ मेनू",
-    "textMenuAriaLabel": "टेक्स्ट संपादन मेनू",
-    "customPromptPlaceholder": "कस्टम प्रॉम्प्ट दर्ज करें...",
     "cut": "काटें",
     "cutShortcut": "Ctrl+X",
     "copy": "कॉपी करें",
     "copyShortcut": "Ctrl+C",
     "paste": "पेस्ट करें",
     "pasteShortcut": "Ctrl+V",
-    "pastePlainText": "सादे टेक्स्ट के रूप में पेस्ट करें",
-    "pastePlainTextShortcut": "Ctrl+Shift+V",
     "delete": "हटाएं",
     "deleteShortcut": "Del",
     "selectAll": "सभी चुनें",
     "selectAllShortcut": "Ctrl+A",
-    "selected": "चयनित:",
-    "aiActions": {
-      "askAi": "AI से पूछें",
-      "rewrite": "फिर से लिखें",
-      "expand": "विस्तार करें",
-      "summarize": "संक्षेप करें",
-      "translate": "अनुवाद करें",
-      "explain": "समझाएं",
-      "fixGrammar": "व्याकरण ठीक करें",
-      "makeFormal": "औपचारिक बनाएं",
-      "makeCasual": "अनौपचारिक बनाएं",
-      "custom": "कस्टम"
-    },
-    "updateTableOfContents": "विषय-सूची अपडेट करें",
     "editCustomNode": "{label} संपादित करें",
     "removeCustomNode": "{label} निकालें"
   },
@@ -668,9 +278,6 @@
     "title": "रूपरेखा",
     "noHeadings": "कोई शीर्षक नहीं मिला। उन्हें यहाँ देखने के लिए अपने दस्तावेज़ में शीर्षक जोड़ें।"
   },
-  "sidebar": {
-    "ariaLabel": "टिप्पणी साइडबार"
-  },
   "viewer": {
     "pageIndicator": "{total} में से {current}"
   },
@@ -680,9 +287,6 @@
     "menuBarAriaLabel": "मेनू बार"
   },
   "errors": {
-    "loadingDocument": "दस्तावेज़ लोड हो रहा है...",
-    "noDocumentLoaded": "कोई दस्तावेज़ लोड नहीं हुआ",
-    "failedToLoad": "दस्तावेज़ लोड करने में विफल",
     "unableToParse": "दस्तावेज़ का विश्लेषण करने में असमर्थ",
     "somethingWentWrong": "कुछ गलत हो गया",
     "errorDescription": "इस घटक को प्रस्तुत करते समय एक त्रुटि हुई। कृपया पुन: प्रयास करें या समस्या बने रहने पर सहायता से संपर्क करें।",
@@ -690,8 +294,7 @@
     "componentStack": "घटक स्टैक:",
     "tryAgain": "पुनः प्रयास करें",
     "showDetails": "विवरण दिखाएं",
-    "hideDetails": "विवरण छिपाएं",
-    "unsavedChanges": "आपके पास सहेजे न गए बदलाव हैं। क्या आप वाकई छोड़ना चाहते हैं?"
+    "hideDetails": "विवरण छिपाएं"
   },
   "table": {
     "insertRowAbove": "पंक्ति ऊपर डालें",
@@ -708,13 +311,11 @@
     "cellFillColor": "सेल भरने का रंग",
     "borderColor": "बॉर्डर का रंग",
     "borderWidth": "बॉर्डर की चौड़ाई",
-    "unknownAction": "अज्ञात क्रिया",
     "borders": {
       "all": "सभी बॉर्डर",
       "outside": "बाहरी बॉर्डर",
       "inside": "आंतरिक बॉर्डर",
       "none": "कोई बॉर्डर नहीं",
-      "remove": "बॉर्डर हटाएं",
       "top": "शीर्ष बॉर्डर",
       "bottom": "तल बॉर्डर",
       "left": "बायां बॉर्डर",
@@ -723,24 +324,6 @@
       "tooltip": "बॉर्डर"
     },
     "moreOptions": "अधिक तालिका विकल्प",
-    "styles": {
-      "title": "तालिका शैलियाँ",
-      "label": "शैलियाँ",
-      "normalTable": "सामान्य तालिका",
-      "tableGrid": "तालिका ग्रिड",
-      "gridTableLight": "ग्रिड तालिका हल्की",
-      "plainTable1": "सादी तालिका 1",
-      "plainTable2": "सादी तालिका 2",
-      "plainTable3": "सादी तालिका 3",
-      "plainTable4": "सादी तालिका 4",
-      "gridTable1Light": "ग्रिड तालिका 1 हल्की",
-      "gridTable4Accent1": "ग्रिड तालिका 4 एक्सेंट 1",
-      "gridTable5Dark": "ग्रिड तालिका 5 गहरी",
-      "listTable3Accent2": "सूची तालिका 3 एक्सेंट 2",
-      "listTable4Accent3": "सूची तालिका 4 एक्सेंट 3",
-      "gridTable4Accent5": "ग्रिड तालिका 4 एक्सेंट 5",
-      "gridTable4Accent6": "ग्रिड तालिका 4 एक्सेंट 6"
-    },
     "selectTable": "संपूर्ण तालिका चुनें",
     "borderStyles": {
       "dashed": "डैश",
@@ -764,22 +347,7 @@
     "top": "ऊपर",
     "middle": "मध्य",
     "bottom": "नीचे",
-    "cellMargins": "सेल मार्जिन",
-    "textDirection": "टेक्स्ट की दिशा",
-    "textDirections": {
-      "horizontal": "क्षैतिज (LR)",
-      "verticalRL": "लंबवत (ऊपर से नीचे, RL)",
-      "verticalLR": "लंबवत (नीचे से ऊपर, LR)"
-    },
     "toggleNoWrap": "नो-रैप टॉगल करें",
-    "rowHeight": "पंक्ति की ऊंचाई",
-    "heightRules": {
-      "auto": "स्वतः",
-      "atLeast": "कम से कम",
-      "exact": "सटीक"
-    },
-    "rule": "नियम",
-    "height": "ऊंचाई",
     "toggleHeaderRow": "हेडर पंक्ति टॉगल करें",
     "distributeColumns": "स्तंभों को समान रूप से वितरित करें",
     "autoFit": "सामग्री के अनुसार स्वतः फिट करें",
@@ -787,9 +355,7 @@
     "tableAlignment": "तालिका संरेखण",
     "alignTableLeft": "तालिका को बाएं संरेखित करें",
     "alignTableCenter": "तालिका को केंद्रित करें",
-    "alignTableRight": "तालिका को दाएं संरेखित करें",
-    "tableOptionsMenu": "तालिका विकल्प मेनू",
-    "tableOptions": "तालिका विकल्प"
+    "alignTableRight": "तालिका को दाएं संरेखित करें"
   },
   "imageTransform": {
     "tooltip": "रूपांतरित करें",
@@ -810,17 +376,7 @@
       "inLineWithText": "टेक्स्ट के साथ इनलाइन",
       "squareLeft": "स्क्वायर लेफ्ट",
       "squareRight": "स्क्वायर राइट",
-      "behindText": "टेक्स्ट के पीछे",
-      "inFrontOfText": "टेक्स्ट के सामने",
-      "ariaLabel": "चित्र लेआउट विकल्प",
-      "imageProperties": "चित्र की विशेषताएँ…"
-    },
-    "menuDesc": {
-      "inLineWithText": "चित्र एक ग्लिफ़ के रूप में लाइन में बहता है",
-      "squareLeft": "चित्र बाईं ओर तैरता है, पाठ दाईं ओर लपेटता है",
-      "squareRight": "चित्र दाईं ओर तैरता है, पाठ बाईं ओर लपेटता है",
-      "behindText": "चित्र मुख्य टेक्स्ट के पीछे पेंट करता है",
-      "inFrontOfText": "चित्र मुख्य टेक्स्ट के ऊपर पेंट करता है"
+      "ariaLabel": "चित्र लेआउट विकल्प"
     },
     "square": "वर्गाकार",
     "targets": {
@@ -837,33 +393,9 @@
     "through": "आर-पार",
     "tight": "सटा हुआ"
   },
-  "responsePreview": {
-    "loading": "{action}...",
-    "result": "{action} परिणाम",
-    "closeEsc": "बंद करें (Esc)",
-    "editPrompt": "स्वीकार करने से पहले परिणाम संपादित करें:",
-    "changes": "बदलाव:",
-    "original": "मूल:",
-    "new": "नया:",
-    "cancelEdit": "संपादन रद्द करें"
-  },
-  "commentMarkers": {
-    "resolvedComment": "सुलझाया गया कमेंट",
-    "comment": "टिप्पणी"
-  },
   "editor": {
-    "toggleCommentsSidebar": "टिप्पणी साइडबार टॉगल करें",
     "showDocumentOutline": "दस्तावेज़ की रूपरेखा दिखाएं",
-    "editing": "संपादन",
-    "editingDescription": "दस्तावेज़ को सीधे संपादित करें",
-    "suggesting": "सुझाव देना",
-    "suggestingDescription": "संपादन सुझाव बन जाते हैं",
-    "viewing": "देखना",
-    "viewingDescription": "केवल पढ़ने के लिए, कोई संपादन नहीं",
-    "failedToParse": "दस्तावेज़ का विश्लेषण करने में विफल",
-    "linkRemoved": "लिंक हटा दिया गया",
     "linkCopied": "लिंक क्लिपबोर्ड पर कॉपी किया गया",
-    "failedToSave": "दस्तावेज़ सहेजने में विफल",
     "fontSubstitutionNotice": "इस दस्तावेज़ के कुछ फ़ॉन्ट उपलब्ध नहीं हैं, इसलिए विकल्प दिखाए जा रहे हैं: {fonts}"
   },
   "hyperlinkPopup": {
@@ -888,14 +420,11 @@
     "options": "विकल्प",
     "insertPageNumber": "वर्तमान पेज नंबर डालें",
     "insertTotalPages": "कुल पेज संख्या डालें",
-    "remove": "{label} हटाएं",
-    "closeEditing": "{label} संपादन बंद करें",
     "chromeAriaLabel": "हेडर और फ़ुटर संपादन",
     "firstPageHeader": "पहले पृष्ठ का हेडर",
     "firstPageFooter": "पहले पृष्ठ का फ़ुटर",
     "evenPageHeader": "सम पृष्ठ का हेडर",
     "evenPageFooter": "सम पृष्ठ का फ़ुटर",
-    "regionSection": "{region} — अनुभाग {section}",
     "sameAsPrevious": "पिछले जैसा",
     "sameAsPreviousHint": "संपादन पिछले अनुभाग के पृष्ठों पर भी लागू होते हैं।",
     "differentFirstPage": "अलग पहला पृष्ठ",
@@ -908,15 +437,9 @@
     "removeHeader": "हेडर हटाएं",
     "removeFooter": "फ़ुटर हटाएं",
     "insertSectionPages": "अनुभाग पृष्ठ संख्या डालें",
-    "insertPageXofY": "पृष्ठ X of Y डालें",
-    "pageXofYLabel": "पृष्ठ",
-    "pageXofYSeparator": "में से",
-    "pageNumbers": "पृष्ठ संख्याएँ"
+    "insertPageXofY": "पृष्ठ X of Y डालें"
   },
   "image": {
-    "placeholder": "चित्र प्लेसहोल्डर",
-    "placeholderText": "[चित्र]",
-    "editableAriaLabel": "संपादित करने योग्य चित्र",
     "contentMismatch": "छवि की सामग्री उसके प्रकार से मेल नहीं खाती",
     "decodeFailed": "छवि को डिकोड नहीं किया जा सका",
     "externalResource": "बाहरी छवि लोड नहीं की गई",
@@ -928,10 +451,6 @@
     "unsupportedFormat": "असमर्थित छवि स्वरूप ({format})"
   },
   "imageOverlay": {
-    "rotate": "घुमाएं",
-    "imageProperties": "चित्र की विशेषताएँ",
-    "deleteImage": "चित्र हटाएं",
-    "replaceImage": "छवि बदलें…",
     "handle": {
       "e": "दाएँ किनारे का आकार बदलें",
       "n": "ऊपरी किनारे का आकार बदलें",
@@ -954,50 +473,16 @@
     "bottomMargin": "तल मार्जिन",
     "hangingIndent": "हैंगिंग इंडेंट"
   },
-  "print": {
-    "label": "प्रिंट करें",
-    "allPages": "सभी ({totalPages} पेज)",
-    "singlePage": "पेज {start}",
-    "pageRange": "पेज {start}-{end}"
-  },
-  "unsaved": {
-    "unsaved": "सहेजा नहीं गया",
-    "saved": "सहेजा गया",
-    "unsavedTitle": "दस्तावेज़ में सहेजे न गए बदलाव हैं",
-    "savedTitle": "सभी बदलाव सहेजे गए",
-    "unsavedAriaLabel": "सहेजे न गए बदलाव",
-    "savedAriaLabel": "सभी बदलाव सहेजे गए"
-  },
   "loading": {
     "label": "लोड हो रहा है"
   },
   "revisions": {
-    "cellDeleted": "कक्ष हटाया गया",
-    "cellInserted": "कक्ष सम्मिलित किया गया",
-    "cellMerged": "कक्ष मर्ज किए गए",
-    "cellPropertiesChanged": "कक्ष गुण बदले गए",
-    "paragraphMarkDeleted": "अनुच्छेद चिह्न हटाया गया",
     "paragraphMarkInserted": "अनुच्छेद चिह्न सम्मिलित किया गया",
-    "paragraphPropertiesChanged": "अनुच्छेद गुण बदले गए",
-    "rowDeleted": "पंक्ति हटाई गई",
-    "rowInserted": "पंक्ति सम्मिलित की गई",
-    "rowPropertiesChanged": "पंक्ति गुण बदले गए",
-    "tablePropertiesChanged": "तालिका गुण बदले गए",
-    "tableDeleted": "तालिका हटाई गई",
-    "tableInserted": "तालिका सम्मिलित की गई",
     "runPropertiesChanged": "पाठ स्वरूपण बदला गया"
   },
   "toc": {
-    "updatePrompt": "इस दस्तावेज़ की विषय-सूची पुरानी हो गई है. क्या इसे अभी पुनः बनाएँ?",
     "refresh": "पूरी तालिका अपडेट करें",
     "refreshPageNumbers": "केवल पृष्ठ संख्याएँ अपडेट करें"
-  },
-  "app": {
-    "name": "DOCX संपादक",
-    "newDocument": "नया",
-    "by": "EigenPal द्वारा",
-    "framework": "फ़्रेमवर्क",
-    "theme": "थीम"
   },
   "editingMode": {
     "editing": "संपादन",
@@ -1064,7 +549,6 @@
       "sdtLocked": "सामग्री नियंत्रण लॉक है",
       "unlocked": "अनलॉक"
     },
-    "noControl": "कर्सर को सामग्री नियंत्रण के अंदर रखें",
     "remove": "सामग्री नियंत्रण हटाएँ",
     "showAll": "सामग्री नियंत्रण की सीमाएँ दिखाएँ",
     "types": {
@@ -1079,8 +563,6 @@
     }
   },
   "notes": {
-    "editingBanner": "नोट संपादित कर रहे हैं",
-    "closeNote": "नोट बंद करें",
     "delete": "नोट हटाएं",
     "convertToEndnote": "एंडनोट में बदलें",
     "convertToFootnote": "फ़ुटनोट में बदलें",

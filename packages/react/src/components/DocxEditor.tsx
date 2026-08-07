@@ -24,7 +24,7 @@ import {
   DocxEditorContextMenu,
 } from '../editor/contextmenu';
 import { DocxEditorContentControl } from '../editor/DocxEditorContentControl';
-import { useTranslation } from '../i18n';
+import { LocaleProvider, useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
 import type { DocxEditorProps, DocxEditorRef } from '../types';
 import { ScopedByAncestorContext } from '../editor/scope-context';
@@ -199,208 +199,230 @@ function DocxEditorRefBridge({ forwardedRef }: { forwardedRef: React.Ref<DocxEdi
   return null;
 }
 
-const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxEditor(props, ref) {
-  const {
-    document: doc,
-    fonts,
-    className,
-    t,
-    chrome = true,
-    title,
-    onTitleChange,
-    renderTitleBarLeft,
-    renderTitleBarRight,
-    colorMode = 'light',
-    author,
-    locale,
-    mode,
-    modules,
-    zoom,
-    onReady,
-    onChange,
-    onFontError,
-    onOpen,
-    onSave,
-    hyperlinkPopup,
-    contextMenu = true,
-    menu = true,
-    navigation = true,
-    rulers = true,
-  } = props;
+/**
+ * The frame itself. Separated from the exported component only so the `i18n` prop can
+ * publish its catalogue ABOVE this body: `useTranslation()` below reads the context its
+ * caller renders in, so a provider inside this function would not reach its own labels.
+ */
+const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
+  function DocxEditorFrame(props, ref) {
+    const {
+      document: doc,
+      fonts,
+      className,
+      t,
+      chrome = true,
+      title,
+      onTitleChange,
+      renderTitleBarLeft,
+      renderTitleBarRight,
+      colorMode = 'light',
+      author,
+      locale,
+      mode,
+      modules,
+      zoom,
+      onReady,
+      onChange,
+      onFontError,
+      onOpen,
+      onSave,
+      hyperlinkPopup,
+      contextMenu = true,
+      menu = true,
+      navigation = true,
+      rulers = true,
+    } = props;
 
-  // Chrome colour mode: 'system' subscribes to the OS setting. Only the chrome
-  // root's `.dark` class moves — the
-  // document canvas stays Word-faithful.
-  const [systemDark, setSystemDark] = useState(prefersColorSchemeDark);
-  useEffect(() => {
-    if (colorMode !== 'system') return undefined;
-    return subscribeSystemDark(setSystemDark);
-  }, [colorMode]);
-  const isDark = resolveIsDark(colorMode, systemDark);
+    // Chrome colour mode: 'system' subscribes to the OS setting. Only the chrome
+    // root's `.dark` class moves — the
+    // document canvas stays Word-faithful.
+    const [systemDark, setSystemDark] = useState(prefersColorSchemeDark);
+    useEffect(() => {
+      if (colorMode !== 'system') return undefined;
+      return subscribeSystemDark(setSystemDark);
+    }, [colorMode]);
+    const isDark = resolveIsDark(colorMode, systemDark);
 
-  // Label resolution, in precedence order: the host's `t`, else the active
-  // `LocaleContext` catalogue (bundled English unless a provider swapped it).
-  //
-  // The fallback is a `useCallback` rather than an inline arrow because the toolbar
-  // memoizes its context value on `t`'s identity. A fresh closure per render would miss
-  // that memo and re-render all two dozen toolbar slots on every host render — which is
-  // the common case, since a host holding `title` in state re-renders on every keystroke
-  // in the title input. `catalogT` is already stable per catalogue and language.
-  //
-  // The cast bridges the two signatures: `TFunction` is keyed by the `TranslationKey`
-  // union derived from `en.json`, while the prop takes a plain `string` so a host can
-  // supply any resolver. Every key this component passes is a real catalogue key.
-  const { t: catalogT } = useTranslation();
-  const translate = useCallback(
-    (key: string, params?: Record<string, string | number>) =>
-      t ? t(key, params) : catalogT(key as TranslationKey, params),
-    [t, catalogT]
-  );
+    // Label resolution, in precedence order: the host's `t`, else the active
+    // `LocaleContext` catalogue (bundled English unless a provider swapped it).
+    //
+    // The fallback is a `useCallback` rather than an inline arrow because the toolbar
+    // memoizes its context value on `t`'s identity. A fresh closure per render would miss
+    // that memo and re-render all two dozen toolbar slots on every host render — which is
+    // the common case, since a host holding `title` in state re-renders on every keystroke
+    // in the title input. `catalogT` is already stable per catalogue and language.
+    //
+    // The cast bridges the two signatures: `TFunction` is keyed by the `TranslationKey`
+    // union derived from `en.json`, while the prop takes a plain `string` so a host can
+    // supply any resolver. Every key this component passes is a real catalogue key.
+    const { t: catalogT } = useTranslation();
+    const translate = useCallback(
+      (key: string, params?: Record<string, string | number>) =>
+        t ? t(key, params) : catalogT(key as TranslationKey, params),
+      [t, catalogT]
+    );
 
-  // The painted document: the primitive Viewport (scroll container, load-bearing
-  // classes) around the primitive Content (the engine's mount point). Chrome-off
-  // hosts get the caller's className on the viewport itself; chrome-on hosts theme
-  // the viewport with `dark` and put the className on the chrome wrapper below.
-  // The link popover mounts INSIDE the viewport, so ordinary CSS keeps it attached to the
-  // page while the user scrolls — no scroll listener, no per-frame reposition. It renders
-  // nothing until a link click or Ctrl/Cmd+K opens it, and `hyperlinkPopup={false}` drops
-  // the packaged panel while leaving the engine's gestures wired for a host's own UI.
-  const viewport = (
-    <DocxEditorViewport
-      className={chrome ? (isDark ? 'dark' : undefined) : className}
-      style={chrome ? SCROLL_AREA_STYLE : undefined}
-    >
-      {chrome ? <DocxEditorHeaderFooterChrome /> : null}
-      {chrome ? <DocxEditorNotesChrome /> : null}
-      <DocxEditorContent />
-      <DocxEditorHyperLink hidden={hyperlinkPopup === false} />
-      {contextMenu === false ? null : (
-        <DocxEditorContextMenu
-          t={translate}
-          {...(typeof contextMenu === 'object' ? contextMenu : {})}
-        />
-      )}
-      <DocxEditorContentControl />
-      {/* The vertical ruler scrolls WITH the document, so unlike its horizontal
+    // The painted document: the primitive Viewport (scroll container, load-bearing
+    // classes) around the primitive Content (the engine's mount point). Chrome-off
+    // hosts get the caller's className on the viewport itself; chrome-on hosts theme
+    // the viewport with `dark` and put the className on the chrome wrapper below.
+    // The link popover mounts INSIDE the viewport, so ordinary CSS keeps it attached to the
+    // page while the user scrolls — no scroll listener, no per-frame reposition. It renders
+    // nothing until a link click or Ctrl/Cmd+K opens it, and `hyperlinkPopup={false}` drops
+    // the packaged panel while leaving the engine's gestures wired for a host's own UI.
+    const viewport = (
+      <DocxEditorViewport
+        className={chrome ? (isDark ? 'dark' : undefined) : className}
+        style={chrome ? SCROLL_AREA_STYLE : undefined}
+      >
+        {chrome ? <DocxEditorHeaderFooterChrome /> : null}
+        {chrome ? <DocxEditorNotesChrome /> : null}
+        <DocxEditorContent />
+        <DocxEditorHyperLink hidden={hyperlinkPopup === false} />
+        {contextMenu === false ? null : (
+          <DocxEditorContextMenu
+            t={translate}
+            {...(typeof contextMenu === 'object' ? contextMenu : {})}
+          />
+        )}
+        <DocxEditorContentControl />
+        {/* The vertical ruler scrolls WITH the document, so unlike its horizontal
           twin it belongs inside the scroller. aria-hidden: it carries no
           operable handles, unlike the horizontal one's indent sliders. */}
-      {rulers && chrome ? (
-        <div style={VERTICAL_RULER_STYLE} aria-hidden="true">
-          <DocxEditorVerticalRuler />
-        </div>
-      ) : null}
-      {props.children}
-    </DocxEditorViewport>
-  );
-
-  const tree = chrome ? (
-    // This wrapper carries the scope class, so the chrome parts below it must
-    // not add their own — see editor/scope-context.ts.
-    <div
-      className={`docx-editor${isDark ? ' dark' : ''}${className ? ` ${className}` : ''}`}
-      style={CONTAINER_STYLE}
-    >
-      {/* Title bar and toolbar share one surface, closed by the seam under the
-          toolbar — see CHROME_BAND_STYLE. */}
-      <div style={CHROME_BAND_STYLE}>
-        <div style={TITLE_BAR_STYLE}>
-          {renderTitleBarLeft?.()}
-          <div style={TITLE_BLOCK_STYLE}>
-            {onTitleChange ? (
-              <input
-                aria-label={translate('titleBar.documentNameAriaLabel')}
-                value={title ?? ''}
-                placeholder={translate('titleBar.untitled')}
-                onChange={(event) => onTitleChange(event.target.value)}
-                style={TITLE_INPUT_STYLE}
-              />
-            ) : (
-              <span style={{ minWidth: 0, padding: '2px 6px' }}>
-                {title ?? translate('titleBar.untitled')}
-              </span>
-            )}
-            {/* File · Format · Insert · Help. Every row is a chrome slot, so it shares its
-                label, icon and enabled state with the toolbar control for the same
-                capability. Open and Save work with no configuration; `onOpen`/`onSave`
-                replace them. */}
-            {menu !== false ? (
-              <DocxEditorMenu
-                t={translate}
-                {...(title !== undefined ? { fileName: title } : {})}
-                {...(onOpen ? { onOpen } : {})}
-                {...(onSave ? { onSave } : {})}
-                // An object `menu` is menu props, spread LAST so a host's own handler wins
-                // over the ones derived from the top-level props above.
-                {...(typeof menu === 'object' ? menu : {})}
-              />
-            ) : null}
+        {rulers && chrome ? (
+          <div style={VERTICAL_RULER_STYLE} aria-hidden="true">
+            <DocxEditorVerticalRuler />
           </div>
-          {renderTitleBarRight?.()}
-        </div>
-        {/* Save is deliberately absent here: the registry marks the `file` group contextual,
+        ) : null}
+        {props.children}
+      </DocxEditorViewport>
+    );
+
+    const tree = chrome ? (
+      // This wrapper carries the scope class, so the chrome parts below it must
+      // not add their own — see editor/scope-context.ts.
+      <div
+        className={`docx-editor${isDark ? ' dark' : ''}${className ? ` ${className}` : ''}`}
+        style={CONTAINER_STYLE}
+      >
+        {/* Title bar and toolbar share one surface, closed by the seam under the
+          toolbar — see CHROME_BAND_STYLE. */}
+        <div style={CHROME_BAND_STYLE}>
+          <div style={TITLE_BAR_STYLE}>
+            {renderTitleBarLeft?.()}
+            <div style={TITLE_BLOCK_STYLE}>
+              {onTitleChange ? (
+                <input
+                  aria-label={translate('titleBar.documentNameAriaLabel')}
+                  value={title ?? ''}
+                  placeholder={translate('titleBar.untitled')}
+                  onChange={(event) => onTitleChange(event.target.value)}
+                  style={TITLE_INPUT_STYLE}
+                />
+              ) : (
+                <span style={{ minWidth: 0, padding: '2px 6px' }}>
+                  {title ?? translate('titleBar.untitled')}
+                </span>
+              )}
+              {/* File · Format · Insert · Help. Every row is a chrome slot, so it shares its
+              label, icon and enabled state with the toolbar control for the same
+              capability. Open and Save work with no configuration; `onOpen`/`onSave`
+              replace them. */}
+              {menu !== false ? (
+                <DocxEditorMenu
+                  t={translate}
+                  {...(title !== undefined ? { fileName: title } : {})}
+                  {...(onOpen ? { onOpen } : {})}
+                  {...(onSave ? { onSave } : {})}
+                  // An object `menu` is menu props, spread LAST so a host's own handler wins
+                  // over the ones derived from the top-level props above.
+                  {...(typeof menu === 'object' ? menu : {})}
+                />
+              ) : null}
+            </div>
+            {renderTitleBarRight?.()}
+          </div>
+          {/* Save is deliberately absent here: the registry marks the `file` group contextual,
             so `defaultChromeGroups()` filters it out and only explicit composition mounts it.
             File -> Save in the menu bar carries it. */}
-        <div style={TOOLBAR_ROW_STYLE}>
-          <DocxEditorToolbar t={translate} />
+          <div style={TOOLBAR_ROW_STYLE}>
+            <DocxEditorToolbar t={translate} />
+          </div>
         </div>
-      </div>
-      {/* The ruler belongs to the packaged frame: every editor this component is
+        {/* The ruler belongs to the packaged frame: every editor this component is
           modelled on shows one, and a host that had to mount it by hand got the
           placement wrong — the part compensates for the review gutter itself, so
           inside the scroll container that reservation is counted twice and the
           ticks drift off the page they measure. It has to sit ABOVE the
           scroller, which is a slot only this component can offer. */}
-      {rulers ? (
-        <div style={RULER_ROW_STYLE}>
-          <DocxEditorHorizontalRuler />
-        </div>
-      ) : null}
-      {/* Word's font compatibility bar: shown when the document's declared faces render
+        {rulers ? (
+          <div style={RULER_ROW_STYLE}>
+            <DocxEditorHorizontalRuler />
+          </div>
+        ) : null}
+        {/* Word's font compatibility bar: shown when the document's declared faces render
           in substitutes, dismissible per set of missing families. */}
-      <DocxEditorFontNotice t={translate} />
-      {/* The navigation pane is a SIBLING of the viewport inside a positioned row, not a
+        <DocxEditorFontNotice t={translate} />
+        {/* The navigation pane is a SIBLING of the viewport inside a positioned row, not a
           column beside it: it floats over the gutter to the left of the centred page and
           leaves the page alone until the window is too narrow to hold both. Without a
           pane this wrapper is an inert flex row around the same viewport. */}
-      <div style={WORKSPACE_STYLE}>
-        {navigation ? <DocxEditorNavigationCompound t={translate} /> : null}
-        {viewport}
-        <PageNumberTranslationContext.Provider value={translate}>
-          <DocxEditorPageNumber />
-        </PageNumberTranslationContext.Provider>
+        <div style={WORKSPACE_STYLE}>
+          {navigation ? <DocxEditorNavigationCompound t={translate} /> : null}
+          {viewport}
+          <PageNumberTranslationContext.Provider value={translate}>
+            <DocxEditorPageNumber />
+          </PageNumberTranslationContext.Provider>
+        </div>
       </div>
-    </div>
-  ) : (
-    viewport
-  );
+    ) : (
+      viewport
+    );
 
-  const tableInteractionLabel = useCallback(
-    (key: 'table.insertRowBelow' | 'table.insertColumnRight') => translate(key),
-    [translate]
-  );
+    const tableInteractionLabel = useCallback(
+      (key: 'table.insertRowBelow' | 'table.insertColumnRight') => translate(key),
+      [translate]
+    );
 
-  // Root owns the facade: created once per document/fonts identity, zoom follows
-  // through `setZoom`, callbacks are read at their latest identity.
-  return (
-    <DocxEditorRoot
-      {...(doc !== undefined ? { document: doc } : {})}
-      {...(fonts ? { fonts } : {})}
-      {...(author !== undefined ? { author } : {})}
-      {...(locale !== undefined ? { locale } : {})}
-      translate={translate}
-      {...(mode !== undefined ? { mode } : {})}
-      {...(modules !== undefined ? { modules } : {})}
-      {...(zoom !== undefined ? { zoom } : {})}
-      tableInteractionLabel={tableInteractionLabel}
-      {...(onReady ? { onReady } : {})}
-      {...(onChange ? { onChange } : {})}
-      {...(onFontError ? { onFontError } : {})}
-    >
-      <DocxEditorRefBridge forwardedRef={ref} />
-      {/* Only the chrome branch renders a wrapper carrying `.docx-editor`.
+    // Root owns the facade: created once per document/fonts identity, zoom follows
+    // through `setZoom`, callbacks are read at their latest identity.
+    return (
+      <DocxEditorRoot
+        {...(doc !== undefined ? { document: doc } : {})}
+        {...(fonts ? { fonts } : {})}
+        {...(author !== undefined ? { author } : {})}
+        {...(locale !== undefined ? { locale } : {})}
+        translate={translate}
+        {...(mode !== undefined ? { mode } : {})}
+        {...(modules !== undefined ? { modules } : {})}
+        {...(zoom !== undefined ? { zoom } : {})}
+        tableInteractionLabel={tableInteractionLabel}
+        {...(onReady ? { onReady } : {})}
+        {...(onChange ? { onChange } : {})}
+        {...(onFontError ? { onFontError } : {})}
+      >
+        <DocxEditorRefBridge forwardedRef={ref} />
+        {/* Only the chrome branch renders a wrapper carrying `.docx-editor`.
           With `chrome={false}` there is none, so the parts must self-scope. */}
-      <ScopedByAncestorContext.Provider value={chrome}>{tree}</ScopedByAncestorContext.Provider>
-    </DocxEditorRoot>
+        <ScopedByAncestorContext.Provider value={chrome}>{tree}</ScopedByAncestorContext.Provider>
+      </DocxEditorRoot>
+    );
+  }
+);
+
+/**
+ * The frame, under the catalogue its `i18n` prop selects.
+ *
+ * The provider is unconditional: with no `i18n` it publishes the catalogue it inherits,
+ * so a host that wraps the app in its own `LocaleProvider` still reaches this chrome and
+ * an `i18n` here overrides that for this editor only.
+ */
+const DocxEditorImpl = forwardRef<DocxEditorRef, DocxEditorProps>(function DocxEditor(props, ref) {
+  return (
+    <LocaleProvider {...(props.i18n !== undefined ? { i18n: props.i18n } : {})}>
+      <DocxEditorFrame {...props} ref={ref} />
+    </LocaleProvider>
   );
 });
 

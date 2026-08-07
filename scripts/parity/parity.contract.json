@@ -17,6 +17,7 @@
       "onChange": "React takes a callback prop. Vue exposes the same signal as a `change` EMIT, which is the idiomatic Vue form and does not appear in DocxEditorProps.",
       "onReady": "React takes a callback prop. Vue exposes the same signal as a `ready` EMIT.",
       "t": "M6V.1 chrome: React resolves chrome labels through this, defaulting to the bundled English catalogue. Vue's chrome port is task 10V.1, which MUST remove this entry.",
+      "i18n": "M6V.1 chrome: the locale catalogue React's packaged chrome resolves labels through, published as a LocaleProvider around the frame. Vue has `provideLocale` but no packaged chrome to language, so the prop lands with 10V.1 alongside `t`.",
       "title": "M6V.1 chrome title. Deferred to 10V.1 with `t`.",
       "onTitleChange": "M6V.1 chrome title editing. Deferred to 10V.1 with `t`.",
       "onSave": "M6V.1 chrome save control. Deferred to 10V.1 with `t`.",

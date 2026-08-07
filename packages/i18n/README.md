@@ -22,13 +22,23 @@ Locale strings, types, and runtime helpers for the [docx-editor.dev](https://doc
 npm install @docx-editor.dev/i18n
 ```
 
-Wrap the editor in a `LocaleProvider`:
+Hand the catalog to the editor:
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { de } from '@docx-editor.dev/i18n';
+
+<DocxEditor document={bytes} i18n={de} />;
+```
+
+For several editors, or for chrome parts you compose yourself, put it in context once with
+`LocaleProvider` instead:
 
 ```tsx
 import { DocxEditor, LocaleProvider } from '@docx-editor.dev/react';
-import { de } from '@docx-editor.dev/i18n';
 
 <LocaleProvider i18n={de}>
+  <DocxEditor.Toolbar />
   <DocxEditor document={bytes} />
 </LocaleProvider>;
 ```
@@ -108,7 +118,7 @@ import type {
   LocaleStrings, // shape of `en`, the full source of truth
   PartialLocaleStrings, // shape of a community partial (null falls back)
   Translations, // alias for PartialLocaleStrings
-  TranslationKey, // 'toolbar.bold' | 'dialogs.findReplace.title' | ...
+  TranslationKey, // 'formattingBar.bold' | 'navigation.find.counter' | ...
   LocaleCode, // 'en' | 'de' | 'pt-BR' | ...
   TFunction, // signature of the `t()` callback
 } from '@docx-editor.dev/i18n';
@@ -123,8 +133,8 @@ import { createT, deepMerge, en, de, type LocaleStrings } from '@docx-editor.dev
 
 const merged = deepMerge(en, de) as LocaleStrings;
 const t = createT(merged, 'de');
-t('toolbar.bold'); // 'Fett'
-t('dialogs.findReplace.matchCount', { current: 3, total: 15 }); // ICU plurals
+t('formattingBar.bold'); // 'Fett'
+t('navigation.find.total', { total: 15 }); // ICU plurals
 ```
 
 `en.json` is the source of truth. Add keys there, then run `bun run i18n:fix` from the repo root to sync community locales (new keys land as `null`). Full guide: [docs/i18n.md](https://github.com/eigenpal/docx-editor/blob/main/docs/i18n.md).
