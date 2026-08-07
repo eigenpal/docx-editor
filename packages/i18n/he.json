@@ -150,7 +150,9 @@
     "ariaLabel": "זום: {label}",
     "zoomIn": "הגדל תצוגה",
     "zoomLevel": "רמת זום",
-    "zoomOut": "הקטן תצוגה"
+    "zoomOut": "הקטן תצוגה",
+    "automatic": null,
+    "fitWidth": null
   },
   "colorPicker": {
     "ariaLabel": "בחר צבע {type}",
@@ -1113,7 +1115,8 @@
     "showPane": "הצג הערות",
     "structural": "מבנה המסמך שונה",
     "deleteComment": "מחק הערה",
-    "discardChange": "בטל שינוי"
+    "discardChange": "בטל שינוי",
+    "close": null
   },
   "imageAltText": {
     "description": "תיאור",

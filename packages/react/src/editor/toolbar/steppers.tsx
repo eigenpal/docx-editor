@@ -22,7 +22,7 @@ import { useEditorCommand } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
 import { guardToolbarMousedown } from './ToolbarButton';
 import type { ToolbarSlotPartProps, ToolbarSlotPartComponent } from './parts';
-import { ZOOM_LEVELS, stepZoomLevel } from '../zoom-levels';
+import { useZoom } from '../useZoom';
 
 /** Engine bounds for `w:sz`: integer half-points, 2..3276 (docx-editor-support). */
 const MIN_HALF_POINTS = 2;
@@ -34,7 +34,6 @@ const FONT_SIZE_PRESETS_PT: readonly number[] = [
 ];
 
 const selectFontSizePt = (snapshot: EditorSnapshot) => snapshot.formatting?.fontSizePt ?? null;
-const selectZoom = (snapshot: EditorSnapshot) => snapshot.zoom;
 
 /** The next preset above `current`, or `current + 1` beyond the ladder. */
 function nextPreset(current: number, presets: readonly number[], max: number): number {
@@ -317,7 +316,8 @@ export const ToolbarFontSize: ToolbarSlotPartComponent = Object.assign(ToolbarFo
 
 function ToolbarZoomImpl({ className, hidden }: ToolbarSlotPartProps) {
   const editor = useDocxEditor();
-  const zoom = useEditorState(selectZoom);
+  const { zoom, isFit, mode, setZoom, setMode, zoomIn, zoomOut, canZoomIn, canZoomOut, levels } =
+    useZoom();
   const label = useToolbarLabel();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement | null>(null);
@@ -337,18 +337,31 @@ function ToolbarZoomImpl({ className, hidden }: ToolbarSlotPartProps) {
   const apply = useCallback(
     (level: number) => {
       setOpen(false);
-      editor?.setZoom(level);
+      setZoom(level);
     },
-    [editor]
+    [setZoom]
+  );
+  const applyMode = useCallback(
+    (next: 'auto' | 'fit-width') => {
+      setOpen(false);
+      setMode(next === 'auto' ? 'auto' : { type: 'fit', fit: 'pageWidth' });
+    },
+    [setMode]
   );
 
   if (hidden) return null;
-  const epsilon = 0.001;
-  const prevLevel = stepZoomLevel(zoom, 'out');
-  const nextLevel = stepZoomLevel(zoom, 'in');
   const display = `${Math.round(zoom * 100)}%`;
+  // Which fit, not just "a fit": `Automatic` is the capped one, `Fit width` the uncapped, and
+  // ticking both would tell the reader the editor is in two modes at once.
+  const autoSelected = isFit && mode.type === 'fit' && mode.maxZoom === 1;
+  const fitWidthSelected = isFit && !autoSelected;
   return (
-    <span ref={rootRef} className="docx-toolbar__zoom" data-slot="zoom.level">
+    <span
+      ref={rootRef}
+      className="docx-toolbar__zoom"
+      data-slot="zoom.level"
+      {...(isFit ? { 'data-fit': '' } : {})}
+    >
       <StepperShell
         className={className}
         groupLabel={label('zoom.zoomLevel')}
@@ -372,15 +385,41 @@ function ToolbarZoomImpl({ className, hidden }: ToolbarSlotPartProps) {
             </span>
           </button>
         }
-        canDecrease={!!editor && prevLevel !== null}
-        canIncrease={!!editor && nextLevel !== null}
-        onDecrease={() => prevLevel !== null && apply(prevLevel)}
-        onIncrease={() => nextLevel !== null && apply(nextLevel)}
+        canDecrease={canZoomOut}
+        canIncrease={canZoomIn}
+        onDecrease={zoomOut}
+        onIncrease={zoomIn}
       />
       {open ? (
         <div className="docx-toolbar__menu docx-toolbar__zoom-menu" role="listbox">
-          {ZOOM_LEVELS.map((level) => {
-            const selected = Math.abs(level - zoom) < epsilon;
+          {/* The fits come FIRST and are ticked from the mode, not the percentage. Ticking
+              the level that matches the resolved scale would light up "100%" while the
+              editor was tracking the viewport and about to move off it. */}
+          <button
+            type="button"
+            role="option"
+            aria-selected={autoSelected}
+            {...(autoSelected ? { 'data-selected': '' } : {})}
+            className="docx-toolbar__menu-item"
+            onMouseDown={guardToolbarMousedown}
+            onClick={() => applyMode('auto')}
+          >
+            {label('zoom.automatic')}
+          </button>
+          <button
+            type="button"
+            role="option"
+            aria-selected={fitWidthSelected}
+            {...(fitWidthSelected ? { 'data-selected': '' } : {})}
+            className="docx-toolbar__menu-item"
+            onMouseDown={guardToolbarMousedown}
+            onClick={() => applyMode('fit-width')}
+          >
+            {label('zoom.fitWidth')}
+          </button>
+          <hr className="docx-toolbar__menu-separator" />
+          {levels.map((level) => {
+            const selected = !isFit && Math.abs(level - zoom) < 0.001;
             return (
               <button
                 key={level}

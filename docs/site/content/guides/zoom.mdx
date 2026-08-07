@@ -1,0 +1,99 @@
+---
+title: 'Zoom and fit to screen'
+description: 'Fit the document to the viewport, control the zoom lifecycle from your own UI with the useZoom hook, and let the comments pane shrink the page instead of pushing it off screen.'
+category: 'Guides'
+seoTitle: 'Zoom and fit to screen'
+---
+
+The editor fits the page to its container by default. A window with room for the sheet renders at 100%; a narrower one shrinks the document instead of growing a horizontal scrollbar.
+
+## The two modes
+
+Zoom has a value and a mode. The value is the scale the pages paint at; the mode is where that value comes from.
+
+| Mode                                | Behavior                                                                                          |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `'auto'` (default)                  | Fit the page width, but never above 100%. Shrinks a page that does not fit, leaves one that does. |
+| `{ type: 'fit', fit: 'pageWidth' }` | Fit the page width in both directions, so a wide window magnifies the page.                       |
+| `{ type: 'fixed' }`                 | Hold whatever `zoom` is set to. This is the pre-fit behavior.                                     |
+
+```tsx
+<DocxEditor document={bytes} />                          {/* auto */}
+<DocxEditor document={bytes} zoomMode={{ type: 'fit', fit: 'pageWidth' }} />
+<DocxEditor document={bytes} zoom={1} zoomMode={{ type: 'fixed' }} />
+```
+
+Passing `zoom` on its own also means fixed, so an app that pinned a scale keeps it.
+
+A fit tracks the container. Resizing the window, opening the comments pane, docking the navigation pane: anything that changes the room beside the page changes the scale, in the engine, with nothing to wire up.
+
+Setting a level ends the fit. That is what you want from a zoom control: a reader who picks 150% has said so, and a resize must not take it back.
+
+## Driving it yourself
+
+`useZoom` is the whole lifecycle in one hook.
+
+```tsx
+import { useZoom } from '@docx-editor.dev/react';
+
+function ZoomControl() {
+  const { zoom, isFit, auto, zoomIn, zoomOut, canZoomIn, canZoomOut } = useZoom();
+
+  return (
+    <div>
+      <button onClick={zoomOut} disabled={!canZoomOut}>
+        &minus;
+      </button>
+      <span>{Math.round(zoom * 100)}%</span>
+      <button onClick={zoomIn} disabled={!canZoomIn}>
+        +
+      </button>
+      <button onClick={auto} aria-pressed={isFit}>
+        Fit
+      </button>
+    </div>
+  );
+}
+```
+
+| Member                    | What it does                                                                              |
+| ------------------------- | ----------------------------------------------------------------------------------------- |
+| `zoom`                    | The resolved scale. `1` is 100%.                                                          |
+| `mode`, `isFit`           | Where the scale came from. Render a control's selected state from these, not from `zoom`. |
+| `setZoom(n)`              | A fixed scale. Leaves any fit.                                                            |
+| `setMode(m)`              | `'auto'`, a fit, or `{ type: 'fixed' }`.                                                  |
+| `auto()`, `fitToWidth()`  | The two fits, by name.                                                                    |
+| `reset()`                 | Back to a plain, untracked 100%.                                                          |
+| `zoomIn()`, `zoomOut()`   | Walk the preset ladder in `levels`.                                                       |
+| `canZoomIn`, `canZoomOut` | Whether there is a rung left in that direction.                                           |
+
+Render the selected state from `mode`, not from `zoom`. A menu that ticks the level matching the percentage will light up "75%" while the editor is tracking the viewport and about to move off it.
+
+The packaged toolbar's zoom control already does all of this: **Automatic** and **Fit width** sit above the preset levels, and the tick follows the mode.
+
+## Comments on a narrow screen
+
+The comments pane reserves a gutter beside the page. Under a fit that gutter comes out of the document's width, so opening comments shrinks the page rather than pushing it off screen — the two sit side by side and both stay readable.
+
+Below a threshold there is no room for that. The pane then gives the gutter back and opens as a drawer over the document: cards stacked in reading order, a scrim behind it, dismissed with Escape or a tap outside. The same comments button opens it, and the document keeps its full width and refits.
+
+The threshold is the editor's own container, not the browser window, so an editor embedded in a narrow column behaves like an editor on a narrow screen. To follow it in your own chrome:
+
+```tsx
+import { useReviewPaneLayout } from '@docx-editor.dev/react';
+
+const layout = useReviewPaneLayout(); // 'rail' | 'drawer'
+```
+
+## Without React
+
+Zoom lives in the engine, so every host reaches it the same way:
+
+```ts
+editor.setZoomMode('auto');
+editor.setZoom(1.5); // leaves the fit
+editor.getZoom(); // 0.79
+editor.getZoomMode(); // { type: 'fit', fit: 'pageWidth', maxZoom: 1 }
+```
+
+`snapshot()` carries `zoom` and `zoomMode`, and both fire on `selectionChange` — including when the editor refits itself after a resize, so a subscriber never shows a stale percentage.

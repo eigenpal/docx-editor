@@ -2141,6 +2141,11 @@ a.docx-hyperlink:focus-visible {
   position: relative;
   overflow: auto;
   overscroll-behavior: contain;
+  /* Load-bearing for fit-to-viewport zoom, not cosmetic. A fit measures this element's
+   * content box; without a stable gutter, fitting a document down far enough to remove the
+   * vertical scrollbar widens that box, which fits larger, which brings the scrollbar back.
+   * Reserving the gutter in both states takes the scrollbar out of the measurement. */
+  scrollbar-gutter: stable;
 }
 
 /* The page stack is the engine's content origin: the engine publishes page 0 at
@@ -3837,7 +3842,8 @@ a.docx-hyperlink:focus-visible {
   left: 0;
   z-index: var(--doc-z-overlay);
   margin-top: 4px;
-  min-width: 96px;
+  /* Wide enough for "Automatic" above the percentages, which are narrower. */
+  min-width: 132px;
 }
 
 /* The merged alignment dropdown: current-alignment icon + caret; the popup is
@@ -4665,6 +4671,15 @@ a.docx-hyperlink:focus-visible {
   padding-right: 44px;
 }
 
+/* No gutter in a container too narrow to hold one. Reserving 316px out of a 420px viewport
+ * to show the comments made the document unreadable to show them; the drawer below takes
+ * that job instead, and the fit gives the width straight back to the page. Both states, so
+ * the marker strip goes too — it is replaced by the toolbar's comments button. */
+.docx-editor__scroll-container[data-review-layout='drawer'][data-review-pane='open'],
+.docx-editor__scroll-container[data-review-layout='drawer'][data-review-pane='closed'] {
+  padding-right: 0;
+}
+
 /* The review rail (`DocxEditor.Review` / the Vue equivalent): one card per pending decision,
  * anchored beside the text it is about.
  *
@@ -4684,6 +4699,98 @@ a.docx-hyperlink:focus-visible {
 /* Closed, the rail is a strip of markers: it keeps every anchor and gives up the width. */
 .docx-review:not([data-open]) {
   width: 32px;
+}
+
+/* ── The drawer ─────────────────────────────────────────────────────────────────────────
+ *
+ * In a container too narrow to hold a rail, the element above keeps its position (the "add a
+ * comment" affordance still belongs on the page's edge) and gives up its column entirely.
+ * The cards move into an overlay panel that the same toolbar button opens.
+ *
+ * The panel is FIXED to the browser viewport, which is what a hamburger drawer does. The
+ * alternative, positioning it against the scroll container, makes it scroll away with the
+ * document — an absolutely-positioned child of a scroller is placed in content coordinates,
+ * not viewport ones. The tradeoff is real and deliberate: an editor embedded in a taller page
+ * gets a drawer as tall as the window rather than as tall as the editor, and a narrow
+ * container is nearly always a small screen where those are the same thing. */
+.docx-review[data-layout='drawer'],
+.docx-review[data-layout='drawer']:not([data-open]) {
+  width: 0;
+}
+
+.docx-review__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--doc-z-overlay);
+  background: var(--doc-overlay);
+  pointer-events: auto;
+}
+
+.docx-review__drawer {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-end: 0;
+  z-index: calc(var(--doc-z-overlay) + 1);
+  display: flex;
+  flex-direction: column;
+  width: min(360px, 100%);
+  max-height: 100dvh;
+  background: var(--doc-bg);
+  border-inline-start: 1px solid var(--doc-border);
+  box-shadow: -4px 0 16px var(--doc-shadow);
+  pointer-events: auto;
+  /* Focused programmatically on open; the ring belongs on the controls inside, not on the
+   * panel the reader never clicked. */
+  outline: none;
+}
+
+.docx-review__drawer[hidden] {
+  display: none;
+}
+
+.docx-review__drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-block-end: 1px solid var(--doc-border);
+  font-weight: 600;
+}
+
+.docx-review__drawer-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--doc-text-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.docx-review__drawer-close:hover {
+  background: var(--doc-bg-hover);
+}
+
+.docx-review__drawer-close:focus-visible {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: -1px;
+}
+
+/* The panel scrolls itself. The anchored rail rides the document's scroll; there is no
+ * document scroll to ride here, and a list longer than the screen has to reach its end. */
+.docx-review__drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px;
 }
 
 /* The "comment on this" button. Pulled OUT of the card column, onto the page's own edge:
@@ -5108,6 +5215,21 @@ a.docx-hyperlink:focus-visible {
 .docx-review__list {
   position: absolute;
   inset: 0;
+}
+
+/* The drawer's list: a stack in document order, in normal flow. The anchored column above
+ * positions each card absolutely against the text it annotates; over the document there is
+ * no text to point at, so the cards simply follow one another. */
+.docx-review__list[data-flow] {
+  position: static;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.docx-review__list[data-flow] .docx-review__slot {
+  /* The anchored column animates `top`; there is no `top` here to animate. */
+  transition: none;
 }
 
 .docx-review__slot {

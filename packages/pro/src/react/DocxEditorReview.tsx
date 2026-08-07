@@ -45,21 +45,34 @@ import {
   useState,
 } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type {
-  EditorSnapshot,
-  ReviewItemQuery,
-  ReviewRevisionKind,
-} from '@docx-editor.dev/core/contracts/editor';
+import type { EditorSnapshot, ReviewRevisionKind } from '@docx-editor.dev/core/contracts/editor';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import {
   ReviewRailContext,
   Slot,
   useDocxEditor,
   useEditorState,
+  useReviewPaneLayout,
   useTranslation,
   type ToolbarTranslate,
 } from '@docx-editor.dev/react';
 import { useReview, type ReviewItemView } from './useReview';
+import { ReviewDrawer } from './ReviewDrawer';
+import {
+  AUTHOR_SLOTS,
+  COLLAPSED_CARD_HEIGHT,
+  COLLAPSE_DISPLACEMENT_PX,
+  COMPOSE_KEY,
+  DEFAULT_CARD_HEIGHT,
+  INITIAL_METRICS,
+  NO_PLACEMENT_REVIEW_QUERY,
+  RAIL_GUTTER,
+  RAIL_OVERSCAN,
+  guardMousedown,
+  idsOf,
+  isThreadedReply,
+  type RailMetrics,
+} from './review-rail-geometry';
 
 /**
  * True while the editor has NO painted document: still loading one, the one it was handed
@@ -111,83 +124,6 @@ interface ReviewRailValue {
   readonly beginDraft: () => void;
   /** Close it, committed or not, and unpin the range. */
   readonly endDraft: () => void;
-}
-
-/** Where the rail is, in the coordinates of its positioning container. */
-interface RailMetrics {
-  /** Layout points to CSS pixels, from the engine. */
-  readonly scale: number;
-  /** The painted surface's own top offset, so chrome above the pages does not shift cards. */
-  readonly top: number;
-  /** Left edge, one gutter right of the sheet; null until there is a surface to measure. */
-  readonly left: number | null;
-}
-
-const INITIAL_METRICS: RailMetrics = { scale: 96 / 72, top: 0, left: null };
-
-/** Space between the page edge and the cards. */
-const RAIL_GUTTER = 16;
-
-/** The compose affordance's place in the stacking run. Not a review item; never rendered. */
-const COMPOSE_KEY = '\u0000compose';
-
-/**
- * How far outside the visible scroll window a card still mounts, in pixels.
- *
- * Enough that a normal scroll or a pane toggle never shows an empty gutter, small enough
- * that a document with two hundred comments mounts a handful of cards rather than all of
- * them. Rendering every card was the toggle's lag: two hundred cards' worth of DOM, plus a
- * `top` transition on each, in one frame.
- */
-const RAIL_OVERSCAN = 600;
-
-/** How many author slots the token ramp defines; past it, colours repeat. */
-const AUTHOR_SLOTS = 8;
-
-/** What an unmeasured, uncollapsed card reserves in the stacking run, in CSS px. */
-const DEFAULT_CARD_HEIGHT = 72;
-/** A collapsed card: the head row and its padding, in CSS px. */
-const COLLAPSED_CARD_HEIGHT = 64;
-/**
- * How far (CSS px) a card may be pushed below its own text before it collapses to a
- * header. Roughly half a viewport: nearer than that the eye still connects card to text;
- * further, a full card reads as annotating whatever happens to be beside it.
- */
-const COLLAPSE_DISPLACEMENT_PX = 480;
-
-/** Stable query for the balloon's unplaced queue read — never allocate per render. */
-const NO_PLACEMENT_REVIEW_QUERY = Object.freeze({ placement: false }) satisfies ReviewItemQuery;
-
-/**
- * Whether this entry renders INSIDE another card rather than as one of its own.
- *
- * Two kinds of reply, one rule. A threaded reply belongs in the comment it answers; a reply to
- * a TRACKED CHANGE is also a comment — OOXML gives `w:ins` and `w:del` no body, so the text is
- * written over the change's own range — and belongs in the change's card. Everywhere the rail
- * lists roots asks this, because a filter that checked only `parentId` drew a reply to a
- * revision twice: once inside the change and once beside it.
- */
-function isThreadedReply(entry: ReviewItemView, present: ReadonlySet<string>): boolean {
-  if (entry.kind !== 'comment') return false;
-  // A parent this list does not hold is not a parent HERE. The engine already drops a link
-  // its own `excludeRevisionKinds` filter broke, but a consumer's `filter` prop can break one
-  // too, and a comment excluded as a reply to a card nobody draws is a comment that vanishes.
-  // Falling back to root is the only answer that always renders it somewhere.
-  if (entry.parentId !== undefined) return present.has(entry.parentId);
-  if (entry.parentRevisionId !== undefined) return present.has(entry.parentRevisionId);
-  return false;
-}
-
-/** Ids of everything the rail is working from, for the reply/root test above. */
-function idsOf(items: readonly ReviewItemView[]): ReadonlySet<string> {
-  return new Set(items.map((entry) => entry.id));
-}
-
-/** Keeps the caret: a mousedown that bubbles to the editor moves it. Inputs are exempt. */
-function guardMousedown(event: React.MouseEvent): void {
-  const tag = (event.target as HTMLElement | null)?.tagName;
-  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
-  event.preventDefault();
 }
 
 function useRail(): ReviewRailValue {
@@ -381,6 +317,11 @@ function ReviewRoot({
   // rail or not, and the tier-2 `<DocxEditor>` sugar mounts none.
   const railRegistry = useContext(ReviewRailContext);
   useEffect(() => railRegistry?.register(), [railRegistry]);
+  // Beside the document, or over it. Published by `DocxEditor.Viewport`, which is the element
+  // whose width decides it — an embedded editor in a narrow column is a narrow editor even on
+  // a wide monitor, so this is container geometry rather than a media query.
+  const layout = useReviewPaneLayout();
+  const drawer = layout === 'drawer';
   // The pane's open state is the ENGINE's, not this component's: the toolbar toggles it and
   // the viewport shifts the page for it, so a flag kept here would be a third opinion.
   const open = review.paneOpen;
@@ -705,6 +646,7 @@ function ReviewRoot({
     'data-testid': 'review-rail',
     'data-count': items.length,
     'data-open': open ? '' : undefined,
+    'data-layout': layout,
     role: 'complementary' as const,
     'aria-label': t('review.ariaLabel'),
     onMouseDown: guardMousedown,
@@ -748,10 +690,16 @@ function ReviewRoot({
   ) : null;
 
   // `preset={false}` hands the panel over verbatim, but a render prop needs the list to run it.
-  const body = !preset
-    ? typeof children === 'function'
-      ? null
-      : children
+  const presetBody = drawer
+    ? // In a drawer the cards are a LIST, not an anchored column: `flow` drops the per-card
+      // `top`, and no window culls them, because the drawer scrolls itself rather than riding
+      // the document's scroll. An anchor here would point at text the drawer is covering.
+      takeRoot(
+        'List',
+        <ReviewList flow stack={false}>
+          {children}
+        </ReviewList>
+      )
     : open
       ? takeRoot(
           'List',
@@ -768,11 +716,30 @@ function ReviewRoot({
         )
       : // Closed, the rail keeps its anchors and drops everything else: a small marker per item
         // in the margin, which is how a reader sees there is something to read without giving up
-        // the width. Clicking one opens the pane on that item.
+        // the width. Clicking one opens the pane on that item. No markers in a drawer: they
+        // would sit over the text they annotate, and the toolbar's comments button is already
+        // the way in.
         takeRoot(
           'Markers',
           <ReviewMarkers scale={metrics.scale} offset={metrics.top} window={window_} />
         );
+
+  const rawBody = !preset ? (typeof children === 'function' ? null : children) : presetBody;
+
+  // Mounted open OR closed, so a half-typed reply survives being dismissed; the drawer hides
+  // itself rather than being unmounted here.
+  const body = drawer ? (
+    <ReviewDrawer
+      open={open}
+      onClose={() => setReviewPaneOpen(false)}
+      label={t('review.ariaLabel')}
+      closeLabel={t('review.close')}
+    >
+      {rawBody}
+    </ReviewDrawer>
+  ) : (
+    rawBody
+  );
 
   return (
     <ReviewContext.Provider value={value}>
@@ -824,6 +791,12 @@ interface ReviewListProps {
   /** Visible band of the scroller; cards outside it are not mounted. Null renders all. */
   window?: { top: number; bottom: number } | null;
   /**
+   * Render the cards in document order with no anchor, for a panel that covers the text
+   * instead of sitting beside it. An anchored card in a drawer points at text the drawer is
+   * on top of, which is worse than not pointing at all.
+   */
+  flow?: boolean;
+  /**
    * A render prop takes over the card entirely, keeping the rail's subscription, anchoring
    * and stacking. Nodes are treated as part overrides for the packaged card.
    */
@@ -847,6 +820,7 @@ function ReviewList({
   scale = 1,
   offset = 0,
   window: visible = null,
+  flow = false,
   children,
   className,
   hidden,
@@ -862,9 +836,16 @@ function ReviewList({
   }
 
   return (
-    <div className={`docx-review__list${className ? ` ${className}` : ''}`}>
+    <div
+      className={`docx-review__list${className ? ` ${className}` : ''}`}
+      {...(flow ? { 'data-flow': '' } : {})}
+    >
       {roots.map((entry) => {
-        const anchor = stack ? (positions?.get(entry.key) ?? entry.anchorY) : entry.anchorY;
+        const anchor = flow
+          ? null
+          : stack
+            ? (positions?.get(entry.key) ?? entry.anchorY)
+            : entry.anchorY;
         const top = anchor === null || anchor === undefined ? null : offset + anchor * scale;
         // Outside the window: not rendered at all. A card the reader cannot see costs a
         // subtree, a measurement and a transition, and two hundred of them cost a frame.

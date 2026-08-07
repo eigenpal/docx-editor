@@ -24,6 +24,9 @@ export function applyThemeShade(hex: string, keep: number): string;
 export function applyThemeTint(hex: string, keep: number): string;
 
 // @public
+export const AUTO_ZOOM_MODE: ZoomMode;
+
+// @public
 export function blankDocumentBytes(): Uint8Array;
 
 // @public
@@ -779,8 +782,8 @@ export interface DocxEditorConfig {
     onFontError?: (error: EditorFontError) => void;
     tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
     translate?: (key: string, params?: Record<string, string | number>) => string;
-    // (undocumented)
     zoom?: number;
+    zoomMode?: ZoomMode | 'auto';
 }
 
 // @public
@@ -862,6 +865,26 @@ export function finalizeImageOverlayInteraction(options: {
     readonly shiftKey: boolean;
     readonly anchorFrameOrigin: AnchorFrameOrigin | null;
 }): FinalizedImageOverlayInteraction;
+
+// @public
+export const FIT_GUTTER_PX = 24;
+
+// @public
+export function fitZoom(input: FitZoomInput): number | null;
+
+// @public
+export interface FitZoomInput {
+    readonly availableWidthPx: number;
+    readonly gutterPx?: number;
+    // (undocumented)
+    readonly maxZoom?: number;
+    // (undocumented)
+    readonly minZoom?: number;
+    readonly pageWidthPx: number;
+}
+
+// @public
+export const FIXED_ZOOM_MODE: ZoomMode;
 
 // @public
 export interface FontConfigurationBase extends FontConfigurationFragment {
@@ -1107,6 +1130,11 @@ export interface ImageResourceLimits {
 
 // @public
 export type ImageWrapTarget = 'inline' | 'square' | 'squareLeft' | 'squareRight' | 'tight' | 'through' | 'topAndBottom' | 'behind' | 'inFront';
+
+// @public
+export function isFitMode(mode: ZoomMode): mode is Extract<ZoomMode, {
+    type: 'fit';
+}>;
 
 // @public
 export function isStaleImageInteractionCommit(editor: Pick<DocxEditorInstance, 'surface' | 'mountGeneration'>, session: ImageInteractionSession): ExecResult | null;
@@ -1492,6 +1520,12 @@ export function resolveThemeColorHex(color: Extract<ColorValue, {
 };
 
 // @public
+export function resolveZoomMode(mode: ZoomMode | 'auto'): ZoomMode | null;
+
+// @public
+export const REVIEW_RAIL_DOCK_MIN_PX = 900;
+
+// @public
 export interface ReviewModelInput {
     readonly commentsExtendedPart?: OoxmlPart | undefined;
     readonly commentsPart?: OoxmlPart | undefined;
@@ -1513,6 +1547,12 @@ export interface ReviewModuleContribution {
     readonly displayModes: readonly RevisionDisplayMode[];
     readonly revisionItemsOfParagraph: (part: OoxmlPart, paragraphId: string) => readonly ReviewRevisionItem[];
 }
+
+// @public
+export type ReviewPaneLayout = 'rail' | 'drawer';
+
+// @public
+export function reviewPaneLayoutFor(containerWidthPx: number, minDockWidthPx?: number): ReviewPaneLayout;
 
 // @public
 export interface RulerDragOptions {
@@ -1962,6 +2002,12 @@ export type VectorImageMime = 'image/svg+xml';
 
 // @public
 export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'];
+
+// @public (undocumented)
+export const ZOOM_MAX = 5;
+
+// @public
+export const ZOOM_MIN = 0.1;
 
 // (No @packageDocumentation comment for this package)
 

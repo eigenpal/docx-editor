@@ -592,9 +592,11 @@ describe('the shaped parts', () => {
     await act(async () => {
       (value as HTMLButtonElement).click();
     });
+    // The two fits come first and are ticked from the MODE, not from the percentage, so a
+    // reader tracking the viewport at 79% does not see "75%" lit up beside them.
     expect(
       [...stepper.querySelectorAll('[role="option"]')].map((option) => option.textContent)
-    ).toEqual(['50%', '75%', '100%', '125%', '150%', '200%']);
+    ).toEqual(['Automatic', 'Fit width', '50%', '75%', '100%', '125%', '150%', '200%']);
     await act(async () => {
       (value as HTMLButtonElement).click();
     });

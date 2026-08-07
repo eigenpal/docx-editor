@@ -87,6 +87,7 @@ import { toolbarCommandState } from '@docx-editor.dev/core/editor';
 import { Translations } from '@docx-editor.dev/i18n';
 import { ViewScope } from '@docx-editor.dev/core/contracts/editor';
 import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core/editor';
+import { ZoomMode } from '@docx-editor.dev/core/contracts/editor';
 
 export { CHROME_GROUPS }
 
@@ -639,8 +640,8 @@ export interface DocxEditorProps {
     rulers?: boolean;
     t?: (key: string, params?: Record<string, string | number>) => string;
     title?: string;
-    // (undocumented)
     zoom?: number;
+    zoomMode?: ZoomMode | 'auto';
 }
 
 // @public
@@ -680,8 +681,8 @@ export interface DocxEditorRootProps {
     onReady?: (editor: Editor) => void;
     tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
     translate?: (key: string, params?: Record<string, string | number>) => string;
-    // (undocumented)
     zoom?: number;
+    zoomMode?: ZoomMode | 'auto';
 }
 
 // @public
@@ -1263,6 +1264,7 @@ export function navigationShift(input: NavigationShiftInput): number;
 
 // @public (undocumented)
 export interface NavigationShiftInput {
+    readonly docked?: boolean;
     readonly inlineEndReservation?: number;
     readonly pageWidthPx: number;
     readonly reservation: number;
@@ -1471,6 +1473,12 @@ export interface ParagraphStyleProps extends ParagraphStylePartProps {
 export { PX_PER_CM }
 
 export { PX_PER_INCH }
+
+// @public
+export const ReviewLayoutContext: react.Context<ReviewPaneLayout>;
+
+// @public
+export type ReviewPaneLayout = 'rail' | 'drawer';
 
 // @public (undocumented)
 export const ReviewRailContext: react.Context<ReviewRailRegistry | null>;
@@ -1978,12 +1986,40 @@ export interface UseParagraphStyleResult {
 }
 
 // @public
+export function useReviewPaneLayout(): ReviewPaneLayout;
+
+// @public
 export function useTableBorderTargetLabel(): string;
 
 // @public (undocumented)
 export function useTranslation(): {
     t: TFunction;
 };
+
+// @public
+export function useZoom(): UseZoomResult;
+
+// @public
+export interface UseZoomResult {
+    readonly auto: () => void;
+    // (undocumented)
+    readonly canZoomIn: boolean;
+    // (undocumented)
+    readonly canZoomOut: boolean;
+    readonly fitToWidth: () => void;
+    readonly isFit: boolean;
+    readonly levels: readonly number[];
+    readonly mode: ZoomMode;
+    readonly reset: () => void;
+    // (undocumented)
+    readonly setMode: (mode: ZoomMode | 'auto') => void;
+    readonly setZoom: (zoom: number) => void;
+    readonly zoom: number;
+    // (undocumented)
+    readonly zoomIn: () => void;
+    // (undocumented)
+    readonly zoomOut: () => void;
+}
 
 // @public
 export const VERSION = "0.0.2";

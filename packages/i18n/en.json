@@ -155,7 +155,9 @@
     "ariaLabel": "Zoom: {label}",
     "zoomOut": "Zoom out",
     "zoomIn": "Zoom in",
-    "zoomLevel": "Zoom level"
+    "zoomLevel": "Zoom level",
+    "automatic": "Automatic",
+    "fitWidth": "Fit width"
   },
   "colorPicker": {
     "ariaLabel": "{type} color picker",
@@ -1151,6 +1153,7 @@
     "structural": "Changed the document structure",
     "replyRefused": "Could not post the reply",
     "showPane": "Show comments",
+    "close": "Close comments",
     "replaced": "Replaced",
     "replacedWith": "with",
     "commentRefused": "Could not add the comment"

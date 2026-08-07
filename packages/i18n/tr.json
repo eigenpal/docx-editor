@@ -150,7 +150,9 @@
     "ariaLabel": "Yakınlaştırma: {label}",
     "zoomIn": "Yakınlaştır",
     "zoomLevel": "Yakınlaştırma düzeyi",
-    "zoomOut": "Uzaklaştır"
+    "zoomOut": "Uzaklaştır",
+    "automatic": null,
+    "fitWidth": null
   },
   "colorPicker": {
     "ariaLabel": "{type} renk seçici",
@@ -1113,7 +1115,8 @@
     "showPane": "Açıklamaları göster",
     "structural": "Belge yapısı değiştirildi",
     "deleteComment": "Açıklamayı sil",
-    "discardChange": "Değişikliği at"
+    "discardChange": "Değişikliği at",
+    "close": null
   },
   "imageAltText": {
     "description": "Açıklama",

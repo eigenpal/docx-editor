@@ -8,10 +8,11 @@
 //   rematerialization and page-visibility work. Without it the engine falls back to
 //   document scrolling and virtualization degrades.
 
-import { useCallback, useContext } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import { ReviewRailContext, useDocxEditor } from './context';
+import { reviewPaneLayoutFor, type ReviewPaneLayout } from '@docx-editor.dev/core/editor';
+import { ReviewLayoutContext, ReviewRailContext, useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
 import { zoomLevelForShortcut } from './zoom-levels';
@@ -53,10 +54,28 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
   // left, the other reserves a gutter on the right, and a document can have both open.
   const layout = useNavigationLayoutStore();
   const shift = useNavigationShift();
+  // This element is the one whose width decides whether the comments fit beside the document,
+  // so it is the one that measures and publishes the answer. A media query would get it wrong
+  // for an embedded editor: a 700px column on a 2560px monitor is a narrow editor.
+  const [element, setElement] = useState<HTMLDivElement | null>(null);
+  const [reviewLayout, setReviewLayout] = useState<ReviewPaneLayout>('rail');
   const attach = useCallback(
-    (element: HTMLDivElement | null) => layout?.setViewport(element),
+    (next: HTMLDivElement | null) => {
+      layout?.setViewport(next);
+      setElement(next);
+    },
     [layout]
   );
+
+  useEffect(() => {
+    if (!element) return undefined;
+    const measure = () => setReviewLayout(reviewPaneLayoutFor(element.clientWidth));
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [element]);
   // CAPTURE, not bubble: the engine's keymap is bound to the painted pages inside this
   // element and binds Word's subscript/superscript to the same Ctrl/Cmd+`=` chord. On the way
   // up it had already scripted the selection by the time zoom ran, so one keystroke both
@@ -83,6 +102,9 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
       data-testid="docx-editor-scroll"
       onKeyDownCapture={onKeyDownCapture}
       {...(reserve ? { 'data-review-pane': paneOpen ? 'open' : 'closed' } : {})}
+      // Always present, mounted rail or not: the stylesheet keys the gutter off it, and a
+      // host reading it should not have to know whether a rail is composed in yet.
+      data-review-layout={reviewLayout}
       className={`${scopeClassName}docx-editor-one-surface docx-editor-one-surface__viewport docx-editor__scroll-container${
         className ? ` ${className}` : ''
       }`}
@@ -92,7 +114,9 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
           wrapper above us, or this element, which scoped itself just now. Say
           so, or parts inside repeat the class under `chrome={false}` and in the
           Root + Viewport composition path. */}
-      <ScopedByAncestorContext.Provider value={true}>{children}</ScopedByAncestorContext.Provider>
+      <ScopedByAncestorContext.Provider value={true}>
+        <ReviewLayoutContext.Provider value={reviewLayout}>{children}</ReviewLayoutContext.Provider>
+      </ScopedByAncestorContext.Provider>
     </div>
   );
 }

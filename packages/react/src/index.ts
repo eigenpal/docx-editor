@@ -52,6 +52,9 @@ export {
 // or any external chrome — composes with: the rail registry the Viewport and rulers
 // reserve gutter space through, the in-tree Slot, and the locale binding.
 export { ReviewRailContext, type ReviewRailRegistry } from './editor/context';
+// How the pane presents itself in the container it is in: beside the document, or over it.
+// Published by `DocxEditor.Viewport`, which is the element whose width decides the answer.
+export { ReviewLayoutContext, useReviewPaneLayout, type ReviewPaneLayout } from './editor/context';
 export { Slot, type SlotProps } from './editor/toolbar/Slot';
 export { LocaleProvider, useTranslation } from './i18n';
 export { useChromeTranslate, type ChromeTranslate } from './i18n';
@@ -177,6 +180,7 @@ export {
   type ContentControlProps,
 } from './editor/DocxEditorContentControl';
 export { useEditorState } from './editor/useEditorState';
+export { useZoom, type UseZoomResult } from './editor/useZoom';
 export { useEditorCaret, type EditorCaret } from './editor/useEditorCaret';
 export { useEditorCommand, type EditorCommandState } from './editor/useEditorCommand';
 export {

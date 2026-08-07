@@ -20,6 +20,7 @@ import type {
   Editor,
   EditorFontError,
   FontConfiguration,
+  ZoomMode,
 } from '@docx-editor.dev/core/contracts/editor';
 import { createDocxEditor, defaultTableLabel } from '@docx-editor.dev/core/editor';
 import type { EditorModule } from '@docx-editor.dev/core/editor';
@@ -71,7 +72,20 @@ export interface DocxEditorRootProps {
   modules?: readonly EditorModule[];
   /** `'edit'` (default) or `'view'` (read-only). Sampled at mount only. */
   mode?: 'edit' | 'view';
+  /**
+   * A fixed scale. Supplying one also means the mode is fixed, unless `zoomMode` says
+   * otherwise: an app that pinned 100% keeps 100% on every window size.
+   */
   zoom?: number;
+  /**
+   * Where the scale comes from. Defaults to `'auto'`: fit the page width, never past 100%,
+   * so a window with room for the sheet renders at 100% and a narrower one shrinks instead
+   * of growing a horizontal scrollbar.
+   *
+   * A fit tracks the room beside the page, so opening the comments rail or docking the
+   * navigation pane shrinks the document by what it took. Pass `{ type: 'fixed' }` to opt out.
+   */
+  zoomMode?: ZoomMode | 'auto';
   /** Fired once per instance, after it is published to the tree (and after any
    *  `DocxEditor.Content` in the same commit has attached its mount point). */
   onReady?: (editor: Editor) => void;
@@ -97,7 +111,15 @@ export interface DocxEditorRootProps {
  * @public
  */
 export function DocxEditorRoot(props: DocxEditorRootProps) {
-  const { document: doc, fonts, zoom, tableInteractionLabel, imageDecodePort, children } = props;
+  const {
+    document: doc,
+    fonts,
+    zoom,
+    zoomMode,
+    tableInteractionLabel,
+    imageDecodePort,
+    children,
+  } = props;
   const { t: catalogT } = useTranslation();
   const defaultTranslate = useCallback(
     (key: string, params?: Record<string, string | number>) =>
@@ -125,6 +147,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       ...(p.mode !== undefined ? { mode: p.mode } : {}),
       ...(p.modules !== undefined ? { modules: p.modules } : {}),
       ...(p.zoom !== undefined ? { zoom: p.zoom } : {}),
+      ...(p.zoomMode !== undefined ? { zoomMode: p.zoomMode } : {}),
       ...(p.tableInteractionLabel ? { tableInteractionLabel: p.tableInteractionLabel } : {}),
       ...(p.imageDecodePort ? { imageDecodePort: p.imageDecodePort } : {}),
       onFontError: (error) => propsRef.current.onFontError?.(error),
@@ -148,9 +171,14 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
 
   // Zoom is a facade parameter, not a remount: tearing the editor down for a zoom
   // change would discard the user's edits and undo history.
+  //
+  // MODE AFTER LEVEL, and both in one effect. `setZoom` leaves any fit mode by design, so
+  // running these in two effects let the order decide the outcome: a host passing both
+  // `zoom={1.5}` and `zoomMode="auto"` would get whichever ran last.
   useEffect(() => {
     if (zoom !== undefined) editor?.setZoom(zoom);
-  }, [editor, zoom]);
+    if (zoomMode !== undefined) editor?.setZoomMode(zoomMode);
+  }, [editor, zoom, zoomMode]);
 
   // Table furniture labels follow the live locale resolver without remounting the editor.
   useEffect(() => {

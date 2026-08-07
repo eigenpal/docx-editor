@@ -10,6 +10,7 @@ import type {
   EditorFontError,
   FontConfiguration,
   Unsubscribe,
+  ZoomMode,
 } from '@docx-editor.dev/core/contracts/editor';
 import type { EditorModule } from '../contracts/modules.ts';
 import type { FontConfigurationFragment, FontResolver } from './font-composition.ts';
@@ -72,7 +73,22 @@ export interface DocxEditorConfig {
   mode?: 'edit' | 'view';
   /** Override raster decode for insert/replace image commands; defaults to browser/headless. */
   imageDecodePort?: import('../store/package/image-resources.ts').ImageDecodePort;
+  /**
+   * The scale to open at, as a fixed number.
+   *
+   * Supplying one also picks the mode: an editor given a `zoom` and no `zoomMode` opens
+   * FIXED at that value and stays there. An embedder that pinned 100% keeps 100%.
+   */
   zoom?: number;
+  /**
+   * Where the scale comes from. Defaults to `'auto'` — fit the page width, never past 100% —
+   * unless {@link DocxEditorConfig.zoom} is supplied, which means fixed.
+   *
+   * `'auto'` leaves a window wide enough for the sheet exactly where it is today and shrinks
+   * a narrower one instead of growing a horizontal scrollbar. Pass `{ type: 'fixed' }` for
+   * the old unconditional behaviour.
+   */
+  zoomMode?: ZoomMode | 'auto';
   onFontError?: (error: EditorFontError) => void;
   /** Localized labels for table insertion furniture on the painted surface. */
   tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;

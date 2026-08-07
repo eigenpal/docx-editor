@@ -150,7 +150,9 @@
     "ariaLabel": "Zoom: {label}",
     "zoomOut": "Perkecil",
     "zoomIn": "Perbesar",
-    "zoomLevel": "Tingkat zoom"
+    "zoomLevel": "Tingkat zoom",
+    "automatic": null,
+    "fitWidth": null
   },
   "colorPicker": {
     "ariaLabel": "Pilih warna {type}",
@@ -1113,7 +1115,8 @@
     "showPane": "Tampilkan komentar",
     "structural": "Struktur dokumen diubah",
     "deleteComment": "Hapus komentar",
-    "discardChange": "Buang perubahan"
+    "discardChange": "Buang perubahan",
+    "close": null
   },
   "imageAltText": {
     "description": "Deskripsi",

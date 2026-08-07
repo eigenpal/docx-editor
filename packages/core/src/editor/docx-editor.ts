@@ -95,6 +95,7 @@ import type {
   TextMatch,
   Unsubscribe,
   ViewScope,
+  ZoomMode,
 } from '@docx-editor.dev/core/contracts/editor';
 import { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 import {
@@ -184,13 +185,13 @@ import {
 } from './embedded-font-faces.ts';
 import {
   mountPaginatedSurface,
-  setPaginatedSurfaceScale,
   type PaginatedSurface,
   type PaginatedSurfaceOptions,
   type PaginatedSurfaceState,
 } from './paginated-surface.ts';
 import { drawingPaintStringsFromTranslate } from '../output/semantic-paint-drawings.ts';
 import { surfaceScroller } from './surface-pages.ts';
+import { createZoomLane } from './docx-editor-zoom.ts';
 import type {
   DocxEditorConfig,
   DocxEditorInstance,
@@ -299,13 +300,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   /** A refusal this facade made before the surface could see the request; see `snapshot`. */
   let facadeRejection: string | null = null;
   const mode = config.mode ?? 'edit';
-  let zoom =
-    config.zoom !== undefined &&
-    Number.isFinite(config.zoom) &&
-    config.zoom >= 0.1 &&
-    config.zoom <= 5
-      ? config.zoom
-      : 1;
 
   let surface: PaginatedSurface | null = null;
   let parseError: string | null = null;
@@ -484,8 +478,19 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     mountGeneration += 1;
   }
 
-  /** Points to CSS pixels: zoom 1 paints at the browser's 96dpi reading of a 72dpi point. */
-  const scaleOf = (): number => zoom * (96 / 72);
+  /**
+   * The scale, the mode, and the fit that keeps them agreeing. Reads the surface and the
+   * container through callbacks because both are replaced under it — a load rebuilds the
+   * surface, `attach` replaces the container — and a lane handed either one directly would go
+   * on rescaling the previous one.
+   */
+  const zoomLane = createZoomLane(config, {
+    container: () => container,
+    surface: () => surface,
+    bump,
+    emitSelectionChange,
+  });
+  const scaleOf = (): number => zoomLane.scale();
 
   function mountBytes(bytes: Uint8Array): void {
     if (!container) {
@@ -612,6 +617,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       surface.setReviewActivationExclusions(reviewActivationExclusions);
     }
     lastSelection = surface.state().selection;
+    // The page's size is only knowable now — it comes from this document's section properties
+    // — so a fit mode resolves here, after the mount and before the emits below. Synchronous
+    // on purpose: it lands in the same task as the mount, so the browser paints once, at the
+    // fitted scale, rather than painting 100% and correcting on the next frame.
+    zoomLane.attach();
     unsubscribeSession = surface.session.subscribe((change) => {
       const documentChange: DocumentChange = {
         revision: change.toRevision,
@@ -987,7 +997,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         surface.session.editable &&
         mode !== 'view' &&
         editingMode !== 'viewing',
-      zoom,
+      zoom: zoomLane.zoom(),
+      zoomMode: zoomLane.mode(),
       selection: selectionRangeOf(surface),
       // Whether the selection is a CARET rather than a range.
       //
@@ -1809,6 +1820,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     detach() {
       if (destroyed) return;
+      // Before the container goes: the observer is on an element found THROUGH it, and one
+      // left running would keep re-fitting a document that is no longer mounted.
+      zoomLane.detach();
       if (surface) {
         pendingBytes = surface.session.save();
         teardownSurface();
@@ -1915,6 +1929,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         ...(gated.tablePlan ? { admittedTablePlan: gated.tablePlan } : {}),
         editor,
       });
+      // A fit is a ratio between the page and the viewport, and this is the one command that
+      // moves the numerator: a Letter page turned landscape is 25% wider and no longer fits
+      // what it fitted a moment ago. Hooked HERE rather than on every commit because a refit
+      // reads `clientWidth` and computed style, which forces layout — paying that per
+      // keystroke to catch a command nobody ran would be a poor trade.
+      if (command.type === 'setPageSetup') zoomLane.refit();
       if (result) return result;
       // `changed` is read from the model, not assumed: reporting `changed: true` where the
       // document did not move would be a lie. It answers for the DOCUMENT, not for
@@ -2483,32 +2503,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       return surface?.revealParagraph(blockId) ?? false;
     },
 
-    getZoom: () => zoom,
-    setZoom(next: number): ExecResult {
-      // Refused rather than clamped: a caller that asked for
-      // 0 or NaN has a bug, and silently substituting 1 hides it.
-      if (!Number.isFinite(next) || next < 0.1 || next > 5) {
-        return {
-          ok: false,
-          code: 'invalidArgs',
-          reason: `zoom must be between 0.1 and 5, got ${next}`,
-        };
-      }
-      if (next === zoom) return { ok: true, changed: false };
-      if (surface && !setPaginatedSurfaceScale(surface, next * (96 / 72))) {
-        return {
-          ok: false,
-          code: 'unsupported',
-          reason: `the mounted surface could not apply zoom ${next}`,
-        };
-      }
-      zoom = next;
-      // Zoom is snapshot state: bump and tell subscribers, with the fresh snapshot on the
-      // selectionChange channel (the store listens to both channels either way).
-      bump();
-      emitSelectionChange();
-      return { ok: true, changed: true };
-    },
+    // The scale and its mode both live in the zoom lane; these four are the contract's view
+    // of it. `setZoom` refuses an out-of-range number rather than clamping, and leaves any fit
+    // mode; `setZoomMode` refuses a mode it does not know.
+    getZoom: () => zoomLane.zoom(),
+    setZoom: (next: number) => zoomLane.setZoom(next),
+    getZoomMode: () => zoomLane.mode(),
+    setZoomMode: (next: ZoomMode | 'auto') => zoomLane.setZoomMode(next),
 
     /**
      * Page boxes from the LAYOUT, never from the DOM, in CONTENT PIXELS at 96dpi.
@@ -2568,6 +2569,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     destroy() {
       destroyed = true;
+      zoomLane.detach();
       disposeEmbeddedFaces();
       teardownSurface();
       container = null;

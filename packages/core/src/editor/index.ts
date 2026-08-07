@@ -186,6 +186,24 @@ export {
 } from './docx-editor-images.ts';
 export { surfaceExtent, type SurfaceExtent } from './surface-pages.ts';
 export {
+  REVIEW_RAIL_DOCK_MIN_PX,
+  reviewPaneLayoutFor,
+  type ReviewPaneLayout,
+} from './review-pane-layout.ts';
+// The fit's vocabulary. Adapters need the constants to render a zoom control that agrees
+// with the engine (the ladder, the default mode) without hard-coding either.
+export {
+  AUTO_ZOOM_MODE,
+  FIT_GUTTER_PX,
+  FIXED_ZOOM_MODE,
+  ZOOM_MAX,
+  ZOOM_MIN,
+  fitZoom,
+  isFitMode,
+  resolveZoomMode,
+  type FitZoomInput,
+} from './zoom-fit.ts';
+export {
   computeImageResizeResult,
   createImageOverlayScrollPort,
   cssPixelsToLayoutPoints,

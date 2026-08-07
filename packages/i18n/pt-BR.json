@@ -150,7 +150,9 @@
     "ariaLabel": "Zoom: {label}",
     "zoomIn": "Ampliar",
     "zoomLevel": "Nível de zoom",
-    "zoomOut": "Reduzir"
+    "zoomOut": "Reduzir",
+    "automatic": null,
+    "fitWidth": null
   },
   "colorPicker": {
     "ariaLabel": "Seletor de cores {type}",
@@ -1113,7 +1115,8 @@
     "showPane": "Mostrar comentários",
     "structural": "Estrutura do documento alterada",
     "deleteComment": "Excluir comentário",
-    "discardChange": "Descartar alteração"
+    "discardChange": "Descartar alteração",
+    "close": null
   },
   "imageAltText": {
     "description": "Descrição",

@@ -25,20 +25,25 @@ import { useNavigationLayoutStore, useNavigationViewportElement } from './naviga
 /** The pane's tabs. Word's Replace tab is a later slice; nothing here pretends it exists. */
 export type NavigationTab = 'headings' | 'find';
 
-const selectPageGeometry = (
-  snapshot: EditorSnapshot
-): { pageSetup: PageSetup | null; zoom: number; reviewPaneOpen: boolean } => ({
+interface PaneGeometry {
+  readonly pageSetup: PageSetup | null;
+  readonly zoom: number;
+  readonly reviewPaneOpen: boolean;
+  /** Whether the page's width follows the padding — see `navigationShift`'s `docked`. */
+  readonly fitting: boolean;
+}
+
+const selectPageGeometry = (snapshot: EditorSnapshot): PaneGeometry => ({
   pageSetup: snapshot.pageSetup ?? null,
   zoom: snapshot.zoom,
   reviewPaneOpen: snapshot.reviewPaneOpen ?? true,
+  fitting: snapshot.zoomMode?.type === 'fit',
 });
 
-const samePageGeometry = (
-  a: { pageSetup: PageSetup | null; zoom: number; reviewPaneOpen: boolean },
-  b: { pageSetup: PageSetup | null; zoom: number; reviewPaneOpen: boolean }
-) =>
+const samePageGeometry = (a: PaneGeometry, b: PaneGeometry) =>
   a.zoom === b.zoom &&
   a.reviewPaneOpen === b.reviewPaneOpen &&
+  a.fitting === b.fitting &&
   a.pageSetup?.pageWidthTwips === b.pageSetup?.pageWidthTwips;
 
 /** How `useNavigationPane` is configured. @public */
@@ -117,7 +122,10 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
   const store = useNavigationLayoutStore();
   const viewport = useNavigationViewportElement();
   const rail = useContext(ReviewRailContext);
-  const { pageSetup, zoom, reviewPaneOpen } = useEditorState(selectPageGeometry, samePageGeometry);
+  const { pageSetup, zoom, reviewPaneOpen, fitting } = useEditorState(
+    selectPageGeometry,
+    samePageGeometry
+  );
   const [viewportWidth, setViewportWidth] = useState(0);
   const [inlineEndReservation, setInlineEndReservation] = useState(0);
 
@@ -159,8 +167,9 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
       pageWidthPx: twipsToPixels(pageWidthTwips) * zoom,
       reservation: navigationPaneReservation(paneWidth),
       inlineEndReservation,
+      docked: fitting,
     });
-  }, [open, pageWidthTwips, zoom, viewportWidth, paneWidth, inlineEndReservation]);
+  }, [open, pageWidthTwips, zoom, viewportWidth, paneWidth, inlineEndReservation, fitting]);
 
   useEffect(() => {
     if (!store) return undefined;

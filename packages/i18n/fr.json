@@ -150,7 +150,9 @@
     "ariaLabel": "Zoom : {label}",
     "zoomIn": "Zoom avant",
     "zoomLevel": "Niveau de zoom",
-    "zoomOut": "Zoom arrière"
+    "zoomOut": "Zoom arrière",
+    "automatic": null,
+    "fitWidth": null
   },
   "colorPicker": {
     "ariaLabel": "Choisir la couleur {type}",
@@ -1113,7 +1115,8 @@
     "showPane": "Afficher les commentaires",
     "structural": "Structure du document modifiée",
     "deleteComment": "Supprimer le commentaire",
-    "discardChange": "Ignorer la modification"
+    "discardChange": "Ignorer la modification",
+    "close": null
   },
   "imageAltText": {
     "description": "Description",

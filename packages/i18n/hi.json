@@ -150,7 +150,9 @@
     "ariaLabel": "ज़ूम: {label}",
     "zoomIn": "ज़ूम इन",
     "zoomLevel": "ज़ूम स्तर",
-    "zoomOut": "ज़ूम आउट"
+    "zoomOut": "ज़ूम आउट",
+    "automatic": null,
+    "fitWidth": null
   },
   "colorPicker": {
     "ariaLabel": "{type} रंग पिकर",
@@ -1113,7 +1115,8 @@
     "showPane": "टिप्पणियाँ दिखाएँ",
     "structural": "दस्तावेज़ संरचना बदली गई",
     "deleteComment": "टिप्पणी हटाएँ",
-    "discardChange": "परिवर्तन छोड़ें"
+    "discardChange": "परिवर्तन छोड़ें",
+    "close": null
   },
   "imageAltText": {
     "description": "विवरण",

@@ -40,6 +40,18 @@ export interface NavigationShiftInput {
   readonly reservation: number;
   /** Padding already reserved at the inline end, for example by the review rail. */
   readonly inlineEndReservation?: number;
+  /**
+   * Whether the page's WIDTH follows the padding — true whenever the editor is in a fit
+   * zoom mode.
+   *
+   * This turns the answer binary, and it has to. The proportional branch below assumes a page
+   * of fixed width sitting in a shrinking box, so padding P moves it by P/2. Under a fit the
+   * page is re-scaled to the padded box instead, so a partial shift makes the page narrower,
+   * which widens the gutter, which asks for a smaller shift, which makes the page wider —
+   * the pane and the document chase each other on every frame and never settle. Docked or
+   * not is a fixed point; anything in between is not.
+   */
+  readonly docked?: boolean;
 }
 
 /**
@@ -55,6 +67,7 @@ export function navigationShift({
   pageWidthPx,
   reservation,
   inlineEndReservation = 0,
+  docked = false,
 }: NavigationShiftInput): number {
   if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) return 0;
   if (!Number.isFinite(pageWidthPx) || pageWidthPx <= 0) return 0;
@@ -72,8 +85,9 @@ export function navigationShift({
 
   // Still centred: padding P moves the page by P/2, so twice the deficit lands it exactly
   // on the reservation. Valid while the padded box is still at least a page wide, which
-  // is the same condition as `reservation <= 2 * gutter`.
-  if (reservation <= 2 * gutter) return Math.ceil(2 * (reservation - gutter));
+  // is the same condition as `reservation <= 2 * gutter` — and only while the page's width
+  // is independent of the padding, which a fit mode is exactly the case where it is not.
+  if (!docked && reservation <= 2 * gutter) return Math.ceil(2 * (reservation - gutter));
 
   // The padded box is narrower than the page: `margin-inline: auto` resolves to zero, the
   // page pins to the padding edge, and the padding IS the offset. Horizontal scrolling

@@ -150,7 +150,9 @@
     "ariaLabel": "Powiększenie: {label}",
     "zoomIn": "Powiększ",
     "zoomLevel": "Poziom powiększenia",
-    "zoomOut": "Pomniejsz"
+    "zoomOut": "Pomniejsz",
+    "automatic": null,
+    "fitWidth": null
   },
   "colorPicker": {
     "ariaLabel": "Próbnik kolorów — {type}",
@@ -1113,7 +1115,8 @@
     "showPane": "Pokaż komentarze",
     "structural": "Zmieniono strukturę dokumentu",
     "deleteComment": "Usuń komentarz",
-    "discardChange": "Odrzuć zmianę"
+    "discardChange": "Odrzuć zmianę",
+    "close": null
   },
   "imageAltText": {
     "description": "Opis",
