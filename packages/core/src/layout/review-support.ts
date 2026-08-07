@@ -236,6 +236,18 @@ export interface ReviewCustomItem {
   readonly title: string;
   /** Card body, from the definition's `reviewCard` hook. */
   readonly detail?: string;
+  /**
+   * Glyph for this node in the collapsed rail, as an SVG path in a `0 -960 960 960` viewBox.
+   *
+   * A PATH rather than a rendered node because this item crosses core, which is DOM-free and
+   * React-free — the same reason `title` and `detail` are strings. A host that wants arbitrary
+   * markup overrides the `Markers` part's `icon` instead, which lives in the adapter where JSX
+   * belongs. Absent falls back to the generic custom-node glyph.
+   *
+   * HOST-AUTHORED, never file data: it is interpolated into an SVG `d` attribute, and a path
+   * taken from a document would be attacker-controlled markup.
+   */
+  readonly icon?: string;
   readonly range: ReviewRange | null;
 }
 

@@ -2168,6 +2168,7 @@ export interface ReviewCustomItem {
     readonly carded: boolean;
     readonly data?: unknown;
     readonly detail?: string;
+    readonly icon?: string;
     readonly id: string;
     // (undocumented)
     readonly kind: 'custom';

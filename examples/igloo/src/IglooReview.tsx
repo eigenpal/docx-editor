@@ -3,7 +3,8 @@
 // Every card is still the packaged `DocxEditorReview` card — anchoring, stacking,
 // virtualization, accept/reject and the reply box are the library's. This file changes only
 // what a reader sees, through five customization rungs at once: `furniture`, part `children`,
-// part `className`/`icon`, an unrecognized child appended to every card, and `--doc-*` tokens.
+// part `className`/`icon`, a per-item `icon` on the collapsed rail's markers, an
+// unrecognized child appended to every card, and `--doc-*` tokens.
 
 import { DocxEditorReview, useReview, useReviewItem } from '@docx-editor.dev/pro/react';
 import type { ReviewRevisionKind } from '@docx-editor.dev/core/contracts/editor';
@@ -11,7 +12,7 @@ import { BergGlyph, DomeGlyph } from './art/Specimen';
 import { Stats } from './SpecimenPopover';
 import { useChromeTranslate } from '@docx-editor.dev/react';
 import { ICE_LABELS } from './labels';
-import { IceMelt, IceRefreeze } from './icons/review';
+import { iceMarker, IceMelt, IceRefreeze } from './icons/review';
 import { blocksOf, insideTemperature, OUTSIDE, surveyOf, tipHeight } from './specimens';
 
 /**
@@ -47,6 +48,11 @@ export function IglooReview() {
       <DocxEditorReview.Avatar className="igloo-rail__avatar" />
       <DocxEditorReview.Accept className="igloo-rail__action" icon={IceMelt} />
       <DocxEditorReview.Reject className="igloo-rail__action" icon={IceRefreeze} />
+
+      {/* The COLLAPSED rail's gutter markers. `icon` takes a function of the item, so a
+          comment, a shift and a specimen are three shapes rather than three bubbles. The
+          anchoring and virtualization the part was handed stay the library's. */}
+      <DocxEditorReview.Markers icon={iceMarker} />
 
       {/* The card body, replaced inside the packaged wrapper. */}
       <DocxEditorReview.Summary className="igloo-rail__summary">

@@ -310,29 +310,14 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
 }
 
 // Inline SVG, like the toolbar's icons: this package ships no icon font.
-const icon = (path: string): ReactNode => (
-  <svg viewBox="0 -960 960 960" width={16} height={16} aria-hidden="true" focusable="false">
-    <path d={path} fill="currentColor" />
-  </svg>
-);
-
-const ADD_COMMENT_ICON =
-  'M440-400h80v-120h120v-80H520v-120h-80v120H320v80h120v120ZM80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z';
-const COMMENT_ICON =
-  'M240-400h480v-80H240v80Zm0-120h480v-80H240v80Zm0-120h480v-80H240v80ZM880-80 720-240H160q-33 0-56.5-23.5T80-320v-480q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v720ZM160-320h594l46 45v-525H160v480Zm0 0v-480 480Z';
-const ACCEPT_ICON = 'M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z';
-const REJECT_ICON =
-  'm256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z';
-/**
- * A TRASH can, not the reject X.
- *
- * Deliberately a different glyph from {@link REJECT_ICON} even though both sit in the same
- * actions row and both discard something. On a revision card the two would otherwise read as
- * the same button drawn twice, and the destructive one — deleting a reviewer's remark outright
- * — is the one that must not be reached for by mistake.
- */
-const DELETE_ICON =
-  'M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z';
+import {
+  ACCEPT_ICON,
+  ADD_COMMENT_ICON,
+  DELETE_ICON,
+  REJECT_ICON,
+  icon,
+  markerIconPath,
+} from './review-icons.tsx';
 
 /**
  * The review rail.
@@ -731,8 +716,21 @@ function ReviewRoot({
   // Root-level slots a child can replace in place. A render prop is not an override — it is
   // the card itself, and travels down to `ReviewList` untouched.
   const rootParts = typeof children === 'function' ? {} : partOverrides(children);
-  const takeRoot = (key: string, fallback: ReactNode): ReactNode =>
-    key in rootParts ? rootParts[key] : fallback;
+  // An override REPLACES the packaged element but inherits its wiring: these parts are handed
+  // geometry the rail alone can compute — the markers' `scale`/`offset`/`window`, the compose
+  // box's `top` — and a host writing `<Review.Markers icon={…}/>` cannot supply any of it.
+  // Taken verbatim, such a child mounted a markers layer with `scale: 1` and no window, which
+  // stacked every marker at the top of the gutter. Host props still win, so an override that
+  // DOES pass one of them keeps it.
+  const takeRoot = (key: string, fallback: ReactNode): ReactNode => {
+    if (!(key in rootParts)) return fallback;
+    const override = rootParts[key];
+    if (!isValidElement(override) || !isValidElement(fallback)) return override;
+    return cloneElement(override, {
+      ...(fallback.props as Record<string, unknown>),
+      ...(override.props as Record<string, unknown>),
+    });
+  };
 
   const affordances = preset ? (
     <>
@@ -902,6 +900,28 @@ function ReviewList({
 ReviewList.docxReviewPart = 'List' as const;
 
 /**
+ * Props for the collapsed rail's gutter markers. @public
+ *
+ * `scale`, `offset` and `window` are the rail's own geometry and are supplied for you — an
+ * override inherits them, so a host passes only what it wants to change.
+ */
+export interface ReviewMarkersProps {
+  scale?: number;
+  offset?: number;
+  /** Visible band of the scroller; markers outside it are not mounted. */
+  window?: { top: number; bottom: number } | null;
+  className?: string;
+  hidden?: boolean;
+  /**
+   * Replace the glyph. A FUNCTION of the item, unlike the action parts' plain node, because
+   * one `Markers` draws every marker in the gutter — a single node would put one shape on all
+   * of them, which is the thing this part was fixed to stop doing. Return null or undefined
+   * for an item to keep its packaged glyph.
+   */
+  icon?: ReactNode | ((item: ReviewItemView) => ReactNode);
+}
+
+/**
  * The collapsed rail: one marker per item, at its anchor.
  *
  * @public
@@ -912,14 +932,8 @@ function ReviewMarkers({
   window: visible = null,
   className,
   hidden,
-}: {
-  scale?: number;
-  offset?: number;
-  /** Visible band of the scroller; markers outside it are not mounted. */
-  window?: { top: number; bottom: number } | null;
-  className?: string;
-  hidden?: boolean;
-}) {
+  icon: iconOverride,
+}: ReviewMarkersProps) {
   const { review } = useRail();
   const t = useReviewLabel();
   if (hidden) return null;
@@ -953,7 +967,8 @@ function ReviewMarkers({
               review.setActive(entry.key);
             }}
           >
-            {icon(COMMENT_ICON)}
+            {(typeof iconOverride === 'function' ? iconOverride(entry) : iconOverride) ??
+              icon(markerIconPath(entry))}
           </button>
         );
       })}

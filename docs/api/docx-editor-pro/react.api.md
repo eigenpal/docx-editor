@@ -100,6 +100,23 @@ export interface ReviewActionProps extends ReviewPartProps {
 export type ReviewItemView = ReviewItemPlacement;
 
 // @public
+export interface ReviewMarkersProps {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
+    icon?: ReactNode | ((item: ReviewItemView) => ReactNode);
+    // (undocumented)
+    offset?: number;
+    // (undocumented)
+    scale?: number;
+    window?: {
+        top: number;
+        bottom: number;
+    } | null;
+}
+
+// @public
 export function reviewModule(options?: ReviewModuleOptions): EditorModule;
 
 // @public

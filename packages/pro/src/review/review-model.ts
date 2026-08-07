@@ -134,6 +134,7 @@ export function customItemsOf(
       carded: definition.reviewCard !== undefined && card !== null,
       title: card?.title ?? '',
       ...(card?.detail !== undefined ? { detail: card.detail } : {}),
+      ...(card?.icon !== undefined ? { icon: card.icon } : {}),
       range: where
         ? {
             partName: part.name,

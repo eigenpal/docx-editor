@@ -533,3 +533,92 @@ describe('DocxEditor.Review while the document is loading', () => {
     expect(view.queryByTestId('review-rail')).toBeNull();
   });
 });
+
+/**
+ * A document with an insertion, a deletion and a comment — three kinds that must not all
+ * draw the same glyph in the closed rail's gutter.
+ */
+const THREE_KINDS = docx(
+  '<w:p><w:r><w:t xml:space="preserve">Kept </w:t></w:r>' +
+    '<w:ins w:id="1" w:author="Ada Lovelace" w:date="2026-01-02T03:04:05Z">' +
+    '<w:r><w:t>added</w:t></w:r></w:ins></w:p>' +
+    '<w:p><w:del w:id="2" w:author="Ada Lovelace" w:date="2026-01-02T03:04:05Z">' +
+    '<w:r><w:delText>struck</w:delText></w:r></w:del></w:p>'
+);
+
+/** The glyph each marker drew, keyed by the kind it is for. */
+function markerGlyphs(view: ReturnType<typeof render>): Map<string, string> {
+  const glyphs = new Map<string, string>();
+  for (const marker of view.queryAllByTestId('review-marker')) {
+    const kind = marker.getAttribute('data-kind') ?? '';
+    glyphs.set(kind, marker.querySelector('path')?.getAttribute('d') ?? '');
+  }
+  return glyphs;
+}
+
+describe('the collapsed rail says what each marker IS', () => {
+  test('a marker draws the glyph for its kind, not one comment bubble for all of them', () => {
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={THREE_KINDS}
+        modules={[reviewModule()]}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    act(() => undefined);
+    // Markers replace the cards only while the pane is CLOSED — that is the whole surface
+    // under test, and it is the one a reader spends most of their time looking at.
+    act(() => {
+      instance!.exec({ type: 'toggleReviewPane' });
+    });
+
+    const glyphs = markerGlyphs(view);
+    expect(glyphs.get('insert')).toBeTruthy();
+    expect(glyphs.get('delete')).toBeTruthy();
+    // The regression: every one of these used to be byte-identical.
+    expect(glyphs.get('insert')).not.toBe(glyphs.get('delete'));
+  });
+
+  test('the Markers part takes a per-item icon and keeps the wiring it was handed', () => {
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={THREE_KINDS}
+        modules={[reviewModule()]}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview>
+            <DocxEditorReview.Markers
+              icon={(item) => <span data-testid="host-glyph">{item.kind}</span>}
+            />
+          </DocxEditorReview>
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    act(() => undefined);
+    act(() => {
+      instance!.exec({ type: 'toggleReviewPane' });
+    });
+
+    // The host's glyph reached every marker...
+    expect(view.queryAllByTestId('host-glyph').length).toBeGreaterThan(0);
+    // ...and the override did NOT lose the anchoring the rail computed for it. Taken
+    // verbatim, an override mounts with the default scale and no positioning, which stacks
+    // every marker on top of the first.
+    for (const marker of view.queryAllByTestId('review-marker')) {
+      expect((marker as HTMLElement).style.position).toBe('absolute');
+    }
+  });
+});

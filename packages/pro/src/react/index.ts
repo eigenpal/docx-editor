@@ -40,6 +40,7 @@ export {
   useReviewItem,
   type DocxEditorReviewNamespace,
   type ReviewActionProps,
+  type ReviewMarkersProps,
   type ReviewPartProps,
   type ReviewProps,
 } from './DocxEditorReview';

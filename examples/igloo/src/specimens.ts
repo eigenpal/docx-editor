@@ -95,6 +95,10 @@ export const ICEBERG = defineCustomNode({
       detail: survey.notes
         ? `${survey.notes}${survey.surveyedBy ? ` — ${survey.surveyedBy}` : ''}`
         : `“${text}” is all of it that surfaced. The other nine tenths are below the line.`,
+      // The glyph in the COLLAPSED rail, so a specimen is not a comment bubble like
+      // everything else. A Material Symbols path (the `0 -960 960 960` viewBox), and
+      // host-authored — it lands in an SVG `d`, so never anything the file supplied.
+      icon: 'M120-160v-80h150l106-320H240v-80h480v80H582l106 320h152v80H560v-80h44l-30-90H386l-30 90h44v80H120Zm292-250h136l-68-204-68 204Z',
     };
   },
 });
@@ -113,6 +117,7 @@ export const IGLOO = defineCustomNode({
     return {
       title: `Igloo: ${blocks} blocks`,
       detail: `${insideTemperature(blocks)} °C in here, ${OUTSIDE} °C out there. Click it to lay another.`,
+      icon: 'M240-200h120v-200h240v200h120v-360L480-740 240-560v360Zm-80 80v-480l320-240 320 240v480H520v-200h-80v200H160Zm320-350Z',
     };
   },
 });

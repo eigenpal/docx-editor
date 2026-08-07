@@ -194,7 +194,21 @@ export interface CustomNodeDefinition<
     readonly text: string;
     /** The bound payload, already through `schema` — see {@link CustomNodeDefinition.fromDocx}. */
     readonly data?: InferSchemaOutput<Schema>;
-  }) => { readonly title: string; readonly detail?: string } | null;
+  }) => {
+    readonly title: string;
+    readonly detail?: string;
+    /**
+     * Glyph for this node in the COLLAPSED rail, as an SVG path in a `0 -960 960 960`
+     * viewBox (a Material Symbol path is exactly this). Without one every marker in the
+     * gutter is the generic comment bubble, so a citation, a tracked deletion and a
+     * comment are indistinguishable until the pane is opened.
+     *
+     * HOST-AUTHORED. Unlike `title` and `detail`, this is not derived from `attrs` or
+     * `text`: it lands in an SVG `d` attribute, and a path out of a document would be
+     * attacker-controlled markup.
+     */
+    readonly icon?: string;
+  } | null;
   /**
    * The "Edit {label}" row the context menu shows at the top when the
    * right-click lands on the node's chip. The HOST owns the dialog.
