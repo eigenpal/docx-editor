@@ -209,8 +209,7 @@ export class Body extends ModelObject {
       this.context,
       `${this.path.label}.revisions`,
       this.path,
-      this.#handle(),
-      this.internals.roots().document
+      this.#handle()
     );
     return this.#revisions;
   }

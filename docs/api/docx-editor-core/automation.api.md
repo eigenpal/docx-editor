@@ -108,6 +108,8 @@ export type AutomationErrorCode =
 * is the problem, and writing an approximation of it would mean something else.
 */
 | 'unsupported-content'
+/** A tracked-change kind this engine preserves but cannot yet accept or reject safely. */
+| 'unsupported-revision'
 /**
 * Two operations in one batch make claims on the same paragraph that cannot both hold.
 *
@@ -709,10 +711,22 @@ export type AutomationOperation =
     readonly op: 'rejectRevision';
     readonly revision: AutomationHandle;
 }
-/** Accept every change in the main story, as ONE decision and one undo unit. */
+/**
+* Accept every change in one story, as ONE decision and one undo unit.
+*
+* The document-handle form is retained for protocol compatibility and names the main story.
+* Story-scoped collections use the body-handle form so a note or header never resolves the main
+* body's changes by accident.
+*/
 | {
     readonly op: 'acceptAllRevisions';
+    readonly body: AutomationHandle;
+} | {
+    readonly op: 'acceptAllRevisions';
     readonly document: AutomationHandle;
+} | {
+    readonly op: 'rejectAllRevisions';
+    readonly body: AutomationHandle;
 } | {
     readonly op: 'rejectAllRevisions';
     readonly document: AutomationHandle;

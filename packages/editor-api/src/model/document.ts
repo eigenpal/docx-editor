@@ -138,8 +138,7 @@ export class Document extends ModelObject {
       this.context,
       'document.revisions',
       this.path,
-      this.internals.roots().body,
-      this.path.handle()
+      this.internals.roots().body
     );
     return this.#revisions;
   }

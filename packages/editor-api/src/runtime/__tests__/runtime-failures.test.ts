@@ -234,6 +234,7 @@ describe('every host refusal arrives as one of this runtime\u2019s codes', () =>
     ['transaction-refused', 'GeneralException'],
     ['invalid-handle', 'InvalidObjectPath'],
     ['invalid-offset', 'InvalidArgument'],
+    ['unsupported-revision', 'NotImplemented'],
     ['disposed', 'RuntimeDisposed'],
   ];
 

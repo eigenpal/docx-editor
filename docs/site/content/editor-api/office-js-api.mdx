@@ -107,6 +107,45 @@ Review dates are file-authored rather than synthesized. `Comment.creationDate`,
 date becomes `null`, so strict TypeScript consumers must narrow it before calling `Date` methods.
 This is a deliberate source-shape divergence from Office.js, whose declarations say only `Date`.
 
+Revision enumeration takes three syncs when a report needs range text: one to name the collection
+items, one to load revision metadata and resolve each `range`, and one to load those ranges' text.
+Every returned item is individually actionable, so collection membership is the acceptability
+signal:
+
+```ts
+const revisions = context.document.revisions;
+revisions.load('items');
+await context.sync();
+
+const ranges = revisions.items.map((revision) => {
+  revision.load(['author', 'date', 'type']);
+  return revision.range;
+});
+await context.sync();
+
+for (const range of ranges) range.load('text');
+await context.sync();
+
+const report = revisions.items.map((revision, index) => ({
+  author: revision.author,
+  date: revision.date?.toISOString() ?? null,
+  type: revision.type,
+  text: ranges[index].text,
+  individuallyResolvable: true,
+}));
+```
+
+Structural revisions are preserved but omitted from `items` because their individual `accept()` and
+`reject()` operations are not supported. This does not make collection-wide decisions partial:
+`acceptAll()` and `rejectAll()` use one canonical transaction and refuse the entire sync if any
+unsupported structural revision remains. No listed revision is resolved in that case. Handle this
+`NotImplemented` refusal and leave the document unchanged, or let a reviewer resolve the structural
+markup in Word. A `Body.revisions` collection in a header, footer, or note resolves only that story;
+other stories sharing its OOXML part are left alone. Browser decisions share the editor's Undo stack;
+one collection-wide decision is one Undo unit. Saving and reopening through the editor facade
+preserves the resulting OOXML but intentionally starts a new browser session, so Undo and selection
+do not survive the reopen.
+
 Font reads are nullable for the same fidelity reason. `Font.bold`, `italic`, `color`, `name`, and
 `size` return `boolean | null`, `string | null`, or `number | null` when a range has mixed or
 unspecified formatting. Setters still accept only concrete values, so consumers narrow a read before

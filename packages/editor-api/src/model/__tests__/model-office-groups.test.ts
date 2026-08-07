@@ -43,6 +43,12 @@ const TRACKED = docx(
     '<w:r><w:t>added</w:t></w:r></w:ins></w:p>'
 );
 
+const TRACKED_WITH_UNSUPPORTED_ROW = docx(
+  '<w:p><w:ins w:id="10" w:author="Ada"><w:r><w:t>added</w:t></w:r></w:ins></w:p>' +
+    '<w:tbl><w:tr><w:trPr><w:ins w:id="20" w:author="Grace"/></w:trPr>' +
+    '<w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+);
+
 async function codeOf(run: () => Promise<unknown>): Promise<string> {
   try {
     await run();
@@ -410,6 +416,37 @@ describe('a section is the page a story is laid out on', () => {
     ]);
   });
 
+  test('a note revision collection accepts its own story rather than the main body', async () => {
+    const runtime = await createServer(WITH_NOTE_TEXT_CASES);
+    await runtime.run(async (context) => {
+      const notes = context.document.endnotes;
+      notes.load('items');
+      await context.sync();
+      const body = notes.items[0]!.body;
+      await context.sync();
+      const revisions = body.revisions;
+      revisions.load('items');
+      await context.sync();
+      expect(revisions.items).toHaveLength(1);
+      revisions.acceptAll();
+      await context.sync();
+    });
+
+    const next = await reopen(runtime);
+    const remaining = await next.run(async (context) => {
+      const notes = context.document.endnotes;
+      notes.load('items');
+      await context.sync();
+      const body = notes.items[0]!.body;
+      await context.sync();
+      const revisions = body.revisions;
+      revisions.load('items');
+      await context.sync();
+      return revisions.items.length;
+    });
+    expect(remaining).toBe(0);
+  });
+
   test('a deleted note refuses a later direct text load', async () => {
     const runtime = await createServer(WITH_NOTE_TEXT_CASES);
     const code = await codeOf(() =>
@@ -563,6 +600,25 @@ describe('comments and tracked changes are what a document says about itself', (
     });
     expect(after.count).toBe(0);
     expect(after.text).toContain('added');
+  });
+
+  test('accept all reports unsupported structural revisions without changing the story', async () => {
+    const runtime = await serverRuntime(TRACKED_WITH_UNSUPPORTED_ROW);
+    const code = await codeOf(() =>
+      runtime.run(async (context) => {
+        context.document.revisions.acceptAll();
+        await context.sync();
+      })
+    );
+    expect(code).toBe('NotImplemented');
+
+    const remaining = await runtime.run(async (context) => {
+      const revisions = context.document.revisions;
+      revisions.load('items');
+      await context.sync();
+      return revisions.items.length;
+    });
+    expect(remaining).toBe(1);
   });
 
   test('a runtime with no author refuses to write a comment rather than inventing one', async () => {

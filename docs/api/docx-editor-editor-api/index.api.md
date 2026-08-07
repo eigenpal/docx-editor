@@ -689,7 +689,7 @@ export class RevisionCollection extends HandleCollection<Revision> {
     // @internal
     protected listing(): AutomationOperation;
     // @internal
-    static of(context: RequestContext, label: string, owner: ObjectPath, body: AutomationHandle, document: AutomationHandle): RevisionCollection;
+    static of(context: RequestContext, label: string, owner: ObjectPath, body: AutomationHandle): RevisionCollection;
     // @internal
     protected promised(label: string, nullable: boolean): Revision & PromisedItem;
     rejectAll(): void;

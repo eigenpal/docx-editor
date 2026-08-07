@@ -579,48 +579,40 @@ export class Revision extends ModelObject implements PromisedItem {
  */
 export class RevisionCollection extends HandleCollection<Revision> {
   readonly #body: AutomationHandle;
-  readonly #document: AutomationHandle;
 
   /** @internal The pending decisions of one story. */
   static of(
     context: RequestContext,
     label: string,
     owner: ObjectPath,
-    body: AutomationHandle,
-    document: AutomationHandle
+    body: AutomationHandle
   ): RevisionCollection {
-    return new RevisionCollection(context, ObjectPath.derived(label, owner), body, document);
+    return new RevisionCollection(context, ObjectPath.derived(label, owner), body);
   }
 
-  private constructor(
-    context: RequestContext,
-    path: ObjectPath,
-    body: AutomationHandle,
-    document: AutomationHandle
-  ) {
+  private constructor(context: RequestContext, path: ObjectPath, body: AutomationHandle) {
     super(context, path);
     this.#body = body;
-    this.#document = document;
   }
 
   /**
    * Keep every change, as ONE decision and one undo unit.
    *
-   * The engine's own whole-document operation rather than a loop over `accept`: a reviewer who
-   * accepted a document's changes made one decision, and one undo should take all of them back. It
-   * refuses outright where the document holds a change the engine cannot resolve, which is the
-   * honest answer — accepting the rest would report a document as reviewed while it still carries
+   * The engine's own whole-story operation rather than a loop over `accept`: a reviewer who
+   * accepted this collection's changes made one decision, and one undo should take all of them
+   * back. It refuses outright where the story holds a change the engine cannot resolve, which is
+   * the honest answer — accepting the rest would report a story as reviewed while it still carries
    * pending changes.
    */
   acceptAll(): void {
-    const document = this.#document;
-    this.commandOn('acceptAll', () => ({ op: 'acceptAllRevisions', document }));
+    const body = this.#body;
+    this.commandOn('acceptAll', () => ({ op: 'acceptAllRevisions', body }));
   }
 
   /** Undo every change, likewise as one decision. */
   rejectAll(): void {
-    const document = this.#document;
-    this.commandOn('rejectAll', () => ({ op: 'rejectAllRevisions', document }));
+    const body = this.#body;
+    this.commandOn('rejectAll', () => ({ op: 'rejectAllRevisions', body }));
   }
 
   /** @internal The read that answers this collection's members. */
