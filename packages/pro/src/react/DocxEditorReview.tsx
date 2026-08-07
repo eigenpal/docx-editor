@@ -72,6 +72,7 @@ import { useReview, type ReviewItemView } from './useReview';
  */
 const selectDocumentAbsent = (snapshot: EditorSnapshot) =>
   snapshot.isLoading || snapshot.parseError !== null || snapshot.pageSetup == null;
+const selectDocumentReadOnly = (snapshot: EditorSnapshot) => snapshot.editingMode === 'viewing';
 
 /** The rail's data, provided once by the Root so a card never re-subscribes. */
 const ReviewContext = createContext<ReviewRailValue | null>(null);
@@ -96,6 +97,8 @@ interface ReviewRailValue {
   readonly t: ToolbarTranslate | undefined;
   /** A card's className, from the rail's `card` prop. */
   readonly cardClassName: string | undefined;
+  /** Viewing mode keeps review decisions visible but makes every mutation unavailable. */
+  readonly readOnly: boolean;
   readonly review: ReturnType<typeof useReview>;
   /**
    * The UNFILTERED queue. The rail's cards render `review.items`, which the structural and
@@ -215,6 +218,7 @@ function useReviewLabel(): (key: TranslationKey) => string {
 const INERT_RAIL: ReviewRailValue = {
   t: undefined,
   cardClassName: undefined,
+  readOnly: false,
   review: {
     items: [],
     activeKey: null,
@@ -354,6 +358,7 @@ function ReviewRoot({
   // this gate "no comments yet" and the furniture floated over the host's loading
   // screen, describing a document that was not there.
   const documentAbsent = useEditorState(selectDocumentAbsent);
+  const readOnly = useEditorState(selectDocumentReadOnly);
   const excludeRevisionKinds = useMemo((): readonly ReviewRevisionKind[] | undefined => {
     const excluded: ReviewRevisionKind[] = [];
     if (!structural) excluded.push('structural');
@@ -662,6 +667,7 @@ function ReviewRoot({
     () => ({
       t: hostT,
       cardClassName,
+      readOnly,
       review: { ...review, items },
       allItems: allReview.items,
       authorSlots,
@@ -673,6 +679,7 @@ function ReviewRoot({
     [
       hostT,
       cardClassName,
+      readOnly,
       review,
       allReview.items,
       items,
@@ -1771,20 +1778,23 @@ function revisionLabelKey(kind: ReviewRevisionKind): TranslationKey {
 
 /** Accept the revision behind this card. @public */
 function ReviewAccept({ className, asChild, hidden, children, icon: glyph }: ReviewActionProps) {
-  const { review } = useRail();
+  const { readOnly, review } = useRail();
   const entry = useContext(ReviewItemContext);
   const t = useReviewLabel();
   if (hidden || !entry || entry.kind !== 'revision' || entry.readOnly) return null;
   const label = t('review.accept');
+  const disabledReason = t('editingMode.viewingHint');
   const shared = {
     type: 'button' as const,
     className: `docx-review__action${className ? ` ${className}` : ''}`,
     'data-testid': 'review-accept',
     'aria-label': label,
-    title: label,
+    title: readOnly ? disabledReason : label,
+    disabled: readOnly,
     onMouseDown: guardMousedown,
     onClick: (event: React.MouseEvent) => {
       event.stopPropagation();
+      if (readOnly) return;
       review.accept(entry);
     },
   };
@@ -1795,20 +1805,23 @@ ReviewAccept.docxReviewPart = 'Accept' as const;
 
 /** Reject the revision behind this card. @public */
 function ReviewReject({ className, asChild, hidden, children, icon: glyph }: ReviewActionProps) {
-  const { review } = useRail();
+  const { readOnly, review } = useRail();
   const entry = useContext(ReviewItemContext);
   const t = useReviewLabel();
   if (hidden || !entry || entry.kind !== 'revision' || entry.readOnly) return null;
   const label = t('review.reject');
+  const disabledReason = t('editingMode.viewingHint');
   const shared = {
     type: 'button' as const,
     className: `docx-review__action${className ? ` ${className}` : ''}`,
     'data-testid': 'review-reject',
     'aria-label': label,
-    title: label,
+    title: readOnly ? disabledReason : label,
+    disabled: readOnly,
     onMouseDown: guardMousedown,
     onClick: (event: React.MouseEvent) => {
       event.stopPropagation();
+      if (readOnly) return;
       review.reject(entry);
     },
   };
@@ -1842,23 +1855,26 @@ ReviewReject.docxReviewPart = 'Reject' as const;
  * @public
  */
 function ReviewDelete({ className, asChild, hidden, children, icon: glyph }: ReviewActionProps) {
-  const { review } = useRail();
+  const { readOnly, review } = useRail();
   const entry = useContext(ReviewItemContext);
   const { t } = useTranslation();
   if (hidden || !entry || entry.kind === 'custom') return null;
   if (entry.kind === 'revision' && entry.readOnly) return null;
   const label = entry.kind === 'comment' ? t('review.deleteComment') : t('review.discardChange');
+  const disabledReason = t('editingMode.viewingHint');
   const shared = {
     type: 'button' as const,
     className: `docx-review__action${className ? ` ${className}` : ''}`,
     'data-testid': 'review-delete',
     'aria-label': label,
-    title: label,
+    title: readOnly ? disabledReason : label,
+    disabled: readOnly,
     onMouseDown: guardMousedown,
     onClick: (event: React.MouseEvent) => {
       // The card is a `role="button"` that activates the item; without this the click both
       // deleted the comment and asked the engine to open a card that no longer exists.
       event.stopPropagation();
+      if (readOnly) return;
       review.remove(entry);
     },
   };

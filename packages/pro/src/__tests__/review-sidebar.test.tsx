@@ -280,6 +280,43 @@ describe('the review sidebar', () => {
     }
   });
 
+  test('viewing mode disables review mutations with the read-only reason', async () => {
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={TRACKED}
+        author="Grace Hopper"
+        modules={[reviewModule()]}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const editor = instance!;
+    await act(async () => {
+      editor.exec({ type: 'setEditingMode', mode: 'viewing' });
+    });
+
+    const actions = [
+      view.getByTestId('review-accept'),
+      view.getByTestId('review-reject'),
+      view.getByTestId('review-delete'),
+    ] as HTMLButtonElement[];
+    for (const action of actions) {
+      expect(action.disabled).toBe(true);
+      expect(action.title).toBe('Read-only, no edits');
+    }
+
+    fireEvent.click(actions[0]!);
+    expect(view.getAllByTestId('review-card')).toHaveLength(1);
+    expect(editor.surface!.session.bodyText()).toBe('base added');
+  });
+
   test('hides the read-only structural cards by default, and shows them on request', () => {
     // One resolvable insertion plus one structural site (a tracked row insertion,
     // `w:trPr/w:ins`) — the kind of markup a heavily revised contract carries by the dozen.

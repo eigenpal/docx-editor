@@ -194,6 +194,10 @@ Two things the hook gives you that you should not recompute. Items come from the
 
 `readOnly` marks a decision the engine cannot resolve structurally. Do not offer Accept and Reject on those: a card offering a button the engine will refuse is worse than one that explains why it cannot.
 
+In viewing mode, the packaged Accept, Reject, and Delete controls remain visible but disabled, with
+`Read-only, no edits` as their title. The decision stays available to inspect and activate without
+presenting a live control whose write the engine will refuse.
+
 `useReviewOf(editor, query)` applies the same behavior to an editor you already hold. Filtering and activation follow these rules:
 
 1. `excludeRevisionKinds` removes those revision kinds from the hook's `items`. `placement: false` keeps the same metadata and sets `anchorY` and `pageIndex` to `null`.
