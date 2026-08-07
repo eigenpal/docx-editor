@@ -12,7 +12,7 @@
   <a href="https://www.docx-editor.dev/docs"><img src="https://img.shields.io/badge/Docs-3B5BDB?style=flat-square&logo=readthedocs&logoColor=white" alt="Documentation" /></a>
 </p>
 
-Open-source WYSIWYG `.docx` editor for React. Word-faithful pagination, tracked changes, comments — and **lossless**: everything you do not edit comes back byte for byte, including the parts the editor does not understand. **[Live demo](https://docx-editor.dev/editor)** | **[Documentation](https://www.docx-editor.dev/docs)**
+Open-source WYSIWYG `.docx` editor for React. Word-faithful pagination, tracked changes, comments — and **lossless round-trip**: untouched content and unsupported OOXML survive editing and save. **[Live demo](https://docx-editor.dev/editor)** | **[Documentation](https://www.docx-editor.dev/docs)**
 
 ## Quick Start
 
@@ -30,9 +30,9 @@ See the [React quick start](#react) below.
 
 ## Nothing is lost
 
-Open a document, edit one word, save it. Everything you did not touch comes back byte for byte: custom XML, embedded fonts, macros, media, Smart Tags, and markup from add-ins the editor has never heard of.
+Open a document, edit one word, save it. Everything you did not touch survives: custom XML, embedded fonts, macros, media, Smart Tags, and markup from add-ins the editor has never heard of.
 
-The mechanism is the canonical tree. Parsing types a node only where layout needs it and keeps everything else generic, holding the original element verbatim. On save, typed parts re-serialize and the rest is repacked from the source file. An element the parser cannot type — unknown, or known but in an invalid position — becomes a generic node instead of being dropped, so unrecognized markup never blocks editing.
+The mechanism is the canonical tree. Parsing types a node only where layout needs it and keeps everything else generic. On save, the tree serializes with structural fidelity and package payloads such as media, fonts, and VBA binaries pass through untouched. An element the parser cannot type — unknown, or known but in an invalid position — becomes a generic node instead of being dropped, so unrecognized markup never blocks editing.
 
 CI checks this on a corpus of real documents with two oracles: a canonical fingerprint over the tree, and a semantic digest compared across save and reopen. A change that drops content fails the build.
 

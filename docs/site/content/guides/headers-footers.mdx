@@ -38,12 +38,11 @@ Documents using any of these render and round-trip correctly; editing a header e
 
 ## Watermarks
 
-Word stores watermarks as VML or drawings in header parts. The editor does not currently render or
-edit them as watermarks. `Editor.getWatermark()` is a stub, and no public interactive or headless
-API authors them.
+Watermarks live in header parts (that is how Word models them). Their VML or
+DrawingML markup and image payloads are preserved through editing and save.
 
-The save pipeline can preserve existing structural markup in a header part, but watermark support
-remains planned. Do not rely on the editor to display, modify or create text or picture watermarks.
+Dedicated watermark rendering, insertion, editing, and headless authoring are not
+supported yet. Existing watermarks remain inert rather than being dropped.
 
 ## Next steps
 

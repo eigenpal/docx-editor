@@ -10,7 +10,7 @@
  * Status axes:
  * - editing:   can the user (or code driving the editor) change it in the editor?
  * - rendering: does it display like Microsoft Word renders it?
- * - roundTrip: does it survive open -> save unchanged?
+ * - roundTrip: does it survive open -> edit -> save -> reopen without loss?
  *
  * Honesty rule: when in doubt, downgrade. A "partial" that turns out to be
  * full delights; a "full" that turns out to be partial burns trust.
@@ -20,7 +20,7 @@ export type FeatureStatus =
   | 'full'
   | 'partial'
   | 'render-only'
-  | 'preserved' // round-trips losslessly, not editable or rendered
+  | 'preserved' // round-trips losslessly as inert content; editing/rendering may be absent
   | 'planned'
   | 'none';
 
@@ -315,9 +315,10 @@ export const wordFeatures: WordFeature[] = [
     category: 'lists',
     editing: 'none',
     rendering: 'none',
-    roundTrip: 'none',
+    roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Not parsed; an image bullet is dropped on save and falls back to no bullet.',
+    notes:
+      'Not rendered or editable; the numPicBullet definition and its authored markup are preserved on save.',
   },
 
   // --- Tables -------------------------------------------------------------
@@ -545,10 +546,10 @@ export const wordFeatures: WordFeature[] = [
     category: 'images',
     editing: 'none',
     rendering: 'partial',
-    roundTrip: 'partial',
+    roundTrip: 'full',
     tier: 'community',
     notes:
-      'Transparency (opacity) renders and round-trips; brightness, contrast, recolor and artistic effects are dropped.',
+      'Transparency, brightness, contrast and grayscale project where supported; authored adjustment markup is preserved on save.',
   },
   {
     id: 'images.effects',
@@ -556,9 +557,10 @@ export const wordFeatures: WordFeature[] = [
     category: 'images',
     editing: 'none',
     rendering: 'none',
-    roundTrip: 'partial',
+    roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Not painted; effectExtent spacing round-trips, the effect itself may not.',
+    notes:
+      'Not painted or editable; authored effect markup and effectExtent spacing are preserved.',
   },
   {
     id: 'images.charts',
@@ -589,9 +591,9 @@ export const wordFeatures: WordFeature[] = [
     category: 'images',
     editing: 'none',
     rendering: 'none',
-    roundTrip: 'none',
+    roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Not modeled; dropped on save.',
+    notes: 'Not rendered or editable; ink markup is preserved generically on save.',
   },
 
   // --- Page layout, headers & footers --------------------------------------
@@ -710,9 +712,9 @@ export const wordFeatures: WordFeature[] = [
     category: 'layout',
     editing: 'none',
     rendering: 'none',
-    roundTrip: 'none',
+    roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Parsed but not serialized; dropped on save and not rendered.',
+    notes: 'Not rendered or editable; authored background markup and relationships are preserved.',
   },
   {
     id: 'layout.page-num-format',
@@ -848,10 +850,10 @@ export const wordFeatures: WordFeature[] = [
     category: 'fields',
     editing: 'none',
     rendering: 'none',
-    roundTrip: 'none',
+    roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'CITATION/BIBLIOGRAPHY fields and the b:Sources store are not parsed; bibliography data is dropped (any cached result text survives as plain runs).',
+      'CITATION/BIBLIOGRAPHY fields remain inert and the b:Sources store is preserved; citation evaluation and editing are not supported.',
   },
   {
     id: 'fields.legacy-forms',
@@ -859,10 +861,10 @@ export const wordFeatures: WordFeature[] = [
     category: 'fields',
     editing: 'none',
     rendering: 'partial',
-    roundTrip: 'partial',
+    roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'The field result shows as static text; w:ffData (checkbox state, constraints) is dropped and the control is not interactive.',
+      'The field result shows as static text; w:ffData, including checkbox state and constraints, is preserved but the control is not interactive.',
   },
 
   // --- Document structure & content controls ---------------------------------
@@ -910,7 +912,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'none',
     roundTrip: 'preserved',
     tier: 'community',
-    notes: 'customXml parts and w:dataBinding round-trip byte-stable; no binding evaluation.',
+    notes:
+      'customXml parts and w:dataBinding round-trip with structural fidelity; no binding evaluation.',
   },
   {
     id: 'structure.macros',
@@ -929,9 +932,10 @@ export const wordFeatures: WordFeature[] = [
     category: 'structure',
     editing: 'none',
     rendering: 'none',
-    roundTrip: 'none',
+    roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Embedded objects are dropped; only a fallback preview image, when present, survives.',
+    notes:
+      'Never executed or rendered; OLE markup and embedded binary payloads are preserved through editing and save.',
   },
   {
     id: 'structure.protection',

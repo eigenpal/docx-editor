@@ -18,9 +18,9 @@ WYSIWYG `.docx` editor for React. Opens a Word file in the browser, paints the r
 layout, edits it in place, and writes a `.docx` back out. No upload service, no conversion
 backend: parsing and serialization both happen client-side.
 
-Saving is lossless. Everything you do not edit comes back byte for byte, including the parts
-the editor does not understand: custom XML, embedded fonts, macros, unknown extensions. Two
-oracles gate that in CI, so opening a document here cannot quietly destroy it.
+Saving has a lossless semantic round-trip. Untouched content, unsupported OOXML, and package
+payloads survive editing and save. Two oracles gate that in CI, so opening a document here
+cannot quietly destroy it.
 
 ```bash
 npm install @docx-editor.dev/react

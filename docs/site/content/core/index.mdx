@@ -70,7 +70,7 @@ bytes → bounded OPC/XML read → canonical document tree → layout → painte
 
 The painted pages _are_ the editable surface. There is no shadow document model to keep in sync with what you see.
 
-Fidelity is structural. Parts the engine models are re-emitted normalized; parts it does not model are carried through byte-for-byte. Content it cannot type (an unknown element, or a known one in an invalid position) becomes a generic node rather than being dropped, so unknown content never blocks editing and never disappears on save.
+Fidelity is structural. The canonical tree preserves XML content and package payloads pass through untouched. Content the engine cannot type (an unknown element, or a known one in an invalid position) becomes a generic node rather than being dropped, so unknown content never blocks editing and never disappears on save.
 
 ## Untrusted input
 

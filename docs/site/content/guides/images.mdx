@@ -11,9 +11,9 @@ DrawingML pictures (`w:drawing` with `pic:pic`) lay out, paint, and round-trip t
 
 | Format                                      | Insert (React)                       | Layout & paint                                                     | Round-trip                                |
 | ------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------ | ----------------------------------------- |
-| PNG, JPEG, GIF                              | Yes, `normalizeImageBytes` preflight | Full decode at authored `wp:extent`                                | Byte-identical media unless replaced      |
-| BMP, WebP                                   | No insert                            | Full decode at authored `wp:extent`                                | Byte-identical media                      |
-| SVG                                         | No insert                            | Painted at authored `wp:extent`                                    | Byte-identical media                      |
+| PNG, JPEG, GIF                              | Yes, `normalizeImageBytes` preflight | Full decode at authored `wp:extent`                                | Original media preserved unless replaced  |
+| BMP, WebP                                   | No insert                            | Full decode at authored `wp:extent`                                | Original media preserved                  |
+| SVG                                         | No insert                            | Painted at authored `wp:extent`                                    | Original media preserved                  |
 | TIFF, EMF, WMF                              | No insert                            | Rasterized when conversion succeeds; labeled placeholder otherwise | Preserved; no zero-click fetch            |
 | External `r:link` / `TargetMode="External"` | No auto-load                         | Placeholder + preserved rel                                        | Preserved; explicit user gesture to embed |
 
@@ -23,9 +23,9 @@ BMP and WebP decode in the browser and paint like PNG or JPEG. BMP support inclu
 bitmaps and the 12-byte `BITMAPCOREHEADER`. WebP support includes lossy, lossless, and extended
 containers.
 
-TIFF, EMF, and WMF paint only when conversion to a validated raster succeeds. The original bytes
-stay in the package untouched, so saving round-trips them unchanged. When conversion is
-unavailable, declined, or fails, the image keeps its extent and shows a labeled placeholder.
+TIFF, EMF, and WMF paint when conversion to a validated raster succeeds. The original media stays
+unchanged in the package through save. When conversion is unavailable, declined, or fails, the
+image keeps its extent and shows a labeled placeholder.
 
 SVG is painted through an `<img>`, which puts the browser in secure static mode: scripts in the
 file never run and external references in it are never fetched. Its intrinsic size is read from
