@@ -93,24 +93,26 @@ export class Bookmark extends ModelObject implements PromisedItem {
     return this.#range;
   }
 
-  /** Put the reader's selection on the bookmark. `NotSupported` where there is no reader. */
+  /**
+   * Put the reader's selection on the bookmark and navigate the editor viewport to it.
+   *
+   * The bookmark's current range is resolved as part of the selection, so callers do not need to
+   * read {@link Bookmark.range} first. `Start` and `End` collapse to that endpoint. Refused with
+   * `NotSupported` where there is no reader.
+   */
   select(selectionMode_?: SelectionMode): void {
     const target = `${this.path.label}.select`;
     const mode = selectionMode(selectionMode_, target);
     this.requireAddressable();
     if (!this.internals.capabilities.selection) fail({ code: 'NotSupported', target });
     const bookmark = this.#handle();
-    // TWO operations in one batch and in this order: the range first, then the selection over it.
-    // A bookmark is a name, and the caret goes on characters.
-    const found = Range.promised(this.context, target, false);
-    this.read(
-      `${target}.range`,
-      () => ({ op: 'getBookmarkRange', bookmark }),
-      (value) => {
-        found.hydrateAddress({ kind: 'span', span: hydratedSpan(value, target) });
-      }
-    );
-    found.select(mode);
+    // One canonical operation: resolving the bookmark and moving the reader belong to the same
+    // batch. A pending Range cannot be targeted until a previous sync makes it addressable.
+    this.command('select', () => ({
+      op: 'selectBookmark',
+      bookmark,
+      mode: mode === 'Select' ? 'select' : mode === 'Start' ? 'start' : 'end',
+    }));
   }
 
   /** @internal Plan the read this object's `load(...)` asked for. */

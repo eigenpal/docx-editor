@@ -21,6 +21,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
+import { caretAt } from '@docx-editor.dev/core/layout';
 import { DocxEditor } from '../../index.ts';
 import { DocxEditor as DocxEditorBrowser } from '../../browser.ts';
 import type { DocxEditorRuntime } from '../runtime.ts';
@@ -75,6 +76,29 @@ describe('DocxEditor.createServer', () => {
     runtime.dispose();
   });
 
+  test('enumerates body bookmarks headlessly and releases the collection with its run', async () => {
+    const runtime = await DocxEditor.createServer(
+      docx(
+        '<w:p><w:bookmarkStart w:id="1" w:name="Headless"/>' +
+          '<w:r><w:t>server bookmark</w:t></w:r><w:bookmarkEnd w:id="1"/></w:p>'
+      )
+    );
+    const escaped = await runtime.run(async (context) => {
+      const bookmarks = context.document.body.bookmarks;
+      bookmarks.load('items');
+      await context.sync();
+      const bookmark = bookmarks.items[0]!;
+      bookmark.load('name');
+      await context.sync();
+      expect(bookmark.name).toBe('Headless');
+      return bookmarks;
+    });
+    expect(() => escaped.load()).toThrowError(
+      expect.objectContaining({ code: 'InvalidObjectPath' })
+    );
+    runtime.dispose();
+  });
+
   test('refuses bytes that are not a document, without throwing anything untyped', async () => {
     await expect(DocxEditor.createServer(new Uint8Array([1, 2, 3, 4]))).rejects.toMatchObject({
       code: 'InvalidArgument',
@@ -96,6 +120,41 @@ describe('DocxEditor.createBrowser', () => {
     const editor = createDocxEditor({ container, document: TWO_PARAGRAPHS });
     if (!editor.surface) throw new Error('surface failed to mount');
     return { editor, container };
+  }
+
+  function mountScrollable(bookmarked = false): {
+    editor: ReturnType<typeof createDocxEditor>;
+    scroller: HTMLElement;
+  } {
+    const scroller = document.createElement('div');
+    scroller.className = 'docx-editor__scroll-container';
+    const container = document.createElement('div');
+    scroller.append(container);
+    document.body.append(scroller);
+    Object.defineProperty(scroller, 'clientHeight', { value: 600, configurable: true });
+    Object.defineProperty(scroller, 'scrollHeight', { value: 100_000, configurable: true });
+    let scrollTop = 0;
+    Object.defineProperty(scroller, 'scrollTop', {
+      get: () => scrollTop,
+      set: (next: number) => {
+        scrollTop = next;
+      },
+      configurable: true,
+    });
+    scroller.scrollTo = ((options: ScrollToOptions) => {
+      scrollTop = options.top ?? 0;
+    }) as HTMLElement['scrollTo'];
+    const body = Array.from({ length: 120 }, (_, index) => {
+      if (index !== 119) return p(`paragraph ${index}`);
+      if (!bookmarked) return p('automation target');
+      return (
+        '<w:p><w:bookmarkStart w:id="1" w:name="AutomationTarget"/>' +
+        '<w:r><w:t>automation target</w:t></w:r><w:bookmarkEnd w:id="1"/></w:p>'
+      );
+    }).join('');
+    const editor = createDocxEditor({ container, document: docx(body) });
+    if (!editor.surface) throw new Error('surface failed to mount');
+    return { editor, scroller };
   }
 
   test('reads the document that is already open', async () => {
@@ -138,6 +197,75 @@ describe('DocxEditor.createBrowser', () => {
     });
     expect('save' in runtime).toBe(false);
     runtime.dispose();
+  });
+
+  test('Range.select reveals an offscreen result and preserves its logical range', async () => {
+    const { editor, scroller } = mountScrollable();
+    const runtime = DocxEditorBrowser.createBrowser(editor);
+    expect(scroller.scrollTop).toBe(0);
+
+    await runtime.run(async (context) => {
+      const matches = context.document.body.search('automation target', { matchCase: true });
+      matches.load();
+      await context.sync();
+      matches.items[0]!.select();
+      await context.sync();
+    });
+
+    const selection = editor.surface!.state().selection;
+    expect(selection.anchor.paragraphId).toBe(selection.head.paragraphId);
+    expect(selection.anchor.offset).toBe(0);
+    expect(selection.head.offset).toBe('automation target'.length);
+    expect(scroller.scrollTop).toBeGreaterThan(0);
+
+    const caret = caretAt(editor.surface!.layout(), selection.head);
+    expect(caret).not.toBeNull();
+    const page = editor.surface!.layout().pages.find((entry) => entry.index === caret!.pageIndex);
+    expect(page).toBeDefined();
+    const targetTop = (page!.contentBox.y + caret!.y) * (96 / 72);
+    expect(targetTop).toBeGreaterThanOrEqual(scroller.scrollTop);
+    expect(targetTop).toBeLessThanOrEqual(scroller.scrollTop + scroller.clientHeight);
+
+    runtime.dispose();
+    editor.destroy();
+    scroller.remove();
+  });
+
+  test('Bookmark.select resolves and reveals an offscreen bookmark in one selection sync', async () => {
+    const { editor, scroller } = mountScrollable(true);
+    const runtime = DocxEditorBrowser.createBrowser(editor);
+    expect(scroller.scrollTop).toBe(0);
+
+    await runtime.run(async (context) => {
+      const matches = context.document.body.search('automation target', { matchCase: true });
+      matches.load();
+      await context.sync();
+      const bookmarks = matches.items[0]!.bookmarks;
+      bookmarks.load();
+      await context.sync();
+      // No `bookmark.range` read or intermediate sync: selection resolves the current marker pair
+      // inside this batch.
+      bookmarks.items[0]!.select();
+      await context.sync();
+    });
+
+    const selection = editor.surface!.state().selection;
+    expect(selection.anchor.paragraphId).toBe(selection.head.paragraphId);
+    expect(selection.anchor.offset).toBe(0);
+    expect(selection.head.offset).toBe('automation target'.length);
+    expect(scroller.scrollTop).toBeGreaterThan(0);
+
+    const caret = caretAt(editor.surface!.layout(), selection.head);
+    expect(caret).not.toBeNull();
+    const page = editor.surface!.layout().pages.find((entry) => entry.index === caret!.pageIndex);
+    expect(page).toBeDefined();
+    const targetTop = (page!.contentBox.y + caret!.y) * (96 / 72);
+    expect(targetTop).toBeGreaterThanOrEqual(scroller.scrollTop);
+    expect(targetTop).toBeLessThanOrEqual(scroller.scrollTop + scroller.clientHeight);
+
+    runtime.dispose();
+    editor.destroy();
+    scroller.remove();
   });
 
   test('disposing the runtime leaves the editor mounted and editable', async () => {

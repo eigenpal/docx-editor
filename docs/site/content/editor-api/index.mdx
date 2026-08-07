@@ -42,6 +42,24 @@ try {
 }
 ```
 
+To discover bookmarks without first knowing their text, enumerate the story that owns them:
+
+```ts
+await runtime.run(async (context) => {
+  const bookmarks = context.document.body.bookmarks;
+  bookmarks.load('items');
+  await context.sync();
+
+  for (const bookmark of bookmarks.items) bookmark.load('name');
+  await context.sync();
+
+  console.log(bookmarks.items.map(({ name }) => name));
+});
+```
+
+`document.body.bookmarks` covers only the main body story. A header or footer `Body` has its own
+collection; this accessor never combines separate stories into a document-wide answer.
+
 ## In the browser
 
 The browser entry takes an editor the host already created (from `@docx-editor.dev/react` or a plain page) and drives it in place. Edits land in the open document with the reader's undo stack intact, so there is no `save()`: the host saves the way it already did.

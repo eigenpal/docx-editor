@@ -50,6 +50,18 @@ expansion is not supported yet. A non-empty `expand` is rejected immediately wit
 `InvalidArgument` targeting the object's `.expand` option; omit it or pass `expand: []`. Load a
 navigation object or collection explicitly and sync it in the usual way.
 
+DocxEditor also adds `Body.bookmarks` for bookmark discovery. It returns the bookmarks declared in
+that `Body` object's one story: `document.body.bookmarks` is the main body story, not a
+document-wide union of headers, footers, and notes. Office.js exposes `Range.bookmarks` but has no
+equivalent body-level discovery member, so this additive accessor is recorded as a DocxEditor
+extension rather than an Office.js conformance claim.
+
+In a browser runtime, `Range.select()` and `Bookmark.select()` also navigate the editor viewport to
+the selected content, matching Word's contract. Selection capability is the only preflight required:
+each operation owns its reveal and verifies selection again at `sync()`. The reveal uses paginated
+layout coordinates, so it works when the target page is virtualized and has no painted element yet.
+A server runtime refuses either `select()` with `NotSupported` because it has no reader or viewport.
+
 Review dates are file-authored rather than synthesized. `Comment.creationDate`,
 `CommentReply.creationDate`, and `Revision.date` return `Date | null`: a missing or invalid OOXML
 date becomes `null`, so strict TypeScript consumers must narrow it before calling `Date` methods.

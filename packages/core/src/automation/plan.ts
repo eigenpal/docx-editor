@@ -1649,6 +1649,28 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     return { ok: true, kind: 'command', ops: [], story: reads.story, answer: () => APPLIED };
   };
 
+  const resolveBookmarkRange = (handle: AutomationHandle) => {
+    const target = handles.resolve(handle, 'bookmark');
+    if (!target || target.kind !== 'bookmark')
+      return refuse('invalid-handle', 'that handle does not name a bookmark', 'bookmark');
+    const reads = packageReads.story(target.story);
+    if (!reads) return refuse('invalid-handle', 'that story is not in this document');
+    const bookmark = bookmarkIn(reads, target.name);
+    if (!bookmark)
+      return refuse(
+        'invalid-handle',
+        'this document no longer declares that bookmark',
+        target.name
+      );
+    const point = (marker: { readonly paragraphId: string; readonly offset: number }) => ({
+      story: reads.story,
+      paragraphId: marker.paragraphId,
+      index: reads.indexOf(marker.paragraphId),
+      offset: marker.offset,
+    });
+    return { reads, range: { start: point(bookmark.start), end: point(bookmark.end) } };
+  };
+
   const plan = (operation: AutomationOperation): PlannedOperation => {
     switch (operation.op) {
       case 'getDocument':
@@ -2149,33 +2171,9 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       }
 
       case 'getBookmarkRange': {
-        const target = handles.resolve(operation.bookmark, 'bookmark');
-        if (!target || target.kind !== 'bookmark')
-          return refuse('invalid-handle', 'that handle does not name a bookmark', 'bookmark');
-        const reads = packageReads.story(target.story);
-        if (!reads) return refuse('invalid-handle', 'that story is not in this document');
-        const bookmark = bookmarkIn(reads, target.name);
-        // GONE MEANS GONE. The markers left with the text that held them, and a range derived from
-        // where they used to be would point at whatever moved in.
-        if (!bookmark)
-          return refuse(
-            'invalid-handle',
-            'this document no longer declares that bookmark',
-            target.name
-          );
-        const start: ResolvedPoint = {
-          story: reads.story,
-          paragraphId: bookmark.start.paragraphId,
-          index: reads.indexOf(bookmark.start.paragraphId),
-          offset: bookmark.start.offset,
-        };
-        const end: ResolvedPoint = {
-          story: reads.story,
-          paragraphId: bookmark.end.paragraphId,
-          index: reads.indexOf(bookmark.end.paragraphId),
-          offset: bookmark.end.offset,
-        };
-        return query({ kind: 'span', span: spanOf({ start, end }) });
+        const found = resolveBookmarkRange(operation.bookmark);
+        if (!('reads' in found)) return found;
+        return query({ kind: 'span', span: spanOf(found.range) });
       }
 
       case 'getComments': {
@@ -2423,6 +2421,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const story = storyReadsOf(resolved.value);
         if (!story) return refuse('invalid-handle', 'that story is not in this document');
         return planSelect(planFor(story), resolved.value, operation.mode);
+      }
+
+      case 'selectBookmark': {
+        const found = resolveBookmarkRange(operation.bookmark);
+        if (!('reads' in found)) return found;
+        return planSelect(planFor(found.reads), found.range, operation.mode);
       }
 
       case 'getContentControls': {
