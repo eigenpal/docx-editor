@@ -23,8 +23,14 @@ const SCOPE = '.docx-editor';
  * Class prefixes the engine owns outright. These paint INSIDE the editor but are
  * matched on painted document elements rather than on chrome descendants, so
  * requiring the scope class on them would be wrong.
+ *
+ * OWNED means we mint the name. `.ProseMirror-` was on this list and is not
+ * ours — it is ProseMirror's, and `.ProseMirror-yjs-cursor` is y-prosemirror's.
+ * A host running its own ProseMirror editor on the same page got our rules on
+ * its elements, which is the leak this guard exists to prevent. Anything we do
+ * not mint has to carry the scope class.
  */
-const OWNED_PREFIXES = ['.docx-', '.layout-', '.paged-editor', '.ProseMirror-'];
+const OWNED_PREFIXES = ['.docx-', '.layout-', '.paged-editor'];
 
 /** A keyframe step (`from`, `to`, `47%`) is not a selector. */
 const KEYFRAME_STEP = /^(from|to|-?[\d.]+%)$/;

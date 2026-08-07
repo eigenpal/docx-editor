@@ -1785,8 +1785,12 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* Default styles for y-prosemirror remote cursor decorations. Consumers can
-  * override by providing their own `.ProseMirror-yjs-cursor` rules. */
-.ProseMirror-yjs-cursor {
+  * override by providing their own `.ProseMirror-yjs-cursor` rules.
+  *
+  * Scoped, because `.ProseMirror-yjs-cursor` is y-prosemirror's class name and
+  * not ours: unscoped, these rules restyled the remote cursors of a HOST's own
+  * ProseMirror + Yjs editor sharing the page. */
+.docx-editor .ProseMirror-yjs-cursor {
   position: relative;
   margin-left: -1px;
   margin-right: -1px;
@@ -1795,7 +1799,7 @@ a.docx-hyperlink:focus-visible {
   word-break: normal;
   pointer-events: none;
 }
-.ProseMirror-yjs-cursor > div {
+.docx-editor .ProseMirror-yjs-cursor > div {
   position: absolute;
   top: -1.05em;
   left: -1px;
