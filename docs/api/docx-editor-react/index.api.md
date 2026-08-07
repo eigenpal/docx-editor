@@ -1474,12 +1474,6 @@ export { PX_PER_CM }
 
 export { PX_PER_INCH }
 
-// @public
-export const ReviewLayoutContext: react.Context<ReviewPaneLayout>;
-
-// @public
-export type ReviewPaneLayout = 'rail' | 'drawer';
-
 // @public (undocumented)
 export const ReviewRailContext: react.Context<ReviewRailRegistry | null>;
 
@@ -1984,9 +1978,6 @@ export interface UseParagraphStyleResult {
     readonly setValue: (styleId: string) => void;
     readonly value: string | null;
 }
-
-// @public
-export function useReviewPaneLayout(): ReviewPaneLayout;
 
 // @public
 export function useTableBorderTargetLabel(): string;

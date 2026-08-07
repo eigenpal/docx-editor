@@ -12,6 +12,7 @@
 
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
+import { ZOOM_MAX } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../../lib/units';
 import { ReviewRailContext } from '../context';
 import { useEditorState } from '../useEditorState';
@@ -33,12 +34,19 @@ interface PaneGeometry {
   readonly fitting: boolean;
 }
 
-const selectPageGeometry = (snapshot: EditorSnapshot): PaneGeometry => ({
-  pageSetup: snapshot.pageSetup ?? null,
-  zoom: snapshot.zoom,
-  reviewPaneOpen: snapshot.reviewPaneOpen ?? true,
-  fitting: snapshot.zoomMode?.type === 'fit',
-});
+const selectPageGeometry = (snapshot: EditorSnapshot): PaneGeometry => {
+  const mode = snapshot.zoomMode;
+  return {
+    pageSetup: snapshot.pageSetup ?? null,
+    zoom: snapshot.zoom,
+    reviewPaneOpen: snapshot.reviewPaneOpen ?? true,
+    // BINDING, not merely selected. A fit resting at its own cap — which the default `'auto'`
+    // does on every container with room for the page — has a fixed-width page and belongs on
+    // the proportional branch. Only a fit that is actually scaling the page to the box makes
+    // the page's width follow the padding.
+    fitting: mode?.type === 'fit' && snapshot.zoom < (mode.maxZoom ?? ZOOM_MAX),
+  };
+};
 
 const samePageGeometry = (a: PaneGeometry, b: PaneGeometry) =>
   a.zoom === b.zoom &&

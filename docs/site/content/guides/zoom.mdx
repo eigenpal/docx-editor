@@ -13,7 +13,7 @@ Zoom has a value and a mode. The value is the scale the pages paint at; the mode
 
 | Mode                                | Behavior                                                                                          |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `'auto'` (default)                  | Fit the page width, but never above 100%. Shrinks a page that does not fit, leaves one that does. |
+| `'auto'` (default)                  | Fit the page width, between 50% and 100%. Shrinks a page that does not fit, leaves one that does. |
 | `{ type: 'fit', fit: 'pageWidth' }` | Fit the page width in both directions, so a wide window magnifies the page.                       |
 | `{ type: 'fixed' }`                 | Hold whatever `zoom` is set to. This is the pre-fit behavior.                                     |
 
@@ -71,18 +71,16 @@ Render the selected state from `mode`, not from `zoom`. A menu that ticks the le
 
 The packaged toolbar's zoom control already does all of this: **Automatic** and **Fit width** sit above the preset levels, and the tick follows the mode.
 
-## Comments on a narrow screen
+## Comments, and narrow screens
 
-The comments pane reserves a gutter beside the page. Under a fit that gutter comes out of the document's width, so opening comments shrinks the page rather than pushing it off screen — the two sit side by side and both stay readable.
+The comments rail reserves a gutter beside the page. Under a fit that gutter comes out of the document's width, so opening comments shrinks the page rather than pushing it off screen: the two sit side by side and both stay readable.
 
-Below a threshold there is no room for that. The pane then gives the gutter back and opens as a drawer over the document: cards stacked in reading order, a scrim behind it, dismissed with Escape or a tap outside. The same comments button opens it, and the document keeps its full width and refits.
+There is a width below which that stops helping. The rail takes a fixed 316px whether or not the container can spare it, so on a phone with comments open the page would be fitted into a sliver — a document nobody can read, to avoid a scrollbar nobody minds. So `'auto'` has a floor of 50%: below that the page keeps a legible size and the container scrolls sideways, which is the ordinary answer to "this does not fit".
 
-The threshold is the editor's own container, not the browser window, so an editor embedded in a narrow column behaves like an editor on a narrow screen. To follow it in your own chrome:
+Set your own floor if 50% is not where you want it:
 
 ```tsx
-import { useReviewPaneLayout } from '@docx-editor.dev/react';
-
-const layout = useReviewPaneLayout(); // 'rail' | 'drawer'
+<DocxEditor document={bytes} zoomMode={{ type: 'fit', fit: 'pageWidth', minZoom: 0.35 }} />
 ```
 
 ## Without React

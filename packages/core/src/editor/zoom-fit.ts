@@ -25,13 +25,42 @@ export const ZOOM_MAX = 5;
 export const FIT_GUTTER_PX = 24;
 
 /**
- * Fit the page width, but never magnify: the default.
+ * How small `'auto'` will shrink a page before it stops trying.
  *
- * A wide window keeps the 100% it has always had, and only a window too narrow to hold the
- * sheet shrinks. Uncapped fitting would render a Letter page at 183% on a 1600px monitor,
- * which is a reader app, not Word.
+ * There is a width below which fitting stops helping. A comments rail takes a fixed 316px
+ * whether or not the container can spare it, so on a narrow screen with the pane open the
+ * page has a sliver left, and fitting to the sliver produces a document nobody can read to
+ * avoid a scrollbar nobody minds. Below this the page keeps a legible size and the container
+ * scrolls sideways, which is the ordinary answer to "this does not fit".
+ *
+ * The lowest rung on the zoom ladder, so a reader who wants to go further has a control that
+ * does it.
  */
-export const AUTO_ZOOM_MODE: ZoomMode = { type: 'fit', fit: 'pageWidth', maxZoom: 1 };
+export const AUTO_ZOOM_FLOOR = 0.5;
+
+/**
+ * Fit the page width, but never magnify and never shrink past legibility: the default.
+ *
+ * A wide container keeps the 100% it has always had, and only one too narrow to hold the
+ * sheet shrinks. Uncapped fitting would render a Letter page at 183% on a 1600px monitor,
+ * which is a reader app, not Word; unfloored fitting would render it at 20% beside an open
+ * comments rail on a phone.
+ */
+export const AUTO_ZOOM_MODE: ZoomMode = {
+  type: 'fit',
+  fit: 'pageWidth',
+  minZoom: AUTO_ZOOM_FLOOR,
+  maxZoom: 1,
+};
+
+/**
+ * Fit the page width in BOTH directions — the uncapped fit, unlike `'auto'`.
+ *
+ * A shared constant rather than a literal per call site: modes are compared by value, but a
+ * control also has to render its own selected state, and two spellings of one mode in two
+ * files is how a menu ends up ticking a row the editor is not in.
+ */
+export const FIT_WIDTH_ZOOM_MODE: ZoomMode = { type: 'fit', fit: 'pageWidth' };
 
 /** The 100% that has no fitting behind it. */
 export const FIXED_ZOOM_MODE: ZoomMode = { type: 'fixed' };
@@ -46,8 +75,29 @@ export function resolveZoomMode(mode: ZoomMode | 'auto'): ZoomMode | null {
   if (mode === 'auto') return AUTO_ZOOM_MODE;
   if (!mode || typeof mode !== 'object') return null;
   if (mode.type === 'fixed') return FIXED_ZOOM_MODE;
-  if (mode.type === 'fit' && mode.fit === 'pageWidth') return mode;
+  if (mode.type === 'fit' && mode.fit === 'pageWidth') {
+    // The canonical fit gets the shared object back, so a host writing the long form of
+    // `'auto'` is reference-equal to `'auto'`.
+    return sameZoomMode(mode, AUTO_ZOOM_MODE) ? AUTO_ZOOM_MODE : mode;
+  }
   return null;
+}
+
+/**
+ * Whether two modes say the same thing.
+ *
+ * `snapshotsEqual` compares `zoomMode` by IDENTITY, and a host's `zoomMode` prop is an object
+ * — `<DocxEditor zoomMode={{ type: 'fit', fit: 'pageWidth' }} />` is a fresh literal on every
+ * render, which is the spelling the docs show. Without a value comparison somewhere, each of
+ * those renders reinstalled the observer, refitted, bumped the tick, and re-rendered every
+ * `useEditorState` consumer in the tree — including the page selector that the slice
+ * memoization exists to keep asleep. The lane holds its object and compares by value here.
+ */
+export function sameZoomMode(a: ZoomMode, b: ZoomMode): boolean {
+  if (a === b) return true;
+  if (a.type !== b.type) return false;
+  if (a.type !== 'fit' || b.type !== 'fit') return true;
+  return a.fit === b.fit && a.minZoom === b.minZoom && a.maxZoom === b.maxZoom;
 }
 
 /** Whether a mode makes the engine track the viewport rather than hold a number. */
@@ -100,11 +150,21 @@ export function fitZoom({
   // first. The floor below then catches whatever is left.
   const usable = Math.max(availableWidthPx - 2 * gutter, availableWidthPx * 0.5);
 
-  const lower = Number.isFinite(minZoom) ? Math.max(minZoom, ZOOM_MIN) : ZOOM_MIN;
-  const upper = Number.isFinite(maxZoom) ? Math.min(maxZoom, ZOOM_MAX) : ZOOM_MAX;
+  // BOTH bounds land inside the contract's range, in both directions. Clamping `minZoom` up
+  // to the floor but not down to the ceiling let `{ minZoom: 10 }` through as a scale of 10 —
+  // a value `setZoom` refuses outright, arriving by the other public path.
+  const lower = Number.isFinite(minZoom) ? clampToRange(minZoom) : ZOOM_MIN;
+  const upper = Number.isFinite(maxZoom) ? clampToRange(maxZoom) : ZOOM_MAX;
+
+  // QUANTIZE FIRST, clamp second. The other order rounds the bound itself: `x / 100 * 100`
+  // floors down for x = 29, 57, 113, 201 and others, so a caller asking for `minZoom: 0.29`
+  // was handed 0.28 — a silent one-percent violation of a bound it stated.
+  const quantized = Math.floor((usable / pageWidthPx) * 100) / 100;
   // A caller that passes min > max has contradicted itself; the lower bound wins, because
   // an unreadably small page is a worse answer than a slightly-too-large one.
-  const capped = Math.min(Math.max(usable / pageWidthPx, lower), Math.max(upper, lower));
+  return Math.min(Math.max(quantized, lower), Math.max(upper, lower));
+}
 
-  return Math.floor(capped * 100) / 100;
+function clampToRange(zoom: number): number {
+  return Math.min(Math.max(zoom, ZOOM_MIN), ZOOM_MAX);
 }

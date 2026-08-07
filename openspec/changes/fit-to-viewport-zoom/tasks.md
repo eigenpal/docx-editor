@@ -19,19 +19,15 @@
 - [x] 2.4 Toolbar zoom menu: Automatic and Fit width above the levels, ticked from the mode, `data-fit` on the part.
 - [x] 2.5 `useZoom` and `UseZoomResult` exported; export-divergence note updated.
 
-## 3. The rail's presentation
+## 3. Keeping the two panes honest
 
-- [x] 3.1 `editor/review-pane-layout.ts` in core: `REVIEW_RAIL_DOCK_MIN_PX`, `reviewPaneLayoutFor`.
-- [x] 3.2 `DocxEditorViewport` measures itself, publishes `data-review-layout` and `ReviewLayoutContext`.
-- [x] 3.3 `navigation-geometry.ts`: `docked` input; `useNavigationPane` passes it when the snapshot reports a fit.
-- [x] 3.4 `pro/react/ReviewDrawer.tsx`: scrim, dialog semantics, Escape, focus in and back, hidden + inert when closed.
-- [x] 3.5 `DocxEditorReview` reads the layout, renders the drawer, adds `flow` to `ReviewList`, drops the markers in a drawer.
-- [x] 3.6 CSS: zeroed gutter in drawer layout, drawer + scrim + head + body, flow list.
-- [x] 3.7 Tests: `react/test/fit-to-viewport.test.tsx` and `pro/src/__tests__/review-drawer.test.tsx`.
+- [x] 3.1 `AUTO_ZOOM_FLOOR`, so a fit stops before the page stops being readable and the container scrolls instead.
+- [x] 3.2 `navigation-geometry.ts`: `docked` input for a fit whose page width follows the padding; `useNavigationPane` passes it only when the fit is BINDING, not merely selected.
+- [x] 3.3 The review rail is untouched: it reserves its gutter at every width, exactly as before.
 
 ## 4. Housekeeping
 
-- [x] 4.1 i18n: `zoom.automatic`, `zoom.fitWidth`, `review.close`; `i18n:fix` across locales.
-- [x] 4.2 Extractions to stay under the max-lines caps: `docx-editor-zoom.ts` out of `docx-editor.ts`, `review-rail-geometry.ts` out of `DocxEditorReview.tsx`.
+- [x] 4.1 i18n: `zoom.automatic`, `zoom.fitWidth`; `i18n:fix` across locales.
+- [x] 4.2 `docx-editor-zoom.ts` extracted out of `docx-editor.ts`, which was at its max-lines cap.
 - [x] 4.3 `check-editor-contract.mjs`: `zoomMode` staged as a React-only prop with its closing condition.
 - [x] 4.4 API snapshots re-extracted; docs page; changeset.

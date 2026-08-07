@@ -1115,8 +1115,7 @@
     "showPane": "Mostrar comentários",
     "structural": "Estrutura do documento alterada",
     "deleteComment": "Excluir comentário",
-    "discardChange": "Descartar alteração",
-    "close": null
+    "discardChange": "Descartar alteração"
   },
   "imageAltText": {
     "description": "Descrição",

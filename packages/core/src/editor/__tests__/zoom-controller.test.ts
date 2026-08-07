@@ -12,6 +12,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import { AUTO_ZOOM_MODE } from '../zoom-fit.ts';
 import type { EditorSnapshot } from '../../contracts/editor.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -102,7 +103,7 @@ afterEach(() => {
 describe('the default mode', () => {
   test('is auto: a window with room for the sheet opens at 100%, exactly as before', () => {
     const { editor } = mount();
-    expect(editor.getZoomMode()).toEqual({ type: 'fit', fit: 'pageWidth', maxZoom: 1 });
+    expect(editor.getZoomMode()).toEqual(AUTO_ZOOM_MODE);
     expect(editor.getZoom()).toBe(1);
   });
 
@@ -130,6 +131,14 @@ describe('the default mode', () => {
     harness.resize(400);
     await harness.settle();
     expect(harness.editor.getZoom()).toBe(1);
+  });
+
+  // A fixed editor tracks nothing, so it has no reason to watch anything. It used to install
+  // an observer anyway and pay a scheduled frame per resize tick to reach an early return.
+  test('a fixed editor installs no observer at all', () => {
+    observerCallbacks = [];
+    mount({ zoomMode: { type: 'fixed' } });
+    expect(observerCallbacks).toHaveLength(0);
   });
 });
 
@@ -236,7 +245,7 @@ describe('leaving and re-entering the fit', () => {
     const result = editor.setZoomMode('fit' as never);
     expect(result.ok).toBe(false);
     expect(result).toMatchObject({ code: 'invalidArgs' });
-    expect(editor.getZoomMode()).toEqual({ type: 'fit', fit: 'pageWidth', maxZoom: 1 });
+    expect(editor.getZoomMode()).toEqual(AUTO_ZOOM_MODE);
   });
 
   test('setting the mode already in force changes nothing', () => {
@@ -246,6 +255,20 @@ describe('leaving and re-entering the fit', () => {
 });
 
 describe('lifecycle', () => {
+  // The observer is on a scroller found through the OLD container, and only a successful mount
+  // re-targets it. A load that failed to parse leaves no surface and no pending bytes, so
+  // attaching to a new element took the do-nothing branch and left the observer watching an
+  // element the editor no longer used — keeping it alive if the host had dropped it.
+  test('moving to a new container after a failed load drops the old observer', () => {
+    const harness = mount();
+    harness.editor.load(new Uint8Array([1, 2, 3]));
+    observerCallbacks = [];
+
+    harness.editor.attach(document.createElement('div'));
+
+    expect(observerCallbacks).toHaveLength(0);
+  });
+
   test('detach stops the observer, so a detached editor is not re-fitted', async () => {
     const harness = mount();
     harness.editor.detach();

@@ -1115,8 +1115,7 @@
     "showPane": "Açıklamaları göster",
     "structural": "Belge yapısı değiştirildi",
     "deleteComment": "Açıklamayı sil",
-    "discardChange": "Değişikliği at",
-    "close": null
+    "discardChange": "Değişikliği at"
   },
   "imageAltText": {
     "description": "Açıklama",

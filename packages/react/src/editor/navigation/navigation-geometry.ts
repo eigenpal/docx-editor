@@ -41,15 +41,20 @@ export interface NavigationShiftInput {
   /** Padding already reserved at the inline end, for example by the review rail. */
   readonly inlineEndReservation?: number;
   /**
-   * Whether the page's WIDTH follows the padding — true whenever the editor is in a fit
-   * zoom mode.
+   * Whether the page's WIDTH follows the padding right now.
    *
    * This turns the answer binary, and it has to. The proportional branch below assumes a page
-   * of fixed width sitting in a shrinking box, so padding P moves it by P/2. Under a fit the
-   * page is re-scaled to the padded box instead, so a partial shift makes the page narrower,
-   * which widens the gutter, which asks for a smaller shift, which makes the page wider —
-   * the pane and the document chase each other on every frame and never settle. Docked or
-   * not is a fixed point; anything in between is not.
+   * of fixed width sitting in a shrinking box, so padding P moves it by P/2. Where the page is
+   * re-scaled to the padded box instead, a partial shift makes the page narrower, which widens
+   * the gutter, which asks for a smaller shift, which makes the page wider — the pane and the
+   * document chase each other every frame and never settle. Docked or not is a fixed point;
+   * anything in between is not.
+   *
+   * NOT "a fit mode is selected". The default fit is capped at 100%, and on any container with
+   * room for the sheet it sits AT that cap with the page a fixed width — exactly the case the
+   * proportional branch was written for. Reading the mode alone docked those containers too
+   * and pushed the page up to 128px further right than the pane needed. The question is
+   * whether the fit is BINDING, which is `zoom < maxZoom`.
    */
   readonly docked?: boolean;
 }

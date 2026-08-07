@@ -24,6 +24,9 @@ export function applyThemeShade(hex: string, keep: number): string;
 export function applyThemeTint(hex: string, keep: number): string;
 
 // @public
+export const AUTO_ZOOM_FLOOR = 0.5;
+
+// @public
 export const AUTO_ZOOM_MODE: ZoomMode;
 
 // @public
@@ -870,6 +873,9 @@ export function finalizeImageOverlayInteraction(options: {
 export const FIT_GUTTER_PX = 24;
 
 // @public
+export const FIT_WIDTH_ZOOM_MODE: ZoomMode;
+
+// @public
 export function fitZoom(input: FitZoomInput): number | null;
 
 // @public
@@ -1523,9 +1529,6 @@ export function resolveThemeColorHex(color: Extract<ColorValue, {
 export function resolveZoomMode(mode: ZoomMode | 'auto'): ZoomMode | null;
 
 // @public
-export const REVIEW_RAIL_DOCK_MIN_PX = 900;
-
-// @public
 export interface ReviewModelInput {
     readonly commentsExtendedPart?: OoxmlPart | undefined;
     readonly commentsPart?: OoxmlPart | undefined;
@@ -1547,12 +1550,6 @@ export interface ReviewModuleContribution {
     readonly displayModes: readonly RevisionDisplayMode[];
     readonly revisionItemsOfParagraph: (part: OoxmlPart, paragraphId: string) => readonly ReviewRevisionItem[];
 }
-
-// @public
-export type ReviewPaneLayout = 'rail' | 'drawer';
-
-// @public
-export function reviewPaneLayoutFor(containerWidthPx: number, minDockWidthPx?: number): ReviewPaneLayout;
 
 // @public
 export interface RulerDragOptions {
@@ -1626,6 +1623,9 @@ export function runTableCommand(editor: Editor | null, command: EditorCommand): 
 // @public
 export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId,
 value?: unknown): ExecResult;
+
+// @public
+export function sameZoomMode(a: ZoomMode, b: ZoomMode): boolean;
 
 // @public
 export interface SectionProperties {

@@ -1115,8 +1115,7 @@
     "showPane": "टिप्पणियाँ दिखाएँ",
     "structural": "दस्तावेज़ संरचना बदली गई",
     "deleteComment": "टिप्पणी हटाएँ",
-    "discardChange": "परिवर्तन छोड़ें",
-    "close": null
+    "discardChange": "परिवर्तन छोड़ें"
   },
   "imageAltText": {
     "description": "विवरण",

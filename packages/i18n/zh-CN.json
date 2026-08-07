@@ -1115,8 +1115,7 @@
     "showPane": "显示批注",
     "structural": "已更改文档结构",
     "deleteComment": "删除批注",
-    "discardChange": "放弃更改",
-    "close": null
+    "discardChange": "放弃更改"
   },
   "imageAltText": {
     "description": "说明",

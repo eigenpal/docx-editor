@@ -41,35 +41,3 @@ export interface ReviewRailRegistry {
 }
 
 export const ReviewRailContext = createContext<ReviewRailRegistry | null>(null);
-
-/**
- * How the review pane presents itself: beside the document, or over it.
- *
- * `'rail'` is the desktop shape — the viewport reserves a gutter and each card is anchored
- * beside the text it annotates. `'drawer'` is what a narrow editor gets: the gutter is given
- * back, the document refits to the full width, and the pane opens as an overlay.
- *
- * The threshold is CONTAINER geometry, not a media query. This editor is embedded, so a
- * 700px column on a 2560px monitor is a narrow editor and a media query would call it wide.
- *
- * @public
- */
-export type ReviewPaneLayout = 'rail' | 'drawer';
-
-/**
- * The layout published by the nearest `DocxEditor.Viewport`.
- *
- * On the Viewport rather than {@link ReviewRailRegistry} because the Viewport is the element
- * whose width decides the answer; the registry is created up in the Root, which has none.
- * `'rail'` outside a Viewport, so a rail composed on its own keeps the desktop shape.
- */
-export const ReviewLayoutContext = createContext<ReviewPaneLayout>('rail');
-
-/**
- * How the review pane is presenting itself right now.
- *
- * @public
- */
-export function useReviewPaneLayout(): ReviewPaneLayout {
-  return useContext(ReviewLayoutContext);
-}

@@ -425,12 +425,6 @@ and their hooks/parts defer to `vue-drawing-authoring-parity`.
   `ZoomMode` and `snapshot().zoomMode` are contract members both adapters reach, and the fit
   itself runs in the engine — a Vue host gets fit-to-viewport zoom with no adapter code.
 - `UseZoomResult` — the hook's return type.
-- `ReviewLayoutContext` — the review pane's presentation (beside the document, or over it),
-  published by React's `DocxEditor.Viewport` because that element's width decides it. The
-  threshold and the rule are engine-side (`reviewPaneLayoutFor`), exported from core; only the
-  context plumbing is React's.
-- `useReviewPaneLayout` — reads that context.
-- `ReviewPaneLayout` — the two-valued type, re-exported from core.
 
 ## Vue-only
 

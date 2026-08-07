@@ -12,6 +12,7 @@
 
 import { useCallback, useMemo } from 'react';
 import type { EditorSnapshot, ZoomMode } from '@docx-editor.dev/core/contracts/editor';
+import { FIT_WIDTH_ZOOM_MODE } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { ZOOM_LEVELS, stepZoomLevel } from './zoom-levels';
@@ -56,7 +57,6 @@ export interface UseZoomResult {
 }
 
 const FIXED: ZoomMode = { type: 'fixed' };
-const FIT_WIDTH: ZoomMode = { type: 'fit', fit: 'pageWidth' };
 
 /**
  * Read and drive the document's zoom.
@@ -97,7 +97,7 @@ export function useZoom(): UseZoomResult {
       isFit: resolved.type === 'fit',
       setZoom,
       setMode,
-      fitToWidth: () => setMode(FIT_WIDTH),
+      fitToWidth: () => setMode(FIT_WIDTH_ZOOM_MODE),
       auto: () => setMode('auto'),
       reset: () => {
         // Mode first: `setZoom` already leaves a fit, and doing it in this order means a

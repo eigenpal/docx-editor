@@ -22,6 +22,7 @@ import { useEditorCommand } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
 import { guardToolbarMousedown } from './ToolbarButton';
 import type { ToolbarSlotPartProps, ToolbarSlotPartComponent } from './parts';
+import { AUTO_ZOOM_MODE, FIT_WIDTH_ZOOM_MODE, sameZoomMode } from '@docx-editor.dev/core/editor';
 import { useZoom } from '../useZoom';
 
 /** Engine bounds for `w:sz`: integer half-points, 2..3276 (docx-editor-support). */
@@ -344,7 +345,7 @@ function ToolbarZoomImpl({ className, hidden }: ToolbarSlotPartProps) {
   const applyMode = useCallback(
     (next: 'auto' | 'fit-width') => {
       setOpen(false);
-      setMode(next === 'auto' ? 'auto' : { type: 'fit', fit: 'pageWidth' });
+      setMode(next === 'auto' ? 'auto' : FIT_WIDTH_ZOOM_MODE);
     },
     [setMode]
   );
@@ -353,8 +354,13 @@ function ToolbarZoomImpl({ className, hidden }: ToolbarSlotPartProps) {
   const display = `${Math.round(zoom * 100)}%`;
   // Which fit, not just "a fit": `Automatic` is the capped one, `Fit width` the uncapped, and
   // ticking both would tell the reader the editor is in two modes at once.
-  const autoSelected = isFit && mode.type === 'fit' && mode.maxZoom === 1;
-  const fitWidthSelected = isFit && !autoSelected;
+  //
+  // NEITHER, for a fit with a cap this menu cannot offer. A host may pass any bounds, and
+  // treating "not Automatic" as "Fit width" ticked a row that, when clicked, silently replaced
+  // the host's cap with none — the tick never moved, so the reader had no way to see that the
+  // mode had changed under them. An unrepresentable mode shows the percentage and no tick.
+  const autoSelected = sameZoomMode(mode, AUTO_ZOOM_MODE);
+  const fitWidthSelected = sameZoomMode(mode, FIT_WIDTH_ZOOM_MODE);
   return (
     <span
       ref={rootRef}
@@ -391,7 +397,11 @@ function ToolbarZoomImpl({ className, hidden }: ToolbarSlotPartProps) {
         onIncrease={zoomIn}
       />
       {open ? (
-        <div className="docx-toolbar__menu docx-toolbar__zoom-menu" role="listbox">
+        <div
+          className="docx-toolbar__menu docx-toolbar__zoom-menu"
+          role="listbox"
+          aria-label={label('zoom.zoomLevel')}
+        >
           {/* The fits come FIRST and are ticked from the mode, not the percentage. Ticking
               the level that matches the resolved scale would light up "100%" while the
               editor was tracking the viewport and about to move off it. */}
@@ -417,7 +427,7 @@ function ToolbarZoomImpl({ className, hidden }: ToolbarSlotPartProps) {
           >
             {label('zoom.fitWidth')}
           </button>
-          <hr className="docx-toolbar__menu-separator" />
+          <hr className="docx-toolbar__menu-separator" role="presentation" />
           {levels.map((level) => {
             const selected = !isFit && Math.abs(level - zoom) < 0.001;
             return (

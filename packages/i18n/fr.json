@@ -1115,8 +1115,7 @@
     "showPane": "Afficher les commentaires",
     "structural": "Structure du document modifiée",
     "deleteComment": "Supprimer le commentaire",
-    "discardChange": "Ignorer la modification",
-    "close": null
+    "discardChange": "Ignorer la modification"
   },
   "imageAltText": {
     "description": "Description",

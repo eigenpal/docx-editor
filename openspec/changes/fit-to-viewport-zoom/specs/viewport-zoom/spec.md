@@ -18,9 +18,11 @@ Both SHALL be readable: `Editor.getZoom()` answers the resolved scale and `Edito
 - **WHEN** a caller passes a value that is not a zoom mode
 - **THEN** the call answers `{ ok: false, code: 'invalidArgs' }` and the mode in force is unchanged
 
-### Requirement: A new editor fits the page width without magnifying it
+### Requirement: A new editor fits the page width without magnifying it, and without shrinking it past legibility
 
-The default mode SHALL be `'auto'`: fit the page width, capped at 100%. A container with room for the page SHALL therefore render at 100%, unchanged from a fixed default, and a container too narrow for it SHALL shrink the document rather than overflow it horizontally.
+The default mode SHALL be `'auto'`: fit the page width, bounded below at a legible floor and above at 100%. A container with room for the page SHALL therefore render at 100%, unchanged from a fixed default, and a container too narrow for it SHALL shrink the document rather than overflow it horizontally.
+
+Past the floor the document SHALL keep its size and the container SHALL scroll horizontally. Fitting exists to avoid a scrollbar; below the floor it would be trading a scrollbar nobody minds for a document nobody can read, which is the worse of the two. This is what a narrow container with the comments rail open gets: the rail keeps its gutter, the page keeps a legible size, and the overflow scrolls.
 
 An editor constructed with a `zoom` and no `zoomMode` SHALL open FIXED at that scale. An embedder that pinned a number asked for that number.
 
@@ -33,6 +35,11 @@ An editor constructed with a `zoom` and no `zoomMode` SHALL open FIXED at that s
 
 - **WHEN** a document opens in a container narrower than the page
 - **THEN** the scale is below 1, and it is resolved during the mount rather than a frame later, so the page is painted once at the fitted scale
+
+#### Scenario: A container past the floor overflows instead of shrinking further
+
+- **WHEN** the room left for the page is less than the floor would need — a narrow container with the comments rail reserving its gutter
+- **THEN** the scale stops at the floor and the container scrolls horizontally
 
 #### Scenario: A configured zoom is not overridden by the default
 

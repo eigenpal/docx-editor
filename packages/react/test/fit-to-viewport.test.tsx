@@ -2,8 +2,7 @@
 //
 // The engine owns the fit itself (`packages/core/src/editor/__tests__/zoom-controller.test.ts`).
 // What lives here is what React contributes: the `useZoom` hook a host builds a control from,
-// the layout the Viewport publishes from its own width, and the one rule that keeps the
-// navigation pane and the fit from chasing each other.
+// and the one rule that keeps the navigation pane and the fit from chasing each other.
 
 // MUST be first: happy-dom registration happens on import.
 import './dom-setup.ts';
@@ -18,7 +17,6 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { useZoom, type UseZoomResult } from '../src/editor/useZoom.ts';
-import { useReviewPaneLayout, type ReviewPaneLayout } from '../src/editor/context.ts';
 import { navigationShift } from '../src/editor/navigation/navigation-geometry.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -61,15 +59,14 @@ class WidthObserver {
 
 let observers: WidthObserver[] = [];
 
-function Probe({ onRender }: { onRender: (zoom: UseZoomResult, layout: ReviewPaneLayout) => void }) {
-  onRender(useZoom(), useReviewPaneLayout());
+function Probe({ onRender }: { onRender: (zoom: UseZoomResult) => void }) {
+  onRender(useZoom());
   return null;
 }
 
 function mount(props: Record<string, unknown> = {}) {
   let instance: DocxEditorInstance | null = null;
   let zoom: UseZoomResult | null = null;
-  let layout: ReviewPaneLayout = 'rail';
   const view = render(
     <DocxEditorRoot
       document={SOURCE}
@@ -80,9 +77,8 @@ function mount(props: Record<string, unknown> = {}) {
     >
       <DocxEditorViewport>
         <Probe
-          onRender={(next, nextLayout) => {
+          onRender={(next) => {
             zoom = next;
-            layout = nextLayout;
           }}
         />
         <DocxEditorContent />
@@ -96,7 +92,6 @@ function mount(props: Record<string, unknown> = {}) {
     scroll,
     editor: () => instance!,
     zoom: () => zoom!,
-    layout: () => layout,
     async resize(width: number) {
       viewportWidth = width;
       await act(async () => {
@@ -120,7 +115,7 @@ describe('useZoom', () => {
     const mounted = mount();
     expect(mounted.zoom().zoom).toBe(1);
     expect(mounted.zoom().isFit).toBe(true);
-    expect(mounted.zoom().mode).toEqual({ type: 'fit', fit: 'pageWidth', maxZoom: 1 });
+    expect(mounted.zoom().mode).toEqual({ type: 'fit', fit: 'pageWidth', minZoom: 0.5, maxZoom: 1 });
   });
 
   test('a level ends the fit; auto goes back to it', async () => {
@@ -178,33 +173,6 @@ describe('useZoom', () => {
   });
 });
 
-describe('the review layout the Viewport publishes', () => {
-  test('a wide container docks the rail', () => {
-    const mounted = mount();
-    expect(mounted.layout()).toBe('rail');
-    expect(mounted.scroll.getAttribute('data-review-layout')).toBe('rail');
-  });
-
-  test('a narrow container moves the comments into a drawer', async () => {
-    const mounted = mount();
-    await mounted.resize(600);
-
-    expect(mounted.layout()).toBe('drawer');
-    expect(mounted.scroll.getAttribute('data-review-layout')).toBe('drawer');
-  });
-
-  // Container geometry, not a media query: the window is irrelevant, the editor's own box
-  // is what decides. This is the same assertion as above, stated as the rule it protects.
-  test('the threshold is the container, so a widened container docks again', async () => {
-    const mounted = mount();
-    await mounted.resize(600);
-    expect(mounted.layout()).toBe('drawer');
-
-    await mounted.resize(1200);
-    expect(mounted.layout()).toBe('rail');
-  });
-});
-
 describe('the navigation pane under a fit', () => {
   // Without this the two chase each other every frame: a partial shift narrows the page,
   // which widens the gutter, which asks for a smaller shift, which widens the page again.
@@ -222,5 +190,21 @@ describe('the navigation pane under a fit', () => {
     const input = { viewportWidth: 1600, pageWidthPx: 816, reservation: 328 };
     expect(navigationShift(input)).toBe(0);
     expect(navigationShift({ ...input, docked: true })).toBe(0);
+  });
+
+  // The predicate is "the fit is BINDING", not "a fit mode is selected". The default `'auto'`
+  // is capped at 100% and rests AT that cap on any container with room for the sheet, where
+  // the page is a fixed width and the proportional branch is exactly right. Reading the mode
+  // alone docked those containers too and pushed the page up to 128px past what the pane
+  // needed.
+  test('a fit resting at its cap is not docked, so the page moves only as far as it must', () => {
+    const mounted = mount();
+    expect(mounted.zoom().zoom).toBe(1);
+    expect(mounted.zoom().isFit).toBe(true);
+
+    // 1400px viewport, Letter page at 100%: gutter 292 against a 328 reservation.
+    const capped = { viewportWidth: 1400, pageWidthPx: 816, reservation: 328 };
+    expect(navigationShift(capped)).toBe(72);
+    expect(navigationShift({ ...capped, docked: true })).toBe(328);
   });
 });

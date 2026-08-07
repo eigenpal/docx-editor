@@ -1115,8 +1115,7 @@
     "showPane": "Kommentare anzeigen",
     "structural": "Dokumentstruktur geändert",
     "deleteComment": "Kommentar löschen",
-    "discardChange": "Änderung verwerfen",
-    "close": null
+    "discardChange": "Änderung verwerfen"
   },
   "imageAltText": {
     "description": "Beschreibung",

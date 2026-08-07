@@ -1807,6 +1807,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         pendingBytes = surface.session.save();
         teardownSurface();
       }
+      // BEFORE the container moves, unconditionally. The observer is on a scroller found
+      // through the OLD container, and only the successful-mount path below re-targets it: a
+      // load that failed to parse leaves no surface and no pending bytes, so attaching to a
+      // new element took the `else bump()` branch and left the observer watching an element
+      // this editor no longer uses — and holding it alive if the host dropped it.
+      zoomLane.detach();
       container = el;
       // A probe answers for one document's font set; the new container may live in a
       // different one (an iframe host), so it re-creates on the next derivation.

@@ -21,6 +21,7 @@ import {
   ZOOM_MIN,
   isFitMode,
   resolveZoomMode,
+  sameZoomMode,
 } from './zoom-fit.ts';
 
 /** What the lane reads from, and writes back to, the facade around it. */
@@ -65,21 +66,40 @@ export function createZoomLane(config: ZoomLaneConfig, host: ZoomLaneHost): Zoom
   /**
    * Where the scale comes from. A configured `zoom` and no configured `zoomMode` means the
    * embedder pinned a number, so honour it: only an editor that asked for neither gets the
-   * `'auto'` default. Reference-stable, because `snapshotsEqual` compares it by identity.
+   * `'auto'` default.
+   *
+   * The lane HOLDS this object and only replaces it when `sameZoomMode` says the value moved,
+   * which is what makes `snapshotsEqual`'s identity compare of `zoomMode` correct.
    */
   let mode: ZoomMode =
     resolveZoomMode(config.zoomMode ?? (config.zoom !== undefined ? FIXED_ZOOM_MODE : 'auto')) ??
     AUTO_ZOOM_MODE;
 
-  /** Move the scale, whoever asked. Returns whether the surface accepted it. */
-  function applyZoom(next: number): boolean {
-    if (next === zoom) return true;
+  /**
+   * Move the scale, whoever asked. Returns whether the surface accepted it.
+   *
+   * `alsoCommit` runs after the surface has accepted and before anything is published, so a
+   * caller that changes the mode in the same breath does not emit a snapshot carrying the new
+   * scale beside the old mode.
+   */
+  function applyZoom(next: number, alsoCommit?: () => void): boolean {
+    if (next === zoom) {
+      alsoCommit?.();
+      return true;
+    }
     const surface = host.surface();
     if (surface && !setPaginatedSurfaceScale(surface, next * (96 / 72))) return false;
     zoom = next;
+    alsoCommit?.();
     host.bump();
     host.emitSelectionChange();
     return true;
+  }
+
+  /** Stop tracking the viewport and hold the scale where it is. */
+  function leaveFit(): void {
+    mode = FIXED_ZOOM_MODE;
+    controller.detach();
   }
 
   // Reads `mode` and `zoom` through closures rather than being handed them, so `setZoomMode`
@@ -105,7 +125,11 @@ export function createZoomLane(config: ZoomLaneConfig, host: ZoomLaneHost): Zoom
     zoom: () => zoom,
     mode: () => mode,
     scale: () => zoom * (96 / 72),
-    attach: () => controller.attach(),
+    // Only a fit tracks anything, so only a fit installs an observer. A fixed editor used to
+    // get one too and pay a scheduled frame per resize tick to reach an early return.
+    attach: () => {
+      if (isFitMode(mode)) controller.attach();
+    },
     detach: () => controller.detach(),
     refit: () => controller.refit(),
 
@@ -119,23 +143,26 @@ export function createZoomLane(config: ZoomLaneConfig, host: ZoomLaneHost): Zoom
           reason: `zoom must be between ${ZOOM_MIN} and ${ZOOM_MAX}, got ${next}`,
         };
       }
-      // A picked number ENDS the fit, and it does so even when the number is the one the fit
-      // had already landed on. Leaving the mode alone there meant picking "100%" while auto
-      // happened to read 100% did nothing, and the next window resize moved the page again.
       const wasFit = isFitMode(mode);
-      if (wasFit) {
-        mode = FIXED_ZOOM_MODE;
-        controller.detach();
-      }
       if (next === zoom) {
         if (!wasFit) return { ok: true, changed: false };
-        // Zoom: 1 -> 1, mode: fit -> fixed. Nothing moved on screen and the whole change is
-        // in the snapshot, so this has to publish or a zoom menu keeps "Automatic" ticked.
+        // Zoom: 1 -> 1, mode: fit -> fixed. A picked number ENDS the fit even when it is the
+        // number the fit had already landed on — leaving the mode alone meant picking "100%"
+        // while auto happened to read 100% did nothing, and the next resize moved the page
+        // again. Nothing moved on screen and the whole change is in the snapshot, so this has
+        // to publish or a zoom menu keeps "Automatic" ticked.
+        leaveFit();
         host.bump();
         host.emitSelectionChange();
         return { ok: true, changed: true };
       }
-      if (!applyZoom(next)) {
+      // THE SURFACE FIRST, the mode inside the same commit. `applyZoom` fails when the surface
+      // refuses the rescale — it catches a throwing relayout, rolls back and returns false —
+      // and dropping the mode before finding that out left the editor claiming `fixed` with no
+      // observer installed, unpublished, while the refused `ok: false` gave the caller no
+      // reason to re-assert anything: a toolbar with "Automatic" ticked over an editor that
+      // had silently stopped tracking.
+      if (!applyZoom(next, wasFit ? leaveFit : undefined)) {
         return {
           ok: false,
           code: 'unsupported',
@@ -154,7 +181,12 @@ export function createZoomLane(config: ZoomLaneConfig, host: ZoomLaneHost): Zoom
           reason: `unknown zoom mode ${JSON.stringify(next)}`,
         };
       }
-      if (resolved === mode) return { ok: true, changed: false };
+      // BY VALUE, and the held object is kept. A host's `zoomMode` prop is an object, and the
+      // spelling the docs show — `zoomMode={{ type: 'fit', fit: 'pageWidth' }}` — is a fresh
+      // literal on every render. Comparing by identity made each of those a real mode change:
+      // the observer was torn down and rebuilt, the document refitted, the tick bumped, and
+      // every `useEditorState` consumer re-rendered, on a render that changed nothing.
+      if (sameZoomMode(resolved, mode)) return { ok: true, changed: false };
       mode = resolved;
       if (isFitMode(resolved)) {
         // Installs the observer AND fits once, so switching to a fit takes effect on the
