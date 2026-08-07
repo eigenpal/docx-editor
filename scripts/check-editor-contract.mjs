@@ -33,6 +33,10 @@ const REACT_PROPS_NOT_YET_IN_VUE = new Set([
   // entries; a divergence with no closing task is how a gate quietly stops meaning
   // anything.
   't',
+  // The catalogue that same chrome resolves through, published as a provider around the
+  // packaged frame. Vue has `provideLocale` already; what it lacks is chrome to language,
+  // so this closes with `t` at 10V.1.
+  'i18n',
   'chrome',
   'title',
   'onTitleChange',

@@ -161,8 +161,8 @@ type DotPath<T, Prefix extends string = ''> = {
 }[keyof T & string];
 
 /**
- * Every valid dot-notation key into `LocaleStrings`, e.g. `'toolbar.bold'`
- * or `'dialogs.findReplace.matchCount'`. Pass to `t(key, vars?)` for
+ * Every valid dot-notation key into `LocaleStrings`, e.g. `'formattingBar.bold'`
+ * or `'navigation.find.counter'`. Pass to `t(key, vars?)` for
  * compile-time-checked translation lookup.
  *
  * @public
@@ -273,7 +273,7 @@ export type TFunction = (key: TranslationKey, vars?: Record<string, string | num
  * Build a typed `t(key, vars?)` function from a merged locale.
  *
  * - **Lookup**: dot-notation paths against the locale tree
- *   (`'toolbar.bold'`, `'dialogs.findReplace.matchCount'`).
+ *   (`'formattingBar.bold'`, `'navigation.find.counter'`).
  * - **Interpolation**: `{name}` placeholders read from `vars`.
  * - **Plurals**: ICU `{count, plural, =0 {none} one {# item} other {# items}}`
  *   with `Intl.PluralRules` for CLDR categories and `=N` for exact matches.
@@ -288,8 +288,8 @@ export type TFunction = (key: TranslationKey, vars?: Record<string, string | num
  * import { deepMerge, createT, en, de } from '@docx-editor.dev/i18n';
  * const merged = deepMerge(en, de) as LocaleStrings;
  * const t = createT(merged, 'de');
- * t('toolbar.bold');                          // → 'Fett'
- * t('dialogs.findReplace.matchCount', { current: 3, total: 15 });
+ * t('formattingBar.bold');                    // → 'Fett'
+ * t('navigation.find.counter', { current: 3, total: 15 });
  * ```
  *
  * @public

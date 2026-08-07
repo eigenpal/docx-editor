@@ -622,6 +622,7 @@ export interface DocxEditorProps {
     document?: DocumentSource;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     hyperlinkPopup?: boolean;
+    i18n?: Translations;
     // (undocumented)
     locale?: string;
     menu?: boolean | DocxEditorMenuProps;

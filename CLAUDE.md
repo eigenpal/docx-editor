@@ -238,8 +238,8 @@ not a reference.
 
 ```ts
 const { t } = useTranslation();
-t('toolbar.bold');
-t('dialogs.findReplace.matchCount', { current: 3, total: 15 });
+t('formattingBar.bold');
+t('navigation.find.counter', { current: 3, total: 15 });
 ```
 
 New string: add to `en.json`, use `t('key')`, `bun run i18n:fix`. New language:

@@ -46,21 +46,30 @@ ls node_modules/@docx-editor.dev/i18n/
 Pass the locale object to the `i18n` prop. React:
 
 ```tsx
-import { DocxEditor, LocaleProvider } from '@docx-editor.dev/react';
+import { DocxEditor } from '@docx-editor.dev/react';
 import { pl } from '@docx-editor.dev/i18n';
 
+<DocxEditor document={bytes} i18n={pl} />;
+```
+
+For several editors, or for chrome parts you compose yourself, put the catalog in context once instead:
+
+```tsx
+import { DocxEditor, LocaleProvider } from '@docx-editor.dev/react';
+
 <LocaleProvider i18n={pl}>
+  <DocxEditor.Toolbar />
   <DocxEditor document={bytes} />
 </LocaleProvider>;
 ```
 
-`LocaleProvider` merges your catalog over English, so a locale that has not translated every key falls back per key rather than per language. It localizes the packaged editor and any chrome parts you compose yourself (`DocxEditor.Toolbar`, `DocxEditor.Menu`, …) alike. Chrome you write from scratch reads the same catalog through `useTranslation()`:
+Either way the catalog merges over English, so a locale that has not translated every key falls back per key rather than per language. Providers nest: an inner one, or an `i18n` prop under an outer provider, overrides only the keys it names. Chrome you write from scratch reads the same catalog through `useTranslation()`:
 
 ```tsx
 import { useTranslation } from '@docx-editor.dev/react';
 
 const { t } = useTranslation();
-<button>{t('toolbar.bold')}</button>;
+<button>{t('formattingBar.bold')}</button>;
 ```
 
 ## Next steps
