@@ -20,17 +20,23 @@ import postcss from 'postcss';
 const SCOPE = '.docx-editor';
 
 /**
- * Class prefixes the engine owns outright. These paint INSIDE the editor but are
- * matched on painted document elements rather than on chrome descendants, so
- * requiring the scope class on them would be wrong.
+ * Class prefixes the engine owns outright, exempt from carrying the scope class.
  *
- * OWNED means we mint the name. `.ProseMirror-` was on this list and is not
- * ours — it is ProseMirror's, and `.ProseMirror-yjs-cursor` is y-prosemirror's.
- * A host running its own ProseMirror editor on the same page got our rules on
- * its elements, which is the leak this guard exists to prevent. Anything we do
- * not mint has to carry the scope class.
+ * Only `.docx-` is left, and the bar for adding another is that the name cannot
+ * plausibly belong to anyone else.
+ *
+ * `.ProseMirror-` was here and is not ours at all — it is ProseMirror's, and
+ * `.ProseMirror-yjs-cursor` is y-prosemirror's, so a host running its own
+ * ProseMirror editor got our rules on its elements.
+ *
+ * `.layout-` and `.paged-editor` we do mint, but the names are generic enough
+ * that a host could mint them too (`.layout-page-header`, `.layout-page-content`).
+ * The old rationale — that they match painted document elements rather than
+ * chrome, so the scope class "would be wrong" — does not hold: painted elements
+ * are always inside the viewport, which always carries the scope class. They are
+ * scoped now, which costs nothing and keeps the editor's CSS inside the editor.
  */
-const OWNED_PREFIXES = ['.docx-', '.layout-', '.paged-editor'];
+const OWNED_PREFIXES = ['.docx-'];
 
 /** A keyframe step (`from`, `to`, `47%`) is not a selector. */
 const KEYFRAME_STEP = /^(from|to|-?[\d.]+%)$/;

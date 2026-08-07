@@ -717,7 +717,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* Transient paragraph flash used by scrollToParaId({ highlight }). */
-.layout-paragraph.docx-paragraph-flash {
+.docx-editor .layout-paragraph.docx-paragraph-flash {
   animation: docx-paragraph-flash-fade var(--docx-paragraph-flash-duration, 1200ms) ease-out both;
 }
 
@@ -1200,7 +1200,7 @@ a.docx-hyperlink:focus-visible {
   cursor: pointer;
 }
 
-.paged-editor--readonly .docx-table-furniture {
+.docx-editor .paged-editor--readonly .docx-table-furniture {
   display: none !important;
 }
 
@@ -1390,13 +1390,13 @@ a.docx-hyperlink:focus-visible {
   * TABLE CELL SELECTION (visible layout table cells)
   * ============================================================================ */
 
-.layout-table-cell-selected {
+.docx-editor .layout-table-cell-selected {
   position: relative;
   outline: 2px solid var(--doc-selection);
   outline-offset: -2px;
 }
 
-.layout-table-cell-selected::after {
+.docx-editor .layout-table-cell-selected::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -1404,17 +1404,17 @@ a.docx-hyperlink:focus-visible {
   pointer-events: none;
 }
 
-.layout-table-resize-handle {
+.docx-editor .layout-table-resize-handle {
   background-color: transparent;
   transition: background-color 0.15s;
 }
 
-.layout-table-resize-handle[data-active='true'] {
+.docx-editor .layout-table-resize-handle[data-active='true'] {
   background-color: transparent;
 }
 
-.layout-table-resize-handle[data-active='true']::after,
-.layout-table-edge-handle-right[data-active='true']::after {
+.docx-editor .layout-table-resize-handle[data-active='true']::after,
+.docx-editor .layout-table-edge-handle-right[data-active='true']::after {
   content: '';
   position: absolute;
   top: 0;
@@ -1427,24 +1427,24 @@ a.docx-hyperlink:focus-visible {
   transform: translateX(-50%);
 }
 
-.layout-table-resize-handle:hover,
-.layout-table-resize-handle.dragging {
+.docx-editor .layout-table-resize-handle:hover,
+.docx-editor .layout-table-resize-handle.dragging {
   background-color: transparent;
 }
 
-.layout-table-resize-handle:hover::after,
-.layout-table-resize-handle.dragging::after {
+.docx-editor .layout-table-resize-handle:hover::after,
+.docx-editor .layout-table-resize-handle.dragging::after {
   opacity: 1;
 }
 
 /* Row resize handles */
-.layout-table-row-resize-handle,
-.layout-table-edge-handle-bottom {
+.docx-editor .layout-table-row-resize-handle,
+.docx-editor .layout-table-edge-handle-bottom {
   background-color: transparent;
   transition: background-color 0.15s;
 }
 
-.layout-table-row-resize-handle[data-active='true']::after {
+.docx-editor .layout-table-row-resize-handle[data-active='true']::after {
   content: '';
   position: absolute;
   top: 50%;
@@ -1457,35 +1457,35 @@ a.docx-hyperlink:focus-visible {
   transform: translateY(-50%);
 }
 
-.layout-table-row-resize-handle:hover,
-.layout-table-row-resize-handle.dragging,
-.layout-table-edge-handle-bottom:hover,
-.layout-table-edge-handle-bottom.dragging {
+.docx-editor .layout-table-row-resize-handle:hover,
+.docx-editor .layout-table-row-resize-handle.dragging,
+.docx-editor .layout-table-edge-handle-bottom:hover,
+.docx-editor .layout-table-edge-handle-bottom.dragging {
   background-color: transparent;
 }
 
-.layout-table-row-resize-handle:hover::after,
-.layout-table-row-resize-handle.dragging::after {
+.docx-editor .layout-table-row-resize-handle:hover::after,
+.docx-editor .layout-table-row-resize-handle.dragging::after {
   opacity: 1;
 }
 
 /* Right edge handle */
-.layout-table-edge-handle-right {
+.docx-editor .layout-table-edge-handle-right {
   background-color: transparent;
   transition: background-color 0.15s;
 }
 
-.layout-table-edge-handle-right[data-active='true'] {
+.docx-editor .layout-table-edge-handle-right[data-active='true'] {
   background-color: transparent;
 }
 
-.layout-table-edge-handle-right:hover,
-.layout-table-edge-handle-right.dragging {
+.docx-editor .layout-table-edge-handle-right:hover,
+.docx-editor .layout-table-edge-handle-right.dragging {
   background-color: transparent;
 }
 
-.layout-table-edge-handle-right:hover::after,
-.layout-table-edge-handle-right.dragging::after {
+.docx-editor .layout-table-edge-handle-right:hover::after,
+.docx-editor .layout-table-edge-handle-right.dragging::after {
   opacity: 1;
 }
 
@@ -1494,22 +1494,22 @@ a.docx-hyperlink:focus-visible {
   * ============================================================================ */
 
 /* Hide table resize handles */
-.paged-editor--readonly .layout-table-resize-handle,
-.paged-editor--readonly .layout-table-row-resize-handle,
-.paged-editor--readonly .layout-table-edge-handle-bottom,
-.paged-editor--readonly .layout-table-edge-handle-right {
+.docx-editor .paged-editor--readonly .layout-table-resize-handle,
+.docx-editor .paged-editor--readonly .layout-table-row-resize-handle,
+.docx-editor .paged-editor--readonly .layout-table-edge-handle-bottom,
+.docx-editor .paged-editor--readonly .layout-table-edge-handle-right {
   display: none !important;
 }
 
 /* Remove header/footer hover effects and edit hints */
-.paged-editor--readonly .layout-page-header,
-.paged-editor--readonly .layout-page-footer {
+.docx-editor .paged-editor--readonly .layout-page-header,
+.docx-editor .paged-editor--readonly .layout-page-footer {
   cursor: default;
   pointer-events: none;
 }
 
 /* Remove text cursor from page content */
-.paged-editor--readonly .layout-page-content {
+.docx-editor .paged-editor--readonly .layout-page-content {
   cursor: default;
 }
 
@@ -1572,7 +1572,7 @@ a.docx-hyperlink:focus-visible {
   * ============================================================================ */
 
 /* Page content area — show text cursor when hovering over editable content */
-.layout-page-content {
+.docx-editor .layout-page-content {
   cursor: text;
 }
 
@@ -1583,7 +1583,7 @@ a.docx-hyperlink:focus-visible {
     like Word, with a corner label chip revealed on hover/focus. The box is
     non-interactive so it never steals clicks from the editable content under it.
     Nested controls each draw their own (slightly inset) box. */
-.layout-block-sdt-box {
+.docx-editor .layout-block-sdt-box {
   pointer-events: none;
   border: 1px solid transparent;
   border-radius: 4px;
@@ -1591,12 +1591,12 @@ a.docx-hyperlink:focus-visible {
   transition: border-color 0.1s ease;
   z-index: 1;
 }
-.layout-block-sdt-box.is-active,
-.layout-block-sdt-box.is-focused {
+.docx-editor .layout-block-sdt-box.is-active,
+.docx-editor .layout-block-sdt-box.is-focused {
   border-color: rgba(25, 103, 210, 0.5);
 }
 /* Corner label chip — hidden until its control is hovered/active. */
-.layout-block-sdt-label {
+.docx-editor .layout-block-sdt-label {
   position: absolute;
   left: -1px;
   bottom: 100%;
@@ -1613,8 +1613,8 @@ a.docx-hyperlink:focus-visible {
   border-radius: 4px 4px 0 0;
   display: none;
 }
-.layout-block-sdt-box.is-active .layout-block-sdt-label,
-.layout-block-sdt-box.is-focused .layout-block-sdt-label {
+.docx-editor .layout-block-sdt-box.is-active .layout-block-sdt-label,
+.docx-editor .layout-block-sdt-box.is-focused .layout-block-sdt-label {
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -1628,30 +1628,30 @@ a.docx-hyperlink:focus-visible {
     stays the double-click-to-edit target; only its content is passed through.
     Kept here (not only in prosemirror/editor.css) so the React adapter's
     styles.css build — which compiles this file — ships the rule. */
-.layout-page-header > *,
-.layout-page-footer > * {
+.docx-editor .layout-page-header > *,
+.docx-editor .layout-page-footer > * {
   pointer-events: none;
 }
 
 /* While editing a region, its content must be hittable again so clicks map to
     header/footer caret positions. */
-.paged-editor--editing-header .layout-page-header > *,
-.paged-editor--editing-footer .layout-page-footer > * {
+.docx-editor .paged-editor--editing-header .layout-page-header > *,
+.docx-editor .paged-editor--editing-footer .layout-page-footer > * {
   pointer-events: auto;
 }
 
 /* Header/footer areas — double-click hint */
-.layout-page-header,
-.layout-page-footer {
+.docx-editor .layout-page-header,
+.docx-editor .layout-page-footer {
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
-.layout-page-header:hover,
-.layout-page-footer:hover {
+.docx-editor .layout-page-header:hover,
+.docx-editor .layout-page-footer:hover {
   background-color: rgba(37, 99, 235, 0.06);
 }
 /* Show "Double-click to edit" hint on hover when area is empty */
-.layout-page-header:empty:hover::after {
+.docx-editor .layout-page-header:empty:hover::after {
   content: 'Double-click to add header';
   display: block;
   text-align: center;
@@ -1659,7 +1659,7 @@ a.docx-hyperlink:focus-visible {
   font-size: 11px;
   padding: 4px 0;
 }
-.layout-page-footer:empty:hover::after {
+.docx-editor .layout-page-footer:empty:hover::after {
   content: 'Double-click to add footer';
   display: block;
   text-align: center;
@@ -1677,7 +1677,7 @@ a.docx-hyperlink:focus-visible {
   */
 
 /* Dim body content when editing header/footer */
-.paged-editor--hf-editing .layout-page-content {
+.docx-editor .paged-editor--hf-editing .layout-page-content {
   opacity: 0.4;
   pointer-events: none;
   transition: opacity 0.15s ease;
@@ -1686,19 +1686,19 @@ a.docx-hyperlink:focus-visible {
 /* While editing one HF region, the sibling region (and the non-edited area)
     shows a normal arrow, not the double-click "pointer" hint. The active
     region's `cursor: text` below wins via later source order. */
-.paged-editor--hf-editing .layout-page-header,
-.paged-editor--hf-editing .layout-page-footer {
+.docx-editor .paged-editor--hf-editing .layout-page-header,
+.docx-editor .paged-editor--hf-editing .layout-page-footer {
   cursor: default;
 }
 
 /* Dotted border on active header area; text caret since it's being edited */
-.paged-editor--editing-header .layout-page-header {
+.docx-editor .paged-editor--editing-header .layout-page-header {
   border-bottom: 1px dotted var(--doc-primary);
   cursor: text;
 }
 
 /* Dotted border on active footer area; text caret since it's being edited */
-.paged-editor--editing-footer .layout-page-footer {
+.docx-editor .paged-editor--editing-footer .layout-page-footer {
   border-top: 1px dotted var(--doc-primary);
   cursor: text;
 }
@@ -1710,8 +1710,8 @@ a.docx-hyperlink:focus-visible {
   */
 
 /* Remove hover effect on header/footer when in editing mode */
-.paged-editor--hf-editing .layout-page-header:hover,
-.paged-editor--hf-editing .layout-page-footer:hover {
+.docx-editor .paged-editor--hf-editing .layout-page-header:hover,
+.docx-editor .paged-editor--hf-editing .layout-page-footer:hover {
   background-color: transparent;
 }
 
@@ -1777,7 +1777,7 @@ a.docx-hyperlink:focus-visible {
   * z-index: 11 — one above SelectionOverlay (10) so cursor name labels render
   * above the local caret.
   * ============================================================================= */
-.paged-editor__decoration-overlay {
+.docx-editor .paged-editor__decoration-overlay {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -1820,7 +1820,7 @@ a.docx-hyperlink:focus-visible {
 /* Interactive trigger for typed controls (checkbox/dropdown/date). The box is
     pointer-events:none; the trigger re-enables them so it is clickable. Sits at
     the top-right corner of the control box. */
-.layout-sdt-widget {
+.docx-editor .layout-sdt-widget {
   position: absolute;
   top: 1px;
   right: 1px;
@@ -1841,30 +1841,30 @@ a.docx-hyperlink:focus-visible {
   opacity: 0.55;
   transition: opacity 0.1s ease;
 }
-.layout-block-sdt-box.is-active .layout-sdt-widget,
-.layout-block-sdt-box.is-focused .layout-sdt-widget,
-.layout-sdt-widget:focus {
+.docx-editor .layout-block-sdt-box.is-active .layout-sdt-widget,
+.docx-editor .layout-block-sdt-box.is-focused .layout-sdt-widget,
+.docx-editor .layout-sdt-widget:focus {
   opacity: 1;
 }
-.layout-sdt-widget:hover {
+.docx-editor .layout-sdt-widget:hover {
   background: var(--doc-primary-light);
 }
 
-.layout-inline-sdt-widget {
+.docx-editor .layout-inline-sdt-widget {
   cursor: pointer;
   pointer-events: auto;
   border-radius: 2px;
   outline-offset: 1px;
   user-select: none;
 }
-.layout-inline-sdt-widget:hover,
-.layout-inline-sdt-widget:focus {
+.docx-editor .layout-inline-sdt-widget:hover,
+.docx-editor .layout-inline-sdt-widget:focus {
   background: var(--doc-primary-light);
   outline: 1px solid rgba(25, 103, 210, 0.55);
 }
 
 /* Popup for dropdown/date content-control widgets (rendered by the adapter). */
-.layout-sdt-widget-popup {
+.docx-editor .layout-sdt-widget-popup {
   min-width: 120px;
   max-height: 240px;
   overflow-y: auto;
@@ -1875,7 +1875,7 @@ a.docx-hyperlink:focus-visible {
   padding: 4px;
   font-size: 13px;
 }
-.layout-sdt-widget-option {
+.docx-editor .layout-sdt-widget-option {
   display: block;
   width: 100%;
   text-align: left;
@@ -1886,26 +1886,26 @@ a.docx-hyperlink:focus-visible {
   cursor: pointer;
   color: var(--doc-text);
 }
-.layout-sdt-widget-option:hover {
+.docx-editor .layout-sdt-widget-option:hover {
   background: var(--doc-primary-light);
 }
-.layout-sdt-widget-empty {
+.docx-editor .layout-sdt-widget-empty {
   padding: 6px 10px;
   color: var(--doc-text-muted);
 }
-.layout-sdt-widget-date {
+.docx-editor .layout-sdt-widget-date {
   font: inherit;
   padding: 4px 6px;
   border: 1px solid var(--doc-border-light);
   border-radius: 4px;
 }
-.layout-sdt-widget-option.is-selected {
+.docx-editor .layout-sdt-widget-option.is-selected {
   font-weight: 600;
   background: var(--doc-bg-hover);
 }
 
 /* Repeating-section item add/remove affordances (bottom-right of the item box). */
-.layout-sdt-repeat-controls {
+.docx-editor .layout-sdt-repeat-controls {
   position: absolute;
   bottom: 1px;
   right: 1px;
@@ -1914,11 +1914,11 @@ a.docx-hyperlink:focus-visible {
   opacity: 0.55;
   pointer-events: none;
 }
-.layout-block-sdt-box.is-active .layout-sdt-repeat-controls,
-.layout-block-sdt-box.is-focused .layout-sdt-repeat-controls {
+.docx-editor .layout-block-sdt-box.is-active .layout-sdt-repeat-controls,
+.docx-editor .layout-block-sdt-box.is-focused .layout-sdt-repeat-controls {
   opacity: 1;
 }
-.layout-sdt-repeat-btn {
+.docx-editor .layout-sdt-repeat-btn {
   min-width: 16px;
   height: 16px;
   padding: 0 3px;
@@ -1931,7 +1931,7 @@ a.docx-hyperlink:focus-visible {
   cursor: pointer;
   pointer-events: auto;
 }
-.layout-sdt-repeat-btn:hover {
+.docx-editor .layout-sdt-repeat-btn:hover {
   background: var(--doc-primary-light);
 }
 
@@ -1940,24 +1940,24 @@ a.docx-hyperlink:focus-visible {
   * Visible painter cues live here so React and Vue stay in lockstep.
   * ========================================================================== */
 
-.layout-revision-bars {
+.docx-editor .layout-revision-bars {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
 
-.layout-revision-change-bar {
+.docx-editor .layout-revision-change-bar {
   position: absolute;
   left: -10px;
   width: 2px;
   pointer-events: none;
 }
 
-.layout-revision-change-bar.layout-revision-ins {
+.docx-editor .layout-revision-change-bar.layout-revision-ins {
   background-color: var(--doc-revision-insertion);
 }
 
-.layout-revision-change-bar.layout-revision-del {
+.docx-editor .layout-revision-change-bar.layout-revision-del {
   background-color: var(--doc-revision-deletion);
 }
 
@@ -2013,11 +2013,11 @@ a.docx-hyperlink:focus-visible {
   text-decoration-color: var(--doc-revision-format);
 }
 
-.layout-revision-pmark {
+.docx-editor .layout-revision-pmark {
   position: relative;
 }
 
-.layout-revision-pmark-glyph {
+.docx-editor .layout-revision-pmark-glyph {
   display: inline;
   margin-left: 2px;
   font-weight: normal;
@@ -2025,11 +2025,11 @@ a.docx-hyperlink:focus-visible {
   pointer-events: none;
 }
 
-.layout-revision-pmark-glyph.layout-revision-ins {
+.docx-editor .layout-revision-pmark-glyph.layout-revision-ins {
   color: var(--doc-revision-insertion);
 }
 
-.layout-revision-pmark-glyph.layout-revision-del {
+.docx-editor .layout-revision-pmark-glyph.layout-revision-del {
   color: var(--doc-revision-deletion);
   text-decoration: line-through;
 }
@@ -2051,24 +2051,24 @@ a.docx-hyperlink:focus-visible {
   background-color: color-mix(in srgb, var(--doc-text-muted) 8%, transparent);
 }
 
-.layout-run-image.docx-insertion,
-.layout-run-image-wrapper.docx-insertion > .layout-run-image,
-.layout-block-image.docx-insertion,
-.layout-image.docx-insertion,
-.layout-page-floating-image.docx-insertion > img,
-.layout-cell-floating-image.docx-insertion > img,
-.layout-header-footer-floating-image.docx-insertion > img {
+.docx-editor .layout-run-image.docx-insertion,
+.docx-editor .layout-run-image-wrapper.docx-insertion > .layout-run-image,
+.docx-editor .layout-block-image.docx-insertion,
+.docx-editor .layout-image.docx-insertion,
+.docx-editor .layout-page-floating-image.docx-insertion > img,
+.docx-editor .layout-cell-floating-image.docx-insertion > img,
+.docx-editor .layout-header-footer-floating-image.docx-insertion > img {
   outline: 2px solid var(--doc-revision-insertion);
   outline-offset: 1px;
 }
 
-.layout-run-image.docx-deletion,
-.layout-run-image-wrapper.docx-deletion > .layout-run-image,
-.layout-block-image.docx-deletion,
-.layout-image.docx-deletion,
-.layout-page-floating-image.docx-deletion > img,
-.layout-cell-floating-image.docx-deletion > img,
-.layout-header-footer-floating-image.docx-deletion > img {
+.docx-editor .layout-run-image.docx-deletion,
+.docx-editor .layout-run-image-wrapper.docx-deletion > .layout-run-image,
+.docx-editor .layout-block-image.docx-deletion,
+.docx-editor .layout-image.docx-deletion,
+.docx-editor .layout-page-floating-image.docx-deletion > img,
+.docx-editor .layout-cell-floating-image.docx-deletion > img,
+.docx-editor .layout-header-footer-floating-image.docx-deletion > img {
   outline: 2px solid var(--doc-revision-deletion);
   outline-offset: 1px;
   opacity: 0.6;
