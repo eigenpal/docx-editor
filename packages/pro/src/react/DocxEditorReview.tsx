@@ -216,7 +216,7 @@ const INERT_RAIL: ReviewRailValue = {
   review: {
     items: [],
     activeKey: null,
-    setActive: () => {},
+    setActive: () => false,
     accept: () => false,
     reject: () => false,
     remove: () => false,

@@ -156,7 +156,7 @@ export interface UseReviewReturn {
     readonly remove: (item: ReviewItemView) => boolean;
     readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
     readonly selectionAnchorY: number | null;
-    readonly setActive: (key: string | null) => void;
+    readonly setActive: (key: string | null) => boolean;
     readonly setPaneOpen: (open: boolean) => void;
 }
 

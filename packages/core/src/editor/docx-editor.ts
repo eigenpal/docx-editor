@@ -1151,6 +1151,24 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   }
 
   /**
+   * Whether `setActiveReviewItem` would take this item.
+   *
+   * The one definition both the flag on a placement and the verb itself read, so a rail can
+   * never be told an item is clickable by one and refused by the other. Two grounds, and
+   * they are the ones activation checks first: an item with no range has nothing to select,
+   * and a kind the host's rail hides must not be reachable — the band would light a card
+   * nothing on screen renders.
+   */
+  function reviewItemActivatable(item: ReviewItem): boolean {
+    if (firstReviewRange(item) === null) return false;
+    return !(
+      item.kind === 'revision' &&
+      reviewActivationExclusions !== null &&
+      reviewActivationExclusions.includes(item.revisionKind)
+    );
+  }
+
+  /**
    * Paragraph anchors, built once per layout.
    *
    * Keyed on the layout OBJECT: a published layout is immutable, so the index is valid for
@@ -1567,6 +1585,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         key,
         id: item.id,
         ...(dateOfItem(item) !== undefined ? { date: dateOfItem(item)! } : {}),
+        // Derived from the two facts activation itself checks, so the flag and the verb
+        // cannot disagree. Not from `geometry`, which is null for a whole page that has not
+        // been laid out yet — an item is addressable long before it has a Y.
+        activatable: reviewItemActivatable(item),
         anchorY: geometry?.y ?? null,
         pageIndex: geometry?.pageIndex ?? null,
         isActive: key === activeReviewKey,
@@ -2169,19 +2191,42 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     getReviewRevision: () => reviewRevision(),
 
-    setActiveReviewItem(key: string | null) {
+    setActiveReviewItem(key: string | null): ExecResult {
       // Dismissing is the only thing a key of `null` can mean here: the caret decides which
       // card is open, and a card the reader closed stays closed until the caret next moves.
       if (key === null) {
         surface?.dismissActiveReview();
         bump();
         emitSelectionChange();
-        return;
+        return { ok: true, changed: false };
+      }
+      if (!surface) {
+        return { ok: false, code: 'notFound', reason: 'no document is open' };
       }
       const placement = reviewPlacements().find((entry) => entry.key === key);
       const item = placement?.item;
-      const range = item ? firstReviewRange(item) : null;
-      if (!range || !surface) return;
+      if (!item) {
+        return { ok: false, code: 'notFound', reason: 'no review item with that key' };
+      }
+      const range = firstReviewRange(item);
+      if (!range) {
+        return {
+          ok: false,
+          code: 'unsupported',
+          reason: 'this review item has no range to select',
+        };
+      }
+      // The rail's own exclusion filter. Refused OUT LOUD rather than by falling through to
+      // a selection nothing lights up: the caret would land on the text, no card would open,
+      // and a host stepping through its queue would see the viewport move and the active key
+      // stay put with nothing to explain it.
+      if (!reviewItemActivatable(item)) {
+        return {
+          ok: false,
+          code: 'unsupported',
+          reason: `review items of kind '${(item as { revisionKind?: string }).revisionKind}' are excluded from activation`,
+        };
+      }
       // A card whose range lives in a header/footer opens that scope, exactly as Word does:
       // the body selection cannot address a furniture paragraph, so setting it would only
       // clamp the caret to some unrelated body position. The mounted `enterHeaderFooter`
@@ -2198,13 +2243,25 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           kind: home.kind,
           position: { paragraphId: range.start.paragraphId, offset: range.start.offset },
         });
-        if (!entered) return;
+        if (!entered) {
+          return {
+            ok: false,
+            code: 'unsupported',
+            reason: 'the header or footer this change lives in could not be opened',
+          };
+        }
       } else if (note !== null) {
         const entered = surface.enterNote?.(note, {
           paragraphId: range.start.paragraphId,
           offset: range.start.offset,
         });
-        if (!entered) return;
+        if (!entered) {
+          return {
+            ok: false,
+            code: 'unsupported',
+            reason: 'the note this change lives in could not be opened',
+          };
+        }
       } else {
         // Card to document. The caret may be parked in a furniture or note scope from the
         // PREVIOUS card — leave it first, exactly as the pointer path does, or the body
@@ -2239,6 +2296,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // not respond to any number of further clicks.
       bump();
       emitSelectionChange();
+      // `changed: false` — activation moves the caret and the open card, and neither is
+      // document state. A host must not mark its document dirty for opening a card.
+      return { ok: true, changed: false };
     },
 
     setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null) {

@@ -1207,7 +1207,7 @@ export interface Editor {
     scrollToBlock(blockId: string): boolean;
     scrollToPage(pageNumber: number): boolean;
     selectMatch(match: TextMatch): ExecResult;
-    setActiveReviewItem(key: string | null): void;
+    setActiveReviewItem(key: string | null): ExecResult;
     // (undocumented)
     setActiveScope(scope: ViewScope): void;
     // (undocumented)
@@ -2195,6 +2195,7 @@ export type ReviewItemPlacement = ReviewCommentPlacement | ReviewRevisionPlaceme
 
 // @public
 export interface ReviewItemPlacementBase {
+    readonly activatable: boolean;
     readonly anchorY: number | null;
     // (undocumented)
     readonly author: string;

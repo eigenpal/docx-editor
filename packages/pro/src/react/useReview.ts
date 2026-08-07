@@ -45,8 +45,16 @@ export interface UseReviewReturn {
   readonly items: readonly ReviewItemView[];
   /** The item the caret is in, or null. */
   readonly activeKey: string | null;
-  /** Card to document: selects the item's range and scrolls to it. */
-  readonly setActive: (key: string | null) => void;
+  /**
+   * Card to document: selects the item's range and scrolls to it.
+   *
+   * Reports whether it landed, on the same terms as {@link accept}. False for an item whose
+   * `activatable` is false — no range to select, or a revision kind this rail excluded — and
+   * for a story that will not open. A queue walked with next/previous controls has no other
+   * way to tell a step that did nothing from one that worked, and skipping to the next item
+   * is only possible if you can find out.
+   */
+  readonly setActive: (key: string | null) => boolean;
   /**
    * Accept a revision. Reports whether it landed.
    *
@@ -148,8 +156,9 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
   const activeKey = useMemo(() => items.find((entry) => entry.isActive)?.key ?? null, [items]);
 
   const setActive = useCallback(
-    (key: string | null) => {
-      editor?.setActiveReviewItem(key);
+    (key: string | null): boolean => {
+      if (!editor) return false;
+      return editor.setActiveReviewItem(key).ok;
     },
     [editor]
   );
