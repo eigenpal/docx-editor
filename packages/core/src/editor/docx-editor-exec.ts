@@ -356,11 +356,12 @@ export function execEditorCommand(
       // — "select this paragraph" means "show it to me" — and the caret-follow scroll
       // inside `setSelection` cannot serve it: it sits out for range selections and for
       // callers whose focus is outside the pages layer, which is the normal state for a
-      // host driving the editor from its own chrome. `'nearest'` keeps an already-visible
-      // target still.
+      // host driving the editor from its own chrome. `'centerIfNeeded'` keeps an
+      // already-visible target still and centres one it has to travel to, rather than
+      // stopping the moment it clears the bottom edge.
       if ('range' in command && isSurfaceSelection(command.range)) {
         mounted.setSelection(command.range);
-        mounted.revealPosition(command.range.head, { block: 'nearest' });
+        mounted.revealPosition(command.range.head, { block: 'centerIfNeeded' });
         // Selection is not document state: nothing to save changed.
         return { ok: true, changed: false };
       }
@@ -383,7 +384,7 @@ export function execEditorCommand(
       );
       if (!resolved.ok) return resolved;
       mounted.setSelection(resolved.selection);
-      mounted.revealPosition(resolved.selection.head, { block: 'nearest' });
+      mounted.revealPosition(resolved.selection.head, { block: 'centerIfNeeded' });
       return { ok: true, changed: false };
     }
     default:

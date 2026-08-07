@@ -243,9 +243,13 @@ export interface PaginatedSurfacePerf {
 export interface RevealOptions {
   /**
    * `'start'` puts the target near the top (a heading the user jumped to), `'center'`
-   * centres it, `'nearest'` scrolls only when it is out of view. Default `'start'`.
+   * centres it, `'nearest'` scrolls only when it is out of view — and only far enough to
+   * clear the edge, which parks the target flush against it. `'centerIfNeeded'` is the one
+   * a jump-to-next-thing control wants: silent while the target is already on screen, and
+   * centred when it has to move, so the reader lands looking AT the thing rather than at
+   * the bottom line of the window. Default `'start'`.
    */
-  readonly block?: 'start' | 'center' | 'nearest';
+  readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
   /** Padding above the target, in CSS pixels. Default 24. */
   readonly offsetPx?: number;
   readonly behavior?: ScrollBehavior;

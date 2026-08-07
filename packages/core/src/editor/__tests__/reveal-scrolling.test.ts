@@ -12,6 +12,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import { caretAt } from '../../layout/semantic-interaction.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -190,6 +191,69 @@ describe('revealPosition and the setSelection command scroll without focus', () 
     // A RANGE selection: the internal caret-follow explicitly sits those out, so a moved
     // viewport proves the command scrolled on its own.
     expect(scroller.scrollTop).toBeGreaterThan(0);
+    editor.destroy();
+  });
+});
+
+describe('a reveal frames its target rather than merely moving the viewport', () => {
+  /**
+   * Where the target actually IS, in the scroller's own coordinates.
+   *
+   * Derived from the layout records rather than from the reveal, so it cannot agree with
+   * the bug it exists to catch: caret geometry is CONTENT-BOX relative (the painter parents
+   * the caret into `.docx-page-content`, one top margin down the sheet), and the reveal used
+   * to add it to `page.box.y` — the top of the SHEET — which undershot every jump by exactly
+   * that margin and left the target just under the fold.
+   */
+  function targetTop(editor: DocxEditorInstance, paragraphId: string): number {
+    const layout = editor.surface!.layout();
+    const caret = caretAt(layout, { paragraphId, offset: 0 })!;
+    const page = layout.pages.find((entry) => entry.index === caret.pageIndex)!;
+    // Records are POINTS; `scrollTop` is CSS PIXELS. The surface's default scale, and the
+    // container sits at the top of the scroller in this harness.
+    return (page.contentBox.y + caret.y) * (96 / 72);
+  }
+
+  test('the revealed line lands inside the viewport, not one page margin below it', () => {
+    const { editor, scroller } = mount();
+    const ids = editor.surface!.session.paragraphIds();
+    const last = ids[ids.length - 1]!;
+    expect(editor.surface!.revealPosition({ paragraphId: last, offset: 0 })).toBe(true);
+
+    const top = targetTop(editor, last);
+    // The whole point of a reveal: the caller can now SEE the thing.
+    expect(top).toBeGreaterThanOrEqual(scroller.scrollTop);
+    expect(top).toBeLessThanOrEqual(scroller.scrollTop + scroller.clientHeight);
+    editor.destroy();
+  });
+
+  test('centerIfNeeded centres a target it has to travel to', () => {
+    const { editor, scroller } = mount();
+    const ids = editor.surface!.session.paragraphIds();
+    const last = ids[ids.length - 1]!;
+    expect(
+      editor.surface!.revealPosition({ paragraphId: last, offset: 0 }, { block: 'centerIfNeeded' })
+    ).toBe(true);
+
+    const middle = scroller.scrollTop + scroller.clientHeight / 2;
+    // Within a line of centre. `'nearest'` parks the target flush against the bottom edge,
+    // which is a legal reveal and a poor one: the reader arrives looking at the last line of
+    // the window rather than at what they asked to see.
+    expect(Math.abs(targetTop(editor, last) - middle)).toBeLessThan(24);
+    editor.destroy();
+  });
+
+  test('centerIfNeeded leaves a target that is already on screen alone', () => {
+    const { editor, scroller } = mount();
+    const ids = editor.surface!.session.paragraphIds();
+    const last = ids[ids.length - 1]!;
+    editor.surface!.revealPosition({ paragraphId: last, offset: 0 }, { block: 'centerIfNeeded' });
+    const settled = scroller.scrollTop;
+
+    // Re-revealing the same position must not move anything — a rail whose cards re-activate
+    // on every selection change would otherwise jerk the page on each click.
+    editor.surface!.revealPosition({ paragraphId: last, offset: 0 }, { block: 'centerIfNeeded' });
+    expect(scroller.scrollTop).toBe(settled);
     editor.destroy();
   });
 });

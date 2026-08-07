@@ -2228,7 +2228,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         lastReviewSelection = { key, from: span.start, to: span.end };
         // Focus-independent by design: the rail card focused itself on mousedown, which is
         // exactly what keeps the caret-follow scroll from ever firing here.
-        surface.revealPosition?.(span.start, { block: 'nearest' });
+        // `centerIfNeeded`, not `nearest`: opening a card the reader can already see must
+        // not yank the page, but a card 20 pages away scrolled the MINIMUM distance parked
+        // the change flush against the bottom edge — the reader arrived looking at the last
+        // line of the window rather than at the edit they had just asked to see.
+        surface.revealPosition?.(span.start, { block: 'centerIfNeeded' });
       }
       // ANNOUNCED, exactly as dismissing is. Opening a card is observable state of its own,
       // and the surface's `onChange` deliberately stays quiet when the caret did not move —

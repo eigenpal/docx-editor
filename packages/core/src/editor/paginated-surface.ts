@@ -3300,7 +3300,12 @@ export function mountPaginatedSurface(
       if (!caret) return false;
       const page = currentLayout.pages.find((entry) => entry.index === caret.pageIndex);
       if (!page) return false;
-      return scrollToContentY(page.box.y + caret.y, caret.height, options);
+      // `contentBox`, not `box`: caret geometry is CONTENT-BOX relative — the painter parents
+      // the caret into `.docx-page-content`, which starts one top margin down the sheet.
+      // Against `box.y` every reveal undershot by exactly that margin (72pt on a 1" page), so
+      // the target landed just under the fold and the reader had to scroll to see what they
+      // had just jumped to.
+      return scrollToContentY(page.contentBox.y + caret.y, caret.height, options);
     },
 
     revealPosition(position, options) {
@@ -3311,7 +3316,7 @@ export function mountPaginatedSurface(
       if (!page) return false;
       // 'nearest' by default: callers reveal on every activation, and a target already in
       // view must not yank the viewport.
-      return scrollToContentY(page.box.y + caret.y, caret.height, {
+      return scrollToContentY(page.contentBox.y + caret.y, caret.height, {
         block: 'nearest',
         ...options,
       });
@@ -3750,7 +3755,7 @@ export function mountPaginatedSurface(
     contentY: number,
     contentHeight: number,
     options?: {
-      block?: 'start' | 'center' | 'nearest';
+      block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
       offsetPx?: number;
       behavior?: ScrollBehavior;
     }
@@ -3762,13 +3767,13 @@ export function mountPaginatedSurface(
     const padding = options?.offsetPx ?? 24;
     const block = options?.block ?? 'start';
     const viewport = scroller.clientHeight;
-    if (block === 'nearest') {
+    if (block === 'nearest' || block === 'centerIfNeeded') {
       const above = top < scroller.scrollTop;
       const below = top + height > scroller.scrollTop + viewport;
       if (!above && !below) return true;
     }
     const target =
-      block === 'center'
+      block === 'center' || block === 'centerIfNeeded'
         ? top - Math.max(0, (viewport - height) / 2)
         : block === 'nearest' && top > scroller.scrollTop
           ? top + height + padding - viewport
