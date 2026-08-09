@@ -386,18 +386,18 @@ export interface DocxEditorServerRuntime extends DocxEditorRuntime {
 
 // @public
 export class Font extends ModelObject {
-    get bold(): boolean;
+    get bold(): boolean | null;
     set bold(value: boolean);
-    get color(): string;
+    get color(): string | null;
     set color(value: string);
-    get italic(): boolean;
+    get italic(): boolean | null;
     set italic(value: boolean);
-    get name(): string;
+    get name(): string | null;
     set name(value: string);
     // @internal
     static of(context: RequestContext, label: string, owner: ObjectPath, kind: SpanOwner): Font;
     protected onLoad(request: ResolvedLoadOptions): void;
-    get size(): number;
+    get size(): number | null;
     set size(value: number);
 }
 
@@ -663,7 +663,7 @@ export class Revision extends ModelObject implements PromisedItem {
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): Revision;
     get author(): string;
-    get date(): Date;
+    get date(): Date | null;
     // @internal
     hydrateAddress(address: ObjectAddress): void;
     // @internal
