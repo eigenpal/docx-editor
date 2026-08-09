@@ -254,7 +254,9 @@
   "comments": {
     "unknown": "Tidak Diketahui",
     "addComment": "Tambahkan komentar...",
-    "replyPlaceholder": "Balas atau tambahkan orang lain dengan @"
+    "replyPlaceholder": "Balas atau tambahkan orang lain dengan @",
+    "reopen": null,
+    "resolve": null
   },
   "revisions": {
     "paragraphMarkInserted": "Menyisipkan tanda paragraf",

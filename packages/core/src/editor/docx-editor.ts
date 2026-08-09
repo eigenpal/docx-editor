@@ -21,12 +21,6 @@
 // is the one survivor and is now REAL — it had the cluster's only consumer, and returning
 // `[]` had silently made both Vue rulers render nothing.
 //
-// The surface still owns caret, selection and hit testing internally, through the browser's
-// own selection and `layout/semantic-hit-test.ts`. Re-exposing any of it on this facade is
-// a small wiring job on the day a host needs it.
-// - The `display` event never fires: the surface paints its own pages into the container
-//   rather than handing the host a render list.
-//
 // Filling any of these in later lights up whichever control reads it, with no change to
 // callers — which is the point of wiring the full contract now.
 //

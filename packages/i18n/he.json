@@ -254,7 +254,9 @@
   "comments": {
     "unknown": "לא ידוע",
     "addComment": "הוסף תגובה...",
-    "replyPlaceholder": "השב או הוסף אחרים עם @"
+    "replyPlaceholder": "השב או הוסף אחרים עם @",
+    "reopen": null,
+    "resolve": null
   },
   "contextMenu": {
     "ariaLabel": "תפריט פעולות AI",

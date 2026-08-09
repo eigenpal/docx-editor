@@ -1789,7 +1789,7 @@ function ReviewAccept({ className, asChild, hidden, children, icon: glyph }: Rev
   const t = useReviewLabel();
   if (hidden || !entry || entry.kind !== 'revision' || entry.readOnly) return null;
   const label = t('review.accept');
-  const disabledReason = t('editor.viewingDescription');
+  const disabledReason = t('editingMode.viewingHint');
   const shared = {
     type: 'button' as const,
     className: `docx-review__action${className ? ` ${className}` : ''}`,
@@ -1815,7 +1815,7 @@ function ReviewReject({ className, asChild, hidden, children, icon: glyph }: Rev
   const t = useReviewLabel();
   if (hidden || !entry || entry.kind !== 'revision' || entry.readOnly) return null;
   const label = t('review.reject');
-  const disabledReason = t('editor.viewingDescription');
+  const disabledReason = t('editingMode.viewingHint');
   const shared = {
     type: 'button' as const,
     className: `docx-review__action${className ? ` ${className}` : ''}`,
@@ -1865,7 +1865,7 @@ function ReviewDelete({ className, asChild, hidden, children, icon: glyph }: Rev
   if (hidden || !entry || entry.kind === 'custom') return null;
   if (entry.kind === 'revision' && entry.readOnly) return null;
   const label = entry.kind === 'comment' ? t('review.deleteComment') : t('review.discardChange');
-  const disabledReason = t('editor.viewingDescription');
+  const disabledReason = t('editingMode.viewingHint');
   const shared = {
     type: 'button' as const,
     className: `docx-review__action${className ? ` ${className}` : ''}`,

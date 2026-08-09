@@ -254,7 +254,9 @@
   "comments": {
     "unknown": "Nieznany",
     "addComment": "Dodaj komentarz...",
-    "replyPlaceholder": "Odpowiedz lub dodaj innych za pomocą @"
+    "replyPlaceholder": "Odpowiedz lub dodaj innych za pomocą @",
+    "reopen": null,
+    "resolve": null
   },
   "contextMenu": {
     "ariaLabel": "Menu akcji AI",
