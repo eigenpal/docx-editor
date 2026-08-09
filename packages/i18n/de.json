@@ -580,65 +580,6 @@
     "convertAllEndnotes": "Alle Endnoten in Fußnoten umwandeln",
     "inheritedValue": "(geerbt)"
   },
-  "review": {
-    "accept": "Annehmen",
-    "ariaLabel": "Überprüfen",
-    "commentRefused": "Der Kommentar konnte nicht hinzugefügt werden",
-    "deleted": "Gelöscht",
-    "empty": "Keine Änderungen oder Kommentare",
-    "inserted": "Hinzugefügt",
-    "movedFrom": "Von hier verschoben",
-    "movedTo": "Hierhin verschoben",
-    "reject": "Ablehnen",
-    "replaced": "Ersetzt",
-    "replacedWith": "durch",
-    "reply": "Antworten",
-    "replyRefused": "Die Antwort konnte nicht gesendet werden",
-    "showPane": "Kommentare anzeigen",
-    "structural": "Dokumentstruktur geändert",
-    "deleteComment": "Kommentar löschen",
-    "discardChange": "Änderung verwerfen"
-  },
-  "imageAltText": {
-    "description": "Beschreibung",
-    "panelTitle": "Alternativtext",
-    "title": "Titel"
-  },
-  "imageInsert": {
-    "errors": {
-      "emptyFile": "Die ausgewählte Datei ist leer.",
-      "invalidSignature": "Die Datei ist kein unterstütztes PNG-, JPEG- oder GIF-Bild.",
-      "oversize": "Das Bild überschreitet die maximal zulässige Größe.",
-      "refused": "Das Bild konnte nicht eingefügt werden.",
-      "unsupportedFormat": "Dieses Bildformat wird beim Einfügen nicht unterstützt."
-    }
-  },
-  "imageProperties": {
-    "crop": "Zuschneiden",
-    "cropBottom": "Unten (%)",
-    "cropLeft": "Links (%)",
-    "cropRight": "Rechts (%)",
-    "cropTop": "Oben (%)",
-    "errors": {
-      "invalidCrop": "Zuschneidewerte müssen Prozentwerte zwischen 0 und 100 sein.",
-      "invalidDimensions": "Geben Sie positive Werte für Breite und Höhe ein.",
-      "refused": "Diese Eigenschaften konnten nicht übernommen werden.",
-      "invalidPosition": "Geben Sie gültige Werte für die horizontale und vertikale Position ein."
-    },
-    "hyperlink": "Hyperlink",
-    "nonPictureHint": "Zuschneiden und Zurücksetzen auf Originalgröße sind nur bei Bildern verfügbar.",
-    "resetNaturalSize": "Auf Originalgröße zurücksetzen",
-    "units": {
-      "points": "pt"
-    },
-    "horizontalOffset": "Horizontaler Versatz",
-    "position": "Position",
-    "positionLocked": "Diese Zeichnung kann nicht verschoben werden.",
-    "positionUnavailable": "Die Position ist nur bei frei beweglichen Bildern verfügbar.",
-    "relativeToHorizontal": "Relativ zu (horizontal)",
-    "relativeToVertical": "Relativ zu (vertikal)",
-    "verticalOffset": "Vertikaler Versatz"
-  },
   "consumerApi": {
     "capture": null,
     "captureHint": null,
@@ -726,7 +667,6 @@
     "subtitle": null,
     "succeeded": null,
     "title": null,
-    "bookmarkQuery": null,
     "noWritableControl": null,
     "syncAuthority": null,
     "bookmarkNotRun": null,
@@ -773,6 +713,22 @@
     "creationSemantics": null,
     "undoCreate": null
   },
+  "serverAutomation": {
+    "badge": null,
+    "failed": null,
+    "hide": null,
+    "idle": null,
+    "load": null,
+    "loaded": null,
+    "prepare": null,
+    "prepared": null,
+    "query": null,
+    "result": null,
+    "running": null,
+    "show": null,
+    "subtitle": null,
+    "title": null
+  },
   "revisionAutomation": {
     "acceptAll": null,
     "acceptFirst": null,
@@ -804,20 +760,63 @@
     "undoCollection": null,
     "undoDecision": null
   },
-  "serverAutomation": {
-    "badge": null,
-    "failed": null,
-    "hide": null,
-    "idle": null,
-    "load": null,
-    "loaded": null,
-    "prepare": null,
-    "prepared": null,
-    "query": null,
-    "result": null,
-    "running": null,
-    "show": null,
-    "subtitle": null,
-    "title": null
+  "review": {
+    "accept": "Annehmen",
+    "ariaLabel": "Überprüfen",
+    "commentRefused": "Der Kommentar konnte nicht hinzugefügt werden",
+    "deleted": "Gelöscht",
+    "empty": "Keine Änderungen oder Kommentare",
+    "inserted": "Hinzugefügt",
+    "movedFrom": "Von hier verschoben",
+    "movedTo": "Hierhin verschoben",
+    "reject": "Ablehnen",
+    "replaced": "Ersetzt",
+    "replacedWith": "durch",
+    "reply": "Antworten",
+    "replyRefused": "Die Antwort konnte nicht gesendet werden",
+    "showPane": "Kommentare anzeigen",
+    "structural": "Dokumentstruktur geändert",
+    "deleteComment": "Kommentar löschen",
+    "discardChange": "Änderung verwerfen"
+  },
+  "imageAltText": {
+    "description": "Beschreibung",
+    "panelTitle": "Alternativtext",
+    "title": "Titel"
+  },
+  "imageInsert": {
+    "errors": {
+      "emptyFile": "Die ausgewählte Datei ist leer.",
+      "invalidSignature": "Die Datei ist kein unterstütztes PNG-, JPEG- oder GIF-Bild.",
+      "oversize": "Das Bild überschreitet die maximal zulässige Größe.",
+      "refused": "Das Bild konnte nicht eingefügt werden.",
+      "unsupportedFormat": "Dieses Bildformat wird beim Einfügen nicht unterstützt."
+    }
+  },
+  "imageProperties": {
+    "crop": "Zuschneiden",
+    "cropBottom": "Unten (%)",
+    "cropLeft": "Links (%)",
+    "cropRight": "Rechts (%)",
+    "cropTop": "Oben (%)",
+    "errors": {
+      "invalidCrop": "Zuschneidewerte müssen Prozentwerte zwischen 0 und 100 sein.",
+      "invalidDimensions": "Geben Sie positive Werte für Breite und Höhe ein.",
+      "refused": "Diese Eigenschaften konnten nicht übernommen werden.",
+      "invalidPosition": "Geben Sie gültige Werte für die horizontale und vertikale Position ein."
+    },
+    "hyperlink": "Hyperlink",
+    "nonPictureHint": "Zuschneiden und Zurücksetzen auf Originalgröße sind nur bei Bildern verfügbar.",
+    "resetNaturalSize": "Auf Originalgröße zurücksetzen",
+    "units": {
+      "points": "pt"
+    },
+    "horizontalOffset": "Horizontaler Versatz",
+    "position": "Position",
+    "positionLocked": "Diese Zeichnung kann nicht verschoben werden.",
+    "positionUnavailable": "Die Position ist nur bei frei beweglichen Bildern verfügbar.",
+    "relativeToHorizontal": "Relativ zu (horizontal)",
+    "relativeToVertical": "Relativ zu (vertikal)",
+    "verticalOffset": "Vertikaler Versatz"
   }
 }

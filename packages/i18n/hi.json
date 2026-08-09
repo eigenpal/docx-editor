@@ -580,65 +580,6 @@
     "convertAllEndnotes": "सभी एंडनोट को फ़ुटनोट में बदलें",
     "inheritedValue": "(विरासत में)"
   },
-  "review": {
-    "accept": "स्वीकार करें",
-    "ariaLabel": "समीक्षा",
-    "commentRefused": "टिप्पणी नहीं जोड़ी जा सकी",
-    "deleted": "हटाया गया",
-    "empty": "कोई परिवर्तन या टिप्पणी नहीं",
-    "inserted": "जोड़ा गया",
-    "movedFrom": "यहाँ से स्थानांतरित किया गया",
-    "movedTo": "यहाँ स्थानांतरित किया गया",
-    "reject": "अस्वीकार करें",
-    "replaced": "प्रतिस्थापित किया गया",
-    "replacedWith": "इससे:",
-    "reply": "उत्तर दें",
-    "replyRefused": "उत्तर पोस्ट नहीं किया जा सका",
-    "showPane": "टिप्पणियाँ दिखाएँ",
-    "structural": "दस्तावेज़ संरचना बदली गई",
-    "deleteComment": "टिप्पणी हटाएँ",
-    "discardChange": "परिवर्तन छोड़ें"
-  },
-  "imageAltText": {
-    "description": "विवरण",
-    "panelTitle": "वैकल्पिक पाठ",
-    "title": "शीर्षक"
-  },
-  "imageInsert": {
-    "errors": {
-      "emptyFile": "चयनित फ़ाइल खाली है.",
-      "invalidSignature": "फ़ाइल समर्थित PNG, JPEG या GIF छवि नहीं है.",
-      "oversize": "छवि अधिकतम अनुमत आकार से अधिक है.",
-      "refused": "छवि सम्मिलित नहीं की जा सकी.",
-      "unsupportedFormat": "यह छवि स्वरूप सम्मिलन के लिए समर्थित नहीं है."
-    }
-  },
-  "imageProperties": {
-    "crop": "क्रॉप",
-    "cropBottom": "नीचे (%)",
-    "cropLeft": "बाएँ (%)",
-    "cropRight": "दाएँ (%)",
-    "cropTop": "ऊपर (%)",
-    "errors": {
-      "invalidCrop": "क्रॉप मान 0 से 100 तक के प्रतिशत होने चाहिए.",
-      "invalidDimensions": "धनात्मक चौड़ाई और ऊँचाई मान दर्ज करें.",
-      "refused": "ये गुण लागू नहीं किए जा सके.",
-      "invalidPosition": "मान्य क्षैतिज और लंबवत स्थिति मान दर्ज करें."
-    },
-    "hyperlink": "हाइपरलिंक",
-    "nonPictureHint": "क्रॉप और मूल आकार रीसेट केवल चित्रों के लिए उपलब्ध हैं.",
-    "resetNaturalSize": "मूल आकार पर रीसेट करें",
-    "units": {
-      "points": "pt"
-    },
-    "horizontalOffset": "क्षैतिज ऑफ़सेट",
-    "position": "स्थिति",
-    "positionLocked": "यह आरेखण स्थानांतरित नहीं किया जा सकता.",
-    "positionUnavailable": "स्थिति केवल फ़्लोटिंग छवियों के लिए उपलब्ध है.",
-    "relativeToHorizontal": "सापेक्ष (क्षैतिज)",
-    "relativeToVertical": "सापेक्ष (लंबवत)",
-    "verticalOffset": "लंबवत ऑफ़सेट"
-  },
   "consumerApi": {
     "capture": null,
     "captureHint": null,
@@ -726,7 +667,6 @@
     "subtitle": null,
     "succeeded": null,
     "title": null,
-    "bookmarkQuery": null,
     "noWritableControl": null,
     "syncAuthority": null,
     "bookmarkNotRun": null,
@@ -773,6 +713,22 @@
     "creationSemantics": null,
     "undoCreate": null
   },
+  "serverAutomation": {
+    "badge": null,
+    "failed": null,
+    "hide": null,
+    "idle": null,
+    "load": null,
+    "loaded": null,
+    "prepare": null,
+    "prepared": null,
+    "query": null,
+    "result": null,
+    "running": null,
+    "show": null,
+    "subtitle": null,
+    "title": null
+  },
   "revisionAutomation": {
     "acceptAll": null,
     "acceptFirst": null,
@@ -804,20 +760,63 @@
     "undoCollection": null,
     "undoDecision": null
   },
-  "serverAutomation": {
-    "badge": null,
-    "failed": null,
-    "hide": null,
-    "idle": null,
-    "load": null,
-    "loaded": null,
-    "prepare": null,
-    "prepared": null,
-    "query": null,
-    "result": null,
-    "running": null,
-    "show": null,
-    "subtitle": null,
-    "title": null
+  "review": {
+    "accept": "स्वीकार करें",
+    "ariaLabel": "समीक्षा",
+    "commentRefused": "टिप्पणी नहीं जोड़ी जा सकी",
+    "deleted": "हटाया गया",
+    "empty": "कोई परिवर्तन या टिप्पणी नहीं",
+    "inserted": "जोड़ा गया",
+    "movedFrom": "यहाँ से स्थानांतरित किया गया",
+    "movedTo": "यहाँ स्थानांतरित किया गया",
+    "reject": "अस्वीकार करें",
+    "replaced": "प्रतिस्थापित किया गया",
+    "replacedWith": "इससे:",
+    "reply": "उत्तर दें",
+    "replyRefused": "उत्तर पोस्ट नहीं किया जा सका",
+    "showPane": "टिप्पणियाँ दिखाएँ",
+    "structural": "दस्तावेज़ संरचना बदली गई",
+    "deleteComment": "टिप्पणी हटाएँ",
+    "discardChange": "परिवर्तन छोड़ें"
+  },
+  "imageAltText": {
+    "description": "विवरण",
+    "panelTitle": "वैकल्पिक पाठ",
+    "title": "शीर्षक"
+  },
+  "imageInsert": {
+    "errors": {
+      "emptyFile": "चयनित फ़ाइल खाली है.",
+      "invalidSignature": "फ़ाइल समर्थित PNG, JPEG या GIF छवि नहीं है.",
+      "oversize": "छवि अधिकतम अनुमत आकार से अधिक है.",
+      "refused": "छवि सम्मिलित नहीं की जा सकी.",
+      "unsupportedFormat": "यह छवि स्वरूप सम्मिलन के लिए समर्थित नहीं है."
+    }
+  },
+  "imageProperties": {
+    "crop": "क्रॉप",
+    "cropBottom": "नीचे (%)",
+    "cropLeft": "बाएँ (%)",
+    "cropRight": "दाएँ (%)",
+    "cropTop": "ऊपर (%)",
+    "errors": {
+      "invalidCrop": "क्रॉप मान 0 से 100 तक के प्रतिशत होने चाहिए.",
+      "invalidDimensions": "धनात्मक चौड़ाई और ऊँचाई मान दर्ज करें.",
+      "refused": "ये गुण लागू नहीं किए जा सके.",
+      "invalidPosition": "मान्य क्षैतिज और लंबवत स्थिति मान दर्ज करें."
+    },
+    "hyperlink": "हाइपरलिंक",
+    "nonPictureHint": "क्रॉप और मूल आकार रीसेट केवल चित्रों के लिए उपलब्ध हैं.",
+    "resetNaturalSize": "मूल आकार पर रीसेट करें",
+    "units": {
+      "points": "pt"
+    },
+    "horizontalOffset": "क्षैतिज ऑफ़सेट",
+    "position": "स्थिति",
+    "positionLocked": "यह आरेखण स्थानांतरित नहीं किया जा सकता.",
+    "positionUnavailable": "स्थिति केवल फ़्लोटिंग छवियों के लिए उपलब्ध है.",
+    "relativeToHorizontal": "सापेक्ष (क्षैतिज)",
+    "relativeToVertical": "सापेक्ष (लंबवत)",
+    "verticalOffset": "लंबवत ऑफ़सेट"
   }
 }

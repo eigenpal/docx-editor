@@ -580,65 +580,6 @@
     "convertAllEndnotes": "将所有尾注转换为脚注",
     "inheritedValue": "（继承）"
   },
-  "review": {
-    "accept": "接受",
-    "ariaLabel": "审阅",
-    "commentRefused": "无法添加批注",
-    "deleted": "已删除",
-    "empty": "没有更改或批注",
-    "inserted": "已添加",
-    "movedFrom": "从此处移动",
-    "movedTo": "移动到此处",
-    "reject": "拒绝",
-    "replaced": "已替换",
-    "replacedWith": "为",
-    "reply": "答复",
-    "replyRefused": "无法发布答复",
-    "showPane": "显示批注",
-    "structural": "已更改文档结构",
-    "deleteComment": "删除批注",
-    "discardChange": "放弃更改"
-  },
-  "imageAltText": {
-    "description": "说明",
-    "panelTitle": "替换文字",
-    "title": "标题"
-  },
-  "imageInsert": {
-    "errors": {
-      "emptyFile": "所选文件为空。",
-      "invalidSignature": "该文件不是受支持的 PNG、JPEG 或 GIF 图像。",
-      "oversize": "图像超过允许的最大大小。",
-      "refused": "无法插入图像。",
-      "unsupportedFormat": "不支持插入此图像格式。"
-    }
-  },
-  "imageProperties": {
-    "crop": "裁剪",
-    "cropBottom": "下（%）",
-    "cropLeft": "左（%）",
-    "cropRight": "右（%）",
-    "cropTop": "上（%）",
-    "errors": {
-      "invalidCrop": "裁剪值必须是 0 到 100 之间的百分比。",
-      "invalidDimensions": "请输入正的宽度和高度值。",
-      "refused": "无法应用这些属性。",
-      "invalidPosition": "请输入有效的水平和垂直位置值。"
-    },
-    "hyperlink": "超链接",
-    "nonPictureHint": "裁剪和恢复原始大小仅适用于图片。",
-    "resetNaturalSize": "恢复原始大小",
-    "units": {
-      "points": "磅"
-    },
-    "horizontalOffset": "水平偏移",
-    "position": "位置",
-    "positionLocked": "无法移动此绘图。",
-    "positionUnavailable": "位置仅适用于浮动图像。",
-    "relativeToHorizontal": "相对于（水平）",
-    "relativeToVertical": "相对于（垂直）",
-    "verticalOffset": "垂直偏移"
-  },
   "consumerApi": {
     "capture": null,
     "captureHint": null,
@@ -726,7 +667,6 @@
     "subtitle": null,
     "succeeded": null,
     "title": null,
-    "bookmarkQuery": null,
     "noWritableControl": null,
     "syncAuthority": null,
     "bookmarkNotRun": null,
@@ -773,6 +713,22 @@
     "creationSemantics": null,
     "undoCreate": null
   },
+  "serverAutomation": {
+    "badge": null,
+    "failed": null,
+    "hide": null,
+    "idle": null,
+    "load": null,
+    "loaded": null,
+    "prepare": null,
+    "prepared": null,
+    "query": null,
+    "result": null,
+    "running": null,
+    "show": null,
+    "subtitle": null,
+    "title": null
+  },
   "revisionAutomation": {
     "acceptAll": null,
     "acceptFirst": null,
@@ -804,20 +760,63 @@
     "undoCollection": null,
     "undoDecision": null
   },
-  "serverAutomation": {
-    "badge": null,
-    "failed": null,
-    "hide": null,
-    "idle": null,
-    "load": null,
-    "loaded": null,
-    "prepare": null,
-    "prepared": null,
-    "query": null,
-    "result": null,
-    "running": null,
-    "show": null,
-    "subtitle": null,
-    "title": null
+  "review": {
+    "accept": "接受",
+    "ariaLabel": "审阅",
+    "commentRefused": "无法添加批注",
+    "deleted": "已删除",
+    "empty": "没有更改或批注",
+    "inserted": "已添加",
+    "movedFrom": "从此处移动",
+    "movedTo": "移动到此处",
+    "reject": "拒绝",
+    "replaced": "已替换",
+    "replacedWith": "为",
+    "reply": "答复",
+    "replyRefused": "无法发布答复",
+    "showPane": "显示批注",
+    "structural": "已更改文档结构",
+    "deleteComment": "删除批注",
+    "discardChange": "放弃更改"
+  },
+  "imageAltText": {
+    "description": "说明",
+    "panelTitle": "替换文字",
+    "title": "标题"
+  },
+  "imageInsert": {
+    "errors": {
+      "emptyFile": "所选文件为空。",
+      "invalidSignature": "该文件不是受支持的 PNG、JPEG 或 GIF 图像。",
+      "oversize": "图像超过允许的最大大小。",
+      "refused": "无法插入图像。",
+      "unsupportedFormat": "不支持插入此图像格式。"
+    }
+  },
+  "imageProperties": {
+    "crop": "裁剪",
+    "cropBottom": "下（%）",
+    "cropLeft": "左（%）",
+    "cropRight": "右（%）",
+    "cropTop": "上（%）",
+    "errors": {
+      "invalidCrop": "裁剪值必须是 0 到 100 之间的百分比。",
+      "invalidDimensions": "请输入正的宽度和高度值。",
+      "refused": "无法应用这些属性。",
+      "invalidPosition": "请输入有效的水平和垂直位置值。"
+    },
+    "hyperlink": "超链接",
+    "nonPictureHint": "裁剪和恢复原始大小仅适用于图片。",
+    "resetNaturalSize": "恢复原始大小",
+    "units": {
+      "points": "磅"
+    },
+    "horizontalOffset": "水平偏移",
+    "position": "位置",
+    "positionLocked": "无法移动此绘图。",
+    "positionUnavailable": "位置仅适用于浮动图像。",
+    "relativeToHorizontal": "相对于（水平）",
+    "relativeToVertical": "相对于（垂直）",
+    "verticalOffset": "垂直偏移"
   }
 }

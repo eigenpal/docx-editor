@@ -580,65 +580,6 @@
     "convertAllEndnotes": "Konwertuj wszystkie przypisy końcowe na przypisy dolne",
     "inheritedValue": "(dziedziczone)"
   },
-  "review": {
-    "accept": "Zaakceptuj",
-    "ariaLabel": "Recenzja",
-    "commentRefused": "Nie można dodać komentarza",
-    "deleted": "Usunięto",
-    "empty": "Brak zmian i komentarzy",
-    "inserted": "Dodano",
-    "movedFrom": "Przeniesiono stąd",
-    "movedTo": "Przeniesiono tutaj",
-    "reject": "Odrzuć",
-    "replaced": "Zamieniono",
-    "replacedWith": "na",
-    "reply": "Odpowiedz",
-    "replyRefused": "Nie można opublikować odpowiedzi",
-    "showPane": "Pokaż komentarze",
-    "structural": "Zmieniono strukturę dokumentu",
-    "deleteComment": "Usuń komentarz",
-    "discardChange": "Odrzuć zmianę"
-  },
-  "imageAltText": {
-    "description": "Opis",
-    "panelTitle": "Tekst alternatywny",
-    "title": "Tytuł"
-  },
-  "imageInsert": {
-    "errors": {
-      "emptyFile": "Wybrany plik jest pusty.",
-      "invalidSignature": "Plik nie jest obsługiwanym obrazem PNG, JPEG ani GIF.",
-      "oversize": "Obraz przekracza maksymalny dozwolony rozmiar.",
-      "refused": "Nie można wstawić obrazu.",
-      "unsupportedFormat": "Ten format obrazu nie jest obsługiwany przy wstawianiu."
-    }
-  },
-  "imageProperties": {
-    "crop": "Przytnij",
-    "cropBottom": "Dół (%)",
-    "cropLeft": "Lewa (%)",
-    "cropRight": "Prawa (%)",
-    "cropTop": "Góra (%)",
-    "errors": {
-      "invalidCrop": "Wartości przycięcia muszą być procentami od 0 do 100.",
-      "invalidDimensions": "Wprowadź dodatnie wartości szerokości i wysokości.",
-      "refused": "Nie można zastosować tych właściwości.",
-      "invalidPosition": "Wprowadź prawidłowe wartości położenia w poziomie i w pionie."
-    },
-    "hyperlink": "Hiperłącze",
-    "nonPictureHint": "Przycinanie i przywracanie naturalnego rozmiaru są dostępne tylko dla obrazów.",
-    "resetNaturalSize": "Przywróć naturalny rozmiar",
-    "units": {
-      "points": "pkt"
-    },
-    "horizontalOffset": "Przesunięcie w poziomie",
-    "position": "Położenie",
-    "positionLocked": "Tego rysunku nie można przenieść.",
-    "positionUnavailable": "Położenie jest dostępne tylko dla obrazów przestawnych.",
-    "relativeToHorizontal": "Względem (w poziomie)",
-    "relativeToVertical": "Względem (w pionie)",
-    "verticalOffset": "Przesunięcie w pionie"
-  },
   "consumerApi": {
     "capture": null,
     "captureHint": null,
@@ -726,7 +667,6 @@
     "subtitle": null,
     "succeeded": null,
     "title": null,
-    "bookmarkQuery": null,
     "noWritableControl": null,
     "syncAuthority": null,
     "bookmarkNotRun": null,
@@ -773,6 +713,22 @@
     "creationSemantics": null,
     "undoCreate": null
   },
+  "serverAutomation": {
+    "badge": null,
+    "failed": null,
+    "hide": null,
+    "idle": null,
+    "load": null,
+    "loaded": null,
+    "prepare": null,
+    "prepared": null,
+    "query": null,
+    "result": null,
+    "running": null,
+    "show": null,
+    "subtitle": null,
+    "title": null
+  },
   "revisionAutomation": {
     "acceptAll": null,
     "acceptFirst": null,
@@ -804,20 +760,63 @@
     "undoCollection": null,
     "undoDecision": null
   },
-  "serverAutomation": {
-    "badge": null,
-    "failed": null,
-    "hide": null,
-    "idle": null,
-    "load": null,
-    "loaded": null,
-    "prepare": null,
-    "prepared": null,
-    "query": null,
-    "result": null,
-    "running": null,
-    "show": null,
-    "subtitle": null,
-    "title": null
+  "review": {
+    "accept": "Zaakceptuj",
+    "ariaLabel": "Recenzja",
+    "commentRefused": "Nie można dodać komentarza",
+    "deleted": "Usunięto",
+    "empty": "Brak zmian i komentarzy",
+    "inserted": "Dodano",
+    "movedFrom": "Przeniesiono stąd",
+    "movedTo": "Przeniesiono tutaj",
+    "reject": "Odrzuć",
+    "replaced": "Zamieniono",
+    "replacedWith": "na",
+    "reply": "Odpowiedz",
+    "replyRefused": "Nie można opublikować odpowiedzi",
+    "showPane": "Pokaż komentarze",
+    "structural": "Zmieniono strukturę dokumentu",
+    "deleteComment": "Usuń komentarz",
+    "discardChange": "Odrzuć zmianę"
+  },
+  "imageAltText": {
+    "description": "Opis",
+    "panelTitle": "Tekst alternatywny",
+    "title": "Tytuł"
+  },
+  "imageInsert": {
+    "errors": {
+      "emptyFile": "Wybrany plik jest pusty.",
+      "invalidSignature": "Plik nie jest obsługiwanym obrazem PNG, JPEG ani GIF.",
+      "oversize": "Obraz przekracza maksymalny dozwolony rozmiar.",
+      "refused": "Nie można wstawić obrazu.",
+      "unsupportedFormat": "Ten format obrazu nie jest obsługiwany przy wstawianiu."
+    }
+  },
+  "imageProperties": {
+    "crop": "Przytnij",
+    "cropBottom": "Dół (%)",
+    "cropLeft": "Lewa (%)",
+    "cropRight": "Prawa (%)",
+    "cropTop": "Góra (%)",
+    "errors": {
+      "invalidCrop": "Wartości przycięcia muszą być procentami od 0 do 100.",
+      "invalidDimensions": "Wprowadź dodatnie wartości szerokości i wysokości.",
+      "refused": "Nie można zastosować tych właściwości.",
+      "invalidPosition": "Wprowadź prawidłowe wartości położenia w poziomie i w pionie."
+    },
+    "hyperlink": "Hiperłącze",
+    "nonPictureHint": "Przycinanie i przywracanie naturalnego rozmiaru są dostępne tylko dla obrazów.",
+    "resetNaturalSize": "Przywróć naturalny rozmiar",
+    "units": {
+      "points": "pkt"
+    },
+    "horizontalOffset": "Przesunięcie w poziomie",
+    "position": "Położenie",
+    "positionLocked": "Tego rysunku nie można przenieść.",
+    "positionUnavailable": "Położenie jest dostępne tylko dla obrazów przestawnych.",
+    "relativeToHorizontal": "Względem (w poziomie)",
+    "relativeToVertical": "Względem (w pionie)",
+    "verticalOffset": "Przesunięcie w pionie"
   }
 }

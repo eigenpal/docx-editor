@@ -580,65 +580,6 @@
     "convertAllEndnotes": "Tüm son notları dip notlara dönüştür",
     "inheritedValue": "(devralınan)"
   },
-  "review": {
-    "accept": "Kabul et",
-    "ariaLabel": "Gözden geçir",
-    "commentRefused": "Açıklama eklenemedi",
-    "deleted": "Silindi",
-    "empty": "Değişiklik veya açıklama yok",
-    "inserted": "Eklendi",
-    "movedFrom": "Buradan taşındı",
-    "movedTo": "Buraya taşındı",
-    "reject": "Reddet",
-    "replaced": "Değiştirildi",
-    "replacedWith": "şununla:",
-    "reply": "Yanıtla",
-    "replyRefused": "Yanıt gönderilemedi",
-    "showPane": "Açıklamaları göster",
-    "structural": "Belge yapısı değiştirildi",
-    "deleteComment": "Açıklamayı sil",
-    "discardChange": "Değişikliği at"
-  },
-  "imageAltText": {
-    "description": "Açıklama",
-    "panelTitle": "Alternatif metin",
-    "title": "Başlık"
-  },
-  "imageInsert": {
-    "errors": {
-      "emptyFile": "Seçilen dosya boş.",
-      "invalidSignature": "Dosya desteklenen bir PNG, JPEG veya GIF görüntüsü değil.",
-      "oversize": "Görüntü izin verilen en büyük boyutu aşıyor.",
-      "refused": "Görüntü eklenemedi.",
-      "unsupportedFormat": "Bu görüntü biçimi ekleme için desteklenmiyor."
-    }
-  },
-  "imageProperties": {
-    "crop": "Kırp",
-    "cropBottom": "Alt (%)",
-    "cropLeft": "Sol (%)",
-    "cropRight": "Sağ (%)",
-    "cropTop": "Üst (%)",
-    "errors": {
-      "invalidCrop": "Kırpma değerleri 0 ile 100 arasında yüzde olmalıdır.",
-      "invalidDimensions": "Pozitif genişlik ve yükseklik değerleri girin.",
-      "refused": "Bu özellikler uygulanamadı.",
-      "invalidPosition": "Geçerli yatay ve dikey konum değerleri girin."
-    },
-    "hyperlink": "Köprü",
-    "nonPictureHint": "Kırpma ve doğal boyuta sıfırlama yalnızca resimler için kullanılabilir.",
-    "resetNaturalSize": "Doğal boyuta sıfırla",
-    "units": {
-      "points": "nk"
-    },
-    "horizontalOffset": "Yatay uzaklık",
-    "position": "Konum",
-    "positionLocked": "Bu çizim taşınamaz.",
-    "positionUnavailable": "Konum yalnızca kayan görüntüler için kullanılabilir.",
-    "relativeToHorizontal": "Göreli konum (yatay)",
-    "relativeToVertical": "Göreli konum (dikey)",
-    "verticalOffset": "Dikey uzaklık"
-  },
   "consumerApi": {
     "capture": null,
     "captureHint": null,
@@ -726,7 +667,6 @@
     "subtitle": null,
     "succeeded": null,
     "title": null,
-    "bookmarkQuery": null,
     "noWritableControl": null,
     "syncAuthority": null,
     "bookmarkNotRun": null,
@@ -773,6 +713,22 @@
     "creationSemantics": null,
     "undoCreate": null
   },
+  "serverAutomation": {
+    "badge": null,
+    "failed": null,
+    "hide": null,
+    "idle": null,
+    "load": null,
+    "loaded": null,
+    "prepare": null,
+    "prepared": null,
+    "query": null,
+    "result": null,
+    "running": null,
+    "show": null,
+    "subtitle": null,
+    "title": null
+  },
   "revisionAutomation": {
     "acceptAll": null,
     "acceptFirst": null,
@@ -804,20 +760,63 @@
     "undoCollection": null,
     "undoDecision": null
   },
-  "serverAutomation": {
-    "badge": null,
-    "failed": null,
-    "hide": null,
-    "idle": null,
-    "load": null,
-    "loaded": null,
-    "prepare": null,
-    "prepared": null,
-    "query": null,
-    "result": null,
-    "running": null,
-    "show": null,
-    "subtitle": null,
-    "title": null
+  "review": {
+    "accept": "Kabul et",
+    "ariaLabel": "Gözden geçir",
+    "commentRefused": "Açıklama eklenemedi",
+    "deleted": "Silindi",
+    "empty": "Değişiklik veya açıklama yok",
+    "inserted": "Eklendi",
+    "movedFrom": "Buradan taşındı",
+    "movedTo": "Buraya taşındı",
+    "reject": "Reddet",
+    "replaced": "Değiştirildi",
+    "replacedWith": "şununla:",
+    "reply": "Yanıtla",
+    "replyRefused": "Yanıt gönderilemedi",
+    "showPane": "Açıklamaları göster",
+    "structural": "Belge yapısı değiştirildi",
+    "deleteComment": "Açıklamayı sil",
+    "discardChange": "Değişikliği at"
+  },
+  "imageAltText": {
+    "description": "Açıklama",
+    "panelTitle": "Alternatif metin",
+    "title": "Başlık"
+  },
+  "imageInsert": {
+    "errors": {
+      "emptyFile": "Seçilen dosya boş.",
+      "invalidSignature": "Dosya desteklenen bir PNG, JPEG veya GIF görüntüsü değil.",
+      "oversize": "Görüntü izin verilen en büyük boyutu aşıyor.",
+      "refused": "Görüntü eklenemedi.",
+      "unsupportedFormat": "Bu görüntü biçimi ekleme için desteklenmiyor."
+    }
+  },
+  "imageProperties": {
+    "crop": "Kırp",
+    "cropBottom": "Alt (%)",
+    "cropLeft": "Sol (%)",
+    "cropRight": "Sağ (%)",
+    "cropTop": "Üst (%)",
+    "errors": {
+      "invalidCrop": "Kırpma değerleri 0 ile 100 arasında yüzde olmalıdır.",
+      "invalidDimensions": "Pozitif genişlik ve yükseklik değerleri girin.",
+      "refused": "Bu özellikler uygulanamadı.",
+      "invalidPosition": "Geçerli yatay ve dikey konum değerleri girin."
+    },
+    "hyperlink": "Köprü",
+    "nonPictureHint": "Kırpma ve doğal boyuta sıfırlama yalnızca resimler için kullanılabilir.",
+    "resetNaturalSize": "Doğal boyuta sıfırla",
+    "units": {
+      "points": "nk"
+    },
+    "horizontalOffset": "Yatay uzaklık",
+    "position": "Konum",
+    "positionLocked": "Bu çizim taşınamaz.",
+    "positionUnavailable": "Konum yalnızca kayan görüntüler için kullanılabilir.",
+    "relativeToHorizontal": "Göreli konum (yatay)",
+    "relativeToVertical": "Göreli konum (dikey)",
+    "verticalOffset": "Dikey uzaklık"
   }
 }

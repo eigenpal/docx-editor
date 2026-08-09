@@ -580,65 +580,6 @@
     "convertAllEndnotes": "Convertir toutes les notes de fin en notes de bas de page",
     "inheritedValue": "(hérité)"
   },
-  "review": {
-    "accept": "Accepter",
-    "ariaLabel": "Révision",
-    "commentRefused": "Impossible d'ajouter le commentaire",
-    "deleted": "Supprimé",
-    "empty": "Aucune modification ni aucun commentaire",
-    "inserted": "Ajouté",
-    "movedFrom": "Déplacé d'ici",
-    "movedTo": "Déplacé ici",
-    "reject": "Refuser",
-    "replaced": "Remplacé",
-    "replacedWith": "par",
-    "reply": "Répondre",
-    "replyRefused": "Impossible de publier la réponse",
-    "showPane": "Afficher les commentaires",
-    "structural": "Structure du document modifiée",
-    "deleteComment": "Supprimer le commentaire",
-    "discardChange": "Ignorer la modification"
-  },
-  "imageAltText": {
-    "description": "Description",
-    "panelTitle": "Texte de remplacement",
-    "title": "Titre"
-  },
-  "imageInsert": {
-    "errors": {
-      "emptyFile": "Le fichier sélectionné est vide.",
-      "invalidSignature": "Le fichier n'est pas une image PNG, JPEG ou GIF prise en charge.",
-      "oversize": "L'image dépasse la taille maximale autorisée.",
-      "refused": "L'image n'a pas pu être insérée.",
-      "unsupportedFormat": "Ce format d'image n'est pas pris en charge pour l'insertion."
-    }
-  },
-  "imageProperties": {
-    "crop": "Rogner",
-    "cropBottom": "Bas (%)",
-    "cropLeft": "Gauche (%)",
-    "cropRight": "Droite (%)",
-    "cropTop": "Haut (%)",
-    "errors": {
-      "invalidCrop": "Les valeurs de rognage doivent être des pourcentages compris entre 0 et 100.",
-      "invalidDimensions": "Entrez des valeurs de largeur et de hauteur positives.",
-      "refused": "Ces propriétés n'ont pas pu être appliquées.",
-      "invalidPosition": "Entrez des valeurs de position horizontale et verticale valides."
-    },
-    "hyperlink": "Lien hypertexte",
-    "nonPictureHint": "Le rognage et la réinitialisation à la taille d'origine ne sont disponibles que pour les images.",
-    "resetNaturalSize": "Rétablir la taille d'origine",
-    "units": {
-      "points": "pt"
-    },
-    "horizontalOffset": "Décalage horizontal",
-    "position": "Position",
-    "positionLocked": "Ce dessin ne peut pas être déplacé.",
-    "positionUnavailable": "La position n'est disponible que pour les images flottantes.",
-    "relativeToHorizontal": "Par rapport à (horizontal)",
-    "relativeToVertical": "Par rapport à (vertical)",
-    "verticalOffset": "Décalage vertical"
-  },
   "consumerApi": {
     "capture": null,
     "captureHint": null,
@@ -726,7 +667,6 @@
     "subtitle": null,
     "succeeded": null,
     "title": null,
-    "bookmarkQuery": null,
     "noWritableControl": null,
     "syncAuthority": null,
     "bookmarkNotRun": null,
@@ -773,6 +713,22 @@
     "creationSemantics": null,
     "undoCreate": null
   },
+  "serverAutomation": {
+    "badge": null,
+    "failed": null,
+    "hide": null,
+    "idle": null,
+    "load": null,
+    "loaded": null,
+    "prepare": null,
+    "prepared": null,
+    "query": null,
+    "result": null,
+    "running": null,
+    "show": null,
+    "subtitle": null,
+    "title": null
+  },
   "revisionAutomation": {
     "acceptAll": null,
     "acceptFirst": null,
@@ -804,20 +760,63 @@
     "undoCollection": null,
     "undoDecision": null
   },
-  "serverAutomation": {
-    "badge": null,
-    "failed": null,
-    "hide": null,
-    "idle": null,
-    "load": null,
-    "loaded": null,
-    "prepare": null,
-    "prepared": null,
-    "query": null,
-    "result": null,
-    "running": null,
-    "show": null,
-    "subtitle": null,
-    "title": null
+  "review": {
+    "accept": "Accepter",
+    "ariaLabel": "Révision",
+    "commentRefused": "Impossible d'ajouter le commentaire",
+    "deleted": "Supprimé",
+    "empty": "Aucune modification ni aucun commentaire",
+    "inserted": "Ajouté",
+    "movedFrom": "Déplacé d'ici",
+    "movedTo": "Déplacé ici",
+    "reject": "Refuser",
+    "replaced": "Remplacé",
+    "replacedWith": "par",
+    "reply": "Répondre",
+    "replyRefused": "Impossible de publier la réponse",
+    "showPane": "Afficher les commentaires",
+    "structural": "Structure du document modifiée",
+    "deleteComment": "Supprimer le commentaire",
+    "discardChange": "Ignorer la modification"
+  },
+  "imageAltText": {
+    "description": "Description",
+    "panelTitle": "Texte de remplacement",
+    "title": "Titre"
+  },
+  "imageInsert": {
+    "errors": {
+      "emptyFile": "Le fichier sélectionné est vide.",
+      "invalidSignature": "Le fichier n'est pas une image PNG, JPEG ou GIF prise en charge.",
+      "oversize": "L'image dépasse la taille maximale autorisée.",
+      "refused": "L'image n'a pas pu être insérée.",
+      "unsupportedFormat": "Ce format d'image n'est pas pris en charge pour l'insertion."
+    }
+  },
+  "imageProperties": {
+    "crop": "Rogner",
+    "cropBottom": "Bas (%)",
+    "cropLeft": "Gauche (%)",
+    "cropRight": "Droite (%)",
+    "cropTop": "Haut (%)",
+    "errors": {
+      "invalidCrop": "Les valeurs de rognage doivent être des pourcentages compris entre 0 et 100.",
+      "invalidDimensions": "Entrez des valeurs de largeur et de hauteur positives.",
+      "refused": "Ces propriétés n'ont pas pu être appliquées.",
+      "invalidPosition": "Entrez des valeurs de position horizontale et verticale valides."
+    },
+    "hyperlink": "Lien hypertexte",
+    "nonPictureHint": "Le rognage et la réinitialisation à la taille d'origine ne sont disponibles que pour les images.",
+    "resetNaturalSize": "Rétablir la taille d'origine",
+    "units": {
+      "points": "pt"
+    },
+    "horizontalOffset": "Décalage horizontal",
+    "position": "Position",
+    "positionLocked": "Ce dessin ne peut pas être déplacé.",
+    "positionUnavailable": "La position n'est disponible que pour les images flottantes.",
+    "relativeToHorizontal": "Par rapport à (horizontal)",
+    "relativeToVertical": "Par rapport à (vertical)",
+    "verticalOffset": "Décalage vertical"
   }
 }

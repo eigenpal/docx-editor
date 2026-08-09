@@ -580,65 +580,6 @@
     "convertAllEndnotes": "המר את כל הערות הסוף להערות שוליים",
     "inheritedValue": "(בירושה)"
   },
-  "review": {
-    "accept": "קבל",
-    "ariaLabel": "סקירה",
-    "commentRefused": "לא ניתן להוסיף את ההערה",
-    "deleted": "נמחק",
-    "empty": "אין שינויים או הערות",
-    "inserted": "נוסף",
-    "movedFrom": "הועבר מכאן",
-    "movedTo": "הועבר לכאן",
-    "reject": "דחה",
-    "replaced": "הוחלף",
-    "replacedWith": "ב-",
-    "reply": "השב",
-    "replyRefused": "לא ניתן לפרסם את התשובה",
-    "showPane": "הצג הערות",
-    "structural": "מבנה המסמך שונה",
-    "deleteComment": "מחק הערה",
-    "discardChange": "בטל שינוי"
-  },
-  "imageAltText": {
-    "description": "תיאור",
-    "panelTitle": "טקסט חלופי",
-    "title": "כותרת"
-  },
-  "imageInsert": {
-    "errors": {
-      "emptyFile": "הקובץ שנבחר ריק.",
-      "invalidSignature": "הקובץ אינו תמונת PNG, JPEG או GIF נתמכת.",
-      "oversize": "התמונה חורגת מהגודל המרבי המותר.",
-      "refused": "לא ניתן להוסיף את התמונה.",
-      "unsupportedFormat": "תבנית תמונה זו אינה נתמכת להוספה."
-    }
-  },
-  "imageProperties": {
-    "crop": "חיתוך",
-    "cropBottom": "למטה (%)",
-    "cropLeft": "שמאל (%)",
-    "cropRight": "ימין (%)",
-    "cropTop": "למעלה (%)",
-    "errors": {
-      "invalidCrop": "ערכי החיתוך חייבים להיות אחוזים בין 0 ל-100.",
-      "invalidDimensions": "הזן ערכי רוחב וגובה חיוביים.",
-      "refused": "לא ניתן להחיל מאפיינים אלה.",
-      "invalidPosition": "הזן ערכי מיקום אופקי ואנכי חוקיים."
-    },
-    "hyperlink": "היפר-קישור",
-    "nonPictureHint": "חיתוך ואיפוס לגודל המקורי זמינים רק עבור תמונות.",
-    "resetNaturalSize": "אפס לגודל המקורי",
-    "units": {
-      "points": "נק'"
-    },
-    "horizontalOffset": "היסט אופקי",
-    "position": "מיקום",
-    "positionLocked": "לא ניתן להזיז ציור זה.",
-    "positionUnavailable": "מיקום זמין רק עבור תמונות צפות.",
-    "relativeToHorizontal": "ביחס ל (אופקי)",
-    "relativeToVertical": "ביחס ל (אנכי)",
-    "verticalOffset": "היסט אנכי"
-  },
   "consumerApi": {
     "capture": null,
     "captureHint": null,
@@ -726,7 +667,6 @@
     "subtitle": null,
     "succeeded": null,
     "title": null,
-    "bookmarkQuery": null,
     "noWritableControl": null,
     "syncAuthority": null,
     "bookmarkNotRun": null,
@@ -773,6 +713,22 @@
     "creationSemantics": null,
     "undoCreate": null
   },
+  "serverAutomation": {
+    "badge": null,
+    "failed": null,
+    "hide": null,
+    "idle": null,
+    "load": null,
+    "loaded": null,
+    "prepare": null,
+    "prepared": null,
+    "query": null,
+    "result": null,
+    "running": null,
+    "show": null,
+    "subtitle": null,
+    "title": null
+  },
   "revisionAutomation": {
     "acceptAll": null,
     "acceptFirst": null,
@@ -804,20 +760,63 @@
     "undoCollection": null,
     "undoDecision": null
   },
-  "serverAutomation": {
-    "badge": null,
-    "failed": null,
-    "hide": null,
-    "idle": null,
-    "load": null,
-    "loaded": null,
-    "prepare": null,
-    "prepared": null,
-    "query": null,
-    "result": null,
-    "running": null,
-    "show": null,
-    "subtitle": null,
-    "title": null
+  "review": {
+    "accept": "קבל",
+    "ariaLabel": "סקירה",
+    "commentRefused": "לא ניתן להוסיף את ההערה",
+    "deleted": "נמחק",
+    "empty": "אין שינויים או הערות",
+    "inserted": "נוסף",
+    "movedFrom": "הועבר מכאן",
+    "movedTo": "הועבר לכאן",
+    "reject": "דחה",
+    "replaced": "הוחלף",
+    "replacedWith": "ב-",
+    "reply": "השב",
+    "replyRefused": "לא ניתן לפרסם את התשובה",
+    "showPane": "הצג הערות",
+    "structural": "מבנה המסמך שונה",
+    "deleteComment": "מחק הערה",
+    "discardChange": "בטל שינוי"
+  },
+  "imageAltText": {
+    "description": "תיאור",
+    "panelTitle": "טקסט חלופי",
+    "title": "כותרת"
+  },
+  "imageInsert": {
+    "errors": {
+      "emptyFile": "הקובץ שנבחר ריק.",
+      "invalidSignature": "הקובץ אינו תמונת PNG, JPEG או GIF נתמכת.",
+      "oversize": "התמונה חורגת מהגודל המרבי המותר.",
+      "refused": "לא ניתן להוסיף את התמונה.",
+      "unsupportedFormat": "תבנית תמונה זו אינה נתמכת להוספה."
+    }
+  },
+  "imageProperties": {
+    "crop": "חיתוך",
+    "cropBottom": "למטה (%)",
+    "cropLeft": "שמאל (%)",
+    "cropRight": "ימין (%)",
+    "cropTop": "למעלה (%)",
+    "errors": {
+      "invalidCrop": "ערכי החיתוך חייבים להיות אחוזים בין 0 ל-100.",
+      "invalidDimensions": "הזן ערכי רוחב וגובה חיוביים.",
+      "refused": "לא ניתן להחיל מאפיינים אלה.",
+      "invalidPosition": "הזן ערכי מיקום אופקי ואנכי חוקיים."
+    },
+    "hyperlink": "היפר-קישור",
+    "nonPictureHint": "חיתוך ואיפוס לגודל המקורי זמינים רק עבור תמונות.",
+    "resetNaturalSize": "אפס לגודל המקורי",
+    "units": {
+      "points": "נק'"
+    },
+    "horizontalOffset": "היסט אופקי",
+    "position": "מיקום",
+    "positionLocked": "לא ניתן להזיז ציור זה.",
+    "positionUnavailable": "מיקום זמין רק עבור תמונות צפות.",
+    "relativeToHorizontal": "ביחס ל (אופקי)",
+    "relativeToVertical": "ביחס ל (אנכי)",
+    "verticalOffset": "היסט אנכי"
   }
 }

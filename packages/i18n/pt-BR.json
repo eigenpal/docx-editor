@@ -580,65 +580,6 @@
     "convertAllEndnotes": "Converter todas as notas de fim em notas de rodapé",
     "inheritedValue": "(herdado)"
   },
-  "review": {
-    "accept": "Aceitar",
-    "ariaLabel": "Revisão",
-    "commentRefused": "Não foi possível adicionar o comentário",
-    "deleted": "Excluído",
-    "empty": "Sem alterações ou comentários",
-    "inserted": "Adicionado",
-    "movedFrom": "Movido daqui",
-    "movedTo": "Movido para cá",
-    "reject": "Rejeitar",
-    "replaced": "Substituído",
-    "replacedWith": "por",
-    "reply": "Responder",
-    "replyRefused": "Não foi possível publicar a resposta",
-    "showPane": "Mostrar comentários",
-    "structural": "Estrutura do documento alterada",
-    "deleteComment": "Excluir comentário",
-    "discardChange": "Descartar alteração"
-  },
-  "imageAltText": {
-    "description": "Descrição",
-    "panelTitle": "Texto alternativo",
-    "title": "Título"
-  },
-  "imageInsert": {
-    "errors": {
-      "emptyFile": "O arquivo selecionado está vazio.",
-      "invalidSignature": "O arquivo não é uma imagem PNG, JPEG ou GIF compatível.",
-      "oversize": "A imagem excede o tamanho máximo permitido.",
-      "refused": "Não foi possível inserir a imagem.",
-      "unsupportedFormat": "Este formato de imagem não é compatível para inserção."
-    }
-  },
-  "imageProperties": {
-    "crop": "Cortar",
-    "cropBottom": "Inferior (%)",
-    "cropLeft": "Esquerda (%)",
-    "cropRight": "Direita (%)",
-    "cropTop": "Superior (%)",
-    "errors": {
-      "invalidCrop": "Os valores de corte devem ser porcentagens de 0 a 100.",
-      "invalidDimensions": "Insira valores positivos de largura e altura.",
-      "refused": "Não foi possível aplicar essas propriedades.",
-      "invalidPosition": "Insira valores válidos de posição horizontal e vertical."
-    },
-    "hyperlink": "Hiperlink",
-    "nonPictureHint": "Corte e redefinição para o tamanho natural estão disponíveis apenas para imagens.",
-    "resetNaturalSize": "Redefinir para o tamanho natural",
-    "units": {
-      "points": "pt"
-    },
-    "horizontalOffset": "Deslocamento horizontal",
-    "position": "Posição",
-    "positionLocked": "Este desenho não pode ser movido.",
-    "positionUnavailable": "A posição está disponível apenas para imagens flutuantes.",
-    "relativeToHorizontal": "Em relação a (horizontal)",
-    "relativeToVertical": "Em relação a (vertical)",
-    "verticalOffset": "Deslocamento vertical"
-  },
   "consumerApi": {
     "capture": null,
     "captureHint": null,
@@ -726,7 +667,6 @@
     "subtitle": null,
     "succeeded": null,
     "title": null,
-    "bookmarkQuery": null,
     "noWritableControl": null,
     "syncAuthority": null,
     "bookmarkNotRun": null,
@@ -773,6 +713,22 @@
     "creationSemantics": null,
     "undoCreate": null
   },
+  "serverAutomation": {
+    "badge": null,
+    "failed": null,
+    "hide": null,
+    "idle": null,
+    "load": null,
+    "loaded": null,
+    "prepare": null,
+    "prepared": null,
+    "query": null,
+    "result": null,
+    "running": null,
+    "show": null,
+    "subtitle": null,
+    "title": null
+  },
   "revisionAutomation": {
     "acceptAll": null,
     "acceptFirst": null,
@@ -804,20 +760,63 @@
     "undoCollection": null,
     "undoDecision": null
   },
-  "serverAutomation": {
-    "badge": null,
-    "failed": null,
-    "hide": null,
-    "idle": null,
-    "load": null,
-    "loaded": null,
-    "prepare": null,
-    "prepared": null,
-    "query": null,
-    "result": null,
-    "running": null,
-    "show": null,
-    "subtitle": null,
-    "title": null
+  "review": {
+    "accept": "Aceitar",
+    "ariaLabel": "Revisão",
+    "commentRefused": "Não foi possível adicionar o comentário",
+    "deleted": "Excluído",
+    "empty": "Sem alterações ou comentários",
+    "inserted": "Adicionado",
+    "movedFrom": "Movido daqui",
+    "movedTo": "Movido para cá",
+    "reject": "Rejeitar",
+    "replaced": "Substituído",
+    "replacedWith": "por",
+    "reply": "Responder",
+    "replyRefused": "Não foi possível publicar a resposta",
+    "showPane": "Mostrar comentários",
+    "structural": "Estrutura do documento alterada",
+    "deleteComment": "Excluir comentário",
+    "discardChange": "Descartar alteração"
+  },
+  "imageAltText": {
+    "description": "Descrição",
+    "panelTitle": "Texto alternativo",
+    "title": "Título"
+  },
+  "imageInsert": {
+    "errors": {
+      "emptyFile": "O arquivo selecionado está vazio.",
+      "invalidSignature": "O arquivo não é uma imagem PNG, JPEG ou GIF compatível.",
+      "oversize": "A imagem excede o tamanho máximo permitido.",
+      "refused": "Não foi possível inserir a imagem.",
+      "unsupportedFormat": "Este formato de imagem não é compatível para inserção."
+    }
+  },
+  "imageProperties": {
+    "crop": "Cortar",
+    "cropBottom": "Inferior (%)",
+    "cropLeft": "Esquerda (%)",
+    "cropRight": "Direita (%)",
+    "cropTop": "Superior (%)",
+    "errors": {
+      "invalidCrop": "Os valores de corte devem ser porcentagens de 0 a 100.",
+      "invalidDimensions": "Insira valores positivos de largura e altura.",
+      "refused": "Não foi possível aplicar essas propriedades.",
+      "invalidPosition": "Insira valores válidos de posição horizontal e vertical."
+    },
+    "hyperlink": "Hiperlink",
+    "nonPictureHint": "Corte e redefinição para o tamanho natural estão disponíveis apenas para imagens.",
+    "resetNaturalSize": "Redefinir para o tamanho natural",
+    "units": {
+      "points": "pt"
+    },
+    "horizontalOffset": "Deslocamento horizontal",
+    "position": "Posição",
+    "positionLocked": "Este desenho não pode ser movido.",
+    "positionUnavailable": "A posição está disponível apenas para imagens flutuantes.",
+    "relativeToHorizontal": "Em relação a (horizontal)",
+    "relativeToVertical": "Em relação a (vertical)",
+    "verticalOffset": "Deslocamento vertical"
   }
 }

@@ -580,65 +580,6 @@
     "convertAllEndnotes": "Konversi semua catatan akhir ke catatan kaki",
     "inheritedValue": "(diwarisi)"
   },
-  "review": {
-    "accept": "Terima",
-    "ariaLabel": "Tinjau",
-    "commentRefused": "Tidak dapat menambahkan komentar",
-    "deleted": "Dihapus",
-    "empty": "Tidak ada perubahan atau komentar",
-    "inserted": "Ditambahkan",
-    "movedFrom": "Dipindahkan dari sini",
-    "movedTo": "Dipindahkan ke sini",
-    "reject": "Tolak",
-    "replaced": "Diganti",
-    "replacedWith": "dengan",
-    "reply": "Balas",
-    "replyRefused": "Tidak dapat mengirim balasan",
-    "showPane": "Tampilkan komentar",
-    "structural": "Struktur dokumen diubah",
-    "deleteComment": "Hapus komentar",
-    "discardChange": "Buang perubahan"
-  },
-  "imageAltText": {
-    "description": "Deskripsi",
-    "panelTitle": "Teks alternatif",
-    "title": "Judul"
-  },
-  "imageInsert": {
-    "errors": {
-      "emptyFile": "File yang dipilih kosong.",
-      "invalidSignature": "File tersebut bukan gambar PNG, JPEG, atau GIF yang didukung.",
-      "oversize": "Gambar melebihi ukuran maksimum yang diizinkan.",
-      "refused": "Gambar tidak dapat disisipkan.",
-      "unsupportedFormat": "Format gambar ini tidak didukung untuk penyisipan."
-    }
-  },
-  "imageProperties": {
-    "crop": "Pangkas",
-    "cropBottom": "Bawah (%)",
-    "cropLeft": "Kiri (%)",
-    "cropRight": "Kanan (%)",
-    "cropTop": "Atas (%)",
-    "errors": {
-      "invalidCrop": "Nilai pangkas harus berupa persentase dari 0 hingga 100.",
-      "invalidDimensions": "Masukkan nilai lebar dan tinggi yang positif.",
-      "refused": "Properti ini tidak dapat diterapkan.",
-      "invalidPosition": "Masukkan nilai posisi horizontal dan vertikal yang valid."
-    },
-    "hyperlink": "Hyperlink",
-    "nonPictureHint": "Pangkas dan reset ukuran asli hanya tersedia untuk gambar.",
-    "resetNaturalSize": "Reset ke ukuran asli",
-    "units": {
-      "points": "pt"
-    },
-    "horizontalOffset": "Offset horizontal",
-    "position": "Posisi",
-    "positionLocked": "Gambar ini tidak dapat dipindahkan.",
-    "positionUnavailable": "Posisi hanya tersedia untuk gambar mengambang.",
-    "relativeToHorizontal": "Relatif terhadap (horizontal)",
-    "relativeToVertical": "Relatif terhadap (vertikal)",
-    "verticalOffset": "Offset vertikal"
-  },
   "consumerApi": {
     "capture": null,
     "captureHint": null,
@@ -726,7 +667,6 @@
     "subtitle": null,
     "succeeded": null,
     "title": null,
-    "bookmarkQuery": null,
     "noWritableControl": null,
     "syncAuthority": null,
     "bookmarkNotRun": null,
@@ -773,6 +713,22 @@
     "creationSemantics": null,
     "undoCreate": null
   },
+  "serverAutomation": {
+    "badge": null,
+    "failed": null,
+    "hide": null,
+    "idle": null,
+    "load": null,
+    "loaded": null,
+    "prepare": null,
+    "prepared": null,
+    "query": null,
+    "result": null,
+    "running": null,
+    "show": null,
+    "subtitle": null,
+    "title": null
+  },
   "revisionAutomation": {
     "acceptAll": null,
     "acceptFirst": null,
@@ -804,20 +760,63 @@
     "undoCollection": null,
     "undoDecision": null
   },
-  "serverAutomation": {
-    "badge": null,
-    "failed": null,
-    "hide": null,
-    "idle": null,
-    "load": null,
-    "loaded": null,
-    "prepare": null,
-    "prepared": null,
-    "query": null,
-    "result": null,
-    "running": null,
-    "show": null,
-    "subtitle": null,
-    "title": null
+  "review": {
+    "accept": "Terima",
+    "ariaLabel": "Tinjau",
+    "commentRefused": "Tidak dapat menambahkan komentar",
+    "deleted": "Dihapus",
+    "empty": "Tidak ada perubahan atau komentar",
+    "inserted": "Ditambahkan",
+    "movedFrom": "Dipindahkan dari sini",
+    "movedTo": "Dipindahkan ke sini",
+    "reject": "Tolak",
+    "replaced": "Diganti",
+    "replacedWith": "dengan",
+    "reply": "Balas",
+    "replyRefused": "Tidak dapat mengirim balasan",
+    "showPane": "Tampilkan komentar",
+    "structural": "Struktur dokumen diubah",
+    "deleteComment": "Hapus komentar",
+    "discardChange": "Buang perubahan"
+  },
+  "imageAltText": {
+    "description": "Deskripsi",
+    "panelTitle": "Teks alternatif",
+    "title": "Judul"
+  },
+  "imageInsert": {
+    "errors": {
+      "emptyFile": "File yang dipilih kosong.",
+      "invalidSignature": "File tersebut bukan gambar PNG, JPEG, atau GIF yang didukung.",
+      "oversize": "Gambar melebihi ukuran maksimum yang diizinkan.",
+      "refused": "Gambar tidak dapat disisipkan.",
+      "unsupportedFormat": "Format gambar ini tidak didukung untuk penyisipan."
+    }
+  },
+  "imageProperties": {
+    "crop": "Pangkas",
+    "cropBottom": "Bawah (%)",
+    "cropLeft": "Kiri (%)",
+    "cropRight": "Kanan (%)",
+    "cropTop": "Atas (%)",
+    "errors": {
+      "invalidCrop": "Nilai pangkas harus berupa persentase dari 0 hingga 100.",
+      "invalidDimensions": "Masukkan nilai lebar dan tinggi yang positif.",
+      "refused": "Properti ini tidak dapat diterapkan.",
+      "invalidPosition": "Masukkan nilai posisi horizontal dan vertikal yang valid."
+    },
+    "hyperlink": "Hyperlink",
+    "nonPictureHint": "Pangkas dan reset ukuran asli hanya tersedia untuk gambar.",
+    "resetNaturalSize": "Reset ke ukuran asli",
+    "units": {
+      "points": "pt"
+    },
+    "horizontalOffset": "Offset horizontal",
+    "position": "Posisi",
+    "positionLocked": "Gambar ini tidak dapat dipindahkan.",
+    "positionUnavailable": "Posisi hanya tersedia untuk gambar mengambang.",
+    "relativeToHorizontal": "Relatif terhadap (horizontal)",
+    "relativeToVertical": "Relatif terhadap (vertikal)",
+    "verticalOffset": "Offset vertikal"
   }
 }
