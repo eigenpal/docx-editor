@@ -3923,15 +3923,25 @@ export function mountPaginatedSurface(
    * the DOM guessed.
    */
   let pointer: PointerController | null = null;
-  const onKeyDown = createKeyDownHandler(
+  const dispatchKeyDown = createKeyDownHandler(
     surface,
     options.onRequestHyperlink ? { onRequestHyperlink: options.onRequestHyperlink } : {}
   );
+  const onKeyDown = (event: KeyboardEvent): void => {
+    // The browser may have moved its caret without delivering the queued `selectionchange`
+    // yet. Close that window before a command resolves its TreeDocOp from model selection.
+    if (!event.defaultPrevented) selectionSync.adoptBeforeInput();
+    dispatchKeyDown(event);
+  };
   const { onCopy, onCut, onPaste } = createClipboardHandlers(surface, insertPlainText);
-  const onBeforeInput = createBeforeInputHandler(surface, {
+  const dispatchBeforeInput = createBeforeInputHandler(surface, {
     isComposing: () => selectionSync.isComposing(),
     insertPlainText,
   });
+  const onBeforeInput = (event: InputEvent): void => {
+    selectionSync.adoptBeforeInput();
+    dispatchBeforeInput(event);
+  };
 
   /** Insert text, turning newlines into real paragraph splits rather than literal characters. */
   function insertPlainText(text: string): void {
