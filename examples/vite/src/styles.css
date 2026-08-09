@@ -312,19 +312,13 @@
 
 /* Mobile responsive overrides */
 @media (max-width: 768px) {
-  /* Compact toolbar on mobile - horizontal scroll instead of wrapping */
+  /* The toolbar collapses its groups into More instead of wrapping. It must not become a
+     scroll container: that would clip the More panel below it. */
   .docx-editor [role='toolbar'] {
     padding: 4px 4px;
     gap: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
     flex-wrap: nowrap !important;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
     min-height: 36px;
-  }
-  .docx-editor [role='toolbar']::-webkit-scrollbar {
-    display: none;
   }
 
   .demo-header__title-block {

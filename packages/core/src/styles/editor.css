@@ -3367,10 +3367,9 @@ a.docx-hyperlink:focus-visible {
   margin-inline-start: auto;
 }
 
-/* The panel SCROLLS when it is taller than the room under the bar. That does clip a
- * popup opened from a control inside it (a font list, a swatch grid) — the same
- * trade every scrolling menu makes — and the alternative, a panel that runs off the
- * bottom of a short window, loses the rows entirely. */
+/* The panel scrolls when it is taller than the room under the bar. A nested menu
+ * temporarily lifts that clipping so its options remain reachable; closing it restores
+ * the bounded panel. */
 .docx-toolbar__more-panel {
   position: absolute;
   top: calc(100% + 6px);
@@ -3387,6 +3386,13 @@ a.docx-hyperlink:focus-visible {
   border: 1px solid var(--doc-border);
   border-radius: 8px;
   box-shadow: var(--doc-shadow-lg);
+}
+
+/* Zoom's level picker is a popover, not panel content. A scroll container would otherwise
+ * cut it off when Zoom is the last (or only) More row. `:has()` is supported by every
+ * browser we support, and scopes the escape hatch to the short interval the picker exists. */
+.docx-toolbar__more-panel:has(.docx-toolbar__zoom-menu) {
+  overflow-y: visible;
 }
 
 .docx-toolbar__more-section + .docx-toolbar__more-section {
