@@ -95,7 +95,6 @@ import type {
   TextMatch,
   Unsubscribe,
   ViewScope,
-  ZoomMode,
 } from '@docx-editor.dev/core/contracts/editor';
 import { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 import {
@@ -191,7 +190,7 @@ import {
 } from './paginated-surface.ts';
 import { drawingPaintStringsFromTranslate } from '../output/semantic-paint-drawings.ts';
 import { surfaceScroller } from './surface-pages.ts';
-import { createZoomLane } from './docx-editor-zoom.ts';
+import { createZoomLane, zoomFacadeMembers } from './docx-editor-zoom.ts';
 import type {
   DocxEditorConfig,
   DocxEditorInstance,
@@ -204,27 +203,6 @@ export type {
   FontMeasurementState,
   HyperlinkChromeHandlers,
 } from './docx-editor-types.ts';
-
-/**
- * Points (the layout's unit) to content pixels at 96dpi (every geometry consumer's unit).
- *
- * The engine lays out in points — twips / 20 — and paints at `zoom * 96/72`. This is that
- * same 96/72, applied once, where layout geometry crosses into the public contract.
- */
-function toContentPixels(box: { x: number; y: number; width: number; height: number }): {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-} {
-  const scale = 96 / 72;
-  return {
-    x: box.x * scale,
-    y: box.y * scale,
-    width: box.width * scale,
-    height: box.height * scale,
-  };
-}
 
 /** The one frozen scope object every snapshot shares, so scope stays reference-equal. */
 const SCOPE_BODY: EditorScope = Object.freeze({ kind: 'body' as const });
@@ -2214,8 +2192,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     getSelectionPlacement: () => selectionPlacement(),
 
-    getRenderScale: () => scaleOf(),
-
     isReviewPaneOpen: () => reviewPaneOpen,
 
     getEditingMode: () => editingMode,
@@ -2514,41 +2490,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       return surface?.revealParagraph(blockId) ?? false;
     },
 
-    // The scale and its mode both live in the zoom lane; these four are the contract's view
-    // of it. `setZoom` refuses an out-of-range number rather than clamping, and leaves any fit
-    // mode; `setZoomMode` refuses a mode it does not know.
-    getZoom: () => zoomLane.zoom(),
-    setZoom: (next: number) => zoomLane.setZoom(next),
-    getZoomMode: () => zoomLane.mode(),
-    setZoomMode: (next: ZoomMode | 'auto') => zoomLane.setZoomMode(next),
-
-    /**
-     * Page boxes from the LAYOUT, never from the DOM, in CONTENT PIXELS at 96dpi.
-     *
-     * The unit conversion is the load-bearing part. Layout works in POINTS (twips / 20), and
-     * the surface converts at paint with `scale = zoom * 96/72`; every consumer of this
-     * member works in content pixels — `ruler-ticks.ts` says so in its header and derives
-     * ticks from `PX_PER_INCH = 96`, and React's own ruler computes the same page width
-     * through `twipsToPixels`. Handing points straight out made a Letter page measure 612
-     * where the painted page is 816, so the Vue ruler drew a strip 25% short of its page and
-     * labelled 8.5 inches as six.
-     *
-     * ZOOM IS NOT APPLIED. These are content pixels at 100%; a caller that scales its own
-     * rendering multiplies by `getZoom()`, which is what both rulers already do.
-     *
-     * `layout()` flushes any pending commit first, so a caller measuring straight after an
-     * edit reads the geometry that edit produced rather than the one before it. Virtualized
-     * pages are included: a page with no element yet still has a box, and that is usually
-     * the page a caller is asking about.
-     */
-    getPageGeometry: () =>
-      surface
-        ? surface.layout().pages.map((page) => ({
-            index: page.index,
-            box: toContentPixels(page.box),
-            contentBox: toContentPixels(page.contentBox),
-          }))
-        : [],
+    ...zoomFacadeMembers(zoomLane, () => surface),
 
     relayout(options?: { sync?: boolean }) {
       // `layout()` flushes any commit the scheduler has not published yet; the surface

@@ -850,9 +850,6 @@ export function executeImageCommand(editor: DocxEditorInstance, command: Extract
 }>): Promise<ExecResult>;
 
 // @public
-export type FieldShadingMode = 'never' | 'when-selected' | 'always';
-
-// @public
 export interface FinalizedImageOverlayInteraction extends ImageResizeResult {
     // (undocumented)
     readonly position: DrawingPositionInput | null;
@@ -1399,7 +1396,6 @@ export interface PaginatedSurfaceOptions {
     readonly defaultFontFamily?: string;
     readonly drawingStrings?: DrawingPaintStrings;
     readonly editingMode?: SurfaceEditingMode;
-    readonly fieldShading?: FieldShadingMode;
     readonly fontAlias?: (family: string) => string | undefined;
     readonly imageDecodePort?: ImageDecodePort;
     // (undocumented)
