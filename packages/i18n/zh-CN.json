@@ -256,7 +256,9 @@
   "comments": {
     "unknown": "未知",
     "addComment": "添加批注",
-    "replyPlaceholder": "回复或使用 @ 提及他人..."
+    "replyPlaceholder": "回复或使用 @ 提及他人...",
+    "reopen": null,
+    "resolve": null
   },
   "contextMenu": {
     "ariaLabel": "AI 操作菜单",

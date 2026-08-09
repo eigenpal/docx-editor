@@ -256,7 +256,9 @@
   "comments": {
     "unknown": "अज्ञात",
     "addComment": "एक टिप्पणी जोड़ें...",
-    "replyPlaceholder": "जवाब दें या @ के साथ दूसरों को जोड़ें"
+    "replyPlaceholder": "जवाब दें या @ के साथ दूसरों को जोड़ें",
+    "reopen": null,
+    "resolve": null
   },
   "contextMenu": {
     "ariaLabel": "AI क्रियाएँ मेनू",

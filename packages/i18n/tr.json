@@ -256,7 +256,9 @@
   "comments": {
     "unknown": "Bilinmiyor",
     "addComment": "Yorum ekle...",
-    "replyPlaceholder": "Yanıtla veya @ ile başkalarını ekle"
+    "replyPlaceholder": "Yanıtla veya @ ile başkalarını ekle",
+    "reopen": null,
+    "resolve": null
   },
   "contextMenu": {
     "ariaLabel": "Yapay zekâ işlemleri menüsü",

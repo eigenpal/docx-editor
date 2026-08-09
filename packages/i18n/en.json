@@ -260,7 +260,9 @@
   "comments": {
     "unknown": "Unknown",
     "addComment": "Add a comment...",
-    "replyPlaceholder": "Reply or add others with @"
+    "replyPlaceholder": "Reply or add others with @",
+    "resolve": "Resolve",
+    "reopen": "Reopen"
   },
   "revisions": {
     "paragraphMarkInserted": "Inserted paragraph break",

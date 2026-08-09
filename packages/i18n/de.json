@@ -256,7 +256,9 @@
   "comments": {
     "unknown": "Unbekannt",
     "addComment": "Kommentar hinzufügen...",
-    "replyPlaceholder": "Antworten oder andere mit @ erwähnen"
+    "replyPlaceholder": "Antworten oder andere mit @ erwähnen",
+    "reopen": null,
+    "resolve": null
   },
   "contextMenu": {
     "ariaLabel": "KI-Aktionsmenü",
