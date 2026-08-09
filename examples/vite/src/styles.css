@@ -310,10 +310,6 @@
   pointer-events: none;
 }
 
-.revision-automation {
-  left: 220px;
-}
-
 /* Mobile responsive overrides */
 @media (max-width: 768px) {
   /* Compact toolbar on mobile - horizontal scroll instead of wrapping */
@@ -339,10 +335,6 @@
      small screens. */
   .demo-vruler {
     display: none;
-  }
-
-  .revision-automation {
-    left: 174px;
   }
 }
 
