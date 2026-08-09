@@ -1,15 +1,16 @@
 // Browser-level selection/input regression for editable FORMTEXT results.
 //
-// A native caret can move before the queued `selectionchange` reaches the model. These tests
-// hold that report back deliberately, then use real pointer and keyboard input to prove the
-// command synchronizes from the browser instead of editing the stale model range.
+// Real pointer and keyboard input cover both selection lanes that meet at a FORMTEXT result:
+// layout-owned hit-testing through justified NBSP text, and native selection moving before the
+// queued `selectionchange` reaches the model.
 
 import { expect, test, type Page } from '@playwright/test';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import type { DocxEditorE2EHook } from '../examples/vite/src/test-harness/table-editing-e2e-hook.ts';
 
 const DEMO_URL = 'http://localhost:5273/?e2e=1&fixture=formtext-selection.docx';
-const PARAGRAPH_TEXT = 'Address: Street, trailing text';
+const PARAGRAPH_TEXT =
+  'reg. no Country, having its principal office at Street, Post/area code, City, Country, (the CompanyNameThatIsTooWideForTheRemainingLine continues with trailing words)';
 const FIELD = '[data-field-atom="form"]';
 
 declare global {
@@ -70,16 +71,66 @@ async function selectionSnapshot(page: Page): Promise<{
   });
 }
 
+function streetField(page: Page) {
+  return page.locator(FIELD).filter({ hasText: 'Street' }).first();
+}
+
+function fieldAtStart(page: Page, start: number) {
+  return page.locator(`${FIELD}[data-start="${start}"]`).first();
+}
+
+async function clickAtRightEdgeOfStreetRange(
+  page: Page,
+  start: number,
+  end: number
+): Promise<void> {
+  const field = streetField(page);
+  const point = await field.evaluate(
+    (element, rangeOffsets) => {
+      const text = element.firstChild;
+      if (!text || text.nodeType !== Node.TEXT_NODE) throw new Error('Street text node is missing');
+      const range = document.createRange();
+      range.setStart(text, rangeOffsets.start);
+      range.setEnd(text, rangeOffsets.end);
+      const box = range.getBoundingClientRect();
+      return { x: box.right - 0.1, y: box.top + box.height / 2 };
+    },
+    { start, end }
+  );
+  await page.mouse.click(point.x, point.y);
+}
+
 test.beforeEach(async ({ page }) => {
   await waitForEditor(page);
   await placeStaleModelCaretAtParagraphEnd(page);
-  await delayNativeSelectionReport(page);
+});
+
+test('justified NBSP form fields keep pointer hit-testing aligned with painted text', async ({
+  page,
+}) => {
+  const field = streetField(page);
+  const fieldStart = Number(await field.getAttribute('data-start'));
+  await clickAtRightEdgeOfStreetRange(page, 3, 4);
+
+  const afterClick = await selectionSnapshot(page);
+  expect(afterClick.nativeText).toBe('Street');
+  expect(afterClick.nativeOffset).toBe(4);
+  expect(afterClick.modelOffset).toBe(fieldStart + 4);
+
+  await page.keyboard.press('Backspace');
+
+  await expect(fieldAtStart(page, fieldStart)).toHaveText('Stret');
+  await expect(
+    page.locator('.docx-paragraph-fragment').filter({ hasText: 'Post/area code' })
+  ).toContainText('Stret, Post/area code');
 });
 
 test('clicking inside a FORMTEXT result makes Backspace delete beside that caret', async ({
   page,
 }) => {
-  const field = page.locator(FIELD).first();
+  await delayNativeSelectionReport(page);
+  const field = streetField(page);
+  const fieldStart = Number(await field.getAttribute('data-start'));
   const box = await field.boundingBox();
   if (!box) throw new Error('FORMTEXT result is not painted');
 
@@ -94,12 +145,14 @@ test('clicking inside a FORMTEXT result makes Backspace delete beside that caret
   const expected = 'Street'.slice(0, before.nativeOffset - 1) + 'Street'.slice(before.nativeOffset);
   await page.keyboard.press('Backspace');
 
-  await expect(page.locator(FIELD).first()).toHaveText(expected);
-  await expect(page.locator('.docx-paragraph-fragment').first()).toContainText(', trailing text');
+  await expect(fieldAtStart(page, fieldStart)).toHaveText(expected);
+  await expect(page.locator('.docx-paragraph-fragment').first()).toContainText(', Post/area code');
 });
 
 test('a native range inside a FORMTEXT result is preserved for Backspace', async ({ page }) => {
-  const field = page.locator(FIELD).first();
+  await delayNativeSelectionReport(page);
+  const field = streetField(page);
+  const fieldStart = Number(await field.getAttribute('data-start'));
   const box = await field.boundingBox();
   if (!box) throw new Error('FORMTEXT result is not painted');
 
@@ -114,8 +167,8 @@ test('a native range inside a FORMTEXT result is preserved for Backspace', async
 
   await page.keyboard.press('Backspace');
 
-  await expect(page.locator(FIELD).first()).toHaveText('St');
-  await expect(page.locator('.docx-paragraph-fragment').first()).toHaveText(
-    'Address: St, trailing text'
+  await expect(fieldAtStart(page, fieldStart)).toHaveText('St');
+  await expect(page.locator('.docx-paragraph-fragment').first()).toContainText(
+    'at St, Post/area code'
   );
 });

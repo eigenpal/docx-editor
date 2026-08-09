@@ -1186,10 +1186,8 @@ function paintLine(
   element.style.overflow = 'visible';
 
   // Justified lines carry their slack in the gaps BETWEEN spans. Inline flow has no gaps,
-  // so the same slack is reapplied as word spacing rather than being silently dropped.
-  const gap = interSpanGap(line);
-  if (gap > 0) element.style.wordSpacing = `${gap * scale}px`;
-
+  // so each span receives its own published advance below. CSS `word-spacing` is not an
+  // equivalent: Chromium expands NBSPs too, moving painted glyphs away from layout geometry.
   // Per-run band heights, chosen so the browser's line-box math cannot move a glyph:
   // the tallest run's band is the glyph band (own height + space-above leading), and any
   // remaining line-box depth is padding-bottom — Word's auto/atLeast extras sit BELOW the
@@ -1274,11 +1272,13 @@ function paintLine(
     anchorLinkId = null;
   };
 
-  for (const span of line.spans) {
+  for (const [spanIndex, span] of line.spans.entries()) {
     appendDrawingAdvancesBefore(span.range.start);
     appendWrapAdvance(span);
     const band = Math.min(span.box.height + leading, line.box.height);
     const painted = paintSpan(document, span, ctx, band, leading);
+    const gap = interSpanGapBefore(line, spanIndex);
+    if (gap > 0) painted.style.marginLeft = `${gap * scale}px`;
     const link = span.link;
     if (!link) {
       anchor = null;
@@ -1325,29 +1325,18 @@ function paintLine(
   return element;
 }
 
-/** The extra space layout put between word spans, beyond their own advances. */
-function interSpanGap(line: LineRecord): number {
-  if (line.spans.length < 2) return 0;
-  // Layout justifies only after expandable spaces, so many consecutive pairs (tab→word,
-  // run split without a space) have a zero gap. Averaging those zeros in diluted
-  // `word-spacing` below the real per-space step and every later glyph drifted left of
-  // its published box — caret mid-word included.
-  const gaps: number[] = [];
-  for (let index = 1; index < line.spans.length; index += 1) {
-    const previous = line.spans[index - 1]!;
-    const current = line.spans[index]!;
-    const drawingOccupiesGap = line.drawings?.some(
-      (drawing) => drawing.start >= previous.range.end && drawing.start < current.range.start
-    );
-    if (drawingOccupiesGap) continue;
-    // A float's wrap zone is an obstacle the line stepped over, not slack to redistribute.
-    // Averaging it in turned the picture's whole width into word spacing on every space.
-    const gap =
-      current.box.x - (previous.box.x + previous.box.width) - (current.wrapAdvanceBefore ?? 0);
-    if (gap > 0.25) gaps.push(gap);
-  }
-  if (gaps.length === 0) return 0;
-  return gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length;
+/** The layout-published gap before one span, excluding separately painted advances. */
+function interSpanGapBefore(line: LineRecord, index: number): number {
+  if (index <= 0) return 0;
+  const previous = line.spans[index - 1]!;
+  const current = line.spans[index]!;
+  const drawingOccupiesGap = line.drawings?.some(
+    (drawing) => drawing.start >= previous.range.end && drawing.start < current.range.start
+  );
+  if (drawingOccupiesGap) return 0;
+  const gap =
+    current.box.x - (previous.box.x + previous.box.width) - (current.wrapAdvanceBefore ?? 0);
+  return gap > 0.25 ? gap : 0;
 }
 
 function paintFragment(

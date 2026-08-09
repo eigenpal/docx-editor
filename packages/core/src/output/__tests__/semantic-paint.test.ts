@@ -99,15 +99,14 @@ describe('the painter is a non-authoritative consumer', () => {
     for (const span of spans) expect(span.style.left).toBe('');
   });
 
-  test('justified word-spacing matches real layout gaps, ignoring zero tab/run gaps', () => {
-    // Layout leaves slack only after expandable spaces; pairs like tab→word stay flush.
-    // Averaging those zero gaps into word-spacing under-stretched every space and drifted
-    // later carets left of their published boxes.
+  test('justified paint follows published gaps without expanding nonbreaking spaces', () => {
+    // CSS word-spacing expands NBSPs in Chromium, but layout only justifies ordinary spaces.
+    // Paint each published gap explicitly so later carets stay on their semantic boxes.
     // Enough words that the paragraph wraps: the first line is justified, the last is not.
     const words = Array.from({ length: 20 }, (_, index) => `w${index}`).join(' ');
     const body =
       `<w:p><w:pPr><w:jc w:val="both"/></w:pPr>` +
-      `<w:r><w:t xml:space="preserve">qu</w:t></w:r>` +
+      `<w:r><w:t xml:space="preserve">qu id </w:t></w:r>` +
       `<w:r><w:tab/></w:r>` +
       `<w:r><w:t xml:space="preserve">${words}</w:t></w:r>` +
       `</w:p>`;
@@ -138,12 +137,18 @@ describe('the painter is a non-authoritative consumer', () => {
     expect(positiveGaps.length).toBeGreaterThan(0);
     // At least one flush pair (tab) so a naive average of every boundary would under-shoot.
     expect(positiveGaps.length).toBeLessThan(line.spans.length - 1);
-    const expected = positiveGaps.reduce((sum, gap) => sum + gap, 0) / positiveGaps.length;
-
     const container = document.createElement('div');
     paintSemanticLayout(container, layout, { scale: 1 });
     const painted = container.querySelector<HTMLElement>('.docx-line')!;
-    expect(Number.parseFloat(painted.style.wordSpacing)).toBeCloseTo(expected, 5);
+    expect(painted.style.wordSpacing).toBe('');
+    const paintedSpans = [...painted.querySelectorAll<HTMLElement>('.layout-run')];
+    expect(paintedSpans).toHaveLength(line.spans.length);
+    for (let index = 1; index < line.spans.length; index += 1) {
+      const previous = line.spans[index - 1]!;
+      const expected = line.spans[index]!.box.x - (previous.box.x + previous.box.width);
+      const actual = Number.parseFloat(paintedSpans[index]!.style.marginLeft || '0');
+      expect(actual).toBeCloseTo(expected > 0.25 ? expected : 0, 5);
+    }
   });
 
   test('a line is as tall as the record says, so lines cannot drift apart', () => {
