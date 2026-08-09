@@ -199,8 +199,8 @@ export interface StyleSpanRecord {
   /**
    * Live PAGE/NUMPAGES/SECTIONPAGES projection (layout-time evaluated text).
    *
-   * Not model-editable until typed fields land: paint treats these as atomic furniture and
-   * selection mapping refuses them the way it refuses markers.
+   * Computed substitutions are not model-editable: paint treats these as atomic furniture
+   * and selection mapping refuses them the way it refuses markers.
    */
   readonly projected?: boolean;
   /**

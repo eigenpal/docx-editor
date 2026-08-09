@@ -160,8 +160,8 @@ export function positionFromDomPoint(
   const nearestElement =
     node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
 
-  // Live-projected PAGE/NUMPAGES fields are inert furniture: they carry no editable model
-  // text until typed fields land.
+  // Live-projected and computed fields are inert furniture: their painted cache has no
+  // independently editable model text. Literal FORMTEXT results are not marked this way.
   if (nearestElement?.closest('[data-docx-field]')) return null;
 
   // Header/footer furniture is painted, not editable, unless this copy is the active scope.
