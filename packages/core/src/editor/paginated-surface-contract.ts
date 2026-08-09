@@ -9,6 +9,7 @@ import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core/bin
 import type { BookmarkIndex, StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import type { ViewScope } from '../contracts/editor.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
+import type { FieldShadingMode } from '../output/semantic-paint.ts';
 import type { ReviewModuleContribution } from '../contracts/modules.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
 import type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
@@ -107,6 +108,18 @@ export interface PaginatedSurfaceOptions {
    * option is shared either way.
    */
   readonly revisionDisplayMode?: RevisionDisplayMode;
+  /**
+   * When a field's result wears Word's grey shading. Omitted keeps Word's own default,
+   * `when-selected`.
+   *
+   * Applies to ORDINARY fields only. Legacy form fields follow the document's
+   * `w:doNotShadeFormData`, because a form's blanks are the document's own statement about
+   * itself rather than a reader's preference.
+   *
+   * A paint-level option, not a layout one: it changes no geometry, so switching it repaints
+   * without remeasuring a single line.
+   */
+  readonly fieldShading?: FieldShadingMode;
   /**
    * The review module's derivation hooks for this surface's session. Absent,
    * `session.reviewItems()` is the typed empty queue and every review affordance

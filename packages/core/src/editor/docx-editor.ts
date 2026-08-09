@@ -700,9 +700,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // mount, so the document opens on the fixed measurer immediately, and when the shaped
   // measurer arrives the surface is remounted FROM THE CURRENT TREE — `session.save()` —
   // so every edit made before fonts resolved survives. What does not survive is the undo
-  // stack and the caret, the honest cost of a full remount; a rescale-in-place path on
-  // the surface would remove it. In the not-yet-attached case there is nothing to
-  // remount: the measurer is simply picked up by the next mount.
+  // stack; the semantic selection is restored after the shaped surface mounts so an
+  // `onReady` selection does not disappear as fonts settle. In the not-yet-attached case
+  // there is nothing to remount: the measurer is simply picked up by the next mount.
   //
   // Failure is DEGRADATION, never a blocked load: a face the validator refuses drops
   // with a typed report and the remaining faces admit; a wholly failed resolution leaves
@@ -935,6 +935,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // a mount that throws must leave a recoverable editor, not an empty container
         // with the document gone. Font fidelity is never worth losing the document.
         const saved = surface.session.save();
+        // Selection is facade state just like the live tree. In particular, `onReady` can
+        // set and reveal a range while embedded fonts are still resolving; keeping only the
+        // scroller's offset made that first call travel to the right text and then lose its
+        // highlight when this remount replaced the surface.
+        const savedSelection = surface.state().selection;
         // A remount replaces the whole subtree, so focus lands on `document.body` — the
         // user typing while fonts resolved would silently stop being able to type.
         // Restore it when the OLD surface had it; never steal it otherwise.
@@ -945,7 +950,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           container.contains(document.activeElement);
         try {
           mountBytes(saved);
-          if (hadFocus) surface?.focus();
         } catch (remountError) {
           shapedMeasurer = undefined;
           shapedProducer = undefined;
@@ -955,6 +959,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           }
           reportFontError(toEditorFontError(remountError));
         }
+        if (hadFocus) surface?.focus();
+        surface?.setSelection(savedSelection);
       } else bump();
     } catch (error) {
       if (destroyed || seq !== loadSeq) return;

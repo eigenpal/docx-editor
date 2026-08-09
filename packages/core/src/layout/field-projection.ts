@@ -9,18 +9,22 @@
 // (aligned with `paragraphTextOf` / `segmentsOf`). Cached result text is not independently
 // editable. Malformed fields demote so interior content never disappears.
 //
-// Shipped scope is furniture-only for live page-number evaluation. `w:fldSimple` advances
-// the model offset but stays layout-inert for page-field evaluation (body simple fields
-// remain deferred).
+// Shipped scope is furniture-only for live page-number evaluation. A simple PAGE /
+// NUMPAGES / SECTIONPAGES field evaluates like its complex twin when a page context is
+// supplied; a non-page `w:fldSimple` still contributes one model unit and paints its
+// cached result, except that allowlisted page fields nested inside that result (complex
+// or simple) are evaluated per sheet rather than concatenated from the saved cache.
+// Other nested field instructions stay inert. Body-side evaluation beyond that is deferred.
 //
 // Projection is a layout concern (span geometry + tab alignment), not paint-time substitution.
 
 import {
   atomicFieldSpansOf,
+  fldSimpleInstr,
   hardBreakKind,
   hardBreakText,
+  hasLegacyFormFieldData,
   isFldSimple,
-  WML_NAMESPACE_URI,
   type OoxmlNode,
   type OoxmlParagraphNode,
   type OoxmlProperty,
@@ -50,7 +54,26 @@ import {
   type AllowlistedPageField,
   type StoryPageFieldNeeds,
 } from './field-instruction.ts';
-import { formatDecimal, formatNumFmt } from './numbering-format.ts';
+import {
+  fieldPageContextToken,
+  finalizePageFieldProjection,
+  formatPageNumber,
+  projectPageFieldValue,
+  storyNeedsPageFields,
+  withPageFieldSources,
+  type FieldPageContext,
+  type PageFieldSource,
+} from './field-page-furniture.ts';
+import { collectSimpleFieldDisplay } from './field-simple-result.ts';
+import {
+  appendModelRange,
+  positionalTabOf,
+  type FieldAtomMarker,
+  type FieldAwarePiece,
+  type ModelRange,
+  type MutableModelRange,
+  type PositionalTab,
+} from './field-pieces.ts';
 import type { InlineDrawingLayoutContext, InlineDrawingLayoutInput } from './drawing-layout.ts';
 import { isRunLevelMcAlternateContent } from '../store/package/drawing-projection.ts';
 import {
@@ -75,11 +98,7 @@ import {
   type RevisionDisplayMode,
 } from './revision-projection.ts';
 import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
-import type {
-  HeaderFooterStoryRecord,
-  SemanticLayout,
-  SpanLinkRecord,
-} from './semantic-records.ts';
+import type { SpanLinkRecord } from './semantic-records.ts';
 import {
   contentControlContentChildren,
   isContentControl,
@@ -100,158 +119,36 @@ export {
   type StoryPageFieldNeeds,
 };
 
+// Same for the whole-document page-field finalization, which now lives in its own module: it
+// resolves values that only exist once pagination is done, and shares nothing with this walk
+// but the context type.
+export {
+  fieldPageContextToken,
+  finalizePageFieldProjection,
+  formatPageNumber,
+  projectPageFieldValue,
+  storyNeedsPageFields,
+  withPageFieldSources,
+  type FieldPageContext,
+  type PageFieldSource,
+};
+
+// The piece vocabulary now lives beside the walk rather than inside it. Same re-export reason:
+// every layout module already imports these from here.
+export {
+  appendModelRange,
+  positionalTabOf,
+  type FieldAtomMarker,
+  type FieldAwarePiece,
+  type ModelRange,
+  type PositionalTab,
+};
+
 /** Optional per-run merge of inherited + direct `rPr` (character styles, defaults). */
 export type RunPropertyCascader = (
   inherited: readonly OoxmlProperty[],
   direct: readonly OoxmlProperty[]
 ) => readonly OoxmlProperty[];
-
-/**
- * Page-field evaluation context for furniture projection.
- *
- * `pageNumber` is the displayed PAGE value after section `w:pgNumType/@w:start` (1-based).
- * `pageCount` is document NUMPAGES. `sectionPageCount` is SECTIONPAGES for the attached
- * section. `format` is the authored `w:pgNumType/@w:fmt` applied only to PAGE.
- */
-export interface FieldPageContext {
-  readonly pageNumber: number;
-  readonly pageCount: number;
-  /** SECTIONPAGES; defaults to `pageCount` when omitted (single-section callers). */
-  readonly sectionPageCount?: number;
-  /** Authored ST_NumberFormat for PAGE; absent → decimal. */
-  readonly format?: string;
-}
-
-/**
- * Per-page source for {@link finalizePageFieldProjection}, attached before document-level
- * page count is known. `pageCount` (NUMPAGES) is filled at finalize from `layout.pages.length`.
- */
-export interface PageFieldSource {
-  readonly pageNumber: number;
-  readonly sectionPageCount: number;
-  readonly format?: string;
-}
-
-/**
- * A `w:ptab` — the ABSOLUTE-position tab (ECMA-376 §17.3.3.16), which is what a table of
- * contents line is actually made of.
- *
- * Not a `w:tab`: it carries its own destination and leader instead of advancing to the next
- * stop in `w:tabs`, so a paragraph needs no tab stops at all to lay one out. A document that
- * uses these has no `w:tabs` to find, which is why an engine that only models `w:tab` shows
- * the entries and page numbers run together with no dots between them.
- */
-export interface PositionalTab {
-  readonly alignment: 'left' | 'center' | 'right';
-  readonly relativeTo: 'margin' | 'indent' | 'leftMargin';
-  readonly leader?: 'dot' | 'hyphen' | 'underscore' | 'middleDot';
-}
-
-/**
- * One measurable piece produced while walking runs (including projected field results).
- *
- * Projected page-field text covers the single atomic model unit for a well-formed field
- * (`start`..`end` is length 1, matching `paragraphTextOf`). Empty-result allowlisted fields
- * still occupy that unit. Furniture is read-only / non-selectable at the surface; the range
- * stays canonical-aligned for layout consumers.
- */
-export interface FieldAwarePiece {
-  readonly text: string;
-  readonly props: readonly OoxmlProperty[];
-  readonly style: ResolvedRunStyle;
-  /** UTF-16 model offset range; projected fields cover suppressed cached-result text when present. */
-  readonly start: number;
-  readonly end: number;
-  /** True when text substitutes for a model unit (page field or inert atomic cache). */
-  readonly projected?: boolean;
-  /**
-   * Set when this piece is a `w:ptab`. Its range is ZERO-WIDTH: the element is generic in
-   * the canonical tree and contributes nothing to the paragraph's text, so it must advance
-   * the line without moving a single model offset — anything else and every offset after it
-   * would disagree with the store.
-   */
-  readonly positionalTab?: PositionalTab;
-  /** Typed hard-break intent; model text remains one newline-compatible UTF-16 unit. */
-  readonly breakKind?: HardBreakKind;
-  /** The hyperlink this piece came from, already sanitized, or absent for ordinary text. */
-  readonly link?: SpanLinkRecord;
-  /**
-   * When set, layout measures this string instead of `text` (eachPage note-mark width
-   * reservation). Paint still uses `text`.
-   */
-  readonly measureText?: string;
-  /** Note citation / mark navigation for paint (body ↔ note). */
-  readonly noteNav?: {
-    readonly scopeId: string;
-    readonly direction: 'to-note' | 'to-body';
-  };
-  /** Typed inline drawing occupying one UTF-16 model unit. */
-  readonly inlineDrawing?: InlineDrawingLayoutInput;
-  /**
-   * The revision wrappers enclosing this text, outermost first, absent when untracked.
-   *
-   * A stack rather than a single value because revisions nest: an insertion by one author
-   * inside a deletion by another is ordinary in a two-round review, and both matter — the
-   * outer one decides whether the content exists, the inner one is still someone's pending
-   * decision about it.
-   */
-  readonly revisions?: readonly RevisionAttribution[];
-}
-
-/** A half-open model-offset range, in the paragraph's own UTF-16 offset space. */
-export interface ModelRange {
-  readonly start: number;
-  readonly end: number;
-}
-
-type MutableModelRange = { start: number; end: number };
-
-/** Append a range, coalescing with the previous one when they touch or overlap. */
-function appendModelRange(ranges: MutableModelRange[], start: number, end: number): void {
-  if (end <= start) return;
-  const last = ranges[ranges.length - 1];
-  if (last && last.end >= start) {
-    last.end = Math.max(last.end, end);
-    return;
-  }
-  ranges.push({ start, end });
-}
-
-const PTAB_ALIGNMENTS = new Set(['left', 'center', 'right']);
-const PTAB_RELATIVE_TO = new Set(['margin', 'indent', 'leftMargin']);
-const PTAB_LEADERS = new Set(['dot', 'hyphen', 'underscore', 'middleDot']);
-
-/**
- * Read a `w:ptab` off a run child, or null when it is not one.
- *
- * The element is generic in the canonical tree (nothing models it), so this reads its
- * attributes directly and validates every one against its closed enumeration — the values
- * come from the file and go on to drive geometry. `w:leader="none"`, and anything
- * unrecognised, resolves to no leader rather than rejecting the tab: the ADVANCE is still
- * authored, and dropping it would run the text together.
- */
-export function positionalTabOf(node: OoxmlNode): PositionalTab | null {
-  if (node.kind === 'textValue' || node.localName !== 'ptab') return null;
-  if (node.namespaceUri !== WML_NAMESPACE_URI) return null;
-  let alignment = 'left';
-  let relativeTo = 'margin';
-  let leader: string | undefined;
-  for (const attribute of node.attributes) {
-    if (attribute.namespaceUri !== WML_NAMESPACE_URI) continue;
-    if (attribute.localName === 'alignment') alignment = attribute.value;
-    else if (attribute.localName === 'relativeTo') relativeTo = attribute.value;
-    else if (attribute.localName === 'leader') leader = attribute.value;
-  }
-  return {
-    alignment: (PTAB_ALIGNMENTS.has(alignment) ? alignment : 'left') as PositionalTab['alignment'],
-    relativeTo: (PTAB_RELATIVE_TO.has(relativeTo)
-      ? relativeTo
-      : 'margin') as PositionalTab['relativeTo'],
-    ...(leader !== undefined && PTAB_LEADERS.has(leader)
-      ? { leader: leader as NonNullable<PositionalTab['leader']> }
-      : {}),
-  };
-}
 
 /**
  * How layout turns a typed `w:hyperlink` node into the sanitized record spans carry.
@@ -262,35 +159,6 @@ export function positionalTabOf(node: OoxmlNode): PositionalTab | null {
  * the right degradation: text is never lost for want of a target.
  */
 export type HyperlinkProjector = (link: OoxmlNode) => SpanLinkRecord | null;
-
-/**
- * Format a displayed PAGE value through the shared ST_NumberFormat resolver.
- *
- * Unknown / script-specific formats fall back to decimal (same convention as list markers).
- * `none` / `bullet` are meaningless for page numbers and also fall back to decimal so a
- * hostile fmt cannot blank the furniture.
- */
-export function formatPageNumber(value: number, format: string | undefined): string {
-  if (!Number.isFinite(value) || value < 0) return '';
-  const n = Math.floor(value);
-  const fmt = format && format.length > 0 ? format : 'decimal';
-  if (fmt === 'none' || fmt === 'bullet') return formatDecimal(n);
-  const text = formatNumFmt(fmt, n);
-  return text.length > 0 ? text : formatDecimal(n);
-}
-
-/** Digit / formatted string for an allowlisted page field under a page context. */
-export function projectPageFieldValue(
-  kind: AllowlistedPageField,
-  context: FieldPageContext
-): string {
-  if (kind === 'PAGE') return formatPageNumber(context.pageNumber, context.format);
-  const value =
-    kind === 'NUMPAGES' ? context.pageCount : (context.sectionPageCount ?? context.pageCount);
-  // Layout-derived counts are already bounded by pagination; still refuse non-finite junk.
-  if (!Number.isFinite(value) || value < 0) return '';
-  return formatDecimal(Math.floor(value));
-}
 
 function runPropertiesOf(
   run: OoxmlNode,
@@ -357,6 +225,41 @@ interface PendingFieldProjection {
   buffered: FieldAwarePiece[];
   /** Demotion-only running offset mirror while buffering ordinary pieces. */
   bufferOffset: number;
+  /**
+   * The revision wrappers this field's displayed text sits inside, captured while the walk was
+   * still INSIDE them.
+   *
+   * An ATOMIC field's result is buffered at the run that carries it and flushed at `fldChar
+   * end`, by which point the depth-first walk has left the wrapper and restored the live stack
+   * to empty. Reading the live stack at flush time therefore attributed a tracked field result
+   * to nothing at all, and it painted as ordinary unchanged text — a deletion with no strike,
+   * an insertion with no underline.
+   *
+   * Both shapes reach here: a `w:del` around only the RESULT run with `begin`/`end` outside it
+   * (how Word records a form field whose value was replaced), and a wrapper around the whole
+   * `begin`…`end` sequence. The second used to demote instead — `atomicFieldSpansOf` did not
+   * descend into revision wrappers — until that walk was widened so the store and layout would
+   * stop disagreeing about what such a field is worth. Anything reasoning about "a wrapped field
+   * never forms an atom" is out of date; `commitAtomicField` now has to resolve visibility
+   * itself, because it can be reached with a stack that the display mode resolves away.
+   *
+   * A field whose result runs carry DIFFERENT stacks collapses to the first: the atom is one
+   * model unit and Word treats a field as one decision, so splitting it would invent a boundary
+   * the model does not have.
+   */
+  resultRevisions: readonly RevisionAttribution[];
+  /** Whether {@link resultRevisions} has been donated yet — an EMPTY stack is a real answer. */
+  capturedResultRevisions: boolean;
+  /** `w:ffData` on the begin marker — a legacy form field, which Word shades on its own rule. */
+  formField: boolean;
+  /**
+   * The link enclosing the displayed result, captured at `begin` for the same reason.
+   *
+   * Reachable where the revision capture is not: `atomicFieldSpansOf` DOES descend into
+   * `w:hyperlink`, so a field inside a link is still an atom, and without this its result was
+   * the one run in the link painting with no href.
+   */
+  resultLink?: SpanLinkRecord;
 }
 
 /**
@@ -368,8 +271,9 @@ interface PendingFieldProjection {
  * is never independently editable. Malformed fields demote: markers contribute nothing and
  * interior result text stays visible at its natural length.
  *
- * `w:fldSimple` advances the model offset by one but stays layout-inert for page-field
- * evaluation (body simple fields remain deferred) — no piece is emitted for the atom.
+ * `w:fldSimple` advances the model offset by one and paints its result as a single projected
+ * piece (live page value when allowlisted and a page context is supplied; otherwise cached
+ * text, with nested allowlisted page fields evaluated live under that same context).
  *
  * Hidden runs (`w:vanish`) emit no piece while still advancing offsets.
  */
@@ -432,11 +336,22 @@ export function piecesOfParagraph(
       readonly measureText?: string;
       readonly noteNav?: FieldAwarePiece['noteNav'];
       readonly inlineDrawing?: InlineDrawingLayoutInput;
+      /**
+       * Attribution to attach INSTEAD of the walk's live stack, for text emitted after the
+       * walk has left the wrapper that owns it — a buffered field result is the only such
+       * case. Passing it here keeps `push` the single place a piece is attributed.
+       */
+      readonly revisionsOverride?: readonly RevisionAttribution[];
+      readonly linkOverride?: SpanLinkRecord;
+      /** Marks this piece as a field's displayed result, for the shading Word draws under one. */
+      readonly fieldAtom?: FieldAtomMarker;
     }
   ): void => {
     if (text.length === 0 && !projected && !extras?.inlineDrawing) return;
-    const link = currentLink ? { link: currentLink } : {};
-    const attribution = revisions.length === 0 ? {} : { revisions };
+    const effectiveLink = extras?.linkOverride ?? currentLink;
+    const effectiveRevisions = extras?.revisionsOverride ?? revisions;
+    const link = effectiveLink ? { link: effectiveLink } : {};
+    const attribution = effectiveRevisions.length === 0 ? {} : { revisions: effectiveRevisions };
     if (projected) {
       pieces.push({
         text,
@@ -448,6 +363,7 @@ export function piecesOfParagraph(
         ...(extras?.measureText !== undefined ? { measureText: extras.measureText } : {}),
         ...(extras?.noteNav ? { noteNav: extras.noteNav } : {}),
         ...(extras?.inlineDrawing ? { inlineDrawing: extras.inlineDrawing } : {}),
+        ...(extras?.fieldAtom ? { fieldAtom: extras.fieldAtom } : {}),
         ...link,
         ...attribution,
       });
@@ -481,13 +397,34 @@ export function piecesOfParagraph(
       openAtomicBeginId = null;
       return;
     }
+    // The walk has already left any wrapper around this field, so its attribution comes from
+    // what was captured on the way in rather than from the live stack.
+    //
+    // Which is also why VISIBILITY has to be asked of the captured stack here rather than left
+    // to the emitters: a field wrapped whole in `w:ins`/`w:del` used never to form an atom at
+    // all, so this path could not meet one — until `atomicFieldSpansOf` learned to descend into
+    // revision wrappers. Without this, an inserted page number painted its digits in the
+    // ORIGINAL view, which is the one view that must show the document before that insertion.
+    if (!revisionsVisible(pending.resultRevisions, displayMode)) {
+      if (deletedRanges && revisionsAreDeletion(pending.resultRevisions)) {
+        appendModelRange(deletedRanges, start, end);
+      }
+      pending = null;
+      openAtomicBeginId = null;
+      return;
+    }
+    const carried = {
+      ...(pending.resultRevisions.length > 0 ? { revisionsOverride: pending.resultRevisions } : {}),
+      ...(pending.resultLink ? { linkOverride: pending.resultLink } : {}),
+      fieldAtom: { formField: pending.formField },
+    };
     if (pending.kind && pageContext) {
       const text = projectPageFieldValue(pending.kind, pageContext);
-      push(text, pending.props, pending.style, true, start, end);
+      push(text, pending.props, pending.style, true, start, end, carried);
     } else if (pending.cachedText.length > 0) {
       // Inert non-page field: paint cached result as layout-owned substitution for the
       // single model unit (same as live PAGE) so hit-test/span ranges stay one atom.
-      push(pending.cachedText, pending.props, pending.style, true, start, end);
+      push(pending.cachedText, pending.props, pending.style, true, start, end, carried);
     }
     pending = null;
     openAtomicBeginId = null;
@@ -681,6 +618,17 @@ export function piecesOfParagraph(
             cachedText: '',
             buffered: [],
             bufferOffset: offset,
+            // A wrapper around the BEGIN marker wraps the whole field, and since
+            // `atomicFieldSpansOf` learned to descend into revision wrappers such a field forms
+            // an atom rather than demoting. Capturing here is what makes the flush able to
+            // resolve visibility at all: a suppressed result run never reaches the donation
+            // below — it is skipped before it gets there — so without this an inserted page
+            // number painted its digits into the ORIGINAL view, with nothing recording that the
+            // insertion was what put them there.
+            resultRevisions: revisions,
+            capturedResultRevisions: revisions.length > 0,
+            formField: hasLegacyFormFieldData(grand),
+            ...(currentLink ? { resultLink: currentLink } : {}),
           };
           if (atomic) {
             // Reserve the single model unit up front so surrounding offsets stay stable.
@@ -736,13 +684,30 @@ export function piecesOfParagraph(
         const fieldSuppressed =
           !revisionsVisible(revisions, displayMode) ||
           (grand.kind === 'deletedText' && !fieldDeleted);
+
+        // Deleted characters are recorded whether or not they were laid out, exactly as they
+        // are for ordinary runs: they occupy model offsets in every display mode, and the caret
+        // has to step over them in every mode. Recording this only on the suppressed branch
+        // left an all-markup deletion — the mode where it is VISIBLE — absent from the ranges.
+        //
+        // The atomic path reserved ONE unit at `begin` and never advanced by the text length,
+        // so the range is that reserved unit. Deriving it from the running offset produced
+        // `start` values before the paragraph began (a measured `{start: -16, end: 1}`).
+        if (fieldDeleted && deletedRanges) {
+          if (pending.atomic) {
+            appendModelRange(deletedRanges, pending.atomStart, pending.atomStart + 1);
+          } else {
+            // Unconditional on this branch too. Gating it on suppression left an all-markup
+            // deletion inside a DEMOTED field out of the ranges — visible, and so the one case
+            // where the caret could walk into deleted content it is meant to step over.
+            appendModelRange(deletedRanges, offset, offset + text.length);
+          }
+        }
+
         if (fieldSuppressed) {
           if (!pending.atomic) {
             offset += text.length;
             pending.bufferOffset = offset;
-          }
-          if (fieldDeleted && deletedRanges) {
-            appendModelRange(deletedRanges, offset - text.length, offset);
           }
           continue;
         }
@@ -754,6 +719,19 @@ export function piecesOfParagraph(
             pending.props = props;
             pending.style = style;
             pending.capturedResultStyle = true;
+          }
+          // The first result run that survives to be displayed donates the attribution the
+          // flush will replay, because by then the walk has left the wrapper. See
+          // `resultRevisions` for why first wins.
+          //
+          // Locked by its own flag, not by the stack being non-empty: an UNTRACKED first run
+          // leaves the stack empty, and testing emptiness let a later tracked run donate its
+          // revision to the whole atom. `Section <w:del>3</w:del>` then painted "Section 3"
+          // struck through entire — the engine claiming a deletion over words nobody deleted.
+          if (!pending.capturedResultRevisions) {
+            pending.resultRevisions = revisions;
+            pending.capturedResultRevisions = true;
+            if (!pending.resultLink && currentLink) pending.resultLink = currentLink;
           }
           pending.cachedText += text;
           continue;
@@ -770,12 +748,19 @@ export function piecesOfParagraph(
           pending.style = style;
           pending.capturedResultStyle = true;
         }
+        // Buffered rather than pushed, so it does not pass through `push` and has to carry its
+        // own attribution. Here the walk is STILL inside the wrapper, so the live stack is the
+        // right one — unlike the atomic flush, which happens after the walk has left it. The
+        // link matters for the same reason: a demoted field inside a `w:hyperlink` lost its
+        // href here while every ordinary run in the same link kept one.
         pending.buffered.push({
           text,
           props,
           style,
           start: offset,
           end: offset + text.length,
+          ...(revisions.length > 0 ? { revisions } : {}),
+          ...(currentLink ? { link: currentLink } : {}),
         });
         offset += text.length;
         pending.bufferOffset = offset;
@@ -797,8 +782,8 @@ export function piecesOfParagraph(
    *
    * Typed runs contribute measurable / selectable text. Generic siblings stay structurally
    * preserved but layout-inert for page-field evaluation; typed/generic `w:fldSimple` advances
-   * one model unit (atomic) without emitting a piece. The exceptions are the two containers
-   * that are not content themselves but hold runs that are:
+   * one model unit and paints through {@link projectSimpleField}. The exceptions are the
+   * containers that are not content themselves but hold runs that are:
    *
    *   - `w:hyperlink`. Skipping it is what made every link's words vanish from the painted
    *     page while still occupying model offsets.
@@ -817,6 +802,86 @@ export function piecesOfParagraph(
    */
   if (!consumeScanNode(budget)) return pieces;
   const paragraphScope = emptyNamespaceScope();
+
+  /**
+   * Paint a `w:fldSimple` (§17.16.19) as one projected model unit.
+   *
+   * The instruction lives in `@w:instr` and the last-computed result as child runs — there is
+   * no `separate` marker on the outer field itself. Allowlisted PAGE / NUMPAGES / SECTIONPAGES
+   * evaluate from the page context when one is supplied. Every other instruction paints its
+   * cached result, but nested allowlisted page fields inside that cache still evaluate live
+   * (see {@link collectSimpleFieldDisplay}) so a `STYLEREF` wrapping `PAGE` does not stamp the
+   * saved sheet's number onto every page.
+   *
+   * Attribution comes from `push` reading the live stack — a `w:fldSimple` inside `w:ins` is
+   * still inside it here, unlike a complex field's deferred flush.
+   */
+  const projectSimpleField = (simple: OoxmlNode, depth: number): void => {
+    const start = offset;
+    offset += 1;
+    if (simple.kind === 'textValue') return;
+
+    // The atom is one model offset whatever it paints, so a revision enclosing the WHOLE field
+    // is answered here, once, before any of the branches below — including the live page-field
+    // one, which does not go through result collection and so would otherwise paint a deleted
+    // footer number straight into the accepted view.
+    //
+    // The deleted range is recorded whether or not it was laid out, exactly as the complex path
+    // and inline drawings do: the offset exists in every display mode and the caret has to step
+    // over it in every mode.
+    if (revisionsAreDeletion(revisions) && deletedRanges) {
+      appendModelRange(deletedRanges, start, start + 1);
+    }
+    if (!revisionsVisible(revisions, displayMode)) return;
+
+    const display = collectSimpleFieldDisplay({
+      simple,
+      depth,
+      pageContext,
+      budget,
+      revisions,
+      displayMode,
+      inheritedRunProperties,
+      cascadeRuns,
+      themeFonts,
+    });
+
+    // A simple PAGE/NUMPAGES/SECTIONPAGES field is evaluated like its complex twin when the
+    // caller supplies a page context. The CACHED result is whatever sheet the producer last
+    // saved from, so painting it verbatim would put that page's number on every page —
+    // `detectStoryPageFields` now reports these so furniture actually gets a per-sheet context
+    // to evaluate against.
+    const pageKind = allowlistedPageField(fldSimpleInstr(simple) ?? '');
+    if (pageKind && pageContext) {
+      const live = projectPageFieldValue(pageKind, pageContext);
+      const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+      if (!style.hidden) {
+        push(live, display.resultProps ?? inheritedRunProperties, style, true, start, start + 1, {
+          fieldAtom: { formField: false },
+        });
+      }
+      return;
+    }
+
+    if (display.text.length === 0) return;
+    // Nested live PAGE may replace an empty cached result and leave no donor run; fall back
+    // to inherited properties the same way a top-level simple PAGE does.
+    const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+    if (style.hidden) return;
+    // `w:ffData` is a `w:fldChar` payload, so a simple field is never a legacy form field.
+    push(
+      display.text,
+      display.resultProps ?? inheritedRunProperties,
+      style,
+      true,
+      start,
+      start + 1,
+      {
+        fieldAtom: { formField: false },
+      }
+    );
+  };
+
   const processInline = (
     child: OoxmlNode,
     depth: number,
@@ -824,7 +889,7 @@ export function piecesOfParagraph(
     sdtDepth: number
   ): void => {
     if (isFldSimple(child)) {
-      offset += 1;
+      projectSimpleField(child, depth);
       return;
     }
     if (child.kind === 'run') {
@@ -868,119 +933,4 @@ export function piecesOfParagraph(
   abandonPending();
 
   return pieces;
-}
-
-/** True when any allowlisted page field is present. */
-export function storyNeedsPageFields(needs: StoryPageFieldNeeds): boolean {
-  return needs.hasPage || needs.hasNumPages || needs.hasSectionPages;
-}
-
-/**
- * Cache-key token for a page context under known field needs.
- *
- * Absent context and field-free stories share the empty baseline key. Keys include only the
- * dimensions the story actually reads so NUMPAGES-only / SECTIONPAGES-only stories reuse one
- * layout across every sheet that shares that count, while PAGE (and format) still distinguish
- * sheets whose measured digit widths differ.
- */
-export function fieldPageContextToken(
-  context: FieldPageContext | undefined,
-  needs: StoryPageFieldNeeds = NO_STORY_PAGE_FIELDS
-): string {
-  if (!context) return '';
-  if (!storyNeedsPageFields(needs)) return '';
-  const parts: string[] = [];
-  if (needs.hasPage) {
-    parts.push(`p${context.pageNumber}`);
-    if (context.format) parts.push(`f${context.format}`);
-  }
-  if (needs.hasNumPages) parts.push(`n${context.pageCount}`);
-  if (needs.hasSectionPages) parts.push(`s${context.sectionPageCount ?? context.pageCount}`);
-  return `|fld:${parts.join('/')}`;
-}
-
-/**
- * Attach section-local PAGE/SECTIONPAGES sources to remapped sheet pages.
- *
- * `displayedStart` is the 1-based PAGE value of the first page in `pages` (after
- * `w:pgNumType/@w:start` and cross-section continuation). NUMPAGES is filled later at
- * document finalize.
- *
- * Pages whose existing {@link PageFieldSource} already matches are returned by identity so
- * incremental layout can keep sheet records stable across no-op re-annotation.
- */
-export function withPageFieldSources(
-  pages: readonly import('./semantic-records.ts').PageRecord[],
-  displayedStart: number,
-  sectionPageCount: number,
-  format: string | undefined
-): import('./semantic-records.ts').PageRecord[] {
-  let changed = false;
-  const next = pages.map((page, index) => {
-    const pageNumber = displayedStart + index;
-    const existing = page.pageFieldSource;
-    if (
-      existing &&
-      existing.pageNumber === pageNumber &&
-      existing.sectionPageCount === sectionPageCount &&
-      existing.format === format
-    ) {
-      return page;
-    }
-    changed = true;
-    return {
-      ...page,
-      pageFieldSource: {
-        pageNumber,
-        sectionPageCount,
-        ...(format ? { format } : {}),
-      },
-    };
-  });
-  return changed ? next : (pages as import('./semantic-records.ts').PageRecord[]);
-}
-
-/**
- * Project allowlisted PAGE/NUMPAGES/SECTIONPAGES onto every page's read-only furniture once
- * the document page count is known. Body stories are unchanged.
- *
- * Uses {@link PageFieldSource} when present (section restart + SECTIONPAGES + fmt). Absent
- * source keeps physical 1-based indices (`page.index + 1`) and treats the whole document as
- * one section — the empty-`pgNumType` comprehensive-fixture behaviour.
- */
-export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLayout {
-  const pageCount = layout.pages.length;
-  if (pageCount === 0) return layout;
-
-  let changed = false;
-  const pages = layout.pages.map((page) => {
-    const source = page.pageFieldSource;
-    const context: FieldPageContext = {
-      pageNumber: source?.pageNumber ?? page.index + 1,
-      pageCount,
-      sectionPageCount: source?.sectionPageCount ?? pageCount,
-      ...(source?.format ? { format: source.format } : {}),
-    };
-    const project = (
-      story: HeaderFooterStoryRecord | undefined
-    ): HeaderFooterStoryRecord | undefined => {
-      if (!story?.pageFieldProjector) return story;
-      changed = true;
-      const projected = story.pageFieldProjector(context);
-      // Strip the projector from the published record.
-      const { pageFieldProjector: _drop, ...rest } = projected;
-      void _drop;
-      return rest;
-    };
-    const header = project(page.header);
-    const footer = project(page.footer);
-    if (header === page.header && footer === page.footer) return page;
-    return {
-      ...page,
-      ...(header !== undefined ? { header } : {}),
-      ...(footer !== undefined ? { footer } : {}),
-    };
-  });
-
-  return changed ? { revision: layout.revision, pages } : layout;
 }

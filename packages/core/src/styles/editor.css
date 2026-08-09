@@ -141,6 +141,11 @@
      clearly deeper colour. Keep the two pairs in step — this is the faint end of that ramp. */
   --doc-revision-insertion-wash: rgba(46, 125, 50, 0.05);
   --doc-revision-deletion-wash: rgba(198, 40, 40, 0.05);
+  /* The grey block behind a FIELD's result — Word's field shading. It says the text was
+     computed rather than typed, which is the whole message, so it is a flat neutral and not
+     part of the revision ramp: a field is not a pending decision. Kept light enough that a
+     contents page dense with them still reads as text. Never printed. */
+  --doc-field-shading: rgba(0, 0, 0, 0.09);
   /* A tracked FORMAT change: the words are unchanged, so it takes neither the insertion nor
      the deletion colour — grey says "the appearance is the decision". The wash plus a faint
      dotted rule make the range findable (it is the hover balloon's target); both are quiet
@@ -2030,6 +2035,32 @@ a.docx-hyperlink:focus-visible {
 
 .docx-table-row--revision.layout-revision-del {
   background-color: var(--doc-revision-deletion-wash);
+}
+
+/* FIELD SHADING — the grey block Word draws behind computed text (a page number, a
+   cross-reference, the blank in a form). It marks where text came from, not what it says.
+
+   A stylesheet rule rather than painter inline style, for the same reason the format-change
+   marking is: a revision wash arrives as inline style and so WINS here, which is the ordering
+   we want. A deleted field must read as deleted first — the strike and its colour are the
+   pending decision; the shading is only provenance. A host that wants no shading at all
+   overrides one selector instead of passing an option through every call site.
+
+   `--shaded` is the resolved "draw it now" state. Legacy form fields carry it from paint
+   (Word shades them on sight); an ordinary field gets it either because the host asked for
+   `always` or because the caret is inside it, which the surface toggles as `--active`. */
+.docx-field-atom--shaded,
+.docx-field-atom--active {
+  background-color: var(--doc-field-shading);
+}
+
+/* Field shading NEVER prints — Word does not print it either. A printed form has no blanks
+   left to find, and a page number on paper is just a page number. */
+@media print {
+  .docx-field-atom--shaded,
+  .docx-field-atom--active {
+    background-color: transparent;
+  }
 }
 
 /* A tracked FORMAT change: grey, because nothing was added or removed — the appearance

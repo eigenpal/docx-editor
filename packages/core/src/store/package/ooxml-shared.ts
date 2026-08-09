@@ -274,6 +274,11 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
         (child) =>
           child.kind === 'run' ||
           child.kind === 'drawing' ||
+          // `w:fldSimple` is an `EG_PContent` member too, and a linked heading followed by its
+          // page number is exactly how a table of contents entry is written. Omitting it
+          // demoted the LINK, and layout drops a generic paragraph child whole — so the entry's
+          // words and its number both disappeared, not just the field.
+          child.kind === 'fldSimple' ||
           isContentRevisionKind(child.kind) ||
           isPreservedChild(child)
       );
@@ -317,6 +322,13 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
         (child) =>
           child.kind === 'run' ||
           child.kind === 'drawing' ||
+          // Admitted DELIBERATELY WIDER than the schema: `CT_RunTrackChange` takes
+          // `EG_ContentRunContent`, which does not list `w:fldSimple` (that is `EG_PContent`).
+          // Word writes the shape anyway for an inserted cross-reference, and refusing it
+          // demoted the WRAPPER rather than the field — the revision stopped being a revision,
+          // so the insertion left the page and the review surface together. Demotion is the
+          // safe fallback only where the thing demoted is the odd one out; here it is not.
+          child.kind === 'fldSimple' ||
           isContentRevisionKind(child.kind) ||
           isPreservedChild(child)
       );

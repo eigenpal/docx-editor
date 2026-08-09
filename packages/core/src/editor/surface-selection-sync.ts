@@ -209,9 +209,10 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    * The diff itself lives in surface-input.ts; this applies it and lands the caret.
    */
   function reconcileParagraphFromDom(paragraphId: string): void {
-    const painted = paintedTextOf(pagesLayer, paragraphId);
+    const modelText = deps.textOf(paragraphId);
+    const painted = paintedTextOf(pagesLayer, paragraphId, modelText);
     if (painted === null) return;
-    const plan = paragraphReplacePlan(paragraphId, deps.textOf(paragraphId), painted);
+    const plan = paragraphReplacePlan(paragraphId, modelText, painted);
     if (!plan) return;
     // Composed text takes the armed caret format like typed text would — same transaction,
     // one undo step. Asked BEFORE the commit (which retires the armed state), and only for

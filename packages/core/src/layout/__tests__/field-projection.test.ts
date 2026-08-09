@@ -423,7 +423,7 @@ describe('header/footer page-context layout cache', () => {
 });
 
 describe('story page-field detection', () => {
-  test('detects PAGE and NUMPAGES complex fields and ignores fldSimple', () => {
+  test('detects PAGE and NUMPAGES in complex fields and in fldSimple', () => {
     const both = parsePart(
       `<w:p>` +
         `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText>` +
@@ -438,12 +438,18 @@ describe('story page-field detection', () => {
       hasSectionPages: false,
     });
 
+    // A simple field keeps its instruction in an ATTRIBUTE, so the marker machine never sees
+    // it. Ignoring it was harmless while simple fields painted nothing — the sheet showed a
+    // blank either way. Once the cached result paints, ignoring it means the story's page
+    // context never varies, one layout is reused for every sheet, and a footer PAGE shows the
+    // producer's last saved number on every page. A wrong number is quieter than a blank, not
+    // smaller.
     const simpleOnly = parsePart(
       `<w:p><w:fldSimple w:instr="PAGE"/><w:fldSimple w:instr="NUMPAGES"/></w:p>`
     );
     expect(detectStoryPageFields(simpleOnly.root)).toEqual({
-      hasPage: false,
-      hasNumPages: false,
+      hasPage: true,
+      hasNumPages: true,
       hasSectionPages: false,
     });
 

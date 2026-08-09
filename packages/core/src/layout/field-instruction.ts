@@ -11,7 +11,9 @@
 // Callers reset state at paragraph boundaries so malformed cross-paragraph fields stay inert.
 
 import {
+  fldSimpleInstr,
   isFldChar as isFldCharHelper,
+  isFldSimple,
   isInstrText as isInstrTextHelper,
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
@@ -31,12 +33,12 @@ export const MAX_STORY_FIELD_SCAN_DEPTH = 64;
 export type AllowlistedPageField = 'PAGE' | 'NUMPAGES' | 'SECTIONPAGES';
 
 /**
- * Which allowlisted complex page fields a header/footer story actually contains.
+ * Which allowlisted page fields a header/footer story actually contains.
  *
  * Drives layout reuse: no fields → one baseline; NUMPAGES only → one layout per page count;
  * SECTIONPAGES only → one layout per section page count; PAGE (alone or combined) → per
- * distinct evaluated values with a bounded cache. `w:fldSimple` never counts — it stays
- * layout-inert.
+ * distinct evaluated values with a bounded cache. Counts both complex markers and
+ * `w:fldSimple` (including an allowlisted page field nested inside a non-page simple field).
  */
 export interface StoryPageFieldNeeds {
   readonly hasPage: boolean;
@@ -248,13 +250,14 @@ export function isInsideFieldResult(state: ComplexFieldParseState): boolean {
 }
 
 /**
- * Bounded scan for allowlisted complex page fields in a header/footer part.
+ * Bounded scan for allowlisted page fields in a header/footer part.
  *
  * Walks the part tree with node/depth caps. Field state spans runs in document order within
  * each paragraph — the same machine paragraph projection uses — and resets at paragraph
- * boundaries so malformed cross-paragraph fields never count. Generic `w:fldSimple` is ignored
- * so detection cannot re-enable deferred body-style simple fields in furniture either.
- * Instruction text is extracted iteratively under the same node/depth/character budgets.
+ * boundaries so malformed cross-paragraph fields never count. Allowlisted `w:fldSimple`
+ * instructions count too, and a non-page simple field is still descended so a nested complex
+ * PAGE inside it is not missed. Instruction text is extracted iteratively under the same
+ * node/depth/character budgets.
  */
 export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
   let hasPage = false;
@@ -341,6 +344,25 @@ export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
       // Shared field state across sibling runs (and nested run containers) in this paragraph.
       scanRun(node, depth);
       return;
+    }
+
+    // `w:fldSimple` carries its instruction in an ATTRIBUTE, so none of the marker machine
+    // above ever sees it. It was ignored while simple fields painted nothing — harmless then,
+    // because the sheet showed a blank either way. Now that the cached result paints, ignoring
+    // it is worse than the blank was: the story's page-context key stays empty, one layout is
+    // reused for every sheet, and a footer `PAGE` shows page one's number on every page.
+    // A wrong number is not a smaller error than a missing one, it is a quieter one.
+    if (isFldSimple(node)) {
+      const kind = allowlistedPageField(fldSimpleInstr(node) ?? '');
+      if (kind) {
+        note(kind);
+        return;
+      }
+      // NOT a page field — fall through and keep walking. A simple field's cached result can
+      // hold a complex one (`STYLEREF` wrapping a `PAGE` is ordinary in a running header), and
+      // returning here hid it: the story reported no page fields, its context token stayed
+      // empty, one layout served every sheet, and the number inside showed page one everywhere.
+      // Exactly the failure this arm was added to prevent, one level down.
     }
 
     for (const child of node.children) {

@@ -22,6 +22,26 @@ import type { SemanticPosition, SemanticSelection } from '@docx-editor.dev/core/
 interface SpanIdentity {
   readonly paragraphId: string;
   readonly start: number;
+  /**
+   * The span's model END, which is NOT `start + textContent.length` for every span.
+   *
+   * A field is one model unit however many characters its result paints — "Scope of the
+   * discussions" is 24 glyphs over a range of 1. Deriving the endpoint from the painted text
+   * therefore handed back an offset the paragraph does not have, and the edit built from it
+   * was refused: a caret placed just after such a field could not type at all.
+   */
+  readonly end: number;
+}
+
+/**
+ * The furthest model offset a gesture inside `identity` can mean.
+ *
+ * Clamped to the span's own RANGE, not to its text. Where the two agree — ordinary runs, which
+ * is nearly everything — this changes nothing.
+ */
+function offsetWithin(identity: SpanIdentity, within: number): number {
+  const span = Math.max(0, identity.end - identity.start);
+  return identity.start + Math.max(0, Math.min(within, span));
 }
 
 /** Node ids are `part#path`, and the part name comes from the document. */
@@ -36,7 +56,16 @@ function identityOf(element: Element): SpanIdentity | null {
   // mutate. `__proto__` as an id is refused here rather than relied on being refused later.
   if (!/^\d{1,9}$/.test(rawStart)) return null;
   if (!PARAGRAPH_ID.test(paragraphId) || paragraphId === '__proto__') return null;
-  return { paragraphId, start: Number(rawStart) };
+  const start = Number(rawStart);
+  // `data-end` is written with `data-start` by the same painter branch, and validated the same
+  // way for the same reason. A span missing or misreporting it falls back to the painted
+  // length, which is the pre-existing behaviour and correct for every 1:1 span.
+  const rawEnd = (element as HTMLElement).dataset?.end;
+  const end =
+    rawEnd !== undefined && /^\d{1,9}$/.test(rawEnd) && Number(rawEnd) >= start
+      ? Number(rawEnd)
+      : start + ((element as HTMLElement).textContent?.length ?? 0);
+  return { paragraphId, start, end };
 }
 
 /** The nearest ancestor (or self) that is a painted span. */
@@ -110,10 +139,7 @@ function positionFromChildIndex(container: Element, index: number): SemanticPosi
   for (let at = Math.min(index, children.length) - 1; at >= 0; at -= 1) {
     const found = spanAtOrInside(children[at]!, true);
     if (!found) continue;
-    return {
-      paragraphId: found.identity.paragraphId,
-      offset: found.identity.start + (found.element.textContent?.length ?? 0),
-    };
+    return { paragraphId: found.identity.paragraphId, offset: found.identity.end };
   }
   return null;
 }
@@ -175,10 +201,9 @@ export function positionFromDomPoint(
     const element = node as Element;
     const identity = identityOf(element);
     if (identity) {
-      const length = element.textContent?.length ?? 0;
       return {
         paragraphId: identity.paragraphId,
-        offset: identity.start + (offset > 0 ? length : 0),
+        offset: offset > 0 ? identity.end : identity.start,
       };
     }
     const resolved = positionFromChildIndex(element, offset);
@@ -189,14 +214,13 @@ export function positionFromDomPoint(
 
   const found = spanFor(node);
   if (!found) return null;
-  const within = offset;
 
-  // Clamp to the span's own text: a browser may report an offset past the end for an
-  // endpoint that sits at a boundary between elements.
-  const length = found.element.textContent?.length ?? 0;
+  // Clamp to the span's own RANGE: a browser may report an offset past the end for an endpoint
+  // that sits at a boundary between elements, and a field's painted result is wider than the
+  // one offset it occupies.
   return {
     paragraphId: found.identity.paragraphId,
-    offset: found.identity.start + Math.max(0, Math.min(within, length)),
+    offset: offsetWithin(found.identity, offset),
   };
 }
 
@@ -274,13 +298,21 @@ function domPointFromPositionIn(
     if (!identity || identity.paragraphId !== position.paragraphId) continue;
     const text = textNodeOf(span);
     const length = span.textContent?.length ?? 0;
-    const end = identity.start + length;
+    const end = identity.end;
     if (!text) continue;
     if (position.offset >= identity.start && position.offset <= end) {
       // A position on a boundary belongs to the span that STARTS there, so a caret between
       // two words sits before the second rather than after the first. The first match wins
       // for the interior; the boundary case keeps looking so the later span is preferred.
-      const point = { node: text, offset: position.offset - identity.start };
+      //
+      // The DOM offset is clamped to the painted text, which is a different length from the
+      // model range wherever a field is: one model unit can be 24 glyphs, and asking a text
+      // node for character 1 of 24 would put the native selection inside a word the model
+      // has no position inside.
+      const point = {
+        node: text,
+        offset: Math.min(position.offset - identity.start, length),
+      };
       if (position.offset < end) return point;
       fallback = point;
     }

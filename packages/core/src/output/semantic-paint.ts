@@ -49,6 +49,18 @@ import {
 } from './semantic-paint-drawings.ts';
 
 /**
+ * When a field's result is drawn on its grey block, following Word's own View option.
+ *
+ * `when-selected` is Word's default and the reason the option exists at all: a document dense
+ * with cross-references turns largely grey under `always`, and under `never` a reader cannot
+ * tell computed text from typed text at all.
+ */
+export type FieldShadingMode = 'never' | 'when-selected' | 'always';
+
+/** Word's default: shaded only while the caret is inside the field. */
+export const DEFAULT_FIELD_SHADING: FieldShadingMode = 'when-selected';
+
+/**
  * What the run painters need beyond the records: the pixel scale, and the optional
  * family-alias lookup that lets embedded fonts paint without their file-declared family
  * name entering the page-global CSS font namespace.
@@ -92,6 +104,24 @@ export interface PaintContext {
   readonly drawingStrings?: DrawingPaintStrings;
   /** Host port for ready-image blob URLs; omitted means ready images paint as placeholders. */
   readonly imageUrlPort?: PaintImageUrlPort;
+  /**
+   * How field results are shaded, mirroring what Word draws.
+   *
+   * Word keeps two independent rules, and this is the one for ORDINARY fields (PAGE, REF, TOC):
+   * an application preference, defaulting to `when-selected`, that never reaches the file.
+   * LEGACY FORM FIELDS follow the document's own `w:doNotShadeFormData` instead, which is why
+   * {@link shadeFormFields} is separate — a form's blanks stay findable whatever this says.
+   *
+   * `when-selected` is finished in CSS off a class the surface toggles from the caret, never
+   * here: shading decided at paint time from a caret position would rebuild spans on every
+   * arrow key, and deciding it in layout would do far worse.
+   */
+  readonly fieldShading?: FieldShadingMode;
+  /**
+   * Whether legacy form fields (`w:ffData`) are shaded — the document's `w:doNotShadeFormData`,
+   * inverted at the read so this states what to DO rather than what to skip.
+   */
+  readonly shadeFormFields?: boolean;
 }
 
 /**
@@ -144,6 +174,10 @@ export interface PaintOptions {
   readonly fontAlias?: (family: string) => string | undefined;
   /** See {@link PaintContext.defaultFontFamily}. */
   readonly defaultFontFamily?: string;
+  /** See {@link PaintContext.fieldShading}. */
+  readonly fieldShading?: FieldShadingMode;
+  /** See {@link PaintContext.shadeFormFields}. */
+  readonly shadeFormFields?: boolean;
   /**
    * Relationship id of the header/footer story currently open for editing.
    *
@@ -728,6 +762,37 @@ function positioned(
  * the active-item highlight is set by attribute rather than by building a CSS rule out of an
  * id — comment and revision metadata are attacker-controlled.
  */
+/**
+ * The grey block Word draws behind a field's result.
+ *
+ * A view affordance, never document formatting: it says "this text was computed, not typed",
+ * and Word does not print it. So it lands as a CLASS, not as inline style — the stylesheet owns
+ * the colour and the `@media print` rule that drops it, and it must lose cleanly to a revision
+ * wash, which is inline and therefore outranks it. That ordering is the point: a deleted field
+ * has to read as deleted first and as a field second.
+ *
+ * `when-selected` is not resolved here. Paint has no caret, and giving it one would rebuild
+ * spans on every arrow key; the surface toggles `docx-field-atom--active` from the caret it
+ * already tracks, exactly as it does for the open review item.
+ */
+function applyFieldShading(element: HTMLElement, span: StyleSpanRecord, ctx: PaintContext): void {
+  const field = span.fieldAtom;
+  if (!field) return;
+  // Marked whatever the mode, because the mode is a VIEW setting a host can flip without
+  // relaying out, and because the review surface and tests want to find fields regardless.
+  element.dataset.fieldAtom = field.formField ? 'form' : 'field';
+  const shaded = field.formField
+    ? ctx.shadeFormFields !== false
+    : (ctx.fieldShading ?? DEFAULT_FIELD_SHADING) !== 'never';
+  if (!shaded) return;
+  element.classList.add('docx-field-atom');
+  // A form field is shaded outright; an ordinary field defers to the caret unless the host
+  // asked for `always`.
+  if (field.formField || (ctx.fieldShading ?? DEFAULT_FIELD_SHADING) === 'always') {
+    element.classList.add('docx-field-atom--shaded');
+  }
+}
+
 function applyRevisionPresentation(
   element: HTMLElement,
   span: StyleSpanRecord,
@@ -941,6 +1006,7 @@ function paintSpan(
     element.contentEditable = 'false';
   }
   applyRunFaceStyle(element, span.style, ctx);
+  applyFieldShading(element, span, ctx);
   applyRevisionPresentation(element, span, ctx);
   // Layout owns advances that the browser cannot reconstruct: horizontal scaling (transform
   // does not reserve space) and OOXML tab stops (`\t` would otherwise paint as a narrow
@@ -2390,6 +2456,8 @@ export function paintSemanticLayout(
       ? { emptyTocPlaceholderIds: options.emptyTocPlaceholderIds }
       : {}),
     ...(options.defaultFontFamily ? { defaultFontFamily: options.defaultFontFamily } : {}),
+    ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),
+    ...(options.shadeFormFields !== undefined ? { shadeFormFields: options.shadeFormFields } : {}),
     authorSlots: authorSlotsOf(layout),
     ...(options.imageUrlPort ? { imageUrlPort: options.imageUrlPort } : {}),
     ...(options.activeHeaderFooterRId

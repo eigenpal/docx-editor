@@ -68,6 +68,21 @@ describe('typed revision family', () => {
     expect(deleted?.children[0]).toMatchObject({ kind: 'textValue', value: 'gone' });
   });
 
+  test('a w:ins wrapping a w:fldSimple stays a revision', () => {
+    // `w:fldSimple` is a member of `EG_ContentRunContent`, which `CT_RunTrackChange` admits, and
+    // it is how Word writes an inserted cross-reference. Omitting it from the allowed children
+    // demoted the WRAPPER rather than the field: the insertion stopped being a revision at all,
+    // so it disappeared from the page and from the review surface together.
+    const part = doc(
+      '<w:p><w:ins w:id="8" w:author="QA" w:date="2026-03-26T11:00:00Z">' +
+        '<w:fldSimple w:instr=" REF _Ref1 \\h "><w:r><w:t>Section 3</w:t></w:r></w:fldSimple>' +
+        '</w:ins></w:p>'
+    );
+    const ins = find(part.root, 'revisionInsert');
+    expect(ins).toBeDefined();
+    expect(ins?.children.some((child) => child.kind === 'fldSimple')).toBe(true);
+  });
+
   test('w:moveFrom and w:moveTo type distinctly from a delete/insert pair', () => {
     const part = doc(
       '<w:p>' +

@@ -243,6 +243,7 @@ export {
   fieldOnOffAttribute,
   fldCharType,
   fldSimpleInstr,
+  hasLegacyFormFieldData,
   instrTextValue,
   isFieldChrome,
   isFldChar,
@@ -428,6 +429,11 @@ export {
   readTrackingSettings,
   type DocumentTrackingSettings,
 } from './tracking-settings.ts';
+export {
+  DEFAULT_VIEW_SETTINGS,
+  readViewSettings,
+  type DocumentViewSettings,
+} from './view-settings.ts';
 export {
   CONTENT_CONTROL_ID_MAX,
   CONTENT_CONTROL_PROPERTY_ORDER,

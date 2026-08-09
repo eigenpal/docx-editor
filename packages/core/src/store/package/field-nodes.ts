@@ -11,7 +11,12 @@
 // contribute nothing and interior result text remains visible/addressable so content
 // never disappears.
 
-import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
+import {
+  contentControlContentChildren,
+  isContentControl,
+  MAX_CONTENT_CONTROL_NESTING,
+} from './content-control-walk.ts';
+import { isContentRevisionKind, WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type {
   OoxmlFldCharNode,
   OoxmlFldSimpleNode,
@@ -157,6 +162,28 @@ export function isFieldChrome(node: OoxmlNode): boolean {
 }
 
 /**
+ * True when a `w:fldChar` carries `w:ffData` — a LEGACY FORM FIELD (§17.16.17).
+ *
+ * FORMTEXT, FORMCHECKBOX and FORMDROPDOWN are what a fillable Word form is made of, and Word
+ * shades them on sight so a reader can find the blanks. That is the only reason to ask: it is a
+ * presentation question, answered by the element's presence alone.
+ *
+ * Presence ONLY. `w:ffData` can carry entry and exit MACRO names, and the canonical tree keeps
+ * its whole subtree generic and inert on purpose. Walking into it to read a name or a default
+ * would be reading attacker-supplied script references for no gain — the shading does not
+ * depend on what the form field says, only on it being one.
+ */
+export function hasLegacyFormFieldData(node: OoxmlNode): boolean {
+  if (node.kind === 'textValue') return false;
+  if (fldCharType(node) === null) return false;
+  for (const child of node.children) {
+    if (child.kind === 'textValue') continue;
+    if (child.localName === 'ffData' && isWml(child, 'ffData')) return true;
+  }
+  return false;
+}
+
+/**
  * One atomic field span inside a paragraph for caret / delete / selection.
  *
  * `removeNodeIds` lists every node that must leave with the unit (begin…end chrome and
@@ -224,7 +251,7 @@ export function atomicFieldSpansOf(
     return ids;
   };
 
-  const visitInline = (child: OoxmlNode): void => {
+  const visitInline = (child: OoxmlNode, sdtDepth = 0): void => {
     if (child.kind === 'fldSimple' || (child.kind === 'generic' && isFldSimple(child))) {
       spans.push({
         kind: 'simple',
@@ -242,8 +269,30 @@ export function atomicFieldSpansOf(
       }
       return;
     }
-    if (child.kind === 'hyperlink') {
-      for (const inner of child.children) visitInline(inner);
+    // An inline content control flattens into the paragraph's run stream, so a field inside
+    // one is an ordinary field. Layout descends here and this walk did not, so a `w:fldSimple`
+    // in an `w:sdt` was worth one offset to layout and nothing to the store — the same
+    // disagreement, in the same direction, as the revision wrappers below.
+    if (isContentControl(child)) {
+      if (sdtDepth < MAX_CONTENT_CONTROL_NESTING) {
+        for (const inner of contentControlContentChildren(child)) {
+          visitInline(inner, sdtDepth + 1);
+        }
+      }
+      return;
+    }
+    if (
+      child.kind !== 'textValue' &&
+      (child.kind === 'hyperlink' || isContentRevisionKind(child.kind))
+    ) {
+      // Revision wrappers are run containers like `w:hyperlink` is. Not descending made a
+      // field whose RESULT is wrapped in `w:del` disagree with itself: the begin/end markers
+      // formed an atom worth one offset, but the struck result run was not among the nodes
+      // that atom swallowed, so the paragraph counted its characters a SECOND time as
+      // ordinary text. Layout folds them into the atom, the store did not, and every offset
+      // after the field was out by the length of the deleted words — the caret painted in one
+      // place and typing landed elsewhere.
+      for (const inner of child.children) visitInline(inner, sdtDepth);
     }
   };
   for (const child of paragraph.children) visitInline(child);
@@ -317,6 +366,12 @@ export function atomicFieldSpansOf(
         if (phase === 'result' && nesting === 1) {
           if (
             node.kind === 'text' ||
+            // `w:delText` is result content that a tracked deletion struck — still the field's
+            // own text, and still swallowed by the one offset the atom is worth. Leaving it out
+            // let the paragraph count those characters a SECOND time as ordinary text while
+            // layout folded them into the atom, so every offset after such a field was out by
+            // the length of the deleted words.
+            node.kind === 'deletedText' ||
             node.kind === 'tab' ||
             node.kind === 'hardBreak' ||
             node.kind === 'textValue'
