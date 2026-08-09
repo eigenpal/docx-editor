@@ -860,12 +860,12 @@ export const wordFeatures: WordFeature[] = [
     id: 'fields.legacy-forms',
     name: 'Legacy form fields (FORMTEXT, FORMCHECKBOX, FORMDROPDOWN)',
     category: 'fields',
-    editing: 'none',
+    editing: 'partial',
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'The field result shows as static text with Word-like form-field shading unless the document sets w:doNotShadeFormData; w:ffData, including checkbox state and constraints, is preserved but the control is not interactive.',
+      'FORMTEXT result text is inline-editable with character-accurate caret/selection; field markers, instructions, and w:ffData round-trip and tracked edits are preserved. Word-like form-field shading applies unless w:doNotShadeFormData. FORMCHECKBOX and FORMDROPDOWN still render static results; checkbox/dropdown interaction, Tab navigation, ffData constraints, and legacy forms-protection fill mode are not implemented.',
   },
 
   // --- Document structure & content controls ---------------------------------
