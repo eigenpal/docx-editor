@@ -195,6 +195,11 @@ export interface InsertCommentMarkerOp {
  * The run straddling the offset is split first, because a range marker is a sibling of runs and
  * cannot be placed inside one. Splitting changes no characters, so every other offset in the
  * paragraph — and every anchor addressed by one — is unmoved.
+ *
+ * A reply reuses its parent's offsets. Equal-offset insertion otherwise lands *before* the
+ * marker already there, so the reply's `commentRangeStart` would open outside the parent and
+ * Word would discard `@w15:paraIdParent` on open. Skip past existing starts at this offset so
+ * the new start nests inside — the shape Word keeps for a threaded reply.
  */
 export function applyInsertCommentMarker(
   part: OoxmlPart,
@@ -211,6 +216,19 @@ export function applyInsertCommentMarker(
   const at = locateOffset(reloaded, reloaded, op.offset, 0);
   if (!at) return { ok: false, reason: 'offset-out-of-range' };
 
+  let insertIndex = at.index;
+  if (op.marker === 'start') {
+    const container = findNode(split.part, at.containerId);
+    if (container && container.kind !== 'textValue') {
+      while (
+        insertIndex < container.children.length &&
+        container.children[insertIndex]!.kind === 'commentRangeStart'
+      ) {
+        insertIndex += 1;
+      }
+    }
+  }
+
   const nodeId = `${part.name}#comment-${op.marker}-${op.commentId}-${op.offset}`;
   const node =
     op.marker === 'reference'
@@ -222,7 +240,7 @@ export function applyInsertCommentMarker(
           op.commentId
         );
 
-  const inserted = insertChildren(split.part, at.containerId, at.index, [node], options);
+  const inserted = insertChildren(split.part, at.containerId, insertIndex, [node], options);
   if (!inserted.ok) {
     return { ok: false, reason: 'tree-invariant', detail: JSON.stringify(inserted.issues) };
   }
