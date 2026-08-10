@@ -559,22 +559,23 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
       });
     }
 
-    // The story markers last. The END goes in before the START when both are in one paragraph,
-    // because inserting at the start would otherwise shift nothing — the markers occupy no
-    // offsets — but the run split at the start reshapes the children the end index counts.
-    ctx.applyTo(storyPartName, {
-      op: 'insertCommentMarker',
-      paragraphId: endParagraphId,
-      offset: request.anchor.end,
-      commentId,
-      marker: 'end',
-    });
+    // The story markers last. Equal-offset insertions land before the marker already there, so
+    // REFERENCE is applied before END to serialize in Word's required END → REFERENCE order.
+    // Both go in before START when the range is in one paragraph: markers occupy no offsets,
+    // but splitting the run at the start reshapes the children the end index counts.
     ctx.applyTo(storyPartName, {
       op: 'insertCommentMarker',
       paragraphId: endParagraphId,
       offset: request.anchor.end,
       commentId,
       marker: 'reference',
+    });
+    ctx.applyTo(storyPartName, {
+      op: 'insertCommentMarker',
+      paragraphId: endParagraphId,
+      offset: request.anchor.end,
+      commentId,
+      marker: 'end',
     });
     ctx.applyTo(storyPartName, {
       op: 'insertCommentMarker',

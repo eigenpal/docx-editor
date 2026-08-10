@@ -199,6 +199,34 @@ describe('adding a comment', () => {
 });
 
 describe('replying', () => {
+  test('serializes each range end before its comment reference, as Word requires', () => {
+    const store = open();
+    const target = paragraphWithText(store.part, 20);
+    const parent = addComment(store, {
+      anchor: { paragraphId: target.id, start: 0, end: 6 },
+      author: 'QA',
+      text: 'parent',
+    });
+    expect(parent.ok).toBe(true);
+    if (!parent.ok) return;
+    const reply = addComment(store, {
+      anchor: { paragraphId: target.id, start: 0, end: 6 },
+      author: 'Dev',
+      text: 'reply',
+      replyToCommentId: parent.commentId,
+    });
+    expect(reply.ok).toBe(true);
+    if (!reply.ok) return;
+
+    const story = serializeOoxmlPart(store.part);
+    for (const commentId of [parent.commentId, reply.commentId]) {
+      const end = story.indexOf(`<w:commentRangeEnd w:id="${commentId}"/>`);
+      const reference = story.indexOf(`<w:commentReference w:id="${commentId}"/>`);
+      expect(end).toBeGreaterThanOrEqual(0);
+      expect(reference).toBeGreaterThan(end);
+    }
+  });
+
   test('a reply links to its parent through commentsExtended', () => {
     const store = open();
     const target = paragraphWithText(store.part, 20);
