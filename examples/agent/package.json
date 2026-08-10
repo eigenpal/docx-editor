@@ -13,7 +13,7 @@
     "@docx-editor.dev/editor-api": "workspace:*",
     "@docx-editor.dev/pro": "workspace:*",
     "@docx-editor.dev/react": "workspace:*",
-    "ai": "^6.0.169",
+    "ai": "^7.0.48",
     "fflate": "^0.8.2",
     "next": "^16.2.7",
     "react": "^19.0.0",
