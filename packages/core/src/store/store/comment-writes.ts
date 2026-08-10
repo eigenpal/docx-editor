@@ -210,14 +210,15 @@ function paraIdsInPackage(pkg: OoxmlPackage): Set<string> {
   return used;
 }
 
-/** The `w14:paraId` of a comment's first paragraph, when it has one. */
+/** The `w14:paraId` of a comment's last paragraph, which keys its `w15:commentEx`. */
 function paraIdOfComment(part: OoxmlPart | undefined, commentId: string): string | null {
   if (!part) return null;
   let found: string | null = null;
   const visit = (node: OoxmlNode): void => {
     if (found !== null || node.kind === 'textValue') return;
     if (node.kind === 'comment' && attribute(node, WML_NAMESPACE_URI, 'id') === commentId) {
-      for (const child of node.children) {
+      for (let index = node.children.length - 1; index >= 0; index -= 1) {
+        const child = node.children[index]!;
         if (child.kind !== 'paragraph') continue;
         const value = attribute(child, W14_NAMESPACE_URI, 'paraId');
         if (value !== undefined && isValidParaId(value)) found = value.toUpperCase();
@@ -231,8 +232,8 @@ function paraIdOfComment(part: OoxmlPart | undefined, commentId: string): string
   return found;
 }
 
-/** The paragraph a comment's `w14:paraId` belongs on: its first, which is where Word puts it. */
-function firstParagraphOfComment(
+/** The last paragraph of a comment, where Word keys its `w15:commentEx` state. */
+function lastParagraphOfComment(
   part: OoxmlPart | undefined,
   commentId: string
 ): OoxmlElement | null {
@@ -241,7 +242,8 @@ function firstParagraphOfComment(
   const visit = (node: OoxmlNode): void => {
     if (found !== null || node.kind === 'textValue') return;
     if (node.kind === 'comment' && attribute(node, WML_NAMESPACE_URI, 'id') === commentId) {
-      for (const child of node.children) {
+      for (let index = node.children.length - 1; index >= 0; index -= 1) {
+        const child = node.children[index]!;
         if (child.kind === 'paragraph') {
           found = child;
           return;
@@ -471,7 +473,7 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
       : paraIdOfComment(commentsPart, request.replyToCommentId);
   const parentTarget =
     request.replyToCommentId !== undefined && existingParentParaId === null
-      ? firstParagraphOfComment(commentsPart, request.replyToCommentId)
+      ? lastParagraphOfComment(commentsPart, request.replyToCommentId)
       : null;
   // A reply to a comment the part does not hold cannot be linked to anything.
   if (request.replyToCommentId !== undefined && existingParentParaId === null && !parentTarget) {
@@ -536,38 +538,21 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
       ctx.applyPackage((current) => {
         const part = current.parts.get(extendedName);
         if (!part) return current;
-        const entry = element(
-          `${extendedName}#ex-${paraId}`,
-          'generic',
-          W15_NAMESPACE_URI,
-          'w15',
-          'commentEx',
-          [
-            {
-              kind: 'genericExtension' as const,
-              namespaceUri: W15_NAMESPACE_URI,
-              localName: 'paraId',
-              prefix: 'w15',
-              value: paraId,
-            },
-            {
-              kind: 'genericExtension' as const,
-              namespaceUri: W15_NAMESPACE_URI,
-              localName: 'paraIdParent',
-              prefix: 'w15',
-              value: parentParaId,
-            },
-            {
-              kind: 'genericExtension' as const,
-              namespaceUri: W15_NAMESPACE_URI,
-              localName: 'done',
-              prefix: 'w15',
-              value: '0',
-            },
-          ],
-          []
-        );
-        const appended = insertChildren(part, part.root.id, part.root.children.length, [entry], {
+        const entries = extendedEntries(part);
+        // Word expects commentsExtended.xml to describe BOTH ends of a thread. Our reader can
+        // follow a child-only parent pointer, but Word discards that incomplete thread and draws
+        // two independent comments on the coincident range. Preserve an existing parent record
+        // verbatim (including resolved state or its own parent link); otherwise add the top-level
+        // record before the reply.
+        const additions = [
+          ...(entries.has(parentParaId.toUpperCase())
+            ? []
+            : [
+                resolvedEntry(`${extendedName}#ex-${parentParaId}`, parentParaId, undefined, false),
+              ]),
+          resolvedEntry(`${extendedName}#ex-${paraId}`, paraId, parentParaId, false),
+        ];
+        const appended = insertChildren(part, part.root.id, part.root.children.length, additions, {
           deferValidation: true,
         });
         return appended.ok ? withPart(current, appended.part) : current;
@@ -695,7 +680,7 @@ export function setCommentResolved(
   const extendedName = extendedPartNameFor(pkg, storyPartName);
   const commentsPart = pkg.parts.get(commentsName);
   if (!commentsPart) return { ok: false, reason: 'unknown-comment' };
-  const target = firstParagraphOfComment(commentsPart, commentId);
+  const target = lastParagraphOfComment(commentsPart, commentId);
   if (!target) return { ok: false, reason: 'unknown-comment' };
 
   // The thread: this comment, plus every comment whose recorded parent is it.

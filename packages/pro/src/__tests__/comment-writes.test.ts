@@ -234,7 +234,9 @@ describe('replying', () => {
     expect(replyParaId).toBeDefined();
 
     const state = threadStateOfPart(extended);
+    expect(state.get(parentParaId!.toUpperCase())).toEqual({ done: false });
     expect(state.get(replyParaId!.toUpperCase())?.parentParaId).toBe(parentParaId!.toUpperCase());
+    expect(state.size).toBe(2);
   });
 
   test('creating the thread part is part of the same transaction', () => {
@@ -315,7 +317,9 @@ describe('replying', () => {
     // reply under the comment instead of beside it.
     const extended = store.package.parts.get('/word/commentsExtended.xml');
     expect(extended).toBeDefined();
-    expect(serializeOoxmlPart(extended!)).toContain(`w15:paraIdParent="${parentParaId}"`);
+    const state = threadStateOfPart(extended!);
+    expect(state.get(parentParaId!)).toEqual({ done: false });
+    expect([...state.values()].some((entry) => entry.parentParaId === parentParaId)).toBe(true);
   });
 
   test('a reply to a comment the part does not hold is refused', () => {
@@ -357,6 +361,7 @@ describe('replying', () => {
     const state = threadStateOfPart(reopened.package.parts.get('/word/commentsExtended.xml')!);
     const replyParaId = comments.find((entry) => entry.id === reply.commentId)?.paraId;
     const parentParaId = comments.find((entry) => entry.id === parent.commentId)?.paraId;
+    expect(state.get(parentParaId!.toUpperCase())).toEqual({ done: false });
     expect(state.get(replyParaId!.toUpperCase())?.parentParaId).toBe(parentParaId!.toUpperCase());
   });
 });
