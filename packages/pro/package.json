@@ -52,7 +52,7 @@
     "@docx-editor.dev/react": "workspace:*",
     "@happy-dom/global-registrator": "^20.8.3",
     "@testing-library/react": "^16.0.0",
-    "@types/react": "^19.0.0",
+    "@types/react": "^19.2.18",
     "fflate": "^0.8.2",
     "license-check-and-add": "^4.0.5",
     "react": "^19.0.0",
