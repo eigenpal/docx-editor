@@ -7,7 +7,7 @@
     "start": "next start --port 3003"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^3.0.54",
+    "@ai-sdk/openai": "^4.0.27",
     "@ai-sdk/react": "^3.0.171",
     "@docx-editor.dev/core": "workspace:*",
     "@docx-editor.dev/editor-api": "workspace:*",
