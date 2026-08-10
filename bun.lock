@@ -232,14 +232,14 @@
     },
     "packages/core": {
       "name": "@docx-editor.dev/core",
-      "version": "2.1.3",
+      "version": "2.2.1",
       "dependencies": {
-        "@docx-editor.dev/i18n": "^2.1.3",
+        "@docx-editor.dev/i18n": "^2.2.1",
         "bidi-js": "1.0.3",
         "emf-converter": "2.0.2",
         "fast-xml-parser": "^5.10.1",
         "fflate": "^0.8.2",
-        "harfbuzzjs": "1.4.0",
+        "harfbuzzjs": "1.5.0",
         "prosemirror-commands": "^1.7.1",
         "prosemirror-keymap": "^1.2.3",
         "prosemirror-model": "^1.25.4",
@@ -265,7 +265,7 @@
     },
     "packages/editor-api": {
       "name": "@docx-editor.dev/editor-api",
-      "version": "2.1.3",
+      "version": "2.2.1",
       "dependencies": {
         "@docx-editor.dev/core": "^2.1.3",
       },
@@ -277,7 +277,7 @@
     },
     "packages/fonts": {
       "name": "@docx-editor.dev/fonts",
-      "version": "2.1.3",
+      "version": "2.2.1",
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",
         "typescript": "^5.3.3",
@@ -285,7 +285,7 @@
     },
     "packages/i18n": {
       "name": "@docx-editor.dev/i18n",
-      "version": "2.1.3",
+      "version": "2.2.1",
       "devDependencies": {
         "tsup": "^8.0.1",
         "typescript": "^5.3.3",
@@ -293,7 +293,7 @@
     },
     "packages/nuxt": {
       "name": "@docx-editor.dev/nuxt",
-      "version": "2.1.3",
+      "version": "2.2.1",
       "dependencies": {
         "@docx-editor.dev/vue": "^0.0.1",
         "@nuxt/kit": "^3.14.0 || ^4.0.0",
@@ -319,7 +319,7 @@
     },
     "packages/pro": {
       "name": "@docx-editor.dev/pro",
-      "version": "2.1.3",
+      "version": "2.2.1",
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/i18n": "workspace:*",
@@ -348,14 +348,14 @@
     },
     "packages/react": {
       "name": "@docx-editor.dev/react",
-      "version": "2.1.3",
+      "version": "2.2.1",
       "dependencies": {
-        "@docx-editor.dev/i18n": "^2.1.3",
+        "@docx-editor.dev/i18n": "^2.2.1",
         "@radix-ui/react-select": "^2.3.3",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "emf-converter": "2.0.2",
-        "harfbuzzjs": "1.4.0",
+        "harfbuzzjs": "1.5.0",
       },
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",
@@ -373,12 +373,12 @@
     },
     "packages/vue": {
       "name": "@docx-editor.dev/vue",
-      "version": "2.1.3",
+      "version": "2.2.1",
       "dependencies": {
         "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/i18n": "workspace:*",
         "emf-converter": "2.0.2",
-        "harfbuzzjs": "1.4.0",
+        "harfbuzzjs": "1.5.0",
       },
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",
@@ -2035,7 +2035,7 @@
 
     "happy-dom": ["happy-dom@20.9.0", "", { "dependencies": { "@types/node": ">=20.0.0", "@types/whatwg-mimetype": "^3.0.2", "@types/ws": "^8.18.1", "entities": "^7.0.1", "whatwg-mimetype": "^3.0.0", "ws": "^8.18.3" } }, "sha512-GZZ9mKe8r646NUAf/zemnGbjYh4Bt8/MqASJY+pSm5ZDtc3YQox+4gsLI7yi1hba6o+eCsGxpHn5+iEVn31/FQ=="],
 
-    "harfbuzzjs": ["harfbuzzjs@1.4.0", "", {}, "sha512-3KrygnLb4ESsntxvxZA7RhJy2Ci47GdXWC8fl9HwPHNEOUDXUNv5M+x/TiBkXKjUz6jz/CRJOL2Ksgq8V3UdKw=="],
+    "harfbuzzjs": ["harfbuzzjs@1.5.0", "", {}, "sha512-IYrYhWlY6BqSJlzhYbc2sxuFaJQXGpl74+1060SBDnYLt1gyyyUWM9LUbn8c/IWedmFW7Jgi9l+uI5cj0GN+qA=="],
 
     "has-bigints": ["has-bigints@1.1.0", "", {}, "sha512-R3pbpkcIqv2Pm3dUwgjclDRVmWpTJW2DcMzcIhEXEx1oh/CEMObMm3KLmRJOdvhM7o4uQBnwr8pzRK2sJWIqfg=="],
 
