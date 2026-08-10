@@ -59,6 +59,7 @@ import {
   useTranslation,
   type ToolbarTranslate,
 } from '@docx-editor.dev/react';
+import { cloneReviewCard, partitionReviewChildren } from './review-composition';
 import { useReview, type ReviewItemView } from './useReview';
 
 /**
@@ -261,12 +262,14 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
   /** Class for each card. The rail's own `className` styles the column; this the boxes in it. */
   card?: { className?: string };
   /**
-   * The cards, or a render prop that replaces the packaged card entirely while keeping the
-   * rail's subscription, anchoring, stacking and virtualization. Nodes are treated as part
-   * overrides for the packaged card instead.
+   * Compound parts for the rail and its implicit List. A function remains supported as the
+   * legacy shorthand for a List render callback, but cannot be combined with root siblings;
+   * prefer an explicit `<Review.List>{item => ...}</Review.List>` in new code.
    *
    * ```tsx
-   * <DocxEditor.Review>{(item) => <MyCard item={item} />}</DocxEditor.Review>
+   * <DocxEditor.Review>
+   *   <DocxEditor.Review.List>{(item) => <MyCard item={item} />}</DocxEditor.Review.List>
+   * </DocxEditor.Review>
    * ```
    */
   children?: ReactNode | ((item: ReviewItemView) => ReactNode);
@@ -713,9 +716,18 @@ function ReviewRoot({
     style: metrics.left === null ? undefined : { left: metrics.left, right: 'auto' },
   };
 
-  // Root-level slots a child can replace in place. A render prop is not an override — it is
-  // the card itself, and travels down to `ReviewList` untouched.
-  const rootParts = typeof children === 'function' ? {} : partOverrides(children);
+  // Root parts and card parts are separate scopes. A root render prop remains the legacy
+  // shorthand for the implicit List's render prop; node children that are not root parts become
+  // that List's card template. Without this partition an AddComment sibling was also forwarded
+  // into every Card, while a root render prop made it impossible to supply AddComment at all.
+  const rootChildren: {
+    parts: Record<string, ReactNode>;
+    rest: ReactNode | ((item: ReviewItemView) => ReactNode);
+  } =
+    typeof children === 'function'
+      ? { parts: {}, rest: children }
+      : partitionReviewChildren(children, 'root');
+  const rootParts = rootChildren.parts;
   // An override REPLACES the packaged element but inherits its wiring: these parts are handed
   // geometry the rail alone can compute — the markers' `scale`/`offset`/`window`, the compose
   // box's `top` — and a host writing `<Review.Markers icon={…}/>` cannot supply any of it.
@@ -763,7 +775,7 @@ function ReviewRoot({
             offset={metrics.top}
             window={window_}
           >
-            {children}
+            {rootChildren.rest}
           </ReviewList>
         )
       : // Closed, the rail keeps its anchors and drops everything else: a small marker per item
@@ -854,11 +866,14 @@ function ReviewList({
   const { review, measure, cardClassName } = useRail();
   if (hidden) return null;
 
+  const listChildren =
+    typeof children === 'function' ? null : partitionReviewChildren(children, 'list');
   const present = idsOf(review.items);
   const roots = review.items.filter((entry) => !isThreadedReply(entry, present));
 
   if (roots.length === 0) {
-    return typeof children === 'function' ? null : <ReviewEmpty />;
+    if (typeof children === 'function') return null;
+    return listChildren?.parts.Empty ?? <ReviewEmpty />;
   }
 
   return (
@@ -885,9 +900,12 @@ function ReviewList({
             >
               {typeof children === 'function' ? (
                 children(entry)
+              ) : listChildren?.parts.Card &&
+                isValidElement<{ className?: string }>(listChildren.parts.Card) ? (
+                cloneReviewCard(listChildren.parts.Card, cardClassName)
               ) : (
                 <ReviewCard {...(cardClassName ? { className: cardClassName } : {})}>
-                  {children}
+                  {listChildren?.rest}
                 </ReviewCard>
               )}
             </div>
@@ -986,12 +1004,12 @@ ReviewMarkers.docxReviewPart = 'Markers' as const;
  * @public
  */
 function ReviewAddComment({
-  top,
+  top = null,
   drafting = false,
   className,
   hidden,
   children,
-}: ReviewPartProps & { top: number | null; drafting?: boolean }) {
+}: ReviewPartProps & { top?: number | null; drafting?: boolean }) {
   const { beginDraft } = useRail();
   const t = useReviewLabel();
   // Offered for ANY range, including one inside an existing comment: overlapping comments
