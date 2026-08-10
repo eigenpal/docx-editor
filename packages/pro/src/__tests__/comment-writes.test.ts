@@ -199,38 +199,11 @@ describe('adding a comment', () => {
 });
 
 describe('replying', () => {
-  test('serializes each range end before its comment reference, as Word requires', () => {
-    const store = open();
-    const target = paragraphWithText(store.part, 20);
-    const parent = addComment(store, {
-      anchor: { paragraphId: target.id, start: 0, end: 6 },
-      author: 'QA',
-      text: 'parent',
-    });
-    expect(parent.ok).toBe(true);
-    if (!parent.ok) return;
-    const reply = addComment(store, {
-      anchor: { paragraphId: target.id, start: 0, end: 6 },
-      author: 'Dev',
-      text: 'reply',
-      replyToCommentId: parent.commentId,
-    });
-    expect(reply.ok).toBe(true);
-    if (!reply.ok) return;
-
-    const story = serializeOoxmlPart(store.part);
-    for (const commentId of [parent.commentId, reply.commentId]) {
-      const end = story.indexOf(`<w:commentRangeEnd w:id="${commentId}"/>`);
-      const reference = story.indexOf(`<w:commentReference w:id="${commentId}"/>`);
-      expect(end).toBeGreaterThanOrEqual(0);
-      expect(reference).toBeGreaterThan(end);
-    }
-  });
-
-  test('a reply nests its range markers inside the parent range, as Word requires', () => {
-    // Equal-offset insertion used to open the reply *before* the parent start. Word then
-    // dropped `@w15:paraIdParent` on open even though commentsExtended named the thread, so
-    // the reply rendered as a sibling and later Word-authored replies could not restore it.
+  test('serializes coincident parent/reply markers in Word classic order', () => {
+    // Word accepts a thread only when the shared range serializes as
+    // start_parent, start_reply, end_reply, end_parent, ref_parent, ref_reply.
+    // Interleaved per-comment end→ref pairs (end_r, ref_r, end_p, ref_p) keep
+    // commentsExtended intact in our reader but make Word drop paraIdParent.
     const store = open();
     const target = paragraphWithText(store.part, 20);
     const parent = addComment(store, {
@@ -254,10 +227,14 @@ describe('replying', () => {
     const replyStart = story.indexOf(`<w:commentRangeStart w:id="${reply.commentId}"/>`);
     const replyEnd = story.indexOf(`<w:commentRangeEnd w:id="${reply.commentId}"/>`);
     const parentEnd = story.indexOf(`<w:commentRangeEnd w:id="${parent.commentId}"/>`);
+    const parentReference = story.indexOf(`<w:commentReference w:id="${parent.commentId}"/>`);
+    const replyReference = story.indexOf(`<w:commentReference w:id="${reply.commentId}"/>`);
     expect(parentStart).toBeGreaterThanOrEqual(0);
     expect(replyStart).toBeGreaterThan(parentStart);
     expect(replyEnd).toBeGreaterThan(replyStart);
     expect(parentEnd).toBeGreaterThan(replyEnd);
+    expect(parentReference).toBeGreaterThan(parentEnd);
+    expect(replyReference).toBeGreaterThan(parentReference);
   });
 
   test('a reply links to its parent through commentsExtended', () => {
