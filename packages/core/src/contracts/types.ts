@@ -289,6 +289,26 @@ export type ContentControlType =
   | 'repeatingSection';
 
 /**
+ * The control types an insertion may author. Picture and repeating section are deferred.
+ *
+ * A NARROWING of {@link ContentControlType} rather than a reuse of it: `checkbox` and
+ * `picture` carry content an insertion would have to invent, and `repeatingSection` is a
+ * container whose items have their own verbs. Reading a control still answers the wider
+ * type — a document may hold kinds this cannot create.
+ *
+ * `dropDownList` is spelt as OOXML spells the element, which is NOT how `ContentControlType`
+ * spells the same kind (`dropdown`). The read vocabulary and the write vocabulary disagree
+ * here already; this type sides with the one the tree op and the automation protocol use, so
+ * a caller who moves between the two surfaces writes the same string in both.
+ */
+export type InsertableContentControlType =
+  | 'richText'
+  | 'plainText'
+  | 'dropDownList'
+  | 'comboBox'
+  | 'date';
+
+/**
  * Narrows a content-control query. Fields combine with AND; an empty filter matches every
  * control.
  */

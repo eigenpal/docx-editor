@@ -248,3 +248,108 @@ describe('removeContentControl command', () => {
     expect(editor.exec({ type: 'removeContentControl' })).toEqual(can);
   });
 });
+
+describe('insertContentControl command', () => {
+  function selectRange(
+    surface: NonNullable<ReturnType<typeof createDocxEditor>['surface']>,
+    from: number,
+    to: number,
+    paragraphIndex = 0
+  ) {
+    const paragraphId = surface.session.paragraphIds()[paragraphIndex]!;
+    surface.setSelection({
+      anchor: { paragraphId, offset: from },
+      head: { paragraphId, offset: to },
+    });
+  }
+
+  test('wraps the selection in a new control carrying its tag and title', () => {
+    const editor = mount(p('Between ACME CORP and BUYER LTD'));
+    selectRange(editor.surface!, 8, 18);
+
+    const result = editor.exec({
+      type: 'insertContentControl',
+      subtype: 'plainText',
+      tag: 'party_name',
+      title: 'Party Name',
+    });
+
+    expect(result).toEqual({ ok: true, changed: true });
+    // Reading it back is the round trip: the query walks the tree from scratch, so a
+    // wrapper that only existed in the op would not be here.
+    expect(editor.query({ type: 'contentControls' })).toMatchObject([
+      { tag: 'party_name', alias: 'Party Name' },
+    ]);
+    // The characters are the ones that were there — wrapping moves run boundaries, it does
+    // not rewrite text.
+    expect(editor.query({ type: 'paragraphs' })[0]?.text).toBe('Between ACME CORP and BUYER LTD');
+  });
+
+  // The reason this command exists. The `save()` → headless insert → `load()` workaround
+  // reaches the same document and throws the undo stack away with it, so an insertion that
+  // cannot be undone is the bug being fixed, not a missing nicety.
+  test('is one undo step, and undo puts the document back', () => {
+    const editor = mount(p('Between ACME CORP and BUYER LTD'));
+    selectRange(editor.surface!, 8, 18);
+
+    editor.exec({ type: 'insertContentControl', subtype: 'plainText', tag: 'party_name' });
+    expect(editor.query({ type: 'contentControls' })).toHaveLength(1);
+
+    expect(editor.exec({ type: 'undo' })).toEqual({ ok: true, changed: true });
+    expect(editor.query({ type: 'contentControls' })).toHaveLength(0);
+    expect(editor.query({ type: 'paragraphs' })[0]?.text).toBe('Between ACME CORP and BUYER LTD');
+  });
+
+  test('refuses a collapsed caret rather than wrapping nothing', () => {
+    const editor = mount(p('Between ACME CORP'));
+    caretAt(editor.surface!, 8);
+
+    const command = { type: 'insertContentControl' as const, subtype: 'plainText' as const };
+    const can = editor.can(command);
+    expect(can).toEqual({
+      ok: false,
+      code: 'invalidArgs',
+      reason: 'there is nothing selected to wrap in a content control',
+    });
+    expect(editor.exec(command)).toEqual(can);
+    expect(editor.query({ type: 'contentControls' })).toHaveLength(0);
+  });
+
+  test('refuses a selection that crosses paragraphs', () => {
+    const editor = mount(p('first') + p('second'));
+    const ids = editor.surface!.session.paragraphIds();
+    editor.surface!.setSelection({
+      anchor: { paragraphId: ids[0]!, offset: 1 },
+      head: { paragraphId: ids[1]!, offset: 3 },
+    });
+
+    const command = { type: 'insertContentControl' as const, subtype: 'richText' as const };
+    const can = editor.can(command);
+    expect(can).toEqual({
+      ok: false,
+      code: 'unsupported',
+      reason: 'wrapping several paragraphs in one content control is not supported',
+    });
+    expect(editor.exec(command)).toEqual(can);
+    expect(editor.query({ type: 'contentControls' })).toHaveLength(0);
+  });
+
+  // `picture` and `repeatingSection` are real `ContentControlType` values a reader can
+  // return, so an untyped caller can hand one straight back to this command.
+  test('refuses a control type an insertion cannot author, and can() agrees', () => {
+    const editor = mount(p('Between ACME CORP'));
+    selectRange(editor.surface!, 8, 17);
+
+    const command = { type: 'insertContentControl', subtype: 'picture' } as unknown as Parameters<
+      typeof editor.exec
+    >[0];
+    const can = editor.can(command);
+    expect(can).toEqual({
+      ok: false,
+      code: 'invalidArgs',
+      reason: 'that control type cannot be inserted (picture)',
+    });
+    expect(editor.exec(command)).toEqual(can);
+    expect(editor.query({ type: 'contentControls' })).toHaveLength(0);
+  });
+});

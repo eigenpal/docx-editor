@@ -13,7 +13,11 @@ import type {
   ExecErrorCode,
   ExecResult,
 } from '@docx-editor.dev/core/contracts/editor';
-import type { ContentControlFilter, ContentControlType } from '../contracts/types.ts';
+import type {
+  ContentControlFilter,
+  ContentControlType,
+  InsertableContentControlType,
+} from '../contracts/types.ts';
 import type { ContentControlSummary } from '../contracts/document.ts';
 import type { DocAnchor, DocLocation, DocRange } from '../contracts/types.ts';
 import {
@@ -334,13 +338,84 @@ export function inlineContentControlsAt(
 // ─── Command dispatch ────────────────────────────────────────────────────────
 
 export type ContentControlEditorCommand =
+  | {
+      type: 'insertContentControl';
+      target?: DocTarget;
+      subtype: InsertableContentControlType;
+      tag?: string;
+      title?: string;
+    }
   | { type: 'setContentControlValue'; target?: DocTarget; value: string }
   | { type: 'removeContentControl'; target?: DocTarget };
 
 export function isContentControlEditorCommand(command: {
   type: string;
 }): command is ContentControlEditorCommand {
-  return command.type === 'setContentControlValue' || command.type === 'removeContentControl';
+  return (
+    command.type === 'insertContentControl' ||
+    command.type === 'setContentControlValue' ||
+    command.type === 'removeContentControl'
+  );
+}
+
+/**
+ * The control types an insertion may author, as a runtime set.
+ *
+ * The contract type already narrows this at compile time; the set is what answers an
+ * untyped caller, which is the same reason the gate below re-checks `value` for
+ * `setContentControlValue` rather than trusting its declared type.
+ */
+const INSERTABLE_SUBTYPES: ReadonlySet<string> = new Set<InsertableContentControlType>([
+  'richText',
+  'plainText',
+  'dropDownList',
+  'comboBox',
+  'date',
+]);
+
+/**
+ * The tree op for an insertion, or the refusal explaining why there is none.
+ *
+ * Reads the SELECTION rather than `command.target`, unlike its two neighbours. They address
+ * a control that already exists and can look one up by id; an insertion addresses the span
+ * that is about to become one, and the surface's own selection is the only range the user
+ * ever pointed at. `selectionMarkOf` already answers null when that range crosses
+ * paragraphs, which is exactly the shape a single inline `w:sdt` cannot wrap.
+ */
+function insertContentControlOp(
+  surface: PaginatedSurface,
+  command: Extract<ContentControlEditorCommand, { type: 'insertContentControl' }>
+): { ok: true; op: TreeDocOp } | { ok: false; code: ExecErrorCode; reason: string } {
+  const mark = selectionMarkOf(surface.state().selection);
+  if (!mark) {
+    return {
+      ok: false,
+      code: 'unsupported',
+      reason: 'wrapping several paragraphs in one content control is not supported',
+    };
+  }
+  // A collapsed caret has no characters to wrap. Word inserts a placeholder control here;
+  // this refuses instead, because a control holding text the caller never asked for is a
+  // document edit they did not request and would have to detect to undo.
+  if (mark.start === mark.end) {
+    return {
+      ok: false,
+      code: 'invalidArgs',
+      reason: 'there is nothing selected to wrap in a content control',
+    };
+  }
+  return {
+    ok: true,
+    op: {
+      op: 'insertContentControl',
+      paragraphId: mark.paragraphId,
+      start: mark.start,
+      end: mark.end,
+      type: command.subtype,
+      ...(command.tag === undefined ? {} : { tag: command.tag }),
+      ...(command.title === undefined ? {} : { alias: command.title }),
+    },
+  };
 }
 
 type CommandGate = { ok: true } | { ok: false; refusal: Extract<ExecResult, { ok: false }> };
@@ -605,6 +680,16 @@ function gateContentControlCommand(
       },
     };
   }
+  if (command.type === 'insertContentControl' && !INSERTABLE_SUBTYPES.has(command.subtype)) {
+    return {
+      ok: false,
+      refusal: {
+        ok: false,
+        code: 'invalidArgs',
+        reason: `that control type cannot be inserted (${String(command.subtype)})`,
+      },
+    };
+  }
   return { ok: true };
 }
 
@@ -623,14 +708,20 @@ export function canContentControlCommand(
 ): CanResult {
   const gated = gateContentControlCommand(command, surface, mode, options);
   if (!gated.ok) return gated.refusal;
-  const resolved = resolveContentControlTarget(surface!, command.target);
-  if (!resolved.ok) {
+  // An insertion has no control to resolve — it is about to create the one it addresses —
+  // so it skips the lookup its neighbours depend on and builds its op from the selection.
+  const built =
+    command.type === 'insertContentControl' ? insertContentControlOp(surface!, command) : null;
+  if (built && !built.ok) return { ok: false, code: built.code, reason: built.reason };
+  const resolved = built ? null : resolveContentControlTarget(surface!, command.target);
+  if (resolved && !resolved.ok) {
     return { ok: false, code: resolved.code, reason: resolved.reason };
   }
-  const op: TreeDocOp =
-    command.type === 'setContentControlValue'
-      ? { op: 'setContentControlValue', controlId: resolved.controlId, value: command.value }
-      : { op: 'removeContentControl', controlId: resolved.controlId };
+  const op: TreeDocOp = built
+    ? built.op
+    : command.type === 'setContentControlValue'
+      ? { op: 'setContentControlValue', controlId: resolved!.controlId, value: command.value }
+      : { op: 'removeContentControl', controlId: resolved!.controlId };
   const rejection = validateTreeOp(surface!.session.part(), op);
   if (rejection) {
     return {
@@ -647,8 +738,20 @@ export function execContentControlCommand(
   surface: PaginatedSurface,
   command: ContentControlEditorCommand
 ): ExecResult {
-  const resolved = resolveContentControlTarget(surface, command.target);
-  if (!resolved.ok) {
+  // See `canContentControlCommand`: an insertion builds its op from the selection rather
+  // than resolving a control that does not exist yet.
+  const built =
+    command.type === 'insertContentControl' ? insertContentControlOp(surface, command) : null;
+  if (built && !built.ok) {
+    return {
+      ok: false,
+      code: built.code,
+      reason: built.reason,
+      ...(command.target !== undefined ? { target: command.target } : {}),
+    };
+  }
+  const resolved = built ? null : resolveContentControlTarget(surface, command.target);
+  if (resolved && !resolved.ok) {
     const target = resolved.target ?? command.target;
     return {
       ok: false,
@@ -660,10 +763,11 @@ export function execContentControlCommand(
 
   const before = surface.session.revision();
   const mark = selectionMarkOf(surface.state().selection);
-  const op: TreeDocOp =
-    command.type === 'setContentControlValue'
-      ? { op: 'setContentControlValue', controlId: resolved.controlId, value: command.value }
-      : { op: 'removeContentControl', controlId: resolved.controlId };
+  const op: TreeDocOp = built
+    ? built.op
+    : command.type === 'setContentControlValue'
+      ? { op: 'setContentControlValue', controlId: resolved!.controlId, value: command.value }
+      : { op: 'removeContentControl', controlId: resolved!.controlId };
 
   const result = surface.session.applyTreeOps([op], mark, mark);
   if (result.rejected) {

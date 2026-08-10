@@ -200,6 +200,9 @@ export interface IndentFormatting {
 }
 
 // @public
+export type InsertableContentControlType = 'richText' | 'plainText' | 'dropDownList' | 'comboBox' | 'date';
+
+// @public
 export interface NumberingRef {
     readonly level: number;
     // (undocumented)
