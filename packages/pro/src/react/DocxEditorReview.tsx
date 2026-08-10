@@ -284,7 +284,8 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
   furniture?: ReactNode;
   /**
    * Render the packaged arrangement. `false` mounts the rail and its context only, so a host
-   * can lay the cards out itself while keeping the subscription and the anchoring.
+   * can lay the cards out itself while keeping the subscription and the anchoring. Explicit
+   * compound parts still inherit root-owned geometry; no omitted part is added back.
    */
   preset?: boolean;
   /**
@@ -744,47 +745,52 @@ function ReviewRoot({
     });
   };
 
-  const affordances = preset ? (
+  const affordances = (
     <>
-      {takeRoot(
-        'AddComment',
-        <ReviewAddComment top={composeTop} drafting={draftAnchorY !== null} />
-      )}
-      {!open || draftAnchorY === null || composeTop === null
+      {preset || 'AddComment' in rootParts
+        ? takeRoot(
+            'AddComment',
+            <ReviewAddComment top={composeTop} drafting={draftAnchorY !== null} />
+          )
+        : null}
+      {!open || draftAnchorY === null || composeTop === null || (!preset && !('Draft' in rootParts))
         ? null
         : takeRoot('Draft', <ReviewDraft top={composeTop} />)}
       {/* Mounted open OR closed: the balloon is how a reader inspects a change whose rail
           card is filtered away, and a closed pane filters ALL of them away. */}
-      {takeRoot('Balloon', <ReviewBalloon />)}
+      {preset || 'Balloon' in rootParts ? takeRoot('Balloon', <ReviewBalloon />) : null}
     </>
-  ) : null;
+  );
 
-  // `preset={false}` hands the panel over verbatim, but a render prop needs the list to run it.
-  const body = !preset
-    ? typeof children === 'function'
-      ? null
-      : children
-    : open
-      ? takeRoot(
-          'List',
-          <ReviewList
-            stack={stack}
-            positions={stacked}
-            collapsed={collapsedKeys}
-            scale={metrics.scale}
-            offset={metrics.top}
-            window={window_}
-          >
-            {rootChildren.rest}
-          </ReviewList>
-        )
-      : // Closed, the rail keeps its anchors and drops everything else: a small marker per item
+  const list = (
+    <ReviewList
+      stack={stack}
+      positions={stacked}
+      collapsed={collapsedKeys}
+      scale={metrics.scale}
+      offset={metrics.top}
+      window={window_}
+    >
+      {rootChildren.rest}
+    </ReviewList>
+  );
+  const markers = <ReviewMarkers scale={metrics.scale} offset={metrics.top} window={window_} />;
+  // `preset={false}` supplies no defaults, but an explicit compound part still inherits the
+  // geometry only the root can calculate. Unrecognized host nodes remain verbatim.
+  const body = open
+    ? preset || 'List' in rootParts
+      ? takeRoot('List', list)
+      : typeof rootChildren.rest === 'function'
+        ? null
+        : rootChildren.rest
+    : preset || 'Markers' in rootParts
+      ? // Closed, the rail keeps its anchors and drops everything else: a small marker per item
         // in the margin, which is how a reader sees there is something to read without giving up
         // the width. Clicking one opens the pane on that item.
-        takeRoot(
-          'Markers',
-          <ReviewMarkers scale={metrics.scale} offset={metrics.top} window={window_} />
-        );
+        takeRoot('Markers', markers)
+      : typeof rootChildren.rest === 'function'
+        ? null
+        : rootChildren.rest;
 
   return (
     <ReviewContext.Provider value={value}>
@@ -1043,7 +1049,7 @@ ReviewAddComment.docxReviewPart = 'AddComment' as const;
  *
  * @public
  */
-function ReviewDraft({ top, className, hidden }: ReviewPartProps & { top: number }) {
+function ReviewDraft({ top = 0, className, hidden }: ReviewPartProps & { top?: number }) {
   const { review, endDraft, measure } = useRail();
   const t = useReviewLabel();
   const [text, setText] = useState('');

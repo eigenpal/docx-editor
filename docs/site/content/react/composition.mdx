@@ -444,7 +444,7 @@ Root parts remain ordinary siblings, so a custom Add Comment control and custom 
 The older root callback form remains supported as shorthand for an implicit `List`, but it
 cannot express root siblings and is not recommended for new code.
 
-When the whole review surface shares nothing with the packaged layout, `preset={false}` mounts the rail and its context without the packaged arrangement, so you can arrange every part yourself. `useStackedReviewPositions(items, heights, { gap, scale: editor.getRenderScale() })` provides the packaged stacking math. See [Tracked changes](/docs/2.x/pro/tracked-changes) for the scale and placement details. Below that, `useReview()` gives you the queue with no chrome at all.
+When the whole review surface shares nothing with the packaged layout, `preset={false}` mounts the rail and its context without the packaged arrangement, so you can arrange every part yourself. Explicit parts still receive their root-owned positioning; omitted defaults stay omitted. `useStackedReviewPositions(items, heights, { gap, scale: editor.getRenderScale() })` provides the packaged stacking math. See [Tracked changes](/docs/2.x/pro/tracked-changes) for the scale and placement details. Below that, `useReview()` gives you the queue with no chrome at all.
 
 To add host content to some cards and not others, `useReviewItem()` reads the card a child is rendered inside:
 

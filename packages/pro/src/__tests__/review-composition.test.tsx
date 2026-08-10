@@ -132,6 +132,47 @@ describe('review compound composition', () => {
     expect(view.getByTestId('root-card-extra').textContent).toBe('Root shorthand');
   });
 
+  test('wires explicitly supplied parts without adding preset defaults', async () => {
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={TRACKED}
+        modules={[reviewModule()]}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview preset={false}>
+            <DocxEditorReview.AddComment>
+              <button type="button" data-testid="explicit-add-comment">
+                Add
+              </button>
+            </DocxEditorReview.AddComment>
+            <DocxEditorReview.Draft />
+            <DocxEditorReview.List>
+              {(item) => <div data-testid="explicit-review-card">{item.text}</div>}
+            </DocxEditorReview.List>
+          </DocxEditorReview>
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+
+    expect(view.getAllByTestId('explicit-review-card')).toHaveLength(1);
+    expect(view.queryByTestId('review-balloon')).toBeNull();
+    await act(async () => {
+      instance!.surface!.selectAll();
+    });
+    const add = view.getByTestId('explicit-add-comment');
+    expect(add.style.position).toBe('absolute');
+    expect(add.style.top).not.toBe('');
+    await act(async () => {
+      add.click();
+    });
+    expect(view.getByTestId('review-draft')).toBeDefined();
+  });
+
   test('uses a List Empty override and preserves legacy root render children', () => {
     const empty = render(
       <DocxEditorRoot document={PLAIN} modules={[reviewModule()]}>
