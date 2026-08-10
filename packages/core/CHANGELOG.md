@@ -1,5 +1,12 @@
 # @docx-editor.dev/core
 
+## 2.2.1
+
+### Patch Changes
+
+- 35f6d04: Fix exported comment replies opening as separate comments instead of a thread in Microsoft Word.
+  - @docx-editor.dev/i18n@2.2.1
+
 ## 2.2.0
 
 ### Minor Changes
