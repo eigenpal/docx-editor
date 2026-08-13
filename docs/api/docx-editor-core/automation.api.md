@@ -5,13 +5,13 @@
 ```ts
 
 // @public
-export const AUTOMATION_COMMAND_OPERATIONS: readonly ["insertText", "replaceSpan", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "selectBookmark", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "insertListParagraph", "setHyperlink", "setCommentResolved", "replyToComment", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl", "insertCustomNode"];
+export const AUTOMATION_COMMAND_OPERATIONS: readonly ["insertText", "replaceSpan", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "selectBookmark", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "insertListParagraph", "setHyperlink", "insertComment", "setCommentResolved", "replyToComment", "deleteComment", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl", "insertCustomNode"];
 
 // @public
 export const AUTOMATION_QUERY_OPERATIONS: readonly ["getDocument", "getBody", "getParagraphs", "getSpanParagraphs", "getText", "getSpanText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
 
 // @public
-export const AUTOMATION_SOLITARY_OPERATIONS: readonly ["deleteNote", "setCommentResolved", "replyToComment", "insertCustomNode"];
+export const AUTOMATION_SOLITARY_OPERATIONS: readonly ["deleteNote", "insertComment", "setCommentResolved", "replyToComment", "insertCustomNode"];
 
 // @public
 export type AutomationAlignment = 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
@@ -613,6 +613,22 @@ export type AutomationOperation =
     readonly comment: AutomationHandle;
 }
 /**
+* Create a top-level comment anchored to a span.
+*
+* Empty spans are valid insertion-point comments. A span may cross paragraphs in one story,
+* but not table-cell boundaries: range markers cannot safely open in one cell and close in
+* another. `author` and non-empty, single-paragraph `text` are required by this slice.
+*
+* Answers the NEW comment whose id is minted inside the package transaction.
+*/
+| {
+    readonly op: 'insertComment';
+    readonly span: AutomationSpanRef;
+    readonly text: string;
+    readonly author: string;
+    readonly date?: string;
+}
+/**
 * Resolve a comment thread, or reopen it.
 *
 * A THREAD: the comment and its replies together, which is what resolving means in Word. Marking
@@ -639,6 +655,17 @@ export type AutomationOperation =
     readonly text: string;
     readonly author: string;
     readonly date?: string;
+}
+/**
+* Delete one comment object.
+*
+* A top-level comment removes its whole thread and anchors. A reply removes only that reply;
+* its parent and siblings remain. Several delete operations may share one batch and commit as
+* one package transaction and one undo unit, but they cannot share a batch with any other write.
+*/
+| {
+    readonly op: 'deleteComment';
+    readonly comment: AutomationHandle;
 }
 /**
 * The tracked changes of a story, in document order.

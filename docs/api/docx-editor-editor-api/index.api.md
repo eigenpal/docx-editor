@@ -605,6 +605,7 @@ class Range_2 extends ModelObject implements PromisedItem {
     hydrateNull(): void;
     get hyperlink(): string;
     set hyperlink(value: string);
+    insertComment(commentText: string): Comment_2;
     insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;
     insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End' | 'Before' | 'After'): Range_2;
     // @internal
