@@ -131,7 +131,9 @@
     "ariaLabel": "זום: {label}",
     "zoomIn": "הגדל תצוגה",
     "zoomLevel": "רמת זום",
-    "zoomOut": "הקטן תצוגה"
+    "zoomOut": "הקטן תצוגה",
+    "automatic": null,
+    "fitWidth": null
   },
   "colorPicker": {
     "highlightColors": "צבע סימון",

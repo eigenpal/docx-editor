@@ -217,3 +217,69 @@ describe('a marker never lands inside an indivisible group', () => {
     expect(fieldChars).toBe(5);
   });
 });
+
+describe('coincident markers keep Word classic order', () => {
+  test('a second range on the same span nests starts/ends and trails references', () => {
+    // Same insertion biases `addComment` uses for a reply. Interleaved end→ref pairs here
+    // are exactly what made Word drop thread parent links on export.
+    const store = storeOf(`<w:p>${run('abcdef')}</w:p>`);
+    const paragraph = firstParagraph(store);
+    const place = (commentId: string) => {
+      const applied = store.transact((ctx) => {
+        ctx.apply({
+          op: 'insertCommentMarker',
+          paragraphId: paragraph.id,
+          offset: 6,
+          commentId,
+          marker: 'reference',
+        });
+        ctx.apply({
+          op: 'insertCommentMarker',
+          paragraphId: paragraph.id,
+          offset: 6,
+          commentId,
+          marker: 'end',
+        });
+        ctx.apply({
+          op: 'insertCommentMarker',
+          paragraphId: paragraph.id,
+          offset: 0,
+          commentId,
+          marker: 'start',
+        });
+      });
+      expect(applied.ok).toBe(true);
+    };
+    place('1');
+    place('2');
+
+    const after = firstParagraph(store);
+    const shape: string[] = [];
+    for (const child of after.children) {
+      if (child.kind === 'commentRangeStart' || child.kind === 'commentRangeEnd') {
+        const id = child.attributes.find((entry) => entry.localName === 'id')?.value;
+        shape.push(`${child.kind}#${id ?? '?'}`);
+        continue;
+      }
+      if (
+        child.kind === 'run' &&
+        child.children.some((inner) => inner.kind === 'commentReference')
+      ) {
+        const ref = child.children.find((inner) => inner.kind === 'commentReference');
+        const id =
+          ref && ref.kind !== 'textValue'
+            ? ref.attributes.find((entry) => entry.localName === 'id')?.value
+            : undefined;
+        shape.push(`commentReference#${id ?? '?'}`);
+      }
+    }
+    expect(shape).toEqual([
+      'commentRangeStart#1',
+      'commentRangeStart#2',
+      'commentRangeEnd#2',
+      'commentRangeEnd#1',
+      'commentReference#1',
+      'commentReference#2',
+    ]);
+  });
+});

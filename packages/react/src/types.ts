@@ -10,6 +10,7 @@ import type {
   EditorSnapshot,
   ExecResult,
   FontConfiguration,
+  ZoomMode,
 } from '@docx-editor.dev/core/contracts/editor';
 import type {
   EditorModule,
@@ -177,7 +178,15 @@ export interface DocxEditorProps {
   document?: DocumentSource;
   /** 'edit' (default) or 'view' (read-only). Applied at mount only — not reactive; remount to change. */
   mode?: EditorMode;
+  /** A fixed scale. Supplying one also makes the mode fixed unless `zoomMode` says otherwise. */
   zoom?: number;
+  /**
+   * Where the scale comes from. Defaults to `'auto'`: fit the page width, between 50% and
+   * 100%. A fit tracks the room beside the page, so opening comments shrinks the document
+   * instead of pushing it off screen; past the floor it scrolls sideways instead.
+   * `{ type: 'fixed' }` opts out.
+   */
+  zoomMode?: ZoomMode | 'auto';
   locale?: string;
   author?: string;
   /**

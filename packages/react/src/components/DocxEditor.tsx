@@ -222,6 +222,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       mode,
       modules,
       zoom,
+      zoomMode,
       onReady,
       onChange,
       onFontError,
@@ -397,6 +398,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
         {...(mode !== undefined ? { mode } : {})}
         {...(modules !== undefined ? { modules } : {})}
         {...(zoom !== undefined ? { zoom } : {})}
+        {...(zoomMode !== undefined ? { zoomMode } : {})}
         tableInteractionLabel={tableInteractionLabel}
         {...(onReady ? { onReady } : {})}
         {...(onChange ? { onChange } : {})}

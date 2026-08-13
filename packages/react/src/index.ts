@@ -177,6 +177,7 @@ export {
   type ContentControlProps,
 } from './editor/DocxEditorContentControl';
 export { useEditorState } from './editor/useEditorState';
+export { useZoom, type UseZoomResult } from './editor/useZoom';
 export { useEditorCaret, type EditorCaret } from './editor/useEditorCaret';
 export { useEditorCommand, type EditorCommandState } from './editor/useEditorCommand';
 export {

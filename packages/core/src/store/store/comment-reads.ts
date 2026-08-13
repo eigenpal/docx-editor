@@ -82,7 +82,7 @@ export interface CommentRecord {
   readonly date?: string;
   /** Body paragraphs, as tree nodes, so the surface renders measured text rather than a string. */
   readonly blocks: readonly OoxmlElement[];
-  /** `w14:paraId` of the first body paragraph — the key thread state is stored under. */
+  /** `w14:paraId` of the last body paragraph — the key thread state is stored under. */
   readonly paraId?: string;
   /** `@w16cid:parentId` — the `w:id` of the comment this replies to, when the file names it. */
   readonly parentCommentId?: string;
@@ -283,8 +283,13 @@ export function commentsOfPart(part: OoxmlPart): CommentRecord[] {
         }
         const initials = wml(node, 'initials');
         const date = wml(node, 'date');
-        const first = blocks.find((block) => block.kind === 'paragraph');
-        const paraId = first ? attribute(first, W14_NAMESPACE_URI, 'paraId') : undefined;
+        let last: OoxmlElement | undefined;
+        for (let index = blocks.length - 1; index >= 0; index -= 1) {
+          if (blocks[index]?.kind !== 'paragraph') continue;
+          last = blocks[index];
+          break;
+        }
+        const paraId = last ? attribute(last, W14_NAMESPACE_URI, 'paraId') : undefined;
         // A comment naming ITSELF as parent is a file defect, not a cycle to propagate.
         const rawParent = attribute(node, W16CID_NAMESPACE_URI, 'parentId');
         const parentCommentId = rawParent === id ? undefined : rawParent;

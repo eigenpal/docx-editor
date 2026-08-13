@@ -5,9 +5,9 @@
 // `field-instruction.ts`. This module projects those fields into measurable pieces and
 // finalizes furniture once document page counts are known.
 //
-// Well-formed complex fields and `w:fldSimple` each contribute one UTF-16 model unit
-// (aligned with `paragraphTextOf` / `segmentsOf`). Cached result text is not independently
-// editable. Malformed fields demote so interior content never disappears.
+// Well-formed computed fields and `w:fldSimple` each contribute one UTF-16 model unit
+// (aligned with `paragraphTextOf` / `segmentsOf`). FORMTEXT results instead keep their literal
+// character offsets because they are user input. Malformed fields demote so content remains.
 //
 // Shipped scope is furniture-only for live page-number evaluation. A simple PAGE /
 // NUMPAGES / SECTIONPAGES field evaluates like its complex twin when a page context is
@@ -19,7 +19,6 @@
 // Projection is a layout concern (span geometry + tab alignment), not paint-time substitution.
 
 import {
-  atomicFieldSpansOf,
   fldSimpleInstr,
   hardBreakKind,
   hardBreakText,
@@ -76,6 +75,7 @@ import {
 } from './field-pieces.ts';
 import type { InlineDrawingLayoutContext, InlineDrawingLayoutInput } from './drawing-layout.ts';
 import { isRunLevelMcAlternateContent } from '../store/package/drawing-projection.ts';
+import { parsedFieldSpansOf } from '../store/package/field-nodes.ts';
 import {
   emptyNamespaceScope,
   namespaceScopeForNode,
@@ -206,7 +206,7 @@ function modelTextOfRunChild(grand: OoxmlNode): string {
 /**
  * Pending live or inert-cache projection for one atomic field unit.
  *
- * Well-formed complex fields contribute exactly one UTF-16 model unit. Cached result text
+ * Well-formed computed fields contribute exactly one UTF-16 model unit. Cached result text
  * is not independently addressable — it only donates display text and result-run style.
  * Missing `end` demotes: buffered cache is flushed as ordinary pieces with real lengths.
  */
@@ -215,6 +215,8 @@ interface PendingFieldProjection {
   kind: AllowlistedPageField | null;
   /** True when this pending field is a well-formed atomic unit (begin will close). */
   atomic: boolean;
+  /** True when this closed FORMTEXT field exposes its authored result as ordinary text. */
+  editableResult: boolean;
   atomStart: number;
   props: readonly OoxmlProperty[];
   style: ResolvedRunStyle;
@@ -266,10 +268,10 @@ interface PendingFieldProjection {
  * Flatten a paragraph into measurable pieces, projecting allowlisted page fields when a
  * page context is supplied (furniture finalize / `withPageContext`).
  *
- * Well-formed complex fields (`begin`→`end`) and typed/generic `w:fldSimple` each contribute
- * one UTF-16 model unit so offsets stay aligned with `paragraphTextOf`. Cached result text
- * is never independently editable. Malformed fields demote: markers contribute nothing and
- * interior result text stays visible at its natural length.
+ * Well-formed computed fields (`begin`→`end`) and typed/generic `w:fldSimple` each contribute
+ * one UTF-16 model unit so offsets stay aligned with `paragraphTextOf`. FORMTEXT results remain
+ * editable at their natural length. Malformed fields demote the same way: markers contribute
+ * nothing and interior result text stays visible.
  *
  * `w:fldSimple` advances the model offset by one and paints its result as a single projected
  * piece (live page value when allowlisted and a page context is supplied; otherwise cached
@@ -297,12 +299,18 @@ export function piecesOfParagraph(
   /** The link the walk is currently inside, so every piece it emits is tagged with it. */
   let currentLink: SpanLinkRecord | undefined;
 
-  const atoms = atomicFieldSpansOf(paragraph as OoxmlParagraphNode, {
+  const fields = parsedFieldSpansOf(paragraph as OoxmlParagraphNode, {
     maxNesting: MAX_FIELD_NESTING,
     maxInstructionChars: MAX_FIELD_INSTRUCTION_CHARS,
   });
+  const atoms = fields.filter((span) => span.addressing === 'atomic');
   const atomBeginIds = new Set(
-    atoms.filter((span) => span.kind === 'complex').map((s) => s.node.id)
+    atoms.filter((span) => span.kind === 'complex').map((span) => span.node.id)
+  );
+  const editableResultBeginIds = new Set(
+    fields
+      .filter((span) => span.kind === 'complex' && span.addressing === 'editable-result')
+      .map((span) => span.node.id)
   );
   const coveredIds = new Set<string>();
   for (const span of atoms) {
@@ -611,6 +619,7 @@ export function piecesOfParagraph(
           pending = {
             kind: null,
             atomic,
+            editableResult: editableResultBeginIds.has(grand.id),
             atomStart: offset,
             props,
             style,
@@ -761,6 +770,7 @@ export function piecesOfParagraph(
           end: offset + text.length,
           ...(revisions.length > 0 ? { revisions } : {}),
           ...(currentLink ? { link: currentLink } : {}),
+          ...(pending.editableResult ? { fieldAtom: { formField: pending.formField } } : {}),
         });
         offset += text.length;
         pending.bufferOffset = offset;

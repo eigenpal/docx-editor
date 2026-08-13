@@ -310,6 +310,90 @@ describe('atomic UTF-16 addressing', () => {
   });
 });
 
+describe('editable FORMTEXT result addressing', () => {
+  const formText = (result: string): string =>
+    `<w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="Text1"/>` +
+    `<w:textInput><w:default w:val="Street"/></w:textInput></w:ffData></w:fldChar></w:r>` +
+    `<w:r><w:instrText xml:space="preserve"> FORMTEXT </w:instrText></w:r>` +
+    `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+    result +
+    `<w:r><w:fldChar w:fldCharType="end"/></w:r>`;
+
+  test('literal result characters keep one-to-one model and layout offsets', () => {
+    const part = parse(
+      `<w:p><w:r><w:t>A</w:t></w:r>` +
+        formText(`<w:r><w:t>Street</w:t></w:r>`) +
+        `<w:r><w:t>Z</w:t></w:r></w:p>`
+    );
+    const paragraph = paragraphOf(part);
+
+    expect(paragraphTextOf(part, paragraph.id)).toBe('AStreetZ');
+    expect(atomicFieldSpansOf(paragraph)).toHaveLength(0);
+    expect(segmentsOf(paragraph).map((segment) => [segment.start, segment.end])).toEqual([
+      [0, 1],
+      [1, 7],
+      [7, 8],
+    ]);
+    const pieces = piecesOfParagraph(paragraph);
+    expect(pieces.map((piece) => piece.text)).toEqual(['A', 'Street', 'Z']);
+    expect(pieces[1]).toMatchObject({
+      start: 1,
+      end: 7,
+      fieldAtom: { formField: true },
+    });
+    expect(pieces[1]!.projected).toBeUndefined();
+  });
+
+  test('editing a tracked result preserves field chrome, revision, and round-trip', () => {
+    const part = parse(
+      `<w:p>` +
+        formText(
+          `<w:ins w:id="17" w:author="E" w:date="2026-08-05T11:42:40Z">` +
+            `<w:r><w:t>Street</w:t></w:r></w:ins>`
+        ) +
+        `</w:p>`
+    );
+    const paragraph = paragraphOf(part);
+    const edited = applyTreeOp(part, {
+      op: 'deleteText',
+      paragraphId: paragraph.id,
+      start: 2,
+      end: 3,
+    });
+    expect(edited.ok).toBe(true);
+    if (!edited.ok) return;
+
+    expect(paragraphTextOf(edited.part, paragraph.id)).toBe('Street'.slice(0, 2) + 'eet');
+    const xml = serializeOoxmlPart(edited.part);
+    expect(xml).toContain('FORMTEXT');
+    expect(xml).toContain('<w:ins');
+    expect(xml).toContain('w:author="E"');
+    expect(xml).toContain('<w:fldChar');
+    const again = reopen(edited.part);
+    expect(paragraphTextOf(again, paragraph.id)).toBe('Steet');
+    expect(canonicalOoxmlFingerprint(again)).toBe(canonicalOoxmlFingerprint(edited.part));
+  });
+
+  test('computed fields remain atomic even when ffData is present', () => {
+    const part = parse(
+      `<w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData/></w:fldChar></w:r>` +
+        `<w:r><w:instrText>REF Company</w:instrText></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:t>Street</w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>`
+    );
+    const paragraph = paragraphOf(part);
+    expect(paragraphTextOf(part, paragraph.id)).toBe(FIELD_ATOM_CHAR);
+    expect(atomicFieldSpansOf(paragraph)).toHaveLength(1);
+    expect(piecesOfParagraph(paragraph)[0]).toMatchObject({
+      text: 'Street',
+      start: 0,
+      end: 1,
+      projected: true,
+    });
+  });
+});
+
 describe('malformed demotion (fail-open)', () => {
   test('end without begin leaves surrounding text addressable', () => {
     const part = parse(

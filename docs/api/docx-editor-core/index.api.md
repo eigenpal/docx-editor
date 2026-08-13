@@ -1010,8 +1010,8 @@ export interface DocxEditorConfig {
     onFontError?: (error: EditorFontError) => void;
     tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
     translate?: (key: string, params?: Record<string, string | number>) => string;
-    // (undocumented)
     zoom?: number;
+    zoomMode?: ZoomMode | 'auto';
 }
 
 // @public
@@ -1182,6 +1182,7 @@ export interface Editor {
     } | null;
     // (undocumented)
     getZoom(): number;
+    getZoomMode(): ZoomMode;
     isActive(command: EditorCommand, options?: {
         scope?: EditorScope;
     }): boolean;
@@ -1215,6 +1216,7 @@ export interface Editor {
     setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null): void;
     setTableInteractionLabel(resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string): void;
     setZoom(zoom: number): ExecResult;
+    setZoomMode(mode: ZoomMode | 'auto'): ExecResult;
     // (undocumented)
     snapshot(options?: {
         scope?: EditorScope;
@@ -1692,6 +1694,7 @@ export interface EditorSnapshot {
     } | null;
     // (undocumented)
     readonly zoom: number;
+    readonly zoomMode?: ZoomMode;
 }
 
 // @public
@@ -2731,6 +2734,19 @@ export interface Watermark {
 
 // @public
 export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'];
+
+// @public
+export type ZoomFitTarget = 'pageWidth';
+
+// @public
+export type ZoomMode = {
+    readonly type: 'fixed';
+} | {
+    readonly type: 'fit';
+    readonly fit: ZoomFitTarget;
+    readonly minZoom?: number;
+    readonly maxZoom?: number;
+};
 
 // (No @packageDocumentation comment for this package)
 

@@ -142,9 +142,10 @@ function commentRecords(
   return byId;
 }
 
-/** The `w14:paraId` of a comment's first paragraph, upper-cased, when it has one. */
+/** The `w14:paraId` of a comment's last paragraph, upper-cased, when it has one. */
 function paraIdOf(comment: OoxmlElement): string | null {
-  for (const child of comment.children) {
+  for (let index = comment.children.length - 1; index >= 0; index -= 1) {
+    const child = comment.children[index]!;
     if (child.kind !== 'paragraph') continue;
     const value = attribute(child, W14_NAMESPACE_URI, 'paraId');
     return value === undefined ? null : value.toUpperCase();

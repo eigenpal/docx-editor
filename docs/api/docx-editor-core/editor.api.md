@@ -24,6 +24,9 @@ export function applyThemeShade(hex: string, keep: number): string;
 export function applyThemeTint(hex: string, keep: number): string;
 
 // @public
+export const AUTO_ZOOM_MODE: ZoomMode;
+
+// @public
 export function blankDocumentBytes(): Uint8Array;
 
 // @public
@@ -779,8 +782,8 @@ export interface DocxEditorConfig {
     onFontError?: (error: EditorFontError) => void;
     tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
     translate?: (key: string, params?: Record<string, string | number>) => string;
-    // (undocumented)
     zoom?: number;
+    zoomMode?: ZoomMode | 'auto';
 }
 
 // @public
@@ -865,6 +868,9 @@ export function finalizeImageOverlayInteraction(options: {
     readonly shiftKey: boolean;
     readonly anchorFrameOrigin: AnchorFrameOrigin | null;
 }): FinalizedImageOverlayInteraction;
+
+// @public
+export const FIT_WIDTH_ZOOM_MODE: ZoomMode;
 
 // @public
 export interface FontConfigurationBase extends FontConfigurationFragment {
@@ -1496,6 +1502,9 @@ export function resolveThemeColorHex(color: Extract<ColorValue, {
 };
 
 // @public
+export function resolveZoomMode(mode: ZoomMode | 'auto'): ZoomMode | null;
+
+// @public
 export interface ReviewModelInput {
     readonly commentsExtendedPart?: OoxmlPart | undefined;
     readonly commentsPart?: OoxmlPart | undefined;
@@ -1590,6 +1599,9 @@ export function runTableCommand(editor: Editor | null, command: EditorCommand): 
 // @public
 export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId,
 value?: unknown): ExecResult;
+
+// @public
+export function sameZoomMode(a: ZoomMode, b: ZoomMode): boolean;
 
 // @public
 export interface SectionProperties {
@@ -1966,6 +1978,12 @@ export type VectorImageMime = 'image/svg+xml';
 
 // @public
 export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'];
+
+// @public
+export const ZOOM_MAX = 5;
+
+// @public
+export const ZOOM_MIN = 0.1;
 
 // (No @packageDocumentation comment for this package)
 

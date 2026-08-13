@@ -258,7 +258,9 @@ describe('toolbar overflow integration', () => {
       localized.getByLabelText('More').click();
     });
     const localizedLabels = Array.from(
-      localized.getByTestId('toolbar-overflow-panel').querySelectorAll('.docx-toolbar__more-control-label')
+      localized
+        .getByTestId('toolbar-overflow-panel')
+        .querySelectorAll('.docx-toolbar__more-control-label')
     ).map((node) => node.textContent);
     expect(localizedLabels).toContain('Zoomen');
     // A key the locale leaves out falls through to English, not to the raw key.
@@ -420,5 +422,27 @@ describe('toolbar overflow integration', () => {
     expect(rule).toContain('inline-size: min(340px, calc(100vw - 16px))');
     expect(rule).toContain('min-inline-size: min(260px, calc(100vw - 16px))');
     expect(rule).toContain('max-height: min(72vh, 560px)');
+  });
+
+  test('More and its nested Zoom picker are not clipped by overflow containers', () => {
+    const coreCss = readFileSync(
+      new URL('../../core/src/styles/editor.css', import.meta.url),
+      'utf8'
+    );
+    const nestedMenuRule =
+      coreCss.match(
+        /\.docx-toolbar__more-panel:has\(\.docx-toolbar__zoom-menu\)\s*\{[^}]+\}/
+      )?.[0] ?? '';
+    expect(nestedMenuRule).toContain('overflow-y: visible');
+
+    const demoCss = readFileSync(
+      new URL('../../../examples/vite/src/styles.css', import.meta.url),
+      'utf8'
+    );
+    const mobileToolbarRule =
+      demoCss.match(
+        /@media \(max-width: 768px\)\s*\{[\s\S]*?\.docx-editor \[role='toolbar'\]\s*\{[^}]+\}/
+      )?.[0] ?? '';
+    expect(mobileToolbarRule).not.toContain('overflow');
   });
 });

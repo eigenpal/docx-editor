@@ -181,6 +181,65 @@ function referenceRun(id: string, commentId: string): OoxmlElement {
   } as OoxmlElement;
 }
 
+/** A run that carries a `w:commentReference` and nothing measured (no text, drawing, …). */
+function isCommentReferenceRun(node: OoxmlNode): boolean {
+  if (node.kind !== 'run') return false;
+  let sawReference = false;
+  for (const child of node.children) {
+    if (child.kind === 'commentReference') {
+      sawReference = true;
+      continue;
+    }
+    if (child.kind === 'runProperties') continue;
+    return false;
+  }
+  return sawReference;
+}
+
+/** Zero-width comment markup already parked at an equal offset. */
+function isCoincidentCommentMarkup(node: OoxmlNode): boolean {
+  return (
+    node.kind === 'commentRangeStart' ||
+    node.kind === 'commentRangeEnd' ||
+    isCommentReferenceRun(node)
+  );
+}
+
+/**
+ * Where a new marker sits among zero-width comment markup already at this offset.
+ *
+ * Word's accepted coincident-range shape is
+ * `start_outer…start_inner…end_inner…end_outer…ref_outer…ref_inner`. Equal-offset
+ * insertion otherwise always lands *before* the marker already there and produces
+ * interleaved end→ref pairs that make Word drop `@w15:paraIdParent`.
+ */
+function coincidentInsertIndex(
+  container: OoxmlElement,
+  index: number,
+  marker: CommentMarkerKind
+): number {
+  let insertIndex = index;
+  if (marker === 'start' || marker === 'end') {
+    // Starts nest inside existing starts; ends stay after those starts (empty ranges)
+    // but before any end/ref already at the offset.
+    while (
+      insertIndex < container.children.length &&
+      container.children[insertIndex]!.kind === 'commentRangeStart'
+    ) {
+      insertIndex += 1;
+    }
+    return insertIndex;
+  }
+  // References trail the whole end/ref cluster so parent refs precede reply refs.
+  while (
+    insertIndex < container.children.length &&
+    isCoincidentCommentMarkup(container.children[insertIndex]!)
+  ) {
+    insertIndex += 1;
+  }
+  return insertIndex;
+}
+
 export interface InsertCommentMarkerOp {
   readonly op: 'insertCommentMarker';
   readonly paragraphId: string;
@@ -195,6 +254,9 @@ export interface InsertCommentMarkerOp {
  * The run straddling the offset is split first, because a range marker is a sibling of runs and
  * cannot be placed inside one. Splitting changes no characters, so every other offset in the
  * paragraph — and every anchor addressed by one — is unmoved.
+ *
+ * Coincident markers (a reply on its parent's range, or a second remark on the same span) are
+ * ordered for Word: starts outer→inner, ends inner→outer, references outer→inner.
  */
 export function applyInsertCommentMarker(
   part: OoxmlPart,
@@ -211,6 +273,12 @@ export function applyInsertCommentMarker(
   const at = locateOffset(reloaded, reloaded, op.offset, 0);
   if (!at) return { ok: false, reason: 'offset-out-of-range' };
 
+  let insertIndex = at.index;
+  const container = findNode(split.part, at.containerId);
+  if (container && container.kind !== 'textValue') {
+    insertIndex = coincidentInsertIndex(container, at.index, op.marker);
+  }
+
   const nodeId = `${part.name}#comment-${op.marker}-${op.commentId}-${op.offset}`;
   const node =
     op.marker === 'reference'
@@ -222,7 +290,7 @@ export function applyInsertCommentMarker(
           op.commentId
         );
 
-  const inserted = insertChildren(split.part, at.containerId, at.index, [node], options);
+  const inserted = insertChildren(split.part, at.containerId, insertIndex, [node], options);
   if (!inserted.ok) {
     return { ok: false, reason: 'tree-invariant', detail: JSON.stringify(inserted.issues) };
   }

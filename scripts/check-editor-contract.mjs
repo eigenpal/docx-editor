@@ -78,6 +78,15 @@ const REACT_PROPS_NOT_YET_IN_VUE = new Set([
   // non-primary buttons so a right-click reaches a menu with the selection intact. The Vue
   // twin is a panel and a placement rule. Removed when the Vue provider/hooks twin lands.
   'contextMenu',
+  // Where the display scale comes from: a fixed number, or a fit the engine keeps tracking.
+  // This is the shallowest gap of the lot — the fit runs in the ENGINE, `'auto'` is
+  // `createDocxEditor`'s default, and `getZoomMode`/`setZoomMode`/`snapshot().zoomMode` are
+  // contract members Vue already reaches through the facade. A Vue host has fit-to-viewport
+  // zoom today and can change the mode; what it cannot do is declare it as a prop. Removed
+  // when the Vue prop surface catches up (the adapter change is a prop, a spread and a
+  // watcher), and blocked on nothing but that: `docs/api/docx-editor-vue` is frozen while
+  // the package is `disconnected`, so the parity contract cannot see a Vue prop added today.
+  'zoomMode',
 ]);
 
 function extractInterfaceBody(source, name) {

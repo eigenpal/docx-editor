@@ -860,12 +860,12 @@ export const wordFeatures: WordFeature[] = [
     id: 'fields.legacy-forms',
     name: 'Legacy form fields (FORMTEXT, FORMCHECKBOX, FORMDROPDOWN)',
     category: 'fields',
-    editing: 'none',
+    editing: 'partial',
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'The field result shows as static text with Word-like form-field shading unless the document sets w:doNotShadeFormData; w:ffData, including checkbox state and constraints, is preserved but the control is not interactive.',
+      'FORMTEXT result text is inline-editable with character-accurate caret/selection; field markers, instructions, and w:ffData round-trip and tracked edits are preserved. Word-like form-field shading applies unless w:doNotShadeFormData. FORMCHECKBOX and FORMDROPDOWN still render static results; checkbox/dropdown interaction, Tab navigation, ffData constraints, and legacy forms-protection fill mode are not implemented.',
   },
 
   // --- Document structure & content controls ---------------------------------
@@ -998,6 +998,17 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes: 'en, de, fr, he, hi, pl, pt-BR, tr, zh-CN via @docx-editor.dev/i18n.',
     docsLink: '/docs/2.x/i18n',
+  },
+  {
+    id: 'collab.zoom-fit',
+    name: 'Automatic fit / responsive zoom',
+    category: 'collaboration',
+    editing: 'full',
+    rendering: 'full',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      "Default zoom mode is `auto`: fit the page width between 50% and 100% so a container narrower than a Letter sheet shrinks the document instead of overflowing. Opening chrome that pads the scroll container (navigation pane, review rail) recomputes the fit from the content box. Hosts can pin a fixed scale with `zoom` alone or `zoomMode={{ type: 'fixed' }}`, or ask for uncapped fit-width. Toolbar Automatic / Fit width / percentage ladder and Ctrl/Cmd+= shortcuts share the same engine-owned mode.",
   },
   {
     id: 'collab.agent-tools',

@@ -1,5 +1,13 @@
 # @docx-editor.dev/i18n
 
+## 2.2.1
+
+## 2.2.0
+
+### Minor Changes
+
+- 568ccf7: The catalogue drops 456 keys nothing renders, mostly strings for dialogs that no longer ship, and every community locale is pruned to match. `TranslationKey` and `LocaleStrings` narrow accordingly, so naming a removed key is now a type error rather than a lookup that returned nothing visible.
+
 ## 2.1.3
 
 ## 2.1.2

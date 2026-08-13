@@ -172,7 +172,7 @@ describe('React zoom shortcuts', () => {
     expect(mounted.zoomText()).toBe('100%▾');
   });
 
-  test('zoom-out at 50% stays owned and keeps the zoom capped for Ctrl and Meta', async () => {
+  test('zoom-out at the ladder floor stays owned and keeps the zoom capped', async () => {
     const mounted = mountShortcutHarness();
     const pages = mounted.pages();
     act(() => {
@@ -180,12 +180,28 @@ describe('React zoom shortcuts', () => {
     });
 
     for (const modifier of [{ ctrlKey: true }, { metaKey: true }]) {
-      await setZoom(mounted, 0.5);
+      await setZoom(mounted, 0.25);
       const event = await dispatchShortcut(pages, { key: '-', ...modifier });
       expect(event.defaultPrevented).toBe(true);
-      expect(mounted.editor().snapshot().zoom).toBe(0.5);
-      expect(mounted.zoomText()).toBe('50%▾');
+      expect(mounted.editor().snapshot().zoom).toBe(0.25);
+      expect(mounted.zoomText()).toBe('25%▾');
     }
+  });
+
+  // 25% exists so this rung is reachable. A floored `'auto'` fit sits exactly on 50%, and
+  // with 50% as the ladder's bottom every zoom-out affordance was dead in precisely the
+  // case the floor exists for: a narrow screen with the comments rail open.
+  test('zoom-out at the auto floor still has somewhere to go', async () => {
+    const mounted = mountShortcutHarness();
+    const pages = mounted.pages();
+    act(() => {
+      pages.focus();
+    });
+    await setZoom(mounted, 0.5);
+
+    await dispatchShortcut(pages, { key: '-', ctrlKey: true });
+
+    expect(mounted.editor().snapshot().zoom).toBe(0.25);
   });
 
   test('unrelated and Alt-modified keystrokes do not change zoom', async () => {

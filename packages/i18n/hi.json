@@ -131,7 +131,9 @@
     "ariaLabel": "ज़ूम: {label}",
     "zoomIn": "ज़ूम इन",
     "zoomLevel": "ज़ूम स्तर",
-    "zoomOut": "ज़ूम आउट"
+    "zoomOut": "ज़ूम आउट",
+    "automatic": null,
+    "fitWidth": null
   },
   "colorPicker": {
     "highlightColors": "हाइलाइट रंग",

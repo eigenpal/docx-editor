@@ -135,7 +135,9 @@
     "ariaLabel": "Zoom: {label}",
     "zoomOut": "Zoom out",
     "zoomIn": "Zoom in",
-    "zoomLevel": "Zoom level"
+    "zoomLevel": "Zoom level",
+    "automatic": "Automatic",
+    "fitWidth": "Fit width"
   },
   "colorPicker": {
     "highlightColors": "Highlight Colors",

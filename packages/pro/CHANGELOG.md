@@ -1,5 +1,13 @@
 # @docx-editor.dev/pro
 
+## 2.2.1
+
+### Patch Changes
+
+- dd78558: Allow custom Add Comment controls, review lists, card templates, and empty states to compose without replacing one another.
+
+## 2.2.0
+
 ## 2.1.3
 
 ## 2.1.2

@@ -16,6 +16,7 @@ import {
   collectReviewItems,
   commentBodyText,
   commentPartNameOf,
+  commentsOfPart,
   commentsExtendedPartNameOf,
   deepParagraphOrderOfPart,
   locateSites,
@@ -90,6 +91,28 @@ describe('the store lane answers the review queue', () => {
     expect(comment.orphaned).toBe(false);
     expect(comment.range?.start).toEqual({ paragraphId, offset: 0 });
     expect(comment.range?.end).toEqual({ paragraphId, offset: 5 });
+  });
+});
+
+describe('comment thread identity', () => {
+  test('uses the last comment paragraph paraId, as commentsExtended requires', () => {
+    const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const W14_NS = 'http://schemas.microsoft.com/office/word/2010/wordml';
+    const result = readOoxmlPart(
+      `<w:comments xmlns:w="${W_NS}" xmlns:w14="${W14_NS}">` +
+        `<w:comment w:id="0" w:author="QA">` +
+        `<w:p w14:paraId="11111111"><w:r><w:t>first</w:t></w:r></w:p>` +
+        `<w:p w14:paraId="22222222"><w:r><w:t>last</w:t></w:r></w:p>` +
+        `</w:comment></w:comments>`,
+      {
+        name: '/word/comments.xml',
+        contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml',
+      }
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+
+    expect(commentsOfPart(result.part)[0]?.paraId).toBe('22222222');
   });
 });
 

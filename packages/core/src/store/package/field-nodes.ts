@@ -5,11 +5,11 @@
 // entryMacro/exitMacro) stays generic payload under `fldChar` — never walked for
 // evaluation, never auto-resolved, never executed.
 //
-// Well-formed complex fields (begin→end within one paragraph) and `fldSimple` each
-// contribute exactly one UTF-16 unit ({@link FIELD_ATOM_CHAR}) to paragraph addressing.
-// Cached result text is not independently addressable. Malformed fields demote: markers
-// contribute nothing and interior result text remains visible/addressable so content
-// never disappears.
+// Well-formed computed fields (begin→end within one paragraph) and `fldSimple` each contribute
+// exactly one UTF-16 unit ({@link FIELD_ATOM_CHAR}) to paragraph addressing. A FORMTEXT field
+// is different: its result is authored form input, so those runs remain normally addressable.
+// Malformed fields demote too: markers contribute nothing and interior result text remains
+// visible/addressable so content never disappears.
 
 import {
   contentControlContentChildren,
@@ -206,13 +206,28 @@ export interface AtomicFieldSpan {
   readonly formatRunIds: readonly string[];
 }
 
+/** A closed field and the addressing policy its instruction gives its result. */
+export interface ParsedFieldSpan extends AtomicFieldSpan {
+  readonly addressing: 'atomic' | 'editable-result';
+}
+
 interface RunChildRef {
   readonly runId: string;
   readonly node: OoxmlNode;
 }
 
+const MERGEFORMAT_SUFFIX = /\s*\\\*\s*MERGEFORMAT\s*$/i;
+
+/** Whether a bounded instruction denotes Word's editable legacy text-form input. */
+export function isEditableFormTextInstruction(raw: string, maxChars = 256): boolean {
+  if (raw.length > maxChars) return false;
+  const collapsed = raw.replace(/\s+/g, ' ').trim().toUpperCase();
+  if (collapsed.length > maxChars) return false;
+  return collapsed.replace(MERGEFORMAT_SUFFIX, '').trim() === 'FORMTEXT';
+}
+
 /**
- * Collect well-formed atomic field spans in document order.
+ * Collect syntactically closed field spans in document order.
  *
  * Demotion (no span emitted — callers surface interior text normally):
  * - `end` without matching `begin`
@@ -224,13 +239,13 @@ interface RunChildRef {
  *
  * Cross-paragraph fields never form: this walk is per paragraph.
  */
-export function atomicFieldSpansOf(
+export function parsedFieldSpansOf(
   paragraph: OoxmlParagraphNode,
   options?: { readonly maxNesting?: number; readonly maxInstructionChars?: number }
-): readonly AtomicFieldSpan[] {
+): readonly ParsedFieldSpan[] {
   const maxNesting = options?.maxNesting ?? 4;
   const maxInstructionChars = options?.maxInstructionChars ?? 256;
-  const spans: AtomicFieldSpan[] = [];
+  const spans: ParsedFieldSpan[] = [];
 
   // Flatten run children in document order for the complex-field machine.
   // Hyperlink is a run container: fields inside a link are ordinary paragraph text.
@@ -259,6 +274,7 @@ export function atomicFieldSpansOf(
         runId: '',
         removeNodeIds: [child.id],
         formatRunIds: formatRunIdsOfSimple(child),
+        addressing: 'atomic',
       });
       return;
     }
@@ -309,6 +325,7 @@ export function atomicFieldSpansOf(
     let nesting = 0;
     let nestingOverflow = false;
     let instructionChars = 0;
+    let instruction = '';
     let instructionOverflow = false;
     let phase: 'instruction' | 'result' | 'done' = 'instruction';
     const removeIds: string[] = [];
@@ -334,7 +351,12 @@ export function atomicFieldSpansOf(
         if (nesting === 1 && phase === 'instruction') {
           const chunk = instrTextValue(node);
           instructionChars += chunk.length;
-          if (instructionChars > maxInstructionChars) instructionOverflow = true;
+          if (instructionChars > maxInstructionChars) {
+            instructionOverflow = true;
+            instruction = '';
+          } else if (!instructionOverflow) {
+            instruction += chunk;
+          }
         }
         if (nesting >= 1) removeIds.push(node.id);
         continue;
@@ -420,11 +442,22 @@ export function atomicFieldSpansOf(
       runId: current.runId,
       removeNodeIds: [...new Set(removeIds)],
       formatRunIds,
+      addressing: isEditableFormTextInstruction(instruction, maxInstructionChars)
+        ? 'editable-result'
+        : 'atomic',
     });
     i = endIndex + 1;
   }
 
   return spans;
+}
+
+/** Collect only fields whose cached result is one atomic model unit. */
+export function atomicFieldSpansOf(
+  paragraph: OoxmlParagraphNode,
+  options?: { readonly maxNesting?: number; readonly maxInstructionChars?: number }
+): readonly AtomicFieldSpan[] {
+  return parsedFieldSpansOf(paragraph, options).filter((span) => span.addressing === 'atomic');
 }
 
 /** Whether `fldCharType` is a legal ST_FldCharType value (used by tests / guards). */

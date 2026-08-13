@@ -476,10 +476,19 @@
   scrollbar-color: var(--doc-scrollbar-thumb) var(--doc-scrollbar-track);
 }
 
-.docx-editor .docx-editor__scroll-container {
+/* Descendant AND self: `DocxEditor.Viewport` puts `docx-editor` on the scroll container
+   itself when no ancestor is scoped (the Root + Viewport composition), and the descendant
+   combinator alone misses that element. */
+.docx-editor .docx-editor__scroll-container,
+.docx-editor.docx-editor__scroll-container {
   /* `both-edges` reserves a symmetric gutter so the centered page stays centered
       on classic-scrollbar platforms (single-edge nudges it ~7px left). Matches
-      the Vue viewport (DocxEditor.css `__pages-viewport`). */
+      the Vue viewport (DocxEditor.css `__pages-viewport`).
+
+      LOAD-BEARING for fit-to-viewport zoom as well as centring: the fit measures this
+      element's content box, and without a reserved gutter, fitting a document down far
+      enough to remove the vertical scrollbar widens that box, which fits larger, which
+      brings the scrollbar back. */
   scrollbar-gutter: stable both-edges;
 }
 
@@ -3389,10 +3398,9 @@ a.docx-hyperlink:focus-visible {
   margin-inline-start: auto;
 }
 
-/* The panel SCROLLS when it is taller than the room under the bar. That does clip a
- * popup opened from a control inside it (a font list, a swatch grid) — the same
- * trade every scrolling menu makes — and the alternative, a panel that runs off the
- * bottom of a short window, loses the rows entirely. */
+/* The panel scrolls when it is taller than the room under the bar. A nested menu
+ * temporarily lifts that clipping so its options remain reachable; closing it restores
+ * the bounded panel. */
 .docx-toolbar__more-panel {
   position: absolute;
   top: calc(100% + 6px);
@@ -3409,6 +3417,13 @@ a.docx-hyperlink:focus-visible {
   border: 1px solid var(--doc-border);
   border-radius: 8px;
   box-shadow: var(--doc-shadow-lg);
+}
+
+/* Zoom's level picker is a popover, not panel content. A scroll container would otherwise
+ * cut it off when Zoom is the last (or only) More row. `:has()` is supported by every
+ * browser we support, and scopes the escape hatch to the short interval the picker exists. */
+.docx-toolbar__more-panel:has(.docx-toolbar__zoom-menu) {
+  overflow-y: visible;
 }
 
 .docx-toolbar__more-section + .docx-toolbar__more-section {
@@ -3868,7 +3883,8 @@ a.docx-hyperlink:focus-visible {
   left: 0;
   z-index: var(--doc-z-overlay);
   margin-top: 4px;
-  min-width: 96px;
+  /* Wide enough for "Automatic" above the percentages, which are narrower. */
+  min-width: 132px;
 }
 
 /* The merged alignment dropdown: current-alignment icon + caret; the popup is
@@ -4816,10 +4832,23 @@ a.docx-hyperlink:focus-visible {
 
 /* The page column moves ONLY by what the adapter computed, and only while a pane
  * is open. Absent (no pane mounted, pane closed, gutter wide enough) the custom
- * property falls back to 0 and this rule is inert. */
-.docx-editor .docx-editor__scroll-container {
+ * property falls back to 0 and this rule is inert.
+ *
+ * Descendant AND self: `DocxEditor.Viewport` puts `docx-editor` on the scroll
+ * container itself when no ancestor is scoped (Root + Viewport composition /
+ * `chrome={false}`), so the self-scoped selector is load-bearing — same pattern
+ * as scrollbar-gutter above. */
+.docx-editor .docx-editor__scroll-container,
+.docx-editor.docx-editor__scroll-container {
   padding-inline-start: var(--docx-nav-shift, 0px);
   transition: padding-inline-start 0.2s ease;
+}
+
+/* Under a fit the page width follows the padded box. Animating the padding would
+ * publish intermediate widths and the fit would chase them every frame. Jump. */
+.docx-editor .docx-editor__scroll-container[data-zoom-fit],
+.docx-editor.docx-editor__scroll-container[data-zoom-fit] {
+  transition: none;
 }
 
 /* Positioning frame: the gutter strip to the left of the page. `pointer-events`
@@ -5692,7 +5721,8 @@ a.docx-hyperlink:focus-visible {
 
 /* Reduced motion: the page still moves when it has to, it just does not glide. */
 @media (prefers-reduced-motion: reduce) {
-  .docx-editor .docx-editor__scroll-container {
+  .docx-editor .docx-editor__scroll-container,
+  .docx-editor.docx-editor__scroll-container {
     transition-duration: 0s;
   }
 }

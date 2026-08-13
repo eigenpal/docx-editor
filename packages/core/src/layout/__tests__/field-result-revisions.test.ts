@@ -117,12 +117,9 @@ describe('a deletion around only the field RESULT', () => {
     // THE bug a user actually hits when these two disagree: the caret paints at layout's
     // offset and the keystroke applies at the store's, so clicking here types there.
     //
-    // A field's atom is worth ONE offset and swallows its result. When the result run is
-    // struck, `w:delText` is still that field's own text — but it was missing from the kinds
-    // the atom swallows, AND the span walk did not descend into `w:del` to reach it, so the
-    // paragraph counted those characters a second time as ordinary text. The paragraph read
-    // 17 longer than anything laid out from it, and every offset past the field was out by
-    // exactly the deleted words.
+    // FORMTEXT is authored form input, not a computed cache: even a struck result keeps its
+    // literal character offsets. Layout may hide those characters by revision mode, but its
+    // ranges and the store's model must still end at the same position.
     const part = partOf(body);
     const paragraph = paragraphOf(body);
     const model = paragraphTextOf(part, paragraph.id);
@@ -130,14 +127,10 @@ describe('a deletion around only the field RESULT', () => {
     const laidOut = pieces.length === 0 ? 0 : pieces[pieces.length - 1]!.end;
     expect(model).not.toBeNull();
     expect(laidOut).toBe(model!.length);
-    // The atom is one unit and the deleted words are inside it, not beside it.
-    expect(model!.startsWith('￼Replacement')).toBe(true);
-    expect(model).not.toContain('Placeholder');
+    expect(model!.startsWith('PlaceholderReplacement')).toBe(true);
   });
 
-  test('the deleted range is the atom, never a negative offset', () => {
-    // The atom reserved ONE model unit at `begin`; deriving the range from the running offset
-    // instead produced a start before the paragraph began, which the caret then stepped into.
+  test('the deleted range covers the literal result characters', () => {
     for (const mode of ['all-markup', 'proposed', 'original'] as const) {
       const ranges: ModelRange[] = [];
       project(body, mode, ranges);
@@ -146,7 +139,7 @@ describe('a deletion around only the field RESULT', () => {
         expect(range.start).toBeGreaterThanOrEqual(0);
         expect(range.end).toBeGreaterThan(range.start);
       }
-      expect(ranges[0]).toEqual({ start: 0, end: 1 });
+      expect(ranges[0]).toEqual({ start: 0, end: 'Placeholder'.length });
     }
   });
 });

@@ -131,7 +131,9 @@
     "ariaLabel": "缩放: {label}",
     "zoomIn": "放大",
     "zoomLevel": "缩放级别",
-    "zoomOut": "缩小"
+    "zoomOut": "缩小",
+    "automatic": null,
+    "fitWidth": null
   },
   "colorPicker": {
     "highlightColors": "突出显示颜色",

@@ -131,7 +131,9 @@
     "ariaLabel": "Powiększenie: {label}",
     "zoomIn": "Powiększ",
     "zoomLevel": "Poziom powiększenia",
-    "zoomOut": "Pomniejsz"
+    "zoomOut": "Pomniejsz",
+    "automatic": null,
+    "fitWidth": null
   },
   "colorPicker": {
     "highlightColors": "Kolory wyróżnienia",

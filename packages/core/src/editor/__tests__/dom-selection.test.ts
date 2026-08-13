@@ -4,6 +4,9 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
+import { readOoxmlPart } from '@docx-editor.dev/core/store';
+import { createFixedMeasurer, layoutSemanticDocument } from '../../layout/semantic-layout.ts';
+import { paintSemanticLayout } from '../../output/semantic-paint.ts';
 import {
   applySelectionToDom,
   positionFromDomPoint,
@@ -38,8 +41,8 @@ const LINE = [
 /**
  * A field's result: many painted glyphs over ONE model offset.
  *
- * `[before][field: 1 unit, 24 glyphs][after]`, which is how a `FORMTEXT` blank or a `REF`
- * cross-reference is laid out.
+ * `[before][field: 1 unit, 24 glyphs][after]`, which is how a computed `REF`
+ * cross-reference is laid out. FORMTEXT results are literal and one-to-one.
  */
 function paintedFieldLine(): HTMLElement {
   const root = document.createElement('div');
@@ -114,6 +117,53 @@ describe('a span whose painted text is wider than its model range', () => {
       paragraphId: 'p1',
       offset: 9,
     });
+  });
+});
+
+describe('painted FORMTEXT selection mapping', () => {
+  const paintField = (instruction: string, result: string, formData = ''): HTMLElement => {
+    const parsed = readOoxmlPart(
+      `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
+        `<w:body><w:p>` +
+        `<w:r><w:fldChar w:fldCharType="begin">${formData}</w:fldChar></w:r>` +
+        `<w:r><w:instrText xml:space="preserve"> ${instruction} </w:instrText></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:t>${result}</w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+        `</w:p></w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'application/xml' }
+    );
+    if (!parsed.ok) throw new Error(parsed.reason);
+    const layout = layoutSemanticDocument(parsed.part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+    });
+    const root = document.createElement('div');
+    paintSemanticLayout(root, layout, { scale: 1, ariaHidden: false });
+    return root;
+  };
+
+  test('a caret inside a literal form result maps character-for-character', () => {
+    const root = paintField(
+      'FORMTEXT',
+      'Street',
+      '<w:ffData><w:name w:val="Text1"/><w:textInput/></w:ffData>'
+    );
+    const field = root.querySelector<HTMLElement>('[data-field-atom="form"]')!;
+    expect(field).toBeDefined();
+    expect(field.hasAttribute('data-docx-field')).toBe(false);
+    expect(field.getAttribute('contenteditable')).not.toBe('false');
+    expect(positionFromDomPoint(field.firstChild!, 3, root)).toEqual({
+      paragraphId: field.dataset.paragraphId,
+      offset: Number(field.dataset.start) + 3,
+    });
+  });
+
+  test('a computed field remains projected and unmappable inside its cache', () => {
+    const root = paintField('REF Company', 'Street');
+    const field = root.querySelector<HTMLElement>('[data-docx-field]')!;
+    expect(field).toBeDefined();
+    expect(field.getAttribute('contenteditable')).toBe('false');
+    expect(positionFromDomPoint(field.firstChild!, 3, root)).toBeNull();
   });
 });
 

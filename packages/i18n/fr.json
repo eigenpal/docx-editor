@@ -131,7 +131,9 @@
     "ariaLabel": "Zoom : {label}",
     "zoomIn": "Zoom avant",
     "zoomLevel": "Niveau de zoom",
-    "zoomOut": "Zoom arrière"
+    "zoomOut": "Zoom arrière",
+    "automatic": null,
+    "fitWidth": null
   },
   "colorPicker": {
     "highlightColors": "Couleurs de surbrillance",

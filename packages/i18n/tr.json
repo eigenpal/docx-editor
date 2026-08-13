@@ -131,7 +131,9 @@
     "ariaLabel": "Yakınlaştırma: {label}",
     "zoomIn": "Yakınlaştır",
     "zoomLevel": "Yakınlaştırma düzeyi",
-    "zoomOut": "Uzaklaştır"
+    "zoomOut": "Uzaklaştır",
+    "automatic": null,
+    "fitWidth": null
   },
   "colorPicker": {
     "highlightColors": "Vurgu renkleri",

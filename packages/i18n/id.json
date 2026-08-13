@@ -131,7 +131,9 @@
     "ariaLabel": "Zoom: {label}",
     "zoomOut": "Perkecil",
     "zoomIn": "Perbesar",
-    "zoomLevel": "Tingkat zoom"
+    "zoomLevel": "Tingkat zoom",
+    "automatic": null,
+    "fitWidth": null
   },
   "colorPicker": {
     "highlightColors": "Warna Sorotan",

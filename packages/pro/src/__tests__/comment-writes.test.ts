@@ -199,6 +199,44 @@ describe('adding a comment', () => {
 });
 
 describe('replying', () => {
+  test('serializes coincident parent/reply markers in Word classic order', () => {
+    // Word accepts a thread only when the shared range serializes as
+    // start_parent, start_reply, end_reply, end_parent, ref_parent, ref_reply.
+    // Interleaved per-comment end→ref pairs (end_r, ref_r, end_p, ref_p) keep
+    // commentsExtended intact in our reader but make Word drop paraIdParent.
+    const store = open();
+    const target = paragraphWithText(store.part, 20);
+    const parent = addComment(store, {
+      anchor: { paragraphId: target.id, start: 0, end: 6 },
+      author: 'QA',
+      text: 'parent',
+    });
+    expect(parent.ok).toBe(true);
+    if (!parent.ok) return;
+    const reply = addComment(store, {
+      anchor: { paragraphId: target.id, start: 0, end: 6 },
+      author: 'Dev',
+      text: 'reply',
+      replyToCommentId: parent.commentId,
+    });
+    expect(reply.ok).toBe(true);
+    if (!reply.ok) return;
+
+    const story = serializeOoxmlPart(store.part);
+    const parentStart = story.indexOf(`<w:commentRangeStart w:id="${parent.commentId}"/>`);
+    const replyStart = story.indexOf(`<w:commentRangeStart w:id="${reply.commentId}"/>`);
+    const replyEnd = story.indexOf(`<w:commentRangeEnd w:id="${reply.commentId}"/>`);
+    const parentEnd = story.indexOf(`<w:commentRangeEnd w:id="${parent.commentId}"/>`);
+    const parentReference = story.indexOf(`<w:commentReference w:id="${parent.commentId}"/>`);
+    const replyReference = story.indexOf(`<w:commentReference w:id="${reply.commentId}"/>`);
+    expect(parentStart).toBeGreaterThanOrEqual(0);
+    expect(replyStart).toBeGreaterThan(parentStart);
+    expect(replyEnd).toBeGreaterThan(replyStart);
+    expect(parentEnd).toBeGreaterThan(replyEnd);
+    expect(parentReference).toBeGreaterThan(parentEnd);
+    expect(replyReference).toBeGreaterThan(parentReference);
+  });
+
   test('a reply links to its parent through commentsExtended', () => {
     const store = open();
     const target = paragraphWithText(store.part, 20);
@@ -234,7 +272,9 @@ describe('replying', () => {
     expect(replyParaId).toBeDefined();
 
     const state = threadStateOfPart(extended);
+    expect(state.get(parentParaId!.toUpperCase())).toEqual({ done: false });
     expect(state.get(replyParaId!.toUpperCase())?.parentParaId).toBe(parentParaId!.toUpperCase());
+    expect(state.size).toBe(2);
   });
 
   test('creating the thread part is part of the same transaction', () => {
@@ -315,7 +355,9 @@ describe('replying', () => {
     // reply under the comment instead of beside it.
     const extended = store.package.parts.get('/word/commentsExtended.xml');
     expect(extended).toBeDefined();
-    expect(serializeOoxmlPart(extended!)).toContain(`w15:paraIdParent="${parentParaId}"`);
+    const state = threadStateOfPart(extended!);
+    expect(state.get(parentParaId!)).toEqual({ done: false });
+    expect([...state.values()].some((entry) => entry.parentParaId === parentParaId)).toBe(true);
   });
 
   test('a reply to a comment the part does not hold is refused', () => {
@@ -357,6 +399,7 @@ describe('replying', () => {
     const state = threadStateOfPart(reopened.package.parts.get('/word/commentsExtended.xml')!);
     const replyParaId = comments.find((entry) => entry.id === reply.commentId)?.paraId;
     const parentParaId = comments.find((entry) => entry.id === parent.commentId)?.paraId;
+    expect(state.get(parentParaId!.toUpperCase())).toEqual({ done: false });
     expect(state.get(replyParaId!.toUpperCase())?.parentParaId).toBe(parentParaId!.toUpperCase());
   });
 });

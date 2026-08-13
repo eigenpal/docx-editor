@@ -419,6 +419,12 @@ and their hooks/parts defer to `vue-drawing-authoring-parity`.
   exported from both adapters, so a Vue host can pass a resolver — it just memoizes the
   identity itself.
 - `FontsInput` — the hook's accepted-origin type.
+- `useZoom` — the zoom lifecycle as one hook (resolved scale, mode, fit/step/reset). A hook,
+  so it belongs to the React provider layer that Vue has no twin of. The engine side it wraps
+  is not a divergence at all: `Editor.getZoom`/`setZoom`/`getZoomMode`/`setZoomMode`,
+  `ZoomMode` and `snapshot().zoomMode` are contract members both adapters reach, and the fit
+  itself runs in the engine — a Vue host gets fit-to-viewport zoom with no adapter code.
+- `UseZoomResult` — the hook's return type.
 
 ## Vue-only
 

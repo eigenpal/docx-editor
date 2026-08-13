@@ -31,7 +31,7 @@ export interface PositionalTab {
 }
 
 /**
- * What a piece says about the FIELD it came from, for the shading Word draws under one.
+ * What a piece says about the FIELD result it came from, for Word's shading.
  *
  * Carried from layout rather than decided at paint time because only the walk knows an atom was
  * a field at all — by paint the result is just text. Whether the shading is actually drawn is a
@@ -96,7 +96,7 @@ export interface FieldAwarePiece {
    * decision about it.
    */
   readonly revisions?: readonly RevisionAttribution[];
-  /** Present when this piece is a field's displayed result; absent for ordinary text. */
+  /** Present when this piece is a field's displayed result; literal or projected. */
   readonly fieldAtom?: FieldAtomMarker;
 }
 

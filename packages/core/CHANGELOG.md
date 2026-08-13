@@ -1,5 +1,26 @@
 # @docx-editor.dev/core
 
+## 2.2.1
+
+### Patch Changes
+
+- 35f6d04: Fix exported comment replies opening as separate comments instead of a thread in Microsoft Word.
+  - @docx-editor.dev/i18n@2.2.1
+
+## 2.2.0
+
+### Minor Changes
+
+- 3096225: The document now fits its container by default, so a narrow window shrinks the page instead of overflowing it and opening the comments pane shrinks the document rather than pushing it off screen. Drive it with `Editor.setZoomMode` or React's new `useZoom` hook, and pass `zoomMode={{ type: 'fixed' }}` to keep the old behavior.
+
+### Patch Changes
+
+- 9c25492: Keep legacy FORMTEXT result text editable with character-accurate caret and selection offsets.
+- 04c2379: Programmatic selections made while embedded fonts load now keep their range and visible highlight after the shaped-font remount.
+- f0e4ab9: Tracked changes on a field's result now render as tracked. A deletion or insertion around the value of a cross-reference, page number or form field previously painted as ordinary unchanged text, so a reviewer saw no strikethrough or author colour on an edit the review sidebar was reporting correctly. A paragraph containing such a field also measured longer than what was laid out from it, which put the caret and the keystroke at different offsets — clicking after the field placed the cursor in one place and typing appeared in another. `w:fldSimple` now paints its cached result instead of blank space, allowlisted PAGE/NUMPAGES/SECTIONPAGES nested inside a non-page simple field evaluate per sheet rather than reusing the saved cache, and field results carry Word's grey field shading — always for legacy form fields unless the document sets `w:doNotShadeFormData`, and per the new `fieldShading` option (`never` / `when-selected` / `always`) for the rest.
+- Updated dependencies [568ccf7]
+  - @docx-editor.dev/i18n@2.2.0
+
 ## 2.1.3
 
 ### Patch Changes

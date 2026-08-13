@@ -131,7 +131,9 @@
     "ariaLabel": "Zoom: {label}",
     "zoomIn": "Vergrößern",
     "zoomLevel": "Zoomstufe",
-    "zoomOut": "Verkleinern"
+    "zoomOut": "Verkleinern",
+    "automatic": null,
+    "fitWidth": null
   },
   "colorPicker": {
     "highlightColors": "Hervorhebungsfarben",
