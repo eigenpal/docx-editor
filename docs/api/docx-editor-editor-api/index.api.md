@@ -16,6 +16,7 @@ export type BesideLocation = Extract<InsertLocation, 'Before' | 'After'>;
 
 // @public
 class Body_2 extends ModelObject {
+    get bookmarks(): BookmarkCollection;
     clear(): void;
     get contentControls(): ContentControlCollection;
     get font(): Font;
@@ -186,6 +187,7 @@ export class ContentControl extends ModelObject implements PromisedItem {
     hydrateNull(): void;
     get id(): string;
     insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range_2;
+    get isBound(): boolean;
     // @internal
     protected onLoad(request: ResolvedLoadOptions): void;
     get paragraphs(): ParagraphCollection;
@@ -478,6 +480,7 @@ export class NoteItem extends ModelObject implements PromisedItem {
     protected onLoad(request: ResolvedLoadOptions): void;
     // @internal
     static promised(context: RequestContext, label: string, nullable: boolean): NoteItem;
+    get text(): string;
     get type(): NoteItemType;
 }
 
