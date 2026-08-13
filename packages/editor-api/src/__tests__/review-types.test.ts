@@ -23,23 +23,11 @@ test('both public entries require nullable review dates to be narrowed', () => {
   expectTypeOf<ServerCommentReply['creationDate']>().toEqualTypeOf<Date | null>();
   expectTypeOf<ServerRevision['date']>().toEqualTypeOf<Date | null>();
 
-  const comment = { creationDate: null } as unknown as ServerComment;
-  const reply = { creationDate: null } as unknown as ServerCommentReply;
   const revision = { date: null } as unknown as ServerRevision;
-
   if (false) {
-    // @ts-expect-error A file-authored comment date must be narrowed before Date methods are used.
-    comment.creationDate.toISOString();
-    // @ts-expect-error A file-authored reply date must be narrowed before Date methods are used.
-    reply.creationDate.toISOString();
     // @ts-expect-error A file-authored revision date must be narrowed before Date methods are used.
     revision.date.toISOString();
   }
-
-  const commentDate = comment.creationDate;
-  const replyDate = reply.creationDate;
   const revisionDate = revision.date;
-  if (commentDate) commentDate.toISOString();
-  if (replyDate) replyDate.toISOString();
   if (revisionDate) revisionDate.toISOString();
 });

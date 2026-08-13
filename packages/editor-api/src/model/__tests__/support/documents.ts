@@ -152,9 +152,16 @@ export const WITH_REVIEW_DATE_CASES: Uint8Array = (() => {
         anchored('1') +
         anchored('3') +
         anchored('5') +
+        anchored('7') +
         revision('11', '2026-03-01T10:00:00Z') +
         revision('12', undefined) +
         revision('13', 'not-a-date') +
+        revision('14', '2026-02-30T10:00:00Z') +
+        revision('15', '2026-04-01T10:00:00') +
+        revision('16', '2026-04-02') +
+        revision('17', '2026-03-01T10:00:00.123+05:30') +
+        revision('18', '2026-03-01T10:00:00+15:00') +
+        revision('19', '0099-01-01T00:00:00Z') +
         '</w:body></w:document>'
     ),
     'word/comments.xml': strToU8(
@@ -165,6 +172,8 @@ export const WITH_REVIEW_DATE_CASES: Uint8Array = (() => {
         comment('4', '3', undefined) +
         comment('5', undefined, 'not-a-date') +
         comment('6', '5', 'also-not-a-date') +
+        comment('7', undefined, '2026-02-30T10:00:00Z') +
+        comment('8', '7', '2026-04-02') +
         '</w:comments>'
     ),
   });

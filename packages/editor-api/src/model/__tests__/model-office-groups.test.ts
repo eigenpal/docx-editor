@@ -298,9 +298,20 @@ describe('comments and tracked changes are what a document says about itself', (
       };
     });
 
-    expect(dates.comments).toEqual([new Date('2026-01-01T10:00:00Z'), null, null]);
-    expect(dates.replies).toEqual([new Date('2026-01-02T10:00:00Z'), null, null]);
-    expect(dates.revisions).toEqual([new Date('2026-03-01T10:00:00Z'), null, null]);
+    expect(dates.comments).toEqual([new Date('2026-01-01T10:00:00Z'), null, null, null]);
+    expect(dates.replies).toEqual([new Date('2026-01-02T10:00:00Z'), null, null, null]);
+    expect(dates.revisions).toEqual([
+      new Date('2026-03-01T10:00:00Z'),
+      null,
+      null,
+      null,
+      null,
+      null,
+      new Date('2026-03-01T04:30:00.123Z'),
+      null,
+      new Date('0099-01-01T00:00:00Z'),
+    ]);
+    expect(dates.revisions[8]!.getTime()).not.toBe(Date.parse('1999-01-01T00:00:00.000Z'));
   });
 
   test('a tracked insertion is a decision a script can read and accept', async () => {

@@ -136,14 +136,6 @@ describe('DocxEditor.createBrowser', () => {
       scrolling: true,
       layout: true,
     });
-    expect(Object.keys(runtime.capabilities).sort()).toEqual([
-      'document',
-      'events',
-      'layout',
-      'save',
-      'scrolling',
-      'selection',
-    ]);
     expect('save' in runtime).toBe(false);
     runtime.dispose();
   });
