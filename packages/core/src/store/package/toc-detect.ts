@@ -78,7 +78,11 @@ function paragraphSites(part: OoxmlPart): ParagraphSite[] {
   return sites;
 }
 
-function fieldTokens(paragraph: OoxmlElement): OoxmlNode[] {
+const fieldTokensByParagraph = new WeakMap<OoxmlElement, readonly OoxmlNode[]>();
+
+function fieldTokens(paragraph: OoxmlElement): readonly OoxmlNode[] {
+  const cached = fieldTokensByParagraph.get(paragraph);
+  if (cached) return cached;
   const tokens: OoxmlNode[] = [];
   const walk = (node: OoxmlNode): void => {
     if (node.kind === 'textValue') return;
@@ -89,6 +93,7 @@ function fieldTokens(paragraph: OoxmlElement): OoxmlNode[] {
     for (const child of node.children) walk(child);
   };
   for (const child of paragraph.children) walk(child);
+  fieldTokensByParagraph.set(paragraph, tokens);
   return tokens;
 }
 

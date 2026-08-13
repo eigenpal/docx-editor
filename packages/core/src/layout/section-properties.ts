@@ -452,7 +452,14 @@ export function enumerateDocumentSectionsBounded(
   part: OoxmlPart,
   displayMode: RevisionDisplayMode = 'all-markup'
 ): DocumentSectionsEnumeration {
-  const blocks = storyBlocks(part, displayMode);
+  return enumerateDocumentSectionsFromBlocks(part, storyBlocks(part, displayMode));
+}
+
+/** Internal shared-list variant for callers that already enumerated the story blocks. */
+export function enumerateDocumentSectionsFromBlocks(
+  part: OoxmlPart,
+  blocks: readonly OoxmlElement[]
+): DocumentSectionsEnumeration {
   const sections: DocumentSection[] = [];
   let blockStart = 0;
   let truncated = false;

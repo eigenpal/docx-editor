@@ -233,6 +233,7 @@ function adoptMultiSectionResult(
   lineCounter: number
 ): void {
   session.previous = finalized;
+  session.startLineCounter = 0;
   session.endLineCounter = lineCounter;
   session.keys = [];
   session.checkpoints = [];

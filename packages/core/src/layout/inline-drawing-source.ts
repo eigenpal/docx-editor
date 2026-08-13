@@ -16,6 +16,7 @@ import {
   DEFAULT_DRAWING_PROJECTION_LIMITS,
   indexInlineDrawingProjectionsInPart,
   isRunLevelMcAlternateContent,
+  MAX_PART_SCAN_ELEMENTS,
   type DrawingProjection,
 } from '../store/package/drawing-projection.ts';
 import {
@@ -83,7 +84,8 @@ interface PartDrawingContextSlot {
   readonly dispose: () => void;
 }
 
-function drawingAtomIdentities(part: OoxmlPart): ReadonlyMap<string, OoxmlNode> | null {
+/** @internal Exposed for bounded traversal regression tests. */
+export function drawingAtomIdentities(part: OoxmlPart): ReadonlyMap<string, OoxmlNode> | null {
   const atoms = new Map<string, OoxmlNode>();
   const stack: { readonly node: OoxmlNode; readonly depth: number }[] = [
     { node: part.root, depth: 0 },
@@ -93,7 +95,7 @@ function drawingAtomIdentities(part: OoxmlPart): ReadonlyMap<string, OoxmlNode> 
     const frame = stack.pop()!;
     visited += 1;
     if (
-      visited > DEFAULT_DRAWING_PROJECTION_LIMITS.maxVisitedElements ||
+      visited > MAX_PART_SCAN_ELEMENTS ||
       frame.depth > DEFAULT_DRAWING_PROJECTION_LIMITS.maxDrawingDepth
     ) {
       return null;

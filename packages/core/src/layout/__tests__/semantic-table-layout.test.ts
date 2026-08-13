@@ -145,6 +145,26 @@ describe('semantic table layout', () => {
     const part = loadPart(`<w:tbl>${header}${body}</w:tbl>`);
     const result = layout(part);
     expect(result.pages.length).toBeGreaterThan(1);
+    const lineIds = allTableFragments(result).flatMap((fragment) =>
+      fragment.rows.flatMap((row) =>
+        row.cells.flatMap((cell) =>
+          cell.blocks.flatMap((block) =>
+            block.kind === 'paragraph' ? block.lines.map((line) => line.id) : []
+          )
+        )
+      )
+    );
+    expect(new Set(lineIds).size).toBe(lineIds.length);
+    const cleanLineIds = allTableFragments(layout(part)).flatMap((fragment) =>
+      fragment.rows.flatMap((row) =>
+        row.cells.flatMap((cell) =>
+          cell.blocks.flatMap((block) =>
+            block.kind === 'paragraph' ? block.lines.map((line) => line.id) : []
+          )
+        )
+      )
+    );
+    expect(cleanLineIds).toEqual(lineIds);
 
     // Every continuation page's table fragment leads with the repeated header row.
     for (const page of result.pages.slice(1)) {

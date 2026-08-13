@@ -160,6 +160,28 @@ describe('work is bounded, measured structurally (tasks 9.3, 9.6)', () => {
     expect(session.stats.reusedPages).toBeLessThanOrEqual(first.pages.length);
   });
 
+  test('a line-count change reconverges after an explicit page break', () => {
+    const pageBreak = `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
+    const withReset = DOCUMENT.replace(
+      paragraph('paragraph 8 word word word word word word '),
+      paragraph('paragraph 8 word word word word word word ') + pageBreak
+    );
+    const session = createLayoutSession();
+    lay(load(withReset), 1, session);
+
+    const edited = load(
+      withReset.replace(
+        paragraph('paragraph 1 word word word word word word '),
+        `<w:p><w:r><w:t>paragraph 1 word word word word word word </w:t><w:br/></w:r></w:p>`
+      )
+    );
+    const incremental = lay(edited, 2, session);
+
+    expect(shapeOf(incremental)).toBe(shapeOf(lay(edited, 2)));
+    expect(session.stats.placed).toBeLessThan(session.stats.total);
+    expect(session.stats.reusedPages).toBeGreaterThan(0);
+  });
+
   test('unchanged pages keep their IDENTITY, so a consumer can skip repainting them', () => {
     const session = createLayoutSession();
     const before = lay(load(DOCUMENT), 1, session);

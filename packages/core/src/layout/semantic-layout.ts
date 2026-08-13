@@ -129,7 +129,7 @@ import {
 import { type HeaderFooterStoryLayout } from './hf-layout.ts';
 import {
   DEFAULT_SECTION_PROPERTIES,
-  enumerateDocumentSections,
+  enumerateDocumentSectionsFromBlocks,
   geometryOfSection,
   paragraphSectionNode,
   type SectionColumns,
@@ -432,8 +432,8 @@ export function layoutSemanticDocument(
   // list, so enumerating sections over a differently-filtered one slices with indices that
   // do not belong to it and lands body text under the wrong section's page geometry.
   const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
-  const sections = enumerateDocumentSections(part, displayMode);
   const blocks = storyBlocks(part, displayMode);
+  const sections = enumerateDocumentSectionsFromBlocks(part, blocks).sections;
   // Wrapper-only metadata (alias/tag/lock/…) lives outside flattened paragraph nodes. Fold a
   // fingerprint into the producer so incremental identity reuse cannot keep stale boundaries.
   const controlToken = contentControlContextToken(part);
@@ -566,6 +566,23 @@ type BlockLayoutOptions = SemanticLayoutOptions & {
    */
   readonly columnRegionBottom?: number;
 };
+
+/**
+ * Body line ids are paragraph-local rather than document-ordinal.
+ *
+ * An edit that adds a line before an explicit page break changes the document-wide line count
+ * but not any line after that break. Keeping those tail ids stable lets incremental layout reuse
+ * the old pages once geometry reconverges.
+ */
+function bodyLineId(
+  paragraphId: string,
+  start: number,
+  lineIndex: number,
+  occurrence?: string
+): string {
+  const local = `line:${paragraphId}:${lineIndex}:${start}`;
+  return occurrence === undefined ? local : `${local}:occ:${occurrence}`;
+}
 
 function layoutBlocksPass(
   bodies: readonly OoxmlElement[],
@@ -768,8 +785,6 @@ function layoutBlocksPass(
         .sort()
         .join(',')
     : '';
-  // lineCounterStart participates: multi-section threads a global counter across sections, and
-  // a shift from an earlier section's line count must invalidate this section's checkpoints.
   const flowStartY = options.flowStartY ?? 0;
   const spaceBeforeCarry = options.spaceBeforeCarry ?? 0;
   // Where this section's first sheet lands in the DOCUMENT. Even/odd header selection
@@ -783,7 +798,9 @@ function layoutBlocksPass(
     : '';
   const columnRegionBottom = options.columnRegionBottom;
   const columnsContext = `|cols:${columns.widths.join(',')};${columns.gaps.join(',')};${columns.separator ? 1 : 0}${columnRegionBottom !== undefined ? `;bal:${columnRegionBottom}` : ''}`;
-  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|lc:${lineCounterStart}|fs:${flowStartY},${spaceBeforeCarry}|pi:${pageIndexStart}${furnitureContext}${notesReserveKey}${noteMarksKey}${columnsContext}`;
+  // Body line ids are paragraph-local, so a changed line count in an earlier section does
+  // not invalidate this section. Geometry, flow start, and document page index still do.
+  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}|pi:${pageIndexStart}${furnitureContext}${notesReserveKey}${noteMarksKey}${columnsContext}`;
 
   const pages: PageRecord[] = [];
   /**
@@ -972,7 +989,11 @@ function layoutBlocksPass(
       { revision, pages: previous!.pages },
       previous!
     );
+    const translatedEndLineCounter =
+      lineCounterStart + (session.endLineCounter - session.startLineCounter);
     session.previous = unchanged;
+    session.startLineCounter = lineCounterStart;
+    session.endLineCounter = translatedEndLineCounter;
     session.stats = {
       placed: 0,
       total: prepared.length,
@@ -983,7 +1004,7 @@ function layoutBlocksPass(
     return {
       layout: unchanged,
       pages: unchanged.pages,
-      lineCounter: session.endLineCounter,
+      lineCounter: translatedEndLineCounter,
       endCursorY: session.endCursorY,
       endSpaceAfter: session.endSpaceAfter,
       endsOpenPage: session.endsOpenPage,
@@ -1298,15 +1319,19 @@ function layoutBlocksPass(
       drawingTokenForParagraph: options.drawingTokenForParagraph,
     });
 
-  // Table layout shares the flow's line counter, paragraph cache, and precomputed list
-  // items (counters already advanced in document order, including cell paragraphs).
+  // Table layout shares the flow's line count, paragraph cache, and precomputed list items
+  // (counters already advanced in document order, including cell paragraphs).
   // Border ownership intervals and vMerge cell visits are budgeted once per pass so nested
   // finalize cannot amplify past the shared ceilings.
   const tableDeps: TableFlowDeps = {
     measurer,
     cache,
     producer,
-    nextLineId: () => `line-${lineCounter++}`,
+    nextLineId: (paragraphId, start, lineIndex, occurrence) => {
+      lineCounter += 1;
+      return bodyLineId(paragraphId, start, lineIndex, occurrence);
+    },
+    pageOccurrenceKey: () => String(pageIndexStart + pages.length),
     styleCascade,
     listItems,
     ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
@@ -1886,7 +1911,6 @@ function layoutBlocksPass(
       if (
         mark &&
         mark.cursorY === cursorY &&
-        mark.lineCounter === lineCounter &&
         mark.previousSpaceAfter === previousSpaceAfter &&
         mark.flowColumnIndex === flowColumnIndex &&
         mark.pageCount === pages.length &&
@@ -1898,9 +1922,10 @@ function layoutBlocksPass(
         reusedPages += tail.length;
         converged = true;
         convergedAt = index;
-        // Tail line ids come from the previous pass; report the terminal counter so a
-        // multi-section orchestrator can thread the global line sequence correctly.
-        lineCounter = session.endLineCounter;
+        // Line ids are paragraph-local, so a changed line count before this join does not
+        // invalidate the tail. Still carry the tail's line COUNT so a multi-section
+        // orchestrator receives the correct terminal count for this revision.
+        lineCounter += session.endLineCounter - mark.lineCounter;
         break;
       }
     }
@@ -2504,7 +2529,7 @@ function layoutBlocksPass(
       });
       const alignedDrawings = alignDrawings(placedDrawings, alignOffset);
       const record: LineRecord = {
-        id: `line-${lineCounter}`,
+        id: bodyLineId(paragraph.id, pendingLine.start, lineIndex),
         range: { paragraphId, start: pendingLine.start, end: pendingLine.end },
         spans: alignedSpans,
         box: {
@@ -2619,6 +2644,7 @@ function layoutBlocksPass(
       : checkpoints;
     session.keys = flowKeys;
     session.context = context;
+    session.startLineCounter = lineCounterStart;
     session.endLineCounter = lineCounter;
     session.endCursorY = endCursorY;
     session.endSpaceAfter = endSpaceAfter;
@@ -2867,32 +2893,46 @@ export function contentControlContextToken(part: OoxmlPart): string {
 }
 
 const contentControlContextTokens = new WeakMap<OoxmlPart, string>();
+const contentControlSubtreeTokens = new WeakMap<OoxmlElement, string>();
 
 function computeContentControlContextToken(part: OoxmlPart): string {
-  const parts: string[] = [];
-  const walk = (node: OoxmlNode, depth: number): void => {
-    if (node.kind === 'textValue') return;
-    if (isContentControl(node)) {
-      if (depth >= MAX_SDT_NESTING) return;
-      const properties = contentControlPropertiesOf(node);
-      parts.push(
-        [
-          node.id,
-          propertyVal(properties, 'alias') ?? '',
-          propertyVal(properties, 'tag') ?? '',
-          parseContentControlLock(propertyVal(properties, 'lock')),
-          mapContentControlType(properties),
-          propertyChild(properties, 'showingPlcHdr') ? '1' : '0',
-          propertyChild(properties, 'dataBinding') ? '1' : '0',
-        ].join(':')
-      );
-      for (const inner of contentControlContentChildren(node)) walk(inner, depth + 1);
-      return;
+  const tokenOf = (node: OoxmlNode, depth: number): string => {
+    if (node.kind === 'textValue') return '';
+    // Paragraph/table nodes are immutable and structurally shared across text edits. Cache
+    // their complete depth-zero result so a new part revision does not re-walk every run.
+    if (depth === 0 && (node.kind === 'paragraph' || node.kind === 'table')) {
+      const cached = contentControlSubtreeTokens.get(node);
+      if (cached !== undefined) return cached;
     }
-    for (const child of node.children) walk(child, depth);
+    let token: string;
+    if (isContentControl(node)) {
+      if (depth >= MAX_SDT_NESTING) return '';
+      const properties = contentControlPropertiesOf(node);
+      const own = [
+        node.id,
+        propertyVal(properties, 'alias') ?? '',
+        propertyVal(properties, 'tag') ?? '',
+        parseContentControlLock(propertyVal(properties, 'lock')),
+        mapContentControlType(properties),
+        propertyChild(properties, 'showingPlcHdr') ? '1' : '0',
+        propertyChild(properties, 'dataBinding') ? '1' : '0',
+      ].join(':');
+      const nested = contentControlContentChildren(node)
+        .map((inner) => tokenOf(inner, depth + 1))
+        .filter((entry) => entry.length > 0);
+      token = [own, ...nested].join('|');
+    } else {
+      token = node.children
+        .map((child) => tokenOf(child, depth))
+        .filter((entry) => entry.length > 0)
+        .join('|');
+    }
+    if (depth === 0 && (node.kind === 'paragraph' || node.kind === 'table')) {
+      contentControlSubtreeTokens.set(node, token);
+    }
+    return token;
   };
-  walk(part.root, 0);
-  return parts.join('|');
+  return tokenOf(part.root, 0);
 }
 
 /** Addressable UTF-16 length of an inline node — mirrors the store / layout offset model. */
@@ -3351,6 +3391,35 @@ export function attachContentControlBoundaries(
   token = contentControlContextToken(part),
   work?: ContentControlBoundaryWork
 ): SemanticLayout {
+  // The token includes every control id, so an empty token proves there are no controls.
+  // Avoid both otherwise-unconditional full walks: collecting controls from the tree and
+  // indexing every placed fragment/span across every page.
+  if (token === '') {
+    const pagesHaveControls = layout.pages.some(
+      (page) => page.contentControls !== undefined && page.contentControls.length > 0
+    );
+    if (
+      !pagesHaveControls &&
+      layout.controlContextToken === token &&
+      sameBoundaryList(layout.contentControls, [])
+    ) {
+      return layout;
+    }
+    const pages = pagesHaveControls
+      ? layout.pages.map((page) =>
+          page.contentControls !== undefined && page.contentControls.length > 0
+            ? { ...page, contentControls: [] }
+            : page
+        )
+      : layout.pages;
+    return {
+      revision: layout.revision,
+      pages,
+      contentControls: [],
+      controlContextToken: token,
+    };
+  }
+
   const collected = collectControls(part);
   const geometry = placedGeometryOf(layout, work);
   const contentControls = collected.map((entry) => boundaryRecordOf(entry, geometry, work));

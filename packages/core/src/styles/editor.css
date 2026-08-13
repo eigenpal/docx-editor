@@ -3048,6 +3048,8 @@ a.docx-hyperlink:focus-visible {
   }
 }
 .docx-paginated-surface .docx-page {
+  /* A rebuilt sheet must not invalidate style/layout/paint across hundreds of sibling pages. */
+  contain: layout style paint;
   /* The TOKEN, not a literal. Dark mode sets `--doc-page-bg` to #ccc precisely so the
      page inversion lands on Word's grey canvas; a hardcoded #fff inverts to pure black
      and takes the text down to unreadable with it. */

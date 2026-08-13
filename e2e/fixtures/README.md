@@ -35,6 +35,7 @@ bun scripts/create-empty-table-row-vmerge-fixture.mjs
 bun scripts/create-table-cell-selection-drag-fixture.mjs
 bun scripts/create-toc-hyperlink-fixture.mjs
 bun scripts/create-inline-checkbox-controls-fixture.mjs e2e/fixtures/inline-checkbox-controls.docx
+bun scripts/create-synthetic-long-edit-fixture.mjs
 ```
 
 If a fixture does not have a checked-in generator, preserve the document and any

@@ -23,6 +23,8 @@ const documentName = /^[\w.-]+\.docx$/.test(fixtureParam) ? fixtureParam : DEFAU
 const treeHarness = params.get('treeFirst') === '1';
 // `?e2e=1` mounts the paginated React editor with `window.__DOCX_EDITOR_E2E__`.
 const tableE2E = params.get('e2e') === '1';
+// `?perfE2e=1` mounts the same bridge with review-heavy production chrome for benchmarks.
+const performanceE2E = params.get('perfE2e') === '1';
 
 const container = document.getElementById('app');
 if (container) {
@@ -30,9 +32,11 @@ if (container) {
   void (async () => {
     const View = treeHarness
       ? (await import('./test-harness/TreeSurfaceHarness.tsx')).TreeSurfaceHarness
-      : tableE2E
-        ? (await import('./test-harness/TableEditingE2EHarness.tsx')).TableEditingE2EHarness
-        : (await import('./ComposedEditorDemo.tsx')).ComposedEditorDemo;
+      : performanceE2E
+        ? (await import('./test-harness/PerformanceE2EHarness.tsx')).PerformanceE2EHarness
+        : tableE2E
+          ? (await import('./test-harness/TableEditingE2EHarness.tsx')).TableEditingE2EHarness
+          : (await import('./ComposedEditorDemo.tsx')).ComposedEditorDemo;
     root.render(
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
         <PreviewBanner />

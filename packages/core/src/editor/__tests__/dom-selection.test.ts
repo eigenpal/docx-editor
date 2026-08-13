@@ -199,6 +199,16 @@ describe('the empty-paragraph caret', () => {
   });
 });
 
+test('a model position with CSS delimiters in its id is mapped without parsing them', () => {
+  const paragraphId = 'p"#]';
+  const root = paintedLine([{ text: 'safe', paragraphId, start: 0 }]);
+  document.body.append(root);
+  const caret = { paragraphId, offset: 2 };
+  expect(applySelectionToDom(root, { anchor: caret, head: caret }, getSelection())).toBe(true);
+  expect(getSelection()!.anchorOffset).toBe(2);
+  root.remove();
+});
+
 describe('selection equality', () => {
   const at = (offset: number) => ({ paragraphId: 'p1', offset });
 

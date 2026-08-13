@@ -73,6 +73,8 @@ export interface LayoutSession {
   keys: string[];
   /** Geometry and producer of the previous pass; a change to either forces a full pass. */
   context: string;
+  /** Line counter at the start of the previous pass, for translating reused section counts. */
+  startLineCounter: number;
   /**
    * Line counter after the last block of the previous pass.
    *
@@ -124,6 +126,7 @@ export function createLayoutSession(): LayoutSession {
     checkpoints: [],
     keys: [],
     context: '',
+    startLineCounter: 0,
     endLineCounter: 0,
     endCursorY: 0,
     endSpaceAfter: 0,

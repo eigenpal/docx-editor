@@ -6,6 +6,10 @@ declare global {
 
 import type { Editor, EditorCommand } from '@docx-editor.dev/core/contracts/editor';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import type {
+  PaginatedSurfacePerf,
+  SurfaceEditingMode,
+} from '../../../../packages/core/src/editor/paginated-surface-contract.ts';
 import {
   findTableInteractionAt,
   tableInteractionIndex,
@@ -56,6 +60,13 @@ export interface DocxEditorE2EHook {
   outerTableIsolationEqual(bytes: Uint8Array): boolean;
   scrollToParagraph(needle: string): boolean;
   layoutRevision(): number | null;
+  fontMeasurer(): 'fixed' | 'shaped' | null;
+  prepareEditBenchmark(
+    fraction: number,
+    mode: SurfaceEditingMode
+  ): { paragraphId: string; revision: number; pageCount: number } | null;
+  benchmarkPerf(): PaginatedSurfacePerf | null;
+  undoBenchmarkEdit(): boolean;
   innerTableId(): string | null;
   outerTableId(): string | null;
   tableEdgePoint(
@@ -274,6 +285,35 @@ export function createDocxEditorE2EHook(getEditor: () => Editor | null): DocxEdi
     },
     layoutRevision() {
       return surface(getEditor())?.layout().revision ?? null;
+    },
+    fontMeasurer() {
+      const editor = getEditor() as DocxEditorInstance | null;
+      return editor?.fontMeasurement().measurer ?? null;
+    },
+    prepareEditBenchmark(fraction, mode) {
+      const currentSurface = surface(getEditor());
+      const pages = document.querySelector<HTMLElement>('.docx-pages');
+      if (!currentSurface || !pages) return null;
+      const paragraphIds = currentSurface.session.paragraphIds();
+      if (paragraphIds.length === 0) return null;
+      const bounded = Math.min(1, Math.max(0, fraction));
+      const paragraphId = paragraphIds[Math.floor((paragraphIds.length - 1) * bounded)]!;
+      const position = { paragraphId, offset: 0 };
+      currentSurface.setEditingMode(mode);
+      currentSurface.setSelection({ anchor: position, head: position });
+      currentSurface.revealPosition(position, { block: 'center' });
+      pages.focus({ preventScroll: true });
+      const state = currentSurface.state();
+      return { paragraphId, revision: state.revision, pageCount: state.pageCount };
+    },
+    benchmarkPerf() {
+      return surface(getEditor())?.state().perf ?? null;
+    },
+    undoBenchmarkEdit() {
+      const currentSurface = surface(getEditor());
+      if (!currentSurface?.state().canUndo) return false;
+      currentSurface.undo();
+      return true;
     },
     innerTableId() {
       const part = documentPart(getEditor());

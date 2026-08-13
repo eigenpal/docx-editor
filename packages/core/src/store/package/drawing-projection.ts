@@ -269,7 +269,8 @@ export const DEFAULT_SUPPORTED_MC_REQUIRES: ReadonlySet<string> = new Set([
 const PIC_GRAPHIC_DATA_URI = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
 
 /** Whole-part drawing scan budget — the parsed tree is already store-limit bounded. */
-const MAX_PART_SCAN_ELEMENTS = 1_000_000;
+/** Part-wide traversal budget; larger than the per-drawing projection budget by design. */
+export const MAX_PART_SCAN_ELEMENTS = 1_000_000;
 
 const EMPTY_EDGES = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
 const EMPTY_CROP: SourceCrop = Object.freeze({ left: 0, top: 0, right: 0, bottom: 0 });

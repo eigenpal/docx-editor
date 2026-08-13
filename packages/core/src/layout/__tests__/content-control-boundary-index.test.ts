@@ -63,6 +63,17 @@ function indexedAgain(
 }
 
 describe('content-control boundary indexes', () => {
+  test('a document without controls skips the page-geometry index', () => {
+    const part = load(Array.from({ length: 100 }, () => paragraph(run('plain'))).join(''));
+    const layout = layoutSemanticDocument(part, 1, { measurer, geometry });
+    const { result, work } = indexedAgain(part, layout);
+
+    expect(result).toBe(layout);
+    expect(work.geometryEntries).toBe(0);
+    expect(work.blockLookups).toBe(0);
+    expect(work.paragraphLookups).toBe(0);
+  });
+
   test('an empty inline range keeps exact caret geometry at a span boundary', () => {
     const part = load(paragraph(`${run('ab')}${control('empty', '')}${run('cd')}`));
     const layout = layoutSemanticDocument(part, 1, { measurer, geometry });

@@ -32,7 +32,7 @@ const paragraph = (text: string, pPr = '') =>
   `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ''}<w:r><w:t>${text}</w:t></w:r></w:p>`;
 
 const sectPr = (extra = '') =>
-  `<w:pPr><w:sectPr>${extra}<w:pgSz w:w="6000" w:h="2400"/><w:pgMar w:top="200" w:right="200" w:bottom="200" w:left="200" w:header="100" w:footer="100"/></w:sectPr></w:pPr>`;
+  `<w:sectPr>${extra}<w:pgSz w:w="6000" w:h="2400"/><w:pgMar w:top="200" w:right="200" w:bottom="200" w:left="200" w:header="100" w:footer="100"/></w:sectPr>`;
 
 /** Two sections, each long enough to span multiple pages under the tight geometry. */
 function twoSectionDocument(mutate?: (body: string) => string): string {
@@ -140,6 +140,43 @@ describe('multi-section page identity and invalidation', () => {
     }
     expect(session.stats.placed).toBeLessThan(session.stats.total);
     expect(session.stats.reusedPages).toBeGreaterThan(0);
+  });
+
+  test('a line-count change before a next-page section keeps later-section pages', () => {
+    const session = createLayoutSession();
+    const before = lay(load(twoSectionDocument()), 1, session);
+    const firstSectionOnePage = before.pages.findIndex((page) =>
+      page.fragments.some(
+        (fragment) =>
+          fragment.kind === 'paragraph' &&
+          fragment.lines.some((line) => line.spans.some((span) => span.text.includes('s1p')))
+      )
+    );
+    expect(firstSectionOnePage).toBeGreaterThan(0);
+
+    const edited = load(
+      twoSectionDocument((body) =>
+        body.replace(
+          paragraph(`s0p1 ${'word '.repeat(8)}`),
+          `<w:p><w:r><w:t>s0p1 ${'word '.repeat(8)}</w:t><w:br/></w:r></w:p>`
+        )
+      )
+    );
+    const after = lay(edited, 2, session);
+    const cleanSession = createLayoutSession();
+    const clean = lay(edited, 2, cleanSession);
+
+    expect(shapeOf(after)).toBe(shapeOf(clean));
+    expect(after.pages.length).toBe(before.pages.length);
+    expect(session.multi?.sections.length).toBe(2);
+    expect(session.multi?.sections[1]?.stats.placed).toBe(0);
+    expect(session.multi?.sections[1]?.stats.reusedPages).toBeGreaterThan(0);
+    expect(after.pages[firstSectionOnePage]).toBe(before.pages[firstSectionOnePage]);
+    expect(session.multi?.sections[1]?.endLineCounter).toBe(
+      cleanSession.multi?.sections[1]?.endLineCounter
+    );
+    expect(session.endLineCounter).toBe(cleanSession.endLineCounter);
+    expect(session.stats.placed).toBeLessThan(session.stats.total);
   });
 
   test('earlier section repagination remaps later pages (new objects)', () => {

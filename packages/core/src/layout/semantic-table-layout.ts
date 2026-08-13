@@ -175,8 +175,15 @@ export interface TableFlowDeps {
   readonly measurer: TextMeasurer;
   readonly cache?: ParagraphLayoutCache<readonly PendingLine[]> | undefined;
   readonly producer: string;
-  /** Line ids continue the document-wide counter, so records stay deterministic. */
-  readonly nextLineId: () => string;
+  /** Produces a stable id from the paragraph-local line identity. */
+  readonly nextLineId: (
+    paragraphId: string,
+    start: number,
+    lineIndex: number,
+    occurrence?: string
+  ) => string;
+  /** Stable visual occurrence for repeated header rows on the current page. */
+  readonly pageOccurrenceKey?: () => string;
   readonly styleCascade?: StyleCascadeTable;
   /** When set (header/footer page projection), PAGE/NUMPAGES resolve against this context. */
   readonly pageContext?: FieldPageContext;
@@ -741,7 +748,7 @@ function placeCellParagraph(
       alignOffset
     );
     records.push({
-      id: deps.nextLineId(),
+      id: deps.nextLineId(paragraphId, pendingLine.start, lineIndex),
       range: { paragraphId, start: pendingLine.start, end: pendingLine.end },
       spans: alignedSpans,
       ...(alignedDrawings.length > 0 ? { drawings: alignedDrawings } : {}),
@@ -1247,6 +1254,14 @@ export function layoutRowFragmentBounded(
   const atLeastHeightPt = heightRule.rule === 'atLeast' ? heightRule.valuePt : undefined;
   const deferredRowAnchors: DeferredRowAnchor[] = [];
   const { rowDeps, flushDeferred } = rowDepsForAnchors(deps, deferredRowAnchors);
+  const flowDeps: TableFlowDeps =
+    isHeaderRepeat && deps.pageOccurrenceKey
+      ? {
+          ...rowDeps,
+          nextLineId: (paragraphId, start, lineIndex) =>
+            rowDeps.nextLineId(paragraphId, start, lineIndex, deps.pageOccurrenceKey!()),
+        }
+      : rowDeps;
   // Exact rows clip to their authored box; never flow past it even when the page allows more.
   const flowMaxBottom =
     exactHeightPt === undefined
@@ -1319,7 +1334,7 @@ export function layoutRowFragmentBounded(
           contentTop,
           contentMaxBottom,
           depth,
-          rowDeps,
+          flowDeps,
           cursor,
           cell.styleFormatting
         );

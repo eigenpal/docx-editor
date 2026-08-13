@@ -26,6 +26,8 @@
     "build:react": "cd examples/vite && USE_PUBLISHED_PACKAGES=true VITE_BASE_PATH=/react/ vite build",
     "check:app-build": "cd examples/vite && vite build --logLevel warn --outDir dist-check --emptyOutDir",
     "build:vue": "cd examples/vue && USE_PUBLISHED_PACKAGES=true VITE_BASE_PATH=/vue/ vite build",
+    "bench:edit": "bun scripts/bench/edit-bench.ts",
+    "bench:edit:browser": "playwright test --config e2e/edit-browser-bench.config.ts",
     "changeset": "changeset",
     "check:adapter-css-thin": "node scripts/check-adapter-css-thin.mjs",
     "check:pro-license-headers": "bun run --filter '@docx-editor.dev/pro' license:check",

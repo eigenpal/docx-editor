@@ -4,6 +4,77 @@ Measures each stage of the one pipeline — bytes → parse → identity → sto
 edit/relayout → save — on a long document, so stage-level regressions show up as numbers
 instead of anecdotes.
 
+## Editing regression benchmark
+
+For repeatable optimization work on the repository-owned, synthetic 200-page reviewed fixture:
+
+```bash
+# Human-readable medians, p95s, and deterministic layout-work counters
+bun run bench:edit
+
+# Capture before/after results
+bun run bench:edit --json > /tmp/edit-before.json
+bun run bench:edit --compare /tmp/edit-before.json
+
+# Override the fixture or repetition counts
+bun run bench:edit path/to/document.docx --runs 15 --warmup 3
+
+# Rebuild or verify the deterministic synthetic fixture
+bun scripts/create-synthetic-long-edit-fixture.mjs
+bun scripts/create-synthetic-long-edit-fixture.mjs --check
+```
+
+The command runs fixed edits at fixed early and middle-document paragraphs against a fixed
+text measurer. Every measured round starts from a fresh store and a warmed layout session, so
+edits do not accumulate between samples. It reports two kinds of evidence:
+
+- **Work counters** (`placed/total`, reused pages, full passes, cache hits/misses/evictions) are
+  hardware-independent and reveal algorithmic improvements or regressions.
+- **Median and p95 timings** measure the user-facing cost but remain hardware-sensitive. Compare
+  repeated runs on the same machine; no wall-clock benchmark can be independent of CPU load,
+  power mode, or thermal state.
+
+The scenarios cover one-character typing, a text insertion that wraps onto new lines, and
+explicit hard breaks at middle and early positions. Baseline comparisons verify the fixture's
+SHA-256, so changed document bytes cannot masquerade as a performance change. The normal test
+suite pins their deterministic work counters; wall-clock timings stay a manual comparison. This
+benchmark intentionally excludes browser paint, React, and DOM selection; use the demo Perf HUD
+when validating those layers.
+
+Run timing comparisons sequentially. Concurrent benchmark processes compete for CPU and can hide
+or exaggerate timing changes; the structural work counters remain deterministic either way.
+
+### Browser editing benchmark
+
+`bench:edit` deliberately stops after the store and layout pipeline. The browser benchmark drives
+trusted Chromium input through the real React adapter, review module, toolbar, paginated DOM,
+selection synchronization, and review rail:
+
+```bash
+bun run bench:edit:browser
+
+# Save machine-readable output or change the repeated sample count
+EDIT_BROWSER_BENCH_OUTPUT=/tmp/browser-edit.json bun run bench:edit:browser
+EDIT_BROWSER_BENCH_RUNS=11 EDIT_BROWSER_BENCH_WARMUP=3 bun run bench:edit:browser
+EDIT_BROWSER_BENCH_SUSTAINED_EDITS=120 bun run bench:edit:browser
+
+# Self-test: every measured input task must include this artificial delay
+EDIT_BROWSER_BENCH_DELAY_MS=25 bun run bench:edit:browser
+```
+
+It reports median/p95 input-task and two-frame presentation latency alongside engine
+layout/paint/selection timings, Event Timing when Chromium reports it, deterministic layout-work
+counters, and the materialized DOM size. It also types 20 warmup plus 180 measured consecutive
+characters without undo in editing and suggesting modes, comparing the first and last ten edits
+and reporting garbage-collected JavaScript heap growth. The environment is pinned to headless Chromium,
+1440×1000 at 1× scale, light mode, reduced motion, one worker, a fixed fixture, fixed edit
+positions, warmups, and fresh undo between samples.
+
+Browser milliseconds cannot be hardware-independent. Use the exact work counters as the CI-safe
+algorithmic gate, and compare repeated browser runs on the same machine. The injected-delay mode
+verifies that the browser measurement itself responds to a known regression rather than merely
+printing plausible numbers.
+
 ## Running it
 
 ```bash
@@ -102,17 +173,17 @@ and revision ids uniquified per copy: ~1,080 comments and ~800 tracked-change si
 script (its stage names below) run against the pre- and post-change engine; medians of 3
 runs, Apple Silicon, Bun 1.3.14.
 
-| Stage                                            | Before | After | Change |
-| ------------------------------------------------ | ------ | ----- | ------ |
-| `collectReviewItems` (repeat, unchanged tree)    | 116 ms | 5 ms  | −96%   |
-| `collectReviewItems` (fresh root, after an edit) | 117 ms | 52 ms | −55%   |
-| `revisionItemsOf` (repeat read)                  | 86 ms  | 3 ms  | −96%   |
-| `locateSites` (repeat read)                      | 54 ms  | ~0 ms | —      |
-| `commentAnchorsOfStory` (repeat read)            | 12 ms  | 0.5 ms | −96%  |
-| `paragraphOrderOfPart` (repeat read)             | 13 ms  | ~0 ms | —      |
-| `hasReviewContent` (after the queue was read)    | 17 ms  | 1 ms  | −94%   |
-| `reviewItems()` after keystroke (local patch)    | 7.5 ms | 6 ms  | —      |
-| `reviewItems()` cold (document open)             | 207 ms | 197 ms | ~same |
+| Stage                                            | Before | After  | Change |
+| ------------------------------------------------ | ------ | ------ | ------ |
+| `collectReviewItems` (repeat, unchanged tree)    | 116 ms | 5 ms   | −96%   |
+| `collectReviewItems` (fresh root, after an edit) | 117 ms | 52 ms  | −55%   |
+| `revisionItemsOf` (repeat read)                  | 86 ms  | 3 ms   | −96%   |
+| `locateSites` (repeat read)                      | 54 ms  | ~0 ms  | —      |
+| `commentAnchorsOfStory` (repeat read)            | 12 ms  | 0.5 ms | −96%   |
+| `paragraphOrderOfPart` (repeat read)             | 13 ms  | ~0 ms  | —      |
+| `hasReviewContent` (after the queue was read)    | 17 ms  | 1 ms   | −94%   |
+| `reviewItems()` after keystroke (local patch)    | 7.5 ms | 6 ms   | —      |
+| `reviewItems()` cold (document open)             | 207 ms | 197 ms | ~same  |
 
 The fresh-root path is what an accept, reject, comment write or undo pays before the rail
 repaints; the unchanged-tree path is what any second reader (automation, a re-render, the
