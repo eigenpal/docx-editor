@@ -1,5 +1,26 @@
 # @docx-editor.dev/editor-api
 
+## 2.3.0
+
+### Minor Changes
+
+- aaf9f43: Allow browser runtimes to receive an explicit author identity so scripts can reply to comments when the live editor permits review writes.
+- c8c148f: Correct font getter types to include `null` when a range has mixed or inherited formatting. Strict TypeScript consumers must now handle the existing nullable runtime result.
+- aaf9f43: Create top-level comments from ranges with the runtime author on server and browser hosts.
+- aaf9f43: Add atomic `Comment.delete()` and `CommentReply.delete()` operations, including browser Undo support and root-versus-reply lifecycle semantics.
+- 120b912: Add `Body.bookmarks` to enumerate bookmarks in a body story without first searching for text.
+- c8c148f: Correct comment, reply, and revision date getter types to include `null` for missing or invalid OOXML dates. Strict TypeScript consumers must now guard these review dates before using `Date` methods.
+- 120b912: Add `ContentControl.isBound` for safely preflighting custom-XML-bound controls before writes.
+- 120b912: Add read-only `NoteItem.text` so footnote and endnote text can be loaded directly in one post-listing sync while preserving `NoteItem.body` for structured access.
+
+### Patch Changes
+
+- c8c148f: Fix browser runtimes reporting save support even though they do not expose a `save()` method.
+- c8c148f: Reject non-empty `LoadQueryOptions.expand` requests instead of silently ignoring navigation-property expansion.
+- 120b912: Fix browser `Range.select()` calls so offscreen ranges are revealed as well as logically selected.
+- 120b912: Fix browser `Bookmark.select()` calls so they resolve and reveal the bookmark without requiring a prior `bookmark.range` sync.
+  - @docx-editor.dev/core@2.3.0
+
 ## 2.2.1
 
 ### Patch Changes
