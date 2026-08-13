@@ -327,7 +327,7 @@ export interface CascadeDeletedNoteReferencesOptions {
 }
 
 // @public
-export function cascadeEmptiedComments(before: OoxmlPackage, after: OoxmlPackage): OoxmlPackage | null;
+export function cascadeEmptiedComments(before: OoxmlPackage, after: OoxmlPackage, owner?: CommentDeletionOwner): OoxmlPackage | null;
 
 // @public
 export function childElements(node: Extract<XmlNode, {
@@ -401,6 +401,12 @@ export function commentAnchorsOfStory(part: OoxmlPart): CommentAnchor[];
 
 // @public
 export function commentBodyText(comment: CommentRecord): string;
+
+// @public
+export interface CommentDeletionOwner {
+    readonly noteId?: number;
+    readonly storyPartName: string;
+}
 
 // @public
 export function commentInitials(comment: CommentRecord): string;
@@ -990,7 +996,7 @@ export interface DefaultRecord {
 }
 
 // @public
-export function deleteCommentThread(pkg: OoxmlPackage, commentId: string): OoxmlPackage | null;
+export function deleteCommentThread(pkg: OoxmlPackage, commentId: string, owner?: CommentDeletionOwner): OoxmlPackage | null;
 
 // @public
 export function deobfuscateFont(bytes: Uint8Array, fontKey: string): Uint8Array | null;

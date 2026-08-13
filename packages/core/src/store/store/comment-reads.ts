@@ -27,6 +27,7 @@
 // found: a notes part holds a story per note, and the reader that stopped at one root per part
 // answered nothing for it.
 
+import type { OoxmlPackage } from '../package/ooxml-package.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -36,6 +37,11 @@ import {
 } from '../package/ooxml-tree.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
 import { collectStoryParagraphs, storyRootsOf } from '../package/story-blocks.ts';
+import {
+  chargePart,
+  createCommentScanBudget,
+  walkCharged,
+} from '../package/comment-lifecycle-scan.ts';
 import { paragraphOffsetIndex } from './tree-op-segments.ts';
 import { createRecentRootCache } from './recent-root-cache.ts';
 
@@ -341,4 +347,27 @@ export function threadStateOfPart(part: OoxmlPart): Map<string, CommentThreadSta
   };
   visit(part.root);
   return states;
+}
+
+/**
+ * Whether the package holds any `w:comment` record — the cheap gate before a reap.
+ *
+ * Overflow cannot prove the package is comment-free, so it returns true and the reap still
+ * runs rather than skipping cleanup.
+ */
+export function hasAnyComment(pkg: OoxmlPackage): boolean {
+  const budget = createCommentScanBudget();
+  for (const part of pkg.parts.values()) {
+    if (!part.name.endsWith('.xml')) continue;
+    if (!chargePart(budget)) return true;
+    let found = false;
+    const finished = walkCharged(part.root, budget, (node) => {
+      if (node.kind !== 'comment') return false;
+      found = true;
+      return true;
+    });
+    if (found) return true;
+    if (!finished) return true;
+  }
+  return false;
 }

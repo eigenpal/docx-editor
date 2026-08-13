@@ -149,6 +149,7 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       // comment on a document open for reading.
       surface.commitReviewOps(() => {
         if (writes.every((write) => write.kind === 'delete')) {
+          const deletion = writes.find((write) => write.kind === 'delete');
           const done = session.deleteComments(
             writes.map((write) => {
               if (write.kind !== 'delete') throw new Error('unreachable mixed comment write');
@@ -158,7 +159,9 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
                   ? {}
                   : { parentCommentId: write.parentCommentId }),
               };
-            })
+            }),
+            scope,
+            deletion?.kind === 'delete' ? deletion.noteId : undefined
           );
           outcome = done ? { ok: true, changed: true } : { ok: false, reason: 'unknown-comment' };
           return { committed: done };

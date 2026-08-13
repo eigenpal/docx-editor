@@ -28,6 +28,12 @@ import {
 } from '../package/ooxml-tree.ts';
 import { W14_NAMESPACE_URI, XML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import { isValidParaId, mintParaId, usedParaIds, w14RootPrefix } from '../package/para-id.ts';
+import {
+  commentInputStoreRejection,
+  normalizeCommentDateValue,
+  validateCommentAuthor,
+  validateCommentText,
+} from './comment-input-validate.ts';
 import type { TreeDocumentStore, TreeModelChange } from './tree-store.ts';
 import type { TreeOpRejection } from './tree-op-validate.ts';
 
@@ -447,11 +453,22 @@ function emptyPart(name: string, xml: string): OoxmlElement | null {
  * rewrite a document nobody edited and break fingerprint equality on an untouched round trip.
  */
 export function addComment(store: TreeDocumentStore, request: AddCommentRequest): AddCommentResult {
-  // `CT_TrackChange` makes `@w:author` required, so a comment without one is invalid XML.
-  // Refusing here makes that state unrepresentable rather than repaired later.
-  if (typeof request.author !== 'string' || request.author.length === 0) {
-    return { ok: false, reason: 'invalid-author' };
+  for (const rejection of [
+    validateCommentAuthor(request.author),
+    validateCommentText(request.text),
+  ]) {
+    if (rejection) return { ok: false, reason: commentInputStoreRejection(rejection) };
   }
+  let normalizedDate: string | undefined;
+  if (request.date !== undefined) {
+    const date = normalizeCommentDateValue(request.date);
+    if (!date.ok) return { ok: false, reason: commentInputStoreRejection(date.rejection) };
+    normalizedDate = date.value;
+  }
+  const authored: AddCommentRequest = {
+    ...request,
+    ...(normalizedDate === undefined ? {} : { date: normalizedDate }),
+  };
 
   const pkg = store.package;
   const storyPartName = store.part.name;
@@ -513,7 +530,7 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
         bound.part,
         bound.part.root.id,
         bound.part.root.children.length,
-        [commentElement(commentId, paraId, request, bound.prefix)],
+        [commentElement(commentId, paraId, authored, bound.prefix)],
         { deferValidation: true }
       );
       return appended.ok ? withPart(current, appended.part) : current;

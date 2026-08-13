@@ -117,11 +117,11 @@ export interface TreeDocxSession {
     // (undocumented)
     canUndo(): boolean;
     currentPackage(): OoxmlPackage;
-    deleteComment(commentId: string): boolean;
+    deleteComment(commentId: string, scope?: StoryScope, noteId?: number): boolean;
     deleteComments(comments: readonly {
         readonly commentId: string;
         readonly parentCommentId?: string;
-    }[]): boolean;
+    }[], scope?: StoryScope, noteId?: number): boolean;
     deleteImage(scope: StoryScope, drawingNodeId: string): ImageIntentResult;
     documentFonts(): readonly string[];
     documentOutline(): readonly DocumentOutlineEntry[];

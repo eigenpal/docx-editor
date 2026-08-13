@@ -2348,7 +2348,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (activeReviewKeyNow() === key) surface.dismissActiveReview();
       let deleted = false;
       surface.commitReviewOps(() => {
-        deleted = surface!.session.deleteComment(item.id);
+        const note = noteHomeOf(item);
+        const parsed = note === null ? null : parseNoteScopeId(note);
+        deleted = surface!.session.deleteComment(
+          item.id,
+          storyScopeOfReviewItem(item),
+          parsed?.noteId
+        );
         return { committed: deleted };
       });
       if (!deleted) {

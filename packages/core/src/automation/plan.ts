@@ -93,7 +93,12 @@ import type { StoryScope } from '../store/store/tree-package-store.ts';
 import type { AutomationCommentWrite } from './document-port.ts';
 import { commentReads, revisionReads, type AutomationRevisionRead } from './review.ts';
 import type { ReviewCommentItem } from '../store/store/review-reads.ts';
-import { planInsertComment } from './comment-create-plan.ts';
+import {
+  planDeleteComment,
+  planInsertComment,
+  stagedCommentDate,
+  validatePlannedCommentFields,
+} from './comment-create-plan.ts';
 import {
   contentControlNodeOf,
   contentControlReadOf,
@@ -2280,20 +2285,20 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       case 'replyToComment': {
         const found = commentAt(operation.comment);
         if (!found.ok) return found.planned;
-        // `CT_TrackChange` makes `@w:author` mandatory. A blank one writes invalid XML rather
-        // than an anonymous remark, so it is refused before anything is staged.
-        if (typeof operation.author !== 'string' || operation.author.trim().length === 0)
-          return refuse('unsupported-content', 'a comment records who wrote it', 'author');
-        if (typeof operation.text !== 'string' || operation.text.length === 0)
-          return refuse('unsupported-content', 'a reply says something', 'text');
-        if (PARAGRAPH_BREAKING.test(operation.text))
-          return refuse('unsupported-content', 'a reply is one paragraph in this slice', 'text');
+        const fields = validatePlannedCommentFields({
+          author: operation.author,
+          text: operation.text,
+          date: operation.date,
+          kind: 'reply',
+        });
+        if (fields) return fields;
         const range = found.item.range;
         if (!range || found.item.orphaned)
           return refuse('invalid-handle', 'that comment has no range to reply over');
         const conflict = pinWrite(planFor(found.reads));
         if (conflict) return conflict;
         const story = found.reads.story;
+        const date = stagedCommentDate(operation.date);
         return {
           ok: true,
           kind: 'commentWrite',
@@ -2310,7 +2315,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             },
             text: operation.text,
             author: operation.author,
-            ...(typeof operation.date === 'string' ? { date: operation.date } : {}),
+            ...(date === undefined ? {} : { date }),
           },
           story: found.reads.story,
           answer: (_post, commentId) =>
@@ -2323,19 +2328,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       case 'deleteComment': {
         const found = commentAt(operation.comment);
         if (!found.ok) return found.planned;
-        const conflict = pinWrite(planFor(found.reads));
-        if (conflict) return conflict;
-        return {
-          ok: true,
-          kind: 'commentWrite',
-          write: {
-            kind: 'delete',
-            commentId: found.item.id,
-            ...(found.item.parentId === undefined ? {} : { parentCommentId: found.item.parentId }),
-          },
-          story: found.reads.story,
-          answer: () => APPLIED,
-        };
+        return planDeleteComment(found.item, found.reads, (reads) => pinWrite(planFor(reads)));
       }
 
       case 'getRevisions': {

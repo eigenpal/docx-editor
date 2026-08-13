@@ -471,12 +471,24 @@ export function normalizeSdtFullDate(value: string): string | null {
 
   const fraction = match[7] !== undefined ? `.${match[7]}` : '';
   const zone = match[8] ?? 'Z';
-  if (zone !== 'Z') {
-    const zoneHour = Number(zone.slice(1, 3));
-    const zoneMinute = Number(zone.slice(4, 6));
-    if (zoneHour > 23 || zoneMinute > 59) return null;
-  }
+  if (!isValidXsdDateTimeZone(zone)) return null;
   return `${date}T${match[4]}:${match[5]}:${match[6]}${fraction}${zone}`;
+}
+
+/** Whether `zone` is a legal `xsd:dateTime` timezone: `Z` or a numeric offset within ±14:00. */
+function isValidXsdDateTimeZone(zone: string): boolean {
+  if (zone === 'Z') return true;
+  if (zone.length !== 6 || (zone[0] !== '+' && zone[0] !== '-')) return false;
+  const sign = zone[0] === '+' ? 1 : -1;
+  const zoneHour = Number(zone.slice(1, 3));
+  const zoneMinute = Number(zone.slice(4, 6));
+  if (!Number.isInteger(zoneHour) || !Number.isInteger(zoneMinute)) return false;
+  if (zoneHour < 0 || zoneMinute < 0 || zoneMinute > 59) return false;
+  const totalMinutes = sign * (zoneHour * 60 + zoneMinute);
+  if (totalMinutes > 14 * 60 || totalMinutes < -14 * 60) return false;
+  // The bound is exactly ±14:00; a fourteen-hour offset must carry `:00` minutes.
+  if (Math.abs(totalMinutes) === 14 * 60 && zoneMinute !== 0) return false;
+  return true;
 }
 
 /**

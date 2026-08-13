@@ -30,7 +30,10 @@ import { normalizeParagraphIdentity } from '../store/package/para-id.ts';
 import { TreePackageStore, type StoryScope } from '../store/store/tree-package-store.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { addComment, setCommentResolved } from '../store/store/comment-writes.ts';
-import { deleteCommentReply, deleteCommentThread } from '../store/package/comment-lifecycle.ts';
+import {
+  deleteCommentReply,
+  deleteCommentThreadInStory,
+} from '../store/package/comment-lifecycle.ts';
 import { insertCustomNodeWrite } from '../store/store/custom-node-writes.ts';
 import type {
   AutomationCommentWriteResult,
@@ -208,10 +211,14 @@ function packageStorePort(store: TreePackageStore): AutomationDocumentPort {
             let next = current;
             for (const write of writes) {
               if (write.kind !== 'delete') continue;
+              const owner = {
+                storyPartName: story.store.part.name,
+                ...(write.noteId === undefined ? {} : { noteId: write.noteId }),
+              };
               const deleted =
                 write.parentCommentId === undefined
-                  ? deleteCommentThread(next, write.commentId)
-                  : deleteCommentReply(next, write.commentId, write.parentCommentId);
+                  ? deleteCommentThreadInStory(next, write.commentId, owner)
+                  : deleteCommentReply(next, write.commentId, write.parentCommentId, owner);
               if (deleted === null) {
                 refused = true;
                 return current;

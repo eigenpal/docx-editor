@@ -34,7 +34,10 @@ import {
   type CustomNodeWriteResult,
   type InsertCustomNodeWrite,
 } from '../store/store/custom-node-writes.ts';
-import { deleteCommentReply, deleteCommentThread } from '../store/package/comment-lifecycle.ts';
+import {
+  deleteCommentReply,
+  deleteCommentThreadInStory,
+} from '../store/package/comment-lifecycle.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import {
   ORIGIN_IDS,
@@ -351,17 +354,21 @@ export interface TreeDocxSession {
    * Delete a comment thread outright — body, thread state and story markers.
    *
    * A THREAD, like resolving one: a reply whose parent is gone has nothing left to answer.
-   * False when the document holds no such comment, or when the removal was refused.
+   * `scope` names the owning story and defaults to the body; `noteId` names one note inside a
+   * shared notes part. False when the document holds no such comment, or when the removal was
+   * refused.
    */
-  deleteComment(commentId: string): boolean;
+  deleteComment(commentId: string, scope?: StoryScope, noteId?: number): boolean;
   /**
    * Delete several comment objects as one package transaction and one undo unit.
    *
    * A root removes its thread; a reply removes only itself and reparents any foreign nested
-   * descendants to its parent.
+   * descendants to its parent. Marker stripping is scoped to `scope` / `noteId`.
    */
   deleteComments(
-    comments: readonly { readonly commentId: string; readonly parentCommentId?: string }[]
+    comments: readonly { readonly commentId: string; readonly parentCommentId?: string }[],
+    scope?: StoryScope,
+    noteId?: number
   ): boolean;
   /**
    * Insert a custom node, with the payload it carries, as ONE transaction.
@@ -1282,12 +1289,18 @@ export function openTreeSession(
         return true;
       },
 
-      deleteComment(commentId) {
-        return this.deleteComments([{ commentId }]);
+      deleteComment(commentId, scope = BODY_SCOPE, noteId) {
+        return this.deleteComments([{ commentId }], scope, noteId);
       },
 
-      deleteComments(comments) {
+      deleteComments(comments, scope = BODY_SCOPE, noteId) {
         if (comments.length === 0) return false;
+        const storyPart = scope.kind === 'body' ? bodyStore().part : packageStore.partFor(scope);
+        if (!storyPart) return false;
+        const owner = {
+          storyPartName: storyPart.name,
+          ...(noteId === undefined ? {} : { noteId }),
+        };
         const store = bodyStore();
         const beforePackage = packageStore.currentPackage();
         const checkpoint = store.checkpoint();
@@ -1306,8 +1319,8 @@ export function openTreeSession(
             for (const comment of comments) {
               const deleted =
                 comment.parentCommentId === undefined
-                  ? deleteCommentThread(next, comment.commentId)
-                  : deleteCommentReply(next, comment.commentId, comment.parentCommentId);
+                  ? deleteCommentThreadInStory(next, comment.commentId, owner)
+                  : deleteCommentReply(next, comment.commentId, comment.parentCommentId, owner);
               if (deleted === null) {
                 refused = true;
                 return current;

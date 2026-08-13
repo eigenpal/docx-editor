@@ -1,5 +1,12 @@
 import { findNode, parentNodeOf } from '../store/package/ooxml-edit.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-tree.ts';
+import {
+  normalizeCommentDateValue,
+  validateCommentAuthor,
+  validateCommentDate,
+  validateCommentText,
+} from '../store/store/comment-input-validate.ts';
+import type { ReviewCommentItem } from '../store/store/review-reads.ts';
 import type { AutomationCommentWrite } from './document-port.ts';
 import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationOperation } from './operations.ts';
@@ -16,6 +23,50 @@ function refuse(code: AutomationErrorCode, message: string, detail?: string): Pl
     ok: false,
     error: Object.freeze(detail === undefined ? { code, message } : { code, message, detail }),
   };
+}
+
+function refuseCommentInput(
+  field: 'author' | 'text' | 'date',
+  kind: 'comment' | 'reply'
+): PlannedOperation {
+  const message =
+    field === 'author'
+      ? 'a comment records who wrote it'
+      : field === 'date'
+        ? 'a comment date must be a valid ISO-8601 instant'
+        : kind === 'reply'
+          ? 'a reply says something'
+          : 'a comment says something';
+  return refuse('unsupported-content', message, field);
+}
+
+/** Refuse invalid author, text or date before a comment write is staged. */
+export function validatePlannedCommentFields(input: {
+  readonly author: unknown;
+  readonly text: unknown;
+  readonly date?: unknown;
+  readonly kind: 'comment' | 'reply';
+}): PlannedOperation | null {
+  if (validateCommentAuthor(input.author)) return refuseCommentInput('author', input.kind);
+  if (validateCommentText(input.text)) return refuseCommentInput('text', input.kind);
+  if (typeof input.text === 'string' && PARAGRAPH_BREAKING.test(input.text)) {
+    return refuse(
+      'unsupported-content',
+      input.kind === 'reply'
+        ? 'a reply is one paragraph in this slice'
+        : 'a comment is one paragraph in this slice',
+      'text'
+    );
+  }
+  if (validateCommentDate(input.date)) return refuseCommentInput('date', input.kind);
+  return null;
+}
+
+/** Canonical `@w:date` for a staged comment write, after validation succeeded. */
+export function stagedCommentDate(date: unknown): string | undefined {
+  if (date === undefined) return undefined;
+  const normalized = normalizeCommentDateValue(date);
+  return normalized.ok ? normalized.value : undefined;
 }
 
 /** Innermost table cell containing a paragraph, or null for ordinary story flow. */
@@ -42,15 +93,13 @@ export function planInsertComment(
   packageReads: AutomationPackageReads,
   pinStory: (reads: AutomationStoryReads) => PlannedOperation | null
 ): PlannedOperation {
-  if (typeof operation.author !== 'string' || operation.author.trim().length === 0) {
-    return refuse('unsupported-content', 'a comment records who wrote it', 'author');
-  }
-  if (typeof operation.text !== 'string' || operation.text.length === 0) {
-    return refuse('unsupported-content', 'a comment says something', 'text');
-  }
-  if (PARAGRAPH_BREAKING.test(operation.text)) {
-    return refuse('unsupported-content', 'a comment is one paragraph in this slice', 'text');
-  }
+  const fields = validatePlannedCommentFields({
+    author: operation.author,
+    text: operation.text,
+    date: operation.date,
+    kind: 'comment',
+  });
+  if (fields) return fields;
   const resolved = resolveSpanRef(operation.span, handles, packageReads);
   if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
   if (resolved.value === null)
@@ -66,6 +115,7 @@ export function planInsertComment(
   }
   const conflict = pinStory(story.value);
   if (conflict) return conflict;
+  const date = stagedCommentDate(operation.date);
   const write: AutomationCommentWrite = {
     kind: 'create',
     anchor: {
@@ -78,7 +128,7 @@ export function planInsertComment(
     },
     text: operation.text,
     author: operation.author,
-    ...(typeof operation.date === 'string' ? { date: operation.date } : {}),
+    ...(date === undefined ? {} : { date }),
   };
   return {
     ok: true,
@@ -89,5 +139,28 @@ export function planInsertComment(
       commentId === undefined
         ? APPLIED
         : { kind: 'handle', handle: handles.comment(commentId, story.value.story) },
+  };
+}
+
+/** Plan a story-owned comment deletion without widening the central dispatcher. */
+export function planDeleteComment(
+  item: ReviewCommentItem,
+  reads: AutomationStoryReads,
+  pinStory: (reads: AutomationStoryReads) => PlannedOperation | null
+): PlannedOperation {
+  const conflict = pinStory(reads);
+  if (conflict) return conflict;
+  const story = reads.story;
+  return {
+    ok: true,
+    kind: 'commentWrite',
+    write: {
+      kind: 'delete',
+      commentId: item.id,
+      ...(item.parentId === undefined ? {} : { parentCommentId: item.parentId }),
+      ...(story.kind === 'note' ? { noteId: story.noteId } : {}),
+    },
+    story,
+    answer: () => APPLIED,
   };
 }

@@ -423,7 +423,12 @@ export {
   type NoteLifecycleRejection,
   type NoteLifecycleResult,
 } from './note-lifecycle.ts';
-export { cascadeEmptiedComments, deleteCommentThread, hasAnyComment } from './comment-lifecycle.ts';
+export {
+  cascadeEmptiedComments,
+  deleteCommentThread,
+  hasAnyComment,
+  type CommentDeletionOwner,
+} from './comment-lifecycle.ts';
 export {
   NO_TRACKING_SETTINGS,
   readTrackingSettings,

@@ -28,6 +28,7 @@ import {
   findContentControl,
   hasGlossaryPlaceholderRef,
   isShowingPlaceholder,
+  normalizeSdtFullDate,
 } from '../store/tree-op-nodes.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -178,6 +179,15 @@ describe('setContentControlValue writes the value each type accepts', () => {
         value: { kind: 'date', iso: 'the ninth of March' },
       })
     ).toBe('invalidArgs');
+  });
+
+  test('normalizeSdtFullDate enforces the xsd:dateTime ±14:00 timezone bound', () => {
+    expect(normalizeSdtFullDate('2026-01-01T00:00:00+14:00')).toBe('2026-01-01T00:00:00+14:00');
+    expect(normalizeSdtFullDate('2026-01-01T00:00:00-14:00')).toBe('2026-01-01T00:00:00-14:00');
+    expect(normalizeSdtFullDate('2026-01-01T00:00:00+13:59')).toBe('2026-01-01T00:00:00+13:59');
+    expect(normalizeSdtFullDate('2026-01-01T00:00:00+15:00')).toBeNull();
+    expect(normalizeSdtFullDate('2026-01-01T00:00:00+14:01')).toBeNull();
+    expect(normalizeSdtFullDate('2026-01-01T00:00:00-15:00')).toBeNull();
   });
 
   test('a value of the wrong shape for the control is a type mismatch', () => {

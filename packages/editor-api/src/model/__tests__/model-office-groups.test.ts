@@ -492,11 +492,17 @@ describe('comments and tracked changes are what a document says about itself', (
       const comments = context.document.comments;
       comments.load('items');
       await context.sync();
-      comments.items[0]!.replies.load('items');
+      const root = comments.items[0]!;
+      root.load('id');
+      root.replies.load('items');
+      for (const comment of comments.items) comment.load('id');
       await context.sync();
-      return { roots: comments.items.length, replies: comments.items[0]!.replies.items.length };
+      return {
+        rootIds: comments.items.map((comment) => comment.id),
+        replies: root.replies.items.length,
+      };
     });
-    expect(remaining).toEqual({ roots: 3, replies: 0 });
+    expect(remaining).toEqual({ rootIds: ['1', '3', '5', '7'], replies: 0 });
     await expect(
       runtime.run(stale, async (context) => {
         stale.load('id');
@@ -519,9 +525,11 @@ describe('comments and tracked changes are what a document says about itself', (
       const comments = context.document.comments;
       comments.load('items');
       await context.sync();
-      return comments.items.length;
+      for (const comment of comments.items) comment.load('id');
+      await context.sync();
+      return comments.items.map((comment) => comment.id);
     });
-    expect(remaining).toBe(1);
+    expect(remaining).toEqual(['5', '7']);
   });
 
   test('a tracked insertion is a decision a script can read and accept', async () => {

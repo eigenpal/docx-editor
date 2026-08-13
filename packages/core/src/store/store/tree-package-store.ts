@@ -444,7 +444,9 @@ export class TreePackageStore {
     // one undo puts the words, the note and the remark back together.
     if (result.change && mayEmptyComments) {
       const afterNotes = this.currentPackage();
-      const reaped = cascadeEmptiedComments(beforePackage, afterNotes);
+      const reaped = cascadeEmptiedComments(beforePackage, afterNotes, {
+        storyPartName: story.partName,
+      });
       if (reaped === null) {
         store.restoreCheckpoint(checkpoint);
         this.installPackageSnapshotInternal(beforePackage);

@@ -50,6 +50,11 @@ export type AutomationCommentWrite =
       readonly commentId: string;
       /** Replies are removed alone; roots remove the whole thread and its story anchors. */
       readonly parentCommentId?: string;
+      /**
+       * When the comment lives in one note of a shared notes part, that note's `w:id`.
+       * StoryScope names the part; this names the note inside it.
+       */
+      readonly noteId?: number;
     };
 
 export type AutomationCommentWriteResult =

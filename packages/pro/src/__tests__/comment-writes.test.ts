@@ -140,6 +140,104 @@ describe('adding a comment', () => {
     expect(store.historyDepth).toBe(0);
   });
 
+  test('invalid XML controls and over-limit values are refused before transact', () => {
+    const store = open();
+    const target = paragraphWithText(store.part, 10);
+    const anchor = { paragraphId: target.id, start: 0, end: 3 };
+    const storyBefore = serializeOoxmlPart(store.part);
+
+    const control = addComment(store, {
+      anchor,
+      author: 'QA',
+      text: '\u0001',
+    });
+    expect(control.ok).toBe(false);
+    if (!control.ok) expect(control.reason).toBe('invalid-text');
+
+    const longAuthor = addComment(store, {
+      anchor,
+      author: 'A'.repeat(257),
+      text: 'ok',
+    });
+    expect(longAuthor.ok).toBe(false);
+    if (!longAuthor.ok) expect(longAuthor.reason).toBe('resource-limit');
+
+    const longText = addComment(store, {
+      anchor,
+      author: 'QA',
+      text: 'x'.repeat(65_536),
+    });
+    expect(longText.ok).toBe(false);
+    if (!longText.ok) expect(longText.reason).toBe('resource-limit');
+
+    const badDate = addComment(store, {
+      anchor,
+      author: 'QA',
+      text: 'dated',
+      date: 'not-a-date',
+    });
+    expect(badDate.ok).toBe(false);
+    if (!badDate.ok) expect(badDate.reason).toBe('invalid-property-value');
+
+    expect(serializeOoxmlPart(store.part)).toBe(storyBefore);
+    expect(store.historyDepth).toBe(0);
+  });
+
+  test('valid Unicode and accepted dates commit without save failure', () => {
+    const store = open();
+    const target = paragraphWithText(store.part, 10);
+    const text = 'caf\u00e9 \uD83D\uDE00';
+    const added = addComment(store, {
+      anchor: { paragraphId: target.id, start: 0, end: 3 },
+      author: 'R\u00e9viewer',
+      text,
+      date: '2026-03-09T12:00:00Z',
+    });
+    expect(added.ok).toBe(true);
+    if (!added.ok) return;
+    const reopened = readOoxmlPackage(writeOoxmlPackage(store.package));
+    expect(reopened.ok).toBe(true);
+    if (!reopened.ok) return;
+    expect(validatePackageInvariants(reopened.package).ok).toBe(true);
+    const commentsXml = serializeOoxmlPart(reopened.package.parts.get('/word/comments.xml')!);
+    expect(commentsXml).toContain('café');
+    expect(commentsXml).toContain('😀');
+    expect(commentsXml).toContain('2026-03-09T12:00:00Z');
+  });
+
+  test('date-only input writes normalized xsd:dateTime on w:date', () => {
+    const store = open();
+    const target = paragraphWithText(store.part, 10);
+    const added = addComment(store, {
+      anchor: { paragraphId: target.id, start: 0, end: 3 },
+      author: 'QA',
+      text: 'dated',
+      date: '2026-03-09',
+    });
+    expect(added.ok).toBe(true);
+    if (!added.ok) return;
+    const xml = serializeOoxmlPart(store.package.parts.get('/word/comments.xml')!);
+    expect(xml).toContain('w:date="2026-03-09T00:00:00Z"');
+    expect(xml).not.toContain('w:date="2026-03-09"');
+  });
+
+  test('offsets beyond xsd ±14:00 are refused before transact', () => {
+    const store = open();
+    const target = paragraphWithText(store.part, 10);
+    const anchor = { paragraphId: target.id, start: 0, end: 3 };
+    const storyBefore = serializeOoxmlPart(store.part);
+    const result = addComment(store, {
+      anchor,
+      author: 'QA',
+      text: 'too far',
+      date: '2026-03-09T00:00:00+15:00',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('invalid-property-value');
+    expect(serializeOoxmlPart(store.part)).toBe(storyBefore);
+    expect(store.historyDepth).toBe(0);
+  });
+
   test('no date is written when none is given', () => {
     const store = open();
     const target = paragraphWithText(store.part, 10);
