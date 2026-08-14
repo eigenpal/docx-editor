@@ -192,7 +192,7 @@ export interface CaretGeometry {
     readonly y: number;
 }
 
-// @public
+// @public (undocumented)
 export function caretStops(layout: SemanticLayout, measurer?: TextMeasurer): CaretGeometry[];
 
 // @public
@@ -592,6 +592,11 @@ export function enumerateDocumentSectionsBounded(part: OoxmlPart, displayMode?: 
 
 // @public
 export function expandLvlText(lvlText: string, counters: readonly number[], formats: readonly string[]): string;
+
+// @public
+export interface FieldAtomMarker {
+    readonly formField: boolean;
+}
 
 // @public
 export function filterRefsOnPage(page: PageRecord, allRefs: readonly PageRefHit[], refIndex?: PageRefIndex): readonly PageRefHit[];
@@ -1154,6 +1159,7 @@ export interface LayoutSession {
     notePageBottomReserves: ReadonlyMap<number, number> | null;
     // @internal
     previous: SemanticLayout | null;
+    startLineCounter: number;
     // (undocumented)
     stats: LayoutSessionStats;
 }
@@ -2868,6 +2874,7 @@ export interface StyleSpanRecord {
     // (undocumented)
     readonly box: LayoutBox;
     readonly caretEdges?: readonly number[];
+    readonly fieldAtom?: FieldAtomMarker;
     readonly link?: SpanLinkRecord;
     readonly noteNav?: {
         readonly scopeId: string;

@@ -569,6 +569,7 @@ export interface Editor {
     } | null;
     // (undocumented)
     getZoom(): number;
+    getZoomMode(): ZoomMode;
     isActive(command: EditorCommand, options?: {
         scope?: EditorScope;
     }): boolean;
@@ -594,7 +595,7 @@ export interface Editor {
     scrollToBlock(blockId: string): boolean;
     scrollToPage(pageNumber: number): boolean;
     selectMatch(match: TextMatch): ExecResult;
-    setActiveReviewItem(key: string | null): ExecResult;
+    setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
     // (undocumented)
     setActiveScope(scope: ViewScope): void;
     // (undocumented)
@@ -602,6 +603,7 @@ export interface Editor {
     setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null): void;
     setTableInteractionLabel(resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string): void;
     setZoom(zoom: number): ExecResult;
+    setZoomMode(mode: ZoomMode | 'auto'): ExecResult;
     // (undocumented)
     snapshot(options?: {
         scope?: EditorScope;
@@ -1070,6 +1072,7 @@ export interface EditorSnapshot {
     } | null;
     // (undocumented)
     readonly zoom: number;
+    readonly zoomMode?: ZoomMode;
 }
 
 // @public
@@ -1400,6 +1403,11 @@ export interface ResolvedNoteNumbering {
     readonly numStart: number;
     // (undocumented)
     readonly pos: string;
+}
+
+// @public
+export interface ReviewActivationOptions {
+    readonly reveal?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' | false;
 }
 
 // @public
@@ -1928,6 +1936,19 @@ export interface Watermark {
     // (undocumented)
     readonly text?: string;
 }
+
+// @public
+export type ZoomFitTarget = 'pageWidth';
+
+// @public
+export type ZoomMode = {
+    readonly type: 'fixed';
+} | {
+    readonly type: 'fit';
+    readonly fit: ZoomFitTarget;
+    readonly minZoom?: number;
+    readonly maxZoom?: number;
+};
 
 // (No @packageDocumentation comment for this package)
 

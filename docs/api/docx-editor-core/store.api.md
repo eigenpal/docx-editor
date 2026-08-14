@@ -327,7 +327,7 @@ export interface CascadeDeletedNoteReferencesOptions {
 }
 
 // @public
-export function cascadeEmptiedComments(before: OoxmlPackage, after: OoxmlPackage): OoxmlPackage | null;
+export function cascadeEmptiedComments(before: OoxmlPackage, after: OoxmlPackage, owner?: CommentDeletionOwner): OoxmlPackage | null;
 
 // @public
 export function childElements(node: Extract<XmlNode, {
@@ -401,6 +401,12 @@ export function commentAnchorsOfStory(part: OoxmlPart): CommentAnchor[];
 
 // @public
 export function commentBodyText(comment: CommentRecord): string;
+
+// @public
+export interface CommentDeletionOwner {
+    readonly noteId?: number;
+    readonly storyPartName: string;
+}
 
 // @public
 export function commentInitials(comment: CommentRecord): string;
@@ -974,6 +980,9 @@ export const DEFAULT_MAX_EDITABLE_STORY_PARTS = 64;
 export const DEFAULT_OOXML_PACKAGE_LIMITS: Required<Pick<OoxmlPackageLimits, 'maxXmlParts' | 'maxRelationships'>>;
 
 // @public
+export const DEFAULT_VIEW_SETTINGS: DocumentViewSettings;
+
+// @public
 export const DEFAULT_ZIP_LIMITS: ZipLimits;
 
 // @public
@@ -987,7 +996,7 @@ export interface DefaultRecord {
 }
 
 // @public
-export function deleteCommentThread(pkg: OoxmlPackage, commentId: string): OoxmlPackage | null;
+export function deleteCommentThread(pkg: OoxmlPackage, commentId: string, owner?: CommentDeletionOwner): OoxmlPackage | null;
 
 // @public
 export function deobfuscateFont(bytes: Uint8Array, fontKey: string): Uint8Array | null;
@@ -1089,6 +1098,11 @@ export interface DocumentTrackingSettings {
     readonly doNotTrackMoves: boolean;
     readonly restrictedToTrackedChanges: boolean;
     readonly trackRevisions: boolean;
+}
+
+// @public
+export interface DocumentViewSettings {
+    readonly doNotShadeFormData: boolean;
 }
 
 // @public
@@ -1362,6 +1376,9 @@ export function hasCommentPart(pkg: OoxmlPackage, storyPartName: string): boolea
 
 // @public
 export function hashAuthored(authoredState: unknown): string;
+
+// @public
+export function hasLegacyFormFieldData(node: OoxmlNode): boolean;
 
 // @public
 export function hasNode(part: OoxmlPart, nodeId: string): boolean;
@@ -3007,6 +3024,9 @@ export function readOoxmlPart(xml: string, metadata: OoxmlPartMetadata, limits?:
 
 // @public
 export function readTrackingSettings(settingsRoot: OoxmlNode | null | undefined): DocumentTrackingSettings;
+
+// @public
+export function readViewSettings(settingsRoot: OoxmlNode | null | undefined): DocumentViewSettings;
 
 // @public
 export function readXml(xml: string, limits?: XmlLimits): XmlResult;

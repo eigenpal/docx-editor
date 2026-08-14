@@ -5,6 +5,12 @@
 ```ts
 
 // @public
+export const DEFAULT_FIELD_SHADING: FieldShadingMode;
+
+// @public
+export type FieldShadingMode = 'never' | 'when-selected' | 'always';
+
+// @public
 export interface OverlayRect {
     readonly className?: string;
     // (undocumented)
@@ -37,12 +43,14 @@ export interface PaintOptions {
     // (undocumented)
     readonly drawingStrings?: DrawingPaintStrings;
     readonly emptyTocPlaceholderIds?: ReadonlySet<string>;
+    readonly fieldShading?: FieldShadingMode;
     readonly fontAlias?: (family: string) => string | undefined;
     // (undocumented)
     readonly imageUrlPort?: PaintImageUrlPort;
     readonly materialize?: ReadonlySet<number>;
     readonly readOnlyParagraphIds?: ReadonlySet<string>;
     readonly scale?: number;
+    readonly shadeFormFields?: boolean;
 }
 
 // @public
