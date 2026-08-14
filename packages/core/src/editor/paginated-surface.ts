@@ -1807,7 +1807,7 @@ export function mountPaginatedSurface(
     // book the paint's own cost to the selection phase.
     lastPaintMs = now() - paintBegan;
     renderOverlay();
-    renderCommentHighlights();
+    renderCommentHighlights(true);
     // The surface may only now have been wrapped in its viewport, so the size watcher
     // re-resolves its target here rather than trusting what existed at mount.
     watchScrollerSize();
@@ -2561,8 +2561,19 @@ export function mountPaginatedSurface(
     return `docx-revision-band docx-revision-band--${kind}${isActive ? ' docx-revision-band--active' : ''}`;
   }
 
-  function renderCommentHighlights(): void {
+  let commentHighlightLayout: SemanticLayout | null = null;
+  let commentHighlightActiveKey: string | null | undefined;
+
+  function renderCommentHighlights(force = false): void {
     const active = activeReviewAtCaret();
+    const activeKey = active ? reviewItemKey(active) : null;
+    if (
+      !force &&
+      commentHighlightLayout === currentLayout &&
+      commentHighlightActiveKey === activeKey
+    ) {
+      return;
+    }
     // Once per paint, not once per rect: a decision spanning many lines asked the same
     // question for every one of them.
     const byKey = new Map<string, ReviewItem>();
@@ -2576,6 +2587,8 @@ export function mountPaginatedSurface(
       scale,
       ...(materializedExtent ? { pageOffsetX: materializedExtent.pageOffsetX } : {}),
     });
+    commentHighlightLayout = currentLayout;
+    commentHighlightActiveKey = activeKey;
   }
 
   /** Draw the selected cells, or clear the layer when nothing is selected that way. */
@@ -3888,6 +3901,12 @@ export function mountPaginatedSurface(
       }
       // Nothing structural goes, so the range start is still there to collapse onto.
       return { ops, collapseTo: orderedStart() };
+    }
+    if (
+      selection.anchor.paragraphId === selection.head.paragraphId &&
+      selection.anchor.offset === selection.head.offset
+    ) {
+      return { ops: [], collapseTo: selection.head };
     }
     const { from, to } = orderedRange();
     return planRangeDeletion(

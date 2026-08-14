@@ -440,6 +440,43 @@ describe('a render never discards a gesture the model has not adopted yet', () =
     }
   });
 
+  test('stale selection echoes cannot reorder a rapid typing burst before deferred paint', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(window.navigator, 'scheduling');
+    Object.defineProperty(window.navigator, 'scheduling', {
+      configurable: true,
+      value: { isInputPending: () => true },
+    });
+    const { surface, host, scroller } = mountScrolled();
+    try {
+      const id = surface.session.paragraphIds()[0]!;
+      surface.setSelection({
+        anchor: { paragraphId: id, offset: 0 },
+        head: { paragraphId: id, offset: 0 },
+      });
+      await Promise.resolve();
+
+      // Paint stays deferred, so the native selection remains at offset zero. A browser can
+      // still deliver the queued echo of that old caret between input tasks; it must not take
+      // ownership back from the model caret that each commit advances.
+      for (const digit of '1234567890') {
+        surface.type(digit);
+        document.dispatchEvent(new Event('selectionchange'));
+      }
+
+      expect(surface.session.bodyText().startsWith('1234567890')).toBe(true);
+      expect(surface.state().selection).toEqual({
+        anchor: { paragraphId: id, offset: 10 },
+        head: { paragraphId: id, offset: 10 },
+      });
+    } finally {
+      surface.destroy();
+      host.remove();
+      scroller.remove();
+      if (descriptor) Object.defineProperty(window.navigator, 'scheduling', descriptor);
+      else delete (window.navigator as Navigator & { scheduling?: unknown }).scheduling;
+    }
+  });
+
   test('an undo with nothing to undo does not disarm the next repaint', async () => {
     // THE FLAG THAT STAYS RAISED.
     //

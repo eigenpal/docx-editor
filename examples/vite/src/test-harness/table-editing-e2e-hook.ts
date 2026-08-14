@@ -81,6 +81,11 @@ export interface DocxEditorE2EHook {
     readonly anchor: { readonly paragraphId: string; readonly offset: number };
     readonly head: { readonly paragraphId: string; readonly offset: number };
   } | null;
+  benchmarkParagraphText(paragraphId: string): string | null;
+  prepareClipboardBenchmark(
+    startFraction: number,
+    endFraction: number
+  ): { readonly expectedText: string; readonly pageCount: number } | null;
   undoBenchmarkEdit(): boolean;
   innerTableId(): string | null;
   outerTableId(): string | null;
@@ -334,6 +339,32 @@ export function createDocxEditorE2EHook(getEditor: () => Editor | null): DocxEdi
     },
     benchmarkSelection() {
       return surface(getEditor())?.state().selection ?? null;
+    },
+    benchmarkParagraphText(paragraphId) {
+      const currentSurface = surface(getEditor());
+      return currentSurface ? paragraphTextFromLayout(currentSurface.layout(), paragraphId) : null;
+    },
+    prepareClipboardBenchmark(startFraction, endFraction) {
+      const currentSurface = surface(getEditor());
+      if (!currentSurface) return null;
+      const ids = currentSurface.session.paragraphIds();
+      if (ids.length === 0) return null;
+      const at = (fraction: number) =>
+        Math.floor((ids.length - 1) * Math.min(1, Math.max(0, fraction)));
+      const startId = ids[Math.min(at(startFraction), at(endFraction))]!;
+      const endId = ids[Math.max(at(startFraction), at(endFraction))]!;
+      currentSurface.setEditingMode('edit');
+      currentSurface.setSelection({
+        anchor: { paragraphId: startId, offset: 0 },
+        head: {
+          paragraphId: endId,
+          offset: paragraphTextFromLayout(currentSurface.layout(), endId).length,
+        },
+      });
+      return {
+        expectedText: currentSurface.selectedText(),
+        pageCount: currentSurface.layout().pages.length,
+      };
     },
     undoBenchmarkEdit() {
       const currentSurface = surface(getEditor());

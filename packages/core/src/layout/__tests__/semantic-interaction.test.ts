@@ -240,7 +240,7 @@ describe('keyboard navigation', () => {
     expect(moveCaret(layout, at(P0, 1), 'left')!.position).toEqual(at(P0, 0));
   });
 
-  test('left and right derive stops for the active paragraph, not the whole document', () => {
+  test('character and vertical moves derive stops only for adjacent paragraphs', () => {
     const long = lay(load(Array.from({ length: 100 }, () => paragraph('abcdef')).join('')));
     let measurements = 0;
     const counting: TextMeasurer = {
@@ -255,6 +255,12 @@ describe('keyboard navigation', () => {
     );
     // A whole-document stop build measures hundreds of prefixes here. The local path only
     // needs the handful of boundaries in "abcdef".
+    expect(measurements).toBeLessThan(20);
+
+    measurements = 0;
+    expect(moveCaret(long, at(P0, 1), 'down', null, { measurer: counting })!.position).toEqual(
+      at(P1, 1)
+    );
     expect(measurements).toBeLessThan(20);
   });
 

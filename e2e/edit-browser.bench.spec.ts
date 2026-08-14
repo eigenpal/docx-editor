@@ -1,27 +1,32 @@
 import { expect, test, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { performance as nodePerformance } from 'node:perf_hooks';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
+import {
+  type BrowserSample,
+  type EnginePerf,
+  type TimingSummary,
+  EDIT_BROWSER_FIXTURE,
+  REPO_ROOT,
+  heapBytes,
+  loadHarness,
+  nonNegativeNumber,
+  percentChange,
+  positiveInteger,
+  summarize,
+  summarizeOptional,
+  twoFrames,
+} from './edit-browser-bench-harness.js';
+import { BURST_RATE_HZ, dispatchClipboard, runBurst } from './edit-browser-burst.js';
 
-const PORT = 5275;
-const FIXTURE = 'synthetic-long-edit.docx';
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const FIXTURE_SHA256 = createHash('sha256')
-  .update(readFileSync(resolve(REPO_ROOT, 'e2e/fixtures', FIXTURE)))
+  .update(readFileSync(resolve(REPO_ROOT, 'e2e/fixtures', EDIT_BROWSER_FIXTURE)))
   .digest('hex');
-const REVIEW_RAIL_ENABLED = process.env.EDIT_BROWSER_BENCH_REVIEW_RAIL !== '0';
-const URL = `http://localhost:${PORT}/?perfE2e=1&fixture=${FIXTURE}&reviewRail=${
-  REVIEW_RAIL_ENABLED ? '1' : '0'
-}`;
 const RUNS = positiveInteger(process.env.EDIT_BROWSER_BENCH_RUNS, 7);
 const WARMUP = positiveInteger(process.env.EDIT_BROWSER_BENCH_WARMUP, 2);
 const SUSTAINED_EDITS = positiveInteger(process.env.EDIT_BROWSER_BENCH_SUSTAINED_EDITS, 180);
 const SUSTAINED_WARMUP_EDITS = 20;
 const INJECTED_DELAY_MS = nonNegativeNumber(process.env.EDIT_BROWSER_BENCH_DELAY_MS, 0);
-const BURST_DURATION_MS = positiveInteger(process.env.EDIT_BROWSER_BENCH_BURST_MS, 5_000);
-const BURST_RATE_HZ = positiveInteger(process.env.EDIT_BROWSER_BENCH_BURST_HZ, 30);
 const BURST_SCENARIO = process.env.EDIT_BROWSER_BENCH_BURST_SCENARIO;
 
 interface EnginePerf {
@@ -95,44 +100,6 @@ interface SustainedReport {
   readonly heapChangeBytes: number | null;
 }
 
-interface BurstProbeSnapshot {
-  readonly keydowns: number;
-  readonly beforeInputs: number;
-  readonly handlerMs: readonly number[];
-  readonly eventDelayMs: readonly number[];
-  readonly longTasksMs: readonly number[];
-  readonly frameGapsMs: readonly number[];
-  readonly heapTimeline: readonly { atMs: number; usedBytes: number }[];
-  readonly injectedDelayObservedMs: readonly number[];
-}
-
-interface BurstReport {
-  readonly name: string;
-  readonly mode: 'edit' | 'suggest';
-  readonly requestedEvents: number;
-  readonly processedEvents: number;
-  readonly dispatchWindowMs: number;
-  readonly drainMs: number;
-  readonly completionLatency: TimingSummary;
-  readonly handler: TimingSummary | null;
-  readonly eventDelay: TimingSummary | null;
-  readonly longTask: TimingSummary | null;
-  readonly maxFrameGapMs: number;
-  readonly heapBeforeBytes: number | null;
-  readonly heapAfterBytes: number | null;
-  readonly heapChangeBytes: number | null;
-  readonly peakObservedHeapBytes: number | null;
-  readonly domNodes: number;
-  readonly materializedPages: number;
-  readonly engine: EnginePerf;
-  readonly initialSelection: { readonly paragraphId: string; readonly offset: number };
-  readonly finalSelection: {
-    readonly anchor: { readonly paragraphId: string; readonly offset: number };
-    readonly head: { readonly paragraphId: string; readonly offset: number };
-  } | null;
-  readonly injectedDelayObserved: TimingSummary | null;
-}
-
 declare global {
   interface Window {
     __EDIT_BROWSER_BENCH__?: {
@@ -144,9 +111,6 @@ declare global {
         duration: number;
         processingStart: number;
       }>;
-    };
-    __EDIT_BURST_BENCH__?: {
-      stop(): BurstProbeSnapshot;
     };
   }
 }
@@ -271,106 +235,6 @@ async function installMeasurementProbe(page: Page): Promise<void> {
   }, INJECTED_DELAY_MS);
 }
 
-async function installBurstProbe(page: Page, injectedDelayMs = 0): Promise<void> {
-  await page.evaluate((delayMs) => {
-    const started = new WeakMap<Event, number>();
-    const handlerMs: number[] = [];
-    const eventDelayMs: number[] = [];
-    const longTasksMs: number[] = [];
-    const frameGapsMs: number[] = [];
-    const heapTimeline: Array<{ atMs: number; usedBytes: number }> = [];
-    const injectedDelayObservedMs: number[] = [];
-    const installedAt = performance.now();
-    let keydowns = 0;
-    let beforeInputs = 0;
-    let stopped = false;
-    let previousFrame = installedAt;
-    let previousHeapSample = 0;
-
-    const begin = (event: Event): void => {
-      if (!event.isTrusted) return;
-      started.set(event, performance.now());
-      if (event.type === 'keydown') keydowns += 1;
-      else beforeInputs += 1;
-      if (delayMs > 0) {
-        const delayStart = performance.now();
-        const delayEnd = performance.now() + delayMs;
-        while (performance.now() < delayEnd) {
-          // Intentional benchmark self-test delay.
-        }
-        injectedDelayObservedMs.push(performance.now() - delayStart);
-      }
-    };
-    const end = (event: Event): void => {
-      const start = started.get(event);
-      if (start !== undefined) handlerMs.push(performance.now() - start);
-    };
-    document.addEventListener('keydown', begin, { capture: true });
-    document.addEventListener('keydown', end);
-    document.addEventListener('beforeinput', begin, { capture: true });
-    document.addEventListener('beforeinput', end);
-
-    const observers: PerformanceObserver[] = [];
-    if (PerformanceObserver.supportedEntryTypes?.includes('event')) {
-      const eventObserver = new PerformanceObserver((list) => {
-        for (const entry of list.getEntries() as PerformanceEventTiming[]) {
-          if (entry.name === 'keydown' || entry.name === 'beforeinput') {
-            eventDelayMs.push(entry.processingStart - entry.startTime);
-          }
-        }
-      });
-      eventObserver.observe({ type: 'event', durationThreshold: 16 } as PerformanceObserverInit);
-      observers.push(eventObserver);
-    }
-    if (PerformanceObserver.supportedEntryTypes?.includes('longtask')) {
-      const longTaskObserver = new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) longTasksMs.push(entry.duration);
-      });
-      longTaskObserver.observe({ type: 'longtask', buffered: true });
-      observers.push(longTaskObserver);
-    }
-
-    const sampleFrame = (now: number): void => {
-      if (stopped) return;
-      frameGapsMs.push(now - previousFrame);
-      previousFrame = now;
-      if (now - previousHeapSample >= 500) {
-        const memory = (
-          performance as Performance & {
-            memory?: { readonly usedJSHeapSize: number };
-          }
-        ).memory;
-        if (memory)
-          heapTimeline.push({ atMs: now - installedAt, usedBytes: memory.usedJSHeapSize });
-        previousHeapSample = now;
-      }
-      requestAnimationFrame(sampleFrame);
-    };
-    requestAnimationFrame(sampleFrame);
-
-    window.__EDIT_BURST_BENCH__ = {
-      stop() {
-        stopped = true;
-        for (const observer of observers) observer.disconnect();
-        document.removeEventListener('keydown', begin, { capture: true });
-        document.removeEventListener('keydown', end);
-        document.removeEventListener('beforeinput', begin, { capture: true });
-        document.removeEventListener('beforeinput', end);
-        return {
-          keydowns,
-          beforeInputs,
-          handlerMs,
-          eventDelayMs,
-          longTasksMs,
-          frameGapsMs,
-          heapTimeline,
-          injectedDelayObservedMs,
-        };
-      },
-    };
-  }, injectedDelayMs);
-}
-
 async function runEdit(page: Page, text: string, mode: 'edit' | 'suggest'): Promise<BrowserSample> {
   const prepared = await page.evaluate(
     ({ fraction, editingMode }) =>
@@ -394,33 +258,8 @@ async function runEdit(page: Page, text: string, mode: 'edit' | 'suggest'): Prom
   return sample;
 }
 
-async function loadHarness(page: Page, measurementProbe = true): Promise<void> {
-  await page.goto(URL, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => !!window.__DOCX_EDITOR_E2E__?.ready());
-  await page.waitForFunction(() => window.__DOCX_EDITOR_E2E__?.fontMeasurer() === 'shaped');
-  await page.waitForSelector('.docx-page[data-materialized="true"]', { timeout: 60_000 });
-  if (measurementProbe) await installMeasurementProbe(page);
-}
-
-async function heapBytes(page: Page): Promise<number | null> {
-  return page.evaluate(() => {
-    const collect = (globalThis as typeof globalThis & { gc?: () => void }).gc;
-    collect?.();
-    const memory = (
-      performance as Performance & {
-        memory?: { readonly usedJSHeapSize: number };
-      }
-    ).memory;
-    return memory?.usedJSHeapSize ?? null;
-  });
-}
-
-function percentChange(next: number, before: number): number {
-  return before === 0 ? 0 : ((next - before) / before) * 100;
-}
-
 async function runSustained(page: Page, mode: 'edit' | 'suggest'): Promise<SustainedReport> {
-  await loadHarness(page);
+  await loadHarness(page, installMeasurementProbe);
   const prepared = await page.evaluate(
     ({ fraction, editingMode }) =>
       window.__DOCX_EDITOR_E2E__!.prepareEditBenchmark(fraction, editingMode),
@@ -475,140 +314,12 @@ async function runSustained(page: Page, mode: 'edit' | 'suggest'): Promise<Susta
   };
 }
 
-async function delay(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function runBurst(
-  page: Page,
-  scenario: {
-    readonly name: string;
-    readonly mode: 'edit' | 'suggest';
-    readonly input: 'type' | 'backspace' | 'arrow-left' | 'arrow-right';
-  },
-  injectedDelayMs = 0
-): Promise<BurstReport> {
-  await loadHarness(page, false);
-  const prepared = await page.evaluate(
-    ({ editingMode, offsetFraction }) =>
-      window.__DOCX_EDITOR_E2E__!.prepareEditBenchmark(0.5, editingMode, offsetFraction),
-    {
-      editingMode: scenario.mode,
-      offsetFraction: scenario.input === 'backspace' || scenario.input === 'arrow-left' ? 1 : 0,
-    }
-  );
-  expect(prepared).not.toBeNull();
-  expect(prepared!.pageCount).toBeGreaterThan(150);
-  await twoFrames(page);
-  const heapBeforeBytes = await heapBytes(page);
-  await installBurstProbe(page, injectedDelayMs);
-  const client = await page.context().newCDPSession(page);
-  const requestedEvents = Math.max(1, Math.round((BURST_DURATION_MS * BURST_RATE_HZ) / 1_000));
-  const intervalMs = 1_000 / BURST_RATE_HZ;
-  const completionLatencyMs: number[] = [];
-  const pending: Promise<void>[] = [];
-  const dispatchStarted = nodePerformance.now();
-
-  for (let index = 0; index < requestedEvents; index += 1) {
-    const due = dispatchStarted + index * intervalMs;
-    const waitMs = due - nodePerformance.now();
-    if (waitMs > 0) await delay(waitMs);
-    const sentAt = nodePerformance.now();
-    const event =
-      scenario.input === 'backspace'
-        ? {
-            type: 'rawKeyDown' as const,
-            key: 'Backspace',
-            code: 'Backspace',
-            windowsVirtualKeyCode: 8,
-            nativeVirtualKeyCode: 51,
-            autoRepeat: index > 0,
-          }
-        : scenario.input === 'arrow-left' || scenario.input === 'arrow-right'
-          ? {
-              type: 'rawKeyDown' as const,
-              key: scenario.input === 'arrow-left' ? 'ArrowLeft' : 'ArrowRight',
-              code: scenario.input === 'arrow-left' ? 'ArrowLeft' : 'ArrowRight',
-              windowsVirtualKeyCode: scenario.input === 'arrow-left' ? 37 : 39,
-              nativeVirtualKeyCode: scenario.input === 'arrow-left' ? 123 : 124,
-              autoRepeat: index > 0,
-            }
-          : {
-              type: 'char' as const,
-              key: 'X',
-              code: 'KeyX',
-              text: 'X',
-              unmodifiedText: 'X',
-            };
-    pending.push(
-      client.send('Input.dispatchKeyEvent', event).then(() => {
-        completionLatencyMs.push(nodePerformance.now() - sentAt);
-      })
-    );
-  }
-
-  const dispatchEnded = nodePerformance.now();
-  await Promise.all(pending);
-  if (scenario.input !== 'type') {
-    const left = scenario.input === 'arrow-left';
-    const backspace = scenario.input === 'backspace';
-    await client.send('Input.dispatchKeyEvent', {
-      type: 'keyUp',
-      key: backspace ? 'Backspace' : left ? 'ArrowLeft' : 'ArrowRight',
-      code: backspace ? 'Backspace' : left ? 'ArrowLeft' : 'ArrowRight',
-      windowsVirtualKeyCode: backspace ? 8 : left ? 37 : 39,
-      nativeVirtualKeyCode: backspace ? 51 : left ? 123 : 124,
-    });
-  }
-  const drainedAt = nodePerformance.now();
-  await twoFrames(page);
-  const probe = await page.evaluate(() => window.__EDIT_BURST_BENCH__!.stop());
-  const heapAfterBytes = await heapBytes(page);
-  const dom = await page.evaluate(() => ({
-    nodes: document.querySelectorAll('.docx-pages *').length,
-    materializedPages: document.querySelectorAll('.docx-page[data-materialized="true"]').length,
-    engine: window.__DOCX_EDITOR_E2E__!.benchmarkPerf()!,
-    selection: window.__DOCX_EDITOR_E2E__!.benchmarkSelection(),
-  }));
-  await client.detach();
-
-  const processedEvents = scenario.input === 'type' ? probe.beforeInputs : probe.keydowns;
-  return {
-    name: scenario.name,
-    mode: scenario.mode,
-    requestedEvents,
-    processedEvents,
-    dispatchWindowMs: dispatchEnded - dispatchStarted,
-    drainMs: drainedAt - dispatchEnded,
-    completionLatency: summarize(completionLatencyMs),
-    handler: probe.handlerMs.length > 0 ? summarize(probe.handlerMs) : null,
-    eventDelay: probe.eventDelayMs.length > 0 ? summarize(probe.eventDelayMs) : null,
-    longTask: probe.longTasksMs.length > 0 ? summarize(probe.longTasksMs) : null,
-    maxFrameGapMs: Math.max(0, ...probe.frameGapsMs),
-    heapBeforeBytes,
-    heapAfterBytes,
-    heapChangeBytes:
-      heapBeforeBytes === null || heapAfterBytes === null ? null : heapAfterBytes - heapBeforeBytes,
-    peakObservedHeapBytes:
-      probe.heapTimeline.length > 0
-        ? Math.max(...probe.heapTimeline.map((sample) => sample.usedBytes))
-        : null,
-    domNodes: dom.nodes,
-    materializedPages: dom.materializedPages,
-    engine: dom.engine,
-    initialSelection: { paragraphId: prepared!.paragraphId, offset: prepared!.offset },
-    finalSelection: dom.selection,
-    injectedDelayObserved:
-      probe.injectedDelayObservedMs.length > 0 ? summarize(probe.injectedDelayObservedMs) : null,
-  };
-}
-
 test('browser editing latency is measurable and structurally stable', async ({
   page,
   browserName,
 }) => {
   test.skip(browserName !== 'chromium', 'Event Timing and benchmark baselines use Chromium');
-  await loadHarness(page);
+  await loadHarness(page, installMeasurementProbe);
 
   const scenarios = [
     { name: 'editing-character', mode: 'edit' as const, text: 'X' },
@@ -737,6 +448,98 @@ test('browser editing latency is measurable and structurally stable', async ({
   console.log(`BROWSER_EDIT_BENCHMARK\n${serialized}`);
 });
 
+test('copy and paste latency is measurable and text stays exact', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'clipboard event timing baseline uses Chromium');
+  test.setTimeout(180_000);
+  await loadHarness(page, installMeasurementProbe, false);
+  const reports: {
+    name: string;
+    task: TimingSummary;
+    frame: TimingSummary | null;
+    textLength: number;
+  }[] = [];
+
+  for (const scenario of [
+    { name: 'copy-paragraph', start: 0.5, end: 0.5 },
+    { name: 'copy-multi-paragraph', start: 0.49, end: 0.51 },
+  ]) {
+    const prepared = await page.evaluate(
+      ({ start, end }) => window.__DOCX_EDITOR_E2E__!.prepareClipboardBenchmark(start, end),
+      scenario
+    );
+    expect(prepared?.pageCount).toBeGreaterThan(150);
+    const samples: number[] = [];
+    let copied = '';
+    for (let index = 0; index < WARMUP + RUNS; index += 1) {
+      const sample = await dispatchClipboard(page, 'copy');
+      expect(sample.defaultPrevented).toBe(true);
+      copied = sample.text;
+      if (index >= WARMUP) samples.push(sample.taskMs);
+    }
+    expect(copied).toBe(prepared!.expectedText);
+    reports.push({
+      name: scenario.name,
+      task: summarize(samples),
+      frame: null,
+      textLength: copied.length,
+    });
+  }
+
+  for (const scenario of [
+    { name: 'paste-small', text: '1234567890' },
+    { name: 'paste-large', text: 'paste benchmark '.repeat(500) },
+  ]) {
+    const taskSamples: number[] = [];
+    const frameSamples: number[] = [];
+    let paragraphId = '';
+    let original = '';
+    for (let index = 0; index < WARMUP + RUNS; index += 1) {
+      const prepared = await page.evaluate(() =>
+        window.__DOCX_EDITOR_E2E__!.prepareEditBenchmark(0.5, 'edit', 0)
+      );
+      expect(prepared).not.toBeNull();
+      paragraphId = prepared!.paragraphId;
+      original = await page.evaluate(
+        (id) => window.__DOCX_EDITOR_E2E__!.benchmarkParagraphText(id) ?? '',
+        paragraphId
+      );
+      const sample = await dispatchClipboard(page, 'paste', scenario.text);
+      expect(sample.defaultPrevented).toBe(true);
+      const after = await page.evaluate(
+        (id) => window.__DOCX_EDITOR_E2E__!.benchmarkParagraphText(id),
+        paragraphId
+      );
+      expect(after).toBe(`${scenario.text}${original}`);
+      if (index >= WARMUP) {
+        taskSamples.push(sample.taskMs);
+        frameSamples.push(sample.frameMs);
+      }
+      expect(await page.evaluate(() => window.__DOCX_EDITOR_E2E__!.undoBenchmarkEdit())).toBe(true);
+      await twoFrames(page);
+    }
+    reports.push({
+      name: scenario.name,
+      task: summarize(taskSamples),
+      frame: summarize(frameSamples),
+      textLength: scenario.text.length,
+    });
+  }
+
+  console.log(
+    'BROWSER_CLIPBOARD_BENCHMARK\n' +
+      JSON.stringify(
+        {
+          schema: 1,
+          fixture: FIXTURE,
+          config: { runs: RUNS, warmup: WARMUP, viewport: '1440x1000@1x' },
+          scenarios: reports,
+        },
+        null,
+        2
+      )
+  );
+});
+
 test('rapid input backlog and retained heap are measurable', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'CDP input scheduling and precise heap use Chromium');
   test.setTimeout(240_000);
@@ -751,15 +554,32 @@ test('rapid input backlog and retained heap are measurable', async ({ page, brow
       ? [{ name: 'editing-backspace', mode: 'edit' as const, input: 'backspace' as const }]
       : [
           { name: 'editing-type', mode: 'edit' as const, input: 'type' as const },
+          {
+            name: 'editing-ordered-type',
+            mode: 'edit' as const,
+            input: 'ordered-type' as const,
+          },
           { name: 'editing-backspace', mode: 'edit' as const, input: 'backspace' as const },
+          { name: 'editing-delete', mode: 'edit' as const, input: 'delete-forward' as const },
           { name: 'suggesting-type', mode: 'suggest' as const, input: 'type' as const },
           { name: 'suggesting-backspace', mode: 'suggest' as const, input: 'backspace' as const },
           { name: 'arrow-left', mode: 'edit' as const, input: 'arrow-left' as const },
           { name: 'arrow-right', mode: 'edit' as const, input: 'arrow-right' as const },
+          { name: 'arrow-up', mode: 'edit' as const, input: 'arrow-up' as const },
+          { name: 'arrow-down', mode: 'edit' as const, input: 'arrow-down' as const },
+          { name: 'word-left', mode: 'edit' as const, input: 'word-left' as const },
+          { name: 'line-start', mode: 'edit' as const, input: 'line-start' as const },
+          { name: 'document-start', mode: 'edit' as const, input: 'document-start' as const },
         ];
   const scenarios = BURST_SCENARIO
     ? availableScenarios.filter((scenario) => scenario.name === BURST_SCENARIO)
-    : availableScenarios;
+    : availableScenarios.filter(
+        (scenario) =>
+          scenario.name !== 'arrow-up' &&
+          scenario.name !== 'word-left' &&
+          scenario.name !== 'line-start' &&
+          scenario.name !== 'document-start'
+      );
   if (scenarios.length === 0) throw new Error(`unknown burst scenario: ${BURST_SCENARIO}`);
   const reports: BurstReport[] = [];
   let selfTest:
@@ -793,11 +613,34 @@ test('rapid input backlog and retained heap are measurable', async ({ page, brow
     expect(report.processedEvents).toBe(report.requestedEvents);
     expect(report.materializedPages).toBeLessThanOrEqual(8);
     expect(report.completionLatency.maxMs).toBeGreaterThan(0);
-    if (report.name === 'arrow-left' || report.name === 'arrow-right') {
+    if (
+      report.name.startsWith('arrow-') ||
+      report.name === 'word-left' ||
+      report.name === 'line-start' ||
+      report.name === 'document-start'
+    ) {
       expect(report.finalSelection?.head).not.toEqual(report.initialSelection);
       // The pre-index path is about 40 ms median on this fixture and cannot keep up with
-      // ordinary 30 Hz key repeat. Leave enough CI headroom while still catching that shape.
+      // ordinary 30 Hz key repeat; the old vertical path was several seconds. Leave enough
+      // CI headroom while still catching either whole-document shape.
       expect(report.handler?.medianMs).toBeLessThan(25);
+    }
+    if (report.name === 'editing-ordered-type') {
+      const before = report.paragraphTextBefore!;
+      const inserted = report.orderedText!;
+      const start = report.initialSelection.offset;
+      expect(report.paragraphTextAfter).toBe(
+        `${before.slice(0, start)}${inserted}${before.slice(start)}`
+      );
+      expect(report.finalSelection?.head).toEqual({
+        paragraphId: report.initialSelection.paragraphId,
+        offset: start + inserted.length,
+      });
+    }
+    if (report.name === 'editing-delete') {
+      expect(report.paragraphTextAfter?.length).toBe(
+        report.paragraphTextBefore!.length - report.requestedEvents
+      );
     }
   }
   if (selfTest) {

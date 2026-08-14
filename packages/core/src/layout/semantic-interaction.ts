@@ -28,7 +28,16 @@ import {
   ParagraphCaretStopCache,
   type IndexedCaretStops,
 } from './semantic-caret-stop-index.ts';
+import {
+  moveHorizontalCaret as moveIndexedHorizontalCaret,
+  moveToDocumentEdge,
+  moveToLineEdge,
+  moveVerticalCaret,
+} from './semantic-caret-navigation.ts';
+import { wordBoundary } from './semantic-word-navigation.ts';
 import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
+
+export { wordBoundary } from './semantic-word-navigation.ts';
 
 /** A caret position in the model. */
 export interface SemanticPosition {
@@ -735,45 +744,9 @@ export function paragraphTextFromLayout(layout: SemanticLayout, paragraphId: str
   return text;
 }
 
-/** Word characters for motion purposes: letters, digits and the marks that join them. */
-const WORD_CHARACTER = /[\p{L}\p{N}_'\u2019]/u;
-
-/**
- * The next word boundary from `offset`, in `direction`.
- *
- * Word-LEFT skips any whitespace immediately behind the caret and then the word behind that,
- * which is what every editor does and what makes repeated presses walk words rather than
- * alternate between a word and the space before it. Word-RIGHT stops at the END of the
- * current word, then skips the following whitespace on the next press.
- */
-export function wordBoundary(text: string, offset: number, direction: -1 | 1): number {
-  const isWord = (index: number): boolean => {
-    const character = text[index];
-    return character !== undefined && WORD_CHARACTER.test(character);
-  };
-  let index = Math.max(0, Math.min(offset, text.length));
-  if (direction === -1) {
-    while (index > 0 && !isWord(index - 1)) index -= 1;
-    while (index > 0 && isWord(index - 1)) index -= 1;
-    return index;
-  }
-  while (index < text.length && !isWord(index)) index += 1;
-  while (index < text.length && isWord(index)) index += 1;
-  return index;
-}
-
-/**
- * How a caret move resolves.
- *
- * Story-scoped stops are REQUIRED when navigating inside an open header or footer: the body's
- * stops describe a different story, and moving through them would walk the caret out of the
- * furniture the user is editing.
- */
+/** Story-scoped stops are required when navigating inside an open header or footer. */
 export interface MoveCaretOptions {
-  /**
-   * Precomputed stops for the active story. Open header/footer navigation MUST pass
-   * story-scoped stops from {@link caretStopsForBlocks}; body keeps the default.
-   */
+  /** Precomputed active-story stops; body navigation keeps the indexed default. */
   readonly stops?: readonly CaretGeometry[];
   readonly measurer?: TextMeasurer;
 }
@@ -784,31 +757,15 @@ function moveHorizontalCaret(
   direction: -1 | 1,
   measurer?: TextMeasurer
 ): { position: SemanticPosition; desiredX: null } | null {
-  const current = paragraphCaretStops(layout, position.paragraphId, measurer);
-  const stops = current.stops;
-  const index = current.index.get(position.paragraphId)?.get(position.offset);
-  if (index === undefined) return null;
-  const localTarget = index + direction;
-  if (localTarget >= 0 && localTarget < stops.length) {
-    return { position: stops[localTarget]!.position, desiredX: null };
-  }
   const order = documentOrder(layout);
   const paragraphIndex = documentOrderIndex(layout).get(position.paragraphId);
   if (paragraphIndex === undefined) return null;
-  const neighbourId = order[paragraphIndex + direction];
-  if (!neighbourId) return { position, desiredX: null };
-  const neighbour = paragraphCaretStops(layout, neighbourId, measurer).stops;
-  const target = direction === -1 ? neighbour[neighbour.length - 1] : neighbour[0];
-  return target ? { position: target.position, desiredX: null } : null;
+  return moveIndexedHorizontalCaret(position, direction, order, paragraphIndex, (paragraphId) =>
+    paragraphCaretStops(layout, paragraphId, measurer)
+  );
 }
 
-/**
- * Move a caret.
- *
- * Vertical movement keeps a DESIRED X so a caret travelling through short lines returns to
- * its original column rather than collapsing to the end of the shortest one. The caller
- * threads that value; passing null starts a fresh vertical run from the current position.
- */
+/** Move a caret; vertical movement carries a desired X through shorter lines. */
 export function moveCaret(
   layout: SemanticLayout,
   position: SemanticPosition,
@@ -818,6 +775,45 @@ export function moveCaret(
 ): { position: SemanticPosition; desiredX: number | null } | null {
   if (!options.stops && (command === 'left' || command === 'right')) {
     return moveHorizontalCaret(layout, position, command === 'left' ? -1 : 1, options.measurer);
+  }
+  if (!options.stops && (command === 'wordLeft' || command === 'wordRight')) {
+    const direction = command === 'wordLeft' ? -1 : 1;
+    const target = wordBoundary(
+      paragraphTextFromLayout(layout, position.paragraphId),
+      position.offset,
+      direction
+    );
+    return target === position.offset
+      ? moveHorizontalCaret(layout, position, direction, options.measurer)
+      : { position: { paragraphId: position.paragraphId, offset: target }, desiredX: null };
+  }
+  if (!options.stops && (command === 'lineStart' || command === 'lineEnd')) {
+    const target = moveToLineEdge(
+      position,
+      command === 'lineStart' ? -1 : 1,
+      paragraphCaretStops(layout, position.paragraphId, options.measurer)
+    );
+    return target ? { position: target, desiredX: null } : null;
+  }
+  if (!options.stops && (command === 'documentStart' || command === 'documentEnd')) {
+    const target = moveToDocumentEdge(
+      command === 'documentStart' ? -1 : 1,
+      documentOrder(layout),
+      (paragraphId) => paragraphCaretStops(layout, paragraphId, options.measurer)
+    );
+    return target ? { position: target, desiredX: null } : null;
+  }
+  if (!options.stops && (command === 'up' || command === 'down')) {
+    const paragraphIndex = documentOrderIndex(layout).get(position.paragraphId);
+    if (paragraphIndex === undefined) return null;
+    return moveVerticalCaret(
+      position,
+      command === 'up' ? -1 : 1,
+      desiredX,
+      documentOrder(layout),
+      paragraphIndex,
+      (paragraphId) => paragraphCaretStops(layout, paragraphId, options.measurer)
+    );
   }
   const stops = options.stops ? [...options.stops] : caretStops(layout, options.measurer);
   if (stops.length === 0) return null;
@@ -894,8 +890,11 @@ export function moveCaret(
     case 'down': {
       const targetX = desiredX ?? current.x;
       const lineIds: string[] = [];
+      const seenLineIds = new Set<string>();
       for (const stop of stops) {
-        if (!lineIds.includes(stop.lineId)) lineIds.push(stop.lineId);
+        if (seenLineIds.has(stop.lineId)) continue;
+        seenLineIds.add(stop.lineId);
+        lineIds.push(stop.lineId);
       }
       const lineIndex = lineIds.indexOf(current.lineId);
       const nextLineIndex = command === 'up' ? lineIndex - 1 : lineIndex + 1;

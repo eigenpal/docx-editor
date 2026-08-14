@@ -124,6 +124,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   const { document, pagesLayer, session } = deps;
 
   let applyingSelection = false;
+  let lastMirroredSelection: SemanticSelection | null = null;
   /**
    * Whether the MODEL holds the newer of the two selections.
    *
@@ -287,11 +288,9 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       if (!claim && !ownsSelection()) return;
       applyingSelection = true;
       const began = deps.now();
-      applySelectionToDom(
-        pagesLayer,
-        deps.domSelection?.() ?? deps.selection(),
-        document.getSelection()
-      );
+      const next = deps.domSelection?.() ?? deps.selection();
+      lastMirroredSelection = next;
+      applySelectionToDom(pagesLayer, next, document.getSelection());
       deps.recordSelectionMs(deps.now() - began);
       // Cleared on a LATER task, because `selectionchange` is queued rather than dispatched
       // synchronously. Clearing it here would defeat the guard in every real browser while
@@ -310,6 +309,13 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // leave it false by the time the echo arrives — and every programmatic selection would
       // be read straight back, fighting the user mid-drag.
       if (applyingSelection) return;
+      // A deferred paint leaves the DOM caret at its PRE-edit offset while the model already
+      // holds the post-edit one. A late echo from an earlier mirror must not make that stale
+      // DOM caret authoritative again; the pending paint will mirror the newer model value.
+      if (modelMoved && lastMirroredSelection) {
+        const reported = semanticSelectionFromDom(pagesLayer, document.getSelection());
+        if (reported && selectionsEqual(reported, lastMirroredSelection)) return;
+      }
       if (composing) return;
       if (deps.isGesturing?.()) return;
       if (deps.holdsCellSelection?.()) return;
