@@ -460,6 +460,18 @@ describe('a render never discards a gesture the model has not adopted yet', () =
     );
   }
 
+  /** Capture-phase listeners happy-dom keeps on the target, used to prove teardown. */
+  function capturingListeners(target: EventTarget, type: string): EventListener[] {
+    for (const symbol of Object.getOwnPropertySymbols(target)) {
+      const bag = (target as unknown as Record<symbol, unknown>)[symbol];
+      if (!bag || typeof bag !== 'object' || !('capturing' in bag)) continue;
+      const capturing = (bag as { capturing: Map<string, EventListener[]> }).capturing;
+      if (!(capturing instanceof Map)) continue;
+      return [...(capturing.get(type) ?? [])];
+    }
+    return [];
+  }
+
   test('a repaint adopts the live browser selection instead of writing the model over it', async () => {
     // THE WINDOW THAT LOSES A DOUBLE-CLICK.
     //
@@ -749,6 +761,105 @@ describe('a render never discards a gesture the model has not adopted yet', () =
     } finally {
       if (descriptor) Object.defineProperty(window.navigator, 'scheduling', descriptor);
       else delete (window.navigator as Navigator & { scheduling?: unknown }).scheduling;
+    }
+  });
+
+  test('clicking the current caret does not authorize a later stale selection echo', async () => {
+    // ONE-SHOT GESTURE PROVENANCE.
+    //
+    // Clicking the already-current mirrored caret fires pointerdown/selectstart but no
+    // selectionchange, so the DOM and model already agree. That gesture may authorize the
+    // immediate adoption opportunity; it must not stay armed into a later deferred edit.
+    // A leftover flag used to make the next stale echo look like a user move, so the
+    // second character inserted at the pre-edit offset and reordered the burst.
+    const descriptor = Object.getOwnPropertyDescriptor(window.navigator, 'scheduling');
+    Object.defineProperty(window.navigator, 'scheduling', {
+      configurable: true,
+      value: { isInputPending: () => true },
+    });
+    const cases: readonly {
+      readonly pointer?: 'engine' | 'native';
+      readonly pointerType: 'mouse' | 'touch';
+    }[] = [{ pointer: 'native', pointerType: 'mouse' }, { pointerType: 'touch' }];
+    try {
+      for (const setup of cases) {
+        const { surface, host, scroller } = mountScrolled(
+          setup.pointer ? { pointer: setup.pointer } : {}
+        );
+        try {
+          const id = surface.session.paragraphIds()[0]!;
+          surface.setSelection({
+            anchor: { paragraphId: id, offset: 0 },
+            head: { paragraphId: id, offset: 0 },
+          });
+          await Promise.resolve();
+          const pages = host.querySelector('.docx-pages');
+          if (!pages) throw new Error('pages layer missing');
+
+          pages.dispatchEvent(
+            new PointerEvent('pointerdown', {
+              bubbles: true,
+              cancelable: true,
+              button: 0,
+              pointerId: 1,
+              pointerType: setup.pointerType,
+            })
+          );
+          pages.dispatchEvent(new Event('selectstart', { bubbles: true, cancelable: true }));
+
+          typeDigit(pages, '1');
+          expect(surface.state().selection.head.offset).toBe(1);
+
+          document.dispatchEvent(new Event('selectionchange'));
+
+          typeDigit(pages, '2');
+          expect(surface.session.bodyText().slice(0, 2)).toBe('12');
+          expect(surface.state().selection).toEqual({
+            anchor: { paragraphId: id, offset: 2 },
+            head: { paragraphId: id, offset: 2 },
+          });
+        } finally {
+          surface.destroy();
+          host.remove();
+          scroller.remove();
+        }
+      }
+    } finally {
+      if (descriptor) Object.defineProperty(window.navigator, 'scheduling', descriptor);
+      else delete (window.navigator as Navigator & { scheduling?: unknown }).scheduling;
+    }
+  });
+
+  test('destroying the surface drops selection-sync capture listeners', () => {
+    const { surface, host, scroller } = mountScrolled();
+    try {
+      const pages = host.querySelector('.docx-pages');
+      if (!pages) throw new Error('pages layer missing');
+
+      const selectStarts = capturingListeners(pages, 'selectstart');
+      const pointerDowns = capturingListeners(pages, 'pointerdown');
+      expect(selectStarts).toHaveLength(1);
+      expect(pointerDowns.length).toBeGreaterThan(0);
+
+      surface.destroy();
+      expect(capturingListeners(pages, 'selectstart')).toEqual([]);
+      expect(capturingListeners(pages, 'pointerdown')).toEqual([]);
+
+      pages.dispatchEvent(new Event('selectstart', { bubbles: true, cancelable: true }));
+      pages.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          pointerId: 1,
+        })
+      );
+      document.dispatchEvent(new Event('selectionchange'));
+      expect(capturingListeners(pages, 'selectstart')).toEqual([]);
+      expect(capturingListeners(pages, 'pointerdown')).toEqual([]);
+    } finally {
+      host.remove();
+      scroller.remove();
     }
   });
 

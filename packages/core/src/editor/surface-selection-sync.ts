@@ -126,6 +126,8 @@ export interface SurfaceSelectionSync {
   readonly onSelectionChange: () => void;
   readonly onCompositionStart: () => void;
   readonly onCompositionEnd: () => void;
+  /** Drop capture listeners. Safe to call once from surface destroy/detach. */
+  destroy(): void;
 }
 
 export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): SurfaceSelectionSync {
@@ -134,11 +136,14 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   let applyingSelection = false;
   let lastMirroredSelection: SemanticSelection | null = null;
   /**
-   * Whether a user selection gesture has happened since the last successful DOM mirror.
+   * Whether a user selection gesture has an unused adoption opportunity.
    *
    * A deferred paint leaves the DOM caret at `lastMirroredSelection`. Equality with that
    * range is therefore not proof of a stale echo: a native/touch caret can land on exactly
-   * the same offset. Pointerdown/selectstart are the provenance that distinguishes the two.
+   * the same offset. Pointerdown/selectstart arm provenance for the next adoption check
+   * (`adoptBeforeInput` / `onSelectionChange`). The flag is one-shot: it cannot survive
+   * into a later, unrelated input. `mirrorToDom` also clears it because that write is a
+   * new baseline.
    */
   let userSelectionGesture = false;
   /**
@@ -211,11 +216,16 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // no longer looking at. Collapsing costs a range the model could not address anyway;
       // keeping one costs an edit in the wrong place.
       if (!domSelectionTouchesPages(pagesLayer, domSelection)) return;
+      userSelectionGesture = false;
       const collapsed = collapsedAt(deps.selection().head);
       if (selectionsEqual(collapsed, deps.selection())) return;
       deps.setSelection(collapsed);
       return;
     }
+    // A mapped caret is the adoption opportunity the gesture armed. Consume it here so an
+    // empty selectionchange (removeAllRanges mid-gesture) cannot spend it, and so a click
+    // on the already-current caret cannot authorize a later stale echo.
+    userSelectionGesture = false;
     if (selectionsEqual(next, deps.selection())) return;
     deps.setSelection(next);
   };
@@ -259,14 +269,13 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
 
   /**
    * Whether the DOM caret is still the last value this surface wrote, while the model has
-   * already moved on, AND no user selection gesture has intervened.
+   * already moved on, AND no unused user-selection gesture is authorizing this check.
    *
    * Deferred paint is the usual case: `commit` raises `modelMoved` and skips `mirrorToDom`
    * until the input queue drains, so the browser keeps showing the PRE-edit caret. That
    * leftover is not a user gesture. Equality with `lastMirroredSelection` is not enough on
-   * its own: a native or touch caret can return to that exact offset on purpose. A
-   * pointerdown/selectstart since the last mirror is the gesture; a queued selectionchange
-   * echo has neither.
+   * its own: a native or touch caret can return to that exact offset on purpose. A still-
+   * armed pointerdown/selectstart is that gesture; a queued selectionchange echo has none.
    */
   function isStaleMirroredCaret(): boolean {
     if (!modelMoved || !lastMirroredSelection || userSelectionGesture) return false;
@@ -274,6 +283,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     return reported !== null && selectionsEqual(reported, lastMirroredSelection);
   }
 
+  /** Arm one adoption opportunity. Secondary buttons are not a caret gesture. */
   function noteUserSelectionGesture(event: Event): void {
     if (event instanceof PointerEvent && event.button !== 0) return;
     userSelectionGesture = true;
@@ -359,6 +369,8 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // insert the next character at that stale offset and reorder a typing burst.
       // A genuine pointer/touch/selectstart gesture still wins, even if it lands on that
       // same pre-edit offset; a queued echo has no such provenance and is skipped.
+      // `adoptDomSelection` spends the one-shot once it sees a mapped caret, so a click on
+      // the already-current caret cannot authorize a later stale echo.
       if (isStaleMirroredCaret()) return;
       adoptDomSelection();
     },
@@ -372,13 +384,13 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // leave it false by the time the echo arrives — and every programmatic selection would
       // be read straight back, fighting the user mid-drag.
       if (applyingSelection) return;
+      if (composing) return;
+      if (deps.isGesturing?.()) return;
+      if (deps.holdsCellSelection?.()) return;
       // A deferred paint leaves the DOM caret at its PRE-edit offset while the model already
       // holds the post-edit one. A late echo from an earlier mirror must not make that stale
       // DOM caret authoritative again; the pending paint will mirror the newer model value.
       if (isStaleMirroredCaret()) return;
-      if (composing) return;
-      if (deps.isGesturing?.()) return;
-      if (deps.holdsCellSelection?.()) return;
       adoptDomSelection();
     },
 
@@ -399,6 +411,12 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       session.endComposition();
       deps.flushLayout();
       deps.render();
+    },
+
+    destroy() {
+      pagesLayer.removeEventListener('pointerdown', noteUserSelectionGesture, true);
+      pagesLayer.removeEventListener('selectstart', noteUserSelectionGesture, true);
+      userSelectionGesture = false;
     },
   };
 }

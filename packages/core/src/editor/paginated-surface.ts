@@ -3789,6 +3789,7 @@ export function mountPaginatedSurface(
       pointer?.destroy();
       tableInteraction.destroy();
       navigation.destroy();
+      selectionSync.destroy();
       pagesLayer.removeEventListener('contextmenu', onTocContextMenu);
       pagesLayer.removeEventListener('click', onTocRowClick);
       pagesLayer.removeEventListener('pointermove', onTocPointerMove);
